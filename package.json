@@ -1,0 +1,14 @@
+{
+  "name": "@boilerplate/common",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "main": "dist",
+  "scripts": {
+    "clean": "shx rm -rf dist && rm -rf node_modules"
+  },
+  "dependencies": {
+    "react-native": "0.59.0-rc.3"
+  },
+  "devDependencies": {}
+}
