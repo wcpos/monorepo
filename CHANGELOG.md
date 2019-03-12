@@ -18,6 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.0.1] - 2019-01-01
 - [Added] - Initial commit
 
-[Unreleased]: https://github.com/kilbot/boilerplate/compare/v1.0.0...HEAD
-[0.0.2]: https://github.com/kilbot/boilerplate/compare/v0.0.1...v0.0.2
-[0.0.1]: https://github.com/kilbot/boilerplate/releases/tag/v0.0.1
+[Unreleased]: https://github.com/wcpos/client/compare/v1.0.0...HEAD
+[0.0.2]: https://github.com/wcpos/client/compare/v0.0.1...v0.0.2
+[0.0.1]: https://github.com/wcpos/client/releases/tag/v0.0.1
