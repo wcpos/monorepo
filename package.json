@@ -8,7 +8,7 @@
     "clean": "shx rm -rf dist && rm -rf node_modules"
   },
   "dependencies": {
-    "react-native": "0.59.0-rc.3"
+    "react-native": "0.59.0"
   },
   "devDependencies": {}
 }
