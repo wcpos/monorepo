@@ -33,7 +33,6 @@
     "@types/styled-components": "4.1.12",
     "react-native-testing-library": "1.6.0",
     "react-test-renderer": "16.8.4",
-    "react-testing-library": "6.0.0",
-    "worker-loader": "2.0.0"
+    "react-testing-library": "6.0.0"
   }
 }
