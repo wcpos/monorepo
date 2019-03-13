@@ -1,0 +1,28 @@
+// import * as React from 'react';
+// import { create } from 'react-test-renderer';
+// import Button, { IState } from './button';
+
+// describe('Button', () => {
+//   it('increments', () => {
+//     const button: any = create(<Button enthusiasmLevel={1} />).getInstance();
+//     button.onIncrement();
+//     button.onIncrement();
+//     const state: IState = button.state;
+//     expect(state.enthusiasmLevel).toBe(3);
+//   });
+
+//   it('decrements', () => {
+//     const button: any = create(<Button enthusiasmLevel={4} />).getInstance();
+//     button.onDecrement();
+//     button.onDecrement();
+//     const state: IState = button.state;
+//     expect(state.enthusiasmLevel).toBe(2);
+//   });
+
+//   it('decrements at zero', () => {
+//     const button: any = create(<Button enthusiasmLevel={0} />).getInstance();
+//     button.onDecrement();
+//     const state: IState = button.state;
+//     expect(state.enthusiasmLevel).toBe(0);
+//   });
+// });
