@@ -3,19 +3,19 @@ import { Q } from '@nozbe/watermelondb';
 import database from '../database';
 
 export default function useUI() {
-  const [ui, setUI] = useState(null);
+	const [ui, setUI] = useState(null);
 
-  async function fetchUI() {
-    const result = await database.collections
-      .get('uis')
-      .query(Q.where('section', 'products'))
-      .fetch();
-    setUI(result[0]);
-  }
+	async function fetchUI() {
+		const result = await database.collections
+			.get('uis')
+			.query(Q.where('section', 'products'))
+			.fetch();
+		setUI(result[0]);
+	}
 
-  useEffect(() => {
-    fetchUI();
-  }, []);
+	useEffect(() => {
+		fetchUI();
+	}, []);
 
-  return ui;
+	return ui;
 }

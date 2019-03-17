@@ -7,7 +7,7 @@ export const DatabaseContext = createContext(database);
 export const { Provider, Consumer } = DatabaseContext;
 
 export default function useDatabase() {
-  return useContext(DatabaseContext);
+	return useContext(DatabaseContext);
 }
 
 // import { useDatabase } from '@nozbe/watermelondb/hooks';
