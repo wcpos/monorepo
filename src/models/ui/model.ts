@@ -5,15 +5,15 @@ import Query from '@nozbe/watermelondb/Query';
 import Column from '../ui_column/model';
 
 export default class UI extends Model {
-  static table = 'uis';
+	static table = 'uis';
 
-  static associations: Associations = {
-    ui_columns: { type: 'has_many', foreignKey: 'ui_id' },
-  };
+	static associations: Associations = {
+		ui_columns: { type: 'has_many', foreignKey: 'ui_id' },
+	};
 
-  @children('ui_columns') columns!: any;
+	@children('ui_columns') columns: any;
 
-  @nochange @field('section') section!: string;
-  @field('sortBy') sortBy!: string;
-  @field('sortDirection') sortDirection!: string;
+	@nochange @field('section') section!: string;
+	@field('sortBy') sortBy!: string;
+	@field('sortDirection') sortDirection!: string;
 }

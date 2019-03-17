@@ -8,16 +8,16 @@ import { schema as uiSchema } from './ui';
 import { schema as uiColumnSchema } from './ui_column';
 
 const schema = appSchema({
-  version: 21,
-  tables: [
-    tableSchema(productSchema),
-    tableSchema(productVariationSchema),
-    tableSchema(orderSchema),
-    tableSchema(orderLineItemSchema),
-    tableSchema(customerSchema),
-    tableSchema(uiSchema),
-    tableSchema(uiColumnSchema),
-  ],
+	version: 21,
+	tables: [
+		tableSchema(productSchema),
+		tableSchema(productVariationSchema),
+		tableSchema(orderSchema),
+		tableSchema(orderLineItemSchema),
+		tableSchema(customerSchema),
+		tableSchema(uiSchema),
+		tableSchema(uiColumnSchema),
+	],
 });
 
 export default schema;

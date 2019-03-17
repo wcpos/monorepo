@@ -3,14 +3,13 @@ import { Database } from '@nozbe/watermelondb';
 import Models, { schema } from './models';
 
 const adapter = new SQLiteAdapter({
-  dbName: 'wcpos',
-  schema,
+	dbName: 'wcpos',
+	schema,
 });
 
 const database = new Database({
-  adapter,
-  // @ts-ignore
-  modelClasses: Models,
+	adapter,
+	modelClasses: Models,
 });
 
 export default database;
