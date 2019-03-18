@@ -1,26 +1,26 @@
 import { createSwitchNavigator } from '@react-navigation/core';
-import Loading from '../loading';
-import AuthStack from './auth';
-import AppStack from './app';
+import Loading from '../sections/auth/loading';
+import Auth from './auth';
+import Main from './main';
 
 const RootStack = createSwitchNavigator(
-  {
-    Loading: {
-      screen: Loading,
-      path: 'loading',
-    },
-    App: {
-      screen: AppStack,
-      path: 'pos',
-    },
-    Auth: {
-      screen: AuthStack,
-      path: 'auth',
-    },
-  },
-  {
-    initialRouteName: 'Loading',
-  }
+	{
+		Loading: {
+			screen: Loading,
+			path: 'loading',
+		},
+		Auth: {
+			screen: Auth,
+			path: 'auth',
+		},
+		Main: {
+			screen: Main,
+			path: 'pos',
+		},
+	},
+	{
+		initialRouteName: 'Loading',
+	}
 );
 
 export default RootStack;
