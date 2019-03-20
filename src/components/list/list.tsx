@@ -14,8 +14,11 @@ type Props = {
 
 const List = ({ activeItemKey, items, onItemPress, keyExtractor, ...props }: Props) => {
 	const renderText = (item: Item) => {
-		const key = keyExtractor(item);
-		return item[key];
+		if (typeof keyExtractor === 'function') {
+			const key = keyExtractor(item);
+			return item[key];
+		}
+		return String(item);
 	};
 
 	return (
@@ -24,7 +27,12 @@ const List = ({ activeItemKey, items, onItemPress, keyExtractor, ...props }: Pro
 				props.renderItem ? (
 					props.renderItem(item)
 				) : (
-					<ListItem key={item.key} text={renderText(item)} onPress={onItemPress} />
+					<ListItem
+						key={item.key || index}
+						text={renderText(item)}
+						onPress={onItemPress}
+						icon={item.icon}
+					/>
 				)
 			)}
 		</ListView>
