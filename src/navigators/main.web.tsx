@@ -43,7 +43,7 @@ const DrawerView: NavigationView = ({ descriptors, navigation }) => {
 
 	return (
 		<Fragment>
-			<MasterBar navigation={descriptor.navigation} />
+			<MasterBar navigation={descriptor.navigation} title={descriptor.state.routeName} />
 			<SceneView
 				component={descriptor.getComponent()}
 				navigation={descriptor.navigation}

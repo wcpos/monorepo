@@ -1,23 +1,24 @@
-import React, { ReactNode } from 'react';
+import React from 'react';
 import Text from '../text';
 import { SegmentView } from './styles';
 
 export type Props = {
-  children?: ReactNode;
-  content?: ReactNode;
-  kind?: 'body' | 'footer' | 'header';
-  type?: 'raised' | 'stacked' | 'piled' | 'vertical' | '';
-  disabled?: boolean;
-  loading?: boolean;
-  raised?: boolean;
+	children?: React.ReactNode;
+	content?: React.ReactNode;
+	kind?: 'body' | 'footer' | 'header';
+	type?: 'raised' | 'stacked' | 'piled' | 'vertical' | '';
+	disabled?: boolean;
+	loading?: boolean;
+	raised?: boolean;
 };
 
-const Segment: React.FC<Props> = ({ children, content, ...rest }) => {
-  let c = content || children;
-  if (typeof c === 'string') {
-    c = <Text>{children}</Text>;
-  }
-  return <SegmentView {...rest}>{c}</SegmentView>;
+const Segment = ({ children, content, ...rest }: Props) => {
+	let segment = content || children || '';
+	if (typeof segment === 'string' || typeof segment === 'number') {
+		segment = <Text>{segment}</Text>;
+	}
+
+	return <SegmentView {...rest}>{segment}</SegmentView>;
 };
 
 export default Segment;

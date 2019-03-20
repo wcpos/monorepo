@@ -15,7 +15,7 @@ type DrawerItemsProps = import('react-navigation').DrawerItemsProps;
 const Screen = ({ navigation, component }: ScreenProps) => {
 	return (
 		<>
-			<MasterBar navigation={navigation} />
+			<MasterBar navigation={navigation} title={navigation.state.routeName} />
 			{component}
 		</>
 	);

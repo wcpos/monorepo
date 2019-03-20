@@ -5,16 +5,17 @@ import Button from '../../components/button';
 
 interface Props {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
+	title: string;
 }
 
-const MasterBar = ({ navigation }: Props) => {
+const MasterBar = ({ navigation, title }: Props) => {
 	return (
 		<BarView>
 			<LeftView>
 				<Button title="Menu" onPress={() => navigation.openDrawer()} />
 			</LeftView>
 			<CenterView>
-				<TitleText>Header</TitleText>
+				<TitleText>{title}</TitleText>
 			</CenterView>
 			<RightView>
 				<Button
