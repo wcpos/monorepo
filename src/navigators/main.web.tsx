@@ -67,12 +67,6 @@ const DrawerView: NavigationView = ({ descriptors, navigation }) => {
 						activeItemKey={activeKey}
 						items={navigation.state.routes}
 						onItemPress={handleItemPress}
-						style={{
-							backgroundColor: '#FFFFFF',
-							width: '300px',
-							height: '100%',
-							flex: 1,
-						}}
 					/>
 				</View>
 			)}

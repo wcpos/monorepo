@@ -1,13 +1,13 @@
 import { createSwitchNavigator } from '@react-navigation/core';
-import Loading from '../sections/auth/loading';
+import Home from '../sections/home';
 import Auth from './auth';
 import Main from './main';
 
 const RootStack = createSwitchNavigator(
 	{
-		Loading: {
-			screen: Loading,
-			path: 'loading',
+		Home: {
+			screen: Home,
+			path: '',
 		},
 		Auth: {
 			screen: Auth,
@@ -19,7 +19,7 @@ const RootStack = createSwitchNavigator(
 		},
 	},
 	{
-		initialRouteName: 'Loading',
+		initialRouteName: 'Home',
 	}
 );
 

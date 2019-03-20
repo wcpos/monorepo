@@ -1,35 +1,36 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ViewStyle } from 'react-native';
+import List, { ListItem } from '../../components/list';
+import { SideBarView } from './styles';
 
 /**
  * Based on:
  * https://github.com/react-navigation/react-navigation-drawer/blob/master/src/views/DrawerNavigatorItems.js
  */
+type Item = import('react-navigation').NavigationRoute;
 type Props = {
 	activeItemKey: string;
-	items: import('react-navigation').NavigationRoute[];
+	items: Item[];
 	onItemPress: (drawItem: import('react-navigation').DrawerItem) => void;
 	drawerPosition?: 'left' | 'right';
-	style: ViewStyle;
 };
 
-const SideBar = ({ activeItemKey, items, onItemPress, style }: Props) => {
+const SideBar = ({ activeItemKey, items, onItemPress }: Props) => {
+	const renderItem = (item: Item) => {
+		return (
+			<ListItem
+				key={item.key}
+				text={item.routeName}
+				onPress={() => {
+					onItemPress({ route: item, focused: false });
+				}}
+			/>
+		);
+	};
+
 	return (
-		<View style={style}>
-			{items.map((route, index) => {
-				const focused = activeItemKey === route.key;
-				return (
-					<TouchableOpacity
-						key={route.key}
-						onPress={() => {
-							onItemPress({ route, focused });
-						}}
-					>
-						<Text style={{ padding: 5, fontSize: 18 }}>{route.routeName}</Text>
-					</TouchableOpacity>
-				);
-			})}
-		</View>
+		<SideBarView>
+			<List items={items} renderItem={renderItem} />
+		</SideBarView>
 	);
 };
 

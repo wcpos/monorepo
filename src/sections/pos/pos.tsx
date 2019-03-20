@@ -4,11 +4,6 @@ import Products from './products';
 import Cart from './cart';
 import ErrorBoundary from '../../components/error';
 
-interface Props {
-	navigation: any;
-	t: any;
-}
-
 const POS = () => {
 	return (
 		<View style={{ flexDirection: 'row' }}>

@@ -2,32 +2,32 @@ import styled, { css } from 'styled-components/native';
 import { ThemeProps } from '../../lib/theme/types';
 
 export const Wrapper = styled.View<{ disabled?: boolean }>`
-  display: flex;
-  flex-direction: column;
-  ${props =>
-    props.disabled &&
-    css`
-      opacity: 0.5;
-    `}
+	display: flex;
+	flex-direction: column;
+	${props =>
+		props.disabled &&
+		css`
+			opacity: 0.5;
+		`}
 `;
 
 export const LabelWrapper = styled.View`
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  margin-start: 25px;
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	margin-start: 25px;
 `;
 
 export const Box = styled.View<{ theme: ThemeProps }>`
-  align-items: center;
-  justify-content: center;
-  border-style: solid;
-  background-color: ${props => props.theme.CHECKBOX_BACKGROUND_COLOR};
-  width: 20px;
-  height: 20px;
-  border-width: ${props => props.theme.CHECKBOX_BORDER_WIDTH};
-  border-color: ${props => props.theme.CHECKBOX_BORDER_COLOR};
-  border-radius: ${props => props.theme.CHECKBOX_BORDER_RADIUS};
+	align-items: center;
+	justify-content: center;
+	border-style: solid;
+	background-color: ${props => props.theme.CHECKBOX_BACKGROUND_COLOR};
+	width: 20px;
+	height: 20px;
+	border-width: ${props => props.theme.CHECKBOX_BORDER_WIDTH};
+	border-color: ${props => props.theme.CHECKBOX_BORDER_COLOR};
+	border-radius: ${props => props.theme.CHECKBOX_BORDER_RADIUS};
 `;
 
 // box: {

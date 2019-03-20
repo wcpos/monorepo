@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, Button, AsyncStorage } from 'react-native';
+import { AsyncStorage } from 'react-native';
+import { BarView, LeftView, CenterView, RightView, TitleText } from './styles';
+import Button from '../../components/button';
 
 interface Props {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
@@ -7,14 +9,14 @@ interface Props {
 
 const MasterBar = ({ navigation }: Props) => {
 	return (
-		<View style={{ display: 'flex', flexDirection: 'row', backgroundColor: '#f5f5f5' }}>
-			<View>
+		<BarView>
+			<LeftView>
 				<Button title="Menu" onPress={() => navigation.openDrawer()} />
-			</View>
-			<View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-				<Text style={{ fontSize: 18 }}>Header</Text>
-			</View>
-			<View>
+			</LeftView>
+			<CenterView>
+				<TitleText>Header</TitleText>
+			</CenterView>
+			<RightView>
 				<Button
 					title="Logout"
 					onPress={async () => {
@@ -22,8 +24,8 @@ const MasterBar = ({ navigation }: Props) => {
 						navigation.navigate('Auth');
 					}}
 				/>
-			</View>
-		</View>
+			</RightView>
+		</BarView>
 	);
 };
 
