@@ -1,7 +1,6 @@
 import React from 'react';
 import { createNavigator, StackRouter, SceneView } from '@react-navigation/core';
-import Auth from '../sections/auth/auth';
-import AuthModal from '../sections/auth/modal';
+import Auth, { Modal } from '../sections/auth';
 
 type NavigationView = import('react-navigation').NavigationView<{}, {}>;
 
@@ -17,11 +16,11 @@ const AuthStack = createNavigator(
 		{
 			Auth: {
 				screen: Auth,
-				path: 'auth',
+				path: '',
 			},
 			Modal: {
-				screen: AuthModal,
-				path: 'modal',
+				screen: Modal,
+				path: 'login',
 			},
 		},
 		{}

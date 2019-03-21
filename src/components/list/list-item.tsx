@@ -1,19 +1,38 @@
 import React from 'react';
 import { TouchableOpacity } from 'react-native';
-import { ListItemText } from './styles';
+import { ListItemView, ListItemTextView, ListItemText } from './styles';
 import Icon from '../icon';
+import Button from '../button';
 
 type Props = {
-	text: string;
-	onPress: () => void;
-	icon?: string;
+	label: string;
+	info?: string;
+	icon?: string | React.Component;
+	action?: string;
+	onPress?: () => void;
+	onAction?: () => void;
 };
 
-const ListItem = ({ text, onPress, icon }: Props) => {
+const ListItem = ({ label, info, onPress, icon, action, onAction }: Props) => {
+	const renderIcon = () => {
+		console.log(icon);
+		if (typeof icon === 'string') {
+			return <Icon name={icon} />;
+		}
+
+		return icon;
+	};
+
 	return (
 		<TouchableOpacity onPress={onPress}>
-			{icon && <Icon name={icon} />}
-			<ListItemText>{text}</ListItemText>
+			<ListItemView>
+				{icon && renderIcon()}
+				<ListItemTextView>
+					<ListItemText>{label}</ListItemText>
+					{info && <ListItemText>{info}</ListItemText>}
+				</ListItemTextView>
+				{action && <Button title={action} onPress={onAction} />}
+			</ListItemView>
 		</TouchableOpacity>
 	);
 };

@@ -6,7 +6,7 @@ import { storiesOf } from '@storybook/react';
 import TextInput from './';
 
 storiesOf('TextInput', module)
-  /**
-   *
-   */
-  .add('basic usage', () => <TextInput placeholder={text('placeholder', 'Placeholder text')} />);
+	/**
+	 *
+	 */
+	.add('basic usage', () => <TextInput placeholder={text('placeholder', 'Placeholder text')} />);

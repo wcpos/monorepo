@@ -17,11 +17,10 @@ storiesOf('List', module)
 	.add('with icon', () => (
 		<List
 			items={[
-				{ name: 'Apples', icon: 'completed' },
-				{ name: 'Pears', icon: 'completed' },
-				{ name: 'Oranges', icon: 'completed' },
+				{ label: 'Apples', icon: 'completed' },
+				{ label: 'Pears', icon: 'completed' },
+				{ label: 'Oranges', icon: 'completed' },
 			]}
-			keyExtractor={() => 'name'}
 		/>
 	))
 
@@ -31,9 +30,24 @@ storiesOf('List', module)
 	.add('selectable', () => (
 		<List
 			items={[
-				{ name: 'Apples', icon: 'completed' },
-				{ name: 'Pears', icon: 'completed' },
-				{ name: 'Oranges', icon: 'completed' },
+				{
+					name: 'Apples',
+					icon: 'completed',
+					info: 'Culpa aliquip reprehenderit ex incididunt do in proident exercitation.',
+					action: 'Remove',
+				},
+				{
+					name: 'Pears',
+					icon: 'completed',
+					info: 'Dolore cillum commodo non sunt laborum ullamco deserunt cupidatat.',
+					action: 'Remove',
+				},
+				{
+					name: 'Oranges',
+					icon: 'completed',
+					info: 'Incididunt cillum elit et amet sunt ea consectetur ex ea occaecat ad est.',
+					action: 'Remove',
+				},
 			]}
 			keyExtractor={() => 'name'}
 		/>

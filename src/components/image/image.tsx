@@ -7,10 +7,12 @@ export type Props = {
 	style?: any;
 	source: ImageSourcePropType;
 	border?: 'rounded' | 'circular';
+	src: string;
 };
 
-const Image = (props: Props) => {
+const Image = ({ src, ...props }: Props) => {
 	const placeholderContainerOpacity = new Animated.Value(1);
+	const source = props.source || { uri: src };
 
 	const onLoadEnd = () => {
 		/* Images finish loading in the same frame for some reason,
@@ -37,12 +39,12 @@ const Image = (props: Props) => {
 						<Placeholder>
 							<Loader />
 						</Placeholder>
-						<Img {...props} />
+						<Img source={source} {...props} />
 					</React.Fragment>
 				),
 				default: (
 					<React.Fragment>
-						<Img {...props} onLoadEnd={onLoadEnd} />
+						<Img source={source} {...props} onLoadEnd={onLoadEnd} />
 						{/* <Placeholder>
               <Loader />
             </Placeholder> */}

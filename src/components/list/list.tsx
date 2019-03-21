@@ -5,20 +5,23 @@ import { ListView } from './styles';
 type Item = any;
 
 type Props = {
-	// activeItemKey: string;
+	activeItemKey?: string;
 	items: Item[];
 	onItemPress?: () => void;
 	keyExtractor?: (item: Item) => string;
 	renderItem?: (item: Item) => React.ReactElement;
 };
 
-const List = ({ activeItemKey, items, onItemPress, keyExtractor, ...props }: Props) => {
-	const renderText = (item: Item) => {
-		if (typeof keyExtractor === 'function') {
-			const key = keyExtractor(item);
-			return item[key];
-		}
-		return String(item);
+const List = ({
+	activeItemKey,
+	items,
+	onItemPress,
+	keyExtractor = () => 'label',
+	...props
+}: Props) => {
+	const renderLabel = (item: Item) => {
+		const key = keyExtractor(item);
+		return item[key] || String(item);
 	};
 
 	return (
@@ -29,9 +32,11 @@ const List = ({ activeItemKey, items, onItemPress, keyExtractor, ...props }: Pro
 				) : (
 					<ListItem
 						key={item.key || index}
-						text={renderText(item)}
+						label={renderLabel(item)}
 						onPress={onItemPress}
 						icon={item.icon}
+						info={item.info}
+						action={item.action}
 					/>
 				)
 			)}

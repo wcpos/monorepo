@@ -34,6 +34,8 @@ export interface ThemeProps {
 	INPUT_FONT_SIZE: number;
 	INPUT_TEXT_COLOR: string;
 
+	LIST_ITEM_PADDING: string;
+
 	LOADER_COLOR: string;
 
 	MASTERBAR_BACKGROUND_COLOR: string;
@@ -45,6 +47,7 @@ export interface ThemeProps {
 	SEGMENT_BORDER_RADIUS: string;
 	SEGMENT_BORDER_WIDTH: string;
 	SEGMENT_PADDING: string;
+	SEGMENT_MARGIN_BOTTOM: string;
 
 	SEGMENT_GROUP_PADDING: string;
 
