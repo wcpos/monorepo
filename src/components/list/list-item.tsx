@@ -15,11 +15,9 @@ type Props = {
 
 const ListItem = ({ label, info, onPress, icon, action, onAction }: Props) => {
 	const renderIcon = () => {
-		console.log(icon);
 		if (typeof icon === 'string') {
 			return <Icon name={icon} />;
 		}
-
 		return icon;
 	};
 

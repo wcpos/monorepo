@@ -10,12 +10,13 @@ import { defaultTheme } from './lib/theme';
 import i18n from './lib/i18n';
 
 const App = () => (
-	<DatabaseProvider database={database}>
-		<ThemeProvider theme={defaultTheme}>
-			<Navigator />
-		</ThemeProvider>
-	</DatabaseProvider>
+	<React.StrictMode>
+		<DatabaseProvider database={database}>
+			<ThemeProvider theme={defaultTheme}>
+				<Navigator />
+			</ThemeProvider>
+		</DatabaseProvider>
+	</React.StrictMode>
 );
 
 export default App;
-

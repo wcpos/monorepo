@@ -1,10 +1,9 @@
 import styled, { css } from 'styled-components/native';
-import { StyleSheet } from 'react-native';
 
-import { Props } from './image';
+type ThemeProps = import('../../lib/theme/types').ThemeProps;
+type Border = Pick<import('./image').Props, 'border'>;
 
-export const Img = styled.Image<Props>`
-	border-style: solid;
+export const Img = styled.Image<{ theme: ThemeProps; border?: Border }>`
 	width: 100px;
 	height: 100px;
 
@@ -13,11 +12,11 @@ export const Img = styled.Image<Props>`
 		switch (props.border) {
 			case 'rounded':
 				return css`
-					border-radius: 0.3125em;
+					border-radius: 3px;
 				`;
 			case 'circular':
 				return css`
-					border-radius: 500rem;
+					border-radius: 500;
 				`;
 			default:
 				return css`
@@ -26,31 +25,3 @@ export const Img = styled.Image<Props>`
 		}
 	}}
 `;
-
-export const Wrapper = styled.View`
-	background-color: transparent;
-	position: relative;
-`;
-
-export const Placeholder = styled.View`
-	background-color: #bdbdbd;
-	align-items: center;
-	justify-content: center;
-`;
-
-const styles = {
-	container: {
-		backgroundColor: 'transparent',
-		position: 'relative',
-	},
-	placeholderContainer: {
-		...StyleSheet.absoluteFillObject,
-	},
-	placeholder: {
-		backgroundColor: '#bdbdbd',
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
-};
-
-export default styles;
