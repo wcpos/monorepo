@@ -21,3 +21,8 @@ export const Input = styled.TextInput<Props>`
 	font-size: ${props => props.theme.INPUT_FONT_SIZE};
 	padding: 5px 10px;
 `;
+
+export const PrefixText = styled.Text`
+	background-color: lightgrey;
+	padding: 5px;
+`;

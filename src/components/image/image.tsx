@@ -5,7 +5,7 @@ import { Img } from './styles';
 export type Props = {
 	src: string;
 	srcSet?: string;
-	border?: 'rounded' | 'circular' | undefined;
+	border?: 'rounded' | 'circular';
 	style?: import('react-native').ImageStyle;
 };
 

@@ -1,9 +1,9 @@
 import styled, { css } from 'styled-components/native';
 
 type ThemeProps = import('../../lib/theme/types').ThemeProps;
-type Border = Pick<import('./image').Props, 'border'>;
+type Props = import('../../lib/utility-types').Omit<import('./image').Props, 'src'>;
 
-export const Img = styled.Image<{ theme: ThemeProps; border?: Border }>`
+export const Img = styled.Image<{ theme: ThemeProps } & Props>`
 	width: 100px;
 	height: 100px;
 
