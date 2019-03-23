@@ -5,74 +5,57 @@ import Text from '../../components/text';
 import Avatar from '../../components/avatar';
 import List, { ListItem } from '../../components/list';
 import { AuthView } from './styles';
-import axios, { noConfigAxios } from '../../lib/axios';
-import parseLinkHeader from '../../lib/parse-link-header';
+import ApiService from '../../services/api';
 
 type Props = {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
 };
 
-function connect(url, dispatch) {
-	dispatch({
-		type: 'loading',
-		payload: {
-			label: 'Check WordPress',
-			icon: 'loading',
-		},
-	});
-	noConfigAxios
-		.head('http://dev.local/wp/latest/')
-		.then(response => {
-			// See https://developer.wordpress.org/rest-api/using-the-rest-api/discovery/
-			const link = response.headers && response.headers.link;
-			const parsed = parseLinkHeader(link);
-			if ('https://api.w.org/' in parsed) {
-				const { url } = parsed['https://api.w.org/'];
-				console.log('WP API found: ', url);
-				dispatch({
-					type: 'success',
-					payload: {
-						label: 'Check WordPress',
-						icon: 'completed',
-					},
-				});
-			}
-		})
-		.catch(error => {
-			if (error.response) {
-				// The request was made and the server responded with a status code
-				// that falls out of the range of 2xx
-				console.log(error.response.data);
-				console.log(error.response.status);
-				console.log(error.response.headers);
-			} else if (error.request) {
-				// The request was made but no response was received
-				// `error.request` is an instance of XMLHttpRequest in the browser and an instance of
-				// http.ClientRequest in node.js
-				console.log(error.request);
-			} else {
-				// Something happened in setting up the request that triggered an Error
-				console.log('Error', error.message);
-			}
-			console.log(error.config);
-		});
-}
+type ActionTypes = import('../../services/api').ActionTypes;
 
-function reducer(state, action) {
-	switch (action.type) {
-		case 'loading':
-			return [...state, action.payload];
-		case 'success':
-			return [...state, action.payload];
-		case 'error':
-			return [...state, action.payload];
+function reducer(state, action: { type: ActionTypes; payload?: any }) {
+	let key: 'wc_api' | 'wp_api' | 'wcpos_api';
+	let type: 'FETCH' | 'SUCCESS' | 'ERROR';
+	// @ts-ignore
+	[key, type] = action.type.split('/');
+
+	const map = {
+		wp_api: 'WordPress',
+		wc_api: 'WooCommerce',
+		wcpos_api: 'WooCommerce POS',
+	};
+
+	switch (type) {
+		case 'FETCH':
+			return {
+				...state,
+				[key]: { label: `Checking ${map[key]} ...`, icon: 'loading' },
+			};
+		case 'SUCCESS':
+			return {
+				...state,
+				[key]: {
+					label: `${map[key]} found!`,
+					icon: 'completed',
+					info: action.payload.message,
+				},
+			};
+		case 'ERROR':
+			return {
+				...state,
+				[key]: { label: `${map[key]} error!`, icon: 'error', info: action.payload.error.message },
+			};
 		default:
 			throw new Error();
 	}
 }
 
 const Auth = ({ navigation }: Props) => {
-	const [checks, dispatch] = React.useReducer(reducer, []);
+	const [checks, dispatch] = React.useReducer(reducer, {
+		wp_api: false,
+		wc_api: false,
+		wcpos_api: false,
+	});
 
 	const sites = [
 		{
@@ -92,6 +75,27 @@ const Auth = ({ navigation }: Props) => {
 	// 	{ label: 'Check WooCommerce', icon: 'error' },
 	// 	{ label: 'Check WooCommerce POS', icon: 'loading' },
 	// ];
+
+	const handleConnect = (url: string) => {
+		const api = new ApiService(url);
+
+		api.connection$.subscribe(
+			data => {
+				if (data.type === 'wcpos_api/FETCH') {
+					navigation.navigate('Modal', { url: data.payload });
+				}
+				dispatch(data);
+			},
+			error => {
+				dispatch(error);
+			},
+			() => {
+				api.connection$.unsubscribe();
+			}
+		);
+
+		api.connect();
+	};
 
 	const renderSite = item => (
 		<ListItem
@@ -113,17 +117,8 @@ const Auth = ({ navigation }: Props) => {
 			<Segment>
 				<Text size="large">Connect</Text>
 				<Text>Enter the URL of your WooCommerce store:</Text>
-				<TextInput
-					prefix="https://"
-					action="Connect"
-					onAction={value =>
-						connect(
-							value,
-							dispatch
-						)
-					}
-				/>
-				<List items={checks} />
+				<TextInput prefix="https://" action="Connect" onAction={handleConnect} keyboardType="url" />
+				<List items={Object.values(checks).filter(item => item)} />
 			</Segment>
 			<Segment>
 				<List items={sites} renderItem={renderSite} />

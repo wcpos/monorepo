@@ -6,22 +6,22 @@ import UI from '../ui/model';
 import Relation from '@nozbe/watermelondb/Relation';
 
 export default class Column extends Model {
-  static table = 'ui_columns';
+	static table = 'ui_columns';
 
-  static associations: Associations = {
-    uis: { type: 'belongs_to', key: 'ui_id' },
-  };
+	static associations: Associations = {
+		uis: { type: 'belongs_to', key: 'ui_id' },
+	};
 
-  @immutableRelation('uis', 'ui_id') ui!: any;
+	@immutableRelation('uis', 'ui_id') ui!: any;
 
-  @nochange @field('key') key!: string;
-  @field('hide') hide!: boolean;
-  @field('disableSort') disableSort!: boolean;
-  @field('flexGrow') flexGrow?: 0 | 1;
-  @field('flexShrink') flexShrink?: 0 | 1;
-  @field('width') width?: string;
+	@nochange @field('key') key!: string;
+	@field('hide') hide!: boolean;
+	@field('disableSort') disableSort!: boolean;
+	@field('flexGrow') flexGrow?: 0 | 1;
+	@field('flexShrink') flexShrink?: 0 | 1;
+	@field('width') width?: string;
 
-  get label() {
-    return i18n.t('product.column.label.' + this.key);
-  }
+	get label() {
+		return i18n.t('product.column.label.' + this.key);
+	}
 }

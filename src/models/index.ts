@@ -5,7 +5,9 @@ import Customer from './customer';
 import UI from './ui';
 import UIColumn from './ui_column';
 
+import Site from './site/model';
+
 import schema from './schema';
 
-export { schema };
+export { schema, Site };
 export default [Product, Order, OrderLineItem, Customer, UI, UIColumn];

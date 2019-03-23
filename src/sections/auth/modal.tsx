@@ -1,31 +1,22 @@
 import React from 'react';
-import { View, Button, AsyncStorage } from 'react-native';
+import { Button, WebView } from 'react-native';
 
 type Props = {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
 };
 
 const Modal = ({ navigation }: Props) => {
+	const uri = navigation.getParam('url');
 	return (
-		<View style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-			<View style={{ width: '50%', marginBottom: 20 }}>
-				<Button
-					title="Go Back"
-					onPress={() => {
-						navigation.goBack();
-					}}
-				/>
-			</View>
-			<View style={{ width: '50%' }}>
-				<Button
-					title="Save User Token"
-					onPress={async () => {
-						await AsyncStorage.setItem('userToken', '123');
-						navigation.navigate('Home');
-					}}
-				/>
-			</View>
-		</View>
+		<>
+			<Button
+				title="Go Back"
+				onPress={() => {
+					navigation.goBack();
+				}}
+			/>
+			<WebView source={{ uri }} />
+		</>
 	);
 };
 
