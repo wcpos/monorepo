@@ -1,4 +1,4 @@
-import axios, { noConfigAxios } from '../lib/axios';
+import axios from 'axios';
 import { Subject, Observable, from } from 'rxjs';
 // import { tap, map, switchMap, catchError } from 'rxjs/operators';
 import { Site } from '../models';

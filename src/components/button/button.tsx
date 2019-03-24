@@ -9,12 +9,13 @@ type Props = {
 	disabled?: boolean;
 	loading?: boolean;
 	raised?: boolean;
+	type?: 'solid' | 'clear' | 'outline';
 	onPress?: (event: GestureResponderEvent) => void;
 };
 
-const Button = ({ children, disabled, title, ...rest }: Props) => {
+const Button = ({ children, disabled, title, onPress, type = 'solid' }: Props) => {
 	return (
-		<Touchable disabled={disabled} {...rest}>
+		<Touchable disabled={disabled} onPress={onPress} type={type}>
 			<Text>{title}</Text>
 		</Touchable>
 	);

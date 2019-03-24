@@ -61,12 +61,12 @@ const Auth = ({ navigation }: Props) => {
 		{
 			name: 'Site 1',
 			url: 'https://demo.wcpos.com',
-			icon: <Avatar src="https://demo.wcpos.com/favicon.ico" />,
+			icon: <Avatar src="https://wcpos.com/wp-content/uploads/2014/06/woopos-logo.png" />,
 		},
 		{
 			name: 'Site 2',
 			url: 'https://beta.wcpos.com',
-			icon: <Avatar src="https://demo.wcpos.com/favicon.ico" />,
+			icon: <Avatar src="https://wcpos.com/wp-content/uploads/2014/06/woopos-logo.png" />,
 		},
 	];
 

@@ -7,11 +7,11 @@ import { storiesOf } from '@storybook/react';
 import Touchable from './';
 
 storiesOf('Touchable', module)
-  /**
-   *
-   */
-  .add('basic usage', () => (
-    <Touchable disabled={boolean('disabled', false)}>
-      <Text>{text('text', 'Touch Me!')}</Text>
-    </Touchable>
-  ));
+	/**
+	 *
+	 */
+	.add('basic usage', () => (
+		<Touchable disabled={boolean('disabled', false)}>
+			<Text>{text('text', 'Touch Me!')}</Text>
+		</Touchable>
+	));
