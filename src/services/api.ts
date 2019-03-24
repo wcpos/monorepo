@@ -102,8 +102,8 @@ class ApiService {
 						app_name: 'WooCommerce POS',
 						scope: 'read_write',
 						user_id: 123,
-						return_url: 'wcpos://auth',
-						callback_url: 'https://auth',
+						return_url: 'https://client.wcpos.com/auth',
+						callback_url: 'https://client.wcpos.com/auth',
 					},
 					true
 				),
