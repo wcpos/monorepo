@@ -1,18 +1,18 @@
 import { Q } from '@nozbe/watermelondb';
 import { field, nochange, date, json, action, children } from '@nozbe/watermelondb/decorators';
-import Model from '../common';
-import { BillingProps, ShippingProps } from '../customer';
-import { reduce } from 'rxjs/operators';
-import { Associations } from '@nozbe/watermelondb/Model';
-import Product from '../product/model';
-import OrderLineItem from '../order_line_item/model';
+import Model from './base';
+
+type BillingProps = import('./types').BillingProps;
+type ShippingProps = import('./types').ShippingProps;
+type Product = typeof import('./product');
+type OrderLineItem = typeof import('./order-line-item');
 
 const sanitizeValues = (json: any) => json || {};
 
 class Order extends Model {
 	static table = 'orders';
 
-	static associations: Associations = {
+	static associations = {
 		order_line_items: { type: 'has_many', foreignKey: 'order_id' },
 	};
 

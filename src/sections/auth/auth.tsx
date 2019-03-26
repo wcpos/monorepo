@@ -13,6 +13,15 @@ type Props = {
 
 type ActionTypes = import('../../services/api').ActionTypes;
 
+/**
+ * Error messages
+ *
+ * wp_api/ERROR: Network Error
+ * Possible CORS error, WooCommerce POS plugin needs to be installed to add Access-Control-Allow-Origin
+ *
+ *
+ */
+
 function reducer(state, action: { type: ActionTypes; payload?: any }) {
 	let key: 'wc_api' | 'wp_api' | 'wcpos_api';
 	let type: 'FETCH' | 'SUCCESS' | 'ERROR';

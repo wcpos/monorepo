@@ -1,13 +1,10 @@
-import { Model } from '@nozbe/watermelondb';
+import Model from './base';
 import { field, nochange, children } from '@nozbe/watermelondb/decorators';
-import { Associations } from '@nozbe/watermelondb/Model';
-import Query from '@nozbe/watermelondb/Query';
-import Column from '../ui_column/model';
 
 export default class UI extends Model {
 	static table = 'uis';
 
-	static associations: Associations = {
+	static associations = {
 		ui_columns: { type: 'has_many', foreignKey: 'ui_id' },
 	};
 

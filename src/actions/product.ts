@@ -1,8 +1,8 @@
 import { sync } from './index';
-import database from '../database';
-import UI from '../models/ui/model';
-import Column from '../models/ui_column/model';
-import Product from '../models/product/model';
+import database from '../store';
+import UI from '../store/models/ui';
+import Column from '../store/models/ui-column';
+import Product from '../store/models/product';
 
 const collection = database.collections.get('products');
 const uiCollection = database.collections.get('uis');

@@ -1,7 +1,7 @@
 import React from 'react';
 import DatabaseProvider from '@nozbe/watermelondb/DatabaseProvider';
 import { ThemeProvider } from 'styled-components/native';
-import database from './database';
+import database from './store';
 import Navigator from './navigators';
 import ActivityIndicator from './components/activity-indicator';
 import { defaultTheme } from './lib/theme';

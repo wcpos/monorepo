@@ -3,7 +3,7 @@ import orderBy from 'lodash/orderBy';
 import Table from '../../../components/table';
 import Button from '../../../components/button';
 import Img from '../../../components/image';
-import database from '../../../database';
+import useDatabase from '../../../hooks/use-database';
 
 interface Props {
 	products: any;
@@ -12,6 +12,7 @@ interface Props {
 const ProductsTable = ({ products }: Props) => {
 	const [sortBy, setSortBy] = useState('name');
 	const [sortDirection, setSortDirection] = useState('asc');
+	const database = useDatabase();
 
 	const sort = ({ sortBy, sortDirection }: any) => {
 		setSortBy(sortBy);

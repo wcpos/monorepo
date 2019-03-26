@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Q } from '@nozbe/watermelondb';
-import database from '../database';
+import database from '../store';
 
 export default function useUI() {
 	const [ui, setUI] = useState(null);

@@ -1,6 +1,6 @@
-import { TableSchemaSpec } from '@nozbe/watermelondb/Schema';
+type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
-const schema: TableSchemaSpec = {
+const schema: Schema = {
 	name: 'ui_columns',
 	columns: [
 		{ name: 'ui_id', type: 'string', isIndexed: true },

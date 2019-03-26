@@ -1,6 +1,6 @@
-import database from '../database';
+import database from '../store/';
 import { sync } from './';
-import Order from '../models/order/model';
+import Order from '../store/models/order';
 
 const orderCollection = database.collections.get('orders');
 

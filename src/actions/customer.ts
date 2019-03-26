@@ -1,6 +1,6 @@
 import { sync } from './index';
-import database from '../database';
-import Customer from '../models/customer/model';
+import database from '../store';
+import Customer from '../store/models/customer';
 
 const customerCollection = database.collections.get('customers');
 

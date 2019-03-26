@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Subject, Observable, from } from 'rxjs';
 // import { tap, map, switchMap, catchError } from 'rxjs/operators';
-import { Site } from '../models';
+import Site from '../store/models/site';
 import Url from '../lib/url-parse';
 
 type AxiosResponse = import('axios').AxiosResponse;
@@ -29,7 +29,7 @@ class ApiService {
 	user: any;
 
 	constructor(site: typeof Site | string, user?: any) {
-		this.site = typeof site === 'string' ? new Site(site) : site;
+		this.site = typeof site === 'string' ? new Site() : site;
 		this.user = user;
 	}
 

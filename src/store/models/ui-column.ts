@@ -1,9 +1,6 @@
 import { field, nochange, immutableRelation } from '@nozbe/watermelondb/decorators';
 import { Associations } from '@nozbe/watermelondb/Model';
-import Model from '../common';
-import i18n from '../../lib/i18n';
-import UI from '../ui/model';
-import Relation from '@nozbe/watermelondb/Relation';
+import Model from './base';
 
 export default class Column extends Model {
 	static table = 'ui_columns';
@@ -22,6 +19,6 @@ export default class Column extends Model {
 	@field('width') width?: string;
 
 	get label() {
-		return i18n.t('product.column.label.' + this.key);
+		return this.i18n.t('product.column.label.' + this.key);
 	}
 }

@@ -1,5 +1,6 @@
 import { Model } from '@nozbe/watermelondb';
 import logger from '../../lib/logger';
+import i18n from '../../lib/i18n';
 import omit from 'lodash/omit';
 
 class BaseModel extends Model {
@@ -8,6 +9,7 @@ class BaseModel extends Model {
 	// }
 
 	protected logger = logger;
+	protected i18n = i18n;
 
 	/** Log updates */
 	public async update(recordUpdater: any) {
