@@ -6,6 +6,8 @@ import Avatar from '../../components/avatar';
 import List, { ListItem } from '../../components/list';
 import { AuthView } from './styles';
 import ApiService from '../../services/api';
+import useDatabase from '../../hooks/use-database';
+import useObservable from '../../hooks/use-observable';
 
 type Props = {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
@@ -66,57 +68,57 @@ const Auth = ({ navigation }: Props) => {
 		wcpos_api: false,
 	});
 
-	const sites = [
-		{
-			name: 'Site 1',
-			url: 'https://demo.wcpos.com',
-			icon: <Avatar src="https://wcpos.com/wp-content/uploads/2014/06/woopos-logo.png" />,
-		},
-		{
-			name: 'Site 2',
-			url: 'https://beta.wcpos.com',
-			icon: <Avatar src="https://wcpos.com/wp-content/uploads/2014/06/woopos-logo.png" />,
-		},
-	];
+	const database = useDatabase();
 
-	// const checks = [
-	// 	{ label: 'Check WordPress', icon: 'completed' },
-	// 	{ label: 'Check WooCommerce', icon: 'error' },
-	// 	{ label: 'Check WooCommerce POS', icon: 'loading' },
-	// ];
+	const sites = useObservable(
+		database.collections
+			.get('sites')
+			.query()
+			.observeWithColumns(['name', 'status']),
+		[]
+	);
 
-	const handleConnect = (url: string) => {
-		const api = new ApiService(url);
+	const handleConnect = async (url: string) => {
+		// const site = await database.collections.get('sites').create(site => {
+		// 	site.url = url;
+		// });
+		await database.action(async () => {
+			const site = await database.collections.get('sites').create(site => {
+				site.url = 'https://' + url.replace(/^(.*:\/\/)/, '');
+			});
+			// site.api.connect();
+		});
 
-		api.connection$.subscribe(
-			data => {
-				if (data.type === 'wcpos_api/FETCH') {
-					navigation.navigate('Modal', { url: data.payload });
-				}
-				dispatch(data);
-			},
-			error => {
-				dispatch(error);
-			},
-			() => {
-				api.connection$.unsubscribe();
-			}
-		);
-
-		api.connect();
+		// const api = new ApiService(url);
+		// api.connection$.subscribe(
+		// 	data => {
+		// 		if (data.type === 'wcpos_api/FETCH') {
+		// 			navigation.navigate('Modal', { url: data.payload });
+		// 		}
+		// 		dispatch(data);
+		// 	},
+		// 	error => {
+		// 		dispatch(error);
+		// 	},
+		// 	() => {
+		// 		api.connection$.unsubscribe();
+		// 	}
+		// );
+		// api.connect();
 	};
 
 	const renderSite = item => (
 		<ListItem
-			label={item.name}
+			key={item.id}
+			label={item.name || item.url}
 			info={item.url}
 			icon={item.icon}
 			action="Remove"
-			onPress={event => {
-				console.log(event);
+			onPress={() => {
+				item.api.connect();
 			}}
-			onAction={event => {
-				console.log(event);
+			onAction={() => {
+				item.destroyPermanently();
 			}}
 		/>
 	);
@@ -127,11 +129,12 @@ const Auth = ({ navigation }: Props) => {
 				<Text size="large">Connect</Text>
 				<Text>Enter the URL of your WooCommerce store:</Text>
 				<TextInput prefix="https://" action="Connect" onAction={handleConnect} keyboardType="url" />
-				<List items={Object.values(checks).filter(item => item)} />
 			</Segment>
-			<Segment>
-				<List items={sites} renderItem={renderSite} />
-			</Segment>
+			{sites && sites.length > 0 && (
+				<Segment>
+					<List items={sites} renderItem={renderSite} />
+				</Segment>
+			)}
 		</AuthView>
 	);
 };

@@ -4,9 +4,9 @@ import i18n from '../../lib/i18n';
 import omit from 'lodash/omit';
 
 class BaseModel extends Model {
-	// constructor(collection: any, rawData: any) {
-	//   super();
-	// }
+	constructor(collection, raw) {
+		super(collection, raw);
+	}
 
 	protected logger = logger;
 	protected i18n = i18n;

@@ -1,16 +1,17 @@
 import Model from './base';
 import { field, nochange, date, json, action, children } from '@nozbe/watermelondb/decorators';
+import ApiService from '../../services/api';
 
 const sanitizeValues = (json: any) => json || {};
 
 export default class Site extends Model {
 	static table = 'sites';
-	// private _url: string;
+	api: ApiService;
 
-	// constructor(url: string) {
-	// 	super();
-	// 	this._url = url;
-	// }
+	constructor(collection, raw) {
+		super(collection, raw);
+		this.api = new ApiService(this);
+	}
 
 	@field('name') name!: string;
 	@field('description') description!: string;
@@ -29,8 +30,4 @@ export default class Site extends Model {
 	// };
 
 	// @immutableRelation('uis', 'ui_id') ui!: any;
-
-	// get url() {
-	// 	return 'https://' + this._url;
-	// }
 }
