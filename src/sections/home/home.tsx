@@ -1,21 +1,23 @@
 import React, { useEffect } from 'react';
 import SplashScreen from 'react-native-splash-screen';
-import { View, Text, ActivityIndicator, StatusBar, AsyncStorage, Platform } from 'react-native';
+import { View, Text, ActivityIndicator, StatusBar, Platform } from 'react-native';
 
 type Props = {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
 };
 
+/**
+ * @TODO - remove this screen?
+ */
 const Home = ({ navigation }: Props) => {
 	useEffect(() => {
 		// do stuff while splash screen is shown
 		// After having done stuff (such as async tasks) hide the splash screen
 		const timer = setTimeout(async () => {
-			const userToken = await AsyncStorage.getItem('userToken');
 			if (Platform.OS === 'ios' || Platform.OS === 'android') {
 				SplashScreen.hide();
 			}
-			navigation.navigate(userToken ? 'Main' : 'Auth');
+			navigation.navigate('Auth');
 		}, 1000);
 		return () => {
 			clearTimeout(timer);

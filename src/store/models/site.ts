@@ -1,5 +1,6 @@
+import { Q } from '@nozbe/watermelondb';
+import { field, json, lazy } from '@nozbe/watermelondb/decorators';
 import Model from './base';
-import { field, nochange, date, json, action, children } from '@nozbe/watermelondb/decorators';
 import ApiService from '../../services/api';
 
 const sanitizeValues = (json: any) => json || {};
@@ -13,6 +14,13 @@ export default class Site extends Model {
 		this.api = new ApiService(this);
 	}
 
+	static associations = {
+		post_authors: { type: 'has_many', foreignKey: 'site_id' },
+	};
+
+	@lazy
+	users = this.collections.get('users').query(Q.on('site_users', 'site_id', this.id));
+
 	@field('name') name!: string;
 	@field('description') description!: string;
 	@field('url') url!: string;
@@ -24,6 +32,8 @@ export default class Site extends Model {
 	@json('routes', sanitizeValues) routes!: {};
 	@field('wp_api_url') wp_api_url!: string;
 	@field('wc_api_url') wc_api_url!: string;
+	@field('wc_api_auth_url') wc_api_auth_url!: string;
+	@json('connection_status', sanitizeValues) connection_status!: string;
 
 	// static associations: Associations = {
 	// 	uis: { type: 'belongs_to', key: 'ui_id' },

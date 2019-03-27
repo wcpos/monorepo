@@ -6,7 +6,7 @@ import Button from '../button';
 
 type Props = {
 	label: string;
-	info?: string;
+	info?: string | React.Component;
 	icon?: string | React.Component;
 	action?: string;
 	onPress?: () => void;
@@ -14,12 +14,8 @@ type Props = {
 };
 
 const ListItem = ({ label, info, onPress, icon, action, onAction }: Props) => {
-	const renderIcon = () => {
-		if (typeof icon === 'string') {
-			return <Icon name={icon} />;
-		}
-		return icon;
-	};
+	const renderIcon = () => (typeof icon === 'string' ? <Icon name={icon} /> : icon);
+	const renderInfo = () => (typeof info === 'string' ? <ListItemText>{info}</ListItemText> : info);
 
 	return (
 		<TouchableOpacity onPress={onPress}>
@@ -27,7 +23,7 @@ const ListItem = ({ label, info, onPress, icon, action, onAction }: Props) => {
 				{icon && renderIcon()}
 				<ListItemTextView>
 					<ListItemText>{label}</ListItemText>
-					{info && <ListItemText>{info}</ListItemText>}
+					{info && renderInfo()}
 				</ListItemTextView>
 				{action && <Button title={action} onPress={onAction} />}
 			</ListItemView>

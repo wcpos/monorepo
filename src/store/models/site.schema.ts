@@ -14,6 +14,8 @@ const schema: Schema = {
 		{ name: 'routes', type: 'string' },
 		{ name: 'wp_api_url', type: 'string' },
 		{ name: 'wc_api_url', type: 'string' },
+		{ name: 'wc_api_auth_url', type: 'string' },
+		{ name: 'connection_status', type: 'string' },
 	],
 };
 

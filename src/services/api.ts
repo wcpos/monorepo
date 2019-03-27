@@ -2,6 +2,7 @@ import axios from 'axios';
 import Url from '../lib/url-parse';
 
 type Site = typeof import('../store/models/site');
+type User = typeof import('../store/models/user');
 
 export type ConnectionEvent = {
 	type: string;
@@ -20,10 +21,33 @@ class ApiService {
 	}
 
 	async connect() {
-		return this.check_wp()
-			.then(() => this.check_wp_api())
+		return this.site
+			.updateFromJSON({
+				connection_status: { status: 'loading', message: 'connecting' },
+			})
+			.then(() => !this.site.wp_api_url && this.check_wp())
+			.then(() => !this.site.wc_api_url && this.check_wp_api())
+			.then(() => this.login())
 			.catch(error => {
-				console.log(error);
+				if (error.response) {
+					// The request was made and the server responded with a status code
+					// that falls out of the range of 2xx
+					console.log(error.response.data);
+					console.log(error.response.status);
+					console.log(error.response.headers);
+				} else if (error.request) {
+					// The request was made but no response was received
+					// `error.request` is an instance of XMLHttpRequest in the browser and an instance of
+					// http.ClientRequest in node.js
+					// CORS or domain not found?
+					console.log(error.request);
+				} else {
+					// Something happened in setting up the request that triggered an Error
+					console.log('Error', error.message);
+				}
+				return this.site.updateFromJSON({
+					connection_status: { status: 'error', message: error.message },
+				});
 			});
 	}
 
@@ -34,7 +58,10 @@ class ApiService {
 			const parsed = Url.parseLinkHeader(link);
 			if ('https://api.w.org/' in parsed) {
 				const { url } = parsed['https://api.w.org/'];
-				return this.site.updateFromJSON({ wp_api_url: url });
+				return this.site.updateFromJSON({
+					wp_api_url: url,
+					connection_status: { status: 'loading', message: 'WP API found' },
+				});
 			} else {
 				throw new Error('WP API not found');
 			}
@@ -43,43 +70,41 @@ class ApiService {
 
 	async check_wp_api() {
 		return this.http.get(this.site.wp_api_url).then(response => {
-			return this.site.updateFromJSON(response.data);
-			// const namespaces = response.data && response.data.namespaces;
-			// if (namespaces.includes('wc/v3')) {
-			// set WooCommerce API Url
-			// this.wc_api_url = new Url(this.wp_api_url);
-			// this.wc_api_url.set('pathname', this.wc_api_url.pathname + 'wc/v3');
-			// // set WooCommerce Auth Url
-			// this.wc_api_auth_url = this.site.url + '/wc-auth/v1/authorize';
-			// this.connection$.next({ wc_api_url: this.wc_api_url.href });
+			const namespaces = response.data && response.data.namespaces;
+			if (namespaces.includes('wc/v3')) {
+				const wc_api_auth_url =
+					response.data.home +
+					this.wc_auth +
+					Url.qs.stringify(
+						{
+							app_name: 'WooCommerce POS',
+							scope: 'read_write',
+							user_id: 123,
+							return_url: 'https://localhost:3000/auth',
+							callback_url: 'https://dev.local/wp/latest/test.php',
+							// return_url: 'https://client.wcpos.com/auth',
+							// callback_url: 'https://client.wcpos.com/auth',
+						},
+						true
+					);
 
-			// console.log(response.data);
-			// debugger;
-			// // this.wc_api_auth_url = this.site.url + '/wc-auth/v1/authorize';
-			// return this.login();
-			// } else {
-			// 	throw new Error('WC API not found');
-			// }
+				return this.site.updateFromJSON({
+					...response.data,
+					wc_api_auth_url,
+					wc_api_url: this.site.wp_api_url + this.wc_namespace,
+					connection_status: { status: 'loading', message: 'WC API found' },
+				});
+			} else {
+				throw new Error('WC API not found');
+			}
 		});
 	}
 
-	// login() {
-	// 	this.connection$.next({
-	// 		type: 'wcpos_api/FETCH',
-	// 		payload:
-	// 			this.site.wc_api_auth_url +
-	// 			Url.qs.stringify(
-	// 				{
-	// 					app_name: 'WooCommerce POS',
-	// 					scope: 'read_write',
-	// 					user_id: 123,
-	// 					return_url: 'https://client.wcpos.com/auth',
-	// 					callback_url: 'https://client.wcpos.com/auth',
-	// 				},
-	// 				true
-	// 			),
-	// 	});
-	// }
+	async login() {
+		return this.site.updateFromJSON({
+			connection_status: { status: 'auth', message: 'Login' },
+		});
+	}
 
 	/**
 	 * Check, if user already authorized.

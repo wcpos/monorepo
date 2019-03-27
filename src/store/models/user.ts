@@ -1,10 +1,18 @@
+import { Q } from '@nozbe/watermelondb';
+import { field, nochange, json, lazy } from '@nozbe/watermelondb/decorators';
 import Model from './base';
-import { field, nochange, date, json, action, children } from '@nozbe/watermelondb/decorators';
 
 const sanitizeValues = (json: any) => json || {};
 
 class User extends Model {
 	static table = 'users';
+
+	static associations = {
+		site_users: { type: 'has_many', foreignKey: 'user_id' },
+	};
+
+	@lazy
+	sites = this.collections.get('posts').query(Q.on('site_users', 'user_id', this.id));
 
 	@nochange @field('remote_id') remote_id!: number;
 	@field('username') username!: string;
@@ -14,8 +22,10 @@ class User extends Model {
 	@field('email') email!: string;
 	@field('nickname') nickname!: string;
 	@field('slug') slug!: string;
+	@field('consumer_key') consumer_key!: string;
+	@field('consumer_secret') consumer_secret!: string;
+	@field('last_access') last_access!: string;
 	@json('meta', sanitizeValues) meta!: {};
-	@field('wc_api_url') wc_api_url!: string;
 }
 
 export default User;
