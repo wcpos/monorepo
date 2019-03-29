@@ -21,20 +21,29 @@ export type Props = {
 	weight?: 'normal' | 'bold' | 'light';
 };
 
-const defaultProps = {
-	align: 'left',
-	italic: false,
-	size: 'normal',
-	type: 'primary',
-	uppercase: false,
-	weight: 'normal',
-	style: {},
+const Text = ({
+	align = 'left',
+	children,
+	italic = false,
+	size = 'normal',
+	style = {},
+	type = 'primary',
+	uppercase = false,
+	weight = 'normal',
+}: Props) => {
+	return (
+		<StyledText
+			align={align}
+			italic={italic}
+			size={size}
+			style={style}
+			type={type}
+			uppercase={uppercase}
+			weight={weight}
+		>
+			{children}
+		</StyledText>
+	);
 };
-
-const Text = ({ children, ...rest }: Props) => {
-	return <StyledText {...rest}>{children}</StyledText>;
-};
-
-Text.defaultProps = defaultProps;
 
 export default Text;

@@ -1,8 +1,6 @@
 import styled from 'styled-components/native';
-import { ThemeProps } from '../../lib/theme/types';
-import { Props as TextProps } from './text';
 
-type Props = { theme: ThemeProps } & TextProps;
+type Props = { theme: import('../../lib/theme/types').ThemeProps } & import('./text').Props;
 
 export const StyledText = styled.Text<Props>`
 	color: ${props => {
@@ -10,11 +8,17 @@ export const StyledText = styled.Text<Props>`
 			case 'secondary':
 				return props.theme.TEXT_COLOR_SECONDARY;
 			case 'attention':
+				return props.theme.TEXT_COLOR_ATTENTION;
 			case 'critical':
+				return props.theme.TEXT_COLOR_CRITICAL;
 			case 'info':
+				return props.theme.TEXT_COLOR_INFO;
 			case 'success':
+				return props.theme.TEXT_COLOR_SUCCESS;
 			case 'warning':
+				return props.theme.TEXT_COLOR_WARNING;
 			case 'inverse':
+				return props.theme.TEXT_COLOR_INVERSE;
 			default:
 				return props.theme.TEXT_COLOR;
 		}

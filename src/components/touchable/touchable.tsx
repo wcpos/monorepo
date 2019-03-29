@@ -1,38 +1,45 @@
 import React from 'react';
 import {
+	GestureResponderEvent,
 	Platform,
 	TouchableNativeFeedback,
 	TouchableOpacity,
 	View,
-	GestureResponderEvent,
 } from 'react-native';
 
 type Props = {
-	children: React.ReactNode;
-	onPress?: (event: GestureResponderEvent) => void;
-	disabled?: boolean;
-	width?: number;
-	style?: {};
-	onLongPress?: (event: GestureResponderEvent) => void;
-	delayPressIn?: number;
-	noRipple?: boolean;
 	borderlessRipple?: boolean;
+	children: React.ReactElement<View>;
+	delayPressIn?: number;
+	disabled?: boolean;
+	noRipple?: boolean;
+	onLongPress?: (event: GestureResponderEvent) => void;
+	onPress?: (event: GestureResponderEvent) => void;
 	rippleColor?: string;
+	style?: {};
+	width?: number;
 };
 
+/**
+ * A Touchable component simply handles the touch gestures on native platforms
+ * on Android it will apply a ripple effect on the backrgound
+ * on iOS and web it will change the opacity of the children
+ *
+ * A Touchable component must have a single child View component
+ */
 const Touchable = ({
-	onPress,
-	style,
-	onLongPress,
-	delayPressIn,
-	noRipple,
 	borderlessRipple,
-	rippleColor = 'rgba(0, 0, 0, 0.32)',
-	width,
+	delayPressIn,
 	disabled,
-	...rest
+	noRipple,
+	onLongPress,
+	onPress,
+	rippleColor = 'rgba(0, 0, 0, 0.32)',
+	style,
+	width,
+	...props
 }: Props) => {
-	const children = React.Children.only(rest.children);
+	const children = React.Children.only(props.children);
 
 	/**
 	 * TouchableNativeFeedback.Ripple causes a crash on old Android versions,
@@ -60,7 +67,7 @@ const Touchable = ({
 				useForeground={useForeground}
 				background={TouchableNativeFeedback.Ripple(rippleColor, borderlessRipple)}
 			>
-				<View style={style}>{children}</View>
+				{children}
 			</TouchableNativeFeedback>
 		);
 	}
@@ -74,7 +81,7 @@ const Touchable = ({
 			activeOpacity={0.5}
 			style={{ width }}
 		>
-			<View style={style}>{children}</View>
+			{children}
 		</TouchableOpacity>
 	);
 };

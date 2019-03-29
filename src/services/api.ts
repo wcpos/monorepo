@@ -81,7 +81,7 @@ class ApiService {
 							scope: 'read_write',
 							user_id: 123,
 							return_url: 'https://localhost:3000/auth',
-							callback_url: 'https://dev.local/wp/latest/test.php',
+							callback_url: 'https://client.wcpos.com',
 							// return_url: 'https://client.wcpos.com/auth',
 							// callback_url: 'https://client.wcpos.com/auth',
 						},

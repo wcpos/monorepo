@@ -6,11 +6,15 @@ import normalizeText from '../normalize-text';
 const colors = {
 	background: palette['blue-grey-050'],
 	border: palette['blue-grey-600'],
-	disabled: palette['blue-grey-400'],
-	error: palette['blue-grey-600'],
 	primary: palette['blue-grey-700'],
 	secondary: palette['blue-grey-500'],
-	text: palette['blue-grey-600'],
+	attention: palette['cyan-800'],
+	critical: palette['red-vivid-600'],
+	info: palette['light-blue-vivid-800'],
+	success: palette['teal-800'],
+	warning: palette['yellow-vivid-800'],
+	inverse: 'rgba(256, 256, 256, 0.8)',
+	disabled: palette['blue-grey-400'],
 };
 
 const fonts = Platform.select({
@@ -26,9 +30,19 @@ const fonts = Platform.select({
 });
 
 const theme: ThemeProps = {
-	BUTTON_TEXT_COLOR: colors.background,
-	BUTTON_BACKGROUND_COLOR: colors.primary,
-	BUTTON_BACKGROUND_COLOR_DISABLED: colors.disabled,
+	BUTTON_BORDER_RADIUS: '3px',
+	BUTTON_COLOR: colors.primary,
+	BUTTON_COLOR_SECONDARY: colors.secondary,
+	BUTTON_COLOR_ATTENTION: colors.attention,
+	BUTTON_COLOR_CRITICAL: colors.critical,
+	BUTTON_COLOR_INFO: colors.info,
+	BUTTON_COLOR_SUCCESS: colors.success,
+	BUTTON_COLOR_WARNING: colors.warning,
+	BUTTON_COLOR_INVERSE: colors.inverse,
+	BUTTON_COLOR_DISABLED: colors.disabled,
+	BUTTON_PADDING_X: '10px',
+	BUTTON_PADDING_Y: '5px',
+
 	BUTTONGROUP_BORDER_COLOR: colors.border,
 	BUTTONGROUP_TEXT_COLOR: colors.background,
 
@@ -82,6 +96,12 @@ const theme: ThemeProps = {
 
 	TEXT_COLOR: colors.primary,
 	TEXT_COLOR_SECONDARY: colors.secondary,
+	TEXT_COLOR_ATTENTION: colors.attention,
+	TEXT_COLOR_CRITICAL: colors.critical,
+	TEXT_COLOR_INFO: colors.info,
+	TEXT_COLOR_SUCCESS: colors.success,
+	TEXT_COLOR_WARNING: colors.warning,
+	TEXT_COLOR_INVERSE: colors.inverse,
 };
 
 export default theme;

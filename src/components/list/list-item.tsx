@@ -1,8 +1,9 @@
 import React from 'react';
 import { TouchableOpacity } from 'react-native';
-import { ListItemView, ListItemTextView, ListItemText } from './styles';
+import { ListItemView, ListItemTextView } from './styles';
 import Icon from '../icon';
 import Button from '../button';
+import Text from '../text';
 
 type Props = {
 	label: string;
@@ -15,14 +16,21 @@ type Props = {
 
 const ListItem = ({ label, info, onPress, icon, action, onAction }: Props) => {
 	const renderIcon = () => (typeof icon === 'string' ? <Icon name={icon} /> : icon);
-	const renderInfo = () => (typeof info === 'string' ? <ListItemText>{info}</ListItemText> : info);
+	const renderInfo = () =>
+		typeof info === 'string' ? (
+			<Text size="small" type="secondary">
+				{info}
+			</Text>
+		) : (
+			info
+		);
 
 	return (
 		<TouchableOpacity onPress={onPress}>
 			<ListItemView>
 				{icon && renderIcon()}
 				<ListItemTextView>
-					<ListItemText>{label}</ListItemText>
+					<Text>{label}</Text>
 					{info && renderInfo()}
 				</ListItemTextView>
 				{action && <Button title={action} onPress={onAction} />}
