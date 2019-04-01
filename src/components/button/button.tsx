@@ -17,14 +17,14 @@ export type Props = {
 	style?: import('react-native').ViewStyle;
 	title?: string;
 	type?:
-		| 'attention'
-		| 'critical'
-		| 'info'
-		| 'primary'
-		| 'secondary'
-		| 'success'
-		| 'warning'
-		| 'inverse';
+	| 'attention'
+	| 'critical'
+	| 'info'
+	| 'primary'
+	| 'secondary'
+	| 'success'
+	| 'warning'
+	| 'inverse';
 };
 
 const Button = ({
@@ -47,7 +47,7 @@ const Button = ({
 	}
 	return (
 		<Touchable disabled={disabled} onPress={onPress}>
-			<ButtonView type={type} background={background}>
+			<ButtonView type={type} background={background} style={style}>
 				<Text type={textType} size={size}>
 					{title}
 				</Text>

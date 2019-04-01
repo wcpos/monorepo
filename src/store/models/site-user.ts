@@ -15,6 +15,9 @@ class SiteUser extends Model {
 
 	@field('site_id') site_id!: string;
 	@field('user_id') user_id!: string;
+	@field('consumer_key') consumer_key!: string;
+	@field('consumer_secret') consumer_secret!: string;
+	@field('last_access') last_access!: string;
 }
 
 export default SiteUser;

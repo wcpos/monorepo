@@ -1,4 +1,5 @@
 import styled from 'styled-components/native';
+import { StyleSheet } from 'react-native';
 
 type Props = { theme: import('../../lib/theme/types').ThemeProps } & import('./button').Props;
 
@@ -48,6 +49,6 @@ export const ButtonView = styled.View<Props>`
 		}
 	}};
 	border-radius: ${props => props.theme.BUTTON_BORDER_RADIUS};
-	border-width: ${props => (props.background === 'outline' ? '1px' : 'none')};
+	border-width: ${props => (props.background === 'outline' ? StyleSheet.hairlineWidth : 0)};
 	padding: ${props => props.theme.BUTTON_PADDING_Y} ${props => props.theme.BUTTON_PADDING_X};
 `;

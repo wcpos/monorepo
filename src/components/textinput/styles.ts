@@ -1,8 +1,6 @@
 import styled from 'styled-components/native';
-import { ThemeProps } from '../../lib/theme/types';
-import { Props as TextInputProps } from './textinput';
 
-type Props = { theme: ThemeProps } & TextInputProps;
+type Props = { theme: import('../../lib/theme/types').ThemeProps } & import('./textinput').Props;
 
 export const Wrapper = styled.View<Props>`
 	flex-direction: row;
@@ -20,9 +18,4 @@ export const Input = styled.TextInput<Props>`
 	align-self: center;
 	font-size: ${props => props.theme.INPUT_FONT_SIZE};
 	padding: 5px 10px;
-`;
-
-export const PrefixText = styled.Text`
-	background-color: lightgrey;
-	padding: 5px;
 `;

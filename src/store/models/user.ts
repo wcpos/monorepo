@@ -22,9 +22,9 @@ class User extends Model {
 	@field('email') email!: string;
 	@field('nickname') nickname!: string;
 	@field('slug') slug!: string;
-	@field('consumer_key') consumer_key!: string;
-	@field('consumer_secret') consumer_secret!: string;
-	@field('last_access') last_access!: string;
+	// @field('consumer_key') consumer_key!: string;
+	// @field('consumer_secret') consumer_secret!: string;
+	// @field('last_access') last_access!: string;
 	@json('meta', sanitizeValues) meta!: {};
 }
 

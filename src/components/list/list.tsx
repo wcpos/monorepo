@@ -19,27 +19,24 @@ const List = ({
 	keyExtractor = () => 'label',
 	...props
 }: Props) => {
-	const renderLabel = (item: Item) => {
-		const key = keyExtractor(item);
-		return item[key] || String(item);
-	};
-
 	return (
 		<ListView>
-			{items.map((item, index) =>
-				props.renderItem ? (
+			{items.map((item, index) => {
+				const key = keyExtractor(item);
+
+				return props.renderItem ? (
 					props.renderItem(item)
 				) : (
 					<ListItem
-						key={item.key || index}
-						label={renderLabel(item)}
+						key={item[key] || index}
+						label={item[key] || String(item)}
 						onPress={onItemPress}
 						icon={item.icon}
 						info={item.info}
 						action={item.action}
 					/>
-				)
-			)}
+				);
+			})}
 		</ListView>
 	);
 };

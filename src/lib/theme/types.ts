@@ -1,4 +1,6 @@
 export interface ThemeProps {
+	APP_BACKGROUND_COLOR: string;
+
 	BUTTON_BORDER_RADIUS: string;
 	BUTTON_COLOR: string;
 	BUTTON_COLOR_SECONDARY: string;

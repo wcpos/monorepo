@@ -30,6 +30,8 @@ const fonts = Platform.select({
 });
 
 const theme: ThemeProps = {
+	APP_BACKGROUND_COLOR: colors.background,
+
 	BUTTON_BORDER_RADIUS: '3px',
 	BUTTON_COLOR: colors.primary,
 	BUTTON_COLOR_SECONDARY: colors.secondary,
@@ -87,7 +89,7 @@ const theme: ThemeProps = {
 	SEGMENT_BORDER_COLOR: colors.primary,
 	SEGMENT_BORDER_RADIUS: '3px',
 	SEGMENT_BORDER_WIDTH: '1px',
-	SEGMENT_PADDING: '0px',
+	SEGMENT_PADDING: '5px',
 
 	SEGMENT_GROUP_PADDING: '10px',
 	SEGMENT_MARGIN_BOTTOM: '10px',

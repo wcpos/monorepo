@@ -1,6 +1,7 @@
 import React from 'react';
 import { Wrapper, Input, PrefixText } from './styles';
 import Button from '../button';
+import Text from '../text';
 
 export type Props = import('react-native').TextInputProps & {
 	autosize?: boolean;
@@ -25,9 +26,13 @@ const TextInput = ({
 			onAction(value);
 		}
 	};
+
+	const renderPrefix = () =>
+		typeof prefix === 'string' ? <Text type="secondary">{prefix}</Text> : prefix;
+
 	return (
 		<Wrapper>
-			{prefix && <PrefixText>{prefix}</PrefixText>}
+			{prefix && renderPrefix()}
 			<Input
 				placeholder={placeholder}
 				value={value}
@@ -35,7 +40,13 @@ const TextInput = ({
 				keyboardType={keyboardType}
 				autoCapitalize="none"
 			/>
-			{action && <Button title={action} onPress={handleAction} />}
+			{action && (
+				<Button
+					title={action}
+					onPress={handleAction}
+					style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+				/>
+			)}
 		</Wrapper>
 	);
 };

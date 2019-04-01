@@ -5,8 +5,9 @@ const schema: Schema = {
 	columns: [
 		{ name: 'site_id', type: 'string', isIndexed: true },
 		{ name: 'user_id', type: 'string', isIndexed: true },
-		{ name: 'consumer_key', type: 'string', isIndexed: true },
-		{ name: 'consumer_secret', type: 'string', isIndexed: true },
+		{ name: 'consumer_key', type: 'string' },
+		{ name: 'consumer_secret', type: 'string' },
+		{ name: 'last_access', type: 'string' },
 	],
 };
 

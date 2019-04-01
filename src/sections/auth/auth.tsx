@@ -8,6 +8,7 @@ import { AuthView } from './styles';
 import useDatabase from '../../hooks/use-database';
 import useObservable from '../../hooks/use-observable';
 import Icon from '../../components/icon';
+import Site from './site';
 
 type Props = {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
@@ -35,6 +36,10 @@ const Auth = ({ navigation }: Props) => {
 			.observeWithColumns(['name', 'connection_status']),
 		[]
 	);
+	// const sites = database.collections
+	// 	.get('sites')
+	// 	.query()
+	// 	.fetch();
 
 	const handleConnect = async (url: string) => {
 		const trimUrl = url.replace(/^.*:\/{2,}|\s/g, '');
@@ -48,32 +53,7 @@ const Auth = ({ navigation }: Props) => {
 		}
 	};
 
-	const renderSite = item => {
-		return (
-			<ListItem
-				key={item.id}
-				label={item.name || item.url}
-				info={
-					<Connection
-						status={item.connection_status.status}
-						message={item.connection_status.message}
-					/>
-				}
-				icon={item.icon}
-				action="Remove"
-				onPress={() => {
-					if (item.connection_status.status === 'auth') {
-						navigation.navigate('Modal', { url: item.wc_api_auth_url });
-					} else {
-						item.api.connect();
-					}
-				}}
-				onAction={() => {
-					item.destroyPermanently();
-				}}
-			/>
-		);
-	};
+	const renderSite = item => <Site site={item} key={item.id} />;
 
 	return (
 		<AuthView>

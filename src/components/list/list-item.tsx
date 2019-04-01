@@ -9,7 +9,7 @@ type Props = {
 	label: string;
 	info?: string | React.Component;
 	icon?: string | React.Component;
-	action?: string;
+	action?: string | React.Component;
 	onPress?: () => void;
 	onAction?: () => void;
 };
@@ -24,6 +24,8 @@ const ListItem = ({ label, info, onPress, icon, action, onAction }: Props) => {
 		) : (
 			info
 		);
+	const renderAction = () =>
+		typeof action === 'string' ? <Button title={action} onPress={onAction} /> : action;
 
 	return (
 		<TouchableOpacity onPress={onPress}>
@@ -33,7 +35,7 @@ const ListItem = ({ label, info, onPress, icon, action, onAction }: Props) => {
 					<Text>{label}</Text>
 					{info && renderInfo()}
 				</ListItemTextView>
-				{action && <Button title={action} onPress={onAction} />}
+				{action && renderAction()}
 			</ListItemView>
 		</TouchableOpacity>
 	);

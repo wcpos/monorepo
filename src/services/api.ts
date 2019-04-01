@@ -12,7 +12,6 @@ export type ConnectionEvent = {
 class ApiService {
 	private http = axios;
 	private wc_namespace = 'wc/v3';
-	private wc_auth = '/wc-auth/v1/authorize';
 
 	site: Site;
 
@@ -69,12 +68,11 @@ class ApiService {
 	}
 
 	async check_wp_api() {
-		return this.http.get(this.site.wp_api_url).then(response => {
+		return this.http.get(this.site.wp_api_url, { headers: { 'X-WCPOS': '1' } }).then(response => {
 			const namespaces = response.data && response.data.namespaces;
-			if (namespaces.includes('wc/v3')) {
+			if (namespaces.includes(this.wc_namespace)) {
 				const wc_api_auth_url =
-					response.data.home +
-					this.wc_auth +
+					response.data.authentication.wcpos.authorize +
 					Url.qs.stringify(
 						{
 							app_name: 'WooCommerce POS',
@@ -82,6 +80,7 @@ class ApiService {
 							user_id: 123,
 							return_url: 'https://localhost:3000/auth',
 							callback_url: 'https://client.wcpos.com',
+							wcpos: 1,
 							// return_url: 'https://client.wcpos.com/auth',
 							// callback_url: 'https://client.wcpos.com/auth',
 						},

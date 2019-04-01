@@ -15,8 +15,27 @@ type Props = {
 const Modal = ({ navigation }: Props) => {
 	const uri = navigation.getParam('url');
 
-	window.location.href = uri;
-	return null;
+	const handleMessage = ({ data }: MessageEvent) => {
+		if (data.username) {
+			// update user info
+			console.log('user', data);
+			// user.updateFromJson(data);
+		}
+		if (data.consumer_key) {
+			// add keys
+			console.log('keys', data);
+			navigation.navigate('Auth');
+		}
+	};
+
+	React.useEffect(() => {
+		window.addEventListener('message', handleMessage);
+		return () => {
+			window.removeEventListener('message', handleMessage);
+		};
+	});
+
+	return <iframe title="Auth" src={uri} width="100%" height="100%" />;
 
 	// const handleMessage = data => {
 	// 	console.log(data);

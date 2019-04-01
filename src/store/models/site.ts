@@ -15,7 +15,7 @@ export default class Site extends Model {
 	}
 
 	static associations = {
-		post_authors: { type: 'has_many', foreignKey: 'site_id' },
+		site_users: { type: 'has_many', foreignKey: 'site_id' },
 	};
 
 	@lazy
