@@ -31,4 +31,17 @@ storiesOf('TextInput', module)
 			onAction={action('submit')}
 			prefix={text('prefix', 'http://')}
 		/>
+	))
+
+	/**
+	 *
+	 */
+	.add('cancellable', () => (
+		<TextInput
+			placeholder={text('placeholder', 'Placeholder text')}
+			action={text('action', 'Submit')}
+			onAction={action('submit')}
+			prefix={text('prefix', 'http://')}
+			cancellable={true}
+		/>
 	));

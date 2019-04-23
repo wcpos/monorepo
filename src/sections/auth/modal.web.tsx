@@ -13,7 +13,7 @@ type Props = {
 
 // @TODO: use normal modal instead
 const Modal = ({ navigation }: Props) => {
-	const uri = navigation.getParam('url');
+	const site = navigation.getParam('site');
 
 	const handleMessage = ({ data }: MessageEvent) => {
 		if (data.username) {
@@ -35,7 +35,7 @@ const Modal = ({ navigation }: Props) => {
 		};
 	});
 
-	return <iframe title="Auth" src={uri} width="100%" height="100%" />;
+	return <iframe title="Auth" src={site.wcAuthUrl} width="100%" height="100%" />;
 
 	// const handleMessage = data => {
 	// 	console.log(data);

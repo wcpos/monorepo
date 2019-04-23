@@ -12,7 +12,7 @@ class User extends Model {
 	};
 
 	@lazy
-	sites = this.collections.get('posts').query(Q.on('site_users', 'user_id', this.id));
+	sites = this.collections.get('sites').query(Q.on('site_users', 'user_id', this.id));
 
 	@nochange @field('remote_id') remote_id!: number;
 	@field('username') username!: string;
@@ -24,7 +24,7 @@ class User extends Model {
 	@field('slug') slug!: string;
 	// @field('consumer_key') consumer_key!: string;
 	// @field('consumer_secret') consumer_secret!: string;
-	// @field('last_access') last_access!: string;
+	@field('last_access') last_access!: string;
 	@json('meta', sanitizeValues) meta!: {};
 }
 

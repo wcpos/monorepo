@@ -6,6 +6,7 @@ export type Props = {
 	align?: 'left' | 'right' | 'center' | 'justify';
 	children: React.ReactNode;
 	italic?: boolean;
+	onPress?: () => void;
 	size?: 'normal' | 'large' | 'small';
 	style?: TextStyle;
 	type?:
@@ -25,6 +26,7 @@ const Text = ({
 	align = 'left',
 	children,
 	italic = false,
+	onPress,
 	size = 'normal',
 	style = {},
 	type = 'primary',
@@ -35,6 +37,7 @@ const Text = ({
 		<StyledText
 			align={align}
 			italic={italic}
+			onPress={onPress}
 			size={size}
 			style={style}
 			type={type}

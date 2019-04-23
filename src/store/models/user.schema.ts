@@ -11,8 +11,6 @@ const schema: Schema = {
 		{ name: 'email', type: 'string' },
 		{ name: 'nickname', type: 'string' },
 		{ name: 'slug', type: 'string' },
-		{ name: 'consumer_key', type: 'string' },
-		{ name: 'consumer_secret', type: 'string' },
 		{ name: 'last_access', type: 'string' },
 		{ name: 'roles', type: 'string' },
 		{ name: 'locale', type: 'string' },

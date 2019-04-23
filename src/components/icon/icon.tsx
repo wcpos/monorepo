@@ -3,27 +3,31 @@ import iconsMap from './icons.json';
 import Text from '../text';
 
 const sanitizeIconCharacter = (iconCharacter: string) => {
-  // if (/^f(.{3})$/.test(iconCharacter)) {
-  return String.fromCharCode(parseInt(iconCharacter, 16));
-  // }
-  // return iconCharacter;
+	// if (/^f(.{3})$/.test(iconCharacter)) {
+	return String.fromCharCode(parseInt(iconCharacter, 16));
+	// }
+	// return iconCharacter;
 };
 
 type Props = {
-  name: string;
-  color?: string;
-  size?: 'small' | 'medium' | 'large';
-  style?: {};
-  disabled?: boolean;
-  raised?: boolean;
-  onPress?: () => void;
+	color?: string;
+	disabled?: boolean;
+	name: string;
+	onPress?: () => void;
+	raised?: boolean;
+	size?: 'small' | 'medium' | 'large';
+	style?: {};
 };
 
-const Icon = ({ name, color, size, style }: Props) => {
-  // @ts-ignore
-  const icon = iconsMap[name] || iconsMap['error'];
+const Icon = ({ name, color, size, style, onPress }: Props) => {
+	// @ts-ignore
+	const icon = iconsMap[name] || iconsMap['error'];
 
-  return <Text style={{ fontFamily: 'WooCommercePOS', color }}>{sanitizeIconCharacter(icon)}</Text>;
+	return (
+		<Text onPress={onPress} style={{ fontFamily: 'WooCommercePOS', color }}>
+			{sanitizeIconCharacter(icon)}
+		</Text>
+	);
 };
 
 export default Icon;

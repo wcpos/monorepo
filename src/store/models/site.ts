@@ -2,6 +2,7 @@ import { Q } from '@nozbe/watermelondb';
 import { field, json, lazy } from '@nozbe/watermelondb/decorators';
 import Model from './base';
 import ApiService from '../../services/api';
+import Url from '../../lib/url-parse';
 
 const sanitizeValues = (json: any) => json || {};
 
@@ -35,9 +36,23 @@ export default class Site extends Model {
 	@field('wc_api_auth_url') wc_api_auth_url!: string;
 	@json('connection_status', sanitizeValues) connection_status!: string;
 
-	// static associations: Associations = {
-	// 	uis: { type: 'belongs_to', key: 'ui_id' },
-	// };
-
-	// @immutableRelation('uis', 'ui_id') ui!: any;
+	/**
+	 *
+	 */
+	get wcAuthUrl() {
+		return (
+			this.authentication.wcpos.authorize +
+			Url.qs.stringify(
+				{
+					app_name: 'WooCommerce POS',
+					scope: 'read_write',
+					user_id: 123,
+					return_url: 'https://localhost:3000/auth',
+					callback_url: 'https://client.wcpos.com',
+					wcpos: 1,
+				},
+				true
+			)
+		);
+	}
 }

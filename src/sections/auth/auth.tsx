@@ -60,7 +60,13 @@ const Auth = ({ navigation }: Props) => {
 			<Segment style={{ width: 460 }}>
 				<Text size="large">Connect</Text>
 				<Text>Enter the URL of your WooCommerce store:</Text>
-				<TextInput prefix="https://" action="Connect" onAction={handleConnect} keyboardType="url" />
+				<TextInput
+					prefix="https://"
+					action="Connect"
+					onAction={handleConnect}
+					keyboardType="url"
+					cancellable={true}
+				/>
 			</Segment>
 			{sites && sites.length > 0 && (
 				<Segment style={{ width: 460 }}>
