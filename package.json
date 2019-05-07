@@ -8,10 +8,10 @@
     "clean": "shx rm -rf dist && rm -rf node_modules"
   },
   "dependencies": {
-    "@nozbe/watermelondb": "0.12.2",
+    "@nozbe/watermelondb": "0.12.3",
     "@react-navigation/core": "3.4.1",
-    "@react-navigation/web": "1.0.0-alpha.7",
-    "@sentry/browser": "5.1.1",
+    "@react-navigation/web": "1.0.0-alpha.8",
+    "@sentry/browser": "5.1.2",
     "axios": "0.18.0",
     "i18next": "15.1.0",
     "lodash": "4.17.11",
@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@types/lodash": "4.14.123",
-    "@types/react": "16.8.15",
+    "@types/react": "16.8.16",
     "@types/react-native": "0.57.51",
     "@types/react-navigation": "3.0.6",
     "@types/styled-components": "4.1.14",
