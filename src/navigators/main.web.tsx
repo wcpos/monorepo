@@ -1,6 +1,6 @@
 import React, { Fragment, useState } from 'react';
 import { createNavigator, SceneView, NavigationActions } from '@react-navigation/core';
-import DrawerRouter from 'react-navigation-drawer/dist/routers/DrawerRouter';
+import DrawerRouter from 'react-navigation-drawer/lib/commonjs/routers/DrawerRouter';
 import { View } from 'react-native';
 import POS from '../sections/pos';
 import Products from '../sections/products';
