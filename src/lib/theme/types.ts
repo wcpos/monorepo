@@ -26,6 +26,8 @@ export interface ThemeProps {
 	CHECKBOX_INFO_FONT_SIZE: number;
 	CHECKBOX_LABEL_COLOR: string;
 	CHECKBOX_LABEL_FONT_SIZE: number;
+	CHECKBOX_WIDTH: number;
+	CHECKBOX_HEIGHT: number;
 
 	FONT_FAMILY: string;
 

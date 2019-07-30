@@ -54,15 +54,17 @@ const theme: ThemeProps = {
 	CHECKBOX_BORDER_RADIUS: '3px',
 	CHECKBOX_BORDER_WIDTH: '1px',
 	CHECKBOX_INFO_COLOR: colors.secondary,
-	CHECKBOX_INFO_FONT_SIZE: normalizeText(14),
+	CHECKBOX_INFO_FONT_SIZE: normalizeText(12),
 	CHECKBOX_LABEL_COLOR: colors.primary,
-	CHECKBOX_LABEL_FONT_SIZE: normalizeText(18),
+	CHECKBOX_LABEL_FONT_SIZE: normalizeText(14),
+	CHECKBOX_WIDTH: normalizeText(14),
+	CHECKBOX_HEIGHT: normalizeText(14),
 
 	FONT_FAMILY: fonts.regular,
 
-	FONT_SIZE: normalizeText(18),
-	FONT_SIZE_LARGE: normalizeText(32),
-	FONT_SIZE_SMALL: normalizeText(14),
+	FONT_SIZE: normalizeText(14),
+	FONT_SIZE_LARGE: normalizeText(18),
+	FONT_SIZE_SMALL: normalizeText(12),
 
 	FONT_WEIGHT: 400,
 	FONT_WEIGHT_BOLD: 700,
@@ -74,7 +76,7 @@ const theme: ThemeProps = {
 	INPUT_BORDER_WIDTH: '1px',
 	INPUT_ERROR_TEXT_COLOR: colors.primary,
 	INPUT_PADDING: '5px',
-	INPUT_FONT_SIZE: normalizeText(18),
+	INPUT_FONT_SIZE: normalizeText(14),
 	INPUT_TEXT_COLOR: colors.border,
 
 	MASTERBAR_BACKGROUND_COLOR: colors.primary,
