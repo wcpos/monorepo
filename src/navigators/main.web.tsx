@@ -1,6 +1,6 @@
-import React, { Fragment, useState } from 'react';
+import React, { Fragment } from 'react';
 import { createNavigator, SceneView, NavigationActions } from '@react-navigation/core';
-import DrawerRouter from 'react-navigation-drawer/lib/commonjs/routers/DrawerRouter';
+import DrawerRouter from 'react-navigation-drawer/lib/module/routers/DrawerRouter';
 import { View } from 'react-native';
 import POS from '../sections/pos';
 import Products from '../sections/products';
@@ -17,21 +17,22 @@ type DrawerItem = import('react-navigation').DrawerItem;
  * react-navigation DrawerView is not compatible with web ... yet
  * based on:
  * https://github.com/react-navigation/react-navigation-drawer/blob/master/src/views/DrawerView.js
+ * https://github.com/react-navigation/drawer/blob/master/src/views/DrawerView.tsx
  */
 const DrawerView: NavigationView = ({ descriptors, navigation }) => {
 	const activeKey = navigation.state.routes[navigation.state.index].key;
 	const descriptor = descriptors[activeKey];
 	// @ts-ignore
-	const { openId, closeId } = navigation.state;
-	const [state, setState] = useState({ open: false, openId, closeId });
+	// const { openId, closeId } = navigation.state;
+	// const [state, setState] = useState({ open: false, openId, closeId });
 
-	if (state.openId !== openId) {
-		setState({ open: true, openId: openId, closeId: state.closeId });
-	}
+	// if (state.openId !== openId) {
+	// 	setState({ open: true, openId: openId, closeId: state.closeId });
+	// }
 
-	if (state.closeId !== closeId) {
-		setState({ open: false, closeId: closeId, openId: state.openId });
-	}
+	// if (state.closeId !== closeId) {
+	// 	setState({ open: false, closeId: closeId, openId: state.openId });
+	// }
 
 	const handleItemPress = ({ route, focused }: DrawerItem) => {
 		if (focused) {
@@ -49,7 +50,7 @@ const DrawerView: NavigationView = ({ descriptors, navigation }) => {
 				navigation={descriptor.navigation}
 				style={{ flex: 1 }}
 			/>
-			{state.open && (
+			{navigation.state.isDrawerOpen && (
 				<View
 					style={{
 						backgroundColor: 'rgba(00, 00, 00, 0.1)',

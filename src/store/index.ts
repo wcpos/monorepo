@@ -50,7 +50,7 @@ const database = new Database({
 		UIColumn,
 		User,
 	],
-	actionsEnabled: true,
+	actionsEnabled: false,
 });
 
 export default database;

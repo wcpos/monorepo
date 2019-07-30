@@ -19,7 +19,7 @@ const SideBar = ({ activeItemKey, items, onItemPress }: Props) => {
 		return (
 			<ListItem
 				key={item.key}
-				text={item.routeName}
+				label={item.routeName}
 				onPress={() => {
 					onItemPress({ route: item, focused: false });
 				}}

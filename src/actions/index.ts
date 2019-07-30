@@ -16,7 +16,7 @@ const user = {
 
 export async function sync(type: string) {
 	return await ajax({
-		url: 'http://dev.local/wp/latest/wp-json/wc/v3/' + type,
+		url: 'https://dev.local/wp/latest/wp-json/wc/v3/' + type,
 		withCredentials: true,
 		user: user.consumer_key,
 		password: user.consumer_secret,

@@ -53,6 +53,10 @@ const Auth = ({ navigation }: Props) => {
 		}
 	};
 
+	const handleDirectLink = () => {
+		navigation.navigate('POS');
+	};
+
 	const renderSite = item => <Site site={item} key={item.id} />;
 
 	return (
@@ -73,6 +77,7 @@ const Auth = ({ navigation }: Props) => {
 					<List items={sites} renderItem={renderSite} />
 				</Segment>
 			)}
+			<Text onPress={handleDirectLink}>Go to POS</Text>
 		</AuthView>
 	);
 };
