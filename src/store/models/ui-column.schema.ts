@@ -5,6 +5,8 @@ const schema: Schema = {
 	columns: [
 		{ name: 'ui_id', type: 'string', isIndexed: true },
 		{ name: 'key', type: 'string' },
+		{ name: 'section', type: 'string' },
+		{ name: 'order', type: 'number' },
 		{ name: 'hide', type: 'boolean' },
 		{ name: 'disableSort', type: 'boolean' },
 		{ name: 'flexGrow', type: 'number', isOptional: true },

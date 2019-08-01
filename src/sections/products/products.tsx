@@ -26,7 +26,7 @@ const Products = () => {
 		// []
 	);
 
-	const ui: any = useUI();
+	const ui: any = useUI('products');
 
 	if (!ui) {
 		return <Button title="Init UI" onPress={initProductsUI} />;

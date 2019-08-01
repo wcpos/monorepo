@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Q } from '@nozbe/watermelondb';
 import useDatabase from '../../hooks/use-database';
 import useObservable from '../../hooks/use-observable';
+import useUI from '../../hooks/use-ui';
 import Segment, { SegmentGroup } from '../../components/segment';
 import Text from '../../components/text';
 import Table from './table';
@@ -20,20 +21,24 @@ const Customers = () => {
 		[search]
 	);
 
+	const ui: any = useUI('customers');
+
 	return (
-		<SegmentGroup>
-			<Segment>
-				<Actions onSearch={setSearch} />
-			</Segment>
-			<Segment>
-				{customers && customers.length > 0 ? (
-					<Table customers={customers} />
-				) : (
-					<Text>No customers found</Text>
-				)}
-			</Segment>
-			<Segment content={customers && customers.length} />
-		</SegmentGroup>
+		ui && (
+			<SegmentGroup>
+				<Segment>
+					<Actions onSearch={setSearch} />
+				</Segment>
+				<Segment>
+					{customers && customers.length > 0 ? (
+						<Table customers={customers} columns={ui.columns} />
+					) : (
+						<Text>No customers found</Text>
+					)}
+				</Segment>
+				<Segment content={customers && customers.length} />
+			</SegmentGroup>
+		)
 	);
 };
 

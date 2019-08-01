@@ -12,6 +12,8 @@ export default class Column extends Model {
 	@immutableRelation('uis', 'ui_id') ui!: any;
 
 	@nochange @field('key') key!: string;
+	@field('section') section!: string;
+	@field('order') order!: number;
 	@field('hide') hide!: boolean;
 	@field('disableSort') disableSort!: boolean;
 	@field('flexGrow') flexGrow?: 0 | 1;
@@ -19,6 +21,6 @@ export default class Column extends Model {
 	@field('width') width?: string;
 
 	get label() {
-		return this.i18n.t('product.column.label.' + this.key);
+		return this.i18n.t(this.section + '.column.label.' + this.key);
 	}
 }
