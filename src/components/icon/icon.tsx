@@ -24,7 +24,7 @@ const Icon = ({ name, color, size, style, onPress }: Props) => {
 	const icon = iconsMap[name] || iconsMap['error'];
 
 	return (
-		<Text onPress={onPress} style={{ fontFamily: 'WooCommercePOS', color }}>
+		<Text onPress={onPress} style={{ fontFamily: 'WooCommercePOS', color }} size={size}>
 			{sanitizeIconCharacter(icon)}
 		</Text>
 	);

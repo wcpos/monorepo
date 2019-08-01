@@ -8,34 +8,33 @@ import Table from './table';
 import Actions from './actions';
 
 const Customers = () => {
-  const [search, setSearch] = useState('');
-  const database = useDatabase();
+	const [search, setSearch] = useState('');
+	const database = useDatabase();
 
-  const customers = useObservable(
-    () =>
-      database.collections
-        .get('customers')
-        // TODO: query works on last_name as well?
-        .query(Q.where('first_name', Q.like(`%${Q.sanitizeLikeString(search)}%`)))
-        .observeWithColumns(['first_name', 'last_name']),
-    []
-  );
+	const customers = useObservable(
+		database.collections
+			.get('customers')
+			.query(Q.where('last_name', Q.like(`%${Q.sanitizeLikeString(search)}%`)))
+			.observeWithColumns(['first_name', 'last_name']),
+		[],
+		[search]
+	);
 
-  return (
-    <SegmentGroup>
-      <Segment>
-        <Actions onSearch={setSearch} />
-      </Segment>
-      <Segment>
-        {customers && customers.length > 0 ? (
-          <Table customers={customers} />
-        ) : (
-          <Text>No customers found</Text>
-        )}
-      </Segment>
-      <Segment content={customers && customers.length} />
-    </SegmentGroup>
-  );
+	return (
+		<SegmentGroup>
+			<Segment>
+				<Actions onSearch={setSearch} />
+			</Segment>
+			<Segment>
+				{customers && customers.length > 0 ? (
+					<Table customers={customers} />
+				) : (
+					<Text>No customers found</Text>
+				)}
+			</Segment>
+			<Segment content={customers && customers.length} />
+		</SegmentGroup>
+	);
 };
 
 export default Customers;

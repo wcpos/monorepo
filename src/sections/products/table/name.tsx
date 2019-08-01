@@ -3,13 +3,13 @@ import TextInput from '../../../components/textinput';
 import Product from '../../../models/product/model';
 
 type Props = {
-  product: Product;
+	product: Product;
 };
 
 const Name = ({ product }: Props) => {
-  const [name, setName] = useState(product.name);
-  const handleBlur = (event: any) => product.update({ name });
-  return <TextInput value={name} onChangeText={setName} onBlur={handleBlur} />;
+	const [name, setName] = useState(product.name);
+	const handleBlur = (event: any) => product.update({ name });
+	return <TextInput value={name} onChangeText={setName} onBlur={handleBlur} />;
 };
 
 export default Name;

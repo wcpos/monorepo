@@ -17,5 +17,5 @@ export const Input = styled.TextInput<Props>`
 	flex: 1;
 	align-self: center;
 	font-size: ${props => props.theme.INPUT_FONT_SIZE};
-	padding: 5px 10px;
+	padding: 0;
 `;

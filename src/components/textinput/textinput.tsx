@@ -18,11 +18,19 @@ const TextInput = ({
 	cancellable = false,
 	placeholder,
 	onAction,
+	onChangeText,
 	prefix,
 	keyboardType,
 	...props
 }: Props) => {
 	const [value, setValue] = React.useState(props.value || '');
+
+	const handleChangeText = (newValue: string) => {
+		setValue(newValue);
+		if (typeof onChangeText === 'function') {
+			onChangeText(value);
+		}
+	};
 
 	const clearText = () => {
 		setValue('');
@@ -45,7 +53,7 @@ const TextInput = ({
 			<Input
 				placeholder={placeholder}
 				value={value}
-				onChangeText={setValue}
+				onChangeText={handleChangeText}
 				keyboardType={keyboardType}
 				autoCapitalize="none"
 			/>

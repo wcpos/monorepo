@@ -4,28 +4,28 @@ import Checkbox from '../../components/checkbox';
 import Loader from '../../components/loader';
 
 interface Props {
-  columns: any;
+	columns: any;
 }
 
 const Settings = (props: Props) => {
-  const columns = useObservable(props.columns.observeWithColumns(['hide']), []);
+	const columns = useObservable(props.columns.observeWithColumns(['hide']), []);
 
-  if (!columns) {
-    return <Loader />;
-  }
+	if (!columns) {
+		return <Loader />;
+	}
 
-  return (
-    <Fragment>
-      {columns.map((column: any) => (
-        <Checkbox
-          key={column.key}
-          label={column.label}
-          checked={!column.hide}
-          onChange={() => column.update({ hide: !column.hide })}
-        />
-      ))}
-    </Fragment>
-  );
+	return (
+		<Fragment>
+			{columns.map((column: any) => (
+				<Checkbox
+					key={column.key}
+					label={column.label}
+					checked={!column.hide}
+					onChange={() => column.update({ hide: !column.hide })}
+				/>
+			))}
+		</Fragment>
+	);
 };
 
 export default Settings;

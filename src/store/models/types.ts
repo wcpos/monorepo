@@ -54,3 +54,10 @@ export interface CustomerQuery {
 	| 'customer'
 	| 'shop_manager';
 }
+
+export interface Customer {
+	first_name: string;
+	last_name: string;
+}
+
+export type Customers = Customer[];
