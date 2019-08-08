@@ -27,14 +27,29 @@ i18n.use(initReactI18next).init({
 					column: {
 						label: {
 							actions: 'Actions',
+							avatar_url: 'Image',
+							billing: 'Billing Address',
+							email: 'Email',
 							first_name: 'First Name',
 							last_name: 'Last Name',
-							email: 'Email',
 							role: 'Role',
-							username: 'Username',
-							billing: 'Billing Address',
 							shipping: 'Shipping Address',
-							avatar_url: 'Image',
+							username: 'Username',
+						},
+					},
+				},
+				orders: {
+					column: {
+						label: {
+							actions: 'Actions',
+							customer: 'Customer',
+							date_completed: 'Date Completed',
+							date_created: 'Date Created',
+							date_modified: 'Date Modified',
+							note: 'Note',
+							number: 'Order Number',
+							status: 'Status',
+							total: 'Total',
 						},
 					},
 				},

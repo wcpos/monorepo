@@ -11,7 +11,6 @@ import Segment, { SegmentGroup } from '../../components/segment';
 import Actions from './actions';
 import Loader from '../../components/loader';
 import Button from '../../components/button';
-import { initProductsUI } from '../../actions/product';
 
 const Products = () => {
 	const [search, setSearch] = useState('');
@@ -28,36 +27,34 @@ const Products = () => {
 
 	const ui: any = useUI('products');
 
-	if (!ui) {
-		return <Button title="Init UI" onPress={initProductsUI} />;
-	}
-
 	// const columns = useObservable(() => ui.columns.observe(), null);
 	return (
-		<SegmentGroup>
-			<Segment>
-				<Actions onSearch={setSearch} />
-			</Segment>
-			<Segment>
-				<Tooltip popover={<Settings columns={ui.columns} />}>
-					<Text>Settings</Text>
-				</Tooltip>
-			</Segment>
-			<Segment>
-				<Table
-					// database={this.props.database}
-					// deleteRecord={this.deleteRecord}
-					// search={this.state.search}
-					// sort={this.handleSort}
-					// sortBy={this.state.sortBy}
-					// sortDirection={this.state.sortDirection}
-					columns={ui.columns}
-					products={products}
-				/>
-			</Segment>
+		ui && (
+			<SegmentGroup>
+				<Segment>
+					<Actions onSearch={setSearch} />
+				</Segment>
+				<Segment>
+					<Tooltip popover={<Settings columns={ui.columns} />}>
+						<Text>Settings</Text>
+					</Tooltip>
+				</Segment>
+				<Segment>
+					<Table
+						// database={this.props.database}
+						// deleteRecord={this.deleteRecord}
+						// search={this.state.search}
+						// sort={this.handleSort}
+						// sortBy={this.state.sortBy}
+						// sortDirection={this.state.sortDirection}
+						columns={ui.columns}
+						products={products}
+					/>
+				</Segment>
 
-			<Segment content={products && products.length} />
-		</SegmentGroup>
+				<Segment content={products && products.length} />
+			</SegmentGroup>
+		)
 	);
 };
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import useDatabase from '../../hooks/use-database';
 import useObservable from '../../hooks/use-observable';
+import useUI from '../../hooks/use-ui';
 import Table from './table';
 import Button from '../../components/button';
 import Segment, { SegmentGroup } from '../../components/segment';
@@ -17,16 +18,20 @@ const Orders = () => {
 		[]
 	);
 
+	const ui: any = useUI('orders');
+
 	return (
-		<SegmentGroup>
-			<Segment>
-				<Button title="Sync" onPress={syncOrders} />
-			</Segment>
-			<Segment>
-				<Table orders={orders} />
-			</Segment>
-			<Segment content={orders && orders.length} />
-		</SegmentGroup>
+		ui && (
+			<SegmentGroup>
+				<Segment>
+					<Button title="Sync" onPress={syncOrders} />
+				</Segment>
+				<Segment>
+					<Table orders={orders} columns={ui.columns} />
+				</Segment>
+				<Segment content={orders && orders.length} />
+			</SegmentGroup>
+		)
 	);
 };
 
