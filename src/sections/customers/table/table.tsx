@@ -68,6 +68,7 @@ const CustomersTable = ({ customers, ...props }: Props) => {
 			sort={sort}
 			sortBy={sortBy}
 			sortDirection={sortDirection}
+			empty="No customers found"
 		/>
 	);
 };

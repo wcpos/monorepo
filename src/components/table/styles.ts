@@ -3,29 +3,29 @@ import { ThemeProps } from '../../lib/theme/types';
 import isNil from 'lodash/isNil';
 
 export const Row = styled.View`
-  flex-direction: row;
-  border-bottom-width: 1px;
-  border-style: solid;
-  border-bottom-color: #000000;
+	flex-direction: row;
+	border-bottom-width: 1px;
+	border-style: solid;
+	border-bottom-color: #000000;
 `;
 
 export const Cell = styled.View<{ flexGrow?: 0 | 1; flexShrink?: 0 | 1; width?: string }>`
-  flex-grow: ${props => (isNil(props.flexGrow) ? 1 : props.flexGrow)};
-  flex-shrink: ${props => (isNil(props.flexShrink) ? 1 : props.flexShrink)};
-  width: ${props => (isNil(props.width) ? '100%' : props.width)};
-  padding: 5px;
+	flex-grow: ${props => (isNil(props.flexGrow) ? 1 : props.flexGrow)};
+	flex-shrink: ${props => (isNil(props.flexShrink) ? 1 : props.flexShrink)};
+	width: ${props => (isNil(props.width) ? '100%' : props.width)};
+	padding: 5px;
 `;
 
 export const HeaderRow = styled.View`
-  flex-direction: row;
-  border-bottom-width: 2px;
-  border-style: solid;
-  border-bottom-color: #000000;
+	flex-direction: row;
+	border-bottom-width: 2px;
+	border-style: solid;
+	border-bottom-color: #000000;
 `;
 
 export const HeaderCell = styled.View<{ flexGrow?: 0 | 1; flexShrink?: 0 | 1; width?: string }>`
-  flex-grow: ${props => (isNil(props.flexGrow) ? 1 : props.flexGrow)};
-  flex-shrink: ${props => (isNil(props.flexShrink) ? 1 : props.flexShrink)};
-  width: ${props => (isNil(props.width) ? '100%' : props.width)};
-  padding: 5px;
+	flex-grow: ${props => (isNil(props.flexGrow) ? 1 : props.flexGrow)};
+	flex-shrink: ${props => (isNil(props.flexShrink) ? 1 : props.flexShrink)};
+	width: ${props => (isNil(props.width) ? '100%' : props.width)};
+	padding: 5px;
 `;

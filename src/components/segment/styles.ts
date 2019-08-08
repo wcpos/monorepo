@@ -61,5 +61,5 @@ export const SegmentGroupView = styled.View<SegmentGroupViewProps>`
 			default: css`
 				box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
 			`,
-		})}
+		})};
 `;

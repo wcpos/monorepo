@@ -9,6 +9,7 @@ import Customers from '../sections/customers';
 import Support from '../sections/support';
 import MasterBar from '../sections/masterbar';
 import SideBar from '../sections/sidebar';
+import Layout from '../components/layout';
 
 type NavigationView = import('react-navigation').NavigationView<{}, {}>;
 type DrawerItem = import('react-navigation').DrawerItem;
@@ -44,12 +45,18 @@ const DrawerView: NavigationView = ({ descriptors, navigation }) => {
 
 	return (
 		<Fragment>
-			<MasterBar navigation={descriptor.navigation} title={descriptor.state.routeName} />
-			<SceneView
-				component={descriptor.getComponent()}
-				navigation={descriptor.navigation}
-				style={{ flex: 1 }}
-			/>
+			<Layout
+				masterbar={
+					<MasterBar navigation={descriptor.navigation} title={descriptor.state.routeName} />
+				}
+				main={
+					<SceneView
+						component={descriptor.getComponent()}
+						navigation={descriptor.navigation}
+						style={{ flex: 1 }}
+					/>
+				}
+			></Layout>
 			{navigation.state.isDrawerOpen && (
 				<View
 					style={{

@@ -7,6 +7,7 @@ import Customers from '../sections/customers';
 import Support from '../sections/support';
 import SideBar from '../sections/sidebar';
 import MasterBar from '../sections/masterbar';
+import Layout from '../components/layout';
 
 type NavigationScreenProps = import('react-navigation').NavigationScreenProps;
 type ScreenProps = NavigationScreenProps & { component: React.ReactElement };
@@ -14,10 +15,10 @@ type DrawerItemsProps = import('react-navigation').DrawerItemsProps;
 
 const Screen = ({ navigation, component }: ScreenProps) => {
 	return (
-		<>
-			<MasterBar navigation={navigation} title={navigation.state.routeName} />
-			{component}
-		</>
+		<Layout
+			masterbar={<MasterBar navigation={navigation} title={navigation.state.routeName} />}
+			main={component}
+		/>
 	);
 };
 

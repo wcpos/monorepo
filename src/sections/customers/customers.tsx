@@ -4,7 +4,6 @@ import useDatabase from '../../hooks/use-database';
 import useObservable from '../../hooks/use-observable';
 import useUI from '../../hooks/use-ui';
 import Segment, { SegmentGroup } from '../../components/segment';
-import Text from '../../components/text';
 import Table from './table';
 import Actions from './actions';
 
@@ -25,18 +24,14 @@ const Customers = () => {
 
 	return (
 		ui && (
-			<SegmentGroup>
-				<Segment>
+			<SegmentGroup style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+				<Segment style={{ flex: '0 1 auto' }}>
 					<Actions onSearch={setSearch} />
 				</Segment>
-				<Segment>
-					{customers && customers.length > 0 ? (
-						<Table customers={customers} columns={ui.columns} />
-					) : (
-						<Text>No customers found</Text>
-					)}
+				<Segment style={{ flex: '1' }}>
+					<Table customers={customers} columns={ui.columns} />
 				</Segment>
-				<Segment content={customers && customers.length} />
+				<Segment style={{ flex: '0 1 auto' }} content={customers && customers.length} />
 			</SegmentGroup>
 		)
 	);
