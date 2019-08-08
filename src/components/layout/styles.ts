@@ -12,4 +12,5 @@ export const Masterbar = styled.View`
 
 export const Main = styled.View`
 	flex: 1;
+	padding: 5px;
 `;

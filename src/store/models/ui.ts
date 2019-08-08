@@ -86,8 +86,9 @@ const init = {
 			{ key: 'email' },
 			{
 				key: 'role',
+				show: false,
 			},
-			{ key: 'username' },
+			{ key: 'username', show: false },
 			{ key: 'billing' },
 			{ key: 'shipping' },
 			{

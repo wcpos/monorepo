@@ -6,22 +6,22 @@ import { syncProducts } from '../../actions/product';
 import { ActionsView } from './styles';
 
 interface Props {
-  onSearch: any;
+	onSearch: any;
 }
 
 const Actions = ({ onSearch }: Props) => {
-  const { t, i18n } = useTranslation();
+	const { t, i18n } = useTranslation();
 
-  return (
-    <ActionsView>
-      <TextInput
-        placeholder={t('product.search.placeholder')}
-        onChangeText={onSearch}
-        style={{ flex: 1 }}
-      />
-      <Button title={t('product.button.sync')} onPress={syncProducts} />
-    </ActionsView>
-  );
+	return (
+		<ActionsView>
+			<TextInput
+				placeholder={t('products.search.placeholder')}
+				onChangeText={onSearch}
+				style={{ flex: 1 }}
+			/>
+			<Button title={t('products.button.sync')} onPress={syncProducts} />
+		</ActionsView>
+	);
 };
 
 export default Actions;

@@ -43,6 +43,9 @@ const ProductsTable = ({ products, ...props }: Props) => {
 
 	const cols = columns
 		.filter((column: any) => !column.hide)
+		.sort(function(a, b) {
+			return a.order - b.order;
+		})
 		.map((column: any) => {
 			switch (column.key) {
 				case 'image':

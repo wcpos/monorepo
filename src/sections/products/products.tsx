@@ -30,16 +30,16 @@ const Products = () => {
 	// const columns = useObservable(() => ui.columns.observe(), null);
 	return (
 		ui && (
-			<SegmentGroup>
-				<Segment>
+			<SegmentGroup style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+				<Segment style={{ flex: '0 1 auto' }}>
 					<Actions onSearch={setSearch} />
 				</Segment>
-				<Segment>
+				<Segment style={{ flex: '0 1 auto' }}>
 					<Tooltip popover={<Settings columns={ui.columns} />}>
 						<Text>Settings</Text>
 					</Tooltip>
 				</Segment>
-				<Segment>
+				<Segment style={{ flex: '1', padding: 0 }}>
 					<Table
 						// database={this.props.database}
 						// deleteRecord={this.deleteRecord}
@@ -52,7 +52,7 @@ const Products = () => {
 					/>
 				</Segment>
 
-				<Segment content={products && products.length} />
+				<Segment style={{ flex: '0 1 auto' }} content={products && products.length} />
 			</SegmentGroup>
 		)
 	);

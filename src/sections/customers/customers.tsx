@@ -28,7 +28,7 @@ const Customers = () => {
 				<Segment style={{ flex: '0 1 auto' }}>
 					<Actions onSearch={setSearch} />
 				</Segment>
-				<Segment style={{ flex: '1' }}>
+				<Segment style={{ flex: '1', padding: 0 }}>
 					<Table customers={customers} columns={ui.columns} />
 				</Segment>
 				<Segment style={{ flex: '0 1 auto' }} content={customers && customers.length} />
