@@ -25,13 +25,13 @@ const Customers = () => {
 	return (
 		ui && (
 			<SegmentGroup style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-				<Segment style={{ flex: '0 1 auto' }}>
+				<Segment style={{ flex: -1 }}>
 					<Actions onSearch={setSearch} />
 				</Segment>
-				<Segment style={{ flex: '1', padding: 0 }}>
+				<Segment style={{ flex: 1, padding: 0 }}>
 					<Table customers={customers} columns={ui.columns} />
 				</Segment>
-				<Segment style={{ flex: '0 1 auto' }} content={customers && customers.length} />
+				<Segment style={{ flex: -1 }} content={customers && customers.length} />
 			</SegmentGroup>
 		)
 	);

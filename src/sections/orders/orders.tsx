@@ -4,8 +4,8 @@ import useObservable from '../../hooks/use-observable';
 import useUI from '../../hooks/use-ui';
 import Table from './table';
 import Button from '../../components/button';
-import Segment, { SegmentGroup } from '../../components/segment';
 import { syncOrders } from '../../actions/order';
+import { TableLayout } from '../../components/layout';
 
 const Orders = () => {
 	// const [search, setSearch] = useState('');
@@ -22,15 +22,11 @@ const Orders = () => {
 
 	return (
 		ui && (
-			<SegmentGroup>
-				<Segment>
-					<Button title="Sync" onPress={syncOrders} />
-				</Segment>
-				<Segment>
-					<Table orders={orders} columns={ui.columns} />
-				</Segment>
-				<Segment content={orders && orders.length} />
-			</SegmentGroup>
+			<TableLayout
+				actions={<Button title="Sync" onPress={syncOrders} />}
+				table={<Table orders={orders} columns={ui.columns} />}
+				footer={orders && orders.length}
+			/>
 		)
 	);
 };

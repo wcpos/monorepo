@@ -6,7 +6,7 @@ import ErrorBoundary from '../../components/error';
 
 const POS = () => {
 	return (
-		<View style={{ flexDirection: 'row' }}>
+		<View style={{ flexDirection: 'row', height: '100%' }}>
 			<View style={{ flex: 1 }}>
 				<ErrorBoundary>
 					<Products />

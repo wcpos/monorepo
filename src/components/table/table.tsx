@@ -30,6 +30,7 @@ const Table = ({ items, columns, sort, sortBy, sortDirection, footer, empty }: P
 			}
 			ListFooterComponent={footer}
 			ListEmptyComponent={<Text>{empty}</Text>}
+			stickyHeaderIndices={[0]}
 		/>
 	);
 };

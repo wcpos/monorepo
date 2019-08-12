@@ -19,7 +19,7 @@ const Cart = () => {
 			.observeWithColumns(['line_items']),
 		[]
 	);
-	const [activeOrder, setActiveOrder] = useState(null);
+	const [activeOrder, setActiveOrder] = useState(false);
 	const [showCustomerNote, setShowCustomerNote] = useState(false);
 
 	const handleUpdate = (json: any) => {
@@ -42,33 +42,33 @@ const Cart = () => {
 	}
 
 	return (
-		<SegmentGroup>
-			<Segment>
+		<SegmentGroup style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+			<Segment style={{ flex: -1 }}>
 				<Customer order={activeOrder} />
 			</Segment>
-			<Segment>
+			<Segment style={{ flex: 1, padding: 0 }}>
 				<Table
 					// @ts-ignore
 					line_items={activeOrder.line_items}
 					// order={activeOrder}
 				/>
 			</Segment>
-			<Segment>
+			<Segment style={{ flex: -1 }}>
 				<Totals order={activeOrder} />
 			</Segment>
-			<Segment>
+			<Segment style={{ flex: -1 }}>
 				<Button title="Note" onPress={() => setShowCustomerNote(true)} />
 			</Segment>
-			{showCustomerNote && (
-				<Segment>
-					<Note
-						// @ts-ignore
-						customer_note={activeOrder.customer_note}
-						onUpdate={handleUpdate}
-					/>
-				</Segment>
-			)}
-			<Segment>
+
+			<Segment style={{ flex: -1 }}>
+				<Note
+					// @ts-ignore
+					customer_note={activeOrder.customer_note}
+					onUpdate={handleUpdate}
+				/>
+			</Segment>
+
+			<Segment style={{ flex: -1 }}>
 				<Tabs orders={orders} setActiveOrder={setActiveOrder} />
 			</Segment>
 		</SegmentGroup>

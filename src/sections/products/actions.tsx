@@ -4,6 +4,7 @@ import TextInput from '../../components/textinput';
 import Button from '../../components/button';
 import { syncProducts } from '../../actions/product';
 import { ActionsView } from './styles';
+import Api from '../../services/api';
 
 interface Props {
 	onSearch: any;
@@ -12,6 +13,11 @@ interface Props {
 const Actions = ({ onSearch }: Props) => {
 	const { t, i18n } = useTranslation();
 
+	const handleSync = async () => {
+		const api = new Api({});
+		return api.sync('products');
+	};
+
 	return (
 		<ActionsView>
 			<TextInput
@@ -19,7 +25,7 @@ const Actions = ({ onSearch }: Props) => {
 				onChangeText={onSearch}
 				style={{ flex: 1 }}
 			/>
-			<Button title={t('products.button.sync')} onPress={syncProducts} />
+			<Button title={t('products.button.sync')} onPress={handleSync} />
 		</ActionsView>
 	);
 };

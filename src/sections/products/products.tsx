@@ -31,15 +31,15 @@ const Products = () => {
 	return (
 		ui && (
 			<SegmentGroup style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-				<Segment style={{ flex: '0 1 auto' }}>
+				<Segment style={{ flex: -1 }}>
 					<Actions onSearch={setSearch} />
 				</Segment>
-				<Segment style={{ flex: '0 1 auto' }}>
+				<Segment style={{ flex: -1 }}>
 					<Tooltip popover={<Settings columns={ui.columns} />}>
 						<Text>Settings</Text>
 					</Tooltip>
 				</Segment>
-				<Segment style={{ flex: '1', padding: 0 }}>
+				<Segment style={{ flex: 1, padding: 0 }}>
 					<Table
 						// database={this.props.database}
 						// deleteRecord={this.deleteRecord}
@@ -52,7 +52,7 @@ const Products = () => {
 					/>
 				</Segment>
 
-				<Segment style={{ flex: '0 1 auto' }} content={products && products.length} />
+				<Segment style={{ flex: -1 }} content={products && products.length} />
 			</SegmentGroup>
 		)
 	);

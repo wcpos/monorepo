@@ -1,5 +1,6 @@
 import axios from 'axios';
 import Url from '../lib/url-parse';
+import database from '../store';
 
 type Site = typeof import('../store/models/site');
 type User = typeof import('../store/models/user');
@@ -111,6 +112,48 @@ class ApiService {
 	// public isAuthorized(): Observable<boolean> {
 	// 	// return this.tokenStorage.getAccessToken().pipe(map(token => !!token));
 	// }
+
+	// {
+	// 	key_id: 3,
+	// 	user_id: "123",
+	// 	consumer_key:
+	// 	"ck_3a5b30b5570a020fa613a7be5cdfc516c21e8371",
+	// 	consumer_secret: "cs_a57adc1116df21dac39a0483cd635f2d3becfb6b",
+	// 	key_permissions: "read_write"
+	// }
+
+	// Basic = Base64 encode ck:cs
+
+	async sync(type: string) {
+		return this.http
+			.get('https://wcposdev.wpengine.com/wp-json/wc/v3/' + type, {
+				auth: {
+					username: 'ck_3a5b30b5570a020fa613a7be5cdfc516c21e8371',
+					password: 'cs_a57adc1116df21dac39a0483cd635f2d3becfb6b',
+				},
+				headers: {
+					'X-WCPOS': '1',
+				},
+			})
+			.then(response => {
+				const batch = response.data.map((json: any) => {
+					const collection = database.collections.get('products');
+					return collection.prepareCreate((model: Product) => {
+						Object.keys(json).forEach((key: string) => {
+							switch (key) {
+								case 'id':
+									model.remote_id = json.id;
+									break;
+								default:
+									// @ts-ignore
+									model[key] = json[key];
+							}
+						});
+					});
+				});
+				return database.action(async () => await database.batch(...batch));
+			});
+	}
 }
 
 export default ApiService;
