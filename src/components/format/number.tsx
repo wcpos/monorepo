@@ -1,18 +1,19 @@
 import React, { Fragment, ReactNode } from 'react';
+import Text from '../text';
 
 interface Props {
-  children: ReactNode;
-  prefix?: string;
-  suffix?: string;
-  decimalSeparator?: string;
+	children: ReactNode;
+	prefix?: string;
+	suffix?: string;
+	decimalSeparator?: string;
 }
 
 const Name = ({ children, prefix, suffix }: Props) => {
-  return (
-    <Fragment>
-      {prefix} {children} {suffix}
-    </Fragment>
-  );
+	return (
+		<Text>
+			{prefix} {children} {suffix}
+		</Text>
+	);
 };
 
 export default Name;

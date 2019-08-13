@@ -22,7 +22,7 @@ import userSchema from './models/user.schema';
 const adapter = new Adapter({
 	dbName: 'wcpos',
 	schema: appSchema({
-		version: 32,
+		version: 34,
 		tables: [
 			tableSchema(customerSchema),
 			tableSchema(orderLineItemSchema),

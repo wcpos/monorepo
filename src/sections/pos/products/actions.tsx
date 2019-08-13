@@ -1,12 +1,16 @@
-import React from 'react';
-import Input from '../../../components/input';
+import React, { Fragment } from 'react';
+import Input from '../../../components/textinput';
 
 interface Props {
 	onSearch: any;
 }
 
 const Actions = ({ onSearch }: Props) => {
-	return <Input placeholder="Search products" onChangeText={onSearch} />;
+	return (
+		<Fragment>
+			<Input placeholder="Search products" onChangeText={onSearch} />
+		</Fragment>
+	);
 };
 
 export default Actions;

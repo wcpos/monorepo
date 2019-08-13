@@ -6,7 +6,7 @@ const schema: Schema = {
 		{ name: 'section', type: 'string' },
 		{ name: 'sortBy', type: 'string' },
 		{ name: 'sortDirection', type: 'string' },
-		// { name: 'columns', type: 'string' },
+		{ name: 'display', type: 'string' },
 	],
 };
 

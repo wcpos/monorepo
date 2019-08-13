@@ -13,6 +13,7 @@ const Actions = ({ product }: Props) => {
 
 	const handleShow = () => {
 		console.log('show modal');
+		console.log(product);
 	};
 
 	return (

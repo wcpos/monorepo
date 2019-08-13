@@ -53,6 +53,21 @@ i18n.use(initReactI18next).init({
 						},
 					},
 				},
+				pos_products: {
+					column: {
+						label: {
+							actions: 'Actions',
+							id: 'ID',
+							image: 'Image',
+							name: 'Product',
+							price: 'Price',
+							regular_price: 'Regular Price',
+							sale_price: 'Sale Price',
+							sku: 'SKU',
+							stock: 'Stock',
+						},
+					},
+				},
 				products: {
 					button: {
 						sync: 'Sync Products',
@@ -65,8 +80,6 @@ i18n.use(initReactI18next).init({
 							id: 'ID',
 							image: 'Image',
 							name: 'Product',
-							note: 'Note',
-							number: 'Number',
 							price: 'Price',
 							qty: 'Qty',
 							regular_price: 'Regular Price',

@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, Fragment } from 'react';
 import { Q } from '@nozbe/watermelondb';
 import useDatabase from '../../../hooks/use-database';
 import useObservable from '../../../hooks/use-observable';
 import Table from './table';
 import Actions from './actions';
 import { TableLayout } from '../../../components/layout';
+import useUI from '../../../hooks/use-ui';
+import Settings from './settings';
 
 const Products = () => {
 	const [search, setSearch] = useState('');
@@ -16,13 +18,19 @@ const Products = () => {
 			.observeWithColumns(['name', 'regular_price']),
 		[]
 	);
+	const ui: any = useUI('pos_products');
 
 	return (
-		<TableLayout
-			actions={<Actions onSearch={setSearch} />}
-			table={<Table products={products} />}
-			footer={products && products.length}
-		/>
+		ui && (
+			<Fragment>
+				<Settings ui={ui} />
+				<TableLayout
+					actions={<Actions onSearch={setSearch} />}
+					table={<Table products={products} ui={ui} />}
+					footer={products && products.length}
+				/>
+			</Fragment>
+		)
 	);
 };
 

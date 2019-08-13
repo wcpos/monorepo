@@ -1,8 +1,34 @@
 import Model from './base';
-import { field, nochange, children } from '@nozbe/watermelondb/decorators';
+import { field, nochange, children, json } from '@nozbe/watermelondb/decorators';
 import database from '../index';
 
+const sanitizeValues = (json: any) => json || {};
+
 const init = {
+	pos_products: {
+		sortBy: 'name',
+		sortDirection: 'asc',
+		columns: [
+			{
+				key: 'image',
+				disableSort: true,
+			},
+			{
+				key: 'name',
+			},
+			{ key: 'sku', hide: true },
+			{ key: 'price' },
+			{
+				key: 'actions',
+				disableSort: true,
+			},
+		],
+		display: [
+			{ key: 'sku', hide: true, label: 'SKU' },
+			{ key: 'categories', label: 'Categories' },
+			{ key: 'tags', hide: true, label: 'Tags' },
+		],
+	},
 	products: {
 		sortBy: 'name',
 		sortDirection: 'asc',
@@ -24,6 +50,8 @@ const init = {
 				key: 'actions',
 				disableSort: true,
 			},
+			{ key: 'categories', hide: true },
+			{ key: 'tags', hide: true },
 		],
 	},
 	orders: {
@@ -52,12 +80,12 @@ const init = {
 			},
 			{
 				key: 'date_modified',
-				show: false,
+				hide: true,
 				width: '10%',
 			},
 			{
 				key: 'date_completed',
-				show: false,
+				hide: true,
 				width: '10%',
 			},
 			{
@@ -86,9 +114,9 @@ const init = {
 			{ key: 'email' },
 			{
 				key: 'role',
-				show: false,
+				hide: true,
 			},
-			{ key: 'username', show: false },
+			{ key: 'username', hide: true },
 			{ key: 'billing' },
 			{ key: 'shipping' },
 			{
@@ -111,12 +139,14 @@ export default class UI extends Model {
 	@nochange @field('section') section!: string;
 	@field('sortBy') sortBy!: string;
 	@field('sortDirection') sortDirection!: string;
+	@json('display', sanitizeValues) display!: {};
 
 	static resetDefaults = async (section: string) => {
 		const ui = database.collections.get('uis').prepareCreate((model: UI) => {
 			model.section = section;
 			model.sortBy = init[section].sortBy;
 			model.sortDirection = init[section].sortDirection;
+			model.display = init[section].display;
 		});
 
 		const columns = init[section].columns.map((column: any, index: number) =>

@@ -125,6 +125,7 @@ class ApiService {
 	// Basic = Base64 encode ck:cs
 
 	async sync(type: string) {
+		debugger;
 		return this.http
 			.get('https://wcposdev.wpengine.com/wp-json/wc/v3/' + type, {
 				auth: {
