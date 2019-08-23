@@ -15,18 +15,21 @@ const user = {
  * Create axios instance with default config
  */
 const http = axios.create({
-	baseURL: 'https://wcposdev.wpengine.com/wp-json/wc/v3/',
+	// baseURL: 'https://wcposdev.wpengine.com/wp-json/wc/v3/',
 	// timeout: 1000,
-	headers: { 'X-WCPOS': '1' },
+	// headers: { 'X-WCPOS': '1' },
 });
 
 http.interceptors.request.use(
 	function(config) {
-		debugger;
-		config.headers.Authorization = `Basic ${btoa(user.key + ':' + user.secret)}`;
+		if (config.method !== 'head') {
+			config.headers['X-WCPOS'] = 1;
+			// config.headers.Authorization = `Basic ${btoa(user.key + ':' + user.secret)}`;
+		}
 		return config;
 	},
 	function(error) {
+		debugger;
 		return Promise.reject(error);
 	}
 );

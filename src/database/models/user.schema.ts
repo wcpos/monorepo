@@ -4,6 +4,7 @@ const schema: Schema = {
 	name: 'users',
 	columns: [
 		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'site_id', type: 'string', isIndexed: true },
 		{ name: 'username', type: 'string' },
 		{ name: 'name', type: 'string' },
 		{ name: 'first_name', type: 'string' },
@@ -15,6 +16,8 @@ const schema: Schema = {
 		{ name: 'roles', type: 'string' },
 		{ name: 'locale', type: 'string' },
 		{ name: 'meta', type: 'string' },
+		{ name: 'consumer_key', type: 'string' },
+		{ name: 'consumer_secret', type: 'string' },
 	],
 };
 

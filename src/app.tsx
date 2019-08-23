@@ -1,7 +1,6 @@
 import React from 'react';
-import DatabaseProvider from '@nozbe/watermelondb/DatabaseProvider';
 import { ThemeProvider } from 'styled-components/native';
-import database from './store';
+import { DatabaseProvider } from './hooks/use-database';
 import Navigator from './navigators';
 import ActivityIndicator from './components/activity-indicator';
 import { defaultTheme } from './lib/theme';
@@ -12,7 +11,7 @@ import i18n from './lib/i18n';
 const App = () => (
 	// <React.StrictMode>
 	<React.Suspense fallback={<ActivityIndicator />}>
-		<DatabaseProvider database={database}>
+		<DatabaseProvider>
 			<ThemeProvider theme={defaultTheme}>
 				<Navigator />
 			</ThemeProvider>

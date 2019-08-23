@@ -1,30 +1,21 @@
 import React from 'react';
-import ReactDOM from 'react-dom';
 
 type Props = {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
 };
 
-{
-	/* <script>
-  window.postMessage("Sending data from WebView");
-</script> */
-}
-
 // @TODO: use normal modal instead
 const Modal = ({ navigation }: Props) => {
 	const site = navigation.getParam('site');
+	const user = navigation.getParam('user');
 
 	const handleMessage = ({ data }: MessageEvent) => {
-		if (data.username) {
-			// update user info
-			console.log('user', data);
-			// user.updateFromJson(data);
-		}
-		if (data.consumer_key) {
-			// add keys
-			console.log('keys', data);
-			navigation.navigate('Auth');
+		if (data.source === 'wcpos') {
+			debugger;
+			user.updateFromJSON(data.payload);
+			if (user.isAuthorized()) {
+				navigation.navigate('Auth');
+			}
 		}
 	};
 

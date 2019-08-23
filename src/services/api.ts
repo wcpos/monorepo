@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Url from '../lib/url-parse';
-import database from '../store';
+import { sitesDatabase as database } from '../database';
+import http from '../lib/axios';
 
 type Site = typeof import('../store/models/site');
 type User = typeof import('../store/models/user');
@@ -125,17 +126,10 @@ class ApiService {
 	// Basic = Base64 encode ck:cs
 
 	async sync(type: string) {
-		debugger;
-		return this.http
-			.get('https://wcposdev.wpengine.com/wp-json/wc/v3/' + type, {
-				auth: {
-					username: 'ck_3a5b30b5570a020fa613a7be5cdfc516c21e8371',
-					password: 'cs_a57adc1116df21dac39a0483cd635f2d3becfb6b',
-				},
-				headers: {
-					'X-WCPOS': '1',
-				},
-			})
+		// return this.http
+		return http
+			.get(type)
+
 			.then(response => {
 				const batch = response.data.map((json: any) => {
 					const collection = database.collections.get('products');

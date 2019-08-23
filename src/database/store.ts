@@ -1,4 +1,5 @@
 import { Database, appSchema, tableSchema } from '@nozbe/watermelondb';
+import hash from 'hash-sum';
 import Adapter from './adapter';
 import Customer from './models/customer';
 import Order from './models/order';
@@ -14,43 +15,55 @@ import orderLineItemSchema from './models/order-line-item.schema';
 import orderSchema from './models/order.schema';
 import productSchema from './models/product.schema';
 import productVariationSchema from './models/product-variation.schema';
-import siteSchema from './models/site.schema';
 import uiColumnSchema from './models/ui-column.schema';
 import uiSchema from './models/ui.schema';
-import userSchema from './models/user.schema';
 
-const adapter = new Adapter({
-	dbName: 'wcpos',
-	schema: appSchema({
-		version: 34,
-		tables: [
-			tableSchema(customerSchema),
-			tableSchema(orderLineItemSchema),
-			tableSchema(orderSchema),
-			tableSchema(productSchema),
-			tableSchema(productVariationSchema),
-			tableSchema(siteSchema),
-			tableSchema(uiColumnSchema),
-			tableSchema(uiSchema),
-			tableSchema(userSchema),
+type Props = {
+	site?: string;
+	user?: string;
+	store?: string;
+};
+
+const store = (obj: Props) => {
+	if (!obj.site || !obj.user) {
+		return;
+	}
+
+	const dbName = hash(obj);
+
+	const adapter = new Adapter({
+		dbName,
+		schema: appSchema({
+			version: 1,
+			tables: [
+				tableSchema(customerSchema),
+				tableSchema(orderLineItemSchema),
+				tableSchema(orderSchema),
+				tableSchema(productSchema),
+				tableSchema(productVariationSchema),
+				tableSchema(uiColumnSchema),
+				tableSchema(uiSchema),
+			],
+		}),
+	});
+
+	const database = new Database({
+		adapter,
+		modelClasses: [
+			Customer,
+			Order,
+			OrderLineItem,
+			Product,
+			ProductVariation,
+			Site,
+			UI,
+			UIColumn,
+			User,
 		],
-	}),
-});
+		actionsEnabled: true,
+	});
 
-const database = new Database({
-	adapter,
-	modelClasses: [
-		Customer,
-		Order,
-		OrderLineItem,
-		Product,
-		ProductVariation,
-		Site,
-		UI,
-		UIColumn,
-		User,
-	],
-	actionsEnabled: false,
-});
+	return database;
+};
 
-export default database;
+export default store;

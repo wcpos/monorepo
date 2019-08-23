@@ -1,6 +1,6 @@
 import Model from './base';
 import { field, nochange, children, json } from '@nozbe/watermelondb/decorators';
-import database from '../index';
+import { storeDatabase as database } from '../index';
 
 const sanitizeValues = (json: any) => json || {};
 

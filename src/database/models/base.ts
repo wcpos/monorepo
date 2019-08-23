@@ -24,10 +24,11 @@ class BaseModel extends Model {
 
 	/** Update from raw JSON */
 	protected async updateFromJSON(json: any) {
-		await this.update(() => {
-			Object.keys(json).forEach((key: string) => {
-				// @ts-ignore
-				this[key] = json[key];
+		await this.collection.database.action(async () => {
+			await this.update(() => {
+				Object.keys(json).forEach((key: string) => {
+					this[key] = json[key];
+				});
 			});
 		});
 	}

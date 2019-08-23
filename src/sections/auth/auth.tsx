@@ -2,13 +2,12 @@ import React from 'react';
 import Segment from '../../components/segment';
 import TextInput from '../../components/textinput';
 import Text from '../../components/text';
-import Avatar from '../../components/avatar';
-import List, { ListItem } from '../../components/list';
 import { AuthView } from './styles';
 import useDatabase from '../../hooks/use-database';
-import useObservable from '../../hooks/use-observable';
+// import useObservable from '../../hooks/use-observable';
 import Icon from '../../components/icon';
-import Site from './site';
+import Sites from './sites';
+// import { sitesDatabase } from '../../database';
 
 type Props = {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
@@ -27,37 +26,36 @@ const Connection = ({
 );
 
 const Auth = ({ navigation }: Props) => {
-	const database = useDatabase();
+	// const { sites } = useAuth();
+	const { sitesDB } = useDatabase();
 
-	const sites = useObservable(
-		database.collections
-			.get('sites')
-			.query()
-			.observeWithColumns(['name', 'connection_status']),
-		[]
-	);
+	// const sites = useObservable(
+	// 	database.collections
+	// 		.get('sites')
+	// 		.query()
+	// 		.observeWithColumns(['name', 'connection_status']),
+	// 	[]
+	// );
 	// const sites = database.collections
 	// 	.get('sites')
 	// 	.query()
 	// 	.fetch();
 
 	const handleConnect = async (url: string) => {
-		const trimUrl = url.replace(/^.*:\/{2,}|\s/g, '');
+		const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
 		if (trimUrl) {
-			const site = await database.action(async () => {
-				return await database.collections.get('sites').create(site => {
-					site.url = 'https://' + trimUrl; // force https
+			const site = await sitesDB.action(async () => {
+				return await sitesDB.collections.get('sites').create(site => {
+					site.url = trimUrl;
 				});
 			});
-			site.api.connect();
+			site.connect();
 		}
 	};
 
 	const handleDirectLink = () => {
 		navigation.navigate('POS');
 	};
-
-	const renderSite = item => <Site site={item} key={item.id} />;
 
 	return (
 		<AuthView>
@@ -72,11 +70,7 @@ const Auth = ({ navigation }: Props) => {
 					cancellable={true}
 				/>
 			</Segment>
-			{sites && sites.length > 0 && (
-				<Segment style={{ width: 460 }}>
-					<List items={sites} renderItem={renderSite} />
-				</Segment>
-			)}
+			<Sites />
 			<Text onPress={handleDirectLink}>Go to POS</Text>
 		</AuthView>
 	);
