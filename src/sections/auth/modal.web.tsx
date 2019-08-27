@@ -11,9 +11,8 @@ const Modal = ({ navigation }: Props) => {
 
 	const handleMessage = ({ data }: MessageEvent) => {
 		if (data.source === 'wcpos') {
-			debugger;
 			user.updateFromJSON(data.payload);
-			if (user.isAuthorized()) {
+			if (user.isAuthenticated()) {
 				navigation.navigate('Auth');
 			}
 		}

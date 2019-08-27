@@ -14,11 +14,11 @@ import Button from '../../components/button';
 
 const Products = () => {
 	const [search, setSearch] = useState('');
-	const database = useDatabase();
+	const { storeDB } = useDatabase();
 
 	const products = useObservable(
 		// () =>
-		database.collections
+		storeDB.collections
 			.get('products')
 			.query(Q.where('name', Q.like(`%${Q.sanitizeLikeString(search)}%`)))
 			.observeWithColumns(['name', 'regular_price', 'sku'])
@@ -47,7 +47,7 @@ const Products = () => {
 						// sort={this.handleSort}
 						// sortBy={this.state.sortBy}
 						// sortDirection={this.state.sortDirection}
-						columns={ui.columns}
+						columns={ui.getColumns()}
 						products={products}
 					/>
 				</Segment>

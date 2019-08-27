@@ -1,25 +1,29 @@
 import React from 'react';
+import get from 'lodash/get';
 import { WebView } from 'react-native-webview';
+
+type MessageEvent = import('react-native-webview').WebViewMessageEvent;
 
 type Props = {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
 };
 
-{
-	/* <script>
-  window.postMessage("Sending data from WebView");
-</script> */
-}
-
 const Modal = ({ navigation }: Props) => {
-	const uri = navigation.getParam('url');
+	const site = navigation.getParam('site');
+	const user = navigation.getParam('user');
 
-	const handleMessage = data => {
+	const handleMessage = (event: MessageEvent) => {
+		const data = JSON.parse(get(event, ['nativeEvent', 'data']));
 		console.log(data);
-		navigation.navigate('Auth');
+		if (data.source === 'wcpos') {
+			user.updateFromJSON(data.payload);
+			if (user.isAuthenticated()) {
+				navigation.navigate('Auth');
+			}
+		}
 	};
 
-	return <WebView source={{ uri }} ref="authModal" onMessage={handleMessage} />;
+	return <WebView source={{ uri: site.wcAuthUrl }} onMessage={handleMessage} />;
 };
 
 export default Modal;

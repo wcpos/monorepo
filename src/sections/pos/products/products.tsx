@@ -10,9 +10,10 @@ import Settings from './settings';
 
 const Products = () => {
 	const [search, setSearch] = useState('');
-	const database = useDatabase();
+	const { storeDB } = useDatabase();
+
 	const products = useObservable(
-		database.collections
+		storeDB.collections
 			.get('products')
 			.query(Q.where('name', Q.like(`%${Q.sanitizeLikeString(search)}%`)))
 			.observeWithColumns(['name', 'regular_price']),

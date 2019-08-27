@@ -7,13 +7,7 @@ interface Props {
 	columns: any;
 }
 
-const Settings = (props: Props) => {
-	const columns = useObservable(props.columns.observeWithColumns(['hide']), []);
-
-	if (!columns) {
-		return <Loader />;
-	}
-
+const Settings = ({ columns }: Props) => {
 	return (
 		<Fragment>
 			{columns.map((column: any) => (

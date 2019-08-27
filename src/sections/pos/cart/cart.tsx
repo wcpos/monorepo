@@ -11,9 +11,9 @@ import Note from './note';
 import Tabs from './tabs';
 
 const Cart = () => {
-	const database = useDatabase();
+	const { storeDB } = useDatabase();
 	const orders = useObservable(
-		database.collections
+		storeDB.collections
 			.get('orders')
 			.query(Q.where('status', 'completed'))
 			.observeWithColumns(['line_items']),

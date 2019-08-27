@@ -10,6 +10,8 @@ import Support from '../sections/support';
 import MasterBar from '../sections/masterbar';
 import SideBar from '../sections/sidebar';
 import Layout from '../components/layout';
+import useDatabase from '../hooks/use-database';
+import Text from '../components/text';
 
 type NavigationView = import('react-navigation').NavigationView<{}, {}>;
 type DrawerItem = import('react-navigation').DrawerItem;
@@ -35,6 +37,8 @@ const DrawerView: NavigationView = ({ descriptors, navigation }) => {
 	// 	setState({ open: false, closeId: closeId, openId: state.openId });
 	// }
 
+	const { storeDB } = useDatabase();
+
 	const handleItemPress = ({ route, focused }: DrawerItem) => {
 		if (focused) {
 			navigation.closeDrawer();
@@ -43,7 +47,7 @@ const DrawerView: NavigationView = ({ descriptors, navigation }) => {
 		}
 	};
 
-	return (
+	return storeDB ? (
 		<Fragment>
 			<Layout
 				masterbar={
@@ -79,6 +83,8 @@ const DrawerView: NavigationView = ({ descriptors, navigation }) => {
 				</View>
 			)}
 		</Fragment>
+	) : (
+		<Text>Loading database</Text>
 	);
 };
 

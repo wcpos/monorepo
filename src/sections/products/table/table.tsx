@@ -21,14 +21,14 @@ interface Props {
 	products: any;
 }
 
-const ProductsTable = ({ products, ...props }: Props) => {
-	const columns = useObservable(props.columns.observeWithColumns(['hide']));
+const ProductsTable = ({ products, columns }: Props) => {
+	// const columns = useObservable(props.columns.observeWithColumns(['hide']));
 
-	console.log('ProductsTable render');
+	// console.log('ProductsTable render');
 
-	if (!columns) {
-		return <Loading />;
-	}
+	// if (!columns) {
+	// 	return <Loading />;
+	// }
 
 	// const sortedProducts = orderBy(products, [sortBy, 'id'], [sortDirection, 'asc']);
 	// const sortedProducts = orderBy(products, ['name'], ['asc']);

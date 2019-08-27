@@ -76,7 +76,7 @@ export default class Site extends Model {
 	 *
 	 */
 	async getWpApiUrl() {
-		return http.head('https://' + this.url).then(response => {
+		return http.head('https://' + this.url + '/').then(response => {
 			// See https://developer.wordpress.org/rest-api/using-the-rest-api/discovery/
 			const link = get(response, ['headers', 'link']);
 			const parsed = Url.parseLinkHeader(link);

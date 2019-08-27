@@ -9,6 +9,7 @@ interface Props {
 
 const Settings = ({ ui }: Props) => {
 	const columns = useObservable(ui.columns.observeWithColumns(['hide']), []);
+	const display = useObservable(ui.display.observeWithColumns(['hide']), []);
 
 	return (
 		<Fragment>
@@ -23,7 +24,7 @@ const Settings = ({ ui }: Props) => {
 				/>
 			))}
 			<Text>Display</Text>
-			{ui.display.map((column: any) => (
+			{display.map((column: any) => (
 				<Checkbox
 					key={column.key}
 					label={column.label}
