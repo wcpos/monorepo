@@ -2,8 +2,8 @@ import { field, nochange, immutableRelation } from '@nozbe/watermelondb/decorato
 import { Associations } from '@nozbe/watermelondb/Model';
 import Model from './base';
 
-export default class Column extends Model {
-	static table = 'ui_columns';
+export default class Display extends Model {
+	static table = 'ui_display';
 
 	static associations: Associations = {
 		uis: { type: 'belongs_to', key: 'ui_id' },
@@ -12,14 +12,9 @@ export default class Column extends Model {
 	@immutableRelation('uis', 'ui_id') ui!: any;
 
 	@nochange @field('key') key!: string;
-	@field('order') order!: number;
 	@field('hide') hide!: boolean;
-	@field('disableSort') disableSort!: boolean;
-	@field('flexGrow') flexGrow?: 0 | 1;
-	@field('flexShrink') flexShrink?: 0 | 1;
-	@field('width') width?: string;
 
 	get label() {
-		return this.i18n.t(this.ui.section + '.column.label.' + this.key);
+		return this.i18n.t(this.ui.section + '.display.label.' + this.key);
 	}
 }

@@ -26,7 +26,7 @@ class User extends Model {
 	@field('consumer_key') consumer_key!: string;
 	@field('consumer_secret') consumer_secret!: string;
 
-	isAuthorized() {
+	isAuthenticated() {
 		return this.consumer_key && this.consumer_secret;
 	}
 }
