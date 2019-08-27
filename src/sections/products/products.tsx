@@ -12,6 +12,8 @@ import Actions from './actions';
 import Loader from '../../components/loader';
 import Button from '../../components/button';
 
+const ui = {};
+
 const Products = () => {
 	const [search, setSearch] = useState('');
 	const { storeDB } = useDatabase();
@@ -47,7 +49,7 @@ const Products = () => {
 						// sort={this.handleSort}
 						// sortBy={this.state.sortBy}
 						// sortDirection={this.state.sortDirection}
-						columns={ui.getColumns()}
+						columns={ui.columns}
 						products={products}
 					/>
 				</Segment>

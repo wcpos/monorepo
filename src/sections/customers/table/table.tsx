@@ -12,7 +12,7 @@ interface Props {
 	columns: any;
 }
 
-const CustomersTable = ({ customers, ...props }: Props) => {
+const CustomersTable = ({ customers, columns, ...props }: Props) => {
 	const [sortBy, setSortBy] = useState('last_name');
 	const [sortDirection, setSortDirection] = useState('asc');
 
@@ -22,12 +22,6 @@ const CustomersTable = ({ customers, ...props }: Props) => {
 	};
 
 	const sortedCustomers = orderBy(customers, [sortBy, 'id'], [sortDirection, 'asc']);
-
-	const columns = useObservable(props.columns.observeWithColumns(['hide']));
-
-	if (!columns) {
-		return <Loading />;
-	}
 
 	const cols = columns
 		.filter((column: any) => !column.hide)

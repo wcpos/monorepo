@@ -9,10 +9,10 @@ import Actions from './actions';
 
 const Customers = () => {
 	const [search, setSearch] = useState('');
-	const database = useDatabase();
+	const { storeDB } = useDatabase();
 
 	const customers = useObservable(
-		database.collections
+		storeDB.collections
 			.get('customers')
 			.query(Q.where('last_name', Q.like(`%${Q.sanitizeLikeString(search)}%`)))
 			.observeWithColumns(['first_name', 'last_name']),

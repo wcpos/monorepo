@@ -15,7 +15,6 @@ interface Props {
 const ProductsTable = ({ products, ui }: Props) => {
 	const [sortBy, setSortBy] = useState('name');
 	const [sortDirection, setSortDirection] = useState('asc');
-	const database = useDatabase();
 
 	const sort = ({ sortBy, sortDirection }: any) => {
 		setSortBy(sortBy);
@@ -26,7 +25,7 @@ const ProductsTable = ({ products, ui }: Props) => {
 	const sortedProducts = orderBy(products, [sortBy, 'id'], [sortDirection, 'asc']);
 
 	const addToCart = async (product: any) => {
-		const orders = await database.collections
+		const orders = await products.collection.database
 			.get('orders')
 			.query()
 			.fetch();
@@ -34,13 +33,7 @@ const ProductsTable = ({ products, ui }: Props) => {
 		await activeOrder.addToCart(product);
 	};
 
-	const columns = useObservable(ui.columns.observeWithColumns(['hide']));
-
-	if (!columns) {
-		return <Loading />;
-	}
-
-	const cols = columns
+	const cols = ui.columns
 		.filter((column: any) => !column.hide)
 		.sort(function(a, b) {
 			return a.order - b.order;

@@ -19,17 +19,12 @@ interface Props {
 
 const OrdersTable = ({
 	orders,
+	columns,
 	// sort,
 	// sortBy,
 	// sortDirection,
 	...props
 }: Props) => {
-	const columns = useObservable(props.columns.observeWithColumns(['hide']));
-
-	if (!columns) {
-		return <Loading />;
-	}
-
 	const cols = columns
 		.filter((column: any) => !column.hide)
 		.sort(function(a, b) {

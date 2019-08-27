@@ -19,6 +19,7 @@ const Products = () => {
 			.observeWithColumns(['name', 'regular_price']),
 		[]
 	);
+
 	const ui: any = useUI('pos_products');
 
 	return (

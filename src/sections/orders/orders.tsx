@@ -9,9 +9,9 @@ import { TableLayout } from '../../components/layout';
 
 const Orders = () => {
 	// const [search, setSearch] = useState('');
-	const database = useDatabase();
+	const { storeDB } = useDatabase();
 	const orders = useObservable(
-		database.collections
+		storeDB.collections
 			.get('orders')
 			.query()
 			.observeWithColumns(['number']),
