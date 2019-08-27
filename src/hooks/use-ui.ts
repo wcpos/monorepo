@@ -2,22 +2,76 @@ import { useState, useEffect } from 'react';
 import { Q } from '@nozbe/watermelondb';
 import useDatabase from './use-database';
 
-export default function useUI(section: string) {
-	const [ui, setUI] = useState(null);
-	const database = useDatabase();
+const initialUI = {
+	pos_products: {
+		sortBy: 'name',
+		sortDirection: 'asc',
+		columns: [
+			{ key: 'image', disableSort: true },
+			{ key: 'name' },
+			{ key: 'sku', hide: true },
+			{ key: 'price' },
+			{ key: 'actions', disableSort: true },
+		],
+		display: [
+			{ key: 'sku', hide: true, label: 'SKU' },
+			{ key: 'categories', label: 'Categories' },
+			{ key: 'tags', hide: true, label: 'Tags' },
+		],
+	},
+	products: {
+		sortBy: 'name',
+		sortDirection: 'asc',
+		columns: [
+			{ key: 'image', disableSort: true },
+			{ key: 'id' },
+			{ key: 'name' },
+			{ key: 'sku' },
+			{ key: 'regular_price' },
+			{ key: 'sale_price' },
+			{ key: 'actions', disableSort: true },
+			{ key: 'categories', hide: true },
+			{ key: 'tags', hide: true },
+		],
+	},
+	orders: {
+		sortBy: 'number',
+		sortDirection: 'desc',
+		columns: [
+			{ key: 'status', width: '10%' },
+			{ key: 'number', width: '10%' },
+			{ key: 'customer', flexGrow: 1 },
+			{ key: 'note', width: '10%' },
+			{ key: 'date_created', flexGrow: 1 },
+			{ key: 'date_modified', hide: true, width: '10%' },
+			{ key: 'date_completed', hide: true, width: '10%' },
+			{ key: 'total', width: '10%' },
+			{ key: 'actions', disableSort: true, width: '10%' },
+		],
+	},
+	customers: {
+		sortBy: 'last_name',
+		sortDirection: 'asc',
+		columns: [
+			{ key: 'avatar_url', disableSort: true },
+			{ key: 'first_name' },
+			{ key: 'last_name' },
+			{ key: 'email' },
+			{ key: 'role', hide: true },
+			{ key: 'username', hide: true },
+			{ key: 'billing' },
+			{ key: 'shipping' },
+			{ key: 'actions', disableSort: true },
+		],
+	},
+};
 
-	useEffect(() => {
-		async function fetchUI() {
-			const uiCollection = database.collections.get('uis');
-			let result = await uiCollection.query(Q.where('section', section)).fetch();
-			if (result.length === 0) {
-				await uiCollection.modelClass.resetDefaults(section);
-				result = await uiCollection.query(Q.where('section', section)).fetch();
-			}
-			setUI(result[0]);
-		}
-		fetchUI();
-	}, [database.collections, section]);
-
-	return ui;
+export default function useUI(section: 'pos_products' | 'customers') {
+	const getColumns = () => {
+		return initialUI[section].columns.map(column => {
+			column.label = 'hi';
+			return column;
+		});
+	};
+	return initialUI[section];
 }

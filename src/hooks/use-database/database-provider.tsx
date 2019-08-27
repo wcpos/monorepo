@@ -12,6 +12,7 @@ type Props = {
  */
 const DatabaseProvider = ({ children }: Props) => {
 	const [lastUser, setLastUser] = useState({ site: undefined, user: undefined, store: undefined });
+	const [storeDB, setStoreDB] = useState();
 
 	// fetch last Store Hash on init
 	useEffect(() => {
@@ -25,15 +26,25 @@ const DatabaseProvider = ({ children }: Props) => {
 		getLastHash();
 	}, []);
 
+	// init store database
+	useEffect(() => {
+		const initDB = async () => {
+			const storeDB = await storeDatabase(lastUser);
+			if (storeDB) {
+				setStoreDB(storeDB);
+			}
+		};
+
+		initDB();
+	}, [lastUser]);
+
 	const switchStoreDB = async (obj: {}) => {
-		const lastUser = await sitesDatabase.adapter.setLocal('store_db', JSON.stringify(obj));
-		setLastUser(lastUser);
+		setLastUser(obj);
+		await sitesDatabase.adapter.setLocal('last_user', JSON.stringify(obj));
 	};
 
 	return (
-		<DatabaseContext.Provider
-			value={{ sitesDB: sitesDatabase, storeDB: storeDatabase(lastUser), switchStoreDB, lastUser }}
-		>
+		<DatabaseContext.Provider value={{ sitesDB: sitesDatabase, storeDB, switchStoreDB, lastUser }}>
 			{children}
 		</DatabaseContext.Provider>
 	);
