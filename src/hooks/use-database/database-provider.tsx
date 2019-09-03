@@ -29,6 +29,11 @@ const DatabaseProvider = ({ children }: Props) => {
 	// init store database
 	useEffect(() => {
 		const initDB = async () => {
+			if (lastUser.user) {
+				const user = await sitesDatabase.collections.get('users').find(lastUser.user);
+				console.log(user);
+			}
+
 			const storeDB = await storeDatabase(lastUser);
 			if (storeDB) {
 				setStoreDB(storeDB);
