@@ -2,20 +2,17 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import TextInput from '../../components/textinput';
 import Button from '../../components/button';
-import { syncProducts } from '../../actions/product';
 import { ActionsView } from './styles';
-import Api from '../../services/api';
 
 interface Props {
 	onSearch: any;
 }
 
 const Actions = ({ onSearch }: Props) => {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 
 	const handleSync = async () => {
-		const api = new Api({});
-		return api.sync('products');
+		console.log('hi');
 	};
 
 	return (

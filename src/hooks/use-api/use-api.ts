@@ -1,8 +1,9 @@
-import axios from 'axios';
+import http from '../../lib/http';
 import { useEffect, useState } from 'react';
 import hash from 'hash-sum';
+import useDatabase from '../use-database';
 
-const { CancelToken } = axios;
+const { CancelToken } = http;
 
 function useAPI(url, config = {}, initialFetch = true) {
 	const [state, setState] = useState({
@@ -16,15 +17,18 @@ function useAPI(url, config = {}, initialFetch = true) {
 	const source = CancelToken.source();
 
 	function fetch() {
-		axios(url, {
-			...config,
+		http('https://wcposdev.wpengine.com/wp-json/wc/v3/' + url, {
+			auth: {
+				username: 'ck_0a250a3037617df63551e58e154f82a1e04a04aa',
+				password: 'cs_285369544840cbe03b6c483ad7bf0e455a8935a3',
+			},
 			cancelToken: source.token,
 		})
 			.then(response => {
 				setState({ error: undefined, response, isLoading: false });
 			})
 			.catch(error => {
-				if (axios.isCancel(error)) {
+				if (http.isCancel(error)) {
 					console.log('Request canceled by cleanup: ', error.message);
 				} else {
 					setState({ error, response: undefined, isLoading: false });
@@ -42,7 +46,9 @@ function useAPI(url, config = {}, initialFetch = true) {
 		return () => {
 			source.cancel('useEffect cleanup.');
 		};
-	}, [url, configHash, state, initialFetch, fetch, source]);
+
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [url, configHash]);
 
 	const { response, error, isLoading } = state;
 

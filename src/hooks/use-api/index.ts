@@ -1,2 +1,3 @@
-export { default as useAPI } from './use-api';
+import useAPI from './use-api';
 export { default as axios } from 'axios';
+export default useAPI;

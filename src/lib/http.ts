@@ -24,7 +24,12 @@ http.interceptors.request.use(
 	function(config) {
 		if (config.method !== 'head') {
 			config.headers['X-WCPOS'] = 1;
-			// config.headers.Authorization = `Basic ${btoa(user.key + ':' + user.secret)}`;
+		}
+		if (config.auth) {
+			config.headers.Authorization = `Basic ${btoa(
+				config.auth.username + ':' + config.auth.password
+			)}`;
+			config.auth = undefined;
 		}
 		return config;
 	},
@@ -33,5 +38,8 @@ http.interceptors.request.use(
 		return Promise.reject(error);
 	}
 );
+
+http.CancelToken = axios.CancelToken;
+http.isCancel = axios.isCancel;
 
 export default http;

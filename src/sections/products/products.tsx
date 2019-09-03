@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Q } from '@nozbe/watermelondb';
-import useDatabase from '../../hooks/use-database';
-import useObservable from '../../hooks/use-observable';
+import useAPI from '../../hooks/use-api';
 import useUI from '../../hooks/use-ui';
 import Text from '../../components/text';
 import Table from './table';
@@ -12,20 +11,17 @@ import Actions from './actions';
 import Loader from '../../components/loader';
 import Button from '../../components/button';
 
-const ui = {};
-
 const Products = () => {
 	const [search, setSearch] = useState('');
-	const { storeDB } = useDatabase();
 
-	const products = useObservable(
-		// () =>
-		storeDB.collections
-			.get('products')
-			.query(Q.where('name', Q.like(`%${Q.sanitizeLikeString(search)}%`)))
-			.observeWithColumns(['name', 'regular_price', 'sku'])
-		// []
-	);
+	// const products = useObservable(
+	// 	storeDB.collections
+	// 		.get('products')
+	// 		.query(Q.where('name', Q.like(`%${Q.sanitizeLikeString(search)}%`)))
+	// 		.observeWithColumns(['name', 'regular_price', 'sku'])
+	// );
+
+	const { data } = useAPI('products');
 
 	const ui: any = useUI('products');
 
@@ -50,11 +46,11 @@ const Products = () => {
 						// sortBy={this.state.sortBy}
 						// sortDirection={this.state.sortDirection}
 						columns={ui.columns}
-						products={products}
+						products={data}
 					/>
 				</Segment>
 
-				<Segment style={{ flex: -1 }} content={products && products.length} />
+				<Segment style={{ flex: -1 }} content={data && data.length} />
 			</SegmentGroup>
 		)
 	);
