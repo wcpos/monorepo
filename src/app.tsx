@@ -3,6 +3,7 @@ import { ThemeProvider } from 'styled-components/native';
 import { DatabaseProvider } from './hooks/use-database';
 import Navigator from './navigators';
 import ActivityIndicator from './components/activity-indicator';
+import Portal from './components/portal';
 import { defaultTheme } from './lib/theme';
 
 // import i18n
@@ -13,7 +14,9 @@ const App = () => (
 	<React.Suspense fallback={<ActivityIndicator />}>
 		<DatabaseProvider>
 			<ThemeProvider theme={defaultTheme}>
-				<Navigator />
+				<Portal.Host>
+					<Navigator />
+				</Portal.Host>
 			</ThemeProvider>
 		</DatabaseProvider>
 	</React.Suspense>
