@@ -1,6 +1,6 @@
 import styled, { css } from 'styled-components/native';
-import { ThemeProps } from '../../lib/theme/types';
 import { Platform } from 'react-native';
+import { ThemeProps } from '../../lib/theme/types';
 
 export const BarView = styled.View<{ theme: ThemeProps }>`
 	background-color: ${props => props.theme.MASTERBAR_BACKGROUND_COLOR};

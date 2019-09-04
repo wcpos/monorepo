@@ -8,7 +8,14 @@ import { action } from '@storybook/addon-actions';
 import Toast from './';
 
 const example1 = () => {
-	Toast.info('This is a Toast!', Toast.SHORT);
+	Toast.info(
+		'This is a Toast!',
+		Toast.SHORT,
+		() => {
+			console.log('Toast closed');
+		},
+		false
+	);
 };
 
 storiesOf('Toast', module)

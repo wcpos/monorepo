@@ -1,5 +1,6 @@
 import React from 'react';
 import { AsyncStorage } from 'react-native';
+import { animated, useSpring } from 'react-spring/native';
 import { BarView, LeftView, CenterView, RightView, TitleText } from './styles';
 import Button from '../../components/button';
 import Toast from '../../components/toast';
@@ -10,6 +11,9 @@ interface Props {
 }
 
 const MasterBar = ({ navigation, title }: Props) => {
+	const fade = useSpring({ opacity: 1, from: { opacity: 0 }, config: { duration: 3000 } });
+	const AnimatedView = animated(RightView);
+
 	return (
 		<BarView>
 			<LeftView>
@@ -18,7 +22,7 @@ const MasterBar = ({ navigation, title }: Props) => {
 			<CenterView>
 				<TitleText>{title}</TitleText>
 			</CenterView>
-			<RightView>
+			<AnimatedView style={fade}>
 				<Button
 					title="Logout"
 					onPress={() => Toast.info('This is a Toast!', Toast.SHORT)}
@@ -27,7 +31,7 @@ const MasterBar = ({ navigation, title }: Props) => {
 					// 	navigation.navigate('Auth');
 					// }}
 				/>
-			</RightView>
+			</AnimatedView>
 		</BarView>
 	);
 };

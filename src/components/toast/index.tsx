@@ -23,8 +23,8 @@ function notice(
 }
 
 export default {
-	SHORT: 3,
-	LONG: 8,
+	SHORT: 3000,
+	LONG: 8000,
 	show(content: string, duration?: number, mask?: boolean) {
 		return notice(content, 'info', duration, () => {}, mask);
 	},

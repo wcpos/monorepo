@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Animated, View, StyleSheet } from 'react-native';
+import { animated, useSpring } from 'react-spring/native';
 import Icon from '../icon';
 import { Container, InnerContainer, Wrapper, Text } from './styles';
 
@@ -12,79 +12,24 @@ export interface Props {
 	onAnimationEnd?: () => void;
 }
 
-export default class ToastContainer extends React.Component<Props, any> {
-	static defaultProps = {
-		duration: 3,
-		mask: false,
-		onClose() {},
-	};
+const Toast = ({ content, duration, onClose, mask, type, onAnimationEnd }: Props) => {
+	// const fade = useSpring({ opacity: 1, from: { opacity: 0 }, config: { duration: 250 } });
+	const fade = useSpring({
+		to: [{ opacity: 1 }, { opacity: 0 }],
+		from: { opacity: 0 },
+		onRest: onAnimationEnd,
+	});
+	const AnimatedWrapper = animated(Wrapper);
 
-	anim: Animated.CompositeAnimation | null;
+	return (
+		<Container pointerEvents={mask ? undefined : 'box-none'}>
+			<InnerContainer>
+				<AnimatedWrapper style={fade}>
+					<Text>{content}</Text>
+				</AnimatedWrapper>
+			</InnerContainer>
+		</Container>
+	);
+};
 
-	constructor(props: Props) {
-		super(props);
-		this.state = {
-			fadeAnim: new Animated.Value(0),
-		};
-	}
-
-	componentDidMount() {
-		const { onClose, onAnimationEnd } = this.props;
-		const duration = this.props.duration as number;
-		const timing = Animated.timing;
-		if (this.anim) {
-			this.anim = null;
-		}
-		const animArr = [
-			timing(this.state.fadeAnim, {
-				toValue: 1,
-				duration: 200,
-				useNativeDriver: true,
-			}),
-			Animated.delay(duration * 1000),
-		];
-		if (duration > 0) {
-			animArr.push(
-				timing(this.state.fadeAnim, {
-					toValue: 0,
-					duration: 200,
-					useNativeDriver: true,
-				})
-			);
-		}
-		this.anim = Animated.sequence(animArr);
-		this.anim.start(() => {
-			if (duration > 0) {
-				this.anim = null;
-				if (onClose) {
-					onClose();
-				}
-				if (onAnimationEnd) {
-					onAnimationEnd();
-				}
-			}
-		});
-	}
-
-	componentWillUnmount() {
-		if (this.anim) {
-			this.anim.stop();
-			this.anim = null;
-		}
-	}
-
-	render() {
-		const { type = '', content, mask } = this.props;
-		return (
-			<Container pointerEvents={mask ? undefined : 'box-none'}>
-				<InnerContainer>
-					<Animated.View style={{ opacity: this.state.fadeAnim }}>
-						<Wrapper>
-							<Text>{content}</Text>
-						</Wrapper>
-					</Animated.View>
-				</InnerContainer>
-			</Container>
-		);
-	}
-}
+export default Toast;
