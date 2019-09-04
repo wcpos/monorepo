@@ -1,10 +1,9 @@
 import React from 'react';
 import { ActivityIndicator, Animated, View, StyleSheet } from 'react-native';
 import Icon from '../icon';
-import Text from '../text';
-// import {} from './styles';
+import { Container, InnerContainer, Wrapper, Text } from './styles';
 
-export interface ToastProps {
+export interface Props {
 	content: string;
 	duration?: number;
 	onClose?: () => void;
@@ -13,16 +12,16 @@ export interface ToastProps {
 	onAnimationEnd?: () => void;
 }
 
-export default class ToastContainer extends React.Component<ToastProps, any> {
+export default class ToastContainer extends React.Component<Props, any> {
 	static defaultProps = {
 		duration: 3,
-		mask: true,
+		mask: false,
 		onClose() {},
 	};
 
 	anim: Animated.CompositeAnimation | null;
 
-	constructor(props: ToastProps) {
+	constructor(props: Props) {
 		super(props);
 		this.state = {
 			fadeAnim: new Animated.Value(0),
@@ -77,39 +76,15 @@ export default class ToastContainer extends React.Component<ToastProps, any> {
 	render() {
 		const { type = '', content, mask } = this.props;
 		return (
-			<View style={[styles.container]} pointerEvents={mask ? undefined : 'box-none'}>
-				<View style={[styles.innerContainer]}>
+			<Container pointerEvents={mask ? undefined : 'box-none'}>
+				<InnerContainer>
 					<Animated.View style={{ opacity: this.state.fadeAnim }}>
-						<View style={[styles.innerWrap]}>
+						<Wrapper>
 							<Text>{content}</Text>
-						</View>
+						</Wrapper>
 					</Animated.View>
-				</View>
-			</View>
+				</InnerContainer>
+			</Container>
 		);
 	}
 }
-
-const styles = StyleSheet.create({
-	container: {
-		position: 'absolute',
-		top: 0,
-		left: 0,
-		bottom: 0,
-		right: 0,
-		backgroundColor: 'transparent',
-		justifyContent: 'center',
-		alignItems: 'center',
-		// zIndex: theme.toast_zindex,
-		zIndex: 1000,
-	},
-	innerContainer: {
-		backgroundColor: 'transparent',
-	},
-	innerWrap: {
-		alignItems: 'center',
-		// backgroundColor: theme.toast_fill,
-		backgroundColor: 'white',
-		minWidth: 100,
-	},
-});

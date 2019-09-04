@@ -45,6 +45,6 @@ export const StyledText = styled.Text<Props>`
 				return props.theme.FONT_SIZE;
 		}
 	}};
-	text-align: ${props => props.align};
+	text-align: ${props => (props.align ? props.align : 'left')};
 	text-transform: ${props => (props.uppercase ? 'uppercase' : 'none')};
 `;

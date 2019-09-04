@@ -75,4 +75,11 @@ export interface ThemeProps {
 	TEXT_COLOR_SUCCESS: string;
 	TEXT_COLOR_WARNING: string;
 	TEXT_COLOR_INVERSE: string;
+
+	TOAST_BACKGROUND_COLOR: string;
+	TOAST_Z_INDEX: number;
+	TOAST_PADDING_X: string;
+	TOAST_PADDING_Y: string;
+	TOAST_BORDER_RADIUS: string;
+	TOAST_TEXT_COLOR: string;
 }

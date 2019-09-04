@@ -106,6 +106,13 @@ const theme: ThemeProps = {
 	TEXT_COLOR_SUCCESS: colors.success,
 	TEXT_COLOR_WARNING: colors.warning,
 	TEXT_COLOR_INVERSE: colors.inverse,
+
+	TOAST_BACKGROUND_COLOR: '#000000',
+	TOAST_Z_INDEX: 1001,
+	TOAST_BORDER_RADIUS: '3px',
+	TOAST_PADDING_X: '10px',
+	TOAST_PADDING_Y: '5px',
+	TOAST_TEXT_COLOR: '#FFFFFF',
 };
 
 export default theme;
