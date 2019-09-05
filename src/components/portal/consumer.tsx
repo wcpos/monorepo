@@ -8,6 +8,7 @@ export type PortalConsumerProps = {
 
 export default class PortalConsumer extends React.Component<PortalConsumerProps> {
 	_key: any;
+
 	componentDidMount() {
 		if (!this.props.manager) {
 			throw new Error(

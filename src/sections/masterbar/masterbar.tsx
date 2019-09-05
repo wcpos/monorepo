@@ -1,9 +1,11 @@
 import React from 'react';
-import { AsyncStorage } from 'react-native';
+import { AsyncStorage, View } from 'react-native';
 import { animated, useSpring } from 'react-spring/native';
 import { BarView, LeftView, CenterView, RightView, TitleText } from './styles';
 import Button from '../../components/button';
 import Toast from '../../components/toast';
+import Text from '../../components/text';
+import Tooltip from '../../components/tooltip';
 
 interface Props {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
@@ -21,6 +23,9 @@ const MasterBar = ({ navigation, title }: Props) => {
 			</LeftView>
 			<CenterView>
 				<TitleText>{title}</TitleText>
+				<Tooltip text="This is the tip!">
+					<Text style={{ color: '#FFFFFF' }}>tooltip</Text>
+				</Tooltip>
 			</CenterView>
 			<AnimatedView style={fade}>
 				<Button
