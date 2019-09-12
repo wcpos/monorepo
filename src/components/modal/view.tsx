@@ -10,6 +10,7 @@ import {
 	ViewStyle,
 } from 'react-native';
 import Portal from '../portal';
+import Dimmer from '../dimmer';
 
 const styles = StyleSheet.create({
 	wrap: {
@@ -22,6 +23,7 @@ const styles = StyleSheet.create({
 	} as ViewStyle,
 	content: {
 		backgroundColor: 'white',
+		zIndex: 1001,
 	} as ViewStyle,
 	absolute: {
 		position: 'absolute',
@@ -233,11 +235,7 @@ export default class RCModal extends React.Component<IModalPropTypes, any> {
 		return (
 			<Portal>
 				<View style={[styles.wrap, props.wrapStyle]}>
-					<TouchableWithoutFeedback onPress={this.onMaskClose}>
-						<Animated.View style={[styles.absolute, { opacity: this.state.opacity }]}>
-							<View style={[styles.absolute, props.maskStyle]} />
-						</Animated.View>
-					</TouchableWithoutFeedback>
+					<Dimmer onPress={this.onMaskClose} />
 					<Animated.View
 						style={[styles.content, props.style, animationStyleMap[props.animationType]]}
 					>

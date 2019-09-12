@@ -23,6 +23,7 @@ const Tooltip = ({ children, placement = 'top', text }: Props) => {
 	};
 
 	const toggleTooltip = () => {
+		debugger;
 		setVisible(!visible);
 	};
 

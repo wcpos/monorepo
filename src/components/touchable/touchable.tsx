@@ -15,6 +15,8 @@ type Props = {
 	noRipple?: boolean;
 	onLongPress?: (event: GestureResponderEvent) => void;
 	onPress?: (event: GestureResponderEvent) => void;
+	onMouseEnter?: (event: GestureResponderEvent) => void;
+	onMouseLeave?: (event: GestureResponderEvent) => void;
 	rippleColor?: string;
 	style?: {};
 	width?: number;
@@ -34,6 +36,8 @@ const Touchable = ({
 	noRipple,
 	onLongPress,
 	onPress,
+	onMouseEnter,
+	onMouseLeave,
 	rippleColor = 'rgba(0, 0, 0, 0.32)',
 	style,
 	width,
@@ -81,7 +85,9 @@ const Touchable = ({
 			activeOpacity={0.5}
 			style={{ width }}
 		>
-			{children}
+			<View onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+				{children}
+			</View>
 		</TouchableOpacity>
 	);
 };

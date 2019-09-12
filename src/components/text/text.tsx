@@ -25,12 +25,12 @@ export type Props = {
 const Text = ({
 	align = 'left',
 	children,
-	italic = false,
+	italic,
 	onPress,
 	size = 'normal',
 	style = {},
 	type = 'primary',
-	uppercase = false,
+	uppercase,
 	weight = 'normal',
 }: Props) => {
 	return (
