@@ -5,7 +5,7 @@ import { BarView, LeftView, CenterView, RightView, TitleText } from './styles';
 import Button from '../../components/button';
 import Toast from '../../components/toast';
 import Text from '../../components/text';
-import Tooltip from '../../components/tooltip';
+import Popover from '../../components/popover';
 
 interface Props {
 	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
@@ -23,9 +23,9 @@ const MasterBar = ({ navigation, title }: Props) => {
 			</LeftView>
 			<CenterView>
 				<TitleText>{title}</TitleText>
-				<Tooltip text="This is the tip!">
-					<Text style={{ color: '#FFFFFF' }}>tooltip</Text>
-				</Tooltip>
+				<Popover content={<Text style={{ color: '#FFFFFF' }}>This is the pop!</Text>}>
+					<Text style={{ color: '#FFFFFF' }}>popover</Text>
+				</Popover>
 			</CenterView>
 			<AnimatedView style={fade}>
 				<Button

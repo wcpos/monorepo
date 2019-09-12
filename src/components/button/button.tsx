@@ -6,7 +6,7 @@ import { ButtonView } from './styles';
 
 export type Props = {
 	background?: 'solid' | 'clear' | 'outline';
-	children?: React.ReactNode;
+	children?: React.ReactChild;
 	disabled?: boolean;
 	icon?: string;
 	iconPosition?: 'left' | 'right';
@@ -45,12 +45,21 @@ const Button = ({
 	if (background === 'solid') {
 		textType = type === 'inverse' ? 'primary' : 'inverse';
 	}
+
+	const renderButtonText = () => (
+		<Text type={textType} size={size}>
+			{title || children}
+		</Text>
+	);
+
 	return (
-		<Touchable disabled={disabled} onPress={onPress}>
+		<Touchable
+			disabled={disabled}
+			onPress={onPress}
+			style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}
+		>
 			<ButtonView type={type} background={background} style={style}>
-				<Text type={textType} size={size}>
-					{title}
-				</Text>
+				{renderButtonText()}
 			</ButtonView>
 		</Touchable>
 	);

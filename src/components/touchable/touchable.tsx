@@ -83,7 +83,7 @@ const Touchable = ({
 			onLongPress={onLongPress}
 			delayPressIn={delayPressIn}
 			activeOpacity={0.5}
-			style={{ width }}
+			style={{ ...style, width }}
 		>
 			<View onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
 				{children}

@@ -2,6 +2,7 @@ import React, { Fragment, useState } from 'react';
 import useLayout from '../../hooks/use-layout';
 import { TargetWrapper } from './styles';
 import TooltipView from './view';
+import Touchable from '../touchable';
 
 type Props = {
 	children: React.ReactChild;
@@ -23,20 +24,20 @@ const Tooltip = ({ children, placement = 'top', text }: Props) => {
 	};
 
 	const toggleTooltip = () => {
-		debugger;
+		console.log('pressed');
 		setVisible(!visible);
 	};
 
 	return (
 		<Fragment>
-			<TargetWrapper
+			<Touchable
 				onLayout={onLayout}
 				onPress={toggleTooltip}
 				onMouseEnter={showTooltip}
 				onMouseLeave={hideTooltip}
 			>
 				{children}
-			</TargetWrapper>
+			</Touchable>
 			{visible && (
 				<TooltipView top={layout.y} left={layout.x}>
 					{text}
