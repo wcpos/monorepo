@@ -1,18 +1,18 @@
 import React from 'react';
 import Portal from '../portal';
 import Arrow from '../arrow';
-import { StyledPopoverView, Wrapper } from './styles';
+import { ContentView, Wrapper } from './styles';
 
 export type Props = {
 	children: React.ReactChild;
 };
 
-const PopoverView: React.FunctionComponent<Props> = ({ children }) => {
+const PopoverView: React.FunctionComponent<Props> = ({ children, measurements }) => {
 	return (
 		<Portal>
-			<Wrapper>
+			<Wrapper style={{ top: measurements.y, left: measurements.x }}>
 				<Arrow />
-				<StyledPopoverView>{children}</StyledPopoverView>
+				<ContentView>{children}</ContentView>
 			</Wrapper>
 		</Portal>
 	);

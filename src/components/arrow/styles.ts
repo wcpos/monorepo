@@ -7,8 +7,9 @@ export const ArrowView = styled.View<Props>`
 	border-left-width: 10px;
 	border-right-width: 10px;
 	border-bottom-width: 10px;
-	border-bottom-color: black;
+	border-bottom-color: white;
 	border-left-color: transparent;
 	border-right-color: transparent;
 	background-color: transparent;
+	box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
 `;

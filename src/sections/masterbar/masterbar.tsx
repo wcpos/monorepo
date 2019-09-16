@@ -23,7 +23,7 @@ const MasterBar = ({ navigation, title }: Props) => {
 			</LeftView>
 			<CenterView>
 				<TitleText>{title}</TitleText>
-				<Popover content={<Text style={{ color: '#FFFFFF' }}>This is the pop!</Text>}>
+				<Popover content={<Text>This is the pop!</Text>}>
 					<Text style={{ color: '#FFFFFF' }}>popover</Text>
 				</Popover>
 			</CenterView>
