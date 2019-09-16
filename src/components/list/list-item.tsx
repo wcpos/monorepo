@@ -27,8 +27,12 @@ const ListItem = ({ label, info, onPress, icon, action, onAction }: Props) => {
 	const renderAction = () =>
 		typeof action === 'string' ? <Button title={action} onPress={onAction} /> : action;
 
+	const handlePress = () => {
+		onPress && onPress({ label });
+	};
+
 	return (
-		<TouchableOpacity onPress={onPress}>
+		<TouchableOpacity onPress={handlePress}>
 			<ListItemView>
 				{icon && renderIcon()}
 				<ListItemTextView>
