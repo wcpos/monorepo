@@ -3,6 +3,9 @@ import orderBy from 'lodash/orderBy';
 import Table from '../../../components/table';
 import Button from '../../../components/button';
 import Img from '../../../components/image';
+import Popover from '../../../components/popover';
+import Icon from '../../../components/icon';
+import Settings from './settings';
 import useDatabase from '../../../hooks/use-database';
 import useObservable from '../../../hooks/use-observable';
 import Loading from '../../../components/loader';
@@ -62,6 +65,11 @@ const ProductsTable = ({ products, ui }: Props) => {
 								addToCart(rowData);
 							}}
 						/>
+					);
+					column.headerCellRenderer = () => (
+						<Popover content={<Settings ui={ui} />}>
+							<Icon name="cog" />
+						</Popover>
 					);
 					break;
 			}

@@ -6,7 +6,6 @@ import Table from './table';
 import Actions from './actions';
 import { TableLayout } from '../../../components/layout';
 import useUI from '../../../hooks/use-ui';
-import Settings from './settings';
 
 const Products = () => {
 	const [search, setSearch] = useState('');
@@ -25,7 +24,6 @@ const Products = () => {
 	return (
 		ui && (
 			<Fragment>
-				<Settings ui={ui} />
 				<TableLayout
 					actions={<Actions onSearch={setSearch} />}
 					table={<Table products={products} ui={ui} />}
