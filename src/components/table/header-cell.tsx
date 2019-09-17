@@ -62,7 +62,7 @@ const Cell = ({
 		<StyledView flexGrow={flexGrow} flexShrink={flexShrink} width={width}>
 			{sortable ? (
 				<Touchable onPress={onPress}>
-					<View>
+					<View style={{ flexDirection: 'row' }}>
 						<Text>{label}</Text>
 						{showSortIndicator && (
 							<Icon name={'angle-' + (sortDirection === 'asc' ? 'up' : 'down')} />

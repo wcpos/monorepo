@@ -19,7 +19,9 @@ const Support = () => {
 
 	const deleteAll = async (table: string) => {
 		const query = storeDB.collections.map[table].query();
-		await query.destroyAllPermanently();
+		await storeDB.action(async () => {
+			await query.destroyAllPermanently();
+		});
 	};
 
 	const columns = [

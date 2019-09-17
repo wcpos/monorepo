@@ -18,6 +18,7 @@ interface Props {
 const ProductsTable = ({ products, ui }: Props) => {
 	const [sortBy, setSortBy] = useState('name');
 	const [sortDirection, setSortDirection] = useState('asc');
+	const { storeDB } = useDatabase();
 
 	const sort = ({ sortBy, sortDirection }: any) => {
 		setSortBy(sortBy);
@@ -28,11 +29,16 @@ const ProductsTable = ({ products, ui }: Props) => {
 	const sortedProducts = orderBy(products, [sortBy, 'id'], [sortDirection, 'asc']);
 
 	const addToCart = async (product: any) => {
-		const orders = await products.collection.database
-			.get('orders')
-			.query()
-			.fetch();
-		const activeOrder = orders[0];
+		const ordersCollection = storeDB.collections.get('orders');
+		const orders = await ordersCollection.query().fetch();
+		let activeOrder = orders[0];
+		if (!activeOrder) {
+			await storeDB.action(async () => {
+				activeOrder = await ordersCollection.create(order => {
+					order.status = 'pending';
+				});
+			});
+		}
 		await activeOrder.addToCart(product);
 	};
 
@@ -45,7 +51,7 @@ const ProductsTable = ({ products, ui }: Props) => {
 			switch (column.key) {
 				case 'thumbnail':
 					column.cellRenderer = ({ cellData }: any) => (
-						<Img source={cellData} style={{ width: 100, height: 100 }} />
+						<Img src={cellData} style={{ width: 100, height: 100 }} />
 					);
 					break;
 				// case 'name':

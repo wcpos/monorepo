@@ -24,6 +24,7 @@ export const HeaderRow = styled.View`
 `;
 
 export const HeaderCell = styled.View<{ flexGrow?: 0 | 1; flexShrink?: 0 | 1; width?: string }>`
+	flex-direction: row;
 	flex-grow: ${props => (isNil(props.flexGrow) ? 1 : props.flexGrow)};
 	flex-shrink: ${props => (isNil(props.flexShrink) ? 1 : props.flexShrink)};
 	width: ${props => (isNil(props.width) ? '100%' : props.width)};

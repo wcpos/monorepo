@@ -11,20 +11,22 @@ import Note from './note';
 import Tabs from './tabs';
 
 const Cart = () => {
+	const [showCustomerNote, setShowCustomerNote] = useState(false);
+
 	const { storeDB } = useDatabase();
+
 	const orders = useObservable(
 		storeDB.collections
 			.get('orders')
-			.query(Q.where('status', 'completed'))
+			.query(Q.where('status', 'pending'))
 			.observeWithColumns(['line_items']),
 		[]
 	);
-	const [activeOrder, setActiveOrder] = useState(false);
-	const [showCustomerNote, setShowCustomerNote] = useState(false);
 
-	const handleUpdate = (json: any) => {
-		// @ts-ignore
-		activeOrder.updateFromJSON(json);
+	const activeOrder = orders[0];
+
+	const handleUpdate = e => {
+		console.log(e);
 	};
 
 	if (!activeOrder) {
@@ -35,7 +37,7 @@ const Cart = () => {
 				</Segment>
 				<Segment content="Your cart is currently empty." />
 				<Segment>
-					<Tabs orders={orders} setActiveOrder={setActiveOrder} />
+					<Tabs orders={orders} />
 				</Segment>
 			</SegmentGroup>
 		);
@@ -69,7 +71,7 @@ const Cart = () => {
 			</Segment>
 
 			<Segment style={{ flex: -1 }}>
-				<Tabs orders={orders} setActiveOrder={setActiveOrder} />
+				<Tabs orders={orders} />
 			</Segment>
 		</SegmentGroup>
 	);

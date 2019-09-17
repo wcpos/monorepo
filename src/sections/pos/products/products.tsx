@@ -1,33 +1,20 @@
 import React, { useState, Fragment } from 'react';
-import { Q } from '@nozbe/watermelondb';
-import useDatabase from '../../../hooks/use-database';
-import useObservable from '../../../hooks/use-observable';
+import useData from '../../../hooks/use-data';
 import Table from './table';
 import Actions from './actions';
 import { TableLayout } from '../../../components/layout';
-import useUI from '../../../hooks/use-ui';
 
-const Products = () => {
+const Products = ({ ui }) => {
 	const [search, setSearch] = useState('');
-	const { storeDB } = useDatabase();
-
-	const products = useObservable(
-		storeDB.collections
-			.get('products')
-			.query(Q.where('name', Q.like(`%${Q.sanitizeLikeString(search)}%`)))
-			.observeWithColumns(['name', 'regular_price']),
-		[]
-	);
-
-	const ui: any = useUI('pos_products');
+	const { data } = useData('products', search);
 
 	return (
 		ui && (
 			<Fragment>
 				<TableLayout
 					actions={<Actions onSearch={setSearch} />}
-					table={<Table products={products} ui={ui} />}
-					footer={products && products.length}
+					table={<Table products={data} ui={ui} />}
+					footer={data && data.length}
 				/>
 			</Fragment>
 		)

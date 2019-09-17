@@ -32,11 +32,6 @@ const Products = () => {
 				<Segment style={{ flex: -1 }}>
 					<Actions onSearch={setSearch} />
 				</Segment>
-				<Segment style={{ flex: -1 }}>
-					<Tooltip popover={<Settings columns={ui.columns} />}>
-						<Text>Settings</Text>
-					</Tooltip>
-				</Segment>
 				<Segment style={{ flex: 1, padding: 0 }}>
 					<Table
 						// database={this.props.database}
