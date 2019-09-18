@@ -17,9 +17,7 @@ const Site = ({ site }: Props) => {
 	const users = useObservable(site.users.observe(), []);
 
 	const handleRemove = async () => {
-		await site.collection.database.action(async () => {
-			site.experimentalDestroyPermanently();
-		});
+		await site.destroy();
 	};
 
 	const handleNewUser = async () => {

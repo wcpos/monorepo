@@ -7,19 +7,19 @@ interface Props {
 }
 
 const Totals = ({ order }: Props) => {
-	// const items = useObservable(order.line_items.observeWithColumns(['quantity', 'total']));
+	const items = useObservable(order.line_items.observeWithColumns(['quantity', 'total']));
 
-	// const total =
-	// 	items &&
-	// 	items.reduce((result: any, line_item: any) => {
-	// 		result += line_item.calculatedTotal;
-	// 		return result;
-	// 	}, 0);
+	const total =
+		items &&
+		items.reduce((result: any, line_item: any) => {
+			result += line_item.calculatedTotal;
+			return result;
+		}, 0);
 
 	return (
 		<Wrapper>
 			<TotalText>Order Total: {order.total}</TotalText>
-			<TotalText>Calc Total: </TotalText>
+			<TotalText>Calc Total: {total}</TotalText>
 		</Wrapper>
 	);
 };

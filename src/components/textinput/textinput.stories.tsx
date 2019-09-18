@@ -3,6 +3,7 @@ import { action } from '@storybook/addon-actions';
 import { text } from '@storybook/addon-knobs';
 import { storiesOf } from '@storybook/react';
 import TextInput from './';
+import Portal from '../portal';
 
 storiesOf('TextInput', module)
 	/**
@@ -44,4 +45,13 @@ storiesOf('TextInput', module)
 			prefix={text('prefix', 'http://')}
 			cancellable={true}
 		/>
+	))
+
+	/**
+	 *
+	 */
+	.add('autosize', () => (
+		<Portal.Host>
+			<TextInput placeholder={text('placeholder', 'Placeholder text')} autosize={true} />
+		</Portal.Host>
 	));

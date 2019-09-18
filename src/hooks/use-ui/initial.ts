@@ -1,7 +1,4 @@
-import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-
-const initialUI = {
+export default {
 	pos_products: {
 		sortBy: 'name',
 		sortDirection: 'asc',
@@ -64,22 +61,3 @@ const initialUI = {
 		],
 	},
 };
-
-export default function useUI(section: 'pos_products' | 'customers' | 'products') {
-	const { t } = useTranslation();
-	const ui = initialUI[section];
-
-	// add labels and order
-	ui.columns.map((column, index) => {
-		column.label = t(section + '.column.label.' + column.key);
-		column.order = index;
-	});
-
-	if (ui.display) {
-		ui.display.map((display, index) => {
-			display.label = t(section + '.display.label.' + display.key);
-		});
-	}
-
-	return ui;
-}

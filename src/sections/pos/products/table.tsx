@@ -7,18 +7,18 @@ import Popover from '../../../components/popover';
 import Icon from '../../../components/icon';
 import Settings from './settings';
 import useDatabase from '../../../hooks/use-database';
-import useObservable from '../../../hooks/use-observable';
+import useUI from '../../../hooks/use-ui';
 import Loading from '../../../components/loader';
 
 interface Props {
 	products: any;
-	ui: any;
 }
 
-const ProductsTable = ({ products, ui }: Props) => {
+const ProductsTable = ({ products }: Props) => {
 	const [sortBy, setSortBy] = useState('name');
 	const [sortDirection, setSortDirection] = useState('asc');
 	const { storeDB } = useDatabase();
+	const { ui, updateUI } = useUI('pos_products');
 
 	const sort = ({ sortBy, sortDirection }: any) => {
 		setSortBy(sortBy);
@@ -73,7 +73,7 @@ const ProductsTable = ({ products, ui }: Props) => {
 						/>
 					);
 					column.headerCellRenderer = () => (
-						<Popover content={<Settings ui={ui} />}>
+						<Popover content={<Settings ui={ui} updateUI={updateUI} />}>
 							<Icon name="cog" />
 						</Popover>
 					);

@@ -4,20 +4,18 @@ import Table from './table';
 import Actions from './actions';
 import { TableLayout } from '../../../components/layout';
 
-const Products = ({ ui }) => {
+const Products = () => {
 	const [search, setSearch] = useState('');
 	const { data } = useData('products', search);
 
 	return (
-		ui && (
-			<Fragment>
-				<TableLayout
-					actions={<Actions onSearch={setSearch} />}
-					table={<Table products={data} ui={ui} />}
-					footer={data && data.length}
-				/>
-			</Fragment>
-		)
+		<Fragment>
+			<TableLayout
+				actions={<Actions onSearch={setSearch} />}
+				table={<Table products={data} />}
+				footer={data && data.length}
+			/>
+		</Fragment>
 	);
 };
 

@@ -20,20 +20,21 @@ const Customers = () => {
 		[search]
 	);
 
-	const ui: any = useUI('customers');
+	const { ui, updateUI }: any = useUI('customers');
+	if (!ui) {
+		return null;
+	}
 
 	return (
-		ui && (
-			<SegmentGroup style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-				<Segment style={{ flex: -1 }}>
-					<Actions onSearch={setSearch} />
-				</Segment>
-				<Segment style={{ flex: 1, padding: 0 }}>
-					<Table customers={customers} columns={ui.columns} />
-				</Segment>
-				<Segment style={{ flex: -1 }} content={customers && customers.length} />
-			</SegmentGroup>
-		)
+		<SegmentGroup style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+			<Segment style={{ flex: -1 }}>
+				<Actions onSearch={setSearch} />
+			</Segment>
+			<Segment style={{ flex: 1, padding: 0 }}>
+				<Table customers={customers} columns={ui.columns} />
+			</Segment>
+			<Segment style={{ flex: -1 }} content={customers && customers.length} />
+		</SegmentGroup>
 	);
 };
 

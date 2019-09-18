@@ -1,13 +1,13 @@
 import React, { Fragment } from 'react';
-import useObservable from '../../../hooks/use-observable';
 import Text from '../../../components/text';
 import Checkbox from '../../../components/checkbox';
 
 interface Props {
 	ui: any;
+	updateUI: any;
 }
 
-const Settings = ({ ui }: Props) => {
+const Settings = ({ ui, updateUI }: Props) => {
 	return (
 		<Fragment>
 			<Text>Settings</Text>
@@ -17,7 +17,7 @@ const Settings = ({ ui }: Props) => {
 					key={column.key}
 					label={column.label}
 					checked={!column.hide}
-					onChange={() => column.update({ hide: !column.hide })}
+					onChange={updateUI}
 				/>
 			))}
 			<Text>Display</Text>
@@ -26,9 +26,7 @@ const Settings = ({ ui }: Props) => {
 					key={column.key}
 					label={column.label}
 					checked={!column.hide}
-					onChange={() => {
-						debugger;
-					}}
+					onChange={updateUI}
 				/>
 			))}
 		</Fragment>

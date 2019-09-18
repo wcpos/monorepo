@@ -20,6 +20,7 @@ const Cart = () => {
 			.get('orders')
 			.query(Q.where('status', 'pending'))
 			.observeWithColumns(['line_items']),
+		[],
 		[]
 	);
 

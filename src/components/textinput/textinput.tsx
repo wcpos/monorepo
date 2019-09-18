@@ -1,8 +1,11 @@
 import React from 'react';
+import { View } from 'react-native';
 import { Wrapper, Input, PrefixText } from './styles';
 import Button from '../button';
 import Text from '../text';
 import Icon from '../icon';
+import Portal from '../portal';
+import useMeasure from '../../hooks/use-measure';
 
 export type Props = import('react-native').TextInputProps & {
 	autosize?: boolean;
@@ -24,6 +27,16 @@ const TextInput = ({
 	...props
 }: Props) => {
 	const [value, setValue] = React.useState(props.value || '');
+	const ref = React.useRef<View>(null);
+	const [measurements, onMeasure] = React.useState({
+		height: 0,
+		pageX: 0,
+		pageY: 0,
+		width: 0,
+		x: 0,
+		y: 0,
+	});
+	const { onLayout } = useMeasure({ onMeasure, ref });
 
 	const handleChangeText = (newValue: string) => {
 		setValue(newValue);
@@ -47,6 +60,15 @@ const TextInput = ({
 
 	const renderCancelIcon = () => <Icon name="clear" onPress={clearText} />;
 
+	// if (autosize) {
+	// 	const key = Portal.add(
+	// 		<View ref={ref} onLayout={onLayout}>
+	// 			<Text>{placeholder}</Text>
+	// 		</View>
+	// 	);
+	// 	console.log(key);
+	// }
+	// console.log(measurements);
 	return (
 		<Wrapper>
 			{prefix && renderPrefix()}
