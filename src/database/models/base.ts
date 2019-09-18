@@ -1,4 +1,5 @@
 import { Model } from '@nozbe/watermelondb';
+import { action } from '@nozbe/watermelondb/decorators';
 import logger from '../../lib/logger';
 import i18n from '../../lib/i18n';
 import omit from 'lodash/omit';
@@ -37,6 +38,11 @@ class BaseModel extends Model {
 	protected toJSON() {
 		// @ts-ignore
 		return omit(this._raw, ['id', '_status', '_changed']);
+	}
+
+	/** Destroy */
+	@action async destroy() {
+		await this.experimentalDestroyPermanently();
 	}
 }
 
