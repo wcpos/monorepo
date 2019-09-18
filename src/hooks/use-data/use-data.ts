@@ -10,7 +10,6 @@ function initialFetch(type) {
 
 	const collection = storeDB.collections.get(type);
 	if (api.data) {
-		debugger;
 		const batch = api.data.map((json: any) => {
 			return collection.prepareCreate((model: Product) => {
 				Object.keys(json).forEach((key: string) => {
