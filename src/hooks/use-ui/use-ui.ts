@@ -19,8 +19,8 @@ export const useUI = section => {
 		});
 	}
 
-	const updateUI = () => {
-		dispatch();
+	const updateUI = action => {
+		dispatch(action);
 	};
 
 	return { ui, updateUI };
