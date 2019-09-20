@@ -6,27 +6,28 @@ import { storiesOf } from '@storybook/react';
 import Checkbox from './';
 
 storiesOf('Checkbox', module)
-  /**
-   *
-   */
-  .add('basic usage', () => (
-    <Checkbox 
-      label={text('label', 'Label')} 
-      checked={boolean('checked', true)} 
-      onChange={action('onChange')}
-      hasError={boolean('hasError', false)}
-      disabled={boolean('disabled', false)}
-    />
-  ))
+	/**
+	 *
+	 */
+	.add('basic usage', () => (
+		<Checkbox
+			label={text('label', 'Label')}
+			checked={boolean('checked', true)}
+			onChange={action('onChange')}
+			hasError={boolean('hasError', false)}
+			disabled={boolean('disabled', false)}
+			name="test"
+		/>
+	))
 
-  /**
-   *
-   */
-  .add('with help', () => (
-    <Checkbox 
-      label={text('label', 'Label')} 
-      info={text('info', 'Lorem ipsum dolor sit amet')} 
-      checked={boolean('checked', true)} 
-      onChange={action('onChange')}
-    />
-  ));
+	/**
+	 *
+	 */
+	.add('with help', () => (
+		<Checkbox
+			label={text('label', 'Label')}
+			info={text('info', 'Lorem ipsum dolor sit amet')}
+			checked={boolean('checked', true)}
+			onChange={action('onChange')}
+		/>
+	));

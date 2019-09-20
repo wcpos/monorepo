@@ -24,12 +24,12 @@ export default function CheckboxIcon({
 	return (
 		<Box
 		// style={[
-			//   styles.box,
-			//   errorState && styles.boxError,
-			//   focused && styles.boxFocused,
-			//   hovered && !disabled && styles.boxHover,
-			//   pressed && styles.boxPressed,
-			// ]}
+		//   styles.box,
+		//   errorState && styles.boxError,
+		//   focused && styles.boxFocused,
+		//   hovered && !disabled && styles.boxHover,
+		//   pressed && styles.boxPressed,
+		// ]}
 		>
 			{checked && <Icon name="check" color={iconColor} size="small" />}
 		</Box>

@@ -1,38 +1,65 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { TouchableWithoutFeedback } from 'react-native';
+import Label from './label';
+import Icon from './icon';
+import { Wrapper } from './styles';
+// import { Hoverable } from '../Hoverable';
 
-import Shared from './shared';
-
-export type Props = {
-  label?: React.ReactNode;
-  value?: string; // this prop is currently used only on web
-  hasError?: boolean;
-  disabled?: boolean;
-  checked?: boolean;
-  name?: string; // this prop is currently used only on web
-  info?: React.ReactNode;
-  onChange?: () => void;
-  children?: React.ReactNode;
+type Props = {
+	label?: React.ReactNode;
+	hasError?: boolean;
+	disabled?: boolean;
+	checked?: boolean;
+	info?: React.ReactNode;
+	onChange?: (checked: boolean, event: { target: {} }) => void;
+	children?: React.ReactNode;
+	name?: string;
 };
 
-export default function Checkbox({
-  label,
-  hasError,
-  disabled,
-  checked,
-  info,
-  onChange,
-  children,
-}: Props) {
-  return (
-    <Shared
-      label={label}
-      hasError={hasError}
-      disabled={disabled}
-      checked={checked}
-      info={info}
-      onPress={onChange}
-    >
-      {children}
-    </Shared>
-  );
-}
+// @TODO - hover, focus states
+// type State = {
+//   focusDisplayed: boolean;
+//   hovered: boolean;
+//   pressed: boolean;
+// };
+
+const Shared = ({ label, hasError, disabled, info, onChange, children, name, ...props }: Props) => {
+	const [checked, setChecked] = useState(!!props.checked);
+
+	const onPress = () => {
+		if (disabled) {
+			return;
+		}
+		const _checked = !checked;
+		setChecked(_checked);
+		if (typeof onChange === 'function') {
+			onChange(_checked, { target: { name, checked: _checked } });
+		}
+	};
+
+	return (
+		<TouchableWithoutFeedback
+			accessibilityRole="button"
+			onPress={onPress}
+			// onPressIn={this.handleOnPressIn}
+			// onPressOut={this.handleOnPressOut}
+			// onFocus={this.handleOnFocus}
+			// onBlur={this.handleOnBlur}
+			disabled={disabled}
+		>
+			<Wrapper disabled={disabled}>
+				<Icon
+					checked={checked}
+					hasError={hasError}
+					disabled={disabled}
+					// focused={focusDisplayed}
+					// hovered={hovered}
+					// pressed={pressed}
+				/>
+				{children || <Label label={label} checked={checked} info={info} />}
+			</Wrapper>
+		</TouchableWithoutFeedback>
+	);
+};
+
+export default Shared;
