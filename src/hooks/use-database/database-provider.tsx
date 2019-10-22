@@ -35,6 +35,7 @@ const DatabaseProvider = ({ children }: Props) => {
 			}
 
 			const storeDB = await storeDatabase(lastUser);
+
 			if (storeDB) {
 				setStoreDB(storeDB);
 			}

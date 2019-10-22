@@ -9,11 +9,7 @@ export default {
 			{ key: 'price' },
 			{ key: 'actions', disableSort: true },
 		],
-		display: [
-			{ key: 'sku', hide: true, label: 'SKU' },
-			{ key: 'categories', label: 'Categories' },
-			{ key: 'tags', hide: true, label: 'Tags' },
-		],
+		display: [{ key: 'sku', hide: true }, { key: 'categories' }, { key: 'tags', hide: true }],
 	},
 	products: {
 		sortBy: 'name',
