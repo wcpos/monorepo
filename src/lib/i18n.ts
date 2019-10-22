@@ -67,6 +67,13 @@ i18n.use(initReactI18next).init({
 							stock: 'Stock',
 						},
 					},
+					display: {
+						label: {
+							sku: 'SKU',
+							categories: 'Categories',
+							tags: 'Tags',
+						},
+					},
 				},
 				products: {
 					button: {

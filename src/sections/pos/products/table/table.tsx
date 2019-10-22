@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import orderBy from 'lodash/orderBy';
-import Table from '../../../components/table';
-import Button from '../../../components/button';
-import Img from '../../../components/image';
-import Popover from '../../../components/popover';
-import Icon from '../../../components/icon';
+import Table from '../../../../components/table';
+import Button from '../../../../components/button';
+import Img from '../../../../components/image';
+import Popover from '../../../../components/popover';
+import Icon from '../../../../components/icon';
 import Settings from './settings';
-import useDatabase from '../../../hooks/use-database';
-import useUI from '../../../hooks/use-ui';
-import Loading from '../../../components/loader';
+import useDatabase from '../../../../hooks/use-database';
+import useUI from '../../../../hooks/use-ui';
+import Loading from '../../../../components/loader';
+import Name from './name';
 
 interface Props {
 	products: any;
@@ -54,9 +55,11 @@ const ProductsTable = ({ products }: Props) => {
 						<Img src={cellData} style={{ width: 100, height: 100 }} />
 					);
 					break;
-				// case 'name':
-				// 	column.cellRenderer = ({ rowData }: any) => <Name product={rowData} />;
-				// 	break;
+				case 'name':
+					column.cellRenderer = ({ rowData }: any) => (
+						<Name product={rowData} display={ui.display} />
+					);
+					break;
 				// case 'sku':
 				// 	column.cellRenderer = ({ cellData }: any) => <Text>{cellData}</Text>;
 				// 	break;

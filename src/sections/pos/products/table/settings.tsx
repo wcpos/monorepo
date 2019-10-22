@@ -1,6 +1,6 @@
 import React, { Fragment } from 'react';
-import Text from '../../../components/text';
-import Checkbox from '../../../components/checkbox';
+import Text from '../../../../components/text';
+import Checkbox from '../../../../components/checkbox';
 
 interface Props {
 	ui: any;
