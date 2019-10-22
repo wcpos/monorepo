@@ -1,4 +1,4 @@
-import { field, date, nochange, json } from '@nozbe/watermelondb/decorators';
+import { field, date, nochange, json, children } from '@nozbe/watermelondb/decorators';
 import { Associations } from '@nozbe/watermelondb/Model';
 import Model from './base';
 
@@ -6,8 +6,10 @@ export default class Product extends Model {
 	static table = 'products';
 
 	static associations: Associations = {
-		product_variations: { type: 'has_many', foreignKey: 'parent_id' },
+		variations: { type: 'has_many', foreignKey: 'parent_id' },
 	};
+
+	@children('variations') variations!: any;
 
 	@nochange @field('remote_id') remote_id!: number;
 	@field('name') name!: string;
@@ -70,10 +72,24 @@ export default class Product extends Model {
 	@field('images') images!: string;
 	@field('attributes') attributes!: string;
 	@field('default_attributes') default_attributes!: string;
-	@field('variations') variations!: string;
+	// @field('variations') variations!: string;
 	@field('grouped_products') grouped_products!: string;
 	@field('menu_order') menu_order!: number;
 	@json('meta_data', (json: any[]) => json) meta_data!: string;
 	@field('thumbnail') thumbnail!: string;
 	@field('barcode') barcode!: string;
+
+	/**
+	 *
+	 */
+	isVariable() {
+		return this.type === 'variable';
+	}
+
+	/**
+	 *
+	 */
+	// ddd() {
+	// 	return this.type === 'variable';
+	// }
 }

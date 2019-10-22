@@ -64,7 +64,7 @@ const schema: Schema = {
 		{ name: 'images', type: 'string' },
 		{ name: 'attributes', type: 'string' },
 		{ name: 'default_attributes', type: 'string' },
-		{ name: 'variations', type: 'string' },
+		// { name: 'variations', type: 'string' },
 		{ name: 'grouped_products', type: 'string' },
 		{ name: 'menu_order', type: 'number' },
 		{ name: 'meta_data', type: 'string' },
