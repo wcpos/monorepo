@@ -1,15 +1,19 @@
 import { field, date, nochange, json, children } from '@nozbe/watermelondb/decorators';
 import { Associations } from '@nozbe/watermelondb/Model';
 import Model from './base';
+import http from '../../lib/http';
+import difference from 'lodash/difference';
+import map from 'lodash/map';
+import find from 'lodash/find';
 
 export default class Product extends Model {
 	static table = 'products';
 
 	static associations: Associations = {
-		variations: { type: 'has_many', foreignKey: 'parent_id' },
+		product_variations: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
-	@children('variations') variations!: any;
+	@children('product_variations') variations!: any;
 
 	@nochange @field('remote_id') remote_id!: number;
 	@field('name') name!: string;
@@ -89,7 +93,57 @@ export default class Product extends Model {
 	/**
 	 *
 	 */
-	// ddd() {
-	// 	return this.type === 'variable';
-	// }
+	async fetch() {
+		const response = await http(
+			'https://dev.local/wp/latest/wp-json/wc/v3/products/' + this.remote_id,
+			{
+				auth: {
+					username: 'ck_c0cba49ee21a37ef95d915e03631c7afd53bc8df',
+					password: 'cs_6769030f21591d37cd91e5983ebe532521fa875a',
+				},
+			}
+		);
+
+		await this.database.action(async () => {
+			await this.update(product => {
+				product.name = response.data.name;
+				product.type = response.data.type;
+				this.updateVariations(response.data.variations);
+				console.log(response.data.categories);
+				// this.updateCategories(response.data.categories);
+			});
+		});
+	}
+
+	/**
+	 *
+	 */
+	async updateVariations(variationIds: []) {
+		// get existing variation ids
+		const existingVariations = await this.variations.fetch();
+		const existingVariationIds = map(existingVariations, 'remote_id');
+		const addVariationIds = difference(variationIds, existingVariationIds);
+		const deleteVariationIds = difference(existingVariationIds, variationIds);
+
+		const add = addVariationIds.map(variationId =>
+			this.variations.collection.prepareCreate((model: any) => {
+				model.parent.set(this);
+				model.remote_id = variationId;
+				model.parent_id = this.remote_id;
+			})
+		);
+
+		const del = deleteVariationIds.map(variationId =>
+			find(existingVariations, { remote_id: variationId }).prepareDestroyPermanently()
+		);
+
+		return await this.batch(...add, ...del);
+	}
+
+	/**
+	 *
+	 */
+	async updateCategories(categories) {
+		debugger;
+	}
 }

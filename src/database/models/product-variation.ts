@@ -1,5 +1,6 @@
 import { Model } from '@nozbe/watermelondb';
-import { field, json, nochange, date } from '@nozbe/watermelondb/decorators';
+import { field, json, nochange, date, immutableRelation } from '@nozbe/watermelondb/decorators';
+import http from '../../lib/http';
 
 export default class ProductVariation extends Model {
 	static table = 'product_variations';
@@ -8,8 +9,9 @@ export default class ProductVariation extends Model {
 		products: { type: 'belongs_to', key: 'parent_id' },
 	};
 
+	@immutableRelation('products', 'parent_id') parent!: any;
+
 	@nochange @field('remote_id') remote_id!: number;
-	@nochange @field('parent_id') parent_id!: number;
 	@date('date_created') date_created!: string;
 	@date('date_created_gmt') date_created_gmt!: string;
 	@date('date_modified') date_modified!: string;
@@ -50,4 +52,32 @@ export default class ProductVariation extends Model {
 	@json('meta_data', (json: any[]) => json) meta_data!: string;
 	@field('thumbnail') thumbnail!: string;
 	@field('barcode') barcode!: string;
+
+	/**
+	 *
+	 */
+	async fetch() {
+		const parent = await this.parent.fetch();
+
+		const response = await http(
+			'https://dev.local/wp/latest/wp-json/wc/v3/products/' +
+				parent.remote_id +
+				'/variations/' +
+				this.remote_id,
+			{
+				auth: {
+					username: 'ck_c0cba49ee21a37ef95d915e03631c7afd53bc8df',
+					password: 'cs_6769030f21591d37cd91e5983ebe532521fa875a',
+				},
+			}
+		);
+		console.log(response);
+
+		await this.database.action(async () => {
+			await this.update(variation => {
+				variation.price = response.data.price;
+				variation.status = response.data.status;
+			});
+		});
+	}
 }
