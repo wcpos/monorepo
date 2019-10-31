@@ -21,21 +21,21 @@ async function syncIds(database) {
 	console.log(response);
 	const { data } = response;
 
-	// const batch = data.map((json: any) => {
-	// 	return collection.prepareCreate((model: Product) => {
-	// 		Object.keys(json).forEach((key: string) => {
-	// 			switch (key) {
-	// 				case 'id':
-	// 					model.remote_id = json.id;
-	// 					break;
-	// 				default:
-	// 					// @ts-ignore
-	// 					model[key] = json[key];
-	// 			}
-	// 		});
-	// 	});
-	// });
-	// await database.action(async () => await database.batch(...batch));
+	const batch = data.map((json: any) => {
+		return collection.prepareCreate((model: Product) => {
+			Object.keys(json).forEach((key: string) => {
+				switch (key) {
+					case 'id':
+						model.remote_id = json.id;
+						break;
+					default:
+						// @ts-ignore
+						model[key] = json[key];
+				}
+			});
+		});
+	});
+	await database.action(async () => await database.batch(...batch));
 }
 
 export default syncIds;
