@@ -10,6 +10,7 @@ import useDatabase from '../../../../hooks/use-database';
 import useUI from '../../../../hooks/use-ui';
 import Loading from '../../../../components/loader';
 import Name from './name';
+import Actions from './actions';
 
 interface Props {
 	products: any;
@@ -68,12 +69,7 @@ const ProductsTable = ({ products }: Props) => {
 				// 	break;
 				case 'actions':
 					column.cellRenderer = ({ rowData }: any) => (
-						<Button
-							title="+"
-							onPress={() => {
-								addToCart(rowData);
-							}}
-						/>
+						<Actions product={rowData} addToCart={addToCart} />
 					);
 					column.headerCellRenderer = () => (
 						<Popover content={<Settings ui={ui} updateUI={updateUI} />}>

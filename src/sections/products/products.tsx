@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Q } from '@nozbe/watermelondb';
 import useAPI from '../../hooks/use-api';
+import useData from '../../hooks/use-data';
 import useUI from '../../hooks/use-ui';
 import Text from '../../components/text';
 import Table from './table';
@@ -21,9 +22,10 @@ const Products = () => {
 	// 		.observeWithColumns(['name', 'regular_price', 'sku'])
 	// );
 
-	const { data } = useAPI('products');
+	// const { data } = useAPI('products');
+	const { data } = useData('products');
 
-	const ui: any = useUI('products');
+	const { ui }: any = useUI('products');
 
 	// const columns = useObservable(() => ui.columns.observe(), null);
 	return (

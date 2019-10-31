@@ -28,7 +28,7 @@ const store = async (obj: Props) => {
 	const adapter = new Adapter({
 		dbName,
 		schema: appSchema({
-			version: 12,
+			version: 14,
 			tables: [
 				tableSchema(customerSchema),
 				tableSchema(orderLineItemSchema),

@@ -4,7 +4,7 @@ const schema: Schema = {
 	name: 'product_variations',
 	columns: [
 		{ name: 'remote_id', type: 'number', isIndexed: true },
-		{ name: 'parent_id', type: 'number' },
+		{ name: 'parent_id', type: 'string', isIndexed: true },
 		{ name: 'date_created', type: 'string' },
 		{ name: 'date_created_gmt', type: 'string' },
 		{ name: 'date_modified', type: 'string' },
