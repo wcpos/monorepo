@@ -12,6 +12,6 @@ export default class ProductCategory extends Model {
 		categories: { type: 'belongs_to', key: 'category_id' },
 	};
 
-	@field('product_id') name!: string;
-	@field('category_id') slug!: string;
+	@field('product_id') product_id!: string;
+	@field('category_id') category_id!: string;
 }

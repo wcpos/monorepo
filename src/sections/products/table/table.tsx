@@ -9,6 +9,7 @@ import RegularPrice from './regular-price';
 import Table from '../../../components/table';
 import Text from '../../../components/text';
 import Name from './name';
+import Categories from './categories';
 import Loading from '../../../components/loader';
 
 interface Props {
@@ -56,6 +57,9 @@ const ProductsTable = ({ products, columns }: Props) => {
 					break;
 				case 'sku':
 					column.cellRenderer = ({ cellData }: any) => <Text>{cellData}</Text>;
+					break;
+				case 'categories':
+					column.cellRenderer = ({ rowData }: any) => <Categories product={rowData} />;
 					break;
 				case 'regular_price':
 					column.cellRenderer = ({ rowData }: any) => <RegularPrice product={rowData} />;

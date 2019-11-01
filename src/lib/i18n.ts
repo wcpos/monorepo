@@ -95,6 +95,8 @@ i18n.use(initReactI18next).init({
 							status: 'Status',
 							stock: 'Stock',
 							total: 'Total',
+							categories: 'Category',
+							tags: 'Tags',
 						},
 					},
 					search: {

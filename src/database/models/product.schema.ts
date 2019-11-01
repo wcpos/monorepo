@@ -59,7 +59,7 @@ const schema: Schema = {
 		{ name: 'cross_sell_ids', type: 'string' },
 		{ name: 'parent_id', type: 'number' },
 		{ name: 'purchase_note', type: 'string' },
-		{ name: 'categories', type: 'string' },
+		// { name: 'categories', type: 'string' },
 		{ name: 'tags', type: 'string' },
 		{ name: 'images', type: 'string' },
 		{ name: 'attributes', type: 'string' },

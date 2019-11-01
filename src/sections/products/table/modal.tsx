@@ -20,7 +20,7 @@ const Modal = ({ product, setVisible }: Props) => {
 			<AceEditor
 				mode="json"
 				theme="github"
-				value={JSON.stringify(product, null, ' ')}
+				value={JSON.stringify(product.toJSON(), null, ' ')}
 				setOptions={{ tabSize: 2 }}
 			/>
 			<Button onPress={close} title="Close" />

@@ -149,17 +149,17 @@ export default class Product extends Model {
 	}
 
 	/**
-	 *
+	 * @TODO - remove cats from pivot table if required
 	 */
 	async updateCategories(categories) {
-		const existingCategories = await this.categories.fetch();
+		const existingCategories = await this.collections
+			.get('categories')
+			.query()
+			.fetch();
 		const existingCategoryIds = map(existingCategories, 'remote_id');
 
 		const addCategories = categories.filter(category => {
 			return !existingCategoryIds.includes(category.id);
-		});
-		const deleteCategories = existingCategories.filter(category => {
-			return !map(categories, 'id').includes(category.remote_id);
 		});
 
 		const add = addCategories.map(category =>
@@ -177,10 +177,19 @@ export default class Product extends Model {
 			})
 		);
 
-		const del = deleteCategories.map(category => category.prepareDestroyPermanently());
-
 		// @TODO: remove from pivot table
 
-		return await this.batch(...add, ...pivot, ...del);
+		return await this.batch(...add, ...pivot);
+	}
+
+	/**
+	 *
+	 */
+	async toJSON() {
+		const json = super.toJSON();
+		const categories = await this.categories.fetch();
+		json.categories = categories.map(category => category.toJSON());
+		console.log(json);
+		return json;
 	}
 }
