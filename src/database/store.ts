@@ -1,15 +1,19 @@
 import { Database, appSchema, tableSchema } from '@nozbe/watermelondb';
 import hash from 'hash-sum';
 import Adapter from './adapter';
+import Category from './models/category';
 import Customer from './models/customer';
 import Order from './models/order';
 import OrderLineItem from './models/order-line-item';
 import Product from './models/product';
+import ProductCategory from './models/product-category';
 import ProductVariation from './models/product-variation';
+import categorySchema from './models/category.schema';
 import customerSchema from './models/customer.schema';
 import orderLineItemSchema from './models/order-line-item.schema';
 import orderSchema from './models/order.schema';
 import productSchema from './models/product.schema';
+import productCategorySchema from './models/product-category.schema';
 import productVariationSchema from './models/product-variation.schema';
 
 type Props = {
@@ -28,12 +32,14 @@ const store = async (obj: Props) => {
 	const adapter = new Adapter({
 		dbName,
 		schema: appSchema({
-			version: 14,
+			version: 15,
 			tables: [
+				tableSchema(categorySchema),
 				tableSchema(customerSchema),
 				tableSchema(orderLineItemSchema),
 				tableSchema(orderSchema),
 				tableSchema(productSchema),
+				tableSchema(productCategorySchema),
 				tableSchema(productVariationSchema),
 			],
 		}),
@@ -41,7 +47,15 @@ const store = async (obj: Props) => {
 
 	const database = await new Database({
 		adapter,
-		modelClasses: [Customer, Order, OrderLineItem, Product, ProductVariation],
+		modelClasses: [
+			Category,
+			Customer,
+			Order,
+			OrderLineItem,
+			Product,
+			ProductCategory,
+			ProductVariation,
+		],
 		actionsEnabled: true,
 	});
 

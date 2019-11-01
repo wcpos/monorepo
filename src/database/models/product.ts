@@ -1,4 +1,5 @@
-import { field, date, nochange, json, children } from '@nozbe/watermelondb/decorators';
+import { Q } from '@nozbe/watermelondb';
+import { field, date, nochange, json, children, lazy } from '@nozbe/watermelondb/decorators';
 import { Associations } from '@nozbe/watermelondb/Model';
 import Model from './base';
 import http from '../../lib/http';
@@ -11,9 +12,15 @@ export default class Product extends Model {
 
 	static associations: Associations = {
 		product_variations: { type: 'has_many', foreignKey: 'parent_id' },
+		product_categories: { type: 'has_many', foreignKey: 'product_id' },
 	};
 
 	@children('product_variations') variations!: any;
+
+	@lazy
+	categories = this.collections
+		.get('categories')
+		.query(Q.on('product_categories', 'product_id', this.id));
 
 	@nochange @field('remote_id') remote_id!: number;
 	@field('name') name!: string;
@@ -71,7 +78,7 @@ export default class Product extends Model {
 	@field('cross_sell_ids') cross_sell_ids!: string;
 	@field('parent_id') parent_id!: number;
 	@field('purchase_note') purchase_note!: string;
-	@field('categories') categories!: string;
+	// @field('categories') categories!: string;
 	@field('tags') tags!: string;
 	@field('images') images!: string;
 	@field('attributes') attributes!: string;
@@ -106,11 +113,12 @@ export default class Product extends Model {
 
 		await this.database.action(async () => {
 			await this.update(product => {
-				product.name = response.data.name;
-				product.type = response.data.type;
 				this.updateVariations(response.data.variations);
-				console.log(response.data.categories);
-				// this.updateCategories(response.data.categories);
+				this.updateCategories(response.data.categories);
+				delete response.data.id;
+				delete response.data.variations;
+				delete response.data.categories;
+				this.updateFromJSON(response.data);
 			});
 		});
 	}
@@ -144,6 +152,35 @@ export default class Product extends Model {
 	 *
 	 */
 	async updateCategories(categories) {
-		debugger;
+		const existingCategories = await this.categories.fetch();
+		const existingCategoryIds = map(existingCategories, 'remote_id');
+
+		const addCategories = categories.filter(category => {
+			return !existingCategoryIds.includes(category.id);
+		});
+		const deleteCategories = existingCategories.filter(category => {
+			return !map(categories, 'id').includes(category.remote_id);
+		});
+
+		const add = addCategories.map(category =>
+			this.categories.collection.prepareCreate((model: any) => {
+				model.remote_id = category.id;
+				model.name = category.name;
+				model.slug = category.slug;
+			})
+		);
+
+		const pivot = add.map(category =>
+			this.collections.get('product_categories').prepareCreate((model: any) => {
+				model.category_id = category.id;
+				model.product_id = this.id;
+			})
+		);
+
+		const del = deleteCategories.map(category => category.prepareDestroyPermanently());
+
+		// @TODO: remove from pivot table
+
+		return await this.batch(...add, ...pivot, ...del);
 	}
 }

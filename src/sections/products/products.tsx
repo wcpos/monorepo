@@ -25,6 +25,14 @@ const Products = () => {
 	// const { data } = useAPI('products');
 	const { data } = useData('products');
 
+	const products = data.slice(0, 2);
+
+	products.forEach(product => {
+		// if (product && !product.status) {
+		product.fetch();
+		// }
+	});
+
 	const { ui }: any = useUI('products');
 
 	// const columns = useObservable(() => ui.columns.observe(), null);
@@ -43,11 +51,11 @@ const Products = () => {
 						// sortBy={this.state.sortBy}
 						// sortDirection={this.state.sortDirection}
 						columns={ui.columns}
-						products={data}
+						products={products}
 					/>
 				</Segment>
 
-				<Segment style={{ flex: -1 }} content={data && data.length} />
+				<Segment style={{ flex: -1 }} content={products && products.length} />
 			</SegmentGroup>
 		)
 	);

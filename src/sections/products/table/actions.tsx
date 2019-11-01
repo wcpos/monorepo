@@ -1,26 +1,33 @@
-import React, { Fragment } from 'react';
+import React from 'react';
 import Button from '../../../components/button';
-import Product from '../../../models/product/model';
+import Modal from '../../../components/modal';
+import ProductModal from './modal';
 
 type Props = {
-	product: Product;
+	product: any;
 };
 
 const Actions = ({ product }: Props) => {
+	const [visible, setVisible] = React.useState(false);
+
 	const handleDelete = () => {
 		product.destroyPermanently();
 	};
 
 	const handleShow = () => {
-		console.log('show modal');
-		console.log(product);
+		setVisible(true);
 	};
 
 	return (
-		<Fragment>
+		<React.Fragment>
 			<Button title="Delete" onPress={handleDelete} />
 			<Button title="Show" onPress={handleShow} />
-		</Fragment>
+			{visible && (
+				<Modal visible={visible}>
+					<ProductModal product={product} setVisible={setVisible} />
+				</Modal>
+			)}
+		</React.Fragment>
 	);
 };
 

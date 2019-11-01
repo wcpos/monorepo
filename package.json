@@ -19,6 +19,7 @@
     "lodash": "4.17.15",
     "lokijs": "1.5.7",
     "polish": "0.2.3",
+    "react-ace": "8.0.0",
     "react-cache": "2.0.0-alpha.1",
     "react-i18next": "10.13.1",
     "react-native": "0.61.2",
