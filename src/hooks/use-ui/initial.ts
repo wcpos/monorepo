@@ -19,11 +19,11 @@ export default {
 			{ key: 'id' },
 			{ key: 'name' },
 			{ key: 'sku' },
+			{ key: 'categories' },
+			{ key: 'tags', hide: true },
 			{ key: 'regular_price' },
 			{ key: 'sale_price' },
 			{ key: 'actions', disableSort: true },
-			{ key: 'categories', hide: true },
-			{ key: 'tags', hide: true },
 		],
 	},
 	orders: {
