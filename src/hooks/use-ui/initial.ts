@@ -20,7 +20,7 @@ export default {
 			{ key: 'name' },
 			{ key: 'sku' },
 			{ key: 'categories' },
-			{ key: 'tags', hide: true },
+			{ key: 'tags' },
 			{ key: 'regular_price' },
 			{ key: 'sale_price' },
 			{ key: 'actions', disableSort: true },
