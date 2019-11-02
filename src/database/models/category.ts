@@ -1,5 +1,5 @@
 import { Q } from '@nozbe/watermelondb';
-import { field, nochange, lazy } from '@nozbe/watermelondb/decorators';
+import { field, nochange, lazy, relation } from '@nozbe/watermelondb/decorators';
 import Model from './base';
 
 export default class Category extends Model {
@@ -8,6 +8,8 @@ export default class Category extends Model {
 	static associations = {
 		product_categories: { type: 'has_many', foreignKey: 'category_id' },
 	};
+
+	@relation('images', 'image_id') image!: any;
 
 	@lazy
 	products = this.collections
@@ -22,5 +24,4 @@ export default class Category extends Model {
 	@field('display') display!: string;
 	@field('menu_order') menu_order!: number;
 	@field('count') count!: number;
-	// @field('image') image!: string;
 }

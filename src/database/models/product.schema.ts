@@ -60,7 +60,7 @@ const schema: Schema = {
 		{ name: 'parent_id', type: 'number' },
 		{ name: 'purchase_note', type: 'string' },
 		// { name: 'categories', type: 'string' },
-		{ name: 'tags', type: 'string' },
+		// { name: 'tags', type: 'string' },
 		{ name: 'images', type: 'string' },
 		{ name: 'attributes', type: 'string' },
 		{ name: 'default_attributes', type: 'string' },

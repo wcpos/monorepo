@@ -8,8 +8,6 @@ export default class Image extends Model {
 		products: { type: 'belongs_to', key: 'parent_id' },
 	};
 
-	@immutableRelation('products', 'parent_id') parent!: any;
-
 	@nochange @field('remote_id') remote_id!: number;
 	@date('date_created') date_created!: string;
 	@date('date_created_gmt') date_created_gmt!: string;
