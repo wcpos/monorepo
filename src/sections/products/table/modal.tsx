@@ -11,6 +11,16 @@ type Props = {
 };
 
 const Modal = ({ product, setVisible }: Props) => {
+	const [data, setData] = React.useState({});
+
+	React.useEffect(() => {
+		async function fetchData() {
+			const json = await product.toJSON();
+			setData(json);
+		}
+		fetchData();
+	}, [product]);
+
 	const close = () => {
 		setVisible(false);
 	};
@@ -20,7 +30,7 @@ const Modal = ({ product, setVisible }: Props) => {
 			<AceEditor
 				mode="json"
 				theme="github"
-				value={JSON.stringify(product.toJSON(), null, ' ')}
+				value={JSON.stringify(data, null, ' ')}
 				setOptions={{ tabSize: 2 }}
 			/>
 			<Button onPress={close} title="Close" />

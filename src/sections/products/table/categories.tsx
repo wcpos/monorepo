@@ -10,7 +10,15 @@ type Props = {
 const Categories = ({ product }: Props) => {
 	const categories = useObservable(product.categories.observe(), []);
 
-	return categories.map(category => <Text>{category.name}</Text>);
+	const handleClick = category => {
+		console.log('filter by cat ', category);
+	};
+
+	return categories.map(category => (
+		<Text key={category.id} onPress={() => handleClick(category)}>
+			{category.name}
+		</Text>
+	));
 };
 
 export default Categories;

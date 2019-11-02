@@ -10,6 +10,7 @@ import Table from '../../../components/table';
 import Text from '../../../components/text';
 import Name from './name';
 import Categories from './categories';
+import Tags from './tags';
 import Loading from '../../../components/loader';
 
 interface Props {
@@ -60,6 +61,9 @@ const ProductsTable = ({ products, columns }: Props) => {
 					break;
 				case 'categories':
 					column.cellRenderer = ({ rowData }: any) => <Categories product={rowData} />;
+					break;
+				case 'tags':
+					column.cellRenderer = ({ rowData }: any) => <Tags product={rowData} />;
 					break;
 				case 'regular_price':
 					column.cellRenderer = ({ rowData }: any) => <RegularPrice product={rowData} />;

@@ -13,14 +13,20 @@ export default class Product extends Model {
 	static associations: Associations = {
 		product_variations: { type: 'has_many', foreignKey: 'parent_id' },
 		product_categories: { type: 'has_many', foreignKey: 'product_id' },
+		product_tags: { type: 'has_many', foreignKey: 'product_id' },
+		images: { type: 'has_many', foreignKey: 'product_id' },
 	};
 
 	@children('product_variations') variations!: any;
+	@children('images') images!: any;
 
 	@lazy
 	categories = this.collections
 		.get('categories')
 		.query(Q.on('product_categories', 'product_id', this.id));
+
+	@lazy
+	tags = this.collections.get('tags').query(Q.on('product_tags', 'product_id', this.id));
 
 	@nochange @field('remote_id') remote_id!: number;
 	@field('name') name!: string;
@@ -79,8 +85,8 @@ export default class Product extends Model {
 	@field('parent_id') parent_id!: number;
 	@field('purchase_note') purchase_note!: string;
 	// @field('categories') categories!: string;
-	@field('tags') tags!: string;
-	@field('images') images!: string;
+	// @field('tags') tags!: string;
+	// @field('images') images!: string;
 	@field('attributes') attributes!: string;
 	@field('default_attributes') default_attributes!: string;
 	// @field('variations') variations!: string;
@@ -115,9 +121,11 @@ export default class Product extends Model {
 			await this.update(product => {
 				this.updateVariations(response.data.variations);
 				this.updateCategories(response.data.categories);
+				this.updateTags(response.data.tags);
 				delete response.data.id;
 				delete response.data.variations;
 				delete response.data.categories;
+				delete response.data.tags;
 				this.updateFromJSON(response.data);
 			});
 		});
@@ -176,6 +184,41 @@ export default class Product extends Model {
 				model.product_id = this.id;
 			})
 		);
+
+		// @TODO: remove from pivot table
+
+		return await this.batch(...add, ...pivot);
+	}
+
+	/**
+	 * @TODO - remove tags from pivot table if required
+	 */
+	async updateTags(tags) {
+		const existingTags = await this.collections
+			.get('tags')
+			.query()
+			.fetch();
+		const existingTagIds = map(existingTags, 'remote_id');
+
+		const addTags = tags.filter(tag => {
+			return !existingTagIds.includes(tag.id);
+		});
+
+		const add = addTags.map(tag =>
+			this.tags.collection.prepareCreate((model: any) => {
+				model.remote_id = tag.id;
+				model.name = tag.name;
+				model.slug = tag.slug;
+			})
+		);
+
+		const pivot = add.map(tag =>
+			this.collections.get('product_tags').prepareCreate((model: any) => {
+				model.tag_id = tag.id;
+				model.product_id = this.id;
+			})
+		);
+		debugger;
 
 		// @TODO: remove from pivot table
 

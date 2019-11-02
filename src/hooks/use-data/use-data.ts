@@ -41,7 +41,6 @@ function useData(type, search = '') {
 			.observeWithColumns(['name', 'regular_price']),
 		[]
 	);
-	console.log(data);
 
 	// initial fetch
 	// if (data.length === 0) {
