@@ -122,6 +122,7 @@ export default class Product extends Model {
 				this.updateVariations(response.data.variations);
 				this.updateCategories(response.data.categories);
 				this.updateTags(response.data.tags);
+				this.updateImages(response.data.images);
 				delete response.data.id;
 				delete response.data.variations;
 				delete response.data.categories;
@@ -154,6 +155,31 @@ export default class Product extends Model {
 		);
 
 		return await this.batch(...add, ...del);
+	}
+
+	/**
+	 *
+	 */
+	async updateImagess(images: []) {
+		// get existing variation ids
+		const existingVariations = await this.images.fetch();
+		// const existingVariationIds = map(existingVariations, 'remote_id');
+		// const addVariationIds = difference(variationIds, existingVariationIds);
+		// const deleteVariationIds = difference(existingVariationIds, variationIds);
+		debugger;
+
+		const add = images.map(image =>
+			this.images.collection.prepareCreate((model: any) => {
+				model.product.set(this);
+				debugger;
+			})
+		);
+
+		// const del = deleteVariationIds.map(variationId =>
+		// 	find(existingVariations, { remote_id: variationId }).prepareDestroyPermanently()
+		// );
+
+		return await this.batch(...add);
 	}
 
 	/**
@@ -218,7 +244,6 @@ export default class Product extends Model {
 				model.product_id = this.id;
 			})
 		);
-		debugger;
 
 		// @TODO: remove from pivot table
 
@@ -232,6 +257,7 @@ export default class Product extends Model {
 		const json = super.toJSON();
 		const categories = await this.categories.fetch();
 		json.categories = categories.map(category => category.toJSON());
+		json.tags = tags.map(tag => tag.toJSON());
 		console.log(json);
 		return json;
 	}

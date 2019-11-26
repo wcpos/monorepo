@@ -5,8 +5,10 @@ export default class Image extends Model {
 	static table = 'images';
 
 	static associations = {
-		products: { type: 'belongs_to', key: 'parent_id' },
+		products: { type: 'belongs_to', key: 'product_id' },
 	};
+
+	@immutableRelation('products', 'product_id') product!: any;
 
 	@nochange @field('remote_id') remote_id!: number;
 	@date('date_created') date_created!: string;
