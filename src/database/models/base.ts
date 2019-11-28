@@ -20,7 +20,8 @@ class BaseModel extends Model {
 			console.log(recordUpdater);
 			return await this.updateFromJSON(recordUpdater);
 		}
-		this.logger.info('Updated', { meta: this });
+		const json = await this.toJSON();
+		this.logger.info('Updated', { meta: json });
 	}
 
 	/** Update from raw JSON */

@@ -10,7 +10,7 @@ export default class Tag extends Model {
 	};
 
 	@lazy
-	products = this.collections.get('products').query(Q.on('product_categories', 'tag_id', this.id));
+	products = this.collections.get('products').query(Q.on('product_tags', 'tag_id', this.id));
 
 	@nochange @field('remote_id') remote_id!: number;
 	@field('name') name!: string;

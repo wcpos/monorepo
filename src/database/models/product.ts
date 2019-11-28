@@ -1,11 +1,15 @@
 import { Q } from '@nozbe/watermelondb';
 import { field, date, nochange, json, children, lazy } from '@nozbe/watermelondb/decorators';
-import { Associations } from '@nozbe/watermelondb/Model';
-import Model from './base';
-import http from '../../lib/http';
 import difference from 'lodash/difference';
 import map from 'lodash/map';
 import find from 'lodash/find';
+import Model from './base';
+import http from '../../lib/http';
+import { pivot, meta } from './decorators';
+
+type Associations = import('@nozbe/watermelondb/Model').Associations;
+type Query = import('@nozbe/watermelondb').Query<Model>;
+type Model = import('@nozbe/watermelondb').Model;
 
 export default class Product extends Model {
 	static table = 'products';
@@ -20,10 +24,11 @@ export default class Product extends Model {
 	@children('product_variations') variations!: any;
 	@children('images') images!: any;
 
-	@lazy
-	categories = this.collections
-		.get('categories')
-		.query(Q.on('product_categories', 'product_id', this.id));
+	// @lazy
+	// categories = this.collections
+	// 	.get('categories')
+	// 	.query(Q.on('product_categories', 'product_id', this.id));
+	@pivot('categories', 'product_categories') categories: Query<Model>;
 
 	@lazy
 	tags = this.collections.get('tags').query(Q.on('product_tags', 'product_id', this.id));
@@ -92,7 +97,7 @@ export default class Product extends Model {
 	// @field('variations') variations!: string;
 	@field('grouped_products') grouped_products!: string;
 	@field('menu_order') menu_order!: number;
-	@json('meta_data', (json: any[]) => json) meta_data!: string;
+	// @meta('product_meta') meta_data!: [];
 	@field('thumbnail') thumbnail!: string;
 	@field('barcode') barcode!: string;
 
@@ -120,13 +125,14 @@ export default class Product extends Model {
 		await this.database.action(async () => {
 			await this.update(product => {
 				this.updateVariations(response.data.variations);
-				this.updateCategories(response.data.categories);
+				// this.updateCategories(response.data.categories);
 				this.updateTags(response.data.tags);
 				this.updateImages(response.data.images);
 				delete response.data.id;
 				delete response.data.variations;
-				delete response.data.categories;
+				// delete response.data.categories;
 				delete response.data.tags;
+				delete response.data.images;
 				this.updateFromJSON(response.data);
 			});
 		});
@@ -160,18 +166,16 @@ export default class Product extends Model {
 	/**
 	 *
 	 */
-	async updateImagess(images: []) {
+	async updateImages(images: []) {
 		// get existing variation ids
-		const existingVariations = await this.images.fetch();
+		const existingImages = await this.images.fetch();
 		// const existingVariationIds = map(existingVariations, 'remote_id');
 		// const addVariationIds = difference(variationIds, existingVariationIds);
 		// const deleteVariationIds = difference(existingVariationIds, variationIds);
-		debugger;
 
 		const add = images.map(image =>
 			this.images.collection.prepareCreate((model: any) => {
 				model.product.set(this);
-				debugger;
 			})
 		);
 
@@ -256,6 +260,7 @@ export default class Product extends Model {
 	async toJSON() {
 		const json = super.toJSON();
 		const categories = await this.categories.fetch();
+		const tags = await this.tags.fetch();
 		json.categories = categories.map(category => category.toJSON());
 		json.tags = tags.map(tag => tag.toJSON());
 		console.log(json);
