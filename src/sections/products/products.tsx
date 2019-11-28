@@ -28,9 +28,9 @@ const Products = () => {
 	const products = data.slice(0, 2);
 
 	products.forEach(product => {
-		if (product && !product.status) {
-			product.fetch();
-		}
+		// if (product && !product.status) {
+		product.fetch();
+		// }
 	});
 
 	const { ui }: any = useUI('products');

@@ -24,4 +24,14 @@ export default class Category extends Model {
 	@field('display') display!: string;
 	@field('menu_order') menu_order!: number;
 	@field('count') count!: number;
+
+	/**
+	 *
+	 * @param json
+	 */
+	rawUpdateFromJSON(json) {
+		this.remote_id = json.id;
+		this.name = json.name;
+		this.slug = json.slug;
+	}
 }
