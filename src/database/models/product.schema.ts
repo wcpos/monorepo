@@ -62,7 +62,7 @@ const schema: Schema = {
 		// { name: 'categories', type: 'string' },
 		// { name: 'tags', type: 'string' },
 		{ name: 'images', type: 'string' },
-		{ name: 'attributes', type: 'string' },
+		// { name: 'attributes', type: 'string' },
 		{ name: 'default_attributes', type: 'string' },
 		// { name: 'variations', type: 'string' },
 		{ name: 'grouped_products', type: 'string' },

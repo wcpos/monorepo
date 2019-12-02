@@ -7,31 +7,20 @@ import Model from './base';
 import http from '../../lib/http';
 import { pivot, meta } from './decorators';
 
-type Associations = import('@nozbe/watermelondb/Model').Associations;
-type Query = import('@nozbe/watermelondb').Query<Model>;
-type Model = import('@nozbe/watermelondb').Model;
+type AssociationsType = import('@nozbe/watermelondb/Model').Associations;
+type QueryType = import('@nozbe/watermelondb').Query<Model>;
+type ModelType = import('@nozbe/watermelondb').Model;
 
 export default class Product extends Model {
 	static table = 'products';
 
-	static associations: Associations = {
-		product_variations: { type: 'has_many', foreignKey: 'parent_id' },
+	static associations: AssociationsType = {
+		images: { type: 'has_many', foreignKey: 'product_id' },
+		product_attributes: { type: 'has_many', foreignKey: 'product_id' },
 		product_categories: { type: 'has_many', foreignKey: 'product_id' },
 		product_tags: { type: 'has_many', foreignKey: 'product_id' },
-		images: { type: 'has_many', foreignKey: 'product_id' },
+		product_variations: { type: 'has_many', foreignKey: 'parent_id' },
 	};
-
-	@children('product_variations') variations!: any;
-	@children('images') images!: any;
-
-	// @lazy
-	// categories = this.collections
-	// 	.get('categories')
-	// 	.query(Q.on('product_categories', 'product_id', this.id));
-	@pivot('categories', 'product_categories') categories: Query<Model>;
-
-	@lazy
-	tags = this.collections.get('tags').query(Q.on('product_tags', 'product_id', this.id));
 
 	@nochange @field('remote_id') remote_id!: number;
 	@field('name') name!: string;
@@ -89,12 +78,12 @@ export default class Product extends Model {
 	@field('cross_sell_ids') cross_sell_ids!: string;
 	@field('parent_id') parent_id!: number;
 	@field('purchase_note') purchase_note!: string;
-	// @field('categories') categories!: string;
-	// @field('tags') tags!: string;
-	// @field('images') images!: string;
-	@field('attributes') attributes!: string;
+	@pivot('categories', 'product_categories') categories!: QueryType<ModelType>;
+	@pivot('tags', 'product_tags') tags!: QueryType<ModelType>;
+	@children('images') images!: any;
+	@pivot('attributes', 'product_attributes') attributes!: QueryType<ModelType>;
 	@field('default_attributes') default_attributes!: string;
-	// @field('variations') variations!: string;
+	@children('product_variations') variations!: any;
 	@field('grouped_products') grouped_products!: string;
 	@field('menu_order') menu_order!: number;
 	// @meta('product_meta') meta_data!: [];
@@ -125,13 +114,9 @@ export default class Product extends Model {
 		await this.database.action(async () => {
 			await this.update(product => {
 				this.updateVariations(response.data.variations);
-				// this.updateCategories(response.data.categories);
-				this.updateTags(response.data.tags);
 				this.updateImages(response.data.images);
 				delete response.data.id;
 				delete response.data.variations;
-				// delete response.data.categories;
-				delete response.data.tags;
 				delete response.data.images;
 				this.updateFromJSON(response.data);
 			});
@@ -187,80 +172,14 @@ export default class Product extends Model {
 	}
 
 	/**
-	 * @TODO - remove cats from pivot table if required
-	 */
-	async updateCategories(categories) {
-		const existingCategories = await this.collections
-			.get('categories')
-			.query()
-			.fetch();
-		const existingCategoryIds = map(existingCategories, 'remote_id');
-
-		const addCategories = categories.filter(category => {
-			return !existingCategoryIds.includes(category.id);
-		});
-
-		const add = addCategories.map(category =>
-			this.categories.collection.prepareCreate((model: any) => {
-				model.remote_id = category.id;
-				model.name = category.name;
-				model.slug = category.slug;
-			})
-		);
-
-		const pivot = add.map(category =>
-			this.collections.get('product_categories').prepareCreate((model: any) => {
-				model.category_id = category.id;
-				model.product_id = this.id;
-			})
-		);
-
-		// @TODO: remove from pivot table
-
-		return await this.batch(...add, ...pivot);
-	}
-
-	/**
-	 * @TODO - remove tags from pivot table if required
-	 */
-	async updateTags(tags) {
-		const existingTags = await this.collections
-			.get('tags')
-			.query()
-			.fetch();
-		const existingTagIds = map(existingTags, 'remote_id');
-
-		const addTags = tags.filter(tag => {
-			return !existingTagIds.includes(tag.id);
-		});
-
-		const add = addTags.map(tag =>
-			this.tags.collection.prepareCreate((model: any) => {
-				model.remote_id = tag.id;
-				model.name = tag.name;
-				model.slug = tag.slug;
-			})
-		);
-
-		const pivot = add.map(tag =>
-			this.collections.get('product_tags').prepareCreate((model: any) => {
-				model.tag_id = tag.id;
-				model.product_id = this.id;
-			})
-		);
-
-		// @TODO: remove from pivot table
-
-		return await this.batch(...add, ...pivot);
-	}
-
-	/**
 	 *
 	 */
 	async toJSON() {
 		const json = super.toJSON();
+		const attributes = await this.attributes.fetch();
 		const categories = await this.categories.fetch();
 		const tags = await this.tags.fetch();
+		json.attributes = attributes.map(attribute => attribute.toJSON());
 		json.categories = categories.map(category => category.toJSON());
 		json.tags = tags.map(tag => tag.toJSON());
 		console.log(json);

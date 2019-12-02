@@ -1,6 +1,7 @@
 import { Database, appSchema, tableSchema } from '@nozbe/watermelondb';
 import hash from 'hash-sum';
 import Adapter from './adapter';
+import Attribute from './models/attribute';
 import Category from './models/category';
 import Customer from './models/customer';
 import Image from './models/image';
@@ -8,20 +9,23 @@ import Meta from './models/meta';
 import Order from './models/order';
 import OrderLineItem from './models/order-line-item';
 import Product from './models/product';
+import ProductAttribute from './models/product-attribute';
 import ProductCategory from './models/product-category';
 import ProductMeta from './models/product-meta';
 import ProductTag from './models/product-tag';
 import ProductVariation from './models/product-variation';
 import Tag from './models/tag';
+import attributeSchema from './models/attribute.schema';
 import categorySchema from './models/category.schema';
 import customerSchema from './models/customer.schema';
 import imageSchema from './models/image.schema';
-import orderLineItemSchema from './models/order-line-item.schema';
 import metaSchema from './models/meta.schema';
+import orderLineItemSchema from './models/order-line-item.schema';
 import orderSchema from './models/order.schema';
-import productSchema from './models/product.schema';
+import productAttributeSchema from './models/product-attribute.schema';
 import productCategorySchema from './models/product-category.schema';
 import productMetaSchema from './models/product-meta.schema';
+import productSchema from './models/product.schema';
 import productTagSchema from './models/product-tag.schema';
 import productVariationSchema from './models/product-variation.schema';
 import tagSchema from './models/tag.schema';
@@ -42,17 +46,19 @@ const store = async (obj: Props) => {
 	const adapter = new Adapter({
 		dbName,
 		schema: appSchema({
-			version: 18,
+			version: 21,
 			tables: [
+				tableSchema(attributeSchema),
 				tableSchema(categorySchema),
 				tableSchema(customerSchema),
 				tableSchema(imageSchema),
 				tableSchema(metaSchema),
 				tableSchema(orderLineItemSchema),
 				tableSchema(orderSchema),
-				tableSchema(productSchema),
+				tableSchema(productAttributeSchema),
 				tableSchema(productCategorySchema),
 				tableSchema(productMetaSchema),
+				tableSchema(productSchema),
 				tableSchema(productTagSchema),
 				tableSchema(productVariationSchema),
 				tableSchema(tagSchema),
@@ -63,6 +69,7 @@ const store = async (obj: Props) => {
 	const database = await new Database({
 		adapter,
 		modelClasses: [
+			Attribute,
 			Category,
 			Customer,
 			Image,
@@ -70,6 +77,7 @@ const store = async (obj: Props) => {
 			Order,
 			OrderLineItem,
 			Product,
+			ProductAttribute,
 			ProductCategory,
 			ProductMeta,
 			ProductTag,
