@@ -46,8 +46,8 @@ const pivot = makeDecorator(
 				const childCollection = model.collections.get(childTable);
 				const pivotCollection = model.collections.get(pivotTable);
 
-				const modelKey = pivotCollection.modelClass.associations[model.table].key;
-				const childKey = pivotCollection.modelClass.associations[childTable].key;
+				const modelKey = pivotCollection.modelClass.associations[model.table]?.key;
+				const childKey = pivotCollection.modelClass.associations[childTable]?.key;
 
 				const query = childCollection.query(Q.on(pivotTable, modelKey, model.id));
 				const remove = await query.fetch();

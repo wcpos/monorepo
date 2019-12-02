@@ -18,4 +18,16 @@ export default class Tag extends Model {
 	@field('parent') parent!: number;
 	@field('description') description!: string;
 	@field('count') count!: number;
+
+	/**
+	 *
+	 * @param json
+	 */
+	rawUpdateFromJSON(json) {
+		if (!this.remote_id) {
+			this.remote_id = json.id;
+		}
+		this.name = json.name;
+		this.slug = json.slug;
+	}
 }
