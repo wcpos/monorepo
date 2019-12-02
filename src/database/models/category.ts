@@ -30,7 +30,9 @@ export default class Category extends Model {
 	 * @param json
 	 */
 	rawUpdateFromJSON(json) {
-		this.remote_id = json.id;
+		if (!this.remote_id) {
+			this.remote_id = json.id;
+		}
 		this.name = json.name;
 		this.slug = json.slug;
 	}

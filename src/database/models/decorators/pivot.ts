@@ -1,19 +1,14 @@
 import { invariant, makeDecorator } from '@nozbe/watermelondb/utils/common';
 import { ensureDecoratorUsedProperly } from '@nozbe/watermelondb/decorators/common';
 import * as Q from '@nozbe/watermelondb/QueryDescription';
+import findIndex from 'lodash/findIndex';
 
 type TableName = import('@nozbe/watermelondb').TableName<string>;
 type Model = import('@nozbe/watermelondb').Model;
 type Query = import('@nozbe/watermelondb').Query<Model>;
 
 // Example: a Product has_many Meta, so it may define:
-//   @pivot('meta', 'product_meta', 'meta_id', 'product_id') meta_data: Query<MetaData>
-
-// @pivot('categories', 'product_categories', 'category_id', 'product_id') categories: Query<Model>;
-
-// const pivotTable = 'product_categories';
-const childKey = 'category_id';
-const modelKey = 'product_id';
+//   @pivot('meta', 'product_meta') meta_data: Query<MetaData>
 
 const pivot = makeDecorator(
 	(childTable: TableName, pivotTable: TableName) => (
@@ -46,36 +41,61 @@ const pivot = makeDecorator(
 				this._childrenQueryCache[childTable] = query;
 				return query;
 			},
-			set(array: []): void {
+			async set(array: []): void {
 				const model: Model = this.asModel;
 				const childCollection = model.collections.get(childTable);
 				const pivotCollection = model.collections.get(pivotTable);
 
-				// const association = model.constructor.associations[childTable]
-				// invariant(
-				// 	association && association.type === 'has_many',
-				// 	`@children decorator used for a table that's not has_many`,
-				// )
+				const modelKey = pivotCollection.modelClass.associations[model.table].key;
+				const childKey = pivotCollection.modelClass.associations[childTable].key;
 
 				const query = childCollection.query(Q.on(pivotTable, modelKey, model.id));
-				const existingMeta = query.fetch();
+				const remove = await query.fetch();
 
-				const children = array.map(data =>
+				// loop through each new data, reconcile against existing
+				const add = [];
+				const update = [];
+
+				array.forEach(obj => {
+					const idx = findIndex(remove, record => {
+						return record.remote_id == obj.id;
+					});
+					// update existing
+					if (idx !== -1) {
+						update.push(
+							remove[idx].prepareUpdate((m: any) => {
+								m.rawUpdateFromJSON(obj);
+							})
+						);
+						remove.splice(idx, 1);
+
+						// add new
+					} else {
+						add.push(obj);
+					}
+				});
+
+				const addChildren = add.map(data =>
 					childCollection.prepareCreate((m: any) => {
 						m.rawUpdateFromJSON(data);
 					})
 				);
 
-				const pivot = children.map(child =>
+				const addPivot = addChildren.map(child =>
 					pivotCollection.prepareCreate((m: any) => {
 						m[childKey] = child.id;
 						m[modelKey] = model.id;
 					})
 				);
 
-				// @TODO: remove from pivot table
+				remove.forEach(async record => {
+					const query = pivotCollection.query(Q.where(childKey, record.id));
+					const pivot = await query.fetch();
+					pivot.forEach(p => p.destroyPermanently());
+					await record.destroyPermanently();
+				});
 
-				return model.batch(...children, ...pivot);
+				return model.batch(...update, ...addChildren, ...addPivot);
 			},
 		};
 	}
