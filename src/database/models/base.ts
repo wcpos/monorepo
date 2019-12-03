@@ -29,7 +29,11 @@ class BaseModel extends Model {
 		await this.collection.database.action(async () => {
 			await this.update(() => {
 				Object.keys(json).forEach((key: string) => {
-					this[key] = json[key];
+					if (key === 'id' && !this.remote_id) {
+						this.remote_id = json.id;
+					} else if (key !== 'id') {
+						this[key] = json[key];
+					}
 				});
 			});
 		});

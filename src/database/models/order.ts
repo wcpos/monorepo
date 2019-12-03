@@ -107,10 +107,16 @@ class Order extends Model {
 	 *
 	 */
 	@action async createLineItem(product: Product) {
+		let name = product.name;
+		// if variable, get name from parent
+		if (product.constructor.name === 'ProductVariation') {
+			const parent = await product.parent.fetch();
+			name = parent.name;
+		}
 		const line_item = await this.line_items.collection.create((item: OrderLineItem) => {
 			item.order.set(this);
 			item.quantity = 1;
-			item.name = product.name;
+			item.name = name;
 			item.product_id = product.remote_id;
 			// item.variation_id = product.variation_id;
 			item.tax_class = product.tax_class;
