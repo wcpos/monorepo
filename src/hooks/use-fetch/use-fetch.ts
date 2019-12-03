@@ -1,27 +1,25 @@
 import { useState, useEffect } from 'react';
-import useDatabase from '../use-database';
+type Query = import('@nozbe/watermelondb').Query<Model>;
 
-const useFetch = () => {
+const useFetch = (query: Query) => {
 	const [data, setData] = useState([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState(false);
-	const { storeDB } = useDatabase();
 
 	useEffect(() => {
 		const fetchData = async () => {
 			setError(false);
 			setLoading(true);
 			try {
-				const productsCollection = storeDB.collections.get('products');
-				const result = await productsCollection.query().fetch();
-				setData(result.slice(0, 1));
+				const result = await query.fetch();
+				setData(result);
 			} catch (error) {
 				setError(true);
 			}
 			setLoading(false);
 		};
 		fetchData();
-	}, [storeDB.collections]);
+	}, [query]);
 
 	return [{ data, loading, error }];
 };

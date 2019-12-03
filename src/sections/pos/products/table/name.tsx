@@ -1,6 +1,7 @@
-import React, { Fragment } from 'react';
+import React from 'react';
+import { View } from 'react-native';
 import Text from '../../../../components/text';
-import useAPI from '../../../../hooks/use-api';
+import useFetch from '../../../../hooks/use-fetch';
 
 interface Props {
 	product: any;
@@ -8,8 +9,26 @@ interface Props {
 }
 
 const Variations = ({ product }) => {
-	// const variations = useAPI('products/' + product.remote_id + '/variations');
-	return <Text>Variations</Text>;
+	const [{ data, error, loading }] = useFetch(product.attributes);
+
+	const handleClick = attribute => {
+		console.log('filter by attribute ', attribute);
+	};
+
+	if (loading) {
+		return <Text>Loading</Text>;
+	}
+
+	return data.map(attribute => (
+		<View key={attribute.id} weight="bold">
+			<Text size="small">{attribute.name}: </Text>
+			{attribute.options.map(option => (
+				<Text size="small" key={option} onPress={() => handleClick(option)}>
+					{option}
+				</Text>
+			))}
+		</View>
+	));
 };
 
 const Name = ({ product, display }: Props) => {
@@ -18,11 +37,11 @@ const Name = ({ product, display }: Props) => {
 	};
 
 	return (
-		<Fragment>
+		<React.Fragment>
 			<Text>{product.name}</Text>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{product.isVariable() && <Variations product={product} />}
-		</Fragment>
+		</React.Fragment>
 	);
 };
 

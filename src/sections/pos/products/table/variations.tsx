@@ -11,13 +11,18 @@ const Variations = ({ product, addToCart }: Props) => {
 	const variations = useObservable(product.variations.observe(), []);
 
 	variations.forEach(variation => {
-		if (variation && !variation.status) {
-			variation.fetch();
-		}
+		// if (variation && !variation.status) {
+		variation.fetch();
+		// }
 	});
 
 	return variations.map(variation => (
-		<Text>
+		<Text
+			key={variation.id}
+			onPress={() => {
+				addToCart(variation);
+			}}
+		>
 			{variation.remote_id} - {variation.price}
 		</Text>
 	));

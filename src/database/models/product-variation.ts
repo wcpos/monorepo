@@ -1,5 +1,13 @@
-import { Model } from '@nozbe/watermelondb';
-import { field, json, nochange, date, immutableRelation } from '@nozbe/watermelondb/decorators';
+import {
+	field,
+	json,
+	nochange,
+	date,
+	immutableRelation,
+	lazy,
+} from '@nozbe/watermelondb/decorators';
+import { distinctUntilChanged, distinctUntilKeyChanged, switchMap } from 'rxjs/operators';
+import Model from './base';
 import http from '../../lib/http';
 
 export default class ProductVariation extends Model {
@@ -47,7 +55,7 @@ export default class ProductVariation extends Model {
 	@field('shipping_class') shipping_class!: string;
 	@field('shipping_class_id') shipping_class_id!: number;
 	@field('image') images!: string;
-	@field('attributes') attributes!: string;
+	@json('attributes', (json: any[]) => json) attributes!: string;
 	@field('menu_order') menu_order!: number;
 	@json('meta_data', (json: any[]) => json) meta_data!: string;
 	@field('thumbnail') thumbnail!: string;
@@ -71,12 +79,10 @@ export default class ProductVariation extends Model {
 				},
 			}
 		);
-		console.log(response);
 
 		await this.database.action(async () => {
 			await this.update(variation => {
-				variation.price = response.data.price;
-				variation.status = response.data.status;
+				this.updateFromJSON(response.data);
 			});
 		});
 	}

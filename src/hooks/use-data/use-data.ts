@@ -47,9 +47,9 @@ function useData(type, search = '') {
 	// 	initialFetch(type);
 	// }
 
-	useEffect(() => {
-		syncIds(storeDB);
-	}, [storeDB]);
+	// useEffect(() => {
+	// 	syncIds(storeDB);
+	// }, [storeDB]);
 
 	return { data };
 }
