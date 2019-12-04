@@ -14,11 +14,10 @@ const schema: Schema = {
 		{ name: 'role', type: 'string' },
 		{ name: 'username', type: 'string' },
 		{ name: 'password', type: 'string' },
-		{ name: 'billing', type: 'string' },
-		{ name: 'shipping', type: 'string' },
 		{ name: 'is_paying_customer', type: 'boolean' },
 		{ name: 'avatar_url', type: 'string' },
-		{ name: 'meta_data', type: 'string' },
+		{ name: 'billing_id', type: 'string' },
+		{ name: 'shipping_id', type: 'string' },
 	],
 };
 
