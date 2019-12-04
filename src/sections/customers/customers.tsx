@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Q } from '@nozbe/watermelondb';
+import sortBy from 'lodash/sortBy';
 import useDatabase from '../../hooks/use-database';
 import useData from '../../hooks/use-data';
 import useUI from '../../hooks/use-ui';
@@ -12,7 +13,7 @@ const Customers = () => {
 
 	const { data } = useData('customers');
 
-	const customers = data.slice(0, 2);
+	const customers = sortBy(data, 'remote_id').slice(0, 2);
 
 	customers.forEach(customer => {
 		customer.fetch();

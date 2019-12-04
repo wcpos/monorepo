@@ -1,11 +1,11 @@
 import { Q } from '@nozbe/watermelondb';
-import { field, date, nochange, json, children, lazy } from '@nozbe/watermelondb/decorators';
+import { field, nochange, json, children, lazy } from '@nozbe/watermelondb/decorators';
 import difference from 'lodash/difference';
 import map from 'lodash/map';
 import find from 'lodash/find';
 import Model from './base';
 import http from '../../lib/http';
-import { pivot, meta } from './decorators';
+import { pivot, date } from './decorators';
 
 type AssociationsType = import('@nozbe/watermelondb/Model').Associations;
 type QueryType = import('@nozbe/watermelondb').Query<Model>;

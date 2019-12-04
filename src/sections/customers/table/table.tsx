@@ -45,8 +45,9 @@ const CustomersTable = ({ customers, columns, ...props }: Props) => {
 					column.cellRenderer = ({ rowData }: any) => (
 						<Button
 							title="Show"
-							onPress={() => {
-								console.log(rowData);
+							onPress={async () => {
+								const json = await rowData.toJSON();
+								console.log(json);
 							}}
 						/>
 					);
