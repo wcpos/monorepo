@@ -1,5 +1,7 @@
 import Model from './base';
 import { field, nochange, date, json } from '@nozbe/watermelondb/decorators';
+import http from '../../lib/http';
+
 import { BillingProps, ShippingProps, MetaDataProps } from './types';
 
 const sanitizeValues = (json: any) => json || {};
@@ -26,5 +28,26 @@ export default class Customer extends Model {
 
 	get name() {
 		return this.first_name + ' ' + this.last_name;
+	}
+
+	/**
+	 *
+	 */
+	async fetch() {
+		const response = await http(
+			'https://dev.local/wp/latest/wp-json/wc/v3/customers/' + this.remote_id,
+			{
+				auth: {
+					username: 'ck_c0cba49ee21a37ef95d915e03631c7afd53bc8df',
+					password: 'cs_6769030f21591d37cd91e5983ebe532521fa875a',
+				},
+			}
+		);
+
+		await this.database.action(async () => {
+			await this.update(customer => {
+				this.updateFromJSON(response.data);
+			});
+		});
 	}
 }

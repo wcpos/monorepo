@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Q } from '@nozbe/watermelondb';
 import useDatabase from '../../hooks/use-database';
-import useObservable from '../../hooks/use-observable';
+import useData from '../../hooks/use-data';
 import useUI from '../../hooks/use-ui';
 import Segment, { SegmentGroup } from '../../components/segment';
 import Table from './table';
@@ -9,16 +9,23 @@ import Actions from './actions';
 
 const Customers = () => {
 	const [search, setSearch] = useState('');
-	const { storeDB } = useDatabase();
 
-	const customers = useObservable(
-		storeDB.collections
-			.get('customers')
-			.query(Q.where('last_name', Q.like(`%${Q.sanitizeLikeString(search)}%`)))
-			.observeWithColumns(['first_name', 'last_name']),
-		[],
-		[search]
-	);
+	const { data } = useData('customers');
+
+	const customers = data.slice(0, 2);
+
+	customers.forEach(customer => {
+		customer.fetch();
+	});
+
+	// const customers = useObservable(
+	// 	storeDB.collections
+	// 		.get('customers')
+	// 		.query(Q.where('last_name', Q.like(`%${Q.sanitizeLikeString(search)}%`)))
+	// 		.observeWithColumns(['first_name', 'last_name']),
+	// 	[],
+	// 	[search]
+	// );
 
 	const { ui, updateUI }: any = useUI('customers');
 	if (!ui) {

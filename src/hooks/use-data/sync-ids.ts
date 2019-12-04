@@ -1,13 +1,15 @@
+import { Q } from '@nozbe/watermelondb';
 import http from '../../lib/http';
+import map from 'lodash/map';
+import difference from 'lodash/difference';
 const { CancelToken } = http;
 
-async function syncIds(database) {
+async function syncIds(collection) {
 	const source = CancelToken.source();
-	const collection = database.collections.get('products');
-
 	const local = await collection.query().fetch();
+	const localIds = map(local, 'remote_id');
 
-	const response = await http('https://dev.local/wp/latest/wp-json/wc/v3/products', {
+	const response = await http('https://dev.local/wp/latest/wp-json/wc/v3/' + collection.table, {
 		auth: {
 			username: 'ck_c0cba49ee21a37ef95d915e03631c7afd53bc8df',
 			password: 'cs_6769030f21591d37cd91e5983ebe532521fa875a',
@@ -18,24 +20,24 @@ async function syncIds(database) {
 		cancelToken: source.token,
 	});
 
-	console.log(response);
 	const { data } = response;
+	const remoteIds = map(data, 'id');
+	const add = difference(remoteIds, localIds);
+	const remove = difference(localIds, remoteIds);
 
-	const batch = data.map((json: any) => {
-		return collection.prepareCreate((model: Product) => {
-			Object.keys(json).forEach((key: string) => {
-				switch (key) {
-					case 'id':
-						model.remote_id = json.id;
-						break;
-					default:
-						// @ts-ignore
-						model[key] = json[key];
-				}
-			});
+	const batch = add.map((id: number) => {
+		return collection.prepareCreate((m: any) => {
+			m.remote_id = id;
 		});
 	});
-	await database.action(async () => await database.batch(...batch));
+	await collection.database.action(async () => await collection.database.batch(...batch));
+
+	remove.forEach(async id => {
+		const stale = await collection.query(Q.where('remote_id', id)).fetch();
+		stale.forEach(record =>
+			collection.database.action(async () => await record.destroyPermanently())
+		);
+	});
 }
 
 export default syncIds;
