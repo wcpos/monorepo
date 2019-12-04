@@ -33,12 +33,11 @@ import syncIds from './sync-ids';
 
 function useData(type, search = '') {
 	const { storeDB } = useDatabase();
+	const collection = storeDB.collections.get(type);
 
 	const data = useObservable(
-		storeDB.collections
-			.get(type)
-			.query(Q.where('name', Q.like(`%${Q.sanitizeLikeString(search)}%`)))
-			.observeWithColumns(['name', 'regular_price']),
+		collection.query(Q.where('name', Q.like(`%${Q.sanitizeLikeString(search)}%`))).observe(),
+		// .observeWithColumns(['name', 'regular_price']),
 		[]
 	);
 
@@ -47,9 +46,9 @@ function useData(type, search = '') {
 	// 	initialFetch(type);
 	// }
 
-	// useEffect(() => {
-	// 	syncIds(storeDB);
-	// }, [storeDB]);
+	useEffect(() => {
+		syncIds(collection);
+	}, [collection]);
 
 	return { data };
 }
