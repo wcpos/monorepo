@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 type Query = import('@nozbe/watermelondb').Query<Model>;
 
 const useFetch = (query: Query) => {
-	const [data, setData] = useState([]);
-	const [loading, setLoading] = useState(false);
+	const [data, setData] = useState(null);
+	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState(false);
 
 	useEffect(() => {
