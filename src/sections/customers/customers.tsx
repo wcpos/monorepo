@@ -13,7 +13,8 @@ const Customers = () => {
 
 	const { data } = useData('customers');
 
-	const customers = sortBy(data, 'remote_id').slice(0, 2);
+	// const customers = sortBy(data, 'remote_id').slice(0, 2);
+	const customers = data.slice(0, 2);
 
 	customers.forEach(customer => {
 		customer.fetch();

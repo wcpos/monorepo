@@ -7,14 +7,17 @@ import {
 	lazy,
 } from '@nozbe/watermelondb/decorators';
 import { distinctUntilChanged, distinctUntilKeyChanged, switchMap } from 'rxjs/operators';
-import Model from './base';
-import http from '../../lib/http';
+import Model from '../base';
+import http from '../../../lib/http';
+import { children } from '../decorators';
 
 export default class ProductVariation extends Model {
 	static table = 'product_variations';
 
 	static associations = {
 		products: { type: 'belongs_to', key: 'parent_id' },
+		meta: { type: 'has_many', foreignKey: 'parent_id' },
+		images: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
 	@immutableRelation('products', 'parent_id') parent!: any;
@@ -54,10 +57,10 @@ export default class ProductVariation extends Model {
 	@field('dimensions') dimensions!: string;
 	@field('shipping_class') shipping_class!: string;
 	@field('shipping_class_id') shipping_class_id!: number;
-	@field('image') images!: string;
+	@children('images') images!: string;
 	@json('attributes', (json: any[]) => json) attributes!: string;
 	@field('menu_order') menu_order!: number;
-	@json('meta_data', (json: any[]) => json) meta_data!: string;
+	@children('meta') meta_data!: [];
 	@field('thumbnail') thumbnail!: string;
 	@field('barcode') barcode!: string;
 

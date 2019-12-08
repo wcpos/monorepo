@@ -1,4 +1,4 @@
-import { makeDecorator } from '@nozbe/watermelondb/utils/common';
+import makeDecorator from '@nozbe/watermelondb/utils/common/makeDecorator';
 import { ensureDecoratorUsedProperly } from '@nozbe/watermelondb/decorators/common';
 
 type ColumnName = import('@nozbe/watermelondb/Schema').ColumnName;

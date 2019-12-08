@@ -1,11 +1,12 @@
-import { field, immutableRelation } from '@nozbe/watermelondb/decorators';
-import Model from './base';
+import { field } from '@nozbe/watermelondb/decorators';
+import Model from '../base';
 
 export default class Address extends Model {
 	static table = 'addresses';
 
 	static associations = {
 		customers: { type: 'belongs_to', key: 'customer_id' },
+		orders: { type: 'belongs_to', key: 'order_id' },
 	};
 
 	@field('type') type!: 'billing' | 'shipping';

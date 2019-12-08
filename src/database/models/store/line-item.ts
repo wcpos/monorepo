@@ -1,14 +1,17 @@
 import { field, nochange, json, immutableRelation } from '@nozbe/watermelondb/decorators';
 import { Associations } from '@nozbe/watermelondb/Model';
-import Model from './base';
+import Model from '../base';
+import { children } from '../decorators';
 
 const sanitizeValues = (json: any) => json;
 
-class OrderLineItem extends Model {
-	static table = 'order_line_items';
+class LineItem extends Model {
+	static table = 'line_items';
 
 	static associations: Associations = {
 		orders: { type: 'belongs_to', key: 'order_id' },
+		meta: { type: 'has_many', foreignKey: 'parent_id' },
+		taxes: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
 	@immutableRelation('orders', 'order_id') order!: any;
@@ -23,14 +26,24 @@ class OrderLineItem extends Model {
 	@field('subtotal_tax') subtotal_tax!: string;
 	@field('total') total!: string;
 	@field('total_tax') total_tax!: string;
-	@json('taxes', sanitizeValues) taxes!: string;
-	@json('meta_data', sanitizeValues) meta_data!: string;
+	@children('taxes') taxes!: string;
+	@children('meta') meta_data!: string;
 	@field('sku') sku!: string;
 	@field('price') price!: number;
 
 	/** */
 	get calculatedTotal() {
 		return this.quantity * this.price;
+	}
+
+	/** */
+	setMetaData(data) {
+		debugger;
+	}
+
+	/** */
+	setTaxes(data) {
+		debugger;
 	}
 
 	/** */
@@ -64,4 +77,4 @@ class OrderLineItem extends Model {
 	}
 }
 
-export default OrderLineItem;
+export default LineItem;

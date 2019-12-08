@@ -1,7 +1,7 @@
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
 const schema: Schema = {
-	name: 'order_line_items',
+	name: 'line_items',
 	columns: [
 		{ name: 'remote_id', type: 'number', isIndexed: true },
 		{ name: 'order_id', type: 'string', isIndexed: true },

@@ -1,6 +1,6 @@
 import { Q } from '@nozbe/watermelondb';
 import { field, nochange, json, immutableRelation } from '@nozbe/watermelondb/decorators';
-import Model from './base';
+import Model from '../base';
 
 const sanitizeValues = (json: any) => json || {};
 

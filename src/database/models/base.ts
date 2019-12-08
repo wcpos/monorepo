@@ -17,7 +17,6 @@ class BaseModel extends Model {
 		if (typeof recordUpdater === 'function') {
 			await super.update(recordUpdater);
 		} else {
-			console.log(recordUpdater);
 			return await this.updateFromJSON(recordUpdater);
 		}
 		const json = await this.toJSON();
@@ -26,16 +25,21 @@ class BaseModel extends Model {
 
 	/** Update from raw JSON */
 	protected async updateFromJSON(json: any) {
-		await this.collection.database.action(async () => {
-			await this.update(() => {
-				Object.keys(json).forEach((key: string) => {
-					if (key === 'id' && !this.remote_id) {
-						this.remote_id = json.id;
-					} else if (key !== 'id') {
-						this[key] = json[key];
-					}
-				});
-			});
+		// await this.collection.database.action(async () => {
+		await this.update(() => {
+			this.set(json);
+		});
+		// });
+	}
+
+	/** */
+	protected set(json) {
+		Object.keys(json).forEach((key: string) => {
+			if (key === 'id' && !this.remote_id) {
+				this.remote_id = json.id;
+			} else if (key !== 'id') {
+				this[key] = json[key];
+			}
 		});
 	}
 

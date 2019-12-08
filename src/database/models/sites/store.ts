@@ -1,6 +1,6 @@
 import { field, nochange } from '@nozbe/watermelondb/decorators';
 import { Associations } from '@nozbe/watermelondb/Model';
-import Model from './base';
+import Model from '../base';
 
 class Store extends Model {
 	static table = 'stores';

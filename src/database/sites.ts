@@ -1,23 +1,19 @@
 import { Database, appSchema, tableSchema } from '@nozbe/watermelondb';
 import Adapter from './adapter';
-import Site from './models/site';
-import User from './models/user';
-import Store from './models/user';
-import siteSchema from './models/site.schema';
-import userSchema from './models/user.schema';
-import storeSchema from './models/store.schema';
+import modelClasses from './models/sites';
+import schemas from './schemas/sites';
 
 const adapter = new Adapter({
 	dbName: 'wcpos-sites',
 	schema: appSchema({
 		version: 2,
-		tables: [tableSchema(siteSchema), tableSchema(userSchema), tableSchema(storeSchema)],
+		tables: schemas.map(tableSchema),
 	}),
 });
 
 const database = new Database({
 	adapter,
-	modelClasses: [Site, User, Store],
+	modelClasses,
 	actionsEnabled: true,
 });
 

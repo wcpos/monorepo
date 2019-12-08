@@ -1,6 +1,6 @@
 import { Q } from '@nozbe/watermelondb';
 import { field, nochange, lazy } from '@nozbe/watermelondb/decorators';
-import Model from './base';
+import Model from '../base';
 
 export default class Tag extends Model {
 	static table = 'tags';
@@ -18,16 +18,4 @@ export default class Tag extends Model {
 	@field('parent') parent!: number;
 	@field('description') description!: string;
 	@field('count') count!: number;
-
-	/**
-	 *
-	 * @param json
-	 */
-	rawUpdateFromJSON(json) {
-		if (!this.remote_id) {
-			this.remote_id = json.id;
-		}
-		this.name = json.name;
-		this.slug = json.slug;
-	}
 }

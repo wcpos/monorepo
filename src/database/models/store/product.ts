@@ -1,11 +1,11 @@
 import { Q } from '@nozbe/watermelondb';
-import { field, nochange, json, children, lazy } from '@nozbe/watermelondb/decorators';
+import { field, nochange, json, lazy } from '@nozbe/watermelondb/decorators';
 import difference from 'lodash/difference';
 import map from 'lodash/map';
 import find from 'lodash/find';
-import Model from './base';
-import http from '../../lib/http';
-import { pivot, date } from './decorators';
+import Model from '../base';
+import http from '../../../lib/http';
+import { pivot, date, children } from '../decorators';
 
 type AssociationsType = import('@nozbe/watermelondb/Model').Associations;
 type QueryType = import('@nozbe/watermelondb').Query<Model>;
@@ -15,7 +15,8 @@ export default class Product extends Model {
 	static table = 'products';
 
 	static associations: AssociationsType = {
-		images: { type: 'has_many', foreignKey: 'product_id' },
+		images: { type: 'has_many', foreignKey: 'parent_id' },
+		meta: { type: 'has_many', foreignKey: 'parent_id' },
 		product_attributes: { type: 'has_many', foreignKey: 'product_id' },
 		product_categories: { type: 'has_many', foreignKey: 'product_id' },
 		product_tags: { type: 'has_many', foreignKey: 'product_id' },
@@ -86,7 +87,7 @@ export default class Product extends Model {
 	@children('product_variations') variations!: any;
 	@field('grouped_products') grouped_products!: string;
 	@field('menu_order') menu_order!: number;
-	// @meta('product_meta') meta_data!: [];
+	@children('meta') meta_data!: QueryType<ModelType>;
 	@field('thumbnail') thumbnail!: string;
 	@field('barcode') barcode!: string;
 
@@ -112,15 +113,22 @@ export default class Product extends Model {
 		);
 
 		await this.database.action(async () => {
-			await this.update(product => {
-				this.updateVariations(response.data.variations);
-				this.updateImages(response.data.images);
-				delete response.data.id;
-				delete response.data.variations;
-				delete response.data.images;
-				this.updateFromJSON(response.data);
-			});
+			await this.update(response.data);
 		});
+	}
+
+	/**
+	 *
+	 */
+	setVariations(data) {
+		debugger;
+	}
+
+	/**
+	 *
+	 */
+	setImages(data) {
+		debugger;
 	}
 
 	/**
