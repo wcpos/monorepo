@@ -1,6 +1,6 @@
 import { Q } from '@nozbe/watermelondb';
 import { field, nochange, lazy, relation } from '@nozbe/watermelondb/decorators';
-import Model from './base';
+import Model from '../base';
 
 export default class Category extends Model {
 	static table = 'categories';

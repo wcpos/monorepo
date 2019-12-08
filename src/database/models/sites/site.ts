@@ -1,10 +1,10 @@
 import { Q } from '@nozbe/watermelondb';
 import { field, json, lazy, children } from '@nozbe/watermelondb/decorators';
 import get from 'lodash/get';
-import Model from './base';
-import ApiService from '../../services/api';
-import Url from '../../lib/url-parse';
-import http from '../../lib/http';
+import Model from '../base';
+import ApiService from '../../../services/api';
+import Url from '../../../lib/url-parse';
+import http from '../../../lib/http';
 
 const sanitizeValues = (json: any) => json || {};
 

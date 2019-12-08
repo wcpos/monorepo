@@ -50,15 +50,25 @@ const addressDecorator = (
 		async set(json): Promise<void> {
 			const model = this.asModel;
 			const collection = model.collections.get(relationTable);
-			const addressModel = await collection.create(m => {
-				Object.keys(json).forEach((k: string) => {
-					m.type = key;
-					m[k] = json[k];
+
+			if (model[key].id) {
+				const addressModel = await model[key].fetch();
+				addressModel.update(m => {
+					Object.keys(json).forEach((k: string) => {
+						m[k] = json[k];
+					});
 				});
-			});
-			model.update(m => {
-				m[key].set(addressModel);
-			});
+			} else {
+				const addressModel = await collection.create(m => {
+					Object.keys(json).forEach((k: string) => {
+						m.type = key;
+						m[k] = json[k];
+					});
+				});
+				model.update(m => {
+					m[key].set(addressModel);
+				});
+			}
 		},
 	};
 };

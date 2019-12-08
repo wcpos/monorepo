@@ -1,8 +1,8 @@
 // import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
 import { Database } from '@nozbe/watermelondb';
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
-import Model from './order-line-item';
-import schema from './order-line-item.schema';
+import Model from './line-item';
+import schema from '../../schemas/store/line-item';
 
 const mockSchema = appSchema({
 	version: 1,

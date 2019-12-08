@@ -1,4 +1,5 @@
-import { invariant, makeDecorator } from '@nozbe/watermelondb/utils/common';
+import invariant from '@nozbe/watermelondb/utils/common/invariant';
+import makeDecorator from '@nozbe/watermelondb/utils/common/makeDecorator';
 import { ensureDecoratorUsedProperly } from '@nozbe/watermelondb/decorators/common';
 import * as Q from '@nozbe/watermelondb/QueryDescription';
 import findIndex from 'lodash/findIndex';

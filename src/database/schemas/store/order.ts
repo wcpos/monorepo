@@ -27,8 +27,6 @@ const schema: Schema = {
 		{ name: 'customer_ip_address', type: 'string' },
 		{ name: 'customer_user_agent', type: 'string' },
 		{ name: 'customer_note', type: 'string' },
-		{ name: 'billing', type: 'string' },
-		{ name: 'shipping', type: 'string' },
 		{ name: 'payment_method', type: 'string' },
 		{ name: 'payment_method_title', type: 'string' },
 		{ name: 'transaction_id', type: 'string' },
@@ -37,13 +35,10 @@ const schema: Schema = {
 		{ name: 'date_completed', type: 'string', isOptional: true },
 		{ name: 'date_completed_gmt', type: 'string', isOptional: true },
 		{ name: 'cart_hash', type: 'string' },
-		{ name: 'meta_data', type: 'string' },
-		// { name: 'line_items', type: 'string' },
-		{ name: 'tax_lines', type: 'string' },
-		{ name: 'shipping_lines', type: 'string' },
-		{ name: 'fee_lines', type: 'string' },
-		{ name: 'coupon_lines', type: 'string' },
-		{ name: 'refunds', type: 'string' },
+		{ name: 'set_paid', type: 'boolean' },
+
+		{ name: 'billing_id', type: 'string' },
+		{ name: 'shipping_id', type: 'string' },
 	],
 };
 

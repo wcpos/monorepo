@@ -4,6 +4,7 @@ const schema: Schema = {
 	name: 'addresses',
 	columns: [
 		{ name: 'customer_id', type: 'string', isIndexed: true },
+		{ name: 'order_id', type: 'string', isIndexed: true },
 		{ name: 'type', type: 'string' },
 		{ name: 'address_1', type: 'string' },
 		{ name: 'address_2', type: 'string' },

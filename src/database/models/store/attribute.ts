@@ -1,6 +1,6 @@
 import { Q } from '@nozbe/watermelondb';
 import { field, nochange, lazy, json } from '@nozbe/watermelondb/decorators';
-import Model from './base';
+import Model from '../base';
 
 const sanitizeOptions = rawOptions => {
 	return Array.isArray(rawOptions) ? rawOptions.map(String) : [];
