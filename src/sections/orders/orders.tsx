@@ -22,9 +22,9 @@ const Orders = () => {
 	const orders = data.slice(0, 2);
 
 	orders.forEach(order => {
-		// if (order && !order.status) {
-		order.fetch();
-		// }
+		if (order && !order.status) {
+			order.fetch();
+		}
 	});
 
 	const { ui }: any = useUI('orders');

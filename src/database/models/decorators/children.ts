@@ -47,7 +47,6 @@ const children = (childTable: TableName) => (
 			return query;
 		},
 		set(data): void {
-			debugger;
 			const model: Model = this.asModel;
 			const setter: string = camelCase('set_' + key);
 			if (typeof model[setter] === 'function') {

@@ -17,4 +17,22 @@ storiesOf('Format', module)
 	/**
 	 *
 	 */
-	.add('list', () => <Format.List array={['one', 'two', 'three']} />);
+	.add('list', () => <Format.List array={['one', 'two', 'three']} />)
+
+	/**
+	 *
+	 */
+	.add('address', () => {
+		const address = {
+			first_name: 'John',
+			last_name: 'Doe',
+			company: 'ACME Inc.',
+			address_1: '969 Market',
+			address_2: 'Suite 66',
+			city: 'San Francisco',
+			state: 'CA',
+			postcode: '94103',
+			country: 'US',
+		};
+		return <Format.Address address={address} />;
+	});

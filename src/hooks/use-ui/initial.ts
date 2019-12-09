@@ -33,6 +33,8 @@ export default {
 			{ key: 'status', width: '10%' },
 			{ key: 'number', width: '10%' },
 			{ key: 'customer', flexGrow: 1 },
+			{ key: 'billing', flexGrow: 1 },
+			{ key: 'shipping', flexGrow: 1 },
 			{ key: 'note', width: '10%' },
 			{ key: 'date_created', flexGrow: 1 },
 			{ key: 'date_modified', hide: true, width: '10%' },

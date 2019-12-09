@@ -3,8 +3,6 @@ import { Associations } from '@nozbe/watermelondb/Model';
 import Model from '../base';
 import { children } from '../decorators';
 
-const sanitizeValues = (json: any) => json;
-
 class LineItem extends Model {
 	static table = 'line_items';
 
@@ -37,13 +35,25 @@ class LineItem extends Model {
 	}
 
 	/** */
-	setMetaData(data) {
-		debugger;
+	setMetaData(array: []) {
+		const add = array.map((json: any) => {
+			return this.meta_data.collection.prepareCreate((m: OrderLineItem) => {
+				m.parent_id = this.id;
+				m.set(json);
+			});
+		});
+		return this.batch(...add);
 	}
 
 	/** */
-	setTaxes(data) {
-		debugger;
+	setTaxes(array: []) {
+		const add = array.map((json: any) => {
+			return this.taxes.collection.prepareCreate((m: OrderLineItem) => {
+				m.parent_id.set(this);
+				m.set(json);
+			});
+		});
+		return this.batch(...add);
 	}
 
 	/** */

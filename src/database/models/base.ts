@@ -43,9 +43,19 @@ class BaseModel extends Model {
 		});
 	}
 
+	/** */
+	protected setMetaData(array: []) {
+		const add = array.map(json =>
+			this.meta_data.collection.prepareCreate((m: any) => {
+				m.parent_id.set(this);
+				m.set(json);
+			})
+		);
+		return this.batch(...add);
+	}
+
 	/** raw JSON */
 	protected toJSON() {
-		// @ts-ignore
 		return omit(this._raw, ['id', '_status', '_changed']);
 	}
 

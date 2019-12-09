@@ -43,6 +43,8 @@ i18n.use(initReactI18next).init({
 						label: {
 							actions: 'Actions',
 							customer: 'Customer',
+							billing: 'Billing',
+							shipping: 'Shipping',
 							date_completed: 'Date Completed',
 							date_created: 'Date Created',
 							date_modified: 'Date Modified',

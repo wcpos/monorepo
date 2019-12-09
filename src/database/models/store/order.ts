@@ -120,22 +120,47 @@ class Order extends Model implements OrderInterface {
 		});
 	}
 
+	setChildren(array: [], key: string) {
+		const add = array.map((json: any) => {
+			return this[key].collection.prepareCreate((m: OrderLineItem) => {
+				m.order.set(this);
+				m.set(json);
+			});
+		});
+		return this.batch(...add);
+	}
+
 	/** */
 	async setLineItems(array: []) {
 		// reconcile??
 
-		const batch = array.map((json: any) => {
+		const add = array.map((json: any) => {
 			return this.line_items.collection.prepareCreate((m: OrderLineItem) => {
 				m.order.set(this);
 				m.set(json);
 			});
 		});
-		await this.batch(batch);
+		await this.batch(...add);
 	}
 
-	/** */
-	async setMetaData(array: []) {
-		debugger;
+	setTaxLines(array: []) {
+		this.setChildren(array, 'tax_lines');
+	}
+
+	setShippingLines(array: []) {
+		this.setChildren(array, 'shipping_lines');
+	}
+
+	setFeeLines(array: []) {
+		this.setChildren(array, 'fee_lines');
+	}
+
+	setCouponLines(array: []) {
+		this.setChildren(array, 'coupon_lines');
+	}
+
+	setRefunds(array: []) {
+		this.setChildren(array, 'refunds');
 	}
 
 	/** */
@@ -242,6 +267,18 @@ class Order extends Model implements OrderInterface {
 		await this.database.action(async () => {
 			await this.update(response.data);
 		});
+	}
+
+	/**
+	 *
+	 */
+	async toJSON() {
+		const json = super.toJSON();
+		const billing = await this.billing.fetch();
+		const shipping = await this.shipping.fetch();
+		json.billing = billing.toJSON();
+		json.shipping = shipping.toJSON();
+		return json;
 	}
 }
 

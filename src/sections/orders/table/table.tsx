@@ -1,10 +1,11 @@
 import React from 'react';
-import useObservable from '../../hooks/use-observable';
-import Table from '../../components/table';
-import Button from '../../components/button';
-import Text from '../../components/text';
-import { Name } from '../../components/format';
-import Loading from '../../components/loader';
+import useObservable from '../../../hooks/use-observable';
+import Table from '../../../components/table';
+import Button from '../../../components/button';
+import Text from '../../../components/text';
+import { Name } from '../../../components/format';
+import Address from './address';
+import Loading from '../../../components/loader';
 
 interface Props {
 	// database: any;
@@ -39,12 +40,20 @@ const OrdersTable = ({
 						</Text>
 					);
 					break;
+				case 'billing':
+					column.cellRenderer = ({ cellData }: any) => <Address address={cellData} />;
+					break;
+				case 'shipping':
+					column.cellRenderer = ({ cellData }: any) => <Address address={cellData} />;
+					break;
 				case 'actions':
 					column.cellRenderer = ({ rowData }: any) => (
 						<Button
 							title="Show"
-							onPress={() => {
+							onPress={async () => {
 								console.log(rowData);
+								const json = await rowData.toJSON();
+								console.log(json);
 							}}
 						/>
 					);
@@ -60,6 +69,7 @@ const OrdersTable = ({
 			// sort={sort}
 			// sortBy={sortBy}
 			// sortDirection={sortDirection}
+			empty="No orders found"
 		/>
 	);
 };
