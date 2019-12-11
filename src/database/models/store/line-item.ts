@@ -3,6 +3,39 @@ import { Associations } from '@nozbe/watermelondb/Model';
 import Model from '../base';
 import { children } from '../decorators';
 
+type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
+type MetaData = typeof import('./meta');
+type MetaDataQuery = import('@nozbe/watermelondb').Query<MetaData>;
+type Tax = typeof import('./tax');
+type TaxQuery = import('@nozbe/watermelondb').Query<Tax>;
+
+/**
+ * Line Item Schema
+ *
+ */
+export const lineItemSchema: Schema = {
+	name: 'line_items',
+	columns: [
+		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'order_id', type: 'string', isIndexed: true },
+		{ name: 'name', type: 'string' },
+		{ name: 'product_id', type: 'number' },
+		{ name: 'variation_id', type: 'number' },
+		{ name: 'quantity', type: 'number' },
+		{ name: 'tax_class', type: 'string' },
+		{ name: 'subtotal', type: 'string' },
+		{ name: 'subtotal_tax', type: 'string' },
+		{ name: 'total', type: 'string' },
+		{ name: 'total_tax', type: 'string' },
+		{ name: 'sku', type: 'string' },
+		{ name: 'price', type: 'number' },
+	],
+};
+
+/**
+ * Line Item Model
+ *
+ */
 class LineItem extends Model {
 	static table = 'line_items';
 
@@ -24,8 +57,8 @@ class LineItem extends Model {
 	@field('subtotal_tax') subtotal_tax!: string;
 	@field('total') total!: string;
 	@field('total_tax') total_tax!: string;
-	@children('taxes') taxes!: string;
-	@children('meta') meta_data!: string;
+	@children('taxes') taxes!: TaxQuery;
+	@children('meta') meta_data!: MetaDataQuery;
 	@field('sku') sku!: string;
 	@field('price') price!: number;
 

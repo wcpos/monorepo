@@ -5,6 +5,7 @@ import Button from '../../../components/button';
 import Text from '../../../components/text';
 import { Name } from '../../../components/format';
 import Address from './address';
+import Customer from './customer';
 import Loading from '../../../components/loader';
 
 interface Props {
@@ -34,11 +35,7 @@ const OrdersTable = ({
 		.map((column: any) => {
 			switch (column.key) {
 				case 'customer':
-					column.cellRenderer = ({ rowData }: any) => (
-						<Text>
-							<Name firstName={rowData.billing.first_name} lastName={rowData.billing.last_name} />
-						</Text>
-					);
+					column.cellRenderer = ({ cellData }: any) => <Customer customerQuery={cellData} />;
 					break;
 				case 'billing':
 					column.cellRenderer = ({ cellData }: any) => <Address address={cellData} />;

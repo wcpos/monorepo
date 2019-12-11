@@ -2,10 +2,32 @@ import { Q } from '@nozbe/watermelondb';
 import { field, nochange, lazy, json } from '@nozbe/watermelondb/decorators';
 import Model from '../base';
 
+type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
+
+/**
+ * Product Attribute Schema
+ *
+ */
+export const attributeSchema: Schema = {
+	name: 'attributes',
+	columns: [
+		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'name', type: 'string' },
+		{ name: 'position', type: 'number' },
+		{ name: 'visible', type: 'boolean' },
+		{ name: 'variation', type: 'boolean' },
+		{ name: 'options', type: 'string' },
+	],
+};
+
 const sanitizeOptions = rawOptions => {
 	return Array.isArray(rawOptions) ? rawOptions.map(String) : [];
 };
 
+/**
+ * Product Attribute Model
+ *
+ */
 export default class Attribute extends Model {
 	static table = 'attributes';
 

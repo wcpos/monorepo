@@ -60,7 +60,6 @@ const addresses = {
 };
 
 const Address = ({ address }: Props) => {
-	console.log(address);
 	const addr = { ...address }; // clone address
 	let template = addresses[addr.country] || addresses['default'];
 	addr.name = addr.first_name + ' ' + addr.last_name;

@@ -1,8 +1,7 @@
 import { Database, appSchema, tableSchema } from '@nozbe/watermelondb';
 import hash from 'hash-sum';
 import Adapter from './adapter';
-import modelClasses from './models/store';
-import schemas from './schemas/store';
+import { modelClasses, schemas } from './models/store';
 
 type Props = {
 	site?: string;
@@ -20,7 +19,7 @@ const store = (obj: Props) => {
 	const adapter = new Adapter({
 		dbName,
 		schema: appSchema({
-			version: 24,
+			version: 25,
 			tables: schemas.map(tableSchema),
 		}),
 	});

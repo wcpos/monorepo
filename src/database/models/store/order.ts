@@ -1,56 +1,76 @@
 import { Q } from '@nozbe/watermelondb';
-import { field, nochange, date, action } from '@nozbe/watermelondb/decorators';
+import { field, nochange, action, lazy } from '@nozbe/watermelondb/decorators';
 import Model from '../base';
 import http from '../../../lib/http';
-import { address, children } from '../decorators';
+import { address, children, date } from '../decorators';
 
-type Query = typeof import('@nozbe/watermelondb/Query');
+type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
+type MetaData = typeof import('./meta');
+type MetaDataQuery = import('@nozbe/watermelondb').Query<MetaData>;
+type LineItem = typeof import('./line-item');
+type LineItemQuery = import('@nozbe/watermelondb').Query<LineItem>;
+type Tax = typeof import('./tax');
+type TaxQuery = import('@nozbe/watermelondb').Query<Tax>;
+type ShippingLine = typeof import('./shipping-line');
+type ShippingLineQuery = import('@nozbe/watermelondb').Query<ShippingLine>;
+type FeeLine = typeof import('./fee-line');
+type FeeLineQuery = import('@nozbe/watermelondb').Query<FeeLine>;
+type CouponLine = typeof import('./coupon-line');
+type CouponLineQuery = import('@nozbe/watermelondb').Query<CouponLine>;
+type OrderRefund = typeof import('./refund');
+type OrderRefundQuery = import('@nozbe/watermelondb').Query<OrderRefund>;
 
-export interface OrderInterface {
-	remote_id: number;
-	parent_id: number;
-	number: string;
-	order_key: string;
-	created_via: string;
-	version: string;
-	status: string;
-	currency: string;
-	date_created: string;
-	date_created_gmt: string;
-	date_modified: string;
-	date_modified_gmt: string;
-	discount_total: string;
-	discount_tax: string;
-	shipping_total: string;
-	shipping_tax: string;
-	cart_tax: string;
-	total: string;
-	total_tax: string;
-	prices_include_tax: boolean;
-	customer_id: string;
-	customer_ip_address: string;
-	customer_user_agent: string;
-	customer_note: string;
-	billing: typeof import('./address');
-	shipping: typeof import('./address');
-	payment_method: string;
-	payment_method_title: string;
-	transaction_id: string;
-	date_paid: string;
-	date_paid_gmt: string;
-	date_completed: string;
-	date_completed_gmt: string;
-	cart_hash: string;
-	meta_data: import('./meta').MetaDataInterface[];
-	line_items: import('./line-item').LineItemInterface[];
-	tax_lines: import('./tax').TaxInterface[];
-	shipping_lines: import('./shipping-line').ShippingLineInterface[];
-	fee_lines: import('./fee-line').FeeLineInterface[];
-	coupon_lines: import('./coupon-line').CouponLineInterface[];
-	refunds: Query<typeof import('./refund')>;
-}
+/**
+ * Order Schema
+ *
+ */
+export const orderSchema: Schema = {
+	name: 'orders',
+	columns: [
+		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'parent_id', type: 'number' },
+		{ name: 'number', type: 'string' },
+		{ name: 'order_key', type: 'string' },
+		{ name: 'created_via', type: 'string' },
+		{ name: 'version', type: 'string' },
+		{ name: 'status', type: 'string' },
+		{ name: 'currency', type: 'string' },
+		{ name: 'date_created', type: 'string' },
+		{ name: 'date_created_gmt', type: 'string' },
+		{ name: 'date_modified', type: 'string' },
+		{ name: 'date_modified_gmt', type: 'string' },
+		{ name: 'discount_total', type: 'string' },
+		{ name: 'discount_tax', type: 'string' },
+		{ name: 'shipping_total', type: 'string' },
+		{ name: 'shipping_tax', type: 'string' },
+		{ name: 'cart_tax', type: 'string' },
+		{ name: 'total', type: 'string' },
+		{ name: 'total_tax', type: 'string' },
+		{ name: 'prices_include_tax', type: 'boolean' },
+		{ name: 'customer_id', type: 'number' },
+		{ name: 'customer_ip_address', type: 'string' },
+		{ name: 'customer_user_agent', type: 'string' },
+		{ name: 'customer_note', type: 'string' },
+		{ name: 'payment_method', type: 'string' },
+		{ name: 'payment_method_title', type: 'string' },
+		{ name: 'transaction_id', type: 'string' },
+		{ name: 'date_paid', type: 'string' },
+		{ name: 'date_paid_gmt', type: 'string' },
+		{ name: 'date_completed', type: 'string', isOptional: true },
+		{ name: 'date_completed_gmt', type: 'string', isOptional: true },
+		{ name: 'cart_hash', type: 'string' },
+		{ name: 'set_paid', type: 'boolean' },
 
-class Order extends Model implements OrderInterface {
+		{ name: 'billing_id', type: 'string' },
+		{ name: 'shipping_id', type: 'string' },
+	],
+};
+
+/**
+ * Order Model
+ *
+ */
+class Order extends Model {
 	static table = 'orders';
 
 	static associations = {
@@ -63,52 +83,50 @@ class Order extends Model implements OrderInterface {
 		meta: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
-	@nochange @field('remote_id') remote_id;
-	@field('parent_id') parent_id;
-	@field('number') number;
-	@field('order_key') order_key;
-	@field('created_via') created_via;
-	@field('version') version;
-	@field('status') status;
-	@field('currency') currency;
-	@field('date_created') date_created;
-	@date('date_created_gmt') date_created_gmt;
-	@date('date_modified') date_modified;
-	@date('date_modified_gmt') date_modified_gmt;
-	@field('discount_total') discount_total;
-	@field('discount_tax') discount_tax;
-	@field('shipping_total') shipping_total;
-	@field('shipping_tax') shipping_tax;
-	@field('cart_tax') cart_tax;
-	@field('total') total;
-	@field('total_tax') total_tax;
-	@field('prices_include_tax') prices_include_tax;
-	@field('customer_id') customer_id;
-	@field('customer_ip_address') customer_ip_address;
-	@field('customer_user_agent') customer_user_agent;
-	@field('customer_note') customer_note;
-	@address('addresses', 'billing_id') billing;
-	@address('addresses', 'shipping_id') shipping;
-	@field('payment_method') payment_method;
-	@field('payment_method_title') payment_method_title;
-	@field('transaction_id') transaction_id;
-	@date('date_paid') date_paid;
-	@date('date_paid_gmt') date_paid_gmt;
-	@date('date_completed') date_completed;
-	@date('date_completed_gmt') date_completed_gmt;
-	@field('cart_hash') cart_hash;
-	@children('meta') meta_data;
-	@children('line_items') line_items;
-	@children('taxes') tax_lines;
-	@children('shipping_lines') shipping_lines;
-	@children('fee_lines') fee_lines;
-	@children('coupon_lines') coupon_lines;
-	@children('refunds') refunds;
+	@lazy
+	customer = this.collections.get('customers').query(Q.where('remote_id', this.customer_id));
 
-	/** */
-	get customerName() {
-		return this.billing.first_name + ' ' + this.billing.last_name;
-	}
+	@nochange @field('remote_id') remote_id!: number;
+	@field('parent_id') parent_id!: number;
+	@field('number') number!: string;
+	@field('order_key') order_key!: string;
+	@field('created_via') created_via!: string;
+	@field('version') version!: string;
+	@field('status') status!: string;
+	@field('currency') currency!: string;
+	@date('date_created') date_created!: Date;
+	@date('date_created_gmt') date_created_gmt!: Date;
+	@date('date_modified') date_modified!: Date;
+	@date('date_modified_gmt') date_modified_gmt!: Date;
+	@field('discount_total') discount_total!: string;
+	@field('discount_tax') discount_tax!: string;
+	@field('shipping_total') shipping_total!: string;
+	@field('shipping_tax') shipping_tax!: string;
+	@field('cart_tax') cart_tax!: string;
+	@field('total') total!: string;
+	@field('total_tax') total_tax!: string;
+	@field('prices_include_tax') prices_include_tax!: boolean;
+	@field('customer_id') customer_id!: string;
+	@field('customer_ip_address') customer_ip_address!: string;
+	@field('customer_user_agent') customer_user_agent!: string;
+	@field('customer_note') customer_note!: string;
+	@address('addresses', 'billing_id') billing!: string;
+	@address('addresses', 'shipping_id') shipping!: string;
+	@field('payment_method') payment_method!: string;
+	@field('payment_method_title') payment_method_title!: string;
+	@field('transaction_id') transaction_id!: string;
+	@date('date_paid') date_paid!: Date;
+	@date('date_paid_gmt') date_paid_gmt!: Date;
+	@date('date_completed') date_completed!: Date;
+	@date('date_completed_gmt') date_completed_gmt!: Date;
+	@field('cart_hash') cart_hash!: string;
+	@children('meta') meta_data!: MetaDataQuery;
+	@children('line_items') line_items!: LineItemQuery;
+	@children('taxes') tax_lines!: TaxQuery;
+	@children('shipping_lines') shipping_lines!: ShippingLineQuery;
+	@children('fee_lines') fee_lines!: FeeLineQuery;
+	@children('coupon_lines') coupon_lines!: CouponLineQuery;
+	@children('refunds') refunds!: OrderRefundQuery;
 
 	/** */
 	async setCustomer(customer: any) {
@@ -276,8 +294,12 @@ class Order extends Model implements OrderInterface {
 		const json = super.toJSON();
 		const billing = await this.billing.fetch();
 		const shipping = await this.shipping.fetch();
+		const line_items = await this.line_items.fetch();
+		const meta = await this.meta_data.fetch();
 		json.billing = billing.toJSON();
 		json.shipping = shipping.toJSON();
+		json.line_items = line_items.map(line_item => line_item.toJSON());
+		json.meta_data = meta.map(m => m.toJSON());
 		return json;
 	}
 }

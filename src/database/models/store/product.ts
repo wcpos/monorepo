@@ -8,9 +8,95 @@ import http from '../../../lib/http';
 import { pivot, date, children } from '../decorators';
 
 type AssociationsType = import('@nozbe/watermelondb/Model').Associations;
-type QueryType = import('@nozbe/watermelondb').Query<Model>;
-type ModelType = import('@nozbe/watermelondb').Model;
+type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
+type MetaData = typeof import('./meta');
+type MetaDataQuery = import('@nozbe/watermelondb').Query<MetaData>;
+type Image = typeof import('./image');
+type ImageQuery = import('@nozbe/watermelondb').Query<Image>;
+type ProductAttribute = typeof import('./product-attribute');
+type ProductAttributeQuery = import('@nozbe/watermelondb').Query<ProductAttribute>;
+type ProductCategory = typeof import('./product-category');
+type ProductCategoryQuery = import('@nozbe/watermelondb').Query<ProductCategory>;
+type ProductTag = typeof import('./product-tag');
+type ProductTagQuery = import('@nozbe/watermelondb').Query<ProductTag>;
+type ProductVariation = typeof import('./product-variation');
+type ProductVariationQuery = import('@nozbe/watermelondb').Query<ProductVariation>;
 
+/**
+ * Product Schema
+ *
+ */
+export const productSchema: Schema = {
+	name: 'products',
+	columns: [
+		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'name', type: 'string' },
+		{ name: 'slug', type: 'string' },
+		{ name: 'permalink', type: 'string' },
+		{ name: 'date_created', type: 'string' },
+		{ name: 'date_created_gmt', type: 'string' },
+		{ name: 'date_modified', type: 'string' },
+		{ name: 'date_modified_gmt', type: 'string' },
+		{ name: 'type', type: 'string' },
+		{ name: 'status', type: 'string' },
+		{ name: 'featured', type: 'boolean' },
+		{ name: 'catalog_visibility', type: 'string' },
+		{ name: 'description', type: 'string' },
+		{ name: 'short_description', type: 'string' },
+		{ name: 'sku', type: 'string' },
+		{ name: 'price', type: 'string' },
+		{ name: 'regular_price', type: 'string' },
+		{ name: 'sale_price', type: 'string' },
+		{ name: 'date_on_sale_from', type: 'string', isOptional: true },
+		{ name: 'date_on_sale_from_gmt', type: 'string', isOptional: true },
+		{ name: 'date_on_sale_to', type: 'string', isOptional: true },
+		{ name: 'date_on_sale_to_gmt', type: 'string', isOptional: true },
+		{ name: 'price_html', type: 'string' },
+		{ name: 'on_sale', type: 'boolean' },
+		{ name: 'purchasable', type: 'boolean' },
+		{ name: 'total_sales', type: 'number' },
+		{ name: 'virtual', type: 'boolean' },
+		{ name: 'downloadable', type: 'boolean' },
+		{ name: 'downloads', type: 'string' },
+		{ name: 'download_limit', type: 'number' },
+		{ name: 'download_expiry', type: 'number' },
+		{ name: 'external_url', type: 'string' },
+		{ name: 'button_text', type: 'string' },
+		{ name: 'tax_status', type: 'string' },
+		{ name: 'tax_class', type: 'string' },
+		{ name: 'manage_stock', type: 'boolean' },
+		{ name: 'stock_quantity', type: 'string', isOptional: true },
+		{ name: 'stock_status', type: 'string' },
+		{ name: 'backorders', type: 'string' },
+		{ name: 'backorders_allowed', type: 'boolean' },
+		{ name: 'backordered', type: 'boolean' },
+		{ name: 'sold_individually', type: 'boolean' },
+		{ name: 'weight', type: 'string' },
+		{ name: 'dimensions', type: 'string' },
+		{ name: 'shipping_required', type: 'boolean' },
+		{ name: 'shipping_taxable', type: 'boolean' },
+		{ name: 'shipping_class', type: 'string' },
+		{ name: 'shipping_class_id', type: 'number' },
+		{ name: 'reviews_allowed', type: 'boolean' },
+		{ name: 'average_rating', type: 'string' },
+		{ name: 'rating_count', type: 'number' },
+		{ name: 'related_ids', type: 'string' },
+		{ name: 'upsell_ids', type: 'string' },
+		{ name: 'cross_sell_ids', type: 'string' },
+		{ name: 'parent_id', type: 'number' },
+		{ name: 'purchase_note', type: 'string' },
+		{ name: 'images', type: 'string' },
+		{ name: 'grouped_products', type: 'string' },
+		{ name: 'menu_order', type: 'number' },
+		{ name: 'thumbnail', type: 'string' },
+		{ name: 'barcode', type: 'string' },
+	],
+};
+
+/**
+ * Product Model
+ *
+ */
 export default class Product extends Model {
 	static table = 'products';
 
@@ -79,15 +165,15 @@ export default class Product extends Model {
 	@field('cross_sell_ids') cross_sell_ids!: string;
 	@field('parent_id') parent_id!: number;
 	@field('purchase_note') purchase_note!: string;
-	@pivot('categories', 'product_categories') categories!: QueryType<ModelType>;
-	@pivot('tags', 'product_tags') tags!: QueryType<ModelType>;
-	@children('images') images!: any;
-	@pivot('attributes', 'product_attributes') attributes!: QueryType<ModelType>;
+	@pivot('categories', 'product_categories') categories!: ProductCategoryQuery;
+	@pivot('tags', 'product_tags') tags!: ProductTagQuery;
+	@children('images') images!: ImageQuery;
+	@pivot('attributes', 'product_attributes') attributes!: ProductAttributeQuery;
 	@field('default_attributes') default_attributes!: string;
-	@children('product_variations') variations!: any;
+	@children('product_variations') variations!: ProductVariationQuery;
 	@field('grouped_products') grouped_products!: string;
 	@field('menu_order') menu_order!: number;
-	@children('meta') meta_data!: QueryType<ModelType>;
+	@children('meta') meta_data!: MetaDataQuery;
 	@field('thumbnail') thumbnail!: string;
 	@field('barcode') barcode!: string;
 

@@ -6,8 +6,37 @@ import ApiService from '../../../services/api';
 import Url from '../../../lib/url-parse';
 import http from '../../../lib/http';
 
+type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
+
+/**
+ * Site Schema
+ *
+ */
+export const siteSchema: Schema = {
+	name: 'sites',
+	columns: [
+		{ name: 'name', type: 'string' },
+		{ name: 'description', type: 'string' },
+		{ name: 'url', type: 'string' },
+		{ name: 'home', type: 'string' },
+		{ name: 'gmt_offset', type: 'string' },
+		{ name: 'timezone_string', type: 'string' },
+		{ name: 'namespaces', type: 'string' },
+		{ name: 'authentication', type: 'string' },
+		{ name: 'routes', type: 'string' },
+		{ name: 'wp_api_url', type: 'string' },
+		{ name: 'wc_api_url', type: 'string' },
+		{ name: 'wc_api_auth_url', type: 'string' },
+		{ name: 'connection_status', type: 'string' },
+	],
+};
+
 const sanitizeValues = (json: any) => json || {};
 
+/**
+ * Site Model
+ *
+ */
 export default class Site extends Model {
 	static table = 'sites';
 	private wc_namespace = 'wc/v3';

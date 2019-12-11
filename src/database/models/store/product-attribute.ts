@@ -1,8 +1,24 @@
 import { Model } from '@nozbe/watermelondb';
 import { field } from '@nozbe/watermelondb/decorators';
 
+type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
+
 /**
  * Product - Attribute pivot table
+ *
+ *
+ */
+export const productAttributeSchema: Schema = {
+	name: 'product_attributes',
+	columns: [
+		{ name: 'product_id', type: 'string' },
+		{ name: 'attribute_id', type: 'string' },
+	],
+};
+
+/**
+ * Product - Attribute pivot table
+ *
  */
 export default class ProductAttribute extends Model {
 	static table = 'product_attributes';

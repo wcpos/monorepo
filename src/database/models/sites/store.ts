@@ -2,6 +2,25 @@ import { field, nochange } from '@nozbe/watermelondb/decorators';
 import { Associations } from '@nozbe/watermelondb/Model';
 import Model from '../base';
 
+type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
+
+/**
+ * Store Schema
+ *
+ */
+export const storeSchema: Schema = {
+	name: 'stores',
+	columns: [
+		{ name: 'remote_id', type: 'string', isIndexed: true },
+		{ name: 'site_id', type: 'string', isIndexed: true },
+		{ name: 'name', type: 'string' },
+	],
+};
+
+/**
+ * Store Model
+ *
+ */
 class Store extends Model {
 	static table = 'stores';
 
