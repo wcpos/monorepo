@@ -1,5 +1,7 @@
-import site from './site';
-import store from './store';
-import user from './user';
+import site, { siteSchema } from './site';
+import store, { storeSchema } from './store';
+import user, { userSchema } from './user';
 
-export default [site, store, user];
+export const schemas = [siteSchema, storeSchema, userSchema];
+
+export const modelClasses = [site, store, user];

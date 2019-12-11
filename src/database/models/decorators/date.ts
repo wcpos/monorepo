@@ -24,11 +24,11 @@ const date = makeDecorator(
 		return {
 			configurable: true,
 			enumerable: true,
-			get(): any {
+			get(): Date {
 				const rawValue = this.asModel._getRaw(columnName);
 				return new Date(rawValue);
 			},
-			set(date: any): void {
+			set(date: string | Date): void {
 				// eg: 2018-11-01T15:33:42
 				this.asModel._setRaw(columnName, date);
 			},

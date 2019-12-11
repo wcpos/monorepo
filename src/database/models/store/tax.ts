@@ -2,32 +2,46 @@ import { field, nochange } from '@nozbe/watermelondb/decorators';
 import Model from '../base';
 import { children } from '../decorators';
 
-export interface TaxInterface {
-	remote_id: number;
-	rate_code: string;
-	rate_id: string;
-	label: string;
-	compound: string;
-	tax_total: string;
-	shipping_tax_total: string;
-	meta_data: import('./meta').MetaDataInterface[];
-}
+type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
+type MetaData = typeof import('./meta');
+type MetaDataQuery = import('@nozbe/watermelondb').Query<MetaData>;
 
+/**
+ * Tax Schema
+ *
+ */
+export const taxSchema: Schema = {
+	name: 'taxes',
+	columns: [
+		{ name: 'parent_id', type: 'string', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'rate_code', type: 'string' },
+		{ name: 'rate_id', type: 'string' },
+		{ name: 'label', type: 'string' },
+		{ name: 'compound', type: 'boolean' },
+		{ name: 'tax_total', type: 'string' },
+		{ name: 'shipping_tax_total', type: 'string' },
+	],
+};
+
+/**
+ * Tax Model
+ *
+ */
 export default class Tax extends Model {
 	static table = 'taxes';
 
 	static associations = {
 		orders: { type: 'belongs_to', key: 'parent_id' },
-		shipping_lines: { type: 'belongs_to', key: 'parent_id' },
 		meta: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
-	@nochange @field('remote_id') remote_id;
-	@field('rate_code') rate_code;
-	@field('rate_id') rate_id;
-	@field('label') label;
-	@field('compound') compound;
-	@field('tax_total') tax_total;
-	@field('shipping_tax_total') shipping_tax_total;
-	@children('meta') meta_data;
+	@nochange @field('remote_id') remote_id!: number;
+	@field('rate_code') rate_code!: string;
+	@field('rate_id') rate_id!: string;
+	@field('label') label!: string;
+	@field('compound') compound!: boolean;
+	@field('tax_total') tax_total!: string;
+	@field('shipping_tax_total') shipping_tax_total!: string;
+	@children('meta') meta_data!: MetaDataQuery;
 }

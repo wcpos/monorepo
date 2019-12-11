@@ -2,6 +2,28 @@ import { Q } from '@nozbe/watermelondb';
 import { field, nochange, lazy } from '@nozbe/watermelondb/decorators';
 import Model from '../base';
 
+type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
+
+/**
+ * Tag Schema
+ *
+ */
+export const tagSchema: Schema = {
+	name: 'tags',
+	columns: [
+		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'name', type: 'string' },
+		{ name: 'slug', type: 'string' },
+		{ name: 'parent', type: 'number' },
+		{ name: 'description', type: 'string' },
+		{ name: 'count', type: 'number' },
+	],
+};
+
+/**
+ * Tag Model
+ *
+ */
 export default class Tag extends Model {
 	static table = 'tags';
 
