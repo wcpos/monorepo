@@ -7,7 +7,7 @@ type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 export const orderNoteSchema: Schema = {
 	name: 'order_notes',
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'order_id', type: 'string', isIndexed: true },
 		{ name: 'author', type: 'string' },
 		{ name: 'date_created', type: 'string' },

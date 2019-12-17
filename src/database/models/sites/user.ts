@@ -11,7 +11,7 @@ type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 export const userSchema: Schema = {
 	name: 'users',
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'site_id', type: 'string', isIndexed: true },
 		{ name: 'username', type: 'string' },
 		{ name: 'name', type: 'string' },

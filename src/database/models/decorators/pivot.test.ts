@@ -1,11 +1,16 @@
 // import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
 import { Database } from '@nozbe/watermelondb';
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
-import LineItem, { lineItemSchema } from './line-item';
+import pivot from './pivot';
+import Base from '../base';
+
+const schema = {};
+
+class Model extends Base {}
 
 const mockSchema = appSchema({
 	version: 1,
-	tables: [tableSchema(lineItemSchema)],
+	tables: [tableSchema(schema)],
 });
 
 // const adapter = new LokiJSAdapter({
@@ -18,7 +23,7 @@ const makeDatabase = ({ actionsEnabled = false } = {}) =>
 		// @ts-ignore
 		adapter: { mockSchema },
 		// @ts-ignore
-		modelClasses: [LineItem],
+		modelClasses: [Model],
 		actionsEnabled,
 	});
 

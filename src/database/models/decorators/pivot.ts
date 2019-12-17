@@ -65,7 +65,7 @@ const pivot = makeDecorator(
 					if (idx !== -1) {
 						update.push(
 							remove[idx].prepareUpdate((m: any) => {
-								m.rawUpdateFromJSON(obj);
+								m.set(obj);
 							})
 						);
 						remove.splice(idx, 1);
@@ -78,7 +78,7 @@ const pivot = makeDecorator(
 
 				const addChildren = add.map(data =>
 					childCollection.prepareCreate((m: any) => {
-						m.rawUpdateFromJSON(data);
+						m.set(data);
 					})
 				);
 
@@ -96,7 +96,10 @@ const pivot = makeDecorator(
 					await record.destroyPermanently();
 				});
 
-				return model.batch(...update, ...addChildren, ...addPivot);
+				return model.database.action(
+					() => model.batch(...update, ...addChildren, ...addPivot),
+					'Batch update pivot table: ' + childTable + ' ' + pivotTable + ' ' + key
+				);
 			},
 		};
 	}

@@ -1,14 +1,7 @@
-import {
-	field,
-	json,
-	nochange,
-	date,
-	immutableRelation,
-	relation,
-} from '@nozbe/watermelondb/decorators';
+import { field, json, nochange, immutableRelation } from '@nozbe/watermelondb/decorators';
 import Model from '../base';
 import http from '../../../lib/http';
-import { children } from '../decorators';
+import { children, date, relation } from '../decorators';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 type MetaData = typeof import('./meta');
@@ -23,7 +16,7 @@ type ImageRelation = import('@nozbe/watermelondb').Relation<Image>;
 export const productVariationSchema: Schema = {
 	name: 'product_variations',
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'parent_id', type: 'string', isIndexed: true },
 		{ name: 'date_created', type: 'string' },
 		{ name: 'date_created_gmt', type: 'string' },

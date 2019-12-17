@@ -16,7 +16,7 @@ type TaxQuery = import('@nozbe/watermelondb').Query<Tax>;
 export const lineItemSchema: Schema = {
 	name: 'line_items',
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'order_id', type: 'string', isIndexed: true },
 		{ name: 'name', type: 'string' },
 		{ name: 'product_id', type: 'number' },
@@ -67,27 +67,27 @@ class LineItem extends Model {
 		return this.quantity * this.price;
 	}
 
-	/** */
-	setMetaData(array: []) {
-		const add = array.map((json: any) => {
-			return this.meta_data.collection.prepareCreate((m: OrderLineItem) => {
-				m.parent_id = this.id;
-				m.set(json);
-			});
-		});
-		return this.batch(...add);
-	}
+	// /** */
+	// setMetaData(array: []) {
+	// 	const add = array.map((json: any) => {
+	// 		return this.meta_data.collection.prepareCreate((m: OrderLineItem) => {
+	// 			m.parent_id = this.id;
+	// 			m.set(json);
+	// 		});
+	// 	});
+	// 	return this.batch(...add);
+	// }
 
-	/** */
-	setTaxes(array: []) {
-		const add = array.map((json: any) => {
-			return this.taxes.collection.prepareCreate((m: OrderLineItem) => {
-				m.parent_id.set(this);
-				m.set(json);
-			});
-		});
-		return this.batch(...add);
-	}
+	// /** */
+	// setTaxes(array: []) {
+	// 	const add = array.map((json: any) => {
+	// 		return this.taxes.collection.prepareCreate((m: OrderLineItem) => {
+	// 			m.parent_id.set(this);
+	// 			m.set(json);
+	// 		});
+	// 	});
+	// 	return this.batch(...add);
+	// }
 
 	/** */
 	async split() {

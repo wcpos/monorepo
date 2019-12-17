@@ -29,7 +29,7 @@ type ProductVariationQuery = import('@nozbe/watermelondb').Query<ProductVariatio
 export const productSchema: Schema = {
 	name: 'products',
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'name', type: 'string' },
 		{ name: 'slug', type: 'string' },
 		{ name: 'permalink', type: 'string' },
@@ -85,12 +85,16 @@ export const productSchema: Schema = {
 		{ name: 'cross_sell_ids', type: 'string' },
 		{ name: 'parent_id', type: 'number' },
 		{ name: 'purchase_note', type: 'string' },
-		{ name: 'images', type: 'string' },
+		{ name: 'default_attributes', type: 'string' },
 		{ name: 'grouped_products', type: 'string' },
 		{ name: 'menu_order', type: 'number' },
 		{ name: 'thumbnail', type: 'string' },
 		{ name: 'barcode', type: 'string' },
 	],
+};
+
+const sanitizeAttributes = rawOptions => {
+	return Array.isArray(rawOptions) ? rawOptions.map(String) : [];
 };
 
 /**
@@ -169,7 +173,7 @@ export default class Product extends Model {
 	@pivot('tags', 'product_tags') tags!: ProductTagQuery;
 	@children('images') images!: ImageQuery;
 	@pivot('attributes', 'product_attributes') attributes!: ProductAttributeQuery;
-	@field('default_attributes') default_attributes!: string;
+	@json('default_attributes', sanitizeAttributes) default_attributes!: string;
 	@children('product_variations') variations!: ProductVariationQuery;
 	@field('grouped_products') grouped_products!: string;
 	@field('menu_order') menu_order!: number;
@@ -203,24 +207,33 @@ export default class Product extends Model {
 		});
 	}
 
-	/**
-	 *
-	 */
-	setVariations(data) {
-		debugger;
+	setChildren(array: [], key: string) {
+		const add = array.map((json: any) => {
+			return this[key].collection.prepareCreate((m: OrderLineItem) => {
+				m.order.set(this);
+				m.set(json);
+			});
+		});
+		return this.batch(...add);
 	}
 
 	/**
 	 *
 	 */
-	setImages(data) {
-		debugger;
+	async setImages(array) {
+		const add = array.map((json: any) => {
+			return this.images.collection.prepareCreate(m => {
+				m.product.set(this);
+				m.set(json);
+			});
+		});
+		return await this.batch(...add);
 	}
 
 	/**
 	 *
 	 */
-	async updateVariations(variationIds: []) {
+	async setVariations(variationIds: []) {
 		// get existing variation ids
 		const existingVariations = await this.variations.fetch();
 		const existingVariationIds = map(existingVariations, 'remote_id');
@@ -240,29 +253,6 @@ export default class Product extends Model {
 		);
 
 		return await this.batch(...add, ...del);
-	}
-
-	/**
-	 *
-	 */
-	async updateImages(images: []) {
-		// get existing variation ids
-		const existingImages = await this.images.fetch();
-		// const existingVariationIds = map(existingVariations, 'remote_id');
-		// const addVariationIds = difference(variationIds, existingVariationIds);
-		// const deleteVariationIds = difference(existingVariationIds, variationIds);
-
-		const add = images.map(image =>
-			this.images.collection.prepareCreate((model: any) => {
-				model.product.set(this);
-			})
-		);
-
-		// const del = deleteVariationIds.map(variationId =>
-		// 	find(existingVariations, { remote_id: variationId }).prepareDestroyPermanently()
-		// );
-
-		return await this.batch(...add);
 	}
 
 	/**

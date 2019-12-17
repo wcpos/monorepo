@@ -27,7 +27,7 @@ type OrderRefundQuery = import('@nozbe/watermelondb').Query<OrderRefund>;
 export const orderSchema: Schema = {
 	name: 'orders',
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'parent_id', type: 'number' },
 		{ name: 'number', type: 'string' },
 		{ name: 'order_key', type: 'string' },

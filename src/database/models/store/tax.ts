@@ -14,7 +14,7 @@ export const taxSchema: Schema = {
 	name: 'taxes',
 	columns: [
 		{ name: 'parent_id', type: 'string', isIndexed: true },
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'rate_code', type: 'string' },
 		{ name: 'rate_id', type: 'string' },
 		{ name: 'label', type: 'string' },

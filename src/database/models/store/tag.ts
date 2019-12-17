@@ -11,7 +11,7 @@ type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 export const tagSchema: Schema = {
 	name: 'tags',
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'name', type: 'string' },
 		{ name: 'slug', type: 'string' },
 		{ name: 'parent', type: 'number' },

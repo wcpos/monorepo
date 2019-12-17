@@ -46,14 +46,24 @@ const children = (childTable: TableName) => (
 			this._childrenQueryCache[childTable] = query;
 			return query;
 		},
-		set(data): void {
-			const model: Model = this.asModel;
+		set(array: []): Promise<void> {
+			const parent: Model = this.asModel;
 			const setter: string = camelCase('set_' + key);
-			if (typeof model[setter] === 'function') {
-				model[setter](data);
-			} else {
-				logError('use setProprty on a @children-marked ');
+			if (typeof parent[setter] === 'function') {
+				return parent[setter](array);
 			}
+
+			const childCollection = parent.collections.get(childTable);
+			const parentTable = parent.collection.modelClass.table;
+			const childKey = childCollection.modelClass.associations[parentTable]?.key;
+
+			const add = array.map(json =>
+				childCollection.prepareCreate((m: any) => {
+					m[childKey] = parent.id;
+					m.set(json);
+				})
+			);
+			return parent.batch(...add);
 		},
 	};
 };
