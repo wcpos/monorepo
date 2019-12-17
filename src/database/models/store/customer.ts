@@ -17,7 +17,7 @@ type AddressRelation = import('@nozbe/watermelondb').Relation<Address>;
 export const customerSchema: Schema = {
 	name: 'customers',
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'date_created', type: 'string' },
 		{ name: 'date_created_gmt', type: 'string' },
 		{ name: 'date_modified', type: 'string' },
@@ -86,10 +86,8 @@ export default class Customer extends Model {
 		);
 
 		await this.database.action(async () => {
-			await this.update(customer => {
-				this.updateFromJSON(response.data);
-			});
-		});
+			await this.update(response.data);
+		}, 'Update after fetch');
 	}
 
 	/**
@@ -100,6 +98,7 @@ export default class Customer extends Model {
 		const billing = await this.billing.fetch();
 		const shipping = await this.shipping.fetch();
 		const meta = await this.meta_data.fetch();
+		debugger;
 		json.billing = billing?.toJSON();
 		json.shipping = shipping?.toJSON();
 		json.meta_data = meta.map(m => m.toJSON());

@@ -11,7 +11,7 @@ type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 export const categorySchema: Schema = {
 	name: 'categories',
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'name', type: 'string' },
 		{ name: 'slug', type: 'string' },
 		{ name: 'parent', type: 'number' },
@@ -49,16 +49,4 @@ export default class Category extends Model {
 	@field('display') display!: string;
 	@field('menu_order') menu_order!: number;
 	@field('count') count!: number;
-
-	/**
-	 *
-	 * @param json
-	 */
-	rawUpdateFromJSON(json) {
-		if (!this.remote_id) {
-			this.remote_id = json.id;
-		}
-		this.name = json.name;
-		this.slug = json.slug;
-	}
 }

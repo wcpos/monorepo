@@ -10,7 +10,7 @@ const Customer = ({ customerQuery }: any) => {
 	}
 	const customer = data[0];
 
-	return <Text>{customer.name}</Text>;
+	return <Text>{customer?.name}</Text>;
 };
 
 export default Customer;

@@ -11,7 +11,7 @@ type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 export const attributeSchema: Schema = {
 	name: 'attributes',
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'name', type: 'string' },
 		{ name: 'position', type: 'number' },
 		{ name: 'visible', type: 'boolean' },
@@ -46,20 +46,4 @@ export default class Attribute extends Model {
 	@field('visible') visible!: boolean;
 	@field('variation') variation!: boolean;
 	@json('options', sanitizeOptions) options!: string;
-
-	/**
-	 * Note! Attribute can have remote ID = 0
-	 * @param json
-	 */
-	rawUpdateFromJSON(json) {
-		Object.keys(json).forEach((key: string) => {
-			if (key === 'id' && !this.remote_id) {
-				if (this.remote_id !== 0) {
-					this.remote_id = json.id;
-				}
-			} else {
-				this[key] = json[key];
-			}
-		});
-	}
 }

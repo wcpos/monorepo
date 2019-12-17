@@ -13,7 +13,7 @@ class BaseModel extends Model {
 	protected i18n = i18n;
 
 	/** Log updates */
-	public async update(recordUpdater: any) {
+	async update(recordUpdater: any) {
 		if (typeof recordUpdater === 'function') {
 			await super.update(recordUpdater);
 		} else {
@@ -24,19 +24,20 @@ class BaseModel extends Model {
 	}
 
 	/** Update from raw JSON */
-	protected async updateFromJSON(json: any) {
-		// await this.collection.database.action(async () => {
+	async updateFromJSON(json: any) {
 		await this.update(() => {
 			this.set(json);
 		});
-		// });
 	}
 
 	/** */
 	protected set(json) {
 		Object.keys(json).forEach((key: string) => {
 			if (key === 'id' && !this.remote_id) {
-				this.remote_id = json.id;
+				// some remote ids can be 0, eg: attributes
+				if (this.remote_id !== 0) {
+					this.remote_id = json.id;
+				}
 			} else if (key !== 'id') {
 				this[key] = json[key];
 			}
@@ -44,15 +45,16 @@ class BaseModel extends Model {
 	}
 
 	/** */
-	protected setMetaData(array: []) {
-		const add = array.map(json =>
-			this.meta_data.collection.prepareCreate((m: any) => {
-				m.parent_id.set(this);
-				m.set(json);
-			})
-		);
-		return this.batch(...add);
-	}
+	// protected setMetaData(array: []) {
+	// 	const parent = this.asModel;
+	// 	const add = array.map(json =>
+	// 		parent.meta_data.collection.prepareCreate((m: any) => {
+	// 			m.parent_id = parent.id;
+	// 			m.set(json);
+	// 		})
+	// 	);
+	// 	return parent.batch(...add);
+	// }
 
 	/** raw JSON */
 	protected toJSON() {

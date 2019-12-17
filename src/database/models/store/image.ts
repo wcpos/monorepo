@@ -10,7 +10,7 @@ type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 export const imageSchema: Schema = {
 	name: 'images',
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'parent_id', type: 'string', isIndexed: true },
 		{ name: 'date_created', type: 'string' },
 		{ name: 'date_created_gmt', type: 'string' },
