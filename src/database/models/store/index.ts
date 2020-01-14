@@ -18,6 +18,7 @@ import refund, { refundSchema } from './refund';
 import shippingLine, { shippingLineSchema } from './shipping-line';
 import tag, { tagSchema } from './tag';
 import tax, { taxSchema } from './tax';
+import taxRate, { taxRateSchema } from './tax-rate';
 
 export const schemas = [
 	addressSchema,
@@ -40,6 +41,7 @@ export const schemas = [
 	shippingLineSchema,
 	tagSchema,
 	taxSchema,
+	taxRateSchema,
 ];
 
 export const modelClasses = [
@@ -63,4 +65,5 @@ export const modelClasses = [
 	shippingLine,
 	tag,
 	tax,
+	taxRate,
 ];
