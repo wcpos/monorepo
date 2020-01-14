@@ -9,10 +9,6 @@ import Icon from '../../components/icon';
 import Sites from './sites';
 // import { sitesDatabase } from '../../database';
 
-type Props = {
-	navigation: import('react-navigation').NavigationScreenProp<{}, {}>;
-};
-
 const Connection = ({
 	status = 'loading',
 	message = 'Loading',
@@ -25,7 +21,7 @@ const Connection = ({
 	</>
 );
 
-const Auth = ({ navigation }: Props) => {
+const Auth = ({ navigation }) => {
 	// const { sites } = useAuth();
 	const { sitesDB } = useDatabase();
 

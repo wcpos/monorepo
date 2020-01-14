@@ -186,13 +186,14 @@ class Order extends Model {
 		this.logger.info('Add to cart: ' + product.name, { meta: product });
 
 		// check if product already in cart
-		const rows = await this.line_items.extend(Q.where('product_id', product.remote_id)).fetch();
+		const idKey = product.constructor.name === 'ProductVariation' ? 'variation_id' : 'product_id';
+		const rows = await this.line_items.extend(Q.where(idKey, product.remote_id)).fetch();
 
 		// update exiting or create new
 		await this.subAction(() => {
 			if (rows.length === 1) {
-				return rows[0].update((item: OrderLineItem) => {
-					item.quantity = item.quantity + 1;
+				return rows[0].update((item: LineItem) => {
+					item.quantity++;
 				});
 			} else {
 				return this.createLineItem(product);
@@ -205,19 +206,30 @@ class Order extends Model {
 	 */
 	@action async createLineItem(product: Product) {
 		let name = product.name;
-		// if variable, get name from parent
+		let product_id = product.remote_id;
+		let variation_id = 0;
+
+		// if variable, get name from parent, add parent id
 		if (product.constructor.name === 'ProductVariation') {
 			const parent = await product.parent.fetch();
 			name = parent.name;
+			product_id = product.parent.id;
+			variation_id = product.remote_id;
 		}
+
+		// fetch taxes, meta
+		// const taxes = await product.taxes.fetch();
+		const meta_data = await product.meta_data.fetch();
+
 		const line_item = await this.line_items.collection.create((item: OrderLineItem) => {
 			item.order.set(this);
 			item.quantity = 1;
 			item.name = name;
-			item.product_id = product.remote_id;
-			// item.variation_id = product.variation_id;
+			item.product_id = product_id;
+			item.variation_id = variation_id;
 			item.tax_class = product.tax_class;
-			item.meta_data = product.meta_data;
+			// item.taxes = taxes;
+			item.meta_data = meta_data;
 			item.sku = product.sku;
 			item.price = parseFloat(product.price);
 		});
