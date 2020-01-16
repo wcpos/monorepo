@@ -1,10 +1,12 @@
 import { Q } from '@nozbe/watermelondb';
-import { field, json, lazy, children } from '@nozbe/watermelondb/decorators';
+import { json } from '@nozbe/watermelondb/decorators';
 import get from 'lodash/get';
 import Model from '../base';
-import ApiService from '../../../services/api';
+import WooCommerceService from '../../../services/woocommerce';
 import Url from '../../../lib/url-parse';
 import http from '../../../lib/http';
+import { map } from 'rxjs/operators';
+import { field, children } from '../decorators';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
@@ -44,7 +46,6 @@ export default class Site extends Model {
 
 	constructor(collection, raw) {
 		super(collection, raw);
-		// this.api = new ApiService(this);
 	}
 
 	static associations = {
@@ -71,6 +72,16 @@ export default class Site extends Model {
 
 	/**
 	 *
+	 * @param prefix
+	 */
+	getUrl(prefix = 'https://') {
+		const url = this.asModel._getRaw('url');
+		return prefix + url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
+		// return prefix + url;
+	}
+
+	/**
+	 *
 	 */
 	get wcAuthUrl() {
 		return (
@@ -92,13 +103,19 @@ export default class Site extends Model {
 	/**
 	 *
 	 */
-	async connect() {
-		if (!this.wp_api_url) {
-			await this.getWpApiUrl();
-		}
-		if (!this.wc_api_url) {
-			await this.getWcApiUrl();
-		}
+	connect() {
+		const api = new WooCommerceService(this.url);
+		api.status$.subscribe({
+			next(x) {
+				console.log('got value ' + JSON.stringify(x));
+			},
+			error(err) {
+				console.error('something wrong occurred: ' + err);
+			},
+			complete() {
+				console.log('done');
+			},
+		});
 	}
 
 	/**

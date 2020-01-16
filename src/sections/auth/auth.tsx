@@ -3,7 +3,7 @@ import Segment from '../../components/segment';
 import TextInput from '../../components/textinput';
 import Text from '../../components/text';
 import { AuthView } from './styles';
-import useDatabase from '../../hooks/use-database';
+import useSites from '../../hooks/use-sites';
 // import useObservable from '../../hooks/use-observable';
 import Icon from '../../components/icon';
 import Sites from './sites';
@@ -22,36 +22,7 @@ const Connection = ({
 );
 
 const Auth = ({ navigation }) => {
-	// const { sites } = useAuth();
-	const { sitesDB } = useDatabase();
-
-	// const sites = useObservable(
-	// 	database.collections
-	// 		.get('sites')
-	// 		.query()
-	// 		.observeWithColumns(['name', 'connection_status']),
-	// 	[]
-	// );
-	// const sites = database.collections
-	// 	.get('sites')
-	// 	.query()
-	// 	.fetch();
-
-	const handleConnect = async (url: string) => {
-		const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
-		if (trimUrl) {
-			const site = await sitesDB.action(async () => {
-				return await sitesDB.collections.get('sites').create(site => {
-					site.url = trimUrl;
-				});
-			});
-			site.connect();
-		}
-	};
-
-	const handleDirectLink = () => {
-		navigation.navigate('POS');
-	};
+	const [sites$, connectNewSite] = useSites();
 
 	return (
 		<AuthView>
@@ -61,13 +32,12 @@ const Auth = ({ navigation }) => {
 				<TextInput
 					prefix="https://"
 					action="Connect"
-					onAction={handleConnect}
+					onAction={connectNewSite}
 					keyboardType="url"
 					cancellable={true}
 				/>
 			</Segment>
-			<Sites />
-			<Text onPress={handleDirectLink}>Go to POS</Text>
+			{sites$ && sites$.length > 0 && <Sites sites={sites$} />}
 		</AuthView>
 	);
 };

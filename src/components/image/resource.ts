@@ -5,6 +5,13 @@ const hashingFn = ({ src, srcSet }: { src: string; srcSet?: string }) => `${src}
 
 export const ImgResource = createResource(({ src, srcSet }: { src: string; srcSet?: string }) => {
 	return new Promise((resolve, reject) => {
-		Image.getSize(src, resolve, reject);
+		Image.getSize(
+			src,
+			(width, height) => {
+				// success
+				resolve({ width, height });
+			}
+			// reject
+		);
 	}) as Promise<Event>;
 }, hashingFn);

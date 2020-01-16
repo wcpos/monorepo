@@ -6,6 +6,7 @@ import ActivityIndicator from './components/activity-indicator';
 import Portal from './components/portal';
 import { defaultTheme } from './lib/theme';
 import * as UI from './hooks/use-ui';
+import ErrorBoundary from './components/error';
 
 // import i18n
 import i18n from './lib/i18n';
@@ -14,7 +15,8 @@ import i18n from './lib/i18n';
 import 'react-native-gesture-handler';
 
 const App = () => (
-	<React.StrictMode>
+	// <React.StrictMode>
+	<ErrorBoundary>
 		<React.Suspense fallback={<ActivityIndicator />}>
 			<DatabaseProvider>
 				<UI.Provider>
@@ -26,7 +28,8 @@ const App = () => (
 				</UI.Provider>
 			</DatabaseProvider>
 		</React.Suspense>
-	</React.StrictMode>
+	</ErrorBoundary>
+	// </React.StrictMode>
 );
 
 export default App;

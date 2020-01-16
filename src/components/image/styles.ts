@@ -16,11 +16,11 @@ export const Img = styled.Image<{ theme: ThemeProps } & Props>`
 				`;
 			case 'circular':
 				return css`
-					border-radius: 500;
+					border-radius: 500px;
 				`;
 			default:
 				return css`
-					border-radius: 0;
+					border-radius: 0px;
 				`;
 		}
 	}}
