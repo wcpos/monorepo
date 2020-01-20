@@ -1,6 +1,7 @@
 import { Q } from '@nozbe/watermelondb';
 import { field, nochange, json, immutableRelation } from '@nozbe/watermelondb/decorators';
 import Model from '../base';
+import { children } from '../decorators';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
@@ -40,6 +41,7 @@ class User extends Model {
 
 	static associations = {
 		sites: { type: 'belongs_to', key: 'site_id' },
+		meta: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
 	@immutableRelation('sites', 'site_id') site!: any;
@@ -53,7 +55,7 @@ class User extends Model {
 	@field('nickname') nickname!: string;
 	@field('slug') slug!: string;
 	@field('last_access') last_access!: string;
-	@json('meta', sanitizeValues) meta!: {};
+	@children('meta') meta!: {};
 	@field('consumer_key') consumer_key!: string;
 	@field('consumer_secret') consumer_secret!: string;
 
