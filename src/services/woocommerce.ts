@@ -30,7 +30,7 @@ class WooCommerceService {
 							},
 						});
 					}),
-					concatMap(wpApiUrl => this.fetchWcApiInfo(wpApiUrl)),
+					concatMap(wp_api_url => this.fetchWcApiInfo(wp_api_url)),
 					tap(data => {
 						subscriber.next({
 							message: 'Found WooCommerce API',

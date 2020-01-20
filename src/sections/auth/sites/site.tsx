@@ -2,10 +2,13 @@ import React from 'react';
 import Avatar from '../../../components/avatar';
 import Text from '../../../components/text';
 import Icon from '../../../components/icon';
+import Button from '../../../components/button';
 import ErrorBoundary from '../../../components/error';
 import useObservable from '../../../hooks/use-observable';
 import { SiteWrapper, SiteTextWrapper } from './styles';
 import User from './user';
+import Modal from '../../../components/modal';
+import AuthModal from './auth-modal';
 
 /**
  * Options for fetching favicons
@@ -17,8 +20,8 @@ import User from './user';
  */
 
 const Site = ({ site }) => {
-	// const site$ = useObservable(site.observeWithColumns(['url']), []);
 	// const users = useObservable(site.users.observe(), []);
+	const [visible, setVisible] = React.useState(false);
 
 	const handleRemove = async () => {
 		await site.destroy();
@@ -35,8 +38,8 @@ const Site = ({ site }) => {
 	return (
 		<SiteWrapper>
 			<ErrorBoundary>
-				<React.Suspense fallback={<Icon name="remove" />}>
-					<Avatar src={`https://api.faviconkit.com/${site.getUrl('')}/144`} />
+				<React.Suspense fallback={<Icon name="help" size="large" />}>
+					<Avatar src={`https://api.faviconkit.com/${site.urlWithoutPrefix()}/144`} />
 				</React.Suspense>
 			</ErrorBoundary>
 
@@ -49,11 +52,26 @@ const Site = ({ site }) => {
 				>
 					{site.url}
 				</Text>
-				<Text>{site.connection_status?.message}</Text>
+				{/* <Text>{status?.message}</Text> */}
 				{/* {users.map(user => (
 					<User key={user.id} user={user} />
 				))} */}
 				{/* <Text onPress={handleNewUser}>Authenticate new user</Text> */}
+				<Button
+					onPress={() => {
+						setVisible(true);
+					}}
+					title="Login"
+				/>
+				<Modal visible={visible}>
+					<AuthModal site={site} user={''} />
+					<Button
+						title="Close Modal"
+						onPress={() => {
+							setVisible(false);
+						}}
+					/>
+				</Modal>
 			</SiteTextWrapper>
 			<Icon name="remove" onPress={handleRemove} />
 		</SiteWrapper>

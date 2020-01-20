@@ -232,7 +232,7 @@ class Modal extends React.Component<ModalProps, any> {
 			// 		return (
 			<ModalContainer>
 				<ModalView visible={visible} onClose={onClose}>
-					<View style={style}>{children}</View>
+					<View style={{ height: '100%' }}>{children}</View>
 				</ModalView>
 			</ModalContainer>
 			// 		);

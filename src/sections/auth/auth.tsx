@@ -3,26 +3,24 @@ import Segment from '../../components/segment';
 import TextInput from '../../components/textinput';
 import Text from '../../components/text';
 import { AuthView } from './styles';
-import useSites from '../../hooks/use-sites';
-// import useObservable from '../../hooks/use-observable';
-import Icon from '../../components/icon';
+import useObservable from '../../hooks/use-observable';
 import Sites from './sites';
-// import { sitesDatabase } from '../../database';
+import { sitesDatabase } from '../../database';
 
-const Connection = ({
-	status = 'loading',
-	message = 'Loading',
-}: {
-	status: 'loading' | 'success' | 'error';
-	message: string;
-}) => (
-	<>
-		<Icon name={status} /> <Text>{message}</Text>
-	</>
-);
+const Auth = () => {
+	const collection = sitesDatabase.collections.get('sites');
+	const sites = useObservable(collection.query().observe(), []);
 
-const Auth = ({ navigation }) => {
-	const [sites$, connectNewSite] = useSites();
+	const createNewSite = async url => {
+		const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
+		if (trimUrl) {
+			await sitesDatabase.action(async () => {
+				return await collection.create(site => {
+					site.url = 'http://' + trimUrl;
+				});
+			});
+		}
+	};
 
 	return (
 		<AuthView>
@@ -30,14 +28,14 @@ const Auth = ({ navigation }) => {
 				<Text size="large">Connect</Text>
 				<Text>Enter the URL of your WooCommerce store:</Text>
 				<TextInput
-					prefix="https://"
+					prefix="http://"
 					action="Connect"
-					onAction={connectNewSite}
+					onAction={createNewSite}
 					keyboardType="url"
 					cancellable={true}
 				/>
 			</Segment>
-			{sites$ && sites$.length > 0 && <Sites sites={sites$} />}
+			{sites.length > 0 && <Sites sites={sites} />}
 		</AuthView>
 	);
 };

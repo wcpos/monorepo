@@ -1,4 +1,3 @@
-import React from 'react';
 import { sitesDatabase } from '../../database/';
 import useObservable from '../use-observable';
 
@@ -15,7 +14,7 @@ export const useSites = () => {
 		if (trimUrl) {
 			const site = await sitesDatabase.action(async () => {
 				return await collection.create(site => {
-					site.url = trimUrl;
+					site.url = 'https://' + trimUrl;
 				});
 			});
 			site.connect();
