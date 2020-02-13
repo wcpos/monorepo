@@ -20,19 +20,11 @@ import AuthModal from './auth-modal';
  */
 
 const Site = ({ site }) => {
-	// const users = useObservable(site.users.observe(), []);
+	const users = useObservable(site.users.observe(), []);
 	const [visible, setVisible] = React.useState(false);
 
 	const handleRemove = async () => {
 		await site.destroy();
-	};
-
-	const handleNewUser = async () => {
-		// const user = await site.collection.database.action(async () => {
-		// 	return await site.users.collection.create((user: any) => {
-		// 		user.site.set(site);
-		// 	});
-		// });
 	};
 
 	return (
@@ -53,25 +45,17 @@ const Site = ({ site }) => {
 					{site.url}
 				</Text>
 				{/* <Text>{status?.message}</Text> */}
-				{/* {users.map(user => (
+				{users.map(user => (
 					<User key={user.id} user={user} />
-				))} */}
+				))}
 				{/* <Text onPress={handleNewUser}>Authenticate new user</Text> */}
 				<Button
+					title="Login"
 					onPress={() => {
 						setVisible(true);
 					}}
-					title="Login"
 				/>
-				<Modal visible={visible}>
-					<AuthModal site={site} user={''} />
-					<Button
-						title="Close Modal"
-						onPress={() => {
-							setVisible(false);
-						}}
-					/>
-				</Modal>
+				<AuthModal site={site} visible={visible} setVisible={setVisible} />
 			</SiteTextWrapper>
 			<Icon name="remove" onPress={handleRemove} />
 		</SiteWrapper>

@@ -22,7 +22,7 @@ const AppNavigator = (props: Partial<StackNavigatorProps>): React.ReactElement =
 		<Stack.Navigator headerMode="none">
 			{user === undefined ? (
 				<Stack.Screen name="Splash" component={SplashScreen} />
-			) : user.authorised ? (
+			) : user.authenticated ? (
 				<Stack.Screen name="POS" options={{ title: 'POS' }} component={POSNavigator} />
 			) : (
 				<Stack.Screen

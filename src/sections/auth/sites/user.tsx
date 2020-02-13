@@ -2,16 +2,14 @@ import React from 'react';
 import Text from '../../../components/text';
 import Icon from '../../../components/icon';
 import { UserWrapper } from './styles';
-import useDatabase from '../../../hooks/use-database';
-import useNavigation from '../../../hooks/use-navigation';
+import useDatabaseContext from '../../../hooks/use-database-context';
 
 type Props = {
 	user: typeof import('../../../database/models/user');
 };
 
 const User = ({ user }: Props) => {
-	const { switchStoreDB } = useDatabase();
-	const navigation = useNavigation();
+	const { setUser } = useDatabaseContext();
 
 	const handleRemove = async () => {
 		await user.collection.database.action(async () => {
@@ -20,8 +18,7 @@ const User = ({ user }: Props) => {
 	};
 
 	const onEnter = () => {
-		switchStoreDB({ site: user.site.id, user: user.id });
-		navigation.navigate('POS');
+		setUser(user);
 	};
 
 	return (

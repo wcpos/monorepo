@@ -1,7 +1,5 @@
 import React, { useState, Fragment } from 'react';
 import useData from '../../../hooks/use-data';
-import useDatabase from '../../../hooks/use-database';
-import useFetch from '../../../hooks/use-fetch';
 import Table from './table';
 import Actions from './actions';
 import { TableLayout } from '../../../components/layout';
