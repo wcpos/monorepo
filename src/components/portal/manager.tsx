@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { StyledManagerView } from './styles';
 
 export type State = {
 	portals: Array<{
@@ -43,16 +43,16 @@ export default class PortalManager extends React.PureComponent<{}, PortalManager
 
 	render() {
 		return this.state.portals.map(({ key, children }, i) => (
-			<View
+			<StyledManagerView
 				key={key}
 				collapsable={
 					false /* Need collapsable=false here to clip the elevations, otherwise they appear above sibling components */
 				}
 				pointerEvents="box-none"
-				style={[StyleSheet.absoluteFill, { zIndex: 1000 + i }]}
+				style={{ zIndex: 1000 + i }}
 			>
 				{children}
-			</View>
+			</StyledManagerView>
 		));
 	}
 }

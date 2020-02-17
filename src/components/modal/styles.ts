@@ -4,6 +4,4 @@ type ModalProps = {
 	theme: import('../../lib/theme/types').ThemeProps;
 } & import('./modal').ModalProps;
 
-export const ModalContainer = styled.View<ModalProps>`
-	z-index: 1000;
-`;
+export const ModalContainer = styled.View<ModalProps>``;

@@ -7,7 +7,6 @@ import ErrorBoundary from '../../../components/error';
 import useObservable from '../../../hooks/use-observable';
 import { SiteWrapper, SiteTextWrapper } from './styles';
 import User from './user';
-import Modal from '../../../components/modal';
 import AuthModal from './auth-modal';
 
 /**
@@ -31,7 +30,7 @@ const Site = ({ site }) => {
 		<SiteWrapper>
 			<ErrorBoundary>
 				<React.Suspense fallback={<Icon name="help" size="large" />}>
-					<Avatar src={`https://api.faviconkit.com/${site.urlWithoutPrefix()}/144`} />
+					<Avatar src={`https://api.faviconkit.com/${site.urlWithoutPrefix}/144`} />
 				</React.Suspense>
 			</ErrorBoundary>
 
@@ -42,7 +41,7 @@ const Site = ({ site }) => {
 						site.connect();
 					}}
 				>
-					{site.url}
+					{site.urlWithoutPrefix}
 				</Text>
 				{/* <Text>{status?.message}</Text> */}
 				{users.map(user => (

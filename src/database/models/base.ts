@@ -32,6 +32,9 @@ class BaseModel extends Model {
 
 	/** */
 	protected set(json) {
+		if (!json) {
+			debugger;
+		}
 		Object.keys(json).forEach((key: string) => {
 			if (key === 'id' && !this.remote_id) {
 				// some remote ids can be 0, eg: attributes

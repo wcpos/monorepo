@@ -15,4 +15,15 @@ storiesOf('Image', module)
 			style={{ width: 300, height: 200 }}
 			border={select('border', ['none', 'rounded', 'circular'], 'none')}
 		/>
+	))
+
+	/**
+	 *
+	 */
+	.add('broken image', () => (
+		<Image
+			src={text('src', 'https://example.com/image.jpg')}
+			style={{ width: 300, height: 200 }}
+			border={select('border', ['none', 'rounded', 'circular'], 'none')}
+		/>
 	));

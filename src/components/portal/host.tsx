@@ -1,6 +1,7 @@
 import React from 'react';
-import { DeviceEventEmitter, NativeEventEmitter, StyleSheet, View } from 'react-native';
+import { DeviceEventEmitter, NativeEventEmitter } from 'react-native';
 import PortalManager from './manager';
+import { StyledHostView } from './styles';
 
 export type PortalHostProps = {
 	children: React.ReactNode;
@@ -151,18 +152,14 @@ export default class PortalHost extends React.Component<PortalHostProps> {
 					unmount: this._unmount,
 				}}
 			>
-				{/* Need collapsable=false here to clip the elevations, otherwise they appear above Portal components */}
-				<View style={styles.container} collapsable={false}>
+				<StyledHostView
+					/* Need collapsable=false here to clip the elevations, otherwise they appear above Portal components */
+					collapsable={false}
+				>
 					{this.props.children}
-				</View>
+				</StyledHostView>
 				<PortalManager ref={this._setManager} />
 			</PortalContext.Provider>
 		);
 	}
 }
-
-const styles = StyleSheet.create({
-	container: {
-		flex: 1,
-	},
-});

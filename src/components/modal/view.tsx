@@ -13,32 +13,16 @@ import Portal from '../portal';
 import Dimmer from '../dimmer';
 
 const styles = StyleSheet.create({
-	wrap: {
-		flex: 1,
-		backgroundColor: 'rgba(0,0,0,0)',
-	} as ViewStyle,
-	mask: {
-		backgroundColor: 'black',
-		opacity: 0.5,
-	} as ViewStyle,
 	content: {
 		backgroundColor: 'white',
 		zIndex: 1001,
+		height: '100%',
 	} as ViewStyle,
-	absolute: {
-		position: 'absolute',
-		top: 0,
-		bottom: 0,
-		left: 0,
-		right: 0,
-	},
 });
 
 const screen = Dimensions.get('window');
 
 export interface IModalPropTypes {
-	wrapStyle?: StyleProp<ViewStyle>;
-	maskStyle?: StyleProp<ViewStyle>;
 	style?: {};
 	animationType: 'none' | 'fade' | 'slide-up' | 'slide-down';
 	animationDuration?: number;
@@ -51,8 +35,6 @@ export interface IModalPropTypes {
 
 export default class RCModal extends React.Component<IModalPropTypes, any> {
 	static defaultProps = {
-		wrapStyle: styles.wrap,
-		maskStyle: styles.mask,
 		animationType: 'slide-up',
 		animateAppear: false,
 		animationDuration: 300,
@@ -234,14 +216,12 @@ export default class RCModal extends React.Component<IModalPropTypes, any> {
 
 		return (
 			<Portal>
-				<View style={[styles.wrap, props.wrapStyle]}>
-					<Dimmer onPress={this.onMaskClose} />
-					<Animated.View
-						style={[styles.content, props.style, animationStyleMap[props.animationType]]}
-					>
-						{this.props.children}
-					</Animated.View>
-				</View>
+				<Dimmer onPress={this.onMaskClose} />
+				<Animated.View
+					style={[styles.content, props.style, animationStyleMap[props.animationType]]}
+				>
+					{this.props.children}
+				</Animated.View>
 			</Portal>
 		);
 	}

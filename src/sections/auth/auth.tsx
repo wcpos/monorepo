@@ -16,7 +16,7 @@ const Auth = () => {
 		if (trimUrl) {
 			await sitesDatabase.action(async () => {
 				return await collection.create(site => {
-					site.url = 'http://' + trimUrl;
+					site.url = 'https://' + trimUrl;
 				});
 			});
 		}
@@ -28,7 +28,7 @@ const Auth = () => {
 				<Text size="large">Connect</Text>
 				<Text>Enter the URL of your WooCommerce store:</Text>
 				<TextInput
-					prefix="http://"
+					prefix="https://"
 					action="Connect"
 					onAction={createNewSite}
 					keyboardType="url"
