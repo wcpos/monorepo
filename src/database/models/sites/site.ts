@@ -1,3 +1,4 @@
+import { Q } from '@nozbe/watermelondb';
 import { json } from '@nozbe/watermelondb/decorators';
 import Model from '../base';
 import WooCommerceService from '../../../services/woocommerce';
@@ -61,8 +62,23 @@ export default class Site extends Model {
 	/**
 	 *
 	 */
-	urlWithoutPrefix() {
+	async fetchUserByRemoteId(remote_id) {
+		const users = await this.users.extend(Q.where('remote_id', remote_id)).fetch();
+		return users && users[0];
+	}
+
+	/**
+	 *
+	 */
+	get urlWithoutPrefix() {
 		return this.url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
+	}
+
+	/**
+	 *
+	 */
+	get urlForceHttps() {
+		return 'https://' + this.urlWithoutPrefix;
 	}
 
 	/**
@@ -73,13 +89,15 @@ export default class Site extends Model {
 		// debugger;
 		// console.log(this.url);
 		// console.log(that.url);
-		const api = new WooCommerceService(this.url);
+		const api = new WooCommerceService(this.urlForceHttps);
 		this.connection_status$ = api.status$.subscribe({
 			next(x) {
 				console.log(x);
-				that.database.action(async () => {
-					await that.update(x?.payload);
-				});
+				const payload = x?.payload;
+				payload &&
+					that.database.action(async () => {
+						await that.update(payload);
+					});
 			},
 			error(err) {
 				console.error('something wrong occurred: ' + err);
