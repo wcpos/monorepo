@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Q } from '@nozbe/watermelondb';
-import useDatabase from '../../../hooks/use-database';
+import useData from '../../../hooks/use-data';
 import useObservable from '../../../hooks/use-observable';
 import Button from '../../../components/button';
 import Segment, { SegmentGroup } from '../../../components/segment';
@@ -12,19 +12,19 @@ import Tabs from './tabs';
 
 const Cart = () => {
 	const [showCustomerNote, setShowCustomerNote] = useState(false);
+	const { data } = useData('orders');
+	// const { storeDB } = useDatabase();
 
-	const { storeDB } = useDatabase();
+	// const orders = useObservable(
+	// 	storeDB.collections
+	// 		.get('orders')
+	// 		.query(Q.where('status', 'pending'))
+	// 		.observeWithColumns(['line_items']),
+	// 	[],
+	// 	[]
+	// );
 
-	const orders = useObservable(
-		storeDB.collections
-			.get('orders')
-			.query(Q.where('status', 'pending'))
-			.observeWithColumns(['line_items']),
-		[],
-		[]
-	);
-
-	const activeOrder = orders[0];
+	const activeOrder = data[0];
 
 	const handleUpdate = e => {
 		console.log(e);
@@ -38,7 +38,7 @@ const Cart = () => {
 				</Segment>
 				<Segment content="Your cart is currently empty." />
 				<Segment>
-					<Tabs orders={orders} />
+					<Tabs orders={data} />
 				</Segment>
 			</SegmentGroup>
 		);
@@ -72,7 +72,7 @@ const Cart = () => {
 			</Segment>
 
 			<Segment style={{ flex: -1 }}>
-				<Tabs orders={orders} />
+				<Tabs orders={data} />
 			</Segment>
 		</SegmentGroup>
 	);

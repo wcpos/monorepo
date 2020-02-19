@@ -10,6 +10,7 @@ type Props = {
 };
 
 const store = (obj: Props) => {
+	console.log(obj);
 	if (!obj.site || !obj.user) {
 		return;
 	}

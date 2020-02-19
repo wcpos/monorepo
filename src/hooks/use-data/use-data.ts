@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Q } from '@nozbe/watermelondb';
-import useDatabase from '../use-database';
+import useDatabase from '../use-database-context';
 import useObservable from '../use-observable';
 import useApi from '../use-api';
 import sync from './sync';
@@ -33,6 +33,9 @@ import syncIds from './sync-ids';
 
 function useData(type, search = '') {
 	const { storeDB } = useDatabase();
+	if (!storeDB) {
+		return { data: [] };
+	}
 	const collection = storeDB.collections.get(type);
 
 	const data = useObservable(

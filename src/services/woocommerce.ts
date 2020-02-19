@@ -48,7 +48,7 @@ class WooCommerceService {
 	 */
 	async fetchWpApiUrl(wpUrl) {
 		return this.http
-			.head(wpUrl)
+			.head(wpUrl + '/') // hack to prevent redirect
 			.then(response => {
 				// See https://developer.wordpress.org/rest-api/using-the-rest-api/discovery/
 				const link = response?.headers?.link;
@@ -70,6 +70,9 @@ class WooCommerceService {
 	 * @param wpUrl WordPress homepage (or store page)
 	 */
 	async fetchWcApiInfo(wpApiUrl) {
+		if (!wpApiUrl) {
+			return;
+		}
 		return this.http.get(wpApiUrl).then(response => {
 			const namespaces = response?.data?.namespaces;
 			if (namespaces.includes(this.wc_namespace)) {
