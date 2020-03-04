@@ -61,7 +61,8 @@ class BaseModel extends Model {
 
 	/** raw JSON */
 	protected toJSON() {
-		return omit(this._raw, ['id', '_status', '_changed']);
+		// return omit(this._raw, ['id', '_status', '_changed']);
+		return omit(this._raw, ['_status', '_changed']);
 	}
 
 	/** Destroy */
