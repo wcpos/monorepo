@@ -6,7 +6,7 @@ export const useStore = () => {
 	const [user] = useLastUser();
 	const [storeDB, setStoreDB] = React.useState();
 
-	if (user?.site_id && user?.id) {
+	if (!storeDB && user?.site_id && user?.id) {
 		const storeDB = storeDatabase({ site: user.site_id, user: user.id });
 
 		if (storeDB) {
