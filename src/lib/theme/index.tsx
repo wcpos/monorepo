@@ -10,10 +10,10 @@ import defaultTheme from './themes/defaultTheme';
 // const useTheme = () => useContext(ThemeContext);
 
 export {
-  // ThemeConsumer,
-  // ThemeContext,
-  // ThemeProvider,
-  defaultTheme,
-  normalizeText,
-  // useTheme,
+	// ThemeConsumer,
+	// ThemeContext,
+	// ThemeProvider,
+	defaultTheme,
+	normalizeText,
+	// useTheme,
 };

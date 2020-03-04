@@ -1,5 +1,6 @@
 import React from 'react';
 import { AsyncStorage, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { BarView, LeftView, CenterView, RightView, TitleText } from './styles';
 import Button from '../../components/button';
 import Popover from '../../components/popover';
@@ -10,7 +11,10 @@ interface Props {
 	title: string;
 }
 
-const MasterBar = ({ navigation, title }: Props) => {
+const MasterBar = ({}: Props) => {
+	const navigation = useNavigation();
+	const title = 'hi';
+
 	return (
 		<BarView>
 			<LeftView>

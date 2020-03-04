@@ -1,4 +1,4 @@
-import * as React from 'react';
+import React from 'react';
 import AuthScreen from '../sections/auth';
 import POSNavigator from './pos';
 import SplashScreen from '../sections/splash';
@@ -9,7 +9,8 @@ type StackNavigatorProps = React.ComponentProps<typeof Stack.Navigator>;
 
 export type AppNavigatorParams = {
 	Auth: undefined;
-	Home: undefined;
+	POS: undefined;
+	Splash: undefined;
 };
 
 const Stack = createStackNavigator<AppNavigatorParams>();
@@ -27,6 +28,7 @@ const AppNavigator = (props: Partial<StackNavigatorProps>): React.ReactElement =
 			) : (
 				<Stack.Screen
 					name="Auth"
+					path="auth"
 					options={{ title: 'Connect', test: 'foo' }}
 					component={AuthScreen}
 				/>
