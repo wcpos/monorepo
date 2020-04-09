@@ -1,10 +1,10 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import App from './app';
+import Text from './';
 
-describe('App', () => {
+describe('Text', () => {
 	it('renders correctly', () => {
-		const { container } = render(<App />);
+		const { container } = render(<Text>Hello World</Text>);
 		expect(container.firstChild).toBeInTheDocument();
 	});
 });

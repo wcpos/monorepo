@@ -1,4 +1,3 @@
-// import { Button, ButtonGroup } from 'react-native-elements';
 import Button from './button';
 import Group from './group';
 

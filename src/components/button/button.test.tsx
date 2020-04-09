@@ -1,10 +1,10 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import App from './app';
+import Button from './';
 
-describe('App', () => {
+describe('Button', () => {
 	it('renders correctly', () => {
-		const { container } = render(<App />);
+		const { container } = render(<Button />);
 		expect(container.firstChild).toBeInTheDocument();
 	});
 });
