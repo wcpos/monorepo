@@ -3,7 +3,7 @@ import styled from 'styled-components/native';
 type Props = { theme: import('../../lib/theme/types').ThemeProps } & import('./text').Props;
 
 export const StyledText = styled.Text<Props>`
-	color: ${props => {
+	color: ${(props) => {
 		switch (props.type) {
 			case 'secondary':
 				return props.theme.TEXT_COLOR_SECONDARY;
@@ -23,9 +23,9 @@ export const StyledText = styled.Text<Props>`
 				return props.theme.TEXT_COLOR;
 		}
 	}};
-	font-family: ${props => props.theme.FONT_FAMILY};
-	font-style: ${props => (props.italic ? 'italic' : 'normal')};
-	font-weight: ${props => {
+	font-family: ${(props) => props.theme.FONT_FAMILY};
+	font-style: ${(props) => (props.italic ? 'italic' : 'normal')};
+	font-weight: ${(props) => {
 		switch (props.weight) {
 			case 'bold':
 				return props.theme.FONT_WEIGHT_BOLD;
@@ -35,7 +35,7 @@ export const StyledText = styled.Text<Props>`
 				return props.theme.FONT_WEIGHT;
 		}
 	}};
-	font-size: ${props => {
+	font-size: ${(props) => {
 		switch (props.size) {
 			case 'large':
 				return props.theme.FONT_SIZE_LARGE;
@@ -45,6 +45,6 @@ export const StyledText = styled.Text<Props>`
 				return props.theme.FONT_SIZE;
 		}
 	}};
-	text-align: ${props => (props.align ? props.align : 'left')};
-	text-transform: ${props => (props.uppercase ? 'uppercase' : 'none')};
+	text-align: ${(props) => (props.align ? props.align : 'left')};
+	text-transform: ${(props) => (props.uppercase ? 'uppercase' : 'none')};
 `;
