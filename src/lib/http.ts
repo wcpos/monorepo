@@ -21,7 +21,7 @@ const http = axios.create({
 });
 
 http.interceptors.request.use(
-	function(config) {
+	function (config) {
 		if (config.method !== 'head') {
 			config.headers['X-WCPOS'] = 1;
 		}
@@ -33,7 +33,7 @@ http.interceptors.request.use(
 		}
 		return config;
 	},
-	function(error) {
+	function (error) {
 		debugger;
 		return Promise.reject(error);
 	}

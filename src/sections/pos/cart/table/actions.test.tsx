@@ -1,7 +1,8 @@
 import React from 'react';
-import { render, fireEvent } from '../../../../test-utils';
+import { fireEvent, screen } from '@testing-library/react';
+import renderWithTheme from '../../../../../jest/render-with-theme';
 import Actions from './actions';
-import Button from '../../../../components/button';
+// import Button from '../../../../components/button';
 
 const mockItem = {
 	destroyPermanently: jest.fn(),
@@ -9,10 +10,10 @@ const mockItem = {
 
 describe('Actions', () => {
 	it('removes line_item', () => {
-		// @ts-ignore
-		const { getByType } = render(<Actions item={mockItem} />);
-		const button = getByType(Button);
-		fireEvent.press(button);
+		const { container } = renderWithTheme(<Actions item={mockItem} />);
+		expect(container.firstChild).toBeInTheDocument();
+		const button = screen.getByText('X');
+		fireEvent.click(button);
 		expect(mockItem.destroyPermanently.call.length).toBe(1);
 	});
 });

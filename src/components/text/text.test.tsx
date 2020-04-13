@@ -1,10 +1,12 @@
 import React from 'react';
-import { render } from '@testing-library/react';
 import Text from './';
+import renderWithTheme from '../../../jest/render-with-theme';
 
 describe('Text', () => {
 	it('renders correctly', () => {
-		const { container } = render(<Text>Hello World</Text>);
+		const test = 'Hello World';
+		const { container } = renderWithTheme(<Text>{test}</Text>);
 		expect(container.firstChild).toBeInTheDocument();
+		expect(container.firstChild).toHaveTextContent(test);
 	});
 });
