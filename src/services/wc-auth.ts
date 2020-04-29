@@ -48,6 +48,29 @@ const fetchWcApiUrl = (url: string) =>
 		})
 	);
 
+/**
+ *
+ * @param baseAuthUrl
+ */
+const constructWcApiAuthUrl = (baseAuthUrl: string) => {
+	return (
+		baseAuthUrl +
+		Url.qs.stringify(
+			{
+				app_name: 'WooCommerce POS',
+				scope: 'read_write',
+				user_id: 123,
+				return_url: 'https://localhost:3000/auth',
+				callback_url: 'https://client.wcpos.com',
+				wcpos: 1,
+				// return_url: 'https://client.wcpos.com/auth',
+				// callback_url: 'https://client.wcpos.com/auth',
+			},
+			true
+		)
+	);
+};
+
 export const testables = { fetchWpApiUrl, parseApiUrlFromHeaders, fetchWcApiUrl };
 
 export default {};
