@@ -6,7 +6,7 @@ import { select } from '@storybook/addon-knobs';
 import Loader from './';
 
 storiesOf('Loader', module)
-  /**
-   *
-   */
-  .add('basic usage', () => <Loader size={select('size', ['small', 'large'], 'small')} />);
+	/**
+	 *
+	 */
+	.add('basic usage', () => <Loader size={select('size', ['small', 'large'], 'small')} />);
