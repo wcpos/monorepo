@@ -11,47 +11,47 @@ import Transport, { TransportStreamOptions } from 'winston-transport';
 // };
 
 interface Options extends TransportStreamOptions {
-  key: string;
-  project: string;
-  level: string;
+	key: string;
+	project: string;
+	level: string;
 }
 
 class SentryTransport extends Transport {
-  options: {};
+	options: {};
 
-  constructor(options: Options) {
-    super(options);
-    const { key, project } = options;
+	constructor(options: Options) {
+		super(options);
+		const { key, project } = options;
 
-    this.options = {
-      dsn: 'https://' + key + '@sentry.io/' + project,
-      ...options,
-    };
+		this.options = {
+			dsn: 'https://' + key + '@sentry.io/' + project,
+			...options,
+		};
 
-    Sentry.init(this.options);
-  }
+		Sentry.init(this.options);
+	}
 
-  /**
-   * @param {{}} info
-   * @param {string} info.level
-   * @param {Error|string} info.message
-   * @param {Function} done
-   */
-  async log(info: any, done: (error?: Error, eventId?: any) => void) {
-    // if (this.silent) {
-    //   return done(undefined, true);
-    // }
+	/**
+	 * @param {{}} info
+	 * @param {string} info.level
+	 * @param {Error|string} info.message
+	 * @param {Function} done
+	 */
+	async log(info: any, done: (error?: Error, eventId?: any) => void) {
+		// if (this.silent) {
+		//   return done(undefined, true);
+		// }
 
-    try {
-      const eventId =
-        info.error instanceof Error
-          ? await Sentry.captureException(info)
-          : await Sentry.captureMessage(info);
-      done(undefined, eventId);
-    } catch (error) {
-      done(error);
-    }
-  }
+		try {
+			const eventId =
+				info.error instanceof Error
+					? await Sentry.captureException(info)
+					: await Sentry.captureMessage(info);
+			done(undefined, eventId);
+		} catch (error) {
+			done(error);
+		}
+	}
 }
 
 export default SentryTransport;

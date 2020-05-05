@@ -23,16 +23,16 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({}) => {
 	React.useEffect(() => {
 		Promise.race([
 			getInitialState(),
-			new Promise(resolve =>
+			new Promise((resolve) =>
 				// Timeout in 150ms if `getInitialState` doesn't resolve
 				// Workaround for https://github.com/facebook/react-native/issues/25675
 				setTimeout(resolve, 150)
 			),
 		])
-			.catch(e => {
+			.catch((e) => {
 				console.error(e);
 			})
-			.then(state => {
+			.then((state) => {
 				if (state !== undefined) {
 					console.log(state);
 					setInitialState(state);
