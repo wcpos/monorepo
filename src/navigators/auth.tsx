@@ -1,7 +1,7 @@
 import React from 'react';
-import AuthScreen from '../sections/auth';
+import AuthScreen from '../pages/auth';
 import POSNavigator from './pos';
-import SplashScreen from '../sections/splash';
+import SplashScreen from '../pages/splash';
 import { createStackNavigator } from '@react-navigation/stack';
 import useDatabaseContext from '../hooks/use-database-context';
 
@@ -16,22 +16,22 @@ export type AppNavigatorParams = {
 const Stack = createStackNavigator<AppNavigatorParams>();
 
 const AppNavigator = (props: Partial<StackNavigatorProps>): React.ReactElement => {
-	const { user } = useDatabaseContext();
-	console.log('Auth Navigator: ' + user);
+	const [isReady, setIsReady] = React.useState(false);
+
+	const user = {
+		authenticated: true,
+	};
 
 	return (
 		<Stack.Navigator headerMode="none">
-			{user === undefined ? (
-				<Stack.Screen name="Splash" component={SplashScreen} />
+			{!isReady ? (
+				<Stack.Screen name="Splash">
+					{() => <SplashScreen onReady={() => setIsReady(true)} />}
+				</Stack.Screen>
 			) : user.authenticated ? (
-				<Stack.Screen name="POS" options={{ title: 'POS' }} component={POSNavigator} />
+				<Stack.Screen name="POS" component={POSNavigator} />
 			) : (
-				<Stack.Screen
-					name="Auth"
-					path="auth"
-					options={{ title: 'Connect', test: 'foo' }}
-					component={AuthScreen}
-				/>
+				<Stack.Screen name="Auth" component={AuthScreen} />
 			)}
 		</Stack.Navigator>
 	);

@@ -7,7 +7,7 @@ import Portal from './components/portal';
 import { defaultTheme } from './lib/theme';
 import * as UI from './hooks/use-ui';
 import ErrorBoundary from './components/error';
-
+import Splash from './pages/splash';
 // import i18n
 import i18n from './lib/i18n';
 

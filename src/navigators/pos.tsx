@@ -1,32 +1,31 @@
 import React from 'react';
-import { View } from 'react-native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import POS from '../sections/pos';
-import Products from '../sections/products';
-import Orders from '../sections/orders';
-import Customers from '../sections/customers';
-import Support from '../sections/support';
-import MasterBar from '../sections/masterbar';
+import PageLayout from '../layout/page';
+import POS from '../pages/pos';
+import Products from '../pages/products';
+// import Orders from '../sections/orders';
+// import Customers from '../sections/customers';
+import Support from '../pages/support';
+// import MasterBar from '../sections/masterbar';
 
-const Screen = ({ children }) => {
-	return (
-		<View>
-			<MasterBar />
-			<POS />
-		</View>
-	);
+const Screen = ({ route }) => {
+	const components = {
+		POS: <POS />,
+		Products: <Products />,
+		Support: <Support />,
+	};
+
+	return <PageLayout header="test">{components[route.name]}</PageLayout>;
 };
 
 const Drawer = createDrawerNavigator();
 
 const App: React.FC = () => {
 	return (
-		<Drawer.Navigator initialRouteName="Cart">
-			<Drawer.Screen name="Cart" component={Screen} />
-			<Drawer.Screen name="Products" component={Products} />
-			<Drawer.Screen name="Orders" component={Orders} />
-			<Drawer.Screen name="Customers" component={Customers} />
-			<Drawer.Screen name="Support" component={Support} />
+		<Drawer.Navigator initialRouteName="POS">
+			<Drawer.Screen name="POS" component={Screen} />
+			<Drawer.Screen name="Products" component={Screen} />
+			<Drawer.Screen name="Support" component={Screen} />
 		</Drawer.Navigator>
 	);
 };

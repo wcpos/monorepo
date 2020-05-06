@@ -8,33 +8,21 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({}) => {
 	const ref = React.useRef();
 
 	const { getInitialState } = useLinking(ref, {
-		prefixes: ['https://client.wcpos.com', 'wcpos://'],
+		prefixes: ['wcpos://'],
 		config: {
-			Auth: 'auth',
-			POS: 'pos',
-			Cart: 'cart',
 			Products: 'products',
 		},
+		getPathFromState(state, config) {},
 	});
 
 	const [isReady, setIsReady] = React.useState(false);
 	const [initialState, setInitialState] = React.useState();
 
 	React.useEffect(() => {
-		Promise.race([
-			getInitialState(),
-			new Promise((resolve) =>
-				// Timeout in 150ms if `getInitialState` doesn't resolve
-				// Workaround for https://github.com/facebook/react-native/issues/25675
-				setTimeout(resolve, 150)
-			),
-		])
-			.catch((e) => {
-				console.error(e);
-			})
+		getInitialState()
+			.catch(() => {})
 			.then((state) => {
 				if (state !== undefined) {
-					console.log(state);
 					setInitialState(state);
 				}
 

@@ -8,7 +8,7 @@ interface Props {
 	animate?: boolean;
 }
 
-const Logo = ({ animate }) => {
+const Logo: React.FC<Props> = ({ animate }) => {
 	// const scaleY = React.useRef(new Animated.Value(1));
 
 	// const pulse = () => {
