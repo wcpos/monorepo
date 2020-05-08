@@ -50,7 +50,7 @@ export default function SkeletonPlaceholder({
 			let style;
 			if (child.type.displayName === 'SkeletonPlaceholderItem') {
 				const { children, ...styles } = child.props;
-				style = styles;
+				style = { ...child.props.style, ...styles };
 			} else {
 				style = child.props.style;
 			}
@@ -91,6 +91,7 @@ export default function SkeletonPlaceholder({
 
 interface SkeletonPlaceholderItem extends ViewStyle {
 	children?: JSX.Element | JSX.Element[];
+	style?: ViewStyle;
 }
 
 SkeletonPlaceholder.Item = ({ children, ...style }: SkeletonPlaceholderItem): JSX.Element => (

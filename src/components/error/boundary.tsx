@@ -1,66 +1,61 @@
-import React, { Component } from 'react';
-import logger from '../../lib/logger';
+import React from 'react';
 import DefaultFallbackComponent from './fallback';
 
-interface Props {
-	children?: any;
-	FallbackComponent?: any;
-	onError?: (error: Error, componentStack: string) => void;
-}
+const changedArray = (a = [], b = []) => a.some((item, index) => !Object.is(item, b[index]));
 
-interface State {
-	error?: Error;
-	info?: React.ErrorInfo;
-}
+const initialState = { error: null, info: null };
 
-class Boundary extends Component<Props, State> {
-	// static defaultProps = {
-	//   FallbackComponent: DefaultFallbackComponent,
-	// };
-
-	state: State = {
-		error: undefined,
-		info: undefined,
+class ErrorBoundary extends React.Component {
+	static defaultProps = {
+		FallbackComponent: DefaultFallbackComponent,
 	};
 
-	componentDidCatch(error: Error, info: React.ErrorInfo): void {
-		const { onError } = this.props;
+	state = initialState;
 
-		if (typeof onError === 'function') {
-			try {
-				onError.call(this, error, info ? info.componentStack : '');
-			} catch (ignoredError) {
-				logger.log({
-					ignoredError,
-					info,
-					level: 'error',
-					message: error.toString(),
-				});
-			}
-		} else {
-			logger.log({
-				error,
-				info,
-				level: 'error',
-				message: error.toString(),
-			});
-		}
+	resetErrorBoundary = (...args) => {
+		this.props.onReset?.(...args);
+		this.setState(initialState);
+	};
 
+	componentDidCatch(error, info) {
+		this.props.onError?.(error, info?.componentStack);
 		this.setState({ error, info });
 	}
 
-	render() {
-		const { children, FallbackComponent } = this.props;
-		const { error, info } = this.state;
+	componentDidUpdate(prevProps) {
+		const { error } = this.state;
+		const { resetKeys } = this.props;
+		if (error !== null && changedArray(prevProps.resetKeys, resetKeys)) {
+			this.props.onResetKeysChange?.(prevProps.resetKeys, resetKeys);
+			this.setState(initialState);
+		}
+	}
 
-		if (error) {
-			return (
-				<DefaultFallbackComponent componentStack={info ? info.componentStack : ''} error={error} />
-			);
+	render() {
+		const { error, info } = this.state;
+		const { fallbackRender, FallbackComponent, fallback } = this.props;
+
+		if (error !== null) {
+			const props = {
+				componentStack: info?.componentStack,
+				error,
+				resetErrorBoundary: this.resetErrorBoundary,
+			};
+			if (React.isValidElement(fallback)) {
+				return fallback;
+			} else if (typeof fallbackRender === 'function') {
+				return fallbackRender(props);
+			} else if (typeof FallbackComponent === 'function') {
+				return <FallbackComponent {...props} />;
+			} else {
+				throw new Error(
+					'react-error-boundary requires either a fallback, fallbackRender, or FallbackComponent prop'
+				);
+			}
 		}
 
-		return children;
+		return this.props.children;
 	}
 }
 
-export default Boundary;
+export default ErrorBoundary;

@@ -1,11 +1,29 @@
 import React from 'react';
-import Placeholder from './';
+import Placeholder from './placeholder';
+import readme from './README.md';
 
 export default {
 	title: 'Components/Placeholder',
+	parameters: {
+		notes: { readme },
+	},
 };
 
+/**
+ *
+ */
 export const basicUsage = () => (
+	<Placeholder>
+		<Placeholder.Item width={100} height={50} />
+		<Placeholder.Item marginTop={10} width={100} height={50} />
+		<Placeholder.Item style={{ marginTop: 10, width: 100, height: 50 }} />
+	</Placeholder>
+);
+
+/**
+ *
+ */
+export const complexUsage = () => (
 	<Placeholder>
 		<Placeholder.Item flexDirection="row" alignItems="center">
 			<Placeholder.Item width={60} height={60} borderRadius={50} />
