@@ -10,7 +10,7 @@ const Auth: React.FC<Props> = () => {
 	const [visible, setVisible] = React.useState(false);
 
 	return (
-		<PageLayout header="test">
+		<PageLayout>
 			<Text>Auth</Text>
 			<Button title="Open Modal" onPress={() => setVisible(true)} />
 			<Modal visible={visible}>

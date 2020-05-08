@@ -1,5 +1,4 @@
 import React from 'react';
-import { View, Text } from 'react-native';
 import { LeftView, RightView, CenterView, TitleText } from './styles';
 
 interface Props {
@@ -11,15 +10,11 @@ interface Props {
 const Header: React.FC<Props> = ({ left, right, title = '' }) => {
 	return (
 		<>
-			<LeftView>
-				<Text>Left</Text>
-			</LeftView>
+			{left && <LeftView>{left}</LeftView>}
 			<CenterView>
 				<TitleText>{title}</TitleText>
 			</CenterView>
-			<RightView>
-				<Text>Right</Text>
-			</RightView>
+			{right && <RightView>{right}</RightView>}
 		</>
 	);
 };

@@ -1,21 +1,23 @@
 import React from 'react';
-
+import markdown from './README.md';
 import { action } from '@storybook/addon-actions';
-import { storiesOf } from '@storybook/react';
 
 import ErrorBoundary from '.';
 
+export default {
+	title: 'Components/Error',
+	parameters: {
+		notes: { markdown },
+	},
+};
+
 function BuggyComponent() {
-  throw new Error('The Error message');
-  return <div>Dum Dum</div>;
+	throw new Error('The Error message');
+	return <div>Dum Dum</div>;
 }
 
-storiesOf('Error', module)
-  /**
-   *
-   */
-  .add('default', () => (
-    <ErrorBoundary onError={action('error handler')}>
-      <BuggyComponent />
-    </ErrorBoundary>
-  ));
+export const basicUsage = () => (
+	<ErrorBoundary onError={action('error handler')}>
+		<BuggyComponent />
+	</ErrorBoundary>
+);

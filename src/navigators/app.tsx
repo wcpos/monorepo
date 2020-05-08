@@ -11,6 +11,7 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({}) => {
 		prefixes: ['wcpos://'],
 		config: {
 			Products: 'products',
+			Support: 'support',
 		},
 		getPathFromState(state, config) {},
 	});

@@ -1,12 +1,9 @@
 import React from 'react';
-
-import { storiesOf } from '@storybook/react';
 import { action } from '@storybook/addon-actions';
+import WebView from './webview';
 
-import WebView from './webview.web';
+export default {
+	title: 'Components/WebView',
+};
 
-storiesOf('WebView', module)
-	/**
-	 *
-	 */
-	.add('basic usage', () => <WebView src="https://wcpos.com" onLoad={action('onLoad')} />);
+export const basicUsage = () => <WebView src="https://wcpos.com" onLoad={action('onLoad')} />;

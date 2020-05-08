@@ -1,24 +1,23 @@
 import React from 'react';
-import { View, Text } from 'react-native';
 import Header from '../header';
 import { PageView, HeaderView, MainView } from './styles';
 
 interface Props {
-	header?: React.ReactNode;
-	main?: React.ReactNode;
-	title?: string | React.ReactNode;
+	header?: string | React.ReactNode;
 	children?: React.ReactNode;
 }
 
-const Page: React.FC<Props> = ({ header, main, title, children }) => {
+const Page: React.FC<Props> = ({ children, ...props }) => {
+	let headerComponent = props.header;
+
+	if (typeof props.header === 'string') {
+		headerComponent = <Header>{props.header}</Header>;
+	}
+
 	return (
 		<PageView>
-			{header && (
-				<HeaderView>
-					<Header title={title} />
-				</HeaderView>
-			)}
-			<MainView>{children ? children : main}</MainView>
+			{headerComponent && <HeaderView>{headerComponent}</HeaderView>}
+			<MainView>{children}</MainView>
 		</PageView>
 	);
 };

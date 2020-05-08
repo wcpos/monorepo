@@ -3,19 +3,17 @@ import Image from '../image';
 
 type Props = {
 	src: string;
-	size?: 'small' | 'large';
+	size?: 'default' | 'small' | 'large';
 };
 
-const Avatar = ({ src, size }: Props) => {
-	let style = { width: 50, height: 50 };
-	if (size === 'small') {
-		style = { width: 20, height: 20 };
-	}
-	if (size === 'large') {
-		style = { width: 100, height: 100 };
-	}
+const map = {
+	default: { width: 50, height: 50 },
+	small: { width: 20, height: 20 },
+	large: { width: 100, height: 100 },
+};
 
-	return <Image src={src} border="circular" style={style} />;
+const Avatar = ({ src, size = 'default' }: Props) => {
+	return <Image src={src} border="circular" style={map[size]} />;
 };
 
 export default Avatar;
