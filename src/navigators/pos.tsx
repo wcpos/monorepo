@@ -25,7 +25,7 @@ const App: React.FC = () => {
 		<Drawer.Navigator initialRouteName="POS">
 			<Drawer.Screen name="POS" component={Screen} />
 			<Drawer.Screen name="Products" component={Screen} />
-			<Drawer.Screen name="Support" component={Screen} path="support" />
+			<Drawer.Screen name="Support" component={Screen} />
 		</Drawer.Navigator>
 	);
 };

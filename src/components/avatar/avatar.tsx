@@ -4,6 +4,7 @@ import Image from '../image';
 type Props = {
 	src: string;
 	size?: 'default' | 'small' | 'large';
+	placeholder?: string | React.ReactNode;
 };
 
 const map = {
@@ -12,8 +13,8 @@ const map = {
 	large: { width: 100, height: 100 },
 };
 
-const Avatar = ({ src, size = 'default' }: Props) => {
-	return <Image src={src} border="circular" style={map[size]} />;
+const Avatar = ({ size = 'default', ...props }: Props) => {
+	return <Image border="circular" style={map[size]} {...props} />;
 };
 
 export default Avatar;

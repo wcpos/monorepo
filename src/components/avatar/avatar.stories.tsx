@@ -12,3 +12,18 @@ export const basicUsage = () => (
 		size={select('size', ['', 'small', 'large'], '')}
 	/>
 );
+
+export const brokenImage = () => (
+	<Avatar
+		src={text('src', 'https://example.com/pic.jpg')}
+		size={select('size', ['', 'small', 'large'], '')}
+	/>
+);
+
+export const withPlaceholder = () => (
+	<Avatar
+		src={text('src', 'https://example.com/pic.jpg')}
+		size={select('size', ['', 'small', 'large'], '')}
+		placeholder="PK"
+	/>
+);
