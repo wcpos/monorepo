@@ -1,27 +1,28 @@
 import { sitesDatabase } from '../../database/';
-import useObservable from '../use-observable';
+// import { useObservableState } from 'observable-hooks';
+import useObservableState from '../use-observable';
 
 export const useSites = () => {
 	const collection = sitesDatabase.collections.get('sites');
-	const sites$ = useObservable(collection.query().observeWithColumns(['url']), []);
+	// const sites = useObservableState(collection.query().observeWithColumns(['url']), []);
+	const sites = useObservableState(collection.query().observe(), []);
 
 	/**
 	 * Add new site to database and connect
 	 * @param url
 	 */
-	const connectNewSite = async url => {
+	const create = async (url) => {
 		const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
 		if (trimUrl) {
-			const site = await sitesDatabase.action(async () => {
-				return await collection.create(site => {
+			return await sitesDatabase.action(async () => {
+				return await collection.create((site) => {
 					site.url = 'https://' + trimUrl;
 				});
 			});
-			site.connect();
 		}
 	};
 
-	return [sites$, connectNewSite];
+	return { sites, create };
 };
 
 export default useSites;
