@@ -2,6 +2,8 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import SplashScreen from '../pages/splash';
 import useUser from '../hooks/use-user';
+// import AuthScreen from '../pages/auth';
+// import POSNavigator from './pos';
 const AuthScreen = React.lazy(() => import('../pages/auth'));
 const POSNavigator = React.lazy(() => import('./pos'));
 

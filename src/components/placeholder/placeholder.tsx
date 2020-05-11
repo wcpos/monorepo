@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { Animated, View, StyleSheet, Easing, ViewStyle } from 'react-native';
+import { Animated, View, StyleSheet, Easing, ViewStyle, Platform } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 
-interface SkeletonPlaceholderProps {
+interface PlaceholderProps {
 	/**
 	 * Determines component's children.
 	 */
@@ -21,12 +21,12 @@ interface SkeletonPlaceholderProps {
 	speed?: number;
 }
 
-export default function SkeletonPlaceholder({
+export default function Placeholder({
 	children,
 	backgroundColor,
 	speed,
 	highlightColor,
-}: SkeletonPlaceholderProps): JSX.Element {
+}: PlaceholderProps): JSX.Element {
 	const animatedValue = new Animated.Value(0);
 
 	React.useEffect(() => {
@@ -35,7 +35,7 @@ export default function SkeletonPlaceholder({
 				toValue: 1,
 				duration: speed,
 				easing: Easing.ease,
-				useNativeDriver: true,
+				useNativeDriver: Platform.OS !== 'web',
 			})
 		).start();
 	});
@@ -48,7 +48,7 @@ export default function SkeletonPlaceholder({
 	const getChildren = (element: JSX.Element | JSX.Element[]) => {
 		return React.Children.map(element, (child: JSX.Element, index: number) => {
 			let style;
-			if (child.type.displayName === 'SkeletonPlaceholderItem') {
+			if (child.type.displayName === 'PlaceholderItem') {
 				const { children, ...styles } = child.props;
 				style = { ...child.props.style, ...styles };
 			} else {
@@ -89,19 +89,19 @@ export default function SkeletonPlaceholder({
 	return <React.Fragment>{getChildren(children)}</React.Fragment>;
 }
 
-interface SkeletonPlaceholderItem extends ViewStyle {
+interface PlaceholderItem extends ViewStyle {
 	children?: JSX.Element | JSX.Element[];
 	style?: ViewStyle;
 }
 
-SkeletonPlaceholder.Item = ({ children, ...style }: SkeletonPlaceholderItem): JSX.Element => (
+Placeholder.Item = ({ children, ...style }: PlaceholderItem): JSX.Element => (
 	<View style={style}>{children}</View>
 );
 
 //@ts-ignore
-SkeletonPlaceholder.Item.displayName = 'SkeletonPlaceholderItem';
+Placeholder.Item.displayName = 'PlaceholderItem';
 
-SkeletonPlaceholder.defaultProps = {
+Placeholder.defaultProps = {
 	backgroundColor: '#E1E9EE',
 	highlightColor: '#F2F8FC',
 	speed: 800,
