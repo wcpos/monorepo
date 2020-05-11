@@ -1,5 +1,6 @@
 import { Q } from '@nozbe/watermelondb';
 import { json } from '@nozbe/watermelondb/decorators';
+import { Subject } from 'rxjs';
 import Model from '../base';
 import WooCommerceService from '../../../services/woocommerce';
 import { field, children } from '../decorators';
@@ -19,16 +20,11 @@ export const siteSchema: Schema = {
 		{ name: 'home', type: 'string' },
 		{ name: 'gmt_offset', type: 'string' },
 		{ name: 'timezone_string', type: 'string' },
-		{ name: 'namespaces', type: 'string' },
-		{ name: 'authentication', type: 'string' },
-		{ name: 'routes', type: 'string' },
 		{ name: 'wp_api_url', type: 'string' },
 		{ name: 'wc_api_url', type: 'string' },
 		{ name: 'wc_api_auth_url', type: 'string' },
 	],
 };
-
-const sanitizeValues = (json: any) => json || {};
 
 /**
  * Site Model
@@ -36,7 +32,7 @@ const sanitizeValues = (json: any) => json || {};
  */
 export default class Site extends Model {
 	static table = 'sites';
-	public connection_status$;
+	public connection_status$ = new Subject();
 
 	static associations = {
 		users: { type: 'has_many', foreignKey: 'site_id' },
@@ -52,9 +48,6 @@ export default class Site extends Model {
 	@field('home') home!: string;
 	@field('gmt_offset') gmt_offset!: string;
 	@field('timezone_string') timezone_string!: string;
-	@json('namespaces', sanitizeValues) namespaces!: {};
-	@json('authentication', sanitizeValues) authentication!: {};
-	@json('routes', sanitizeValues) routes!: {};
 	@field('wp_api_url') wp_api_url!: string;
 	@field('wc_api_url') wc_api_url!: string;
 	@field('wc_api_auth_url') wc_api_auth_url!: string;
@@ -85,26 +78,27 @@ export default class Site extends Model {
 	 *
 	 */
 	connect() {
-		const that = this;
-		// debugger;
-		// console.log(this.url);
-		// console.log(that.url);
-		const api = new WooCommerceService(this.urlForceHttps);
-		this.connection_status$ = api.status$.subscribe({
-			next(x) {
-				console.log(x);
-				const payload = x?.payload;
-				payload &&
-					that.database.action(async () => {
-						await that.update(payload);
-					});
-			},
-			error(err) {
-				console.error('something wrong occurred: ' + err);
-			},
-			complete() {
-				console.log('done');
-			},
-		});
+		this.connection_status$.next('update');
+		// const that = this;
+		// // debugger;
+		// // console.log(this.url);
+		// // console.log(that.url);
+		// const api = new WooCommerceService(this.urlForceHttps);
+		// this.connection_status$ = api.status$.subscribe({
+		// 	next(x) {
+		// 		console.log(x);
+		// 		const payload = x?.payload;
+		// 		payload &&
+		// 			that.database.action(async () => {
+		// 				await that.update(payload);
+		// 			});
+		// 	},
+		// 	error(err) {
+		// 		console.error('something wrong occurred: ' + err);
+		// 	},
+		// 	complete() {
+		// 		console.log('done');
+		// 	},
+		// });
 	}
 }
