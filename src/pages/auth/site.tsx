@@ -15,7 +15,7 @@ import { SiteWrapper, SiteTextWrapper } from './styles';
  * - https://api.faviconkit.com/${url}/144
  */
 const Site = ({ site }) => {
-	const status = useObservableState(site.connection_status$, 'default');
+	const status = useObservableState(site.connection_status$);
 
 	const handleRemove = async () => {
 		await site.destroy();
@@ -29,7 +29,7 @@ const Site = ({ site }) => {
 				<Text size="small" type="secondary">
 					{site.urlWithoutPrefix}
 				</Text>
-				<Text size="small">{status}</Text>
+				{status && <Text size="small">{status?.message}</Text>}
 				<Button title="Connect again" onPress={() => site.connect()} />
 			</SiteTextWrapper>
 			<Icon name="remove" onPress={handleRemove} />

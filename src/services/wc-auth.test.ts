@@ -1,5 +1,5 @@
 import { Observable, of } from 'rxjs';
-import { testables } from './wc-auth';
+import wcApiService from './wc-auth';
 import mockHeaders from '../../jest/__fixtures__/wp-headers.json';
 import mockWpApiIndex from '../../jest/__fixtures__/wp-json-index.json';
 import mockWcApiIndex from '../../jest/__fixtures__/wc-api-index.json';
@@ -25,7 +25,7 @@ jest.mock('../lib/http', () => {
 
 describe('WooCommerce Auth Service', () => {
 	it('fetchWpApiUrl', (done) => {
-		const fetch = testables.fetchWpApiUrl('http://example.com');
+		const fetch = wcApiService.fetchWpApiUrl('http://example.com');
 		expect(fetch).toBeInstanceOf(Observable);
 		fetch.subscribe((data) => {
 			expect(data).toBe('http://example.com/wp-json/');
@@ -34,11 +34,11 @@ describe('WooCommerce Auth Service', () => {
 	});
 
 	it('getWpApiUrlFromHeadResponse', () => {
-		expect(testables.parseApiUrlFromHeaders(mockHeaders)).toBe('http://example.com/wp-json/');
+		expect(wcApiService.parseApiUrlFromHeaders(mockHeaders)).toBe('http://example.com/wp-json/');
 	});
 
 	it('fetchWcApiUrl', (done) => {
-		const fetch = testables.fetchWcApiUrl('http://example.com/wp-json/');
+		const fetch = wcApiService.fetchWcApiUrl('http://example.com/wp-json/');
 		expect(fetch).toBeInstanceOf(Observable);
 		fetch.subscribe((data) => {
 			expect(data).toHaveProperty('name', 'WooCommerce POS Development');

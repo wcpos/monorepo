@@ -28,27 +28,6 @@ const fetchWpApiUrl = (url: string) =>
 	);
 
 /**
- * Fetch WooCommerce API URL
- * @param url WordPress API URL
- */
-const fetchWcApiUrl = (url: string) =>
-	from(http.get(url)).pipe(
-		map((response) => {
-			const namespaces = response?.data?.namespaces;
-			if (namespaces && namespaces.includes(namespace)) {
-				const baseAuthUrl = response?.data?.authentication?.wcpos?.authorize;
-				if (baseAuthUrl) {
-					return {
-						...response.data,
-						wc_api_url: url + namespace + '/', // enforce trailing slash
-						wc_api_auth_url: baseAuthUrl,
-					};
-				}
-			}
-		})
-	);
-
-/**
  *
  * @param baseAuthUrl
  */
@@ -71,6 +50,25 @@ const constructWcApiAuthUrl = (baseAuthUrl: string) => {
 	);
 };
 
-export const testables = { fetchWpApiUrl, parseApiUrlFromHeaders, fetchWcApiUrl };
+/**
+ * Fetch WooCommerce API URL
+ * @param url WordPress API URL
+ */
+const fetchWcApiUrl = (url: string) =>
+	from(http.get(url)).pipe(
+		map((response) => {
+			const namespaces = response?.data?.namespaces;
+			if (namespaces && namespaces.includes(namespace)) {
+				const baseAuthUrl = response?.data?.authentication?.wcpos?.authorize;
+				if (baseAuthUrl) {
+					return {
+						...response.data,
+						wc_api_url: url + namespace + '/', // enforce trailing slash
+						wc_api_auth_url: constructWcApiAuthUrl(baseAuthUrl),
+					};
+				}
+			}
+		})
+	);
 
-export default {};
+export default { fetchWpApiUrl, parseApiUrlFromHeaders, fetchWcApiUrl };
