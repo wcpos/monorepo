@@ -1,8 +1,9 @@
 import { Q } from '@nozbe/watermelondb';
 import { json } from '@nozbe/watermelondb/decorators';
-import { Subject } from 'rxjs';
+import { Subject, BehaviorSubject, of } from 'rxjs';
+import { tap, map, concatMap, startWith, switchMap, catchError } from 'rxjs/operators';
 import Model from '../base';
-import WooCommerceService from '../../../services/woocommerce';
+import wcAuthService from '../../../services/wc-auth';
 import { field, children } from '../decorators';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
@@ -32,7 +33,11 @@ export const siteSchema: Schema = {
  */
 export default class Site extends Model {
 	static table = 'sites';
-	public connection_status$ = new Subject();
+	private _connection_status$ = new BehaviorSubject({
+		type: 'connecting',
+		message: 'TODO: check connection status after init',
+	});
+	public readonly connection_status$ = this._connection_status$.asObservable();
 
 	static associations = {
 		users: { type: 'has_many', foreignKey: 'site_id' },
@@ -78,27 +83,34 @@ export default class Site extends Model {
 	 *
 	 */
 	connect() {
-		this.connection_status$.next('update');
-		// const that = this;
-		// // debugger;
-		// // console.log(this.url);
-		// // console.log(that.url);
-		// const api = new WooCommerceService(this.urlForceHttps);
-		// this.connection_status$ = api.status$.subscribe({
-		// 	next(x) {
-		// 		console.log(x);
-		// 		const payload = x?.payload;
-		// 		payload &&
-		// 			that.database.action(async () => {
-		// 				await that.update(payload);
-		// 			});
-		// 	},
-		// 	error(err) {
-		// 		console.error('something wrong occurred: ' + err);
-		// 	},
-		// 	complete() {
-		// 		console.log('done');
-		// 	},
-		// });
+		this._connection_status$.next({
+			type: 'connecting',
+			message: 'Connecting ...',
+		});
+
+		of(this.urlForceHttps)
+			.pipe(
+				concatMap((url) => wcAuthService.fetchWpApiUrl(url)),
+				tap((wp_api_url) => {
+					this._connection_status$.next({
+						type: 'connecting',
+						message: 'Wordpress API Found',
+					});
+				}),
+				concatMap((wp_api_url) => wcAuthService.fetchWcApiUrl(wp_api_url)),
+				tap((wc_api_url) => {
+					this._connection_status$.next({
+						type: 'connecting',
+						message: 'WooCommerce API Found',
+					});
+				}),
+				catchError((err) => {
+					this._connection_status$.next({
+						type: 'error',
+						message: err.message,
+					});
+				})
+			)
+			.subscribe();
 	}
 }
