@@ -1,36 +1,49 @@
 import React from 'react';
-import { Linking, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import Modal from '../../components/modal';
 import Button from '../../components/button';
-import useUser from '../../hooks/use-user';
+import Url from '../../lib/url-parse';
+import WebView from '../../components/webview';
 
-const AuthModal: React.FC<Props> = ({ visible }) => {
-	const { user, setUser } = useUser();
+interface Props {
+	visible: boolean;
+	setVisible: () => void;
+	site: typeof import('../../database/models/sites/site');
+}
+
+const AuthModal: React.FC<Props> = ({ visible, setVisible, site }) => {
+	const returnUrl = Platform.OS === 'web' ? 'https://localhost:3000/auth' : 'wcpos://auth';
+
+	const authUrl =
+		site.wc_api_auth_url +
+		Url.qs.stringify(
+			{
+				app_name: 'WooCommerce POS',
+				scope: 'read_write',
+				user_id: 123,
+				return_url: returnUrl,
+				callback_url: 'https://client.wcpos.com',
+				wcpos: 1,
+			},
+			true
+		);
+
+	const handleMessage = (event) => {
+		const data = typeof event?.data === 'string' ? JSON.parse(event?.data) : event?.data;
+
+		if (data?.source === 'wcpos') {
+			site.createOrUpdateUser(data.payload);
+		}
+	};
 
 	return (
 		<Modal visible={visible}>
+			<WebView src={authUrl} onMessage={handleMessage} />
 			<Button
+				title="Close Modal"
 				onPress={() => {
-					if (Platform.OS === 'web') {
-						// TODO: capture location changes from webview
-						Linking.openURL('https://localhost:3000/auth');
-					} else {
-						Linking.openURL('wcpos://auth');
-					}
+					setVisible(false);
 				}}
-				title="Cancel"
-			/>
-			<Button
-				onPress={() => {
-					setUser({ foo: 'bar' });
-				}}
-				title="Update User"
-			/>
-			<Button
-				onPress={() => {
-					setUser({ authenticated: true });
-				}}
-				title="Login"
 			/>
 		</Modal>
 	);

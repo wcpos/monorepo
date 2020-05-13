@@ -1,8 +1,6 @@
 import React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import PageLayout from '../../layout/page';
-import Button from '../../components/button';
-import Modal from './modal';
 import Segment, { SegmentGroup } from '../../components/segment';
 import TextInput from '../../components/textinput';
 import Text from '../../components/text';
@@ -13,7 +11,6 @@ import Site from './site';
 interface Props {}
 
 const Auth: React.FC<Props> = (props) => {
-	const [visible, setVisible] = React.useState(false);
 	const navigation = useNavigation();
 	const { sites, create } = useSites();
 	console.log(sites);
@@ -58,8 +55,6 @@ const Auth: React.FC<Props> = (props) => {
 					</SegmentGroup>
 				)}
 			</AuthView>
-			<Button title="Open Modal" onPress={() => setVisible(true)} />
-			<Modal visible={visible} />
 		</PageLayout>
 	);
 };

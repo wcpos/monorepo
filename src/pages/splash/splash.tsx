@@ -5,18 +5,20 @@ import Button from '../../components/button';
 import useUser from '../../hooks/use-user';
 import { SplashView } from './styles';
 
-interface Props {
-	onReady: () => void;
-}
+interface Props {}
 
-const Splash: React.FC<Props> = ({ onReady }) => {
+/**
+ * @TODO do you really need a splash page??
+ */
+const Splash: React.FC<Props> = () => {
 	const { setUser } = useUser();
-	// React.useEffect(() => {
-	// 	const timer = setTimeout(() => {
-	// 		typeof onReady === 'function' && onReady();
-	// 	}, 2000);
-	// 	return () => clearTimeout(timer);
-	// }, [onReady]);
+
+	React.useEffect(() => {
+		const timer = setTimeout(() => {
+			setUser({ authenticated: true });
+		}, 1000);
+		return () => clearTimeout(timer);
+	}, []);
 
 	return (
 		<PageLayout>

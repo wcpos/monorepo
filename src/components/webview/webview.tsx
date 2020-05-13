@@ -6,7 +6,7 @@ type Props = import('./').Props;
 const WebView = ({
 	src,
 	title,
-	onMessage = event => {},
+	onMessage = (event) => {},
 	onError = () => {},
 	onLoad = () => {},
 }: Props) => {

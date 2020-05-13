@@ -4,6 +4,7 @@ import Avatar from '../../components/avatar';
 import Text from '../../components/text';
 import Icon from '../../components/icon';
 import Button from '../../components/button';
+import Modal from './modal';
 import { SiteWrapper, SiteTextWrapper } from './styles';
 
 /**
@@ -16,6 +17,7 @@ import { SiteWrapper, SiteTextWrapper } from './styles';
  */
 const Site = ({ site }) => {
 	const status = useObservableState(site.connection_status$);
+	const [visible, setVisible] = React.useState(false);
 
 	const handleRemove = async () => {
 		await site.destroy();
@@ -31,8 +33,17 @@ const Site = ({ site }) => {
 				</Text>
 				{status && <Text size="small">{status?.message}</Text>}
 				<Button title="Connect again" onPress={() => site.connect()} />
+				{status.type === 'login' && (
+					<Button
+						title="Login"
+						onPress={() => {
+							setVisible(true);
+						}}
+					/>
+				)}
 			</SiteTextWrapper>
 			<Icon name="remove" onPress={handleRemove} />
+			{visible && <Modal site={site} visible={visible} setVisible={setVisible} />}
 		</SiteWrapper>
 	);
 };
