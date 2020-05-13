@@ -1,5 +1,5 @@
 import { Q } from '@nozbe/watermelondb';
-import { json } from '@nozbe/watermelondb/decorators';
+import { json, action } from '@nozbe/watermelondb/decorators';
 import { Subject, BehaviorSubject, of } from 'rxjs';
 import { tap, map, concatMap, startWith, switchMap, catchError } from 'rxjs/operators';
 import Model from '../base';
@@ -29,7 +29,6 @@ export const siteSchema: Schema = {
 
 /**
  * Site Model
- *
  */
 export default class Site extends Model {
 	static table = 'sites';
@@ -92,15 +91,17 @@ export default class Site extends Model {
 			.pipe(
 				concatMap((url) => wcAuthService.fetchWpApiUrl(url)),
 				tap((wp_api_url) => {
+					this.setData({ wp_api_url });
 					this._connection_status$.next({
 						type: 'connecting',
 						message: 'Wordpress API Found',
 					});
 				}),
 				concatMap((wp_api_url) => wcAuthService.fetchWcApiUrl(wp_api_url)),
-				tap((wc_api_url) => {
+				tap((data) => {
+					this.setData(data);
 					this._connection_status$.next({
-						type: 'connecting',
+						type: 'login',
 						message: 'WooCommerce API Found',
 					});
 				}),
@@ -112,5 +113,26 @@ export default class Site extends Model {
 				})
 			)
 			.subscribe();
+	}
+
+	/**
+	 *
+	 * @param data
+	 */
+	async createOrUpdateUser(data) {
+		let user = await this.fetchUserByRemoteId(data?.remote_id);
+		if (!user) {
+			user = await this.createUser();
+		}
+		user.setData(data);
+	}
+
+	/**
+	 *
+	 */
+	@action createUser() {
+		return this.users.collection.create((user) => {
+			user.site.set(this);
+		});
 	}
 }
