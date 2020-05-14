@@ -1,2 +1,3 @@
 import useStore from './use-store';
-export default useStore;
+import StoreProvider from './provider';
+export { useStore as default, StoreProvider };

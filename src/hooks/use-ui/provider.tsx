@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect, useReducer } from 'react';
 import reducer from './reducer';
 import initialState from './initial';
 
-export const Context = createContext(null);
+export const Context = createContext();
 
 type Props = {
 	children: React.ReactNode;
@@ -11,7 +11,7 @@ type Props = {
 /**
  *
  */
-export const Provider = ({ children }: Props) => {
+const UiProvider: React.FC<Props> = ({ children }) => {
 	// const [ui, setUI] = useState();
 	const [state, dispatch] = useReducer(reducer, initialState);
 	const [contextValue, setContextValue] = useState({ state, dispatch });
@@ -43,3 +43,5 @@ export const Provider = ({ children }: Props) => {
 
 	return <Context.Provider value={contextValue}>{children}</Context.Provider>;
 };
+
+export default UiProvider;

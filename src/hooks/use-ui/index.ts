@@ -1,2 +1,3 @@
-export * from './provider';
-export { useUI as default } from './use-ui';
+import useUi from './use-ui';
+import UiProvider from './provider';
+export { useUi as default, UiProvider };

@@ -1,10 +1,16 @@
-import { useContext } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Context } from './';
+import { Context } from './provider';
 
-export const useUI = section => {
+/**
+ *
+ * @param section
+ * @TODO process translations only once on start up
+ * @TODO make sure changes only cause relevant components to re-render
+ */
+const useUi = (section) => {
 	const { t } = useTranslation();
-	const { state, dispatch } = useContext(Context);
+	const { state, dispatch } = React.useContext(Context);
 	const ui = state && state[section];
 
 	// add labels and order
@@ -19,9 +25,11 @@ export const useUI = section => {
 		});
 	}
 
-	const updateUI = action => {
+	const updateUI = (action) => {
 		dispatch(action);
 	};
 
 	return { ui, updateUI };
 };
+
+export default useUi;
