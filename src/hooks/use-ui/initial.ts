@@ -2,6 +2,7 @@ export default {
 	pos_products: {
 		sortBy: 'name',
 		sortDirection: 'asc',
+		width: '60%',
 		columns: [
 			{ key: 'image', disableSort: true },
 			{ key: 'name' },
@@ -10,6 +11,9 @@ export default {
 			{ key: 'actions', disableSort: true },
 		],
 		display: [{ key: 'sku', hide: true }, { key: 'categories' }, { key: 'tags', hide: true }],
+	},
+	pos_cart: {
+		width: '40%',
 	},
 	products: {
 		sortBy: 'name',

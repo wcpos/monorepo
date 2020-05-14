@@ -1,14 +1,14 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import Icon from '../../../components/icon/icon2';
+import Icon from '../../../components/icon';
 
 interface Props {}
 
-const Products: React.FC<Props> = ({ header, main, title }) => {
+const Products: React.FC<Props> = () => {
 	return (
 		<>
 			<Text>Products</Text>
-			<Icon />
+			<Icon name="check" />
 		</>
 	);
 };
