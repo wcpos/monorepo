@@ -2,7 +2,6 @@ import React from 'react';
 import { ThemeProvider } from 'styled-components/native';
 import { UserProvider } from './hooks/use-user';
 import { StoreProvider } from './hooks/use-store';
-import { UiProvider } from './hooks/use-ui';
 import Navigator from './navigators';
 import ActivityIndicator from './components/activity-indicator';
 import Portal from './components/portal';
@@ -22,11 +21,9 @@ const App = () => (
 			<UserProvider>
 				<StoreProvider>
 					<ThemeProvider theme={defaultTheme}>
-						<UiProvider>
-							<Portal.Host>
-								<Navigator />
-							</Portal.Host>
-						</UiProvider>
+						<Portal.Host>
+							<Navigator />
+						</Portal.Host>
 					</ThemeProvider>
 				</StoreProvider>
 			</UserProvider>

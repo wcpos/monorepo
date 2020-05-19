@@ -1,0 +1,69 @@
+{
+	"pos_products": {
+		"sortBy": "name",
+		"sortDirection": "asc",
+		"width": "60%",
+		"columns": [
+			{ "key": "image", "disableSort": true },
+			{ "key": "name" },
+			{ "key": "sku", "hide": true },
+			{ "key": "price" },
+			{ "key": "actions", "disableSort": true }
+		],
+		"display": [
+			{ "key": "sku", "hide": true },
+			{ "key": "categories" },
+			{ "key": "tags", "hide": true }
+		]
+	},
+	"pos_cart": {
+		"width": "40%"
+	},
+	"products": {
+		"sortBy": "name",
+		"sortDirection": "asc",
+		"columns": [
+			{ "key": "image", "disableSort": true },
+			{ "key": "id" },
+			{ "key": "name" },
+			{ "key": "sku" },
+			{ "key": "categories" },
+			{ "key": "tags" },
+			{ "key": "regular_price" },
+			{ "key": "sale_price" },
+			{ "key": "actions", "disableSort": true }
+		]
+	},
+	"orders": {
+		"sortBy": "number",
+		"sortDirection": "desc",
+		"columns": [
+			{ "key": "status", "width": "10%" },
+			{ "key": "number", "width": "10%" },
+			{ "key": "customer", "flexGrow": 1 },
+			{ "key": "billing", "flexGrow": 1 },
+			{ "key": "shipping", "flexGrow": 1 },
+			{ "key": "note", "width": "10%" },
+			{ "key": "date_created", "flexGrow": 1 },
+			{ "key": "date_modified", "hide": true, "width": "10%" },
+			{ "key": "date_completed", "hide": true, "width": "10%" },
+			{ "key": "total", "width": "10%" },
+			{ "key": "actions", "disableSort": true, "width": "10%" }
+		]
+	},
+	"customers": {
+		"sortBy": "last_name",
+		"sortDirection": "asc",
+		"columns": [
+			{ "key": "avatar_url", "disableSort": true },
+			{ "key": "first_name" },
+			{ "key": "last_name" },
+			{ "key": "email" },
+			{ "key": "role", "hide": true },
+			{ "key": "username", "hide": true },
+			{ "key": "billing" },
+			{ "key": "shipping" },
+			{ "key": "actions", "disableSort": true }
+		]
+	}
+}

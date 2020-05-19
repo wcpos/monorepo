@@ -1,6 +1,31 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Context } from './provider';
+import initialUI from './initial.json';
+
+type sectionType = Extract<keyof typeof initialUI, string>;
+
+/**
+ * initUI helper to set up the default UI for each section
+ * @param section
+ * @param t
+ */
+const initUI = (section: sectionType, t) => {
+	const ui = initialUI[section];
+	if (!ui) return;
+
+	ui?.columns.map((column, index) => {
+		column.label = t(section + '.column.label.' + column.key);
+		column.order = index;
+	});
+
+	if (ui?.display) {
+		ui.display.map((display, index) => {
+			display.label = t(section + '.display.label.' + display.key);
+		});
+	}
+
+	return ui;
+};
 
 /**
  *
@@ -8,26 +33,9 @@ import { Context } from './provider';
  * @TODO process translations only once on start up
  * @TODO make sure changes only cause relevant components to re-render
  */
-const useUi = (section) => {
+const useUi = (section: sectionType) => {
 	const { t } = useTranslation();
-	const { state, dispatch } = React.useContext(Context);
-	const ui = state && state[section];
-
-	// add labels and order
-	ui.columns.map((column, index) => {
-		column.label = t(section + '.column.label.' + column.key);
-		column.order = index;
-	});
-
-	if (ui.display) {
-		ui.display.map((display, index) => {
-			display.label = t(section + '.display.label.' + display.key);
-		});
-	}
-
-	const updateUI = (action) => {
-		dispatch(action);
-	};
+	const [ui];
 
 	return { ui, updateUI };
 };
