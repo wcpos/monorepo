@@ -20,7 +20,7 @@ const store = (obj: Props) => {
 	const adapter = new Adapter({
 		dbName,
 		schema: appSchema({
-			version: 26,
+			version: 27,
 			tables: schemas.map(tableSchema),
 		}),
 	});
