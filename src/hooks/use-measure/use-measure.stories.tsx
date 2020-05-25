@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import Text from '../../components/text';
 
-import { storiesOf } from '@storybook/react';
-
 import useMeasure from './';
+
+export default {
+	title: 'Hooks/useMeasure',
+};
 
 const MyComponent = () => {
 	const [measurements, onMeasure] = useState({
@@ -30,17 +32,13 @@ const MyComponent = () => {
 	);
 };
 
-storiesOf('useMeasure', module)
-	/**
-	 *
-	 */
-	.add('basic usage', () => {
-		const paddingLeft = Math.floor(Math.random() * 100 + 1);
-		const paddingTop = Math.floor(Math.random() * 100 + 1);
+export const basicUsage = () => {
+	const paddingLeft = Math.floor(Math.random() * 100 + 1);
+	const paddingTop = Math.floor(Math.random() * 100 + 1);
 
-		return (
-			<View style={{ paddingLeft, paddingTop }}>
-				<MyComponent />
-			</View>
-		);
-	});
+	return (
+		<View style={{ paddingLeft, paddingTop }}>
+			<MyComponent />
+		</View>
+	);
+};
