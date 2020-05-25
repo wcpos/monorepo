@@ -3,48 +3,73 @@ import { View, Text } from 'react-native';
 import Products from './products';
 import Cart from './cart';
 import Draggable from '../../components/draggable';
+import Button from '../../components/button';
 import useStore from '../../hooks/use-store';
+import useObservable from '../../hooks/use-observable';
+import { Q } from '@nozbe/watermelondb';
 
 interface Props {}
 
-const POS: React.FC<Props> = () => {
-	const { store } = useStore();
-	const [width, setWidth] = React.useState(500);
+const initialUI = {
+	pos_products: {
+		width: 500,
+	},
+};
 
-	console.log('render:' + width);
+const reducer = (state, action) => {
+	switch (action.type) {
+		case 'UI_UPDATE':
+			return { ...state, ...action.payload };
+		default:
+			return state;
+	}
+};
+
+const useUI = () => {
+	const { store } = useStore();
+	const collection = store.collections.get('uis');
+
+	const ui = useObservable(
+		collection.query(Q.where('section', 'pos_products')).observe()
+		// .observeWithColumns(['name', 'regular_price']),
+	);
+
+	if (ui.length > 1) {
+	}
+};
+
+const POS: React.FC<Props> = () => {
+	const [ui, dispatch] = React.useReducer(reducer, initialUI);
+	// const width = React.useRef(ui?.pos_products?.width).current;
+	// console.log(width);
+	// const width =
+
+	console.log('render:' + ui?.pos_products?.width);
+	// const [width, setWidth] = React.useState(ui?.pos_products?.width);
 
 	const handleColumnResizeUpdate = ({ dx }) => {
-		setWidth(width + dx);
+		// console.log('render:' + width);
+		// setWidth(width + dx);
+		dispatch({
+			type: 'UI_UPDATE',
+			payload: { pos_products: { width: ui?.pos_products?.width + dx } },
+		});
 	};
 
-	const handleColumnResizeEnd = async () => {
-		console.log('end:' + width);
-		await store.adapter.setLocal('width', width + '');
+	const handleColumnResizeEnd = () => {
+		console.log('end:' + ui?.pos_products?.width);
+		// dispatch({ type: 'UI_UPDATE', payload: { pos_products: { width } } });
 	};
-
-	// fetch last user hash on init
-	React.useEffect(() => {
-		const getWidth = async () => {
-			const storedWidth = await store.adapter.getLocal('width');
-			console.log(storedWidth);
-			if (storedWidth) {
-				setWidth(parseInt(storedWidth, 10));
-			}
-		};
-
-		getWidth();
-	}, []);
 
 	return (
 		<React.Fragment>
-			<View style={{ width }}>
+			<View style={{ width: ui?.pos_products?.width }}>
 				<Products />
-				<Text>{width + ''}</Text>
 			</View>
 			<Draggable onUpdate={handleColumnResizeUpdate} onEnd={handleColumnResizeEnd}>
 				<View style={{ backgroundColor: '#000', padding: 20 }}></View>
 			</Draggable>
-			<View>
+			<View style={{ flexGrow: 1 }}>
 				<Cart />
 			</View>
 		</React.Fragment>

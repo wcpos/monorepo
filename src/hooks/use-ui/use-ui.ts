@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
+// import { useTranslation } from 'react-i18next';
 import initialUI from './initial.json';
 
 type sectionType = Extract<keyof typeof initialUI, string>;
@@ -29,15 +29,28 @@ const initUI = (section: sectionType, t) => {
 
 /**
  *
+ * @param state
+ * @param action
+ */
+const reducer = (state, action) => {
+	switch (action.type) {
+		case 'UI_UPDATE':
+			return { ...state, ...action.payload };
+		default:
+			return state;
+	}
+};
+
+/**
+ *
  * @param section
  * @TODO process translations only once on start up
  * @TODO make sure changes only cause relevant components to re-render
  */
 const useUi = (section: sectionType) => {
-	const { t } = useTranslation();
-	const [ui];
+	const [ui, dispatch] = React.useReducer(reducer, initialUI);
 
-	return { ui, updateUI };
+	return [ui, dispatch];
 };
 
 export default useUi;

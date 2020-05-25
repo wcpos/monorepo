@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import TableLayout from '../../../layout/table';
 
 interface Props {}
 
 const Cart: React.FC<Props> = ({ header, main, title }) => {
-	return <Text>Cart</Text>;
+	return <TableLayout actions="Actions" table="Table" footer="Footer" />;
 };
 
 export default Cart;
