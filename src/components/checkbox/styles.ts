@@ -1,11 +1,12 @@
 import styled, { css } from 'styled-components/native';
 import { ThemeProps } from '../../lib/theme/types';
+import Icon from '../icon';
 
 export const Wrapper = styled.View<{ disabled?: boolean }>`
 	display: flex;
 	flex-direction: row;
-	${props =>
-		props.disabled &&
+	${({ disabled }) =>
+		disabled &&
 		css`
 			opacity: 0.5;
 		`}
@@ -16,12 +17,17 @@ export const Box = styled.View<{ theme: ThemeProps }>`
 	align-items: center;
 	justify-content: center;
 	border-style: solid;
-	background-color: ${props => props.theme.CHECKBOX_BACKGROUND_COLOR};
-	width: ${props => props.theme.CHECKBOX_WIDTH};
-	height: ${props => props.theme.CHECKBOX_HEIGHT};
-	border-width: ${props => props.theme.CHECKBOX_BORDER_WIDTH};
-	border-color: ${props => props.theme.CHECKBOX_BORDER_COLOR};
-	border-radius: ${props => props.theme.CHECKBOX_BORDER_RADIUS};
+	background-color: ${({ theme, checked }) =>
+		checked ? theme.CHECKBOX_BACKGROUND_COLOR : 'transparent'};
+	width: ${({ theme }) => theme.CHECKBOX_WIDTH};
+	height: ${({ theme }) => theme.CHECKBOX_HEIGHT};
+	border-width: ${({ theme }) => theme.CHECKBOX_BORDER_WIDTH};
+	border-color: ${({ theme }) => theme.CHECKBOX_BORDER_COLOR};
+	border-radius: ${({ theme }) => theme.CHECKBOX_BORDER_RADIUS};
+`;
+
+export const Check = styled(Icon)<{ theme: ThemeProps }>`
+	color: #fff;
 `;
 
 export const LabelWrapper = styled.View`

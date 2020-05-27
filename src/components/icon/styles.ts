@@ -1,5 +1,22 @@
 import { StyleSheet, Platform, ViewStyle } from 'react-native';
 
+import styled, { css } from 'styled-components/native';
+import { ThemeProps } from '../../lib/theme/types';
+
+export const Icon = styled.View<{ theme: ThemeProps }>`
+	flex: 0 1 auto;
+	align-items: center;
+	justify-content: center;
+	border-style: solid;
+	background-color: ${({ theme, checked }) =>
+		checked ? theme.CHECKBOX_BACKGROUND_COLOR : 'transparent'};
+	width: ${({ theme }) => theme.CHECKBOX_WIDTH};
+	height: ${({ theme }) => theme.CHECKBOX_HEIGHT};
+	border-width: ${({ theme }) => theme.CHECKBOX_BORDER_WIDTH};
+	border-color: ${({ theme }) => theme.CHECKBOX_BORDER_COLOR};
+	border-radius: ${({ theme }) => theme.CHECKBOX_BORDER_RADIUS};
+`;
+
 interface Props {
 	button: ViewStyle;
 	raised: ViewStyle;

@@ -17,6 +17,7 @@ export const basicUsage = () => (
 		name={select('name', iconNames, 'cog')}
 		// loading={boolean('loading', false)}
 		disabled={boolean('disabled', false)}
+		size={select('size', ['small', 'normal', 'large'], 'normal')}
 	/>
 );
 

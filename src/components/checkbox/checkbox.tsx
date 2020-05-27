@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { TouchableWithoutFeedback } from 'react-native';
 import Label from './label';
 import Icon from './icon';
@@ -23,8 +23,17 @@ type Props = {
 //   pressed: boolean;
 // };
 
-const Shared = ({ label, hasError, disabled, info, onChange, children, name, ...props }: Props) => {
-	const [checked, setChecked] = useState(!!props.checked);
+const Checkbox: React.FC<Props> = ({
+	label,
+	hasError,
+	disabled,
+	info,
+	onChange,
+	children,
+	name,
+	...props
+}) => {
+	const [checked, setChecked] = React.useState(!!props.checked);
 
 	const onPress = () => {
 		if (disabled) {
@@ -62,4 +71,4 @@ const Shared = ({ label, hasError, disabled, info, onChange, children, name, ...
 	);
 };
 
-export default Shared;
+export default Checkbox;
