@@ -6,14 +6,14 @@ import { modelClasses, schemas } from './models/sites';
 const config = {
 	dbName: 'wcpos-sites',
 	schema: appSchema({
-		version: 3,
+		version: 4,
 		tables: schemas.map(tableSchema),
 	}),
 };
 
 if (Platform.OS === 'web') {
-	config.useWebWorker = true;
-	config.useIncrementalIndexedDB = false;
+	config.useWebWorker = false;
+	config.useIncrementalIndexedDB = true;
 	// It's recommended you implement this method:
 	// config.onIndexedDBVersionChange = () => {
 	// database was deleted in another browser tab (user logged out), so we must make sure we delete

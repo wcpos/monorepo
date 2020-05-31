@@ -57,9 +57,10 @@ const children = (childTable: TableName) => (
 			const parentTable = parent.collection.modelClass.table;
 			const childKey = childCollection.modelClass.associations[parentTable]?.key;
 
-			const add = array.map(json =>
+			const add = array.map((json) =>
 				childCollection.prepareCreate((m: any) => {
-					m[childKey] = parent.id;
+					// m[childKey] = parent.id;
+					m.ui.set(parent);
 					m.set(json);
 				})
 			);

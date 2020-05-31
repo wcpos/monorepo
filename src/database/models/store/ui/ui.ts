@@ -1,5 +1,6 @@
 import Model from '../../base';
-import { field, nochange, children } from '@nozbe/watermelondb/decorators';
+import { nochange } from '@nozbe/watermelondb/decorators';
+import { field, children } from '../../decorators';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
@@ -23,8 +24,8 @@ export default class UI extends Model {
 	static table = 'uis';
 
 	static associations = {
-		ui_columns: { type: 'has_many', foreignKey: 'ui_id' },
-		ui_display: { type: 'has_many', foreignKey: 'ui_id' },
+		ui_columns: { type: 'has_many', foreignKey: 'parent_id' },
+		ui_display: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
 	@children('ui_columns') columns: any;
