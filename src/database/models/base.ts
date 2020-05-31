@@ -32,28 +32,28 @@ class BaseModel extends Model {
 	// }
 
 	// /** */
-	// protected set(json) {
-	// 	if (!json) {
-	// 		debugger;
-	// 	}
-	// 	Object.keys(json).forEach((key: string) => {
-	// 		if (key === 'id' && !this.remote_id) {
-	// 			// some remote ids can be 0, eg: attributes
-	// 			if (this.remote_id !== 0) {
-	// 				this.remote_id = json.id;
-	// 			}
-	// 		} else if (key !== 'id') {
-	// 			this[key] = json[key];
-	// 		}
-	// 	});
-	// }
+	protected set(json) {
+		if (!json) {
+			debugger;
+		}
+		Object.keys(json).forEach((key: string) => {
+			if (key === 'id' && !this.remote_id) {
+				// some remote ids can be 0, eg: attributes
+				if (this.remote_id !== 0) {
+					this.remote_id = json.id;
+				}
+			} else if (key !== 'id') {
+				this[key] = json[key];
+			}
+		});
+	}
 
 	/**
 	 * Update model with JSON data
 	 * @param data
 	 * @TODO log updates
 	 */
-	@action setData(data) {
+	@action updateWithJson(data) {
 		return this.update(() => {
 			forEach(data, (value, key) => {
 				if (key === 'id' && !this.remote_id) {

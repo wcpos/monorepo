@@ -24,22 +24,23 @@ const Header = ({ columns, sort, sortBy, sortDirection }: Props) => {
 					flexShrink,
 					width,
 				} = column;
+
 				return (
-					// column.show && (
-					<Cell
-						dataKey={dataKey}
-						defaultSortDirection={defaultSortDirection}
-						key={'Header-Col' + index}
-						headerCellRenderer={headerCellRenderer}
-						label={label}
-						sort={disableSort ? undefined : sort}
-						sortBy={sortBy}
-						sortDirection={sortDirection}
-						flexGrow={flexGrow}
-						flexShrink={flexShrink}
-						width={width}
-					/>
-					// )
+					!column.hide && (
+						<Cell
+							dataKey={dataKey}
+							defaultSortDirection={defaultSortDirection}
+							key={'Header-Col' + index}
+							headerCellRenderer={headerCellRenderer}
+							label={label}
+							sort={disableSort ? undefined : sort}
+							sortBy={sortBy}
+							sortDirection={sortDirection}
+							flexGrow={flexGrow}
+							flexShrink={flexShrink}
+							width={width}
+						/>
+					)
 				);
 			})}
 		</StyledView>

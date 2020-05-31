@@ -5,6 +5,10 @@ import Button from '../../components/button';
 import useUser from '../../hooks/use-user';
 import { SplashView } from './styles';
 
+// import { storeDatabase } from '../../database';
+
+// const database = storeDatabase({ site: 'test', user: 'test' });
+
 interface Props {}
 
 /**
@@ -14,6 +18,10 @@ const Splash: React.FC<Props> = () => {
 	const { setUser } = useUser();
 
 	React.useEffect(() => {
+		// const uis = await database.collections.get('uis').query().fetch();
+		// console.log(uis);
+		// const columns = await uis[0]?.columns.fetch();
+		// console.log(columns);
 		const timer = setTimeout(() => {
 			setUser({ authenticated: true });
 		}, 1000);

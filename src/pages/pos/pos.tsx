@@ -5,66 +5,96 @@ import Cart from './cart';
 import Draggable from '../../components/draggable';
 import Button from '../../components/button';
 import useStore from '../../hooks/use-store';
-import useObservable from '../../hooks/use-observable';
+// import useObservable from '../../hooks/use-observable';
 import { Q } from '@nozbe/watermelondb';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { switchMap, map, shareReplay, filter } from 'rxjs/operators';
+import { storeDatabase } from '../../database';
+
+const database = storeDatabase({ site: 'test', user: 'test' });
 
 interface Props {}
 
-const initialUI = {
-	pos_products: {
-		width: 500,
-	},
+const init = async () => {
+	await database.action(async () => {
+		const newUI = await database.collections.get('uis').create((ui) => {
+			ui.section = 'pos_products';
+			ui.set({
+				sortBy: 'name',
+				sortDirection: 'asc',
+				width: '60%',
+				columns: [
+					{ key: 'image', disableSort: true, order: 0 },
+					{ key: 'name', order: 1 },
+					{ key: 'sku', hide: true, order: 2 },
+					{ key: 'price', order: 3 },
+					{ key: 'actions', disableSort: true, order: 4 },
+				],
+				display: [
+					{ key: 'sku', hide: true, order: 0 },
+					{ key: 'categories', order: 1 },
+					{ key: 'tags', hide: true, order: 2 },
+				],
+			});
+		});
+		return newUI;
+	});
 };
 
-const reducer = (state, action) => {
-	switch (action.type) {
-		case 'UI_UPDATE':
-			return { ...state, ...action.payload };
-		default:
-			return state;
-	}
-};
+const uiResource = new ObservableResource(
+	database.collections
+		.get('uis')
+		.query(Q.where('section', 'pos_products'))
+		.observe()
+		.pipe(
+			filter((uis) => {
+				if (uis.length > 0) {
+					return true;
+				}
+				init();
+				return false;
+			}),
+			map((array) => array[0])
+			// shareReplay()
+		)
+);
 
-const useUI = () => {
-	const { store } = useStore();
-	const collection = store.collections.get('uis');
-
-	const ui = useObservable(
-		collection.query(Q.where('section', 'pos_products')).observe()
-		// .observeWithColumns(['name', 'regular_price']),
-	);
-
-	if (ui.length > 1) {
-	}
-};
+// const getResource = (store) =>
+// 	new ObservableResource(
+// 		store.collections
+// 			.get('uis')
+// 			.query(Q.where('section', 'pos_products'))
+// 			.observe()
+// 			.pipe(
+// 				map((array) => array[6])
+// 				// shareReplay()
+// 			)
+// 	);
 
 const POS: React.FC<Props> = () => {
-	const [ui, dispatch] = React.useReducer(reducer, initialUI);
-	// const width = React.useRef(ui?.pos_products?.width).current;
-	// console.log(width);
-	// const width =
-
-	console.log('render:' + ui?.pos_products?.width);
-	// const [width, setWidth] = React.useState(ui?.pos_products?.width);
+	// const { store } = useStore();
+	// const uiResource = getResource(store);
+	const ui = useObservableSuspense(uiResource);
+	// const [width, setWidth] = React.useState(ui.width);
 
 	const handleColumnResizeUpdate = ({ dx }) => {
-		// console.log('render:' + width);
 		// setWidth(width + dx);
-		dispatch({
-			type: 'UI_UPDATE',
-			payload: { pos_products: { width: ui?.pos_products?.width + dx } },
-		});
 	};
 
 	const handleColumnResizeEnd = () => {
-		console.log('end:' + ui?.pos_products?.width);
-		// dispatch({ type: 'UI_UPDATE', payload: { pos_products: { width } } });
+		ui.database.action(async () => {
+			await ui.update((ui) => {
+				ui.width = ui.width - 50 + '';
+			});
+		});
 	};
 
 	return (
 		<React.Fragment>
-			<View style={{ width: ui?.pos_products?.width }}>
-				<Products />
+			<View style={{ width: ui.width }}>
+				<React.Suspense fallback="Loading products...">
+					<Products ui={ui} />
+				</React.Suspense>
 			</View>
 			<Draggable onUpdate={handleColumnResizeUpdate} onEnd={handleColumnResizeEnd}>
 				<View style={{ backgroundColor: '#000', padding: 20 }}></View>

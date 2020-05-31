@@ -34,7 +34,7 @@ const Sites: React.FC<Props> = () => {
 		},
 	];
 
-	return <Table columns={columns} items={tableCounts} />;
+	return <Table columns={columns} data={tableCounts} />;
 };
 
 export default Sites;

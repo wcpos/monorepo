@@ -1,7 +1,6 @@
 import React from 'react';
 import { ThemeProvider } from 'styled-components/native';
 import { UserProvider } from './hooks/use-user';
-import { StoreProvider } from './hooks/use-store';
 import Navigator from './navigators';
 import ActivityIndicator from './components/activity-indicator';
 import Portal from './components/portal';
@@ -19,13 +18,11 @@ const App = () => (
 	<ErrorBoundary>
 		<React.Suspense fallback={<ActivityIndicator />}>
 			<UserProvider>
-				<StoreProvider>
-					<ThemeProvider theme={defaultTheme}>
-						<Portal.Host>
-							<Navigator />
-						</Portal.Host>
-					</ThemeProvider>
-				</StoreProvider>
+				<ThemeProvider theme={defaultTheme}>
+					<Portal.Host>
+						<Navigator />
+					</Portal.Host>
+				</ThemeProvider>
 			</UserProvider>
 		</React.Suspense>
 	</ErrorBoundary>

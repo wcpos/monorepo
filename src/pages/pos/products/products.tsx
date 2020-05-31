@@ -1,57 +1,39 @@
 import React from 'react';
 import TableLayout from '../../../layout/table';
-import Table from '../../../components/table2';
-import Input from '../../../components/textinput';
-import Checkbox from '../../../components/checkbox';
+import Table from '../../../components/table';
+import Actions from './actions';
 import simpleProduct from '../../../../jest/__fixtures__/product.json';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { map, tap } from 'rxjs/operators';
 
-interface Props {}
+interface Props {
+	ui: any;
+}
 
 /**
  *
- * @param param0
  */
-const Actions: React.FC<Props> = ({ columns }) => {
-	const onFilter = () => {
-		console.log('change query');
-	};
-
-	const handleColumnShowHide = () => {
-		console.log('hi');
-	};
-
-	return (
-		<React.Fragment>
-			<Input placeholder="Search products" onChangeText={onFilter} />
-			{columns.map((column: any) => (
-				<Checkbox
-					key={column.accessor}
-					name={column.accessor}
-					label={column.Header}
-					checked={!column.hide}
-					onChange={handleColumnShowHide}
-				/>
-			))}
-		</React.Fragment>
+const Products: React.FC<Props> = ({ ui }) => {
+	// const columnsResource = new ObservableResource(ui.columns.observe().pipe(shareReplay(1)));
+	const displayResource = new ObservableResource(
+		ui.display.observe().pipe(map((results) => results.sort((a, b) => a.order - b.order)))
 	);
-};
+	const display = useObservableSuspense(displayResource);
+	const columnsResource = new ObservableResource(
+		ui.columns.observeWithColumns(['name', 'sku']).pipe(
+			map((results) => results.sort((a, b) => a.order - b.order)),
+			tap((results) => {
+				console.log(results);
+			})
+		)
+	);
+	const columns = useObservableSuspense(columnsResource);
 
-/**
- *
- */
-const Products: React.FC<Props> = () => {
-	const columns = [
-		{ accessor: 'image', Header: 'Image', disableSort: true },
-		{ accessor: 'name', Header: 'Name' },
-		{ accessor: 'sku', Header: 'SKU', hide: true },
-		{ accessor: 'price', Header: 'Price' },
-		{ accessor: 'actions', Header: 'Actions', disableSort: true },
-	];
 	const data = [simpleProduct];
 
 	return (
 		<TableLayout
-			actions={<Actions columns={columns} />}
+			actions={<Actions columns={columns} display={display} />}
 			table={<Table columns={columns} data={data} />}
 			footer="Footer"
 		/>

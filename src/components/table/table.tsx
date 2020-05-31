@@ -7,7 +7,7 @@ import Text from '../text';
 
 type Props = {
 	style?: any;
-	items: any[];
+	data: any[];
 	columns: ColumnProps[];
 	sort?: Sort;
 	sortBy?: string;
@@ -16,13 +16,13 @@ type Props = {
 	empty?: React.ReactNode;
 };
 
-const Table = ({ items, columns, sort, sortBy, sortDirection, footer, empty }: Props) => {
+const Table = ({ data, columns, sort, sortBy, sortDirection, footer, empty }: Props) => {
 	const renderItem = ({ item }: any) => <Row rowData={item} columns={columns} />;
 	const keyExtractor = (item: any, index: number) => item.id;
 
 	return (
 		<FlatList
-			data={items}
+			data={data}
 			renderItem={renderItem}
 			keyExtractor={keyExtractor}
 			ListHeaderComponent={
