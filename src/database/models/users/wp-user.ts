@@ -6,14 +6,14 @@ import { children } from '../decorators';
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
 /**
- * User Schema
+ * WordPress User Schema
  *
  */
-export const userSchema: Schema = {
-	name: 'users',
+export const wpUserSchema: Schema = {
+	name: 'wp_users',
 	columns: [
 		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
-		{ name: 'site_id', type: 'string', isIndexed: true },
+		{ name: 'parent_id', type: 'string', isIndexed: true },
 		{ name: 'username', type: 'string' },
 		{ name: 'name', type: 'string' },
 		{ name: 'first_name', type: 'string' },
@@ -29,21 +29,19 @@ export const userSchema: Schema = {
 	],
 };
 
-const sanitizeValues = (json: any) => json || {};
-
 /**
- * User Model
+ * WordPress User Model
  *
  */
-class User extends Model {
-	static table = 'users';
+class WpUser extends Model {
+	static table = 'wp_users';
 
 	static associations = {
-		sites: { type: 'belongs_to', key: 'site_id' },
+		sites: { type: 'belongs_to', key: 'parent_id' },
 		meta: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
-	@immutableRelation('sites', 'site_id') site!: any;
+	@immutableRelation('sites', 'parent_id') site!: any;
 
 	@field('remote_id') remote_id!: number;
 	@field('username') username!: string;
@@ -67,4 +65,4 @@ class User extends Model {
 	}
 }
 
-export default User;
+export default WpUser;

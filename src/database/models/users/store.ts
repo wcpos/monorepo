@@ -12,7 +12,7 @@ export const storeSchema: Schema = {
 	name: 'stores',
 	columns: [
 		{ name: 'remote_id', type: 'string', isIndexed: true },
-		{ name: 'site_id', type: 'string', isIndexed: true },
+		{ name: 'parent_id', type: 'string', isIndexed: true },
 		{ name: 'name', type: 'string' },
 	],
 };
@@ -25,7 +25,7 @@ class Store extends Model {
 	static table = 'stores';
 
 	static associations: Associations = {
-		sites: { type: 'belongs_to', key: 'site_id' },
+		sites: { type: 'belongs_to', key: 'parent_id' },
 	};
 
 	@nochange @field('remote_id') remote_id!: number;

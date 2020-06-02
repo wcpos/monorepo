@@ -10,7 +10,7 @@ type Props = {
 	store?: string;
 };
 
-const store = (obj: Props) => {
+const getStoreDatabase = (obj: Props) => {
 	console.log(obj);
 	if (!obj.site || !obj.user) {
 		return;
@@ -48,4 +48,4 @@ const store = (obj: Props) => {
 	return database;
 };
 
-export default store;
+export default getStoreDatabase;
