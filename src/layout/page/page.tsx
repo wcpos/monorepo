@@ -26,7 +26,8 @@ const Page: React.FC<Props> = ({ children, ...props }) => {
 	console.log(measurements);
 
 	return (
-		<PageView onLayout={onLayout} ref={ref}>
+		// <PageView onLayout={onLayout} ref={ref}>
+		<PageView>
 			{headerComponent && <HeaderView>{headerComponent}</HeaderView>}
 			<MainView>{children}</MainView>
 		</PageView>

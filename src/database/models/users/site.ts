@@ -1,10 +1,9 @@
 import { Q } from '@nozbe/watermelondb';
-import { json, action } from '@nozbe/watermelondb/decorators';
+import { action, field, children, immutableRelation } from '@nozbe/watermelondb/decorators';
 import { Subject, BehaviorSubject, of } from 'rxjs';
 import { tap, map, concatMap, startWith, switchMap, catchError } from 'rxjs/operators';
 import Model from '../base';
 import wcAuthService from '../../../services/wc-auth';
-import { field, children } from '../decorators';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
@@ -15,6 +14,7 @@ type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 export const siteSchema: Schema = {
 	name: 'sites',
 	columns: [
+		{ name: 'parent_id', type: 'string', isIndexed: true },
 		{ name: 'name', type: 'string' },
 		{ name: 'description', type: 'string' },
 		{ name: 'url', type: 'string' },
@@ -39,11 +39,14 @@ export default class Site extends Model {
 	public readonly connection_status$ = this._connection_status$.asObservable();
 
 	static associations = {
-		users: { type: 'has_many', foreignKey: 'site_id' },
-		stores: { type: 'has_many', foreignKey: 'site_id' },
+		user: { type: 'belongs_to', key: 'parent_id' },
+		wp_users: { type: 'has_many', foreignKey: 'parent_id' },
+		stores: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
-	@children('users') users!: any;
+	@immutableRelation('users', 'parent_id') user!: any;
+
+	@children('wp_users') wp_users!: any;
 	@children('stores') stores!: any;
 
 	@field('name') name!: string;
@@ -59,9 +62,9 @@ export default class Site extends Model {
 	/**
 	 *
 	 */
-	async fetchUserByRemoteId(remote_id) {
-		const users = await this.users.extend(Q.where('remote_id', remote_id)).fetch();
-		return users && users[0];
+	async fetchWpUserByRemoteId(remote_id) {
+		const wpUsers = await this.wp_users.extend(Q.where('remote_id', remote_id)).fetch();
+		return wpUsers && wpUsers[0];
 	}
 
 	/**
@@ -91,7 +94,7 @@ export default class Site extends Model {
 			.pipe(
 				concatMap((url) => wcAuthService.fetchWpApiUrl(url)),
 				tap((wp_api_url) => {
-					this.setData({ wp_api_url });
+					this.updateWithJson({ wp_api_url });
 					this._connection_status$.next({
 						type: 'connecting',
 						message: 'Wordpress API Found',
@@ -99,7 +102,7 @@ export default class Site extends Model {
 				}),
 				concatMap((wp_api_url) => wcAuthService.fetchWcApiUrl(wp_api_url)),
 				tap((data) => {
-					this.setData(data);
+					this.updateWithJson(data);
 					this._connection_status$.next({
 						type: 'login',
 						message: 'WooCommerce API Found',
@@ -120,19 +123,22 @@ export default class Site extends Model {
 	 * @param data
 	 */
 	async createOrUpdateUser(data) {
-		let user = await this.fetchUserByRemoteId(data?.remote_id);
-		if (!user) {
-			user = await this.createUser();
+		let wpUser = await this.fetchWpUserByRemoteId(data?.remote_id);
+		if (!wpUser) {
+			wpUser = await this.createNewWpUser(data);
+		} else {
+			wpUser.updateWithJson(data);
 		}
-		user.setData(data);
+		debugger;
 	}
 
 	/**
 	 *
 	 */
-	@action createUser() {
-		return this.users.collection.create((user) => {
-			user.site.set(this);
+	@action createNewWpUser(data) {
+		return this.wp_users.collection.create((wp_user) => {
+			wp_user.set(data);
+			wp_user.site.set(this);
 		});
 	}
 }

@@ -6,14 +6,14 @@ import Popover from '../../components/popover';
 import Text from '../../components/text';
 import UserMenu from './user-menu';
 import Avatar from '../../components/avatar';
-import useUser from '../../hooks/use-user';
+import useDatabase from '../../hooks/use-database';
 
 interface Props {}
 
 const MasterBar: React.FC<Props> = () => {
 	const route = useRoute();
 	const navigation = useNavigation();
-	const { user, logout } = useUser();
+	const { user } = useDatabase();
 
 	return (
 		<Header
@@ -23,7 +23,7 @@ const MasterBar: React.FC<Props> = () => {
 				// <Popover content={<UserMenu />}>
 				<>
 					<Text>{user.first_name}</Text>
-					<Button onPress={logout} title="Logout" />
+					<Button onPress={user.logout} title="Logout" />
 					<Avatar src="blah" placeholder="jj" />
 				</>
 				// </Popover>

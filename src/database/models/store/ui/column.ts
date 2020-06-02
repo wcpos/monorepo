@@ -1,4 +1,5 @@
-import { field, nochange, immutableRelation } from '@nozbe/watermelondb/decorators';
+import { nochange, immutableRelation, lazy } from '@nozbe/watermelondb/decorators';
+import { field } from '../../decorators';
 import { Associations } from '@nozbe/watermelondb/Model';
 import Model from '../../base';
 
@@ -27,10 +28,11 @@ export const uiColumnSchema: Schema = {
  */
 export default class Column extends Model {
 	static table = 'ui_columns';
+	private _section = null;
 
-	// static associations: Associations = {
-	// 	uis: { type: 'belongs_to', key: 'parent_id' },
-	// };
+	static associations: Associations = {
+		uis: { type: 'belongs_to', key: 'parent_id' },
+	};
 
 	@immutableRelation('uis', 'parent_id') ui!: any;
 
@@ -43,6 +45,15 @@ export default class Column extends Model {
 	@field('width') width?: string;
 
 	get label() {
-		return this.i18n.t(this.ui.section + '.column.label.' + this.key);
+		if (!this._section) {
+			this.getSection();
+			return '';
+		}
+		return this.i18n.t(this._section + '.column.label.' + this.key);
+	}
+
+	async getSection() {
+		const ui = await this.ui.fetch();
+		this._section = ui.section;
 	}
 }

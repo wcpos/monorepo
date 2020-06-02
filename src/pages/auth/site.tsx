@@ -6,6 +6,7 @@ import Icon from '../../components/icon';
 import Button from '../../components/button';
 import Modal from './modal';
 import { SiteWrapper, SiteTextWrapper } from './styles';
+import useDatabase from '../../hooks/use-database';
 
 /**
  * Options for fetching favicons
@@ -18,6 +19,14 @@ import { SiteWrapper, SiteTextWrapper } from './styles';
 const Site = ({ site }) => {
 	const status = useObservableState(site.connection_status$);
 	const [visible, setVisible] = React.useState(false);
+	const { setStoreDB } = useDatabase();
+
+	const setStore = async () => {
+		const wpUsers = await site.wp_users.fetch();
+		console.log('TODO: fix wpUsers', wpUsers);
+		const wpUser = wpUsers[1];
+		setStoreDB({ user: site.user.id, site: site.id, wp_user: wpUser.id });
+	};
 
 	const handleRemove = async () => {
 		await site.destroy();
@@ -41,6 +50,7 @@ const Site = ({ site }) => {
 						}}
 					/>
 				)}
+				<Button title="Enter" onPress={() => setStore()} />
 			</SiteTextWrapper>
 			<Icon name="remove" onPress={handleRemove} />
 			{visible && <Modal site={site} visible={visible} setVisible={setVisible} />}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import SplashScreen from '../pages/splash';
-import useUser from '../hooks/use-user';
+import useDatabase from '../hooks/use-database';
 // import AuthScreen from '../pages/auth';
 // import POSNavigator from './pos';
 const AuthScreen = React.lazy(() => import('../pages/auth'));
@@ -18,13 +18,15 @@ export type AppNavigatorParams = {
 const Stack = createStackNavigator<AppNavigatorParams>();
 
 const AppNavigator = (props: Partial<StackNavigatorProps>): React.ReactElement => {
-	const { user } = useUser();
+	const { user, storeDB } = useDatabase();
+	console.log(user);
+	console.log(storeDB);
 
 	return (
 		<Stack.Navigator headerMode="none">
 			{!user ? (
 				<Stack.Screen name="Splash">{() => <SplashScreen />}</Stack.Screen>
-			) : user?.authenticated ? (
+			) : user && storeDB ? (
 				<Stack.Screen name="POS" component={POSNavigator} />
 			) : (
 				<Stack.Screen name="Auth" component={AuthScreen} />

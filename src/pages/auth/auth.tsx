@@ -5,15 +5,16 @@ import Segment, { SegmentGroup } from '../../components/segment';
 import TextInput from '../../components/textinput';
 import Text from '../../components/text';
 import { AuthView } from './styles';
-import useSites from '../../hooks/use-sites';
 import Site from './site';
+import useDatabase from '../../hooks/use-database';
+import { useObservableState } from 'observable-hooks';
 
 interface Props {}
 
 const Auth: React.FC<Props> = (props) => {
 	const navigation = useNavigation();
-	const { sites, create } = useSites();
-	console.log(sites);
+	const { user } = useDatabase();
+	const sites = useObservableState(user.sites.observe());
 
 	React.useEffect(() => {
 		const unsubscribe = navigation.addListener('state', () => {
@@ -24,9 +25,16 @@ const Auth: React.FC<Props> = (props) => {
 	}, [navigation]);
 
 	const onConnect = async (url) => {
-		const newSite = await create(url);
-		if (newSite) {
-			newSite.connect();
+		const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
+		if (trimUrl) {
+			const newSite = await user.database.action(
+				async () =>
+					await user.sites.collection.create((site) => {
+						site.url = 'https://' + trimUrl;
+						site.user.set(user);
+					})
+			);
+			newSite?.connect();
 		}
 	};
 

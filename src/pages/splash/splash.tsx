@@ -15,18 +15,18 @@ interface Props {}
  * @TODO do you really need a splash page??
  */
 const Splash: React.FC<Props> = () => {
-	const { setUser } = useUser();
+	// const { setUser } = useUser();
 
-	React.useEffect(() => {
-		// const uis = await database.collections.get('uis').query().fetch();
-		// console.log(uis);
-		// const columns = await uis[0]?.columns.fetch();
-		// console.log(columns);
-		const timer = setTimeout(() => {
-			setUser({ authenticated: true });
-		}, 1000);
-		return () => clearTimeout(timer);
-	}, []);
+	// React.useEffect(() => {
+	// 	// const uis = await database.collections.get('uis').query().fetch();
+	// 	// console.log(uis);
+	// 	// const columns = await uis[0]?.columns.fetch();
+	// 	// console.log(columns);
+	// 	const timer = setTimeout(() => {
+	// 		setUser({ authenticated: true });
+	// 	}, 1000);
+	// 	return () => clearTimeout(timer);
+	// }, []);
 
 	return (
 		<PageLayout>

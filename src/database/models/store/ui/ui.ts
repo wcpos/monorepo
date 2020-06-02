@@ -36,6 +36,17 @@ export default class UI extends Model {
 	@field('sortDirection') sortDirection!: string;
 	@field('width') width!: string;
 
+	getWidth() {
+		const width = parseInt(this._raw.width, 10);
+		console.log(width);
+		return isNaN(width) ? 500 : width;
+	}
+
+	setWidth(value) {
+		console.log(value);
+		this.asModel._setRaw('width', value + '');
+	}
+
 	/** *
 	 * TODO: Should not create new!! Need to update (and delete children)
 	 */
@@ -76,4 +87,11 @@ export default class UI extends Model {
 		// );
 		return await this.batch(ui, ...columns, ...display);
 	};
+
+	/**
+	 *
+	 */
+	reset() {
+		console.log('reset ui');
+	}
 }

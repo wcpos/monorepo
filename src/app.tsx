@@ -1,8 +1,7 @@
 import React from 'react';
 import { ThemeProvider } from 'styled-components/native';
-import { UserProvider } from './hooks/use-user';
+import { DatabaseProvider } from './hooks/use-database';
 import Navigator from './navigators';
-import ActivityIndicator from './components/activity-indicator';
 import Portal from './components/portal';
 import { defaultTheme } from './lib/theme';
 import ErrorBoundary from './components/error';
@@ -16,14 +15,14 @@ import 'react-native-gesture-handler';
 const App = () => (
 	// <React.StrictMode>
 	<ErrorBoundary>
-		<React.Suspense fallback={<ActivityIndicator />}>
-			<UserProvider>
+		<React.Suspense fallback="loading app...">
+			<DatabaseProvider>
 				<ThemeProvider theme={defaultTheme}>
 					<Portal.Host>
 						<Navigator />
 					</Portal.Host>
 				</ThemeProvider>
-			</UserProvider>
+			</DatabaseProvider>
 		</React.Suspense>
 	</ErrorBoundary>
 	// </React.StrictMode>

@@ -3,8 +3,8 @@ import useStore from '../../hooks/use-store';
 import useObservable from '../../hooks/use-observable';
 import Table from '../../components/table';
 import Button from '../../components/button';
-import { storeDatabase } from '../../database';
-const store = storeDatabase({ site: 'test', user: 'test' });
+import { getStoreDatabase } from '../../database';
+const store = getStoreDatabase({ site: 'test', user: 'test' });
 
 interface Props {}
 

@@ -15,24 +15,24 @@ const Row = ({ rowData, columns }: Props) => {
 		const cellData =
 			typeof column.cellDataGetter === 'function'
 				? column.cellDataGetter({ rowData, dataKey, column })
-      	: rowData[dataKey];
+				: rowData[dataKey];
 
 		const { flexGrow, flexShrink, width, cellRenderer } = column;
 
 		return (
-			// column.show && (
-			<Cell
-				cellData={cellData}
-				cellRenderer={cellRenderer}
-				columnData={column}
-				dataKey={dataKey}
-				key={dataKey || index}
-				rowData={rowData}
-				flexGrow={flexGrow}
-				flexShrink={flexShrink}
-				width={width}
-			/>
-			// )
+			!column.hide && (
+				<Cell
+					cellData={cellData}
+					cellRenderer={cellRenderer}
+					columnData={column}
+					dataKey={dataKey}
+					key={dataKey || index}
+					rowData={rowData}
+					flexGrow={flexGrow}
+					flexShrink={flexShrink}
+					width={width}
+				/>
+			)
 		);
 	};
 

@@ -1,3 +1,3 @@
-import sitesDatabase from './sites';
-import storeDatabase from './store';
-export { sitesDatabase, storeDatabase };
+import usersDatabase from './users';
+import getStoreDatabase from './store';
+export { usersDatabase, getStoreDatabase };

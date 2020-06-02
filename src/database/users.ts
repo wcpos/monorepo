@@ -1,10 +1,10 @@
 import { Database, appSchema, tableSchema } from '@nozbe/watermelondb';
 import { Platform } from 'react-native';
 import Adapter from './adapter';
-import { modelClasses, schemas } from './models/sites';
+import { modelClasses, schemas } from './models/users';
 
 const config = {
-	dbName: 'wcpos-sites',
+	dbName: 'wcpos-users',
 	schema: appSchema({
 		version: 4,
 		tables: schemas.map(tableSchema),

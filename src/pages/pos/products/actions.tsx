@@ -1,13 +1,15 @@
 import React from 'react';
 import Input from '../../../components/textinput';
 import Checkbox from '../../../components/checkbox';
+import Button from '../../../components/button';
+import Text from '../../../components/text';
 
 interface Props {}
 
 /**
  *
  */
-const Actions: React.FC<Props> = ({ columns, display }) => {
+const Actions: React.FC<Props> = ({ columns, display, onRestoreUi }) => {
 	const onFilter = () => {
 		console.log('change query');
 	};
@@ -15,6 +17,7 @@ const Actions: React.FC<Props> = ({ columns, display }) => {
 	return (
 		<React.Fragment>
 			<Input placeholder="Search products" onChangeText={onFilter} />
+			<Text>Columns</Text>
 			{columns.map((column: any) => (
 				<Checkbox
 					key={column.key}
@@ -26,6 +29,7 @@ const Actions: React.FC<Props> = ({ columns, display }) => {
 					}}
 				/>
 			))}
+			<Text>Display</Text>
 			{display.map((d: any) => (
 				<Checkbox
 					key={d.key}
@@ -37,6 +41,7 @@ const Actions: React.FC<Props> = ({ columns, display }) => {
 					}}
 				/>
 			))}
+			<Button title="Restore Default Settings" onPress={onRestoreUi} />
 		</React.Fragment>
 	);
 };

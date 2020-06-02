@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import Products from './products';
 import Cart from './cart';
+import ErrorBoundary from '../../components/error';
 import Draggable from '../../components/draggable';
 import Button from '../../components/button';
 import useStore from '../../hooks/use-store';
@@ -9,9 +10,9 @@ import useStore from '../../hooks/use-store';
 import { Q } from '@nozbe/watermelondb';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { switchMap, map, shareReplay, filter } from 'rxjs/operators';
-import { storeDatabase } from '../../database';
+import { getStoreDatabase } from '../../database';
 
-const database = storeDatabase({ site: 'test', user: 'test' });
+const database = getStoreDatabase({ site: 'test', user: 'test' });
 
 interface Props {}
 
@@ -45,7 +46,7 @@ const uiResource = new ObservableResource(
 	database.collections
 		.get('uis')
 		.query(Q.where('section', 'pos_products'))
-		.observe()
+		.observeWithColumns(['width'])
 		.pipe(
 			filter((uis) => {
 				if (uis.length > 0) {
@@ -75,32 +76,34 @@ const POS: React.FC<Props> = () => {
 	// const { store } = useStore();
 	// const uiResource = getResource(store);
 	const ui = useObservableSuspense(uiResource);
-	// const [width, setWidth] = React.useState(ui.width);
+	const [width, setWidth] = React.useState(ui.width);
 
 	const handleColumnResizeUpdate = ({ dx }) => {
-		// setWidth(width + dx);
+		console.log(width + dx);
+		setWidth(width + dx);
 	};
 
-	const handleColumnResizeEnd = () => {
-		ui.database.action(async () => {
-			await ui.update((ui) => {
-				ui.width = ui.width - 50 + '';
-			});
-		});
+	const handleColumnResizeEnd = ({ dx }) => {
+		console.log(width + dx);
+		ui.updateWithJson({ width: width + dx });
 	};
 
 	return (
 		<React.Fragment>
-			<View style={{ width: ui.width }}>
-				<React.Suspense fallback="Loading products...">
-					<Products ui={ui} />
-				</React.Suspense>
+			<View style={{ width }}>
+				<ErrorBoundary>
+					<React.Suspense fallback="Loading products...">
+						<Products ui={ui} />
+					</React.Suspense>
+				</ErrorBoundary>
 			</View>
 			<Draggable onUpdate={handleColumnResizeUpdate} onEnd={handleColumnResizeEnd}>
 				<View style={{ backgroundColor: '#000', padding: 20 }}></View>
 			</Draggable>
 			<View style={{ flexGrow: 1 }}>
-				<Cart />
+				<ErrorBoundary>
+					<Cart />
+				</ErrorBoundary>
 			</View>
 		</React.Fragment>
 	);
