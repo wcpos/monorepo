@@ -1,25 +1,24 @@
 import React from 'react';
-import useStore from '../../hooks/use-store';
+import useDatabase from '../../hooks/use-database';
 import useObservable from '../../hooks/use-observable';
 import Table from '../../components/table';
 import Button from '../../components/button';
-import { getStoreDatabase } from '../../database';
-const store = getStoreDatabase({ site: 'test', user: 'test' });
 
 interface Props {}
 
 const Stores: React.FC<Props> = ({ header, main, title }) => {
-	const tableCounts = Object.keys(store.collections.map).reduce((result: any[], key) => {
+	const { storeDB } = useDatabase();
+	const tableCounts = Object.keys(storeDB.collections.map).reduce((result: any[], key) => {
 		result.push({
 			name: key,
-			count: useObservable(store.collections.map[key].query().observeCount(), []),
+			count: useObservable(storeDB.collections.map[key].query().observeCount(), []),
 		});
 		return result;
 	}, []);
 
 	const deleteAll = async (table: string) => {
-		const query = store.collections.map[table].query();
-		await store.action(async () => {
+		const query = storeDB.collections.map[table].query();
+		await storeDB.action(async () => {
 			await query.destroyAllPermanently();
 		});
 	};

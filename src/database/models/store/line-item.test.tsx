@@ -21,7 +21,7 @@ const makeDatabase = ({ actionsEnabled = false } = {}) =>
 
 describe('Order Line Item Model', () => {
 	let database: Database;
-	let collection: Collection<UI>;
+	let collection: Collection<LineItem>;
 
 	beforeEach(() => {
 		database = makeDatabase();

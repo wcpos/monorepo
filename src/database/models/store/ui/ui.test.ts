@@ -1,10 +1,13 @@
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
 import { Database, Collection, appSchema, tableSchema } from '@nozbe/watermelondb';
 import UI, { uiSchema } from './ui';
+import Column, { uiColumnSchema } from './column';
+import Display, { uiDisplaySchema } from './display';
+import initialData from './initial.json';
 
 const mockSchema = appSchema({
 	version: 1,
-	tables: [tableSchema(uiSchema)],
+	tables: [tableSchema(uiSchema), tableSchema(uiColumnSchema), tableSchema(uiDisplaySchema)],
 });
 
 const adapter = new LokiJSAdapter({
@@ -15,7 +18,7 @@ const adapter = new LokiJSAdapter({
 const makeDatabase = ({ actionsEnabled = false } = {}) =>
 	new Database({
 		adapter,
-		modelClasses: [UI],
+		modelClasses: [UI, Column, Display],
 		actionsEnabled,
 	});
 
@@ -43,5 +46,31 @@ describe('UI Model', () => {
 		});
 		expect(model).toBeInstanceOf(UI);
 		expect(model.section).toBe('products');
+	});
+
+	it('creates "columns" as children', async () => {
+		const model: UI = await database.action(async () => {
+			const newModel = await collection.create((ui) => {
+				ui.section = 'pos_products';
+				ui.set(initialData.pos_products);
+			});
+			return newModel;
+		});
+		const columns = await model.columns.fetch();
+		expect(model).toBeInstanceOf(UI);
+		expect(columns.length).toEqual(initialData.pos_products.columns.length);
+	});
+
+	it('creates "display" as children', async () => {
+		const model: UI = await database.action(async () => {
+			const newModel = await collection.create((ui) => {
+				ui.section = 'pos_products';
+				ui.set(initialData.pos_products);
+			});
+			return newModel;
+		});
+		const display = await model.display.fetch();
+		expect(model).toBeInstanceOf(UI);
+		expect(display.length).toEqual(initialData.pos_products.display.length);
 	});
 });

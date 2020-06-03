@@ -20,13 +20,13 @@ const Products: React.FC<Props> = ({ ui }) => {
 	// const columnsResource = new ObservableResource(ui.columns.observe().pipe(shareReplay(1)));
 	const displayResource = new ObservableResource(
 		ui.display
-			.observeWithColumns(['hide', 'sortBy', 'sortDirection'])
+			.observeWithColumns(['hide'])
 			.pipe(map((results) => results.sort((a, b) => a.order - b.order)))
 	);
 	const display = useObservableSuspense(displayResource);
 	const columnsResource = new ObservableResource(
 		ui.columns
-			.observeWithColumns(['hide'])
+			.observeWithColumns(['hide', 'sortBy', 'sortDirection'])
 			.pipe(map((results) => results.sort((a, b) => a.order - b.order)))
 	);
 	const columns = useObservableSuspense(columnsResource);
@@ -37,12 +37,12 @@ const Products: React.FC<Props> = ({ ui }) => {
 	columns.map((column: any) => {
 		switch (column.key) {
 			case 'thumbnail':
-				column.cellRenderer = ({ cellData }: any) => (
-					<Image src={cellData} style={{ width: 100, height: 100 }} />
-				);
+				// column.cellRenderer = ({ cellData }: any) => (
+				// 	<Image src={cellData} style={{ width: 100, height: 100 }} />
+				// );
 				break;
 			case 'name':
-				column.cellRenderer = ({ rowData }: any) => <Name product={rowData} display={ui.display} />;
+				// column.cellRenderer = ({ rowData }: any) => <Name product={rowData} display={ui.display} />;
 				break;
 			// case 'sku':
 			// 	column.cellRenderer = ({ cellData }: any) => <Text>{cellData}</Text>;
@@ -51,14 +51,14 @@ const Products: React.FC<Props> = ({ ui }) => {
 			// 	column.cellRenderer = ({ rowData }: any) => <RegularPrice product={rowData} />;
 			// 	break;
 			case 'actions':
-				column.cellRenderer = ({ rowData }: any) => (
-					<ProductActions
-						product={rowData}
-						addToCart={() => {
-							console.log('add to cart');
-						}}
-					/>
-				);
+				// column.cellRenderer = ({ rowData }: any) => (
+				// 	<ProductActions
+				// 		product={rowData}
+				// 		addToCart={() => {
+				// 			console.log('add to cart');
+				// 		}}
+				// 	/>
+				// );
 				break;
 			default:
 				break;

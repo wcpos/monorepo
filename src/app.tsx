@@ -1,4 +1,5 @@
 import React from 'react';
+import { Text } from 'react-native';
 import { ThemeProvider } from 'styled-components/native';
 import { DatabaseProvider } from './hooks/use-database';
 import Navigator from './navigators';
@@ -15,7 +16,7 @@ import 'react-native-gesture-handler';
 const App = () => (
 	// <React.StrictMode>
 	<ErrorBoundary>
-		<React.Suspense fallback="loading app...">
+		<React.Suspense fallback={<Text>loading app...</Text>}>
 			<DatabaseProvider>
 				<ThemeProvider theme={defaultTheme}>
 					<Portal.Host>

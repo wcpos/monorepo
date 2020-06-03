@@ -1,5 +1,5 @@
 import React from 'react';
-import { View } from 'react-native';
+import { View, Text } from 'react-native';
 import Icon from '../icon';
 
 interface Props {
@@ -14,7 +14,7 @@ interface Props {
 const Fallback = ({ componentStack, error }: Props) => (
 	<View>
 		<Icon name="exclamation-circle" />
-		<p>Error Boundary Fallback</p>
+		<Text>Error Boundary Fallback</Text>
 		{/* <p>We're sorry — something's gone wrong.</p>
 		<p>Our team has been notified, but click here fill out a report.</p> */}
 		{/* {error && (

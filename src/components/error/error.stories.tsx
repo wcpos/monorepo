@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Button } from 'react-native';
-import readme from './README.md';
 import { action } from '@storybook/addon-actions';
+import readme from './README.md';
 
 import ErrorBoundary from '.';
 

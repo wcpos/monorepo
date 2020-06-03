@@ -2,21 +2,21 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { Q } from '@nozbe/watermelondb';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { switchMap, map, shareReplay, filter } from 'rxjs/operators';
+import { switchMap, map, shareReplay, filter, tap } from 'rxjs/operators';
 import Products from './products';
 import Cart from './cart';
 import ErrorBoundary from '../../components/error';
 import Draggable from '../../components/draggable';
-import Button from '../../components/button';
-import useStore from '../../hooks/use-store';
+// import Button from '../../components/button';
+import useDatabase from '../../hooks/use-database';
 // import useObservable from '../../hooks/use-observable';
-import { getStoreDatabase } from '../../database';
+// import { getStoreDatabase } from '../../database';
 
-const database = getStoreDatabase({ site: 'test', user: 'test' });
+// const database = getStoreDatabase({ site: 'test', user: 'test' });
 
 interface Props {}
 
-const init = async () => {
+const init = async (database) => {
 	await database.action(async () => {
 		const newUI = await database.collections.get('uis').create((ui) => {
 			ui.section = 'pos_products';
@@ -42,24 +42,6 @@ const init = async () => {
 	});
 };
 
-const uiResource = new ObservableResource(
-	database.collections
-		.get('uis')
-		.query(Q.where('section', 'pos_products'))
-		.observeWithColumns(['width'])
-		.pipe(
-			filter((uis) => {
-				if (uis.length > 0) {
-					return true;
-				}
-				init();
-				return false;
-			}),
-			map((array) => array[0])
-			// shareReplay()
-		)
-);
-
 // const getResource = (store) =>
 // 	new ObservableResource(
 // 		store.collections
@@ -75,6 +57,25 @@ const uiResource = new ObservableResource(
 const POS: React.FC<Props> = () => {
 	// const { store } = useStore();
 	// const uiResource = getResource(store);
+	const { storeDB } = useDatabase();
+	const uiResource = new ObservableResource(
+		storeDB.collections
+			.get('uis')
+			.query(Q.where('section', 'pos_products'))
+			.observeWithColumns(['width'])
+			.pipe(
+				filter((uis) => {
+					if (uis.length > 0) {
+						return true;
+					}
+					init(storeDB);
+					return false;
+				}),
+				map((array) => array[0])
+
+				// shareReplay()
+			)
+	);
 	const ui = useObservableSuspense(uiResource);
 	const [width, setWidth] = React.useState(ui.width);
 
@@ -92,7 +93,7 @@ const POS: React.FC<Props> = () => {
 		<>
 			<View style={{ width }}>
 				<ErrorBoundary>
-					<React.Suspense fallback="Loading products...">
+					<React.Suspense fallback={<Text>Loading products...</Text>}>
 						<Products ui={ui} />
 					</React.Suspense>
 				</ErrorBoundary>

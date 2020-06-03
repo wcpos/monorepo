@@ -43,15 +43,16 @@ class ErrorBoundary extends React.Component {
 			};
 			if (React.isValidElement(fallback)) {
 				return fallback;
-			} else if (typeof fallbackRender === 'function') {
-				return fallbackRender(props);
-			} else if (typeof FallbackComponent === 'function') {
-				return <FallbackComponent {...props} />;
-			} else {
-				throw new Error(
-					'react-error-boundary requires either a fallback, fallbackRender, or FallbackComponent prop'
-				);
 			}
+			if (typeof fallbackRender === 'function') {
+				return fallbackRender(props);
+			}
+			if (typeof FallbackComponent === 'function') {
+				return <FallbackComponent {...props} />;
+			}
+			throw new Error(
+				'react-error-boundary requires either a fallback, fallbackRender, or FallbackComponent prop'
+			);
 		}
 
 		return this.props.children;

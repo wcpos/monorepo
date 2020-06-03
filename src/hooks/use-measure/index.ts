@@ -1,2 +1,1 @@
-import { useMeasure } from './use-measure';
-export default useMeasure;
+export { default } from './use-measure';
