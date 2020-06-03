@@ -1,5 +1,5 @@
-import Model from '../../base';
 import { nochange } from '@nozbe/watermelondb/decorators';
+import Model from '../../base';
 import { field, children } from '../../decorators';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
@@ -44,7 +44,7 @@ export default class UI extends Model {
 
 	setWidth(value) {
 		console.log(value);
-		this.asModel._setRaw('width', value + '');
+		this.asModel._setRaw('width', `${value}`);
 	}
 
 	/** *
