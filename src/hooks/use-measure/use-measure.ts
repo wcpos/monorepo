@@ -37,9 +37,10 @@ const adjustPageY = (pageY: number) => {
 };
 
 /**
- * A render prop to measure given node by passing `onLayout` and `ref` handlers. This differs from `ViewMeasure` in that it does not create any node in the tree
+ * A render prop to measure given node by passing `onLayout` and `ref` handlers.
+ * This differs from `ViewMeasure` in that it does not create any node in the tree
  */
-export const useMeasure = (props: UseMeasureProps) => {
+const useMeasure = (props: UseMeasureProps) => {
 	const { onMeasure, ref } = props;
 	const [measurements, setMeasurements] = React.useState(initialMeasurements);
 
@@ -70,7 +71,7 @@ export const useMeasure = (props: UseMeasureProps) => {
 		(e: LayoutChangeEvent) => {
 			// Use the value from here, isntead of inside UIManager.measure callback
 			// Async behavior will nullify nativeEvent
-			const layout = e.nativeEvent.layout;
+			const { layout } = e.nativeEvent;
 			handleMeasure(layout);
 		},
 		[handleMeasure]
@@ -92,3 +93,5 @@ export const useMeasure = (props: UseMeasureProps) => {
 		onMeasure: handleMeasure,
 	};
 };
+
+export default useMeasure;

@@ -1,7 +1,7 @@
 import { useContext } from 'react';
-import { DatabaseContext } from './';
+import { DatabaseContext } from './database-provider';
 
-export const useDatabase = () => {
+const useDatabase = () => {
 	return useContext(DatabaseContext);
 };
 

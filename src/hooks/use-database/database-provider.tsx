@@ -1,5 +1,5 @@
 import React from 'react';
-import { usersDatabase, getStoreDatabase } from '../../database/';
+import { usersDatabase, getStoreDatabase } from '../../database';
 
 // const getLastUser = async () => {
 // 	const user = await usersDatabase.adapter.getLocal('last_user');
