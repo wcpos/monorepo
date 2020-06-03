@@ -48,19 +48,17 @@ const children = (childTable: TableName) => (
 		},
 		set(array: []): Promise<void> {
 			const parent: Model = this.asModel;
-			const setter: string = camelCase('set_' + key);
+			const setter: string = camelCase(`set_${key}`);
 			if (typeof parent[setter] === 'function') {
 				return parent[setter](array);
 			}
 
 			const childCollection = parent.collections.get(childTable);
-			const parentTable = parent.collection.modelClass.table;
-			const childKey = childCollection.modelClass.associations[parentTable]?.key;
+			const foreignKey = parent.collection.modelClass.associations[childTable]?.foreignKey;
 
 			const add = array.map((json) =>
 				childCollection.prepareCreate((m: any) => {
-					// m[childKey] = parent.id;
-					m.ui.set(parent);
+					m[foreignKey] = parent.id;
 					m.set(json);
 				})
 			);

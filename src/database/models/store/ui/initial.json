@@ -20,7 +20,7 @@
 		"width": "40%"
 	},
 	"products": {
-		";sortBy": "name",
+		"sortBy": "name",
 		"sortDirection": "asc",
 		"columns": [
 			{ "key": "image", "disableSort": true },
