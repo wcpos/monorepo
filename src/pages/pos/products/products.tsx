@@ -1,10 +1,10 @@
 import React from 'react';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { map, tap } from 'rxjs/operators';
 import TableLayout from '../../../layout/table';
 import Table from '../../../components/table';
 import TableActions from './actions';
 import simpleProduct from '../../../../jest/__fixtures__/product.json';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { map, tap } from 'rxjs/operators';
 import ProductActions from './cells/actions';
 import Name from './cells/name';
 import Image from './cells/image';
@@ -59,6 +59,8 @@ const Products: React.FC<Props> = ({ ui }) => {
 						}}
 					/>
 				);
+				break;
+			default:
 				break;
 		}
 		return column;

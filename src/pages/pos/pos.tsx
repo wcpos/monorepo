@@ -1,5 +1,8 @@
 import React from 'react';
 import { View, Text } from 'react-native';
+import { Q } from '@nozbe/watermelondb';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { switchMap, map, shareReplay, filter } from 'rxjs/operators';
 import Products from './products';
 import Cart from './cart';
 import ErrorBoundary from '../../components/error';
@@ -7,9 +10,6 @@ import Draggable from '../../components/draggable';
 import Button from '../../components/button';
 import useStore from '../../hooks/use-store';
 // import useObservable from '../../hooks/use-observable';
-import { Q } from '@nozbe/watermelondb';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { switchMap, map, shareReplay, filter } from 'rxjs/operators';
 import { getStoreDatabase } from '../../database';
 
 const database = getStoreDatabase({ site: 'test', user: 'test' });
@@ -89,7 +89,7 @@ const POS: React.FC<Props> = () => {
 	};
 
 	return (
-		<React.Fragment>
+		<>
 			<View style={{ width }}>
 				<ErrorBoundary>
 					<React.Suspense fallback="Loading products...">
@@ -98,14 +98,14 @@ const POS: React.FC<Props> = () => {
 				</ErrorBoundary>
 			</View>
 			<Draggable onUpdate={handleColumnResizeUpdate} onEnd={handleColumnResizeEnd}>
-				<View style={{ backgroundColor: '#000', padding: 20 }}></View>
+				<View style={{ backgroundColor: '#000', padding: 20 }} />
 			</Draggable>
 			<View style={{ flexGrow: 1 }}>
 				<ErrorBoundary>
 					<Cart />
 				</ErrorBoundary>
 			</View>
-		</React.Fragment>
+		</>
 	);
 };
 

@@ -15,7 +15,7 @@ const Actions: React.FC<Props> = ({ columns, display, onRestoreUi }) => {
 	};
 
 	return (
-		<React.Fragment>
+		<>
 			<Input placeholder="Search products" onChangeText={onFilter} />
 			<Text>Columns</Text>
 			{columns.map((column: any) => (
@@ -42,7 +42,7 @@ const Actions: React.FC<Props> = ({ columns, display, onRestoreUi }) => {
 				/>
 			))}
 			<Button title="Restore Default Settings" onPress={onRestoreUi} />
-		</React.Fragment>
+		</>
 	);
 };
 

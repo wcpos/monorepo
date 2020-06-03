@@ -40,7 +40,7 @@ const fetchWcApiUrl = (url: string) =>
 				if (baseAuthUrl) {
 					return {
 						...response.data,
-						wc_api_url: url + namespace + '/', // enforce trailing slash
+						wc_api_url: `${url + namespace}/`, // enforce trailing slash
 						wc_api_auth_url: baseAuthUrl,
 					};
 				}
