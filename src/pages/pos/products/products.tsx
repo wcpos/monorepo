@@ -17,7 +17,6 @@ interface Props {
  *
  */
 const Products: React.FC<Props> = ({ ui }) => {
-	// const columnsResource = new ObservableResource(ui.columns.observe().pipe(shareReplay(1)));
 	const displayResource = new ObservableResource(
 		ui.display
 			.observeWithColumns(['hide'])

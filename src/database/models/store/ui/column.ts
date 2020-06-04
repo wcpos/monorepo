@@ -1,6 +1,6 @@
-import { nochange, immutableRelation, lazy } from '@nozbe/watermelondb/decorators';
-import { field } from '../../decorators';
+import { nochange, immutableRelation, lazy, relation } from '@nozbe/watermelondb/decorators';
 import { Associations } from '@nozbe/watermelondb/Model';
+import { field } from '../../decorators';
 import Model from '../../base';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
@@ -13,7 +13,6 @@ export const uiColumnSchema: Schema = {
 	columns: [
 		{ name: 'parent_id', type: 'string', isIndexed: true },
 		{ name: 'key', type: 'string' },
-		{ name: 'section', type: 'string' },
 		{ name: 'order', type: 'number' },
 		{ name: 'hide', type: 'boolean' },
 		{ name: 'disableSort', type: 'boolean' },
@@ -28,13 +27,12 @@ export const uiColumnSchema: Schema = {
  */
 export default class Column extends Model {
 	static table = 'ui_columns';
-	private _section = null;
 
 	static associations: Associations = {
 		uis: { type: 'belongs_to', key: 'parent_id' },
 	};
 
-	@immutableRelation('uis', 'parent_id') ui!: any;
+	@relation('uis', 'parent_id') ui!: any;
 
 	@nochange @field('key') key!: string;
 	@field('order') order!: number;
@@ -45,15 +43,6 @@ export default class Column extends Model {
 	@field('width') width?: string;
 
 	get label() {
-		if (!this._section) {
-			this.getSection();
-			return '';
-		}
-		return this.i18n.t(this._section + '.column.label.' + this.key);
-	}
-
-	async getSection() {
-		const ui = await this.ui.fetch();
-		this._section = ui.section;
+		return this.i18n.t(`${this.ui.section}.column.label.${this.key}`);
 	}
 }

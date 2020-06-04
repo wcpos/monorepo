@@ -1,5 +1,5 @@
 import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
-import { Database, Collection, appSchema, tableSchema } from '@nozbe/watermelondb';
+import { Database, Collection, appSchema, tableSchema, Q } from '@nozbe/watermelondb';
 import UI, { uiSchema } from './ui';
 import Column, { uiColumnSchema } from './column';
 import Display, { uiDisplaySchema } from './display';
@@ -13,6 +13,8 @@ const mockSchema = appSchema({
 const adapter = new LokiJSAdapter({
 	dbName: 'tests',
 	schema: mockSchema,
+	useWebWorker: false,
+	useIncrementalIndexedDB: true,
 });
 
 const makeDatabase = ({ actionsEnabled = false } = {}) =>
