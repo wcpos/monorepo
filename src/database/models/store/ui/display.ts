@@ -23,9 +23,9 @@ export const uiDisplaySchema: Schema = {
 export default class Display extends Model {
 	static table = 'ui_display';
 
-	// static associations: Associations = {
-	// 	uis: { type: 'belongs_to', key: 'parent_id' },
-	// };
+	static associations: Associations = {
+		uis: { type: 'belongs_to', key: 'parent_id' },
+	};
 
 	@immutableRelation('uis', 'parent_id') ui!: any;
 

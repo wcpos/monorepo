@@ -1,9 +1,9 @@
 import { Model } from '@nozbe/watermelondb';
 import { action } from '@nozbe/watermelondb/decorators';
-import logger from '../../lib/logger';
-import i18n from '../../lib/i18n';
 import omit from 'lodash/omit';
 import forEach from 'lodash/forEach';
+import logger from '../../lib/logger';
+import i18n from '../../lib/i18n';
 
 class BaseModel extends Model {
 	constructor(collection, raw) {

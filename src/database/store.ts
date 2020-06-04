@@ -21,7 +21,7 @@ const getStoreDatabase = (obj: Props) => {
 	const config = {
 		dbName,
 		schema: appSchema({
-			version: 31,
+			version: 33,
 			tables: schemas.map(tableSchema),
 		}),
 	};

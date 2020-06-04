@@ -53,18 +53,18 @@ const relation = (
 
 			if (model[key].id) {
 				const child = await model[key].fetch();
-				child.update(m => {
+				child.update((m) => {
 					Object.keys(json).forEach((k: string) => {
 						m[k] = json[k];
 					});
 				});
 			} else {
-				const child = await collection.create(m => {
+				const child = await collection.create((m) => {
 					Object.keys(json).forEach((k: string) => {
 						m[k] = json[k];
 					});
 				});
-				model.update(m => {
+				model.update((m) => {
 					m[key].set(child);
 				});
 			}

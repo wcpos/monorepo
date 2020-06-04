@@ -58,10 +58,11 @@ const children = (childTable: TableName) => (
 
 			const add = array.map((json) =>
 				childCollection.prepareCreate((m: any) => {
-					m[foreignKey] = parent.id;
+					m._setRaw(foreignKey, parent.id);
 					m.set(json);
 				})
 			);
+
 			return parent.batch(...add);
 		},
 	};
