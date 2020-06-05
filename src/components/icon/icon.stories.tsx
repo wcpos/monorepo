@@ -27,6 +27,6 @@ export const allIcons = () => (
 			{ key: 'name', label: 'Name', cellDataGetter: ({ rowData }) => rowData },
 			{ key: 'icon', label: 'Icon', cellRenderer: ({ rowData }) => <Icon name={rowData} /> },
 		]}
-		items={iconNames}
+		data={iconNames}
 	/>
 );

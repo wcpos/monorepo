@@ -25,11 +25,8 @@ const getSize = (size: Sizes) => {
 };
 
 const Icon: React.FC<Props> = ({ color, disabled, name, size = 'normal', ...props }) => {
-	/**
-	 * @TODO why is context not working here??
-	 */
 	const theme = useTheme();
-	console.log(theme);
+	console.log('@TODO why is context not working here??', theme);
 
 	let SvgIcon = Svgs[name];
 

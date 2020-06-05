@@ -65,7 +65,7 @@ const Cell = ({
 					<View style={{ flexDirection: 'row' }}>
 						<Text>{label}</Text>
 						{showSortIndicator && (
-							<Icon name={'angle-' + (sortDirection === 'asc' ? 'up' : 'down')} />
+							<Icon name={'arrow-' + (sortDirection === 'asc' ? 'up' : 'down')} />
 						)}
 					</View>
 				</Touchable>

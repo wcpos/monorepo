@@ -33,7 +33,7 @@ export default class Display extends Model {
 	@field('hide') hide!: boolean;
 	@field('order') order!: number;
 
-	get label(): string {
-		return this.i18n.t(`${this.ui.section}.display.label.${this.key}`);
-	}
+	// get label(): string {
+	// 	return this.i18n.t(`${this.ui.section}.display.label.${this.key}`);
+	// }
 }

@@ -8,6 +8,7 @@ import simpleProduct from '../../../../jest/__fixtures__/product.json';
 import ProductActions from './cells/actions';
 import Name from './cells/name';
 import Image from './cells/image';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
 	ui: any;
@@ -17,6 +18,8 @@ interface Props {
  *
  */
 const Products: React.FC<Props> = ({ ui }) => {
+	const { t } = useTranslation();
+
 	const displayResource = new ObservableResource(
 		ui.display
 			.observeWithColumns(['hide'])
@@ -34,6 +37,7 @@ const Products: React.FC<Props> = ({ ui }) => {
 	 * Decorate table cells
 	 */
 	columns.map((column: any) => {
+		column.label = t(`pos_products.column.label.${column.key}`);
 		switch (column.key) {
 			case 'thumbnail':
 				// column.cellRenderer = ({ cellData }: any) => (
@@ -63,6 +67,14 @@ const Products: React.FC<Props> = ({ ui }) => {
 				break;
 		}
 		return column;
+	});
+
+	/**
+	 * Decorate table cells
+	 */
+	display.map((d: any) => {
+		d.label = t(`pos_products.display.label.${d.key}`);
+		return d;
 	});
 
 	const data = [simpleProduct];
