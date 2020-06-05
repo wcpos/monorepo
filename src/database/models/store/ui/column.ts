@@ -42,7 +42,7 @@ export default class Column extends Model {
 	@field('flexShrink') flexShrink?: 0 | 1;
 	@field('width') width?: string;
 
-	get label() {
-		return this.i18n.t(`${this.ui.section}.column.label.${this.key}`);
-	}
+	// get label() {
+	// 	return this.i18n.t(`${this.ui.section}.column.label.${this.key}`);
+	// }
 }
