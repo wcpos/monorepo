@@ -1,33 +1,63 @@
 import React from 'react';
 import { FlatList } from 'react-native';
-import Row from './row';
+import Body from './body';
 import Header from './header';
-import { ColumnProps, Sort, SortDirection } from './';
+import Row from './row';
+import HeaderRow from './header-row';
 import Text from '../text';
 
 type Props = {
-	style?: any;
+	children?: import('react-native').ListRenderItem<any>;
+	columns: import('./types').ColumnProps[];
 	data: any[];
-	columns: ColumnProps[];
-	sort?: Sort;
-	sortBy?: string;
-	sortDirection?: SortDirection;
-	footer?: React.ReactNode;
 	empty?: React.ReactNode;
+	footer?: React.ReactNode;
+	sort?: import('./types').Sort;
+	sortBy?: string;
+	sortDirection?: import('./types').SortDirection;
+	style?: any;
 };
 
-const Table = ({ data, columns, sort, sortBy, sortDirection, footer, empty }: Props) => {
-	const renderItem = ({ item }: any) => <Row rowData={item} columns={columns} />;
-	const keyExtractor = (item: any, index: number) => item.id;
+const Table: React.FC<Props> = ({
+	children,
+	columns,
+	data,
+	empty,
+	footer,
+	sort,
+	sortBy,
+	sortDirection,
+}) => {
+	const keyExtractor = (item: any, index: number) => item.id || index;
+	const childCount = React.Children.count(children);
+	let renderItem = ({ item }: any) => <Row rowData={item} columns={columns} />;
+	let headerComponent = (
+		<HeaderRow columns={columns} sort={sort} sortBy={sortBy} sortDirection={sortDirection} />
+	);
+
+	// sub components
+	if (childCount > 0) {
+		children.map((child) => {
+			if (child.type.name === 'Header') {
+				headerComponent = child.props.children;
+			}
+			if (child.type.name === 'Body') {
+				renderItem = child.props.children;
+			}
+		});
+	}
+
+	// function
+	if (typeof children === 'function') {
+		renderItem = children;
+	}
 
 	return (
 		<FlatList
 			data={data}
 			renderItem={renderItem}
 			keyExtractor={keyExtractor}
-			ListHeaderComponent={
-				<Header columns={columns} sort={sort} sortBy={sortBy} sortDirection={sortDirection} />
-			}
+			ListHeaderComponent={headerComponent}
 			ListFooterComponent={footer}
 			ListEmptyComponent={<Text>{empty}</Text>}
 			stickyHeaderIndices={[0]}
@@ -35,4 +65,4 @@ const Table = ({ data, columns, sort, sortBy, sortDirection, footer, empty }: Pr
 	);
 };
 
-export default Table;
+export default Object.assign(Table, { Header, Body, HeaderRow, Row });

@@ -1,6 +1,6 @@
 import React from 'react';
+import { useTheme } from 'styled-components/native';
 import Svgs from './svg';
-import { useTheme } from 'styled-components';
 
 type Sizes = 'small' | 'normal' | 'large';
 
@@ -26,19 +26,18 @@ const getSize = (size: Sizes) => {
 
 const Icon: React.FC<Props> = ({ color, disabled, name, size = 'normal', ...props }) => {
 	const theme = useTheme();
-	console.log('@TODO why is context not working here??', theme);
 
 	let SvgIcon = Svgs[name];
 
 	if (!SvgIcon) {
-		SvgIcon = Svgs['error'];
+		SvgIcon = Svgs.error;
 	}
 
 	return (
 		<SvgIcon
 			width={props.width || getSize(size)}
 			height={props.height || getSize(size)}
-			fill={color}
+			fill={color || theme?.TEXT_COLOR}
 		/>
 	);
 };

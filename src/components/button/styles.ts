@@ -52,3 +52,5 @@ export const ButtonView = styled.View<Props>`
 	border-width: ${({ background }) => (background === 'outline' ? StyleSheet.hairlineWidth : 0)};
 	padding: ${({ theme }) => theme.BUTTON_PADDING_Y} ${({ theme }) => theme.BUTTON_PADDING_X};
 `;
+
+export const Group = styled.View<Props>``;

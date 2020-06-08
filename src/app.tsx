@@ -10,9 +10,6 @@ import ErrorBoundary from './components/error';
 // import i18n
 import i18n from './lib/i18n';
 
-//
-import 'react-native-gesture-handler';
-
 const App = () => (
 	// <React.StrictMode>
 	<ErrorBoundary>

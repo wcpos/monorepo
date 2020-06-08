@@ -5,13 +5,15 @@ import useFetch from '../../../../hooks/use-fetch';
 
 interface Props {
 	product: any;
-	display: any;
+	showSKU: boolean;
+	showCategories: boolean;
+	showTags: boolean;
 }
 
 const Variations = ({ product }) => {
 	const [{ data, error, loading }] = useFetch(product.attributes);
 
-	const handleClick = attribute => {
+	const handleClick = (attribute) => {
 		console.log('filter by attribute ', attribute);
 	};
 
@@ -19,10 +21,10 @@ const Variations = ({ product }) => {
 		return <Text>Loading</Text>;
 	}
 
-	return data.map(attribute => (
+	return data.map((attribute) => (
 		<View key={attribute.id} weight="bold">
 			<Text size="small">{attribute.name}: </Text>
-			{attribute.options.map(option => (
+			{attribute.options.map((option) => (
 				<Text size="small" key={option} onPress={() => handleClick(option)}>
 					{option}
 				</Text>
@@ -31,15 +33,13 @@ const Variations = ({ product }) => {
 	));
 };
 
-const Name = ({ product, display }: Props) => {
-	const show = property => {
-		return true;
-	};
-
+const Name = ({ product, showSKU, showCategories, showTags }: Props) => {
 	return (
 		<React.Fragment>
 			<Text>{product.name}</Text>
-			{show('sku') && <Text size="small">{product.sku}</Text>}
+			{showSKU && <Text size="small">{product.sku}</Text>}
+			{showCategories && <Text size="small">Categories</Text>}
+			{showTags && <Text size="small">Tags</Text>}
 			{product.isVariable() && <Variations product={product} />}
 		</React.Fragment>
 	);

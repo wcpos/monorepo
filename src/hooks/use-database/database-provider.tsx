@@ -33,7 +33,8 @@ type Props = {
  */
 const DatabaseProvider = ({ children }: Props) => {
 	const [user, setUser] = React.useState();
-	// const site = undefined;
+	const [wpUser, setWpUser] = React.useState();
+	const [site, setSite] = React.useState();
 	const [storeDB, _setStoreDB] = React.useState();
 	// const store = undefined;
 
@@ -61,9 +62,13 @@ const DatabaseProvider = ({ children }: Props) => {
 
 			if (hash) {
 				const user = await userCollection.find(hash.user);
-				setUser(user);
+				const site = await usersDatabase.collections.get('sites').find(hash.site);
+				const wpUser = await usersDatabase.collections.get('wp_users').find(hash.wp_user);
 				const database = getStoreDatabase(hash);
+				setUser(user);
 				_setStoreDB(database);
+				setSite(site);
+				setWpUser(wpUser);
 			}
 		};
 
@@ -77,7 +82,7 @@ const DatabaseProvider = ({ children }: Props) => {
 	};
 
 	return (
-		<DatabaseContext.Provider value={{ user, storeDB, setStoreDB }}>
+		<DatabaseContext.Provider value={{ user, storeDB, setStoreDB, wpUser, site }}>
 			{children}
 		</DatabaseContext.Provider>
 	);

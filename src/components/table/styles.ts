@@ -1,32 +1,41 @@
 import styled from 'styled-components/native';
-import { ThemeProps } from '../../lib/theme/types';
 import isNil from 'lodash/isNil';
 
-export const Row = styled.View`
+type ThemeProps = import('../../lib/theme/types').ThemeProps;
+
+type RowProps = { theme: ThemeProps } & import('./row').Props;
+
+export const Row = styled.View<RowProps>`
 	flex-direction: row;
 	border-bottom-width: 1px;
 	border-style: solid;
 	border-bottom-color: #000000;
 `;
 
-export const Cell = styled.View<{ flexGrow?: 0 | 1; flexShrink?: 0 | 1; width?: string }>`
-	flex-grow: ${(props) => (isNil(props.flexGrow) ? 1 : props.flexGrow)};
-	flex-shrink: ${(props) => (isNil(props.flexShrink) ? 1 : props.flexShrink)};
-	width: ${(props) => (isNil(props.width) ? '100%' : props.width)};
+type CellProps = { theme: ThemeProps } & import('./cell').Props;
+
+export const Cell = styled.View<CellProps>`
+	flex-grow: ${({ flexGrow }) => (isNil(flexGrow) ? 1 : flexGrow)};
+	flex-shrink: ${({ flexShrink }) => (isNil(flexShrink) ? 1 : flexShrink)};
+	width: ${({ width }) => (isNil(width) ? '100%' : width)};
 	padding: 5px;
 `;
 
-export const HeaderRow = styled.View`
+type HeaderRowProps = { theme: ThemeProps } & import('./header-row').Props;
+
+export const HeaderRow = styled.View<HeaderRowProps>`
 	flex-direction: row;
 	border-bottom-width: 2px;
 	border-style: solid;
 	border-bottom-color: #000000;
 `;
 
-export const HeaderCell = styled.View<{ flexGrow?: 0 | 1; flexShrink?: 0 | 1; width?: string }>`
+type HeaderCellProps = { theme: ThemeProps } & import('./header-cell').Props;
+
+export const HeaderCell = styled.View<HeaderCellProps>`
 	flex-direction: row;
-	flex-grow: ${(props) => (isNil(props.flexGrow) ? 1 : props.flexGrow)};
-	flex-shrink: ${(props) => (isNil(props.flexShrink) ? 1 : props.flexShrink)};
-	width: ${(props) => (isNil(props.width) ? '100%' : props.width)};
+	flex-grow: ${({ flexGrow }) => (isNil(flexGrow) ? 1 : flexGrow)};
+	flex-shrink: ${({ flexShrink }) => (isNil(flexShrink) ? 1 : flexShrink)};
+	width: ${({ width }) => (isNil(width) ? '100%' : width)};
 	padding: 5px;
 `;

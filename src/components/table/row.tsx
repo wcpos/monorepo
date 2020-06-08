@@ -1,14 +1,17 @@
 import React from 'react';
-import { Row as StyledView } from './styles';
+import * as Styled from './styles';
 import Cell from './cell';
-import { ColumnProps } from './';
 
-type Props = {
+type ColumnProps = import('./types').ColumnProps;
+
+export type Props = {
+	children?: React.ReactNode;
 	rowData: any;
 	columns: ColumnProps[];
+	styles?: import('react-native').ViewStyle;
 };
 
-const Row = ({ rowData, columns }: Props) => {
+const Row: React.FC<Props> = ({ rowData, columns, style, children }) => {
 	const mapper = (column: ColumnProps, index: number) => {
 		const dataKey = column.key || index;
 
@@ -23,7 +26,7 @@ const Row = ({ rowData, columns }: Props) => {
 			!column.hide && (
 				<Cell
 					cellData={cellData}
-					cellRenderer={cellRenderer}
+					// cellRenderer={children || cellRenderer}
 					columnData={column}
 					dataKey={dataKey}
 					key={dataKey || index}
@@ -36,7 +39,7 @@ const Row = ({ rowData, columns }: Props) => {
 		);
 	};
 
-	return <StyledView>{columns.map(mapper)}</StyledView>;
+	return <Styled.Row style={style}>{columns && columns.map(mapper)}</Styled.Row>;
 };
 
-export default Row;
+export default Object.assign(Row, { Cell });

@@ -1,23 +1,24 @@
 import React from 'react';
-import { Cell as StyledView } from './styles';
-import { CellRenderer } from './';
+import * as Styled from './styles';
 import Text from '../text';
 
-type Props = {
+export type Props = {
+	children?: React.ReactNode;
 	cellData: any;
-	cellRenderer?: CellRenderer;
+	// cellRenderer?: import('./types').CellRenderer;
 	columnData: any;
-	dataKey: string | number;
-	rowData: any;
-	// style?: any;
+	dataKey?: string | number;
+	rowData?: any;
+	style?: import('react-native').ViewStyle;
 	// rowIndex: number;
 	flexGrow?: 0 | 1;
 	flexShrink?: 0 | 1;
 	width?: string;
 };
 
-const Cell = ({
-	cellRenderer,
+const Cell: React.FC<Props> = ({
+	children,
+	// cellRenderer,
 	cellData,
 	dataKey,
 	rowData,
@@ -25,18 +26,19 @@ const Cell = ({
 	flexGrow,
 	flexShrink,
 	width,
-}: Props) => {
-	const cell =
-		typeof cellRenderer === 'function'
-			? cellRenderer({ cellData, dataKey, rowData })
-			: cellData == null
-				? ''
-			: String(cellData);
+	style,
+}) => {
+	// const cell =
+	// 	typeof cellRenderer === 'function'
+	// 		? cellRenderer({ cellData, dataKey, rowData })
+	// 		: cellData == null
+	// 		? ''
+	// 		: String(cellData);
 
 	return (
-		<StyledView flexGrow={flexGrow} flexShrink={flexShrink} width={width}>
-			{typeof cell === 'string' ? <Text>{cell}</Text> : cell}
-		</StyledView>
+		<Styled.Cell style={style} flexGrow={flexGrow} flexShrink={flexShrink} width={width}>
+			<Text>{String(cellData)}</Text>
+		</Styled.Cell>
 	);
 };
 

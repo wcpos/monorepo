@@ -4,8 +4,8 @@ type Props = {
 	children: React.ReactNode;
 };
 
-const Header: React.FC<Props> = ({ children }) => {
+const Body: React.FC<Props> = ({ children }) => {
 	return <>{children}</>;
 };
 
-export default Header;
+export default Body;

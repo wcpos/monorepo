@@ -62,7 +62,7 @@ const POS: React.FC<Props> = () => {
 		storeDB.collections
 			.get('uis')
 			.query(Q.where('section', 'pos_products'))
-			.observeWithColumns(['width'])
+			.observeWithColumns(['width', 'sortBy', 'sortDirection'])
 			.pipe(
 				filter((uis) => {
 					if (uis.length > 0) {
