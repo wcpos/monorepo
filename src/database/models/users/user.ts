@@ -35,10 +35,6 @@ class User extends Model {
 	@field('last_name') last_name!: string;
 	@field('display_name') display_name!: string;
 	@children('meta') meta!: {};
-
-	logout() {
-		console.log('logout!');
-	}
 }
 
 export default User;
