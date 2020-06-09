@@ -1,7 +1,7 @@
 import React from 'react';
 import Text from '../text';
 
-type Props = {
+export type Props = {
 	children?: React.ReactNode;
 	buttons: any[];
 	selectedIndex?: number;

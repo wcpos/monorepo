@@ -1,6 +1,6 @@
 import React from 'react';
 // import { render } from '@testing-library/react';
-import Button from './';
+import Button from '.';
 import renderWithTheme from '../../../jest/render-with-theme';
 
 describe('Button', () => {

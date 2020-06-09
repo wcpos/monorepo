@@ -1,9 +1,10 @@
 import { StyleSheet, Platform, ViewStyle } from 'react-native';
-
 import styled, { css } from 'styled-components/native';
-import { ThemeProps } from '../../lib/theme/types';
 
-export const Icon = styled.View<{ theme: ThemeProps }>`
+type Props = { theme: import('../../lib/theme/types').ThemeProps };
+
+// eslint-disable-next-line import/prefer-default-export
+export const Icon = styled.View<Props>`
 	flex: 0 1 auto;
 	align-items: center;
 	justify-content: center;
@@ -17,32 +18,32 @@ export const Icon = styled.View<{ theme: ThemeProps }>`
 	border-radius: ${({ theme }) => theme.CHECKBOX_BORDER_RADIUS};
 `;
 
-interface Props {
-	button: ViewStyle;
-	raised: ViewStyle;
-	disabled: ViewStyle;
-}
+// interface Props {
+// 	button: ViewStyle;
+// 	raised: ViewStyle;
+// 	disabled: ViewStyle;
+// }
 
-const styles: Props = StyleSheet.create({
-	button: {
-		margin: 7,
-	},
-	raised: {
-		...Platform.select({
-			android: {
-				elevation: 2,
-			},
-			default: {
-				shadowColor: 'rgba(0,0,0, .4)',
-				shadowOffset: { height: 1, width: 1 },
-				shadowOpacity: 1,
-				shadowRadius: 1,
-			},
-		}),
-	},
-	disabled: {
-		backgroundColor: '#D1D5D8',
-	},
-});
+// const styles: Props = StyleSheet.create({
+// 	button: {
+// 		margin: 7,
+// 	},
+// 	raised: {
+// 		...Platform.select({
+// 			android: {
+// 				elevation: 2,
+// 			},
+// 			default: {
+// 				shadowColor: 'rgba(0,0,0, .4)',
+// 				shadowOffset: { height: 1, width: 1 },
+// 				shadowOpacity: 1,
+// 				shadowRadius: 1,
+// 			},
+// 		}),
+// 	},
+// 	disabled: {
+// 		backgroundColor: '#D1D5D8',
+// 	},
+// });
 
-export default styles;
+// export default styles;

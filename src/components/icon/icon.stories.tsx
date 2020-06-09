@@ -1,10 +1,8 @@
 import React from 'react';
-import { action } from '@storybook/addon-actions';
 import { boolean, text, select } from '@storybook/addon-knobs';
-import Icon from './';
+import Icon from '.';
 import svgs from './svg';
 import Table from '../table';
-import Icon2 from './icon2';
 
 const iconNames = Object.keys(svgs);
 

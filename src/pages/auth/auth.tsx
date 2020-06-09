@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { useObservableState } from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import PageLayout from '../../layout/page';
 import Segment, { SegmentGroup } from '../../components/segment';
 import TextInput from '../../components/textinput';
@@ -14,7 +14,9 @@ interface Props {}
 const Auth: React.FC<Props> = (props) => {
 	const navigation = useNavigation();
 	const { user } = useDatabase();
-	const sites = useObservableState(user.sites.observe());
+	const sitesResource = new ObservableResource(user.sites.observe());
+	const sites = useObservableSuspense(sitesResource);
+	console.log(user);
 
 	React.useEffect(() => {
 		const unsubscribe = navigation.addListener('state', () => {

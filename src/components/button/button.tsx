@@ -2,14 +2,14 @@ import React from 'react';
 import { GestureResponderEvent } from 'react-native';
 import Touchable from '../touchable';
 import Text from '../text';
-import { ButtonView } from './styles';
+import * as Styled from './styles';
 
 export type Props = {
+	accessoryLeft?: React.ReactNode;
+	accessoryRight?: React.ReactNode;
 	background?: 'solid' | 'clear' | 'outline';
 	children?: React.ReactChild;
 	disabled?: boolean;
-	icon?: string;
-	iconPosition?: 'left' | 'right';
 	loading?: boolean;
 	onPress?: (event: GestureResponderEvent) => void;
 	raised?: boolean;
@@ -17,50 +17,61 @@ export type Props = {
 	style?: import('react-native').ViewStyle;
 	title?: string;
 	type?:
-	| 'attention'
-	| 'critical'
-	| 'info'
-	| 'primary'
-	| 'secondary'
-	| 'success'
-	| 'warning'
-	| 'inverse';
+		| 'attention'
+		| 'critical'
+		| 'info'
+		| 'primary'
+		| 'secondary'
+		| 'success'
+		| 'warning'
+		| 'inverse';
 };
 
-const Button = ({
+const Button: React.FC<Props> = ({
+	accessoryLeft,
+	accessoryRight,
 	background = 'solid',
 	children,
 	disabled,
-	icon,
-	iconPosition,
 	loading,
 	onPress,
 	raised,
 	size = 'normal',
 	style,
-	title,
 	type = 'primary',
-}: Props) => {
+	...props
+}) => {
+	const title = props.title || children;
 	let textType = type;
 	if (background === 'solid') {
 		textType = type === 'inverse' ? 'primary' : 'inverse';
 	}
 
-	const renderButtonText = () => (
-		<Text type={textType} size={size}>
-			{title || children}
-		</Text>
-	);
+	const renderTitle = () => {
+		if (typeof title === 'string') {
+			return (
+				<Text type={textType} size={size}>
+					{title}
+				</Text>
+			);
+		}
+		if (React.isValidElement(title) && title?.type?.name === 'Icon') {
+			return React.cloneElement(title, { color: '#FFF' });
+		}
+		return title;
+	};
 
 	return (
 		<Touchable
 			disabled={disabled}
 			onPress={onPress}
-			style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}
+			// style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}
 		>
-			<ButtonView type={type} background={background} style={style}>
-				{renderButtonText()}
-			</ButtonView>
+			<Styled.Background type={type} background={background} style={style}>
+				{accessoryLeft && React.cloneElement(accessoryLeft, { color: '#FFF' })}
+				{renderTitle()}
+				{accessoryRight && React.cloneElement(accessoryRight, { color: '#FFF' })}
+			</Styled.Background>
 		</Touchable>
 	);
 };

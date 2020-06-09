@@ -1,9 +1,11 @@
 import styled from 'styled-components/native';
 import { StyleSheet } from 'react-native';
 
-type Props = { theme: import('../../lib/theme/types').ThemeProps } & import('./button').Props;
+type ThemeProps = { theme: import('../../lib/theme/types').ThemeProps };
+type ButtonProps = import('./button').Props;
+type BackgroundProps = ThemeProps & Pick<ButtonProps, 'background' | 'type'>;
 
-export const ButtonView = styled.View<Props>`
+export const Background = styled.View<BackgroundProps>`
 	background-color: ${({ background, type, theme }) => {
 		if (background === 'clear' || background === 'outline') {
 			return 'transparent';
@@ -51,6 +53,9 @@ export const ButtonView = styled.View<Props>`
 	border-radius: ${({ theme }) => theme.BUTTON_BORDER_RADIUS};
 	border-width: ${({ background }) => (background === 'outline' ? StyleSheet.hairlineWidth : 0)};
 	padding: ${({ theme }) => theme.BUTTON_PADDING_Y} ${({ theme }) => theme.BUTTON_PADDING_X};
+	flex-direction: row;
 `;
 
-export const Group = styled.View<Props>``;
+type GroupProps = ThemeProps & import('./group').Props;
+
+export const Group = styled.View<GroupProps>``;

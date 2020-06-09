@@ -52,7 +52,9 @@ const Site = ({ site }) => {
 				)}
 				<Button title="Enter" onPress={() => setStore()} />
 			</SiteTextWrapper>
-			<Icon name="remove" onPress={handleRemove} />
+			<Button onPress={handleRemove}>
+				<Icon name="remove" />
+			</Button>
 			{visible && <Modal site={site} visible={visible} setVisible={setVisible} />}
 		</SiteWrapper>
 	);

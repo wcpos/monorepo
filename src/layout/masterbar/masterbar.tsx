@@ -13,7 +13,7 @@ interface Props {}
 const MasterBar: React.FC<Props> = () => {
 	const route = useRoute();
 	const navigation = useNavigation();
-	const { user } = useDatabase();
+	const { user, logout } = useDatabase();
 
 	return (
 		<Header
@@ -23,7 +23,7 @@ const MasterBar: React.FC<Props> = () => {
 				// <Popover content={<UserMenu />}>
 				<>
 					<Text>{user.first_name}</Text>
-					<Button onPress={user.logout} title="Logout" />
+					<Button onPress={logout} title="Logout" />
 					<Avatar src="blah" placeholder="jj" />
 				</>
 				// </Popover>
