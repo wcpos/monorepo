@@ -9,12 +9,20 @@ const getLastUserHash = async () => {
 			return obj;
 		}
 	} catch (e) {
-		console.log(e);
+		console.log('No last user saved', e);
 	}
 };
 
 const storeLastUserHash = async (obj: {}) => {
-	return await usersDatabase.adapter.setLocal('last_user_hash', JSON.stringify(obj));
+	const response = await usersDatabase.adapter.setLocal('last_user_hash', JSON.stringify(obj));
+	console.log(response);
+	return response;
+};
+
+const removeLastUserHash = async () => {
+	const response = await usersDatabase.adapter.removeLocal('last_user_hash');
+	console.log(response);
+	return response;
 };
 
 export const DatabaseContext = React.createContext({
@@ -81,8 +89,13 @@ const DatabaseProvider = ({ children }: Props) => {
 		storeLastUserHash(obj);
 	};
 
+	const logout = () => {
+		removeLastUserHash();
+		_setStoreDB(undefined);
+	};
+
 	return (
-		<DatabaseContext.Provider value={{ user, storeDB, setStoreDB, wpUser, site }}>
+		<DatabaseContext.Provider value={{ user, storeDB, setStoreDB, wpUser, site, logout }}>
 			{children}
 		</DatabaseContext.Provider>
 	);
