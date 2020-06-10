@@ -36,6 +36,7 @@ export default class Site extends Model {
 		type: 'connecting',
 		message: 'TODO: check connection status after init',
 	});
+
 	public readonly connection_status$ = this._connection_status$.asObservable();
 
 	static associations = {
@@ -78,7 +79,7 @@ export default class Site extends Model {
 	 *
 	 */
 	get urlForceHttps() {
-		return 'https://' + this.urlWithoutPrefix;
+		return `https://${this.urlWithoutPrefix}`;
 	}
 
 	/**
@@ -129,7 +130,6 @@ export default class Site extends Model {
 		} else {
 			wpUser.updateWithJson(data);
 		}
-		debugger;
 	}
 
 	/**
