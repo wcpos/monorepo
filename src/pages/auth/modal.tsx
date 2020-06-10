@@ -13,7 +13,7 @@ interface Props {
 
 const AuthModal: React.FC<Props> = ({ visible, setVisible, site }) => {
 	const returnUrl = Platform.OS === 'web' ? 'https://localhost:3000/auth' : 'wcpos://auth';
-	debugger;
+
 	const authUrl =
 		site.wc_api_auth_url +
 		Url.qs.stringify(

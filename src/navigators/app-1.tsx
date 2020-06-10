@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { NavigationContainer, useLinking } from '@react-navigation/native';
+import { Text } from 'react-native';
 import AuthNavigator from './auth';
 
 interface AppNavigatorProps {}
@@ -8,13 +9,23 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({}) => {
 	const ref = React.useRef();
 
 	const { getInitialState } = useLinking(ref, {
-		prefixes: ['wcpos://'],
+		prefixes: ['https://localhost', 'wcpos://'],
+		// prefixes: ['wcpos://'],
 		config: {
-			Splash: 'loading',
 			Auth: 'auth',
-			POS: '',
-			Products: 'products',
-			Support: 'support',
+			Main: {
+				screens: {
+					POS: {
+						path: 'pos',
+					},
+					Products: {
+						path: 'products',
+					},
+					Support: {
+						path: 'support',
+					},
+				},
+			},
 		},
 	});
 
@@ -38,7 +49,12 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({}) => {
 	}
 
 	return (
-		<NavigationContainer initialState={initialState} ref={ref}>
+		<NavigationContainer
+			fallback={<Text>Deep link</Text>}
+			initialState={initialState}
+			ref={ref}
+			onStateChange={(state) => console.log('New state is', state)}
+		>
 			<AuthNavigator />
 		</NavigationContainer>
 	);

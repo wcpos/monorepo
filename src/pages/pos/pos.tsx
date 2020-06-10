@@ -14,33 +14,9 @@ import useDatabase from '../../hooks/use-database';
 
 // const database = getStoreDatabase({ site: 'test', user: 'test' });
 
-interface Props {}
-
-const init = async (database) => {
-	await database.action(async () => {
-		const newUI = await database.collections.get('uis').create((ui) => {
-			ui.section = 'pos_products';
-			ui.set({
-				sortBy: 'name',
-				sortDirection: 'asc',
-				width: '60%',
-				columns: [
-					{ key: 'image', disableSort: true, order: 0 },
-					{ key: 'name', order: 1 },
-					{ key: 'sku', hide: true, order: 2 },
-					{ key: 'price', order: 3 },
-					{ key: 'actions', disableSort: true, order: 4 },
-				],
-				display: [
-					{ key: 'sku', hide: true, order: 0 },
-					{ key: 'categories', order: 1 },
-					{ key: 'tags', hide: true, order: 2 },
-				],
-			});
-		});
-		return newUI;
-	});
-};
+interface Props {
+	uiResource: any;
+}
 
 // const getResource = (store) =>
 // 	new ObservableResource(
@@ -54,29 +30,13 @@ const init = async (database) => {
 // 			)
 // 	);
 
-const POS: React.FC<Props> = () => {
+const POS: React.FC<Props> = ({ uiResource }) => {
 	// const { store } = useStore();
 	// const uiResource = getResource(store);
-	const { storeDB } = useDatabase();
-	const uiResource = new ObservableResource(
-		storeDB.collections
-			.get('uis')
-			.query(Q.where('section', 'pos_products'))
-			.observeWithColumns(['width', 'sortBy', 'sortDirection'])
-			.pipe(
-				filter((uis) => {
-					if (uis.length > 0) {
-						return true;
-					}
-					init(storeDB);
-					return false;
-				}),
-				map((array) => array[0])
 
-				// shareReplay()
-			)
-	);
+	console.log('render');
 	const ui = useObservableSuspense(uiResource);
+
 	const [width, setWidth] = React.useState(ui.width);
 
 	const handleColumnResizeUpdate = ({ dx }) => {

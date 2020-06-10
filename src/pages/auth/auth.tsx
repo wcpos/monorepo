@@ -44,7 +44,7 @@ const Auth: React.FC<Props> = (props) => {
 		<PageLayout>
 			<AuthView>
 				<Segment style={{ width: 460 }}>
-					<Text size="large">Connect</Text>
+					<Text size="large">Connect!</Text>
 					<Text>Enter the URL of your WooCommerce store:</Text>
 					<TextInput
 						prefix="https://"

@@ -4,14 +4,13 @@ import { Linking } from 'react-native';
 import SplashScreen from '../pages/splash';
 import useDatabase from '../hooks/use-database';
 import AuthScreen from '../pages/auth';
-import POSNavigator from './pos';
+import MainNavigator from './main';
 // const AuthScreen = React.lazy(() => import('../pages/auth'));
-// const POSNavigator = React.lazy(() => import('./pos'));
+// const MainNavigator = React.lazy(() => import('./main'));
 
 export type AppNavigatorParams = {
 	Auth: undefined;
-	POS: undefined;
-	Splash: undefined;
+	Main: undefined;
 };
 
 const Stack = createStackNavigator<AppNavigatorParams>();
@@ -30,17 +29,19 @@ const AppNavigator = (props: Partial<StackNavigatorProps>): React.ReactElement =
 	// 	getInitialUrl();
 	// }, []);
 
-	const renderApp = () => {
-		if (!user) {
-			return <Stack.Screen name="Splash">{() => <SplashScreen />}</Stack.Screen>;
-		}
-		if (user && storeDB) {
-			return <Stack.Screen name="POS" component={POSNavigator} />;
-		}
-		return <Stack.Screen name="Auth" component={AuthScreen} />;
-	};
+	if (!user) {
+		return <SplashScreen />;
+	}
 
-	return <Stack.Navigator headerMode="none">{renderApp()}</Stack.Navigator>;
+	return (
+		<Stack.Navigator headerMode="none">
+			{user && storeDB ? (
+				<Stack.Screen name="Main" component={MainNavigator} />
+			) : (
+				<Stack.Screen name="Auth" component={AuthScreen} />
+			)}
+		</Stack.Navigator>
+	);
 };
 
 export default AppNavigator;

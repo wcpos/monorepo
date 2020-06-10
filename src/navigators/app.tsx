@@ -7,21 +7,21 @@ interface AppNavigatorProps {}
 
 const AppNavigator: React.FC<AppNavigatorProps> = ({}) => {
 	const linking = {
-		prefixes: ['wcpos://'],
-		config: {
-			Splash: 'loading',
-			Auth: 'auth',
-			POS: '',
-			Products: 'products',
-			Support: 'support',
-		},
+		prefixes: ['https://localhost', 'wcpos://'],
+		// config: {
+		// 	Auth: 'auth',
+		// 	Main: '',
+		// 	POS: '',
+		// 	Products: 'products',
+		// 	Support: 'support',
+		// },
 	};
 
 	return (
 		<NavigationContainer
-			linking={linking}
+			// linking={linking}
 			fallback={<Text>Deep link</Text>}
-			onStateChange={(state) => console.log('New state is', state)}
+			// onStateChange={(state) => console.log('New state is', state)}
 		>
 			<AuthNavigator />
 		</NavigationContainer>
