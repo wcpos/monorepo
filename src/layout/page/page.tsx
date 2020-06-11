@@ -1,6 +1,6 @@
 import React from 'react';
 import Header from '../header';
-import { PageView, HeaderView, MainView } from './styles';
+import * as Styled from './styles';
 import useMeasure from '../../hooks/use-measure';
 
 interface Props {
@@ -27,10 +27,10 @@ const Page: React.FC<Props> = ({ children, ...props }) => {
 
 	return (
 		// <PageView onLayout={onLayout} ref={ref}>
-		<PageView>
-			{headerComponent && <HeaderView>{headerComponent}</HeaderView>}
-			<MainView>{children}</MainView>
-		</PageView>
+		<Styled.Page>
+			{headerComponent && <Styled.Header>{headerComponent}</Styled.Header>}
+			<Styled.Main>{children}</Styled.Main>
+		</Styled.Page>
 	);
 };
 

@@ -11,6 +11,7 @@
 	"dependencies": {
 		"@nozbe/watermelondb": "0.16.2",
 		"@react-native-community/masked-view": "0.1.10",
+		"@react-native-community/netinfo": "5.9.2",
 		"@react-navigation/drawer": "5.8.2",
 		"@react-navigation/native": "5.5.1",
 		"@react-navigation/stack": "5.5.1",
@@ -27,6 +28,7 @@
 		"react-cache": "2.0.0-alpha.1",
 		"react-i18next": "11.5.0",
 		"react-native": "0.63.0-rc.1",
+		"react-native-device-info": "5.6.1",
 		"react-native-linear-gradient": "2.5.6",
 		"react-native-reanimated": "1.9.0",
 		"react-native-safe-area-context": "3.0.3",

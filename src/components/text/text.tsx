@@ -10,19 +10,19 @@ export type Props = {
 	size?: 'normal' | 'large' | 'small';
 	style?: TextStyle;
 	type?:
-	| 'attention'
-	| 'critical'
-	| 'info'
-	| 'primary'
-	| 'secondary'
-	| 'success'
-	| 'warning'
-	| 'inverse';
+		| 'attention'
+		| 'critical'
+		| 'info'
+		| 'primary'
+		| 'secondary'
+		| 'success'
+		| 'warning'
+		| 'inverse';
 	uppercase?: boolean;
 	weight?: 'normal' | 'bold' | 'light';
 };
 
-const Text = ({
+const Text: React.FC<Props> = ({
 	align = 'left',
 	children,
 	italic,
@@ -32,7 +32,7 @@ const Text = ({
 	type = 'primary',
 	uppercase,
 	weight = 'normal',
-}: Props) => {
+}) => {
 	return (
 		<StyledText
 			align={align}
