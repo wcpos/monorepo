@@ -7,7 +7,7 @@ import Text from '../../components/text';
 import UserMenu from './user-menu';
 import Avatar from '../../components/avatar';
 import useDatabase from '../../hooks/use-database';
-import { AppContext } from '../../app';
+import useAppState from '../../hooks/use-app-state';
 
 interface Props {}
 
@@ -15,7 +15,7 @@ const MasterBar: React.FC<Props> = () => {
 	const route = useRoute();
 	const navigation = useNavigation();
 	const { user, logout } = useDatabase();
-	const [appState] = React.useContext(AppContext);
+	const [appState] = useAppState();
 
 	return (
 		<Header>
@@ -25,6 +25,7 @@ const MasterBar: React.FC<Props> = () => {
 			<Header.Title>{route.name}</Header.Title>
 			<Header.Right>
 				<Text type="inverse">{appState.online ? 'online' : 'offline'}</Text>
+				<Text type="inverse">{appState.window.width}</Text>
 			</Header.Right>
 			<Header.Right>
 				<Text>{user.first_name}</Text>
