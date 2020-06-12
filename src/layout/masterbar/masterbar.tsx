@@ -6,7 +6,6 @@ import Popover from '../../components/popover';
 import Text from '../../components/text';
 import UserMenu from './user-menu';
 import Avatar from '../../components/avatar';
-import useDatabase from '../../hooks/use-database';
 import useAppState from '../../hooks/use-app-state';
 
 interface Props {}
@@ -14,8 +13,7 @@ interface Props {}
 const MasterBar: React.FC<Props> = () => {
 	const route = useRoute();
 	const navigation = useNavigation();
-	const { user, logout } = useDatabase();
-	const [appState] = useAppState();
+	const [appState, dispatch, actionTypes] = useAppState();
 
 	return (
 		<Header>
@@ -28,8 +26,8 @@ const MasterBar: React.FC<Props> = () => {
 				<Text type="inverse">{appState.window.width}</Text>
 			</Header.Right>
 			<Header.Right>
-				<Text>{user.first_name}</Text>
-				<Button onPress={logout} title="Logout" />
+				<Text>{appState.user.display_name}</Text>
+				<Button onPress={() => dispatch({ type: actionTypes.USER_LOGOUT })} title="Logout" />
 				<Avatar src="blah" placeholder="jj" />
 			</Header.Right>
 		</Header>

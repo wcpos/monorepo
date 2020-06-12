@@ -11,7 +11,7 @@ import ProductActions from './cells/actions';
 import Name from './cells/name';
 import Image from './cells/image';
 import Product from '../../../database/models/store/product';
-import useDatabase from '../../../hooks/use-database';
+import useAppState from '../../../hooks/use-app-state';
 import Text from '../../../components/text';
 import { syncIds } from '../../../services/wc-api';
 
@@ -26,7 +26,7 @@ const initProducts = () => {};
  */
 const Products: React.FC<Props> = ({ ui }) => {
 	const { t } = useTranslation();
-	const { storeDB, wpUser, site } = useDatabase();
+	const [{ storeDB, wpUser, site }] = useAppState();
 
 	const displayResource = new ObservableResource(
 		ui.display

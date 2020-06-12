@@ -1,13 +1,11 @@
 import React from 'react';
 import { Dimensions } from 'react-native';
 import debounce from 'lodash/debounce';
-import { DIMENSIONS_CHANGE } from './consts';
+import { DIMENSIONS_CHANGE } from './action-types';
 
+type AppState = import('./app-state-provider').AppState;
 type AppAction = import('./app-state-provider').AppAction;
-type PayloadProps = {
-	window: import('react-native').ScaledSize;
-	screen: import('react-native').ScaledSize;
-};
+type PayloadProps = Pick<AppState, 'window' | 'screen'>;
 
 const useDimensions = (dispatch: React.Dispatch<AppAction>): void => {
 	// @TODO why useMemo?

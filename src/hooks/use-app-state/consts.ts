@@ -1,2 +1,0 @@
-export const IS_ONLINE = 'IS_ONLINE';
-export const DIMENSIONS_CHANGE = 'DIMENSIONS_CHANGE';

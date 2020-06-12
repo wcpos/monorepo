@@ -10,7 +10,7 @@ import Products from '../pages/products';
 // import Orders from '../sections/orders';
 // import Customers from '../sections/customers';
 import Support from '../pages/support';
-import useDatabase from '../hooks/use-database';
+import useAppState from '../hooks/use-app-state';
 import Text from '../components/text';
 
 const init = async (database) => {
@@ -40,7 +40,7 @@ const init = async (database) => {
 };
 
 const Screen = ({ route, navigation }) => {
-	const { storeDB } = useDatabase();
+	const [{ storeDB }] = useAppState();
 	const uiResource = new ObservableResource(
 		storeDB.collections
 			.get('uis')

@@ -1,7 +1,6 @@
 import React from 'react';
 import { Text } from 'react-native';
 import { ThemeProvider } from 'styled-components/native';
-import { DatabaseProvider } from './hooks/use-database';
 import { AppStateProvider } from './hooks/use-app-state';
 import Navigator from './navigators';
 import Portal from './components/portal';
@@ -17,13 +16,11 @@ const App: React.FC = () => {
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<AppStateProvider>
-					<DatabaseProvider>
-						<ThemeProvider theme={defaultTheme}>
-							<Portal.Host>
-								<Navigator />
-							</Portal.Host>
-						</ThemeProvider>
-					</DatabaseProvider>
+					<ThemeProvider theme={defaultTheme}>
+						<Portal.Host>
+							<Navigator />
+						</Portal.Host>
+					</ThemeProvider>
 				</AppStateProvider>
 			</React.Suspense>
 		</ErrorBoundary>
