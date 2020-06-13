@@ -8,10 +8,10 @@ import useAppState from '../hooks/use-app-state';
 const routes = {
 	Auth: 'auth',
 	Main: {
-		path: '',
+		path: 'main',
 		screens: {
 			POS: {
-				path: '',
+				path: 'pos',
 			},
 			Products: {
 				path: 'products',
@@ -26,42 +26,45 @@ const routes = {
 interface AppNavigatorProps {}
 
 const AppNavigator: React.FC<AppNavigatorProps> = ({}) => {
-	const ref = React.useRef();
-	const [{ user, storeDB }] = useAppState();
+	const ref: React.Ref<any> = React.useRef();
+	const [{ user, urlPrefix }] = useAppState();
 
 	const { getInitialState } = useLinking(ref, {
-		prefixes: ['https://localhost:3000', 'wcpos://'],
-		// prefixes: ['wcpos://'],
+		prefixes: [urlPrefix],
 		config: routes,
 	});
 
-	const [isReady, setIsReady] = React.useState(false);
+	const [isReady, setIsReady] = React.useState(true);
 	const [initialState, setInitialState] = React.useState();
 
 	React.useEffect(() => {
-		getInitialState()
-			.catch((e) => {
-				console.error(e);
-			})
-			.then((state) => {
+		(async () => {
+			try {
+				const state = await getInitialState();
 				if (state !== undefined) {
 					setInitialState(state);
 				}
-
+			} catch (e) {
+				console.warn(e);
+			} finally {
 				setIsReady(true);
-			});
+			}
+		})();
 	}, [getInitialState]);
 
 	if (!isReady || !user) {
+		// return null;
 		return <SplashPage />;
 	}
 
 	return (
 		<NavigationContainer
-			fallback={<Text>Deep link</Text>}
+			// fallback={<Text>Deep link</Text>}
 			initialState={initialState}
 			ref={ref}
-			onStateChange={(state) => console.log('New state is', state)}
+			onStateChange={(state) => {
+				console.log('New nav state', JSON.stringify(state, null, 2));
+			}}
 		>
 			<AuthNavigator />
 		</NavigationContainer>

@@ -8,26 +8,29 @@ interface Props {
 	children?: React.ReactNode;
 }
 
-const Page: React.FC<Props> = ({ children, ...props }) => {
-	const headerComponent =
-		typeof props.header === 'string' ? <Header>{props.header}</Header> : props.header;
+const Page: React.FC<Props> = ({ children, header }) => {
+	const headerComponent = typeof header === 'string' ? <Header>{header}</Header> : header;
 
-	const [measurements, onMeasure] = React.useState({
-		height: 0,
-		pageX: 0,
-		pageY: 0,
-		width: 0,
-		x: 0,
-		y: 0,
-	});
+	// const [measurements, onMeasure] = React.useState({
+	// 	height: 0,
+	// 	pageX: 0,
+	// 	pageY: 0,
+	// 	width: 0,
+	// 	x: 0,
+	// 	y: 0,
+	// });
+	// const [measurements, onMeasure] = React.useState();
+	const onMeasure = (measurements) => {
+		console.log(measurements);
+	};
 	const ref = React.useRef(null);
 	const { onLayout } = useMeasure({ onMeasure, ref });
 
-	console.log(measurements);
+	// console.log(measurements);
 
 	return (
-		// <PageView onLayout={onLayout} ref={ref}>
-		<Styled.Page>
+		<Styled.Page onLayout={onLayout} ref={ref}>
+			{/* <Styled.Page> */}
 			{headerComponent && <Styled.Header>{headerComponent}</Styled.Header>}
 			<Styled.Main>{children}</Styled.Main>
 		</Styled.Page>

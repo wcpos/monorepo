@@ -14,6 +14,7 @@ export type AppState = {
 		uniqueId: string;
 		version: string;
 	};
+	urlPrefix: string;
 	user?: any;
 	storeDB?: any;
 	site?: any;
@@ -33,6 +34,7 @@ const initialState: AppState = {
 		uniqueId: getUniqueId(),
 		version: getReadableVersion(),
 	},
+	urlPrefix: window?.location?.origin || 'wcpos://',
 	user: undefined,
 	storeDB: undefined,
 	site: undefined,
