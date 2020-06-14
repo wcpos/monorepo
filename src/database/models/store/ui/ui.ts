@@ -1,6 +1,8 @@
-import { nochange } from '@nozbe/watermelondb/decorators';
+import { nochange, field, action } from '@nozbe/watermelondb/decorators';
+import { ObservableResource } from 'observable-hooks';
 import Model from '../../base';
-import { field, children } from '../../decorators';
+import { children } from '../../decorators';
+import initial from './initial.json';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
@@ -28,6 +30,13 @@ export default class UI extends Model {
 		ui_display: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
+	private _columnsResource: ObservableResource<unknown, unknown>;
+
+	constructor(collection, raw) {
+		super(collection, raw);
+		this._columnsResource = new ObservableResource(this.columns.observeWithColumns(['hide']));
+	}
+
 	@children('ui_columns') columns: any;
 	@children('ui_display') display: any;
 
@@ -45,6 +54,10 @@ export default class UI extends Model {
 	setWidth(value) {
 		console.log(value);
 		this.asModel._setRaw('width', `${value}`);
+	}
+
+	get columnsResource() {
+		return this._columnsResource;
 	}
 
 	/** *
@@ -91,7 +104,11 @@ export default class UI extends Model {
 	/**
 	 *
 	 */
-	reset() {
-		console.log('reset ui');
+	@action reset() {
+		const ui = this.prepareUpdate((model: UI) => {
+			model.set(initial.products);
+		});
+
+		return this.batch(ui);
 	}
 }

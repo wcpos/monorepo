@@ -1,5 +1,5 @@
 import React from 'react';
-import { SegmentGroupView } from './styles';
+import * as Styled from './styles';
 
 type Segment = typeof import('./segment').default;
 
@@ -7,14 +7,21 @@ export type Props = {
 	children: React.ReactElement<Segment>[] | React.ReactElement<Segment>;
 	style?: import('react-native').ViewStyle;
 	raised?: boolean;
+	direction?: 'vertical' | 'horizontal';
 };
 
-const SegmentGroup = ({ children, style, raised = true }: Props) => {
+const SegmentGroup: React.FC<Props> = ({
+	children,
+	direction = 'vertical',
+	style,
+	raised = true,
+}) => {
 	const count = React.Children.count(children);
+
 	return (
-		<SegmentGroupView style={style} raised={raised}>
+		<Styled.Group style={style} raised={raised} direction={direction}>
 			{React.Children.map(children, (child, index) => {
-				let props = { group: 'middle', raised: false };
+				const props = { group: 'middle', raised: false };
 				if (index === 0) {
 					props.group = 'first';
 				}
@@ -23,7 +30,7 @@ const SegmentGroup = ({ children, style, raised = true }: Props) => {
 				}
 				return React.cloneElement(child, props);
 			})}
-		</SegmentGroupView>
+		</Styled.Group>
 	);
 };
 

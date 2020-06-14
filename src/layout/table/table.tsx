@@ -9,10 +9,12 @@ type Props = {
 
 const Table = ({ actions, table, footer }: Props) => {
 	return (
-		<SegmentGroup style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-			<Segment style={{ flex: -1 }}>{actions}</Segment>
-			<Segment style={{ flex: 1, padding: 0 }}>{table}</Segment>
-			<Segment style={{ flex: -1 }} content={footer} />
+		<SegmentGroup>
+			<Segment>{actions}</Segment>
+			<Segment grow style={{ padding: 0 }}>
+				{table}
+			</Segment>
+			<Segment content={footer} />
 		</SegmentGroup>
 	);
 };

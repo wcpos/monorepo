@@ -1,6 +1,7 @@
 import React from 'react';
+import { View } from 'react-native';
 import { boolean, select } from '@storybook/addon-knobs';
-import Segment, { SegmentGroup } from './';
+import Segment, { SegmentGroup } from '.';
 
 export default {
 	title: 'Components/Segment',
@@ -23,31 +24,33 @@ export const basicUsage = () => (
  *
  */
 export const group = () => (
-	<SegmentGroup raised={boolean('raised', true)}>
-		<Segment>Top</Segment>
-		<Segment>Middle</Segment>
-		<Segment>Middle</Segment>
-		<Segment>Middle</Segment>
-		<Segment>Bottom</Segment>
-	</SegmentGroup>
+	<View style={{ height: 400 }}>
+		<Segment.Group raised={boolean('raised', true)}>
+			<Segment>Top</Segment>
+			<Segment>Middle</Segment>
+			<Segment grow>Middle</Segment>
+			<Segment>Middle</Segment>
+			<Segment>Bottom</Segment>
+		</Segment.Group>
+	</View>
 );
 
 /**
  *
  */
 export const nestedGroup = () => (
-	<SegmentGroup raised={boolean('raised', true)}>
+	<Segment.Group raised={boolean('raised', true)}>
 		<Segment type="header">Top</Segment>
-		<SegmentGroup>
+		<Segment.Group>
 			<Segment>Nested Top</Segment>
 			<Segment>Nested Middle</Segment>
 			<Segment>Nested Bottom</Segment>
-		</SegmentGroup>
-		<SegmentGroup>
+		</Segment.Group>
+		<Segment.Group direction="horizontal">
 			<Segment>Left</Segment>
 			<Segment>Center</Segment>
 			<Segment>Right</Segment>
-		</SegmentGroup>
+		</Segment.Group>
 		<Segment type="footer">Bottom</Segment>
-	</SegmentGroup>
+	</Segment.Group>
 );

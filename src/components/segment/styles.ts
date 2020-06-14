@@ -1,22 +1,19 @@
 import styled, { css } from 'styled-components/native';
 import Platform from '../../lib/platform';
 
-type SegmentViewProps = {
+type SegmentProps = {
 	theme: import('../../lib/theme/types').ThemeProps;
 } & import('./segment').Props;
 
-type SegmentGroupViewProps = {
-	theme: import('../../lib/theme/types').ThemeProps;
-} & import('./group').Props;
-
-export const SegmentView = styled.View<SegmentViewProps>`
-	background: ${(props) => props.theme.SEGMENT_BACKGROUND_COLOR};
-	border-width: ${(props) => props.theme.SEGMENT_BORDER_WIDTH};
-	border-color: ${(props) => props.theme.SEGMENT_BORDER_COLOR};
+export const Segment = styled.View<SegmentProps>`
+	background: ${({ theme }) => theme.SEGMENT_BACKGROUND_COLOR};
+	border-width: ${({ theme }) => theme.SEGMENT_BORDER_WIDTH};
+	border-color: ${({ theme }) => theme.SEGMENT_BORDER_COLOR};
 	border-style: solid;
-	border-radius: ${(props) => (props.group === 'middle' ? '0' : props.theme.SEGMENT_BORDER_RADIUS)};
-	padding: ${(props) => props.theme.SEGMENT_PADDING};
-	margin-bottom: ${(props) => (props.group ? '0' : props.theme.SEGMENT_MARGIN_BOTTOM)};
+	border-radius: ${({ group, theme }) => (group === 'middle' ? '0' : theme.SEGMENT_BORDER_RADIUS)};
+	padding: ${({ theme }) => theme.SEGMENT_PADDING};
+	margin-bottom: ${({ group, theme }) => (group ? '0' : theme.SEGMENT_MARGIN_BOTTOM)};
+	flex-grow: ${({ grow }) => (grow ? '1' : '0')};
 
 	${({ group }) =>
 		group === 'first' &&
@@ -51,7 +48,15 @@ export const SegmentView = styled.View<SegmentViewProps>`
 		})}
 `;
 
-export const SegmentGroupView = styled.View<SegmentGroupViewProps>`
+type GroupProps = {
+	theme: import('../../lib/theme/types').ThemeProps;
+} & import('./group').Props;
+
+export const Group = styled.View<GroupProps>`
+	flex-direction: ${({ direction }) => (direction === 'horizontal' ? 'row' : 'column')};
+	height: inherit;
+	width: 100%;
+
 	${({ raised }) =>
 		raised &&
 		Platform.select({

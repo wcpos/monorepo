@@ -15,7 +15,7 @@ const Stack = createStackNavigator<AppNavigatorParams>();
 type StackNavigatorProps = React.ComponentProps<typeof Stack.Navigator>;
 
 const AppNavigator = (props: Partial<StackNavigatorProps>): React.ReactElement => {
-	const [{ user, storeDB }] = useAppState();
+	const [{ storeDB }] = useAppState();
 
 	return (
 		<Stack.Navigator headerMode="none">

@@ -4,19 +4,14 @@ import hash from 'hash-sum';
 import Adapter from './adapter';
 import { modelClasses, schemas } from './models/store';
 
-type Props = {
-	site?: string;
-	user?: string;
-	store?: string;
-};
+interface LastUserHash {
+	site: string;
+	user: string;
+	store: string;
+}
 
-const getStoreDatabase = (obj: Props) => {
-	console.log(obj);
-	if (!obj.site || !obj.user) {
-		return;
-	}
-
-	const dbName = hash(obj);
+const getStoreDatabase = (lastUser: LastUserHash): Database => {
+	const dbName = hash(lastUser); // turn last user object into string
 
 	const config = {
 		dbName,

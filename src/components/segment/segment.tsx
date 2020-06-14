@@ -1,6 +1,6 @@
 import React from 'react';
 import Text from '../text';
-import { SegmentView } from './styles';
+import * as Styled from './styles';
 
 export type Props = {
 	children?: React.ReactNode;
@@ -11,18 +11,27 @@ export type Props = {
 	raised?: boolean;
 	group?: 'first' | 'middle' | 'last';
 	style?: import('react-native').ViewStyle;
+	grow?: boolean;
 };
 
-const Segment = ({ children, content, group, type, raised = true, style }: Props) => {
+const Segment: React.FC<Props> = ({
+	children,
+	content,
+	group,
+	grow,
+	type,
+	raised = true,
+	style,
+}) => {
 	let segment = content || children || '';
 	if (typeof segment === 'string' || typeof segment === 'number') {
 		segment = <Text>{segment}</Text>;
 	}
 
 	return (
-		<SegmentView style={style} group={group} type={type} raised={raised}>
+		<Styled.Segment style={style} group={group} type={type} raised={raised} grow={grow}>
 			{segment}
-		</SegmentView>
+		</Styled.Segment>
 	);
 };
 
