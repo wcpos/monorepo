@@ -1,56 +1,44 @@
-import React from 'react';
-// import { useTranslation } from 'react-i18next';
-import initialUI from './initial.json';
+import { Q } from '@nozbe/watermelondb';
+import { filter, map, tap } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
+import useAppState from '../use-app-state';
 
-type sectionType = Extract<keyof typeof initialUI, string>;
+type Section = 'pos_products' | 'pos_cart' | 'products';
+type UI = typeof import('../../database/models/store/ui/ui');
 
 /**
- * initUI helper to set up the default UI for each section
+ *
  * @param section
- * @param t
  */
-const initUI = (section: sectionType, t) => {
-	const ui = initialUI[section];
-	if (!ui) return;
+const useUI = (section: Section): ObservableResource<UI> => {
+	const [{ storeDB }] = useAppState();
+	const uiCollection = storeDB.collections.get('uis');
 
-	ui?.columns.map((column, index) => {
-		column.label = t(section + '.column.label.' + column.key);
-		column.order = index;
-	});
-
-	if (ui?.display) {
-		ui.display.map((display, index) => {
-			display.label = t(section + '.display.label.' + display.key);
+	const init = async () => {
+		await storeDB.action(async () => {
+			const newUI = await uiCollection.create((ui: UI) => {
+				ui.section = section;
+			});
+			newUI.reset();
 		});
-	}
+	};
 
-	return ui;
+	const ui$ = uiCollection
+		.query(Q.where('section', section))
+		.observeWithColumns(['width', 'sortBy', 'sortDirection'])
+		.pipe(
+			filter((uis: UI[]) => {
+				if (uis.length > 0) {
+					return true;
+				}
+				init();
+				return false;
+			}),
+			map((uis: UI[]) => uis[0]),
+			tap((result) => console.log('UI found from useUI', result))
+		);
+
+	return new ObservableResource(ui$);
 };
 
-/**
- *
- * @param state
- * @param action
- */
-const reducer = (state, action) => {
-	switch (action.type) {
-		case 'UI_UPDATE':
-			return { ...state, ...action.payload };
-		default:
-			return state;
-	}
-};
-
-/**
- *
- * @param section
- * @TODO process translations only once on start up
- * @TODO make sure changes only cause relevant components to re-render
- */
-const useUi = (section: sectionType) => {
-	const [ui, dispatch] = React.useReducer(reducer, initialUI);
-
-	return [ui, dispatch];
-};
-
-export default useUi;
+export default useUI;

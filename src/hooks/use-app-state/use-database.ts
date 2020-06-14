@@ -55,7 +55,7 @@ const useDatabase = (dispatch: React.Dispatch<AppAction>): void => {
 				const user = await userCollection.find(hash.user);
 				const site = await usersDatabase.collections.get('sites').find(hash.site);
 				const wpUser = await usersDatabase.collections.get('wp_users').find(hash.wp_user);
-				const storeDB = getStoreDatabase(hash);
+				const storeDB = hash?.user && hash?.site ? getStoreDatabase(hash) : undefined;
 				dispatch({ type: RESTORE_LAST_USER, payload: { user, site, wpUser, storeDB } });
 			}
 		};
