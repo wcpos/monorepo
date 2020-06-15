@@ -14,6 +14,7 @@ const useUI = (type: DataType) => {
 	const [{ storeDB, wpUser, site }] = useAppState();
 	const dataCollection = storeDB.collections.get(type);
 
+	// @TODO query observable combine with database query
 	const data$ = dataCollection
 		.query(Q.where('name', Q.like(`%${Q.sanitizeLikeString('')}%`)))
 		.observe()
