@@ -7,35 +7,33 @@ import Actions from './actions';
 
 interface Props {
 	uiResource: any;
-	dataResource: any;
+	productsResource: any;
 }
 
-const Products: React.FC<Props> = ({ uiResource, dataResource }) => {
-	const products = useObservableSuspense(dataResource);
+const Products: React.FC<Props> = ({ uiResource, productsResource }) => {
+	const products = useObservableSuspense(productsResource);
 	const ui = useObservableSuspense(uiResource);
 	const columns = useObservableSuspense(ui.columnsResource);
 
 	return (
-		<Segment.Group>
-			<Segment>
-				<React.Suspense fallback={<Text>loading actions...</Text>}>
+		<React.Suspense fallback={<Text>loading products...</Text>}>
+			<Segment.Group>
+				<Segment>
 					<Actions
 						columns={columns}
 						resetUI={() => {
 							ui.reset();
 						}}
 					/>
-				</React.Suspense>
-			</Segment>
-			<Segment grow>
-				<React.Suspense fallback={<Text>loading products...</Text>}>
+				</Segment>
+				<Segment grow>
 					<Table products={products} columns={columns} />
-				</React.Suspense>
-			</Segment>
-			<Segment>
-				<Text>Footer</Text>
-			</Segment>
-		</Segment.Group>
+				</Segment>
+				<Segment>
+					<Text>Footer</Text>
+				</Segment>
+			</Segment.Group>
+		</React.Suspense>
 	);
 };
 

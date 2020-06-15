@@ -37,7 +37,7 @@ const Cell: React.FC<Props> = ({
 
 	return (
 		<Styled.Cell style={style} flexGrow={flexGrow} flexShrink={flexShrink} width={width}>
-			<Text>{String(cellData)}</Text>
+			<Text>{children || String(cellData)}</Text>
 		</Styled.Cell>
 	);
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import Sites from './sites-db';
+import Sites from './users-db';
 import Store from './store-db';
 import Segment, { SegmentGroup } from '../../components/segment';
 
@@ -8,9 +8,9 @@ interface Props {}
 
 const Support: React.FC<Props> = ({ header, main, title }) => {
 	return (
-		<React.Fragment>
+		<>
 			<SegmentGroup style={{ width: '50%' }}>
-				<Segment>Sites Database</Segment>
+				<Segment>Users Database</Segment>
 				<Segment>
 					<Sites />
 				</Segment>
@@ -25,7 +25,7 @@ const Support: React.FC<Props> = ({ header, main, title }) => {
 					<Store />
 				</Segment>
 			</SegmentGroup>
-		</React.Fragment>
+		</>
 	);
 };
 

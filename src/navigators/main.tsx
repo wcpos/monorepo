@@ -13,9 +13,9 @@ import useDataResource from '../hooks/use-data-resource';
 
 const Screen = ({ route, navigation }) => {
 	const components = {
-		POS: <POS dataResource={useDataResource('products')} uiResource={useUI('pos_products')} />,
+		POS: <POS productsResource={useDataResource('products')} uiResource={useUI('pos_products')} />,
 		Products: (
-			<Products dataResource={useDataResource('products')} uiResource={useUI('products')} />
+			<Products productsResource={useDataResource('products')} uiResource={useUI('products')} />
 		),
 		Support: <Support />,
 	};

@@ -1,61 +1,28 @@
 import React from 'react';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { map, tap, filter } from 'rxjs/operators';
+import { useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
-import { Q } from '@nozbe/watermelondb';
 import TableLayout from '../../../layout/table';
 import Table from '../../../components/table';
 import TableActions from './actions';
-import simpleProduct from '../../../../jest/__fixtures__/product.json';
 import ProductActions from './cells/actions';
 import Name from './cells/name';
 import Image from './cells/image';
-import Product from '../../../database/models/store/product';
-import useAppState from '../../../hooks/use-app-state';
 import Text from '../../../components/text';
-import { syncIds } from '../../../services/wc-api';
 
 interface Props {
+	productsResource: any;
 	ui: any;
 }
-
-const initProducts = () => {};
 
 /**
  *
  */
-const Products: React.FC<Props> = ({ ui }) => {
+const Products: React.FC<Props> = ({ productsResource, ui }) => {
 	const { t } = useTranslation();
-	const [{ storeDB, wpUser, site }] = useAppState();
 
-	const displayResource = new ObservableResource(
-		ui.display
-			.observeWithColumns(['hide'])
-			.pipe(map((results) => results.sort((a, b) => a.order - b.order)))
-	);
-	const display = useObservableSuspense(displayResource);
-	const columnsResource = new ObservableResource(
-		ui.columns
-			.observeWithColumns(['hide', 'sortBy', 'sortDirection'])
-			.pipe(map((results) => results.sort((a, b) => a.order - b.order)))
-	);
-	const columns = useObservableSuspense(columnsResource);
-
-	const productResource = new ObservableResource(
-		storeDB.collections
-			.get('products')
-			.query(Q.where('name', Q.like(`%${Q.sanitizeLikeString('')}%`)))
-			.observe()
-			.pipe(
-				filter((products) => {
-					if (products.length > 0) {
-						return true;
-					}
-					syncIds(storeDB.collections.get('products'), wpUser, site);
-				})
-			)
-	);
-	const products = useObservableSuspense(productResource);
+	const display = useObservableSuspense(ui.displayResource);
+	const columns = useObservableSuspense(ui.columnsResource);
+	const products = useObservableSuspense(productsResource);
 
 	/**
 	 * Decorate table cells

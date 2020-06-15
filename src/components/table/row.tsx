@@ -20,13 +20,16 @@ const Row: React.FC<Props> = ({ rowData, columns, style, children }) => {
 				? column.cellDataGetter({ rowData, dataKey, column })
 				: rowData[dataKey];
 
-		const { flexGrow, flexShrink, width, cellRenderer } = column;
+		const { flexGrow, flexShrink, width } = column;
+
+		if (typeof children === 'function') {
+			return children({ cellData, column });
+		}
 
 		return (
 			!column.hide && (
 				<Cell
 					cellData={cellData}
-					// cellRenderer={children || cellRenderer}
 					columnData={column}
 					dataKey={dataKey}
 					key={dataKey || index}

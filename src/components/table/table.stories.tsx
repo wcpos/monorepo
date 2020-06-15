@@ -86,7 +86,13 @@ export const customTableCell = () => {
 		>
 			{({ item }) => (
 				<Table.Row rowData={item} columns={columns}>
-					{({ cellData, column }) => <Table.Row.Cell cellData={cellData} />}
+					{({ cellData, column }) => {
+						if (column.key === 'price') {
+							const fixedDecimal = cellData.toFixed(2);
+							return <Table.Row.Cell>{`$ ${fixedDecimal}`}</Table.Row.Cell>;
+						}
+						return <Table.Row.Cell cellData={cellData} />;
+					}}
 				</Table.Row>
 			)}
 		</Table>

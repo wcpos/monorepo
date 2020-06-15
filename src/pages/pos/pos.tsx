@@ -1,36 +1,17 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { Q } from '@nozbe/watermelondb';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { switchMap, map, shareReplay, filter, tap } from 'rxjs/operators';
+import { useObservableSuspense } from 'observable-hooks';
 import Products from './products';
 import Cart from './cart';
 import ErrorBoundary from '../../components/error';
 import Draggable from '../../components/draggable';
-// import Button from '../../components/button';
-import useDatabase from '../../hooks/use-database';
-// import useObservable from '../../hooks/use-observable';
-// import { getStoreDatabase } from '../../database';
-
-// const database = getStoreDatabase({ site: 'test', user: 'test' });
 
 interface Props {
+	productsResource: any;
 	uiResource: any;
 }
 
-// const getResource = (store) =>
-// 	new ObservableResource(
-// 		store.collections
-// 			.get('uis')
-// 			.query(Q.where('section', 'pos_products'))
-// 			.observe()
-// 			.pipe(
-// 				map((array) => array[6])
-// 				// shareReplay()
-// 			)
-// 	);
-
-const POS: React.FC<Props> = ({ uiResource }) => {
+const POS: React.FC<Props> = ({ productsResource, uiResource }) => {
 	// const { store } = useStore();
 	// const uiResource = getResource(store);
 
@@ -54,7 +35,7 @@ const POS: React.FC<Props> = ({ uiResource }) => {
 			<View style={{ width }}>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading products...</Text>}>
-						<Products ui={ui} />
+						<Products ui={ui} productsResource={productsResource} />
 					</React.Suspense>
 				</ErrorBoundary>
 			</View>
