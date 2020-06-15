@@ -1,5 +1,6 @@
 import { nochange, field, action } from '@nozbe/watermelondb/decorators';
 import { ObservableResource } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 import Model from '../../base';
 import { children } from '../../decorators';
 import initial from './initial.json';
@@ -31,10 +32,20 @@ export default class UI extends Model {
 	};
 
 	private _columnsResource: ObservableResource<unknown, unknown>;
+	private _displayResource: ObservableResource<unknown, unknown>;
 
 	constructor(collection, raw) {
 		super(collection, raw);
-		this._columnsResource = new ObservableResource(this.columns.observeWithColumns(['hide']));
+		this._columnsResource = new ObservableResource(
+			this.columns
+				.observeWithColumns(['hide'])
+				.pipe(map((columns) => columns.sort((a, b) => a.order - b.order)))
+		);
+		this._displayResource = new ObservableResource(
+			this.display
+				.observeWithColumns(['hide'])
+				.pipe(map((display) => display.sort((a, b) => a.order - b.order)))
+		);
 	}
 
 	@children('ui_columns') columns: any;
@@ -58,6 +69,10 @@ export default class UI extends Model {
 
 	get columnsResource() {
 		return this._columnsResource;
+	}
+
+	get displayResource() {
+		return this._displayResource;
 	}
 
 	/** *
@@ -106,7 +121,7 @@ export default class UI extends Model {
 	 */
 	@action reset() {
 		const ui = this.prepareUpdate((model: UI) => {
-			model.set(initial.products);
+			model.set(initial[this.section]);
 		});
 
 		return this.batch(ui);
