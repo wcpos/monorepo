@@ -5,15 +5,17 @@ import { children } from '../decorators';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
+const TABLE_NAME = 'wp_users';
+
 /**
  * WordPress User Schema
  *
  */
 export const wpUserSchema: Schema = {
-	name: 'wp_users',
+	name: TABLE_NAME,
 	columns: [
 		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
-		{ name: 'parent_id', type: 'string', isIndexed: true },
+		{ name: 'site_id', type: 'string', isIndexed: true },
 		{ name: 'username', type: 'string' },
 		{ name: 'name', type: 'string' },
 		{ name: 'first_name', type: 'string' },
@@ -34,14 +36,17 @@ export const wpUserSchema: Schema = {
  *
  */
 class WpUser extends Model {
-	static table = 'wp_users';
+	static table = TABLE_NAME;
 
 	static associations = {
-		sites: { type: 'belongs_to', key: 'parent_id' },
+		sites: { type: 'belongs_to', key: 'site_id' },
+		stores: { type: 'has_many', foreignKey: 'wp_user_id' },
 		meta: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
 	@immutableRelation('sites', 'parent_id') site!: any;
+
+	@children('stores') stores!: any;
 
 	@field('remote_id') remote_id!: number;
 	@field('username') username!: string;

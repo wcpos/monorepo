@@ -7,14 +7,16 @@ import wcAuthService from '../../../services/wc-auth';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
+const TABLE_NAME = 'sites';
+
 /**
  * Site Schema
  *
  */
 export const siteSchema: Schema = {
-	name: 'sites',
+	name: TABLE_NAME,
 	columns: [
-		{ name: 'parent_id', type: 'string', isIndexed: true },
+		{ name: 'app_user_id', type: 'string', isIndexed: true },
 		{ name: 'name', type: 'string' },
 		{ name: 'description', type: 'string' },
 		{ name: 'url', type: 'string' },
@@ -31,7 +33,7 @@ export const siteSchema: Schema = {
  * Site Model
  */
 export default class Site extends Model {
-	static table = 'sites';
+	static table = TABLE_NAME;
 	private _connection_status$ = new BehaviorSubject({
 		type: 'connecting',
 		message: 'TODO: check connection status after init',
@@ -40,12 +42,12 @@ export default class Site extends Model {
 	public readonly connection_status$ = this._connection_status$.asObservable();
 
 	static associations = {
-		user: { type: 'belongs_to', key: 'parent_id' },
-		wp_users: { type: 'has_many', foreignKey: 'parent_id' },
-		stores: { type: 'has_many', foreignKey: 'parent_id' },
+		app_users: { type: 'belongs_to', key: 'app_user_id' },
+		wp_users: { type: 'has_many', foreignKey: 'site_id' },
+		stores: { type: 'has_many', foreignKey: 'site_id' },
 	};
 
-	@immutableRelation('users', 'parent_id') user!: any;
+	@immutableRelation('app_users', 'app_user_id') user!: any;
 
 	@children('wp_users') wp_users!: any;
 	@children('stores') stores!: any;

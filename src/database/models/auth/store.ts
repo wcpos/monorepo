@@ -4,15 +4,17 @@ import Model from '../base';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
+const TABLE_NAME = 'stores';
+
 /**
  * Store Schema
  *
  */
 export const storeSchema: Schema = {
-	name: 'stores',
+	name: TABLE_NAME,
 	columns: [
 		{ name: 'remote_id', type: 'string', isIndexed: true },
-		{ name: 'parent_id', type: 'string', isIndexed: true },
+		{ name: 'wp_user_id', type: 'string', isIndexed: true },
 		{ name: 'name', type: 'string' },
 	],
 };
@@ -22,13 +24,14 @@ export const storeSchema: Schema = {
  *
  */
 class Store extends Model {
-	static table = 'stores';
+	static table = TABLE_NAME;
 
 	static associations: Associations = {
-		sites: { type: 'belongs_to', key: 'parent_id' },
+		wp_users: { type: 'belongs_to', key: 'wp_user_id' },
+		uis: { type: 'has_many', foreignKey: 'store_id' },
 	};
 
-	@nochange @field('remote_id') remote_id!: number;
+	@field('remote_id') remote_id!: number;
 	@field('name') name!: string;
 }
 

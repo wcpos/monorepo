@@ -20,11 +20,6 @@ import tag, { tagSchema } from './tag';
 import tax, { taxSchema } from './tax';
 import taxRate, { taxRateSchema } from './tax-rate';
 
-// ui settings
-import ui, { uiSchema } from './ui/ui';
-import uiColumn, { uiColumnSchema } from './ui/column';
-import uiDisplay, { uiDisplaySchema } from './ui/display';
-
 export const schemas = [
 	addressSchema,
 	attributeSchema,
@@ -47,11 +42,6 @@ export const schemas = [
 	tagSchema,
 	taxSchema,
 	taxRateSchema,
-
-	// ui settings
-	uiSchema,
-	uiColumnSchema,
-	uiDisplaySchema,
 ];
 
 export const modelClasses = [
@@ -76,9 +66,4 @@ export const modelClasses = [
 	tag,
 	tax,
 	taxRate,
-
-	// ui settings
-	ui,
-	uiColumn,
-	uiDisplay,
 ];

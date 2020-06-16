@@ -1,22 +1,13 @@
 import { Database, appSchema, tableSchema } from '@nozbe/watermelondb';
 import { Platform } from 'react-native';
-import hash from 'hash-sum';
 import Adapter from './adapter';
 import { modelClasses, schemas } from './models/store';
 
-interface LastUserHash {
-	site: string;
-	user: string;
-	store: string;
-}
-
-const getStoreDatabase = (lastUser: LastUserHash): Database => {
-	const dbName = hash(lastUser); // turn last user object into string
-
+const getStoreDatabase = (dbName: string): Database => {
 	const config = {
 		dbName,
 		schema: appSchema({
-			version: 34,
+			version: 2,
 			tables: schemas.map(tableSchema),
 		}),
 	};
