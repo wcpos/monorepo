@@ -36,14 +36,15 @@ const ProductsTable: React.FC<Props> = ({ columns, products, sort }) => {
 	return (
 		<Table columns={columns} data={products} sort={sort}>
 			<Table.Header>
-				<Table.HeaderRow>
-					{columns.map((column) => {
+				<Table.HeaderRow columns={columns}>
+					{({ getHeaderCellProps }) => {
+						const { column } = getHeaderCellProps();
 						return (
-							<Table.HeaderRow.HeaderCell>
+							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
 								{t(`products.column.label.${column.key}`)}
 							</Table.HeaderRow.HeaderCell>
 						);
-					})}
+					}}
 				</Table.HeaderRow>
 			</Table.Header>
 			<Table.Body>

@@ -15,18 +15,28 @@ const Products: React.FC<Props> = ({ uiResource, productsResource }) => {
 	const ui = useObservableSuspense(uiResource);
 	const columns = useObservableSuspense(ui.columnsResource);
 
-	const handleResetUI = () => {
+	const onResetUI = () => {
 		ui.reset();
+	};
+
+	const onSort = ({ sortBy, sortDirection }) => {
+		ui.updateWithJson({ sortBy, sortDirection });
 	};
 
 	return (
 		<React.Suspense fallback={<Text>loading products...</Text>}>
 			<Segment.Group>
 				<Segment>
-					<Actions columns={columns} uiReset={handleResetUI} />
+					<Actions columns={columns} resetUI={onResetUI} />
 				</Segment>
 				<Segment grow>
-					<Table products={products} columns={columns} />
+					<Table
+						products={products}
+						columns={columns}
+						sort={onSort}
+						sortBy={ui.sortBy}
+						sortDirection={ui.sortDirection}
+					/>
 				</Segment>
 				<Segment>
 					<Text>Footer</Text>

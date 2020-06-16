@@ -3,7 +3,7 @@ import isNil from 'lodash/isNil';
 
 type ThemeProps = import('../../lib/theme/types').ThemeProps;
 
-type RowProps = { theme: ThemeProps } & import('./row').Props;
+type RowProps = { theme: ThemeProps } & Pick<import('./row').Props, 'style'>;
 
 export const Row = styled.View<RowProps>`
 	flex-direction: row;
@@ -21,7 +21,7 @@ export const Cell = styled.View<CellProps>`
 	padding: 5px;
 `;
 
-type HeaderRowProps = { theme: ThemeProps } & import('./header-row').Props;
+type HeaderRowProps = { theme: ThemeProps } & Pick<import('./header-row').Props, 'style'>;
 
 export const HeaderRow = styled.View<HeaderRowProps>`
 	flex-direction: row;

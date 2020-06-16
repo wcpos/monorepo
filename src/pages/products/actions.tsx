@@ -7,13 +7,13 @@ import Text from '../../components/text';
 
 interface Props {
 	columns: any;
-	uiReset: () => void;
+	resetUI: () => void;
 }
 
 /**
  *
  */
-const Actions: React.FC<Props> = ({ columns, uiReset }) => {
+const Actions: React.FC<Props> = ({ columns, resetUI }) => {
 	const { t } = useTranslation();
 
 	const onFilter = () => {
@@ -47,7 +47,7 @@ const Actions: React.FC<Props> = ({ columns, uiReset }) => {
 					}}
 				/>
 			))} */}
-			<Button title="Restore Default Settings" onPress={uiReset} />
+			<Button title="Restore Default Settings" onPress={resetUI} />
 		</>
 	);
 };

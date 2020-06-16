@@ -109,15 +109,13 @@ export const customTableCell = () => {
 };
 
 export const customTable = () => {
-	const columns = [
-		{ key: 'quantity', label: 'Qty', flexGrow: 0, flexShrink: 1, width: '20%' },
-		{ key: 'name', label: 'Name', flexGrow: 1, flexShrink: 0, width: '50%' },
-		{ key: 'price', label: 'Price', flexGrow: 0, flexShrink: 1, width: '30%' },
-	];
-
 	return (
 		<Table
-			// columns={columns}
+			columns={[
+				{ key: 'quantity', label: 'Qty', flexGrow: 0, flexShrink: 1, width: '20%' },
+				{ key: 'name', label: 'Name', flexGrow: 1, flexShrink: 0, width: '50%' },
+				{ key: 'price', label: 'Price', flexGrow: 0, flexShrink: 1, width: '30%' },
+			]}
 			data={[
 				{ name: 'Apples', price: 1.29, quantity: 2 },
 				{ name: 'Pears', price: 3.1, quantity: 0 },
@@ -126,27 +124,19 @@ export const customTable = () => {
 		>
 			<Table.Header>
 				<Table.HeaderRow>
-					{columns.map(({ key, flexGrow, flexShrink, width, label }) => {
+					{({ getHeaderCellProps }) => {
+						const { label } = getHeaderCellProps();
 						return (
-							<Table.HeaderRow.HeaderCell
-								key={key}
-								dataKey={key}
-								flexGrow={flexGrow}
-								flexShrink={flexShrink}
-								width={width}
-								sort={action('sort')}
-								sortBy="name"
-								sortDirection="asc"
-							>
+							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
 								{label}
 							</Table.HeaderRow.HeaderCell>
 						);
-					})}
+					}}
 				</Table.HeaderRow>
 			</Table.Header>
 			<Table.Body>
 				{({ item }) => (
-					<Table.Row rowData={item} columns={columns}>
+					<Table.Row rowData={item}>
 						{({ cellData, column, getCellProps }) => (
 							<Table.Row.Cell {...getCellProps()} cellData={cellData} columnData={column} />
 						)}

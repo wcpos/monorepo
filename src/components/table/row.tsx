@@ -15,28 +15,29 @@ export type Props = {
 const Row: React.FC<Props> = ({ rowData, columns, style, children }) => {
 	return (
 		<Styled.Row style={style}>
-			{columns.map((column: ColumnProps, index: number) => {
-				if (column.hide) return;
-				const dataKey = column.key || index;
-				const cellData = rowData[dataKey];
-				const { flexGrow, flexShrink, width } = column;
+			{columns &&
+				columns.map((column: ColumnProps, index: number) => {
+					if (column.hide) return;
+					const dataKey = column.key || index;
+					const cellData = rowData[dataKey];
+					const { flexGrow, flexShrink, width } = column;
 
-				const getCellProps = (): CellProps => ({
-					cellData,
-					column,
-					dataKey,
-					flexGrow,
-					flexShrink,
-					width,
-					rowData,
-				});
+					const getCellProps = (): CellProps => ({
+						cellData,
+						column,
+						dataKey,
+						flexGrow,
+						flexShrink,
+						width,
+						rowData,
+					});
 
-				if (typeof children === 'function') {
-					return children({ cellData, column, getCellProps });
-				}
+					if (typeof children === 'function') {
+						return children({ cellData, column, getCellProps });
+					}
 
-				return <Cell {...getCellProps()} />;
-			})}
+					return <Cell {...getCellProps()} />;
+				})}
 		</Styled.Row>
 	);
 };

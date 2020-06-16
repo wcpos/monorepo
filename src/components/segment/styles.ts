@@ -11,7 +11,7 @@ export const Segment = styled.View<SegmentProps>`
 	border-color: ${({ theme }) => theme.SEGMENT_BORDER_COLOR};
 	border-style: solid;
 	border-radius: ${({ group, theme }) => (group === 'middle' ? '0' : theme.SEGMENT_BORDER_RADIUS)};
-	padding: ${({ theme }) => theme.SEGMENT_PADDING};
+	padding: ${({ theme, grow }) => (grow ? 0 : theme.SEGMENT_PADDING)};
 	margin-bottom: ${({ group, theme }) => (group ? '0' : theme.SEGMENT_MARGIN_BOTTOM)};
 	flex-grow: ${({ grow }) => (grow ? '1' : '0')};
 

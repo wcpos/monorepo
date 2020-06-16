@@ -2,6 +2,7 @@ import React from 'react';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import PageLayout from '../layout/page';
 import MasterBar from '../layout/masterbar';
+import ErrorBoundary from '../components/error';
 import POS from '../pages/pos';
 import Products from '../pages/products';
 // import Orders from '../sections/orders';
@@ -21,9 +22,13 @@ const Screen = ({ route, navigation }) => {
 	};
 
 	return (
-		<React.Suspense fallback={<Text>{`Loading ${route.name} page...`}</Text>}>
-			<PageLayout header={<MasterBar />}>{components[route.name]}</PageLayout>
-		</React.Suspense>
+		<PageLayout header={<MasterBar />}>
+			<ErrorBoundary>
+				<React.Suspense fallback={<Text>{`Loading ${route.name} page...`}</Text>}>
+					{components[route.name]}
+				</React.Suspense>
+			</ErrorBoundary>
+		</PageLayout>
 	);
 };
 

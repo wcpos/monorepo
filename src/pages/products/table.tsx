@@ -6,25 +6,35 @@ import Text from '../../components/text';
 interface Props {
 	columns: any;
 	products: any;
+	sort: () => void;
+	sortBy: string;
+	sortDirection: string;
 }
 
 /**
  *
  */
-const ProductsTable: React.FC<Props> = ({ columns, products }) => {
+const ProductsTable: React.FC<Props> = ({ columns, products, sort, sortBy, sortDirection }) => {
 	const { t } = useTranslation();
 
 	return (
-		<Table columns={columns} data={products}>
+		<Table
+			columns={columns}
+			data={products}
+			sort={sort}
+			sortBy={sortBy}
+			sortDirection={sortDirection}
+		>
 			<Table.Header>
 				<Table.HeaderRow>
-					{columns.map((column) => {
+					{({ getHeaderCellProps }) => {
+						const { column } = getHeaderCellProps();
 						return (
-							<Table.HeaderRow.HeaderCell>
+							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
 								{t(`products.column.label.${column.key}`)}
 							</Table.HeaderRow.HeaderCell>
 						);
-					})}
+					}}
 				</Table.HeaderRow>
 			</Table.Header>
 			<Table.Body>
