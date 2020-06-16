@@ -51,6 +51,8 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 		// 	return { ...state, ...payload };
 		// case SET_THEME:
 		// 	return { ...state, colorTheme: action.theme };
+		case actionTypes.SET_STORE:
+			return state;
 		default:
 			return { ...state, ...payload };
 	}
