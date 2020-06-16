@@ -10,7 +10,7 @@ type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 export const uiDisplaySchema: Schema = {
 	name: 'ui_display',
 	columns: [
-		{ name: 'parent_id', type: 'string', isIndexed: true },
+		{ name: 'ui_id', type: 'string', isIndexed: true },
 		{ name: 'key', type: 'string' },
 		{ name: 'hide', type: 'boolean' },
 		{ name: 'order', type: 'number' },
@@ -24,10 +24,10 @@ export default class Display extends Model {
 	static table = 'ui_display';
 
 	static associations: Associations = {
-		uis: { type: 'belongs_to', key: 'parent_id' },
+		uis: { type: 'belongs_to', key: 'ui_id' },
 	};
 
-	@immutableRelation('uis', 'parent_id') ui!: any;
+	@immutableRelation('uis', 'ui_id') ui!: any;
 
 	@nochange @field('key') key!: string;
 	@field('hide') hide!: boolean;

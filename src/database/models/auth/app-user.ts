@@ -5,12 +5,14 @@ import Model from '../base';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
+const TABLE_NAME = 'app_users';
+
 /**
- * User Schema
+ * App User Schema
  *
  */
-export const userSchema: Schema = {
-	name: 'users',
+export const appUserSchema: Schema = {
+	name: TABLE_NAME,
 	columns: [
 		{ name: 'first_name', type: 'string' },
 		{ name: 'last_name', type: 'string' },
@@ -19,14 +21,16 @@ export const userSchema: Schema = {
 };
 
 /**
- * User Model
+ * App User Model
  *
  */
-class User extends Model {
-	static table = 'users';
+class AppUser extends Model {
+	static table = TABLE_NAME;
 
 	static associations = {
-		sites: { type: 'has_many', foreignKey: 'parent_id' },
+		sites: { type: 'has_many', foreignKey: 'sites_id' },
+		wp_users: { type: 'has_many', foreignKey: 'sites_id' },
+		store: { type: 'has_many', foreignKey: 'sites_id' },
 		meta: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
@@ -49,4 +53,4 @@ class User extends Model {
 	}
 }
 
-export default User;
+export default AppUser;

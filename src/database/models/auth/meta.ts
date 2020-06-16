@@ -3,11 +3,13 @@ import Model from '../base';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 
+const TABLE_NAME = 'meta';
+
 /**
  * Meta Data Schema
  */
 export const metaSchema: Schema = {
-	name: 'meta',
+	name: TABLE_NAME,
 	columns: [
 		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
 		{ name: 'parent_id', type: 'string', isIndexed: true },
@@ -29,10 +31,10 @@ export const metaSchema: Schema = {
  *
  */
 export default class Meta extends Model {
-	static table = 'meta';
+	static table = TABLE_NAME;
 
 	static associations = {
-		users: { type: 'belongs_to', key: 'parent_id' },
+		app_users: { type: 'belongs_to', key: 'parent_id' },
 	};
 
 	@nochange @field('remote_id') remote_id!: number;

@@ -11,7 +11,7 @@ type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 export const uiColumnSchema: Schema = {
 	name: 'ui_columns',
 	columns: [
-		{ name: 'parent_id', type: 'string', isIndexed: true },
+		{ name: 'ui_id', type: 'string', isIndexed: true },
 		{ name: 'key', type: 'string' },
 		{ name: 'order', type: 'number' },
 		{ name: 'hide', type: 'boolean' },
@@ -29,10 +29,10 @@ export default class Column extends Model {
 	static table = 'ui_columns';
 
 	static associations: Associations = {
-		uis: { type: 'belongs_to', key: 'parent_id' },
+		uis: { type: 'belongs_to', key: 'ui_id' },
 	};
 
-	@relation('uis', 'parent_id') ui!: any;
+	@relation('uis', 'ui_id') ui!: any;
 
 	@nochange @field('key') key!: string;
 	@field('order') order!: number;

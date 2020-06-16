@@ -27,7 +27,7 @@ const MasterBar: React.FC<Props> = () => {
 			</Header.Right>
 			<Header.Right>
 				<Text>{appState.user.display_name}</Text>
-				<Button onPress={() => dispatch({ type: actionTypes.USER_LOGOUT })} title="Logout" />
+				<Button onPress={() => dispatch({ type: actionTypes.STORE_LOGOUT })} title="Logout" />
 				<Avatar src="blah" placeholder="jj" />
 			</Header.Right>
 		</Header>

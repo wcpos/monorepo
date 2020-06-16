@@ -1,12 +1,14 @@
 import { Database, appSchema, tableSchema } from '@nozbe/watermelondb';
 import { Platform } from 'react-native';
 import Adapter from './adapter';
-import { modelClasses, schemas } from './models/users';
+import { modelClasses, schemas } from './models/auth';
+
+// @TODO: change to wcpos-auth
 
 const config = {
-	dbName: 'wcpos-users',
+	dbName: 'wcpos-auth',
 	schema: appSchema({
-		version: 4,
+		version: 2,
 		tables: schemas.map(tableSchema),
 	}),
 };

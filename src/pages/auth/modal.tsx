@@ -8,7 +8,7 @@ import WebView from '../../components/webview';
 interface Props {
 	visible: boolean;
 	setVisible: () => void;
-	site: typeof import('../../database/models/users/site');
+	site: typeof import('../../database/models/auth/site');
 }
 
 const AuthModal: React.FC<Props> = ({ visible, setVisible, site }) => {

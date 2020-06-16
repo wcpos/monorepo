@@ -1,65 +1,50 @@
 import React from 'react';
-import { usersDatabase, getStoreDatabase } from '../../database';
+import database from '../../database';
 import { SET_USER, RESTORE_LAST_USER } from './action-types';
 
 // type AppState = import('./app-state-provider').AppState;
 type AppAction = import('./app-state-provider').AppAction;
 
-const getLastUserHash = async () => {
-	const hash = await usersDatabase.adapter.getLocal('last_user_hash');
-	try {
-		const obj = JSON.parse(hash || '');
-		if (obj && typeof obj === 'object') {
-			return obj;
-		}
-	} catch (e) {
-		console.log('No last user saved', e);
-	}
+const getLastStore = async () => {
+	return database.adapter.getLocal('last_store');
 };
 
-const storeLastUserHash = async (obj: {}) => {
-	const response = await usersDatabase.adapter.setLocal('last_user_hash', JSON.stringify(obj));
-	console.log(response);
-	return response;
+const setLastStore = async (storeId: string) => {
+	return database.adapter.setLocal('last_store', storeId);
 };
 
-const removeLastUserHash = async () => {
-	const response = await usersDatabase.adapter.removeLocal('last_user_hash');
-	console.log(response);
-	return response;
+export const removeLastStore = async () => {
+	return database.adapter.removeLocal('last_store');
 };
 
 const useDatabase = (dispatch: React.Dispatch<AppAction>): void => {
 	React.useEffect(() => {
-		const initDatabases = async () => {
-			const userCollection = usersDatabase.collections.get('users');
-			const hash = await getLastUserHash();
-			const userCount = await userCollection.query().fetchCount();
+		(async function init() {
+			const appUsersCollection = database.collections.get('app_users');
+			const storesCollection = database.collections.get('stores');
+			const lastStore = await getLastStore();
 
-			if (!hash && userCount === 0) {
-				// create new user
-				await usersDatabase.action(async () => {
-					const newUser = await userCollection.create((user) => {
-						user.display_name = 'New User';
+			if (!lastStore) {
+				debugger;
+				const appUserCount = await appUsersCollection.query().fetchCount();
+
+				if (appUserCount === 0) {
+					// create new user
+					await database.action(async () => {
+						const newUser = await appUsersCollection.create((user) => {
+							user.display_name = 'New User';
+						});
+						dispatch({ type: SET_USER, payload: { user: newUser } });
 					});
-					dispatch({ type: SET_USER, payload: { user: newUser } });
-				});
-			}
+				}
 
-			if (!hash && userCount === 1) {
-				const allUsers = await userCollection.query().fetch();
-				dispatch({ type: SET_USER, payload: { user: allUsers[0] } });
+				if (appUserCount === 0) {
+					// set only user
+					const allUsers = await appUsersCollection.query().fetch();
+					dispatch({ type: SET_USER, payload: { user: allUsers[0] } });
+				}
 			}
-
-			if (hash) {
-				const user = await userCollection.find(hash.user);
-				const site = await usersDatabase.collections.get('sites').find(hash.site);
-				const wpUser = await usersDatabase.collections.get('wp_users').find(hash.wp_user);
-				const storeDB = hash?.user && hash?.site ? getStoreDatabase(hash) : undefined;
-				dispatch({ type: RESTORE_LAST_USER, payload: { user, site, wpUser, storeDB } });
-			}
-		};
-		initDatabases();
+		})();
 	}, [dispatch]);
 };
 

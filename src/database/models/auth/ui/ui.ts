@@ -1,4 +1,4 @@
-import { nochange, field, action } from '@nozbe/watermelondb/decorators';
+import { nochange, field, action, immutableRelation } from '@nozbe/watermelondb/decorators';
 import { ObservableResource } from 'observable-hooks';
 import { map, tap } from 'rxjs/operators';
 import Model from '../../base';
@@ -15,6 +15,7 @@ type Display = typeof import('./display');
 export const uiSchema: Schema = {
 	name: 'uis',
 	columns: [
+		{ name: 'store_id', type: 'string', isIndexed: true },
 		{ name: 'section', type: 'string' },
 		{ name: 'sortBy', type: 'string' },
 		{ name: 'sortDirection', type: 'string' },
@@ -29,8 +30,9 @@ export default class UI extends Model {
 	static table = 'uis';
 
 	static associations = {
-		ui_columns: { type: 'has_many', foreignKey: 'parent_id' },
-		ui_display: { type: 'has_many', foreignKey: 'parent_id' },
+		stores: { type: 'belongs_to', key: 'store_id' },
+		ui_columns: { type: 'has_many', foreignKey: 'ui_id' },
+		ui_display: { type: 'has_many', foreignKey: 'ui_id' },
 	};
 
 	private _columnsResource: ObservableResource<Column[], Column[]>;
@@ -55,6 +57,8 @@ export default class UI extends Model {
 
 	@children('ui_columns') columns: any;
 	@children('ui_display') display: any;
+
+	@immutableRelation('stores', 'store_id') store!: any;
 
 	@nochange @field('section') section!: string;
 	@field('sortBy') sortBy!: string;
