@@ -3,7 +3,7 @@ import { Dimensions } from 'react-native';
 import { getUniqueId, getReadableVersion } from './device-info';
 import useNetInfo from './use-net-info';
 import useDimensions from './use-dimensions';
-import useDatabase from './use-database';
+import useDatabase, { removeLastStore } from './use-database';
 import * as actionTypes from './action-types';
 
 export type AppState = {
@@ -16,9 +16,10 @@ export type AppState = {
 	};
 	urlPrefix: string;
 	user?: any;
-	storeDB?: any;
-	site?: any;
-	wpUser?: any;
+	store?: any;
+	// storeDB?: any;
+	// site?: any;
+	// wpUser?: any;
 };
 export type ActionTypes = typeof actionTypes;
 export type AppAction = {
@@ -36,9 +37,10 @@ const initialState: AppState = {
 	},
 	urlPrefix: window?.location?.origin || 'wcpos://',
 	user: undefined,
-	storeDB: undefined,
-	site: undefined,
-	wpUser: undefined,
+	store: undefined,
+	// storeDB: undefined,
+	// site: undefined,
+	// wpUser: undefined,
 };
 
 function appStateReducer(state: AppState, action: AppAction): AppState {
@@ -51,6 +53,9 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 		// 	return { ...state, ...payload };
 		// case SET_THEME:
 		// 	return { ...state, colorTheme: action.theme };
+		case actionTypes.STORE_LOGOUT:
+			removeLastStore();
+			return { ...state, store: undefined };
 		case actionTypes.SET_STORE:
 			return state;
 		default:
