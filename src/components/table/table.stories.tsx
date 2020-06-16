@@ -1,5 +1,6 @@
 import React from 'react';
 import { action } from '@storybook/addon-actions';
+import Text from '../text';
 // import { text, select, boolean } from '@storybook/addon-knobs';
 
 import Table from '.';
@@ -86,12 +87,20 @@ export const customTableCell = () => {
 		>
 			{({ item }) => (
 				<Table.Row rowData={item} columns={columns}>
-					{({ cellData, column }) => {
+					{({ cellData, column, getCellProps }) => {
 						if (column.key === 'price') {
 							const fixedDecimal = cellData.toFixed(2);
-							return <Table.Row.Cell>{`$ ${fixedDecimal}`}</Table.Row.Cell>;
+							return (
+								<Table.Row.Cell {...getCellProps()}>
+									<Text>{`$ ${fixedDecimal}`}</Text>
+								</Table.Row.Cell>
+							);
 						}
-						return <Table.Row.Cell cellData={cellData} />;
+						return (
+							<Table.Row.Cell {...getCellProps()}>
+								<Text>{cellData}</Text>
+							</Table.Row.Cell>
+						);
 					}}
 				</Table.Row>
 			)}
@@ -138,7 +147,9 @@ export const customTable = () => {
 			<Table.Body>
 				{({ item }) => (
 					<Table.Row rowData={item} columns={columns}>
-						{({ cellData, column }) => <Table.Row.Cell cellData={cellData} columnData={column} />}
+						{({ cellData, column, getCellProps }) => (
+							<Table.Row.Cell {...getCellProps()} cellData={cellData} columnData={column} />
+						)}
 					</Table.Row>
 				)}
 			</Table.Body>

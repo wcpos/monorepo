@@ -1,16 +1,17 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import Table from '../../components/table';
+import Text from '../../components/text';
 
 interface Props {
-	columnsResource: any;
+	columns: any;
 	products: any;
 }
 
 /**
  *
  */
-const ProductsTable: React.FC<Props> = ({ columns, uiReset, products }) => {
+const ProductsTable: React.FC<Props> = ({ columns, products }) => {
 	const { t } = useTranslation();
 
 	return (
@@ -29,7 +30,11 @@ const ProductsTable: React.FC<Props> = ({ columns, uiReset, products }) => {
 			<Table.Body>
 				{({ item }) => (
 					<Table.Row rowData={item} columns={columns}>
-						{({ cellData, column }) => <Table.Row.Cell cellData={cellData} columnData={column} />}
+						{({ cellData, column, getCellProps }) => (
+							<Table.Row.Cell {...getCellProps()}>
+								<Text>{String(cellData)}</Text>
+							</Table.Row.Cell>
+						)}
 					</Table.Row>
 				)}
 			</Table.Body>

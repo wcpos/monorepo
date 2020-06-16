@@ -1,15 +1,22 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import Input from '../../../components/textinput';
 import Checkbox from '../../../components/checkbox';
 import Button from '../../../components/button';
 import Text from '../../../components/text';
 
-interface Props {}
+interface Props {
+	columns: any[];
+	display: any[];
+	resetUI: () => void;
+}
 
 /**
  *
  */
-const Actions: React.FC<Props> = ({ columns, display, onRestoreUi }) => {
+const Actions: React.FC<Props> = ({ columns, display, resetUI }) => {
+	const { t } = useTranslation();
+
 	const onFilter = () => {
 		console.log('change query');
 	};
@@ -22,7 +29,7 @@ const Actions: React.FC<Props> = ({ columns, display, onRestoreUi }) => {
 				<Checkbox
 					key={column.key}
 					name={column.key}
-					label={column.label}
+					label={t(`pos_products.column.label.${column.key}`)}
 					checked={!column.hide}
 					onChange={(checked) => {
 						column.updateWithJson({ hide: !checked });
@@ -34,14 +41,14 @@ const Actions: React.FC<Props> = ({ columns, display, onRestoreUi }) => {
 				<Checkbox
 					key={d.key}
 					name={d.key}
-					label={d.label}
+					label={t(`pos_products.display.label.${d.key}`)}
 					checked={!d.hide}
 					onChange={(checked) => {
 						d.updateWithJson({ hide: !checked });
 					}}
 				/>
 			))}
-			<Button title="Restore Default Settings" onPress={onRestoreUi} />
+			<Button title="Restore Default Settings" onPress={resetUI} />
 		</>
 	);
 };

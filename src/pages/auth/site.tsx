@@ -6,7 +6,7 @@ import Icon from '../../components/icon';
 import Button from '../../components/button';
 import Modal from './modal';
 import { SiteWrapper, SiteTextWrapper } from './styles';
-import useDatabase from '../../hooks/use-database';
+import useAppState from '../../hooks/use-app-state';
 
 /**
  * Options for fetching favicons
@@ -19,13 +19,16 @@ import useDatabase from '../../hooks/use-database';
 const Site = ({ site }) => {
 	const status = useObservableState(site.connection_status$);
 	const [visible, setVisible] = React.useState(false);
-	const { setStoreDB } = useDatabase();
+	const [appState, dispatch, actions] = useAppState();
 
 	const setStore = async () => {
 		const wpUsers = await site.wp_users.fetch();
 		console.log('TODO: fix wpUsers', wpUsers);
-		const wpUser = wpUsers[1];
-		setStoreDB({ user: site.user.id, site: site.id, wp_user: wpUser.id });
+		const wpUser = wpUsers[0];
+		dispatch({
+			type: actions.SET_STORE,
+			payload: { user: site.user.id, site: site.id, wp_user: wpUser.id },
+		});
 	};
 
 	const handleRemove = async () => {

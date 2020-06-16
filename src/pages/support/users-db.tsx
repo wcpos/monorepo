@@ -22,6 +22,11 @@ const Sites: React.FC<Props> = () => {
 		});
 	};
 
+	const printToConsole = async (table: string) => {
+		const data = await usersDatabase.collections.map[table].query().fetch();
+		console.log(data);
+	};
+
 	const columns = [
 		{ key: 'name', label: 'Name' },
 		{ key: 'count', label: 'Count' },
@@ -55,7 +60,7 @@ const Sites: React.FC<Props> = () => {
 			<Table.Body>
 				{({ item }) => (
 					<Table.Row rowData={item} columns={columns}>
-						{({ cellData, column }) => {
+						{({ column, getCellProps }) => {
 							if (column.key === 'actions') {
 								return (
 									<Table.Row.Cell>
@@ -65,10 +70,16 @@ const Sites: React.FC<Props> = () => {
 												deleteAll(item.name);
 											}}
 										/>
+										<Button
+											title="Info"
+											onPress={() => {
+												printToConsole(item.name);
+											}}
+										/>
 									</Table.Row.Cell>
 								);
 							}
-							return <Table.Row.Cell cellData={cellData} columnData={column} />;
+							return <Table.Row.Cell {...getCellProps()} />;
 						}}
 					</Table.Row>
 				)}

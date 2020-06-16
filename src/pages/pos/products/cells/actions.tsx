@@ -1,4 +1,4 @@
-import React, { Fragment } from 'react';
+import React from 'react';
 import Button from '../../../../components/button';
 import Popover from '../../../../components/popover';
 import Variations from './variations';
@@ -8,7 +8,7 @@ interface Props {
 	addToCart: any;
 }
 
-const Actions = ({ product, addToCart }: Props) => {
+const Actions: React.FC<Props> = ({ product, addToCart }) => {
 	if (product.isVariable()) {
 		return (
 			<Popover content={<Variations product={product} addToCart={addToCart} />}>

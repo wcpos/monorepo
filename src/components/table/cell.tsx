@@ -4,11 +4,10 @@ import Text from '../text';
 
 export type Props = {
 	children?: React.ReactNode;
-	cellData: any;
-	// cellRenderer?: import('./types').CellRenderer;
-	columnData: any;
-	dataKey?: string | number;
-	rowData?: any;
+	cellData?: any;
+	column?: any;
+	// dataKey?: string | number;
+	// rowData?: any;
 	style?: import('react-native').ViewStyle;
 	// rowIndex: number;
 	flexGrow?: 0 | 1;
@@ -16,28 +15,10 @@ export type Props = {
 	width?: string;
 };
 
-const Cell: React.FC<Props> = ({
-	children,
-	// cellRenderer,
-	cellData,
-	dataKey,
-	rowData,
-	// style,
-	flexGrow,
-	flexShrink,
-	width,
-	style,
-}) => {
-	// const cell =
-	// 	typeof cellRenderer === 'function'
-	// 		? cellRenderer({ cellData, dataKey, rowData })
-	// 		: cellData == null
-	// 		? ''
-	// 		: String(cellData);
-
+const Cell: React.FC<Props> = ({ children, cellData, flexGrow, flexShrink, width, style }) => {
 	return (
 		<Styled.Cell style={style} flexGrow={flexGrow} flexShrink={flexShrink} width={width}>
-			<Text>{children || String(cellData)}</Text>
+			{children || <Text>{String(cellData)}</Text>}
 		</Styled.Cell>
 	);
 };

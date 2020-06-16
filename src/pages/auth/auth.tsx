@@ -7,16 +7,14 @@ import TextInput from '../../components/textinput';
 import Text from '../../components/text';
 import { AuthView } from './styles';
 import Site from './site';
-import useDatabase from '../../hooks/use-database';
+import useAppState from '../../hooks/use-app-state';
 
 interface Props {}
 
 const Auth: React.FC<Props> = (props) => {
 	const navigation = useNavigation();
-	const { user } = useDatabase();
-	const sitesResource = new ObservableResource(user.sites.observe());
-	const sites = useObservableSuspense(sitesResource);
-	console.log(user);
+	const [{ user }] = useAppState();
+	const sites = useObservableSuspense(user.sitesResource);
 
 	React.useEffect(() => {
 		const unsubscribe = navigation.addListener('state', () => {
@@ -29,12 +27,11 @@ const Auth: React.FC<Props> = (props) => {
 	const onConnect = async (url) => {
 		const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
 		if (trimUrl) {
-			const newSite = await user.database.action(
-				async () =>
-					await user.sites.collection.create((site) => {
-						site.url = `https://${trimUrl}`;
-						site.user.set(user);
-					})
+			const newSite = await user.database.action(async () =>
+				user.sites.collection.create((site) => {
+					site.url = `https://${trimUrl}`;
+					site.user.set(user);
+				})
 			);
 			newSite?.connect();
 		}

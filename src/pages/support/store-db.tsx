@@ -23,6 +23,11 @@ const Stores: React.FC<Props> = ({ header, main, title }) => {
 		});
 	};
 
+	const printToConsole = async (table: string) => {
+		const data = await storeDB.collections.map[table].query().fetch();
+		console.log(data);
+	};
+
 	const columns = [
 		{ key: 'name', label: 'Name' },
 		{ key: 'count', label: 'Count' },
@@ -64,6 +69,12 @@ const Stores: React.FC<Props> = ({ header, main, title }) => {
 											title="Delete"
 											onPress={() => {
 												deleteAll(item.name);
+											}}
+										/>
+										<Button
+											title="Info"
+											onPress={() => {
+												printToConsole(item.name);
 											}}
 										/>
 									</Table.Row.Cell>

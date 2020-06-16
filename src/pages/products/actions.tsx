@@ -1,5 +1,4 @@
 import React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import Input from '../../components/textinput';
 import Checkbox from '../../components/checkbox';
@@ -7,7 +6,7 @@ import Button from '../../components/button';
 import Text from '../../components/text';
 
 interface Props {
-	columnsResource: any;
+	columns: any;
 	uiReset: () => void;
 }
 

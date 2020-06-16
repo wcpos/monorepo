@@ -1,11 +1,13 @@
 import { nochange, field, action } from '@nozbe/watermelondb/decorators';
 import { ObservableResource } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 import Model from '../../base';
 import { children } from '../../decorators';
 import initial from './initial.json';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
+type Column = typeof import('./column');
+type Display = typeof import('./display');
 
 /**
  * UI Schema
@@ -31,15 +33,18 @@ export default class UI extends Model {
 		ui_display: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
-	private _columnsResource: ObservableResource<unknown, unknown>;
-	private _displayResource: ObservableResource<unknown, unknown>;
+	private _columnsResource: ObservableResource<Column[], Column[]>;
+	private _displayResource: ObservableResource<Display[], Display[]>;
 
 	constructor(collection, raw) {
 		super(collection, raw);
 		this._columnsResource = new ObservableResource(
-			this.columns
-				.observeWithColumns(['hide'])
-				.pipe(map((columns) => columns.sort((a, b) => a.order - b.order)))
+			this.columns.observeWithColumns(['hide']).pipe(
+				map((columns) => columns.sort((a, b) => a.order - b.order))
+				// tap((col) => {
+				// 	debugger;
+				// })
+			)
 		);
 		this._displayResource = new ObservableResource(
 			this.display
@@ -67,63 +72,28 @@ export default class UI extends Model {
 		this.asModel._setRaw('width', `${value}`);
 	}
 
-	get columnsResource() {
+	get columnsResource(): ObservableResource<Column[], Column[]> {
 		return this._columnsResource;
 	}
 
-	get displayResource() {
+	get displayResource(): ObservableResource<Display[], Display[]> {
 		return this._displayResource;
 	}
 
-	/** *
-	 * TODO: Should not create new!! Need to update (and delete children)
-	 */
-	resetDefaults = async () => {
-		const ui = this.prepareUpdate((model: UI) => {
-			model.sortBy = init[this.section].sortBy;
-			model.sortDirection = init[this.section].sortDirection;
-		});
-
-		const columns = init[this.section].columns.map((column: any, index: number) =>
-			ui.columns.collection.prepareCreate((model: any) => {
-				model.ui.set(ui);
-				model.key = column.key;
-				model.hide = column.hide;
-				model.disableSort = column.disableSort;
-				model.flexGrow = column.flexGrow;
-				model.flexShrink = column.flexShrink;
-				model.width = column.width;
-				model.section = this.section; // @TODO: remove
-				model.order = index;
-			})
-		);
-
-		let display = [];
-
-		if (init[this.section].display && init[this.section].display.length > 0) {
-			display = init[this.section].display.map((display: any, index: number) =>
-				ui.display.collection.prepareCreate((model: any) => {
-					model.ui.set(ui);
-					model.key = display.key;
-					model.hide = display.hide;
-				})
-			);
-		}
-
-		// return await this.collection.database.action(
-		// 	async () => await this.collection.database.batch(batch)
-		// );
-		return await this.batch(ui, ...columns, ...display);
-	};
-
 	/**
-	 *
+	 * Reset the UI to the default settings
 	 */
-	@action reset() {
-		const ui = this.prepareUpdate((model: UI) => {
-			model.set(initial[this.section]);
-		});
+	@action async reset(): Promise<void> {
+		// delete children
+		const columns = await this.columns.fetch();
+		const deleteColumns = columns.map((column) => column.prepareDestroyPermanently());
+		const display = await this.display.fetch();
+		const deleteDisplay = display.map((d) => d.prepareDestroyPermanently());
 
-		return this.batch(ui);
+		await this.batch(...deleteColumns, ...deleteDisplay);
+
+		return this.update((model: UI) => {
+			return model.set(initial[this.section]);
+		});
 	}
 }

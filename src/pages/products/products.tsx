@@ -15,16 +15,15 @@ const Products: React.FC<Props> = ({ uiResource, productsResource }) => {
 	const ui = useObservableSuspense(uiResource);
 	const columns = useObservableSuspense(ui.columnsResource);
 
+	const handleResetUI = () => {
+		ui.reset();
+	};
+
 	return (
 		<React.Suspense fallback={<Text>loading products...</Text>}>
 			<Segment.Group>
 				<Segment>
-					<Actions
-						columns={columns}
-						resetUI={() => {
-							ui.reset();
-						}}
-					/>
+					<Actions columns={columns} uiReset={handleResetUI} />
 				</Segment>
 				<Segment grow>
 					<Table products={products} columns={columns} />

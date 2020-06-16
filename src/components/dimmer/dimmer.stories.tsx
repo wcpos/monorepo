@@ -1,12 +1,9 @@
 import React from 'react';
-
-import { storiesOf } from '@storybook/react';
 import { action } from '@storybook/addon-actions';
+import Dimmer from '.';
 
-import Dimmer from './';
+export default {
+	title: 'Components/Dimmer',
+};
 
-storiesOf('Dimmer', module)
-	/**
-	 * Dimmer
-	 */
-	.add('basic usage', () => <Dimmer onPress={action('Dimmer pressed')} />);
+export const basicUsage = () => <Dimmer onPress={action('Dimmer pressed')} />;

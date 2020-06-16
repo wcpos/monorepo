@@ -18,21 +18,21 @@ const POS: React.FC<Props> = ({ productsResource, uiResource }) => {
 	console.log('render');
 	const ui = useObservableSuspense(uiResource);
 
-	const [width, setWidth] = React.useState(ui.width);
+	// const [width, setWidth] = React.useState(ui.width);
 
 	const handleColumnResizeUpdate = ({ dx }) => {
-		console.log(width + dx);
-		setWidth(width + dx);
+		console.log(ui.width + dx);
+		// ui.updateWithJson({ width: ui.width + dx });
 	};
 
 	const handleColumnResizeEnd = ({ dx }) => {
-		console.log(width + dx);
-		ui.updateWithJson({ width: width + dx });
+		console.log(ui.width + dx);
+		// ui.updateWithJson({ width: ui.width + dx });
 	};
 
 	return (
 		<>
-			<View style={{ width }}>
+			<View style={{ width: ui.width }}>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading products...</Text>}>
 						<Products ui={ui} productsResource={productsResource} />
