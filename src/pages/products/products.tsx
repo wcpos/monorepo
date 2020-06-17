@@ -4,16 +4,15 @@ import { useObservableSuspense } from 'observable-hooks';
 import Segment from '../../components/segment';
 import Table from './table';
 import Actions from './actions';
+import useAppState from '../../hooks/use-app-state';
 
-interface Props {
-	uiResource: any;
-	productsResource: any;
-}
+interface Props {}
 
-const Products: React.FC<Props> = ({ uiResource, productsResource }) => {
-	const products = useObservableSuspense(productsResource);
-	const ui = useObservableSuspense(uiResource);
+const Products: React.FC<Props> = () => {
+	const [{ store }] = useAppState();
+	const ui = useObservableSuspense(store.getUiResource('products'));
 	const columns = useObservableSuspense(ui.columnsResource);
+	const products = useObservableSuspense(store.getDataResource('products'));
 
 	const onResetUI = () => {
 		ui.reset();

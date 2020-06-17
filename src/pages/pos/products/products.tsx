@@ -5,6 +5,7 @@ import Segment from '../../../components/segment';
 import Table from './table';
 import Actions from './actions';
 import Text from '../../../components/text';
+import useAppState from '../../../hooks/use-app-state';
 
 interface Props {
 	productsResource: any;
@@ -14,12 +15,13 @@ interface Props {
 /**
  *
  */
-const Products: React.FC<Props> = ({ productsResource, ui }) => {
+const Products: React.FC<Props> = ({ ui }) => {
 	// const { t } = useTranslation();
+	const [{ store }] = useAppState();
 
 	const display = useObservableSuspense(ui.displayResource);
 	const columns = useObservableSuspense(ui.columnsResource);
-	const products = useObservableSuspense(productsResource);
+	const products = useObservableSuspense(store.getDataResource('products'));
 
 	/**
 	 * Decorate table cells

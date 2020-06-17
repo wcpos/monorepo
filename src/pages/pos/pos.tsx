@@ -5,19 +5,14 @@ import Products from './products';
 import Cart from './cart';
 import ErrorBoundary from '../../components/error';
 import Draggable from '../../components/draggable';
+import useAppState from '../../hooks/use-app-state';
 
-interface Props {
-	productsResource: any;
-	uiResource: any;
-}
+interface Props {}
 
-const POS: React.FC<Props> = ({ productsResource, uiResource }) => {
-	// const { store } = useStore();
-	// const uiResource = getResource(store);
-
+const POS: React.FC<Props> = () => {
+	const [{ store }] = useAppState();
+	const productsUI = useObservableSuspense(store.getUiResource('pos_products'));
 	console.log('render');
-	const ui = useObservableSuspense(uiResource);
-
 	// const [width, setWidth] = React.useState(ui.width);
 
 	const handleColumnResizeUpdate = ({ dx }) => {
@@ -32,10 +27,10 @@ const POS: React.FC<Props> = ({ productsResource, uiResource }) => {
 
 	return (
 		<>
-			<View style={{ width: ui.width }}>
+			<View style={{ width: productsUI.width }}>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading products...</Text>}>
-						<Products ui={ui} productsResource={productsResource} />
+						<Products ui={productsUI} />
 					</React.Suspense>
 				</ErrorBoundary>
 			</View>
