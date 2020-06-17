@@ -6,6 +6,7 @@ import { ObservableResource } from 'observable-hooks';
 import Model from '../base';
 import getStoreDatabase from '../../store';
 import initialUi from './ui/initial.json';
+import { syncIds } from '../../../services/wc-api';
 
 type Schema = import('@nozbe/watermelondb/Schema').TableSchemaSpec;
 type Database = import('@nozbe/watermelondb').Database;
@@ -116,6 +117,13 @@ class Store extends Model {
 	getDataResource(type: 'products' | 'orders') {
 		if (!this._dataResources[type]) {
 			const dataCollection = this._db.collections.get(type);
+			const that = this;
+			const init = async () => {
+				const wpUser = await that.wp_user.fetch();
+				const site = await wpUser.site.fetch();
+
+				syncIds(dataCollection, wpUser, site);
+			};
 
 			// @TODO query observable combine with database query
 			const data$ = dataCollection
@@ -126,7 +134,7 @@ class Store extends Model {
 						if (data.length > 0) {
 							return true;
 						}
-						// syncIds(dataCollection, wpUser, site);
+						init();
 					})
 				);
 
