@@ -145,9 +145,14 @@ const AppStateProvider: React.FC = ({ children }) => {
 					const allUsers = await appUsersCollection.query().fetch();
 					dispatch({ type: actionTypes.SET_USER, payload: { appUser: allUsers[0] } });
 				}
+
+				if (appUserCount > 0) {
+					debugger;
+				}
 			} else {
 				const store = await storesCollection.find(lastStore);
-				dispatch({ type: actionTypes.SET_STORE, payload: { store } });
+				const appUser = await appUsersCollection.find(store.app_user.id);
+				dispatch({ type: actionTypes.SET_STORE, payload: { appUser, store } });
 			}
 		})();
 	}, [dispatch]);
