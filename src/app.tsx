@@ -18,6 +18,7 @@ const App: React.FC = () => {
 				<AppStateProvider>
 					<ThemeProvider theme={defaultTheme}>
 						<Portal.Host>
+							{/* <Text>hello</Text> */}
 							<Navigator />
 						</Portal.Host>
 					</ThemeProvider>

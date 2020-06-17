@@ -52,9 +52,12 @@ type GroupProps = {
 	theme: import('../../lib/theme/types').ThemeProps;
 } & import('./group').Props;
 
+// height: inherit;
+/**
+ * Note: height 'inherit' caused app to crash on mobile
+ */
 export const Group = styled.View<GroupProps>`
 	flex-direction: ${({ direction }) => (direction === 'horizontal' ? 'row' : 'column')};
-	height: inherit;
 	width: 100%;
 
 	${({ raised }) =>

@@ -14,7 +14,7 @@ interface Props {
 const AuthModal: React.FC<Props> = ({ visible, setVisible, site }) => {
 	const returnUrl = Platform.OS === 'web' ? 'https://localhost:3000/auth' : 'wcpos://auth';
 	const [payload, setPayload] = React.useState({});
-
+	console.log(payload);
 	if (payload?.consumer_key && payload?.consumer_secret) {
 		site.createOrUpdateUser(payload);
 		setVisible(false);
@@ -35,8 +35,9 @@ const AuthModal: React.FC<Props> = ({ visible, setVisible, site }) => {
 		);
 
 	const handleMessage = (event) => {
+		console.log(data);
 		const data = typeof event?.data === 'string' ? JSON.parse(event?.data) : event?.data;
-
+		console.log(data);
 		if (data?.source === 'wcpos') {
 			setPayload({ ...payload, ...data.payload });
 		}

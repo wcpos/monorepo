@@ -1,21 +1,39 @@
 import React from 'react';
 import { WebView as RNWebView } from 'react-native-webview';
+import noop from 'lodash/noop';
 
-type WebViewMessageEvent = import('react-native-webview').WebViewMessageEvent;
-type WebViewErrorEvent = import('react-native-webview/lib/WebViewTypes').WebViewErrorEvent;
-type WebViewNavigationEvent = import('react-native-webview/lib/WebViewTypes').WebViewNavigationEvent;
+type WebViewMessage = import('react-native-webview/lib/WebViewTypes').WebViewMessage;
+type WebViewError = import('react-native-webview/lib/WebViewTypes').WebViewError;
+type WebViewNavigation = import('react-native-webview/lib/WebViewTypes').WebViewNavigation;
 
 type Props = {
 	src: string;
 	title?: string;
-	onMessage?: (event: WebViewMessageEvent) => void;
-	onError?: (event: WebViewErrorEvent) => void;
-	onLoad?: (event: WebViewNavigationEvent) => void;
+	onMessage?: (ev: WebViewMessage) => void;
+	onError?: (ev: WebViewError) => void;
+	onLoad?: (ev: WebViewNavigation) => void;
 };
 
-const WebView: React.FC<Props> = ({ src, title, onMessage, onError, onLoad }) => {
+const WebView: React.FC<Props> = ({
+	src,
+	title,
+	onMessage = noop,
+	onError = noop,
+	onLoad = noop,
+}) => {
 	return (
-		<RNWebView source={{ uri: src }} onMessage={onMessage} onError={onError} onLoad={onLoad} />
+		<RNWebView
+			source={{ uri: src }}
+			onMessage={({ nativeEvent }) => {
+				onMessage(nativeEvent);
+			}}
+			onError={({ nativeEvent }) => {
+				onError(nativeEvent);
+			}}
+			onLoad={({ nativeEvent }) => {
+				onLoad(nativeEvent);
+			}}
+		/>
 	);
 };
 

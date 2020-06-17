@@ -1,10 +1,10 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import useAppState from '../hooks/use-app-state';
-// import AuthScreen from '../pages/auth';
-// import MainNavigator from './main';
-const AuthScreen = React.lazy(() => import('../pages/auth'));
-const MainNavigator = React.lazy(() => import('./main'));
+import AuthScreen from '../pages/auth';
+import MainNavigator from './main';
+// const AuthScreen = React.lazy(() => import('../pages/auth'));
+// const MainNavigator = React.lazy(() => import('./main'));
 
 export type AppNavigatorParams = {
 	Auth: undefined;

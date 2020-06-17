@@ -34,7 +34,7 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({}) => {
 		config: routes,
 	});
 
-	const [isReady, setIsReady] = React.useState(true);
+	const [isReady, setIsReady] = React.useState(false);
 	const [initialState, setInitialState] = React.useState();
 
 	React.useEffect(() => {
@@ -53,7 +53,6 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({}) => {
 	}, [getInitialState]);
 
 	if (!isReady || !appUser) {
-		// return null;
 		return <SplashPage />;
 	}
 

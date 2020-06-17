@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import PageLayout from '../../layout/page';
-import Segment, { SegmentGroup } from '../../components/segment';
+import Segment from '../../components/segment';
 import TextInput from '../../components/textinput';
 import Text from '../../components/text';
 import { AuthView } from './styles';
@@ -44,14 +44,14 @@ const Auth: React.FC<Props> = (props) => {
 					/>
 				</Segment>
 				{sites.length > 0 && (
-					<SegmentGroup style={{ width: 460 }}>
+					<Segment.Group style={{ width: 460 }}>
 						<Segment content="Sites" />
 						{sites.map((site) => (
 							<Segment key={site.id}>
 								<Site site={site} />
 							</Segment>
 						))}
-					</SegmentGroup>
+					</Segment.Group>
 				)}
 			</AuthView>
 		</PageLayout>
