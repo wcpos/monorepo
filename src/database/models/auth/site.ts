@@ -47,7 +47,7 @@ export default class Site extends Model {
 		stores: { type: 'has_many', foreignKey: 'site_id' },
 	};
 
-	@immutableRelation('app_users', 'app_user_id') user!: any;
+	@immutableRelation('app_users', 'app_user_id') app_user!: any;
 
 	@children('wp_users') wp_users!: any;
 	@children('stores') stores!: any;
@@ -67,6 +67,15 @@ export default class Site extends Model {
 	 */
 	async fetchWpUserByRemoteId(remote_id) {
 		const wpUsers = await this.wp_users.extend(Q.where('remote_id', remote_id)).fetch();
+		return wpUsers && wpUsers[0];
+	}
+
+	/**
+	 *
+	 */
+	async fetchWpUserByAppUserId(app_user_id) {
+		const wpUsers = await this.wp_users.extend(Q.where('app_user_id', app_user_id)).fetch();
+		console.log(wpUsers);
 		return wpUsers && wpUsers[0];
 	}
 
@@ -126,6 +135,7 @@ export default class Site extends Model {
 	 * @param data
 	 */
 	async createOrUpdateUser(data) {
+		console.log(data);
 		let wpUser = await this.fetchWpUserByRemoteId(data?.remote_id);
 		if (!wpUser) {
 			wpUser = await this.createNewWpUser(data);
@@ -141,6 +151,7 @@ export default class Site extends Model {
 		return this.wp_users.collection.create((wp_user) => {
 			wp_user.set(data);
 			wp_user.site.set(this);
+			wp_user.app_user.id = this.app_user.id;
 		});
 	}
 }

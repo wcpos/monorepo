@@ -14,7 +14,8 @@ const TABLE_NAME = 'wp_users';
 export const wpUserSchema: Schema = {
 	name: TABLE_NAME,
 	columns: [
-		{ name: 'remote_id', type: 'number', isIndexed: true, isOptional: true },
+		{ name: 'remote_id', type: 'number', isIndexed: true },
+		{ name: 'app_user_id', type: 'string', isIndexed: true },
 		{ name: 'site_id', type: 'string', isIndexed: true },
 		{ name: 'username', type: 'string' },
 		{ name: 'name', type: 'string' },
@@ -39,12 +40,14 @@ class WpUser extends Model {
 	static table = TABLE_NAME;
 
 	static associations = {
+		app_users: { type: 'belongs_to', key: 'user_id' },
 		sites: { type: 'belongs_to', key: 'site_id' },
 		stores: { type: 'has_many', foreignKey: 'wp_user_id' },
 		meta: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 
-	@immutableRelation('sites', 'parent_id') site!: any;
+	@immutableRelation('app_users', 'app_user_id') app_user!: any;
+	@immutableRelation('sites', 'site_id') site!: any;
 
 	@children('stores') stores!: any;
 
