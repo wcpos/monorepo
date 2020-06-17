@@ -28,9 +28,9 @@ class AppUser extends Model {
 	static table = TABLE_NAME;
 
 	static associations = {
-		sites: { type: 'has_many', foreignKey: 'sites_id' },
-		wp_users: { type: 'has_many', foreignKey: 'sites_id' },
-		store: { type: 'has_many', foreignKey: 'sites_id' },
+		sites: { type: 'has_many', foreignKey: 'app_user_id' },
+		wp_users: { type: 'has_many', foreignKey: 'app_user_id' },
+		store: { type: 'has_many', foreignKey: 'app_user_id' },
 		meta: { type: 'has_many', foreignKey: 'parent_id' },
 	};
 

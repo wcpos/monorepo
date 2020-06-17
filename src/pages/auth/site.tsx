@@ -19,16 +19,33 @@ import useAppState from '../../hooks/use-app-state';
 const Site = ({ site }) => {
 	const status = useObservableState(site.connection_status$);
 	const [visible, setVisible] = React.useState(false);
-	const [appState, dispatch, actions] = useAppState();
+	const [{ appUser }, dispatch, actions] = useAppState();
 
-	const setStore = async () => {
+	const selectStore = async () => {
+		let store;
 		const wpUsers = await site.wp_users.fetch();
-		console.log('TODO: fix wpUsers', wpUsers);
 		const wpUser = wpUsers[0];
-		dispatch({
-			type: actions.SET_STORE,
-			payload: { user: site.user.id, site: site.id, wp_user: wpUser.id },
-		});
+		const stores = await wpUser.stores.fetch();
+		if (stores.length === 0) {
+			// create new default store
+			store = await wpUser.database.action(async () =>
+				wpUser.stores.collection.create((m) => {
+					m.name = site.name;
+					m.app_user.set(appUser);
+					m.wp_user.set(wpUser);
+				})
+			);
+		}
+		if (stores.length === 1) {
+			// select only store
+			store = stores[0];
+		}
+		if (store) {
+			dispatch({
+				type: actions.SET_STORE,
+				payload: { store },
+			});
+		}
 	};
 
 	const handleRemove = async () => {
@@ -45,6 +62,7 @@ const Site = ({ site }) => {
 				</Text>
 				{status && <Text size="small">{status?.message}</Text>}
 				<Button title="Connect again" onPress={() => site.connect()} />
+				<Button title="Enter" onPress={() => selectStore()} />
 				{status.type === 'login' && (
 					<Button
 						title="Login"
@@ -53,7 +71,6 @@ const Site = ({ site }) => {
 						}}
 					/>
 				)}
-				<Button title="Enter" onPress={() => setStore()} />
 			</SiteTextWrapper>
 			<Button onPress={handleRemove}>
 				<Icon name="remove" />

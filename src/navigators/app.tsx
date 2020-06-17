@@ -27,7 +27,7 @@ interface AppNavigatorProps {}
 
 const AppNavigator: React.FC<AppNavigatorProps> = ({}) => {
 	const ref: React.Ref<any> = React.useRef();
-	const [{ user, urlPrefix }] = useAppState();
+	const [{ appUser, urlPrefix }] = useAppState();
 
 	const { getInitialState } = useLinking(ref, {
 		prefixes: [urlPrefix],
@@ -52,7 +52,7 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({}) => {
 		})();
 	}, [getInitialState]);
 
-	if (!isReady || !user) {
+	if (!isReady || !appUser) {
 		// return null;
 		return <SplashPage />;
 	}

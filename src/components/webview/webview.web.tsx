@@ -1,13 +1,22 @@
 import React from 'react';
 
-type Props = import('./').Props;
+type Props = {
+	src: string;
+	title?: string;
+	onMessage?: (event: MessageEvent) => void;
+	onLoad?: (event: React.SyntheticEvent<HTMLIFrameElement, Event>) => void;
+	onError?: (event: React.SyntheticEvent<HTMLIFrameElement, Event>) => void;
+};
 
-const WebView = ({ src, title, onError, onMessage, onLoad }: Props) => {
+const WebView: React.FC<Props> = ({ src, title, onError, onMessage, onLoad }) => {
+	// eslint-disable-next-line consistent-return
 	React.useEffect(() => {
-		window.addEventListener('message', onMessage);
-		return () => {
-			window.removeEventListener('message', onMessage);
-		};
+		if (typeof onMessage === 'function') {
+			window.addEventListener('message', onMessage);
+			return () => {
+				window.removeEventListener('message', onMessage);
+			};
+		}
 	});
 
 	return (

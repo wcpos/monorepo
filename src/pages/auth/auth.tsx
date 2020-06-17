@@ -13,24 +13,16 @@ interface Props {}
 
 const Auth: React.FC<Props> = (props) => {
 	const navigation = useNavigation();
-	const [{ user }] = useAppState();
-	const sites = useObservableSuspense(user.sitesResource);
-
-	React.useEffect(() => {
-		const unsubscribe = navigation.addListener('state', () => {
-			console.log('close modal?');
-		});
-
-		return unsubscribe;
-	}, [navigation]);
+	const [{ appUser }] = useAppState();
+	const sites = useObservableSuspense(appUser.sitesResource);
 
 	const onConnect = async (url) => {
 		const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
 		if (trimUrl) {
-			const newSite = await user.database.action(async () =>
-				user.sites.collection.create((site) => {
+			const newSite = await appUser.database.action(async () =>
+				appUser.sites.collection.create((site) => {
 					site.url = `https://${trimUrl}`;
-					site.user.set(user);
+					site.app_user.set(appUser);
 				})
 			);
 			newSite?.connect();

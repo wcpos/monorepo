@@ -15,11 +15,11 @@ const Stack = createStackNavigator<AppNavigatorParams>();
 type StackNavigatorProps = React.ComponentProps<typeof Stack.Navigator>;
 
 const AppNavigator = (props: Partial<StackNavigatorProps>): React.ReactElement => {
-	const [{ storeDB }] = useAppState();
+	const [{ store }] = useAppState();
 
 	return (
 		<Stack.Navigator headerMode="none">
-			{storeDB ? (
+			{store ? (
 				<Stack.Screen name="Main" component={MainNavigator} />
 			) : (
 				<Stack.Screen name="Auth" component={AuthScreen} />

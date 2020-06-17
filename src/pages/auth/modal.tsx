@@ -13,6 +13,12 @@ interface Props {
 
 const AuthModal: React.FC<Props> = ({ visible, setVisible, site }) => {
 	const returnUrl = Platform.OS === 'web' ? 'https://localhost:3000/auth' : 'wcpos://auth';
+	const [payload, setPayload] = React.useState({});
+
+	if (payload?.consumer_key && payload?.consumer_secret) {
+		site.createOrUpdateUser(payload);
+		setVisible(false);
+	}
 
 	const authUrl =
 		site.wc_api_auth_url +
@@ -20,7 +26,7 @@ const AuthModal: React.FC<Props> = ({ visible, setVisible, site }) => {
 			{
 				app_name: 'WooCommerce POS',
 				scope: 'read_write',
-				user_id: site?.user?.id,
+				user_id: site?.app_user?.id,
 				return_url: returnUrl,
 				callback_url: 'https://client.wcpos.com',
 				wcpos: 1,
@@ -32,7 +38,7 @@ const AuthModal: React.FC<Props> = ({ visible, setVisible, site }) => {
 		const data = typeof event?.data === 'string' ? JSON.parse(event?.data) : event?.data;
 
 		if (data?.source === 'wcpos') {
-			site.createOrUpdateUser(data.payload);
+			setPayload({ ...payload, ...data.payload });
 		}
 	};
 
