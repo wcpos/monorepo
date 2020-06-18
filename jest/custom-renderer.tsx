@@ -11,12 +11,12 @@ import defaultTheme from '../lib/theme/themes/defaultTheme';
 //   render(ui, { wrapper: AllTheProviders, ...options });
 
 function customRender(node: any, options?: any) {
-  const rendered: any = render(<ThemeProvider theme={defaultTheme}>{node}</ThemeProvider>, options);
-  return {
-    ...rendered,
-    rerender: (ui: any, options: any) =>
-      customRender(ui, { container: rendered.container, ...options }),
-  };
+	const rendered: any = render(<ThemeProvider theme={defaultTheme}>{node}</ThemeProvider>, options);
+	return {
+		...rendered,
+		rerender: (ui: any, options: any) =>
+			customRender(ui, { container: rendered.container, ...options }),
+	};
 }
 
 export default customRender;
