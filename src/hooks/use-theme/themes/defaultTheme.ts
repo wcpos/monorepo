@@ -105,8 +105,11 @@ const theme = {
 
 	SIDEBAR_BACKGROUND_COLOR: '#FFFFFF',
 
-	TAG_BACKGROUND_COLOR: 'grey',
-	TAG_TEXT_COLOR: 'black',
+	TAG_BACKGROUND_COLOR: colors.secondary,
+	TAG_TEXT_COLOR: colors.inverse,
+	TAG_BORDER_RADIUS: '10px',
+	TAG_PADDING_X: '5px',
+	TAG_PADDING_Y: '5px',
 
 	TEXT_COLOR: colors.primary,
 	TEXT_COLOR_SECONDARY: colors.secondary,
