@@ -1,6 +1,5 @@
 import React from 'react';
-import { TextStyle } from 'react-native';
-import { StyledText } from './styles';
+import * as Styled from './styles';
 
 /**
  * note: weird bug in storybook when importing * as Styled
@@ -8,11 +7,11 @@ import { StyledText } from './styles';
 
 export type Props = {
 	align?: 'left' | 'right' | 'center' | 'justify';
-	children: React.ReactNode;
+	children: string;
 	italic?: boolean;
 	onPress?: () => void;
 	size?: 'normal' | 'large' | 'small';
-	style?: TextStyle;
+	style?: import('react-native').TextStyle;
 	type?:
 		| 'attention'
 		| 'critical'
@@ -38,7 +37,7 @@ const Text: React.FC<Props> = ({
 	weight = 'normal',
 }) => {
 	return (
-		<StyledText
+		<Styled.Text
 			align={align}
 			italic={italic}
 			onPress={onPress}
@@ -49,7 +48,7 @@ const Text: React.FC<Props> = ({
 			weight={weight}
 		>
 			{children}
-		</StyledText>
+		</Styled.Text>
 	);
 };
 

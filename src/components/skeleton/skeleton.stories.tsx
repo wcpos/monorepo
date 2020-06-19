@@ -1,5 +1,5 @@
 import React from 'react';
-import Placeholder from './placeholder';
+import Placeholder from './skeleton';
 import readme from './README.md';
 
 export default {

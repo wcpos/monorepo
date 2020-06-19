@@ -24,7 +24,7 @@ class SentryTransport extends Transport {
 		const { key, project } = options;
 
 		this.options = {
-			dsn: 'https://' + key + '@sentry.io/' + project,
+			dsn: `https://${key}@sentry.io/${project}`,
 			...options,
 		};
 

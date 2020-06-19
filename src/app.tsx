@@ -4,7 +4,6 @@ import { ThemeProvider } from './hooks/use-theme';
 import { AppStateProvider } from './hooks/use-app-state';
 import Navigator from './navigators';
 import Portal from './components/portal';
-import { defaultTheme } from './lib/theme';
 import ErrorBoundary from './components/error';
 
 // import i18n

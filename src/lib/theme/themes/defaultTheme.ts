@@ -1,6 +1,5 @@
 import Platform from '../../platform';
 import palette from '../palettes/blue-grey.json';
-import { ThemeProps } from '../types';
 import normalizeText from '../normalize-text';
 
 const colors = {
@@ -29,7 +28,7 @@ const fonts = Platform.select({
 	},
 });
 
-const theme: ThemeProps = {
+const theme = {
 	APP_BACKGROUND_COLOR: colors.background,
 
 	BUTTON_BORDER_RADIUS: '3px',
@@ -54,17 +53,17 @@ const theme: ThemeProps = {
 	CHECKBOX_BORDER_RADIUS: '3px',
 	CHECKBOX_BORDER_WIDTH: '1px',
 	CHECKBOX_INFO_COLOR: colors.secondary,
-	CHECKBOX_INFO_FONT_SIZE: normalizeText(12) + 'px',
+	CHECKBOX_INFO_FONT_SIZE: `${normalizeText(12)}px`,
 	CHECKBOX_LABEL_COLOR: colors.primary,
-	CHECKBOX_LABEL_FONT_SIZE: normalizeText(14) + 'px',
-	CHECKBOX_WIDTH: normalizeText(14) + 'px',
-	CHECKBOX_HEIGHT: normalizeText(14) + 'px',
+	CHECKBOX_LABEL_FONT_SIZE: `${normalizeText(14)}px`,
+	CHECKBOX_WIDTH: `${normalizeText(14)}px`,
+	CHECKBOX_HEIGHT: `${normalizeText(14)}px`,
 
 	FONT_FAMILY: fonts.regular,
 
-	FONT_SIZE: normalizeText(14) + 'px',
-	FONT_SIZE_LARGE: normalizeText(18) + 'px',
-	FONT_SIZE_SMALL: normalizeText(12) + 'px',
+	FONT_SIZE: `${normalizeText(14)}px`,
+	FONT_SIZE_LARGE: `${normalizeText(18)}px`,
+	FONT_SIZE_SMALL: `${normalizeText(12)}px`,
 
 	FONT_WEIGHT: 400,
 	FONT_WEIGHT_BOLD: 700,
@@ -76,7 +75,7 @@ const theme: ThemeProps = {
 	INPUT_BORDER_WIDTH: '1px',
 	INPUT_ERROR_TEXT_COLOR: colors.primary,
 	INPUT_PADDING: '5px',
-	INPUT_FONT_SIZE: normalizeText(14) + 'px',
+	INPUT_FONT_SIZE: `${normalizeText(14)}px`,
 	INPUT_TEXT_COLOR: colors.border,
 
 	MASTERBAR_BACKGROUND_COLOR: colors.primary,
@@ -105,6 +104,9 @@ const theme: ThemeProps = {
 	SEGMENT_MARGIN_BOTTOM: '10px',
 
 	SIDEBAR_BACKGROUND_COLOR: '#FFFFFF',
+
+	TAG_BACKGROUND_COLOR: 'grey',
+	TAG_TEXT_COLOR: 'black',
 
 	TEXT_COLOR: colors.primary,
 	TEXT_COLOR_SECONDARY: colors.secondary,

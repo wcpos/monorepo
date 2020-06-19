@@ -2,7 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { ImgResource } from './resource';
 import { Img } from './styles';
-import Placeholder from '../placeholder';
+import Placeholder from '../skeleton';
 import ErrorBoundary from '../error';
 import Text from '../text';
 
