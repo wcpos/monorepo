@@ -11,7 +11,7 @@
 	"dependencies": {
 		"@nozbe/watermelondb": "0.16.2",
 		"@react-native-community/masked-view": "0.1.10",
-		"@react-native-community/netinfo": "5.9.2",
+		"@react-native-community/netinfo": "5.9.3",
 		"@react-navigation/drawer": "5.8.2",
 		"@react-navigation/native": "5.5.1",
 		"@react-navigation/stack": "5.5.1",
@@ -19,7 +19,7 @@
 		"axios": "0.19.2",
 		"base-64": "0.1.0",
 		"hash-sum": "2.0.0",
-		"i18next": "19.4.5",
+		"i18next": "19.5.0",
 		"lodash": "4.17.15",
 		"lokijs": "1.5.8",
 		"observable-hooks": "3.0.0",

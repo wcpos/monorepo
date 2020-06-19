@@ -1,6 +1,10 @@
 import React from 'react';
 import * as Styled from './styles';
 
+/**
+ * note: weird bug in storybook when importing * as Styled
+ */
+
 export type Props = {
 	align?: 'left' | 'right' | 'center' | 'justify';
 	children: string;

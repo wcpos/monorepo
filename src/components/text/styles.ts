@@ -3,7 +3,7 @@ import styled from 'styled-components/native';
 type TextProps = import('./text').Props;
 
 // eslint-disable-next-line import/prefer-default-export
-export const Text = styled.Text<TextProps>`
+export const StyledText = styled.Text<TextProps>`
 	color: ${({ type, theme }) => {
 		switch (type) {
 			case 'secondary':

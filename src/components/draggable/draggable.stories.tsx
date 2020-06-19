@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import { action } from '@storybook/addon-actions';
-import Draggable from './';
+import Draggable from '.';
 
 export default {
 	title: 'Components/Draggable',
