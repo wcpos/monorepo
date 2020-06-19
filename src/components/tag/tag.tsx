@@ -10,6 +10,7 @@ import useTheme from '../../hooks/use-theme';
 export interface Props {
 	children: string;
 	closable?: boolean;
+	disabled?: boolean;
 	onClose?: () => void;
 }
 
@@ -67,15 +68,15 @@ const Skeleton: React.FC<SkeletonProps> = ({
 	);
 };
 
-const Tag: React.FC<Props> = ({ children, closable, onClose }) => {
+const Tag: React.FC<Props> = ({ children, closable, disabled, onClose }) => {
 	const { theme } = useTheme();
 	return (
-		<Styled.Tag>
+		<Styled.Tag disabled={disabled}>
 			<Text size="small" style={{ color: theme.TAG_TEXT_COLOR }}>
 				{children}
 			</Text>
 			{closable && (
-				<Button onPress={onClose}>
+				<Button disabled={disabled} onPress={onClose}>
 					<Icon name="close" />
 				</Button>
 			)}

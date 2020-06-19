@@ -106,6 +106,7 @@ const theme = {
 	SIDEBAR_BACKGROUND_COLOR: '#FFFFFF',
 
 	TAG_BACKGROUND_COLOR: colors.secondary,
+	TAG_BACKGROUND_DISABLED: colors.disabled,
 	TAG_TEXT_COLOR: colors.inverse,
 	TAG_BORDER_RADIUS: '10px',
 	TAG_PADDING_X: '5px',
