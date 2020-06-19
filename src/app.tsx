@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text } from 'react-native';
-import { ThemeProvider } from 'styled-components/native';
+import { ThemeProvider } from './hooks/use-theme';
 import { AppStateProvider } from './hooks/use-app-state';
 import Navigator from './navigators';
 import Portal from './components/portal';
@@ -16,7 +16,7 @@ const App: React.FC = () => {
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<AppStateProvider>
-					<ThemeProvider theme={defaultTheme}>
+					<ThemeProvider>
 						<Portal.Host>
 							{/* <Text>hello</Text> */}
 							<Navigator />
