@@ -1,9 +1,9 @@
 import React from 'react';
-import Placeholder from './skeleton';
+import Skeleton from './skeleton';
 import readme from './README.md';
 
 export default {
-	title: 'Components/Placeholder',
+	title: 'Components/Skeleton',
 	parameters: {
 		notes: { readme },
 	},
@@ -13,24 +13,24 @@ export default {
  *
  */
 export const basicUsage = () => (
-	<Placeholder>
-		<Placeholder.Item width={100} height={50} />
-		<Placeholder.Item marginTop={10} width={100} height={50} />
-		<Placeholder.Item style={{ marginTop: 10, width: 100, height: 50 }} />
-	</Placeholder>
+	<Skeleton>
+		<Skeleton.Item width={100} height={50} />
+		<Skeleton.Item marginTop={10} width={100} height={50} />
+		<Skeleton.Item style={{ marginTop: 10, width: 100, height: 50 }} />
+	</Skeleton>
 );
 
 /**
  *
  */
 export const complexUsage = () => (
-	<Placeholder>
-		<Placeholder.Item flexDirection="row" alignItems="center">
-			<Placeholder.Item width={60} height={60} borderRadius={50} />
-			<Placeholder.Item marginLeft={20}>
-				<Placeholder.Item width={120} height={20} borderRadius={4} />
-				<Placeholder.Item marginTop={6} width={80} height={20} borderRadius={4} />
-			</Placeholder.Item>
-		</Placeholder.Item>
-	</Placeholder>
+	<Skeleton>
+		<Skeleton.Item flexDirection="row" alignItems="center">
+			<Skeleton.Item width={60} height={60} borderRadius={50} />
+			<Skeleton.Item marginLeft={20}>
+				<Skeleton.Item width={120} height={20} borderRadius={4} />
+				<Skeleton.Item marginTop={6} width={80} height={20} borderRadius={4} />
+			</Skeleton.Item>
+		</Skeleton.Item>
+	</Skeleton>
 );

@@ -1,5 +1,5 @@
 import React from 'react';
-import * as Styled from './styles';
+import { StyledText } from './styles';
 
 /**
  * note: weird bug in storybook when importing * as Styled
@@ -37,7 +37,7 @@ const Text: React.FC<Props> = ({
 	weight = 'normal',
 }) => {
 	return (
-		<Styled.Text
+		<StyledText
 			align={align}
 			italic={italic}
 			onPress={onPress}
@@ -48,7 +48,7 @@ const Text: React.FC<Props> = ({
 			weight={weight}
 		>
 			{children}
-		</Styled.Text>
+		</StyledText>
 	);
 };
 

@@ -8,3 +8,11 @@ export default {
 };
 
 export const basicUsage = () => <Tag>{text('children', 'Label')}</Tag>;
+
+export const closable = () => (
+	<Tag closable onClose={action('close')}>
+		{text('children', 'Label')}
+	</Tag>
+);
+
+export const skeleton = () => <Tag.Skeleton />;
