@@ -60,33 +60,32 @@ export default function Placeholder({
 						{getChildren(child.props.children)}
 					</View>
 				);
-			} else {
-				return (
-					<View key={index} style={{ position: 'relative' }}>
-						<View style={[style, { backgroundColor, overflow: 'hidden' }]}>
-							<Animated.View
-								style={[
-									StyleSheet.absoluteFill,
-									{
-										transform: [{ translateX }],
-									},
-								]}
-							>
-								<LinearGradient
-									colors={[backgroundColor, highlightColor, backgroundColor] as string[]}
-									start={{ x: 0, y: 0 }}
-									end={{ x: 1, y: 0 }}
-									style={{ flex: 1 }}
-								/>
-							</Animated.View>
-						</View>
-					</View>
-				);
 			}
+			return (
+				<View key={index} style={{ position: 'relative' }}>
+					<View style={[style, { backgroundColor, overflow: 'hidden' }]}>
+						<Animated.View
+							style={[
+								StyleSheet.absoluteFill,
+								{
+									transform: [{ translateX }],
+								},
+							]}
+						>
+							<LinearGradient
+								colors={[backgroundColor, highlightColor, backgroundColor] as string[]}
+								start={{ x: 0, y: 0 }}
+								end={{ x: 1, y: 0 }}
+								style={{ flex: 1 }}
+							/>
+						</Animated.View>
+					</View>
+				</View>
+			);
 		});
 	};
 
-	return <React.Fragment>{getChildren(children)}</React.Fragment>;
+	return <>{getChildren(children)}</>;
 }
 
 interface PlaceholderItem extends ViewStyle {
@@ -98,7 +97,7 @@ Placeholder.Item = ({ children, ...style }: PlaceholderItem): JSX.Element => (
 	<View style={style}>{children}</View>
 );
 
-//@ts-ignore
+// @ts-ignore
 Placeholder.Item.displayName = 'PlaceholderItem';
 
 Placeholder.defaultProps = {

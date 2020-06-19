@@ -1,4 +1,4 @@
-import Platform from '../../platform';
+import Platform from '../../../utils/platform';
 import palette from '../palettes/blue-grey.json';
 import normalizeText from '../normalize-text';
 
