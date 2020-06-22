@@ -11,7 +11,7 @@ export type Props = {
 	style?: import('react-native').ViewStyle;
 };
 
-const HeaderRow: React.FC<Props> = ({ columns, sort, sortBy, sortDirection, children, style }) => {
+const HeaderRow = ({ columns, sort, sortBy, sortDirection, children, style }: Props) => {
 	return (
 		<Styled.HeaderRow style={style}>
 			{columns &&

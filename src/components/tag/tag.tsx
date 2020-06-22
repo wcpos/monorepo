@@ -21,12 +21,12 @@ export interface SkeletonProps {
 	style?: ViewStyle;
 }
 
-const Skeleton: React.FC<SkeletonProps> = ({
+const Skeleton = ({
 	backgroundColor = '#E1E9EE',
 	highlightColor = '#F2F8FC',
 	speed = 800,
 	style = { width: '50px', height: '24px', borderRadius: '10px' },
-}) => {
+}: SkeletonProps) => {
 	const animatedValue = new Animated.Value(0);
 
 	React.useEffect(() => {
@@ -68,7 +68,7 @@ const Skeleton: React.FC<SkeletonProps> = ({
 	);
 };
 
-const Tag: React.FC<Props> = ({ children, closable, disabled, onClose }) => {
+const Tag = ({ children, closable, disabled, onClose }: Props) => {
 	const { theme } = useTheme();
 	return (
 		<Styled.Tag disabled={disabled}>
