@@ -5,6 +5,7 @@ import debounce from 'lodash/debounce';
 import { getUniqueId, getReadableVersion } from './device-info';
 import database from '../../database';
 import * as actionTypes from './action-types';
+import logger from '../../services/logger';
 
 type AppState = {
 	online: boolean;
@@ -58,7 +59,7 @@ const removeLastStore = async () => database.adapter.removeLocal('last_store');
  */
 function appStateReducer(state: AppState, action: AppAction): AppState {
 	const { type, payload } = action;
-	console.log(type, payload);
+	logger.info(type, payload);
 	switch (type) {
 		// case consts.DIMENSIONS_CHANGE:
 		// 	return { ...state, ...payload };
