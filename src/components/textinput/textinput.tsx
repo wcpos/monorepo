@@ -27,16 +27,16 @@ const TextInput = ({
 	...props
 }: Props) => {
 	const [value, setValue] = React.useState(props.value || '');
-	const ref = React.useRef<View>(null);
-	const [measurements, onMeasure] = React.useState({
-		height: 0,
-		pageX: 0,
-		pageY: 0,
-		width: 0,
-		x: 0,
-		y: 0,
-	});
-	const { onLayout } = useMeasure({ onMeasure, ref });
+	// const ref = React.useRef<View>(null);
+	// const [measurements, onMeasure] = React.useState({
+	// 	height: 0,
+	// 	pageX: 0,
+	// 	pageY: 0,
+	// 	width: 0,
+	// 	x: 0,
+	// 	y: 0,
+	// });
+	// const { onLayout } = useMeasure({ onMeasure, ref });
 
 	const handleChangeText = (newValue: string) => {
 		setValue(newValue);

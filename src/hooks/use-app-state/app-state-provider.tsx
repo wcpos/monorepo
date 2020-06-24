@@ -59,7 +59,8 @@ const removeLastStore = async () => database.adapter.removeLocal('last_store');
  */
 function appStateReducer(state: AppState, action: AppAction): AppState {
 	const { type, payload } = action;
-	logger.info(type, payload);
+	// logger.info(type, payload);
+	logger.error('test');
 	switch (type) {
 		// case consts.DIMENSIONS_CHANGE:
 		// 	return { ...state, ...payload };
