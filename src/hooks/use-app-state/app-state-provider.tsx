@@ -3,7 +3,7 @@ import { Dimensions } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import debounce from 'lodash/debounce';
 import { getUniqueId, getReadableVersion } from './device-info';
-import database from '../../database';
+import getDatabase from '../../database';
 import * as actionTypes from './action-types';
 import logger from '../../services/logger';
 
@@ -60,7 +60,7 @@ const removeLastStore = async () => database.adapter.removeLocal('last_store');
 function appStateReducer(state: AppState, action: AppAction): AppState {
 	const { type, payload } = action;
 	// logger.info(type, payload);
-	logger.error('test');
+	logger.info(type, payload);
 	switch (type) {
 		// case consts.DIMENSIONS_CHANGE:
 		// 	return { ...state, ...payload };
@@ -85,6 +85,7 @@ export const AppStateContext = React.createContext<ContextValue>(null);
  * The Provider
  */
 const AppStateProvider: React.FC = ({ children }) => {
+	const [userDatabase, setUserDatabase] = React.useState();
 	const [state, dispatch] = React.useReducer(appStateReducer, initialState);
 	const value: ContextValue = React.useMemo(() => [state, dispatch, actionTypes], [state]) as any;
 
@@ -125,9 +126,27 @@ const AppStateProvider: React.FC = ({ children }) => {
 	 */
 	React.useEffect(() => {
 		(async function init() {
-			logger.info('Hello World!');
+			const db = await getDatabase('wcpos_users');
+			setUserDatabase(db);
 		})();
 	}, []);
+
+	React.useEffect(() => {
+		(async function init() {
+			if (userDatabase) {
+				const lastStore = await userDatabase.getLocal('last_store');
+
+				if (!lastStore) {
+					const appUsers = await userDatabase.collections.app_users.find().exec();
+
+					if (appUsers.length === 0) {
+						// create new user
+						logger.info('No app user found');
+					}
+				}
+			}
+		})();
+	}, [userDatabase]);
 	// React.useEffect(() => {
 	// 	(async function init() {
 	// 		const appUsersCollection = database.collections.get('app_users');
