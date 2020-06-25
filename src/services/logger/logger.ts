@@ -21,13 +21,15 @@ class Logger {
 		// this.winstonLogger.log('info', message, { context });
 	}
 
-	info(message: any, context?: string): void {
+	info(message: any, meta?: string): void {
 		// this.winstonLogger.info(message, { context });
 		console.log(message);
 		this.logCollection.then((collection) => {
-			const date = new Date();
-			const timestamp = String(date.getTime());
-			collection.insert({ timestamp, level: 'info', message });
+			if (collection) {
+				const date = new Date();
+				const timestamp = String(date.getTime());
+				collection.insert({ timestamp, level: 'info', message, meta });
+			}
 		});
 	}
 
@@ -38,6 +40,7 @@ class Logger {
 		// }
 		// throw new Error('My first Sentry error!');
 		// Sentry.nativeCrash();
+		console.error(message);
 	}
 
 	warn(message: any, context?: string): void {
