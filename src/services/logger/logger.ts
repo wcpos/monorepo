@@ -1,71 +1,21 @@
 // import { createLogger, transports, format } from 'winston';
 // import SentryTransport from './sentry-transport';
 import Sentry from './sentry';
+import logCollection from '../../database/user/logs';
+
+const PRODUCTION = process.env.NODE_ENV === 'production';
 
 Sentry.init({
 	dsn: `${process.env.REACT_APP_SENTRY_DSN}`,
-	enableAutoSessionTracking: true,
+	enableAutoSessionTracking: PRODUCTION,
 });
 
 const logLevels = ['info', 'error', 'warn', 'debug', 'verbose'];
-const PRODUCTION = process.env.NODE_ENV === 'production';
 
 class Logger {
-	// private readonly winstonLogger = createLogger();
+	private logCollection = logCollection;
 
-	constructor() {
-		// if (PRODUCTION) {
-		// 	// console
-		// 	this.winstonLogger.add(
-		// 		new transports.Console({
-		// 			level: 'info',
-		// 			format: format.combine(
-		// 				// winston.format.splat(),
-		// 				format.colorize(),
-		// 				// winston.format.metadata({ key: 'meta' }),
-		// 				format.printf((info: any) => {
-		// 					console.log(info.meta);
-		// 					return `${info.level} ${info.message}`;
-		// 				})
-		// 			),
-		// 		})
-		// 	);
-		// 	// sentry
-		// 	this.winstonLogger.add(
-		// 		new SentryTransport({
-		// 			level: 'error',
-		// 		})
-		// 	);
-		// } else {
-		// 	// console
-		// 	this.winstonLogger.add(
-		// 		new transports.Console({
-		// 			// format: format.combine(
-		// 			// 	// winston.format.splat(),
-		// 			// 	format.colorize(),
-		// 			// 	// winston.format.metadata({ key: 'meta' }),
-		// 			// 	format.printf((info: any) => {
-		// 			// 		console.log(info.meta);
-		// 			// 		return `${info.level} ${info.message}`;
-		// 			// 	})
-		// 			// ),
-		// 		})
-		// 	);
-		// 	// file
-		// 	// this.winstonLogger.add(
-		// 	// 	new transports.File({
-		// 	// 		filename: 'wcpos.log',
-		// 	// 		level: 'debug',
-		// 	// 		format: format.combine(
-		// 	// 			format.timestamp(),
-		// 	// 			format.metadata(),
-		// 	// 			format.prettyPrint(),
-		// 	// 			format.json()
-		// 	// 		),
-		// 	// 	})
-		// 	// );
-		// }
-	}
+	constructor() {}
 
 	log(message: any, context?: string): void {
 		// this.winstonLogger.log('info', message, { context });
@@ -73,6 +23,12 @@ class Logger {
 
 	info(message: any, context?: string): void {
 		// this.winstonLogger.info(message, { context });
+		console.log(message);
+		this.logCollection.then((collection) => {
+			const date = new Date();
+			const timestamp = String(date.getTime());
+			collection.insert({ timestamp, level: 'info', message });
+		});
 	}
 
 	error(message: any, trace?: string, context?: string): void {

@@ -125,39 +125,44 @@ const AppStateProvider: React.FC = ({ children }) => {
 	 */
 	React.useEffect(() => {
 		(async function init() {
-			const appUsersCollection = database.collections.get('app_users');
-			const storesCollection = database.collections.get('stores');
-			const lastStore = await getLastStore();
-
-			if (!lastStore) {
-				const appUserCount = await appUsersCollection.query().fetchCount();
-
-				if (appUserCount === 0) {
-					// create new user
-					await database.action(async () => {
-						const newUser = await appUsersCollection.create((user) => {
-							user.display_name = 'New User';
-						});
-						dispatch({ type: actionTypes.SET_USER, payload: { appUser: newUser } });
-					});
-				}
-
-				if (appUserCount === 1) {
-					// set only user
-					const allUsers = await appUsersCollection.query().fetch();
-					dispatch({ type: actionTypes.SET_USER, payload: { appUser: allUsers[0] } });
-				}
-
-				if (appUserCount > 0) {
-					debugger;
-				}
-			} else {
-				const store = await storesCollection.find(lastStore);
-				const appUser = await appUsersCollection.find(store.app_user.id);
-				dispatch({ type: actionTypes.SET_STORE, payload: { appUser, store } });
-			}
+			logger.info('Hello World!');
 		})();
-	}, [dispatch]);
+	}, []);
+	// React.useEffect(() => {
+	// 	(async function init() {
+	// 		const appUsersCollection = database.collections.get('app_users');
+	// 		const storesCollection = database.collections.get('stores');
+	// 		const lastStore = await getLastStore();
+
+	// 		if (!lastStore) {
+	// 			const appUserCount = await appUsersCollection.query().fetchCount();
+
+	// 			if (appUserCount === 0) {
+	// 				// create new user
+	// 				await database.action(async () => {
+	// 					const newUser = await appUsersCollection.create((user) => {
+	// 						user.display_name = 'New User';
+	// 					});
+	// 					dispatch({ type: actionTypes.SET_USER, payload: { appUser: newUser } });
+	// 				});
+	// 			}
+
+	// 			if (appUserCount === 1) {
+	// 				// set only user
+	// 				const allUsers = await appUsersCollection.query().fetch();
+	// 				dispatch({ type: actionTypes.SET_USER, payload: { appUser: allUsers[0] } });
+	// 			}
+
+	// 			if (appUserCount > 0) {
+	// 				debugger;
+	// 			}
+	// 		} else {
+	// 			const store = await storesCollection.find(lastStore);
+	// 			const appUser = await appUsersCollection.find(store.app_user.id);
+	// 			dispatch({ type: actionTypes.SET_STORE, payload: { appUser, store } });
+	// 		}
+	// 	})();
+	// }, [dispatch]);
 
 	return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 };
