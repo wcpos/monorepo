@@ -47,8 +47,8 @@ class Logger {
 		// this.winstonLogger.warn(message, { context });
 	}
 
-	debug(message: any, context?: string): void {
-		// this.winstonLogger.debug(message, { context });
+	debug(message: any, meta?: {}): void {
+		console.log(`[debug] - ${message}`, meta);
 	}
 
 	verbose(message: any, context?: string): void {

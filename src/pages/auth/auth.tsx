@@ -14,19 +14,21 @@ interface Props {}
 const Auth: React.FC<Props> = (props) => {
 	const navigation = useNavigation();
 	const [{ appUser }] = useAppState();
-	const sites = useObservableSuspense(appUser.sitesResource);
+	// const sites = useObservableSuspense(appUser.sitesResource);
+	const sites = [];
 
 	const onConnect = async (url) => {
-		const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
-		if (trimUrl) {
-			const newSite = await appUser.database.action(async () =>
-				appUser.sites.collection.create((site) => {
-					site.url = `https://${trimUrl}`;
-					site.app_user.set(appUser);
-				})
-			);
-			newSite?.connect();
-		}
+		appUser.addSite(url);
+		// const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
+		// if (trimUrl) {
+		// 	const newSite = await appUser.database.action(async () =>
+		// 		appUser.sites.collection.create((site) => {
+		// 			site.url = `https://${trimUrl}`;
+		// 			site.app_user.set(appUser);
+		// 		})
+		// 	);
+		// 	newSite?.connect();
+		// }
 	};
 
 	return (

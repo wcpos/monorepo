@@ -1,0 +1,18 @@
+{
+	"title": "WordPress Sites schema",
+	"version": 0,
+	"description": "",
+	"type": "object",
+	"properties": {
+		"id": {
+			"type": "string",
+			"primary": true
+		},
+		"url": {
+			"type": "string"
+		},
+		"name": {
+			"type": "string"
+		}
+	}
+}

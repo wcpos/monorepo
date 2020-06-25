@@ -16,6 +16,13 @@
 		},
 		"display_name": {
 			"type": "string"
+		},
+		"sites": {
+			"type": "array",
+			"ref": "sites",
+			"items": {
+				"type": "string"
+			}
 		}
 	}
 }
