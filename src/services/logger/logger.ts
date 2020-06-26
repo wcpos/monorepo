@@ -5,10 +5,12 @@ import logCollection from '../../database/user/logs';
 
 const PRODUCTION = process.env.NODE_ENV === 'production';
 
-Sentry.init({
-	dsn: `${process.env.REACT_APP_SENTRY_DSN}`,
-	enableAutoSessionTracking: PRODUCTION,
-});
+if (PRODUCTION) {
+	Sentry.init({
+		dsn: `${process.env.REACT_APP_SENTRY_DSN}`,
+		enableAutoSessionTracking: true,
+	});
+}
 
 const logLevels = ['info', 'error', 'warn', 'debug', 'verbose'];
 
