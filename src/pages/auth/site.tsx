@@ -17,7 +17,7 @@ import useAppState from '../../hooks/use-app-state';
  * - https://api.faviconkit.com/${url}/144
  */
 const Site = ({ site }) => {
-	const status = useObservableState(site.connection_status$);
+	// const status = useObservableState(site.connection_status$);
 	const [visible, setVisible] = React.useState(false);
 	const [{ appUser }, dispatch, actions] = useAppState();
 
@@ -56,7 +56,7 @@ const Site = ({ site }) => {
 		<SiteWrapper>
 			<Avatar src={`https://api.faviconkit.com/${site.urlWithoutPrefix}/144`} />
 			<SiteTextWrapper>
-				<Text weight="bold">{site.name || site.urlWithoutPrefix}</Text>
+				<Text weight="bold">{site.nameOrUrl || site.urlWithoutPrefix}</Text>
 				<Text size="small" type="secondary">
 					{site.urlWithoutPrefix}
 				</Text>

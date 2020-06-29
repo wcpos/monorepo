@@ -1,15 +1,17 @@
 import { createRxDatabase, addRxPlugin } from 'rxdb';
 import idbAdapter from 'pouchdb-adapter-idb';
-import schema from './user/app-user-schema.json';
-import sitesSchema from './user/sites-schema.json';
+import { ObservableResource } from 'observable-hooks';
+import { switchMap, tap, map } from 'rxjs/operators';
+import schema from './users/app-users/schema.json';
+import sitesSchema from './users/sites/schema.json';
 
-type AppUser = {
-	id: string;
-	first_name: string;
-	last_name: string;
-	display_name: string;
-	sites: [];
-};
+type WordPressSiteSchema = import('./users/sites/interface').WordPressSitesSchema;
+type AppUserSchema = import('./users/app-users/interface').AppUserSchema;
+type AppUserMethods = {};
+
+type SiteDocument = import('rxdb').RxDocument<WordPressSiteSchema, {}>;
+type RxDatabase = import('rxdb').RxDatabase;
+type RxCollection = import('rxdb').RxCollection;
 
 const docMethods = {
 	async addSite(url) {
@@ -23,6 +25,9 @@ const docMethods = {
 			console.log(this);
 		}
 	},
+	getSitesResource(): ObservableResource<SiteDocument[]> {
+		return new ObservableResource(this.sites$);
+	},
 };
 
 const colMethods = {
@@ -31,18 +36,24 @@ const colMethods = {
 	},
 };
 
-type AppUserCollection = import('rxdb').RxCollection<AppUser, typeof docMethods, typeof colMethods>;
+type AppUserCollection = import('rxdb').RxCollection<
+	AppUserSchema,
+	typeof docMethods,
+	typeof colMethods
+>;
 
 addRxPlugin(idbAdapter);
 
-const getDatabase = async (name: string) => {
+const getDatabase = async (
+	name: string
+): Promise<RxDatabase<{ app_users: RxCollection<AppUserSchema, {}, {}> }>> => {
 	const db = await createRxDatabase({
 		name,
 		adapter: 'idb', // the name of your adapter
 		ignoreDuplicate: true, // for development?
 	});
 	if (name === 'wcpos_users') {
-		await db.collection({
+		const appUsersCollection = await db.collection({
 			name: 'app_users',
 			schema,
 			methods: docMethods,
@@ -51,9 +62,42 @@ const getDatabase = async (name: string) => {
 				foo: 'bar',
 			},
 		});
-		await db.collection({
+		appUsersCollection.postCreate(function (plainData, rxDocument) {
+			Object.defineProperty(rxDocument, 'sitesResource', {
+				get: () => {
+					return new ObservableResource(
+						rxDocument.sites$.pipe(
+							switchMap((siteIds) =>
+								rxDocument.collection.database.collections.sites.findByIds(siteIds)
+							),
+							// map((result) => result.value),
+							tap((result) => {
+								console.log(result);
+							})
+						)
+					);
+				},
+			});
+		});
+
+		const sitesCollection = await db.collection({
 			name: 'sites',
 			schema: sitesSchema,
+		});
+		sitesCollection.postCreate(function (plainData, rxDocument) {
+			debugger;
+			Object.defineProperty(rxDocument, 'nameOrUrl', {
+				get: () => {
+					debugger;
+					return rxDocument.name || rxDocument.url;
+				},
+			});
+			Object.defineProperty(rxDocument, 'urlWithoutPrefix', {
+				get: () => {
+					debugger;
+					return 'foo';
+				},
+			});
 		});
 	}
 	return db;

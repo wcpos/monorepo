@@ -1,7 +1,7 @@
 // import { createLogger, transports, format } from 'winston';
 // import SentryTransport from './sentry-transport';
 import Sentry from './sentry';
-import logCollection from '../../database/user/logs';
+import logCollection from '../../database/users/logs';
 
 const PRODUCTION = process.env.NODE_ENV === 'production';
 
@@ -50,7 +50,7 @@ class Logger {
 	}
 
 	debug(message: any, meta?: {}): void {
-		console.log(`[debug] - ${message}`, meta);
+		console.log(`[debug] ${message}`, meta);
 	}
 
 	verbose(message: any, context?: string): void {

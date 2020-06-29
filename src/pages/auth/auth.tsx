@@ -14,8 +14,10 @@ interface Props {}
 const Auth: React.FC<Props> = (props) => {
 	const navigation = useNavigation();
 	const [{ appUser }] = useAppState();
-	// const sites = useObservableSuspense(appUser.sitesResource);
-	const sites = [];
+	// console.log(appUser.getSitesResource());
+	const sites = useObservableSuspense(appUser.sitesResource);
+	console.log(sites);
+	// const sites = [];
 
 	const onConnect = async (url) => {
 		appUser.addSite(url);
@@ -30,6 +32,18 @@ const Auth: React.FC<Props> = (props) => {
 		// 	newSite?.connect();
 		// }
 	};
+
+	React.useEffect(() => {
+		(async function fetchSites() {
+			const site = await appUser.collection.database.collections.sites
+				.findOne(appUser.sites[0])
+				.exec();
+			console.log(site.nameOrUrl);
+			debugger;
+			// const site = await appUser.sites.find().exec();
+			// console.log(sites);
+		})();
+	}, []);
 
 	return (
 		<PageLayout>
