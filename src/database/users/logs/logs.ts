@@ -1,6 +1,6 @@
-import getDatabase from '../database';
-import schema from './log-schema.json';
-import logger from '../../services/logger';
+import getDatabase from '../../database';
+import schema from './schema.json';
+import logger from '../../../services/logger';
 
 const collection = getDatabase('wcpos_users')
 	.then((userDatabase) =>
