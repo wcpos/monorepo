@@ -3,7 +3,7 @@ import { Dimensions } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import debounce from 'lodash/debounce';
 import { getUniqueId, getReadableVersion } from './device-info';
-import getDatabase from '../../database';
+import database from '../../database';
 import * as actionTypes from './action-types';
 import logger from '../../services/logger';
 
@@ -127,7 +127,7 @@ const AppStateProvider: React.FC = ({ children }) => {
 	 */
 	React.useEffect(() => {
 		(async function init() {
-			const db = await getDatabase('wcpos_users');
+			const db = await database;
 			setUserDatabase(db);
 		})();
 	}, []);
