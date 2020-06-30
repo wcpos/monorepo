@@ -3,8 +3,11 @@ import SQLite from 'react-native-sqlite-2';
 import SQLiteAdapterFactory from 'pouchdb-adapter-react-native-sqlite';
 // import httpAdapter from 'pouchdb-adapter-http';
 
+type Collections = import('../database').Collections;
+type Database = import('../database').Database;
+
 const SQLiteAdapter = SQLiteAdapterFactory(SQLite);
-const supportedAdapters: IAdapter[] = [];
+const supportedAdapters = [];
 
 addRxPlugin(SQLiteAdapter);
 // addRxPlugin(httpAdapter);
@@ -32,8 +35,8 @@ addRxPlugin(SQLiteAdapter);
 	});
 })();
 
-const getDatabase = async (name: string) => {
-	const db = await createRxDatabase({
+const getDatabase = async (name: string): Promise<Database> => {
+	const db = await createRxDatabase<Collections>({
 		name,
 		adapter: 'react-native-sqlite', // the name of your adapter
 		multiInstance: false,
