@@ -1,7 +1,7 @@
 import createDatabase from './adapter';
 import createCollectionMap from './users';
 
-type Collections = {
+export type Collections = {
 	logs: import('./users/logs/logs').LogsCollection;
 	// eslint-disable-next-line camelcase
 	app_users: import('./users/app-users/app-users').AppUsersCollection;
@@ -9,8 +9,8 @@ type Collections = {
 };
 export type Database = import('rxdb').RxDatabase<Collections>;
 
-const databasePromise: Promise<Database> = createDatabase('wcpos_users').then((db) => {
-	return Promise.all(
+const databasePromise: Promise<Database> = createDatabase('wcpos_users').then((db) =>
+	Promise.all(
 		createCollectionMap.map((createCollection) => {
 			return createCollection(db);
 		})
@@ -18,7 +18,7 @@ const databasePromise: Promise<Database> = createDatabase('wcpos_users').then((d
 		console.log(values);
 		console.log(db);
 		return db;
-	});
-});
+	})
+);
 
 export default databasePromise;
