@@ -1,7 +1,7 @@
 import React from 'react';
 import { action } from '@storybook/addon-actions';
 import Text from '../text';
-import Pressable from './';
+import Pressable from '.';
 
 export default {
 	title: 'Components/Pressable',

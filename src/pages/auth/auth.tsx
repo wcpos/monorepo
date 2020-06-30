@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigation } from '@react-navigation/native';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import PageLayout from '../../layout/page';
 import Segment from '../../components/segment';
@@ -12,15 +11,12 @@ import useAppState from '../../hooks/use-app-state';
 interface Props {}
 
 const Auth: React.FC<Props> = (props) => {
-	const navigation = useNavigation();
 	const [{ appUser }] = useAppState();
-	// console.log(appUser.getSitesResource());
 	const sites = useObservableSuspense(appUser.sitesResource);
-	console.log(sites);
-	// const sites = [];
 
-	const onConnect = async (url) => {
-		appUser.addSite(url);
+	const onConnect = async (url: string) => {
+		const newSite = await appUser.addSite(url);
+		newSite.connect();
 		// const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
 		// if (trimUrl) {
 		// 	const newSite = await appUser.database.action(async () =>
@@ -32,18 +28,6 @@ const Auth: React.FC<Props> = (props) => {
 		// 	newSite?.connect();
 		// }
 	};
-
-	React.useEffect(() => {
-		(async function fetchSites() {
-			const site = await appUser.collection.database.collections.sites
-				.findOne(appUser.sites[0])
-				.exec();
-			console.log(site.nameOrUrl);
-			debugger;
-			// const site = await appUser.sites.find().exec();
-			// console.log(sites);
-		})();
-	}, []);
 
 	return (
 		<PageLayout>

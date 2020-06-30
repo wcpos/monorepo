@@ -1,7 +1,7 @@
 // import { createLogger, transports, format } from 'winston';
 // import SentryTransport from './sentry-transport';
 import Sentry from './sentry';
-import logCollection from '../../database/users/logs';
+// import logCollection from '../../database/users/logs';
 
 const PRODUCTION = process.env.NODE_ENV === 'production';
 
@@ -15,9 +15,11 @@ if (PRODUCTION) {
 const logLevels = ['info', 'error', 'warn', 'debug', 'verbose'];
 
 class Logger {
-	private logCollection = logCollection;
+	private logCollection;
 
-	constructor() {}
+	constructor() {
+		// this.logCollection = logCollection;
+	}
 
 	log(message: any, context?: string): void {
 		// this.winstonLogger.log('info', message, { context });
@@ -26,13 +28,13 @@ class Logger {
 	info(message: any, meta?: string): void {
 		// this.winstonLogger.info(message, { context });
 		console.log(message);
-		this.logCollection.then((collection) => {
-			if (collection) {
-				const date = new Date();
-				const timestamp = String(date.getTime());
-				collection.insert({ timestamp, level: 'info', message, meta });
-			}
-		});
+		// this.logCollection.then((collection) => {
+		// 	if (collection) {
+		// 		const date = new Date();
+		// 		const timestamp = String(date.getTime());
+		// 		collection.insert({ timestamp, level: 'info', message, meta });
+		// 	}
+		// });
 	}
 
 	error(message: any, trace?: string, context?: string): void {
