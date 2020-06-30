@@ -2,33 +2,51 @@ import { ObservableResource } from 'observable-hooks';
 import { switchMap, tap, map } from 'rxjs/operators';
 import schema from './schema.json';
 
+type SiteModel = import('../sites/sites').SiteModel;
+type AppUserSchema = import('./interface').AppUserSchema;
+type AppUserModelMethods = {
+	addSite: (url: string) => Promise<SiteModel> | undefined;
+};
+type AppUserModel = import('rxdb').RxDocument<AppUserSchema, AppUserModelMethods>;
+type AppUserCollectionMethods = {
+	createNewUser: () => Promise<AppUserModel>;
+};
+export type AppUsersCollection = import('rxdb').RxCollection<
+	AppUserModel,
+	AppUserModelMethods,
+	AppUserCollectionMethods
+>;
+type Database = import('../../database').Database;
+
 /**
  * App User Model methods
  */
-const methods = {
+const methods: AppUserModelMethods = {
 	async addSite(url) {
 		const trimmedUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
-		if (trimmedUrl) {
-			const newSite = await this.collection.database.collections.sites.upsert({
-				id: 'site-0',
-				url: trimmedUrl,
-			});
-			await this.update({ $set: { sites: [newSite.id] } });
-			console.log(this);
-		}
+		if (!trimmedUrl) return;
+		const newSite = await this.collection.database.collections.sites.upsert({
+			id: 'site-0',
+			url: trimmedUrl,
+		});
+		await this.update({ $set: { sites: [newSite.id] } });
+
+		console.log(this);
+		// eslint-disable-next-line consistent-return
+		return newSite;
 	},
 };
 
 /**
  * App User Collection methods
  */
-const statics = {
+const statics: AppUserCollectionMethods = {
 	async createNewUser() {
 		return this.insert({ id: 'new-0', first_name: 'Default', last_name: 'User' });
 	},
 };
 
-const createAppUsersCollection = async (db) => {
+const createAppUsersCollection = async (db: Database): Promise<AppUsersCollection> => {
 	const appUsersCollection = await db.collection({
 		name: 'app_users',
 		schema,

@@ -1,6 +1,11 @@
 import schema from './schema.json';
 
-const createSitesCollection = async (db) => {
+type SiteSchema = import('./interface').WordPressSitesSchema;
+export type SiteModel = import('rxdb').RxDocument<SiteSchema, unknown>;
+export type SitesCollection = import('rxdb').RxCollection<SiteModel, unknown, unknown>;
+type Database = import('../../database').Database;
+
+const createSitesCollection = async (db: Database): Promise<SitesCollection> => {
 	const sitesCollection = await db.collection({
 		name: 'sites',
 		schema,
