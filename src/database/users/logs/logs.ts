@@ -1,16 +1,14 @@
-import getDatabase from '../../database';
 import schema from './schema.json';
-import logger from '../../../services/logger';
 
-const collection = getDatabase('wcpos_users')
-	.then((userDatabase) =>
-		userDatabase.collection({
-			name: 'logs',
-			schema,
-		})
-	)
-	.catch((err) => {
-		logger.error(err);
+const createLogsCollection = async (db) => {
+	const logCollection = await db.collection({
+		name: 'logs',
+		schema,
+		methods: {},
+		statics: {},
 	});
 
-export default collection;
+	return logCollection;
+};
+
+export default createLogsCollection;
