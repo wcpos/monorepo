@@ -22,6 +22,10 @@ type Database = import('../../database').Database;
  * App User Model methods
  */
 const methods: AppUserModelMethods = {
+	/**
+	 *
+	 * @param url
+	 */
 	async addSite(url) {
 		const trimmedUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
 		if (!trimmedUrl) return;
@@ -34,6 +38,17 @@ const methods: AppUserModelMethods = {
 		console.log(this);
 		// eslint-disable-next-line consistent-return
 		return newSite;
+	},
+
+	/**
+	 *
+	 * @param site
+	 */
+	async removeSite(site) {
+		await site.remove().then(() => {
+			// remove from appUser.sites
+			return this.update({ $set: { sites: [] } });
+		});
 	},
 };
 
@@ -60,7 +75,9 @@ const createAppUsersCollection = async (db: Database): Promise<AppUsersCollectio
 	appUsersCollection.postCreate((plainData, rxDocument) => {
 		const sitesResource = new ObservableResource(
 			rxDocument.sites$.pipe(
-				switchMap((siteIds) => rxDocument.collection.database.collections.sites.findByIds(siteIds)),
+				switchMap((siteIds) => {
+					return rxDocument.collection.database.collections.sites.findByIds(siteIds || []);
+				}),
 				map((result) => Array.from(result.values()))
 				// tap((result) => {
 				// 	console.log(result);

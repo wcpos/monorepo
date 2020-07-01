@@ -49,7 +49,7 @@ const Site = ({ site }) => {
 	};
 
 	const handleRemove = async () => {
-		await site.destroy();
+		await appUser.removeSite(site);
 	};
 
 	return (
