@@ -13,6 +13,27 @@
 		},
 		"name": {
 			"type": "string"
+		},
+		"description": {
+			"type": "string"
+		},
+		"home": {
+			"type": "string"
+		},
+		"gmt_offset": {
+			"type": "string"
+		},
+		"timezone_string": {
+			"type": "string"
+		},
+		"wp_api_url": {
+			"type": "string"
+		},
+		"wc_api_url": {
+			"type": "string"
+		},
+		"wc_api_auth_url": {
+			"type": "string"
 		}
 	}
 }

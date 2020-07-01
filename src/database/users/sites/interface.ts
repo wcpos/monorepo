@@ -9,5 +9,12 @@ export interface WordPressSitesSchema {
   id?: string;
   url?: string;
   name?: string;
+  description?: string;
+  home?: string;
+  gmt_offset?: string;
+  timezone_string?: string;
+  wp_api_url?: string;
+  wc_api_url?: string;
+  wc_api_auth_url?: string;
   [k: string]: any;
 }

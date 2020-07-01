@@ -60,17 +60,17 @@ const Site = ({ site }) => {
 				<Text size="small" type="secondary">
 					{site.urlWithoutPrefix}
 				</Text>
-				{status && <Text size="small">{status?.message}</Text>}
+				{/* {status && <Text size="small">{status?.message}</Text>} */}
 				<Button title="Connect again" onPress={() => site.connect()} />
 				<Button title="Enter" onPress={() => selectStore()} />
-				{status.type === 'login' && (
+				{/* {status.type === 'login' && (
 					<Button
 						title="Login"
 						onPress={() => {
 							setVisible(true);
 						}}
 					/>
-				)}
+				)} */}
 			</SiteTextWrapper>
 			<Button onPress={handleRemove}>
 				<Icon name="remove" />
