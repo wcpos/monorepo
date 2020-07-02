@@ -15,6 +15,13 @@
 		"consumer_key": { "type": "string" },
 		"consumer_secret": { "type": "string" },
 		"key_id": { "type": "number" },
-		"key_permissions": { "type": "string" }
+		"key_permissions": { "type": "string" },
+		"stores": {
+			"type": "array",
+			"ref": "stores",
+			"items": {
+				"type": "string"
+			}
+		}
 	}
 }

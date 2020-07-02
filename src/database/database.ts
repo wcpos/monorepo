@@ -6,6 +6,7 @@ export type Collections = {
 	// eslint-disable-next-line camelcase
 	app_users: import('./users/app-users/app-users').AppUsersCollection;
 	sites: import('./users/sites/sites').SitesCollection;
+	stores: import('./users/stores/stores').Collection;
 };
 export type Database = import('rxdb').RxDatabase<Collections>;
 
