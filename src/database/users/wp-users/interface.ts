@@ -21,5 +21,6 @@ export interface WordPressUserSchema {
   consumer_secret?: string;
   key_id?: number;
   key_permissions?: string;
+  stores?: string[];
   [k: string]: any;
 }

@@ -73,7 +73,8 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 			removeLastStore();
 			return { ...state, store: undefined };
 		case actionTypes.SET_STORE:
-			setLastStore(payload.store.id);
+			// setLastStore(payload.store.id);
+			payload.store.collection.upsertLocal('last_store', { store_id: payload.store.id });
 			return { ...state, ...payload };
 		default:
 			return { ...state, ...payload };
@@ -156,6 +157,7 @@ const AppStateProvider: React.FC = ({ children }) => {
 						// multiple users
 					}
 				} else {
+					debugger;
 					// const store = await storesCollection.find(lastStore);
 					// const appUser = await appUsersCollection.find(store.app_user.id);
 					// dispatch({ type: actionTypes.SET_STORE, payload: { appUser, store } });

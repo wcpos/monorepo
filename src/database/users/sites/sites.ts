@@ -99,6 +99,23 @@ const methods = {
 		});
 		await this.update({ $set: { wp_users: [newWpUser.id] } });
 	},
+
+	/**
+	 *
+	 */
+	async getStore() {
+		const newStore = await this.collections().stores.upsert({
+			id: 'store_xyz',
+			name: 'Default Store',
+		});
+
+		await this.collections()
+			.wp_users.findOne(this.wp_users[0])
+			.exec()
+			.then((wpUser) => wpUser.update({ $set: { stores: [newStore.id] } }));
+
+		return newStore;
+	},
 };
 
 /**
