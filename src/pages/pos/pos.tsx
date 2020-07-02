@@ -12,6 +12,7 @@ interface Props {}
 const POS: React.FC<Props> = () => {
 	const [{ store }] = useAppState();
 	const productsUI = useObservableSuspense(store.getUiResource('pos_products'));
+	console.log(productsUI);
 	console.log('render');
 	// const [width, setWidth] = React.useState(ui.width);
 

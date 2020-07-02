@@ -19,8 +19,6 @@ const Products: React.FC<Props> = ({ ui }) => {
 	// const { t } = useTranslation();
 	const [{ store }] = useAppState();
 
-	const display = useObservableSuspense(ui.displayResource);
-	const columns = useObservableSuspense(ui.columnsResource);
 	const products = useObservableSuspense(store.getDataResource('products'));
 
 	/**
@@ -88,10 +86,10 @@ const Products: React.FC<Props> = ({ ui }) => {
 		<React.Suspense fallback={<Text>loading products...</Text>}>
 			<Segment.Group>
 				<Segment>
-					<Actions columns={columns} display={display} resetUI={onResetUI} />
+					<Actions columns={ui.columns} display={ui.display} resetUI={onResetUI} />
 				</Segment>
 				<Segment grow>
-					<Table products={products} columns={columns} display={display} sort={onSort} />
+					<Table products={products} columns={ui.columns} display={ui.display} sort={onSort} />
 				</Segment>
 				<Segment>
 					<Text>Footer</Text>
