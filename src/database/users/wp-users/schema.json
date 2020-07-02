@@ -1,0 +1,20 @@
+{
+	"title": "WordPress User schema",
+	"version": 0,
+	"description": "WordPress User credientials",
+	"type": "object",
+	"properties": {
+		"id": { "type": "string", "primary": true },
+		"remote_id": { "type": "number" },
+		"username": { "type": "string" },
+		"first_name": { "type": "string" },
+		"last_name": { "type": "string" },
+		"email": { "type": "string" },
+		"display_name": { "type": "string" },
+		"last_access": { "type": "string" },
+		"consumer_key": { "type": "string" },
+		"consumer_secret": { "type": "string" },
+		"key_id": { "type": "number" },
+		"key_permissions": { "type": "string" }
+	}
+}

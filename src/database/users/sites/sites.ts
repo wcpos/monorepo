@@ -12,6 +12,9 @@ type Database = import('../../database').Database;
  *
  */
 const methods = {
+	/**
+	 *
+	 */
 	connect() {
 		of(this.urlForceHttps)
 			.pipe(
@@ -60,6 +63,41 @@ const methods = {
 				})
 			)
 			.subscribe();
+	},
+
+	/**
+	 *
+	 */
+	async createOrUpdateWpUser(data) {
+		const {
+			remote_id,
+			username,
+			first_name,
+			last_name,
+			display_name,
+			email,
+			key_id,
+			user_id,
+			consumer_key,
+			consumer_secret,
+			key_permissions,
+		} = data;
+
+		const newWpUser = await this.collections().wp_users.upsert({
+			id: 'wp-user-0',
+			remote_id,
+			username,
+			first_name,
+			last_name,
+			display_name,
+			email,
+			key_id,
+			// user_id,
+			consumer_key,
+			consumer_secret,
+			key_permissions,
+		});
+		await this.update({ $set: { wp_users: [newWpUser.id] } });
 	},
 };
 
