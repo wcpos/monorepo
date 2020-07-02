@@ -136,7 +136,7 @@ const AppStateProvider: React.FC = ({ children }) => {
 	React.useEffect(() => {
 		(async function init() {
 			if (userDatabase) {
-				const lastStore = await userDatabase.getLocal('last_store');
+				const lastStore = await userDatabase.collections.stores.getLocal('last_store');
 
 				if (!lastStore) {
 					const appUsers = await userDatabase.collections.app_users.find().exec();
@@ -157,10 +157,13 @@ const AppStateProvider: React.FC = ({ children }) => {
 						// multiple users
 					}
 				} else {
-					debugger;
-					// const store = await storesCollection.find(lastStore);
-					// const appUser = await appUsersCollection.find(store.app_user.id);
-					// dispatch({ type: actionTypes.SET_STORE, payload: { appUser, store } });
+					const store = await userDatabase.collections.stores
+						.findOne(lastStore.get('store_id'))
+						.exec();
+
+					const appUser = await userDatabase.collections.app_users.findOne('new-0').exec();
+
+					dispatch({ type: actionTypes.SET_STORE, payload: { appUser, store } });
 				}
 			}
 		})();
