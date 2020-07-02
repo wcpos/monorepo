@@ -34,6 +34,13 @@
 		},
 		"wc_api_auth_url": {
 			"type": "string"
+		},
+		"wp_users": {
+			"type": "array",
+			"ref": "wp_users",
+			"items": {
+				"type": "string"
+			}
 		}
 	}
 }

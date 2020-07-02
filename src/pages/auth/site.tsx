@@ -63,14 +63,14 @@ const Site = ({ site }) => {
 				{/* {status && <Text size="small">{status?.message}</Text>} */}
 				<Button title="Connect again" onPress={() => site.connect()} />
 				<Button title="Enter" onPress={() => selectStore()} />
-				{/* {status.type === 'login' && (
+				{site.wc_api_auth_url && (
 					<Button
 						title="Login"
 						onPress={() => {
 							setVisible(true);
 						}}
 					/>
-				)} */}
+				)}
 			</SiteTextWrapper>
 			<Button onPress={handleRemove}>
 				<Icon name="remove" />

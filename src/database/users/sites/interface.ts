@@ -16,5 +16,6 @@ export interface WordPressSitesSchema {
   wp_api_url?: string;
   wc_api_url?: string;
   wc_api_auth_url?: string;
+  wp_users?: string[];
   [k: string]: any;
 }
