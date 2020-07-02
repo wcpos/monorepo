@@ -3,6 +3,7 @@ import createAppUserCollection from './app-users';
 import createSitesCollection from './sites';
 import createWpUserCollection from './wp-users';
 import createStoresCollection from './stores';
+import createUiSettingsCollection from './ui-settings';
 
 export default [
 	createLogsCollection,
@@ -10,4 +11,5 @@ export default [
 	createSitesCollection,
 	createWpUserCollection,
 	createStoresCollection,
+	createUiSettingsCollection,
 ];

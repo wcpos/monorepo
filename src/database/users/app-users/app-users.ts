@@ -57,7 +57,7 @@ const methods: AppUserModelMethods = {
  */
 const statics: AppUserCollectionMethods = {
 	async createNewUser() {
-		return this.insert({ id: 'new-0', first_name: 'Default', last_name: 'User' });
+		return this.upsert({ id: 'new-0', first_name: 'Default', last_name: 'User' });
 	},
 };
 

@@ -1,0 +1,32 @@
+{
+	"title": "WooCommerce Product schema",
+	"version": 0,
+	"description": "WooCommerce Product schema",
+	"type": "object",
+	"properties": {
+		"id": {
+			"type": "string",
+			"primary": true
+		},
+		"name": {
+			"type": "string"
+		},
+		"slug": {
+			"type": "string"
+		},
+		"type": {
+			"default": "simple",
+			"enum": ["simple", "grouped", "external", "variable"],
+			"type": "string"
+		},
+		"sku": {
+			"type": "string"
+		},
+		"regular_price": {
+			"type": "string"
+		},
+		"sale_price": {
+			"type": "string"
+		}
+	}
+}
