@@ -13,7 +13,14 @@ type Database = import('../../database').Database;
 /**
  * WooCommerce Product Model methods
  */
-const methods: Methods = {};
+const methods: Methods = {
+	/**
+	 *
+	 */
+	isVariable() {
+		return this.type === 'variable';
+	},
+};
 
 /**
  * WooCommerce Product Collection methods

@@ -1,11 +1,12 @@
 import React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import Segment from '../../../components/segment';
 import Table from './table';
 import Actions from './actions';
 import Text from '../../../components/text';
 import useAppState from '../../../hooks/use-app-state';
+import Button from '../../../components/button';
 
 interface Props {
 	productsResource: any;
@@ -18,8 +19,15 @@ interface Props {
 const Products: React.FC<Props> = ({ ui }) => {
 	// const { t } = useTranslation();
 	const [{ store }] = useAppState();
+	const [columns, setColumns] = React.useState([]);
 
 	const products = useObservableSuspense(store.getDataResource('products'));
+	const storeDatabase = useObservableSuspense(store.dbResource);
+
+	React.useEffect(() => {
+		ui.columns$.subscribe((x) => setColumns(x));
+		return ui.columns$.unsubscribe;
+	}, []);
 
 	/**
 	 * Decorate table cells
@@ -78,21 +86,23 @@ const Products: React.FC<Props> = ({ ui }) => {
 		ui.updateWithJson({ sortBy, sortDirection });
 	};
 
-	const onResetUI = () => {
-		ui.reset();
-	};
-
 	return (
 		<React.Suspense fallback={<Text>loading products...</Text>}>
 			<Segment.Group>
 				<Segment>
-					<Actions columns={ui.columns} display={ui.display} resetUI={onResetUI} />
+					<Actions ui={ui} />
 				</Segment>
 				<Segment grow>
-					<Table products={products} columns={ui.columns} display={ui.display} sort={onSort} />
+					<Table products={products} columns={columns} display={ui.display} sort={onSort} />
 				</Segment>
 				<Segment>
 					<Text>Footer</Text>
+					<Button
+						title="Add Product"
+						onPress={() => {
+							storeDatabase.collections.products.insert({ id: 'test-1', name: 'Test Product 1' });
+						}}
+					/>
 				</Segment>
 			</Segment.Group>
 		</React.Suspense>

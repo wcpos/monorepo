@@ -1,7 +1,8 @@
 import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
-import { switchMap, map } from 'rxjs/operators';
+import { switchMap, map, filter, tap, switchMapTo, share, mergeMap } from 'rxjs/operators';
 import schema from './schema.json';
+import initialUI from './initial.json';
 
 export type Schema = import('./interface').UISettingsSchema;
 export type Methods = {};
@@ -11,14 +12,77 @@ export type Collection = import('rxdb').RxCollection<Model, Methods, Statics>;
 type Database = import('../../database').Database;
 
 /**
- * WordPress User Model methods
+ * UI Settings Model methods
  */
-const methods: Methods = {};
+const methods: Methods = {
+	/**
+	 *
+	 */
+	reset() {
+		if (initialUI.hasOwnProperty(this.section)) {
+			this.update({ $set: initialUI[this.section] });
+		}
+	},
+
+	/**
+	 *
+	 */
+	async updateColumn(key, payload) {
+		await this.atomicSet(
+			'columns',
+			this.columns.map((column) => {
+				if (key === column.key) {
+					return { ...column, ...payload };
+				}
+				return column;
+			})
+		);
+	},
+
+	/**
+	 *
+	 */
+	async updateDisplay(key, payload) {
+		await this.atomicSet(
+			'display',
+			this.display.map((d) => {
+				if (key === d.key) {
+					return { ...d, ...payload };
+				}
+				return d;
+			})
+		);
+	},
+
+	/**
+	 *
+	 */
+	async updateWidth() {
+		await this.update({ $set: { width: '40% ' } });
+	},
+};
 
 /**
- * WordPress User Collection methods
+ * UI Settings Collection methods
  */
-const statics: Statics = {};
+const statics: Statics = {
+	/**
+	 *
+	 */
+	getUiSetting$(store_id, section) {
+		const query = this.findOne().where({ store_id }).where({ section });
+		return query.$.pipe(
+			filter((ui) => {
+				if (!ui) {
+					this.insert({ id: `${store_id}-${section}`, store_id, section, ...initialUI[section] });
+					return false;
+				}
+				return true;
+			}),
+			tap((result) => console.log('UI found from Store Model', result))
+		);
+	},
+};
 
 /**
  *

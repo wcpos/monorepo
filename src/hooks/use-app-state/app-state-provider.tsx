@@ -83,10 +83,14 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 
 export const AppStateContext = React.createContext<ContextValue>(null);
 
+interface Props {
+	children: React.ReactElement;
+	i18n: any;
+}
 /**
  * The Provider
  */
-const AppStateProvider: React.FC = ({ children }) => {
+const AppStateProvider = ({ children, i18n }: Props) => {
 	const [userDatabase, setUserDatabase] = React.useState();
 	const [state, dispatch] = React.useReducer(appStateReducer, initialState);
 	const value: ContextValue = React.useMemo(() => [state, dispatch, actionTypes], [state]) as any;

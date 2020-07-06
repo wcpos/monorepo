@@ -50,6 +50,9 @@ const createStoresCollection = async (db: Database): Promise<Collection> => {
 	});
 
 	StoresCollection.postCreate((raw, model) => {
+		/**
+		 * Init Store Database
+		 */
 		const storeDatabase = getDatabase(model.id).then((db) =>
 			Promise.all(
 				createCollectionMap.map((createCollection) => {
@@ -61,8 +64,20 @@ const createStoresCollection = async (db: Database): Promise<Collection> => {
 				return db;
 			})
 		);
-		const query = model.collections().ui_settings.findOne().where('section').eq('pos_products');
 
+		/**
+		 * Init UI Settings
+		 */
+		const uiResources = {
+			pos_products: new ObservableResource(
+				model.collections().ui_settings.getUiSetting$(model.id, 'pos_products')
+			),
+			pos_cart: 'bar',
+		};
+
+		/**
+		 * Init Data Resources
+		 */
 		const dbResource = new ObservableResource(from(storeDatabase));
 
 		const dataResources = {
@@ -71,32 +86,16 @@ const createStoresCollection = async (db: Database): Promise<Collection> => {
 			),
 		};
 
-		// @TODO - move uiResources to the ui settings collection?
-		const uiResource = new ObservableResource(
-			query.$.pipe(
-				filter((ui) => {
-					if (!ui) {
-						model
-							.collections()
-							.ui_settings.upsert({ id: 'pos_products-0', section: 'pos_products' });
-						return false;
-					}
-					return true;
-				}),
-				tap((result) => console.log('UI found from Store Model', result))
-			)
-		);
-
 		Object.defineProperty(model, 'dbResource', {
 			get: () => dbResource,
 		});
 
-		Object.defineProperty(model, 'uiResource', {
-			get: () => uiResource,
-		});
-
 		Object.defineProperty(model, 'dataResources', {
 			get: () => dataResources,
+		});
+
+		Object.defineProperty(model, 'uiResources', {
+			get: () => uiResources,
 		});
 	});
 

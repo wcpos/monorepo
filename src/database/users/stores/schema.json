@@ -4,8 +4,23 @@
 	"description": "WooCommerce POS Store",
 	"type": "object",
 	"properties": {
-		"id": { "type": "string", "primary": true },
-		"remote_id": { "type": "number", "default": 0 },
-		"name": { "type": "string" }
+		"id": {
+			"type": "string",
+			"primary": true
+		},
+		"remote_id": {
+			"type": "number",
+			"default": 0
+		},
+		"name": {
+			"type": "string"
+		},
+		"uis": {
+			"type": "array",
+			"ref": "ui_settings",
+			"items": {
+				"type": "string"
+			}
+		}
 	}
 }
