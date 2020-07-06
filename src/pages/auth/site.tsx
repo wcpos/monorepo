@@ -20,6 +20,8 @@ const Site = ({ site }) => {
 	// const status = useObservableState(site.connection_status$);
 	const [visible, setVisible] = React.useState(false);
 	const [{ appUser }, dispatch, actions] = useAppState();
+	const changes = useObservableState(site.name$);
+	console.log('@TODO - observe computed values?', changes);
 
 	const selectStore = async () => {
 		const store = await site.getStore();
@@ -27,31 +29,6 @@ const Site = ({ site }) => {
 			type: actions.SET_STORE,
 			payload: { store },
 		});
-
-		// let store;
-		// const wpUsers = await site.wp_users.fetch();
-		// const wpUser = wpUsers[0];
-		// const stores = await wpUser.stores.fetch();
-		// if (stores.length === 0) {
-		// 	// create new default store
-		// 	store = await wpUser.database.action(async () =>
-		// 		wpUser.stores.collection.create((m) => {
-		// 			m.name = site.name;
-		// 			m.app_user.set(appUser);
-		// 			m.wp_user.set(wpUser);
-		// 		})
-		// 	);
-		// }
-		// if (stores.length === 1) {
-		// 	// select only store
-		// 	store = stores[0];
-		// }
-		// if (store) {
-		// 	dispatch({
-		// 		type: actions.SET_STORE,
-		// 		payload: { store },
-		// 	});
-		// }
 	};
 
 	const handleRemove = async () => {

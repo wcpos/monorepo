@@ -1,0 +1,1154 @@
+[
+	{ 
+		"id": 66,
+		"name": "WordPress Pennant",
+		"slug": "wordpress-pennant",
+		"permalink": "https://wcposdev.wpengine.com/product/wordpress-pennant/",
+		"date_created": "2019-08-12T10:27:17",
+		"date_created_gmt": "2019-08-12T10:27:17",
+		"date_modified": "2019-08-12T10:27:56",
+		"date_modified_gmt": "2019-08-12T10:27:56",
+		"type": "external",
+		"status": "publish",
+		"featured": false,
+		"catalog_visibility": "visible",
+		"description": "<p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. Aenean ultricies mi vitae est. Mauris placerat eleifend leo.</p>\n",
+		"short_description": "<p>This is an external product.</p>\n",
+		"sku": "wp-pennant",
+		"price": "11.05",
+		"regular_price": "11.05",
+		"sale_price": "",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": null,
+		"date_on_sale_to_gmt": null,
+		"price_html": "<span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>11.05</span>",
+		"on_sale": false,
+		"purchasable": false,
+		"total_sales": 0,
+		"virtual": false,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": 0,
+		"download_expiry": 0,
+		"external_url": "https://mercantile.wordpress.org/product/wordpress-pennant/",
+		"button_text": "Buy on the WordPress swag store!",
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": false,
+		"stock_quantity": null,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"sold_individually": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_required": true,
+		"shipping_taxable": true,
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"reviews_allowed": true,
+		"average_rating": "0.00",
+		"rating_count": 0,
+		"related_ids": [],
+		"upsell_ids": [],
+		"cross_sell_ids": [],
+		"parent_id": 0,
+		"purchase_note": "",
+		"categories": [
+			{
+				"id": 24,
+				"name": "Decor",
+				"slug": "decor"
+			}
+		],
+		"tags": [],
+		"images": [
+			{
+				"id": 89,
+				"date_created": "2019-08-12T10:27:55",
+				"date_created_gmt": "2019-08-12T10:27:55",
+				"date_modified": "2019-08-12T10:27:55",
+				"date_modified_gmt": "2019-08-12T10:27:55",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/pennant-1.jpg",
+				"name": "pennant-1.jpg",
+				"alt": ""
+			}
+		],
+		"attributes": [],
+		"default_attributes": [],
+		"variations": [],
+		"grouped_products": [],
+		"menu_order": 0,
+		"meta_data": [
+			{
+				"id": 967,
+				"key": "_wpcom_is_markdown",
+				"value": "1"
+			}
+		],
+		"_links": {
+			"self": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products/66"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products"
+				}
+			]
+		}
+	},
+	{
+		"id": 65,
+		"name": "Logo Collection",
+		"slug": "logo-collection",
+		"permalink": "https://wcposdev.wpengine.com/product/logo-collection/",
+		"date_created": "2019-08-12T10:27:17",
+		"date_created_gmt": "2019-08-12T10:27:17",
+		"date_modified": "2019-08-12T10:27:54",
+		"date_modified_gmt": "2019-08-12T10:27:54",
+		"type": "grouped",
+		"status": "publish",
+		"featured": false,
+		"catalog_visibility": "visible",
+		"description": "<p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. Aenean ultricies mi vitae est. Mauris placerat eleifend leo.</p>\n",
+		"short_description": "<p>This is a grouped product.</p>\n",
+		"sku": "logo-collection",
+		"price": "18",
+		"regular_price": "",
+		"sale_price": "",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": null,
+		"date_on_sale_to_gmt": null,
+		"price_html": "<span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>18.00</span> &ndash; <span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>45.00</span>",
+		"on_sale": true,
+		"purchasable": false,
+		"total_sales": 0,
+		"virtual": false,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": 0,
+		"download_expiry": 0,
+		"external_url": "",
+		"button_text": "",
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": false,
+		"stock_quantity": null,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"sold_individually": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_required": true,
+		"shipping_taxable": true,
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"reviews_allowed": true,
+		"average_rating": "0.00",
+		"rating_count": 0,
+		"related_ids": [],
+		"upsell_ids": [],
+		"cross_sell_ids": [],
+		"parent_id": 0,
+		"purchase_note": "",
+		"categories": [
+			{
+				"id": 19,
+				"name": "Clothing",
+				"slug": "clothing"
+			}
+		],
+		"tags": [],
+		"images": [
+			{
+				"id": 88,
+				"date_created": "2019-08-12T10:27:54",
+				"date_created_gmt": "2019-08-12T10:27:54",
+				"date_modified": "2019-08-12T10:27:54",
+				"date_modified_gmt": "2019-08-12T10:27:54",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/logo-1.jpg",
+				"name": "logo-1.jpg",
+				"alt": ""
+			},
+			{
+				"id": 87,
+				"date_created": "2019-08-12T10:27:52",
+				"date_created_gmt": "2019-08-12T10:27:52",
+				"date_modified": "2019-08-12T10:27:52",
+				"date_modified_gmt": "2019-08-12T10:27:52",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/beanie-with-logo-1.jpg",
+				"name": "beanie-with-logo-1.jpg",
+				"alt": ""
+			},
+			{
+				"id": 86,
+				"date_created": "2019-08-12T10:27:51",
+				"date_created_gmt": "2019-08-12T10:27:51",
+				"date_modified": "2019-08-12T10:27:51",
+				"date_modified_gmt": "2019-08-12T10:27:51",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/t-shirt-with-logo-1.jpg",
+				"name": "t-shirt-with-logo-1.jpg",
+				"alt": ""
+			},
+			{
+				"id": 74,
+				"date_created": "2019-08-12T10:27:29",
+				"date_created_gmt": "2019-08-12T10:27:29",
+				"date_modified": "2019-08-12T10:27:29",
+				"date_modified_gmt": "2019-08-12T10:27:29",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/hoodie-with-logo-2.jpg",
+				"name": "hoodie-with-logo-2.jpg",
+				"alt": ""
+			}
+		],
+		"attributes": [],
+		"default_attributes": [],
+		"variations": [],
+		"grouped_products": [45, 46, 47],
+		"menu_order": 0,
+		"meta_data": [
+			{
+				"id": 957,
+				"key": "_wpcom_is_markdown",
+				"value": "1"
+			}
+		],
+		"_links": {
+			"self": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products/65"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products"
+				}
+			]
+		}
+	},
+	{
+		"id": 64,
+		"name": "Beanie with Logo",
+		"slug": "beanie-with-logo",
+		"permalink": "https://wcposdev.wpengine.com/product/beanie-with-logo/",
+		"date_created": "2019-08-12T10:27:17",
+		"date_created_gmt": "2019-08-12T10:27:17",
+		"date_modified": "2019-08-12T10:27:52",
+		"date_modified_gmt": "2019-08-12T10:27:52",
+		"type": "simple",
+		"status": "publish",
+		"featured": false,
+		"catalog_visibility": "visible",
+		"description": "<p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. Aenean ultricies mi vitae est. Mauris placerat eleifend leo.</p>\n",
+		"short_description": "<p>This is a simple product.</p>\n",
+		"sku": "Woo-beanie-logo",
+		"price": "18",
+		"regular_price": "20",
+		"sale_price": "18",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": null,
+		"date_on_sale_to_gmt": null,
+		"price_html": "<del><span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>20.00</span></del> <ins><span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>18.00</span></ins>",
+		"on_sale": true,
+		"purchasable": true,
+		"total_sales": 0,
+		"virtual": false,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": 0,
+		"download_expiry": 0,
+		"external_url": "",
+		"button_text": "",
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": false,
+		"stock_quantity": null,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"sold_individually": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_required": true,
+		"shipping_taxable": true,
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"reviews_allowed": true,
+		"average_rating": "0.00",
+		"rating_count": 0,
+		"related_ids": [48, 50, 47, 49],
+		"upsell_ids": [],
+		"cross_sell_ids": [],
+		"parent_id": 0,
+		"purchase_note": "",
+		"categories": [
+			{
+				"id": 22,
+				"name": "Accessories",
+				"slug": "accessories-clothing"
+			}
+		],
+		"tags": [],
+		"images": [
+			{
+				"id": 87,
+				"date_created": "2019-08-12T10:27:52",
+				"date_created_gmt": "2019-08-12T10:27:52",
+				"date_modified": "2019-08-12T10:27:52",
+				"date_modified_gmt": "2019-08-12T10:27:52",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/beanie-with-logo-1.jpg",
+				"name": "beanie-with-logo-1.jpg",
+				"alt": ""
+			}
+		],
+		"attributes": [
+			{
+				"id": 1,
+				"name": "Color",
+				"position": 0,
+				"visible": true,
+				"variation": false,
+				"options": ["Red"]
+			}
+		],
+		"default_attributes": [],
+		"variations": [],
+		"grouped_products": [],
+		"menu_order": 0,
+		"meta_data": [
+			{
+				"id": 947,
+				"key": "_wpcom_is_markdown",
+				"value": "1"
+			}
+		],
+		"_links": {
+			"self": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products/64"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products"
+				}
+			]
+		}
+	},
+	{
+		"id": 63,
+		"name": "T-Shirt with Logo",
+		"slug": "t-shirt-with-logo",
+		"permalink": "https://wcposdev.wpengine.com/product/t-shirt-with-logo/",
+		"date_created": "2019-08-12T10:27:17",
+		"date_created_gmt": "2019-08-12T10:27:17",
+		"date_modified": "2019-08-12T10:27:51",
+		"date_modified_gmt": "2019-08-12T10:27:51",
+		"type": "simple",
+		"status": "publish",
+		"featured": false,
+		"catalog_visibility": "visible",
+		"description": "<p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. Aenean ultricies mi vitae est. Mauris placerat eleifend leo.</p>\n",
+		"short_description": "<p>This is a simple product.</p>\n",
+		"sku": "Woo-tshirt-logo",
+		"price": "18",
+		"regular_price": "18",
+		"sale_price": "",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": null,
+		"date_on_sale_to_gmt": null,
+		"price_html": "<span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>18.00</span>",
+		"on_sale": false,
+		"purchasable": true,
+		"total_sales": 0,
+		"virtual": false,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": 0,
+		"download_expiry": 0,
+		"external_url": "",
+		"button_text": "",
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": false,
+		"stock_quantity": null,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"sold_individually": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_required": true,
+		"shipping_taxable": true,
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"reviews_allowed": true,
+		"average_rating": "0.00",
+		"rating_count": 0,
+		"related_ids": [54, 46, 43, 53],
+		"upsell_ids": [],
+		"cross_sell_ids": [],
+		"parent_id": 0,
+		"purchase_note": "",
+		"categories": [
+			{
+				"id": 20,
+				"name": "Tshirts",
+				"slug": "tshirts-clothing"
+			}
+		],
+		"tags": [],
+		"images": [
+			{
+				"id": 86,
+				"date_created": "2019-08-12T10:27:51",
+				"date_created_gmt": "2019-08-12T10:27:51",
+				"date_modified": "2019-08-12T10:27:51",
+				"date_modified_gmt": "2019-08-12T10:27:51",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/t-shirt-with-logo-1.jpg",
+				"name": "t-shirt-with-logo-1.jpg",
+				"alt": ""
+			}
+		],
+		"attributes": [
+			{
+				"id": 1,
+				"name": "Color",
+				"position": 0,
+				"visible": true,
+				"variation": false,
+				"options": ["Gray"]
+			}
+		],
+		"default_attributes": [],
+		"variations": [],
+		"grouped_products": [],
+		"menu_order": 0,
+		"meta_data": [
+			{
+				"id": 938,
+				"key": "_wpcom_is_markdown",
+				"value": "1"
+			}
+		],
+		"_links": {
+			"self": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products/63"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products"
+				}
+			]
+		}
+	},
+	{
+		"id": 56,
+		"name": "Single",
+		"slug": "single",
+		"permalink": "https://wcposdev.wpengine.com/product/single/",
+		"date_created": "2019-08-12T10:27:16",
+		"date_created_gmt": "2019-08-12T10:27:16",
+		"date_modified": "2019-08-12T10:27:49",
+		"date_modified_gmt": "2019-08-12T10:27:49",
+		"type": "simple",
+		"status": "publish",
+		"featured": false,
+		"catalog_visibility": "visible",
+		"description": "<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum sagittis orci ac odio dictum tincidunt. Donec ut metus leo. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Sed luctus, dui eu sagittis sodales, nulla nibh sagittis augue, vel porttitor diam enim non metus. Vestibulum aliquam augue neque. Phasellus tincidunt odio eget ullamcorper efficitur. Cras placerat ut turpis pellentesque vulputate. Nam sed consequat tortor. Curabitur finibus sapien dolor. Ut eleifend tellus nec erat pulvinar dignissim. Nam non arcu purus. Vivamus et massa massa.</p>\n",
+		"short_description": "<p>This is a simple, virtual product.</p>\n",
+		"sku": "woo-single",
+		"price": "2",
+		"regular_price": "3",
+		"sale_price": "2",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": null,
+		"date_on_sale_to_gmt": null,
+		"price_html": "<del><span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>3.00</span></del> <ins><span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>2.00</span></ins>",
+		"on_sale": true,
+		"purchasable": true,
+		"total_sales": 0,
+		"virtual": true,
+		"downloadable": true,
+		"downloads": [
+			{
+				"id": "89ff78da-252e-47c3-8a2e-2adc9f07a7e2",
+				"name": "Single",
+				"file": "https://demo.woothemes.com/woocommerce/wp-content/uploads/sites/56/2017/08/single.jpg"
+			}
+		],
+		"download_limit": 1,
+		"download_expiry": 1,
+		"external_url": "",
+		"button_text": "",
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": false,
+		"stock_quantity": null,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"sold_individually": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_required": false,
+		"shipping_taxable": false,
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"reviews_allowed": true,
+		"average_rating": "0.00",
+		"rating_count": 0,
+		"related_ids": [55],
+		"upsell_ids": [],
+		"cross_sell_ids": [],
+		"parent_id": 0,
+		"purchase_note": "",
+		"categories": [
+			{
+				"id": 23,
+				"name": "Music",
+				"slug": "music"
+			}
+		],
+		"tags": [],
+		"images": [
+			{
+				"id": 85,
+				"date_created": "2019-08-12T10:27:48",
+				"date_created_gmt": "2019-08-12T10:27:48",
+				"date_modified": "2019-08-12T10:27:48",
+				"date_modified_gmt": "2019-08-12T10:27:48",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/single-1.jpg",
+				"name": "single-1.jpg",
+				"alt": ""
+			}
+		],
+		"attributes": [],
+		"default_attributes": [],
+		"variations": [],
+		"grouped_products": [],
+		"menu_order": 0,
+		"meta_data": [
+			{
+				"id": 879,
+				"key": "_wpcom_is_markdown",
+				"value": "1"
+			}
+		],
+		"_links": {
+			"self": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products/56"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products"
+				}
+			]
+		}
+	},
+	{
+		"id": 55,
+		"name": "Album",
+		"slug": "album",
+		"permalink": "https://wcposdev.wpengine.com/product/album/",
+		"date_created": "2019-08-12T10:27:16",
+		"date_created_gmt": "2019-08-12T10:27:16",
+		"date_modified": "2019-08-12T10:27:47",
+		"date_modified_gmt": "2019-08-12T10:27:47",
+		"type": "simple",
+		"status": "publish",
+		"featured": false,
+		"catalog_visibility": "visible",
+		"description": "<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum sagittis orci ac odio dictum tincidunt. Donec ut metus leo. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Sed luctus, dui eu sagittis sodales, nulla nibh sagittis augue, vel porttitor diam enim non metus. Vestibulum aliquam augue neque. Phasellus tincidunt odio eget ullamcorper efficitur. Cras placerat ut turpis pellentesque vulputate. Nam sed consequat tortor. Curabitur finibus sapien dolor. Ut eleifend tellus nec erat pulvinar dignissim. Nam non arcu purus. Vivamus et massa massa.</p>\n",
+		"short_description": "<p>This is a simple, virtual product.</p>\n",
+		"sku": "woo-album",
+		"price": "15",
+		"regular_price": "15",
+		"sale_price": "",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": null,
+		"date_on_sale_to_gmt": null,
+		"price_html": "<span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>15.00</span>",
+		"on_sale": false,
+		"purchasable": true,
+		"total_sales": 0,
+		"virtual": true,
+		"downloadable": true,
+		"downloads": [
+			{
+				"id": "2087c9b4-6ae3-41c1-9b61-0a773bdc62f8",
+				"name": "Single 1",
+				"file": "https://demo.woothemes.com/woocommerce/wp-content/uploads/sites/56/2017/08/single.jpg"
+			},
+			{
+				"id": "f3d4ec60-e293-4d01-9fc4-a4764ed928c4",
+				"name": "Single 2",
+				"file": "https://demo.woothemes.com/woocommerce/wp-content/uploads/sites/56/2017/08/album.jpg"
+			}
+		],
+		"download_limit": 1,
+		"download_expiry": 1,
+		"external_url": "",
+		"button_text": "",
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": false,
+		"stock_quantity": null,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"sold_individually": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_required": false,
+		"shipping_taxable": false,
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"reviews_allowed": true,
+		"average_rating": "0.00",
+		"rating_count": 0,
+		"related_ids": [56],
+		"upsell_ids": [],
+		"cross_sell_ids": [],
+		"parent_id": 0,
+		"purchase_note": "",
+		"categories": [
+			{
+				"id": 23,
+				"name": "Music",
+				"slug": "music"
+			}
+		],
+		"tags": [],
+		"images": [
+			{
+				"id": 84,
+				"date_created": "2019-08-12T10:27:47",
+				"date_created_gmt": "2019-08-12T10:27:47",
+				"date_modified": "2019-08-12T10:27:47",
+				"date_modified_gmt": "2019-08-12T10:27:47",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/album-1.jpg",
+				"name": "album-1.jpg",
+				"alt": ""
+			}
+		],
+		"attributes": [],
+		"default_attributes": [],
+		"variations": [],
+		"grouped_products": [],
+		"menu_order": 0,
+		"meta_data": [
+			{
+				"id": 870,
+				"key": "_wpcom_is_markdown",
+				"value": "1"
+			}
+		],
+		"_links": {
+			"self": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products/55"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products"
+				}
+			]
+		}
+	},
+	{
+		"id": 54,
+		"name": "Polo",
+		"slug": "polo",
+		"permalink": "https://wcposdev.wpengine.com/product/polo/",
+		"date_created": "2019-08-12T10:27:15",
+		"date_created_gmt": "2019-08-12T10:27:15",
+		"date_modified": "2019-08-12T10:27:46",
+		"date_modified_gmt": "2019-08-12T10:27:46",
+		"type": "simple",
+		"status": "publish",
+		"featured": false,
+		"catalog_visibility": "visible",
+		"description": "<p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. Aenean ultricies mi vitae est. Mauris placerat eleifend leo.</p>\n",
+		"short_description": "<p>This is a simple product.</p>\n",
+		"sku": "woo-polo",
+		"price": "20",
+		"regular_price": "20",
+		"sale_price": "",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": null,
+		"date_on_sale_to_gmt": null,
+		"price_html": "<span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>20.00</span>",
+		"on_sale": false,
+		"purchasable": true,
+		"total_sales": 0,
+		"virtual": false,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": 0,
+		"download_expiry": 0,
+		"external_url": "",
+		"button_text": "",
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": false,
+		"stock_quantity": null,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"sold_individually": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_required": true,
+		"shipping_taxable": true,
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"reviews_allowed": true,
+		"average_rating": "0.00",
+		"rating_count": 0,
+		"related_ids": [46, 43, 53, 63],
+		"upsell_ids": [],
+		"cross_sell_ids": [],
+		"parent_id": 0,
+		"purchase_note": "",
+		"categories": [
+			{
+				"id": 20,
+				"name": "Tshirts",
+				"slug": "tshirts-clothing"
+			}
+		],
+		"tags": [],
+		"images": [
+			{
+				"id": 83,
+				"date_created": "2019-08-12T10:27:45",
+				"date_created_gmt": "2019-08-12T10:27:45",
+				"date_modified": "2019-08-12T10:27:45",
+				"date_modified_gmt": "2019-08-12T10:27:45",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/polo-2.jpg",
+				"name": "polo-2.jpg",
+				"alt": ""
+			}
+		],
+		"attributes": [
+			{
+				"id": 1,
+				"name": "Color",
+				"position": 0,
+				"visible": true,
+				"variation": false,
+				"options": ["Blue"]
+			}
+		],
+		"default_attributes": [],
+		"variations": [],
+		"grouped_products": [],
+		"menu_order": 0,
+		"meta_data": [
+			{
+				"id": 861,
+				"key": "_wpcom_is_markdown",
+				"value": "1"
+			}
+		],
+		"_links": {
+			"self": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products/54"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products"
+				}
+			]
+		}
+	},
+	{
+		"id": 53,
+		"name": "Long Sleeve Tee",
+		"slug": "long-sleeve-tee",
+		"permalink": "https://wcposdev.wpengine.com/product/long-sleeve-tee/",
+		"date_created": "2019-08-12T10:27:15",
+		"date_created_gmt": "2019-08-12T10:27:15",
+		"date_modified": "2019-08-12T10:27:44",
+		"date_modified_gmt": "2019-08-12T10:27:44",
+		"type": "simple",
+		"status": "publish",
+		"featured": false,
+		"catalog_visibility": "visible",
+		"description": "<p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. Aenean ultricies mi vitae est. Mauris placerat eleifend leo.</p>\n",
+		"short_description": "<p>This is a simple product.</p>\n",
+		"sku": "woo-long-sleeve-tee",
+		"price": "25",
+		"regular_price": "25",
+		"sale_price": "",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": null,
+		"date_on_sale_to_gmt": null,
+		"price_html": "<span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>25.00</span>",
+		"on_sale": false,
+		"purchasable": true,
+		"total_sales": 0,
+		"virtual": false,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": 0,
+		"download_expiry": 0,
+		"external_url": "",
+		"button_text": "",
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": false,
+		"stock_quantity": null,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"sold_individually": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_required": true,
+		"shipping_taxable": true,
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"reviews_allowed": true,
+		"average_rating": "0.00",
+		"rating_count": 0,
+		"related_ids": [54, 46, 63, 43],
+		"upsell_ids": [],
+		"cross_sell_ids": [],
+		"parent_id": 0,
+		"purchase_note": "",
+		"categories": [
+			{
+				"id": 20,
+				"name": "Tshirts",
+				"slug": "tshirts-clothing"
+			}
+		],
+		"tags": [],
+		"images": [
+			{
+				"id": 82,
+				"date_created": "2019-08-12T10:27:43",
+				"date_created_gmt": "2019-08-12T10:27:43",
+				"date_modified": "2019-08-12T10:27:43",
+				"date_modified_gmt": "2019-08-12T10:27:43",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/long-sleeve-tee-2.jpg",
+				"name": "long-sleeve-tee-2.jpg",
+				"alt": ""
+			}
+		],
+		"attributes": [
+			{
+				"id": 1,
+				"name": "Color",
+				"position": 0,
+				"visible": true,
+				"variation": false,
+				"options": ["Green"]
+			}
+		],
+		"default_attributes": [],
+		"variations": [],
+		"grouped_products": [],
+		"menu_order": 0,
+		"meta_data": [
+			{
+				"id": 852,
+				"key": "_wpcom_is_markdown",
+				"value": "1"
+			}
+		],
+		"_links": {
+			"self": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products/53"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products"
+				}
+			]
+		}
+	},
+	{
+		"id": 52,
+		"name": "Hoodie with Zipper",
+		"slug": "hoodie-with-zipper",
+		"permalink": "https://wcposdev.wpengine.com/product/hoodie-with-zipper/",
+		"date_created": "2019-08-12T10:27:15",
+		"date_created_gmt": "2019-08-12T10:27:15",
+		"date_modified": "2019-08-12T10:27:42",
+		"date_modified_gmt": "2019-08-12T10:27:42",
+		"type": "simple",
+		"status": "publish",
+		"featured": true,
+		"catalog_visibility": "visible",
+		"description": "<p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. Aenean ultricies mi vitae est. Mauris placerat eleifend leo.</p>\n",
+		"short_description": "<p>This is a simple product.</p>\n",
+		"sku": "woo-hoodie-with-zipper",
+		"price": "45",
+		"regular_price": "45",
+		"sale_price": "",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": null,
+		"date_on_sale_to_gmt": null,
+		"price_html": "<span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>45.00</span>",
+		"on_sale": false,
+		"purchasable": true,
+		"total_sales": 0,
+		"virtual": false,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": 0,
+		"download_expiry": 0,
+		"external_url": "",
+		"button_text": "",
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": false,
+		"stock_quantity": null,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"sold_individually": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_required": true,
+		"shipping_taxable": true,
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"reviews_allowed": true,
+		"average_rating": "0.00",
+		"rating_count": 0,
+		"related_ids": [45, 44],
+		"upsell_ids": [],
+		"cross_sell_ids": [],
+		"parent_id": 0,
+		"purchase_note": "",
+		"categories": [
+			{
+				"id": 21,
+				"name": "Hoodies",
+				"slug": "hoodies-clothing"
+			}
+		],
+		"tags": [],
+		"images": [
+			{
+				"id": 81,
+				"date_created": "2019-08-12T10:27:41",
+				"date_created_gmt": "2019-08-12T10:27:41",
+				"date_modified": "2019-08-12T10:27:41",
+				"date_modified_gmt": "2019-08-12T10:27:41",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/hoodie-with-zipper-2.jpg",
+				"name": "hoodie-with-zipper-2.jpg",
+				"alt": ""
+			}
+		],
+		"attributes": [],
+		"default_attributes": [],
+		"variations": [],
+		"grouped_products": [],
+		"menu_order": 0,
+		"meta_data": [
+			{
+				"id": 844,
+				"key": "_wpcom_is_markdown",
+				"value": "1"
+			}
+		],
+		"_links": {
+			"self": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products/52"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products"
+				}
+			]
+		}
+	},
+	{
+		"id": 51,
+		"name": "Hoodie with Pocket",
+		"slug": "hoodie-with-pocket",
+		"permalink": "https://wcposdev.wpengine.com/product/hoodie-with-pocket/",
+		"date_created": "2019-08-12T10:27:15",
+		"date_created_gmt": "2019-08-12T10:27:15",
+		"date_modified": "2019-08-12T10:27:40",
+		"date_modified_gmt": "2019-08-12T10:27:40",
+		"type": "simple",
+		"status": "publish",
+		"featured": true,
+		"catalog_visibility": "hidden",
+		"description": "<p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. Aenean ultricies mi vitae est. Mauris placerat eleifend leo.</p>\n",
+		"short_description": "<p>This is a simple product.</p>\n",
+		"sku": "woo-hoodie-with-pocket",
+		"price": "35",
+		"regular_price": "45",
+		"sale_price": "35",
+		"date_on_sale_from": null,
+		"date_on_sale_from_gmt": null,
+		"date_on_sale_to": null,
+		"date_on_sale_to_gmt": null,
+		"price_html": "<del><span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>45.00</span></del> <ins><span class=\"woocommerce-Price-amount amount\"><span class=\"woocommerce-Price-currencySymbol\">&#36;</span>35.00</span></ins>",
+		"on_sale": true,
+		"purchasable": true,
+		"total_sales": 0,
+		"virtual": false,
+		"downloadable": false,
+		"downloads": [],
+		"download_limit": 0,
+		"download_expiry": 0,
+		"external_url": "",
+		"button_text": "",
+		"tax_status": "taxable",
+		"tax_class": "",
+		"manage_stock": false,
+		"stock_quantity": null,
+		"stock_status": "instock",
+		"backorders": "no",
+		"backorders_allowed": false,
+		"backordered": false,
+		"sold_individually": false,
+		"weight": "",
+		"dimensions": {
+			"length": "",
+			"width": "",
+			"height": ""
+		},
+		"shipping_required": true,
+		"shipping_taxable": true,
+		"shipping_class": "",
+		"shipping_class_id": 0,
+		"reviews_allowed": true,
+		"average_rating": "0.00",
+		"rating_count": 0,
+		"related_ids": [44, 52, 45],
+		"upsell_ids": [],
+		"cross_sell_ids": [],
+		"parent_id": 0,
+		"purchase_note": "",
+		"categories": [
+			{
+				"id": 21,
+				"name": "Hoodies",
+				"slug": "hoodies-clothing"
+			}
+		],
+		"tags": [],
+		"images": [
+			{
+				"id": 80,
+				"date_created": "2019-08-12T10:27:40",
+				"date_created_gmt": "2019-08-12T10:27:40",
+				"date_modified": "2019-08-12T10:27:40",
+				"date_modified_gmt": "2019-08-12T10:27:40",
+				"src": "https://wcposdev.wpengine.com/wp-content/uploads/2019/08/hoodie-with-pocket-2.jpg",
+				"name": "hoodie-with-pocket-2.jpg",
+				"alt": ""
+			}
+		],
+		"attributes": [
+			{
+				"id": 1,
+				"name": "Color",
+				"position": 0,
+				"visible": true,
+				"variation": false,
+				"options": ["Gray"]
+			}
+		],
+		"default_attributes": [],
+		"variations": [],
+		"grouped_products": [],
+		"menu_order": 0,
+		"meta_data": [
+			{
+				"id": 834,
+				"key": "_wpcom_is_markdown",
+				"value": "1"
+			}
+		],
+		"_links": {
+			"self": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products/51"
+				}
+			],
+			"collection": [
+				{
+					"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/products"
+				}
+			]
+		}
+	}
+]

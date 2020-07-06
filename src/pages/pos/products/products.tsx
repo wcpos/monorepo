@@ -7,6 +7,7 @@ import Actions from './actions';
 import Text from '../../../components/text';
 import useAppState from '../../../hooks/use-app-state';
 import Button from '../../../components/button';
+import http from '../../../lib/http';
 
 interface Props {
 	productsResource: any;
@@ -18,7 +19,7 @@ interface Props {
  */
 const Products: React.FC<Props> = ({ ui }) => {
 	// const { t } = useTranslation();
-	const [{ store }] = useAppState();
+	const [{ appUser, store }] = useAppState();
 	const [columns, setColumns] = React.useState([]);
 
 	const products = useObservableSuspense(store.getDataResource('products'));
@@ -98,9 +99,16 @@ const Products: React.FC<Props> = ({ ui }) => {
 				<Segment>
 					<Text>Footer</Text>
 					<Button
-						title="Add Product"
-						onPress={() => {
-							storeDatabase.collections.products.insert({ id: 'test-1', name: 'Test Product 1' });
+						title="Add Products"
+						onPress={async () => {
+							const wpUser = await appUser.collections().wp_users.findOne().exec();
+							const { data } = await http('https://wcposdev.wpengine.com/wp-json/wc/v3/products', {
+								auth: {
+									username: wpUser.consumer_key,
+									password: wpUser.consumer_secret,
+								},
+							});
+							storeDatabase.collections.products.bulkInsert(data);
 						}}
 					/>
 				</Segment>

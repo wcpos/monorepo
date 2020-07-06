@@ -9,8 +9,7 @@
 			"primary": true
 		},
 		"remote_id": {
-			"type": "number",
-			"default": 0
+			"type": "number"
 		},
 		"name": {
 			"type": "string"

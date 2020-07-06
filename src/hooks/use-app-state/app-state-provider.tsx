@@ -70,7 +70,7 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 			logger.debug('Set app user', payload.toJSON());
 			return { ...state, appUser: payload };
 		case actionTypes.STORE_LOGOUT:
-			removeLastStore();
+			state.store.collection.upsertLocal('last_store', { store_id: undefined });
 			return { ...state, store: undefined };
 		case actionTypes.SET_STORE:
 			// setLastStore(payload.store.id);
@@ -141,8 +141,9 @@ const AppStateProvider = ({ children, i18n }: Props) => {
 		(async function init() {
 			if (userDatabase) {
 				const lastStore = await userDatabase.collections.stores.getLocal('last_store');
+				const lastStoreId = lastStore && lastStore.get('store_id');
 
-				if (!lastStore) {
+				if (!lastStoreId) {
 					const appUsers = await userDatabase.collections.app_users.find().exec();
 
 					if (appUsers.length === 0) {
@@ -161,9 +162,7 @@ const AppStateProvider = ({ children, i18n }: Props) => {
 						// multiple users
 					}
 				} else {
-					const store = await userDatabase.collections.stores
-						.findOne(lastStore.get('store_id'))
-						.exec();
+					const store = await userDatabase.collections.stores.findOne(lastStoreId).exec();
 
 					const appUser = await userDatabase.collections.app_users.findOne('new-0').exec();
 
