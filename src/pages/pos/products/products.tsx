@@ -88,32 +88,30 @@ const Products: React.FC<Props> = ({ ui }) => {
 	};
 
 	return (
-		<React.Suspense fallback={<Text>loading products...</Text>}>
-			<Segment.Group>
-				<Segment>
-					<Actions ui={ui} />
-				</Segment>
-				<Segment grow>
-					<Table products={products} columns={columns} display={ui.display} sort={onSort} />
-				</Segment>
-				<Segment>
-					<Text>Footer</Text>
-					<Button
-						title="Add Products"
-						onPress={async () => {
-							const wpUser = await appUser.collections().wp_users.findOne().exec();
-							const { data } = await http('https://wcposdev.wpengine.com/wp-json/wc/v3/products', {
-								auth: {
-									username: wpUser.consumer_key,
-									password: wpUser.consumer_secret,
-								},
-							});
-							storeDatabase.collections.products.bulkInsert(data);
-						}}
-					/>
-				</Segment>
-			</Segment.Group>
-		</React.Suspense>
+		<Segment.Group>
+			<Segment>
+				<Actions ui={ui} />
+			</Segment>
+			<Segment grow>
+				<Table products={products} columns={columns} display={ui.display} sort={onSort} />
+			</Segment>
+			<Segment>
+				<Text>Footer</Text>
+				<Button
+					title="Add Products"
+					onPress={async () => {
+						const wpUser = await appUser.collections().wp_users.findOne().exec();
+						const { data } = await http('https://wcposdev.wpengine.com/wp-json/wc/v3/products', {
+							auth: {
+								username: wpUser.consumer_key,
+								password: wpUser.consumer_secret,
+							},
+						});
+						storeDatabase.collections.products.bulkInsert(data);
+					}}
+				/>
+			</Segment>
+		</Segment.Group>
 	);
 };
 

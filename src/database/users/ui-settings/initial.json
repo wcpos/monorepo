@@ -17,7 +17,15 @@
 		]
 	},
 	"pos_cart": {
-		"width": "40%"
+		"width": "40%",
+		"sortBy": "id",
+		"sortDirection": "asc",
+		"columns": [
+			{ "key": "quantity", "order": 0 },
+			{ "key": "name", "order": 1 },
+			{ "key": "price", "order": 2 },
+			{ "key": "total", "order": 3 }
+		]
 	},
 	"products": {
 		"sortBy": "name",

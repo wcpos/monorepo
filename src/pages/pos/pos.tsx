@@ -12,6 +12,7 @@ interface Props {}
 const POS: React.FC<Props> = () => {
 	const [{ store }] = useAppState();
 	const productsUI = useObservableSuspense(store.uiResources.pos_products);
+	const cartUI = useObservableSuspense(store.uiResources.pos_cart);
 	console.log('render');
 	const [width, setWidth] = React.useState('');
 	// const width = useObservableState(productsUI.width$);
@@ -46,7 +47,9 @@ const POS: React.FC<Props> = () => {
 			</Draggable>
 			<View style={{ flexGrow: 1 }}>
 				<ErrorBoundary>
-					<Cart />
+					<React.Suspense fallback={<Text>Loading cart...</Text>}>
+						<Cart ui={cartUI} />
+					</React.Suspense>
 				</ErrorBoundary>
 			</View>
 		</>

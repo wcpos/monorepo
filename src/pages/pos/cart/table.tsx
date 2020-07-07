@@ -2,17 +2,8 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import Table from '../../../components/table';
 import Text from '../../../components/text';
-import Actions from './cells/actions';
 
-interface Props {
-	columns: any;
-	products: any;
-}
-
-/**
- *
- */
-const ProductsTable: React.FC<Props> = ({ columns, products, sort }) => {
+const CartTable = ({ columns, order }) => {
 	const { t } = useTranslation();
 
 	const renderCell = ({ getCellProps }) => {
@@ -20,9 +11,6 @@ const ProductsTable: React.FC<Props> = ({ columns, products, sort }) => {
 		let children;
 
 		switch (column.key) {
-			case 'actions':
-				children = <Actions product={rowData} />;
-				break;
 			default:
 				children = <Text>{String(cellData)}</Text>;
 		}
@@ -30,14 +18,14 @@ const ProductsTable: React.FC<Props> = ({ columns, products, sort }) => {
 	};
 
 	return (
-		<Table columns={columns} data={products} sort={sort}>
+		<Table columns={columns} data={order.line_items}>
 			<Table.Header>
 				<Table.HeaderRow columns={columns}>
 					{({ getHeaderCellProps }) => {
 						const { column } = getHeaderCellProps();
 						return (
 							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
-								{t(`products.column.label.${column.key}`)}
+								{t(`cart.column.label.${column.key}`)}
 							</Table.HeaderRow.HeaderCell>
 						);
 					}}
@@ -54,4 +42,4 @@ const ProductsTable: React.FC<Props> = ({ columns, products, sort }) => {
 	);
 };
 
-export default ProductsTable;
+export default CartTable;

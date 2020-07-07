@@ -19,6 +19,19 @@ const methods: Methods = {
 	/**
 	 *
 	 */
+	async addOrUpdateLineItem(product) {
+		await this.atomicUpdate((oldData) => {
+			oldData.line_items.push({
+				name: product.name,
+				product_id: parseInt(product.id, 10),
+				quantity: 1,
+				price: parseInt(product.price, 10),
+				sku: product.sku,
+				tax_class: product.tax_class,
+			});
+			return oldData;
+		});
+	},
 };
 
 /**

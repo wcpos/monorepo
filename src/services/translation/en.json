@@ -37,6 +37,16 @@
 				}
 			}
 		},
+		"cart": {
+			"column": {
+				"label": {
+					"quantity": "Qty",
+					"name": "Product",
+					"price": "Price",
+					"total": "Total"
+				}
+			}
+		},
 		"pos_products": {
 			"column": {
 				"label": {
