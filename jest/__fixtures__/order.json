@@ -1,0 +1,168 @@
+{
+	"id": 100,
+	"parent_id": 0,
+	"number": "100",
+	"order_key": "wc_order_5MeNYmh9LRLj1",
+	"created_via": "admin",
+	"version": "4.2.0",
+	"status": "pending",
+	"currency": "AUD",
+	"date_created": "2020-07-07T14:40:00",
+	"date_created_gmt": "2020-07-07T14:40:00",
+	"date_modified": "2020-07-07T14:42:16",
+	"date_modified_gmt": "2020-07-07T14:42:16",
+	"discount_total": "0.00",
+	"discount_tax": "0.00",
+	"shipping_total": "0.00",
+	"shipping_tax": "0.00",
+	"cart_tax": "12.02",
+	"total": "72.12",
+	"total_tax": "12.02",
+	"prices_include_tax": false,
+	"customer_id": 2,
+	"customer_ip_address": "",
+	"customer_user_agent": "",
+	"customer_note": "",
+	"billing": {
+		"first_name": "",
+		"last_name": "",
+		"company": "",
+		"address_1": "",
+		"address_2": "",
+		"city": "",
+		"state": "",
+		"postcode": "",
+		"country": "GB",
+		"email": "paul@kilbot.com.au",
+		"phone": ""
+	},
+	"shipping": {
+		"first_name": "",
+		"last_name": "",
+		"company": "",
+		"address_1": "",
+		"address_2": "",
+		"city": "",
+		"state": "",
+		"postcode": "",
+		"country": "GB"
+	},
+	"payment_method": "",
+	"payment_method_title": "",
+	"transaction_id": "",
+	"date_paid": null,
+	"date_paid_gmt": null,
+	"date_completed": null,
+	"date_completed_gmt": null,
+	"cart_hash": "",
+	"meta_data": [
+		{
+			"id": 1009,
+			"key": "_pos",
+			"value": "0"
+		}
+	],
+	"line_items": [
+		{
+			"id": 1,
+			"name": "Beanie",
+			"product_id": 47,
+			"variation_id": 0,
+			"quantity": 1,
+			"tax_class": "",
+			"subtotal": "18.00",
+			"subtotal_tax": "3.60",
+			"total": "18.00",
+			"total_tax": "3.60",
+			"taxes": [
+				{
+					"id": 1,
+					"total": "3.6",
+					"subtotal": "3.6"
+				}
+			],
+			"meta_data": [],
+			"sku": "woo-beanie",
+			"price": 18
+		},
+		{
+			"id": 2,
+			"name": "WordPress Pennant",
+			"product_id": 66,
+			"variation_id": 0,
+			"quantity": 2,
+			"tax_class": "",
+			"subtotal": "22.10",
+			"subtotal_tax": "4.42",
+			"total": "22.10",
+			"total_tax": "4.42",
+			"taxes": [
+				{
+					"id": 1,
+					"total": "4.42",
+					"subtotal": "4.42"
+				}
+			],
+			"meta_data": [],
+			"sku": "wp-pennant",
+			"price": 11.05
+		},
+		{
+			"id": 3,
+			"name": "Polo",
+			"product_id": 54,
+			"variation_id": 0,
+			"quantity": 1,
+			"tax_class": "",
+			"subtotal": "20.00",
+			"subtotal_tax": "4.00",
+			"total": "20.00",
+			"total_tax": "4.00",
+			"taxes": [
+				{
+					"id": 1,
+					"total": "4",
+					"subtotal": "4"
+				}
+			],
+			"meta_data": [],
+			"sku": "woo-polo",
+			"price": 20
+		}
+	],
+	"tax_lines": [
+		{
+			"id": 4,
+			"rate_code": "GB-VAT-1",
+			"rate_id": 1,
+			"label": "VAT",
+			"compound": true,
+			"tax_total": "12.02",
+			"shipping_tax_total": "0.00",
+			"rate_percent": 20,
+			"meta_data": []
+		}
+	],
+	"shipping_lines": [],
+	"fee_lines": [],
+	"coupon_lines": [],
+	"refunds": [],
+	"currency_symbol": "$",
+	"_links": {
+		"self": [
+			{
+				"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/orders/100"
+			}
+		],
+		"collection": [
+			{
+				"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/orders"
+			}
+		],
+		"customer": [
+			{
+				"href": "https://wcposdev.wpengine.com/wp-json/wc/v3/customers/2"
+			}
+		]
+	}
+}

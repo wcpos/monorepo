@@ -5,13 +5,16 @@ import Segment from '../../components/segment';
 import Table from './table';
 import Actions from './actions';
 import useAppState from '../../hooks/use-app-state';
+import Button from '../../components/button';
+import WcApiService from '../../services/wc-api';
 
 interface Props {}
 
 const Orders: React.FC<Props> = () => {
-	const [{ store }] = useAppState();
+	const [{ appUser, store }] = useAppState();
 	const ui = useObservableSuspense(store.uiResources.orders);
 	const orders = useObservableSuspense(store.getDataResource('orders'));
+	const storeDatabase = useObservableSuspense(store.dbResource);
 
 	const onResetUI = () => {
 		ui.reset();
@@ -38,7 +41,20 @@ const Orders: React.FC<Props> = () => {
 					/>
 				</Segment>
 				<Segment>
-					<Text>Footer</Text>
+					<Button
+						title="Fetch orders"
+						onPress={async () => {
+							const wpUser = await appUser.collections().wp_users.findOne().exec();
+							const baseUrl = 'https://wcposdev.wpengine.com/wp-json/wc/v3/';
+							const collection = 'orders';
+							const key = wpUser.consumer_key;
+							const secret = wpUser.consumer_secret;
+							const api = new WcApiService({ baseUrl, collection, key, secret });
+							const data = await api.fetch();
+							console.log(data);
+							storeDatabase.collections.orders.bulkInsert(data);
+						}}
+					/>
 				</Segment>
 			</Segment.Group>
 		</React.Suspense>
