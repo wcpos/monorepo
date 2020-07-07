@@ -4,9 +4,25 @@
 	"description": "WooCommerce Order schema",
 	"type": "object",
 	"properties": {
+		"id": {
+			"type": "string",
+			"primary": true
+		},
 		"parent_id": {
 			"description": "Parent order ID.",
 			"type": "integer"
+		},
+		"number": {
+			"type": "string"
+		},
+		"order_key": {
+			"type": "string"
+		},
+		"created_via": {
+			"type": "string"
+		},
+		"version": {
+			"type": "string"
 		},
 		"status": {
 			"default": "pending",
@@ -184,10 +200,52 @@
 			"description": "Currency the order was created with, in ISO format.",
 			"type": "string"
 		},
+		"date_created": {
+			"type": "string"
+		},
+		"date_created_gmt": {
+			"type": "string"
+		},
+		"date_modified": {
+			"type": "string"
+		},
+		"date_modified_gmt": {
+			"type": "string"
+		},
+		"discount_total": {
+			"type": "string"
+		},
+		"discount_tax": {
+			"type": "string"
+		},
+		"shipping_total": {
+			"type": "string"
+		},
+		"shipping_tax": {
+			"type": "string"
+		},
+		"cart_tax": {
+			"type": "string"
+		},
+		"total": {
+			"type": "string"
+		},
+		"total_tax": {
+			"type": "string"
+		},
+		"prices_include_tax": {
+			"type": "boolean"
+		},
 		"customer_id": {
 			"default": 0,
 			"description": "User ID who owns the order. 0 for guests.",
 			"type": "integer"
+		},
+		"customer_ip_address": {
+			"type": "string"
+		},
+		"customer_user_agent": {
+			"type": "string"
 		},
 		"customer_note": {
 			"description": "Note left by customer during checkout.",
@@ -213,6 +271,21 @@
 			"description": "Unique transaction ID.",
 			"type": "string"
 		},
+		"date_paid": {
+			"type": ["string", "null"]
+		},
+		"date_paid_gmt": {
+			"type": ["string", "null"]
+		},
+		"date_completed": {
+			"type": ["string", "null"]
+		},
+		"date_completed_gmt": {
+			"type": ["string", "null"]
+		},
+		"cart_hash": {
+			"type": "string"
+		},
 		"meta_data": {
 			"description": "Meta data.",
 			"type": "array",
@@ -229,7 +302,7 @@
 					},
 					"value": {
 						"description": "Meta value.",
-						"type": "mixed"
+						"type": "string"
 					}
 				}
 			}
@@ -246,11 +319,11 @@
 					},
 					"name": {
 						"description": "Product name.",
-						"type": "mixed"
+						"type": "string"
 					},
 					"product_id": {
 						"description": "Product ID.",
-						"type": "mixed"
+						"type": "integer"
 					},
 					"variation_id": {
 						"description": "Variation ID, if applicable.",
@@ -317,7 +390,7 @@
 								},
 								"value": {
 									"description": "Meta value.",
-									"type": "mixed"
+									"type": "string"
 								}
 							}
 						}
@@ -329,6 +402,59 @@
 					"price": {
 						"description": "Product price.",
 						"type": "number"
+					}
+				}
+			}
+		},
+		"tax_lines": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "integer"
+					},
+					"rate_code": {
+						"type": "string"
+					},
+					"rate_id": {
+						"type": "integer"
+					},
+					"label": {
+						"type": "string"
+					},
+					"compound": {
+						"type": "boolean"
+					},
+					"tax_total": {
+						"type": "string"
+					},
+					"shipping_tax_total": {
+						"type": "string"
+					},
+					"rate_percent": {
+						"type": "number"
+					},
+					"meta_data": {
+						"description": "Meta data.",
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"description": "Meta ID.",
+									"type": "integer"
+								},
+								"key": {
+									"description": "Meta key.",
+									"type": "string"
+								},
+								"value": {
+									"description": "Meta value.",
+									"type": "string"
+								}
+							}
+						}
 					}
 				}
 			}
@@ -345,11 +471,11 @@
 					},
 					"method_title": {
 						"description": "Shipping method name.",
-						"type": "mixed"
+						"type": "string"
 					},
 					"method_id": {
 						"description": "Shipping method ID.",
-						"type": "mixed"
+						"type": "string"
 					},
 					"instance_id": {
 						"description": "Shipping instance ID.",
@@ -396,7 +522,7 @@
 								},
 								"value": {
 									"description": "Meta value.",
-									"type": "mixed"
+									"type": "string"
 								}
 							}
 						}
@@ -416,7 +542,7 @@
 					},
 					"name": {
 						"description": "Fee name.",
-						"type": "mixed"
+						"type": "string"
 					},
 					"tax_class": {
 						"description": "Tax class of fee.",
@@ -472,7 +598,7 @@
 								},
 								"value": {
 									"description": "Meta value.",
-									"type": "mixed"
+									"type": "string"
 								}
 							}
 						}
@@ -492,7 +618,7 @@
 					},
 					"code": {
 						"description": "Coupon code.",
-						"type": "mixed"
+						"type": "string"
 					},
 					"discount": {
 						"description": "Discount total.",
@@ -527,10 +653,25 @@
 				}
 			}
 		},
-		"set_paid": {
-			"default": false,
-			"description": "Define if the order is paid. It will set the status to processing and reduce stock items.",
-			"type": "boolean"
+		"refunds": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "integer"
+					},
+					"reason": {
+						"type": "string"
+					},
+					"total": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"currency_symbol": {
+			"type": "string"
 		}
 	}
 }

@@ -9,10 +9,15 @@
  * WooCommerce Order schema
  */
 export interface WooCommerceOrderSchema {
+  id?: string;
   /**
    * Parent order ID.
    */
   parent_id?: number;
+  number?: string;
+  order_key?: string;
+  created_via?: string;
+  version?: string;
   /**
    * Order status.
    */
@@ -184,10 +189,24 @@ export interface WooCommerceOrderSchema {
     | "YER"
     | "ZAR"
     | "ZMW";
+  date_created?: string;
+  date_created_gmt?: string;
+  date_modified?: string;
+  date_modified_gmt?: string;
+  discount_total?: string;
+  discount_tax?: string;
+  shipping_total?: string;
+  shipping_tax?: string;
+  cart_tax?: string;
+  total?: string;
+  total_tax?: string;
+  prices_include_tax?: boolean;
   /**
    * User ID who owns the order. 0 for guests.
    */
   customer_id?: number;
+  customer_ip_address?: string;
+  customer_user_agent?: string;
   /**
    * Note left by customer during checkout.
    */
@@ -216,6 +235,11 @@ export interface WooCommerceOrderSchema {
    * Unique transaction ID.
    */
   transaction_id?: string;
+  date_paid?: string | null;
+  date_paid_gmt?: string | null;
+  date_completed?: string | null;
+  date_completed_gmt?: string | null;
+  cart_hash?: string;
   /**
    * Meta data.
    */
@@ -231,9 +255,7 @@ export interface WooCommerceOrderSchema {
     /**
      * Meta value.
      */
-    value?: {
-      [k: string]: any;
-    };
+    value?: string;
     [k: string]: any;
   }[];
   /**
@@ -247,15 +269,11 @@ export interface WooCommerceOrderSchema {
     /**
      * Product name.
      */
-    name?: {
-      [k: string]: any;
-    };
+    name?: string;
     /**
      * Product ID.
      */
-    product_id?: {
-      [k: string]: any;
-    };
+    product_id?: number;
     /**
      * Variation ID, if applicable.
      */
@@ -317,9 +335,7 @@ export interface WooCommerceOrderSchema {
       /**
        * Meta value.
        */
-      value?: {
-        [k: string]: any;
-      };
+      value?: string;
       [k: string]: any;
     }[];
     /**
@@ -330,6 +346,35 @@ export interface WooCommerceOrderSchema {
      * Product price.
      */
     price?: number;
+    [k: string]: any;
+  }[];
+  tax_lines?: {
+    id?: number;
+    rate_code?: string;
+    rate_id?: number;
+    label?: string;
+    compound?: boolean;
+    tax_total?: string;
+    shipping_tax_total?: string;
+    rate_percent?: number;
+    /**
+     * Meta data.
+     */
+    meta_data?: {
+      /**
+       * Meta ID.
+       */
+      id?: number;
+      /**
+       * Meta key.
+       */
+      key?: string;
+      /**
+       * Meta value.
+       */
+      value?: string;
+      [k: string]: any;
+    }[];
     [k: string]: any;
   }[];
   /**
@@ -343,15 +388,11 @@ export interface WooCommerceOrderSchema {
     /**
      * Shipping method name.
      */
-    method_title?: {
-      [k: string]: any;
-    };
+    method_title?: string;
     /**
      * Shipping method ID.
      */
-    method_id?: {
-      [k: string]: any;
-    };
+    method_id?: string;
     /**
      * Shipping instance ID.
      */
@@ -393,9 +434,7 @@ export interface WooCommerceOrderSchema {
       /**
        * Meta value.
        */
-      value?: {
-        [k: string]: any;
-      };
+      value?: string;
       [k: string]: any;
     }[];
     [k: string]: any;
@@ -411,9 +450,7 @@ export interface WooCommerceOrderSchema {
     /**
      * Fee name.
      */
-    name?: {
-      [k: string]: any;
-    };
+    name?: string;
     /**
      * Tax class of fee.
      */
@@ -463,9 +500,7 @@ export interface WooCommerceOrderSchema {
       /**
        * Meta value.
        */
-      value?: {
-        [k: string]: any;
-      };
+      value?: string;
       [k: string]: any;
     }[];
     [k: string]: any;
@@ -481,9 +516,7 @@ export interface WooCommerceOrderSchema {
     /**
      * Coupon code.
      */
-    code?: {
-      [k: string]: any;
-    };
+    code?: string;
     /**
      * Discount total.
      */
@@ -512,9 +545,12 @@ export interface WooCommerceOrderSchema {
     }[];
     [k: string]: any;
   }[];
-  /**
-   * Define if the order is paid. It will set the status to processing and reduce stock items.
-   */
-  set_paid?: boolean;
+  refunds?: {
+    id?: number;
+    reason?: string;
+    total?: string;
+    [k: string]: any;
+  }[];
+  currency_symbol?: string;
   [k: string]: any;
 }
