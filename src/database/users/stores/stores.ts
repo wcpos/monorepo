@@ -91,6 +91,9 @@ const createStoresCollection = async (db: Database): Promise<Collection> => {
 			products: new ObservableResource(
 				from(storeDatabase).pipe(switchMap((db) => db.collections.products.find().$))
 			),
+			orders: new ObservableResource(
+				from(storeDatabase).pipe(switchMap((db) => db.collections.orders.find().$))
+			),
 		};
 
 		Object.defineProperty(model, 'dbResource', {

@@ -1,0 +1,536 @@
+{
+	"title": "WooCommerce Order schema",
+	"version": 0,
+	"description": "WooCommerce Order schema",
+	"type": "object",
+	"properties": {
+		"parent_id": {
+			"description": "Parent order ID.",
+			"type": "integer"
+		},
+		"status": {
+			"default": "pending",
+			"enum": ["pending", "processing", "on-hold", "completed", "cancelled", "refunded", "failed"],
+			"description": "Order status.",
+			"type": "string"
+		},
+		"currency": {
+			"default": "AUD",
+			"enum": [
+				"AED",
+				"AFN",
+				"ALL",
+				"AMD",
+				"ANG",
+				"AOA",
+				"ARS",
+				"AUD",
+				"AWG",
+				"AZN",
+				"BAM",
+				"BBD",
+				"BDT",
+				"BGN",
+				"BHD",
+				"BIF",
+				"BMD",
+				"BND",
+				"BOB",
+				"BRL",
+				"BSD",
+				"BTC",
+				"BTN",
+				"BWP",
+				"BYR",
+				"BYN",
+				"BZD",
+				"CAD",
+				"CDF",
+				"CHF",
+				"CLP",
+				"CNY",
+				"COP",
+				"CRC",
+				"CUC",
+				"CUP",
+				"CVE",
+				"CZK",
+				"DJF",
+				"DKK",
+				"DOP",
+				"DZD",
+				"EGP",
+				"ERN",
+				"ETB",
+				"EUR",
+				"FJD",
+				"FKP",
+				"GBP",
+				"GEL",
+				"GGP",
+				"GHS",
+				"GIP",
+				"GMD",
+				"GNF",
+				"GTQ",
+				"GYD",
+				"HKD",
+				"HNL",
+				"HRK",
+				"HTG",
+				"HUF",
+				"IDR",
+				"ILS",
+				"IMP",
+				"INR",
+				"IQD",
+				"IRR",
+				"IRT",
+				"ISK",
+				"JEP",
+				"JMD",
+				"JOD",
+				"JPY",
+				"KES",
+				"KGS",
+				"KHR",
+				"KMF",
+				"KPW",
+				"KRW",
+				"KWD",
+				"KYD",
+				"KZT",
+				"LAK",
+				"LBP",
+				"LKR",
+				"LRD",
+				"LSL",
+				"LYD",
+				"MAD",
+				"MDL",
+				"MGA",
+				"MKD",
+				"MMK",
+				"MNT",
+				"MOP",
+				"MRU",
+				"MUR",
+				"MVR",
+				"MWK",
+				"MXN",
+				"MYR",
+				"MZN",
+				"NAD",
+				"NGN",
+				"NIO",
+				"NOK",
+				"NPR",
+				"NZD",
+				"OMR",
+				"PAB",
+				"PEN",
+				"PGK",
+				"PHP",
+				"PKR",
+				"PLN",
+				"PRB",
+				"PYG",
+				"QAR",
+				"RON",
+				"RSD",
+				"RUB",
+				"RWF",
+				"SAR",
+				"SBD",
+				"SCR",
+				"SDG",
+				"SEK",
+				"SGD",
+				"SHP",
+				"SLL",
+				"SOS",
+				"SRD",
+				"SSP",
+				"STN",
+				"SYP",
+				"SZL",
+				"THB",
+				"TJS",
+				"TMT",
+				"TND",
+				"TOP",
+				"TRY",
+				"TTD",
+				"TWD",
+				"TZS",
+				"UAH",
+				"UGX",
+				"USD",
+				"UYU",
+				"UZS",
+				"VEF",
+				"VES",
+				"VND",
+				"VUV",
+				"WST",
+				"XAF",
+				"XCD",
+				"XOF",
+				"XPF",
+				"YER",
+				"ZAR",
+				"ZMW"
+			],
+			"description": "Currency the order was created with, in ISO format.",
+			"type": "string"
+		},
+		"customer_id": {
+			"default": 0,
+			"description": "User ID who owns the order. 0 for guests.",
+			"type": "integer"
+		},
+		"customer_note": {
+			"description": "Note left by customer during checkout.",
+			"type": "string"
+		},
+		"billing": {
+			"description": "Billing address.",
+			"type": "object"
+		},
+		"shipping": {
+			"description": "Shipping address.",
+			"type": "object"
+		},
+		"payment_method": {
+			"description": "Payment method ID.",
+			"type": "string"
+		},
+		"payment_method_title": {
+			"description": "Payment method title.",
+			"type": "string"
+		},
+		"transaction_id": {
+			"description": "Unique transaction ID.",
+			"type": "string"
+		},
+		"meta_data": {
+			"description": "Meta data.",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"description": "Meta ID.",
+						"type": "integer"
+					},
+					"key": {
+						"description": "Meta key.",
+						"type": "string"
+					},
+					"value": {
+						"description": "Meta value.",
+						"type": "mixed"
+					}
+				}
+			}
+		},
+		"line_items": {
+			"description": "Line items data.",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"description": "Item ID.",
+						"type": "integer"
+					},
+					"name": {
+						"description": "Product name.",
+						"type": "mixed"
+					},
+					"product_id": {
+						"description": "Product ID.",
+						"type": "mixed"
+					},
+					"variation_id": {
+						"description": "Variation ID, if applicable.",
+						"type": "integer"
+					},
+					"quantity": {
+						"description": "Quantity ordered.",
+						"type": "integer"
+					},
+					"tax_class": {
+						"description": "Tax class of product.",
+						"type": "string"
+					},
+					"subtotal": {
+						"description": "Line subtotal (before discounts).",
+						"type": "string"
+					},
+					"subtotal_tax": {
+						"description": "Line subtotal tax (before discounts).",
+						"type": "string"
+					},
+					"total": {
+						"description": "Line total (after discounts).",
+						"type": "string"
+					},
+					"total_tax": {
+						"description": "Line total tax (after discounts).",
+						"type": "string"
+					},
+					"taxes": {
+						"description": "Line taxes.",
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"description": "Tax rate ID.",
+									"type": "integer"
+								},
+								"total": {
+									"description": "Tax total.",
+									"type": "string"
+								},
+								"subtotal": {
+									"description": "Tax subtotal.",
+									"type": "string"
+								}
+							}
+						}
+					},
+					"meta_data": {
+						"description": "Meta data.",
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"description": "Meta ID.",
+									"type": "integer"
+								},
+								"key": {
+									"description": "Meta key.",
+									"type": "string"
+								},
+								"value": {
+									"description": "Meta value.",
+									"type": "mixed"
+								}
+							}
+						}
+					},
+					"sku": {
+						"description": "Product SKU.",
+						"type": "string"
+					},
+					"price": {
+						"description": "Product price.",
+						"type": "number"
+					}
+				}
+			}
+		},
+		"shipping_lines": {
+			"description": "Shipping lines data.",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"description": "Item ID.",
+						"type": "integer"
+					},
+					"method_title": {
+						"description": "Shipping method name.",
+						"type": "mixed"
+					},
+					"method_id": {
+						"description": "Shipping method ID.",
+						"type": "mixed"
+					},
+					"instance_id": {
+						"description": "Shipping instance ID.",
+						"type": "string"
+					},
+					"total": {
+						"description": "Line total (after discounts).",
+						"type": "string"
+					},
+					"total_tax": {
+						"description": "Line total tax (after discounts).",
+						"type": "string"
+					},
+					"taxes": {
+						"description": "Line taxes.",
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"description": "Tax rate ID.",
+									"type": "integer"
+								},
+								"total": {
+									"description": "Tax total.",
+									"type": "string"
+								}
+							}
+						}
+					},
+					"meta_data": {
+						"description": "Meta data.",
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"description": "Meta ID.",
+									"type": "integer"
+								},
+								"key": {
+									"description": "Meta key.",
+									"type": "string"
+								},
+								"value": {
+									"description": "Meta value.",
+									"type": "mixed"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"fee_lines": {
+			"description": "Fee lines data.",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"description": "Item ID.",
+						"type": "integer"
+					},
+					"name": {
+						"description": "Fee name.",
+						"type": "mixed"
+					},
+					"tax_class": {
+						"description": "Tax class of fee.",
+						"type": "string"
+					},
+					"tax_status": {
+						"description": "Tax status of fee.",
+						"type": "string",
+						"enum": ["taxable", "none"]
+					},
+					"total": {
+						"description": "Line total (after discounts).",
+						"type": "string"
+					},
+					"total_tax": {
+						"description": "Line total tax (after discounts).",
+						"type": "string"
+					},
+					"taxes": {
+						"description": "Line taxes.",
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"description": "Tax rate ID.",
+									"type": "integer"
+								},
+								"total": {
+									"description": "Tax total.",
+									"type": "string"
+								},
+								"subtotal": {
+									"description": "Tax subtotal.",
+									"type": "string"
+								}
+							}
+						}
+					},
+					"meta_data": {
+						"description": "Meta data.",
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"description": "Meta ID.",
+									"type": "integer"
+								},
+								"key": {
+									"description": "Meta key.",
+									"type": "string"
+								},
+								"value": {
+									"description": "Meta value.",
+									"type": "mixed"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"coupon_lines": {
+			"description": "Coupons line data.",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"description": "Item ID.",
+						"type": "integer"
+					},
+					"code": {
+						"description": "Coupon code.",
+						"type": "mixed"
+					},
+					"discount": {
+						"description": "Discount total.",
+						"type": "string"
+					},
+					"discount_tax": {
+						"description": "Discount total tax.",
+						"type": "string"
+					},
+					"meta_data": {
+						"description": "Meta data.",
+						"type": "array",
+
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"description": "Meta ID.",
+									"type": "integer"
+								},
+								"key": {
+									"description": "Meta key.",
+									"type": "string"
+								},
+								"value": {
+									"description": "Meta value.",
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"set_paid": {
+			"default": false,
+			"description": "Define if the order is paid. It will set the status to processing and reduce stock items.",
+			"type": "boolean"
+		}
+	}
+}
