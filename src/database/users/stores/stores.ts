@@ -68,11 +68,18 @@ const createStoresCollection = async (db: Database): Promise<Collection> => {
 		/**
 		 * Init UI Settings
 		 */
+		const initUiResource = (section) => {
+			return new ObservableResource(
+				model.collections().ui_settings.getUiSetting$(model.id, section)
+			);
+		};
+
 		const uiResources = {
-			pos_products: new ObservableResource(
-				model.collections().ui_settings.getUiSetting$(model.id, 'pos_products')
-			),
-			pos_cart: 'bar',
+			pos_products: initUiResource('pos_products'),
+			pos_cart: initUiResource('pos_cart'),
+			products: initUiResource('products'),
+			orders: initUiResource('orders'),
+			customers: initUiResource('customers'),
 		};
 
 		/**

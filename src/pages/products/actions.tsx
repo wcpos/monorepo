@@ -13,7 +13,7 @@ interface Props {
 /**
  *
  */
-const Actions: React.FC<Props> = ({ columns, resetUI }) => {
+const Actions: React.FC<Props> = ({ ui }) => {
 	const { t } = useTranslation();
 
 	const onFilter = () => {
@@ -24,14 +24,14 @@ const Actions: React.FC<Props> = ({ columns, resetUI }) => {
 		<>
 			<Input placeholder="Search products" onChangeText={onFilter} />
 			<Text>Columns</Text>
-			{columns.map((column: any) => (
+			{ui.columns.map((column: any) => (
 				<Checkbox
 					key={column.key}
 					name={column.key}
 					label={t(`products.column.label.${column.key}`)}
 					checked={!column.hide}
 					onChange={(checked) => {
-						column.updateWithJson({ hide: !checked });
+						ui.updateColumn(column.key, { hide: !checked });
 					}}
 				/>
 			))}
@@ -47,7 +47,7 @@ const Actions: React.FC<Props> = ({ columns, resetUI }) => {
 					}}
 				/>
 			))} */}
-			<Button title="Restore Default Settings" onPress={resetUI} />
+			<Button title="Restore Default Settings" onPress={ui.reset} />
 		</>
 	);
 };

@@ -10,8 +10,7 @@ interface Props {}
 
 const Products: React.FC<Props> = () => {
 	const [{ store }] = useAppState();
-	const ui = useObservableSuspense(store.getUiResource('products'));
-	const columns = useObservableSuspense(ui.columnsResource);
+	const ui = useObservableSuspense(store.uiResources.products);
 	const products = useObservableSuspense(store.getDataResource('products'));
 
 	const onResetUI = () => {
@@ -19,19 +18,20 @@ const Products: React.FC<Props> = () => {
 	};
 
 	const onSort = ({ sortBy, sortDirection }) => {
-		ui.updateWithJson({ sortBy, sortDirection });
+		console.log({ sortBy, sortDirection });
+		// ui.updateWithJson({ sortBy, sortDirection });
 	};
 
 	return (
 		<React.Suspense fallback={<Text>loading products...</Text>}>
 			<Segment.Group>
 				<Segment>
-					<Actions columns={columns} resetUI={onResetUI} />
+					<Actions ui={ui} />
 				</Segment>
 				<Segment grow>
 					<Table
 						products={products}
-						columns={columns}
+						columns={ui.columns}
 						sort={onSort}
 						sortBy={ui.sortBy}
 						sortDirection={ui.sortDirection}
