@@ -1,3 +1,4 @@
 import createProductsCollection from './products';
+import createOrdersCollection from './orders';
 
-export default [createProductsCollection];
+export default [createProductsCollection, createOrdersCollection];

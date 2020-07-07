@@ -12,5 +12,6 @@ export interface WooCommercePOSStoreSchema {
   id?: string;
   remote_id?: number;
   name?: string;
+  uis?: string[];
   [k: string]: any;
 }

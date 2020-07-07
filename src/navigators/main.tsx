@@ -5,17 +5,16 @@ import MasterBar from '../layout/masterbar';
 import ErrorBoundary from '../components/error';
 import POS from '../pages/pos';
 import Products from '../pages/products';
-// import Orders from '../sections/orders';
+import Orders from '../pages/orders';
 // import Customers from '../sections/customers';
 import Support from '../pages/support';
 import Text from '../components/text';
-import useUI from '../hooks/use-ui';
-import useDataResource from '../hooks/use-data-resource';
 
 const Screen = ({ route, navigation }) => {
 	const components = {
 		POS: <POS />,
 		Products: <Products />,
+		Orders: <Orders />,
 		Support: <Support />,
 	};
 
@@ -37,6 +36,7 @@ const MainNavigator: React.FC = () => {
 		<Drawer.Navigator>
 			<Drawer.Screen name="POS" component={Screen} />
 			<Drawer.Screen name="Products" component={Screen} />
+			<Drawer.Screen name="Orders" component={Screen} />
 			<Drawer.Screen name="Support" component={Screen} />
 		</Drawer.Navigator>
 	);
