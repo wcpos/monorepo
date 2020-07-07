@@ -15,7 +15,8 @@
 			"type": "string"
 		},
 		"permalink": {
-			"type": "string"
+			"type": "string",
+			"format": "uri"
 		},
 		"date_created": {
 			"type": "string"
@@ -35,8 +36,8 @@
 			"type": "string"
 		},
 		"status": {
-			"default": "any",
-			"enum": ["any", "future", "draft", "pending", "private", "publish"],
+			"default": "publish",
+			"enum": ["draft", "pending", "private", "publish"],
 			"type": "string"
 		},
 		"featured": {
@@ -64,16 +65,16 @@
 			"type": "string"
 		},
 		"date_on_sale_from": {
-			"type": "string"
+			"type": ["string", "null"]
 		},
 		"date_on_sale_from_gmt": {
-			"type": "string"
+			"type": ["string", "null"]
 		},
 		"date_on_sale_to": {
-			"type": "string"
+			"type": ["string", "null"]
 		},
 		"date_on_sale_to_gmt": {
-			"type": "string"
+			"type": ["string", "null"]
 		},
 		"price_html": {
 			"type": "string"
@@ -88,19 +89,23 @@
 			"type": "number"
 		},
 		"virtual": {
+			"default": false,
 			"type": "boolean"
 		},
 		"downloadable": {
+			"default": false,
 			"type": "boolean"
 		},
 		"downloads": {
 			"type": "array"
 		},
 		"download_limit": {
-			"type": "number"
+			"default": -1,
+			"type": "integer"
 		},
 		"download_expiry": {
-			"type": "number"
+			"default": -1,
+			"type": "integer"
 		},
 		"external_url": {
 			"type": "string"
@@ -109,6 +114,7 @@
 			"type": "string"
 		},
 		"tax_status": {
+			"default": "taxable",
 			"enum": ["taxable", "shipping", "none"],
 			"type": "string"
 		},
@@ -116,16 +122,19 @@
 			"type": "string"
 		},
 		"manage_stock": {
+			"default": false,
 			"type": "boolean"
 		},
 		"stock_quantity": {
-			"type": "string"
+			"type": ["number", "null"]
 		},
 		"stock_status": {
+			"default": "instock",
 			"enum": ["instock", "outofstock", "onbackorder"],
 			"type": "string"
 		},
 		"backorders": {
+			"default": "no",
 			"enum": ["no", "notify", "yes"],
 			"type": "string"
 		},
@@ -165,7 +174,7 @@
 			"type": "string"
 		},
 		"shipping_class_id": {
-			"type": "number"
+			"type": "integer"
 		},
 		"reviews_allowed": true,
 		"average_rating": {
@@ -177,23 +186,23 @@
 		"related_ids": {
 			"type": "array",
 			"items": {
-				"type": "number"
+				"type": "integer"
 			}
 		},
 		"upsell_ids": {
 			"type": "array",
 			"items": {
-				"type": "number"
+				"type": "integer"
 			}
 		},
 		"cross_sell_ids": {
 			"type": "array",
 			"items": {
-				"type": "number"
+				"type": "integer"
 			}
 		},
 		"parent_id": {
-			"type": "number"
+			"type": "integer"
 		},
 		"purchase_note": {
 			"type": "string"
@@ -204,7 +213,7 @@
 				"type": "object",
 				"properties": {
 					"id": {
-						"type": "number"
+						"type": "integer"
 					},
 					"name": {
 						"type": "string"
@@ -221,7 +230,7 @@
 				"type": "object",
 				"properties": {
 					"id": {
-						"type": "number"
+						"type": "integer"
 					},
 					"name": {
 						"type": "string"
@@ -238,7 +247,7 @@
 				"type": "object",
 				"properties": {
 					"id": {
-						"type": "number"
+						"type": "integer"
 					},
 					"date_created": {
 						"type": "string"
@@ -271,13 +280,13 @@
 				"type": "object",
 				"properties": {
 					"id": {
-						"type": "number"
+						"type": "integer"
 					},
 					"name": {
 						"type": "string"
 					},
 					"position": {
-						"type": "number"
+						"type": "integer"
 					},
 					"visible": {
 						"type": "boolean",
@@ -302,7 +311,7 @@
 				"type": "object",
 				"properties": {
 					"id": {
-						"type": "number"
+						"type": "integer"
 					},
 					"name": {
 						"type": "string"
@@ -316,17 +325,17 @@
 		"variations": {
 			"type": "array",
 			"items": {
-				"type": "number"
+				"type": "integer"
 			}
 		},
 		"grouped_products": {
 			"type": "array",
 			"items": {
-				"type": "number"
+				"type": "integer"
 			}
 		},
 		"menu_order": {
-			"type": "number"
+			"type": "integer"
 		},
 		"meta_data": {
 			"type": "array",
@@ -334,7 +343,7 @@
 				"type": "object",
 				"properties": {
 					"id": {
-						"type": "number"
+						"type": "integer"
 					},
 					"key": {
 						"type": "string"
