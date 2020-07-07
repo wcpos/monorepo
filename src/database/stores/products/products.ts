@@ -45,12 +45,16 @@ const createProductsCollection = async (db: Database): Promise<Collection> => {
 	ProductsCollection.preInsert(function (rawData) {
 		// remove _links property (invalid property name)
 		unset(rawData, '_links');
+
 		// remove propeties not on schema
 		const omitProperties = difference(Object.keys(rawData), this.schema.topLevelFields);
-		console.log('the following properties are being omiited', omitProperties);
-		omitProperties.forEach((prop) => {
-			unset(rawData, prop);
-		});
+		if (omitProperties.length > 0) {
+			console.log('the following properties are being omiited', omitProperties);
+			omitProperties.forEach((prop) => {
+				unset(rawData, prop);
+			});
+		}
+
 		// change id to string
 		rawData.id = String(rawData.id);
 	}, false);

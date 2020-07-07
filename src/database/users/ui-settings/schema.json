@@ -33,7 +33,7 @@
 						"type": "string"
 					},
 					"order": {
-						"type": "number"
+						"type": "integer"
 					},
 					"hide": {
 						"type": "boolean"
@@ -63,7 +63,7 @@
 						"type": "string"
 					},
 					"order": {
-						"type": "number"
+						"type": "integer"
 					},
 					"hide": {
 						"type": "boolean"
