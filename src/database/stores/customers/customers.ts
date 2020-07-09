@@ -5,7 +5,7 @@ import difference from 'lodash/difference';
 import unset from 'lodash/unset';
 import schema from './schema.json';
 
-export type Schema = import('./interface').WooCommerceOrderSchema;
+export type Schema = import('./interface').WooCommercePOSStoreSchema;
 export type Methods = {};
 export type Model = import('rxdb').RxDocument<Schema, Methods>;
 export type Statics = {};
@@ -19,19 +19,6 @@ const methods: Methods = {
 	/**
 	 *
 	 */
-	async addOrUpdateLineItem(product) {
-		await this.atomicUpdate((oldData) => {
-			oldData.line_items.push({
-				name: product.name,
-				product_id: parseInt(product.id, 10),
-				quantity: 1,
-				price: parseInt(product.price, 10),
-				sku: product.sku,
-				tax_class: product.tax_class,
-			});
-			return oldData;
-		});
-	},
 };
 
 /**
@@ -49,7 +36,7 @@ const statics: Statics = {
  */
 const createOrdersCollection = async (db: Database): Promise<Collection> => {
 	const OrdersCollection = await db.collection({
-		name: 'orders',
+		name: 'customers',
 		schema,
 		methods,
 		statics,

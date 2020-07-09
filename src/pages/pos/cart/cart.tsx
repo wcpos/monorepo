@@ -14,6 +14,16 @@ const Cart: React.FC<Props> = ({ ui }) => {
 	const orders = useObservableSuspense(store.getDataResource('orders'));
 	const order = orders[0];
 
+	if (!order) {
+		return (
+			<Segment.Group>
+				<Segment>
+					<CustomerSelect ui={ui} />
+				</Segment>
+			</Segment.Group>
+		);
+	}
+
 	return (
 		<Segment.Group>
 			<Segment>
