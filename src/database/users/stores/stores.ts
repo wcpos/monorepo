@@ -99,6 +99,10 @@ const createStoresCollection = async (db: Database): Promise<Collection> => {
 			),
 		};
 
+		Object.defineProperty(model, 'db', {
+			get: () => storeDatabase,
+		});
+
 		Object.defineProperty(model, 'dbResource', {
 			get: () => dbResource,
 		});
