@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { useObservableSuspense } from 'observable-hooks';
 import Segment from '../../components/segment';
+import Input from '../../components/textinput';
 import Table from './table';
 import Actions from './actions';
 import useAppState from '../../hooks/use-app-state';
@@ -13,8 +14,8 @@ const Products: React.FC<Props> = () => {
 	const ui = useObservableSuspense(store.uiResources.products);
 	const products = useObservableSuspense(store.getDataResource('products'));
 
-	const onResetUI = () => {
-		ui.reset();
+	const onSearch = (value) => {
+		console.log(value);
 	};
 
 	const onSort = ({ sortBy, sortDirection }) => {
@@ -26,6 +27,7 @@ const Products: React.FC<Props> = () => {
 		<React.Suspense fallback={<Text>loading products...</Text>}>
 			<Segment.Group>
 				<Segment>
+					<Input placeholder="Search products" onChangeText={onSearch} />
 					<Actions ui={ui} />
 				</Segment>
 				<Segment grow>

@@ -22,7 +22,6 @@ const Actions: React.FC<Props> = ({ ui }) => {
 
 	return (
 		<>
-			<Input placeholder="Search products" onChangeText={onFilter} />
 			<Text>Columns</Text>
 			{ui.columns.map((column: any) => (
 				<Checkbox

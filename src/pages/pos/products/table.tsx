@@ -1,8 +1,12 @@
 import React from 'react';
+import { useObservable, useObservableState } from 'observable-hooks';
+import { from } from 'rxjs';
+import { switchMap, tap, debounceTime } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
 import Table from '../../../components/table';
 import Text from '../../../components/text';
 import Actions from './cells/actions';
+import useAppState from '../../../hooks/use-app-state';
 
 interface Props {
 	columns: any;
@@ -12,8 +16,33 @@ interface Props {
 /**
  *
  */
-const ProductsTable: React.FC<Props> = ({ columns, products, sort }) => {
+const ProductsTable: React.FC<Props> = ({ columns, search, sort }) => {
 	const { t } = useTranslation();
+	const [{ store }] = useAppState();
+
+	const products$ = useObservable(
+		// A stream of React elements!
+		(inputs$) =>
+			inputs$.pipe(
+				// distinctUntilChanged((a, b) => a[0] === b[0]),
+				debounceTime(150),
+				switchMap(([val]) =>
+					from(store.db).pipe(
+						switchMap((db) => {
+							const regexp = new RegExp(val, 'i');
+							return db.collections.products.find({
+								selector: {
+									name: { $regex: regexp },
+								},
+							}).$;
+						})
+					)
+				)
+			),
+		[search] as const
+	);
+
+	const products = useObservableState(products$, []);
 
 	const renderCell = ({ getCellProps }) => {
 		const { cellData, column, rowData } = getCellProps();

@@ -1,6 +1,5 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import Input from '../../../components/textinput';
 import Checkbox from '../../../components/checkbox';
 import Button from '../../../components/button';
 import Text from '../../../components/text';
@@ -21,7 +20,6 @@ const Actions: React.FC<Props> = ({ ui }) => {
 
 	return (
 		<>
-			<Input placeholder="Search products" onChangeText={onFilter} />
 			<Text>Columns</Text>
 			{ui.columns.map((column: any) => (
 				<Checkbox
