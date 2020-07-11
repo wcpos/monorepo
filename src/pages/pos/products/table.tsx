@@ -1,7 +1,7 @@
 import React from 'react';
 import { useObservable, useObservableState } from 'observable-hooks';
 import { from } from 'rxjs';
-import { switchMap, tap, debounceTime } from 'rxjs/operators';
+import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
 import Table from '../../../components/table';
 import Text from '../../../components/text';
@@ -16,7 +16,7 @@ interface Props {
 /**
  *
  */
-const ProductsTable: React.FC<Props> = ({ columns, search, sort }) => {
+const ProductsTable: React.FC<Props> = ({ columns, query, sort }) => {
 	const { t } = useTranslation();
 	const [{ store }] = useAppState();
 
@@ -24,22 +24,32 @@ const ProductsTable: React.FC<Props> = ({ columns, search, sort }) => {
 		// A stream of React elements!
 		(inputs$) =>
 			inputs$.pipe(
-				// distinctUntilChanged((a, b) => a[0] === b[0]),
+				distinctUntilChanged((a, b) => a[0] === b[0]),
 				debounceTime(150),
-				switchMap(([val]) =>
+				switchMap(([q]) =>
 					from(store.db).pipe(
 						switchMap((db) => {
-							const regexp = new RegExp(val, 'i');
-							return db.collections.products.find({
-								selector: {
-									name: { $regex: regexp },
-								},
-							}).$;
+							console.log(q);
+							const regexp = new RegExp(q.search, 'i');
+							const RxQuery = db.collections.products
+								.find({
+									selector: {
+										name: { $regex: regexp },
+									},
+								})
+								.sort({ [q.sortBy]: q.sortDirection });
+							return RxQuery.$;
+						}),
+						catchError((err) => {
+							console.error(err);
 						})
 					)
-				)
+				),
+				catchError((err) => {
+					console.error(err);
+				})
 			),
-		[search] as const
+		[query] as const
 	);
 
 	const products = useObservableState(products$, []);
@@ -59,7 +69,13 @@ const ProductsTable: React.FC<Props> = ({ columns, search, sort }) => {
 	};
 
 	return (
-		<Table columns={columns} data={products} sort={sort}>
+		<Table
+			columns={columns}
+			data={products}
+			sort={sort}
+			sortBy={query.sortBy}
+			sortDirection={query.sortDirection}
+		>
 			<Table.Header>
 				<Table.HeaderRow columns={columns}>
 					{({ getHeaderCellProps }) => {

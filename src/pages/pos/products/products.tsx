@@ -21,11 +21,16 @@ interface Props {
  */
 const Products: React.FC<Props> = ({ ui }) => {
 	// const { t } = useTranslation();
-	const [{ store }] = useAppState();
+	const [{ appUser, store }] = useAppState();
 	const [columns, setColumns] = React.useState([]);
-	const [search, setSearch] = React.useState('');
+	const [query, setQuery] = React.useState({
+		search: '',
+		sortBy: 'name',
+		sortDirection: 'asc',
+	});
 
 	// const products = useObservableSuspense(store.getDataResource('products'));
+	const storeDatabase = useObservableSuspense(store.dbResource);
 
 	// React.useEffect(() => {
 	// 	debugger;
@@ -40,27 +45,41 @@ const Products: React.FC<Props> = ({ ui }) => {
 	React.useEffect(() => {
 		ui.columns$.subscribe((x) => setColumns(x));
 		return ui.columns$.unsubscribe;
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	const onSort = ({ sortBy, sortDirection }) => {
-		ui.updateWithJson({ sortBy, sortDirection });
+		console.log({ sortBy, sortDirection });
+		setQuery({ ...query, sortBy, sortDirection });
 	};
 
-	const onSearch = (value) => {
-		setSearch(value);
+	const onSearch = (search) => {
+		setQuery({ ...query, search });
 	};
 
 	return (
 		<Segment.Group>
 			<Segment>
-				<Input value={search} placeholder="Search products" onChangeText={onSearch} />
+				<Input value={query.search} placeholder="Search products" onChangeText={onSearch} />
 				<Actions ui={ui} />
 			</Segment>
 			<Segment grow>
-				<Table search={search} columns={columns} display={ui.display} sort={onSort} />
+				<Table query={query} columns={columns} display={ui.display} sort={onSort} />
 			</Segment>
 			<Segment>
-				<Text>Footer</Text>
+				<Button
+					title="Add Products"
+					onPress={async () => {
+						const wpUser = await appUser.collections().wp_users.findOne().exec();
+						const { data } = await http('https://wcposdev.wpengine.com/wp-json/wc/v3/products', {
+							auth: {
+								username: wpUser.consumer_key,
+								password: wpUser.consumer_secret,
+							},
+						});
+						storeDatabase.collections.products.bulkInsert(data);
+					}}
+				/>
 			</Segment>
 		</Segment.Group>
 	);

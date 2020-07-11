@@ -28,7 +28,7 @@ const Fallback: React.FC<Props> = ({ componentStack, error, resetErrorBoundary }
 		)} */}
 		<Text>Something went wrong:</Text>
 		<Text>{error.message}</Text>
-		<Text>{componentStack}</Text>
+		{/* <Text>{componentStack}</Text> */}
 		<Button onPress={resetErrorBoundary} title="Try again" />
 	</View>
 );
