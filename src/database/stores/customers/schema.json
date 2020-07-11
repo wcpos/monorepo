@@ -1,0 +1,62 @@
+{
+	"title": "WooCommerce Customer schema",
+	"version": 0,
+	"description": "WooCommerce Customer schema",
+	"type": "object",
+	"properties": {
+		"id": {
+			"primary": true,
+			"description": "Unique identifier for the resource.",
+			"type": "string"
+		},
+		"email": {
+			"description": "The email address for the customer.",
+			"type": "string"
+		},
+		"first_name": {
+			"description": "Customer first name.",
+			"type": "string"
+		},
+		"last_name": {
+			"description": "Customer last name.",
+			"type": "string"
+		},
+		"username": {
+			"description": "Customer login name.",
+			"type": "string"
+		},
+		"password": {
+			"description": "Customer password.",
+			"type": "string"
+		},
+		"billing": {
+			"description": "List of billing address data.",
+			"type": "object"
+		},
+		"shipping": {
+			"description": "List of shipping address data.",
+			"type": "object"
+		},
+		"meta_data": {
+			"description": "Meta data.",
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"description": "Meta ID.",
+						"type": "integer"
+					},
+					"key": {
+						"description": "Meta key.",
+						"type": "string"
+					},
+					"value": {
+						"description": "Meta value.",
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}

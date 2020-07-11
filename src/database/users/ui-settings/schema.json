@@ -1,0 +1,75 @@
+{
+	"title": "UI Settings schema",
+	"version": 0,
+	"description": "UI Settings for each section of the POS",
+	"type": "object",
+	"properties": {
+		"id": {
+			"type": "string",
+			"primary": true
+		},
+		"store_id": {
+			"type": "string"
+		},
+		"section": {
+			"type": "string"
+		},
+		"sortBy": {
+			"type": "string"
+		},
+		"sortDirection": {
+			"type": "string"
+		},
+		"width": {
+			"type": "string"
+		},
+		"columns": {
+			"type": "array",
+			"uniqueItems": true,
+			"items": {
+				"type": "object",
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"order": {
+						"type": "integer"
+					},
+					"hide": {
+						"type": "boolean"
+					},
+					"disableSort": {
+						"type": "boolean"
+					},
+					"flexGrow": {
+						"type": "number"
+					},
+					"flexShrink": {
+						"type": "number"
+					},
+					"width": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"display": {
+			"type": "array",
+			"uniqueItems": true,
+			"items": {
+				"type": "object",
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"order": {
+						"type": "integer"
+					},
+					"hide": {
+						"type": "boolean"
+					}
+				}
+			}
+		}
+	}
+}
