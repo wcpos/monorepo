@@ -19,6 +19,15 @@ const methods: Methods = {
 	/**
 	 *
 	 */
+	computedTotal() {
+		return this.quantity * this.price;
+	},
+	/**
+	 *
+	 */
+	computedSubtotal() {
+		return this.quantity * this.price;
+	},
 };
 
 /**

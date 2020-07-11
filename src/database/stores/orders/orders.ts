@@ -20,18 +20,30 @@ const methods: Methods = {
 	 *
 	 */
 	async addOrUpdateLineItem(product) {
-		await this.atomicUpdate((oldData) => {
-			oldData.line_items.push({
+		await this.collections()
+			.line_items.upsert({
+				id: `new-${Date.now()}`,
+				order_id: this.id,
 				name: product.name,
 				product_id: parseInt(product.id, 10),
 				quantity: 1,
 				price: parseInt(product.price, 10),
 				sku: product.sku,
 				tax_class: product.tax_class,
+			})
+			.then((newLineItem) => {
+				this.update({
+					$push: {
+						line_items: newLineItem.id,
+					},
+				});
 			});
-			return oldData;
-		});
 	},
+
+	/**
+	 *
+	 */
+	async computedSubtotal() {},
 };
 
 /**
