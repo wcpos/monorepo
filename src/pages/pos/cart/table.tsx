@@ -11,11 +11,8 @@ const CartTable = ({ columns, order }) => {
 
 	const lineItems$ = useObservable(() =>
 		order.line_items$.pipe(
-			tap((res) => console.log(res)),
-
 			switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
 			map((result) => Array.from(result.values())),
-			tap((res) => console.log(res)),
 			catchError((err) => console.error(err))
 		)
 	);
@@ -27,6 +24,9 @@ const CartTable = ({ columns, order }) => {
 		let children;
 
 		switch (column.key) {
+			case 'total':
+				children = <Text>{rowData.computedTotal()}</Text>;
+				break;
 			default:
 				children = <Text>{String(cellData)}</Text>;
 		}

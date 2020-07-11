@@ -1,5 +1,8 @@
 import React from 'react';
-import { useObservableSuspense, useObservableState } from 'observable-hooks';
+import { useObservableSuspense, useObservableState, useObservable } from 'observable-hooks';
+import { from } from 'rxjs';
+import { switchMap, tap, catchError, map } from 'rxjs/operators';
+import sumBy from 'lodash/sumBy';
 import useAppState from '../../../hooks/use-app-state';
 import Segment from '../../../components/segment';
 import Text from '../../../components/text';
@@ -13,6 +16,18 @@ const Cart: React.FC<Props> = ({ ui }) => {
 
 	const orders = useObservableSuspense(store.getDataResource('orders'));
 	const order = orders[0];
+
+	const subtotalSum$ = useObservable(() =>
+		order.line_items$.pipe(
+			switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
+			map((result) =>
+				sumBy(Array.from(result.values()), (o) => parseInt(o.computedSubtotal(), 10))
+			),
+			catchError((err) => console.error(err))
+		)
+	);
+
+	const computedSubtotal = useObservableState(subtotalSum$, 0);
 
 	if (!order) {
 		return (
@@ -35,7 +50,7 @@ const Cart: React.FC<Props> = ({ ui }) => {
 			<Segment>
 				<Text>
 					Subtotal:
-					{order.subtotal}
+					{computedSubtotal}
 				</Text>
 				<Text>
 					Total Tax:
