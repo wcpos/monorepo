@@ -60,9 +60,7 @@ export interface WooCommerceCustomerSchema {
     /**
      * Meta value.
      */
-    value?: {
-      [k: string]: any;
-    };
+    value?: string;
     [k: string]: any;
   }[];
   [k: string]: any;
