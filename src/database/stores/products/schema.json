@@ -354,5 +354,6 @@
 				}
 			}
 		}
-	}
+	},
+	"indexes": ["name", "price"]
 }
