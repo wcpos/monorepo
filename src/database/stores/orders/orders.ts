@@ -60,6 +60,9 @@ const createOrdersCollection = async (db: Database): Promise<Collection> => {
 		// remove _links property (invalid property name)
 		unset(rawData, '_links');
 
+		// change id to string
+		rawData.id = String(rawData.id);
+
 		// remove propeties not on schema
 		const omitProperties = difference(Object.keys(rawData), this.schema.topLevelFields);
 		if (omitProperties.length > 0) {
@@ -69,22 +72,12 @@ const createOrdersCollection = async (db: Database): Promise<Collection> => {
 			});
 		}
 
-		// change id to string
-		rawData.id = String(rawData.id);
-	}, false);
+		// bulkInsert line items
+		this.collections().line_items.bulkInsertFromOrder(rawData.line_items, rawData.id);
 
-	// OrdersCollection.postCreate((raw, model) => {
-	// 	const dbResource = new ObservableResource(
-	// 		from(
-	// 			getDatabase(model.id).then((db) => {
-	// 				console.log(db);
-	// 			})
-	// 		)
-	// 	);
-	// 	Object.defineProperty(model, 'dbResource', {
-	// 		get: () => dbResource,
-	// 	});
-	// });
+		// extract line_item ids
+		rawData.line_items = rawData.line_items.map((line_item) => String(line_item.id));
+	}, false);
 
 	return OrdersCollection;
 };

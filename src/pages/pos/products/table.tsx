@@ -13,6 +13,8 @@ interface Props {
 	products: any;
 }
 
+const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+
 /**
  *
  */
@@ -30,7 +32,7 @@ const ProductsTable: React.FC<Props> = ({ columns, query, sort }) => {
 					from(store.db).pipe(
 						switchMap((db) => {
 							console.log(q);
-							const regexp = new RegExp(q.search, 'i');
+							const regexp = new RegExp(escape(q.search), 'i');
 							const RxQuery = db.collections.products
 								.find({
 									selector: {

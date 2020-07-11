@@ -355,5 +355,5 @@
 			}
 		}
 	},
-	"indexes": ["name", "price"]
+	"indexes": ["name", "sku", "price", "regular_price", "sale_price"]
 }

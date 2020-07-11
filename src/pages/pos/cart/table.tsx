@@ -1,10 +1,26 @@
 import React from 'react';
+import { useObservable, useObservableState } from 'observable-hooks';
+import { from } from 'rxjs';
+import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
 import Table from '../../../components/table';
 import Text from '../../../components/text';
 
 const CartTable = ({ columns, order }) => {
 	const { t } = useTranslation();
+
+	const lineItems$ = useObservable(() =>
+		order.line_items$.pipe(
+			tap((res) => console.log(res)),
+
+			switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
+			map((result) => Array.from(result.values())),
+			tap((res) => console.log(res)),
+			catchError((err) => console.error(err))
+		)
+	);
+
+	const lineItems = useObservableState(lineItems$, []);
 
 	const renderCell = ({ getCellProps }) => {
 		const { cellData, column, rowData } = getCellProps();
@@ -18,7 +34,7 @@ const CartTable = ({ columns, order }) => {
 	};
 
 	return (
-		<Table columns={columns} data={order.line_items}>
+		<Table columns={columns} data={lineItems}>
 			<Table.Header>
 				<Table.HeaderRow columns={columns}>
 					{({ getHeaderCellProps }) => {
