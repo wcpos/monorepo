@@ -2,13 +2,18 @@ import React from 'react';
 import Button from '../../../../components/button';
 import Popover from '../../../../components/popover';
 import Variations from './variations';
+import useAppState from '../../../../hooks/use-app-state';
 
 interface Props {
 	product: any;
-	addToCart: any;
 }
 
-const Actions: React.FC<Props> = ({ product, addToCart }) => {
+const Actions: React.FC<Props> = ({ product }) => {
+	const addToCart = async () => {
+		const order = await product.collections().orders.findOne().exec();
+		order.addOrUpdateLineItem(product);
+	};
+
 	if (product.isVariable()) {
 		return (
 			<Popover content={<Variations product={product} addToCart={addToCart} />}>
@@ -21,7 +26,7 @@ const Actions: React.FC<Props> = ({ product, addToCart }) => {
 		<Button
 			title="+"
 			onPress={() => {
-				addToCart(product);
+				addToCart();
 			}}
 		/>
 	);

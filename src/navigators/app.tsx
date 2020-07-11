@@ -16,6 +16,12 @@ const routes = {
 			Products: {
 				path: 'products',
 			},
+			Orders: {
+				path: 'orders',
+			},
+			Customers: {
+				path: 'customers',
+			},
 			Support: {
 				path: 'support',
 			},

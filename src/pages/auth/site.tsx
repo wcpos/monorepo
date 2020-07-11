@@ -17,53 +17,36 @@ import useAppState from '../../hooks/use-app-state';
  * - https://api.faviconkit.com/${url}/144
  */
 const Site = ({ site }) => {
-	const status = useObservableState(site.connection_status$);
+	// const status = useObservableState(site.connection_status$);
 	const [visible, setVisible] = React.useState(false);
 	const [{ appUser }, dispatch, actions] = useAppState();
+	const changes = useObservableState(site.name$);
+	console.log('@TODO - observe computed values?', changes);
 
 	const selectStore = async () => {
-		let store;
-		const wpUsers = await site.wp_users.fetch();
-		const wpUser = wpUsers[0];
-		const stores = await wpUser.stores.fetch();
-		if (stores.length === 0) {
-			// create new default store
-			store = await wpUser.database.action(async () =>
-				wpUser.stores.collection.create((m) => {
-					m.name = site.name;
-					m.app_user.set(appUser);
-					m.wp_user.set(wpUser);
-				})
-			);
-		}
-		if (stores.length === 1) {
-			// select only store
-			store = stores[0];
-		}
-		if (store) {
-			dispatch({
-				type: actions.SET_STORE,
-				payload: { store },
-			});
-		}
+		const store = await site.getStore();
+		dispatch({
+			type: actions.SET_STORE,
+			payload: { store },
+		});
 	};
 
 	const handleRemove = async () => {
-		await site.destroy();
+		await appUser.removeSite(site);
 	};
 
 	return (
 		<SiteWrapper>
 			<Avatar src={`https://api.faviconkit.com/${site.urlWithoutPrefix}/144`} />
 			<SiteTextWrapper>
-				<Text weight="bold">{site.name || site.urlWithoutPrefix}</Text>
+				<Text weight="bold">{site.nameOrUrl || site.urlWithoutPrefix}</Text>
 				<Text size="small" type="secondary">
 					{site.urlWithoutPrefix}
 				</Text>
-				{status && <Text size="small">{status?.message}</Text>}
+				{/* {status && <Text size="small">{status?.message}</Text>} */}
 				<Button title="Connect again" onPress={() => site.connect()} />
 				<Button title="Enter" onPress={() => selectStore()} />
-				{status.type === 'login' && (
+				{site.wc_api_auth_url && (
 					<Button
 						title="Login"
 						onPress={() => {

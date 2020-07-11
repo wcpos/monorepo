@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigation } from '@react-navigation/native';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import PageLayout from '../../layout/page';
 import Segment from '../../components/segment';
@@ -12,21 +11,22 @@ import useAppState from '../../hooks/use-app-state';
 interface Props {}
 
 const Auth: React.FC<Props> = (props) => {
-	const navigation = useNavigation();
 	const [{ appUser }] = useAppState();
 	const sites = useObservableSuspense(appUser.sitesResource);
 
-	const onConnect = async (url) => {
-		const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
-		if (trimUrl) {
-			const newSite = await appUser.database.action(async () =>
-				appUser.sites.collection.create((site) => {
-					site.url = `https://${trimUrl}`;
-					site.app_user.set(appUser);
-				})
-			);
-			newSite?.connect();
-		}
+	const onConnect = async (url: string) => {
+		const newSite = await appUser.addSite(url);
+		newSite.connect();
+		// const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
+		// if (trimUrl) {
+		// 	const newSite = await appUser.database.action(async () =>
+		// 		appUser.sites.collection.create((site) => {
+		// 			site.url = `https://${trimUrl}`;
+		// 			site.app_user.set(appUser);
+		// 		})
+		// 	);
+		// 	newSite?.connect();
+		// }
 	};
 
 	return (

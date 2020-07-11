@@ -1,6 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
-import { Wrapper, Input, PrefixText } from './styles';
+import noop from 'lodash/noop';
+import * as Styled from './styles';
 import Button from '../button';
 import Text from '../text';
 import Icon from '../icon';
@@ -9,85 +10,44 @@ import useMeasure from '../../hooks/use-measure';
 
 export type Props = import('react-native').TextInputProps & {
 	autosize?: boolean;
+	disabled?: boolean;
 	action?: string;
-	cancellable?: boolean;
+	clearable?: boolean;
+	invalid?: boolean;
 	onAction?: (value: string) => void;
+	onClear?: () => void;
 	prefix?: string;
 };
 
 const TextInput = ({
 	action,
 	autosize,
-	cancellable = false,
+	clearable = false,
+	disabled = false,
+	invalid = false,
 	placeholder,
-	onAction,
-	onChangeText,
+	onAction = noop,
+	onChangeText = noop,
+	onClear = noop,
 	prefix,
-	keyboardType,
+	value,
 	...props
-}: Props) => {
-	const [value, setValue] = React.useState(props.value || '');
-	const ref = React.useRef<View>(null);
-	const [measurements, onMeasure] = React.useState({
-		height: 0,
-		pageX: 0,
-		pageY: 0,
-		width: 0,
-		x: 0,
-		y: 0,
-	});
-	const { onLayout } = useMeasure({ onMeasure, ref });
-
-	const handleChangeText = (newValue: string) => {
-		setValue(newValue);
-		if (typeof onChangeText === 'function') {
-			onChangeText(value);
-		}
+}: Props): React.ReactElement => {
+	const handleClear = () => {
+		console.log('hi');
 	};
 
-	const clearText = () => {
-		setValue('');
-	};
-
-	const handleAction = () => {
-		if (typeof onAction === 'function') {
-			onAction(value);
-		}
-	};
-
-	const renderPrefix = () =>
-		typeof prefix === 'string' ? <Text type="secondary">{prefix}</Text> : prefix;
-
-	const renderCancelIcon = () => <Icon name="clear" onPress={clearText} />;
-
-	// if (autosize) {
-	// 	const key = Portal.add(
-	// 		<View ref={ref} onLayout={onLayout}>
-	// 			<Text>{placeholder}</Text>
-	// 		</View>
-	// 	);
-	// 	console.log(key);
-	// }
-	// console.log(measurements);
 	return (
-		<Wrapper>
-			{prefix && renderPrefix()}
-			<Input
-				placeholder={placeholder}
+		<Styled.Box>
+			<Styled.Input
 				value={value}
-				onChangeText={handleChangeText}
-				keyboardType={keyboardType}
-				autoCapitalize="none"
+				placeholder={placeholder}
+				disabled={disabled}
+				onChangeText={onChangeText}
+				{...props}
 			/>
-			{cancellable && value.length > 0 && renderCancelIcon()}
-			{action && (
-				<Button
-					title={action}
-					onPress={handleAction}
-					style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
-				/>
-			)}
-		</Wrapper>
+			<Icon name="clear" onPress={handleClear} />
+		</Styled.Box>
 	);
 };
 

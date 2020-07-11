@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable as RNPressable, GestureResponderEvent } from 'react-native';
 
 interface Props {
+	children: React.ReactNode;
 	disabled?: boolean;
 	noRipple?: boolean;
 	onLongPress?: (event: GestureResponderEvent) => void;
@@ -10,8 +11,18 @@ interface Props {
 	onMouseLeave?: (event: GestureResponderEvent) => void;
 }
 
-const Pressable: React.FC<Props> = (props) => {
-	return <RNPressable {...props} />;
+const Pressable = ({ children, ...props }: Props) => {
+	return (
+		<RNPressable
+			style={({ pressed }) => ({
+				opacity: pressed ? 0.5 : 1,
+				backgroundColor: pressed ? 'red' : 'orange',
+			})}
+			{...props}
+		>
+			{children}
+		</RNPressable>
+	);
 };
 
 export default Pressable;
