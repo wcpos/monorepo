@@ -59,7 +59,6 @@ const removeLastStore = async () => database.adapter.removeLocal('last_store');
  */
 function appStateReducer(state: AppState, action: AppAction): AppState {
 	const { type, payload } = action;
-	logger.info(type, payload);
 	switch (type) {
 		// case consts.DIMENSIONS_CHANGE:
 		// 	return { ...state, ...payload };
@@ -67,11 +66,15 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 		// 	return { ...state, ...payload };
 		// case SET_THEME:
 		// 	return { ...state, colorTheme: action.theme };
+		case actionTypes.SET_USER:
+			logger.debug('Set app user', payload.toJSON());
+			return { ...state, appUser: payload };
 		case actionTypes.STORE_LOGOUT:
-			removeLastStore();
+			state.store.collection.upsertLocal('last_store', { store_id: undefined });
 			return { ...state, store: undefined };
 		case actionTypes.SET_STORE:
-			setLastStore(payload.store.id);
+			// setLastStore(payload.store.id);
+			payload.store.collection.upsertLocal('last_store', { store_id: payload.store.id });
 			return { ...state, ...payload };
 		default:
 			return { ...state, ...payload };
@@ -80,10 +83,15 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 
 export const AppStateContext = React.createContext<ContextValue>(null);
 
+interface Props {
+	children: React.ReactElement;
+	i18n: any;
+}
 /**
  * The Provider
  */
-const AppStateProvider: React.FC = ({ children }) => {
+const AppStateProvider = ({ children, i18n }: Props) => {
+	const [userDatabase, setUserDatabase] = React.useState();
 	const [state, dispatch] = React.useReducer(appStateReducer, initialState);
 	const value: ContextValue = React.useMemo(() => [state, dispatch, actionTypes], [state]) as any;
 
@@ -124,39 +132,45 @@ const AppStateProvider: React.FC = ({ children }) => {
 	 */
 	React.useEffect(() => {
 		(async function init() {
-			const appUsersCollection = database.collections.get('app_users');
-			const storesCollection = database.collections.get('stores');
-			const lastStore = await getLastStore();
+			const db = await database;
+			setUserDatabase(db);
+		})();
+	}, []);
 
-			if (!lastStore) {
-				const appUserCount = await appUsersCollection.query().fetchCount();
+	React.useEffect(() => {
+		(async function init() {
+			if (userDatabase) {
+				const lastStore = await userDatabase.collections.stores.getLocal('last_store');
+				const lastStoreId = lastStore && lastStore.get('store_id');
 
-				if (appUserCount === 0) {
-					// create new user
-					await database.action(async () => {
-						const newUser = await appUsersCollection.create((user) => {
-							user.display_name = 'New User';
-						});
-						dispatch({ type: actionTypes.SET_USER, payload: { appUser: newUser } });
-					});
+				if (!lastStoreId) {
+					const appUsers = await userDatabase.collections.app_users.find().exec();
+
+					if (appUsers.length === 0) {
+						// create new user
+						logger.debug('No app user found');
+						const newUser = await userDatabase.collections.app_users.createNewUser();
+						dispatch({ type: actionTypes.SET_USER, payload: newUser });
+					}
+
+					if (appUsers.length === 1) {
+						// set only user
+						dispatch({ type: actionTypes.SET_USER, payload: appUsers[0] });
+					}
+
+					if (appUsers.length > 1) {
+						// multiple users
+					}
+				} else {
+					const store = await userDatabase.collections.stores.findOne(lastStoreId).exec();
+
+					const appUser = await userDatabase.collections.app_users.findOne('new-0').exec();
+
+					dispatch({ type: actionTypes.SET_STORE, payload: { appUser, store } });
 				}
-
-				if (appUserCount === 1) {
-					// set only user
-					const allUsers = await appUsersCollection.query().fetch();
-					dispatch({ type: actionTypes.SET_USER, payload: { appUser: allUsers[0] } });
-				}
-
-				if (appUserCount > 0) {
-					debugger;
-				}
-			} else {
-				const store = await storesCollection.find(lastStore);
-				const appUser = await appUsersCollection.find(store.app_user.id);
-				dispatch({ type: actionTypes.SET_STORE, payload: { appUser, store } });
 			}
 		})();
-	}, [dispatch]);
+	}, [userDatabase]);
 
 	return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 };
