@@ -22,7 +22,7 @@ const Site = ({ site }) => {
 	const [{ user }, dispatch, actions] = useAppState();
 
 	const selectStore = async (): Promise<void> => {
-		const store = await site.getStore();
+		const store = await user.getStore(site.id, site.wp_credentials[0].username);
 		dispatch({
 			type: actions.SET_STORE,
 			payload: { store },
@@ -43,8 +43,8 @@ const Site = ({ site }) => {
 				</Text>
 				{/* {status && <Text size="small">{status?.message}</Text>} */}
 				<Button title="Connect again" onPress={() => user.connectSite(site.id)} />
-				<Button title="Enter" onPress={() => selectStore()} />
-				{site.wc_api_auth_url && (
+				{site.wp_credentials?.length > 0 && <Button title="Enter" onPress={() => selectStore()} />}
+				{site.wc_api_auth_url && site.wp_credentials?.length === 0 && (
 					<Button
 						title="Login"
 						onPress={() => {
@@ -56,7 +56,7 @@ const Site = ({ site }) => {
 			<Button onPress={handleRemove}>
 				<Icon name="remove" />
 			</Button>
-			{visible && <Modal site={site} visible={visible} setVisible={setVisible} />}
+			{visible && <Modal site={site} user={user} visible={visible} setVisible={setVisible} />}
 		</SiteWrapper>
 	);
 };

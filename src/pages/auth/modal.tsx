@@ -8,15 +8,16 @@ import WebView from '../../components/webview';
 interface Props {
 	visible: boolean;
 	setVisible: () => void;
-	site: typeof import('../../database/models/auth/site');
+	user: any;
+	site: any;
 }
 
-const AuthModal: React.FC<Props> = ({ visible, setVisible, site }) => {
+const AuthModal = ({ visible, setVisible, user, site }: Props): React.ReactElement => {
 	const returnUrl = Platform.OS === 'web' ? 'https://localhost:3000/auth' : 'wcpos://auth';
 	const [payload, setPayload] = React.useState({});
 
 	if (payload?.consumer_key && payload?.consumer_secret) {
-		site.createOrUpdateWpUser(payload);
+		user.createOrUpdateWpCredentialsBySiteId(site.id, payload);
 		setVisible(false);
 	}
 
@@ -26,8 +27,7 @@ const AuthModal: React.FC<Props> = ({ visible, setVisible, site }) => {
 			{
 				app_name: 'WooCommerce POS',
 				scope: 'read_write',
-				// user_id: site?.app_user?.id,
-				user_id: 'new-0',
+				user_id: user.id,
 				return_url: returnUrl,
 				callback_url: 'https://client.wcpos.com',
 				wcpos: 1,

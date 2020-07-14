@@ -40,7 +40,7 @@ const methods: UserDocumentMethods = {
 		if (!id) return;
 
 		// eslint-disable-next-line consistent-return
-		return this.update({ $push: { sites: { id } } })
+		return this.update({ $push: { sites: { id, wp_credentials: [] } } })
 			.then(() => id)
 			.catch((err) => console.log(err));
 	},
@@ -100,6 +100,47 @@ const methods: UserDocumentMethods = {
 			)
 			.subscribe();
 	},
+
+	/**
+	 *
+	 * @param id
+	 * @param username
+	 */
+	findWpCredentialsBySiteIdAndUsername(id, username) {
+		const idx = this.findSiteIndexById(id);
+		return findIndex(this.sites[idx].wp_credentials, { username });
+	},
+
+	/**
+	 *
+	 * @param site
+	 * @param wpCredentials
+	 * @TODO - use remote id for WP user rather than username?
+	 */
+	async createOrUpdateWpCredentialsBySiteId(id, wpCredentials) {
+		const siteIdx = this.findSiteIndexById(id);
+		const wpCredentialsIdx = this.findWpCredentialsBySiteIdAndUsername(id, wpCredentials.username);
+		const allowed = Object.keys(
+			this.collection.schema.normalized.properties.sites.items.properties.wp_credentials.items
+				.properties
+		);
+		const wp_credentials = pick(wpCredentials, allowed);
+
+		return this.atomicUpdate((user) => {
+			if (wpCredentialsIdx === -1) {
+				user.sites[siteIdx].wp_credentials = user.sites[siteIdx].wp_credentials || [];
+				user.sites[siteIdx].wp_credentials.push(wp_credentials);
+			} else {
+				user.sites[siteIdx].wp_credentials[wpCredentialsIdx] = {
+					...user.sites[siteIdx].wp_credentials[wpCredentialsIdx],
+					...wp_credentials,
+				};
+			}
+			return user;
+		});
+	},
+
+	async getStore(siteId, wpUsername) {},
 };
 
 /**
