@@ -47,7 +47,8 @@
 		"rxdb-utils": "2.0.0-beta.2",
 		"rxjs": "6.6.0",
 		"styled-components": "5.1.1",
-		"url-parse": "1.4.7"
+		"url-parse": "1.4.7",
+		"uuidv4": "^6.1.1"
 	},
 	"devDependencies": {
 		"@testing-library/jest-dom": "5.11.0",

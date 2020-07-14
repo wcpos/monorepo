@@ -19,11 +19,9 @@ import useAppState from '../../hooks/use-app-state';
 const Site = ({ site }) => {
 	// const status = useObservableState(site.connection_status$);
 	const [visible, setVisible] = React.useState(false);
-	const [{ appUser }, dispatch, actions] = useAppState();
-	const changes = useObservableState(site.name$);
-	console.log('@TODO - observe computed values?', changes);
+	const [{ user }, dispatch, actions] = useAppState();
 
-	const selectStore = async () => {
+	const selectStore = async (): Promise<void> => {
 		const store = await site.getStore();
 		dispatch({
 			type: actions.SET_STORE,
@@ -31,20 +29,20 @@ const Site = ({ site }) => {
 		});
 	};
 
-	const handleRemove = async () => {
-		await appUser.removeSite(site);
+	const handleRemove = async (): Promise<void> => {
+		await user.removeSiteById(site.id);
 	};
 
 	return (
 		<SiteWrapper>
-			<Avatar src={`https://api.faviconkit.com/${site.urlWithoutPrefix}/144`} />
+			<Avatar src={`https://api.faviconkit.com/${site.id}/144`} />
 			<SiteTextWrapper>
-				<Text weight="bold">{site.nameOrUrl || site.urlWithoutPrefix}</Text>
+				<Text weight="bold">{site.name || site.id}</Text>
 				<Text size="small" type="secondary">
-					{site.urlWithoutPrefix}
+					{site.id}
 				</Text>
 				{/* {status && <Text size="small">{status?.message}</Text>} */}
-				<Button title="Connect again" onPress={() => site.connect()} />
+				<Button title="Connect again" onPress={() => user.connectSite(site.id)} />
 				<Button title="Enter" onPress={() => selectStore()} />
 				{site.wc_api_auth_url && (
 					<Button

@@ -30,23 +30,41 @@ const TextInput = ({
 	onChangeText = noop,
 	onClear = noop,
 	prefix,
-	value,
+	value = '',
 	...props
 }: Props): React.ReactElement => {
+	const [text, setText] = React.useState(value);
+
+	const handleChangeText = (val: string) => {
+		setText(val);
+		onChangeText(val);
+	};
+
 	const handleClear = () => {
-		console.log('hi');
+		setText('');
+	};
+
+	const handleOnAction = () => {
+		onAction(text);
 	};
 
 	return (
 		<Styled.Box>
 			<Styled.Input
-				value={value}
+				defaultValue={text}
 				placeholder={placeholder}
 				disabled={disabled}
-				onChangeText={onChangeText}
+				onChangeText={handleChangeText}
 				{...props}
 			/>
-			<Icon name="clear" onPress={handleClear} />
+			{clearable && <Icon name="clear" onPress={handleClear} />}
+			{action && (
+				<Button
+					title={action}
+					onPress={handleOnAction}
+					style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+				/>
+			)}
 		</Styled.Box>
 	);
 };

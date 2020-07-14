@@ -25,7 +25,7 @@ const CartTable = ({ columns, order }) => {
 
 		switch (column.key) {
 			case 'total':
-				children = <Text>{rowData.computedTotal()}</Text>;
+				children = <Text>{rowData.total}</Text>;
 				break;
 			default:
 				children = <Text>{String(cellData)}</Text>;

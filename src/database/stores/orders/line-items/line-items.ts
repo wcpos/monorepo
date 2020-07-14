@@ -1,8 +1,9 @@
 import { ObservableResource } from 'observable-hooks';
-import { from } from 'rxjs';
+import { from, combineLatest } from 'rxjs';
 import { switchMap, map } from 'rxjs/operators';
 import difference from 'lodash/difference';
 import unset from 'lodash/unset';
+import sum from 'lodash/sum';
 import schema from './schema.json';
 
 export type Schema = import('./interface').WooCommerceOrderLineItemSchema;
@@ -77,18 +78,11 @@ const createLineItemsCollection = async (db: Database): Promise<Collection> => {
 		rawData.id = String(rawData.id);
 	}, false);
 
-	// ProductsCollection.postCreate((raw, model) => {
-	// 	const dbResource = new ObservableResource(
-	// 		from(
-	// 			getDatabase(model.id).then((db) => {
-	// 				console.log(db);
-	// 			})
-	// 		)
-	// 	);
-	// 	Object.defineProperty(model, 'dbResource', {
-	// 		get: () => dbResource,
-	// 	});
-	// });
+	LineItemsCollection.postCreate((raw, model) => {
+		combineLatest(model.quantity$, model.price$).subscribe((val) => {
+			model.atomicSet('total', String(val[0] * val[1]));
+		});
+	});
 
 	return LineItemsCollection;
 };

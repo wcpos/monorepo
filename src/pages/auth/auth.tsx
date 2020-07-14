@@ -1,5 +1,5 @@
 import React from 'react';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { useObservable, useObservableState } from 'observable-hooks';
 import PageLayout from '../../layout/page';
 import Segment from '../../components/segment';
 import TextInput from '../../components/textinput';
@@ -10,13 +10,21 @@ import useAppState from '../../hooks/use-app-state';
 
 interface Props {}
 
+/**
+ *
+ */
 const Auth: React.FC<Props> = (props) => {
-	const [{ appUser }] = useAppState();
-	const sites = useObservableSuspense(appUser.sitesResource);
+	const [{ user }] = useAppState();
+	console.log(user);
+	// const sites = useObservableState(user.sites$, []); // @TODO - why can't I use this? possible that user changed?
+	const sites$ = useObservable(() => user.sites$, [user]);
+	const sites: [] = useObservableState(sites$, []);
 
-	const onConnect = async (url: string) => {
-		const newSite = await appUser.addSite(url);
-		newSite.connect();
+	const onConnect = async (url: string): Promise<void> => {
+		const newSiteId = await user.addSite(url);
+		if (newSiteId) {
+			user.connectSite(newSiteId);
+		}
 		// const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
 		// if (trimUrl) {
 		// 	const newSite = await appUser.database.action(async () =>
@@ -32,7 +40,7 @@ const Auth: React.FC<Props> = (props) => {
 	return (
 		<PageLayout>
 			<AuthView>
-				<Segment style={{ width: 460 }}>
+				<Segment style={{ width: '90%', maxWidth: 460 }}>
 					<Text size="large">Connect!</Text>
 					<Text>Enter the URL of your WooCommerce store:</Text>
 					<TextInput
@@ -40,11 +48,11 @@ const Auth: React.FC<Props> = (props) => {
 						action="Connect"
 						onAction={onConnect}
 						keyboardType="url"
-						cancellable
+						clearable
 					/>
 				</Segment>
 				{sites.length > 0 && (
-					<Segment.Group style={{ width: 460 }}>
+					<Segment.Group style={{ width: '90%', maxWidth: 460 }}>
 						<Segment content="Sites" />
 						{sites.map((site) => (
 							<Segment key={site.id}>

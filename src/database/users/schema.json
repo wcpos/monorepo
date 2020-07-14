@@ -1,0 +1,184 @@
+{
+	"title": "User schema",
+	"version": 0,
+	"description": "Global app user - different to WordPress user",
+	"type": "object",
+	"properties": {
+		"id": {
+			"type": "string",
+			"primary": true
+		},
+		"first_name": {
+			"type": "string"
+		},
+		"last_name": {
+			"type": "string"
+		},
+		"display_name": {
+			"type": "string"
+		},
+		"sites": {
+			"type": "array",
+			"default": [],
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"url": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"home": {
+						"type": "string"
+					},
+					"gmt_offset": {
+						"type": "string"
+					},
+					"timezone_string": {
+						"type": "string"
+					},
+					"wp_api_url": {
+						"type": "string"
+					},
+					"wc_api_url": {
+						"type": "string"
+					},
+					"wc_api_auth_url": {
+						"type": "string"
+					},
+					"wp_credentials": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "number"
+								},
+								"username": {
+									"type": "string"
+								},
+								"first_name": {
+									"type": "string"
+								},
+								"last_name": {
+									"type": "string"
+								},
+								"email": {
+									"type": "string"
+								},
+								"display_name": {
+									"type": "string"
+								},
+								"last_access": {
+									"type": "string"
+								},
+								"consumer_key": {
+									"type": "string"
+								},
+								"consumer_secret": {
+									"type": "string"
+								},
+								"key_id": {
+									"type": "number"
+								},
+								"key_permissions": {
+									"type": "string"
+								},
+								"stores": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"id": {
+												"type": "number"
+											},
+											"name": {
+												"type": "string"
+											},
+											"db_id": {
+												"type": "string"
+											},
+											"uis": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"properties": {
+														"section": {
+															"type": "string"
+														},
+														"sortBy": {
+															"type": "string"
+														},
+														"sortDirection": {
+															"type": "string"
+														},
+														"width": {
+															"type": "string"
+														},
+														"columns": {
+															"type": "array",
+															"items": {
+																"type": "object",
+																"properties": {
+																	"key": {
+																		"type": "string"
+																	},
+																	"order": {
+																		"type": "integer"
+																	},
+																	"hide": {
+																		"type": "boolean"
+																	},
+																	"disableSort": {
+																		"type": "boolean"
+																	},
+																	"flexGrow": {
+																		"type": "number"
+																	},
+																	"flexShrink": {
+																		"type": "number"
+																	},
+																	"width": {
+																		"type": "string"
+																	}
+																}
+															}
+														},
+														"display": {
+															"type": "array",
+															"items": {
+																"type": "object",
+																"properties": {
+																	"key": {
+																		"type": "string"
+																	},
+																	"order": {
+																		"type": "integer"
+																	},
+																	"hide": {
+																		"type": "boolean"
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
