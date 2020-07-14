@@ -16,7 +16,7 @@ type AppState = {
 		version: string;
 	};
 	urlPrefix: string;
-	appUser?: any;
+	user?: any;
 	store?: any;
 	// storeDB?: any;
 	// site?: any;
@@ -38,7 +38,7 @@ const initialState: AppState = {
 		version: getReadableVersion(),
 	},
 	urlPrefix: window?.location?.origin || 'wcpos://',
-	appUser: undefined,
+	user: undefined,
 	store: undefined,
 	// storeDB: undefined,
 	// site: undefined,
@@ -68,7 +68,7 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 		// 	return { ...state, colorTheme: action.theme };
 		case actionTypes.SET_USER:
 			logger.debug('Set app user', payload.toJSON());
-			return { ...state, appUser: payload };
+			return { ...state, user: payload };
 		case actionTypes.STORE_LOGOUT:
 			state.store.collection.upsertLocal('last_store', { store_id: undefined });
 			return { ...state, store: undefined };
@@ -140,33 +140,34 @@ const AppStateProvider = ({ children, i18n }: Props) => {
 	React.useEffect(() => {
 		(async function init() {
 			if (userDatabase) {
-				const lastStore = await userDatabase.collections.stores.getLocal('last_store');
+				const lastStore = await userDatabase.collections.users.getLocal('last_store');
 				const lastStoreId = lastStore && lastStore.get('store_id');
 
 				if (!lastStoreId) {
-					const appUsers = await userDatabase.collections.app_users.find().exec();
+					const users = await userDatabase.collections.users.find().exec();
 
-					if (appUsers.length === 0) {
+					if (users.length === 0) {
 						// create new user
 						logger.debug('No app user found');
-						const newUser = await userDatabase.collections.app_users.createNewUser();
+						const newUser = await userDatabase.collections.users.createNewUser();
 						dispatch({ type: actionTypes.SET_USER, payload: newUser });
 					}
 
-					if (appUsers.length === 1) {
+					if (users.length === 1) {
 						// set only user
-						dispatch({ type: actionTypes.SET_USER, payload: appUsers[0] });
+						dispatch({ type: actionTypes.SET_USER, payload: users[0] });
 					}
 
-					if (appUsers.length > 1) {
+					if (users.length > 1) {
 						// multiple users
 					}
 				} else {
-					const store = await userDatabase.collections.stores.findOne(lastStoreId).exec();
+					debugger;
+					// const store = await userDatabase.collections.stores.findOne(lastStoreId).exec();
 
-					const appUser = await userDatabase.collections.app_users.findOne('new-0').exec();
+					// const appUser = await userDatabase.collections.app_users.findOne('new-0').exec();
 
-					dispatch({ type: actionTypes.SET_STORE, payload: { appUser, store } });
+					// dispatch({ type: actionTypes.SET_STORE, payload: { appUser, store } });
 				}
 			}
 		})();
