@@ -97,79 +97,10 @@
 										"type": "object",
 										"properties": {
 											"id": {
-												"type": "number"
+												"type": "string"
 											},
 											"name": {
 												"type": "string"
-											},
-											"db_id": {
-												"type": "string"
-											},
-											"uis": {
-												"type": "array",
-												"items": {
-													"type": "object",
-													"properties": {
-														"section": {
-															"type": "string"
-														},
-														"sortBy": {
-															"type": "string"
-														},
-														"sortDirection": {
-															"type": "string"
-														},
-														"width": {
-															"type": "string"
-														},
-														"columns": {
-															"type": "array",
-															"items": {
-																"type": "object",
-																"properties": {
-																	"key": {
-																		"type": "string"
-																	},
-																	"order": {
-																		"type": "integer"
-																	},
-																	"hide": {
-																		"type": "boolean"
-																	},
-																	"disableSort": {
-																		"type": "boolean"
-																	},
-																	"flexGrow": {
-																		"type": "number"
-																	},
-																	"flexShrink": {
-																		"type": "number"
-																	},
-																	"width": {
-																		"type": "string"
-																	}
-																}
-															}
-														},
-														"display": {
-															"type": "array",
-															"items": {
-																"type": "object",
-																"properties": {
-																	"key": {
-																		"type": "string"
-																	},
-																	"order": {
-																		"type": "integer"
-																	},
-																	"hide": {
-																		"type": "boolean"
-																	}
-																}
-															}
-														}
-													}
-												}
 											}
 										}
 									}

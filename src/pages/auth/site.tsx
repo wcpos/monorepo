@@ -22,10 +22,10 @@ const Site = ({ site }) => {
 	const [{ user }, dispatch, actions] = useAppState();
 
 	const selectStore = async (): Promise<void> => {
-		const store = await user.getStore(site.id, site.wp_credentials[0].username);
+		const storeDB = await user.getStoreDB(site.wp_credentials[0].stores[0].id);
 		dispatch({
-			type: actions.SET_STORE,
-			payload: { store },
+			type: actions.SET_STOREDB,
+			payload: storeDB,
 		});
 	};
 

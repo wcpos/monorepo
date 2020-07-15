@@ -17,7 +17,7 @@ type AppState = {
 	};
 	urlPrefix: string;
 	user?: any;
-	store?: any;
+	storeDB?: any;
 	// storeDB?: any;
 	// site?: any;
 	// wpUser?: any;
@@ -39,7 +39,7 @@ const initialState: AppState = {
 	},
 	urlPrefix: window?.location?.origin || 'wcpos://',
 	user: undefined,
-	store: undefined,
+	storeDB: undefined,
 	// storeDB: undefined,
 	// site: undefined,
 	// wpUser: undefined,
@@ -70,11 +70,12 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 			logger.debug('Set app user', payload.toJSON());
 			return { ...state, user: payload };
 		case actionTypes.STORE_LOGOUT:
-			state.store.collection.upsertLocal('last_store', { store_id: undefined });
-			return { ...state, store: undefined };
-		case actionTypes.SET_STORE:
-			// setLastStore(payload.store.id);
-			payload.store.collection.upsertLocal('last_store', { store_id: payload.store.id });
+			// state.store.collection.upsertLocal('last_store', { store_id: undefined });
+			return { ...state, storeDB: undefined };
+		case actionTypes.SET_STOREDB:
+			state.user.collection.upsertLocal('last_store', { store_id: payload.name });
+			return { ...state, storeDB: payload };
+		case actionTypes.SET_USER_AND_STOREDB:
 			return { ...state, ...payload };
 		default:
 			return { ...state, ...payload };
@@ -162,12 +163,14 @@ const AppStateProvider = ({ children, i18n }: Props) => {
 						// multiple users
 					}
 				} else {
-					debugger;
-					// const store = await userDatabase.collections.stores.findOne(lastStoreId).exec();
+					// get user
+					// @TODO - find user by store id
+					const user = await userDatabase.collections.users.findOne().exec();
 
-					// const appUser = await userDatabase.collections.app_users.findOne('new-0').exec();
+					// get storeDB
+					const storeDB = await user.getStoreDB(lastStoreId);
 
-					// dispatch({ type: actionTypes.SET_STORE, payload: { appUser, store } });
+					dispatch({ type: actionTypes.SET_USER_AND_STOREDB, payload: { user, storeDB } });
 				}
 			}
 		})();
