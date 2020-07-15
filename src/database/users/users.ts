@@ -4,6 +4,9 @@ import { Subject, BehaviorSubject, of } from 'rxjs';
 import findIndex from 'lodash/findIndex';
 import pick from 'lodash/pick';
 import schema from './schema.json';
+import getDatabase from '../adapter';
+import createCollectionMap from '../stores';
+import generateId from '../../utils/generate-id';
 
 import wcAuthService from '../../services/wc-auth';
 
@@ -126,6 +129,11 @@ const methods: UserDocumentMethods = {
 		);
 		const wp_credentials = pick(wpCredentials, allowed);
 
+		// generate random id and add default store
+		// @TODO - how to handle this with multiple stores?
+		// maybe stores should be separated into their own table? then checked against custom wcpos api
+		wp_credentials.stores = [{ id: generateId(), name: 'Default Store' }];
+
 		return this.atomicUpdate((user) => {
 			if (wpCredentialsIdx === -1) {
 				user.sites[siteIdx].wp_credentials = user.sites[siteIdx].wp_credentials || [];
@@ -140,7 +148,26 @@ const methods: UserDocumentMethods = {
 		});
 	},
 
-	async getStore(siteId, wpUsername) {},
+	/**
+	 *
+	 * @param name
+	 */
+	async getStoreDB(name: string) {
+		// init store database
+		const storeDatabase = getDatabase(name).then((db) =>
+			Promise.all(
+				createCollectionMap.map((createCollection) => {
+					return createCollection(db);
+				})
+			).then((values) => {
+				console.log(values);
+				console.log(db);
+				return db;
+			})
+		);
+
+		return storeDatabase;
+	},
 };
 
 /**
