@@ -21,7 +21,7 @@ interface Props {
  */
 const Products: React.FC<Props> = ({ ui }) => {
 	// const { t } = useTranslation();
-	// const [{ user, storeDB }] = useAppState();
+	const [{ user, storeDB }] = useAppState();
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const display = useObservableState(ui.get$('display'), ui.get('display'));
 
@@ -31,19 +31,6 @@ const Products: React.FC<Props> = ({ ui }) => {
 		sortBy: 'name',
 		sortDirection: 'asc',
 	});
-
-	// const products = useObservableSuspense(store.getDataResource('products'));
-	// const storeDatabase = useObservableSuspense(store.dbResource);
-
-	// React.useEffect(() => {
-	// 	debugger;
-	// 	(async function init() {
-	// 		debugger;
-	// 		await store.db.then((db) => {
-	// 			debugger;
-	// 		});
-	// 	})();
-	// }, []);
 
 	const onSort = ({ sortBy, sortDirection }) => {
 		console.log({ sortBy, sortDirection });
@@ -67,14 +54,14 @@ const Products: React.FC<Props> = ({ ui }) => {
 				<Button
 					title="Add Products"
 					onPress={async () => {
-						// const wpUser = await user.collections().wp_users.findOne().exec();
-						// const { data } = await http('https://wcposdev.wpengine.com/wp-json/wc/v3/products', {
-						// 	auth: {
-						// 		username: wpUser.consumer_key,
-						// 		password: wpUser.consumer_secret,
-						// 	},
-						// });
-						// storeDatabase.collections.products.bulkInsert(data);
+						const wpCredentials = user.sites[0].wp_credentials[0];
+						const { data } = await http('https://wcposdev.wpengine.com/wp-json/wc/v3/products', {
+							auth: {
+								username: wpCredentials.consumer_key,
+								password: wpCredentials.consumer_secret,
+							},
+						});
+						storeDB.collections.products.bulkInsert(data);
 					}}
 				/>
 			</Segment>
