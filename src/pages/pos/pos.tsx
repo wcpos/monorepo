@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { useObservableSuspense, useObservableState } from 'observable-hooks';
+import { useObservable, useObservableState } from 'observable-hooks';
 import Products from './products';
 import Cart from './cart';
 import ErrorBoundary from '../../components/error';
@@ -11,10 +11,9 @@ interface Props {}
 
 const POS: React.FC<Props> = () => {
 	const [{ storeDB }] = useAppState();
-	const width = useObservableState(
-		storeDB.ui.pos_products.get$('width'),
-		storeDB.ui.pos_products.get('width')
-	);
+	const productsUI = storeDB.getUI('pos_products');
+
+	const [width] = useObservableState(() => productsUI.get$('width'), productsUI.get('width'));
 	console.log('render');
 	// const [width, setWidth] = React.useState(storeDB.ui.pos_products.width);
 	// const width = useObservableState(productsUI.width$);
@@ -35,7 +34,7 @@ const POS: React.FC<Props> = () => {
 			<View style={{ width }}>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading products...</Text>}>
-						<Products ui={storeDB.ui.pos_products} />
+						<Products ui={productsUI} />
 					</React.Suspense>
 				</ErrorBoundary>
 			</View>
@@ -45,7 +44,7 @@ const POS: React.FC<Props> = () => {
 			<View style={{ flexGrow: 1 }}>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading cart...</Text>}>
-						<Cart ui={storeDB.ui.pos_cart} />
+						<Cart />
 					</React.Suspense>
 				</ErrorBoundary>
 			</View>

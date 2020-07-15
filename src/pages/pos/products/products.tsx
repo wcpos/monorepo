@@ -22,7 +22,7 @@ interface Props {
 const Products: React.FC<Props> = ({ ui }) => {
 	// const { t } = useTranslation();
 	// const [{ user, storeDB }] = useAppState();
-	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
+	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const display = useObservableState(ui.get$('display'), ui.get('display'));
 
 	// const [columns, setColumns] = React.useState([]);
@@ -45,12 +45,6 @@ const Products: React.FC<Props> = ({ ui }) => {
 	// 	})();
 	// }, []);
 
-	// React.useEffect(() => {
-	// 	ui.columns$.subscribe((x) => setColumns(x));
-	// 	return ui.columns$.unsubscribe;
-	// 	// eslint-disable-next-line react-hooks/exhaustive-deps
-	// }, []);
-
 	const onSort = ({ sortBy, sortDirection }) => {
 		console.log({ sortBy, sortDirection });
 		setQuery({ ...query, sortBy, sortDirection });
@@ -64,7 +58,7 @@ const Products: React.FC<Props> = ({ ui }) => {
 		<Segment.Group>
 			<Segment>
 				<Input value={query.search} placeholder="Search products" onChangeText={onSearch} />
-				<Actions columns={columns} display={display} />
+				<Actions columns={columns} display={display} ui={ui} />
 			</Segment>
 			<Segment grow>
 				<Table query={query} columns={columns} display={display} sort={onSort} />

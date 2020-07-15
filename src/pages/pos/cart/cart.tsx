@@ -11,8 +11,9 @@ import CustomerSelect from './customer-select';
 
 interface Props {}
 
-const Cart: React.FC<Props> = ({ ui }) => {
+const Cart: React.FC<Props> = () => {
 	const [{ storeDB }] = useAppState();
+	const ui = storeDB.getUI('pos_cart');
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
 
 	// const orders = useObservableSuspense(storeDB.getDataResource('orders'));

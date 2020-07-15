@@ -183,6 +183,9 @@ const methods: UserDocumentMethods = {
 					uiArray.forEach((ui) => {
 						db.ui[ui.id] = ui;
 					});
+					db.getUI = (section) => {
+						return db.ui[section];
+					};
 					return db;
 				})
 		);
