@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useObservableState } from 'observable-hooks';
 import Input from '../../components/textinput';
 import Checkbox from '../../components/checkbox';
 import Button from '../../components/button';
@@ -13,7 +14,7 @@ interface Props {
 /**
  *
  */
-const Actions: React.FC<Props> = ({ ui }) => {
+const Actions: React.FC<Props> = ({ columns, query }) => {
 	const { t } = useTranslation();
 
 	const onFilter = () => {
@@ -23,14 +24,14 @@ const Actions: React.FC<Props> = ({ ui }) => {
 	return (
 		<>
 			<Text>Columns</Text>
-			{ui.columns.map((column: any) => (
+			{columns.map((column: any) => (
 				<Checkbox
 					key={column.key}
 					name={column.key}
 					label={t(`products.column.label.${column.key}`)}
 					checked={!column.hide}
 					onChange={(checked) => {
-						ui.updateColumn(column.key, { hide: !checked });
+						// ui.updateColumn(column.key, { hide: !checked });
 					}}
 				/>
 			))}
@@ -46,7 +47,7 @@ const Actions: React.FC<Props> = ({ ui }) => {
 					}}
 				/>
 			))} */}
-			<Button title="Restore Default Settings" onPress={ui.reset} />
+			<Button title="Restore Default Settings" onPress={() => {}} />
 		</>
 	);
 };

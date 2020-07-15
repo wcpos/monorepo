@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useObservableState, useObservable } from 'observable-hooks';
 import Table from '../../components/table';
 import Text from '../../components/text';
 
@@ -14,16 +15,16 @@ interface Props {
 /**
  *
  */
-const ProductsTable: React.FC<Props> = ({ columns, products, sort, sortBy, sortDirection }) => {
+const ProductsTable: React.FC<Props> = ({ columns, products }) => {
 	const { t } = useTranslation();
 
 	return (
 		<Table
 			columns={columns}
 			data={products}
-			sort={sort}
-			sortBy={sortBy}
-			sortDirection={sortDirection}
+			// sort={sort}
+			// sortBy={sortBy}
+			// sortDirection={sortDirection}
 		>
 			<Table.Header>
 				<Table.HeaderRow>
