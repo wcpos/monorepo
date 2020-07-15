@@ -16,8 +16,10 @@ const Cart: React.FC<Props> = () => {
 	const ui = storeDB.getUI('pos_cart');
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
 
+	const query = storeDB.collections.orders.find();
+
 	// const orders = useObservableSuspense(storeDB.getDataResource('orders'));
-	const orders = [];
+	const orders = useObservableState(query.$, []);
 	const order = orders[0];
 
 	// const subtotalSum$ = useObservable(() =>

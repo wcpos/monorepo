@@ -12,7 +12,7 @@ interface Props {}
 
 const Products: React.FC<Props> = () => {
 	const [{ storeDB }] = useAppState();
-	const ui = storeDB.getUI('pos_products');
+	const ui = storeDB.getUI('products');
 
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 

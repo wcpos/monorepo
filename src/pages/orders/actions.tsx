@@ -13,7 +13,7 @@ interface Props {
 /**
  *
  */
-const Actions: React.FC<Props> = ({ ui }) => {
+const Actions: React.FC<Props> = ({ ui, columns }) => {
 	const { t } = useTranslation();
 
 	const onFilter = () => {
@@ -24,7 +24,7 @@ const Actions: React.FC<Props> = ({ ui }) => {
 		<>
 			<Input placeholder="Search orders" onChangeText={onFilter} />
 			<Text>Columns</Text>
-			{ui.columns.map((column: any) => (
+			{columns.map((column: any) => (
 				<Checkbox
 					key={column.key}
 					name={column.key}
