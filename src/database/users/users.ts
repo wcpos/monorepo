@@ -7,8 +7,8 @@ import schema from './schema.json';
 import getDatabase from '../adapter';
 import createCollectionMap from '../stores';
 import generateId from '../../utils/generate-id';
-
 import wcAuthService from '../../services/wc-auth';
+import initialUI from './ui-settings/initial.json';
 
 type UserSchema = import('./interface').UserSchema;
 type UserDocumentMethods = {
@@ -159,11 +159,32 @@ const methods: UserDocumentMethods = {
 				createCollectionMap.map((createCollection) => {
 					return createCollection(db);
 				})
-			).then((values) => {
-				console.log(values);
-				console.log(db);
-				return db;
-			})
+			)
+				// .then(() =>
+				// 	Promise.all([
+				// 		db.upsertLocal('pos_products', initialUI.pos_products),
+				// 		db.upsertLocal('pos_cart', initialUI.pos_cart),
+				// 		db.upsertLocal('products', initialUI.products),
+				// 		db.upsertLocal('orders', initialUI.orders),
+				// 		db.upsertLocal('customers', initialUI.customers),
+				// 	])
+				// )
+				.then(() =>
+					Promise.all([
+						db.getLocal('pos_products'),
+						db.getLocal('pos_cart'),
+						db.getLocal('products'),
+						db.getLocal('orders'),
+						db.getLocal('customers'),
+					])
+				)
+				.then((uiArray) => {
+					db.ui = {};
+					uiArray.forEach((ui) => {
+						db.ui[ui.id] = ui;
+					});
+					return db;
+				})
 		);
 
 		return storeDatabase;

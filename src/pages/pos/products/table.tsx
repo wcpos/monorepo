@@ -20,41 +20,42 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
  */
 const ProductsTable: React.FC<Props> = ({ columns, query, sort }) => {
 	const { t } = useTranslation();
-	const [{ store }] = useAppState();
+	const [{ storeDB }] = useAppState();
 
-	const products$ = useObservable(
-		// A stream of React elements!
-		(inputs$) =>
-			inputs$.pipe(
-				distinctUntilChanged((a, b) => a[0] === b[0]),
-				debounceTime(150),
-				switchMap(([q]) =>
-					from(store.db).pipe(
-						switchMap((db) => {
-							console.log(q);
-							const regexp = new RegExp(escape(q.search), 'i');
-							const RxQuery = db.collections.products
-								.find({
-									selector: {
-										name: { $regex: regexp },
-									},
-								})
-								.sort({ [q.sortBy]: q.sortDirection });
-							return RxQuery.$;
-						}),
-						catchError((err) => {
-							console.error(err);
-						})
-					)
-				),
-				catchError((err) => {
-					console.error(err);
-				})
-			),
-		[query] as const
-	);
+	// const products$ = useObservable(
+	// 	// A stream of React elements!
+	// 	(inputs$) =>
+	// 		inputs$.pipe(
+	// 			distinctUntilChanged((a, b) => a[0] === b[0]),
+	// 			debounceTime(150),
+	// 			switchMap(([q]) =>
+	// 				from(store.db).pipe(
+	// 					switchMap((db) => {
+	// 						console.log(q);
+	// 						const regexp = new RegExp(escape(q.search), 'i');
+	// 						const RxQuery = db.collections.products
+	// 							.find({
+	// 								selector: {
+	// 									name: { $regex: regexp },
+	// 								},
+	// 							})
+	// 							.sort({ [q.sortBy]: q.sortDirection });
+	// 						return RxQuery.$;
+	// 					}),
+	// 					catchError((err) => {
+	// 						console.error(err);
+	// 					})
+	// 				)
+	// 			),
+	// 			catchError((err) => {
+	// 				console.error(err);
+	// 			})
+	// 		),
+	// 	[query] as const
+	// );
 
-	const products = useObservableState(products$, []);
+	// const products = useObservableState(products$, []);
+	const products = [];
 
 	const renderCell = ({ getCellProps }) => {
 		const { cellData, column, rowData } = getCellProps();

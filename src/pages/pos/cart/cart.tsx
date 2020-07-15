@@ -12,22 +12,24 @@ import CustomerSelect from './customer-select';
 interface Props {}
 
 const Cart: React.FC<Props> = ({ ui }) => {
-	const [{ store }] = useAppState();
+	const [{ storeDB }] = useAppState();
+	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
 
-	const orders = useObservableSuspense(store.getDataResource('orders'));
+	// const orders = useObservableSuspense(storeDB.getDataResource('orders'));
+	const orders = [];
 	const order = orders[0];
 
-	const subtotalSum$ = useObservable(() =>
-		order.line_items$.pipe(
-			switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
-			map((result) =>
-				sumBy(Array.from(result.values()), (o) => parseInt(o.computedSubtotal(), 10))
-			),
-			catchError((err) => console.error(err))
-		)
-	);
+	// const subtotalSum$ = useObservable(() =>
+	// 	order.line_items$.pipe(
+	// 		switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
+	// 		map((result) =>
+	// 			sumBy(Array.from(result.values()), (o) => parseInt(o.computedSubtotal(), 10))
+	// 		),
+	// 		catchError((err) => console.error(err))
+	// 	)
+	// );
 
-	const computedSubtotal = useObservableState(subtotalSum$, 0);
+	// const computedSubtotal = useObservableState(subtotalSum$, 0);
 
 	if (!order) {
 		return (
@@ -45,12 +47,12 @@ const Cart: React.FC<Props> = ({ ui }) => {
 				<CustomerSelect ui={ui} />
 			</Segment>
 			<Segment grow>
-				<Table order={order} columns={ui.columns} />
+				<Table order={order} columns={columns} />
 			</Segment>
 			<Segment>
 				<Text>
 					Subtotal:
-					{computedSubtotal}
+					{/* {computedSubtotal} */}
 				</Text>
 				<Text>
 					Total Tax:

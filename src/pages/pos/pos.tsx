@@ -10,11 +10,13 @@ import useAppState from '../../hooks/use-app-state';
 interface Props {}
 
 const POS: React.FC<Props> = () => {
-	const [{ store }] = useAppState();
-	const productsUI = useObservableSuspense(store.uiResources.pos_products);
-	const cartUI = useObservableSuspense(store.uiResources.pos_cart);
+	const [{ storeDB }] = useAppState();
+	const width = useObservableState(
+		storeDB.ui.pos_products.get$('width'),
+		storeDB.ui.pos_products.get('width')
+	);
 	console.log('render');
-	const [width, setWidth] = React.useState('');
+	// const [width, setWidth] = React.useState(storeDB.ui.pos_products.width);
 	// const width = useObservableState(productsUI.width$);
 	// console.log(width);
 
@@ -28,17 +30,12 @@ const POS: React.FC<Props> = () => {
 		// ui.updateWithJson({ width: ui.width + dx });
 	};
 
-	React.useEffect(() => {
-		productsUI.width$.subscribe((x) => setWidth(x));
-		return productsUI.width$.unsubscribe;
-	}, []);
-
 	return (
 		<>
 			<View style={{ width }}>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading products...</Text>}>
-						<Products ui={productsUI} />
+						<Products ui={storeDB.ui.pos_products} />
 					</React.Suspense>
 				</ErrorBoundary>
 			</View>
@@ -48,7 +45,7 @@ const POS: React.FC<Props> = () => {
 			<View style={{ flexGrow: 1 }}>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading cart...</Text>}>
-						<Cart ui={cartUI} />
+						<Cart ui={storeDB.ui.pos_cart} />
 					</React.Suspense>
 				</ErrorBoundary>
 			</View>

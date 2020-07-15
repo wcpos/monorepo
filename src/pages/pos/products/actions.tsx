@@ -11,7 +11,7 @@ interface Props {
 /**
  *
  */
-const Actions: React.FC<Props> = ({ ui }) => {
+const Actions: React.FC<Props> = ({ columns, display }) => {
 	const [t] = useTranslation();
 
 	const onFilter = () => {
@@ -21,33 +21,33 @@ const Actions: React.FC<Props> = ({ ui }) => {
 	return (
 		<>
 			<Text>Columns</Text>
-			{ui.columns.map((column: any) => (
+			{columns.map((column: any) => (
 				<Checkbox
 					key={column.key}
 					name={column.key}
 					label={t(`pos_products.column.label.${column.key}`)}
 					checked={!column.hide}
 					onChange={(checked) => {
-						ui.updateColumn(column.key, { hide: !checked });
+						// ui.updateColumn(column.key, { hide: !checked });
 						// column.updateWithJson({ hide: !checked });
 					}}
 				/>
 			))}
 			<Text>Display</Text>
-			{ui.display.map((d: any) => (
+			{display.map((d: any) => (
 				<Checkbox
 					key={d.key}
 					name={d.key}
 					label={t(`pos_products.display.label.${d.key}`)}
 					checked={!d.hide}
 					onChange={(checked) => {
-						ui.updateDisplay(d.key, { hide: !checked });
+						// ui.updateDisplay(d.key, { hide: !checked });
 						// d.updateWithJson({ hide: !checked });
 					}}
 				/>
 			))}
-			<Button title="Restore Default Settings" onPress={ui.reset} />
-			<Button title="Change width" onPress={ui.updateWidth} />
+			<Button title="Restore Default Settings" onPress={() => {}} />
+			<Button title="Change width" onPress={() => {}} />
 		</>
 	);
 };

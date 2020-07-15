@@ -26,7 +26,7 @@ const MasterBar: React.FC<Props> = () => {
 				<Text type="inverse">{appState.window.width}</Text>
 			</Header.Right>
 			<Header.Right>
-				<Text>{appState.appUser.display_name}</Text>
+				<Text>{appState.user.display_name}</Text>
 				<Button onPress={() => dispatch({ type: actionTypes.STORE_LOGOUT })} title="Logout" />
 				<Avatar src="blah" placeholder="jj" />
 			</Header.Right>
