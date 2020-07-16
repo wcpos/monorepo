@@ -1,8 +1,8 @@
 import React from 'react';
-import Button from '../../../components/button';
+import Text from '../../../components/text';
 
-const CustomerSelect = ({ ui }) => {
-	return <Button title="Restore Default Settings" onPress={() => {}} />;
+const CustomerSelect = () => {
+	return <Text>Select customer</Text>;
 };
 
 export default CustomerSelect;

@@ -1,38 +1,31 @@
 import React from 'react';
+import { View } from 'react-native';
 import { useObservableSuspense, useObservableState, useObservable } from 'observable-hooks';
-import { from } from 'rxjs';
-import { switchMap, tap, catchError, map } from 'rxjs/operators';
+import { from, of } from 'rxjs';
+import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
 import sumBy from 'lodash/sumBy';
 import useAppState from '../../../hooks/use-app-state';
 import Segment from '../../../components/segment';
 import Text from '../../../components/text';
 import Table from './table';
 import CustomerSelect from './customer-select';
+import Actions from './actions';
 
 interface Props {}
 
 const Cart: React.FC<Props> = () => {
 	const [{ storeDB }] = useAppState();
 	const ui = storeDB.getUI('pos_cart');
-	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
+	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
-	const query = storeDB.collections.orders.find();
-
-	// const orders = useObservableSuspense(storeDB.getDataResource('orders'));
-	const orders = useObservableState(query.$, []);
-	const order = orders[0];
-
-	// const subtotalSum$ = useObservable(() =>
-	// 	order.line_items$.pipe(
-	// 		switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
-	// 		map((result) =>
-	// 			sumBy(Array.from(result.values()), (o) => parseInt(o.computedSubtotal(), 10))
-	// 		),
-	// 		catchError((err) => console.error(err))
-	// 	)
-	// );
-
-	// const computedSubtotal = useObservableState(subtotalSum$, 0);
+	// @TODO - why doesn't this update the totals?
+	const query = storeDB.collections.orders.findOne();
+	const order = useObservableState(
+		query.$.pipe(
+			switchMap((order) => order.$.pipe(map(() => order))),
+			tap((res) => console.log(res))
+		)
+	);
 
 	if (!order) {
 		return (
@@ -48,23 +41,36 @@ const Cart: React.FC<Props> = () => {
 		<Segment.Group>
 			<Segment>
 				<CustomerSelect ui={ui} />
+				<Actions ui={ui} columns={columns} />
 			</Segment>
 			<Segment grow>
 				<Table order={order} columns={columns} />
 			</Segment>
 			<Segment>
-				<Text>
-					Subtotal:
-					{/* {computedSubtotal} */}
-				</Text>
-				<Text>
-					Total Tax:
-					{order.total_tax}
-				</Text>
-				<Text>
-					Order Total:
-					{order.total}
-				</Text>
+				<View style={{ flexDirection: 'row' }}>
+					<View style={{ flex: 1 }}>
+						<Text>Subtotal:</Text>
+					</View>
+					<View>
+						<Text>{order.subtotal}</Text>
+					</View>
+				</View>
+				<View style={{ flexDirection: 'row' }}>
+					<View style={{ flex: 1 }}>
+						<Text>Total Tax:</Text>
+					</View>
+					<View>
+						<Text>{order.total_tax}</Text>
+					</View>
+				</View>
+				<View style={{ flexDirection: 'row' }}>
+					<View style={{ flex: 1 }}>
+						<Text>Order Total:</Text>
+					</View>
+					<View>
+						<Text>{order.total}</Text>
+					</View>
+				</View>
 			</Segment>
 		</Segment.Group>
 	);

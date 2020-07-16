@@ -1,7 +1,7 @@
 import React from 'react';
 import { useObservable, useObservableState } from 'observable-hooks';
 import { from, of, combineLatest } from 'rxjs';
-import { switchMap, tap, catchError, map, switchMapTo } from 'rxjs/operators';
+import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
 import Table from '../../../components/table';
 import Text from '../../../components/text';
@@ -13,11 +13,7 @@ const CartTable = ({ columns, order }) => {
 	const lineItems$ = order.line_items$.pipe(
 		switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
 		map((result) => Array.from(result.values())),
-		switchMap((array) => combineLatest(array.map((item) => item.$))),
-		// super hacky ... I want to return the document, not the change event
-		switchMap((array) =>
-			combineLatest(array.map((item) => order.collections().line_items.findOne(item.id).$))
-		),
+		switchMap((array) => combineLatest(array.map((item) => item.$.pipe(map(() => item))))),
 		tap((res) => console.log(res)),
 		catchError((err) => console.error(err))
 	);
@@ -67,11 +63,14 @@ const CartTable = ({ columns, order }) => {
 				</Table.HeaderRow>
 			</Table.Header>
 			<Table.Body>
-				{({ item }) => (
-					<Table.Row rowData={item} columns={columns}>
-						{renderCell}
-					</Table.Row>
-				)}
+				{({ item }) => {
+					// @TODO - try separating this and using item.$ observable
+					return (
+						<Table.Row rowData={item} columns={columns}>
+							{renderCell}
+						</Table.Row>
+					);
+				}}
 			</Table.Body>
 		</Table>
 	);

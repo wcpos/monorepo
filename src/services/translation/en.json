@@ -43,7 +43,11 @@
 					"quantity": "Qty",
 					"name": "Product",
 					"price": "Price",
-					"total": "Total"
+					"total": "Total",
+					"sku": "SKU",
+					"subtotal": "Subtotal",
+					"subtotal_tax": "Subtotal Tax",
+					"total_tax": "Total Tax"
 				}
 			}
 		},

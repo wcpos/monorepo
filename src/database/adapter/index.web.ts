@@ -27,7 +27,7 @@ const getDatabase = async (name: string): Promise<Database> => {
 	const db = createRxDatabase<Collections>({
 		name,
 		adapter: 'idb', // the name of your adapter
-		ignoreDuplicate: true, // for development?
+		// ignoreDuplicate: true, // for development?
 	});
 	return db;
 };
