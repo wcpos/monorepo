@@ -1,8 +1,9 @@
 import { ObservableResource } from 'observable-hooks';
-import { from } from 'rxjs';
-import { switchMap, map } from 'rxjs/operators';
+import { from, of, combineLatest } from 'rxjs';
+import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
 import difference from 'lodash/difference';
 import unset from 'lodash/unset';
+import sumBy from 'lodash/sumBy';
 import schema from './schema.json';
 
 export type Schema = import('./interface').WooCommerceOrderSchema;
@@ -90,6 +91,42 @@ const createOrdersCollection = async (db: Database): Promise<Collection> => {
 		// extract line_item ids
 		rawData.line_items = rawData.line_items.map((line_item) => String(line_item.id));
 	}, false);
+
+	/**
+	 * wire up total
+	 */
+	OrdersCollection.postCreate((raw, model) => {
+		// combineLatest(model.quantity$, model.price$).subscribe((val) => {
+		// 	model.atomicSet('total', String(val[0] * val[1]));
+		// });
+		model.line_items$
+			.pipe(
+				switchMap((ids) => from(model.collections().line_items.findByIds(ids))),
+				// map((result) => Array.from(result.values())),
+				// switchMap((array) => combineLatest(array.map((item) => item.$))),
+				switchMap((items) => combineLatest(Array.from(items.values()).map((item) => item.$))),
+				catchError((err) => console.error(err))
+			)
+			.subscribe((lineItems) => {
+				const total = String(
+					sumBy(lineItems, function (item) {
+						return Number(item.total);
+					})
+				);
+				if (total !== model.total) {
+					model.atomicSet('total', total);
+				}
+
+				const total_tax = String(
+					sumBy(lineItems, function (item) {
+						return Number(item.total_tax);
+					})
+				);
+				if (total_tax !== model.total_tax) {
+					model.atomicSet('total_tax', total_tax);
+				}
+			});
+	});
 
 	return OrdersCollection;
 };
