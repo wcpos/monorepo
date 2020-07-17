@@ -16,7 +16,7 @@ import useAppState from '../../hooks/use-app-state';
     
  * - https://api.faviconkit.com/${url}/144
  */
-const Site = ({ site }) => {
+const Site = ({ site, index }) => {
 	// const status = useObservableState(site.connection_status$);
 	const [visible, setVisible] = React.useState(false);
 	const [{ user }, dispatch, actions] = useAppState();
@@ -24,8 +24,8 @@ const Site = ({ site }) => {
 	const selectStore = async (): Promise<void> => {
 		const storeDB = await user.getStoreDB(site.wp_credentials[0].stores[0].id);
 		dispatch({
-			type: actions.SET_STOREDB,
-			payload: storeDB,
+			type: actions.SET_STORE,
+			payload: { storeDB, storePath: `1.sites.${index}.wp_credentials.0.stores.0` },
 		});
 	};
 

@@ -24,7 +24,8 @@ const fetchWpApiUrl = (url: string) =>
 	from(http.head(url)).pipe(
 		map((response) => {
 			return parseApiUrlFromHeaders(response?.headers);
-		})
+		}),
+		catchError((err) => console.error(err))
 	);
 
 /**
@@ -45,7 +46,8 @@ const fetchWcApiUrl = (url: string) =>
 					};
 				}
 			}
-		})
+		}),
+		catchError((err) => console.error(err))
 	);
 
 export default { fetchWpApiUrl, parseApiUrlFromHeaders, fetchWcApiUrl };

@@ -54,9 +54,9 @@ const Auth: React.FC<Props> = (props) => {
 				{sites.length > 0 && (
 					<Segment.Group style={{ width: '90%', maxWidth: 460 }}>
 						<Segment content="Sites" />
-						{sites.map((site) => (
+						{sites.map((site, index) => (
 							<Segment key={site.id}>
-								<Site site={site} />
+								<Site site={site} index={index} />
 							</Segment>
 						))}
 					</Segment.Group>

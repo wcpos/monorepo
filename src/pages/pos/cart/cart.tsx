@@ -20,12 +20,13 @@ const Cart: React.FC<Props> = () => {
 
 	// @TODO - why doesn't this update the totals?
 	const query = storeDB.collections.orders.findOne();
-	const order = useObservableState(
-		query.$.pipe(
-			switchMap((order) => order.$.pipe(map(() => order))),
-			tap((res) => console.log(res))
-		)
+	const order$ = query.$.pipe(
+		filter((order) => order),
+		switchMap((order) => order.$.pipe(map(() => order))),
+		tap((res) => console.log(res))
 	);
+
+	const order = useObservableState(order$);
 
 	if (!order) {
 		return (
@@ -36,6 +37,8 @@ const Cart: React.FC<Props> = () => {
 			</Segment.Group>
 		);
 	}
+
+	order$.subscribe((res) => console.log(res));
 
 	return (
 		<Segment.Group>
