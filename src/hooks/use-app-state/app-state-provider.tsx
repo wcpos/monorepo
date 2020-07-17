@@ -2,6 +2,7 @@ import React from 'react';
 import { Dimensions } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import debounce from 'lodash/debounce';
+import get from 'lodash/get';
 import { getUniqueId, getReadableVersion } from './device-info';
 import database from '../../database';
 import * as actionTypes from './action-types';
@@ -18,7 +19,7 @@ type AppState = {
 	urlPrefix: string;
 	user?: any;
 	storeDB?: any;
-	// storeDB?: any;
+	storePath?: any;
 	// site?: any;
 	// wpUser?: any;
 };
@@ -40,7 +41,7 @@ const initialState: AppState = {
 	urlPrefix: window?.location?.origin || 'wcpos://',
 	user: undefined,
 	storeDB: undefined,
-	// storeDB: undefined,
+	storePath: undefined,
 	// site: undefined,
 	// wpUser: undefined,
 };
@@ -70,12 +71,15 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 			logger.debug('Set app user', payload.toJSON());
 			return { ...state, user: payload };
 		case actionTypes.STORE_LOGOUT:
-			// state.store.collection.upsertLocal('last_store', { store_id: undefined });
+			state.user.collection.upsertLocal('last_store', { store_id: undefined });
 			return { ...state, storeDB: undefined };
 		case actionTypes.SET_STOREDB:
 			state.user.collection.upsertLocal('last_store', { store_id: payload.name });
 			return { ...state, storeDB: payload };
-		case actionTypes.SET_USER_AND_STOREDB:
+		case actionTypes.SET_STORE:
+			state.user.collection.upsertLocal('last_store', { store_id: payload.storePath });
+			return { ...state, ...payload };
+		case actionTypes.SET_USER_AND_STORE:
 			return { ...state, ...payload };
 		default:
 			return { ...state, ...payload };
@@ -142,9 +146,9 @@ const AppStateProvider = ({ children, i18n }: Props) => {
 		(async function init() {
 			if (userDatabase) {
 				const lastStore = await userDatabase.collections.users.getLocal('last_store');
-				const lastStoreId = lastStore && lastStore.get('store_id');
+				const lastStorePath = lastStore && lastStore.get('store_id');
 
-				if (!lastStoreId) {
+				if (!lastStorePath) {
 					const users = await userDatabase.collections.users.find().exec();
 
 					if (users.length === 0) {
@@ -164,13 +168,19 @@ const AppStateProvider = ({ children, i18n }: Props) => {
 					}
 				} else {
 					// get user
-					// @TODO - find user by store id
-					const user = await userDatabase.collections.users.findOne().exec();
+					const path = lastStorePath.split('.');
+					const userId = path.shift();
+					const user = await userDatabase.collections.users.findOne(userId).exec();
+					path.push('id');
 
 					// get storeDB
-					const storeDB = await user.getStoreDB(lastStoreId);
+					const id = get(user, path);
+					const storeDB = await user.getStoreDB(id);
 
-					dispatch({ type: actionTypes.SET_USER_AND_STOREDB, payload: { user, storeDB } });
+					dispatch({
+						type: actionTypes.SET_USER_AND_STORE,
+						payload: { user, storeDB, storePath: lastStorePath },
+					});
 				}
 			}
 		})();
