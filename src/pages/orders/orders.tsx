@@ -12,7 +12,7 @@ import WcApiService from '../../services/wc-api';
 interface Props {}
 
 const Orders: React.FC<Props> = () => {
-	const [{ user, storeDB }] = useAppState();
+	const [{ user, storeDB, storePath }] = useAppState();
 	const ui = storeDB.getUI('orders');
 
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
@@ -74,8 +74,10 @@ const Orders: React.FC<Props> = () => {
 					<Button
 						title="Fetch orders"
 						onPress={async () => {
-							const wpCredentials = user.sites[0].wp_credentials[0];
-							const baseUrl = 'https://wcposdev.wpengine.com/wp-json/wc/v3/';
+							const path = storePath.split('.');
+							const site = user.get(path.slice(1, 3).join('.'));
+							const wpCredentials = user.get(path.slice(1, 5).join('.'));
+							const baseUrl = site.wc_api_url;
 							const collection = 'orders';
 							const key = wpCredentials.consumer_key;
 							const secret = wpCredentials.consumer_secret;

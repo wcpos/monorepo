@@ -9,6 +9,18 @@
 			"description": "Unique identifier for the resource.",
 			"type": "string"
 		},
+		"date_created": {
+			"type": "string"
+		},
+		"date_created_gmt": {
+			"type": "string"
+		},
+		"date_modified": {
+			"type": "string"
+		},
+		"date_modified_gmt": {
+			"type": "string"
+		},
 		"email": {
 			"description": "The email address for the customer.",
 			"type": "string"
@@ -21,6 +33,9 @@
 			"description": "Customer last name.",
 			"type": "string"
 		},
+		"role": {
+			"type": "string"
+		},
 		"username": {
 			"description": "Customer login name.",
 			"type": "string"
@@ -31,11 +46,81 @@
 		},
 		"billing": {
 			"description": "List of billing address data.",
-			"type": "object"
+			"type": "object",
+			"properties": {
+				"first_name": {
+					"type": "string"
+				},
+				"last_name": {
+					"type": "string"
+				},
+				"company": {
+					"type": "string"
+				},
+				"address_1": {
+					"type": "string"
+				},
+				"address_2": {
+					"type": "string"
+				},
+				"city": {
+					"type": "string"
+				},
+				"postcode": {
+					"type": "string"
+				},
+				"country": {
+					"type": "string"
+				},
+				"state": {
+					"type": "string"
+				},
+				"email": {
+					"type": "string"
+				},
+				"phone": {
+					"type": "string"
+				}
+			}
 		},
 		"shipping": {
 			"description": "List of shipping address data.",
-			"type": "object"
+			"type": "object",
+			"properties": {
+				"first_name": {
+					"type": "string"
+				},
+				"last_name": {
+					"type": "string"
+				},
+				"company": {
+					"type": "string"
+				},
+				"address_1": {
+					"type": "string"
+				},
+				"address_2": {
+					"type": "string"
+				},
+				"city": {
+					"type": "string"
+				},
+				"postcode": {
+					"type": "string"
+				},
+				"country": {
+					"type": "string"
+				},
+				"state": {
+					"type": "string"
+				}
+			}
+		},
+		"is_paying_customer": {
+			"type": "boolean"
+		},
+		"avatar_url": {
+			"type": "string"
 		},
 		"meta_data": {
 			"description": "Meta data.",
@@ -58,5 +143,12 @@
 				}
 			}
 		}
-	}
+	},
+	"indexes": [
+		"first_name",
+		"last_name",
+		["first_name", "last_name"],
+		"billing.company",
+		"billing.phone"
+	]
 }

@@ -2,6 +2,7 @@ import React from 'react';
 import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { switchMap } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
+import get from 'lodash/get';
 import Segment from '../../../components/segment';
 import Input from '../../../components/textinput';
 import Table from './table';
@@ -21,7 +22,7 @@ interface Props {
  */
 const Products: React.FC<Props> = ({ ui }) => {
 	// const { t } = useTranslation();
-	const [{ user, storePath }] = useAppState();
+	const [{ user, storePath, storeDB }] = useAppState();
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const display = useObservableState(ui.get$('display'), ui.get('display'));
 
@@ -54,16 +55,17 @@ const Products: React.FC<Props> = ({ ui }) => {
 				<Button
 					title="Add Products"
 					onPress={async () => {
-						console.log(storePath);
+						const path = storePath.split('.');
+						const site = user.get(path.slice(1, 3).join('.'));
+						const wpCredentials = user.get(path.slice(1, 5).join('.'));
 
-						// const wpCredentials = user.sites[0].wp_credentials[0];
-						// const { data } = await http('https://wcposdev.wpengine.com/wp-json/wc/v3/products', {
-						// 	auth: {
-						// 		username: wpCredentials.consumer_key,
-						// 		password: wpCredentials.consumer_secret,
-						// 	},
-						// });
-						// storeDB.collections.products.bulkInsert(data);
+						const { data } = await http(`${site.wc_api_url}products`, {
+							auth: {
+								username: wpCredentials.consumer_key,
+								password: wpCredentials.consumer_secret,
+							},
+						});
+						storeDB.collections.products.bulkInsert(data);
 					}}
 				/>
 			</Segment>

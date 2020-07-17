@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text } from 'react-native';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableState, useObservable } from 'observable-hooks';
+import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
+
 import Segment from '../../components/segment';
 import Table from './table';
 import Actions from './actions';
@@ -11,30 +13,59 @@ import WcApiService from '../../services/wc-api';
 interface Props {}
 
 const Customers: React.FC<Props> = () => {
-	const [{ appUser, store }] = useAppState();
-	const ui = useObservableSuspense(store.uiResources.customers);
-	const customers = useObservableSuspense(store.getDataResource('customers'));
-	const storeDatabase = useObservableSuspense(store.dbResource);
+	const [{ user, storeDB, storePath }] = useAppState();
+	const ui = storeDB.getUI('customers');
 
-	const onResetUI = () => {
-		ui.reset();
-	};
+	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
 	const onSort = ({ sortBy, sortDirection }) => {
 		console.log({ sortBy, sortDirection });
 		// ui.updateWithJson({ sortBy, sortDirection });
 	};
 
+	const [query, setQuery] = React.useState({
+		search: '',
+		sortBy: 'first_name',
+		sortDirection: 'asc',
+	});
+
+	const customers$ = useObservable(
+		// A stream of React elements!
+		(inputs$) =>
+			inputs$.pipe(
+				distinctUntilChanged((a, b) => a[0] === b[0]),
+				debounceTime(150),
+				switchMap(([q]) => {
+					const regexp = new RegExp(escape(q.search), 'i');
+					const RxQuery = storeDB.collections.customers
+						.find()
+						// .find({
+						// 	selector: {
+						// 		name: { $regex: regexp },
+						// 	},
+						// })
+						.sort({ [q.sortBy]: q.sortDirection });
+					return RxQuery.$;
+				}),
+				catchError((err) => {
+					console.error(err);
+				})
+			),
+		[query] as const
+	);
+
+	const customers = useObservableState(customers$, []);
+
 	return (
 		<React.Suspense fallback={<Text>loading customers...</Text>}>
 			<Segment.Group>
 				<Segment>
-					<Actions ui={ui} />
+					<Actions ui={ui} columns={columns} />
 				</Segment>
 				<Segment grow>
 					<Table
 						customers={customers}
-						columns={ui.columns}
+						columns={columns}
 						sort={onSort}
 						sortBy={ui.sortBy}
 						sortDirection={ui.sortDirection}
@@ -44,15 +75,17 @@ const Customers: React.FC<Props> = () => {
 					<Button
 						title="Fetch customers"
 						onPress={async () => {
-							const wpUser = await appUser.collections().wp_users.findOne().exec();
-							const baseUrl = 'https://wcposdev.wpengine.com/wp-json/wc/v3/';
+							const path = storePath.split('.');
+							const site = user.get(path.slice(1, 3).join('.'));
+							const wpCredentials = user.get(path.slice(1, 5).join('.'));
+							const baseUrl = site.wc_api_url;
 							const collection = 'customers';
-							const key = wpUser.consumer_key;
-							const secret = wpUser.consumer_secret;
+							const key = wpCredentials.consumer_key;
+							const secret = wpCredentials.consumer_secret;
 							const api = new WcApiService({ baseUrl, collection, key, secret });
 							const data = await api.fetch();
 							console.log(data);
-							storeDatabase.collections.customers.bulkInsert(data);
+							storeDB.collections.customers.bulkInsert(data);
 						}}
 					/>
 				</Segment>
