@@ -1,5 +1,5 @@
 import { ObservableResource } from 'observable-hooks';
-import { switchMap, map, tap, concatMap, startWith, catchError } from 'rxjs/operators';
+import { switchMap, map, tap, concatMap, startWith, catchError, filter } from 'rxjs/operators';
 import { Subject, BehaviorSubject, of } from 'rxjs';
 import findIndex from 'lodash/findIndex';
 import pick from 'lodash/pick';
@@ -93,6 +93,7 @@ const methods: UserDocumentMethods = {
 				tap((wp_api_url) => {
 					this.updateSiteById(id, { wp_api_url });
 				}),
+				filter((wp_api_url) => wp_api_url),
 				concatMap((wp_api_url) => wcAuthService.fetchWcApiUrl(wp_api_url)),
 				tap((data) => {
 					this.updateSiteById(id, data);
@@ -171,11 +172,26 @@ const methods: UserDocumentMethods = {
 				// )
 				.then(() =>
 					Promise.all([
-						db.getLocal('pos_products'),
-						db.getLocal('pos_cart'),
-						db.getLocal('products'),
-						db.getLocal('orders'),
-						db.getLocal('customers'),
+						db
+							.getLocal('pos_products')
+							.then((ui) => ui || db.upsertLocal('pos_products', initialUI.pos_products))
+							.then((ui) => ui),
+						db
+							.getLocal('pos_cart')
+							.then((ui) => ui || db.upsertLocal('pos_cart', initialUI.pos_cart))
+							.then((ui) => ui),
+						db
+							.getLocal('products')
+							.then((ui) => ui || db.upsertLocal('products', initialUI.products))
+							.then((ui) => ui),
+						db
+							.getLocal('orders')
+							.then((ui) => ui || db.upsertLocal('orders', initialUI.orders))
+							.then((ui) => ui),
+						db
+							.getLocal('customers')
+							.then((ui) => ui || db.upsertLocal('customers', initialUI.customers))
+							.then((ui) => ui),
 					])
 				)
 				.then((uiArray) => {
@@ -192,6 +208,11 @@ const methods: UserDocumentMethods = {
 
 		return storeDatabase;
 	},
+
+	/**
+	 *
+	 */
+	getWpCredentialsByStoreId(id) {},
 };
 
 /**
