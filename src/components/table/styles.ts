@@ -28,6 +28,7 @@ export const HeaderRow = styled.View<HeaderRowProps>`
 	border-bottom-width: 2px;
 	border-style: solid;
 	border-bottom-color: #000000;
+	background-color: #ffffff;
 `;
 
 type HeaderCellProps = { theme: ThemeProps } & import('./header-cell').Props;

@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import Header from '../header';
 import * as Styled from './styles';
 // import useMeasure from '../../hooks/use-measure';

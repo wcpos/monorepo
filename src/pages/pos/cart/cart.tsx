@@ -41,15 +41,15 @@ const Cart: React.FC<Props> = () => {
 	order$.subscribe((res) => console.log(res));
 
 	return (
-		<Segment.Group>
-			<Segment>
+		<Segment.Group style={{ height: '100%', width: '100%' }}>
+			<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
 				<CustomerSelect ui={ui} />
 				<Actions ui={ui} columns={columns} />
 			</Segment>
-			<Segment grow>
+			<Segment style={{ flexGrow: 0, flexShrink: 1, flexBasis: 'auto' }}>
 				<Table order={order} columns={columns} />
 			</Segment>
-			<Segment>
+			<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
 				<View style={{ flexDirection: 'row' }}>
 					<View style={{ flex: 1 }}>
 						<Text>Subtotal:</Text>

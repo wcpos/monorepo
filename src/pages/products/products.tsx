@@ -7,6 +7,7 @@ import Input from '../../components/textinput';
 import Table from './table';
 import Actions from './actions';
 import useAppState from '../../hooks/use-app-state';
+import * as Styled from './styles';
 
 interface Props {}
 
@@ -58,20 +59,20 @@ const Products: React.FC<Props> = () => {
 	};
 
 	return (
-		<React.Suspense fallback={<Text>loading products...</Text>}>
-			<Segment.Group>
-				<Segment>
+		<Styled.Container>
+			<Segment.Group style={{ height: '100%', width: '100%' }}>
+				<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
 					<Input placeholder="Search products" onChangeText={onSearch} />
 					<Actions columns={columns} query={query} />
 				</Segment>
-				<Segment grow>
+				<Segment style={{ flexGrow: 0, flexShrink: 1, flexBasis: 'auto' }}>
 					<Table columns={columns} products={products} />
 				</Segment>
-				<Segment>
+				<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
 					<Text>Footer</Text>
 				</Segment>
 			</Segment.Group>
-		</React.Suspense>
+		</Styled.Container>
 	);
 };
 

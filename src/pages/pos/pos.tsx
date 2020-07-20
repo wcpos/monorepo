@@ -6,6 +6,7 @@ import Cart from './cart';
 import ErrorBoundary from '../../components/error';
 import Draggable from '../../components/draggable';
 import useAppState from '../../hooks/use-app-state';
+import * as Styled from './styles';
 
 interface Props {}
 
@@ -30,25 +31,25 @@ const POS: React.FC<Props> = () => {
 	};
 
 	return (
-		<>
-			<View style={{ width }}>
+		<Styled.Container>
+			<Styled.Column style={{ width }}>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading products...</Text>}>
 						<Products ui={productsUI} />
 					</React.Suspense>
 				</ErrorBoundary>
-			</View>
+			</Styled.Column>
 			<Draggable onUpdate={handleColumnResizeUpdate} onEnd={handleColumnResizeEnd}>
 				<View style={{ backgroundColor: '#000', padding: 20 }} />
 			</Draggable>
-			<View style={{ flexGrow: 1 }}>
+			<Styled.Column>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading cart...</Text>}>
 						<Cart />
 					</React.Suspense>
 				</ErrorBoundary>
-			</View>
-		</>
+			</Styled.Column>
+		</Styled.Container>
 	);
 };
 

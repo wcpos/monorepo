@@ -43,15 +43,15 @@ const Products: React.FC<Props> = ({ ui }) => {
 	};
 
 	return (
-		<Segment.Group>
-			<Segment>
+		<Segment.Group style={{ height: '100%', width: '100%' }}>
+			<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
 				<Input value={query.search} placeholder="Search products" onChangeText={onSearch} />
 				<Actions columns={columns} display={display} ui={ui} />
 			</Segment>
-			<Segment grow>
+			<Segment style={{ flexGrow: 0, flexShrink: 1, flexBasis: 'auto' }}>
 				<Table query={query} columns={columns} display={display} sort={onSort} />
 			</Segment>
-			<Segment>
+			<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
 				<Button
 					title="Add Products"
 					onPress={async () => {
