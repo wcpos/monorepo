@@ -58,6 +58,21 @@ const methods: Methods = {
 			return lineItem.remove();
 		});
 	},
+
+	/**
+	 *
+	 */
+	async addFeeLine(data) {
+		await this.collections()
+			.fee_lines.upsert({ ...data, id: `new-${Date.now()}`, order_id: this.id })
+			.then((newFee) => {
+				return this.update({
+					$push: {
+						fee_lines: newFee.id,
+					},
+				});
+			});
+	},
 };
 
 /**
@@ -100,9 +115,11 @@ const createOrdersCollection = async (db: Database): Promise<Collection> => {
 
 		// bulkInsert line items
 		this.collections().line_items.bulkInsertFromOrder(rawData.line_items, rawData.id);
+		this.collections().fee_lines.bulkInsertFromOrder(rawData.fee_lines, rawData.id);
 
 		// extract line_item ids
 		rawData.line_items = rawData.line_items.map((line_item) => String(line_item.id));
+		rawData.fee_lines = rawData.fee_lines.map((fee_line) => String(fee_line.id));
 	}, false);
 
 	/**
