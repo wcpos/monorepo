@@ -62,6 +62,7 @@ const Actions: React.FC<Props> = ({ columns, ui }) => {
 							{ key: 'subtotal_tax', order: 5 },
 							{ key: 'total_tax', order: 6 },
 							{ key: 'total', order: 7 },
+							{ key: 'actions', order: 8 },
 						],
 					});
 				}}

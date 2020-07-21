@@ -6,15 +6,22 @@ import { useTranslation } from 'react-i18next';
 import Table from '../../../components/table';
 import Text from '../../../components/text';
 import TextInput from '../../../components/textinput';
+import Button from '../../../components/button';
+import sortBy from 'lodash/sortBy';
 
 const CartTable = ({ columns, order }) => {
 	const { t } = useTranslation();
+	const [query, setQuery] = React.useState({
+		sortBy: 'id',
+		sortDirection: 'asc',
+	});
 
 	const lineItems$ = order.line_items$.pipe(
 		switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
 		map((result) => Array.from(result.values())),
+		// sort in memory
+		map((result) => sortBy(result, query.sortBy)),
 		switchMap((array) => combineLatest(array.map((item) => item.$.pipe(map(() => item))))),
-		tap((res) => console.log(res)),
 		catchError((err) => console.error(err))
 	);
 
@@ -42,14 +49,36 @@ const CartTable = ({ columns, order }) => {
 			case 'total':
 				children = <Text>{rowData.total}</Text>;
 				break;
+			case 'actions':
+				children = (
+					<Button
+						title="x"
+						onPress={() => {
+							order.removeLineItem(rowData);
+						}}
+					/>
+				);
+				break;
+
 			default:
 				children = <Text>{String(cellData)}</Text>;
 		}
 		return <Table.Row.Cell {...getCellProps()}>{children}</Table.Row.Cell>;
 	};
 
+	const onSort = ({ sortBy, sortDirection }) => {
+		console.log({ sortBy, sortDirection });
+		setQuery({ ...query, sortBy, sortDirection });
+	};
+
 	return (
-		<Table columns={columns} data={lineItems}>
+		<Table
+			columns={columns}
+			data={lineItems}
+			sort={onSort}
+			sortBy={query.sortBy}
+			sortDirection={query.sortDirection}
+		>
 			<Table.Header>
 				<Table.HeaderRow columns={columns}>
 					{({ getHeaderCellProps }) => {

@@ -47,7 +47,8 @@
 					"sku": "SKU",
 					"subtotal": "Subtotal",
 					"subtotal_tax": "Subtotal Tax",
-					"total_tax": "Total Tax"
+					"total_tax": "Total Tax",
+					"actions": "Actions"
 				}
 			}
 		},

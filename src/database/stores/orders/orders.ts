@@ -33,7 +33,7 @@ const methods: Methods = {
 				tax_class: product.tax_class,
 			})
 			.then((newLineItem) => {
-				this.update({
+				return this.update({
 					$push: {
 						line_items: newLineItem.id,
 					},
@@ -45,6 +45,19 @@ const methods: Methods = {
 	 *
 	 */
 	async computedSubtotal() {},
+
+	/**
+	 *
+	 */
+	async removeLineItem(lineItem) {
+		await this.update({
+			$pullAll: {
+				line_items: [lineItem.id],
+			},
+		}).then(() => {
+			return lineItem.remove();
+		});
+	},
 };
 
 /**
