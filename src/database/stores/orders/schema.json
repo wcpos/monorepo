@@ -443,76 +443,7 @@
 			"description": "Fee lines data.",
 			"type": "array",
 			"items": {
-				"type": "object",
-				"properties": {
-					"id": {
-						"description": "Item ID.",
-						"type": "integer"
-					},
-					"name": {
-						"description": "Fee name.",
-						"type": "string"
-					},
-					"tax_class": {
-						"description": "Tax class of fee.",
-						"type": "string"
-					},
-					"tax_status": {
-						"description": "Tax status of fee.",
-						"type": "string",
-						"enum": ["taxable", "none"]
-					},
-					"total": {
-						"description": "Line total (after discounts).",
-						"type": "string"
-					},
-					"total_tax": {
-						"description": "Line total tax (after discounts).",
-						"type": "string"
-					},
-					"taxes": {
-						"description": "Line taxes.",
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"id": {
-									"description": "Tax rate ID.",
-									"type": "integer"
-								},
-								"total": {
-									"description": "Tax total.",
-									"type": "string"
-								},
-								"subtotal": {
-									"description": "Tax subtotal.",
-									"type": "string"
-								}
-							}
-						}
-					},
-					"meta_data": {
-						"description": "Meta data.",
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"id": {
-									"description": "Meta ID.",
-									"type": "integer"
-								},
-								"key": {
-									"description": "Meta key.",
-									"type": "string"
-								},
-								"value": {
-									"description": "Meta value.",
-									"type": "string"
-								}
-							}
-						}
-					}
-				}
+				"type": "string"
 			}
 		},
 		"coupon_lines": {

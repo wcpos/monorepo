@@ -1,13 +1,13 @@
 import React from 'react';
 import { useObservable, useObservableState } from 'observable-hooks';
-import { from, of, combineLatest } from 'rxjs';
+import { from, of, combineLatest, zip } from 'rxjs';
 import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
+import sortBy from 'lodash/sortBy';
 import Table from '../../../components/table';
 import Text from '../../../components/text';
 import TextInput from '../../../components/textinput';
 import Button from '../../../components/button';
-import sortBy from 'lodash/sortBy';
 
 const CartTable = ({ columns, order }) => {
 	const { t } = useTranslation();
@@ -19,13 +19,36 @@ const CartTable = ({ columns, order }) => {
 	const lineItems$ = order.line_items$.pipe(
 		switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
 		map((result) => Array.from(result.values())),
-		// sort in memory
-		map((result) => sortBy(result, query.sortBy)),
-		switchMap((array) => combineLatest(array.map((item) => item.$.pipe(map(() => item))))),
 		catchError((err) => console.error(err))
 	);
 
-	const [lineItems] = useObservableState(() => lineItems$, []);
+	const feeLines$ = order.fee_lines$.pipe(
+		switchMap((ids) => from(order.collections().fee_lines.findByIds(ids))),
+		map((result) => Array.from(result.values())),
+		catchError((err) => console.error(err))
+	);
+
+	const items$ = combineLatest(lineItems$, feeLines$).pipe(
+		map(([lineItems, feeLines]) => {
+			// sort line items
+
+			// sort fee lines
+
+			// merge
+			return lineItems.concat(feeLines);
+		})
+	);
+
+	// const lineItems$ = order.line_items$.pipe(
+	// 	switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
+	// 	map((result) => Array.from(result.values())),
+	// 	// sort in memory
+	// 	map((result) => sortBy(result, query.sortBy)),
+	// 	switchMap((array) => combineLatest(array.map((item) => item.$.pipe(map(() => item))))),
+	// 	catchError((err) => console.error(err))
+	// );
+
+	const [items] = useObservableState(() => items$, []);
 
 	const renderCell = ({ getCellProps }) => {
 		const { cellData, column, rowData } = getCellProps();
@@ -74,7 +97,7 @@ const CartTable = ({ columns, order }) => {
 	return (
 		<Table
 			columns={columns}
-			data={lineItems}
+			data={items}
 			sort={onSort}
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}

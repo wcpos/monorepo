@@ -7,6 +7,7 @@ import sumBy from 'lodash/sumBy';
 import useAppState from '../../../hooks/use-app-state';
 import Segment from '../../../components/segment';
 import Text from '../../../components/text';
+import Button from '../../../components/button';
 import Table from './table';
 import CustomerSelect from './customer-select';
 import Actions from './actions';
@@ -74,6 +75,14 @@ const Cart: React.FC<Props> = () => {
 						<Text>{order.total}</Text>
 					</View>
 				</View>
+			</Segment>
+			<Segment>
+				<Button
+					title="Add Fee"
+					onPress={() => {
+						order.addFeeLine({ name: 'Fee', total: '10' });
+					}}
+				/>
 			</Segment>
 		</Segment.Group>
 	);
