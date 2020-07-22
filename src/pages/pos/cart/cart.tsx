@@ -18,10 +18,14 @@ const Cart: React.FC<Props> = () => {
 	const [{ storeDB }] = useAppState();
 	const ui = storeDB.getUI('pos_cart');
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
+	const [query, setQuery] = React.useState({
+		sortBy: 'id',
+		sortDirection: 'asc',
+	});
 
 	// @TODO - why doesn't this update the totals?
-	const query = storeDB.collections.orders.findOne();
-	const order$ = query.$.pipe(
+	const orderQuery = storeDB.collections.orders.findOne();
+	const order$ = orderQuery.$.pipe(
 		filter((order) => order),
 		switchMap((order) => order.$.pipe(map(() => order))),
 		tap((res) => console.log(res))
@@ -39,7 +43,9 @@ const Cart: React.FC<Props> = () => {
 		);
 	}
 
-	order$.subscribe((res) => console.log(res));
+	const handleSort = ({ sortBy, sortDirection }) => {
+		setQuery({ ...query, sortBy, sortDirection });
+	};
 
 	return (
 		<Segment.Group style={{ height: '100%', width: '100%' }}>
@@ -48,7 +54,7 @@ const Cart: React.FC<Props> = () => {
 				<Actions ui={ui} columns={columns} />
 			</Segment>
 			<Segment style={{ flexGrow: 0, flexShrink: 1, flexBasis: 'auto' }}>
-				<Table order={order} columns={columns} />
+				<Table order={order} columns={columns} query={query} onSort={handleSort} />
 			</Segment>
 			<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
 				<View style={{ flexDirection: 'row' }}>

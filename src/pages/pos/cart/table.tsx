@@ -3,7 +3,7 @@ import { useObservable, useObservableState } from 'observable-hooks';
 import { from, of, combineLatest, zip } from 'rxjs';
 import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
-import sortBy from 'lodash/sortBy';
+import orderBy from 'lodash/orderBy';
 import Table from '../../../components/table';
 import Text from '../../../components/text';
 import TextInput from '../../../components/textinput';
@@ -12,12 +12,8 @@ import LineItem from './rows/line-item';
 import FeeLine from './rows/fee-line';
 import ShippingLine from './rows/shipping-line';
 
-const CartTable = ({ columns, order }) => {
+const CartTable = ({ columns, order, query, onSort }) => {
 	const { t } = useTranslation();
-	const [query, setQuery] = React.useState({
-		sortBy: 'id',
-		sortDirection: 'asc',
-	});
 
 	const lineItems$ = order.line_items$.pipe(
 		switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
@@ -37,23 +33,20 @@ const CartTable = ({ columns, order }) => {
 		catchError((err) => console.error(err))
 	);
 
-	const items$ = combineLatest(lineItems$, feeLines$, shippingLines$).pipe(
-		map(([lineItems, feeLines, shippingLines]) => {
-			// sort line items
-
-			// sort fee lines
-
-			// merge
-			return lineItems.concat(feeLines, shippingLines);
-		})
+	const items$ = useObservable(
+		(inputs$) =>
+			combineLatest(lineItems$, feeLines$, shippingLines$, inputs$).pipe(
+				map(([lineItems, feeLines, shippingLines, [q]]) => {
+					const sortedLineItems = orderBy(lineItems, q.sortBy, q.sortDirection);
+					const sortedFeeLines = orderBy(feeLines, q.sortBy, q.sortDirection);
+					const sortedShippingLines = orderBy(shippingLines, q.sortBy, q.sortDirection);
+					return sortedLineItems.concat(sortedFeeLines, sortedShippingLines);
+				})
+			),
+		[query]
 	);
 
 	const [items] = useObservableState(() => items$, []);
-
-	const onSort = ({ sortBy, sortDirection }) => {
-		console.log({ sortBy, sortDirection });
-		setQuery({ ...query, sortBy, sortDirection });
-	};
 
 	return (
 		<Table
