@@ -8,6 +8,9 @@ import Table from '../../../components/table';
 import Text from '../../../components/text';
 import TextInput from '../../../components/textinput';
 import Button from '../../../components/button';
+import LineItem from './rows/line-item';
+import FeeLine from './rows/fee-line';
+import ShippingLine from './rows/shipping-line';
 
 const CartTable = ({ columns, order }) => {
 	const { t } = useTranslation();
@@ -28,66 +31,24 @@ const CartTable = ({ columns, order }) => {
 		catchError((err) => console.error(err))
 	);
 
-	const items$ = combineLatest(lineItems$, feeLines$).pipe(
-		map(([lineItems, feeLines]) => {
+	const shippingLines$ = order.shipping_lines$.pipe(
+		switchMap((ids) => from(order.collections().shipping_lines.findByIds(ids))),
+		map((result) => Array.from(result.values())),
+		catchError((err) => console.error(err))
+	);
+
+	const items$ = combineLatest(lineItems$, feeLines$, shippingLines$).pipe(
+		map(([lineItems, feeLines, shippingLines]) => {
 			// sort line items
 
 			// sort fee lines
 
 			// merge
-			return lineItems.concat(feeLines);
+			return lineItems.concat(feeLines, shippingLines);
 		})
 	);
 
-	// const lineItems$ = order.line_items$.pipe(
-	// 	switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
-	// 	map((result) => Array.from(result.values())),
-	// 	// sort in memory
-	// 	map((result) => sortBy(result, query.sortBy)),
-	// 	switchMap((array) => combineLatest(array.map((item) => item.$.pipe(map(() => item))))),
-	// 	catchError((err) => console.error(err))
-	// );
-
 	const [items] = useObservableState(() => items$, []);
-
-	const renderCell = ({ getCellProps }) => {
-		const { cellData, column, rowData } = getCellProps();
-		let children;
-
-		switch (column.key) {
-			case 'quantity':
-				children = (
-					<TextInput
-						value={cellData}
-						onChangeText={async (val) => {
-							rowData.update({
-								$set: {
-									quantity: Number(val),
-								},
-							});
-						}}
-					/>
-				);
-				break;
-			case 'total':
-				children = <Text>{rowData.total}</Text>;
-				break;
-			case 'actions':
-				children = (
-					<Button
-						title="x"
-						onPress={() => {
-							order.removeLineItem(rowData);
-						}}
-					/>
-				);
-				break;
-
-			default:
-				children = <Text>{String(cellData)}</Text>;
-		}
-		return <Table.Row.Cell {...getCellProps()}>{children}</Table.Row.Cell>;
-	};
 
 	const onSort = ({ sortBy, sortDirection }) => {
 		console.log({ sortBy, sortDirection });
@@ -115,13 +76,17 @@ const CartTable = ({ columns, order }) => {
 				</Table.HeaderRow>
 			</Table.Header>
 			<Table.Body>
-				{({ item }) => {
-					// @TODO - try separating this and using item.$ observable
-					return (
-						<Table.Row rowData={item} columns={columns}>
-							{renderCell}
-						</Table.Row>
-					);
+				{({ item }): React.ReactElement | null => {
+					switch (item.collection.name) {
+						case 'line_items':
+							return <LineItem order={order} item={item} columns={columns} />;
+						case 'fee_lines':
+							return <FeeLine order={order} fee={item} columns={columns} />;
+						case 'shipping_lines':
+							return <ShippingLine order={order} shipping={item} columns={columns} />;
+						default:
+							return null;
+					}
 				}}
 			</Table.Body>
 		</Table>

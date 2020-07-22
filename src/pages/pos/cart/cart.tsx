@@ -83,6 +83,12 @@ const Cart: React.FC<Props> = () => {
 						order.addFeeLine({ name: 'Fee', total: '10' });
 					}}
 				/>
+				<Button
+					title="Add Shipping"
+					onPress={() => {
+						order.addShippingLine({ method_title: 'Shipping', total: '5' });
+					}}
+				/>
 			</Segment>
 		</Segment.Group>
 	);

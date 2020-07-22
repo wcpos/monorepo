@@ -41,7 +41,7 @@
 			"column": {
 				"label": {
 					"quantity": "Qty",
-					"name": "Product",
+					"name": "Name",
 					"price": "Price",
 					"total": "Total",
 					"sku": "SKU",

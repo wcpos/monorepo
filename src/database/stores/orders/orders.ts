@@ -73,6 +73,47 @@ const methods: Methods = {
 				});
 			});
 	},
+
+	/**
+	 *
+	 */
+	async removeFeeLine(feeLine) {
+		await this.update({
+			$pullAll: {
+				fee_lines: [feeLine.id],
+			},
+		}).then(() => {
+			return feeLine.remove();
+		});
+	},
+
+	/**
+	 *
+	 */
+	async addShippingLine(data) {
+		await this.collections()
+			.shipping_lines.upsert({ ...data, id: `new-${Date.now()}`, order_id: this.id })
+			.then((newShipping) => {
+				return this.update({
+					$push: {
+						shipping_lines: newShipping.id,
+					},
+				});
+			});
+	},
+
+	/**
+	 *
+	 */
+	async removeShippingLine(shippingLine) {
+		await this.update({
+			$pullAll: {
+				shipping_lines: [shippingLine.id],
+			},
+		}).then(() => {
+			return shippingLine.remove();
+		});
+	},
 };
 
 /**
