@@ -1,6 +1,6 @@
 import { ObservableResource } from 'observable-hooks';
 import { from, combineLatest } from 'rxjs';
-import { switchMap, map } from 'rxjs/operators';
+import { switchMap, map, tap } from 'rxjs/operators';
 import difference from 'lodash/difference';
 import unset from 'lodash/unset';
 import sum from 'lodash/sum';
@@ -79,9 +79,11 @@ const createLineItemsCollection = async (db: Database): Promise<Collection> => {
 	}, false);
 
 	LineItemsCollection.postCreate((raw, model) => {
-		combineLatest(model.quantity$, model.price$).subscribe((val) => {
-			model.atomicSet('total', String(val[0] * val[1]));
-		});
+		combineLatest(model.quantity$, model.price$)
+			.pipe(tap((res) => console.log(res)))
+			.subscribe((val) => {
+				model.atomicSet('total', String(val[0] * val[1]));
+			});
 	});
 
 	return LineItemsCollection;
