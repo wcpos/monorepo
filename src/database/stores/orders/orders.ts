@@ -170,6 +170,8 @@ const createOrdersCollection = async (db: Database): Promise<Collection> => {
 		// combineLatest(model.quantity$, model.price$).subscribe((val) => {
 		// 	model.atomicSet('total', String(val[0] * val[1]));
 		// });
+
+		// @TODO - why does this effect line_item subscriptions?
 		model.line_items$
 			.pipe(
 				switchMap((ids) => from(model.collections().line_items.findByIds(ids))),
