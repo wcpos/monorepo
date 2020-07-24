@@ -3,10 +3,9 @@ import { useObservable, useObservableState } from 'observable-hooks';
 import { from } from 'rxjs';
 import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
-import Table from '../../../components/table';
-import Text from '../../../components/text';
-import Actions from './cells/actions';
-import useAppState from '../../../hooks/use-app-state';
+import Table from '../../../../components/table';
+import useAppState from '../../../../hooks/use-app-state';
+import Rows from './rows';
 
 interface Props {
 	columns: any;
@@ -18,7 +17,7 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
 /**
  *
  */
-const ProductsTable: React.FC<Props> = ({ columns, query, sort }) => {
+const ProductsTable: React.FC<Props> = ({ columns, display, query, sort }) => {
 	const { t } = useTranslation();
 	const [{ storeDB }] = useAppState();
 
@@ -48,20 +47,6 @@ const ProductsTable: React.FC<Props> = ({ columns, query, sort }) => {
 
 	const products = useObservableState(products$, []);
 
-	const renderCell = ({ getCellProps }) => {
-		const { cellData, column, rowData } = getCellProps();
-		let children;
-
-		switch (column.key) {
-			case 'actions':
-				children = <Actions product={rowData} />;
-				break;
-			default:
-				children = <Text>{String(cellData)}</Text>;
-		}
-		return <Table.Row.Cell {...getCellProps()}>{children}</Table.Row.Cell>;
-	};
-
 	return (
 		<Table
 			columns={columns}
@@ -83,11 +68,12 @@ const ProductsTable: React.FC<Props> = ({ columns, query, sort }) => {
 				</Table.HeaderRow>
 			</Table.Header>
 			<Table.Body>
-				{({ item }) => (
-					<Table.Row rowData={item} columns={columns}>
-						{renderCell}
-					</Table.Row>
-				)}
+				{({ item }) => {
+					if (item.type === 'variable') {
+						return <Rows.Variation variation={item} columns={columns} display={display} />;
+					}
+					return <Rows.Product product={item} columns={columns} display={display} />;
+				}}
 			</Table.Body>
 		</Table>
 	);

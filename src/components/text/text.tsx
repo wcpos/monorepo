@@ -7,7 +7,7 @@ import { StyledText } from './styles';
 
 export type Props = {
 	align?: 'left' | 'right' | 'center' | 'justify';
-	children: string;
+	children: React.ReactNode;
 	italic?: boolean;
 	onPress?: () => void;
 	size?: 'normal' | 'large' | 'small';

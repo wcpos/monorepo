@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
-import Text from '../../../../components/text';
-import useFetch from '../../../../hooks/use-fetch';
+import Text from '../../../../../../components/text';
+import useFetch from '../../../../../../hooks/use-fetch';
 
 interface Props {
 	product: any;
@@ -38,8 +38,26 @@ const Name = ({ product, showSKU, showCategories, showTags }: Props) => {
 		<React.Fragment>
 			<Text>{product.name}</Text>
 			{showSKU && <Text size="small">{product.sku}</Text>}
-			{showCategories && <Text size="small">Categories</Text>}
-			{showTags && <Text size="small">Tags</Text>}
+			{showCategories && (
+				<View style={{ flexDirection: 'row' }}>
+					<Text size="small">
+						<Text size="small" type="secondary">
+							Categories:
+						</Text>
+						{product.categories.map((cat) => cat.name).join(', ')}
+					</Text>
+				</View>
+			)}
+			{showTags && (
+				<View style={{ flexDirection: 'row' }}>
+					<Text size="small">
+						<Text size="small" type="secondary">
+							Tags:
+						</Text>
+						{product.tags.map((tag) => tag.name).join(', ')}
+					</Text>
+				</View>
+			)}
 			{product.isVariable() && <Variations product={product} />}
 		</React.Fragment>
 	);
