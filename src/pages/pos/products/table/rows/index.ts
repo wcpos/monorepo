@@ -1,4 +1,1 @@
-import Product from './product';
-import Variation from './variation';
-
-export default { Product, Variation };
+export { default } from './row';

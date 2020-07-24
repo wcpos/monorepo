@@ -1,6 +1,5 @@
 import React from 'react';
-import Text from '../../../../components/text';
-import useObservable from '../../../../hooks/use-observable';
+import Text from '../../../../../../components/text';
 
 interface Props {
 	product: any;
@@ -8,15 +7,16 @@ interface Props {
 }
 
 const Variations = ({ product, addToCart }: Props) => {
-	const variations = useObservable(product.variations.observe(), []);
+	// const variations = useObservable(product.variations.observe(), []);
 
-	variations.forEach(variation => {
-		// if (variation && !variation.status) {
-		variation.fetch();
-		// }
-	});
+	// variations.forEach((variation) => {
+	// 	// if (variation && !variation.status) {
+	// 	variation.fetch();
+	// 	// }
+	// });
+	const variations = [];
 
-	return variations.map(variation => (
+	return variations.map((variation) => (
 		<Text
 			key={variation.id}
 			onPress={() => {

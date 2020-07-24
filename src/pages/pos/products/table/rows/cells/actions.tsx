@@ -1,8 +1,7 @@
 import React from 'react';
-import Button from '../../../../components/button';
-import Popover from '../../../../components/popover';
+import Button from '../../../../../../components/button';
+import Popover from '../../../../../../components/popover';
 import Variations from './variations';
-import useAppState from '../../../../hooks/use-app-state';
 
 interface Props {
 	product: any;

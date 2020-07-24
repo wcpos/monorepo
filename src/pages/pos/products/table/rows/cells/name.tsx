@@ -1,7 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
 import Text from '../../../../../../components/text';
-import useFetch from '../../../../../../hooks/use-fetch';
 
 interface Props {
 	product: any;
@@ -10,36 +9,13 @@ interface Props {
 	showTags: boolean;
 }
 
-const Variations = ({ product }) => {
-	const [{ data, error, loading }] = useFetch(product.attributes);
-
-	const handleClick = (attribute) => {
-		console.log('filter by attribute ', attribute);
-	};
-
-	if (loading) {
-		return <Text>Loading</Text>;
-	}
-
-	return data.map((attribute) => (
-		<View key={attribute.id} weight="bold">
-			<Text size="small">{attribute.name}: </Text>
-			{attribute.options.map((option) => (
-				<Text size="small" key={option} onPress={() => handleClick(option)}>
-					{option}
-				</Text>
-			))}
-		</View>
-	));
-};
-
 const Name = ({ product, showSKU, showCategories, showTags }: Props) => {
 	return (
 		<React.Fragment>
 			<Text>{product.name}</Text>
 			{showSKU && <Text size="small">{product.sku}</Text>}
 			{showCategories && (
-				<View style={{ flexDirection: 'row' }}>
+				<View>
 					<Text size="small">
 						<Text size="small" type="secondary">
 							Categories:
@@ -49,7 +25,7 @@ const Name = ({ product, showSKU, showCategories, showTags }: Props) => {
 				</View>
 			)}
 			{showTags && (
-				<View style={{ flexDirection: 'row' }}>
+				<View>
 					<Text size="small">
 						<Text size="small" type="secondary">
 							Tags:
@@ -58,7 +34,20 @@ const Name = ({ product, showSKU, showCategories, showTags }: Props) => {
 					</Text>
 				</View>
 			)}
-			{product.isVariable() && <Variations product={product} />}
+			{product.type === 'variable' && (
+				<View>
+					{product.attributes
+						.filter((attr) => attr.variation)
+						.map((attr) => (
+							<Text size="small">
+								<Text size="small" type="secondary">
+									{attr.name}:
+								</Text>
+								{attr.options.join(', ')}
+							</Text>
+						))}
+				</View>
+			)}
 		</React.Fragment>
 	);
 };

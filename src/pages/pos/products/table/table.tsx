@@ -5,7 +5,7 @@ import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from '
 import { useTranslation } from 'react-i18next';
 import Table from '../../../../components/table';
 import useAppState from '../../../../hooks/use-app-state';
-import Rows from './rows';
+import Row from './rows';
 
 interface Props {
 	columns: any;
@@ -68,12 +68,7 @@ const ProductsTable: React.FC<Props> = ({ columns, display, query, sort }) => {
 				</Table.HeaderRow>
 			</Table.Header>
 			<Table.Body>
-				{({ item }) => {
-					if (item.type === 'variable') {
-						return <Rows.Variation variation={item} columns={columns} display={display} />;
-					}
-					return <Rows.Product product={item} columns={columns} display={display} />;
-				}}
+				{({ item }) => <Row product={item} columns={columns} display={display} />}
 			</Table.Body>
 		</Table>
 	);

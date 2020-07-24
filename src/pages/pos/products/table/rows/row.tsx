@@ -2,14 +2,10 @@ import React from 'react';
 import Table from '../../../../../components/table';
 import Button from '../../../../../components/button';
 import Name from './cells/name';
+import Actions from './cells/actions';
 import find from 'lodash/find';
 
-const ProductRow = ({ product, columns, display }) => {
-	const addToCart = async () => {
-		const order = await product.collections().orders.findOne().exec();
-		order.addOrUpdateLineItem(product);
-	};
-
+const Row = ({ product, columns, display }) => {
 	const show = (key: string): boolean => {
 		const d = find(display, { key });
 		return !d.hide;
@@ -33,7 +29,7 @@ const ProductRow = ({ product, columns, display }) => {
 										/>
 									);
 								case 'actions':
-									return <Button title="+" onPress={addToCart} />;
+									return <Actions product={product} />;
 								default:
 									return null;
 							}
@@ -45,4 +41,4 @@ const ProductRow = ({ product, columns, display }) => {
 	);
 };
 
-export default ProductRow;
+export default Row;
