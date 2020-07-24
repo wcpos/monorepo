@@ -4,15 +4,17 @@ import { useObservable, useObservableState } from 'observable-hooks';
 import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
 import Segment from '../../components/segment';
 import Input from '../../components/textinput';
+import Button from '../../components/button';
 import Table from './table';
 import Actions from './actions';
 import useAppState from '../../hooks/use-app-state';
+import WcApiService from '../../services/wc-api';
 import * as Styled from './styles';
 
 interface Props {}
 
 const Products: React.FC<Props> = () => {
-	const [{ storeDB }] = useAppState();
+	const [{ user, storePath, storeDB }] = useAppState();
 	const ui = storeDB.getUI('products');
 
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
@@ -69,7 +71,54 @@ const Products: React.FC<Props> = () => {
 					<Table columns={columns} products={products} />
 				</Segment>
 				<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
-					<Text>Footer</Text>
+					<Text>
+						<Button
+							title="Fetch Tax Rates"
+							onPress={async () => {
+								const path = storePath.split('.');
+								const site = user.get(path.slice(1, 3).join('.'));
+								const wpCredentials = user.get(path.slice(1, 5).join('.'));
+								const baseUrl = site.wc_api_url;
+								const collection = 'taxes';
+								const key = wpCredentials.consumer_key;
+								const secret = wpCredentials.consumer_secret;
+								const api = new WcApiService({ baseUrl, collection, key, secret });
+								const data = await api.fetch();
+								console.log(data);
+								await storeDB.upsertLocal(
+									'tax_rates',
+									// turn array into json
+									data.reduce((obj, rate) => {
+										obj[rate.id] = rate;
+										return obj;
+									}, {})
+								);
+							}}
+						/>
+						<Button
+							title="Fetch Tax Classes"
+							onPress={async () => {
+								const path = storePath.split('.');
+								const site = user.get(path.slice(1, 3).join('.'));
+								const wpCredentials = user.get(path.slice(1, 5).join('.'));
+								const baseUrl = site.wc_api_url;
+								const collection = 'taxes/classes';
+								const key = wpCredentials.consumer_key;
+								const secret = wpCredentials.consumer_secret;
+								const api = new WcApiService({ baseUrl, collection, key, secret });
+								const data = await api.fetch();
+								console.log(data);
+								await storeDB.upsertLocal(
+									'tax_classes',
+									// turn array into json
+									data.reduce((obj, taxClass) => {
+										obj[taxClass.slug] = taxClass;
+										return obj;
+									}, {})
+								);
+							}}
+						/>
+					</Text>
 				</Segment>
 			</Segment.Group>
 		</Styled.Container>
