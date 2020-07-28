@@ -10,7 +10,7 @@ interface Props {
 }
 
 const Variations = ({ product, addToCart }: Props) => {
-	const [{ user, storePath }] = useAppState();
+	const [{ user, storeDB, storePath }] = useAppState();
 
 	// const variations = useObservable(product.variations.observe(), []);
 
@@ -43,6 +43,7 @@ const Variations = ({ product, addToCart }: Props) => {
 		});
 		const result = await api.fetch();
 		console.log(result);
+		storeDB.collections.variations.bulkInsert(result);
 	};
 
 	return (
