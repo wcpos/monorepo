@@ -6,12 +6,12 @@ import SplashPage from '../pages/splash';
 import useAppState from '../hooks/use-app-state';
 
 const routes = {
-	Auth: 'auth',
+	Auth: '',
 	Main: {
-		path: 'main',
+		path: '',
 		screens: {
 			POS: {
-				path: 'pos',
+				path: '',
 			},
 			Products: {
 				path: 'products',

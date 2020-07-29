@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import Text from '../../../../../../components/text';
 import Button from '../../../../../../components/button';
 import useAppState from '../../../../../../hooks/use-app-state';
@@ -11,25 +12,16 @@ interface Props {
 
 const Variations = ({ product, addToCart }: Props) => {
 	const [{ user, storeDB, storePath }] = useAppState();
+	const [variations, setVariations] = React.useState([]);
 
-	// const variations = useObservable(product.variations.observe(), []);
-
-	// variations.forEach((variation) => {
-	// 	// if (variation && !variation.status) {
-	// 	variation.fetch();
-	// 	// }
-	// });
-
-	// return variations.map((variation) => (
-	// 	<Text
-	// 		key={variation.id}
-	// 		onPress={() => {
-	// 			addToCart(variation);
-	// 		}}
-	// 	>
-	// 		{variation.remote_id} - {variation.price}
-	// 	</Text>
-	// ));
+	React.useEffect(() => {
+		(async () => {
+			const variations = await storeDB.collections.variations.findByIds(
+				product.variations.map(String)
+			);
+			setVariations(Array.from(variations.values()));
+		})();
+	}, [product]);
 
 	const fetchData = async (endpoint) => {
 		const path = storePath.split('.');
@@ -46,14 +38,30 @@ const Variations = ({ product, addToCart }: Props) => {
 		storeDB.collections.variations.bulkInsert(result);
 	};
 
-	return (
-		<Button
-			title="Fetch variations"
-			onPress={() => {
-				fetchData(`products/${product.id}/variations`);
-			}}
-		/>
-	);
+	if (variations.length === 0) {
+		return (
+			<Button
+				title="Fetch variations"
+				onPress={() => {
+					fetchData(`products/${product.id}/variations`);
+				}}
+			/>
+		);
+	}
+
+	return variations.map((variation) => (
+		<View key={variation.id}>
+			<Text>
+				{variation.id} -
+				{variation.attributes.map((attribute) => (
+					<Text key={attribute.id}>
+						{attribute.name} - {attribute.option},
+					</Text>
+				))}
+				- {variation.price}
+			</Text>
+		</View>
+	));
 };
 
 export default Variations;
