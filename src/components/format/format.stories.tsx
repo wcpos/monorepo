@@ -1,38 +1,28 @@
 import React from 'react';
-import { storiesOf } from '@storybook/react';
 
-import * as Format from './';
+import * as Format from '.';
 
-storiesOf('Format', module)
-	/**
-	 *
-	 */
-	.add('name', () => <Format.Name firstName="Bob" lastName="Doe" />)
+export default {
+	title: 'Component/Format',
+};
 
-	/**
-	 *
-	 */
-	.add('number', () => <Format.Number prefix="$">3.99</Format.Number>)
+export const name = () => <Format.Name firstName="Bob" lastName="Doe" />;
 
-	/**
-	 *
-	 */
-	.add('list', () => <Format.List array={['one', 'two', 'three']} />)
+export const number = () => <Format.Number prefix="$">3.99</Format.Number>;
 
-	/**
-	 *
-	 */
-	.add('address', () => {
-		const address = {
-			first_name: 'John',
-			last_name: 'Doe',
-			company: 'ACME Inc.',
-			address_1: '969 Market',
-			address_2: 'Suite 66',
-			city: 'San Francisco',
-			state: 'CA',
-			postcode: '94103',
-			country: 'US',
-		};
-		return <Format.Address address={address} />;
-	});
+export const list = () => <Format.List array={['one', 'two', 'three']} />;
+
+export const address_1 = () => {
+	const address = {
+		first_name: 'John',
+		last_name: 'Doe',
+		company: 'ACME Inc.',
+		address_1: '969 Market',
+		address_2: 'Suite 66',
+		city: 'San Francisco',
+		state: 'CA',
+		postcode: '94103',
+		country: 'US',
+	};
+	return <Format.Address address={address} />;
+};

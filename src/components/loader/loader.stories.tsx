@@ -1,12 +1,11 @@
 import React from 'react';
 
-import { storiesOf } from '@storybook/react';
 import { select } from '@storybook/addon-knobs';
 
-import Loader from './';
+import Loader from '.';
 
-storiesOf('Loader', module)
-	/**
-	 *
-	 */
-	.add('basic usage', () => <Loader size={select('size', ['small', 'large'], 'small')} />);
+export default {
+	title: 'Component/Loader',
+};
+
+export const basicUsage = () => <Loader size={select('size', ['small', 'large'], 'small')} />;

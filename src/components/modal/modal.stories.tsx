@@ -4,10 +4,11 @@ import Button from '../button';
 import Portal from '../portal';
 import Text from '../text';
 
-import { storiesOf } from '@storybook/react';
-import { action } from '@storybook/addon-actions';
+import Modal from '.';
 
-import Modal from './';
+export default {
+	title: 'Component/Modal',
+};
 
 const Example1 = () => {
 	const [visible, setVisible] = useState(false);
@@ -33,12 +34,8 @@ const Example1 = () => {
 	);
 };
 
-storiesOf('Modal', module)
-	/**
-	 *
-	 */
-	.add('basic usage', () => (
-		<Portal.Host>
-			<Example1 />
-		</Portal.Host>
-	));
+export const basicUsage = () => (
+	<Portal.Host>
+		<Example1 />
+	</Portal.Host>
+);

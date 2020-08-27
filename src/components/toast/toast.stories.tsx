@@ -1,11 +1,13 @@
 import React from 'react';
+import { action } from '@storybook/addon-actions';
 import Button from '../button';
 import Portal from '../portal';
 
-import { storiesOf } from '@storybook/react';
-import { action } from '@storybook/addon-actions';
+import Toast from '.';
 
-import Toast from './';
+export default {
+	title: 'Component/Toast',
+};
 
 const example1 = () => {
 	Toast.info(
@@ -18,12 +20,8 @@ const example1 = () => {
 	);
 };
 
-storiesOf('Toast', module)
-	/**
-	 *
-	 */
-	.add('basic usage', () => (
-		<Portal.Host>
-			<Button title="Show Toast" onPress={example1} />
-		</Portal.Host>
-	));
+export const basicUsage = () => (
+	<Portal.Host>
+		<Button title="Show Toast" onPress={example1} />
+	</Portal.Host>
+);

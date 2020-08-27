@@ -2,12 +2,11 @@ import React from 'react';
 
 // import { action } from '@storybook/addon-actions';
 // import { text } from '@storybook/addon-knobs';
-import { storiesOf } from '@storybook/react';
 
-import Calculator from './';
+import Calculator from '.';
 
-storiesOf('Calculator', module)
-  /**
-   *
-   */
-  .add('basic usage', () => <Calculator />);
+export default {
+	title: 'Module/Calculator',
+};
+
+export const basicUsage = () => <Calculator />;
