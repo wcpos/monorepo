@@ -10,9 +10,14 @@ interface Props {
 	addToCart: any;
 }
 
-const Variations = ({ product, addToCart }: Props) => {
+const Variations = ({ product }: Props) => {
 	const [{ user, storeDB, storePath }] = useAppState();
 	const [variations, setVariations] = React.useState([]);
+
+	const addToCart = async (variation) => {
+		const order = await product.collections().orders.findOne().exec();
+		order.addOrUpdateLineItem(variation, product);
+	};
 
 	React.useEffect(() => {
 		(async () => {
@@ -21,7 +26,7 @@ const Variations = ({ product, addToCart }: Props) => {
 			);
 			setVariations(Array.from(variations.values()));
 		})();
-	}, [product]);
+	}, [product, storeDB.collections.variations]);
 
 	const fetchData = async (endpoint) => {
 		const path = storePath.split('.');
@@ -55,11 +60,12 @@ const Variations = ({ product, addToCart }: Props) => {
 				{variation.id} -
 				{variation.attributes.map((attribute) => (
 					<Text key={attribute.id}>
-						{attribute.name} - {attribute.option},
+						{attribute.name} -{attribute.option},
 					</Text>
 				))}
 				- {variation.price}
 			</Text>
+			<Button title="Add to Cart" onPress={() => addToCart(variation)} />
 		</View>
 	));
 };

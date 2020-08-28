@@ -204,5 +204,8 @@
 			}
 		}
 	},
+	"thumbnail": {
+		"type": "string"
+	},
 	"indexes": ["sku"]
 }

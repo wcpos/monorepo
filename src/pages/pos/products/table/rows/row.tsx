@@ -1,9 +1,10 @@
 import React from 'react';
+import find from 'lodash/find';
 import Table from '../../../../../components/table';
 import Button from '../../../../../components/button';
+import Image from './cells/image';
 import Name from './cells/name';
 import Actions from './cells/actions';
-import find from 'lodash/find';
 
 const Row = ({ product, columns, display }) => {
 	const show = (key: string): boolean => {
@@ -19,6 +20,8 @@ const Row = ({ product, columns, display }) => {
 					<Table.Row.Cell {...getCellProps()}>
 						{((): React.ReactElement | null => {
 							switch (column.key) {
+								case 'image':
+									return <Image product={product} />;
 								case 'name':
 									return (
 										<Name

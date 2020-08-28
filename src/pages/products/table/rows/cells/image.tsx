@@ -1,5 +1,5 @@
 import React from 'react';
-import Img from '../../../../../../components/image';
+import Img from '../../../../../components/image';
 
 type Props = {
 	product: any;

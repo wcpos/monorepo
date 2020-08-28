@@ -1,5 +1,6 @@
 import React from 'react';
 import Table from '../../../../components/table';
+import Image from './cells/image';
 import Categories from './cells/categories';
 import Tags from './cells/tags';
 import Actions from './cells/actions';
@@ -16,6 +17,8 @@ const Row = ({ product, columns }: Props) => {
 				<Table.Row.Cell {...getCellProps()}>
 					{((): React.ReactElement | null => {
 						switch (column.key) {
+							case 'image':
+								return <Image product={product} />;
 							case 'categories':
 								return <Categories categories={cellData} />;
 							case 'tags':
