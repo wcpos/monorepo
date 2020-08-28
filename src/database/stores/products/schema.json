@@ -353,6 +353,9 @@
 					}
 				}
 			}
+		},
+		"thumbnail": {
+			"type": "string"
 		}
 	},
 	"indexes": ["name", "sku", "price", "regular_price", "sale_price"]

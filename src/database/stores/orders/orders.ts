@@ -20,15 +20,16 @@ const methods: Methods = {
 	/**
 	 *
 	 */
-	async addOrUpdateLineItem(product) {
+	async addOrUpdateLineItem(product, parent) {
 		await this.collections()
 			.line_items.upsert({
 				id: `new-${Date.now()}`,
 				order_id: this.id,
-				name: product.name,
-				product_id: parseInt(product.id, 10),
+				name: product.name || parent.name,
+				product_id: parent ? parseInt(parent.id, 10) : parseInt(product.id, 10),
+				variation_id: parent && parseInt(product.id, 10),
 				quantity: 1,
-				price: parseInt(product.price, 10),
+				price: parseFloat(product.price),
 				sku: product.sku,
 				tax_class: product.tax_class,
 			})
