@@ -10,12 +10,7 @@ export type Props = {
 	direction?: 'vertical' | 'horizontal';
 };
 
-const SegmentGroup: React.FC<Props> = ({
-	children,
-	direction = 'vertical',
-	style,
-	raised = true,
-}) => {
+const SegmentGroup = ({ children, direction = 'vertical', style, raised = true }: Props) => {
 	const count = React.Children.count(children);
 
 	return (

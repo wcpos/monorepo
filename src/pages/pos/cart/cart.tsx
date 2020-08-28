@@ -48,15 +48,15 @@ const Cart: React.FC<Props> = () => {
 	};
 
 	return (
-		<Segment.Group style={{ height: '100%', width: '100%' }}>
-			<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
+		<Segment.Group>
+			<Segment>
 				<CustomerSelect ui={ui} />
 				<Actions ui={ui} columns={columns} />
 			</Segment>
-			<Segment style={{ flexGrow: 0, flexShrink: 1, flexBasis: 'auto' }}>
+			<Segment grow>
 				<Table order={order} columns={columns} query={query} onSort={handleSort} />
 			</Segment>
-			<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
+			<Segment>
 				<View style={{ flexDirection: 'row' }}>
 					<View style={{ flex: 1 }}>
 						<Text>Subtotal:</Text>

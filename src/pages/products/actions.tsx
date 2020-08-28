@@ -14,7 +14,7 @@ interface Props {
 /**
  *
  */
-const Actions: React.FC<Props> = ({ columns, query }) => {
+const Actions: React.FC<Props> = ({ columns, query, ui }) => {
 	const { t } = useTranslation();
 
 	const onFilter = () => {
@@ -24,14 +24,15 @@ const Actions: React.FC<Props> = ({ columns, query }) => {
 	return (
 		<>
 			<Text>Columns</Text>
-			{columns.map((column: any) => (
+			{columns.map((column: any, index) => (
 				<Checkbox
 					key={column.key}
 					name={column.key}
 					label={t(`products.column.label.${column.key}`)}
 					checked={!column.hide}
 					onChange={(checked) => {
-						// ui.updateColumn(column.key, { hide: !checked });
+						columns[index] = { ...column, hide: !checked };
+						ui.atomicSet('columns', columns);
 					}}
 				/>
 			))}

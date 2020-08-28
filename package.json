@@ -16,7 +16,7 @@
 		"@react-navigation/drawer": "5.9.0",
 		"@react-navigation/native": "5.7.3",
 		"@react-navigation/stack": "5.9.0",
-		"@sentry/browser": "5.21.4",
+		"@sentry/browser": "5.22.0",
 		"@sentry/electron": "2.0.0",
 		"@sentry/react-native": "1.7.2",
 		"axios": "0.20.0",

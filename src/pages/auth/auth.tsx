@@ -52,7 +52,7 @@ const Auth: React.FC<Props> = (props) => {
 					/>
 				</Segment>
 				{sites.length > 0 && (
-					<Segment.Group style={{ width: '90%', maxWidth: 460 }}>
+					<Segment.Group style={{ width: '90%', maxWidth: 460, height: 'auto' }}>
 						<Segment content="Sites" />
 						{sites.map((site, index) => (
 							<Segment key={site.id}>

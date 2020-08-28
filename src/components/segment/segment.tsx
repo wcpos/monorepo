@@ -14,15 +14,7 @@ export type Props = {
 	grow?: boolean;
 };
 
-const Segment: React.FC<Props> = ({
-	children,
-	content,
-	group,
-	grow,
-	type,
-	raised = true,
-	style,
-}) => {
+const Segment = ({ children, content, group, grow, type, raised = true, style }: Props) => {
 	let segment = content || children || '';
 	if (typeof segment === 'string' || typeof segment === 'number') {
 		segment = <Text>{segment}</Text>;

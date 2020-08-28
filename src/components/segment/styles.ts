@@ -13,7 +13,9 @@ export const Segment = styled.View<SegmentProps>`
 	border-radius: ${({ group, theme }) => (group === 'middle' ? '0' : theme.SEGMENT_BORDER_RADIUS)};
 	padding: ${({ theme, grow }) => (grow ? 0 : theme.SEGMENT_PADDING)};
 	margin-bottom: ${({ group, theme }) => (group ? '0' : theme.SEGMENT_MARGIN_BOTTOM)};
-	flex-grow: ${({ grow }) => (grow ? '1' : '0')};
+	flex-shrink: ${({ grow }) => (grow ? '1' : '0')};
+	flex-grow: 0;
+	flex-basis: auto;
 
 	${({ group }) =>
 		group === 'first' &&
@@ -21,8 +23,8 @@ export const Segment = styled.View<SegmentProps>`
 			border-bottom-left-radius: 0;
 			border-bottom-right-radius: 0;
 		`}
-    
-  ${({ group }) =>
+
+	${({ group }) =>
 		group === 'last' &&
 		css`
 			border-top-left-radius: 0;
@@ -59,6 +61,7 @@ type GroupProps = {
 export const Group = styled.View<GroupProps>`
 	flex-direction: ${({ direction }) => (direction === 'horizontal' ? 'row' : 'column')};
 	width: 100%;
+	height: 100%;
 
 	${({ raised }) =>
 		raised &&

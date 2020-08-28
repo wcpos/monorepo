@@ -62,15 +62,15 @@ const Products: React.FC<Props> = () => {
 
 	return (
 		<Styled.Container>
-			<Segment.Group style={{ height: '100%', width: '100%' }}>
-				<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
+			<Segment.Group>
+				<Segment>
 					<Input placeholder="Search products" onChangeText={onSearch} />
-					<Actions columns={columns} query={query} />
+					<Actions columns={columns} query={query} ui={ui} />
 				</Segment>
-				<Segment style={{ flexGrow: 0, flexShrink: 1, flexBasis: 'auto' }}>
+				<Segment grow>
 					<Table columns={columns} products={products} />
 				</Segment>
-				<Segment style={{ flexGrow: 0, flexShrink: 0, flexBasis: 'auto' }}>
+				<Segment>
 					<Text>
 						<Button
 							title="Fetch Tax Rates"
