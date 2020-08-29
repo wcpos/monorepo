@@ -8,7 +8,7 @@ import getDatabase from '../adapter';
 import createCollectionMap from '../stores';
 import generateId from '../../utils/generate-id';
 import wcAuthService from '../../services/wc-auth';
-import initialUI from './ui-settings/initial.json';
+import initialUI from './ui-initial.json';
 
 type UserSchema = import('./interface').UserSchema;
 type UserDocumentMethods = {
