@@ -60,7 +60,7 @@ const Customers: React.FC<Props> = () => {
 		<React.Suspense fallback={<Text>loading customers...</Text>}>
 			<Segment.Group>
 				<Segment>
-					<Actions ui={ui} columns={columns} />
+					<Actions columns={columns} query={query} ui={ui} />
 				</Segment>
 				<Segment grow>
 					<Table

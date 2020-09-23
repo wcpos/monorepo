@@ -14,7 +14,7 @@ export type Collection = import('rxdb').RxCollection<Model, Methods, Statics>;
 type Database = import('../../database').Database;
 
 /**
- * WooCommerce Product Model methods
+ * WooCommerce Order Model methods
  */
 const methods: Methods = {
 	/**
@@ -118,7 +118,7 @@ const methods: Methods = {
 };
 
 /**
- * WooCommerce Product Collection methods
+ * WooCommerce Order Collection methods
  */
 const statics: Statics = {
 	/**

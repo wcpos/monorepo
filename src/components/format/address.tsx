@@ -14,6 +14,7 @@ interface Props {
 		postcode?: string;
 		state?: string;
 	};
+	showName: boolean;
 }
 
 const addresses = {
@@ -59,17 +60,19 @@ const addresses = {
 	VN: '{name}\n{company}\n{address_1}\n{city}\n{country}',
 };
 
-const Address = ({ address }: Props) => {
+const Address = ({ address, showName }: Props) => {
 	const addr = { ...address }; // clone address
-	let template = addresses[addr.country] || addresses['default'];
-	addr.name = addr.first_name + ' ' + addr.last_name;
+	let template = addresses[addr.country] || addresses.default;
+	if (showName !== false) {
+		addr.name = `${addr.first_name} ${addr.last_name}`;
+	}
 	addr.state_code = addr.state;
 	addr.state_upper = addr.state?.toUpperCase();
 	addr.city_upper = addr.city?.toUpperCase();
 
 	const matches = template.match(/\{[\w]+\}/g);
 	matches &&
-		matches.forEach(match => {
+		matches.forEach((match) => {
 			const regex = new RegExp(match, 'g');
 			const prop = match.split(/{|}/g)[1];
 			template = template.replace(regex, addr[prop] || '');
