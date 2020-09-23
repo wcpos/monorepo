@@ -24,14 +24,15 @@ const Actions: React.FC<Props> = ({ ui, columns }) => {
 		<>
 			<Input placeholder="Search orders" onChangeText={onFilter} />
 			<Text>Columns</Text>
-			{columns.map((column: any) => (
+			{columns.map((column: any, index: number) => (
 				<Checkbox
 					key={column.key}
 					name={column.key}
 					label={t(`orders.column.label.${column.key}`)}
 					checked={!column.hide}
 					onChange={(checked) => {
-						ui.updateColumn(column.key, { hide: !checked });
+						columns[index] = { ...column, hide: !checked };
+						ui.atomicSet('columns', columns);
 					}}
 				/>
 			))}

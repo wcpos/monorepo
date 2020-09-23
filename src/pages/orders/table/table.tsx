@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import Table from '../../components/table';
-import Text from '../../components/text';
+import Table from '../../../components/table';
+import Row from './rows';
 
 interface Props {
 	columns: any;
@@ -37,17 +37,7 @@ const OrdersTable: React.FC<Props> = ({ columns, orders, sort, sortBy, sortDirec
 					}}
 				</Table.HeaderRow>
 			</Table.Header>
-			<Table.Body>
-				{({ item }) => (
-					<Table.Row rowData={item} columns={columns}>
-						{({ cellData, column, getCellProps }) => (
-							<Table.Row.Cell {...getCellProps()}>
-								<Text>{String(cellData)}</Text>
-							</Table.Row.Cell>
-						)}
-					</Table.Row>
-				)}
-			</Table.Body>
+			<Table.Body>{({ item }) => <Row order={item} columns={columns} />}</Table.Body>
 		</Table>
 	);
 };

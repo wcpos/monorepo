@@ -2,12 +2,12 @@ import React from 'react';
 import Format from '../../../../../components/format';
 
 type Props = {
-	customer: any;
+	order: any;
 	type: 'shipping' | 'billing';
 };
 
-const Address = ({ customer, type }: Props) => {
-	return <Format.Address address={customer[type]} showName={false} />;
+const Address = ({ order, type }: Props) => {
+	return <Format.Address address={order[type]} showName={false} />;
 };
 
 export default Address;
