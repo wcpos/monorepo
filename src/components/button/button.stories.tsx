@@ -12,10 +12,16 @@ export default {
 export const basicUsage = () => (
 	<>
 		<View style={{ padding: 10 }}>
-			<Button onPress={action('pressed')} title="Primary" />
+			<Button onPress={action('pressed')} onLongPress={action('long press')} title="Primary" />
 		</View>
 		<View style={{ padding: 10 }}>
-			<Button onPress={action('pressed')} title="Secondary" type="secondary" />
+			<Button
+				onPress={action('pressed')}
+				onPressIn={action('press in')}
+				onPressOut={action('press out')}
+				title="Secondary"
+				type="secondary"
+			/>
 		</View>
 		<View style={{ padding: 10 }}>
 			<Button onPress={action('pressed')} title="Attention" type="attention" />

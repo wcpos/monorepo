@@ -3,20 +3,25 @@ import { StyleSheet } from 'react-native';
 
 type ThemeProps = { theme: import('../../lib/theme/types').ThemeProps };
 type ButtonProps = import('./button').Props;
-type BackgroundProps = ThemeProps & Pick<ButtonProps, 'background' | 'type'>;
+type BackgroundProps = ThemeProps &
+	Pick<ButtonProps, 'background' | 'type' | 'disabled'> & {
+		focused: boolean;
+		hovered: boolean;
+		pressed: boolean;
+	};
 
 export const Background = styled.View<BackgroundProps>`
-	background-color: ${({ background, type, theme }) => {
+	background-color: ${({ background, type, theme, focused, hovered, pressed }) => {
 		if (background === 'clear' || background === 'outline') {
 			return 'transparent';
 		}
 		switch (type) {
 			case 'secondary':
-				return theme.BUTTON_COLOR_SECONDARY;
+				return hovered ? 'black' : theme.BUTTON_COLOR_SECONDARY;
 			case 'attention':
-				return theme.BUTTON_COLOR_ATTENTION;
+				return focused ? 'black' : theme.BUTTON_COLOR_ATTENTION;
 			case 'critical':
-				return theme.BUTTON_COLOR_CRITICAL;
+				return pressed ? 'black' : theme.BUTTON_COLOR_CRITICAL;
 			case 'info':
 				return theme.BUTTON_COLOR_INFO;
 			case 'success':
@@ -50,6 +55,8 @@ export const Background = styled.View<BackgroundProps>`
 				return theme.BUTTON_COLOR;
 		}
 	}};
+
+	opacity: ${({ disabled }) => (disabled ? 0.5 : 1)}
 	border-radius: ${({ theme }) => theme.BUTTON_BORDER_RADIUS};
 	border-width: ${({ background }) => (background === 'outline' ? StyleSheet.hairlineWidth : 0)};
 	padding: ${({ theme }) => theme.BUTTON_PADDING_Y} ${({ theme }) => theme.BUTTON_PADDING_X};

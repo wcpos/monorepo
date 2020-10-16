@@ -1,6 +1,5 @@
 import React from 'react';
-import { GestureResponderEvent } from 'react-native';
-import Touchable from '../touchable';
+import { Pressable, GestureResponderEvent } from 'react-native';
 import Text from '../text';
 import * as Styled from './styles';
 
@@ -12,6 +11,9 @@ export type Props = {
 	disabled?: boolean;
 	loading?: boolean;
 	onPress?: (event: GestureResponderEvent) => void;
+	onPressIn?: (event: GestureResponderEvent) => void;
+	onPressOut?: (event: GestureResponderEvent) => void;
+	onLongPress?: (event: GestureResponderEvent) => void;
 	raised?: boolean;
 	size?: 'normal' | 'large' | 'small';
 	style?: import('react-native').ViewStyle;
@@ -27,7 +29,7 @@ export type Props = {
 		| 'inverse';
 };
 
-const Button: React.FC<Props> = ({
+const Button = ({
 	accessoryLeft,
 	accessoryRight,
 	background = 'solid',
@@ -35,12 +37,15 @@ const Button: React.FC<Props> = ({
 	disabled,
 	loading,
 	onPress,
+	onPressIn,
+	onPressOut,
+	onLongPress,
 	raised,
 	size = 'normal',
 	style,
 	type = 'primary',
 	...props
-}) => {
+}: Props) => {
 	const title = props.title || children;
 	let textType = type;
 	if (background === 'solid') {
@@ -62,17 +67,29 @@ const Button: React.FC<Props> = ({
 	};
 
 	return (
-		<Touchable
-			disabled={disabled}
+		<Pressable
 			onPress={onPress}
-			// style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}
+			onPressIn={onPressIn}
+			onPressOut={onPressOut}
+			delayLongPress={800}
+			onLongPress={onLongPress}
 		>
-			<Styled.Background type={type} background={background} style={style}>
-				{accessoryLeft && React.cloneElement(accessoryLeft, { color: '#FFF' })}
-				{renderTitle()}
-				{accessoryRight && React.cloneElement(accessoryRight, { color: '#FFF' })}
-			</Styled.Background>
-		</Touchable>
+			{({ pressed, hovered, focused }) => (
+				<Styled.Background
+					background={background}
+					disabled={disabled}
+					focused={focused}
+					hovered={hovered}
+					pressed={pressed}
+					style={style}
+					type={type}
+				>
+					{accessoryLeft && React.cloneElement(accessoryLeft, { color: '#FFF' })}
+					{renderTitle()}
+					{accessoryRight && React.cloneElement(accessoryRight, { color: '#FFF' })}
+				</Styled.Background>
+			)}
+		</Pressable>
 	);
 };
 
