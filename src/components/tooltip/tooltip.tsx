@@ -1,4 +1,5 @@
 import React, { Fragment, useState } from 'react';
+import { Pressable } from 'react-native';
 import useLayout from '../../hooks/use-layout';
 import { TargetWrapper } from './styles';
 import TooltipView from './view';
@@ -29,21 +30,20 @@ const Tooltip = ({ children, placement = 'top', text }: Props) => {
 	};
 
 	return (
-		<Fragment>
-			<Touchable
-				onLayout={onLayout}
-				onPress={toggleTooltip}
-				onMouseEnter={showTooltip}
-				onMouseLeave={hideTooltip}
-			>
-				{children}
-			</Touchable>
+		<Pressable
+			onLayout={onLayout}
+			onPress={toggleTooltip}
+			onMouseEnter={showTooltip}
+			onMouseLeave={hideTooltip}
+		>
+			{children}
+
 			{visible && (
 				<TooltipView top={layout.y} left={layout.x}>
 					{text}
 				</TooltipView>
 			)}
-		</Fragment>
+		</Pressable>
 	);
 };
 
