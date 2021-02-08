@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { usersDatabase, getStoreDatabase } from '../../database';
 import { SET_USER, RESTORE_LAST_USER } from './action-types';
 

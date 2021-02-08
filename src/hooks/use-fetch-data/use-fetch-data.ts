@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import useAppState from '../use-app-state';
 import WcApiService from '../../services/wc-api';
 
