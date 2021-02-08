@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler';
-import React from 'react';
+import * as React from 'react';
 import { Text } from 'react-native';
 import { ThemeProvider } from './hooks/use-theme';
 import { AppStateProvider } from './hooks/use-app-state';

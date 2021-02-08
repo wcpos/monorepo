@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import useObservable from '../../../hooks/use-observable';
 import Text from '../../../components/text';
 import { Product } from '../../../database/models/types';

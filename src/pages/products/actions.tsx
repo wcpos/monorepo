@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useObservableState } from 'observable-hooks';
 import Input from '../../components/textinput';

@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import find from 'lodash/find';
 import Table from '../../../../../components/table';
 import Button from '../../../../../components/button';

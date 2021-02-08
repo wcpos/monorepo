@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { boolean, text, select } from '@storybook/addon-knobs';
 import Icon from '.';
 import svgs from './svg';

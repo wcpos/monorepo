@@ -1,5 +1,5 @@
 // React Native version of https://codepen.io/mjijackson/pen/xOzyGX
-import React from 'react';
+import * as React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Display from './display';
 import Input from './input';

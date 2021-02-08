@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { Pressable, GestureResponderEvent } from 'react-native';
 import Text from '../text';
 import * as Styled from './styles';

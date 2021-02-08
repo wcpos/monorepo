@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { FlatList } from 'react-native-gesture-handler'; // swipeable rows?
 import Body from './body';
 import Header from './header';

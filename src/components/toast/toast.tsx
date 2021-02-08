@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { animated, useSpring } from 'react-spring/native';
 import Icon from '../icon';
 import { Container, InnerContainer, Wrapper, Text } from './styles';

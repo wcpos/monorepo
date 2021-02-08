@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import useAppState from '../../hooks/use-app-state';
 import useObservable from '../../hooks/use-observable';
 import Table from '../../components/table';

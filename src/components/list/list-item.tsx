@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { TouchableOpacity } from 'react-native';
 import { ListItemView, ListItemTextView } from './styles';
 import Icon from '../icon';

@@ -1,6 +1,6 @@
-import React from 'react';
+import * as React from 'react';
 
-import Arrow from './';
+import Arrow from '.';
 
 export default {
 	title: 'Components/Arrow',

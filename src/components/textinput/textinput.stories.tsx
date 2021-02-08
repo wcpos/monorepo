@@ -1,11 +1,11 @@
-import React from 'react';
+import * as React from 'react';
 import { action } from '@storybook/addon-actions';
 import { text } from '@storybook/addon-knobs';
 import TextInput from '.';
 import Portal from '../portal';
 
 export default {
-	title: 'Component/TextInput',
+	title: 'Components/TextInput',
 };
 
 export const basicUsage = () => <TextInput placeholder={text('placeholder', 'Placeholder text')} />;

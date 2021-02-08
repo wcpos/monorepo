@@ -1,10 +1,10 @@
-import React from 'react';
+import * as React from 'react';
 import { View, Text, ScrollView } from 'react-native';
 
 import Layout from '.';
 
 export default {
-	title: 'Component/Layout',
+	title: 'Components/Layout',
 };
 
 export const basicUsage = () => (

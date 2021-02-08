@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { Pressable as RNPressable, GestureResponderEvent } from 'react-native';
 
 interface Props {

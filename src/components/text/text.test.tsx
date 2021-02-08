@@ -1,5 +1,5 @@
-import React from 'react';
-import Text from './';
+import * as React from 'react';
+import Text from '.';
 import renderWithTheme from '../../../jest/render-with-theme';
 
 describe('Text', () => {

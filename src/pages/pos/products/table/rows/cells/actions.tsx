@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import Button from '../../../../../../components/button';
 import Popover from '../../../../../../components/popover';
 import Variations from './variations';

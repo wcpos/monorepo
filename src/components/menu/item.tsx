@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { MenuItemText } from './styles';
 
 const Item = ({ label }) => {

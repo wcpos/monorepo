@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { action } from '@storybook/addon-actions';
 import Button from '../button';
 import Portal from '../portal';
@@ -6,7 +6,7 @@ import Portal from '../portal';
 import Toast from '.';
 
 export default {
-	title: 'Component/Toast',
+	title: 'Components/Toast',
 };
 
 const example1 = () => {

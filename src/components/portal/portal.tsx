@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import PortalConsumer from './consumer';
 import PortalHost, { portal, PortalContext } from './host';
 

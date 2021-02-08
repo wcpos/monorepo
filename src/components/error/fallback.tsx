@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { View, Text } from 'react-native';
 import Icon from '../icon';
 import Button from '../button';

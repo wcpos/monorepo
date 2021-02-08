@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { View } from 'react-native';
 import { useObservableSuspense, useObservableState, useObservable } from 'observable-hooks';
 import { from, of } from 'rxjs';

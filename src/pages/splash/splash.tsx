@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import PageLayout from '../../layout/page';
 import Logo from '../../components/logo';
 import * as Styled from './styles';

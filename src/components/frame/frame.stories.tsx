@@ -1,9 +1,9 @@
-import React from 'react';
+import * as React from 'react';
 
 import Frame from '.';
 
 export default {
-	title: 'Component/Frame',
+	title: 'Components/Frame',
 };
 
 export const basicUsage = () => <Frame />;

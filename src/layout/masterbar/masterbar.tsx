@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import Header from '../header';
 import Button from '../../components/button';

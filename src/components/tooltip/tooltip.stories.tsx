@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { View } from 'react-native';
 import { action } from '@storybook/addon-actions';
 import Text from '../text';
@@ -7,7 +7,7 @@ import Portal from '../portal';
 import Tooltip from '.';
 
 export default {
-	title: 'Component/Tooltip',
+	title: 'Components/Tooltip',
 };
 
 export const basicUsage = () => (

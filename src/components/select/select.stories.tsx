@@ -1,11 +1,11 @@
-import React from 'react';
+import * as React from 'react';
 import { action } from '@storybook/addon-actions';
 import Portal from '../portal';
 
 import Select from '.';
 
 export default {
-	title: 'Component/Select',
+	title: 'Components/Select',
 };
 
 export const basicUsage = (

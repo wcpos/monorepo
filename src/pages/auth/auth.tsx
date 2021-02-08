@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { useObservable, useObservableState } from 'observable-hooks';
 import PageLayout from '../../layout/page';
 import Segment from '../../components/segment';

@@ -1,9 +1,9 @@
-import React from 'react';
+import * as React from 'react';
 
 import * as Format from '.';
 
 export default {
-	title: 'Component/Format',
+	title: 'Components/Format',
 };
 
 export const name = () => <Format.Name firstName="Bob" lastName="Doe" />;

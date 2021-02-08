@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { View } from 'react-native';
 import noop from 'lodash/noop';
 import * as Styled from './styles';

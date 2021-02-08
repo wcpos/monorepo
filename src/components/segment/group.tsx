@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import * as Styled from './styles';
 
 type Segment = typeof import('./segment').default;

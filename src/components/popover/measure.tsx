@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import useMeasure from '../../hooks/use-measure';
 
 const Measure: React.FunctionComponent<Props> = ({ children, onMeasure, ref }) => {

@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { View, Text, Button } from 'react-native';
 import { action } from '@storybook/addon-actions';
 import readme from './README.md';

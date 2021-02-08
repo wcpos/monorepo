@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { WebView as RNWebView } from 'react-native-webview';
 import noop from 'lodash/noop';
 

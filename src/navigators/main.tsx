@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import PageLayout from '../layout/page';
 import MasterBar from '../layout/masterbar';

@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { View } from 'react-native';
 import Button from '../button';
 import Text from '../text';
@@ -7,7 +7,7 @@ import Portal from '../portal';
 import Popover from '.';
 
 export default {
-	title: 'Component/Popover',
+	title: 'Components/Popover',
 };
 
 export const basicUsage = () => (

@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { View, GestureResponderEvent } from 'react-native';
 import { HeaderCell as StyledView } from './styles';
 import Text from '../text';

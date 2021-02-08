@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import Table from '../../../../components/table';
 import Button from '../../../../components/button';
 import Price from './cells/price';

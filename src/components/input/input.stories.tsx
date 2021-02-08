@@ -1,11 +1,11 @@
-import React from 'react';
+import * as React from 'react';
 
 // import { text } from '@storybook/addon-knobs';
 
 import Input from '.';
 
 export default {
-	title: 'Component/Input',
+	title: 'Components/Input',
 };
 
 export const basicUsage = () => <Input />;

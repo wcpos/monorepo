@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { text } from '@storybook/addon-knobs';
 import Header from '.';
 import Button from '../../components/button';

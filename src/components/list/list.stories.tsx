@@ -1,11 +1,11 @@
-import React from 'react';
+import * as React from 'react';
 import { action } from '@storybook/addon-actions';
 import { text, select, boolean } from '@storybook/addon-knobs';
 
 import List from '.';
 
 export default {
-	title: 'Component/List',
+	title: 'Components/List',
 };
 
 export const basicUsage = () => <List items={['Apples', 'Pears', 'Oranges']} />;

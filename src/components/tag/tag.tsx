@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { Animated, View, StyleSheet, Easing, ViewStyle, Platform } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import * as Styled from './styles';

@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { Text, View } from 'react-native';
 
 import { action } from '@storybook/addon-actions';
@@ -7,7 +7,7 @@ import { text, boolean } from '@storybook/addon-knobs';
 import Touchable from '.';
 
 export default {
-	title: 'Component/Touchable',
+	title: 'Components/Touchable',
 };
 
 export const basicUsage = () => (

@@ -7,7 +7,7 @@ import Text from '../text';
 import Modal from '.';
 
 export default {
-	title: 'Component/Modal',
+	title: 'Components/Modal',
 };
 
 const Example1 = () => {

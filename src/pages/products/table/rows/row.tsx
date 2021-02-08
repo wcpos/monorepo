@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import Table from '../../../../components/table';
 import Image from './cells/image';
 import Categories from './cells/categories';

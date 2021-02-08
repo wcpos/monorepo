@@ -1,6 +1,6 @@
-import React from 'react';
+import * as React from 'react';
 import Text from '../../components/text';
-import Versions from './';
+import Versions from '.';
 
 export default {
 	title: 'Modules/Versions',

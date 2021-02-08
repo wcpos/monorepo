@@ -8,7 +8,7 @@ import Text from '../text';
 import Portal from '.';
 
 export default {
-	title: 'Component/Portal',
+	title: 'Components/Portal',
 };
 
 let key: number;

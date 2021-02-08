@@ -6,7 +6,7 @@ import pick from 'lodash/pick';
 import schema from './schema.json';
 import getDatabase from '../adapter';
 import createCollectionMap from '../stores';
-import generateId from '../../utils/generate-id';
+import { generateId } from '../../utils';
 import wcAuthService from '../../services/wc-auth';
 import initialUI from './ui-initial.json';
 

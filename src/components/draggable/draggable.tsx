@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { View, PanResponder } from 'react-native';
 import noop from 'lodash/noop';
 

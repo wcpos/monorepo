@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import Segment, { SegmentGroup } from '../../components/segment';
 
 type Props = {

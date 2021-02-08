@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import Portal from '../portal';
 import Arrow from '../arrow';
 import { ContentView, Wrapper } from './styles';

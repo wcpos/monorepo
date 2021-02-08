@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { DeviceEventEmitter, NativeEventEmitter } from 'react-native';
 import PortalManager from './manager';
 import { StyledHostView } from './styles';
@@ -32,6 +32,7 @@ class PortalGuard {
 		TopViewEventEmitter.emit(addType, e, key);
 		return key;
 	};
+
 	remove = (key: number) => TopViewEventEmitter.emit(removeType, key);
 }
 
@@ -98,6 +99,7 @@ export default class PortalHost extends React.Component<PortalHostProps> {
 			}
 		}
 	}
+
 	componentWillUnmount() {
 		TopViewEventEmitter.removeListener(addType, this._mount);
 		TopViewEventEmitter.removeListener(removeType, this._unmount);
@@ -124,7 +126,7 @@ export default class PortalHost extends React.Component<PortalHostProps> {
 		} else {
 			const op: Operation = { type: 'mount', key, children };
 			const index = this._queue.findIndex(
-				o => o.type === 'mount' || (o.type === 'update' && o.key === key)
+				(o) => o.type === 'mount' || (o.type === 'update' && o.key === key)
 			);
 
 			if (index > -1) {

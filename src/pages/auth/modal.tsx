@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { Platform } from 'react-native';
 import Modal from '../../components/modal';
 import Button from '../../components/button';

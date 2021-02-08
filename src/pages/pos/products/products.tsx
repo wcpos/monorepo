@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { switchMap } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';

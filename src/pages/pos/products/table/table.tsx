@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { useObservable, useObservableState } from 'observable-hooks';
 import { from } from 'rxjs';
 import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';

@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { View } from 'react-native';
 import { render } from '@testing-library/react';
 import Draggable from './draggable';

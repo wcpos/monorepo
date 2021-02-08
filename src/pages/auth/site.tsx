@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import Avatar from '../../components/avatar';
 import Text from '../../components/text';
