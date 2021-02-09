@@ -78,8 +78,11 @@ const createLineItemsCollection = async (db: Database): Promise<Collection> => {
 		rawData.id = String(rawData.id);
 	}, false);
 
+	/** 
+	 * Calculate quantity * price
+	 */
 	LineItemsCollection.postCreate((raw, model) => {
-		combineLatest(model.quantity$, model.price$)
+		combineLatest([model.quantity$, model.price$])
 			.pipe(tap((res) => console.log(res)))
 			.subscribe((val) => {
 				model.atomicSet('total', String(val[0] * val[1]));

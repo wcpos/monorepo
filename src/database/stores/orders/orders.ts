@@ -188,6 +188,7 @@ const createOrdersCollection = async (db: Database): Promise<Collection> => {
 					})
 				);
 				if (total !== model.total) {
+					console.log(total);
 					model.atomicSet('total', total);
 				}
 
@@ -197,6 +198,7 @@ const createOrdersCollection = async (db: Database): Promise<Collection> => {
 					})
 				);
 				if (total_tax !== model.total_tax) {
+					console.log(total_tax);
 					model.atomicSet('total_tax', total_tax);
 				}
 			});
