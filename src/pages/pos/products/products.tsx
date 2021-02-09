@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import Segment from '../../../components/segment';
 import Input from '../../../components/textinput';
+import Popover from '../../../components/popover';
 import Table from './table';
 import Actions from './actions';
 import Text from '../../../components/text';
@@ -46,7 +47,9 @@ const Products: React.FC<Props> = ({ ui }) => {
 		<Segment.Group>
 			<Segment>
 				<Input value={query.search} placeholder="Search products" onChangeText={onSearch} />
-				<Actions columns={columns} display={display} ui={ui} />
+				<Popover content={<Actions columns={columns} display={display} ui={ui} />}>
+					<Button title="Table Settings" />
+				</Popover>
 			</Segment>
 			<Segment grow>
 				<Table query={query} columns={columns} display={display} sort={onSort} />

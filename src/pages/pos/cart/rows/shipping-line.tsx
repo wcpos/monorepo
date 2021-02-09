@@ -2,6 +2,7 @@ import * as React from 'react';
 import Table from '../../../../components/table';
 import Button from '../../../../components/button';
 import Text from '../../../../components/text';
+import Price from './cells/price';
 
 type Props = {
 	order: any;
@@ -24,6 +25,8 @@ const ShippingLine = ({ order, shipping, columns }: Props): React.ReactElement =
 							switch (column.key) {
 								case 'quantity':
 									return null;
+								case 'price':
+									return <Price lineItem={shipping} price={cellData} />;
 								case 'name':
 									return <Text>{shipping.method_title}</Text>;
 								case 'actions':

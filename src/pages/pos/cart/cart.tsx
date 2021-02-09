@@ -1,37 +1,28 @@
 import * as React from 'react';
-import { View } from 'react-native';
 import { useObservableSuspense, useObservableState, useObservable } from 'observable-hooks';
 import { from, of } from 'rxjs';
 import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
 import sumBy from 'lodash/sumBy';
-import useAppState from '../../../hooks/use-app-state';
 import Segment from '../../../components/segment';
-import Text from '../../../components/text';
 import Button from '../../../components/button';
+import Popover from '../../../components/popover';
 import Table from './table';
 import CustomerSelect from './customer-select';
 import Actions from './actions';
+import Totals from './totals';
 
-interface Props {}
+interface Props {
+	ui: any;
+	order$: any;
+}
 
-const Cart: React.FC<Props> = () => {
-	const [{ storeDB }] = useAppState();
-	const ui = storeDB.getUI('pos_cart');
+const Cart: React.FC<Props> = ({ ui, order$ }) => {
+	const order = useObservableState(order$);
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const [query, setQuery] = React.useState({
 		sortBy: 'id',
 		sortDirection: 'asc',
 	});
-
-	// @TODO - why doesn't this update the totals?
-	const orderQuery = storeDB.collections.orders.findOne();
-	const order$ = orderQuery.$.pipe(
-		filter((order) => order),
-		switchMap((order) => order.$.pipe(map(() => order))),
-		tap((res) => console.log(res))
-	);
-
-	const order = useObservableState(order$);
 
 	if (!order) {
 		return (
@@ -51,36 +42,15 @@ const Cart: React.FC<Props> = () => {
 		<Segment.Group>
 			<Segment>
 				<CustomerSelect ui={ui} />
-				<Actions ui={ui} columns={columns} />
+				<Popover content={<Actions columns={columns} ui={ui} />}>
+					<Button title="Table Settings" />
+				</Popover>
 			</Segment>
 			<Segment grow>
 				<Table order={order} columns={columns} query={query} onSort={handleSort} />
 			</Segment>
 			<Segment>
-				<View style={{ flexDirection: 'row' }}>
-					<View style={{ flex: 1 }}>
-						<Text>Subtotal:</Text>
-					</View>
-					<View>
-						<Text>{order.subtotal}</Text>
-					</View>
-				</View>
-				<View style={{ flexDirection: 'row' }}>
-					<View style={{ flex: 1 }}>
-						<Text>Total Tax:</Text>
-					</View>
-					<View>
-						<Text>{order.total_tax}</Text>
-					</View>
-				</View>
-				<View style={{ flexDirection: 'row' }}>
-					<View style={{ flex: 1 }}>
-						<Text>Order Total:</Text>
-					</View>
-					<View>
-						<Text>{order.total}</Text>
-					</View>
-				</View>
+				<Totals order$={order.$} />
 			</Segment>
 			<Segment>
 				<Button

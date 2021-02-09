@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { View, Text } from 'react-native';
 import { useObservable, useObservableState } from 'observable-hooks';
+import { from, of } from 'rxjs';
+import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
 // import { PanGestureHandler } from 'react-native-gesture-handler';
 // import { useAnimatedGestureHandler, useSharedValue } from 'react-native-reanimated';
 import Products from './products';
@@ -15,6 +17,15 @@ interface Props {}
 const POS: React.FC<Props> = () => {
 	const [{ storeDB }] = useAppState();
 	const productsUI = storeDB.getUI('pos_products');
+	const cartUI = storeDB.getUI('pos_cart');
+
+	// fetch order
+	const orderQuery = storeDB.collections.orders.findOne();
+	const order$ = orderQuery.$.pipe(
+		filter((order) => order),
+		switchMap((order) => order.$.pipe(map(() => order))),
+		tap((res) => console.log(res))
+	);
 
 	const [width] = useObservableState(() => productsUI.get$('width'), productsUI.get('width'));
 	console.log('render');
@@ -62,7 +73,7 @@ const POS: React.FC<Props> = () => {
 			<Styled.Column>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading cart...</Text>}>
-						<Cart />
+						<Cart ui={cartUI} order$={order$} />
 					</React.Suspense>
 				</ErrorBoundary>
 			</Styled.Column>
