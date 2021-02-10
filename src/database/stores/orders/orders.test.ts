@@ -29,6 +29,8 @@ describe('Orders collection', () => {
 		return database;
 	});
 
+	afterAll(async () => database.destory());
+
 	it('should be a valid adapter', async () => {
 		const ok = await checkAdapter('memory');
 		expect(ok).toBe(true);
@@ -49,6 +51,13 @@ describe('Orders collection', () => {
 		const order = await ordersCollection.insert({
 			number: '12345',
 		});
-		expect(order).toBe(true);
+		// check defaults
+		expect(order).toMatchObject({
+			currency: 'AUD',
+			customer_id: 0,
+			id: 'undefined',
+			number: '12345',
+			status: 'pending',
+		});
 	});
 });
