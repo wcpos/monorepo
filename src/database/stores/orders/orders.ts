@@ -131,15 +131,22 @@ const statics: Statics = {
  * @param db
  */
 const createOrdersCollection = async (db: Database): Promise<Collection> => {
-	const OrdersCollection = await db.collection({
-		name: 'orders',
-		schema,
-		methods,
-		statics,
+	const collections = await db.addCollections({
+		orders: {
+			schema,
+			// pouchSettings: {},
+			statics,
+			methods,
+			// attachments: {},
+			// options: {},
+			// migrationStrategies: {},
+			// autoMigrate: true,
+			// cacheReplacementPolicy() {},
+		},
 	});
 
 	// @TODO - turn this into a plugin?
-	OrdersCollection.preInsert(function (rawData) {
+	collections.orders.preInsert(function (rawData) {
 		// remove _links property (invalid property name)
 		unset(rawData, '_links');
 
@@ -167,7 +174,7 @@ const createOrdersCollection = async (db: Database): Promise<Collection> => {
 	/**
 	 * wire up total
 	 */
-	OrdersCollection.postCreate((raw, model) => {
+	collections.orders.postCreate((raw, model) => {
 		// combineLatest(model.quantity$, model.price$).subscribe((val) => {
 		// 	model.atomicSet('total', String(val[0] * val[1]));
 		// });
@@ -204,7 +211,7 @@ const createOrdersCollection = async (db: Database): Promise<Collection> => {
 			});
 	});
 
-	return OrdersCollection;
+	return collections.orders;
 };
 
 export default createOrdersCollection;
