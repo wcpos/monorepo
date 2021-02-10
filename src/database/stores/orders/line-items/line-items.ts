@@ -5,6 +5,10 @@ import difference from 'lodash/difference';
 import unset from 'lodash/unset';
 import sum from 'lodash/sum';
 import schema from './schema.json';
+import preInsert from './preInsert';
+import postCreate from './postCreate';
+import methods from './methods';
+import statics from './statics';
 
 export type Schema = import('./interface').WooCommerceOrderLineItemSchema;
 export type Methods = {};
@@ -14,82 +18,28 @@ export type Collection = import('rxdb').RxCollection<Model, Methods, Statics>;
 type Database = import('../../../database').Database;
 
 /**
- * WooCommerce Order Line Item methods
- */
-const methods: Methods = {
-	/**
-	 *
-	 */
-	computedTotal() {
-		return this.quantity * this.price;
-	},
-	/**
-	 *
-	 */
-	computedSubtotal() {
-		return this.quantity * this.price;
-	},
-};
-
-/**
- * WooCommerce Order Line Item statics
- */
-const statics: Statics = {
-	/**
-	 *
-	 */
-	async bulkInsertFromOrder(data: [], orderId: string) {
-		this.bulkInsert(
-			data.map((d) => {
-				d.order_id = orderId;
-				return d;
-			})
-		);
-	},
-};
-
-/**
  *
  * @param db
  */
 const createLineItemsCollection = async (db: Database): Promise<Collection> => {
-	const LineItemsCollection = await db.collection({
-		name: 'line_items',
-		schema,
-		methods,
-		statics,
+	const collections = await db.addCollections({
+		line_items: {
+			schema,
+			// pouchSettings: {},
+			statics,
+			methods,
+			// attachments: {},
+			// options: {},
+			// migrationStrategies: {},
+			// autoMigrate: true,
+			// cacheReplacementPolicy() {},
+		},
 	});
 
-	// @TODO - turn this into a plugin?
-	LineItemsCollection.preInsert(function (rawData) {
-		// remove _links property (invalid property name)
-		// unset(rawData, '_links');
+	collections.line_items.preInsert(preInsert, false);
+	collections.line_items.postCreate(postCreate);
 
-		// remove propeties not on schema
-		const omitProperties = difference(Object.keys(rawData), this.schema.topLevelFields);
-		if (omitProperties.length > 0) {
-			console.log('the following properties are being omiited', omitProperties);
-			omitProperties.forEach((prop) => {
-				unset(rawData, prop);
-			});
-		}
-
-		// change id to string
-		rawData.id = String(rawData.id);
-	}, false);
-
-	/** 
-	 * Calculate quantity * price
-	 */
-	LineItemsCollection.postCreate((raw, model) => {
-		combineLatest([model.quantity$, model.price$])
-			.pipe(tap((res) => console.log(res)))
-			.subscribe((val) => {
-				model.atomicSet('total', String(val[0] * val[1]));
-			});
-	});
-
-	return LineItemsCollection;
+	return collections.line_items;
 };
 
 export default createLineItemsCollection;
