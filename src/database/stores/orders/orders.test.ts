@@ -13,32 +13,42 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 
-describe('Orders model', () => {
+describe('Orders collection', () => {
+	let database = null;
+	let ordersCollection = null;
+
+	beforeAll(async () => {
+		database = await createRxDatabase({
+			name: 'mydatabase',
+			adapter: 'memory', // the name of your adapter
+			ignoreDuplicate: true, // this create-call will not throw because you explicitly allow it
+		});
+
+		ordersCollection = await createOrdersCollection(database);
+
+		return database;
+	});
+
 	it('should be a valid adapter', async () => {
 		const ok = await checkAdapter('memory');
 		expect(ok).toBe(true);
 	});
 
 	it('should be a valid database', async () => {
-		const database = await createRxDatabase({
-			name: 'mydatabase',
-			adapter: 'memory', // the name of your adapter
-			ignoreDuplicate: true, // this create-call will not throw because you explicitly allow it
-		});
-
 		expect(isRxDatabase(database)).toBe(true);
 	});
 
 	it('should be a valid RxCollection', async () => {
-		const database = await createRxDatabase({
-			name: 'mydatabase',
-			adapter: 'memory', // the name of your adapter
-			ignoreDuplicate: true, // this create-call will not throw because you explicitly allow it
-		});
-
 		// create a collection with the schema
-		await createOrdersCollection(database);
-
+		// await createOrdersCollection(database);
 		expect(database.orders.name).toBe('orders');
+	});
+
+	it('should insert a new Order document', async () => {
+		// const ordersCollection =
+		const order = await ordersCollection.insert({
+			number: '12345',
+		});
+		expect(order).toBe(true);
 	});
 });
