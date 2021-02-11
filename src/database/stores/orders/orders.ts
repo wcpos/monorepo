@@ -34,7 +34,7 @@ const createOrdersCollection = async (db) => {
 		},
 	});
 
-	collections.orders.preInsert(preInsert, false);
+	collections.orders.postInsert(preInsert, false);
 	collections.orders.postCreate(postCreate);
 
 	await createOrderLineItemsCollection(db);

@@ -33,6 +33,7 @@ const woocommercePlugin: RxPlugin = {
 
 	/**
 	 * you can add hooks to the hook-list
+	 * https://github.com/pubkey/rxdb/blob/master/src/hooks.ts
 	 */
 	hooks: {
 		/**
