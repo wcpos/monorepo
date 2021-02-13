@@ -4,6 +4,8 @@ import isFinite from 'lodash/isFinite';
 
 /**
  * Calculate quantity * price
+ * @TODO - question: is it possible to hook in before qty or price
+ * changes and then emit with updated total?
  */
 export default (raw, model) => {
 	combineLatest([model.quantity$, model.price$])
