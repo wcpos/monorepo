@@ -1,3 +1,4 @@
+import { skip } from 'rxjs/operators';
 import { checkAdapter, isRxDatabase } from 'rxdb';
 import { createRxDatabase, addRxPlugin } from 'rxdb/plugins/core';
 import dbAdapter from 'pouchdb-adapter-memory';
@@ -5,6 +6,7 @@ import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
+import collections from 'rxdb-utils/dist/collections';
 import createOrdersCollection from './orders';
 
 addRxPlugin(dbAdapter);
@@ -12,8 +14,10 @@ addRxPlugin(RxDBValidatePlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
+addRxPlugin(collections);
 
 describe('Orders collection', () => {
+	let subscription = null;
 	let database = null;
 	let ordersCollection = null;
 
@@ -29,6 +33,7 @@ describe('Orders collection', () => {
 		return database;
 	});
 
+	afterEach(async () => subscription && subscription.unsubscribe());
 	afterAll(async () => database.destory());
 
 	it('should be a valid adapter', async () => {
@@ -47,17 +52,19 @@ describe('Orders collection', () => {
 	});
 
 	it('should insert a new Order document', async () => {
-		// const ordersCollection =
 		const order = await ordersCollection.insert({
-			number: '12345',
+			id: '12345',
 		});
-		// check defaults
-		expect(order).toMatchObject({
-			currency: 'AUD',
-			customer_id: 0,
-			id: 'undefined',
-			number: '12345',
-			status: 'pending',
+
+		subscription = order.$.pipe(skip(1)).subscribe((result) => {
+			expect(order).toMatchObject({
+				currency: 'AUD',
+				customer_id: 0,
+				id: '12345',
+				status: 'pending',
+			});
+
+			done();
 		});
 	});
 });

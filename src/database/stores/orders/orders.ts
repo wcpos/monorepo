@@ -2,6 +2,7 @@ import schema from './schema.json';
 import methods from './methods';
 import statics from './statics';
 import preInsert from './preInsert';
+import postInsert from './postInsert';
 import postCreate from './postCreate';
 import createOrderLineItemsCollection from './line-items';
 import createOrderFeeLinesCollection from './fee-lines';
@@ -34,7 +35,8 @@ const createOrdersCollection = async (db) => {
 		},
 	});
 
-	collections.orders.postInsert(preInsert, false);
+	collections.orders.preInsert(preInsert, false);
+	collections.orders.postInsert(postInsert, false);
 	collections.orders.postCreate(postCreate);
 
 	await createOrderLineItemsCollection(db);
