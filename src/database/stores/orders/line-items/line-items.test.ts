@@ -1,3 +1,5 @@
+// import { TestScheduler } from 'rxjs/testing';
+import { skip } from 'rxjs/operators';
 import { checkAdapter, isRxDatabase } from 'rxdb';
 import { createRxDatabase, addRxPlugin } from 'rxdb/plugins/core';
 import dbAdapter from 'pouchdb-adapter-memory';
@@ -14,8 +16,15 @@ addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 
 describe('Orders collection', () => {
+	let subscription = null;
 	let database = null;
 	let lineItemsCollection = null;
+
+	// beforeEach(() => {
+	// 	testScheduler = new TestScheduler((actual, expected) => {
+	// 		expect(actual).toEqual(expected);
+	// 	});
+	// });
 
 	beforeAll(async () => {
 		database = await createRxDatabase({
@@ -29,6 +38,7 @@ describe('Orders collection', () => {
 		return database;
 	});
 
+	afterEach(async () => subscription && subscription.unsubscribe());
 	afterAll(async () => database.destory());
 
 	it('should be a valid adapter', async () => {
@@ -47,13 +57,55 @@ describe('Orders collection', () => {
 	});
 
 	it('should insert a new Line Item document', async () => {
-		const order = await lineItemsCollection.insert({
-			id: '12345',
+		const lineItem = await lineItemsCollection.insert({
+			id: 12345,
 		});
 
-		// check defaults
-		expect(order).toMatchObject({
+		expect(lineItem).toMatchObject({
 			id: '12345',
+		});
+	});
+
+	it('should calculate the quantity * price', async (done) => {
+		const lineItem = await lineItemsCollection.findOne('12345').exec();
+
+		subscription = lineItem.$.pipe(skip(2)).subscribe((result) => {
+			expect(result).toMatchObject({
+				id: '12345',
+				quantity: 1,
+				price: 1.23,
+				total: '1.23',
+			});
+
+			done();
+		});
+
+		await lineItem.update({
+			$set: {
+				quantity: 1,
+				price: 1.23,
+			},
+		});
+	});
+
+	it('should update on quantity change', async (done) => {
+		const lineItem = await lineItemsCollection.findOne('12345').exec();
+
+		subscription = lineItem.$.pipe(skip(2)).subscribe((result) => {
+			expect(result).toMatchObject({
+				id: '12345',
+				quantity: 2,
+				price: 1.23,
+				total: '2.46',
+			});
+
+			done();
+		});
+
+		await lineItem.update({
+			$inc: {
+				quantity: 1, // increase quantity by 1
+			},
 		});
 	});
 });
