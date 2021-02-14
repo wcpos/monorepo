@@ -20,7 +20,7 @@ export default (plainData, rxDocument): void => {
 
 	// bulkInsert line items
 	rxDocument.collections().line_items.bulkInsertFromOrder(plainData.line_items, plainData.id);
-	rxDocument.collections().fee_lines.bulkInsertFromOrder(plainData.fee_lines, plainData.id);
+	// rxDocument.collections().fee_lines.bulkInsertFromOrder(plainData.fee_lines, plainData.id);
 
 	// extract line_item ids
 	// rawData.line_items = rawData.line_items.map((line_item) => String(line_item.id));

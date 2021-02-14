@@ -2,18 +2,66 @@ import * as React from 'react';
 import { View } from 'react-native';
 import Text from '../text';
 
+type Countries =
+	'default' |
+	'AU' |
+	'AT' |
+	'BE' |
+	'CA' |
+	'CH' |
+	'CL' |
+	'CN' |
+	'CZ' |
+	'DE' |
+	'EE' |
+	'FI' |
+	'DK' |
+	'FR' |
+	'HK' |
+	'HU' |
+	'IN' |
+	'IS' |
+	'IT' |
+	'JP' |
+	'TW' |
+	'LI' |
+	'NL' |
+	'NZ' |
+	'NO' |
+	'PL' |
+	'PT' |
+	'SK' |
+	'RS' |
+	'SI' |
+	'ES' |
+	'SE' |
+	'TR' |
+	'UG' |
+	'US' |
+	'VN';
+
+
+interface Address {
+	address_1?: string;
+	address_2?: string;
+	city?: string;
+	company?: string;
+	country?: Countries;
+	first_name?: string;
+	last_name?: string;
+	postcode?: string;
+	state?: string;
+}
+
+type Template = Address & {
+	name?: string;
+	state_code?: string;
+	state_upper?: string;
+	city_upper?: string;
+}
+
 interface Props {
-	address: {
-		address_1?: string;
-		address_2?: string;
-		city?: string;
-		company?: string;
-		country?: string;
-		first_name?: string;
-		last_name?: string;
-		postcode?: string;
-		state?: string;
-	};
+	address: Address;
 	showName: boolean;
 }
 
@@ -61,20 +109,21 @@ const addresses = {
 };
 
 const Address = ({ address, showName }: Props) => {
-	const addr = { ...address }; // clone address
-	let template = addresses[addr.country] || addresses.default;
-	if (showName !== false) {
-		addr.name = `${addr.first_name} ${addr.last_name}`;
-	}
-	addr.state_code = addr.state;
-	addr.state_upper = addr.state?.toUpperCase();
-	addr.city_upper = addr.city?.toUpperCase();
+	const addr = { ...address } as Template; // clone address
+	let template = addr.country && addresses.hasOwnProperty(addr.country) ? addresses[addr.country] : addresses.default;
 
+	Object.assign(addr, {
+		name: showName && `${addr.first_name} ${addr.last_name}`,
+		state_code: addr.state,
+		state_upper: addr.state?.toUpperCase(),
+		city_upper: addr.city?.toUpperCase()
+	});
+	
 	const matches = template.match(/\{[\w]+\}/g);
 	matches &&
 		matches.forEach((match) => {
 			const regex = new RegExp(match, 'g');
-			const prop = match.split(/{|}/g)[1];
+			const prop = match.split(/{|}/g)[1] as Extract<keyof Template, string>;
 			template = template.replace(regex, addr[prop] || '');
 		});
 

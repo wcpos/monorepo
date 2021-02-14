@@ -51,20 +51,41 @@ describe('Orders collection', () => {
 		expect(database.orders.name).toBe('orders');
 	});
 
-	it('should insert a new Order document', async () => {
+	it('should insert a new Order document', async (done) => {
 		const order = await ordersCollection.insert({
-			id: '12345',
+			id: 12345,
+			line_items: [{ id: 123 }],
 		});
 
-		subscription = order.$.pipe(skip(1)).subscribe((result) => {
+		// subscription = order.$.pipe(skip(0)).subscribe((result) => {
+		subscription = order.$.subscribe((result) => {
 			expect(order).toMatchObject({
 				currency: 'AUD',
 				customer_id: 0,
 				id: '12345',
 				status: 'pending',
+				line_item: [],
 			});
 
 			done();
 		});
 	});
+
+	// it('should insert line_items', async (done) => {
+	// 	const order = await ordersCollection.insert({
+	// 		id: 1234567890,
+	// 		line_items: [{ id: 123 }, { id: 1234 }],
+	// 	});
+
+	// 	subscription = order.$.pipe(skip(1)).subscribe((result) => {
+	// 		expect(order).toMatchObject({
+	// 			currency: 'AUD',
+	// 			customer_id: 0,
+	// 			id: '1234567890',
+	// 			status: 'pending',
+	// 		});
+
+	// 		done();
+	// 	});
+	// });
 });

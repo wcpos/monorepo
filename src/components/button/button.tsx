@@ -4,8 +4,8 @@ import Text from '../text';
 import * as Styled from './styles';
 
 export type Props = {
-	accessoryLeft?: React.ReactNode;
-	accessoryRight?: React.ReactNode;
+	accessoryLeft?: React.ReactElement;
+	accessoryRight?: React.ReactElement;
 	background?: 'solid' | 'clear' | 'outline';
 	children?: React.ReactChild;
 	disabled?: boolean;
@@ -17,7 +17,7 @@ export type Props = {
 	raised?: boolean;
 	size?: 'normal' | 'large' | 'small';
 	style?: import('react-native').ViewStyle;
-	title?: string;
+	title?: string | React.ReactElement;
 	type?:
 		| 'attention'
 		| 'critical'
@@ -60,7 +60,8 @@ const Button = ({
 				</Text>
 			);
 		}
-		if (React.isValidElement(title) && title?.type?.name === 'Icon') {
+		// if (React.isValidElement(title) && title?.type?.name === 'Icon') {
+		if (React.isValidElement(title)) {
 			return React.cloneElement(title, { color: '#FFF' });
 		}
 		return title;
@@ -74,12 +75,10 @@ const Button = ({
 			delayLongPress={800}
 			onLongPress={onLongPress}
 		>
-			{({ pressed, hovered, focused }) => (
+			{({ pressed }) => (
 				<Styled.Background
 					background={background}
 					disabled={disabled}
-					focused={focused}
-					hovered={hovered}
 					pressed={pressed}
 					style={style}
 					type={type}

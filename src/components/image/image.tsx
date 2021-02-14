@@ -11,7 +11,7 @@ export type Props = {
 	srcSet?: string;
 	border?: 'rounded' | 'circular';
 	style?: import('react-native').ImageStyle;
-	placeholder?: string | React.ReactNode;
+	placeholder?: React.ReactNode;
 };
 
 const Image = ({ src, srcSet, border, style }: Props) => {

@@ -12,7 +12,7 @@ export const Wrapper = styled.View<{ disabled?: boolean }>`
 		`}
 `;
 
-export const Box = styled.View<{ theme: ThemeProps }>`
+export const Box = styled.View<{ theme: ThemeProps } & { checked: boolean | undefined }>`
 	flex: 0 1 auto;
 	align-items: center;
 	justify-content: center;

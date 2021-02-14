@@ -13,8 +13,8 @@ const map = {
 	large: { width: 100, height: 100 },
 };
 
-const Avatar = ({ size = 'default', ...props }: Props) => {
-	return <Image border="circular" style={map[size]} {...props} />;
+const Avatar = ({ src, size = 'default', placeholder }: Props) => {
+	return <Image border="circular" src={src} style={map[size]} placeholder={placeholder} />;
 };
 
 export default Avatar;

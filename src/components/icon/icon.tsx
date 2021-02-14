@@ -3,6 +3,7 @@ import { useTheme } from 'styled-components/native';
 import Svgs from './svg';
 
 type Sizes = 'small' | 'normal' | 'large';
+type ThemeProps = import('../../lib/theme/types').ThemeProps;
 
 interface Props {
 	color?: string;
@@ -25,7 +26,8 @@ const getSize = (size: Sizes) => {
 };
 
 const Icon: React.FC<Props> = ({ color, disabled, name, size = 'normal', ...props }) => {
-	const theme = useTheme();
+	// @ts-expect-error ts(2322)
+	const theme: ThemeProps = useTheme();
 
 	let SvgIcon = Svgs[name];
 
@@ -35,6 +37,8 @@ const Icon: React.FC<Props> = ({ color, disabled, name, size = 'normal', ...prop
 
 	return (
 		<SvgIcon
+			// @TODO - clean up this component
+			// @ts-expect-error ts(2322)
 			width={props.width || getSize(size)}
 			height={props.height || getSize(size)}
 			fill={color || theme?.TEXT_COLOR}

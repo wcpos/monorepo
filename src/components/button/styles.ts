@@ -5,21 +5,19 @@ type ThemeProps = { theme: import('../../lib/theme/types').ThemeProps };
 type ButtonProps = import('./button').Props;
 type BackgroundProps = ThemeProps &
 	Pick<ButtonProps, 'background' | 'type' | 'disabled'> & {
-		focused: boolean;
-		hovered: boolean;
 		pressed: boolean;
 	};
 
 export const Background = styled.View<BackgroundProps>`
-	background-color: ${({ background, type, theme, focused, hovered, pressed }) => {
+	background-color: ${({ background, type, theme, pressed }) => {
 		if (background === 'clear' || background === 'outline') {
 			return 'transparent';
 		}
 		switch (type) {
 			case 'secondary':
-				return hovered ? 'black' : theme.BUTTON_COLOR_SECONDARY;
-			case 'attention':
-				return focused ? 'black' : theme.BUTTON_COLOR_ATTENTION;
+			// 	return hovered ? 'black' : theme.BUTTON_COLOR_SECONDARY;
+			// case 'attention':
+			// 	return focused ? 'black' : theme.BUTTON_COLOR_ATTENTION;
 			case 'critical':
 				return pressed ? 'black' : theme.BUTTON_COLOR_CRITICAL;
 			case 'info':

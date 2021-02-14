@@ -87,6 +87,15 @@ const Orders: React.FC<Props> = () => {
 							storeDB.collections.orders.bulkInsert(data);
 						}}
 					/>
+					<Button
+						title="Insert new order"
+						onPress={async () => {
+							storeDB.collections.orders.insert({
+								id: '1234',
+								number: '1234',
+							});
+						}}
+					/>
 				</Segment>
 			</Segment.Group>
 		</React.Suspense>
