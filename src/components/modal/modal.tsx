@@ -71,7 +71,7 @@ class Modal extends React.Component<ModalProps, any> {
 	// static operation: typeof operation;
 	// static prompt: typeof prompt;
 
-	root: View | null;
+	root: View | null = null;
 
 	onFooterLayout = (e: LayoutChangeEvent) => {
 		if (this.root) {

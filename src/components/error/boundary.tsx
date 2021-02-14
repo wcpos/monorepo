@@ -65,9 +65,9 @@ class ErrorBoundary extends React.Component<
 React.PropsWithRef<React.PropsWithChildren<ErrorBoundaryProps>>,
 ErrorBoundaryState
 > {
-	// static defaultProps = {
-	// 	FallbackComponent: DefaultFallbackComponent,
-	// };
+	static defaultProps = {
+		FallbackComponent: DefaultFallbackComponent,
+	};
 
 	static getDerivedStateFromError(error: Error) {
     return {error}

@@ -22,7 +22,7 @@ const Image = ({ src, srcSet, border, style }: Props) => {
 	return <Img source={{ uri: src }} border={border} style={style} />;
 };
 
-const SuspendedImage = ({ placeholder, ...props }) => {
+const SuspendedImage = ({ placeholder, ...props }: Props) => {
 	const getPlaceholder = () => {
 		if (typeof placeholder === 'string') {
 			return (

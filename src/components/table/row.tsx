@@ -12,7 +12,7 @@ export type Props = {
 	style?: import('react-native').ViewStyle;
 };
 
-const Row: React.FC<Props> = ({ rowData, columns, style, children }) => {
+const Row = ({ rowData, columns, style, children }: Props) => {
 	return (
 		<Styled.Row style={style}>
 			{columns &&

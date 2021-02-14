@@ -31,7 +31,7 @@ export const HeaderRow = styled.View<HeaderRowProps>`
 	background-color: #ffffff;
 `;
 
-type HeaderCellProps = { theme: ThemeProps } & import('./header-cell').Props;
+type HeaderCellProps = { theme: ThemeProps } & Omit<import('./header-cell').Props, 'dataKey'>;
 
 export const HeaderCell = styled.View<HeaderCellProps>`
 	flex-direction: row;

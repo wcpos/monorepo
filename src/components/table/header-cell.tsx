@@ -20,7 +20,7 @@ export type Props = {
 	width?: string;
 };
 
-const HeaderCell: React.FC<Props> = ({
+const HeaderCell = ({
 	children,
 	sort,
 	sortBy,
@@ -33,7 +33,7 @@ const HeaderCell: React.FC<Props> = ({
 	flexGrow,
 	flexShrink,
 	width,
-}) => {
+}: Props) => {
 	const sortable = typeof sort === 'function';
 	const showSortIndicator = sortable && sortBy === dataKey;
 
@@ -66,7 +66,8 @@ const HeaderCell: React.FC<Props> = ({
 					<View style={{ flexDirection: 'row' }}>
 						<Text>{children || label}</Text>
 						{showSortIndicator && (
-							<Icon name={`arrow-${sortDirection === 'asc' ? 'up' : 'down'}`} />
+							// @ts-ignore ts(2322)
+							<Icon name={`${sortDirection === 'asc' ? 'arrow-up' : 'arrow-down'}`} />
 						)}
 					</View>
 				</Touchable>

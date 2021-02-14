@@ -13,5 +13,5 @@ export const ImgResource = createResource(({ src, srcSet }: { src: string; srcSe
 			}
 			// reject
 		);
-	}) as Promise<Event>;
+	});
 }, hashingFn);

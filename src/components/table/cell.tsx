@@ -6,8 +6,8 @@ export type Props = {
 	children?: React.ReactNode;
 	cellData?: any;
 	column?: any;
-	// dataKey?: string | number;
-	// rowData?: any;
+	dataKey?: string | number;
+	rowData?: any;
 	style?: import('react-native').ViewStyle;
 	// rowIndex: number;
 	flexGrow?: 0 | 1;

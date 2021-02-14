@@ -26,7 +26,7 @@ export type Props = {
 	content: React.ReactChild;
 };
 
-const Popover: React.FunctionComponent<Props> = ({ content, ...props }) => {
+const Popover = ({ content, ...props }: Props) => {
 	let children;
 	const [visible, setVisible] = useState(false);
 	const [measurements, onMeasure] = useState({

@@ -36,17 +36,17 @@ const Table: React.FC<Props> = ({
 	);
 
 	// sub components
-	if (childCount > 0) {
+	if (Array.isArray(children) && childCount > 0) {
 		children.map((child) => {
-			if (child.type.name === 'Header') {
-				headerComponent = React.cloneElement(child.props.children, {
+			if (child?.type?.name === 'Header') {
+				headerComponent = React.cloneElement(child?.props?.children, {
 					columns,
 					sort,
 					sortBy,
 					sortDirection,
 				});
 			}
-			if (child.type.name === 'Body') {
+			if (child?.type?.name === 'Body') {
 				renderItem = child.props.children;
 			}
 		});
