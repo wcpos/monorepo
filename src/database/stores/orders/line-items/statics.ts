@@ -7,12 +7,14 @@ export default {
 	 *
 	 */
 	async bulkInsertFromOrder(data: [], orderId: string) {
-		this.bulkInsert(
-			data.map((d) => {
-				d.order_id = orderId;
-				return d;
-			})
-		);
+		if (Array.isArray(data) && data.length > 0) {
+			this.bulkInsert(
+				data.map((d) => {
+					d.order_id = orderId;
+					return d;
+				})
+			);
+		}
 	},
 
 }
