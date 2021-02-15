@@ -21,12 +21,12 @@ interface PlaceholderProps {
 	speed?: number;
 }
 
-export default function Placeholder({
+const Placeholder = ({
 	children,
 	backgroundColor,
 	speed,
 	highlightColor,
-}: PlaceholderProps): JSX.Element {
+}: PlaceholderProps) => {
 	const animatedValue = new Animated.Value(0);
 
 	React.useEffect(() => {
@@ -105,3 +105,5 @@ Placeholder.defaultProps = {
 	highlightColor: '#F2F8FC',
 	speed: 800,
 };
+
+export default Placeholder;

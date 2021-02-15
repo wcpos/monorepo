@@ -5,18 +5,29 @@ import Text from '../text';
 
 export default {
 	title: 'Components/Image',
+	component: Image,
 };
 
 /**
  *
  */
-export const basicUsage = () => (
+export const basicUsage = (args) => (
 	<Image
-		src={text('src', 'https://picsum.photos/200/300/?random')}
-		style={{ width: 300, height: 200 }}
-		border={select('border', ['none', 'rounded', 'circular'], 'none')}
+		// src={text('src', 'https://picsum.photos/200/300/?random')}
+		// style={{ width: 300, height: 200 }}
+		// border={select('border', ['none', 'rounded', 'circular'], 'none')}
+		{...args}
 	/>
 );
+basicUsage.args = {
+	src: 'https://picsum.photos/200/300/?random',
+	style: { width: 300, height: 200 },
+	border: {
+		control: {
+			type: 'select', options: ['none', 'rounded', 'circular']
+		}
+	}
+}
 
 /**
  *
