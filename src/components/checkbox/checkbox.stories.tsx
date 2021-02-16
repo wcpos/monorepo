@@ -1,28 +1,41 @@
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-import { text, boolean } from '@storybook/addon-knobs';
-import Checkbox from '.';
+import Checkbox from './checkbox';
+
+type ICheckboxProps = import('./checkbox').ICheckboxProps;
 
 export default {
 	title: 'Components/Checkbox',
+	component: Checkbox
 };
 
-export const basicUsage = () => (
+export const basicUsage = ({ label, checked, hasError, disabled }: ICheckboxProps) => (
 	<Checkbox
-		label={text('label', 'Label')}
-		checked={boolean('checked', true)}
+		label={label}
+		checked={checked}
 		onChange={action('onChange')}
-		hasError={boolean('hasError', false)}
-		disabled={boolean('disabled', false)}
+		hasError={hasError}
+		disabled={disabled}
 		name="test"
 	/>
 );
+basicUsage.args = {
+	label: 'Label',
+	checked: true,
+	hasError: false,
+	disabled: false
+}
 
-export const withInfo = () => (
+export const withInfo = ({ label, checked, info }: ICheckboxProps) => (
 	<Checkbox
-		label={text('label', 'Label')}
-		info={text('info', 'Lorem ipsum dolor sit amet')}
-		checked={boolean('checked', true)}
+		label={label}
+		info={info}
+		checked={checked}
 		onChange={action('onChange')}
 	/>
 );
+withInfo.args = {
+	label: 'Label',
+	info: 'Lorem ipsum dolor sit amet',
+	checked: true,
+}

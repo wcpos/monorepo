@@ -1,6 +1,5 @@
 import * as React from 'react';
-import { text, select } from '@storybook/addon-knobs';
-import Image from './';
+import Image, { IImageProps } from './image';
 import Text from '../text';
 
 export default {
@@ -15,51 +14,38 @@ export default {
 				],
 			},
 		},
+		style: { width: 300, height: 200 }
 	}
 };
 
 /**
  *
  */
-export const basicUsage = ({ border, ...rest }) => {
-	<Image
-		// src={text('src', 'https://picsum.photos/200/300/?random')}
-		// style={{ width: 300, height: 200 }}
-		// border={select('border', ['none', 'rounded', 'circular'], 'none')}
-		border={border}
-		{...rest}
-	/>
+export const basicUsage = ({ src, style, border }: IImageProps) => {
+	<Image src={src} style={style} border={border} />
 };
 basicUsage.args = {
 	src: 'https://picsum.photos/200/300/?random',
-	style: { width: 300, height: 200 },
-	border: 'none'
 }
 
 /**
  *
  */
-export const brokenImage = () => (
-	<Image
-		src={text('src', 'https://example.com/image.jpg')}
-		style={{ width: 300, height: 200 }}
-		// border={select('border', ['none', 'rounded', 'circular'], 'none')}
-	/>
+export const brokenImage = ({src, style, border}: IImageProps) => (
+	<Image src={src} style={style} border={border} />
+
 );
 brokenImage.args = {
-	// src: 'https://picsum.photos/200/300/?random',
-	// style: { width: 300, height: 200 },
-	border: 'circular'
+	src: 'https://example.com/image.jpg',
 }
 
 /**
  *
  */
-export const withPlaceholder = () => (
-	<Image
-		src={text('src', 'https://example.com/image.jpg')}
-		style={{ width: 300, height: 200 }}
-		border={select('border', ['none', 'rounded', 'circular'], 'none')}
-		placeholder={<Text>broken</Text>}
-	/>
+export const withPlaceholder = ({src, style, border}: IImageProps) => (
+	<Image src={src} style={style} border={border} />
+
 );
+brokenImage.args = {
+	src: 'https://example.com/image.jpg',
+}

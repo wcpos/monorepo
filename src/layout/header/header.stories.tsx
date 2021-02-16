@@ -1,21 +1,21 @@
 import * as React from 'react';
-import { text } from '@storybook/addon-knobs';
-import Header from '.';
 import Button from '../../components/button';
 import Text from '../../components/text';
+import Header, { IHeaderProps } from './header';
 
 export default {
 	title: 'Layout/Header',
+	component: Header,
 };
 
-export const basicUsage = () => <Header title={text('title', 'Title')} />;
+export const basicUsage = ({ title }: IHeaderProps) => <Header title={title} />;
 
-export const subComponents = () => (
+export const subComponents = ({ title }: IHeaderProps) => (
 	<Header>
 		<Header.Left>
 			<Button title="Left" />
 		</Header.Left>
-		<Header.Title>{text('title', 'Title')}</Header.Title>
+		<Header.Title>{title}</Header.Title>
 		<Header.Right>
 			<Text>Right</Text>
 		</Header.Right>

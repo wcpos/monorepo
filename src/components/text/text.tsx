@@ -5,7 +5,7 @@ import { StyledText } from './styles';
  * note: weird bug in storybook when importing * as Styled
  */
 
-export type Props = {
+export interface ITextProps {
 	align?: 'left' | 'right' | 'center' | 'justify';
 	children: React.ReactNode;
 	italic?: boolean;
@@ -25,7 +25,7 @@ export type Props = {
 	weight?: 'normal' | 'bold' | 'light';
 };
 
-const Text: React.FC<Props> = ({
+export const Text = ({
 	align = 'left',
 	children,
 	italic,
@@ -35,7 +35,7 @@ const Text: React.FC<Props> = ({
 	type = 'primary',
 	uppercase,
 	weight = 'normal',
-}) => {
+}: ITextProps) => {
 	return (
 		<StyledText
 			align={align}

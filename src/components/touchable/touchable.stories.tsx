@@ -1,27 +1,31 @@
 import * as React from 'react';
 import { Text, View } from 'react-native';
-
 import { action } from '@storybook/addon-actions';
-import { text, boolean } from '@storybook/addon-knobs';
-
-import Touchable from '.';
+import Touchable, { ITouchableProps} from './touchable';
 
 export default {
 	title: 'Components/Touchable',
+	component: Touchable
 };
 
-export const basicUsage = () => (
-	<Touchable disabled={boolean('disabled', false)} onPress={action('Pressed')}>
-		<Text>{text('text', 'Touch Me!')}</Text>
+export const basicUsage = ({disabled, text}: ITouchableProps & { text: string }) => (
+	<Touchable disabled={disabled} onPress={action('Pressed')}>
+		<Text>{text}</Text>
 	</Touchable>
 );
+basicUsage.args = {
+	text: 'Touch Me!'
+}
 
-export const hover = () => (
+export const hover = ({disabled, text}: ITouchableProps & { text: string }) => (
 	<Touchable
-		disabled={boolean('disabled', false)}
+		disabled={disabled}
 		onMouseEnter={action('Mouse Enter')}
 		onMouseLeave={action('Mouse Leave')}
 	>
-		<Text>{text('text', 'Hover over me!')}</Text>
+		<Text>{text}</Text>
 	</Touchable>
 );
+basicUsage.args = {
+	text: 'Hover over me!'
+}

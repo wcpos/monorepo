@@ -1,8 +1,9 @@
 import * as React from 'react';
 import Text from '../text';
 import * as Styled from './styles';
+import Group from './group'
 
-export type Props = {
+export interface ISegmentProps {
 	children?: React.ReactNode;
 	content?: React.ReactNode;
 	type?: 'body' | 'footer' | 'header';
@@ -14,7 +15,7 @@ export type Props = {
 	grow?: boolean;
 };
 
-const Segment = ({ children, content, group, grow, type, raised = true, style }: Props) => {
+export const Segment = ({ children, content, group, grow, type, raised = true, style }: ISegmentProps) => {
 	let segment = content || children || '';
 	if (typeof segment === 'string' || typeof segment === 'number') {
 		segment = <Text>{segment}</Text>;
@@ -26,5 +27,7 @@ const Segment = ({ children, content, group, grow, type, raised = true, style }:
 		</Styled.Segment>
 	);
 };
+
+Segment.Group = Group;
 
 export default Segment;

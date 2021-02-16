@@ -1,21 +1,19 @@
 import * as React from 'react';
 import { View } from 'react-native';
-import { boolean, select } from '@storybook/addon-knobs';
-import Segment, { SegmentGroup } from '.';
+import Segment, { ISegmentProps } from './segment';
+import Group, { ISegmentGroupProps} from './group';
 
 export default {
 	title: 'Components/Segment',
+	component: Segment,
+	subcomponents: [ Group ]
 };
 
 /**
  *
  */
-export const basicUsage = () => (
-	<Segment
-		disabled={boolean('disabled', false)}
-		loading={boolean('loading', false)}
-		raised={boolean('raised', false)}
-	>
+export const basicUsage = ({ disabled, loading, raised}: ISegmentProps) => (
+	<Segment disabled={disabled} loading={loading} raised={raised}>
 		Te eum doming eirmod, nominati pertinacia argumentum ad his.
 	</Segment>
 );
@@ -23,9 +21,9 @@ export const basicUsage = () => (
 /**
  *
  */
-export const group = () => (
+export const group = ({ raised }: ISegmentGroupProps) => (
 	<View style={{ height: 400 }}>
-		<Segment.Group raised={boolean('raised', true)}>
+		<Segment.Group raised={raised}>
 			<Segment>Top</Segment>
 			<Segment>Middle</Segment>
 			<Segment grow>Middle</Segment>
@@ -38,8 +36,8 @@ export const group = () => (
 /**
  *
  */
-export const nestedGroup = () => (
-	<Segment.Group raised={boolean('raised', true)}>
+export const nestedGroup = ({ raised }: ISegmentGroupProps) => (
+	<Segment.Group raised={raised}>
 		<Segment type="header">Top</Segment>
 		<Segment.Group>
 			<Segment>Nested Top</Segment>

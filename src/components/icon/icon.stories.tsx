@@ -1,21 +1,33 @@
 import * as React from 'react';
-import { boolean, text, select } from '@storybook/addon-knobs';
-import Icon from '.';
+import Icon from './icon';
 import svgs from './svg';
 import Table from '../table';
+
+type IIconProps = import('./icon').IIconProps;
 
 const iconNames = Object.keys(svgs);
 
 export default {
 	title: 'Components/Icon',
+	component: Icon,
+	argTypes: {
+		size: {
+			control: {
+				type: 'inline-radio',
+				// options: [
+				// 	'default', 'small', 'large'
+				// ],
+			},
+		},
+	}
 };
 
-export const basicUsage = () => (
+export const basicUsage = ({ name, disabled, size}: IIconProps) => (
 	<Icon
-		name={select('name', iconNames, 'cog')}
-		// loading={boolean('loading', false)}
-		disabled={boolean('disabled', false)}
-		size={select('size', ['small', 'normal', 'large'], 'normal')}
+		name={name}
+		// loading={loading}
+		disabled={disabled}
+		size={size}
 	/>
 );
 

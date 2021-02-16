@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-import { text, select, boolean } from '@storybook/addon-knobs';
-import Text from './';
+import Text, { ITextProps } from './text';
 
 export default {
 	title: 'Components/Text',
@@ -13,32 +12,34 @@ const lorem =
 /**
  *
  */
-export const basicUsage = () => (
+export const basicUsage = ({ text, type, size, weight, align, uppercase, italic }: ITextProps & { text: string }) => (
 	<Text
-		type={select(
-			'type',
-			['primary', 'secondary', 'attention', 'info', 'success', 'warning', 'critical', 'inverse'],
-			'primary'
-		)}
-		size={select('size', ['small', 'normal', 'large'], 'normal')}
-		weight={select('weight', ['light', 'normal', 'bold'], 'normal')}
-		align={select('align', ['left', 'right', 'center', 'justify'], 'left')}
-		uppercase={boolean('uppercase', false)}
-		italic={boolean('italic', false)}
+		type={type}
+		size={size}
+		weight={weight}
+		align={align}
+		uppercase={uppercase}
+		italic={italic}
 	>
-		{text('children', lorem)}
+		{text}
 	</Text>
 );
+basicUsage.args = {
+	text: lorem
+}
 
 /**
  *
  */
-export const cascadingStyles = () => (
+export const cascadingStyles = ({ text }: ITextProps & { text: string }) => (
 	<Text style={{ color: 'blue', fontSize: 22 }}>
-		Test
+		{text}
 		<Text style={{ color: 'red' }}>Nested test</Text>
 	</Text>
 );
+basicUsage.args = {
+	text: 'Test'
+}
 
 /**
  *

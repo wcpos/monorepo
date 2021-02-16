@@ -6,7 +6,7 @@ import Placeholder from '../skeleton';
 import ErrorBoundary from '../error';
 import Text from '../text';
 
-export type Props = {
+export interface IImageProps {
 	src: string;
 	srcSet?: string;
 	border?: 'rounded' | 'circular';
@@ -14,7 +14,7 @@ export type Props = {
 	placeholder?: React.ReactNode;
 };
 
-const Image = ({ src, srcSet, border, style }: Props) => {
+const Image = ({ src, srcSet, border, style }: IImageProps) => {
 	if (src) {
 		ImgResource.read({ src, srcSet });
 	}
@@ -22,7 +22,7 @@ const Image = ({ src, srcSet, border, style }: Props) => {
 	return <Img source={{ uri: src }} border={border} style={style} />;
 };
 
-const SuspendedImage = ({ placeholder, ...props }: Props) => {
+export const SuspendedImage = ({ src, srcSet, border, style, placeholder, ...rest }: IImageProps) => {
 	const getPlaceholder = () => {
 		if (typeof placeholder === 'string') {
 			return (
@@ -38,7 +38,7 @@ const SuspendedImage = ({ placeholder, ...props }: Props) => {
 		<React.Suspense
 			fallback={
 				<Placeholder>
-					<Placeholder.Item style={props.style} />
+					<Placeholder.Item style={style} />
 				</Placeholder>
 			}
 		>
@@ -57,7 +57,7 @@ const SuspendedImage = ({ placeholder, ...props }: Props) => {
 					</View>
 				}
 			>
-				<Image {...props} />
+				<Image src={src} srcSet={srcSet} border={border} style={style} {...rest} />
 			</ErrorBoundary>
 		</React.Suspense>
 	);

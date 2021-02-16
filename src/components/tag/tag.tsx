@@ -7,7 +7,7 @@ import Icon from '../icon';
 import Button from '../button';
 import useTheme from '../../hooks/use-theme';
 
-export interface Props {
+export interface ITagProps {
 	children: string;
 	closable?: boolean;
 	disabled?: boolean;
@@ -68,7 +68,7 @@ const Skeleton = ({
 	);
 };
 
-const Tag = ({ children, closable, disabled, onClose }: Props) => {
+export const Tag = ({ children, closable, disabled, onClose }: ITagProps) => {
 	const { theme } = useTheme();
 	return (
 		<Styled.Tag disabled={disabled}>

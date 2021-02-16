@@ -1,20 +1,26 @@
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-import { text, boolean } from '@storybook/addon-knobs';
-import Tag from '.';
+import Tag, { ITagProps } from './tag';
 
 export default {
 	title: 'Components/Tag',
+	component: Tag
 };
 
-export const basicUsage = () => (
-	<Tag disabled={boolean('disabled')}>{text('children', 'Label')}</Tag>
+export const basicUsage = ({ disabled, label }: ITagProps) => (
+	<Tag disabled={disabled}>{label}</Tag>
 );
+basicUsage.args = {
+	label: 'Label'
+}
 
-export const closable = () => (
-	<Tag closable onClose={action('close')} disabled={boolean('disabled')}>
-		{text('children', 'Label')}
+export const closable = ({ disabled, label }: ITagProps) => (
+	<Tag closable onClose={action('close')} disabled={disabled}>
+		{label}
 	</Tag>
 );
+closable.args = {
+	label: 'Label'
+}
 
 export const skeleton = () => <Tag.Skeleton />;

@@ -5,7 +5,7 @@ import Icon from './icon';
 import { Wrapper } from './styles';
 // import { Hoverable } from '../Hoverable';
 
-type Props = {
+export interface ICheckboxProps {
 	label?: React.ReactNode;
 	hasError?: boolean;
 	disabled?: boolean;
@@ -23,7 +23,7 @@ type Props = {
 //   pressed: boolean;
 // };
 
-const Checkbox: React.FC<Props> = ({
+export const Checkbox = ({
 	label,
 	hasError,
 	disabled,
@@ -32,7 +32,7 @@ const Checkbox: React.FC<Props> = ({
 	children,
 	name,
 	...props
-}) => {
+}: ICheckboxProps) => {
 	const [checked, setChecked] = React.useState(!!props.checked);
 
 	const onPress = () => {

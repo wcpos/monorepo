@@ -2,10 +2,10 @@ import * as React from 'react';
 import { useTheme } from 'styled-components/native';
 import Svgs from './svg';
 
-type Sizes = 'small' | 'normal' | 'large';
+type Sizes = 'default' | 'small' | 'large';
 type ThemeProps = import('../../lib/theme/types').ThemeProps;
 
-interface Props {
+export interface IIconProps {
 	color?: string;
 	disabled?: boolean;
 	height?: number;
@@ -25,7 +25,7 @@ const getSize = (size: Sizes) => {
 	}
 };
 
-const Icon: React.FC<Props> = ({ color, disabled, name, size = 'normal', ...props }) => {
+export const Icon = ({ color, disabled, name, size = 'default', width, height }: IIconProps) => {
 	// @ts-expect-error ts(2322)
 	const theme: ThemeProps = useTheme();
 
@@ -39,8 +39,8 @@ const Icon: React.FC<Props> = ({ color, disabled, name, size = 'normal', ...prop
 		<SvgIcon
 			// @TODO - clean up this component
 			// @ts-expect-error ts(2322)
-			width={props.width || getSize(size)}
-			height={props.height || getSize(size)}
+			width={width || getSize(size)}
+			height={height || getSize(size)}
 			fill={color || theme?.TEXT_COLOR}
 		/>
 	);

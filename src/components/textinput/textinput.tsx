@@ -32,7 +32,7 @@ const TextInput = ({
 	prefix,
 	value = '',
 	...props
-}: Props): React.ReactElement => {
+}: Props) => {
 	const [text, setText] = React.useState(value);
 
 	const handleChangeText = (val: string) => {

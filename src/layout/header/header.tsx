@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as Styled from './styles';
 
-interface Props {
+export interface IHeaderProps {
 	children?: React.ReactNode;
 	left?: React.ReactNode;
 	right?: React.ReactNode;
@@ -22,7 +22,7 @@ const Title: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 	</Styled.Center>
 );
 
-const Header: React.FC<Props> = ({ children, ...props }) => {
+const Header = ({ children, ...props }: IHeaderProps) => {
 	const childCount = React.Children.count(children);
 	const left = [];
 	let title = <Title>{props.title}</Title>;

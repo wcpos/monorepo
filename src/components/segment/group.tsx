@@ -3,14 +3,14 @@ import * as Styled from './styles';
 
 type Segment = typeof import('./segment').default;
 
-export type Props = {
+export interface ISegmentGroupProps {
 	children: React.ReactElement<Segment>[] | React.ReactElement<Segment>;
 	style?: import('react-native').ViewStyle;
 	raised?: boolean;
 	direction?: 'vertical' | 'horizontal';
 };
 
-const SegmentGroup = ({ children, direction = 'vertical', style, raised = true }: Props) => {
+export const SegmentGroup = ({ children, direction = 'vertical', style, raised = true }: ISegmentGroupProps) => {
 	const count = React.Children.count(children);
 
 	return (

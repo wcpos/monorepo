@@ -1,44 +1,49 @@
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-import { text } from '@storybook/addon-knobs';
-import TextInput from '.';
+import TextInput, { Props } from './textinput';
 import Portal from '../portal';
 
 export default {
 	title: 'Components/TextInput',
+	component: TextInput,
+	argTypes: {
+		placeholder: 'Placeholder text',
+		prefix: 'http://',
+		action: 'Submit'
+	}
 };
 
-export const basicUsage = () => <TextInput placeholder={text('placeholder', 'Placeholder text')} />;
+export const basicUsage = ({ placeholder }: Props) => <TextInput placeholder={placeholder} />;
 
-export const withAction = () => (
+export const withAction = ({ placeholder, action }: Props) => (
 	<TextInput
-		placeholder={text('placeholder', 'Placeholder text')}
-		action={text('action', 'Submit')}
+	placeholder={placeholder}
+		action={action}
 		onAction={action('submit')}
 	/>
 );
 
-export const withPrefix = () => (
+export const withPrefix = ({ placeholder, prefix, action }: Props) => (
 	<TextInput
-		placeholder={text('placeholder', 'Placeholder text')}
-		action={text('action', 'Submit')}
+	placeholder={placeholder}
+	action={action}
 		onAction={action('submit')}
-		prefix={text('prefix', 'http://')}
+		prefix={prefix}
 	/>
 );
 
-export const clearable = () => (
+export const clearable = ({ placeholder, prefix, action, clearable }: Props) => (
 	<TextInput
-		placeholder={text('placeholder', 'Placeholder text')}
-		action={text('action', 'Submit')}
+		placeholder={placeholder}
+		action={action}
 		onAction={action('submit')}
-		prefix={text('prefix', 'http://')}
-		cancellable
+		prefix={prefix}
+		clearable
 	/>
 );
 
-export const autosize = () => (
+export const autosize = ({ placeholder, autosize }: Props) => (
 	<Portal.Host>
-		<TextInput placeholder={text('placeholder', 'Placeholder text')} autosize />
+		<TextInput placeholder={placeholder} autosize />
 	</Portal.Host>
 );

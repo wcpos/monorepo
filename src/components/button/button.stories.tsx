@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import { action } from '@storybook/addon-actions';
-import { text, select, boolean } from '@storybook/addon-knobs';
 import Icon from '../icon';
 import Button from '.';
 import Group from './group'
@@ -122,19 +121,19 @@ export const buttonGroup = () => (
 	/>
 );
 
-export const buttonWithIcon = () => (
+export const buttonWithIcon = ({ title }) => (
 	<>
 		<View style={{ padding: 10 }}>
 			<Button
 				onPress={action('pressed')}
-				title={text('title', 'Remove')}
+				title={title}
 				accessoryLeft={<Icon name="remove" />}
 			/>
 		</View>
 		<View style={{ padding: 10 }}>
 			<Button
 				onPress={action('pressed')}
-				title={text('title', 'Remove')}
+				title={title}
 				accessoryRight={<Icon name="remove" />}
 			/>
 		</View>
@@ -145,3 +144,6 @@ export const buttonWithIcon = () => (
 		</View>
 	</>
 );
+buttonWithIcon.args = {
+	title: 'Remove'
+}

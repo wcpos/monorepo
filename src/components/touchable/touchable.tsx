@@ -7,7 +7,7 @@ import {
 	View,
 } from 'react-native';
 
-type Props = {
+export interface ITouchableProps {
 	borderlessRipple?: boolean;
 	children: React.ReactElement<View>;
 	delayPressIn?: number;
@@ -42,7 +42,7 @@ const Touchable = ({
 	style,
 	width,
 	...props
-}: Props) => {
+}: ITouchableProps) => {
 	const children = React.Children.only(props.children);
 
 	/**
