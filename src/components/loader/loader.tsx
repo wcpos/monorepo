@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { ActivityIndicator } from './styles';
 
-export type Props = {
-	size?: 'large' | 'small';
+export interface ILoaderProps {
+	size?: 'small' | 'large';
 };
 
-const Loader = (props: Props) => {
+export const Loader = (props: ILoaderProps) => {
 	return <ActivityIndicator {...props} />;
 };
 

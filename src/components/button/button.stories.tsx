@@ -4,9 +4,12 @@ import { action } from '@storybook/addon-actions';
 import { text, select, boolean } from '@storybook/addon-knobs';
 import Icon from '../icon';
 import Button from '.';
+import Group from './group'
 
 export default {
 	title: 'Components/Button',
+	component: Button,
+	subcomponents: { Group },
 };
 
 export const basicUsage = () => (

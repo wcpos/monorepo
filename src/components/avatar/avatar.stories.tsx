@@ -1,29 +1,54 @@
 import * as React from 'react';
-import { text, select } from '@storybook/addon-knobs';
-import Avatar from './';
+import Avatar from './avatar';
+
+type IAvatarProps = import('./avatar').IAvatarProps
 
 export default {
 	title: 'Components/Avatar',
+	component: Avatar,
+	argTypes: {
+		size: {
+			control: {
+				type: 'inline-radio',
+				options: [
+					'default', 'small', 'large'
+				],
+			},
+		},
+	}
 };
 
-export const basicUsage = () => (
+export const basicUsage = ({ src, size }: IAvatarProps) => (
 	<Avatar
-		src={text('src', 'https://picsum.photos/200/200/?people')}
-		size={select('size', ['', 'small', 'large'], '')}
+	src={src}
+	size={size}
 	/>
 );
+basicUsage.args = {
+	src: 'https://picsum.photos/200/200/?people',
+	size: 'default'
+}
 
-export const brokenImage = () => (
+export const brokenImage = ({ src, size }: IAvatarProps) => (
 	<Avatar
-		src={text('src', 'https://example.com/pic.jpg')}
-		size={select('size', ['', 'small', 'large'], '')}
+	src={src}
+	size={size}
 	/>
 );
+brokenImage.args = {
+	src: 'https://example.com/pic.jpg',
+	size: 'default'
+}
 
-export const withPlaceholder = () => (
+export const withPlaceholder = ({ src, size, placeholder }: IAvatarProps) => (
 	<Avatar
-		src={text('src', 'https://example.com/pic.jpg')}
-		size={select('size', ['', 'small', 'large'], '')}
-		placeholder="PK"
+		src={src}
+		size={size}
+		placeholder={placeholder}
 	/>
 );
+withPlaceholder.args = {
+	src: 'https://example.com/pic.jpg',
+	size: 'default',
+	placeholder: 'PK'
+}

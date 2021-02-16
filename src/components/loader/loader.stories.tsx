@@ -1,11 +1,11 @@
 import * as React from 'react';
+import Loader from './loader';
 
-import { select } from '@storybook/addon-knobs';
-
-import Loader from '.';
+type ILoaderProps = import('./loader').ILoaderProps;
 
 export default {
 	title: 'Components/Loader',
+	component: Loader
 };
 
-export const basicUsage = () => <Loader size={select('size', ['small', 'large'], 'small')} />;
+export const basicUsage = ({ size }: ILoaderProps) => <Loader size={size} />;
