@@ -8,19 +8,15 @@ import createOrderLineItemsCollection from './line-items';
 import createOrderFeeLinesCollection from './fee-lines';
 import createOrderShippingLinesCollection from './shipping-lines';
 
-export type Schema = import('./interface').WooCommerceOrderSchema;
-export type Methods = {};
-export type Model = import('rxdb').RxDocument<Schema, Methods>;
-export type Statics = {};
-export type Collection = import('rxdb').RxCollection<Model, Methods, Statics>;
-type Database = import('../../database').Database;
+type StoreDatabase = import('../../types').StoreDatabase;
+type OrderCollection = import('../../types').OrderCollection;
 
 /**
  *
  * @param db
  */
-// const createOrdersCollection = async (db: Database): Promise<Collection> => {
-const createOrdersCollection = async (db) => {
+const createOrdersCollection = async (db: StoreDatabase): Promise<OrderCollection> => {
+	// const createOrdersCollection = async (db) => {
 	const collections = await db.addCollections({
 		orders: {
 			schema,
@@ -43,6 +39,7 @@ const createOrdersCollection = async (db) => {
 	await createOrderFeeLinesCollection(db);
 	await createOrderShippingLinesCollection(db);
 
+	// @ts-ignore
 	return collections.orders;
 };
 

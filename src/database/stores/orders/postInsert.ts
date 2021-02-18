@@ -1,8 +1,10 @@
 import difference from 'lodash/difference';
 import unset from 'lodash/unset';
 
+type OrderDocument = import('../../types').OrderDocument;
+
 // @TODO - turn this into a plugin?
-export default (plainData, rxDocument): void => {
+export default (plainData: Record<string, unknown>, rxDocument: OrderDocument): void => {
 	// // remove _links property (invalid property name)
 	// unset(rawData, '_links');
 

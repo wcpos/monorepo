@@ -176,7 +176,9 @@
 		"shipping_class_id": {
 			"type": "integer"
 		},
-		"reviews_allowed": true,
+		"reviews_allowed": {
+			"type": "boolean"
+		},
 		"average_rating": {
 			"type": "string"
 		},

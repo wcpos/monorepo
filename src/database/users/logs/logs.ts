@@ -1,19 +1,24 @@
 import schema from './schema.json';
 
-type LogSchema = import('./interface').LogSchema;
-export type LogModel = import('rxdb').RxDocument<LogSchema, unknown>;
-export type LogsCollection = import('rxdb').RxCollection<LogModel, unknown, unknown>;
-type Database = import('../../database').Database;
+type Database = import('../../types').UserDatabase;
+type LogCollection = import('../../types').LogCollection;
 
-const createLogsCollection = async (db: Database): Promise<LogsCollection> => {
-	const logCollection = await db.collection({
-		name: 'logs',
-		schema,
-		methods: {},
-		statics: {},
+const createLogsCollection = async (db: Database): Promise<LogCollection> => {
+	const collections = await db.addCollections({
+		logs: {
+			schema,
+			// pouchSettings: {},
+			// statics: {},
+			// methods: {},
+			// attachments: {},
+			// options: {},
+			// migrationStrategies: {},
+			// autoMigrate: true,
+			// cacheReplacementPolicy() {},
+		},
 	});
 
-	return logCollection;
+	return collections.logs;
 };
 
 export default createLogsCollection;

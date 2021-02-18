@@ -1,12 +1,17 @@
+type OrderFeeLineDocument = import('../../../types').OrderFeeLineDocument;
+
 /**
  * WooCommerce Order Line Item statics
  */
 export default {
-	
 	/**
 	 *
 	 */
-	async bulkInsertFromOrder(data: [], orderId: string) {
+	async bulkInsertFromOrder(
+		this: OrderFeeLineDocument,
+		data: Record<string, unknown>[],
+		orderId: string
+	) {
 		if (Array.isArray(data) && data.length > 0) {
 			this.bulkInsert(
 				data.map((d) => {
@@ -16,5 +21,4 @@ export default {
 			);
 		}
 	},
-
-}
+};
