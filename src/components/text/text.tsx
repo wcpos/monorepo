@@ -23,7 +23,7 @@ export interface ITextProps {
 		| 'inverse';
 	uppercase?: boolean;
 	weight?: 'normal' | 'bold' | 'light';
-};
+}
 
 export const Text = ({
 	align = 'left',
@@ -51,5 +51,3 @@ export const Text = ({
 		</StyledText>
 	);
 };
-
-export default Text;

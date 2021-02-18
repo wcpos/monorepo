@@ -1,18 +1,18 @@
 import * as React from 'react';
 import { View } from 'react-native';
-import Segment, { ISegmentProps } from './segment';
-import Group, { ISegmentGroupProps} from './group';
+import { Segment, ISegmentProps } from './segment';
+import { SegmentGroup, ISegmentGroupProps } from './group';
 
 export default {
 	title: 'Components/Segment',
 	component: Segment,
-	subcomponents: [ Group ]
+	subcomponents: [SegmentGroup],
 };
 
 /**
  *
  */
-export const basicUsage = ({ disabled, loading, raised}: ISegmentProps) => (
+export const basicUsage = ({ disabled, loading, raised }: ISegmentProps) => (
 	<Segment disabled={disabled} loading={loading} raised={raised}>
 		Te eum doming eirmod, nominati pertinacia argumentum ad his.
 	</Segment>

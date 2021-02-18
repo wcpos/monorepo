@@ -9,8 +9,8 @@ import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import collections from 'rxdb-utils/dist/collections';
 import wcPlugin from '../plugins/woocommerce';
 
-type Collections = import('../database').Collections;
-type Database = import('../database').Database;
+// type Collections = import('../database').Collections;
+// type Database = import('../database').Database;
 
 if (process.env.NODE_ENV !== 'production') {
 	addRxPlugin(RxDBDevModePlugin);
@@ -24,8 +24,8 @@ addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(collections);
 addRxPlugin(wcPlugin);
 
-const getDatabase = async (name: string): Promise<Database> => {
-	const db = createRxDatabase<Collections>({
+const getDatabase = async (name: string) => {
+	const db = createRxDatabase({
 		name,
 		adapter: 'idb', // the name of your adapter
 		// ignoreDuplicate: true, // for development?

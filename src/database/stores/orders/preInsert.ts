@@ -2,12 +2,12 @@ import difference from 'lodash/difference';
 import unset from 'lodash/unset';
 
 // @TODO - turn this into a plugin?
-export default (rawData: {}): void => {
+export default (plainData: Record<string, unknown>): void => {
 	// remove _links property (invalid property name)
-	unset(rawData, '_links');
+	unset(plainData, '_links');
 
 	// change id to string
-	rawData.id = String(rawData.id);
+	plainData.id = String(plainData.id);
 
 	// remove propeties not on schema
 	// const omitProperties = difference(Object.keys(rawData), this.schema.topLevelFields);

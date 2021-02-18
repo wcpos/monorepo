@@ -1,2 +1,1 @@
-import Image from './image';
-export default Image;
+export { SuspendedImage as default } from './image';

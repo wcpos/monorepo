@@ -6,26 +6,26 @@ import unset from 'lodash/unset';
 import sum from 'lodash/sum';
 import schema from './schema.json';
 
-export type Schema = import('./interface').WooCommerceOrderFeeLineSchema;
-export type Methods = {};
-export type Model = import('rxdb').RxDocument<Schema, Methods>;
-export type Statics = {};
-export type Collection = import('rxdb').RxCollection<Model, Methods, Statics>;
-type Database = import('../../../database').Database;
+type StoreDatabase = import('../../../types').StoreDatabase;
+type OrderFeeLineDocument = import('../../../types').OrderFeeLineDocument;
 
 /**
  * WooCommerce Order Fee Line methods
  */
-const methods: Methods = {};
+export const methods = {};
 
 /**
  * WooCommerce Order Fee Line statics
  */
-const statics: Statics = {
+export const statics = {
 	/**
 	 *
 	 */
-	async bulkInsertFromOrder(data: [], orderId: string) {
+	async bulkInsertFromOrder(
+		this: OrderFeeLineDocument,
+		data: Record<string, unknown>[],
+		orderId: string
+	) {
 		this.bulkInsert(
 			data.map((d) => {
 				d.order_id = orderId;
@@ -39,39 +39,46 @@ const statics: Statics = {
  *
  * @param db
  */
-const createFeeLinesCollection = async (db: Database): Promise<Collection> => {
-	const FeeLinesCollection = await db.collection({
-		name: 'fee_lines',
-		schema,
-		methods,
-		statics,
+const createFeeLinesCollection = async (db: StoreDatabase) => {
+	const collections = await db.addCollections({
+		fee_lines: {
+			schema,
+			// pouchSettings: {},
+			statics,
+			methods,
+			// attachments: {},
+			// options: {},
+			// migrationStrategies: {},
+			// autoMigrate: true,
+			// cacheReplacementPolicy() {},
+		},
 	});
 
 	// @TODO - turn this into a plugin?
-	FeeLinesCollection.preInsert(function (rawData) {
+	collections.fee_lines.preInsert(function (rawData: Record<string, unknown>) {
 		// remove _links property (invalid property name)
 		// unset(rawData, '_links');
 
 		// remove propeties not on schema
-		const omitProperties = difference(Object.keys(rawData), this.schema.topLevelFields);
-		if (omitProperties.length > 0) {
-			console.log('the following properties are being omiited', omitProperties);
-			omitProperties.forEach((prop) => {
-				unset(rawData, prop);
-			});
-		}
+		// const omitProperties = difference(Object.keys(rawData), this.schema.topLevelFields);
+		// if (omitProperties.length > 0) {
+		// 	console.log('the following properties are being omiited', omitProperties);
+		// 	omitProperties.forEach((prop) => {
+		// 		unset(rawData, prop);
+		// 	});
+		// }
 
 		// change id to string
 		rawData.id = String(rawData.id);
 	}, false);
 
-	FeeLinesCollection.postCreate((raw, model) => {
-		// combineLatest(model.quantity$, model.price$).subscribe((val) => {
-		// 	model.atomicSet('total', String(val[0] * val[1]));
-		// });
-	});
+	// FeeLinesCollection.postCreate((raw, model) => {
+	// combineLatest(model.quantity$, model.price$).subscribe((val) => {
+	// 	model.atomicSet('total', String(val[0] * val[1]));
+	// });
+	// });
 
-	return FeeLinesCollection;
+	return collections.fee_lines;
 };
 
 export default createFeeLinesCollection;

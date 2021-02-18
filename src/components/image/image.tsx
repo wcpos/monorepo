@@ -12,7 +12,7 @@ export interface IImageProps {
 	border?: 'rounded' | 'circular';
 	style?: import('react-native').ImageStyle;
 	placeholder?: React.ReactNode;
-};
+}
 
 const Image = ({ src, srcSet, border, style }: IImageProps) => {
 	if (src) {
@@ -22,7 +22,14 @@ const Image = ({ src, srcSet, border, style }: IImageProps) => {
 	return <Img source={{ uri: src }} border={border} style={style} />;
 };
 
-export const SuspendedImage = ({ src, srcSet, border, style, placeholder, ...rest }: IImageProps) => {
+export const SuspendedImage = ({
+	src,
+	srcSet,
+	border,
+	style,
+	placeholder,
+	...rest
+}: IImageProps) => {
 	const getPlaceholder = () => {
 		if (typeof placeholder === 'string') {
 			return (
@@ -62,5 +69,3 @@ export const SuspendedImage = ({ src, srcSet, border, style, placeholder, ...res
 		</React.Suspense>
 	);
 };
-
-export default SuspendedImage;

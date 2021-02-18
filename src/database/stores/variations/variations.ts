@@ -5,52 +5,50 @@ import difference from 'lodash/difference';
 import unset from 'lodash/unset';
 import schema from './schema.json';
 
-export type Schema = import('./interface').WooCommercePOSStoreSchema;
-export type Methods = {};
-export type Model = import('rxdb').RxDocument<Schema, Methods>;
-export type Statics = {};
-export type Collection = import('rxdb').RxCollection<Model, Methods, Statics>;
-type Database = import('../../database').Database;
+type StoreDatabase = import('../../types').StoreDatabase;
 
 /**
  * WooCommerce Product Model methods
  */
-const methods: Methods = {
-	/**
-	 *
-	 */
-};
+// const methods = {};
 
 /**
  * WooCommerce Product Collection methods
  */
-const statics: Statics = {};
+// const statics = {};
 
 /**
  *
  * @param db
  */
-const createVariationsCollection = async (db: Database): Promise<Collection> => {
-	const VariationsCollection = await db.collection({
-		name: 'variations',
-		schema,
-		methods,
-		statics,
+const createVariationsCollection = async (db: StoreDatabase) => {
+	const collections = await db.addCollections({
+		variations: {
+			schema,
+			// pouchSettings: {},
+			// statics,
+			// methods,
+			// attachments: {},
+			// options: {},
+			// migrationStrategies: {},
+			// autoMigrate: true,
+			// cacheReplacementPolicy() {},
+		},
 	});
 
 	// @TODO - turn this into a plugin?
-	VariationsCollection.preInsert(function (rawData) {
+	collections.variations.preInsert((rawData: Record<string, unknown>) => {
 		// remove _links property (invalid property name)
 		unset(rawData, '_links');
 
 		// remove propeties not on schema
-		const omitProperties = difference(Object.keys(rawData), this.schema.topLevelFields);
-		if (omitProperties.length > 0) {
-			console.log('the following properties are being omiited', omitProperties);
-			omitProperties.forEach((prop) => {
-				unset(rawData, prop);
-			});
-		}
+		// const omitProperties = difference(Object.keys(rawData), this.schema.topLevelFields);
+		// if (omitProperties.length > 0) {
+		// 	console.log('the following properties are being omiited', omitProperties);
+		// 	omitProperties.forEach((prop) => {
+		// 		unset(rawData, prop);
+		// 	});
+		// }
 
 		// change id to string
 		rawData.id = String(rawData.id);
@@ -69,7 +67,7 @@ const createVariationsCollection = async (db: Database): Promise<Collection> => 
 	// 	});
 	// });
 
-	return VariationsCollection;
+	return collections.variations;
 };
 
 export default createVariationsCollection;

@@ -5,17 +5,12 @@ import difference from 'lodash/difference';
 import unset from 'lodash/unset';
 import schema from './schema.json';
 
-export type Schema = import('./interface').WooCommercePOSStoreSchema;
-export type Methods = {};
-export type Model = import('rxdb').RxDocument<Schema, Methods>;
-export type Statics = {};
-export type Collection = import('rxdb').RxCollection<Model, Methods, Statics>;
-type Database = import('../../database').Database;
+type StoreDatabase = import('../../types').StoreDatabase;
 
 /**
  * WooCommerce Product Model methods
  */
-const methods: Methods = {
+export const methods = {
 	/**
 	 *
 	 */
@@ -24,7 +19,7 @@ const methods: Methods = {
 /**
  * WooCommerce Product Collection methods
  */
-const statics: Statics = {
+export const statics = {
 	/**
 	 *
 	 */
@@ -34,27 +29,34 @@ const statics: Statics = {
  *
  * @param db
  */
-const createOrdersCollection = async (db: Database): Promise<Collection> => {
-	const OrdersCollection = await db.collection({
-		name: 'customers',
-		schema,
-		methods,
-		statics,
+const createOrdersCollection = async (db: StoreDatabase) => {
+	const collections = await db.addCollections({
+		customers: {
+			schema,
+			// pouchSettings: {},
+			statics,
+			methods,
+			// attachments: {},
+			// options: {},
+			// migrationStrategies: {},
+			// autoMigrate: true,
+			// cacheReplacementPolicy() {},
+		},
 	});
 
 	// @TODO - turn this into a plugin?
-	OrdersCollection.preInsert(function (rawData) {
+	collections.customers.preInsert((rawData: Record<string, unknown>) => {
 		// remove _links property (invalid property name)
 		unset(rawData, '_links');
 
 		// remove propeties not on schema
-		const omitProperties = difference(Object.keys(rawData), this.schema.topLevelFields);
-		if (omitProperties.length > 0) {
-			console.log('the following properties are being omiited', omitProperties);
-			omitProperties.forEach((prop) => {
-				unset(rawData, prop);
-			});
-		}
+		// const omitProperties = difference(Object.keys(rawData), this.schema.topLevelFields);
+		// if (omitProperties.length > 0) {
+		// 	console.log('the following properties are being omiited', omitProperties);
+		// 	omitProperties.forEach((prop) => {
+		// 		unset(rawData, prop);
+		// 	});
+		// }
 
 		// change id to string
 		rawData.id = String(rawData.id);
@@ -73,7 +75,7 @@ const createOrdersCollection = async (db: Database): Promise<Collection> => {
 	// 	});
 	// });
 
-	return OrdersCollection;
+	return collections.customers;
 };
 
 export default createOrdersCollection;

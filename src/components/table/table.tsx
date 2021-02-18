@@ -6,19 +6,19 @@ import Row from './row';
 import HeaderRow from './header-row';
 import Text from '../text';
 
-type Props = {
+export interface ITableProps {
 	children?: import('react-native').ListRenderItem<any>;
 	columns: import('./types').ColumnProps[];
 	data: any[];
-	empty?: React.ReactNode;
-	footer?: React.ReactNode;
+	empty?: React.ReactElement;
+	footer?: React.ReactElement;
 	sort?: import('./types').Sort;
 	sortBy?: string;
 	sortDirection?: import('./types').SortDirection;
 	style?: any;
-};
+}
 
-const Table: React.FC<Props> = ({
+export const Table = ({
 	children,
 	columns,
 	data,
@@ -27,10 +27,12 @@ const Table: React.FC<Props> = ({
 	sort,
 	sortBy,
 	sortDirection,
-}) => {
+}: ITableProps) => {
 	const keyExtractor = (item: any, index: number) => item.id || index;
 	const childCount = React.Children.count(children);
-	let renderItem = ({ item }: any) => <Row rowData={item} columns={columns} />;
+	let renderItem: React.FunctionComponent<any> = ({ item }: any) => (
+		<Row rowData={item} columns={columns} />
+	);
 	let headerComponent = (
 		<HeaderRow columns={columns} sort={sort} sortBy={sortBy} sortDirection={sortDirection} />
 	);

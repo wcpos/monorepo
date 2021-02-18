@@ -1,12 +1,14 @@
 import { from, of, combineLatest } from 'rxjs';
 import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
-
 import sumBy from 'lodash/sumBy';
+
+type OrderDocument = import('../../types').OrderDocument;
+type OrderLineItemDocument = import('../../types').OrderLineItemDocument;
 
 /**
  * wire up total
  */
-export default (raw, model) => {
+export default (raw: Record<string, unknown>, model: OrderDocument) => {
 	// combineLatest(model.quantity$, model.price$).subscribe((val) => {
 	// 	model.atomicSet('total', String(val[0] * val[1]));
 	// });
@@ -14,13 +16,18 @@ export default (raw, model) => {
 	// @TODO - why does this effect line_item subscriptions?
 	model.line_items$
 		.pipe(
-			switchMap((ids) => from(model.collections().line_items.findByIds(ids))),
+			switchMap((ids: [string]) => from(model.collections().line_items.findByIds(ids))),
 			// map((result) => Array.from(result.values())),
 			// switchMap((array) => combineLatest(array.map((item) => item.$))),
-			switchMap((items) => combineLatest(Array.from(items.values()).map((item) => item.$))),
-			catchError((err) => console.error(err))
+			switchMap((items: [OrderLineItemDocument]) =>
+				combineLatest(Array.from(items.values()).map((item) => item.$))
+			),
+			catchError((err) => {
+				console.error(err);
+				return err;
+			})
 		)
-		.subscribe((lineItems) => {
+		.subscribe((lineItems: [OrderLineItemDocument]) => {
 			const total = String(
 				sumBy(lineItems, function (item) {
 					return Number(item.total);

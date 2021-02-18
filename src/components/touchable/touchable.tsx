@@ -20,7 +20,7 @@ export interface ITouchableProps {
 	rippleColor?: string;
 	style?: {};
 	width?: number;
-};
+}
 
 /**
  * A Touchable component simply handles the touch gestures on native platforms
@@ -30,7 +30,7 @@ export interface ITouchableProps {
  * A Touchable component must have a single child View component
  */
 const Touchable = ({
-	borderlessRipple,
+	borderlessRipple = false,
 	delayPressIn,
 	disabled,
 	noRipple,
@@ -85,9 +85,7 @@ const Touchable = ({
 			activeOpacity={0.5}
 			style={{ ...style, width }}
 		>
-			<View onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
-				{children}
-			</View>
+			<View>{children}</View>
 		</TouchableOpacity>
 	);
 };

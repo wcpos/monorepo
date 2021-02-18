@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-import Text, { ITextProps } from './text';
+import { Text, ITextProps } from './text';
 
 export default {
 	title: 'Components/Text',
@@ -12,21 +12,22 @@ const lorem =
 /**
  *
  */
-export const basicUsage = ({ text, type, size, weight, align, uppercase, italic }: ITextProps & { text: string }) => (
-	<Text
-		type={type}
-		size={size}
-		weight={weight}
-		align={align}
-		uppercase={uppercase}
-		italic={italic}
-	>
+export const basicUsage = ({
+	text,
+	type,
+	size,
+	weight,
+	align,
+	uppercase,
+	italic,
+}: ITextProps & { text: string }) => (
+	<Text type={type} size={size} weight={weight} align={align} uppercase={uppercase} italic={italic}>
 		{text}
 	</Text>
 );
 basicUsage.args = {
-	text: lorem
-}
+	text: lorem,
+};
 
 /**
  *
@@ -38,8 +39,8 @@ export const cascadingStyles = ({ text }: ITextProps & { text: string }) => (
 	</Text>
 );
 basicUsage.args = {
-	text: 'Test'
-}
+	text: 'Test',
+};
 
 /**
  *

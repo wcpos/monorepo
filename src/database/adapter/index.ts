@@ -9,11 +9,11 @@ import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import collections from 'rxdb-utils/dist/collections';
 import wcPlugin from '../plugins/woocommerce';
 
-type Collections = import('../database').Collections;
-type Database = import('../database').Database;
+// type Collections = import('../database').Collections;
+// type Database = import('../database').Database;
 
 const SQLiteAdapter = SQLiteAdapterFactory(SQLite);
-const supportedAdapters = [];
+const supportedAdapters: string[] = [];
 
 addRxPlugin(SQLiteAdapter);
 addRxPlugin(RxDBNoValidatePlugin);
@@ -48,8 +48,8 @@ addRxPlugin(wcPlugin);
 	});
 })();
 
-const getDatabase = async (name: string): Promise<Database> => {
-	const db = await createRxDatabase<Collections>({
+const getDatabase = async (name: string) => {
+	const db = await createRxDatabase({
 		name,
 		adapter: 'react-native-sqlite', // the name of your adapter
 		multiInstance: false,

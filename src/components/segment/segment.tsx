@@ -1,7 +1,7 @@
 import * as React from 'react';
 import Text from '../text';
 import * as Styled from './styles';
-import Group from './group'
+import { SegmentGroup } from './group';
 
 export interface ISegmentProps {
 	children?: React.ReactNode;
@@ -13,9 +13,17 @@ export interface ISegmentProps {
 	group?: 'first' | 'middle' | 'last';
 	style?: import('react-native').ViewStyle;
 	grow?: boolean;
-};
+}
 
-export const Segment = ({ children, content, group, grow, type, raised = true, style }: ISegmentProps) => {
+export const Segment = ({
+	children,
+	content,
+	group,
+	grow,
+	type,
+	raised = true,
+	style,
+}: ISegmentProps) => {
 	let segment = content || children || '';
 	if (typeof segment === 'string' || typeof segment === 'number') {
 		segment = <Text>{segment}</Text>;
@@ -28,6 +36,4 @@ export const Segment = ({ children, content, group, grow, type, raised = true, s
 	);
 };
 
-Segment.Group = Group;
-
-export default Segment;
+Segment.Group = SegmentGroup;

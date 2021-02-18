@@ -57,7 +57,7 @@ const TextInput = ({
 				onChangeText={handleChangeText}
 				{...props}
 			/>
-			{clearable && <Icon name="clear" onPress={handleClear} />}
+			{clearable && <Icon name="clear" />}
 			{action && (
 				<Button
 					title={action}

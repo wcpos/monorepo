@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Icon from './icon';
+import { Icon } from './icon';
 import svgs from './svg';
 import Table from '../table';
 
@@ -11,6 +11,7 @@ export default {
 	title: 'Components/Icon',
 	component: Icon,
 	argTypes: {
+		color: { control: 'color' },
 		size: {
 			control: {
 				type: 'inline-radio',
@@ -19,10 +20,10 @@ export default {
 				// ],
 			},
 		},
-	}
+	},
 };
 
-export const basicUsage = ({ name, disabled, size}: IIconProps) => (
+export const basicUsage = ({ name, disabled, size }: IIconProps) => (
 	<Icon
 		name={name}
 		// loading={loading}

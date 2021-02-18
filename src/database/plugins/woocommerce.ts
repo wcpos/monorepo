@@ -1,6 +1,8 @@
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
+type RxDocument = import('rxdb/dist/types').RxDocument;
 
 const woocommercePlugin: RxPlugin = {
+	name: 'woocommerce',
 	rxdb: true, // this must be true so rxdb knows that this is a rxdb-plugin and not a pouchdb-plugin
 
 	/**
@@ -14,7 +16,7 @@ const woocommercePlugin: RxPlugin = {
 		 *
 		 * @param {object} prototype of RxCollection
 		 */
-		RxCollection: (proto) => {
+		RxCollection: (proto: any) => {
 			proto.hello = function () {
 				return 'world';
 			};
@@ -25,7 +27,7 @@ const woocommercePlugin: RxPlugin = {
 	 * some methods are static and can be overwritten in the overwriteable-object
 	 */
 	overwritable: {
-		validatePassword(password) {
+		validatePassword(password: string) {
 			if ((password && typeof password !== 'string') || password.length < 10)
 				throw new TypeError('password is not valid');
 		},
@@ -39,8 +41,9 @@ const woocommercePlugin: RxPlugin = {
 		/**
 		 * add a foo-property to each document. You can then call myDocument.foo (='bar')
 		 */
-		createRxDocument(doc) {
+		createRxDocument(doc: RxDocument) {
 			console.log('@TODO - remove this');
+			// @ts-ignore
 			doc.foo = 'bar';
 		},
 	},

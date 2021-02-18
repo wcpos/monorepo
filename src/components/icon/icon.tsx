@@ -46,4 +46,4 @@ export const Icon = ({ color, disabled, name, size = 'default', width, height }:
 	);
 };
 
-export default Icon;
+// export default Icon;

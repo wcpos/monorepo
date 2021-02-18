@@ -2,8 +2,8 @@ import * as React from 'react';
 import { View } from 'react-native';
 import { action } from '@storybook/addon-actions';
 import Icon from '../icon';
-import Button from '.';
-import Group from './group'
+import Button from './button';
+import Group from './group';
 
 export default {
 	title: 'Components/Button',
@@ -124,18 +124,10 @@ export const buttonGroup = () => (
 export const buttonWithIcon = ({ title }) => (
 	<>
 		<View style={{ padding: 10 }}>
-			<Button
-				onPress={action('pressed')}
-				title={title}
-				accessoryLeft={<Icon name="remove" />}
-			/>
+			<Button onPress={action('pressed')} title={title} accessoryLeft={<Icon name="remove" />} />
 		</View>
 		<View style={{ padding: 10 }}>
-			<Button
-				onPress={action('pressed')}
-				title={title}
-				accessoryRight={<Icon name="remove" />}
-			/>
+			<Button onPress={action('pressed')} title={title} accessoryRight={<Icon name="remove" />} />
 		</View>
 		<View style={{ padding: 10 }}>
 			<Button onPress={action('pressed')}>
@@ -145,5 +137,5 @@ export const buttonWithIcon = ({ title }) => (
 	</>
 );
 buttonWithIcon.args = {
-	title: 'Remove'
-}
+	title: 'Remove',
+};

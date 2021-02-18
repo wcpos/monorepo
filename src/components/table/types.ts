@@ -26,7 +26,7 @@ export type CellDataGetter = (props: CellDataGetterProps) => any;
 export interface ColumnProps {
 	key: string;
 	label: string;
-	headerCellRenderer?: HeaderCellRenderer;
+	// headerCellRenderer?: HeaderCellRenderer;
 	hide?: boolean;
 	disableSort?: boolean;
 	flexGrow?: 0 | 1;

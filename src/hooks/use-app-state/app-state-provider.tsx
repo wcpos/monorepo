@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Dimensions } from 'react-native';
+import { isRxDatabase } from 'rxdb';
 import NetInfo from '@react-native-community/netinfo';
 import debounce from 'lodash/debounce';
 import get from 'lodash/get';
@@ -8,7 +9,7 @@ import database from '../../database';
 import * as actionTypes from './action-types';
 import logger from '../../services/logger';
 
-type AppState = {
+export type AppState = {
 	online: boolean;
 	window: import('react-native').ScaledSize;
 	screen: import('react-native').ScaledSize;
@@ -23,9 +24,9 @@ type AppState = {
 	// site?: any;
 	// wpUser?: any;
 };
-type AppAction = { type: Extract<keyof typeof actionTypes, string>; payload?: any };
-type ActionTypes = typeof actionTypes;
-type ContextValue = [AppState, React.Dispatch<AppAction>, ActionTypes];
+export type AppAction = { type: Extract<keyof typeof actionTypes, string>; payload?: any };
+export type ActionTypes = typeof actionTypes;
+export type ContextValue = [AppState, React.Dispatch<AppAction>, ActionTypes];
 
 /**
  * Initial App State
@@ -49,9 +50,9 @@ const initialState: AppState = {
 /**
  * Local storage helpers
  */
-const getLastStore = async () => database.adapter.getLocal('last_store');
-const setLastStore = async (storeId: string) => database.adapter.setLocal('last_store', storeId);
-const removeLastStore = async () => database.adapter.removeLocal('last_store');
+// const getLastStore = async () => database.adapter.getLocal('last_store');
+// const setLastStore = async (storeId: string) => database.adapter.setLocal('last_store', storeId);
+// const removeLastStore = async () => database.adapter.removeLocal('last_store');
 
 /**
  * App State reducer
@@ -86,7 +87,7 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 	}
 }
 
-export const AppStateContext = React.createContext<ContextValue>(null);
+export const AppStateContext = React.createContext<ContextValue>({} as ContextValue);
 
 interface Props {
 	children: React.ReactElement;
@@ -138,22 +139,26 @@ const AppStateProvider = ({ children, i18n }: Props) => {
 	React.useEffect(() => {
 		(async function init() {
 			const db = await database;
+			// @ts-ignore
 			setUserDatabase(db);
 		})();
 	}, []);
 
 	React.useEffect(() => {
 		(async function init() {
-			if (userDatabase) {
+			if (isRxDatabase(userDatabase)) {
+				// @ts-ignore
 				const lastStore = await userDatabase.collections.users.getLocal('last_store');
 				const lastStorePath = lastStore && lastStore.get('store_id');
 
 				if (!lastStorePath) {
+					// @ts-ignore
 					const users = await userDatabase.collections.users.find().exec();
 
 					if (users.length === 0) {
 						// create new user
 						logger.debug('No app user found');
+						// @ts-ignore
 						const newUser = await userDatabase.collections.users.createNewUser();
 						dispatch({ type: actionTypes.SET_USER, payload: newUser });
 					}
@@ -170,6 +175,7 @@ const AppStateProvider = ({ children, i18n }: Props) => {
 					// get user
 					const path = lastStorePath.split('.');
 					const userId = path.shift();
+					// @ts-ignore
 					const user = await userDatabase.collections.users.findOne(userId).exec();
 					path.push('id');
 

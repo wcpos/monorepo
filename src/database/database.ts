@@ -1,18 +1,12 @@
 import createDatabase from './adapter';
 import createCollectionMap from './users';
 
-export type Collections = {
-	logs: import('./users/logs/logs').LogsCollection;
-	// eslint-disable-next-line camelcase
-	app_users: import('./users/app-users/app-users').AppUsersCollection;
-	sites: import('./users/sites/sites').SitesCollection;
-	stores: import('./users/stores/stores').Collection;
-};
-export type Database = import('rxdb').RxDatabase<Collections>;
+type UserDatabase = import('./types').UserDatabase;
 
-const databasePromise: Promise<Database> = createDatabase('wcpos_users').then((db) =>
+const databasePromise = createDatabase('wcpos_users').then((db) =>
 	Promise.all(
 		createCollectionMap.map((createCollection) => {
+			// @ts-ignore
 			return createCollection(db);
 		})
 	).then((values) => {

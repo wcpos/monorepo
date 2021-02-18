@@ -3,7 +3,7 @@ import Platform from '../../lib/platform';
 
 type SegmentProps = {
 	theme: import('../../lib/theme/types').ThemeProps;
-} & import('./segment').Props;
+} & import('./segment').ISegmentProps;
 
 export const Segment = styled.View<SegmentProps>`
 	background: ${({ theme }) => theme.SEGMENT_BACKGROUND_COLOR};
@@ -52,7 +52,7 @@ export const Segment = styled.View<SegmentProps>`
 
 type GroupProps = {
 	theme: import('../../lib/theme/types').ThemeProps;
-} & import('./group').Props;
+} & import('./group').ISegmentGroupProps;
 
 // height: inherit;
 /**

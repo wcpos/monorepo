@@ -10,18 +10,13 @@ import postCreate from './postCreate';
 import methods from './methods';
 import statics from './statics';
 
-export type Schema = import('./interface').WooCommerceOrderLineItemSchema;
-export type Methods = {};
-export type Model = import('rxdb').RxDocument<Schema, Methods>;
-export type Statics = {};
-export type Collection = import('rxdb').RxCollection<Model, Methods, Statics>;
-type Database = import('../../../database').Database;
+type StoreDatabase = import('../../../types').StoreDatabase;
 
 /**
  *
  * @param db
  */
-const createLineItemsCollection = async (db: Database): Promise<Collection> => {
+const createLineItemsCollection = async (db: StoreDatabase) => {
 	const collections = await db.addCollections({
 		line_items: {
 			schema,
