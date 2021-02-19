@@ -8,17 +8,15 @@ import { AuthView } from './styles';
 import Site from './site';
 import useAppState from '../../hooks/use-app-state';
 
-interface Props {}
-
 /**
  *
  */
-const Auth: React.FC<Props> = (props) => {
+const Auth = () => {
 	const [{ user }] = useAppState();
 	console.log(user);
 	// const sites = useObservableState(user.sites$, []); // @TODO - why can't I use this? possible that user changed?
 	const sites$ = useObservable(() => user.sites$, [user]);
-	const sites: [] = useObservableState(sites$, []);
+	const sites: unknown | Record<string, unknown>[] = useObservableState(sites$, []);
 
 	const onConnect = async (url: string): Promise<void> => {
 		const newSiteId = await user.addSite(url);
@@ -51,9 +49,9 @@ const Auth: React.FC<Props> = (props) => {
 						clearable
 					/>
 				</Segment>
-				{sites.length > 0 && (
+				{Array.isArray(sites) && sites.length > 0 && (
 					<Segment.Group style={{ width: '90%', maxWidth: 460, height: 'auto' }}>
-						<Segment content="Sites" />
+						{/* <Segment content="Sites" /> */}
 						{sites.map((site, index) => (
 							<Segment key={site.id}>
 								<Site site={site} index={index} />

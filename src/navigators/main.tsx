@@ -10,15 +10,21 @@ import Customers from '../pages/customers';
 import Support from '../pages/support';
 import Text from '../components/text';
 
-const Screen = ({ route, navigation }) => {
-	const components = {
-		POS: <POS />,
-		Products: <Products />,
-		Orders: <Orders />,
-		Customers: <Customers />,
-		Support: <Support />,
+type ScreenProps = {
+	route: {
+		name: Extract<keyof typeof components, string>;
 	};
+};
 
+const components = {
+	POS: <POS />,
+	Products: <Products />,
+	Orders: <Orders />,
+	Customers: <Customers />,
+	Support: <Support />,
+};
+
+const Screen = ({ route }: ScreenProps) => {
 	return (
 		<PageLayout header={<MasterBar />}>
 			<ErrorBoundary>
@@ -32,7 +38,7 @@ const Screen = ({ route, navigation }) => {
 
 const Drawer = createDrawerNavigator();
 
-const MainNavigator: React.FC = () => {
+const MainNavigator = () => {
 	return (
 		<Drawer.Navigator>
 			<Drawer.Screen name="POS" component={Screen} />

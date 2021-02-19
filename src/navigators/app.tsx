@@ -35,7 +35,7 @@ const AppNavigator = (): React.ReactElement => {
 
 	const { getInitialState } = useLinking(ref, {
 		prefixes: [urlPrefix],
-		config: routes,
+		config: { screens: routes },
 	});
 
 	const [isReady, setIsReady] = React.useState(false);
@@ -46,6 +46,7 @@ const AppNavigator = (): React.ReactElement => {
 			try {
 				const state = await getInitialState();
 				if (state !== undefined) {
+					// @ts-ignore
 					setInitialState(state);
 				}
 			} catch (e) {

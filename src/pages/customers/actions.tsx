@@ -6,8 +6,10 @@ import Button from '../../components/button';
 import Text from '../../components/text';
 
 interface Props {
+	ui: any;
 	columns: any;
-	resetUI: () => void;
+	resetUI?: () => void;
+	query: any;
 }
 
 /**

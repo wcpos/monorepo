@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View, Text } from 'react-native';
 import { useObservableState, useObservable } from 'observable-hooks';
 import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
-
 import Segment from '../../components/segment';
 import Table from './table';
 import Actions from './actions';
@@ -10,15 +9,15 @@ import useAppState from '../../hooks/use-app-state';
 import Button from '../../components/button';
 import WcApiService from '../../services/wc-api';
 
-interface Props {}
+type Sort = import('../../components/table/types').Sort;
 
-const Customers: React.FC<Props> = () => {
+const Customers = () => {
 	const [{ user, storeDB, storePath }] = useAppState();
 	const ui = storeDB.getUI('customers');
 
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
-	const onSort = ({ sortBy, sortDirection }) => {
+	const onSort: Sort = ({ sortBy, sortDirection }) => {
 		console.log({ sortBy, sortDirection });
 		// ui.updateWithJson({ sortBy, sortDirection });
 	};
@@ -49,6 +48,7 @@ const Customers: React.FC<Props> = () => {
 				}),
 				catchError((err) => {
 					console.error(err);
+					return err;
 				})
 			),
 		[query] as const

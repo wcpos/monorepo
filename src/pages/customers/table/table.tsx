@@ -3,12 +3,15 @@ import { useTranslation } from 'react-i18next';
 import Table from '../../../components/table';
 import Row from './rows';
 
+type Sort = import('../../../components/table/types').Sort;
+type SortDirection = import('../../../components/table/types').SortDirection;
+
 interface Props {
 	columns: any;
 	customers: any;
-	sort: () => void;
+	sort: Sort;
 	sortBy: string;
-	sortDirection: string;
+	sortDirection: SortDirection;
 }
 
 /**

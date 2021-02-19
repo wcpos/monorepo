@@ -8,6 +8,10 @@ import Modal from './modal';
 import { SiteWrapper, SiteTextWrapper } from './styles';
 import useAppState from '../../hooks/use-app-state';
 
+interface ISiteProps {
+	site: any;
+	index: number;
+}
 /**
  * Options for fetching favicons
  * - https://api.statvoo.com/favicon/?url=${url}
@@ -16,7 +20,7 @@ import useAppState from '../../hooks/use-app-state';
     
  * - https://api.faviconkit.com/${url}/144
  */
-const Site = ({ site, index }) => {
+const Site = ({ site, index }: ISiteProps) => {
 	// const status = useObservableState(site.connection_status$);
 	const [visible, setVisible] = React.useState(false);
 	const [{ user }, dispatch, actions] = useAppState();
@@ -37,7 +41,7 @@ const Site = ({ site, index }) => {
 		<SiteWrapper>
 			<Avatar src={`https://api.faviconkit.com/${site.id}/144`} />
 			<SiteTextWrapper>
-				<Text weight="bold">{site.name || site.id}</Text>
+				<Text weight="bold">{site?.name || site.id}</Text>
 				<Text size="small" type="secondary">
 					{site.id}
 				</Text>

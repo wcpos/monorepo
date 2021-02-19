@@ -14,7 +14,7 @@ export type AppNavigatorParams = {
 const Stack = createStackNavigator<AppNavigatorParams>();
 type StackNavigatorProps = React.ComponentProps<typeof Stack.Navigator>;
 
-const AppNavigator = (props: Partial<StackNavigatorProps>): React.ReactElement => {
+const AppNavigator = (props: Partial<StackNavigatorProps>) => {
 	const [{ storeDB }] = useAppState();
 
 	return (
