@@ -1,16 +1,19 @@
 import * as React from 'react';
 import Button from '../../components/button';
 import Text from '../../components/text';
-import Header, { IHeaderProps } from './header';
+import { Header, IHeaderProps } from './header';
 
 export default {
 	title: 'Layout/Header',
 	component: Header,
 };
 
-export const basicUsage = ({ title }: IHeaderProps) => <Header title={title} />;
+export const basicUsage = ({ title }: { title: string }) => <Header>{title}</Header>;
+basicUsage.args = {
+	title: 'Title',
+};
 
-export const subComponents = ({ title }: IHeaderProps) => (
+export const subComponents = ({ title }: { title: string }) => (
 	<Header>
 		<Header.Left>
 			<Button title="Left" />
@@ -24,3 +27,6 @@ export const subComponents = ({ title }: IHeaderProps) => (
 		</Header.Right>
 	</Header>
 );
+subComponents.args = {
+	title: 'Title',
+};

@@ -1,55 +1,42 @@
 import * as React from 'react';
+import get from 'lodash/get';
 import * as Styled from './styles';
 
 export interface IHeaderProps {
-	children?: React.ReactNode;
-	left?: React.ReactNode;
-	right?: React.ReactNode;
-	title?: string | React.ReactNode;
+	children: string | React.ReactElement | React.ReactElement[];
 }
 
-const Left: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-	<Styled.Left>{children}</Styled.Left>
-);
-
-const Right: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-	<Styled.Right>{children}</Styled.Right>
-);
-
-const Title: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+const Left: React.FC = ({ children }) => <Styled.Left>{children}</Styled.Left>;
+const Right: React.FC = ({ children }) => <Styled.Right>{children}</Styled.Right>;
+const Title: React.FC = ({ children }) => (
 	<Styled.Center>
 		{typeof children === 'string' ? <Styled.Title>{children}</Styled.Title> : children}
 	</Styled.Center>
 );
 
-const Header = ({ children, ...props }: IHeaderProps) => {
-	const childCount = React.Children.count(children);
-	const left = [];
-	let title = <Title>{props.title}</Title>;
-	const right = [];
+export const Header = ({ children }: IHeaderProps) => {
+	let title = <Title>{children}</Title>;
+	const left: React.ReactNode[] = [];
+	const right: React.ReactNode[] = [];
 
-	// sub components
-	if (childCount > 0) {
-		children.map((child, index) => {
-			if (child.type.name === 'Left') {
-				left.push(<Left key={index}>{child.props.children}</Left>);
+	React.Children.forEach(children, (child: React.ReactChild) => {
+		if (React.isValidElement(child) && typeof child.type !== 'string') {
+			const displayName: string = get(child, 'type.displayName');
+			if (displayName === 'Header.Left') {
+				left.push(<Left>{child.props.children}</Left>);
 			}
-			if (child.type.name === 'Title') {
-				title = <Title key={index}>{child.props.children}</Title>;
+			if (displayName === 'Header.Title') {
+				title = <Title>{child.props.children}</Title>;
 			}
-			if (child.type.name === 'Right') {
-				right.push(<Right key={index}>{child.props.children}</Right>);
+			if (displayName === 'Header.Right') {
+				right.push(<Right>{child.props.children}</Right>);
 			}
-		});
-	}
+		}
+	});
 
-	return (
-		<Styled.Header>
-			{left}
-			{title}
-			{right}
-		</Styled.Header>
-	);
+	return <Styled.Header>{left.concat(title).concat(right)}</Styled.Header>;
 };
 
-export default Object.assign(Header, { Left, Title, Right });
+Header.Left = Left;
+Header.Right = Right;
+Header.Title = Title;
