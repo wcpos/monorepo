@@ -1,7 +1,7 @@
 import styled, { css } from 'styled-components/native';
 import { Platform } from 'react-native';
 
-type ThemeProps = import('../../lib/theme/types').ThemeProps;
+type ThemeProps = import('../../lib/theme').ThemeProps;
 
 export const Header = styled.View<{ theme: ThemeProps }>`
 	flex-direction: row;

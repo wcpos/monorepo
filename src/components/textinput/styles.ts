@@ -1,6 +1,6 @@
 import styled from 'styled-components/native';
 
-type Props = { theme: import('../../lib/theme/types').ThemeProps } & import('./textinput').Props;
+type Props = { theme: import('../../lib/theme').ThemeProps } & import('./textinput').Props;
 
 export const Box = styled.View<Props>`
 	flex-direction: row;

@@ -1,12 +1,12 @@
 import styled from 'styled-components/native';
 
-type Props = { theme: import('../../lib/theme/types').ThemeProps };
+type ThemeProps = import('../../lib/theme').ThemeProps;
 
-export const Wrapper = styled.View<Props>`
+export const Wrapper = styled.View<{ theme: ThemeProps }>`
 	align-self: flex-start;
 `;
 
-export const ContentView = styled.View<Props>`
+export const ContentView = styled.View<{ theme: ThemeProps }>`
 	justify-content: center;
 	background-color: white;
 	border-radius: 3px;

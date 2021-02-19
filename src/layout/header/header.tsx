@@ -21,7 +21,7 @@ export const Header = ({ children }: IHeaderProps) => {
 
 	React.Children.forEach(children, (child: React.ReactChild) => {
 		if (React.isValidElement(child) && typeof child.type !== 'string') {
-			const displayName: string = get(child, 'type.displayName');
+			const displayName = get(child, 'type.displayName');
 			if (displayName === 'Header.Left') {
 				left.push(<Left>{child.props.children}</Left>);
 			}

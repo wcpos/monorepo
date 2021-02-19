@@ -8,6 +8,7 @@ import defaultTheme from './themes/defaultTheme';
 // const ThemeConsumer = ThemeContext.Consumer;
 
 // const useTheme = () => useContext(ThemeContext);
+export type ThemeProps = typeof defaultTheme;
 
 export {
 	// ThemeConsumer,

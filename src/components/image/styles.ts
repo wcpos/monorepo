@@ -1,6 +1,6 @@
 import styled, { css } from 'styled-components/native';
 
-type ThemeProps = import('../../lib/theme/types').ThemeProps;
+type ThemeProps = import('../../lib/theme').ThemeProps;
 type Props = import('../../lib/utility-types').Omit<import('./image').IImageProps, 'src'>;
 
 export const Img = styled.Image<{ theme: ThemeProps } & Props>`

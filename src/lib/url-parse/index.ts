@@ -1,4 +1,5 @@
 import Url from 'url-parse';
 import parseLinkHeader from './parse-link-header';
-Url.parseLinkHeader = parseLinkHeader;
+
+Object.assign(Url, { parseLinkHeader });
 export default Url;

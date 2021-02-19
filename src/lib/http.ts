@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { encode as btoa } from 'base-64';
+
 export const noConfigAxios = axios;
 
 const user = {
@@ -27,7 +28,7 @@ http.interceptors.request.use(
 		}
 		if (config.auth) {
 			config.headers.Authorization = `Basic ${btoa(
-				config.auth.username + ':' + config.auth.password
+				`${config.auth.username}:${config.auth.password}`
 			)}`;
 			config.auth = undefined;
 		}
@@ -39,7 +40,6 @@ http.interceptors.request.use(
 	}
 );
 
-http.CancelToken = axios.CancelToken;
-http.isCancel = axios.isCancel;
+Object.assign(http, { CancelToken: axios.CancelToken, isCancel: axios.isCancel });
 
 export default http;

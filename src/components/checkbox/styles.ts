@@ -1,6 +1,7 @@
 import styled, { css } from 'styled-components/native';
-import { ThemeProps } from '../../lib/theme/types';
 import Icon from '../icon';
+
+type ThemeProps = import('../../lib/theme').ThemeProps;
 
 export const Wrapper = styled.View<{ disabled?: boolean }>`
 	display: flex;

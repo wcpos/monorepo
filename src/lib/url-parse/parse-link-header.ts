@@ -39,11 +39,8 @@ function parseLink(link: string) {
 	return info;
 }
 
-export default function(linkHeader: string = '') {
-	const p = linkHeader
-		.split(/,\s*</)
-		.map(parseLink)
-		.filter(hasRel);
+export default function (linkHeader = '') {
+	const p = linkHeader.split(/,\s*</).map(parseLink).filter(hasRel);
 
 	return p.reduce(intoRels, {});
 }

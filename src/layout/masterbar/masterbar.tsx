@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute, useNavigation, DrawerActions } from '@react-navigation/native';
 import Header from '../header';
 import Button from '../../components/button';
 import Popover from '../../components/popover';
@@ -8,17 +8,19 @@ import UserMenu from './user-menu';
 import Avatar from '../../components/avatar';
 import useAppState from '../../hooks/use-app-state';
 
-interface Props {}
-
-const MasterBar: React.FC<Props> = () => {
+const MasterBar = () => {
 	const route = useRoute();
 	const navigation = useNavigation();
 	const [appState, dispatch, actionTypes] = useAppState();
 
+	const openDrawer = React.useCallback(() => {
+		navigation.dispatch(DrawerActions.openDrawer());
+	}, []);
+
 	return (
 		<Header>
 			<Header.Left>
-				<Button title="Menu" onPress={() => navigation.openDrawer()} />
+				<Button title="Menu" onPress={openDrawer} />
 			</Header.Left>
 			<Header.Title>{route.name}</Header.Title>
 			<Header.Right>

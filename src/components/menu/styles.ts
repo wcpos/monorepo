@@ -1,8 +1,8 @@
 import styled from 'styled-components/native';
 import { StyledText } from '../text/styles';
 
-type Props = { theme: import('../../lib/theme/types').ThemeProps };
+type ThemeProps = import('../../lib/theme').ThemeProps;
 
-export const Wrapper = styled.View<Props>``;
+export const Wrapper = styled.View<{ theme: ThemeProps }>``;
 
-export const MenuItemText = styled(StyledText)<Props>``;
+export const MenuItemText = styled(StyledText)<{ theme: ThemeProps }>``;

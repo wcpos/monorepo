@@ -1,6 +1,6 @@
 import styled, { css } from 'styled-components/native';
 
-type ThemeProps = import('../../lib/theme/types').ThemeProps;
+type ThemeProps = import('../../lib/theme').ThemeProps;
 
 // eslint-disable-next-line import/prefer-default-export
 export const Container = styled.View<{ theme: ThemeProps }>`

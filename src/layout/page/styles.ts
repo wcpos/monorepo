@@ -1,7 +1,8 @@
 import styled, { css } from 'styled-components/native';
 import { Platform } from 'react-native';
 
-type ThemeProps = import('../../lib/theme/types').ThemeProps;
+// type ThemeProps = import('../../lib/theme').ThemeProps;
+type ThemeProps = import('../../lib/theme').ThemeProps;
 
 /**
  * TODO: calc support for react-native?
@@ -9,7 +10,7 @@ type ThemeProps = import('../../lib/theme/types').ThemeProps;
  */
 
 export const Page = styled.SafeAreaView<{ theme: ThemeProps }>`
-	background-color: ${(props) => props.theme.PAGE_BACKGROUND_COLOR};
+	background-color: ${({ theme }) => theme.PAGE_BACKGROUND_COLOR};
 	height: 100%;
 `;
 

@@ -1,6 +1,6 @@
 import styled from 'styled-components/native';
 
-type ThemeProps = import('../../lib/theme/types').ThemeProps;
+type ThemeProps = import('../../lib/theme').ThemeProps;
 
 export const ListView = styled.View<{ theme: ThemeProps }>`
 	padding: 5px;

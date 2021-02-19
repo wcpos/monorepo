@@ -1,7 +1,7 @@
 import styled from 'styled-components/native';
 import isNil from 'lodash/isNil';
 
-type ThemeProps = import('../../lib/theme/types').ThemeProps;
+type ThemeProps = import('../../lib/theme').ThemeProps;
 
 type RowProps = { theme: ThemeProps } & Pick<import('./row').Props, 'style'>;
 

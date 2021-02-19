@@ -3,7 +3,7 @@ import { useTheme } from 'styled-components/native';
 import Svgs from './svg';
 
 type Sizes = 'default' | 'small' | 'large';
-type ThemeProps = import('../../lib/theme/types').ThemeProps;
+type ThemeProps = import('../../lib/theme').ThemeProps;
 
 export interface IIconProps {
 	color?: string;

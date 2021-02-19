@@ -7,13 +7,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-(function(global, factory) {
+(function (global, factory) {
 	typeof exports === 'object' && typeof module !== 'undefined'
 		? factory(exports, require('react'), require('scheduler'))
 		: typeof define === 'function' && define.amd
-			? define(['exports', 'react', 'scheduler'], factory)
-			: factory((global.ReactCache = {}), global.React, global.Scheduler);
-})(this, function(exports, React, scheduler) {
+		? define(['exports', 'react', 'scheduler'], factory)
+		: factory((global.ReactCache = {}), global.React, global.Scheduler);
+})(this, function (exports, React, scheduler) {
 	/**
 	 * Similar to invariant but only logs a warning if the condition is not met.
 	 * This can be used to log issues in development environments in critical
@@ -21,10 +21,10 @@
 	 * same logic and follow the same code paths.
 	 */
 
-	var warningWithoutStack = function() {};
+	let warningWithoutStack = function () {};
 
 	{
-		warningWithoutStack = function(condition, format) {
+		warningWithoutStack = function (condition, format) {
 			for (
 				var _len = arguments.length, args = Array(_len > 2 ? _len - 2 : 0), _key = 2;
 				_key < _len;
@@ -47,10 +47,10 @@
 				return;
 			}
 			if (typeof console !== 'undefined') {
-				var argsWithFormat = args.map(function(item) {
-					return '' + item;
+				const argsWithFormat = args.map(function (item) {
+					return `${item}`;
 				});
-				argsWithFormat.unshift('Warning: ' + format);
+				argsWithFormat.unshift(`Warning: ${format}`);
 
 				// We intentionally don't use spread (or .apply) directly because it
 				// breaks IE9: https://github.com/facebook/react/issues/13610
@@ -60,27 +60,25 @@
 				// --- Welcome to debugging React ---
 				// This error was thrown as a convenience so that you can use this stack
 				// to find the callsite that caused this warning to fire.
-				var argIndex = 0;
-				var message =
-					'Warning: ' +
-					format.replace(/%s/g, function() {
-						return args[argIndex++];
-					});
+				let argIndex = 0;
+				const message = `Warning: ${format.replace(/%s/g, function () {
+					return args[argIndex++];
+				})}`;
 				throw new Error(message);
 			} catch (x) {}
 		};
 	}
 
-	var warningWithoutStack$1 = warningWithoutStack;
+	const warningWithoutStack$1 = warningWithoutStack;
 
 	function createLRU(limit) {
-		var LIMIT = limit;
+		let LIMIT = limit;
 
 		// Circular, doubly-linked list
-		var first = null;
-		var size = 0;
+		let first = null;
+		let size = 0;
 
-		var cleanUpIsScheduled = false;
+		let cleanUpIsScheduled = false;
 
 		function scheduleCleanUp() {
 			if (cleanUpIsScheduled === false && size > LIMIT) {
@@ -99,11 +97,11 @@
 		function deleteLeastRecentlyUsedEntries(targetSize) {
 			// Delete entries from the cache, starting from the end of the list.
 			if (first !== null) {
-				var resolvedFirst = first;
-				var last = resolvedFirst.previous;
+				const resolvedFirst = first;
+				let last = resolvedFirst.previous;
 				while (size > targetSize && last !== null) {
-					var _onDelete = last.onDelete;
-					var _previous = last.previous;
+					const _onDelete = last.onDelete;
+					const _previous = last.previous;
 					last.onDelete = null;
 
 					// Remove from the list
@@ -128,9 +126,9 @@
 		}
 
 		function add(value, onDelete) {
-			var entry = {
-				value: value,
-				onDelete: onDelete,
+			const entry = {
+				value,
+				onDelete,
 				next: null,
 				previous: null,
 			};
@@ -139,7 +137,7 @@
 				first = entry;
 			} else {
 				// Append to head
-				var last = first.previous;
+				const last = first.previous;
 				last.next = entry;
 				entry.previous = last;
 
@@ -157,18 +155,18 @@
 		}
 
 		function access(entry) {
-			var next = entry.next;
+			const { next } = entry;
 			if (next !== null) {
 				// Entry already cached
-				var resolvedFirst = first;
+				const resolvedFirst = first;
 				if (first !== entry) {
 					// Remove from current position
-					var _previous2 = entry.previous;
+					const _previous2 = entry.previous;
 					_previous2.next = next;
 					next.previous = _previous2;
 
 					// Append to head
-					var last = resolvedFirst.previous;
+					const last = resolvedFirst.previous;
 					last.next = entry;
 					entry.previous = last;
 
@@ -191,22 +189,21 @@
 		}
 
 		return {
-			add: add,
-			update: update,
-			access: access,
-			setLimit: setLimit,
+			add,
+			update,
+			access,
+			setLimit,
 		};
 	}
 
-	var Pending = 0;
-	var Resolved = 1;
-	var Rejected = 2;
+	const Pending = 0;
+	const Resolved = 1;
+	const Rejected = 2;
 
-	var ReactCurrentDispatcher =
-		React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher;
+	const { ReactCurrentDispatcher } = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
 
 	function readContext(Context, observedBits) {
-		var dispatcher = ReactCurrentDispatcher.current;
+		const dispatcher = ReactCurrentDispatcher.current;
 		if (dispatcher === null) {
 			throw new Error(
 				'react-cache: read and preload may only be called from within a ' +
@@ -227,45 +224,45 @@
 				input === null
 			)
 				? warningWithoutStack$1(
-					false,
-					'Invalid key type. Expected a string, number, symbol, or boolean, ' +
+						false,
+						'Invalid key type. Expected a string, number, symbol, or boolean, ' +
 							'but instead received: %s' +
 							'\n\nTo use non-primitive values as keys, you must pass a hash ' +
 							'function as the second argument to createResource().',
-					input
+						input
 				  )
 				: void 0;
 		}
 		return input;
 	}
 
-	var CACHE_LIMIT = 500;
-	var lru = createLRU(CACHE_LIMIT);
+	const CACHE_LIMIT = 500;
+	const lru = createLRU(CACHE_LIMIT);
 
-	var entries = new Map();
+	const entries = new Map();
 
-	var CacheContext = React.createContext(null);
+	const CacheContext = React.createContext(null);
 
 	function accessResult(resource, fetch, input, key) {
-		var entriesForResource = entries.get(resource);
+		let entriesForResource = entries.get(resource);
 		if (entriesForResource === undefined) {
 			entriesForResource = new Map();
 			entries.set(resource, entriesForResource);
 		}
-		var entry = entriesForResource.get(key);
+		const entry = entriesForResource.get(key);
 		if (entry === undefined) {
-			var thenable = fetch(input);
+			const thenable = fetch(input);
 			thenable.then(
-				function(value) {
+				function (value) {
 					if (newResult.status === Pending) {
-						var resolvedResult = newResult;
+						const resolvedResult = newResult;
 						resolvedResult.status = Resolved;
 						resolvedResult.value = value;
 					}
 				},
-				function(error) {
+				function (error) {
 					if (newResult.status === Pending) {
-						var rejectedResult = newResult;
+						const rejectedResult = newResult;
 						rejectedResult.status = Rejected;
 						rejectedResult.value = error;
 					}
@@ -275,16 +272,15 @@
 				status: Pending,
 				value: thenable,
 			};
-			var newEntry = lru.add(newResult, deleteEntry.bind(null, resource, key));
+			const newEntry = lru.add(newResult, deleteEntry.bind(null, resource, key));
 			entriesForResource.set(key, newEntry);
 			return newResult;
-		} else {
-			return lru.access(entry);
 		}
+		return lru.access(entry);
 	}
 
 	function deleteEntry(resource, key) {
-		var entriesForResource = entries.get(resource);
+		const entriesForResource = entries.get(resource);
 		if (entriesForResource !== undefined) {
 			entriesForResource.delete(key);
 			if (entriesForResource.size === 0) {
@@ -294,26 +290,26 @@
 	}
 
 	function unstable_createResource(fetch, maybeHashInput) {
-		var hashInput = maybeHashInput !== undefined ? maybeHashInput : identityHashFn;
+		const hashInput = maybeHashInput !== undefined ? maybeHashInput : identityHashFn;
 
 		var resource = {
-			read: function(input) {
+			read(input) {
 				// react-cache currently doesn't rely on context, but it may in the
 				// future, so we read anyway to prevent access outside of render.
 				readContext(CacheContext);
-				var key = hashInput(input);
-				var result = accessResult(resource, fetch, input, key);
+				const key = hashInput(input);
+				const result = accessResult(resource, fetch, input, key);
 				switch (result.status) {
 					case Pending: {
-						var suspender = result.value;
+						const suspender = result.value;
 						throw suspender;
 					}
 					case Resolved: {
-						var _value = result.value;
+						const _value = result.value;
 						return _value;
 					}
 					case Rejected: {
-						var error = result.value;
+						const error = result.value;
 						throw error;
 					}
 					default:
@@ -321,11 +317,11 @@
 						return undefined;
 				}
 			},
-			preload: function(input) {
+			preload(input) {
 				// react-cache currently doesn't rely on context, but it may in the
 				// future, so we read anyway to prevent access outside of render.
 				readContext(CacheContext);
-				var key = hashInput(input);
+				const key = hashInput(input);
 				accessResult(resource, fetch, input, key);
 			},
 		};

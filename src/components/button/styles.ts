@@ -1,7 +1,7 @@
 import styled from 'styled-components/native';
 import { StyleSheet } from 'react-native';
 
-type ThemeProps = { theme: import('../../lib/theme/types').ThemeProps };
+type ThemeProps = { theme: import('../../lib/theme').ThemeProps };
 type ButtonProps = import('./button').Props;
 type BackgroundProps = ThemeProps &
 	Pick<ButtonProps, 'background' | 'type' | 'disabled'> & {
@@ -14,7 +14,7 @@ export const Background = styled.View<BackgroundProps>`
 			return 'transparent';
 		}
 		switch (type) {
-			case 'secondary':
+			// case 'secondary':
 			// 	return hovered ? 'black' : theme.BUTTON_COLOR_SECONDARY;
 			// case 'attention':
 			// 	return focused ? 'black' : theme.BUTTON_COLOR_ATTENTION;
