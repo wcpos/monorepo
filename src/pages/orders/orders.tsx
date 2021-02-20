@@ -9,15 +9,15 @@ import useAppState from '../../hooks/use-app-state';
 import Button from '../../components/button';
 import WcApiService from '../../services/wc-api';
 
-interface Props {}
+type Sort = import('../../components/table/types').Sort;
 
-const Orders: React.FC<Props> = () => {
+const Orders = () => {
 	const [{ user, storeDB, storePath }] = useAppState();
 	const ui = storeDB.getUI('orders');
 
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
-	const onSort = ({ sortBy, sortDirection }) => {
+	const onSort: Sort = ({ sortBy, sortDirection }) => {
 		console.log({ sortBy, sortDirection });
 		// ui.updateWithJson({ sortBy, sortDirection });
 	};
@@ -48,6 +48,7 @@ const Orders: React.FC<Props> = () => {
 				}),
 				catchError((err) => {
 					console.error(err);
+					return err;
 				})
 			),
 		[query] as const

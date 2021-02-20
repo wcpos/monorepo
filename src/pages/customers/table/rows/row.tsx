@@ -4,15 +4,23 @@ import Image from './cells/image';
 import Actions from './cells/actions';
 import Address from './cells/address';
 
-interface Props {
+type ColumnProps = import('../../../../components/table/types').ColumnProps;
+type GetCellPropsFunction = import('../../../../components/table/row').GetCellPropsFunction;
+type CellRenderProps = {
+	cellData: any;
+	column: ColumnProps;
+	getCellProps: GetCellPropsFunction;
+};
+
+interface ICustomerRowProps {
 	customer: any;
-	columns: [];
+	columns: ColumnProps[];
 }
 
-const Row = ({ customer, columns }: Props) => {
+const Row = ({ customer, columns }: ICustomerRowProps) => {
 	return (
 		<Table.Row rowData={customer} columns={columns}>
-			{({ cellData, column, getCellProps }) => (
+			{({ cellData, column, getCellProps }: CellRenderProps): React.ReactElement => (
 				<Table.Row.Cell {...getCellProps()}>
 					{((): React.ReactElement | null => {
 						switch (column.key) {

@@ -2,16 +2,20 @@ import * as React from 'react';
 import * as Styled from './styles';
 import HeaderCell from './header-cell';
 
-export type Props = {
+type ColumnProps = import('./types').ColumnProps;
+type IHeaderCellProps = import('./header-cell').IHeaderCellProps;
+export type GetHeaderCellPropsFunction = () => IHeaderCellProps & { column: ColumnProps };
+
+export interface IHeaderRowProps {
 	children?: React.ReactNode;
 	columns?: import('./types').ColumnProps[];
 	sort?: import('./types').Sort;
 	sortBy?: string;
 	sortDirection?: import('./types').SortDirection;
 	style?: import('react-native').ViewStyle;
-};
+}
 
-const HeaderRow = ({ columns, sort, sortBy, sortDirection, children, style }: Props) => {
+const HeaderRow = ({ columns, sort, sortBy, sortDirection, children, style }: IHeaderRowProps) => {
 	return (
 		<Styled.HeaderRow style={style}>
 			{columns &&
@@ -20,7 +24,7 @@ const HeaderRow = ({ columns, sort, sortBy, sortDirection, children, style }: Pr
 					const dataKey = column.key || index;
 					const { defaultSortDirection, disableSort, label, flexGrow, flexShrink, width } = column;
 
-					const getHeaderCellProps = () => ({
+					const getHeaderCellProps: GetHeaderCellPropsFunction = () => ({
 						column,
 						dataKey,
 						defaultSortDirection,

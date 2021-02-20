@@ -6,7 +6,7 @@ import Row from './rows';
 type Sort = import('../../../components/table/types').Sort;
 type SortDirection = import('../../../components/table/types').SortDirection;
 
-interface Props {
+interface ICustomersTableProps {
 	columns: any;
 	customers: any;
 	sort: Sort;
@@ -14,10 +14,18 @@ interface Props {
 	sortDirection: SortDirection;
 }
 
+type GetHeaderCellPropsFunction = import('../../../components/table/header-row').GetHeaderCellPropsFunction;
+
 /**
  *
  */
-const CustomersTable: React.FC<Props> = ({ columns, customers, sort, sortBy, sortDirection }) => {
+const CustomersTable = ({
+	columns,
+	customers,
+	sort,
+	sortBy,
+	sortDirection,
+}: ICustomersTableProps) => {
 	const { t } = useTranslation();
 
 	return (
@@ -30,7 +38,7 @@ const CustomersTable: React.FC<Props> = ({ columns, customers, sort, sortBy, sor
 		>
 			<Table.Header>
 				<Table.HeaderRow>
-					{({ getHeaderCellProps }) => {
+					{({ getHeaderCellProps }: { getHeaderCellProps: GetHeaderCellPropsFunction }) => {
 						const { column } = getHeaderCellProps();
 						return (
 							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
@@ -40,7 +48,9 @@ const CustomersTable: React.FC<Props> = ({ columns, customers, sort, sortBy, sor
 					}}
 				</Table.HeaderRow>
 			</Table.Header>
-			<Table.Body>{({ item }) => <Row customer={item} columns={columns} />}</Table.Body>
+			<Table.Body>
+				{({ item }: { item: any }) => <Row customer={item} columns={columns} />}
+			</Table.Body>
 		</Table>
 	);
 };

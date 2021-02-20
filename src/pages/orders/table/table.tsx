@@ -3,12 +3,16 @@ import { useTranslation } from 'react-i18next';
 import Table from '../../../components/table';
 import Row from './rows';
 
+type Sort = import('../../../components/table/types').Sort;
+type SortDirection = import('../../../components/table/types').SortDirection;
+type GetHeaderCellPropsFunction = import('../../../components/table/header-row').GetHeaderCellPropsFunction;
+
 interface Props {
 	columns: any;
 	orders: any;
-	sort: () => void;
+	sort: Sort;
 	sortBy: string;
-	sortDirection: string;
+	sortDirection: SortDirection;
 }
 
 /**
@@ -27,7 +31,7 @@ const OrdersTable: React.FC<Props> = ({ columns, orders, sort, sortBy, sortDirec
 		>
 			<Table.Header>
 				<Table.HeaderRow>
-					{({ getHeaderCellProps }) => {
+					{({ getHeaderCellProps }: { getHeaderCellProps: GetHeaderCellPropsFunction }) => {
 						const { column } = getHeaderCellProps();
 						return (
 							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
@@ -37,7 +41,7 @@ const OrdersTable: React.FC<Props> = ({ columns, orders, sort, sortBy, sortDirec
 					}}
 				</Table.HeaderRow>
 			</Table.Header>
-			<Table.Body>{({ item }) => <Row order={item} columns={columns} />}</Table.Body>
+			<Table.Body>{({ item }: { item: any }) => <Row order={item} columns={columns} />}</Table.Body>
 		</Table>
 	);
 };

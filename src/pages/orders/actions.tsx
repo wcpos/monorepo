@@ -7,7 +7,8 @@ import Text from '../../components/text';
 
 interface Props {
 	columns: any;
-	resetUI: () => void;
+	resetUI?: () => void;
+	ui: any;
 }
 
 /**

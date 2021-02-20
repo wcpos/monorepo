@@ -5,15 +5,23 @@ import Customer from './cells/customer';
 import Actions from './cells/actions';
 import Address from './cells/address';
 
+type ColumnProps = import('../../../../components/table/types').ColumnProps;
+type GetCellPropsFunction = import('../../../../components/table/row').GetCellPropsFunction;
+type CellRenderProps = {
+	cellData: any;
+	column: ColumnProps;
+	getCellProps: GetCellPropsFunction;
+};
+
 interface Props {
 	order: any;
-	columns: [];
+	columns: ColumnProps[];
 }
 
 const Row = ({ order, columns }: Props) => {
 	return (
 		<Table.Row rowData={order} columns={columns}>
-			{({ cellData, column, getCellProps }) => (
+			{({ cellData, column, getCellProps }: CellRenderProps) => (
 				<Table.Row.Cell {...getCellProps()}>
 					{((): React.ReactElement | null => {
 						switch (column.key) {

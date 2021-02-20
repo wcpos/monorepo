@@ -26,11 +26,9 @@ const Cart: React.FC<Props> = ({ ui, order$ }) => {
 
 	if (!order) {
 		return (
-			<Segment.Group>
-				<Segment>
-					<CustomerSelect ui={ui} />
-				</Segment>
-			</Segment.Group>
+			<Segment>
+				<CustomerSelect />
+			</Segment>
 		);
 	}
 

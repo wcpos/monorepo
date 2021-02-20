@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { FlatList } from 'react-native-gesture-handler'; // swipeable rows?
+import get from 'lodash/get';
 import Body from './body';
 import Header from './header';
 import Row from './row';
@@ -7,7 +8,7 @@ import HeaderRow from './header-row';
 import Text from '../text';
 
 export interface ITableProps {
-	children?: import('react-native').ListRenderItem<any>;
+	children?: React.ReactElement | React.ReactElement[];
 	columns: import('./types').ColumnProps[];
 	data: any[];
 	empty?: React.ReactElement;
@@ -39,8 +40,8 @@ export const Table = ({
 
 	// sub components
 	if (Array.isArray(children) && childCount > 0) {
-		children.map((child) => {
-			if (child?.type?.name === 'Header') {
+		children.forEach((child) => {
+			if (get(child, 'type.displayName') === 'Table.Header') {
 				headerComponent = React.cloneElement(child?.props?.children, {
 					columns,
 					sort,
@@ -48,7 +49,7 @@ export const Table = ({
 					sortDirection,
 				});
 			}
-			if (child?.type?.name === 'Body') {
+			if (get(child, 'type.displayName') === 'Table.Body') {
 				renderItem = child.props.children;
 			}
 		});
@@ -72,4 +73,7 @@ export const Table = ({
 	);
 };
 
-export default Object.assign(Table, { Header, Body, HeaderRow, Row });
+Table.Header = Header;
+Table.Body = Body;
+Table.HeaderRow = HeaderRow;
+Table.Row = Row;

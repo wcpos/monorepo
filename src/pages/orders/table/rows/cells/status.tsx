@@ -6,6 +6,7 @@ type Props = {
 };
 
 const Status = ({ status }: Props) => {
+	// @ts-ignore
 	return <Icon name={status} />;
 };
 

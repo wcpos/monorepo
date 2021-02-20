@@ -4,15 +4,19 @@ import Cell from './cell';
 
 type ColumnProps = import('./types').ColumnProps;
 type CellProps = import('./cell').Props;
+export type GetCellPropsFunction = () => CellProps;
 
-export type Props = {
+export interface ITableRowProps {
 	children?: React.ReactNode;
 	rowData: any;
 	columns: ColumnProps[];
 	style?: import('react-native').ViewStyle;
-};
+}
 
-const Row = ({ rowData, columns, style, children }: Props) => {
+type IsFunction<T> = T extends (...args: any[]) => any ? T : never;
+const isFunction = <T extends {}>(value: T): value is IsFunction<T> => typeof value === 'function';
+
+const Row = ({ rowData, columns, style, children }: ITableRowProps) => {
 	return (
 		<Styled.Row style={style}>
 			{columns &&
@@ -22,7 +26,7 @@ const Row = ({ rowData, columns, style, children }: Props) => {
 					const cellData = rowData[dataKey];
 					const { flexGrow, flexShrink, width } = column;
 
-					const getCellProps = (): CellProps => ({
+					const getCellProps: GetCellPropsFunction = () => ({
 						cellData,
 						column,
 						dataKey,
@@ -32,7 +36,8 @@ const Row = ({ rowData, columns, style, children }: Props) => {
 						rowData,
 					});
 
-					if (typeof children === 'function') {
+					if (children && isFunction(children)) {
+						// @ts-ignore
 						return children({ cellData, column, getCellProps });
 					}
 

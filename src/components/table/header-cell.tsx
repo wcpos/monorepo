@@ -5,7 +5,7 @@ import Text from '../text';
 import Icon from '../icon';
 import Touchable from '../touchable';
 
-export type Props = {
+export interface IHeaderCellProps {
 	children?: React.ReactNode;
 	dataKey: string | number;
 	defaultSortDirection?: import('./types').SortDirection;
@@ -18,7 +18,7 @@ export type Props = {
 	flexGrow?: 0 | 1;
 	flexShrink?: 0 | 1;
 	width?: string;
-};
+}
 
 const HeaderCell = ({
 	children,
@@ -33,7 +33,7 @@ const HeaderCell = ({
 	flexGrow,
 	flexShrink,
 	width,
-}: Props) => {
+}: IHeaderCellProps) => {
 	const sortable = typeof sort === 'function';
 	const showSortIndicator = sortable && sortBy === dataKey;
 

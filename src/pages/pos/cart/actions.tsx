@@ -4,14 +4,15 @@ import Checkbox from '../../../components/checkbox';
 import Button from '../../../components/button';
 import Text from '../../../components/text';
 
-interface Props {
+interface ICartActionsProps {
 	ui: any;
+	columns: any[];
 }
 
 /**
  *
  */
-const Actions: React.FC<Props> = ({ columns, ui }) => {
+const Actions = ({ columns, ui }: ICartActionsProps) => {
 	const [t] = useTranslation();
 
 	return (
