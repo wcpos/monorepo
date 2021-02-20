@@ -13,15 +13,16 @@ import useAppState from '../../../hooks/use-app-state';
 import Button from '../../../components/button';
 import http from '../../../lib/http';
 
-interface Props {
-	productsResource: any;
+type Sort = import('../../../components/table/types').Sort;
+
+interface IPOSProductsProps {
 	ui: any;
 }
 
 /**
  *
  */
-const Products: React.FC<Props> = ({ ui }) => {
+const Products = ({ ui }: IPOSProductsProps) => {
 	// const { t } = useTranslation();
 	const [{ user, storePath, storeDB }] = useAppState();
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
@@ -34,12 +35,13 @@ const Products: React.FC<Props> = ({ ui }) => {
 		sortDirection: 'asc',
 	});
 
-	const onSort = ({ sortBy, sortDirection }) => {
+	const onSort: Sort = ({ sortBy, sortDirection }) => {
 		console.log({ sortBy, sortDirection });
+		// @ts-ignore
 		setQuery({ ...query, sortBy, sortDirection });
 	};
 
-	const onSearch = (search) => {
+	const onSearch = (search: string) => {
 		setQuery({ ...query, search });
 	};
 

@@ -7,8 +7,8 @@ interface Props {
 	order$: any;
 }
 
-const Totals = ({ order$ }: Props): JSX.Element => {
-	const order = useObservableState(order$);
+const Totals = ({ order$ }: Props) => {
+	const order: any = useObservableState(order$);
 
 	if (!order) {
 		return null;

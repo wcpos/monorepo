@@ -12,9 +12,7 @@ import Draggable from '../../components/draggable';
 import useAppState from '../../hooks/use-app-state';
 import * as Styled from './styles';
 
-interface Props {}
-
-const POS: React.FC<Props> = () => {
+const POS = () => {
 	const [{ storeDB }] = useAppState();
 	const productsUI = storeDB.getUI('pos_products');
 	const cartUI = storeDB.getUI('pos_cart');
@@ -22,8 +20,8 @@ const POS: React.FC<Props> = () => {
 	// fetch order
 	const orderQuery = storeDB.collections.orders.findOne();
 	const order$ = orderQuery.$.pipe(
-		filter((order) => order),
-		switchMap((order) => order.$.pipe(map(() => order))),
+		filter((order: any) => order),
+		switchMap((order: any) => order.$.pipe(map(() => order))),
 		tap((res) => console.log(res))
 	);
 
@@ -33,12 +31,12 @@ const POS: React.FC<Props> = () => {
 	// const width = useObservableState(productsUI.width$);
 	// console.log(width);
 
-	const handleColumnResizeUpdate = ({ dx }) => {
+	const handleColumnResizeUpdate = ({ dx }: { dx: number }) => {
 		// console.log(ui.width + dx);
 		// ui.updateWithJson({ width: ui.width + dx });
 	};
 
-	const handleColumnResizeEnd = ({ dx }) => {
+	const handleColumnResizeEnd = ({ dx }: { dx: number }) => {
 		// console.log(ui.width + dx);
 		// ui.updateWithJson({ width: ui.width + dx });
 	};

@@ -11,13 +11,15 @@ import CustomerSelect from './customer-select';
 import Actions from './actions';
 import Totals from './totals';
 
-interface Props {
+type Sort = import('../../../components/table/types').Sort;
+
+interface ICartProps {
 	ui: any;
 	order$: any;
 }
 
-const Cart: React.FC<Props> = ({ ui, order$ }) => {
-	const order = useObservableState(order$);
+const Cart: React.FC<ICartProps> = ({ ui, order$ }) => {
+	const order: any = useObservableState(order$);
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const [query, setQuery] = React.useState({
 		sortBy: 'id',
@@ -32,14 +34,15 @@ const Cart: React.FC<Props> = ({ ui, order$ }) => {
 		);
 	}
 
-	const handleSort = ({ sortBy, sortDirection }) => {
+	const handleSort: Sort = ({ sortBy, sortDirection }) => {
+		// @ts-ignore
 		setQuery({ ...query, sortBy, sortDirection });
 	};
 
 	return (
 		<Segment.Group>
 			<Segment>
-				<CustomerSelect ui={ui} />
+				<CustomerSelect />
 				<Popover content={<Actions columns={columns} ui={ui} />}>
 					<Button title="Table Settings" />
 				</Popover>

@@ -9,7 +9,9 @@ import Row from './rows';
 
 interface Props {
 	columns: any;
-	products: any;
+	display: any;
+	query: any;
+	sort: any;
 }
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
@@ -17,7 +19,7 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
 /**
  *
  */
-const ProductsTable: React.FC<Props> = ({ columns, display, query, sort }) => {
+const ProductsTable = ({ columns, display, query, sort }: Props) => {
 	const { t } = useTranslation();
 	const [{ storeDB }] = useAppState();
 

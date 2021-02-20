@@ -12,34 +12,67 @@ import LineItem from './rows/line-item';
 import FeeLine from './rows/fee-line';
 import ShippingLine from './rows/shipping-line';
 
-const CartTable = ({ columns, order, query, onSort }) => {
+type ColumnProps = import('../../../components/table/types').ColumnProps;
+type Sort = import('../../../components/table/types').Sort;
+type SortDirection = import('../../../components/table/types').SortDirection;
+type GetHeaderCellPropsFunction = import('../../../components/table/header-row').GetHeaderCellPropsFunction;
+
+interface ICartTableProps {
+	columns: ColumnProps[];
+	order: any;
+	query: any;
+	onSort: Sort;
+}
+
+const CartTable = ({ columns, order, query, onSort }: ICartTableProps) => {
 	const { t } = useTranslation();
 
 	const lineItems$ = order.line_items$.pipe(
 		switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
-		map((result) => Array.from(result.values())),
-		catchError((err) => console.error(err))
+		map((result: Map<string, unknown>) => Array.from(result.values())),
+		catchError((err) => {
+			console.error(err);
+			return err;
+		})
 	);
 
 	const feeLines$ = order.fee_lines$.pipe(
 		switchMap((ids) => from(order.collections().fee_lines.findByIds(ids))),
-		map((result) => Array.from(result.values())),
-		catchError((err) => console.error(err))
+		map((result: Map<string, unknown>) => Array.from(result.values())),
+		catchError((err) => {
+			console.error(err);
+			return err;
+		})
 	);
 
 	const shippingLines$ = order.shipping_lines$.pipe(
 		switchMap((ids) => from(order.collections().shipping_lines.findByIds(ids))),
-		map((result) => Array.from(result.values())),
-		catchError((err) => console.error(err))
+		map((result: Map<string, unknown>) => Array.from(result.values())),
+		catchError((err) => {
+			console.error(err);
+			return err;
+		})
 	);
 
 	const items$ = useObservable(
 		(inputs$) =>
-			combineLatest(lineItems$, feeLines$, shippingLines$, inputs$).pipe(
+			combineLatest([lineItems$, feeLines$, shippingLines$, inputs$]).pipe(
 				map(([lineItems, feeLines, shippingLines, [q]]) => {
-					const sortedLineItems = orderBy(lineItems, q.sortBy, q.sortDirection);
-					const sortedFeeLines = orderBy(feeLines, q.sortBy, q.sortDirection);
-					const sortedShippingLines = orderBy(shippingLines, q.sortBy, q.sortDirection);
+					const sortedLineItems = orderBy(
+						lineItems as Record<string, unknown>,
+						q.sortBy,
+						q.sortDirection
+					);
+					const sortedFeeLines = orderBy(
+						feeLines as Record<string, unknown>,
+						q.sortBy,
+						q.sortDirection
+					);
+					const sortedShippingLines = orderBy(
+						shippingLines as Record<string, unknown>,
+						q.sortBy,
+						q.sortDirection
+					);
 					return sortedLineItems.concat(sortedFeeLines, sortedShippingLines);
 				})
 			),
@@ -58,7 +91,7 @@ const CartTable = ({ columns, order, query, onSort }) => {
 		>
 			<Table.Header>
 				<Table.HeaderRow columns={columns}>
-					{({ getHeaderCellProps }) => {
+					{({ getHeaderCellProps }: { getHeaderCellProps: GetHeaderCellPropsFunction }) => {
 						const { column } = getHeaderCellProps();
 						return (
 							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
@@ -69,7 +102,7 @@ const CartTable = ({ columns, order, query, onSort }) => {
 				</Table.HeaderRow>
 			</Table.Header>
 			<Table.Body>
-				{({ item }): React.ReactElement | null => {
+				{({ item }: { item: any }): React.ReactElement | null => {
 					switch (item.collection.name) {
 						case 'line_items':
 							return <LineItem order={order} item={item} columns={columns} />;

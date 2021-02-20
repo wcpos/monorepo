@@ -4,6 +4,8 @@ import Button from '../../../../components/button';
 import Quantity from './cells/quantity';
 import Price from './cells/price';
 
+type GetCellPropsFunction = import('../../../../components/table/row').GetCellPropsFunction;
+
 type Props = {
 	order: any;
 	item: any;
@@ -17,7 +19,7 @@ const LineItem = ({ order, item, columns }: Props): React.ReactElement => {
 
 	return (
 		<Table.Row rowData={item} columns={columns}>
-			{({ getCellProps }) => {
+			{({ getCellProps }: { getCellProps: GetCellPropsFunction }) => {
 				const { cellData, column } = getCellProps();
 				return (
 					<Table.Row.Cell {...getCellProps()}>

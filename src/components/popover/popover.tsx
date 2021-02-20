@@ -23,7 +23,7 @@ export type PlacementProps =
 export type Props = {
 	children: React.ReactElement;
 	placement?: PlacementProps;
-	content: React.ReactChild;
+	content: React.ReactElement;
 };
 
 const Popover = ({ content, ...props }: Props) => {
@@ -51,24 +51,25 @@ const Popover = ({ content, ...props }: Props) => {
 	useEscKey(closePopover);
 
 	const childCount = React.Children.count(props.children);
-	if (childCount === 1) {
-		children = React.cloneElement(React.Children.only(props.children), {
+	if (childCount === 1 && React.isValidElement(props.children)) {
+		children = React.cloneElement(props.children, {
+			// @ts-ignore
 			onPress: toggleVisible,
 		});
 	}
 
 	if (visible) {
 		return (
-			<Fragment>
+			<>
 				<View onLayout={onLayout} ref={ref}>
 					{children}
 				</View>
 				<PopoverView measurements={measurements}>{content}</PopoverView>
-			</Fragment>
+			</>
 		);
 	}
 
-	return children;
+	return children || null;
 };
 
 export default Popover;

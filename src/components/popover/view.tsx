@@ -5,7 +5,7 @@ import { ContentView, Wrapper } from './styles';
 
 export type Props = {
 	children: React.ReactChild;
-	measurements: { x: number; y: number; };
+	measurements: { x: number; y: number };
 };
 
 const PopoverView = ({ children, measurements }: Props) => {

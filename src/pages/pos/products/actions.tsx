@@ -4,14 +4,18 @@ import Checkbox from '../../../components/checkbox';
 import Button from '../../../components/button';
 import Text from '../../../components/text';
 
-interface Props {
+type ColumnProps = import('../../../components/table/types').ColumnProps;
+
+interface IPOSProductActionsProps {
+	columns: ColumnProps[];
+	display: any[];
 	ui: any;
 }
 
 /**
  *
  */
-const Actions: React.FC<Props> = ({ columns, display, ui }) => {
+const Actions = ({ columns, display, ui }: IPOSProductActionsProps) => {
 	const [t] = useTranslation();
 
 	const onFilter = () => {
