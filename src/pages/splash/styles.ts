@@ -1,5 +1,6 @@
 import styled from 'styled-components/native';
-import { ThemeProps } from '../../lib/theme/types';
+
+type ThemeProps = import('../../lib/theme').ThemeProps;
 
 // eslint-disable-next-line import/prefer-default-export
 export const Splash = styled.View<{ theme: ThemeProps }>`

@@ -14,21 +14,19 @@ const Variations = ({ product }: Props) => {
 	const [{ user, storeDB, storePath }] = useAppState();
 	const [variations, setVariations] = React.useState([]);
 
-	const addToCart = async (variation) => {
+	const addToCart = async (variation: any) => {
 		const order = await product.collections().orders.findOne().exec();
 		order.addOrUpdateLineItem(variation, product);
 	};
 
 	React.useEffect(() => {
 		(async () => {
-			const variations = await storeDB.collections.variations.findByIds(
-				product.variations.map(String)
-			);
-			setVariations(Array.from(variations.values()));
+			const vars = await storeDB.collections.variations.findByIds(product.variations.map(String));
+			setVariations(Array.from(vars.values()));
 		})();
 	}, [product, storeDB.collections.variations]);
 
-	const fetchData = async (endpoint) => {
+	const fetchData = async (endpoint: string) => {
 		const path = storePath.split('.');
 		const site = user.get(path.slice(1, 3).join('.'));
 		const wpCredentials = user.get(path.slice(1, 5).join('.'));
@@ -54,20 +52,24 @@ const Variations = ({ product }: Props) => {
 		);
 	}
 
-	return variations.map((variation) => (
-		<View key={variation.id}>
-			<Text>
-				{variation.id} -
-				{variation.attributes.map((attribute) => (
-					<Text key={attribute.id}>
-						{attribute.name} -{attribute.option},
+	return (
+		<>
+			{variations.map((variation: any) => (
+				<View key={variation.id}>
+					<Text>
+						{variation.id} -
+						{variation.attributes.map((attribute: any) => (
+							<Text key={attribute.id}>
+								{attribute.name} -{attribute.option},
+							</Text>
+						))}
+						- {variation.price}
 					</Text>
-				))}
-				- {variation.price}
-			</Text>
-			<Button title="Add to Cart" onPress={() => addToCart(variation)} />
-		</View>
-	));
+					<Button title="Add to Cart" onPress={() => addToCart(variation)} />
+				</View>
+			))}
+		</>
+	);
 };
 
 export default Variations;

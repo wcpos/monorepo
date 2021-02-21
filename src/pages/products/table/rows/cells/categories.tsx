@@ -1,12 +1,17 @@
 import * as React from 'react';
 import Text from '../../../../../components/text';
 
+type Category = {
+	id: string;
+	name: string;
+};
+
 interface Props {
-	categories: [];
+	categories: Category[];
 }
 
 const Categories = ({ categories }: Props) => {
-	const handleClick = (category) => {
+	const handleClick = (category: Category) => {
 		console.log('filter by cat ', category);
 	};
 

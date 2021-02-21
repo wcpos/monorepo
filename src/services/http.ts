@@ -36,7 +36,8 @@ http.interceptors.request.use(
 	}
 );
 
-http.CancelToken = axios.CancelToken;
-http.isCancel = axios.isCancel;
+Object.assign(http, { CancelToken: axios.CancelToken, isCancel: axios.isCancel });
+// http.CancelToken = axios.CancelToken;
+// http.isCancel = axios.isCancel;
 
 export default http;

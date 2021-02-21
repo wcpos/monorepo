@@ -9,47 +9,45 @@ interface Props {
 	showTags: boolean;
 }
 
-const Name = ({ product, showSKU, showCategories, showTags }: Props) => {
-	return (
-		<React.Fragment>
-			<Text>{product.name}</Text>
-			{showSKU && <Text size="small">{product.sku}</Text>}
-			{showCategories && (
-				<View>
-					<Text size="small">
-						<Text size="small" type="secondary">
-							Categories:
-						</Text>
-						{product.categories.map((cat) => cat.name).join(', ')}
+const Name = ({ product, showSKU, showCategories, showTags }: Props) => (
+	<>
+		<Text>{product.name}</Text>
+		{showSKU && <Text size="small">{product.sku}</Text>}
+		{showCategories && (
+			<View>
+				<Text size="small">
+					<Text size="small" type="secondary">
+						Categories:
 					</Text>
-				</View>
-			)}
-			{showTags && (
-				<View>
-					<Text size="small">
-						<Text size="small" type="secondary">
-							Tags:
-						</Text>
-						{product.tags.map((tag) => tag.name).join(', ')}
+					{product.categories.map((cat: any) => cat.name).join(', ')}
+				</Text>
+			</View>
+		)}
+		{showTags && (
+			<View>
+				<Text size="small">
+					<Text size="small" type="secondary">
+						Tags:
 					</Text>
-				</View>
-			)}
-			{product.type === 'variable' && (
-				<View>
-					{product.attributes
-						.filter((attr) => attr.variation)
-						.map((attr) => (
-							<Text size="small">
-								<Text size="small" type="secondary">
-									{attr.name}:
-								</Text>
-								{attr.options.join(', ')}
+					{product.tags.map((tag: any) => tag.name).join(', ')}
+				</Text>
+			</View>
+		)}
+		{product.type === 'variable' && (
+			<View>
+				{product.attributes
+					.filter((attr: any) => attr.variation)
+					.map((attr: any) => (
+						<Text size="small">
+							<Text size="small" type="secondary">
+								{attr.name}:
 							</Text>
-						))}
-				</View>
-			)}
-		</React.Fragment>
-	);
-};
+							{attr.options.join(', ')}
+						</Text>
+					))}
+			</View>
+		)}
+	</>
+);
 
 export default Name;

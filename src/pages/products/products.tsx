@@ -11,9 +11,9 @@ import useAppState from '../../hooks/use-app-state';
 import WcApiService from '../../services/wc-api';
 import * as Styled from './styles';
 
-interface Props {}
+type Sort = import('../../components/table/types').Sort;
 
-const Products: React.FC<Props> = () => {
+const Products = () => {
 	const [{ user, storePath, storeDB }] = useAppState();
 	const ui = storeDB.getUI('products');
 
@@ -44,6 +44,7 @@ const Products: React.FC<Props> = () => {
 				}),
 				catchError((err) => {
 					console.error(err);
+					return err;
 				})
 			),
 		[query] as const
@@ -51,11 +52,11 @@ const Products: React.FC<Props> = () => {
 
 	const products = useObservableState(products$, []);
 
-	const onSearch = (value) => {
+	const onSearch = (value: string) => {
 		console.log(value);
 	};
 
-	const onSort = ({ sortBy, sortDirection }) => {
+	const onSort: Sort = ({ sortBy, sortDirection }) => {
 		console.log({ sortBy, sortDirection });
 		// ui.updateWithJson({ sortBy, sortDirection });
 	};
@@ -88,7 +89,7 @@ const Products: React.FC<Props> = () => {
 								await storeDB.upsertLocal(
 									'tax_rates',
 									// turn array into json
-									data.reduce((obj, rate) => {
+									data.reduce((obj: Record<string, unknown>, rate: any) => {
 										obj[rate.id] = rate;
 										return obj;
 									}, {})
@@ -111,7 +112,7 @@ const Products: React.FC<Props> = () => {
 								await storeDB.upsertLocal(
 									'tax_classes',
 									// turn array into json
-									data.reduce((obj, taxClass) => {
+									data.reduce((obj: Record<string, unknown>, taxClass: any) => {
 										obj[taxClass.slug] = taxClass;
 										return obj;
 									}, {})

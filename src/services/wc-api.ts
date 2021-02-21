@@ -7,7 +7,7 @@ class WcApiService {
 	private secret: string;
 	private http: any;
 
-	constructor(args) {
+	constructor(args: { baseUrl: string; collection: string; key: string; secret: string }) {
 		const { baseUrl, collection, key, secret } = args;
 		this.baseUrl = baseUrl;
 		this.collection = collection;

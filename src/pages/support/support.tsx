@@ -4,9 +4,7 @@ import { View, Text } from 'react-native';
 // import Store from './store-db';
 import Segment from '../../components/segment';
 
-interface Props {}
-
-const Support: React.FC<Props> = ({ header, main, title }) => {
+const Support = () => {
 	return (
 		<>
 			<Segment.Group style={{ width: '50%' }}>

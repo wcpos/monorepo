@@ -6,15 +6,17 @@ import Checkbox from '../../components/checkbox';
 import Button from '../../components/button';
 import Text from '../../components/text';
 
-interface Props {
-	columns: any;
-	resetUI: () => void;
+interface IProductsActionsProps {
+	columns: any[];
+	resetUI?: () => void;
+	query?: any;
+	ui: any;
 }
 
 /**
  *
  */
-const Actions: React.FC<Props> = ({ columns, query, ui }) => {
+const Actions = ({ columns, query, ui }: IProductsActionsProps) => {
 	const { t } = useTranslation();
 
 	const onFilter = () => {
@@ -24,7 +26,7 @@ const Actions: React.FC<Props> = ({ columns, query, ui }) => {
 	return (
 		<>
 			<Text>Columns</Text>
-			{columns.map((column: any, index) => (
+			{columns.map((column: any, index: number) => (
 				<Checkbox
 					key={column.key}
 					name={column.key}

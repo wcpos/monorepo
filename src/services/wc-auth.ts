@@ -12,6 +12,7 @@ const namespace = 'wc/v3';
  */
 const parseApiUrlFromHeaders = (headers: { link: string }) => {
 	const link = headers?.link;
+	// @ts-ignore
 	const parsed = Url.parseLinkHeader(link);
 	return parsed?.['https://api.w.org/']?.url;
 };
@@ -25,7 +26,10 @@ const fetchWpApiUrl = (url: string) =>
 		map((response) => {
 			return parseApiUrlFromHeaders(response?.headers);
 		}),
-		catchError((err) => console.error(err))
+		catchError((err) => {
+			console.error(err);
+			return err;
+		})
 	);
 
 /**
@@ -47,7 +51,10 @@ const fetchWcApiUrl = (url: string) =>
 				}
 			}
 		}),
-		catchError((err) => console.error(err))
+		catchError((err) => {
+			console.error(err);
+			return err;
+		})
 	);
 
 export default { fetchWpApiUrl, parseApiUrlFromHeaders, fetchWcApiUrl };

@@ -15,7 +15,7 @@ if (PRODUCTION) {
 const logLevels = ['info', 'error', 'warn', 'debug', 'verbose'];
 
 class Logger {
-	private logCollection;
+	private logCollection: any;
 
 	constructor() {
 		// this.logCollection = logCollection;

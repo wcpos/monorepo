@@ -6,7 +6,15 @@ import Image from './cells/image';
 import Name from './cells/name';
 import Actions from './cells/actions';
 
-const Row = ({ product, columns, display }) => {
+type GetCellPropsFunction = import('../../../../../components/table/row').GetCellPropsFunction;
+
+interface IPOSProductsTableRowProps {
+	product: any;
+	columns: any;
+	display: any;
+}
+
+const Row = ({ product, columns, display }: IPOSProductsTableRowProps) => {
 	const show = (key: string): boolean => {
 		const d = find(display, { key });
 		return !d.hide;
@@ -14,7 +22,7 @@ const Row = ({ product, columns, display }) => {
 
 	return (
 		<Table.Row rowData={product} columns={columns}>
-			{({ getCellProps }) => {
+			{({ getCellProps }: { getCellProps: GetCellPropsFunction }) => {
 				const { cellData, column } = getCellProps();
 				return (
 					<Table.Row.Cell {...getCellProps()}>

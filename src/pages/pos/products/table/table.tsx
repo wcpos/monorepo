@@ -7,11 +7,16 @@ import Table from '../../../../components/table';
 import useAppState from '../../../../hooks/use-app-state';
 import Row from './rows';
 
+type ColumnProps = import('../../../../components/table/types').ColumnProps;
+type Sort = import('../../../../components/table/types').Sort;
+type SortDirection = import('../../../../components/table/types').SortDirection;
+type GetHeaderCellPropsFunction = import('../../../../components/table/header-row').GetHeaderCellPropsFunction;
+
 interface Props {
 	columns: any;
 	display: any;
 	query: any;
-	sort: any;
+	sort: Sort;
 }
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
@@ -42,12 +47,13 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 				}),
 				catchError((err) => {
 					console.error(err);
+					return err;
 				})
 			),
 		[query] as const
 	);
 
-	const products = useObservableState(products$, []);
+	const products = useObservableState(products$, []) as any[];
 
 	return (
 		<Table
@@ -59,7 +65,7 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 		>
 			<Table.Header>
 				<Table.HeaderRow columns={columns}>
-					{({ getHeaderCellProps }) => {
+					{({ getHeaderCellProps }: { getHeaderCellProps: GetHeaderCellPropsFunction }) => {
 						const { column } = getHeaderCellProps();
 						return (
 							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
@@ -70,7 +76,7 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 				</Table.HeaderRow>
 			</Table.Header>
 			<Table.Body>
-				{({ item }) => <Row product={item} columns={columns} display={display} />}
+				{({ item }: { item: any }) => <Row product={item} columns={columns} display={display} />}
 			</Table.Body>
 		</Table>
 	);

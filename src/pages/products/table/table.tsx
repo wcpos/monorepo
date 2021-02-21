@@ -5,12 +5,16 @@ import Table from '../../../components/table';
 import Text from '../../../components/text';
 import Row from './rows';
 
+type Sort = import('../../../components/table/types').Sort;
+type SortDirection = import('../../../components/table/types').SortDirection;
+type GetHeaderCellPropsFunction = import('../../../components/table/header-row').GetHeaderCellPropsFunction;
+
 interface Props {
 	columns: any;
 	products: any;
-	sort: () => void;
-	sortBy: string;
-	sortDirection: string;
+	sort?: Sort;
+	sortBy?: string;
+	sortDirection?: SortDirection;
 }
 
 /**
@@ -29,7 +33,7 @@ const ProductsTable = ({ columns, products }: Props) => {
 		>
 			<Table.Header>
 				<Table.HeaderRow>
-					{({ getHeaderCellProps }) => {
+					{({ getHeaderCellProps }: { getHeaderCellProps: GetHeaderCellPropsFunction }) => {
 						const { column } = getHeaderCellProps();
 						return (
 							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
@@ -39,7 +43,9 @@ const ProductsTable = ({ columns, products }: Props) => {
 					}}
 				</Table.HeaderRow>
 			</Table.Header>
-			<Table.Body>{({ item }) => <Row product={item} columns={columns} />}</Table.Body>
+			<Table.Body>
+				{({ item }: { item: any }) => <Row product={item} columns={columns} />}
+			</Table.Body>
 		</Table>
 	);
 };
