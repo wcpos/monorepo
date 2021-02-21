@@ -38,5 +38,8 @@ export const Header = ({ children }: IHeaderProps) => {
 };
 
 Header.Left = Left;
+Header.Left.displayName = 'Header.Left';
 Header.Right = Right;
+Header.Right.displayName = 'Header.Right';
 Header.Title = Title;
+Header.Title.displayName = 'Header.Title';

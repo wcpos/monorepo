@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as Styled from './styles';
-import HeaderCell from './header-cell';
+import { HeaderCell } from './header-cell';
 
 type ColumnProps = import('./types').ColumnProps;
 type IHeaderCellProps = import('./header-cell').IHeaderCellProps;
@@ -15,7 +15,14 @@ export interface IHeaderRowProps {
 	style?: import('react-native').ViewStyle;
 }
 
-const HeaderRow = ({ columns, sort, sortBy, sortDirection, children, style }: IHeaderRowProps) => {
+export const HeaderRow = ({
+	columns,
+	sort,
+	sortBy,
+	sortDirection,
+	children,
+	style,
+}: IHeaderRowProps) => {
 	return (
 		<Styled.HeaderRow style={style}>
 			{columns &&
@@ -42,10 +49,11 @@ const HeaderRow = ({ columns, sort, sortBy, sortDirection, children, style }: IH
 						return children({ column, getHeaderCellProps });
 					}
 
-					return <HeaderCell {...getHeaderCellProps()} />;
+					return <HeaderCell key={dataKey} {...getHeaderCellProps()} />;
 				})}
 		</Styled.HeaderRow>
 	);
 };
 
-export default Object.assign(HeaderRow, { HeaderCell });
+HeaderRow.HeaderCell = HeaderCell;
+HeaderRow.displayName = 'Table.HeaderRow';

@@ -1,4 +1,4 @@
-import { addRxPlugin, createRxDatabase, checkAdapter } from 'rxdb';
+import { addRxPlugin, createRxDatabase, checkAdapter } from 'rxdb/plugins/core';
 import SQLite from 'react-native-sqlite-2';
 import SQLiteAdapterFactory from 'pouchdb-adapter-react-native-sqlite';
 // import httpAdapter from 'pouchdb-adapter-http';

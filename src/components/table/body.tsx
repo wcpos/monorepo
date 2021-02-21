@@ -4,8 +4,8 @@ type Props = {
 	children: React.ReactNode;
 };
 
-const Body: React.FC<Props> = ({ children }) => {
+export const Body: React.FC<Props> = ({ children }) => {
 	return <>{children}</>;
 };
 
-export default Body;
+Body.displayName = 'Table.Body';

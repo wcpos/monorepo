@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Dimensions } from 'react-native';
-import { isRxDatabase } from 'rxdb';
+import { isRxDatabase } from 'rxdb/plugins/core';
 import NetInfo from '@react-native-community/netinfo';
 import debounce from 'lodash/debounce';
 import get from 'lodash/get';

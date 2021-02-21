@@ -2,7 +2,7 @@ import * as React from 'react';
 import * as Styled from './styles';
 import Text from '../text';
 
-export type Props = {
+export interface ITableCellProps {
 	children?: React.ReactNode;
 	cellData?: any;
 	column?: any;
@@ -13,9 +13,20 @@ export type Props = {
 	flexGrow?: 0 | 1;
 	flexShrink?: 0 | 1;
 	width?: string;
-};
+	index?: number;
+}
 
-const Cell: React.FC<Props> = ({ children, cellData, flexGrow, flexShrink, width, style }) => {
+export const Cell = ({
+	children,
+	cellData,
+	flexGrow,
+	flexShrink,
+	width,
+	style,
+	rowData,
+}: ITableCellProps) => {
+	// const key = row.id;
+	// debugger;
 	if (children) {
 		return (
 			<Styled.Cell style={style} flexGrow={flexGrow} flexShrink={flexShrink} width={width}>
@@ -31,4 +42,4 @@ const Cell: React.FC<Props> = ({ children, cellData, flexGrow, flexShrink, width
 	);
 };
 
-export default Cell;
+Cell.displayName = 'Table.Row.Cell';

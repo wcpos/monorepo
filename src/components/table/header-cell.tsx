@@ -20,7 +20,7 @@ export interface IHeaderCellProps {
 	width?: string;
 }
 
-const HeaderCell = ({
+export const HeaderCell = ({
 	children,
 	sort,
 	sortBy,
@@ -78,4 +78,4 @@ const HeaderCell = ({
 	);
 };
 
-export default HeaderCell;
+HeaderCell.displayName = 'Table.Header.Cell';

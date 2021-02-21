@@ -4,8 +4,8 @@ type Props = {
 	children: React.ReactNode;
 };
 
-const Header: React.FC<Props> = ({ children }) => {
+export const Header: React.FC<Props> = ({ children }) => {
 	return <>{children}</>;
 };
 
-export default Header;
+Header.displayName = 'Table.Header';

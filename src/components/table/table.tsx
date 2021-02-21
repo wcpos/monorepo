@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { FlatList } from 'react-native-gesture-handler'; // swipeable rows?
 import get from 'lodash/get';
-import Body from './body';
-import Header from './header';
-import Row from './row';
-import HeaderRow from './header-row';
+import { Body } from './body';
+import { Header } from './header';
+import { Row } from './row';
+import { HeaderRow } from './header-row';
 import Text from '../text';
 
 export interface ITableProps {

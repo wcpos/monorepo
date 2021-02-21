@@ -12,7 +12,7 @@ export const Row = styled.View<RowProps>`
 	border-bottom-color: #000000;
 `;
 
-type CellProps = { theme: ThemeProps } & import('./cell').Props;
+type CellProps = { theme: ThemeProps } & import('./cell').ITableCellProps;
 
 export const Cell = styled.View<CellProps>`
 	flex-grow: ${({ flexGrow }) => (isNil(flexGrow) ? 1 : flexGrow)};
