@@ -6,6 +6,7 @@ import { RxDBNoValidatePlugin } from 'rxdb/plugins/no-validate';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
+import { RxDBAdapterCheckPlugin } from 'rxdb/plugins/adapter-check';
 import collections from 'rxdb-utils/dist/collections';
 import wcPlugin from '../plugins/woocommerce';
 
@@ -20,6 +21,7 @@ addRxPlugin(RxDBNoValidatePlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
+addRxPlugin(RxDBAdapterCheckPlugin);
 addRxPlugin(collections);
 addRxPlugin(wcPlugin);
 

@@ -11,6 +11,13 @@ export default {
 	/**
 	 *
 	 */
+	isOpen(this: OrderDocument) {
+		return this.status === 'pending';
+	},
+
+	/**
+	 *
+	 */
 	async addOrUpdateLineItem(
 		this: OrderDocument,
 		product: ProductDocument,
