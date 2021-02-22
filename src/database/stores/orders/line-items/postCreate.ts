@@ -9,7 +9,7 @@ type OrderLineItemDocument = import('../../../types').OrderLineItemDocument;
  * @TODO - question: is it possible to hook in before qty or price
  * changes and then emit with updated total?
  */
-export default (raw: Record<string, unknown>, model: OrderLineItemDocument) => {
+export default (plainData: Record<string, unknown>, model: OrderLineItemDocument) => {
 	combineLatest([model.quantity$, model.price$])
 		.pipe(tap((res) => console.log(res)))
 		.subscribe((val) => {

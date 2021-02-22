@@ -3,23 +3,28 @@ import { useObservableSuspense, useObservableState, useObservable } from 'observ
 import { from, of } from 'rxjs';
 import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
 import sumBy from 'lodash/sumBy';
+import get from 'lodash/get';
 import Segment from '../../../components/segment';
 import Button from '../../../components/button';
 import Popover from '../../../components/popover';
+import Text from '../../../components/text';
 import Table from './table';
 import CustomerSelect from './customer-select';
 import Actions from './actions';
 import Totals from './totals';
 
 type Sort = import('../../../components/table/types').Sort;
+type OrderDocument = import('../../../database/types').OrderDocument;
 
 interface ICartProps {
 	ui: any;
-	order$: any;
+	orders: OrderDocument[];
 }
 
-const Cart: React.FC<ICartProps> = ({ ui, order$ }) => {
-	const order: any = useObservableState(order$);
+const Cart = ({ ui, orders = [] }: ICartProps) => {
+	const [order, setOrder] = React.useState<OrderDocument | undefined>(get(orders, '0'));
+	// const order: OrderDocument | undefined = useObservableState(get(orders, '0.$'));
+	// debugger;
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const [query, setQuery] = React.useState({
 		sortBy: 'id',
@@ -28,9 +33,17 @@ const Cart: React.FC<ICartProps> = ({ ui, order$ }) => {
 
 	if (!order) {
 		return (
-			<Segment>
-				<CustomerSelect />
-			</Segment>
+			<Segment.Group>
+				<Segment>
+					<CustomerSelect />
+				</Segment>
+				<Segment>
+					{orders.map((order) => (
+						<Text onPress={() => setOrder(order)}>{`${order.id}: ${order.total}`}</Text>
+					))}
+					<Text onPress={() => setOrder(undefined)}>New</Text>
+				</Segment>
+			</Segment.Group>
 		);
 	}
 
@@ -51,7 +64,7 @@ const Cart: React.FC<ICartProps> = ({ ui, order$ }) => {
 				<Table order={order} columns={columns} query={query} onSort={handleSort} />
 			</Segment>
 			<Segment>
-				<Totals order$={order.$} />
+				<Totals order={order} />
 			</Segment>
 			<Segment>
 				<Button
@@ -66,6 +79,12 @@ const Cart: React.FC<ICartProps> = ({ ui, order$ }) => {
 						order.addShippingLine({ method_title: 'Shipping', total: '5' });
 					}}
 				/>
+			</Segment>
+			<Segment>
+				{orders.map((order) => (
+					<Text onPress={() => setOrder(order)}>{`${order.id}: ${order.total}`}</Text>
+				))}
+				<Text onPress={() => setOrder(undefined)}>New</Text>
 			</Segment>
 		</Segment.Group>
 	);

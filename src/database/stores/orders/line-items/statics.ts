@@ -1,4 +1,4 @@
-type OrderFeeLineDocument = import('../../../types').OrderFeeLineDocument;
+type OrderLineItemDocument = import('../../../types').OrderLineItemDocument;
 
 /**
  * WooCommerce Order Line Item statics
@@ -8,7 +8,7 @@ export default {
 	 *
 	 */
 	async bulkInsertFromOrder(
-		this: OrderFeeLineDocument,
+		this: OrderLineItemDocument,
 		data: Record<string, unknown>[],
 		orderId: string
 	) {

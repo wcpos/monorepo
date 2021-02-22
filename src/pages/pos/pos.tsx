@@ -12,18 +12,30 @@ import Draggable from '../../components/draggable';
 import useAppState from '../../hooks/use-app-state';
 import * as Styled from './styles';
 
+type OrderDocument = import('../../database/types').OrderDocument;
+
 const POS = () => {
 	const [{ storeDB }] = useAppState();
 	const productsUI = storeDB.getUI('pos_products');
 	const cartUI = storeDB.getUI('pos_cart');
 
 	// fetch order
-	const orderQuery = storeDB.collections.orders.findOne();
-	const order$ = orderQuery.$.pipe(
-		filter((order: any) => order),
-		switchMap((order: any) => order.$.pipe(map(() => order))),
-		tap((res) => console.log(res))
-	);
+	// const orderQuery = storeDB.collections.orders.findOne();
+	// const order$ = orderQuery.$.pipe(
+	// 	filter((order: any) => order),
+	// 	switchMap((order: any) => order.$.pipe(map(() => order))),
+	// 	tap((res) => console.log(res))
+	// );
+	const orderQuery = storeDB.collections.orders.find().where('status').eq('pending');
+	const orders: OrderDocument[] | undefined = useObservableState(orderQuery.$);
+	// const order$ = orderQuery.$.pipe(
+	// 	filter((order: any) => order),
+	// 	tap((res) => {
+	// 		debugger;
+	// 	}),
+	// 	switchMap((order: any) => order.$.pipe(map(() => order))),
+	// 	tap((res) => console.log(res))
+	// );
 
 	const [width] = useObservableState(() => productsUI.get$('width'), productsUI.get('width'));
 	console.log('render');
@@ -71,7 +83,7 @@ const POS = () => {
 			<Styled.Column>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading cart...</Text>}>
-						<Cart ui={cartUI} order$={order$} />
+						{orders ? <Cart ui={cartUI} orders={orders} /> : null}
 					</React.Suspense>
 				</ErrorBoundary>
 			</Styled.Column>

@@ -55,7 +55,7 @@ const createFeeLinesCollection = async (db: StoreDatabase) => {
 	});
 
 	// @TODO - turn this into a plugin?
-	collections.fee_lines.preInsert(function (rawData: Record<string, unknown>) {
+	collections.fee_lines.preInsert((plainData: Record<string, unknown>) => {
 		// remove _links property (invalid property name)
 		// unset(rawData, '_links');
 
@@ -69,7 +69,7 @@ const createFeeLinesCollection = async (db: StoreDatabase) => {
 		// }
 
 		// change id to string
-		rawData.id = String(rawData.id);
+		plainData.id = String(plainData.id);
 	}, false);
 
 	// FeeLinesCollection.postCreate((raw, model) => {

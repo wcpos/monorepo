@@ -4,15 +4,15 @@ import { View } from 'react-native';
 import Text from '../../../components/text';
 
 interface Props {
-	order$: any;
+	order: any;
 }
 
-const Totals = ({ order$ }: Props) => {
-	const order: any = useObservableState(order$);
+const Totals = ({ order }: Props) => {
+	// const order: any = useObservableState(order$);
 
-	if (!order) {
-		return null;
-	}
+	// if (!order) {
+	// 	return null;
+	// }
 
 	return (
 		<>
