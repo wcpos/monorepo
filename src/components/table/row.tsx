@@ -37,6 +37,7 @@ export const Row = ({ rowData, columns, style, children }: ITableRowProps) => {
 						width,
 						rowData,
 						index,
+						key: dataKey,
 					});
 
 					if (children && isFunction(children)) {

@@ -24,9 +24,8 @@ export const Cell = ({
 	width,
 	style,
 	rowData,
+	dataKey,
 }: ITableCellProps) => {
-	// const key = row.id;
-	// debugger;
 	if (children) {
 		return (
 			<Styled.Cell style={style} flexGrow={flexGrow} flexShrink={flexShrink} width={width}>

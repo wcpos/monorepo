@@ -19,17 +19,19 @@ export const Header = ({ children }: IHeaderProps) => {
 	const left: React.ReactNode[] = [];
 	const right: React.ReactNode[] = [];
 
-	React.Children.forEach(children, (child: React.ReactChild) => {
+	React.Children.forEach(children, (child: React.ReactChild, index: number) => {
 		if (React.isValidElement(child) && typeof child.type !== 'string') {
 			const displayName = get(child, 'type.displayName');
+			const key = `header-${index}`;
+
 			if (displayName === 'Header.Left') {
-				left.push(<Left>{child.props.children}</Left>);
+				left.push(<Left key={key}>{child.props.children}</Left>);
 			}
 			if (displayName === 'Header.Title') {
-				title = <Title>{child.props.children}</Title>;
+				title = <Title key={key}>{child.props.children}</Title>;
 			}
 			if (displayName === 'Header.Right') {
-				right.push(<Right>{child.props.children}</Right>);
+				right.push(<Right key={key}>{child.props.children}</Right>);
 			}
 		}
 	});

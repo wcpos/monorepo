@@ -43,13 +43,14 @@ export const HeaderRow = ({
 						sortBy,
 						sortDirection,
 						width,
+						key: dataKey,
 					});
 
 					if (typeof children === 'function') {
 						return children({ column, getHeaderCellProps });
 					}
 
-					return <HeaderCell key={dataKey} {...getHeaderCellProps()} />;
+					return <HeaderCell {...getHeaderCellProps()} />;
 				})}
 		</Styled.HeaderRow>
 	);
