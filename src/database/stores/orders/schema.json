@@ -449,5 +449,6 @@
 		"currency_symbol": {
 			"type": "string"
 		}
-	}
+	},
+	"indexes": ["date_created_gmt"]
 }
