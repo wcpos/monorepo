@@ -2,15 +2,19 @@ import * as React from 'react';
 import Button from '../../../../../../components/button';
 import Popover from '../../../../../../components/popover';
 import Variations from './variations';
+import useAppState from '../../../../../../hooks/use-app-state';
 
 interface Props {
 	product: any;
 }
 
 const Actions: React.FC<Props> = ({ product }) => {
+	const [obj] = useAppState();
+
 	const addToCart = async () => {
-		const order = await product.collections().orders.findOne().exec();
-		order.addOrUpdateLineItem(product);
+		console.log(obj);
+		// const order = await product.collections().orders.findOne().exec();
+		// order.addOrUpdateLineItem(product);
 	};
 
 	if (product.isVariable()) {

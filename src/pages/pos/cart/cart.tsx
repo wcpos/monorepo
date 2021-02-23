@@ -12,6 +12,7 @@ import Table from './table';
 import CustomerSelect from './customer-select';
 import Actions from './actions';
 import Totals from './totals';
+import useAppState from '../../../hooks/use-app-state';
 
 type Sort = import('../../../components/table/types').Sort;
 type OrderDocument = import('../../../database/types').OrderDocument;
@@ -22,7 +23,9 @@ interface ICartProps {
 }
 
 const Cart = ({ ui, orders = [] }: ICartProps) => {
-	const [order, setOrder] = React.useState<OrderDocument | undefined>(get(orders, '0'));
+	const [{ currentOrder }, dispatch, actionTypes] = useAppState();
+
+	// const [order, setOrder] = React.useState<OrderDocument | undefined>(get(orders, '0'));
 	// const order: OrderDocument | undefined = useObservableState(get(orders, '0.$'));
 	// debugger;
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
@@ -31,7 +34,15 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 		sortDirection: 'asc',
 	});
 
-	if (!order) {
+	const setCurrentOrder = (order?: OrderDocument) => {
+		dispatch({ type: actionTypes.SET_CURRENT_ORDER, payload: { currentOrder: order } });
+	};
+
+	React.useEffect(() => {
+		setCurrentOrder(get(orders, '0'));
+	}, []);
+
+	if (!currentOrder) {
 		return (
 			<Segment.Group>
 				<Segment>
@@ -39,9 +50,9 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				</Segment>
 				<Segment>
 					{orders.map((order) => (
-						<Text onPress={() => setOrder(order)}>{`${order.id}: ${order.total}`}</Text>
+						<Text onPress={() => setCurrentOrder(order)}>{`${order.id}: ${order.total}`}</Text>
 					))}
-					<Text onPress={() => setOrder(undefined)}>New</Text>
+					<Text onPress={() => setCurrentOrder(undefined)}>New</Text>
 				</Segment>
 			</Segment.Group>
 		);
@@ -61,30 +72,30 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				</Popover>
 			</Segment>
 			<Segment grow>
-				<Table order={order} columns={columns} query={query} onSort={handleSort} />
+				<Table order={currentOrder} columns={columns} query={query} onSort={handleSort} />
 			</Segment>
 			<Segment>
-				<Totals order={order} />
+				<Totals order={currentOrder} />
 			</Segment>
 			<Segment>
 				<Button
 					title="Add Fee"
 					onPress={() => {
-						order.addFeeLine({ name: 'Fee', total: '10' });
+						currentOrder.addFeeLine({ name: 'Fee', total: '10' });
 					}}
 				/>
 				<Button
 					title="Add Shipping"
 					onPress={() => {
-						order.addShippingLine({ method_title: 'Shipping', total: '5' });
+						currentOrder.addShippingLine({ method_title: 'Shipping', total: '5' });
 					}}
 				/>
 			</Segment>
 			<Segment>
 				{orders.map((order) => (
-					<Text onPress={() => setOrder(order)}>{`${order.id}: ${order.total}`}</Text>
+					<Text onPress={() => setCurrentOrder(order)}>{`${order.id}: ${order.total}`}</Text>
 				))}
-				<Text onPress={() => setOrder(undefined)}>New</Text>
+				<Text onPress={() => setCurrentOrder(undefined)}>New</Text>
 			</Segment>
 		</Segment.Group>
 	);

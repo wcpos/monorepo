@@ -9,6 +9,8 @@ import database from '../../database';
 import * as actionTypes from './action-types';
 import logger from '../../services/logger';
 
+type OrderDocument = import('../../database/types').OrderDocument;
+
 export type AppState = {
 	online: boolean;
 	window: import('react-native').ScaledSize;
@@ -21,6 +23,7 @@ export type AppState = {
 	user?: any;
 	storeDB?: any;
 	storePath?: any;
+	currentOrder?: OrderDocument;
 	// site?: any;
 	// wpUser?: any;
 };
@@ -43,6 +46,7 @@ const initialState: AppState = {
 	user: undefined,
 	storeDB: undefined,
 	storePath: undefined,
+	currentOrder: undefined,
 	// site: undefined,
 	// wpUser: undefined,
 };
@@ -81,6 +85,8 @@ function appStateReducer(state: AppState, action: AppAction): AppState {
 			state.user.collection.upsertLocal('last_store', { store_id: payload.storePath });
 			return { ...state, ...payload };
 		case actionTypes.SET_USER_AND_STORE:
+			return { ...state, ...payload };
+		case actionTypes.SET_CURRENT_ORDER:
 			return { ...state, ...payload };
 		default:
 			return { ...state, ...payload };
