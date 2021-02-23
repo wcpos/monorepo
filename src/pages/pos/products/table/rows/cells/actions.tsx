@@ -9,12 +9,13 @@ interface Props {
 }
 
 const Actions: React.FC<Props> = ({ product }) => {
-	const [obj] = useAppState();
+	const [{ currentOrder, storeDB }] = useAppState();
 
 	const addToCart = async () => {
-		console.log(obj);
-		// const order = await product.collections().orders.findOne().exec();
-		// order.addOrUpdateLineItem(product);
+		if (currentOrder) {
+			return currentOrder.addOrUpdateLineItem(product);
+		}
+		return storeDB.collections.orders.createNewOrder(product);
 	};
 
 	if (product.isVariable()) {
