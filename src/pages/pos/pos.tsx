@@ -26,7 +26,11 @@ const POS = () => {
 	// 	switchMap((order: any) => order.$.pipe(map(() => order))),
 	// 	tap((res) => console.log(res))
 	// );
-	const orderQuery = storeDB.collections.orders.find().where('status').eq('pending');
+	const orderQuery = storeDB.collections.orders
+		.find()
+		.where('status')
+		.eq('pending')
+		.sort({ date_created_gmt: -1 });
 	const orders: OrderDocument[] | undefined = useObservableState(orderQuery.$);
 	// const order$ = orderQuery.$.pipe(
 	// 	filter((order: any) => order),

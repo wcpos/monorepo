@@ -24,8 +24,8 @@ const Orders = () => {
 
 	const [query, setQuery] = React.useState({
 		search: '',
-		sortBy: 'id',
-		sortDirection: 'asc',
+		sortBy: 'date_created_gmt',
+		sortDirection: 'desc',
 	});
 
 	const orders$ = useObservable(
