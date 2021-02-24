@@ -28,7 +28,7 @@ const getDatabase = async (name: string) => {
 	const db = createRxDatabase({
 		name,
 		adapter: 'idb', // the name of your adapter
-		// ignoreDuplicate: true, // for development?
+		ignoreDuplicate: true, // for development?
 	});
 	return db;
 };

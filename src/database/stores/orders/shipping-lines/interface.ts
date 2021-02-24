@@ -12,7 +12,7 @@ export interface WooCommerceOrderShippingLineSchema {
 	/**
 	 * Item ID.
 	 */
-	id?: string;
+	id: string;
 	order_id?: string;
 	/**
 	 * Product name.

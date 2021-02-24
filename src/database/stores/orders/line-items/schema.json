@@ -99,5 +99,6 @@
 			"type": "number"
 		}
 	},
+	"required": ["id"],
 	"indexes": ["name", "quantity", "sku", "price", "total"]
 }
