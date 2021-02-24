@@ -70,5 +70,6 @@
 			}
 		}
 	},
+	"required": ["id"],
 	"indexes": ["method_title"]
 }

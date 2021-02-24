@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useObservable, useObservableState } from 'observable-hooks';
-import { from, of, combineLatest, zip } from 'rxjs';
+import { from, of, combineLatest, zip, Observable } from 'rxjs';
 import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
@@ -16,70 +16,86 @@ type ColumnProps = import('../../../components/table/types').ColumnProps;
 type Sort = import('../../../components/table/types').Sort;
 type SortDirection = import('../../../components/table/types').SortDirection;
 type GetHeaderCellPropsFunction = import('../../../components/table/header-row').GetHeaderCellPropsFunction;
+type OrderDocument = import('../../../database/types').OrderDocument;
+type OrderLineItemDocument = import('../../../database/types').OrderLineItemDocument;
+type OrderFeeLineDocument = import('../../../database/types').OrderFeeLineDocument;
+type OrderShippingLineDocument = import('../../../database/types').OrderShippingLineDocument;
 
 interface ICartTableProps {
 	columns: ColumnProps[];
-	order: any;
+	order: OrderDocument;
 	query: any;
 	onSort: Sort;
 }
 
 const CartTable = ({ columns, order, query, onSort }: ICartTableProps) => {
 	const { t } = useTranslation();
-
-	const lineItems$ = order.line_items$.pipe(
-		switchMap((ids) => from(order.collections().line_items.findByIds(ids))),
-		map((result: Map<string, unknown>) => Array.from(result.values())),
-		catchError((err) => {
-			console.error(err);
-			return err;
-		})
-	);
-
-	const feeLines$ = order.fee_lines$.pipe(
-		switchMap((ids) => from(order.collections().fee_lines.findByIds(ids))),
-		map((result: Map<string, unknown>) => Array.from(result.values())),
-		catchError((err) => {
-			console.error(err);
-			return err;
-		})
-	);
-
-	const shippingLines$ = order.shipping_lines$.pipe(
-		switchMap((ids) => from(order.collections().shipping_lines.findByIds(ids))),
-		map((result: Map<string, unknown>) => Array.from(result.values())),
-		catchError((err) => {
-			console.error(err);
-			return err;
-		})
-	);
+	console.log(order.id);
 
 	const items$ = useObservable(
-		(inputs$) =>
-			combineLatest([lineItems$, feeLines$, shippingLines$, inputs$]).pipe(
-				map(([lineItems, feeLines, shippingLines, [q]]) => {
-					const sortedLineItems = orderBy(
-						lineItems as Record<string, unknown>,
-						q.sortBy,
-						q.sortDirection
-					);
-					const sortedFeeLines = orderBy(
-						feeLines as Record<string, unknown>,
-						q.sortBy,
-						q.sortDirection
-					);
-					const sortedShippingLines = orderBy(
-						shippingLines as Record<string, unknown>,
-						q.sortBy,
-						q.sortDirection
-					);
-					return sortedLineItems.concat(sortedFeeLines, sortedShippingLines);
+		(inputs$) => {
+			// @ts-ignore
+			const [q, o] = inputs$.getValue();
+			console.log(o.id); // this is not being executed on change of order???
+
+			// move this to an OrderDocument method
+			const lineItems$: Observable<OrderLineItemDocument[]> = o.line_items$.pipe(
+				switchMap((ids) => {
+					return from(o.collections().line_items.findByIds(ids || []));
+				}),
+				map((result: Map<string, OrderLineItemDocument>) => {
+					return Array.from(result.values());
+				}),
+				tap((res) => console.log(res)),
+				catchError((err) => {
+					console.error(err);
+					return err;
 				})
-			),
-		[query]
+			);
+
+			const feeLines$: Observable<OrderFeeLineDocument[]> = o.fee_lines$.pipe(
+				switchMap((ids) => {
+					return from(o.collections().fee_lines.findByIds(ids || []));
+				}),
+				map((result: Map<string, OrderFeeLineDocument>) => {
+					return Array.from(result.values());
+				}),
+				catchError((err) => {
+					console.error(err);
+					return err;
+				})
+			);
+
+			const shippingLines$: Observable<OrderShippingLineDocument[]> = o.shipping_lines$.pipe(
+				switchMap((ids) => {
+					return from(o.collections().shipping_lines.findByIds(ids || []));
+				}),
+				map((result: Map<string, OrderShippingLineDocument>) => {
+					return Array.from(result.values());
+				}),
+				catchError((err) => {
+					console.error(err);
+					return err;
+				})
+			);
+
+			return combineLatest([lineItems$, feeLines$, shippingLines$]).pipe(
+				map(([lineItems, feeLines, shippingLines]) => {
+					const sortedLineItems = orderBy(lineItems, q.sortBy, q.sortDirection);
+					const sortedFeeLines = orderBy(feeLines, q.sortBy, q.sortDirection);
+					const sortedShippingLines = orderBy(shippingLines, q.sortBy, q.sortDirection);
+					// @ts-ignore
+					return sortedLineItems.concat(sortedFeeLines, sortedShippingLines) as Array<
+						OrderLineItemDocument | OrderFeeLineDocument | OrderShippingLineDocument
+					>;
+				})
+			);
+		},
+		[query, order]
 	);
 
-	const [items] = useObservableState(() => items$, []);
+	// const [items] = useObservableState(() => items$, []);
+	const items = useObservableState(items$, []);
 
 	return (
 		<Table

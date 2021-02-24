@@ -38,6 +38,9 @@ export type LogCollection = import('rxdb').RxCollection<
 export type StoreDatabaseCollections = {
 	products: ProductCollection;
 	orders: OrderCollection;
+	line_items: OrderLineItemCollection;
+	fee_lines: OrderFeeLineCollection;
+	shipping_lines: OrderShippingLineCollection;
 };
 export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
 
