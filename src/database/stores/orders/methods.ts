@@ -1,8 +1,15 @@
+import { from, of, combineLatest, zip, Observable } from 'rxjs';
+import { switchMap, tap, catchError, map } from 'rxjs/operators';
+import orderBy from 'lodash/orderBy';
+
 type OrderDocument = import('../../types').OrderDocument;
 type ProductDocument = import('../../types').ProductDocument;
 type OrderLineItemDocument = import('../../types').OrderLineItemDocument;
+type OrderLineItemCollection = import('../../types').OrderLineItemCollection;
 type OrderFeeLineDocument = import('../../types').OrderFeeLineDocument;
+type OrderFeeLineCollection = import('../../types').OrderFeeLineCollection;
 type OrderShippingLineDocument = import('../../types').OrderShippingLineDocument;
+type OrderShippingLineCollection = import('../../types').OrderShippingLineCollection;
 
 /**
  * WooCommerce Order Model methods
@@ -13,6 +20,116 @@ export default {
 	 */
 	isOpen(this: OrderDocument) {
 		return this.status === 'pending';
+	},
+
+	/**
+	 *
+	 */
+	async getLineItems(
+		this: OrderDocument,
+		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+	): Promise<OrderLineItemDocument[]> {
+		// note: findByIds returns a map
+		const collection: OrderLineItemCollection = this.collections().line_items;
+		const lineItems = await collection.findByIds(this.line_items || []);
+		const lineItemsArray = Array.from(lineItems.values());
+		return orderBy(lineItemsArray, q.sortBy, q.sortDirection);
+	},
+
+	/**
+	 *
+	 */
+	getLineItems$(
+		this: OrderDocument,
+		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+	): Observable<OrderLineItemDocument[]> {
+		return this.line_items$.pipe(
+			switchMap(async (ids) => {
+				// note: findByIds returns a map
+				const lineItems = await this.collections().line_items.findByIds(ids || []);
+				const lineItemsArray = Array.from(lineItems.values());
+				return orderBy(lineItemsArray, q.sortBy, q.sortDirection);
+			})
+		);
+	},
+
+	/**
+	 *
+	 */
+	async getFeeLines(
+		this: OrderDocument,
+		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+	): Promise<OrderFeeLineDocument[]> {
+		// note: findByIds returns a map
+		const collection: OrderFeeLineCollection = this.collections().fee_lines;
+		const feeLines = await collection.findByIds(this.fee_lines || []);
+		const feeLinesArray = Array.from(feeLines.values());
+		return orderBy(feeLinesArray, q.sortBy, q.sortDirection);
+	},
+
+	/**
+	 *
+	 */
+	getFeeLines$(
+		this: OrderDocument,
+		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+	): Observable<OrderFeeLineDocument[]> {
+		return this.fee_lines$.pipe(
+			switchMap(async (ids) => {
+				// note: findByIds returns a map
+				const feeLines = await this.collections().fee_lines.findByIds(ids || []);
+				const feeLinesArray = Array.from(feeLines.values());
+				return orderBy(feeLinesArray, q.sortBy, q.sortDirection);
+			})
+		);
+	},
+
+	/**
+	 *
+	 */
+	async getShippingLines(
+		this: OrderDocument,
+		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+	): Promise<OrderShippingLineDocument[]> {
+		// note: findByIds returns a map
+		const collection: OrderShippingLineCollection = this.collections().shipping_lines;
+		const shippingLines = await collection.findByIds(this.shipping_lines || []);
+		const shippingLinesArray = Array.from(shippingLines.values());
+		return orderBy(shippingLinesArray, q.sortBy, q.sortDirection);
+	},
+
+	/**
+	 *
+	 */
+	getShippingLines$(
+		this: OrderDocument,
+		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+	): Observable<OrderShippingLineDocument[]> {
+		return this.shipping_lines$.pipe(
+			switchMap(async (ids) => {
+				// note: findByIds returns a map
+				const shippingLines = await this.collections().shipping_lines.findByIds(ids || []);
+				const shippingLinesArray = Array.from(shippingLines.values());
+				return orderBy(shippingLinesArray, q.sortBy, q.sortDirection);
+			})
+		);
+	},
+
+	/**
+	 *
+	 */
+	getCart$(
+		this: OrderDocument,
+		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+	): Observable<Array<OrderLineItemDocument | OrderFeeLineDocument | OrderShippingLineDocument>> {
+		return combineLatest([
+			this.getLineItems$(q),
+			this.getFeeLines$(q),
+			this.getShippingLines$(q),
+		]).pipe(
+			// @ts-ignore
+			map(([lineItems, feeLines, shippingLines]) => lineItems.concat(feeLines, shippingLines))
+		);
 	},
 
 	/**
