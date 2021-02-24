@@ -32,69 +32,11 @@ const CartTable = ({ columns, order, query, onSort }: ICartTableProps) => {
 	const { t } = useTranslation();
 	console.log(order.id);
 
-	const items$ = useObservable(
-		(inputs$) => {
-			// @ts-ignore
-			const [q, o] = inputs$.getValue();
-			console.log(o.id); // this is not being executed on change of order???
+	const items$ = useObservable((inputs$) => inputs$.pipe(switchMap(([o, q]) => o.getCart$(q))), [
+		order,
+		query,
+	]) as Observable<any[]>;
 
-			// move this to an OrderDocument method
-			const lineItems$: Observable<OrderLineItemDocument[]> = o.line_items$.pipe(
-				switchMap((ids) => {
-					return from(o.collections().line_items.findByIds(ids || []));
-				}),
-				map((result: Map<string, OrderLineItemDocument>) => {
-					return Array.from(result.values());
-				}),
-				tap((res) => console.log(res)),
-				catchError((err) => {
-					console.error(err);
-					return err;
-				})
-			);
-
-			const feeLines$: Observable<OrderFeeLineDocument[]> = o.fee_lines$.pipe(
-				switchMap((ids) => {
-					return from(o.collections().fee_lines.findByIds(ids || []));
-				}),
-				map((result: Map<string, OrderFeeLineDocument>) => {
-					return Array.from(result.values());
-				}),
-				catchError((err) => {
-					console.error(err);
-					return err;
-				})
-			);
-
-			const shippingLines$: Observable<OrderShippingLineDocument[]> = o.shipping_lines$.pipe(
-				switchMap((ids) => {
-					return from(o.collections().shipping_lines.findByIds(ids || []));
-				}),
-				map((result: Map<string, OrderShippingLineDocument>) => {
-					return Array.from(result.values());
-				}),
-				catchError((err) => {
-					console.error(err);
-					return err;
-				})
-			);
-
-			return combineLatest([lineItems$, feeLines$, shippingLines$]).pipe(
-				map(([lineItems, feeLines, shippingLines]) => {
-					const sortedLineItems = orderBy(lineItems, q.sortBy, q.sortDirection);
-					const sortedFeeLines = orderBy(feeLines, q.sortBy, q.sortDirection);
-					const sortedShippingLines = orderBy(shippingLines, q.sortBy, q.sortDirection);
-					// @ts-ignore
-					return sortedLineItems.concat(sortedFeeLines, sortedShippingLines) as Array<
-						OrderLineItemDocument | OrderFeeLineDocument | OrderShippingLineDocument
-					>;
-				})
-			);
-		},
-		[query, order]
-	);
-
-	// const [items] = useObservableState(() => items$, []);
 	const items = useObservableState(items$, []);
 
 	return (

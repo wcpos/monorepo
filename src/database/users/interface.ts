@@ -14,6 +14,7 @@ export interface UserSchema {
   last_name?: string;
   display_name?: string;
   sites?: {
+    id?: string;
     url?: string;
     name?: string;
     description?: string;
@@ -36,32 +37,8 @@ export interface UserSchema {
       key_id?: number;
       key_permissions?: string;
       stores?: {
-        id?: number;
+        id?: string;
         name?: string;
-        db_id?: string;
-        uis?: {
-          section?: string;
-          sortBy?: string;
-          sortDirection?: string;
-          width?: string;
-          columns?: {
-            key?: string;
-            order?: number;
-            hide?: boolean;
-            disableSort?: boolean;
-            flexGrow?: number;
-            flexShrink?: number;
-            width?: string;
-            [k: string]: any;
-          }[];
-          display?: {
-            key?: string;
-            order?: number;
-            hide?: boolean;
-            [k: string]: any;
-          }[];
-          [k: string]: any;
-        }[];
         [k: string]: any;
       }[];
       [k: string]: any;
