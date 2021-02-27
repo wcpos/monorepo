@@ -64,13 +64,22 @@ const Products = ({ ui }: IPOSProductsProps) => {
 						const site = user.get(path.slice(1, 3).join('.'));
 						const wpCredentials = user.get(path.slice(1, 5).join('.'));
 
-						const { data } = await http(`${site.wc_api_url}products`, {
+						// const { data } = await http(`${site.wc_api_url}products`, {
+						// 	auth: {
+						// 		username: wpCredentials.consumer_key,
+						// 		password: wpCredentials.consumer_secret,
+						// 	},
+						// });
+						// storeDB.collections.products.bulkInsert(data);
+						const replicationState = storeDB.products.syncRestApi({
+							url: 'products',
 							auth: {
 								username: wpCredentials.consumer_key,
 								password: wpCredentials.consumer_secret,
 							},
+							pull: {},
 						});
-						storeDB.collections.products.bulkInsert(data);
+						replicationState.run(false);
 					}}
 				/>
 			</Segment>
