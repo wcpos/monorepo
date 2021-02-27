@@ -7,7 +7,7 @@ import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import collections from 'rxdb-utils/dist/collections';
-import wcPlugin from '../plugins/woocommerce';
+import RxDBWooCommerceRestApiReplicationPlugin from '../plugins/woocommerce-rest-api';
 
 // type Collections = import('../database').Collections;
 // type Database = import('../database').Database;
@@ -22,7 +22,7 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(collections);
-addRxPlugin(wcPlugin);
+addRxPlugin(RxDBWooCommerceRestApiReplicationPlugin);
 
 const getDatabase = async (name: string) => {
 	const db = createRxDatabase({
