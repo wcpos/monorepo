@@ -23,7 +23,7 @@ interface ICartProps {
 }
 
 const Cart = ({ ui, orders = [] }: ICartProps) => {
-	const [{ currentOrder }, dispatch, actionTypes] = useAppState();
+	const [{ currentOrder, storeDB, storePath, user }, dispatch, actionTypes] = useAppState();
 
 	// const [order, setOrder] = React.useState<OrderDocument | undefined>(get(orders, '0'));
 	// const order: OrderDocument | undefined = useObservableState(get(orders, '0.$'));
@@ -88,6 +88,29 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 					title="Add Shipping"
 					onPress={() => {
 						currentOrder.addShippingLine({ method_title: 'Shipping', total: '5' });
+					}}
+				/>
+				<Button
+					title="Save"
+					onPress={async () => {
+						const path = storePath.split('.');
+						const wpCredentials = user.get(path.slice(1, 5).join('.'));
+
+						// const { data } = await http(`${site.wc_api_url}products`, {
+						// 	auth: {
+						// 		username: wpCredentials.consumer_key,
+						// 		password: wpCredentials.consumer_secret,
+						// 	},
+						// });
+						// storeDB.collections.products.bulkInsert(data);
+						const replicationState = currentOrder.syncRestApi({
+							auth: {
+								username: wpCredentials.consumer_key,
+								password: wpCredentials.consumer_secret,
+							},
+							push: {},
+						});
+						replicationState.run(false);
 					}}
 				/>
 			</Segment>

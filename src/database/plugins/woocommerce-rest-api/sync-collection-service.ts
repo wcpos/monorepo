@@ -5,7 +5,7 @@ type RxCollection = import('rxdb/dist/types').RxCollection;
 type RestApiSyncPullOptions = import('./types').RestApiSyncPullOptions;
 type RestApiSyncPushOptions = import('./types').RestApiSyncPushOptions;
 
-export class RxDBWooCommerceRestApiReplicationState {
+export class RxDBWooCommerceRestApiSyncCollectionService {
 	constructor(
 		public readonly collection: RxCollection,
 		public readonly url: string,
@@ -146,7 +146,9 @@ export class RxDBWooCommerceRestApiReplicationState {
 	/**
 	 * @return true if successfull, false if not
 	 */
-	async runPush(): Promise<boolean> {}
+	async runPush(): Promise<boolean> {
+		console.log('hi');
+	}
 
 	cancel(): Promise<any> {
 		if (this.isStopped()) return Promise.resolve(false);
