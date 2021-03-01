@@ -6,6 +6,9 @@ type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb/dist/types').RxCollection;
 type RxDocument = import('rxdb/dist/types').RxDocument;
 
+/**
+ *
+ */
 export function syncRestApiCollection(
 	this: RxCollection,
 	{
@@ -51,6 +54,9 @@ export function syncRestApiCollection(
 	return replicationState;
 }
 
+/**
+ *
+ */
 export function syncRestApiDocument(
 	this: RxDocument,
 	{
@@ -86,12 +92,40 @@ export function syncRestApiDocument(
 	return replicationState;
 }
 
+/**
+ *
+ */
+export async function toRestApiJSON(this: RxDocument) {
+	const json = this.toJSON();
+
+	if (typeof json.id === 'string' && json.id.substring(0, 3) === 'new') {
+		json.id = undefined;
+	}
+
+	if (this.collection.name === 'orders') {
+		// add line_items
+		const lineItems = await this.collections().line_items.findByIds(this.line_items || []);
+		json.line_items = await Promise.all(
+			Array.from(lineItems.values()).map((doc) => doc.toRestApiJSON())
+		);
+	}
+
+	// if (this.collection.name === 'line_items') {
+	// }
+
+	return json;
+}
+
+/**
+ *
+ */
 const prototypes = {
 	RxCollection: (proto: any) => {
 		proto.syncRestApi = syncRestApiCollection;
 	},
 	RxDocument: (proto: any) => {
 		proto.syncRestApi = syncRestApiDocument;
+		proto.toRestApiJSON = toRestApiJSON;
 	},
 };
 
