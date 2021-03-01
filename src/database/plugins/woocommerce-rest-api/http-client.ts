@@ -7,6 +7,7 @@ export const noConfigAxios = axios;
  * Create axios instance with default config
  */
 const http = axios.create({
+	// baseURL: 'https://dev.local/wp/latest/wp-json/wc/v3/',
 	baseURL: 'https://wcposdev.wpengine.com/wp-json/wc/v3/',
 	// timeout: 1000,
 	// headers: { 'X-WCPOS': '1' },

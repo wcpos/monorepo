@@ -130,7 +130,7 @@ export class RxDBWooCommerceRestApiSyncDocumentService {
 			result = await this.client({
 				method: 'post',
 				url: this.document.collection.name,
-				data: this.document.toJSON(),
+				data: await this.document.toRestApiJSON(),
 				auth: this.auth,
 			});
 			if (result.errors) {
