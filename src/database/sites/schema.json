@@ -1,0 +1,46 @@
+{
+	"title": "Site schema",
+	"version": 0,
+	"description": "WordPress site",
+	"type": "object",
+	"properties": {
+		"localId": {
+			"type": "string",
+			"primary": true
+		},
+		"url": {
+			"type": "string"
+		},
+		"name": {
+			"type": "string"
+		},
+		"description": {
+			"type": "string"
+		},
+		"home": {
+			"type": "string"
+		},
+		"gmtOffset": {
+			"type": "string"
+		},
+		"timezoneString": {
+			"type": "string"
+		},
+		"wpApiUrl": {
+			"type": "string"
+		},
+		"wcApiUrl": {
+			"type": "string"
+		},
+		"wcApiAuthUrl": {
+			"type": "string"
+		},
+		"wpCredentials": {
+			"type": "array",
+			"ref": "wpcredentials",
+			"items": {
+				"type": "string"
+			}
+		}
+	}
+}

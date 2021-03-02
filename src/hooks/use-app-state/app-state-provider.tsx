@@ -5,11 +5,11 @@ import NetInfo from '@react-native-community/netinfo';
 import debounce from 'lodash/debounce';
 import get from 'lodash/get';
 import { getUniqueId, getReadableVersion } from './device-info';
-import database from '../../database';
+import DatabaseService from '../../database';
 import * as actionTypes from './action-types';
 import logger from '../../services/logger';
 
-type OrderDocument = import('../../database/types').OrderDocument;
+// type OrderDocument = import('../../database/types').OrderDocument;
 
 export type AppState = {
 	online: boolean;
@@ -23,7 +23,8 @@ export type AppState = {
 	user?: any;
 	storeDB?: any;
 	storePath?: any;
-	currentOrder?: OrderDocument;
+	// currentOrder?: OrderDocument;
+	currentOrder?: any;
 	// site?: any;
 	// wpUser?: any;
 };
@@ -103,7 +104,6 @@ interface Props {
  * The Provider
  */
 const AppStateProvider = ({ children, i18n }: Props) => {
-	const [userDatabase, setUserDatabase] = React.useState();
 	const [state, dispatch] = React.useReducer(appStateReducer, initialState);
 	const value: ContextValue = React.useMemo(() => [state, dispatch, actionTypes], [state]) as any;
 
@@ -132,6 +132,9 @@ const AppStateProvider = ({ children, i18n }: Props) => {
 		}, 250);
 	}, [dispatch]);
 
+	/**
+	 *
+	 */
 	React.useEffect(() => {
 		Dimensions.addEventListener('change', onChange);
 		return () => {
@@ -144,59 +147,68 @@ const AppStateProvider = ({ children, i18n }: Props) => {
 	 */
 	React.useEffect(() => {
 		(async function init() {
-			const db = await database;
-			// @ts-ignore
-			setUserDatabase(db);
+			const db = await DatabaseService.getUserDB();
+			const users = await db.users.find().exec();
+			if (users.length === 0) {
+				// create new user
+				logger.debug('No app user found');
+				// @ts-ignore
+				const newUser = await db.users.insert({ displayName: 'Test', sites: [{ url: 'test' }] });
+				dispatch({ type: actionTypes.SET_USER, payload: newUser });
+			}
 		})();
 	}, []);
 
-	React.useEffect(() => {
-		(async function init() {
-			if (isRxDatabase(userDatabase)) {
-				// @ts-ignore
-				const lastStore = await userDatabase.collections.users.getLocal('last_store');
-				const lastStorePath = lastStore && lastStore.get('store_id');
+	/**
+	 *
+	 */
+	// React.useEffect(() => {
+	// 	(async function init() {
+	// 		if (isRxDatabase(userDatabase)) {
+	// 			// @ts-ignore
+	// 			const lastStore = await userDatabase.collections.users.getLocal('last_store');
+	// 			const lastStorePath = lastStore && lastStore.get('store_id');
 
-				if (!lastStorePath) {
-					// @ts-ignore
-					const users = await userDatabase.collections.users.find().exec();
+	// 			if (!lastStorePath) {
+	// 				// @ts-ignore
+	// 				const users = await userDatabase.collections.users.find().exec();
 
-					if (users.length === 0) {
-						// create new user
-						logger.debug('No app user found');
-						// @ts-ignore
-						const newUser = await userDatabase.collections.users.createNewUser();
-						dispatch({ type: actionTypes.SET_USER, payload: newUser });
-					}
+	// 				if (users.length === 0) {
+	// 					// create new user
+	// 					logger.debug('No app user found');
+	// 					// @ts-ignore
+	// 					const newUser = await userDatabase.collections.users.createNewUser();
+	// 					dispatch({ type: actionTypes.SET_USER, payload: newUser });
+	// 				}
 
-					if (users.length === 1) {
-						// set only user
-						dispatch({ type: actionTypes.SET_USER, payload: users[0] });
-					}
+	// 				if (users.length === 1) {
+	// 					// set only user
+	// 					dispatch({ type: actionTypes.SET_USER, payload: users[0] });
+	// 				}
 
-					if (users.length > 1) {
-						// multiple users
-					}
-				} else {
-					// get user
-					const path = lastStorePath.split('.');
-					const userId = path.shift();
-					// @ts-ignore
-					const user = await userDatabase.collections.users.findOne(userId).exec();
-					path.push('id');
+	// 				if (users.length > 1) {
+	// 					// multiple users
+	// 				}
+	// 			} else {
+	// 				// get user
+	// 				const path = lastStorePath.split('.');
+	// 				const userId = path.shift();
+	// 				// @ts-ignore
+	// 				const user = await userDatabase.collections.users.findOne(userId).exec();
+	// 				path.push('id');
 
-					// get storeDB
-					const id = get(user, path);
-					const storeDB = await user.getStoreDB(id);
+	// 				// get storeDB
+	// 				const id = get(user, path);
+	// 				const storeDB = await user.getStoreDB(id);
 
-					dispatch({
-						type: actionTypes.SET_USER_AND_STORE,
-						payload: { user, storeDB, storePath: lastStorePath },
-					});
-				}
-			}
-		})();
-	}, [userDatabase]);
+	// 				dispatch({
+	// 					type: actionTypes.SET_USER_AND_STORE,
+	// 					payload: { user, storeDB, storePath: lastStorePath },
+	// 				});
+	// 			}
+	// 		}
+	// 	})();
+	// }, [userDatabase]);
 
 	return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 };

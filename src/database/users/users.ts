@@ -1,25 +1,20 @@
 import schema from './schema.json';
-import methods from './methods';
-import statics from './statics';
 
-type Database = import('../types').UserDatabase;
+type RxCollection = import('rxdb').RxCollection;
+type RxDatabase = import('rxdb').RxDatabase;
 
-const createUsersCollection = async (db: Database) => {
-	const collections = await db.addCollections({
-		users: {
-			schema,
-			// pouchSettings: {},
-			statics,
-			methods,
-			// attachments: {},
-			// options: {},
-			// migrationStrategies: {},
-			// autoMigrate: true,
-			// cacheReplacementPolicy() {},
+export const users = {
+	schema,
+	// pouchSettings: {},
+	statics: {
+		preInsertSites(plainData: Record<string, unknown>, collection: RxCollection, db: RxDatabase) {
+			debugger;
 		},
-	});
-
-	return collections.users;
+	},
+	methods: {},
+	// attachments: {},
+	// options: {},
+	// migrationStrategies: {},
+	// autoMigrate: true,
+	// cacheReplacementPolicy() {},
 };
-
-export default createUsersCollection;

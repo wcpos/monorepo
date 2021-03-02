@@ -1,16 +1,22 @@
+import isFunction from 'lodash/isFunction';
+import { v4 as uuidv4 } from 'uuid';
 import { DEFAULT_MODIFIER } from './helper';
-import { RxDBWooCommerceRestApiSyncCollectionService } from './sync-collection-service';
-import { RxDBWooCommerceRestApiSyncDocumentService } from './sync-document-service';
+import { RxDBWooCommerceRestApiSyncCollectionService } from './collection-service';
+import { RxDBWooCommerceRestApiSyncDocumentService } from './document-service';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb/dist/types').RxCollection;
 type RxDocument = import('rxdb/dist/types').RxDocument;
-
+export type Document = RxDocument & {
+	toRestApiJSON: () => Record<string, unknown>;
+	collections: () => Record<string, RxCollection>;
+};
+export type Collection = RxCollection & { collections: () => Record<string, RxCollection> };
 /**
  *
  */
 export function syncRestApiCollection(
-	this: RxCollection,
+	this: Collection,
 	{
 		url,
 		auth = {},
@@ -24,7 +30,7 @@ export function syncRestApiCollection(
 		retryTime = 1000 * 5, // in ms
 		autoStart = true, // if this is false, the replication does nothing at start
 		syncRevisions = false,
-	}
+	}: any
 ) {
 	// const collection = this;
 
@@ -58,7 +64,7 @@ export function syncRestApiCollection(
  *
  */
 export function syncRestApiDocument(
-	this: RxDocument,
+	this: Document,
 	{
 		url,
 		auth = {},
@@ -72,7 +78,7 @@ export function syncRestApiDocument(
 		retryTime = 1000 * 5, // in ms
 		autoStart = true, // if this is false, the replication does nothing at start
 		syncRevisions = false,
-	}
+	}: any
 ) {
 	const replicationState = new RxDBWooCommerceRestApiSyncDocumentService(
 		this,
@@ -95,8 +101,8 @@ export function syncRestApiDocument(
 /**
  *
  */
-export async function toRestApiJSON(this: RxDocument) {
-	const json = this.toJSON();
+export async function toRestApiJSON(this: Document) {
+	const json: Record<string, unknown> = this.toJSON();
 
 	if (typeof json.id === 'string' && json.id.substring(0, 3) === 'new') {
 		json.id = undefined;
@@ -104,6 +110,7 @@ export async function toRestApiJSON(this: RxDocument) {
 
 	if (this.collection.name === 'orders') {
 		// add line_items
+		// @ts-ignore
 		const lineItems = await this.collections().line_items.findByIds(this.line_items || []);
 		json.line_items = await Promise.all(
 			Array.from(lineItems.values()).map((doc) => doc.toRestApiJSON())
@@ -129,8 +136,14 @@ const prototypes = {
 	},
 };
 
-export const RxDBSyncWooCommerceRestApiPlugin: RxPlugin = {
-	name: 'sync-woocommerce-rest-api',
+/**
+ *
+ */
+const hooks = {};
+
+export const RxDBWooCommerceRestApiSyncPlugin: RxPlugin = {
+	name: 'woocommerce-rest-api-sync',
 	rxdb: true,
 	prototypes,
+	hooks,
 };

@@ -6,13 +6,11 @@
  */
 
 /**
- * Global app user - different to WordPress user
+ * WooCommerce POS Store
  */
-export interface UserSchema {
+export interface WCPOSStoreSchema {
   localId?: string;
-  firstName?: string;
-  lastName?: string;
-  displayName?: string;
-  sites?: string[];
+  id?: number;
+  name?: string;
   [k: string]: any;
 }
