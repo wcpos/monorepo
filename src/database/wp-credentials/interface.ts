@@ -6,13 +6,21 @@
  */
 
 /**
- * Global app user - different to WordPress user
+ * WordPress credentials
  */
-export interface UserSchema {
+export interface WPCredentialsSchema {
   localId?: string;
+  id?: number;
+  username?: string;
   firstName?: string;
   lastName?: string;
+  email?: string;
   displayName?: string;
-  sites?: string[];
+  lastAccess?: string;
+  consumerKey?: string;
+  consumerSecret?: string;
+  keyId?: number;
+  keyPermissions?: string;
+  stores?: string[];
   [k: string]: any;
 }

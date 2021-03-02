@@ -1,1 +1,1 @@
-export { default } from './database';
+export { DatabaseService as default } from './service';

@@ -1,0 +1,18 @@
+{
+	"title": "WCPOS Store schema",
+	"version": 0,
+	"description": "WooCommerce POS Store",
+	"type": "object",
+	"properties": {
+		"localId": {
+			"type": "string",
+			"primary": true
+		},
+		"id": {
+			"type": "number"
+		},
+		"name": {
+			"type": "string"
+		}
+	}
+}

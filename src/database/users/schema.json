@@ -4,111 +4,24 @@
 	"description": "Global app user - different to WordPress user",
 	"type": "object",
 	"properties": {
-		"id": {
+		"localId": {
 			"type": "string",
 			"primary": true
 		},
-		"first_name": {
+		"firstName": {
 			"type": "string"
 		},
-		"last_name": {
+		"lastName": {
 			"type": "string"
 		},
-		"display_name": {
+		"displayName": {
 			"type": "string"
 		},
 		"sites": {
 			"type": "array",
-			"default": [],
+			"ref": "sites",
 			"items": {
-				"type": "object",
-				"properties": {
-					"id": {
-						"type": "string"
-					},
-					"url": {
-						"type": "string"
-					},
-					"name": {
-						"type": "string"
-					},
-					"description": {
-						"type": "string"
-					},
-					"home": {
-						"type": "string"
-					},
-					"gmt_offset": {
-						"type": "string"
-					},
-					"timezone_string": {
-						"type": "string"
-					},
-					"wp_api_url": {
-						"type": "string"
-					},
-					"wc_api_url": {
-						"type": "string"
-					},
-					"wc_api_auth_url": {
-						"type": "string"
-					},
-					"wp_credentials": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"id": {
-									"type": "number"
-								},
-								"username": {
-									"type": "string"
-								},
-								"first_name": {
-									"type": "string"
-								},
-								"last_name": {
-									"type": "string"
-								},
-								"email": {
-									"type": "string"
-								},
-								"display_name": {
-									"type": "string"
-								},
-								"last_access": {
-									"type": "string"
-								},
-								"consumer_key": {
-									"type": "string"
-								},
-								"consumer_secret": {
-									"type": "string"
-								},
-								"key_id": {
-									"type": "number"
-								},
-								"key_permissions": {
-									"type": "string"
-								},
-								"stores": {
-									"type": "array",
-									"items": {
-										"type": "object",
-										"properties": {
-											"id": {
-												"type": "string"
-											},
-											"name": {
-												"type": "string"
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
+				"type": "string"
 			}
 		}
 	}

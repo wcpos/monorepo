@@ -1,13 +1,13 @@
 import { BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 import httpClient from './http-client';
 
-type RxCollection = import('rxdb/dist/types').RxCollection;
 type RestApiSyncPullOptions = import('./types').RestApiSyncPullOptions;
 type RestApiSyncPushOptions = import('./types').RestApiSyncPushOptions;
+type Document = import('./sync-plugin').Document;
 
-export class RxDBWooCommerceRestApiSyncCollectionService {
+export class RxDBWooCommerceRestApiSyncDocumentService {
 	constructor(
-		public readonly collection: RxCollection,
+		public readonly document: Document,
 		public readonly url: string,
 		public auth: { [k: string]: string },
 		public readonly pull: RestApiSyncPullOptions,
@@ -58,10 +58,8 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 	 *
 	 */
 	_prepare() {
-		// stop sync when collection gets destroyed
-		this.collection.onDestroy.then(() => {
-			this.cancel();
-		});
+		// stop sync when document gets deleted
+		// this.document.deleted$.subscribe(state => state && this.cancel());
 
 		// create getters for the observables
 		Object.keys(this._subjects).forEach((key) => {
@@ -74,8 +72,8 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 	}
 
 	isStopped(): boolean {
-		if (!this.live && this._subjects.initialReplicationComplete._value) return true;
-		if (this._subjects.canceled._value) return true;
+		// if (!this.live && this._subjects.initialReplicationComplete._value) return true;
+		// if (this._subjects.canceled._value) return true;
 		return false;
 	}
 
@@ -96,10 +94,10 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 			if (!ok && retryOnFail) {
 				setTimeout(() => this.run(), this.retryTime);
 				/*
-					Because we assume that conflicts are solved on the server side,
-					if push failed, do not attempt to pull before push was successful
-					otherwise we do not know how to merge changes with the local state
-				*/
+						Because we assume that conflicts are solved on the server side,
+						if push failed, do not attempt to pull before push was successful
+						otherwise we do not know how to merge changes with the local state
+					*/
 				return true;
 			}
 		}
@@ -116,13 +114,26 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 	}
 
 	/**
-	 * @return true if sucessfull
+	 * @return true if successfull, false if not
 	 */
 	async runPull(): Promise<boolean> {
-		// const latestDocument = await getLastPullDocument(this.collection, this.endpointHash);
+		console.log('pull');
+		return false;
+	}
+
+	/**
+	 * @return true if successfull, false if not
+	 */
+	async runPush(): Promise<boolean> {
 		let result;
+		console.log(this.document);
 		try {
-			result = await this.client.get(this.collection.name, { auth: this.auth });
+			result = await this.client({
+				method: 'post',
+				url: this.document.collection.name,
+				data: await this.document.toRestApiJSON(),
+				auth: this.auth,
+			});
 			if (result.errors) {
 				if (typeof result.errors === 'string') {
 					throw new Error(result.errors);
@@ -138,16 +149,9 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 		}
 
 		const { data } = result;
-		console.log(data);
+		await this.document.atomicPatch(data);
 
 		return true;
-	}
-
-	/**
-	 * @return true if successfull, false if not
-	 */
-	async runPush(): Promise<boolean> {
-		console.log('hi');
 	}
 
 	cancel(): Promise<any> {

@@ -1,1 +1,1 @@
-export { RxDBSyncWooCommerceRestApiPlugin as default } from './sync-rest-api-plugin';
+export { RxDBWooCommerceRestApiSyncPlugin as default } from './sync-plugin';

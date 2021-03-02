@@ -6,13 +6,19 @@
  */
 
 /**
- * Global app user - different to WordPress user
+ * WordPress site
  */
-export interface UserSchema {
+export interface SiteSchema {
   localId?: string;
-  firstName?: string;
-  lastName?: string;
-  displayName?: string;
-  sites?: string[];
+  url?: string;
+  name?: string;
+  description?: string;
+  home?: string;
+  gmtOffset?: string;
+  timezoneString?: string;
+  wpApiUrl?: string;
+  wcApiUrl?: string;
+  wcApiAuthUrl?: string;
+  wpCredentials?: string[];
   [k: string]: any;
 }

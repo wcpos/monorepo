@@ -6,13 +6,16 @@
  */
 
 /**
- * Global app user - different to WordPress user
+ * Logs events for debugging and user record
  */
-export interface UserSchema {
+export interface LogSchema {
   localId?: string;
-  firstName?: string;
-  lastName?: string;
-  displayName?: string;
-  sites?: string[];
+  dateCreatedGmt?: string;
+  user?: string;
+  level: string;
+  message: string;
+  meta?: {
+    [k: string]: any;
+  };
   [k: string]: any;
 }

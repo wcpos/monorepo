@@ -1,0 +1,52 @@
+{
+	"title": "WP Credentials schema",
+	"version": 0,
+	"description": "WordPress credentials",
+	"type": "object",
+	"properties": {
+		"localId": {
+			"type": "string",
+			"primary": true
+		},
+		"id": {
+			"type": "number"
+		},
+		"username": {
+			"type": "string"
+		},
+		"firstName": {
+			"type": "string"
+		},
+		"lastName": {
+			"type": "string"
+		},
+		"email": {
+			"type": "string"
+		},
+		"displayName": {
+			"type": "string"
+		},
+		"lastAccess": {
+			"type": "string"
+		},
+		"consumerKey": {
+			"type": "string"
+		},
+		"consumerSecret": {
+			"type": "string"
+		},
+		"keyId": {
+			"type": "number"
+		},
+		"keyPermissions": {
+			"type": "string"
+		},
+		"stores": {
+			"type": "array",
+			"ref": "stores",
+			"items": {
+				"type": "string"
+			}
+		}
+	}
+}
