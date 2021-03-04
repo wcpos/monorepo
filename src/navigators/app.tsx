@@ -6,7 +6,7 @@ import SplashPage from '../pages/splash';
 import useAppState from '../hooks/use-app-state';
 
 const routes = {
-	Auth: '',
+	Auth: 'connect',
 	Main: {
 		path: '',
 		screens: {

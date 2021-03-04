@@ -1,11 +1,11 @@
 import { isRxDatabase, isRxCollection } from 'rxdb/plugins/core';
-import { DatabaseService, checkAdapter } from './service';
+import { DatabaseService, checkAdapter, _createUsersDB } from './service';
 
 describe('Database Service', () => {
 	let db: any = null;
 
 	// afterEach(async () => subscription && subscription.unsubscribe());
-	afterAll(async () => db?.destroy());
+	// afterAll(async () => db?.destroy());
 
 	it('should have the memory adapter', async () => {
 		const ok = await checkAdapter('memory');
@@ -18,10 +18,26 @@ describe('Database Service', () => {
 		expect(db.name).toBe('wcposusers');
 	});
 
+	it('should return the same instance of the Users database', async () => {
+		db = await DatabaseService.getUserDB();
+		const db2 = await DatabaseService.getUserDB();
+		expect(db === db2).toBe(true);
+		const db3 = await _createUsersDB();
+		expect(db === db3).toBe(false);
+	});
+
 	it('should have a method to get the Stores database', async () => {
 		db = await DatabaseService.getStoreDB('test');
 		expect(isRxDatabase(db)).toBe(true);
 		expect(db.name).toBe('test');
+	});
+
+	it('should return the requested Store database and remove any previous Store DBs', async () => {
+		db = await DatabaseService.getStoreDB('test');
+		const db2 = await DatabaseService.getStoreDB('test2');
+		expect(db.destroyed).toBe(true);
+		expect(isRxDatabase(db2)).toBe(true);
+		expect(db2.name).toBe('test2');
 	});
 
 	describe('Users Database', () => {

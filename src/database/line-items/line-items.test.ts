@@ -15,26 +15,31 @@ describe('Line Items Collection', () => {
 	afterAll(async () => db?.destroy());
 
 	it('should be a valid RxCollection', async () => {
-		expect(isRxCollection(db.lineItems)).toBe(true);
-		expect(db.lineItems.name).toBe('lineItems');
+		expect(isRxCollection(db.line_items)).toBe(true);
+		expect(db.line_items.name).toBe('line_items');
 	});
 
 	it('should insert a new Line Item document', async () => {
-		const lineItem = await db.lineItems.insert({
-			id: 12345,
+		const lineItem = await db.line_items.insert({
+			name: 'Product',
 		});
+		expect(isRxDocument(lineItem)).toBe(true);
 
+		// check default
 		expect(lineItem).toMatchObject({
-			id: '12345',
+			localId: expect.any(String),
+			name: 'Product',
 		});
 	});
 
 	it('should calculate the quantity * price', async (done) => {
-		const lineItem = await db.lineItems.findOne('12345').exec();
+		const lineItem = await db.line_items.insert({
+			quantity: 1,
+			price: 1.23,
+		});
 
-		subscription = lineItem.$.pipe(skip(2)).subscribe((result) => {
+		subscription = lineItem.$.subscribe((result) => {
 			expect(result).toMatchObject({
-				id: '12345',
 				quantity: 1,
 				price: 1.23,
 				total: '1.23',
@@ -42,17 +47,10 @@ describe('Line Items Collection', () => {
 
 			done();
 		});
-
-		await lineItem.update({
-			$set: {
-				quantity: 1,
-				price: 1.23,
-			},
-		});
 	});
 
 	it('should update on quantity change', async (done) => {
-		const lineItem = await db.lineItems.findOne('12345').exec();
+		const lineItem = await db.line_items.findOne('12345').exec();
 
 		subscription = lineItem.$.pipe(skip(2)).subscribe((result) => {
 			expect(result).toMatchObject({

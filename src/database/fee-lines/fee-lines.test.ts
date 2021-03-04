@@ -14,22 +14,20 @@ describe('Fee Lines Collection', () => {
 	it('should be a valid RxCollection', async () => {
 		// create a collection with the schema
 		// await createOrdersCollection(database);
-		expect(isRxCollection(db.feeLines)).toBe(true);
-		expect(db.feeLines.name).toBe('feeLines');
+		expect(isRxCollection(db.fee_lines)).toBe(true);
+		expect(db.fee_lines.name).toBe('fee_lines');
 	});
 
 	it('should insert a new Line Item document', async () => {
-		const order = await db.feeLines.insert({
-			number: '12345',
+		const feeLine = await db.fee_lines.insert({
+			name: 'Fee',
 		});
+		expect(isRxDocument(feeLine)).toBe(true);
 
 		// check defaults
-		expect(order).toMatchObject({
-			currency: 'AUD',
-			customer_id: 0,
-			id: 'undefined',
-			number: '12345',
-			status: 'pending',
+		expect(feeLine).toMatchObject({
+			localId: expect.any(String),
+			name: 'Fee',
 		});
 	});
 });
