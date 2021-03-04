@@ -1,17 +1,16 @@
 import schema from './schema.json';
 
-type RxCollection = import('rxdb').RxCollection;
-type RxDatabase = import('rxdb').RxDatabase;
+export type UserSchema = import('./interface').UserSchema;
+export type UserDocument = import('rxdb').RxDocument<UserSchema, UserMethods>;
+export type UserCollection = import('rxdb').RxCollection<UserDocument, UserMethods, UserStatics>;
+type UserMethods = Record<string, never>;
+type UserStatics = Record<string, never>;
 
 export const users = {
 	schema,
 	// pouchSettings: {},
-	statics: {
-		preInsertSites(plainData: Record<string, unknown>, collection: RxCollection, db: RxDatabase) {
-			debugger;
-		},
-	},
-	methods: {},
+	// statics: {},
+	// methods: {},
 	// attachments: {},
 	// options: {},
 	// migrationStrategies: {},
