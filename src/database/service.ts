@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import forEach from 'lodash/forEach';
 import isFunction from 'lodash/isFunction';
 import camelCase from 'lodash/camelCase';
+import set from 'lodash/set';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
 import Platform from '../lib/platform';
 import logs from './logs';
@@ -79,16 +80,19 @@ if (Platform.OS === 'web') {
 /**
  * creates the generic database
  */
-async function createDB(name: string) {
-	const db = await createRxDatabase({
+export async function _createDB<T>(name: string) {
+	const db = await createRxDatabase<T>({
 		name,
 		adapter,
 		multiInstance,
+		ignoreDuplicate: Platform.OS === 'test',
 	});
 
 	if (Platform.OS === 'web') {
-		/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-		(window as any).db = db; // write to window for debugging
+		if (!(window as any).dbs) {
+			set(window, 'dbs', {});
+		}
+		(window as any).dbs[name] = db;
 	}
 
 	return db;
@@ -97,8 +101,8 @@ async function createDB(name: string) {
 /**
  * creates the Users database
  */
-async function createUsersDB() {
-	const db = await createDB('wcposusers');
+export async function _createUsersDB() {
+	const db = await _createDB<UserDatabaseCollections>('wcposusers');
 
 	const collections = await db.addCollections({
 		logs,
@@ -108,7 +112,7 @@ async function createUsersDB() {
 		stores,
 	});
 
-	forEach(collections, (collection, key) => {
+	forEach(collections, (collection) => {
 		collection.preInsert((plainData: Record<string, unknown>) => {
 			if (!plainData.localId) plainData.localId = uuidv4();
 			if (!plainData.dateCreatedGmt) plainData.dateCreatedGmt = Date.now();
@@ -133,8 +137,8 @@ async function createUsersDB() {
 /**
  * creates the Store database
  */
-async function createStoresDB(name: string) {
-	const db = await createDB(name);
+export async function _createStoresDB(name: string) {
+	const db = await _createDB<StoreDatabaseCollections>(name);
 
 	const collections = await db.addCollections({
 		// @ts-ignore
@@ -147,25 +151,54 @@ async function createStoresDB(name: string) {
 		shipping_lines,
 	});
 
+	forEach(collections, (collection) => {
+		collection.preInsert((plainData: Record<string, unknown>) => {
+			if (!plainData.localId) plainData.localId = uuidv4();
+			if (!plainData.dateCreatedGmt) plainData.dateCreatedGmt = Date.now();
+			/**
+			 * This allows each collection to manage plainData coming from the WC REST API
+			 * It loops through each property and calls collection.preInsert{Property}
+			 * if it exists
+			 */
+			forEach(plainData, (data, key) => {
+				const preInsertKey = camelCase(`preInsert-${key}`);
+				if (isFunction(collection[preInsertKey])) {
+					collection[preInsertKey](plainData, collection, db);
+				}
+			});
+			return plainData;
+		}, false);
+	});
+
 	return db;
 }
 
-const DatabaseService = {
-	USER_DB_CREATE_PROMISE: createUsersDB(),
-	STORE_DB_CREATE_PROMISE: null,
+export interface IDatabaseService {
+	USER_DB_CREATE_PROMISE: Promise<UserDatabase>;
+	STORE_DB_CREATE_PROMISE: Promise<StoreDatabase | null>;
+	getUserDB: () => Promise<UserDatabase>;
+	getStoreDB: (name: string) => Promise<StoreDatabase | null>;
+	getRandomId: () => string;
+}
 
-	getUserDB() {
+const DatabaseService: IDatabaseService = {
+	USER_DB_CREATE_PROMISE: _createUsersDB(),
+	STORE_DB_CREATE_PROMISE: Promise.resolve(null),
+
+	async getUserDB() {
 		return this.USER_DB_CREATE_PROMISE;
 	},
 
-	getStoreDB(name: string) {
-		// if (this.USER_DB_CREATE_PROMISE) {
-		// 	return this.USER_DB_CREATE_PROMISE.then((db) => {
-		// 		debugger;
-		// 	});
-		// }
-		this.USER_DB_CREATE_PROMISE = createStoresDB(name);
-		return this.USER_DB_CREATE_PROMISE;
+	async getStoreDB(name) {
+		const db = await this.STORE_DB_CREATE_PROMISE;
+		if (!db) {
+			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name);
+		}
+		if (db?.name !== name) {
+			await db?.destroy();
+			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name);
+		}
+		return this.STORE_DB_CREATE_PROMISE;
 	},
 
 	getRandomId() {
