@@ -149,12 +149,18 @@ const AppStateProvider = ({ children, i18n }: Props) => {
 		(async function init() {
 			const db = await DatabaseService.getUserDB();
 			const users = await db.users.find().exec();
+
 			if (users.length === 0) {
 				// create new user
 				logger.debug('No app user found');
 				// @ts-ignore
-				const newUser = await db.users.insert({ displayName: 'Test', sites: [{ url: 'test' }] });
+				const newUser = await db.users.insert({ displayName: 'Test' });
 				dispatch({ type: actionTypes.SET_USER, payload: newUser });
+			}
+
+			if (users.length === 1) {
+				// set only user
+				dispatch({ type: actionTypes.SET_USER, payload: users[0] });
 			}
 		})();
 	}, []);
