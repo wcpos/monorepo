@@ -19,9 +19,19 @@ import users from './users';
 import sites from './sites';
 import wpcredentials from './wp-credentials';
 import stores from './stores';
+import products from './products';
+import productVariations from './product-variations';
+import orders from './orders';
+import lineItems from './line-items';
+import feeLines from './fee-lines';
+import shippingLines from './shipping-lines';
 import './adapter';
 
-type RxCollection = import('rxdb').RxCollection;
+type RxDatabase = import('rxdb').RxDatabase;
+type UserDatabaseCollections = import('./types').UserDatabaseCollections;
+type UserDatabase = import('./types').UserDatabase;
+type StoreDatabaseCollections = import('./types').StoreDatabaseCollections;
+type StoreDatabase = import('./types').StoreDatabase;
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -56,8 +66,8 @@ if (Platform.OS === 'web') {
 /**
  * creates the generic database
  */
-async function createDB(name: string): Promise<any> {
-	const db = await createRxDatabase<any>({
+async function createDB(name: string) {
+	const db = await createRxDatabase({
 		name,
 		adapter,
 		multiInstance,
@@ -72,12 +82,12 @@ async function createDB(name: string): Promise<any> {
 }
 
 /**
- * creates the generic database
+ * creates the Users database
  */
-async function createUsersDB(): Promise<any> {
+async function createUsersDB() {
 	const db = await createDB('wcposusers');
 
-	const collections: RxCollection[] = await db.addCollections({
+	const collections = await db.addCollections({
 		logs,
 		users,
 		sites,
@@ -89,15 +99,37 @@ async function createUsersDB(): Promise<any> {
 		collection.preInsert((plainData: Record<string, unknown>) => {
 			if (!plainData.localId) plainData.localId = uuidv4();
 			if (!plainData.dateCreatedGmt) plainData.dateCreatedGmt = Date.now();
+			/**
+			 * This allows each collection to manage plainData coming from the WC REST API
+			 * It loops through each property and calls collection.preInsert{Property}
+			 * if it exists
+			 */
 			forEach(plainData, (data, key) => {
 				const preInsertKey = camelCase(`preInsert-${key}`);
 				if (isFunction(collection[preInsertKey])) {
 					collection[preInsertKey](plainData, collection, db);
 				}
 			});
-			debugger;
 			return plainData;
 		}, false);
+	});
+
+	return db;
+}
+
+/**
+ * creates the Store database
+ */
+async function createStoresDB(name: string) {
+	const db = await createDB(name);
+
+	const collections = await db.addCollections({
+		products,
+		productVariations,
+		orders,
+		lineItems,
+		feeLines,
+		shippingLines,
 	});
 
 	return db;
@@ -111,7 +143,13 @@ const DatabaseService = {
 		return this.USER_DB_CREATE_PROMISE;
 	},
 
-	getStoreDB() {
+	getStoreDB(name: string) {
+		if (this.USER_DB_CREATE_PROMISE) {
+			return this.USER_DB_CREATE_PROMISE.then((db) => {
+				debugger;
+			});
+		}
+		this.USER_DB_CREATE_PROMISE = createStoresDB(name);
 		return this.USER_DB_CREATE_PROMISE;
 	},
 

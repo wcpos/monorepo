@@ -29,4 +29,16 @@ describe('Database Service', () => {
 			expect(isRxCollection(db.users)).toBe(true);
 		});
 	});
+
+	describe('Stores Database', () => {
+		it('should have a collection for products', async () => {
+			db = await DatabaseService.getStoreDB('test');
+			expect(isRxCollection(db.products)).toBe(true);
+		});
+
+		it('should have a collection for orders', async () => {
+			db = await DatabaseService.getStoreDB('test');
+			expect(isRxCollection(db.orders)).toBe(true);
+		});
+	});
 });
