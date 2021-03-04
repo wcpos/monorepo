@@ -1,33 +1,30 @@
 import { skip } from 'rxjs/operators';
 import { isRxCollection } from 'rxdb/plugins/core';
-import createOrdersCollection from './orders';
-import createTestDatabase from '../../../../jest/create-test-database';
+import { DatabaseService } from '../service';
 
 describe('Orders collection', () => {
-	const subscription = null;
-	let database = null;
-	let ordersCollection = null;
+	const subscription: any = null;
+	let db: any = null;
 
 	beforeAll(async () => {
-		database = await createTestDatabase();
-		ordersCollection = await createOrdersCollection(database);
+		db = await DatabaseService.getStoreDB('test');
 	});
 
 	afterEach(async () => subscription && subscription.unsubscribe());
-	afterAll(async () => database.destory());
+	afterAll(async () => db.destory());
 
 	it('should be a valid RxCollection', async () => {
-		expect(isRxCollection(database?.orders)).toBe(true);
+		expect(isRxCollection(db?.orders)).toBe(true);
 	});
 
 	it('should also create required children, eg: line items', async () => {
-		expect(isRxCollection(database?.line_items)).toBe(true);
-		expect(isRxCollection(database?.fee_lines)).toBe(true);
-		expect(isRxCollection(database?.shipping_lines)).toBe(true);
+		expect(isRxCollection(db?.line_items)).toBe(true);
+		expect(isRxCollection(db?.fee_lines)).toBe(true);
+		expect(isRxCollection(db?.shipping_lines)).toBe(true);
 	});
 
 	it('should insert a new Order document', async () => {
-		const order = await ordersCollection.insert({
+		const order = await db.orders.insert({
 			id: 12345,
 		});
 
@@ -40,12 +37,12 @@ describe('Orders collection', () => {
 	});
 
 	it('the new order should be open', async () => {
-		const order = await ordersCollection.findOne('12345').exec();
+		const order = await db.orders.findOne('12345').exec();
 		expect(order.isOpen()).toBe(true);
 	});
 
 	// it('should insert line_items', async (done) => {
-	// 	const order = await ordersCollection.insert({
+	// 	const order = await db.orders.insert({
 	// 		id: 1234567890,
 	// 		line_items: [{ id: 123 }, { id: 1234 }],
 	// 	});

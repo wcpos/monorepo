@@ -1,17 +1,17 @@
 import schema from './schema.json';
 
-export type ProductVariationsSchema = import('./interface').WooCommerceProductVariationSchema;
-export type ProductVariationsDocument = import('rxdb').RxDocument<
-	ProductVariationsSchema,
-	ProductVariationsMethods
+export type ProductVariationSchema = import('./interface').WooCommerceProductVariationSchema;
+export type ProductVariationDocument = import('rxdb').RxDocument<
+	ProductVariationSchema,
+	ProductVariationMethods
 >;
-export type ProductVariationsCollection = import('rxdb').RxCollection<
-	ProductVariationsDocument,
-	ProductVariationsMethods,
-	ProductVariationsStatics
+export type ProductVariationCollection = import('rxdb').RxCollection<
+	ProductVariationDocument,
+	ProductVariationMethods,
+	ProductVariationStatics
 >;
-type ProductVariationsMethods = Record<string, never>;
-type ProductVariationsStatics = Record<string, never>;
+type ProductVariationMethods = Record<string, never>;
+type ProductVariationStatics = Record<string, never>;
 
 export const productVariations = {
 	schema,

@@ -4,12 +4,13 @@ import orderBy from 'lodash/orderBy';
 
 type OrderDocument = import('./orders').OrderDocument;
 type ProductDocument = import('../products/products').ProductDocument;
-type OrderLineItemDocument = import('../../types').OrderLineItemDocument;
-type OrderLineItemCollection = import('../../types').OrderLineItemCollection;
-type OrderFeeLineDocument = import('../../types').OrderFeeLineDocument;
-type OrderFeeLineCollection = import('../../types').OrderFeeLineCollection;
-type OrderShippingLineDocument = import('../../types').OrderShippingLineDocument;
-type OrderShippingLineCollection = import('../../types').OrderShippingLineCollection;
+type LineItemDocument = import('../line-items').LineItemDocument;
+type LineItemCollection = import('../line-items').LineItemCollection;
+type FeeLineDocument = import('../fee-lines').FeeLineDocument;
+type FeeLineCollection = import('../fee-lines').FeeLineCollection;
+type ShippingLineDocument = import('../shipping-lines').ShippingLineDocument;
+type ShippingLineCollection = import('../shipping-lines').ShippingLineCollection;
+type ProductVariationDocument = import('../product-variations').ProductVariationDocument;
 
 /**
  * WooCommerce Order Model methods
@@ -28,9 +29,9 @@ export default {
 	async getLineItems(
 		this: OrderDocument,
 		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Promise<OrderLineItemDocument[]> {
+	): Promise<LineItemDocument[]> {
 		// note: findByIds returns a map
-		const collection: OrderLineItemCollection = this.collections().line_items;
+		const collection: LineItemCollection = this.collections().line_items;
 		const lineItems = await collection.findByIds(this.line_items || []);
 		const lineItemsArray = Array.from(lineItems.values());
 		return orderBy(lineItemsArray, q.sortBy, q.sortDirection);
@@ -42,7 +43,7 @@ export default {
 	getLineItems$(
 		this: OrderDocument,
 		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Observable<OrderLineItemDocument[]> {
+	): Observable<LineItemDocument[]> {
 		return this.line_items$.pipe(
 			switchMap(async (ids) => {
 				// note: findByIds returns a map
@@ -59,9 +60,9 @@ export default {
 	async getFeeLines(
 		this: OrderDocument,
 		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Promise<OrderFeeLineDocument[]> {
+	): Promise<FeeLineDocument[]> {
 		// note: findByIds returns a map
-		const collection: OrderFeeLineCollection = this.collections().fee_lines;
+		const collection: FeeLineCollection = this.collections().fee_lines;
 		const feeLines = await collection.findByIds(this.fee_lines || []);
 		const feeLinesArray = Array.from(feeLines.values());
 		return orderBy(feeLinesArray, q.sortBy, q.sortDirection);
@@ -73,7 +74,7 @@ export default {
 	getFeeLines$(
 		this: OrderDocument,
 		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Observable<OrderFeeLineDocument[]> {
+	): Observable<FeeLineDocument[]> {
 		return this.fee_lines$.pipe(
 			switchMap(async (ids) => {
 				// note: findByIds returns a map
@@ -90,9 +91,9 @@ export default {
 	async getShippingLines(
 		this: OrderDocument,
 		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Promise<OrderShippingLineDocument[]> {
+	): Promise<ShippingLineDocument[]> {
 		// note: findByIds returns a map
-		const collection: OrderShippingLineCollection = this.collections().shipping_lines;
+		const collection: ShippingLineCollection = this.collections().shipping_lines;
 		const shippingLines = await collection.findByIds(this.shipping_lines || []);
 		const shippingLinesArray = Array.from(shippingLines.values());
 		return orderBy(shippingLinesArray, q.sortBy, q.sortDirection);
@@ -104,7 +105,7 @@ export default {
 	getShippingLines$(
 		this: OrderDocument,
 		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Observable<OrderShippingLineDocument[]> {
+	): Observable<ShippingLineDocument[]> {
 		return this.shipping_lines$.pipe(
 			switchMap(async (ids) => {
 				// note: findByIds returns a map
@@ -121,7 +122,7 @@ export default {
 	getCart$(
 		this: OrderDocument,
 		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Observable<Array<OrderLineItemDocument | OrderFeeLineDocument | OrderShippingLineDocument>> {
+	): Observable<Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>> {
 		return combineLatest([
 			this.getLineItems$(q),
 			this.getFeeLines$(q),
@@ -137,7 +138,7 @@ export default {
 	 */
 	async addOrUpdateLineItem(
 		this: OrderDocument,
-		product: ProductDocument,
+		product: ProductDocument | ProductVariationDocument,
 		parent: ProductDocument
 	) {
 		await this.collections()
@@ -145,14 +146,14 @@ export default {
 				id: `new-${Date.now()}`,
 				order_id: this.id,
 				name: product.name || parent.name,
-				product_id: parent ? parseInt(parent.id || '', 10) : parseInt(product.id || '', 10),
-				variation_id: parent && parseInt(product.id || '', 10),
+				product_id: parent ? parent.id : product.id,
+				variation_id: parent && product.id,
 				quantity: 1,
 				price: parseFloat(product.price || ''),
 				sku: product.sku,
 				tax_class: product.tax_class,
 			})
-			.then((newLineItem: OrderLineItemDocument) => {
+			.then((newLineItem: LineItemDocument) => {
 				return this.update({
 					$push: {
 						line_items: newLineItem.id,
@@ -169,7 +170,7 @@ export default {
 	/**
 	 *
 	 */
-	async removeLineItem(this: OrderDocument, lineItem: OrderLineItemDocument) {
+	async removeLineItem(this: OrderDocument, lineItem: LineItemDocument) {
 		await this.update({
 			$pullAll: {
 				line_items: [lineItem.id],
@@ -185,7 +186,7 @@ export default {
 	async addFeeLine(this: OrderDocument, data: Record<string, unknown>) {
 		await this.collections()
 			.fee_lines.upsert({ ...data, id: `new-${Date.now()}`, order_id: this.id })
-			.then((newFee: OrderFeeLineDocument) => {
+			.then((newFee: FeeLineDocument) => {
 				return this.update({
 					$push: {
 						fee_lines: newFee.id,
@@ -197,7 +198,7 @@ export default {
 	/**
 	 *
 	 */
-	async removeFeeLine(this: OrderDocument, feeLine: OrderFeeLineDocument) {
+	async removeFeeLine(this: OrderDocument, feeLine: FeeLineDocument) {
 		await this.update({
 			$pullAll: {
 				fee_lines: [feeLine.id],
@@ -213,7 +214,7 @@ export default {
 	async addShippingLine(this: OrderDocument, data: Record<string, unknown>) {
 		await this.collections()
 			.shipping_lines.upsert({ ...data, id: `new-${Date.now()}`, order_id: this.id })
-			.then((newShipping: OrderShippingLineDocument) => {
+			.then((newShipping: ShippingLineDocument) => {
 				return this.update({
 					$push: {
 						shipping_lines: newShipping.id,
@@ -225,7 +226,7 @@ export default {
 	/**
 	 *
 	 */
-	async removeShippingLine(this: OrderDocument, shippingLine: OrderShippingLineDocument) {
+	async removeShippingLine(this: OrderDocument, shippingLine: ShippingLineDocument) {
 		await this.update({
 			$pullAll: {
 				shipping_lines: [shippingLine.id],

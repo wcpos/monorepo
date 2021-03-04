@@ -15,7 +15,13 @@ describe('Database Service', () => {
 	it('should have method to get the Users database', async () => {
 		db = await DatabaseService.getUserDB();
 		expect(isRxDatabase(db)).toBe(true);
-		expect(db.name).toBe('wcpos-users');
+		expect(db.name).toBe('wcposusers');
+	});
+
+	it('should have a method to get the Stores database', async () => {
+		db = await DatabaseService.getStoreDB('test');
+		expect(isRxDatabase(db)).toBe(true);
+		expect(db.name).toBe('test');
 	});
 
 	describe('Users Database', () => {
