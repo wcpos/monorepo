@@ -17,21 +17,33 @@ import Platform from '../lib/platform';
 import logs from './logs';
 import users from './users';
 import sites from './sites';
-import wpcredentials from './wp-credentials';
+import wp_credentials from './wp-credentials';
 import stores from './stores';
 import products from './products';
-import productVariations from './product-variations';
+import product_variations from './product-variations';
 import orders from './orders';
-import lineItems from './line-items';
-import feeLines from './fee-lines';
-import shippingLines from './shipping-lines';
+import line_items from './line-items';
+import fee_lines from './fee-lines';
+import shipping_lines from './shipping-lines';
 import './adapter';
 
-type RxDatabase = import('rxdb').RxDatabase;
-type UserDatabaseCollections = import('./types').UserDatabaseCollections;
-type UserDatabase = import('./types').UserDatabase;
-type StoreDatabaseCollections = import('./types').StoreDatabaseCollections;
-type StoreDatabase = import('./types').StoreDatabase;
+export type UserDatabaseCollections = {
+	logs: import('./logs').LogCollection;
+	users: import('./users').UserCollection;
+	sites: import('./sites').SiteCollection;
+	wp_credentials: import('./wp-credentials').WPCredentialsCollection;
+	stores: import('./sites').SiteCollection;
+};
+export type UserDatabase = import('rxdb').RxDatabase<UserDatabaseCollections>;
+
+export type StoreDatabaseCollections = {
+	products: import('./products').ProductCollection;
+	orders: import('./orders').OrderCollection;
+	line_items: import('./line-items').LineItemCollection;
+	fee_lines: import('./fee-lines').FeeLineCollection;
+	shipping_lines: import('./shipping-lines').ShippingLineCollection;
+};
+export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -63,6 +75,7 @@ if (Platform.OS === 'web') {
 		multiInstance = false;
 	}
 }
+
 /**
  * creates the generic database
  */
@@ -91,7 +104,7 @@ async function createUsersDB() {
 		logs,
 		users,
 		sites,
-		wpcredentials,
+		wp_credentials,
 		stores,
 	});
 
@@ -124,12 +137,14 @@ async function createStoresDB(name: string) {
 	const db = await createDB(name);
 
 	const collections = await db.addCollections({
+		// @ts-ignore
 		products,
-		productVariations,
+		product_variations,
+		// @ts-ignore
 		orders,
-		lineItems,
-		feeLines,
-		shippingLines,
+		line_items,
+		fee_lines,
+		shipping_lines,
 	});
 
 	return db;
@@ -144,11 +159,11 @@ const DatabaseService = {
 	},
 
 	getStoreDB(name: string) {
-		if (this.USER_DB_CREATE_PROMISE) {
-			return this.USER_DB_CREATE_PROMISE.then((db) => {
-				debugger;
-			});
-		}
+		// if (this.USER_DB_CREATE_PROMISE) {
+		// 	return this.USER_DB_CREATE_PROMISE.then((db) => {
+		// 		debugger;
+		// 	});
+		// }
 		this.USER_DB_CREATE_PROMISE = createStoresDB(name);
 		return this.USER_DB_CREATE_PROMISE;
 	},

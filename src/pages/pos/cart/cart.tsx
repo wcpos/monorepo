@@ -15,7 +15,7 @@ import Totals from './totals';
 import useAppState from '../../../hooks/use-app-state';
 
 type Sort = import('../../../components/table/types').Sort;
-type OrderDocument = import('../../../database/types').OrderDocument;
+type OrderDocument = import('../../../database').OrderTypes.OrderDocument;
 
 interface ICartProps {
 	ui: any;

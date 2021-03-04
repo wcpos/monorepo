@@ -4,8 +4,8 @@ import schema from './schema.json';
 import methods from './methods';
 
 type OrderMethods = typeof import('./methods');
-export type WooCommerceOrderSchema = import('./interface').WooCommerceOrderSchema;
-export type OrderDocument = import('rxdb').RxDocument<WooCommerceOrderSchema, OrderMethods>;
+export type OrderSchema = import('./interface').WooCommerceOrderSchema;
+export type OrderDocument = import('rxdb').RxDocument<OrderSchema, OrderMethods>;
 export type OrderCollection = import('rxdb').RxCollection<
 	OrderDocument,
 	OrderMethods,

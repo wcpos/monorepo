@@ -12,7 +12,7 @@ import Draggable from '../../components/draggable';
 import useAppState from '../../hooks/use-app-state';
 import * as Styled from './styles';
 
-type OrderDocument = import('../../database/types').OrderDocument;
+type OrderDocument = import('../../database').OrderTypes.OrderDocument;
 
 const POS = () => {
 	const [{ storeDB }] = useAppState();

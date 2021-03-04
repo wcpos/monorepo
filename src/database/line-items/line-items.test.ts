@@ -1,33 +1,26 @@
 // import { TestScheduler } from 'rxjs/testing';
 import { skip } from 'rxjs/operators';
-import createLineItemsCollection from './line-items';
-import createTestDatabase from '../../../jest/create-test-database';
+import { isRxDocument, isRxCollection } from 'rxdb/plugins/core';
+import { DatabaseService } from '../service';
 
-describe('Orders collection', () => {
-	let subscription = null;
-	let database = null;
-	let lineItemsCollection = null;
-
-	// beforeEach(() => {
-	// 	testScheduler = new TestScheduler((actual, expected) => {
-	// 		expect(actual).toEqual(expected);
-	// 	});
-	// });
+describe('Line Items Collection', () => {
+	let subscription: any = null;
+	let db: any = null;
 
 	beforeAll(async () => {
-		database = await createTestDatabase();
-		lineItemsCollection = await createLineItemsCollection(database);
+		db = await DatabaseService.getStoreDB('test');
 	});
 
 	afterEach(async () => subscription && subscription.unsubscribe());
-	afterAll(async () => database.destory());
+	afterAll(async () => db?.destroy());
 
 	it('should be a valid RxCollection', async () => {
-		expect(database.line_items.name).toBe('line_items');
+		expect(isRxCollection(db.lineItems)).toBe(true);
+		expect(db.lineItems.name).toBe('lineItems');
 	});
 
 	it('should insert a new Line Item document', async () => {
-		const lineItem = await lineItemsCollection.insert({
+		const lineItem = await db.lineItems.insert({
 			id: 12345,
 		});
 
@@ -37,7 +30,7 @@ describe('Orders collection', () => {
 	});
 
 	it('should calculate the quantity * price', async (done) => {
-		const lineItem = await lineItemsCollection.findOne('12345').exec();
+		const lineItem = await db.lineItems.findOne('12345').exec();
 
 		subscription = lineItem.$.pipe(skip(2)).subscribe((result) => {
 			expect(result).toMatchObject({
@@ -59,7 +52,7 @@ describe('Orders collection', () => {
 	});
 
 	it('should update on quantity change', async (done) => {
-		const lineItem = await lineItemsCollection.findOne('12345').exec();
+		const lineItem = await db.lineItems.findOne('12345').exec();
 
 		subscription = lineItem.$.pipe(skip(2)).subscribe((result) => {
 			expect(result).toMatchObject({

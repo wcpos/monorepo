@@ -16,10 +16,10 @@ type ColumnProps = import('../../../components/table/types').ColumnProps;
 type Sort = import('../../../components/table/types').Sort;
 type SortDirection = import('../../../components/table/types').SortDirection;
 type GetHeaderCellPropsFunction = import('../../../components/table/header-row').GetHeaderCellPropsFunction;
-type OrderDocument = import('../../../database/types').OrderDocument;
-type OrderLineItemDocument = import('../../../database/types').OrderLineItemDocument;
-type OrderFeeLineDocument = import('../../../database/types').OrderFeeLineDocument;
-type OrderShippingLineDocument = import('../../../database/types').OrderShippingLineDocument;
+type OrderDocument = import('../../../database').OrderTypes.OrderDocument;
+type LineItemDocument = import('../../../database').LineItemTypes.LineItemDocument;
+type FeeLineDocument = import('../../../database').FeeLineTypes.FeeLineDocument;
+type ShippingLineDocument = import('../../../database').ShippingLineTypes.ShippingLineDocument;
 
 interface ICartTableProps {
 	columns: ColumnProps[];
