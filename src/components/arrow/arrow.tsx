@@ -1,11 +1,6 @@
 import * as React from 'react';
-import { ViewProps } from 'react-native';
-import { ArrowView } from './styles';
+import * as Styled from './styles';
 
-export type Props = ViewProps;
-
-const Arrow: React.FunctionComponent<Props> = (props) => {
-	return <ArrowView {...props} />;
+export const Arrow = () => {
+	return <Styled.View />;
 };
-
-export default Arrow;

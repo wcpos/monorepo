@@ -1,8 +1,8 @@
 import styled from 'styled-components/native';
 
-type Props = { theme: import('../../lib/theme').ThemeProps } & import('./arrow').Props;
+type Props = { theme: import('../../lib/theme').ThemeProps };
 
-export const ArrowView = styled.View<Props>`
+export const View = styled.View<Props>`
 	width: 20px;
 	border-left-width: 10px;
 	border-right-width: 10px;

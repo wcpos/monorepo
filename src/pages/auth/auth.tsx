@@ -15,8 +15,9 @@ const Auth = () => {
 	const [{ user }] = useAppState();
 	console.log(user);
 	// const sites = useObservableState(user.sites$, []); // @TODO - why can't I use this? possible that user changed?
-	const sites$ = useObservable(() => user.sites$, [user]);
-	const sites: unknown | Record<string, unknown>[] = useObservableState(sites$, []);
+	// const sites$ = useObservable(() => user.sites$, [user]);
+	// const sites: unknown | Record<string, unknown>[] = useObservableState(sites$, []);
+	const sites: any[] = [];
 
 	const onConnect = async (url: string): Promise<void> => {
 		const newSiteId = await user.addSite(url);
