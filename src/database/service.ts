@@ -13,8 +13,8 @@ import forEach from 'lodash/forEach';
 import isFunction from 'lodash/isFunction';
 import camelCase from 'lodash/camelCase';
 import set from 'lodash/set';
+import Platform from '@wcpos/common/src/lib/platform';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
-import Platform from '../lib/platform';
 import logs from './logs';
 import users from './users';
 import sites from './sites';
@@ -26,25 +26,7 @@ import orders from './orders';
 import line_items from './line-items';
 import fee_lines from './fee-lines';
 import shipping_lines from './shipping-lines';
-import './adapter';
-
-export type UserDatabaseCollections = {
-	logs: import('./logs').LogCollection;
-	users: import('./users').UserCollection;
-	sites: import('./sites').SiteCollection;
-	wp_credentials: import('./wp-credentials').WPCredentialsCollection;
-	stores: import('./sites').SiteCollection;
-};
-export type UserDatabase = import('rxdb').RxDatabase<UserDatabaseCollections>;
-
-export type StoreDatabaseCollections = {
-	products: import('./products').ProductCollection;
-	orders: import('./orders').OrderCollection;
-	line_items: import('./line-items').LineItemCollection;
-	fee_lines: import('./fee-lines').FeeLineCollection;
-	shipping_lines: import('./shipping-lines').ShippingLineCollection;
-};
-export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
+import { config } from './adapter';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -62,30 +44,12 @@ addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
 
 /**
- * Default database settings for each platform
- */
-let adapter = 'memory';
-let multiInstance = true;
-if (Platform.OS === 'android' || Platform.OS === 'ios') {
-	adapter = 'react-native-sqlite';
-	multiInstance = false;
-}
-if (Platform.OS === 'web') {
-	adapter = 'idb';
-	if (Platform.isElectron) {
-		multiInstance = false;
-	}
-}
-
-/**
  * creates the generic database
  */
 export async function _createDB<T>(name: string) {
 	const db = await createRxDatabase<T>({
 		name,
-		adapter,
-		multiInstance,
-		ignoreDuplicate: Platform.OS === 'test',
+		...config,
 	});
 
 	if (Platform.OS === 'web') {
@@ -97,6 +61,18 @@ export async function _createDB<T>(name: string) {
 
 	return db;
 }
+
+/**
+ * types for the Users database
+ */
+export type UserDatabaseCollections = {
+	logs: import('./logs').LogCollection;
+	users: import('./users').UserCollection;
+	sites: import('./sites').SiteCollection;
+	wp_credentials: import('./wp-credentials').WPCredentialsCollection;
+	stores: import('./sites').SiteCollection;
+};
+export type UserDatabase = import('rxdb').RxDatabase<UserDatabaseCollections>;
 
 /**
  * creates the Users database
@@ -133,6 +109,18 @@ export async function _createUsersDB() {
 
 	return db;
 }
+
+/**
+ * types for the Store database
+ */
+export type StoreDatabaseCollections = {
+	products: import('./products').ProductCollection;
+	orders: import('./orders').OrderCollection;
+	line_items: import('./line-items').LineItemCollection;
+	fee_lines: import('./fee-lines').FeeLineCollection;
+	shipping_lines: import('./shipping-lines').ShippingLineCollection;
+};
+export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
 
 /**
  * creates the Store database
@@ -173,6 +161,9 @@ export async function _createStoresDB(name: string) {
 	return db;
 }
 
+/**
+ * Database Service Interface
+ */
 export interface IDatabaseService {
 	USER_DB_CREATE_PROMISE: Promise<UserDatabase>;
 	STORE_DB_CREATE_PROMISE: Promise<StoreDatabase | null>;
@@ -181,6 +172,9 @@ export interface IDatabaseService {
 	getRandomId: () => string;
 }
 
+/**
+ * Database Service
+ */
 const DatabaseService: IDatabaseService = {
 	USER_DB_CREATE_PROMISE: _createUsersDB(),
 	STORE_DB_CREATE_PROMISE: Promise.resolve(null),

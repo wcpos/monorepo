@@ -20,10 +20,11 @@ describe('Users Collection', () => {
 		});
 	});
 
-	it('should insert new site (one-to-many)', async () => {
-		const userDoc = await db.users.insert({ sites: [{ url: 'example.com' }] });
+	it('should have method to add site', async () => {
+		const userDoc = await db.users.findOne().where('displayName').equals('John').exec();
 		expect(isRxDocument(userDoc)).toBe(true);
-		const sites = await db.sites.find().exec();
-		console.log(sites);
+		const siteDoc = await userDoc.addSite('example.com');
+		expect(isRxDocument(userDoc)).toBe(true);
+		expect(userDoc.sites).toContain(siteDoc.localId);
 	});
 });
