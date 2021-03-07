@@ -24,7 +24,7 @@ export const HeaderRow = ({
 	style,
 }: IHeaderRowProps) => {
 	return (
-		<Styled.HeaderRow style={style}>
+		<Styled.HeaderRow>
 			{columns &&
 				columns.map((column, index) => {
 					if (column.hide) return;

@@ -1,6 +1,6 @@
 import styled from 'styled-components/native';
 
-type TagProps = import('./tag').Props;
+type TagProps = import('./tag').ITagProps;
 
 // eslint-disable-next-line import/prefer-default-export
 export const Tag = styled.View<Pick<TagProps, 'disabled'>>`

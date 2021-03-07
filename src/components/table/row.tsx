@@ -20,7 +20,7 @@ export const Row = ({ rowData, columns, style, children }: ITableRowProps) => {
 	// const key = rowData.id;
 
 	return (
-		<Styled.Row style={style}>
+		<Styled.Row>
 			{columns &&
 				columns.map((column: ColumnProps, index: number) => {
 					if (column.hide) return;

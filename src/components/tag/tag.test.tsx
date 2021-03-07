@@ -1,10 +1,15 @@
 import * as React from 'react';
 import { render } from '@testing-library/react';
-import Tag from './tag';
+import { ThemeProvider } from '@wcpos/common/src/hooks/use-theme';
+import { Tag } from './tag';
 
-describe('Arrow', () => {
+describe('Tag', () => {
 	it('renders correctly', () => {
-		const { container } = render(<Tag>Test</Tag>);
+		const { container } = render(
+			<ThemeProvider>
+				<Tag>Test</Tag>
+			</ThemeProvider>
+		);
 		expect(container.firstChild).toBeInTheDocument();
 	});
 });

@@ -12,7 +12,8 @@ const colors = {
 	info: palette['light-blue-vivid-800'],
 	success: palette['teal-800'],
 	warning: palette['yellow-vivid-800'],
-	inverse: 'rgba(256, 256, 256, 0.8)',
+	inverse: palette['yellow-vivid-800'],
+	// inverse: 'rgba(256, 256, 256, 0.8)',
 	disabled: palette['blue-grey-400'],
 };
 

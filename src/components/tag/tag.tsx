@@ -15,9 +15,9 @@ export interface ITagProps {
 }
 
 export interface SkeletonProps {
-	backgroundColor: string;
-	highlightColor: string;
-	speed: number;
+	backgroundColor?: string;
+	highlightColor?: string;
+	speed?: number;
 	style?: ViewStyle;
 }
 
@@ -25,7 +25,7 @@ const Skeleton = ({
 	backgroundColor = '#E1E9EE',
 	highlightColor = '#F2F8FC',
 	speed = 800,
-	style = { width: '50px', height: '24px', borderRadius: '10px' },
+	style = { width: '50px', height: '24px', borderRadius: 10 },
 }: SkeletonProps) => {
 	const animatedValue = new Animated.Value(0);
 
@@ -70,18 +70,19 @@ const Skeleton = ({
 
 export const Tag = ({ children, closable, disabled, onClose }: ITagProps) => {
 	const { theme } = useTheme();
+
 	return (
 		<Styled.Tag disabled={disabled}>
-			<Text size="small" style={{ color: theme.TAG_TEXT_COLOR }}>
+			<Text size="small" style={{ color: theme?.TAG_TEXT_COLOR }}>
 				{children}
 			</Text>
 			{closable && (
 				<Button disabled={disabled} onPress={onClose}>
-					<Icon name="close" />
+					<Icon name="clear" />
 				</Button>
 			)}
 		</Styled.Tag>
 	);
 };
 
-export default Object.assign(Tag, { Skeleton });
+Tag.Skeleton = Skeleton;

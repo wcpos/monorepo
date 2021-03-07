@@ -1,22 +1,17 @@
 import * as React from 'react';
 import { ThemeProvider as StyledComponentsThemeProvider } from 'styled-components/native';
+import noop from 'lodash/noop';
 import defaultTheme from './themes/defaultTheme';
 
-type Props = {
-	children: React.ReactNode;
-};
-
-// @ts-ignore
-export const ThemeContext = React.createContext({ switchTheme: (args) => {} });
+export const ThemeContext = React.createContext({ switchTheme: noop });
 
 /**
  *
  */
-const ThemeProvider: React.FC<Props> = ({ children }) => {
+const ThemeProvider: React.FC = ({ children }) => {
 	const [theme, setTheme] = React.useState(defaultTheme);
 
-	// @ts-ignore
-	const switchTheme = (args): void => {
+	const switchTheme = (args: any[]) => {
 		console.log(...args);
 	};
 

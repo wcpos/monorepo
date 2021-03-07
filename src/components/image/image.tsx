@@ -19,7 +19,7 @@ const Image = ({ src, srcSet, border, style }: IImageProps) => {
 		ImgResource.read({ src, srcSet });
 	}
 
-	return <Img source={{ uri: src }} border={border} style={style} />;
+	return <Img source={{ uri: src }} border={border} />;
 };
 
 export const SuspendedImage = ({
