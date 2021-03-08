@@ -50,6 +50,7 @@ export async function _createDB<T>(name: string) {
 	const db = await createRxDatabase<T>({
 		name,
 		...config,
+		pouchSettings: { revs_limit: 1, auto_compaction: true },
 	});
 
 	if (Platform.OS === 'web') {
@@ -82,6 +83,7 @@ export async function _createUsersDB() {
 
 	const collections = await db.addCollections({
 		logs,
+		// @ts-ignore
 		users,
 		sites,
 		wp_credentials,

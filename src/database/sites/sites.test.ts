@@ -19,4 +19,15 @@ describe('Sites Collection', () => {
 			url: 'example.com',
 		});
 	});
+
+	it('should connect to the url', async () => {
+		const siteDoc = await db.sites.findOne({ selector: { url: 'example.com' } }).exec();
+		expect(isRxDocument(siteDoc)).toBe(true);
+		await siteDoc.connect();
+		expect(siteDoc).toMatchObject({
+			localId: expect.any(String),
+			url: 'example.com',
+			name: 'Test Site',
+		});
+	});
 });
