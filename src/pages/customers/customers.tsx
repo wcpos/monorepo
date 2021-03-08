@@ -51,7 +51,7 @@ const Customers = () => {
 					return err;
 				})
 			),
-		[query] as const
+		[query]
 	);
 
 	const customers = useObservableState(customers$, []);

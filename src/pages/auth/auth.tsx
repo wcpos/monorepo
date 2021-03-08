@@ -13,17 +13,13 @@ import useAppState from '../../hooks/use-app-state';
  */
 const Auth = () => {
 	const [{ user }] = useAppState();
-	console.log(user);
-	// const sites = useObservableState(user.sites$, []); // @TODO - why can't I use this? possible that user changed?
-	// const sites$ = useObservable(() => user.sites$, [user]);
-	// const sites: unknown | Record<string, unknown>[] = useObservableState(sites$, []);
-	const sites: any[] = [];
+	const [sites] = useObservableState(user.getSites_$);
 
 	const onConnect = async (url: string): Promise<void> => {
-		const newSiteId = await user.addSite(url);
-		if (newSiteId) {
-			user.connectSite(newSiteId);
-		}
+		const newSiteId = await user.addSiteByUrl(url);
+		// if (newSiteId) {
+		// 	user.connectSite(newSiteId);
+		// }
 		// const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
 		// if (trimUrl) {
 		// 	const newSite = await appUser.database.action(async () =>
@@ -50,12 +46,12 @@ const Auth = () => {
 						clearable
 					/>
 				</Segment>
-				{Array.isArray(sites) && sites.length > 0 && (
+				{sites && sites.length > 0 && (
 					<Segment.Group style={{ width: '90%', maxWidth: 460, height: 'auto' }}>
-						{/* <Segment content="Sites" /> */}
-						{sites.map((site, index) => (
+						<Segment content="Sites" />
+						{sites.map((site) => (
 							<Segment key={site.id}>
-								<Site site={site} index={index} />
+								<Site site={site} />
 							</Segment>
 						))}
 					</Segment.Group>

@@ -51,7 +51,7 @@ const Orders = () => {
 					return err;
 				})
 			),
-		[query] as const
+		[query]
 	);
 
 	const orders = useObservableState(orders$, []);

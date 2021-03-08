@@ -50,7 +50,7 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 					return err;
 				})
 			),
-		[query] as const
+		[query]
 	);
 
 	const products = useObservableState(products$, []) as any[];

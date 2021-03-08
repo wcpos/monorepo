@@ -1,16 +1,17 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Avatar from '../../components/avatar';
-import Text from '../../components/text';
-import Icon from '../../components/icon';
-import Button from '../../components/button';
+import Avatar from '@wcpos/common/src/components/avatar';
+import Text from '@wcpos/common/src/components/text';
+import Icon from '@wcpos/common/src/components/icon';
+import Button from '@wcpos/common/src/components/button';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Modal from './modal';
 import { SiteWrapper, SiteTextWrapper } from './styles';
-import useAppState from '../../hooks/use-app-state';
+
+type SiteDocument = import('@wcpos/common/src/database/sites').SiteDocument;
 
 interface ISiteProps {
 	site: any;
-	index: number;
 }
 /**
  * Options for fetching favicons
@@ -20,34 +21,34 @@ interface ISiteProps {
     
  * - https://api.faviconkit.com/${url}/144
  */
-const Site = ({ site, index }: ISiteProps) => {
+const Site = ({ site }: ISiteProps) => {
 	// const status = useObservableState(site.connection_status$);
 	const [visible, setVisible] = React.useState(false);
 	const [{ user }, dispatch, actions] = useAppState();
 
 	const selectStore = async (): Promise<void> => {
-		const storeDB = await user.getStoreDB(site.wp_credentials[0].stores[0].id);
-		dispatch({
-			type: actions.SET_STORE,
-			payload: { storeDB, storePath: `1.sites.${index}.wp_credentials.0.stores.0` },
-		});
+		// const storeDB = await user.getStoreDB(site.wp_credentials[0].stores[0].id);
+		// dispatch({
+		// 	type: actions.SET_STORE,
+		// 	payload: { storeDB, storePath: `1.sites.${index}.wp_credentials.0.stores.0` },
+		// });
 	};
 
-	const handleRemove = async (): Promise<void> => {
-		await user.removeSiteById(site.id);
+	const handleRemove = async () => {
+		await user.removeSite(site);
 	};
 
 	return (
 		<SiteWrapper>
 			<Avatar src={`https://api.faviconkit.com/${site.id}/144`} />
 			<SiteTextWrapper>
-				<Text weight="bold">{site?.name || site.id}</Text>
+				<Text weight="bold">{site?.name || site.url}</Text>
 				<Text size="small" type="secondary">
-					{site.id}
+					{site.url}
 				</Text>
 				{/* {status && <Text size="small">{status?.message}</Text>} */}
-				<Button title="Connect again" onPress={() => user.connectSite(site.id)} />
-				{site.wp_credentials?.length > 0 && <Button title="Enter" onPress={() => selectStore()} />}
+				<Button title="Connect" onPress={() => site.connect()} />
+				{/* {site.wp_credentials?.length > 0 && <Button title="Enter" onPress={() => selectStore()} />}
 				{site.wc_api_auth_url && site.wp_credentials?.length === 0 && (
 					<Button
 						title="Login"
@@ -55,7 +56,7 @@ const Site = ({ site, index }: ISiteProps) => {
 							setVisible(true);
 						}}
 					/>
-				)}
+				)} */}
 			</SiteTextWrapper>
 			<Button onPress={handleRemove}>
 				<Icon name="remove" />

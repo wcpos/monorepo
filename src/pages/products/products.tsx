@@ -47,7 +47,7 @@ const Products = () => {
 					return err;
 				})
 			),
-		[query] as const
+		[query]
 	);
 
 	const products = useObservableState(products$, []);
