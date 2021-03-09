@@ -17,7 +17,7 @@ type SiteDocument = import('../sites').SiteDocument;
 interface Methods {
 	addSiteByUrl: (url: string) => Promise<SiteDocument | undefined>;
 	removeSite: (site: SiteDocument) => Promise<void>;
-	getSites_$: () => Observable<any>;
+	getSites_$: () => Observable<SiteDocument[]>;
 }
 
 const methods: Methods = {
@@ -49,7 +49,7 @@ const methods: Methods = {
 	async removeSite(this: UserDocument, site: SiteDocument) {
 		await site.remove();
 		await this.atomicPatch({
-			sites: pull(this.sites, site.id),
+			sites: pull(this.sites as any[], site.id),
 		});
 	},
 

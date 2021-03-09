@@ -85,6 +85,7 @@ export async function _createUsersDB() {
 		logs,
 		// @ts-ignore
 		users,
+		// @ts-ignore
 		sites,
 		wp_credentials,
 		stores,

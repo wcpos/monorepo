@@ -13,6 +13,7 @@ import useAppState from '../../hooks/use-app-state';
  */
 const Auth = () => {
 	const [{ user }] = useAppState();
+	// @ts-ignore
 	const [sites] = useObservableState(user.getSites_$);
 
 	const onConnect = async (url: string): Promise<void> => {
@@ -49,11 +50,15 @@ const Auth = () => {
 				{sites && sites.length > 0 && (
 					<Segment.Group style={{ width: '90%', maxWidth: 460, height: 'auto' }}>
 						<Segment content="Sites" />
-						{sites.map((site) => (
-							<Segment key={site.id}>
-								<Site site={site} />
-							</Segment>
-						))}
+
+						{
+							// @ts-ignore
+							sites.map((site) => (
+								<Segment key={site.id}>
+									<Site site={site} />
+								</Segment>
+							))
+						}
 					</Segment.Group>
 				)}
 			</AuthView>
