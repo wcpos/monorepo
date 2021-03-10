@@ -13,6 +13,7 @@ import forEach from 'lodash/forEach';
 import isFunction from 'lodash/isFunction';
 import camelCase from 'lodash/camelCase';
 import set from 'lodash/set';
+import unset from 'lodash/unset';
 import Platform from '@wcpos/common/src/lib/platform';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
 import logs from './logs';
@@ -32,7 +33,9 @@ import { ConnectionService } from './sites/service';
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
 	// which does many checks and adds full error messages
-	addRxPlugin(RxDBDevModePlugin);
+	if (!module?.hot?.data) {
+		addRxPlugin(RxDBDevModePlugin);
+	}
 }
 
 addRxPlugin(memoryAdapter); // in memory db replication for heavy operations
@@ -43,6 +46,26 @@ addRxPlugin(RxDBNoValidatePlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
+
+/**
+ * Parse plain data helper
+ * @param plainData
+ */
+const parsePlainData = (plainData: Record<string, unknown>) => {
+	/**
+	 * add localId and dateCreatedGmt to plain data
+	 */
+	if (!plainData.localId) plainData.localId = uuidv4();
+	if (!plainData.dateCreatedGmt) plainData.dateCreatedGmt = Date.now();
+
+	/**
+	 * data with leading underscore will throw error from rxdb
+	 */
+	if (plainData._links) {
+		plainData.links = plainData._links;
+		unset(plainData, '_links');
+	}
+};
 
 /**
  * creates the generic database
@@ -94,8 +117,8 @@ export async function _createUsersDB() {
 
 	forEach(collections, (collection) => {
 		collection.preInsert((plainData: Record<string, unknown>) => {
-			if (!plainData.localId) plainData.localId = uuidv4();
-			if (!plainData.dateCreatedGmt) plainData.dateCreatedGmt = Date.now();
+			parsePlainData(plainData);
+
 			/**
 			 * This allows each collection to manage plainData coming from the WC REST API
 			 * It loops through each property and calls collection.preInsert{Property}
@@ -108,6 +131,10 @@ export async function _createUsersDB() {
 				}
 			});
 			return plainData;
+		}, false);
+
+		collection.preSave((plainData: Record<string, unknown>, rxDocument) => {
+			parsePlainData(plainData);
 		}, false);
 	});
 
@@ -153,8 +180,7 @@ export async function _createStoresDB(name: string) {
 
 	forEach(collections, (collection) => {
 		collection.preInsert((plainData: Record<string, unknown>) => {
-			if (!plainData.localId) plainData.localId = uuidv4();
-			if (!plainData.dateCreatedGmt) plainData.dateCreatedGmt = Date.now();
+			parsePlainData(plainData);
 			/**
 			 * This allows each collection to manage plainData coming from the WC REST API
 			 * It loops through each property and calls collection.preInsert{Property}
@@ -167,6 +193,10 @@ export async function _createStoresDB(name: string) {
 				}
 			});
 			return plainData;
+		}, false);
+
+		collection.preSave((plainData: Record<string, unknown>, rxDocument) => {
+			parsePlainData(plainData);
 		}, false);
 	});
 

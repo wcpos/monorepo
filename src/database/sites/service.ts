@@ -4,6 +4,8 @@ import Url from '@wcpos/common/src/lib/url-parse';
 
 type SiteDocument = import('./sites').SiteDocument;
 
+const namespace = 'wc/v3';
+
 const parseApiUrlFromHeaders = (headers: { link: string }) => {
 	const link = headers?.link;
 	// @ts-ignore
@@ -52,12 +54,18 @@ export class ConnectionService {
 		this._subjects.error.next('');
 		this._subjects.status.next('Connecting...');
 		return this._fetchHead()
-			.then((status) => {})
+			.then((status) => {
+				return this._fetchWcApiUrl();
+			})
 			.catch((err) => {
 				this._subjects.error.next(err.message);
 			});
 	}
 
+	/**
+	 * Fetch WordPress API URL
+	 * @param url WordPress URL
+	 */
 	async _fetchHead(): Promise<any> {
 		return this.client.head(`https://${this.site.url}`).then((response) => {
 			const wpApiUrl = parseApiUrlFromHeaders(response.headers);
@@ -67,5 +75,31 @@ export class ConnectionService {
 			}
 			throw Error('Site does not seem to be a WordPress site');
 		});
+	}
+
+	/**
+	 * Fetch WooCommerce API URL
+	 * @param url WordPress API URL
+	 */
+	async _fetchWcApiUrl(): Promise<any> {
+		return (
+			this.site.wpApiUrl &&
+			this.client.get(this.site.wpApiUrl).then((response) => {
+				const namespaces = response?.data?.namespaces;
+				if (namespaces && namespaces.includes(namespace)) {
+					const baseAuthUrl = response?.data?.authentication?.wcpos?.authorize;
+					if (baseAuthUrl) {
+						return this.site.atomicPatch({
+							...response.data,
+							wcApiUrl: `${this.site.wpApiUrl + namespace}/`, // enforce trailing slash
+							wcApiAuthUrl: baseAuthUrl,
+						});
+					}
+					throw Error('WooCommerce POS not found');
+				} else {
+					throw Error('WooCommerce not found');
+				}
+			})
+		);
 	}
 }
