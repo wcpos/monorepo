@@ -27,6 +27,7 @@ import line_items from './line-items';
 import fee_lines from './fee-lines';
 import shipping_lines from './shipping-lines';
 import { config } from './adapter';
+import { ConnectionService } from './sites/service';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -108,6 +109,14 @@ export async function _createUsersDB() {
 			});
 			return plainData;
 		}, false);
+	});
+
+	// add connection service to site documents
+	collections.sites.postCreate((plainData, rxDocument) => {
+		const connectionServiceInstance = new ConnectionService(rxDocument);
+		Object.defineProperty(rxDocument, 'connection', {
+			get: () => connectionServiceInstance,
+		});
 	});
 
 	return db;

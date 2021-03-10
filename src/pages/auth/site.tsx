@@ -22,7 +22,8 @@ interface ISiteProps {
  * - https://api.faviconkit.com/${url}/144
  */
 const Site = ({ site }: ISiteProps) => {
-	// const status = useObservableState(site.connection_status$);
+	const status = useObservableState(site.connection.status$) as string;
+	const error = useObservableState(site.connection.error$) as string;
 	const [visible, setVisible] = React.useState(false);
 	const [{ user }, dispatch, actions] = useAppState();
 
@@ -46,7 +47,8 @@ const Site = ({ site }: ISiteProps) => {
 				<Text size="small" type="secondary">
 					{site.url}
 				</Text>
-				{/* {status && <Text size="small">{status?.message}</Text>} */}
+				{error && <Text size="small">{error}</Text>}
+				{status && !error && <Text size="small">{status}</Text>}
 				<Button title="Connect" onPress={() => site.connect()} />
 				{/* {site.wp_credentials?.length > 0 && <Button title="Enter" onPress={() => selectStore()} />}
 				{site.wc_api_auth_url && site.wp_credentials?.length === 0 && (
