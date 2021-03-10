@@ -49,6 +49,7 @@ const Site = ({ site }: ISiteProps) => {
 				</Text>
 				{error && <Text size="small">{error}</Text>}
 				{status && !error && <Text size="small">{status}</Text>}
+
 				<Button title="Connect" onPress={() => site.connect()} />
 				{/* {site.wp_credentials?.length > 0 && <Button title="Enter" onPress={() => selectStore()} />}
 				{site.wc_api_auth_url && site.wp_credentials?.length === 0 && (
