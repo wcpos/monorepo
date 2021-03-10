@@ -15,8 +15,7 @@ const methods: SiteMethods = {
 	 *
 	 */
 	async connect(this: SiteDocument) {
-		const service = new ConnectionService(this);
-		await service.connect();
+		await this.connection.connect();
 	},
 };
 

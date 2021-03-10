@@ -1,5 +1,6 @@
 import { isRxDocument } from 'rxdb/plugins/core';
 import { DatabaseService } from '../service';
+import { ConnectionService } from './service';
 
 describe('Sites Collection', () => {
 	let db: any = null;
@@ -18,6 +19,14 @@ describe('Sites Collection', () => {
 			localId: expect.any(String),
 			url: 'example.com',
 		});
+	});
+
+	it('should have a getter for the connection service', async () => {
+		const siteDoc = await db.sites.findOne({ selector: { url: 'example.com' } }).exec();
+		expect(isRxDocument(siteDoc)).toBe(true);
+		expect(siteDoc.connection).toBeInstanceOf(ConnectionService);
+		const { connection } = siteDoc;
+		expect(connection).toBe(siteDoc.connection); // check against re-initialisation
 	});
 
 	it('should connect to the url', async () => {
