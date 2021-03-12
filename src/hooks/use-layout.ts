@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import * as React from 'react';
 
-export default function useLayout() {
+export default function useNavigationInitialState() {
 	const [layout, setLayout] = useState({
 		x: 0,
 		y: 0,
@@ -8,7 +8,7 @@ export default function useLayout() {
 		height: 0,
 	});
 
-	const onLayout = useCallback(e => setLayout(e.nativeEvent.layout), []);
+	const onLayout = useCallback((e) => setLayout(e.nativeEvent.layout), []);
 
 	return {
 		onLayout,

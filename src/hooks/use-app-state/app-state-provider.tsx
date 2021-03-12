@@ -1,222 +1,66 @@
 import * as React from 'react';
-import { Dimensions } from 'react-native';
-import { isRxDatabase } from 'rxdb/plugins/core';
-import NetInfo from '@react-native-community/netinfo';
-import debounce from 'lodash/debounce';
-import get from 'lodash/get';
+import { isRxDocument } from 'rxdb/plugins/core';
+import getTheme from '@wcpos/common/src/themes';
+import useScreenSize from '../use-screen-size';
+import useOnline from '../use-online';
+import useUser from '../use-user';
 import { getUniqueId, getReadableVersion } from './device-info';
-import DatabaseService from '../../database';
-import * as actionTypes from './action-types';
-import logger from '../../services/logger';
 
-// type OrderDocument = import('../../database/types').OrderDocument;
+type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
+type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
+type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
-export type AppState = {
-	online: boolean;
-	window: import('react-native').ScaledSize;
-	screen: import('react-native').ScaledSize;
+export interface IAppStateProps {
 	info: {
 		uniqueId: string;
 		version: string;
 	};
-	urlPrefix: string;
-	user?: any;
-	storeDB?: any;
-	storePath?: any;
-	// currentOrder?: OrderDocument;
-	currentOrder?: any;
-	// site?: any;
-	// wpUser?: any;
-};
-export type AppAction = { type: Extract<keyof typeof actionTypes, string>; payload?: any };
-export type ActionTypes = typeof actionTypes;
-export type ContextValue = [AppState, React.Dispatch<AppAction>, ActionTypes];
-
-/**
- * Initial App State
- */
-const initialState: AppState = {
-	online: false,
-	window: Dimensions.get('window'),
-	screen: Dimensions.get('screen'),
-	info: {
-		uniqueId: getUniqueId(),
-		version: getReadableVersion(),
-	},
-	urlPrefix: window?.location?.origin || 'wcpos://',
-	user: undefined,
-	storeDB: undefined,
-	storePath: undefined,
-	currentOrder: undefined,
-	// site: undefined,
-	// wpUser: undefined,
-};
-
-/**
- * Local storage helpers
- */
-// const getLastStore = async () => database.adapter.getLocal('last_store');
-// const setLastStore = async (storeId: string) => database.adapter.setLocal('last_store', storeId);
-// const removeLastStore = async () => database.adapter.removeLocal('last_store');
-
-/**
- * App State reducer
- * @param state Global shared state
- * @param action Reducer actions
- */
-function appStateReducer(state: AppState, action: AppAction): AppState {
-	const { type, payload } = action;
-	switch (type) {
-		// case consts.DIMENSIONS_CHANGE:
-		// 	return { ...state, ...payload };
-		// case consts.IS_ONLINE:
-		// 	return { ...state, ...payload };
-		// case SET_THEME:
-		// 	return { ...state, colorTheme: action.theme };
-		case actionTypes.SET_USER:
-			logger.debug('Set app user', payload.toJSON());
-			return { ...state, user: payload };
-		case actionTypes.STORE_LOGOUT:
-			state.user.collection.upsertLocal('last_store', { store_id: undefined });
-			return { ...state, storeDB: undefined };
-		case actionTypes.SET_STOREDB:
-			state.user.collection.upsertLocal('last_store', { store_id: payload.name });
-			return { ...state, storeDB: payload };
-		case actionTypes.SET_STORE:
-			state.user.collection.upsertLocal('last_store', { store_id: payload.storePath });
-			return { ...state, ...payload };
-		case actionTypes.SET_USER_AND_STORE:
-			return { ...state, ...payload };
-		case actionTypes.SET_CURRENT_ORDER:
-			return { ...state, ...payload };
-		default:
-			return { ...state, ...payload };
-	}
+	online: boolean;
+	screen: import('react-native').ScaledSize;
+	user: UserDocument;
+	setUser: React.Dispatch<React.SetStateAction<UserDocument | undefined>>;
+	userDB: UserDatabase;
+	storeDB?: StoreDatabase;
 }
 
-export const AppStateContext = React.createContext<ContextValue>({} as ContextValue);
+export const AppStateContext = React.createContext<unknown>({}) as React.Context<IAppStateProps>;
 
-interface Props {
-	children: React.ReactElement;
+const info = {
+	uniqueId: getUniqueId(),
+	version: getReadableVersion(),
+};
+
+interface IAppStatePropviderProps {
+	children: any;
 	i18n: any;
 }
 /**
- * The Provider
+ * App State Provider
+ * Hydrates static or non-frequent state for the app
  */
-const AppStateProvider = ({ children, i18n }: Props) => {
-	const [state, dispatch] = React.useReducer(appStateReducer, initialState);
-	const value: ContextValue = React.useMemo(() => [state, dispatch, actionTypes], [state]) as any;
+const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
+	// const [isReady, setIsReady] = React.useState(false);
+	const screen = useScreenSize();
+	const online = useOnline();
+	const { user, setUser, userDB } = useUser();
+	const theme = getTheme('default', 'dark');
 
-	/**
-	 * Listen to internet connection
-	 */
-	React.useEffect(() => {
-		return NetInfo.addEventListener(({ isConnected }) => {
-			if (state.online !== isConnected) {
-				dispatch({ type: actionTypes.IS_ONLINE, payload: { online: isConnected } });
-			}
-		});
-	}, [dispatch, state.online]);
+	const value = {
+		info,
+		online,
+		screen,
+		user,
+		setUser,
+		userDB,
+		storeDB: undefined,
+	} as IAppStateProps;
+	console.log(value);
 
-	/**
-	 * Listen to screen size
-	 */
-	// @TODO possibly move this a ui focused context
-	// @TODO why useMemo?
-	// const onChange = debounce(({ window, screen }: { window: ScaledSize; screen: ScaledSize }) => {
-	// 	dispatch({ type: DIMENSIONS_CHANGE, payload: { window, screen } });
-	// }, 250);
-	const onChange = React.useMemo(() => {
-		return debounce(({ window, screen }: Pick<AppState, 'window' | 'screen'>) => {
-			dispatch({ type: actionTypes.DIMENSIONS_CHANGE, payload: { window, screen } });
-		}, 250);
-	}, [dispatch]);
-
-	/**
-	 *
-	 */
-	React.useEffect(() => {
-		Dimensions.addEventListener('change', onChange);
-		return () => {
-			Dimensions.removeEventListener('change', onChange);
-		};
-	});
-
-	/**
-	 * Init database
-	 */
-	React.useEffect(() => {
-		(async function init() {
-			const db = await DatabaseService.getUserDB();
-			const users = await db.users.find().exec();
-
-			if (users.length === 0) {
-				// create new user
-				logger.debug('No app user found');
-				// @ts-ignore
-				const newUser = await db.users.insert({ displayName: 'Test' });
-				dispatch({ type: actionTypes.SET_USER, payload: newUser });
-			}
-
-			if (users.length === 1) {
-				// set only user
-				dispatch({ type: actionTypes.SET_USER, payload: users[0] });
-			}
-		})();
-	}, []);
-
-	/**
-	 *
-	 */
-	// React.useEffect(() => {
-	// 	(async function init() {
-	// 		if (isRxDatabase(userDatabase)) {
-	// 			// @ts-ignore
-	// 			const lastStore = await userDatabase.collections.users.getLocal('last_store');
-	// 			const lastStorePath = lastStore && lastStore.get('store_id');
-
-	// 			if (!lastStorePath) {
-	// 				// @ts-ignore
-	// 				const users = await userDatabase.collections.users.find().exec();
-
-	// 				if (users.length === 0) {
-	// 					// create new user
-	// 					logger.debug('No app user found');
-	// 					// @ts-ignore
-	// 					const newUser = await userDatabase.collections.users.createNewUser();
-	// 					dispatch({ type: actionTypes.SET_USER, payload: newUser });
-	// 				}
-
-	// 				if (users.length === 1) {
-	// 					// set only user
-	// 					dispatch({ type: actionTypes.SET_USER, payload: users[0] });
-	// 				}
-
-	// 				if (users.length > 1) {
-	// 					// multiple users
-	// 				}
-	// 			} else {
-	// 				// get user
-	// 				const path = lastStorePath.split('.');
-	// 				const userId = path.shift();
-	// 				// @ts-ignore
-	// 				const user = await userDatabase.collections.users.findOne(userId).exec();
-	// 				path.push('id');
-
-	// 				// get storeDB
-	// 				const id = get(user, path);
-	// 				const storeDB = await user.getStoreDB(id);
-
-	// 				dispatch({
-	// 					type: actionTypes.SET_USER_AND_STORE,
-	// 					payload: { user, storeDB, storePath: lastStorePath },
-	// 				});
-	// 			}
-	// 		}
-	// 	})();
-	// }, [userDatabase]);
-
-	return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
+	return (
+		<AppStateContext.Provider value={value}>
+			{children(isRxDocument(user), theme)}
+		</AppStateContext.Provider>
+	);
 };
 
 export default AppStateProvider;
