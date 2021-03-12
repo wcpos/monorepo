@@ -8,19 +8,18 @@ import schema from './schema.json';
 export type UserSchema = import('./interface').UserSchema;
 export type UserDocument = import('rxdb').RxDocument<UserSchema, UserMethods>;
 export type UserCollection = import('rxdb').RxCollection<UserDocument, UserMethods, UserStatics>;
-type UserMethods = Record<string, never>;
 type UserStatics = Record<string, never>;
 
 type SiteCollection = import('../sites').SiteCollection;
 type SiteDocument = import('../sites').SiteDocument;
 
-interface Methods {
+interface UserMethods {
 	addSiteByUrl: (url: string) => Promise<SiteDocument | undefined>;
 	removeSite: (site: SiteDocument) => Promise<void>;
 	getSites_$: () => Observable<SiteDocument[]>;
 }
 
-const methods: Methods = {
+const methods: UserMethods = {
 	/**
 	 *
 	 */
