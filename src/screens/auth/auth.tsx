@@ -1,18 +1,18 @@
 import * as React from 'react';
 import { useObservable, useObservableState } from 'observable-hooks';
-import PageLayout from '../../layout/page';
-import Segment from '../../components/segment';
-import TextInput from '../../components/textinput';
-import Text from '../../components/text';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import PageLayout from '@wcpos/common/src/layout/page';
+import Segment from '@wcpos/common/src/components/segment';
+import TextInput from '@wcpos/common/src/components/textinput';
+import Text from '@wcpos/common/src/components/text';
 import { AuthView } from './styles';
 import Site from './site';
-import useAppState from '../../hooks/use-app-state';
 
 /**
  *
  */
 const Auth = () => {
-	const [{ user }] = useAppState();
+	const { user } = useAppState();
 	// @ts-ignore
 	const [sites] = useObservableState(user.getSites_$);
 
@@ -49,16 +49,12 @@ const Auth = () => {
 				</Segment>
 				{sites && sites.length > 0 && (
 					<Segment.Group style={{ width: '90%', maxWidth: 460, height: 'auto' }}>
-						<Segment content="Sites" />
-
-						{
-							// @ts-ignore
-							sites.map((site) => (
-								<Segment key={site.id}>
-									<Site site={site} />
-								</Segment>
-							))
-						}
+						{/* <Segment content="Sites" /> */}
+						{sites.map((site) => (
+							<Segment key={site.localId}>
+								<Site site={site} user={user} />
+							</Segment>
+						))}
 					</Segment.Group>
 				)}
 			</AuthView>

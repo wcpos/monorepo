@@ -1,6 +1,6 @@
-import Platform from '../../../utils/platform';
-import palette from '../palettes/blue-grey.json';
-import normalizeText from '../normalize-text';
+import Platform from '@wcpos/common/src/lib/platform';
+import palette from './palettes/blue-grey.json';
+import normalizeText from './normalize-text';
 
 const colors = {
 	background: palette['blue-grey-050'],

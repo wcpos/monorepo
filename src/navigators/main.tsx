@@ -1,14 +1,14 @@
 import * as React from 'react';
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import PageLayout from '../layout/page';
-import MasterBar from '../layout/masterbar';
-import ErrorBoundary from '../components/error';
-import POS from '../pages/pos';
-import Products from '../pages/products';
-import Orders from '../pages/orders';
-import Customers from '../pages/customers';
-import Support from '../pages/support';
-import Text from '../components/text';
+import PageLayout from '@wcpos/common/src/layout/page';
+import MasterBar from '@wcpos/common/src/layout/masterbar';
+import ErrorBoundary from '@wcpos/common/src/components/error';
+import POS from '@wcpos/common/src/screens/pos';
+import Products from '@wcpos/common/src/screens/products';
+// import Orders from '../screens/orders';
+// import Customers from '../screens/customers';
+// import Support from '../screens/support';
+import Text from '@wcpos/common/src/components/text';
 
 type ScreenProps = {
 	route: {
@@ -19,9 +19,9 @@ type ScreenProps = {
 const components = {
 	POS: <POS />,
 	Products: <Products />,
-	Orders: <Orders />,
-	Customers: <Customers />,
-	Support: <Support />,
+	// Orders: <Orders />,
+	// Customers: <Customers />,
+	// Support: <Support />,
 };
 
 const Screen = ({ route }: ScreenProps) => {
@@ -43,9 +43,9 @@ const MainNavigator = () => {
 		<Drawer.Navigator>
 			<Drawer.Screen name="POS" component={Screen} />
 			<Drawer.Screen name="Products" component={Screen} />
-			<Drawer.Screen name="Orders" component={Screen} />
+			{/* <Drawer.Screen name="Orders" component={Screen} />
 			<Drawer.Screen name="Customers" component={Screen} />
-			<Drawer.Screen name="Support" component={Screen} />
+			<Drawer.Screen name="Support" component={Screen} /> */}
 		</Drawer.Navigator>
 	);
 };

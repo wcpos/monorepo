@@ -33,6 +33,7 @@ import { ConnectionService } from './sites/service';
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
 	// which does many checks and adds full error messages
+	// also, only add on first render, seems to be conflict with HMR
 	if (!module?.hot?.data) {
 		addRxPlugin(RxDBDevModePlugin);
 	}

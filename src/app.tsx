@@ -1,31 +1,91 @@
 import 'react-native-gesture-handler';
 import * as React from 'react';
 import { Text } from 'react-native';
-import { ThemeProvider } from './hooks/use-theme';
+import { NavigationContainer, useLinking, NavigationContainerRef } from '@react-navigation/native';
+import { ThemeProvider } from 'styled-components/native';
 import { AppStateProvider } from './hooks/use-app-state';
 import TranslationService from './services/translation';
-import Navigator from './navigators';
+import AppNavigator from './navigators';
 import Portal from './components/portal';
 import ErrorBoundary from './components/error';
+import SplashScreen from './screens/splash';
 
 const i18n = new TranslationService();
+const routes = {
+	Auth: 'connect',
+	Main: {
+		path: '',
+		screens: {
+			POS: {
+				path: '',
+			},
+			Products: {
+				path: 'products',
+			},
+			Orders: {
+				path: 'orders',
+			},
+			Customers: {
+				path: 'customers',
+			},
+			Support: {
+				path: 'support',
+			},
+		},
+	},
+};
 
-const App: React.FC = () => {
-	// <React.StrictMode>
+const App = () => {
+	const navigationRef = React.useRef<NavigationContainerRef>(null);
+	const [isNavReady, setNavIsReady] = React.useState(false);
+	const [initialNavState, setInitialNavState] = React.useState<any>();
+
+	/**
+	 * Deep linking for react-navigation
+	 */
+	const { getInitialState } = useLinking(navigationRef, {
+		prefixes: [(window as any).location.origin || 'wcpos://'],
+		config: { screens: routes },
+	});
+
+	React.useEffect(() => {
+		(async () => {
+			try {
+				const state = await getInitialState();
+				if (state !== undefined) {
+					setInitialNavState(state);
+				}
+			} catch (e) {
+				console.warn(e);
+			} finally {
+				setNavIsReady(true);
+			}
+		})();
+	}, [getInitialState]);
+
 	return (
+		// <React.StrictMode>
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<AppStateProvider i18n={i18n}>
-					<ThemeProvider>
-						<Portal.Host>
-							<Navigator />
-						</Portal.Host>
-					</ThemeProvider>
+					{(isAppStateReady: boolean, theme: any) => (
+						<ThemeProvider theme={theme}>
+							<Portal.Host>
+								{isAppStateReady && isNavReady ? (
+									<NavigationContainer ref={navigationRef} initialState={initialNavState}>
+										<AppNavigator />
+									</NavigationContainer>
+								) : (
+									<SplashScreen />
+								)}
+							</Portal.Host>
+						</ThemeProvider>
+					)}
 				</AppStateProvider>
 			</React.Suspense>
 		</ErrorBoundary>
+		// </React.StrictMode>
 	);
-	// </React.StrictMode>
 };
 
 export default App;

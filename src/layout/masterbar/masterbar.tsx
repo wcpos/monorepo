@@ -1,17 +1,17 @@
 import * as React from 'react';
 import { useRoute, useNavigation, DrawerActions } from '@react-navigation/native';
-import Header from '../header';
-import Button from '../../components/button';
-import Popover from '../../components/popover';
-import Text from '../../components/text';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import Button from '@wcpos/common/src/components/button';
+import Popover from '@wcpos/common/src/components/popover';
+import Text from '@wcpos/common/src/components/text';
+import Avatar from '@wcpos/common/src/components/avatar';
 import UserMenu from './user-menu';
-import Avatar from '../../components/avatar';
-import useAppState from '../../hooks/use-app-state';
+import Header from '../header';
 
 const MasterBar = () => {
 	const route = useRoute();
 	const navigation = useNavigation();
-	const [appState, dispatch, actionTypes] = useAppState();
+	const appState = useAppState();
 
 	const openDrawer = React.useCallback(() => {
 		navigation.dispatch(DrawerActions.openDrawer());
@@ -25,11 +25,16 @@ const MasterBar = () => {
 			<Header.Title>{route.name}</Header.Title>
 			<Header.Right>
 				<Text type="inverse">{appState.online ? 'online' : 'offline'}</Text>
-				<Text type="inverse">{appState.window.width}</Text>
+				<Text type="inverse">{appState.screen.width}</Text>
 			</Header.Right>
 			<Header.Right>
-				<Text>{appState.user.display_name}</Text>
-				<Button onPress={() => dispatch({ type: actionTypes.STORE_LOGOUT })} title="Logout" />
+				<Text>{appState.user.displayName}</Text>
+				<Button
+					onPress={() => {
+						console.log('logout');
+					}}
+					title="Logout"
+				/>
 				<Avatar src="blah" placeholder="jj" />
 			</Header.Right>
 		</Header>

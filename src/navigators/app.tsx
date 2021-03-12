@@ -1,77 +1,31 @@
 import * as React from 'react';
-import { NavigationContainer, useLinking } from '@react-navigation/native';
-import { Text } from 'react-native';
-import AuthNavigator from './auth';
-import SplashPage from '../pages/splash';
-import useAppState from '../hooks/use-app-state';
+import { createStackNavigator } from '@react-navigation/stack';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import AuthScreen from '@wcpos/common/src/screens/auth';
+import Text from '@wcpos/common/src/components/text';
+// import MainNavigator from './main';
+// const AuthScreen = React.lazy(() => import('../pages/auth'));
+// const MainNavigator = React.lazy(() => import('./main'));
 
-const routes = {
-	Auth: 'connect',
-	Main: {
-		path: '',
-		screens: {
-			POS: {
-				path: '',
-			},
-			Products: {
-				path: 'products',
-			},
-			Orders: {
-				path: 'orders',
-			},
-			Customers: {
-				path: 'customers',
-			},
-			Support: {
-				path: 'support',
-			},
-		},
-	},
+export type AppNavigatorParams = {
+	Auth: undefined;
+	Main: undefined;
 };
 
-const AppNavigator = (): React.ReactElement => {
-	const ref: React.Ref<any> = React.useRef();
-	const [{ user, urlPrefix }] = useAppState();
+const Stack = createStackNavigator<AppNavigatorParams>();
+type StackNavigatorProps = React.ComponentProps<typeof Stack.Navigator>;
 
-	const { getInitialState } = useLinking(ref, {
-		prefixes: [urlPrefix],
-		config: { screens: routes },
-	});
-
-	const [isReady, setIsReady] = React.useState(false);
-	const [initialState, setInitialState] = React.useState();
-
-	React.useEffect(() => {
-		(async () => {
-			try {
-				const state = await getInitialState();
-				if (state !== undefined) {
-					// @ts-ignore
-					setInitialState(state);
-				}
-			} catch (e) {
-				console.warn(e);
-			} finally {
-				setIsReady(true);
-			}
-		})();
-	}, [getInitialState]);
-
-	if (!isReady || !user) {
-		return <SplashPage />;
-	}
+const AppNavigator = (props: Partial<StackNavigatorProps>) => {
+	const { storeDB } = useAppState();
 
 	return (
-		<NavigationContainer
-			// fallback={<Text>Deep link</Text>}
-			initialState={initialState}
-			ref={ref}
-			onStateChange={(state) => {
-				console.log('New nav state', JSON.stringify(state, null, 2));
-			}}
-		>
-			<AuthNavigator />
-		</NavigationContainer>
+		<Stack.Navigator headerMode="none">
+			{storeDB ? (
+				<Stack.Screen name="Main" component={() => <Text>Main</Text>} />
+			) : (
+				<Stack.Screen name="Auth" component={AuthScreen} />
+			)}
+		</Stack.Navigator>
 	);
 };
 

@@ -1,15 +1,18 @@
 import * as React from 'react';
 import { Platform } from 'react-native';
-import Modal from '../../components/modal';
-import Button from '../../components/button';
-import Url from '../../lib/url-parse';
-import WebView from '../../components/webview';
+import Modal from '@wcpos/common/src/components/modal';
+import Button from '@wcpos/common/src/components/button';
+import Url from '@wcpos/common/src/lib/url-parse';
+import WebView from '@wcpos/common/src/components/webview';
 
-interface Props {
+type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
+type SiteDocument = import('@wcpos/common/src/database/sites').SiteDocument;
+
+interface IAuthModalProps {
 	visible: boolean;
 	setVisible: (visible: boolean) => void;
-	user: any;
-	site: any;
+	site: SiteDocument;
+	user: UserDocument;
 }
 
 interface IPayloadProps {
@@ -17,25 +20,29 @@ interface IPayloadProps {
 	consumer_secret?: string;
 }
 
-const AuthModal = ({ visible, setVisible, user, site }: Props): React.ReactElement => {
+const AuthModal = ({ visible, setVisible, site, user }: IAuthModalProps) => {
 	const returnUrl = Platform.OS === 'web' ? 'https://localhost:3000/auth' : 'wcpos://auth';
 	const [payload, setPayload] = React.useState<IPayloadProps>({});
 
 	if (payload?.consumer_key && payload?.consumer_secret) {
-		user.createOrUpdateWpCredentialsBySiteId(site.id, payload);
+		debugger;
 		setVisible(false);
 	}
-
+	console.log(site);
 	const authUrl =
-		site.wc_api_auth_url +
-		Url.qs.stringify({
-			app_name: 'WooCommerce POS',
-			scope: 'read_write',
-			user_id: user.id,
-			return_url: returnUrl,
-			callback_url: 'https://client.wcpos.com',
-			wcpos: 1,
-		});
+		site.wcApiAuthUrl +
+		Url.qs.stringify(
+			{
+				app_name: 'WooCommerce POS',
+				scope: 'read_write',
+				user_id: user.localId,
+				return_url: returnUrl,
+				callback_url: 'https://client.wcpos.com',
+				wcpos: 1,
+			},
+			// @ts-ignore
+			true
+		);
 
 	const handleMessage = (event: { data: unknown }) => {
 		const data = typeof event?.data === 'string' ? JSON.parse(event?.data) : event?.data;

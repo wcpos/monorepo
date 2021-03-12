@@ -9,9 +9,11 @@ import Modal from './modal';
 import { SiteWrapper, SiteTextWrapper } from './styles';
 
 type SiteDocument = import('@wcpos/common/src/database/sites').SiteDocument;
+type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
 
 interface ISiteProps {
-	site: any;
+	site: SiteDocument;
+	user: UserDocument;
 }
 /**
  * Options for fetching favicons
@@ -21,11 +23,10 @@ interface ISiteProps {
     
  * - https://api.faviconkit.com/${url}/144
  */
-const Site = ({ site }: ISiteProps) => {
+const Site = ({ site, user }: ISiteProps) => {
 	const status = useObservableState(site.connection.status$) as string;
 	const error = useObservableState(site.connection.error$) as string;
 	const [visible, setVisible] = React.useState(false);
-	const [{ user }, dispatch, actions] = useAppState();
 
 	const selectStore = async (): Promise<void> => {
 		// const storeDB = await user.getStoreDB(site.wp_credentials[0].stores[0].id);
@@ -51,6 +52,13 @@ const Site = ({ site }: ISiteProps) => {
 				{status && !error && <Text size="small">{status}</Text>}
 
 				<Button title="Connect" onPress={() => site.connect()} />
+				<Button
+					title="Login"
+					onPress={() => {
+						setVisible(true);
+					}}
+				/>
+
 				{/* {site.wp_credentials?.length > 0 && <Button title="Enter" onPress={() => selectStore()} />}
 				{site.wc_api_auth_url && site.wp_credentials?.length === 0 && (
 					<Button
