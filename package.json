@@ -45,7 +45,7 @@
 		"react-ace": "9.3.0",
 		"react-cache": "2.0.0-alpha.1",
 		"react-i18next": "11.8.10",
-		"react-native": "0.63.4",
+		"react-native": "0.64.0",
 		"react-native-device-info": "8.0.5",
 		"react-native-gesture-handler": "1.10.3",
 		"react-native-linear-gradient": "2.5.6",

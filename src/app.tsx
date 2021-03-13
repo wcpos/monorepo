@@ -67,6 +67,7 @@ const App = () => {
 		// <React.StrictMode>
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
+				{/* @TODO - suspend AppStateProvider until state is ready */}
 				<AppStateProvider i18n={i18n}>
 					{(isAppStateReady: boolean, theme: any) => (
 						<ThemeProvider theme={theme}>
