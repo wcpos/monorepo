@@ -1,5 +1,4 @@
 import { createRxDatabase, addRxPlugin, checkAdapter, isRxDatabase } from 'rxdb/plugins/core';
-import memoryAdapter from 'pouchdb-adapter-memory';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 // import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
 import collectionsHelper from 'rxdb-utils/dist/collections';
@@ -39,7 +38,6 @@ if (process.env.NODE_ENV === 'development') {
 	}
 }
 
-addRxPlugin(memoryAdapter); // in memory db replication for heavy operations
 addRxPlugin(collectionsHelper);
 addRxPlugin(RxDBAdapterCheckPlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
@@ -78,6 +76,7 @@ export async function _createDB<T>(name: string) {
 		pouchSettings: { revs_limit: 1, auto_compaction: true },
 	});
 
+	// add to window for debugging
 	if (Platform.OS === 'web') {
 		if (!(window as any).dbs) {
 			set(window, 'dbs', {});
