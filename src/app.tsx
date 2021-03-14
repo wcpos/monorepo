@@ -9,8 +9,11 @@ import AppNavigator from './navigators';
 import Portal from './components/portal';
 import ErrorBoundary from './components/error';
 import SplashScreen from './screens/splash';
+import Platform from './lib/platform';
 
 const i18n = new TranslationService();
+const prefixes =
+	Platform.OS === 'android' || Platform.OS === 'ios' ? 'wcpos://' : (window as any).location.origin;
 const routes = {
 	Auth: 'connect',
 	Main: {
@@ -44,7 +47,7 @@ const App = () => {
 	 * Deep linking for react-navigation
 	 */
 	const { getInitialState } = useLinking(navigationRef, {
-		prefixes: [(window as any).location.origin || 'wcpos://'],
+		prefixes: [prefixes],
 		config: { screens: routes },
 	});
 
