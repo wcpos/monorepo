@@ -4,10 +4,6 @@
 	"description": "WooCommerce Order Fee Line schema",
 	"type": "object",
 	"properties": {
-		"localId": {
-			"type": "string",
-			"primary": true
-		},
 		"id": {
 			"type": "integer"
 		},
@@ -15,11 +11,11 @@
 			"description": "Fee name.",
 			"type": "string"
 		},
-		"tax_class": {
+		"taxClass": {
 			"description": "Tax class of fee.",
 			"type": "string"
 		},
-		"tax_status": {
+		"taxStatus": {
 			"description": "Tax status of fee.",
 			"type": "string",
 			"enum": ["taxable", "none"]
@@ -28,7 +24,7 @@
 			"description": "Line total (after discounts).",
 			"type": "string"
 		},
-		"total_tax": {
+		"totalTax": {
 			"description": "Line total tax (after discounts).",
 			"type": "string"
 		},
@@ -53,7 +49,7 @@
 				}
 			}
 		},
-		"meta_data": {
+		"metaData": {
 			"description": "Meta data.",
 			"type": "array",
 			"items": {

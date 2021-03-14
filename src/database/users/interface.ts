@@ -9,7 +9,6 @@
  * Global app user - different to WordPress user
  */
 export interface UserSchema {
-  localId?: string;
   firstName?: string;
   lastName?: string;
   displayName?: string;

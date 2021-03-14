@@ -11,35 +11,35 @@
 export interface WooCommerceProductVariationSchema {
   localId?: string;
   id?: number;
-  date_created?: string;
-  date_created_gmt?: string;
-  date_modified?: string;
-  date_modified_gmt?: string;
+  dateCreated?: string;
+  dateCreatedGmt?: string;
+  dateModified?: string;
+  dateModifiedGmt?: string;
   description?: string;
   permalink?: string;
   sku?: string;
   price?: string;
-  regular_price?: string;
-  sale_price?: string;
-  date_on_sale_from?: string | null;
-  date_on_sale_from_gmt?: string | null;
-  date_on_sale_to?: string | null;
-  date_on_sale_to_gmt?: string | null;
-  on_sale?: boolean;
+  regularPrice?: string;
+  salePrice?: string;
+  dateOnSaleFrom?: string | null;
+  dateOnSaleFromGmt?: string | null;
+  dateOnSaleTo?: string | null;
+  dateOnSaleToGmt?: string | null;
+  onSale?: boolean;
   status?: "draft" | "pending" | "private" | "publish";
   purchasable?: boolean;
   virtual?: boolean;
   downloadable?: boolean;
   downloads?: any[];
-  download_limit?: number;
-  download_expiry?: number;
-  tax_status?: "taxable" | "shipping" | "none";
-  tax_class?: string;
-  manage_stock?: boolean;
-  stock_quantity?: number | null;
-  stock_status?: "instock" | "outofstock" | "onbackorder";
+  downloadLimit?: number;
+  downloadExpiry?: number;
+  taxStatus?: "taxable" | "shipping" | "none";
+  taxClass?: string;
+  manageStock?: boolean;
+  stockQuantity?: number | null;
+  stockStatus?: "instock" | "outofstock" | "onbackorder";
   backorders?: "no" | "notify" | "yes";
-  backorders_allowed?: boolean;
+  backordersAllowed?: boolean;
   backordered?: boolean;
   weight?: string;
   dimensions?: {
@@ -48,8 +48,8 @@ export interface WooCommerceProductVariationSchema {
     height?: string;
     [k: string]: any;
   };
-  shipping_class?: string;
-  shipping_class_id?: number;
+  shippingClass?: string;
+  shippingClassId?: number;
   image?: {
     [k: string]: any;
   } | null;
@@ -59,12 +59,13 @@ export interface WooCommerceProductVariationSchema {
     option?: string;
     [k: string]: any;
   }[];
-  menu_order?: number;
-  meta_data?: {
+  menuOrder?: number;
+  metaData?: {
     id?: number;
     key?: string;
     value?: string;
     [k: string]: any;
   }[];
+  thumbnail?: string;
   [k: string]: any;
 }

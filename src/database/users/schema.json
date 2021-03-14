@@ -4,10 +4,6 @@
 	"description": "Global app user - different to WordPress user",
 	"type": "object",
 	"properties": {
-		"localId": {
-			"type": "string",
-			"primary": true
-		},
 		"firstName": {
 			"type": "string"
 		},

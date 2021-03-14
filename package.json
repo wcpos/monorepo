@@ -31,13 +31,13 @@
 		"@types/styled-components": "5.1.8",
 		"@types/styled-components-react-native": "^5.1.1",
 		"@types/url-parse": "1.4.3",
-		"@types/uuid": "8.3.0",
 		"@wcpos/common": "0.0.1",
 		"axios": "0.21.1",
 		"i18next": "19.9.2",
 		"jsonschema-to-interface": "1.0.5",
 		"lodash": "4.17.21",
 		"observable-hooks": "4.0.3",
+		"pouchdb-adapter-http": "^7.2.2",
 		"pouchdb-adapter-idb": "7.2.2",
 		"pouchdb-adapter-memory": "7.2.2",
 		"pouchdb-adapter-react-native-sqlite": "3.0.1",
@@ -63,7 +63,6 @@
 		"rxdb-utils": "2.0.0-beta.2",
 		"rxjs": "6.6.6",
 		"styled-components": "5.2.1",
-		"url-parse": "1.5.1",
-		"uuid": "8.3.2"
+		"url-parse": "1.5.1"
 	}
 }

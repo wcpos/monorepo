@@ -9,7 +9,6 @@
  * WordPress site
  */
 export interface SiteSchema {
-  localId?: string;
   url?: string;
   name?: string;
   description?: string;

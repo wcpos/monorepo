@@ -4,10 +4,6 @@
 	"description": "WooCommerce Order Line Item schema",
 	"type": "object",
 	"properties": {
-		"localId": {
-			"type": "string",
-			"primary": true
-		},
 		"id": {
 			"description": "Item ID.",
 			"type": "integer"
@@ -16,11 +12,11 @@
 			"description": "Product name.",
 			"type": "string"
 		},
-		"product_id": {
+		"productDd": {
 			"description": "Product ID.",
 			"type": "integer"
 		},
-		"variation_id": {
+		"variationId": {
 			"description": "Variation ID, if applicable.",
 			"type": "integer"
 		},
@@ -28,7 +24,7 @@
 			"description": "Quantity ordered.",
 			"type": "integer"
 		},
-		"tax_class": {
+		"taxClass": {
 			"description": "Tax class of product.",
 			"type": "string"
 		},
@@ -36,7 +32,7 @@
 			"description": "Line subtotal (before discounts).",
 			"type": "string"
 		},
-		"subtotal_tax": {
+		"subtotalTax": {
 			"description": "Line subtotal tax (before discounts).",
 			"type": "string"
 		},
@@ -44,7 +40,7 @@
 			"description": "Line total (after discounts).",
 			"type": "string"
 		},
-		"total_tax": {
+		"totalTax": {
 			"description": "Line total tax (after discounts).",
 			"type": "string"
 		},
@@ -69,7 +65,7 @@
 				}
 			}
 		},
-		"meta_data": {
+		"metaData": {
 			"description": "Meta data.",
 			"type": "array",
 			"items": {

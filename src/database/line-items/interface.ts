@@ -9,7 +9,6 @@
  * WooCommerce Order Line Item schema
  */
 export interface WooCommerceOrderLineItemSchema {
-  localId?: string;
   /**
    * Item ID.
    */
@@ -21,11 +20,11 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Product ID.
    */
-  product_id?: number;
+  productDd?: number;
   /**
    * Variation ID, if applicable.
    */
-  variation_id?: number;
+  variationId?: number;
   /**
    * Quantity ordered.
    */
@@ -33,7 +32,7 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Tax class of product.
    */
-  tax_class?: string;
+  taxClass?: string;
   /**
    * Line subtotal (before discounts).
    */
@@ -41,7 +40,7 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Line subtotal tax (before discounts).
    */
-  subtotal_tax?: string;
+  subtotalTax?: string;
   /**
    * Line total (after discounts).
    */
@@ -49,7 +48,7 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Line total tax (after discounts).
    */
-  total_tax?: string;
+  totalTax?: string;
   /**
    * Line taxes.
    */
@@ -71,7 +70,7 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Meta data.
    */
-  meta_data?: {
+  metaData?: {
     /**
      * Meta ID.
      */

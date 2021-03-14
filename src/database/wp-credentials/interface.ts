@@ -9,7 +9,6 @@
  * WordPress credentials
  */
 export interface WPCredentialsSchema {
-  localId?: string;
   id?: number;
   username?: string;
   firstName?: string;

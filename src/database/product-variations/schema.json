@@ -11,16 +11,16 @@
 		"id": {
 			"type": "integer"
 		},
-		"date_created": {
+		"dateCreated": {
 			"type": "string"
 		},
-		"date_created_gmt": {
+		"dateCreatedGmt": {
 			"type": "string"
 		},
-		"date_modified": {
+		"dateModified": {
 			"type": "string"
 		},
-		"date_modified_gmt": {
+		"dateModifiedGmt": {
 			"type": "string"
 		},
 		"description": {
@@ -36,25 +36,25 @@
 		"price": {
 			"type": "string"
 		},
-		"regular_price": {
+		"regularPrice": {
 			"type": "string"
 		},
-		"sale_price": {
+		"salePrice": {
 			"type": "string"
 		},
-		"date_on_sale_from": {
+		"dateOnSaleFrom": {
 			"type": ["string", "null"]
 		},
-		"date_on_sale_from_gmt": {
+		"dateOnSaleFromGmt": {
 			"type": ["string", "null"]
 		},
-		"date_on_sale_to": {
+		"dateOnSaleTo": {
 			"type": ["string", "null"]
 		},
-		"date_on_sale_to_gmt": {
+		"dateOnSaleToGmt": {
 			"type": ["string", "null"]
 		},
-		"on_sale": {
+		"onSale": {
 			"type": "boolean"
 		},
 		"status": {
@@ -76,30 +76,30 @@
 		"downloads": {
 			"type": "array"
 		},
-		"download_limit": {
+		"downloadLimit": {
 			"default": -1,
 			"type": "integer"
 		},
-		"download_expiry": {
+		"downloadExpiry": {
 			"default": -1,
 			"type": "integer"
 		},
-		"tax_status": {
+		"taxStatus": {
 			"default": "taxable",
 			"enum": ["taxable", "shipping", "none"],
 			"type": "string"
 		},
-		"tax_class": {
+		"taxClass": {
 			"type": "string"
 		},
-		"manage_stock": {
+		"manageStock": {
 			"default": false,
 			"type": "boolean"
 		},
-		"stock_quantity": {
+		"stockQuantity": {
 			"type": ["number", "null"]
 		},
-		"stock_status": {
+		"stockStatus": {
 			"default": "instock",
 			"enum": ["instock", "outofstock", "onbackorder"],
 			"type": "string"
@@ -109,7 +109,7 @@
 			"enum": ["no", "notify", "yes"],
 			"type": "string"
 		},
-		"backorders_allowed": {
+		"backordersAllowed": {
 			"type": "boolean"
 		},
 		"backordered": {
@@ -132,10 +132,10 @@
 				}
 			}
 		},
-		"shipping_class": {
+		"shippingClass": {
 			"type": "string"
 		},
-		"shipping_class_id": {
+		"shippingClassId": {
 			"type": "integer"
 		},
 
@@ -145,16 +145,16 @@
 				"id": {
 					"type": "integer"
 				},
-				"date_created": {
+				"dateCreated": {
 					"type": "string"
 				},
-				"date_created_gmt": {
+				"dateCreatedGmt": {
 					"type": "string"
 				},
-				"date_modified": {
+				"dateModified": {
 					"type": "string"
 				},
-				"date_modified_gmt": {
+				"dateModifiedGmt": {
 					"type": "string"
 				},
 				"src": {
@@ -186,10 +186,10 @@
 				}
 			}
 		},
-		"menu_order": {
+		"menuOrder": {
 			"type": "integer"
 		},
-		"meta_data": {
+		"metaData": {
 			"type": "array",
 			"items": {
 				"type": "object",
@@ -205,10 +205,10 @@
 					}
 				}
 			}
+		},
+		"thumbnail": {
+			"type": "string"
 		}
-	},
-	"thumbnail": {
-		"type": "string"
 	},
 	"indexes": ["sku"]
 }
