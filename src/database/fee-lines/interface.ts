@@ -9,7 +9,6 @@
  * WooCommerce Order Fee Line schema
  */
 export interface WooCommerceOrderFeeLineSchema {
-  localId?: string;
   id?: number;
   /**
    * Fee name.
@@ -18,11 +17,11 @@ export interface WooCommerceOrderFeeLineSchema {
   /**
    * Tax class of fee.
    */
-  tax_class?: string;
+  taxClass?: string;
   /**
    * Tax status of fee.
    */
-  tax_status?: "taxable" | "none";
+  taxStatus?: "taxable" | "none";
   /**
    * Line total (after discounts).
    */
@@ -30,7 +29,7 @@ export interface WooCommerceOrderFeeLineSchema {
   /**
    * Line total tax (after discounts).
    */
-  total_tax?: string;
+  totalTax?: string;
   /**
    * Line taxes.
    */
@@ -52,7 +51,7 @@ export interface WooCommerceOrderFeeLineSchema {
   /**
    * Meta data.
    */
-  meta_data?: {
+  metaData?: {
     /**
      * Meta ID.
      */

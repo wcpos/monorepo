@@ -9,49 +9,48 @@
  * WooCommerce Product schema
  */
 export interface WooCommerceProductSchema {
-  localId?: string;
   id?: number;
   name?: string;
   slug?: string;
   permalink?: string;
-  date_created?: string;
-  date_created_gmt?: string;
-  date_modified?: string;
-  date_modified_gmt?: string;
+  dateCreated?: string;
+  dateCreatedGmt?: string;
+  dateModified?: string;
+  dateModifiedGmt?: string;
   type?: "simple" | "grouped" | "external" | "variable";
   status?: "draft" | "pending" | "private" | "publish";
   featured?: boolean;
-  catalog_visibility?: string;
+  catalogVisibility?: string;
   description?: string;
-  short_description?: string;
+  shortDescription?: string;
   sku?: string;
   price?: string;
-  regular_price?: string;
-  sale_price?: string;
-  date_on_sale_from?: string | null;
-  date_on_sale_from_gmt?: string | null;
-  date_on_sale_to?: string | null;
-  date_on_sale_to_gmt?: string | null;
-  price_html?: string;
-  on_sale?: boolean;
+  regularPrice?: string;
+  salePrice?: string;
+  dateOnSaleFrom?: string | null;
+  dateOnSaleFromGmt?: string | null;
+  dateOnSaleTo?: string | null;
+  dateOnSaleToGmt?: string | null;
+  priceHtml?: string;
+  onSale?: boolean;
   purchasable?: boolean;
-  total_sales?: number;
+  totalSales?: number;
   virtual?: boolean;
   downloadable?: boolean;
   downloads?: any[];
-  download_limit?: number;
-  download_expiry?: number;
-  external_url?: string;
-  button_text?: string;
-  tax_status?: "taxable" | "shipping" | "none";
-  tax_class?: string;
-  manage_stock?: boolean;
-  stock_quantity?: number | null;
-  stock_status?: "instock" | "outofstock" | "onbackorder";
+  downloadLimit?: number;
+  downloadExpiry?: number;
+  externalUrl?: string;
+  buttonText?: string;
+  taxStatus?: "taxable" | "shipping" | "none";
+  taxClass?: string;
+  manageStock?: boolean;
+  stockQuantity?: number | null;
+  stockStatus?: "instock" | "outofstock" | "onbackorder";
   backorders?: "no" | "notify" | "yes";
-  backorders_allowed?: boolean;
+  backordersAllowed?: boolean;
   backordered?: boolean;
-  sold_individually?: boolean;
+  soldIndividually?: boolean;
   weight?: string;
   dimensions?: {
     length?: string;
@@ -59,18 +58,18 @@ export interface WooCommerceProductSchema {
     height?: string;
     [k: string]: any;
   };
-  shipping_required?: boolean;
-  shipping_taxable?: boolean;
-  shipping_class?: string;
-  shipping_class_id?: number;
-  reviews_allowed?: boolean;
-  average_rating?: string;
-  rating_count?: number;
+  shippingRequired?: boolean;
+  shippingTaxable?: boolean;
+  shippingClass?: string;
+  shippingClassId?: number;
+  reviewsAllowed?: boolean;
+  averageRating?: string;
+  ratingCount?: number;
   related_ids?: number[];
-  upsell_ids?: number[];
-  cross_sell_ids?: number[];
-  parent_id?: number;
-  purchase_note?: string;
+  upsellIds?: number[];
+  crossSellIds?: number[];
+  parentId?: number;
+  purchaseNote?: string;
   categories?: {
     id?: number;
     name?: string;
@@ -85,10 +84,10 @@ export interface WooCommerceProductSchema {
   }[];
   images?: {
     id?: number;
-    date_created?: string;
-    date_created_gmt?: string;
-    date_modified?: string;
-    date_modified_gmt?: string;
+    dateCreated?: string;
+    dateCreatedGmt?: string;
+    dateModified?: string;
+    dateModifiedGmt?: string;
     src?: string;
     name?: string;
     alt?: string;
@@ -103,16 +102,16 @@ export interface WooCommerceProductSchema {
     options?: string[];
     [k: string]: any;
   }[];
-  default_attributes?: {
+  defaultAttributes?: {
     id?: number;
     name?: string;
     option?: string;
     [k: string]: any;
   }[];
   variations?: number[];
-  grouped_products?: number[];
-  menu_order?: number;
-  meta_data?: {
+  groupedProducts?: number[];
+  menuOrder?: number;
+  metaData?: {
     id?: number;
     key?: string;
     value?: string;

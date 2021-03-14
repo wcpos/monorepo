@@ -12,11 +12,11 @@ export interface WooCommerceCustomerSchema {
   /**
    * Unique identifier for the resource.
    */
-  id?: string;
-  date_created?: string;
-  date_created_gmt?: string;
-  date_modified?: string;
-  date_modified_gmt?: string;
+  id?: number;
+  dateCreated?: string;
+  dateCreatedGmt?: string;
+  dateModified?: string;
+  dateModifiedGmt?: string;
   /**
    * The email address for the customer.
    */
@@ -24,11 +24,11 @@ export interface WooCommerceCustomerSchema {
   /**
    * Customer first name.
    */
-  first_name?: string;
+  firstName?: string;
   /**
    * Customer last name.
    */
-  last_name?: string;
+  lastName?: string;
   role?: string;
   /**
    * Customer login name.
@@ -42,11 +42,11 @@ export interface WooCommerceCustomerSchema {
    * List of billing address data.
    */
   billing?: {
-    first_name?: string;
-    last_name?: string;
+    firstName?: string;
+    lastName?: string;
     company?: string;
-    address_1?: string;
-    address_2?: string;
+    address1?: string;
+    address2?: string;
     city?: string;
     postcode?: string;
     country?: string;
@@ -59,23 +59,23 @@ export interface WooCommerceCustomerSchema {
    * List of shipping address data.
    */
   shipping?: {
-    first_name?: string;
-    last_name?: string;
+    firstName?: string;
+    lastName?: string;
     company?: string;
-    address_1?: string;
-    address_2?: string;
+    address1?: string;
+    address2?: string;
     city?: string;
     postcode?: string;
     country?: string;
     state?: string;
     [k: string]: any;
   };
-  is_paying_customer?: boolean;
-  avatar_url?: string;
+  isPayingCustomer?: boolean;
+  avatarUrl?: string;
   /**
    * Meta data.
    */
-  meta_data?: {
+  metaData?: {
     /**
      * Meta ID.
      */

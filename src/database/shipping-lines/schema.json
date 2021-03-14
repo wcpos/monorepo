@@ -4,22 +4,18 @@
 	"description": "WooCommerce Order Shipping Line schema",
 	"type": "object",
 	"properties": {
-		"localId": {
-			"type": "string",
-			"primary": true
-		},
 		"id": {
 			"type": "integer"
 		},
-		"method_title": {
+		"methodTitle": {
 			"description": "Shipping method name.",
 			"type": "string"
 		},
-		"method_id": {
+		"methodId": {
 			"description": "Shipping method ID.",
 			"type": "string"
 		},
-		"instance_id": {
+		"instanceId": {
 			"description": "Shipping instance ID.",
 			"type": "string"
 		},
@@ -27,7 +23,7 @@
 			"description": "Line total (after discounts).",
 			"type": "string"
 		},
-		"total_tax": {
+		"totalTax": {
 			"description": "Line total tax (after discounts).",
 			"type": "string"
 		},
@@ -48,7 +44,7 @@
 				}
 			}
 		},
-		"meta_data": {
+		"metaData": {
 			"description": "Meta data.",
 			"type": "array",
 			"items": {
@@ -70,5 +66,5 @@
 			}
 		}
 	},
-	"indexes": ["method_title"]
+	"indexes": ["methodTitle"]
 }

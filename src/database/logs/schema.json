@@ -4,10 +4,6 @@
 	"description": "Logs events for debugging and user record",
 	"type": "object",
 	"properties": {
-		"localId": {
-			"type": "string",
-			"primary": true
-		},
 		"dateCreatedGmt": {
 			"type": "string"
 		},

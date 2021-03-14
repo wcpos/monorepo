@@ -1,5 +1,4 @@
 import isFunction from 'lodash/isFunction';
-import { v4 as uuidv4 } from 'uuid';
 import { DEFAULT_MODIFIER } from './helpers';
 import { RxDBWooCommerceRestApiSyncCollectionService } from './collection-service';
 import { RxDBWooCommerceRestApiSyncDocumentService } from './document-service';

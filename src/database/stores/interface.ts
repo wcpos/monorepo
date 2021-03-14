@@ -9,7 +9,6 @@
  * WooCommerce POS Store
  */
 export interface WCPOSStoreSchema {
-  localId?: string;
   id?: number;
   name?: string;
   [k: string]: any;

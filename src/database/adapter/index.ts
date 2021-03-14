@@ -4,6 +4,7 @@ import SQLiteAdapterFactory from 'pouchdb-adapter-react-native-sqlite';
 
 const SQLiteAdapter = SQLiteAdapterFactory(SQLite);
 addRxPlugin(SQLiteAdapter);
+addRxPlugin(require('pouchdb-adapter-http'));
 
 export const config = {
 	adapter: 'react-native-sqlite',

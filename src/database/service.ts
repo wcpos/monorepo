@@ -7,7 +7,6 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { RxDBNoValidatePlugin } from 'rxdb/plugins/no-validate';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
-import { v4 as uuidv4 } from 'uuid';
 import forEach from 'lodash/forEach';
 import isFunction from 'lodash/isFunction';
 import camelCase from 'lodash/camelCase';
@@ -52,9 +51,8 @@ addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
  */
 const parsePlainData = (plainData: Record<string, unknown>) => {
 	/**
-	 * add localId and dateCreatedGmt to plain data
+	 * add dateCreatedGmt to plain data
 	 */
-	if (!plainData.localId) plainData.localId = uuidv4();
 	if (!plainData.dateCreatedGmt) plainData.dateCreatedGmt = Date.now();
 
 	/**
@@ -211,7 +209,6 @@ export interface IDatabaseService {
 	STORE_DB_CREATE_PROMISE: Promise<StoreDatabase | null>;
 	getUserDB: () => Promise<UserDatabase>;
 	getStoreDB: (name: string) => Promise<StoreDatabase | null>;
-	getRandomId: () => string;
 }
 
 /**
@@ -235,10 +232,6 @@ const DatabaseService: IDatabaseService = {
 			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name);
 		}
 		return this.STORE_DB_CREATE_PROMISE;
-	},
-
-	getRandomId() {
-		return uuidv4();
 	},
 };
 

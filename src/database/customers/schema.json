@@ -5,31 +5,30 @@
 	"type": "object",
 	"properties": {
 		"id": {
-			"primary": true,
 			"description": "Unique identifier for the resource.",
+			"type": "integer"
+		},
+		"dateCreated": {
 			"type": "string"
 		},
-		"date_created": {
+		"dateCreatedGmt": {
 			"type": "string"
 		},
-		"date_created_gmt": {
+		"dateModified": {
 			"type": "string"
 		},
-		"date_modified": {
-			"type": "string"
-		},
-		"date_modified_gmt": {
+		"dateModifiedGmt": {
 			"type": "string"
 		},
 		"email": {
 			"description": "The email address for the customer.",
 			"type": "string"
 		},
-		"first_name": {
+		"firstName": {
 			"description": "Customer first name.",
 			"type": "string"
 		},
-		"last_name": {
+		"lastName": {
 			"description": "Customer last name.",
 			"type": "string"
 		},
@@ -48,19 +47,19 @@
 			"description": "List of billing address data.",
 			"type": "object",
 			"properties": {
-				"first_name": {
+				"firstName": {
 					"type": "string"
 				},
-				"last_name": {
+				"lastName": {
 					"type": "string"
 				},
 				"company": {
 					"type": "string"
 				},
-				"address_1": {
+				"address1": {
 					"type": "string"
 				},
-				"address_2": {
+				"address2": {
 					"type": "string"
 				},
 				"city": {
@@ -87,19 +86,19 @@
 			"description": "List of shipping address data.",
 			"type": "object",
 			"properties": {
-				"first_name": {
+				"firstName": {
 					"type": "string"
 				},
-				"last_name": {
+				"lastName": {
 					"type": "string"
 				},
 				"company": {
 					"type": "string"
 				},
-				"address_1": {
+				"address1": {
 					"type": "string"
 				},
-				"address_2": {
+				"address2": {
 					"type": "string"
 				},
 				"city": {
@@ -116,13 +115,13 @@
 				}
 			}
 		},
-		"is_paying_customer": {
+		"isPayingCustomer": {
 			"type": "boolean"
 		},
-		"avatar_url": {
+		"avatarUrl": {
 			"type": "string"
 		},
-		"meta_data": {
+		"metaData": {
 			"description": "Meta data.",
 			"type": "array",
 			"items": {
@@ -145,9 +144,9 @@
 		}
 	},
 	"indexes": [
-		"first_name",
-		"last_name",
-		["first_name", "last_name"],
+		"firstName",
+		"lastName",
+		["firstName", "lastName"],
 		"billing.company",
 		"billing.phone"
 	]

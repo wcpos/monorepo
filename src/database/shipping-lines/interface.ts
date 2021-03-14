@@ -9,20 +9,19 @@
  * WooCommerce Order Shipping Line schema
  */
 export interface WooCommerceOrderShippingLineSchema {
-  localId?: string;
   id?: number;
   /**
    * Shipping method name.
    */
-  method_title?: string;
+  methodTitle?: string;
   /**
    * Shipping method ID.
    */
-  method_id?: string;
+  methodId?: string;
   /**
    * Shipping instance ID.
    */
-  instance_id?: string;
+  instanceId?: string;
   /**
    * Line total (after discounts).
    */
@@ -30,7 +29,7 @@ export interface WooCommerceOrderShippingLineSchema {
   /**
    * Line total tax (after discounts).
    */
-  total_tax?: string;
+  totalTax?: string;
   /**
    * Line taxes.
    */
@@ -48,7 +47,7 @@ export interface WooCommerceOrderShippingLineSchema {
   /**
    * Meta data.
    */
-  meta_data?: {
+  metaData?: {
     /**
      * Meta ID.
      */

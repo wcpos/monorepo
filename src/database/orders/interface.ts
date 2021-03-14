@@ -9,15 +9,14 @@
  * WooCommerce Order schema
  */
 export interface WooCommerceOrderSchema {
-  localId?: string;
   id?: number;
   /**
    * Parent order ID.
    */
-  parent_id?: number;
+  parentId?: number;
   number?: string;
-  order_key?: string;
-  created_via?: string;
+  orderKey?: string;
+  createdVia?: string;
   version?: string;
   /**
    * Order status.
@@ -190,28 +189,28 @@ export interface WooCommerceOrderSchema {
     | "YER"
     | "ZAR"
     | "ZMW";
-  date_created?: string;
-  date_created_gmt?: string;
-  date_modified?: string;
-  date_modified_gmt?: string;
-  discount_total?: string;
-  discount_tax?: string;
-  shipping_total?: string;
-  shipping_tax?: string;
-  cart_tax?: string;
+  dateCreated?: string;
+  dateCreatedGmt?: string;
+  dateModified?: string;
+  dateModifiedGmt?: string;
+  discountTotal?: string;
+  discountTax?: string;
+  shippingTotal?: string;
+  shippingTax?: string;
+  cartTax?: string;
   total?: string;
-  total_tax?: string;
-  prices_include_tax?: boolean;
+  totalTax?: string;
+  pricesIncludeTax?: boolean;
   /**
    * User ID who owns the order. 0 for guests.
    */
-  customer_id?: number;
-  customer_ip_address?: string;
-  customer_user_agent?: string;
+  customerId?: number;
+  customerIpAddress?: string;
+  customerUserAgent?: string;
   /**
    * Note left by customer during checkout.
    */
-  customer_note?: string;
+  customerNote?: string;
   /**
    * Billing address.
    */
@@ -227,24 +226,24 @@ export interface WooCommerceOrderSchema {
   /**
    * Payment method ID.
    */
-  payment_method?: string;
+  paymentMethod?: string;
   /**
    * Payment method title.
    */
-  payment_method_title?: string;
+  paymentMethodTitle?: string;
   /**
    * Unique transaction ID.
    */
-  transaction_id?: string;
-  date_paid?: string | null;
-  date_paid_gmt?: string | null;
-  date_completed?: string | null;
-  date_completed_gmt?: string | null;
-  cart_hash?: string;
+  transactionId?: string;
+  datePaid?: string | null;
+  datePaidGmt?: string | null;
+  dateCompleted?: string | null;
+  dateCompletedGmt?: string | null;
+  cartHash?: string;
   /**
    * Meta data.
    */
-  meta_data?: {
+  metaData?: {
     /**
      * Meta ID.
      */
@@ -262,20 +261,20 @@ export interface WooCommerceOrderSchema {
   /**
    * Line items data.
    */
-  line_items?: string[];
-  tax_lines?: {
+  lineItems?: string[];
+  taxLines?: {
     id?: number;
-    rate_code?: string;
-    rate_id?: number;
+    rateCode?: string;
+    rateId?: number;
     label?: string;
     compound?: boolean;
-    tax_total?: string;
-    shipping_tax_total?: string;
-    rate_percent?: number;
+    taxTotal?: string;
+    shippingTaxTotal?: string;
+    ratePercent?: number;
     /**
      * Meta data.
      */
-    meta_data?: {
+    metaData?: {
       /**
        * Meta ID.
        */
@@ -295,15 +294,15 @@ export interface WooCommerceOrderSchema {
   /**
    * Shipping lines data.
    */
-  shipping_lines?: string[];
+  shippingLines?: string[];
   /**
    * Fee lines data.
    */
-  fee_lines?: string[];
+  feeLines?: string[];
   /**
    * Coupons line data.
    */
-  coupon_lines?: {
+  couponLines?: {
     /**
      * Item ID.
      */
@@ -319,11 +318,11 @@ export interface WooCommerceOrderSchema {
     /**
      * Discount total tax.
      */
-    discount_tax?: string;
+    discountTax?: string;
     /**
      * Meta data.
      */
-    meta_data?: {
+    metaData?: {
       /**
        * Meta ID.
        */
@@ -346,6 +345,6 @@ export interface WooCommerceOrderSchema {
     total?: string;
     [k: string]: any;
   }[];
-  currency_symbol?: string;
+  currencySymbol?: string;
   [k: string]: any;
 }

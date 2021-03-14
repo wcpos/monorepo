@@ -9,7 +9,6 @@
  * Logs events for debugging and user record
  */
 export interface LogSchema {
-  localId?: string;
   dateCreatedGmt?: string;
   user?: string;
   level: string;
