@@ -36,6 +36,17 @@ export const group = ({ raised }: ISegmentGroupProps) => (
 /**
  *
  */
+export const groupWithOneSegment = ({ raised }: ISegmentGroupProps) => (
+	<View style={{ height: 400 }}>
+		<Segment.Group raised={raised}>
+			<Segment>One</Segment>
+		</Segment.Group>
+	</View>
+);
+
+/**
+ *
+ */
 export const nestedGroup = ({ raised }: ISegmentGroupProps) => (
 	<Segment.Group raised={raised}>
 		<Segment type="header">Top</Segment>

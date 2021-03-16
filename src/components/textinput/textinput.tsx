@@ -55,7 +55,6 @@ const TextInput = ({
 				placeholder={placeholder}
 				disabled={disabled}
 				onChangeText={handleChangeText}
-				{...props}
 			/>
 			{clearable && <Icon name="clear" />}
 			{action && (

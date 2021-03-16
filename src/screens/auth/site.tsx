@@ -26,6 +26,7 @@ interface ISiteProps {
 const Site = ({ site, user }: ISiteProps) => {
 	const status = useObservableState(site.connection.status$) as string;
 	const error = useObservableState(site.connection.error$) as string;
+	const name = useObservableState(site.name$) as string;
 	const [visible, setVisible] = React.useState(false);
 
 	const selectStore = async (): Promise<void> => {
@@ -42,9 +43,9 @@ const Site = ({ site, user }: ISiteProps) => {
 
 	return (
 		<SiteWrapper>
-			<Avatar src={`https://api.faviconkit.com/${site.id}/144`} />
+			<Avatar src={`https://api.faviconkit.com/${site.url}/144`} />
 			<SiteTextWrapper>
-				<Text weight="bold">{site?.name || site.url}</Text>
+				<Text weight="bold">{name || site.url}</Text>
 				<Text size="small" type="secondary">
 					{site.url}
 				</Text>

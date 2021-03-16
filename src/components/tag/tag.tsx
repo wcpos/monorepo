@@ -1,11 +1,13 @@
 import * as React from 'react';
 import { Animated, View, StyleSheet, Easing, ViewStyle, Platform } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
+import { useTheme } from 'styled-components/native';
 import * as Styled from './styles';
 import Text from '../text';
 import Icon from '../icon';
 import Button from '../button';
-import useTheme from '../../hooks/use-theme';
+
+type ThemeProps = import('@wcpos/common/src/themes').ThemeProps;
 
 export interface ITagProps {
 	children: string;
@@ -69,11 +71,11 @@ const Skeleton = ({
 };
 
 export const Tag = ({ children, closable, disabled, onClose }: ITagProps) => {
-	const { theme } = useTheme();
+	const theme = useTheme() as ThemeProps;
 
 	return (
 		<Styled.Tag disabled={disabled}>
-			<Text size="small" style={{ color: theme?.TAG_TEXT_COLOR }}>
+			<Text size="small" style={{ color: theme.TAG_TEXT_COLOR }}>
 				{children}
 			</Text>
 			{closable && (

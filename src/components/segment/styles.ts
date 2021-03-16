@@ -1,8 +1,8 @@
 import styled, { css } from 'styled-components/native';
-import Platform from '../../lib/platform';
+import Platform from '@wcpos/common/src/lib/platform';
 
-type ThemeProps = import('../../lib/theme').ThemeProps;
-type SegmentProps = { theme: ThemeProps } & import('./segment').ISegmentProps;
+type ISegmentProps = import('./segment').ISegmentProps;
+type SegmentProps = Pick<ISegmentProps, 'raised' | 'group' | 'grow'>;
 
 export const Segment = styled.View<SegmentProps>`
 	background: ${({ theme }) => theme.SEGMENT_BACKGROUND_COLOR};
@@ -49,14 +49,15 @@ export const Segment = styled.View<SegmentProps>`
 		})}
 `;
 
-type GroupProps = { theme: ThemeProps } & import('./group').ISegmentGroupProps;
+type ISegmentGroupProps = import('./group').ISegmentGroupProps;
+type GroupProps = Pick<ISegmentGroupProps, 'raised' | 'flexDirection'>;
 
 // height: inherit;
 /**
  * Note: height 'inherit' caused app to crash on mobile
  */
 export const Group = styled.View<GroupProps>`
-	flex-direction: ${({ direction }) => (direction === 'horizontal' ? 'row' : 'column')};
+	flex-direction: ${({ flexDirection }) => flexDirection};
 	width: 100%;
 	height: 100%;
 

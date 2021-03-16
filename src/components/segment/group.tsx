@@ -1,3 +1,5 @@
+// @ts-nocheck
+// @TODO - fix typescript
 import * as React from 'react';
 import * as Styled from './styles';
 
@@ -6,40 +8,42 @@ type Segment = typeof import('./segment').Segment;
 type ISegmentProps = import('./segment').ISegmentProps;
 
 export interface ISegmentGroupProps {
-	children: React.ReactElement<Segment>[];
+	children: React.ReactElement<Segment>[] | React.ReactElement<Segment>;
 	style?: import('react-native').ViewStyle;
 	raised?: boolean;
-	direction?: 'vertical' | 'horizontal';
+	flexDirection?: 'row' | 'column';
 }
 
 export const SegmentGroup = ({
 	children,
-	direction = 'vertical',
+	flexDirection = 'column',
 	style,
 	raised = true,
 }: ISegmentGroupProps) => {
 	const count = React.Children.count(children);
 
+	if (count === 1) {
+		return children;
+	}
+
 	return (
-		// @ts-ignore
-		<Styled.Group style={style} raised={raised} direction={direction}>
-			{React.Children.count(children) > 1 &&
-				React.Children.map(children, (child, index) => {
-					if (React.isValidElement(child)) {
-						const props: { group?: 'first' | 'middle' | 'last'; raised?: boolean } = {
-							group: 'middle',
-							raised: false,
-						};
-						if (index === 0) {
-							props.group = 'first';
-						}
-						if (index === count - 1) {
-							props.group = 'last';
-						}
-						return React.cloneElement(child as React.ReactElement<ISegmentProps>, props);
+		<Styled.Group style={style} raised={raised} flexDirection={flexDirection}>
+			{React.Children.map(children, (child, index) => {
+				if (React.isValidElement(child)) {
+					const props: { group?: 'first' | 'middle' | 'last'; raised?: boolean } = {
+						group: 'middle',
+						raised: false,
+					};
+					if (index === 0) {
+						props.group = 'first';
 					}
-					return null;
-				})}
+					if (index === count - 1) {
+						props.group = 'last';
+					}
+					return React.cloneElement(child as React.ReactElement<Segment>, props);
+				}
+				return [];
+			})}
 		</Styled.Group>
 	);
 };

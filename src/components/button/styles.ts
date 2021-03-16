@@ -10,6 +10,7 @@ type BackgroundProps = ThemeProps &
 
 export const Background = styled.View<BackgroundProps>`
 	background-color: ${({ background, type, theme, pressed }) => {
+		console.log(theme);
 		if (background === 'clear' || background === 'outline') {
 			return 'transparent';
 		}

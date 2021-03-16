@@ -35,7 +35,7 @@ const AuthModal = ({ visible, setVisible, site, user }: IAuthModalProps) => {
 			{
 				app_name: 'WooCommerce POS',
 				scope: 'read_write',
-				user_id: user.localId,
+				user_id: user._id,
 				return_url: returnUrl,
 				callback_url: 'https://client.wcpos.com',
 				wcpos: 1,
