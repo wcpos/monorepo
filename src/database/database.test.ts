@@ -37,7 +37,7 @@ describe('Database Service', () => {
 		const db2 = await DatabaseService.getStoreDB('test2');
 		expect(db.destroyed).toBe(true);
 		expect(isRxDatabase(db2)).toBe(true);
-		expect(db2.name).toBe('test2');
+		expect(db2?.name).toBe('test2');
 	});
 
 	describe('Users Database', () => {
