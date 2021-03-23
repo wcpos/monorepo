@@ -41,11 +41,11 @@ interface ModalPropsType<T> {
 	operation?: boolean;
 }
 
-const maxHeight = StyleSheet.create({
+const { maxHeight } = StyleSheet.create({
 	maxHeight: {
 		maxHeight: Dimensions.get('window').height,
 	},
-}).maxHeight;
+});
 
 export interface ModalProps extends ModalPropsType<TextStyle> {
 	style?: StyleProp<ViewStyle>;

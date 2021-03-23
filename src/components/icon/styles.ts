@@ -1,10 +1,8 @@
 import { StyleSheet, Platform, ViewStyle } from 'react-native';
 import styled, { css } from 'styled-components/native';
 
-type Props = { theme: import('../../lib/theme/types').ThemeProps };
-
 // eslint-disable-next-line import/prefer-default-export
-export const Icon = styled.View<Props>`
+export const Icon = styled.View`
 	flex: 0 1 auto;
 	align-items: center;
 	justify-content: center;

@@ -20,7 +20,14 @@ const WebView: React.FC<Props> = ({ src, title, onError, onMessage, onLoad }) =>
 	});
 
 	return (
-		<iframe title={title} src={src} onLoad={onLoad} onError={onError} width="100%" height="100%" />
+		<iframe
+			title={title}
+			src="https://dev.local/wp/latest/wp-admin/"
+			onLoad={onLoad}
+			onError={onError}
+			width="100%"
+			height="100%"
+		/>
 	);
 };
 

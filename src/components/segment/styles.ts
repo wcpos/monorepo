@@ -2,7 +2,7 @@ import styled, { css } from 'styled-components/native';
 import Platform from '@wcpos/common/src/lib/platform';
 
 type ISegmentProps = import('./segment').ISegmentProps;
-type SegmentProps = Pick<ISegmentProps, 'raised' | 'group' | 'grow'>;
+type SegmentProps = Pick<ISegmentProps, 'raised' | 'group' | 'grow' | 'type'>;
 
 export const Segment = styled.View<SegmentProps>`
 	background: ${({ theme }) => theme.SEGMENT_BACKGROUND_COLOR};

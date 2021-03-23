@@ -1,16 +1,13 @@
 import styled from 'styled-components/native';
 import { StyleSheet } from 'react-native';
 
-type ThemeProps = { theme: import('../../lib/theme').ThemeProps };
 type ButtonProps = import('./button').Props;
-type BackgroundProps = ThemeProps &
-	Pick<ButtonProps, 'background' | 'type' | 'disabled'> & {
-		pressed: boolean;
-	};
+type BackgroundProps = Pick<ButtonProps, 'background' | 'type' | 'disabled'> & {
+	pressed: boolean;
+};
 
 export const Background = styled.View<BackgroundProps>`
 	background-color: ${({ background, type, theme, pressed }) => {
-		console.log(theme);
 		if (background === 'clear' || background === 'outline') {
 			return 'transparent';
 		}
@@ -62,6 +59,6 @@ export const Background = styled.View<BackgroundProps>`
 	flex-direction: row;
 `;
 
-type GroupProps = ThemeProps & import('./group').Props;
+type GroupProps = import('./group').Props;
 
 export const Group = styled.View<GroupProps>``;

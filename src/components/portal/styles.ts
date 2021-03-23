@@ -1,8 +1,6 @@
 import styled from 'styled-components/native';
 
-type ThemeProps = import('../../lib/theme').ThemeProps;
-
-export const StyledManagerView = styled.View<{ theme: ThemeProps }>`
+export const StyledManagerView = styled.View`
 	position: absolute;
 	left: 0;
 	right: 0;
@@ -11,6 +9,6 @@ export const StyledManagerView = styled.View<{ theme: ThemeProps }>`
 	height: 100%;
 `;
 
-export const StyledHostView = styled.View<{ theme: ThemeProps }>`
+export const StyledHostView = styled.View`
 	flex: 1;
 `;

@@ -1,9 +1,7 @@
 import styled from 'styled-components/native';
 
-type ThemeProps = import('../../lib/theme').ThemeProps;
-
 // eslint-disable-next-line import/prefer-default-export
-export const Dimmer = styled.View<{ theme: ThemeProps }>`
+export const Dimmer = styled.View`
 	position: absolute;
 	top: 0;
 	left: 0;
