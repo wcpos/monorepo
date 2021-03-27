@@ -4,7 +4,8 @@ import Url from '@wcpos/common/src/lib/url-parse';
 
 type SiteDocument = import('./sites').SiteDocument;
 
-const namespace = 'wc/v3';
+const wcNamespace = 'wc/v3';
+const wcposNamespace = 'wcpos/v1';
 
 const parseApiUrlFromHeaders = (headers: { link: string }) => {
 	const link = headers?.link;
@@ -67,7 +68,8 @@ export class ConnectionService {
 	 * @param url WordPress URL
 	 */
 	async _fetchHead(): Promise<any> {
-		return this.client.head(`https://${this.site.url}`).then((response) => {
+		const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
+		return this.client.head(`${protocol}://${this.site.url}`).then((response) => {
 			const wpApiUrl = parseApiUrlFromHeaders(response.headers);
 			if (wpApiUrl) {
 				this._subjects.status.next('WordPress website found');
@@ -85,20 +87,23 @@ export class ConnectionService {
 		return (
 			this.site.wpApiUrl &&
 			this.client.get(this.site.wpApiUrl).then((response) => {
-				const namespaces = response?.data?.namespaces;
-				if (namespaces && namespaces.includes(namespace)) {
-					const baseAuthUrl = response?.data?.authentication?.wcpos?.authorize;
-					if (baseAuthUrl) {
-						return this.site.atomicPatch({
-							...response.data,
-							wcApiUrl: `${this.site.wpApiUrl + namespace}/`, // enforce trailing slash
-							wcApiAuthUrl: baseAuthUrl,
-						});
-					}
-					throw Error('WooCommerce POS not found');
-				} else {
-					throw Error('WooCommerce not found');
+				const namespaces: string[] = response?.data?.namespaces || [];
+				if (!namespaces.includes(wcNamespace)) {
+					throw Error('WooCommerce API not found');
+				} else if (!namespaces.includes(wcposNamespace)) {
+					throw Error('WooCommerce POS API not found');
 				}
+				return this.site.atomicPatch({
+					...response.data,
+				});
+				// const baseAuthUrl = response?.data?.authentication?.wcpos?.authorize;
+				// if (baseAuthUrl) {
+				// 	return this.site.atomicPatch({
+				// 		...response.data,
+				// 		wcApiUrl: `${this.site.wpApiUrl + namespace}/`, // enforce trailing slash
+				// 		wcApiAuthUrl: baseAuthUrl,
+				// 	});
+				// }
 			})
 		);
 	}

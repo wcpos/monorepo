@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { action } from '@storybook/addon-actions';
 import { Icon } from './icon';
 import svgs from './svg';
 import Table from '../table';
@@ -32,12 +33,12 @@ export const basicUsage = ({ name, disabled, size }: IIconProps) => (
 	/>
 );
 
-export const allIcons = () => (
-	<Table
-		columns={[
-			{ key: 'name', label: 'Name', cellDataGetter: ({ rowData }) => rowData },
-			{ key: 'icon', label: 'Icon', cellRenderer: ({ rowData }) => <Icon name={rowData} /> },
-		]}
-		data={iconNames}
+export const pressableIcon = ({ name, disabled, size }: IIconProps) => (
+	<Icon
+		name={name}
+		// loading={loading}
+		disabled={disabled}
+		size={size}
+		onPress={action('onPress')}
 	/>
 );

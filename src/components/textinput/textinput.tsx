@@ -8,7 +8,7 @@ import Icon from '../icon';
 import Portal from '../portal';
 import useMeasure from '../../hooks/use-measure';
 
-export type Props = import('react-native').TextInputProps & {
+export type ITextInputProps = import('react-native').TextInputProps & {
 	autosize?: boolean;
 	disabled?: boolean;
 	action?: string;
@@ -31,8 +31,7 @@ const TextInput = ({
 	onClear = noop,
 	prefix,
 	value = '',
-	...props
-}: Props) => {
+}: ITextInputProps) => {
 	const [text, setText] = React.useState(value);
 
 	const handleChangeText = (val: string) => {
@@ -50,13 +49,14 @@ const TextInput = ({
 
 	return (
 		<Styled.Box>
-			<Styled.Input
-				defaultValue={text}
+			<Styled.TextInput
+				// defaultValue={text}
 				placeholder={placeholder}
 				disabled={disabled}
 				onChangeText={handleChangeText}
+				value={text}
 			/>
-			{clearable && <Icon name="clear" />}
+			{clearable && text && <Icon name="clear" onPress={handleClear} />}
 			{action && (
 				<Button
 					title={action}

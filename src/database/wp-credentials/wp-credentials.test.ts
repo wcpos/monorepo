@@ -15,7 +15,7 @@ describe('Logs Collection', () => {
 		const userDoc = await db.users.insert({ displayName: 'John' });
 		expect(isRxDocument(userDoc)).toBe(true);
 		expect(userDoc).toMatchObject({
-			localId: expect.any(String),
+			_id: expect.any(String),
 			displayName: 'John',
 		});
 	});

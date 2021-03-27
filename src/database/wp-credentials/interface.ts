@@ -18,6 +18,7 @@ export interface WPCredentialsSchema {
   lastAccess?: string;
   consumerKey?: string;
   consumerSecret?: string;
+  jwt?: string;
   keyId?: number;
   keyPermissions?: string;
   stores?: string[];

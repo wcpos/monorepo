@@ -31,6 +31,9 @@
 		"consumerSecret": {
 			"type": "string"
 		},
+		"jwt": {
+			"type": "string"
+		},
 		"keyId": {
 			"type": "number"
 		},
@@ -45,5 +48,5 @@
 			}
 		}
 	},
-	"enrypted": ["consumerSecret"]
+	"enrypted": ["consumerSecret", "jwt"]
 }

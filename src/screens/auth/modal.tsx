@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform } from 'react-native';
+import Platform from '@wcpos/common/src/lib/platform';
 import Modal from '@wcpos/common/src/components/modal';
 import Button from '@wcpos/common/src/components/button';
 import Url from '@wcpos/common/src/lib/url-parse';

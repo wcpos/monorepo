@@ -5,7 +5,7 @@ import Text from '@wcpos/common/src/components/text';
 import Icon from '@wcpos/common/src/components/icon';
 import Button from '@wcpos/common/src/components/button';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import Modal from './modal';
+import Modal from './login-modal';
 import { SiteWrapper, SiteTextWrapper } from './styles';
 
 type SiteDocument = import('@wcpos/common/src/database/sites').SiteDocument;
