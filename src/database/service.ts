@@ -1,16 +1,17 @@
 import { createRxDatabase, addRxPlugin, checkAdapter, isRxDatabase } from 'rxdb/plugins/core';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
-// import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
+import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
 import collectionsHelper from 'rxdb-utils/dist/collections';
 import { RxDBAdapterCheckPlugin } from 'rxdb/plugins/adapter-check';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
-import { RxDBNoValidatePlugin } from 'rxdb/plugins/no-validate';
+// import { RxDBNoValidatePlugin } from 'rxdb/plugins/no-validate';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import forEach from 'lodash/forEach';
 import isFunction from 'lodash/isFunction';
 import camelCase from 'lodash/camelCase';
 import set from 'lodash/set';
+import get from 'lodash/get';
 import unset from 'lodash/unset';
 import Platform from '@wcpos/common/src/lib/platform';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
@@ -40,7 +41,8 @@ if (process.env.NODE_ENV === 'development') {
 addRxPlugin(collectionsHelper);
 addRxPlugin(RxDBAdapterCheckPlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
-addRxPlugin(RxDBNoValidatePlugin);
+// addRxPlugin(RxDBNoValidatePlugin);
+addRxPlugin(RxDBValidatePlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
@@ -51,17 +53,15 @@ addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
  */
 const parsePlainData = (plainData: Record<string, unknown>) => {
 	/**
-	 * add dateCreatedGmt to plain data
+	 * convert all plainData properties to camelCase
 	 */
-	if (!plainData.dateCreatedGmt) plainData.dateCreatedGmt = Date.now();
-
-	/**
-	 * data with leading underscore will throw error from rxdb
-	 */
-	if (plainData._links) {
-		plainData.links = plainData._links;
-		unset(plainData, '_links');
-	}
+	forEach(plainData, (data, key) => {
+		const privateProperties = ['_id', '_attachments', '_rev'];
+		if (!privateProperties.includes(key) && key.includes('_')) {
+			plainData[camelCase(key)] = data;
+			unset(plainData, key);
+		}
+	});
 };
 
 /**
@@ -109,6 +109,7 @@ export async function _createUsersDB() {
 		users,
 		// @ts-ignore
 		sites,
+		// @ts-ignore
 		wp_credentials,
 		stores,
 	});
@@ -132,6 +133,8 @@ export async function _createUsersDB() {
 		}, false);
 
 		collection.preSave((plainData: Record<string, unknown>, rxDocument) => {
+			const schema = get(rxDocument, 'collection.schema.topLevelFields');
+			console.log(schema);
 			parsePlainData(plainData);
 		}, false);
 	});
@@ -195,6 +198,11 @@ export async function _createStoresDB(name: string) {
 
 		collection.preSave((plainData: Record<string, unknown>, rxDocument) => {
 			parsePlainData(plainData);
+
+			/**
+			 * add dateCreatedGmt to plain data
+			 */
+			if (!plainData.dateCreatedGmt) plainData.dateCreatedGmt = Date.now();
 		}, false);
 	});
 
