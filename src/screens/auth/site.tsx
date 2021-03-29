@@ -1,5 +1,7 @@
 import * as React from 'react';
+import { tap, switchMap, map } from 'rxjs/operators';
 import { useObservableState } from 'observable-hooks';
+import get from 'lodash/get';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Text from '@wcpos/common/src/components/text';
 import Icon from '@wcpos/common/src/components/icon';
@@ -10,6 +12,7 @@ import { SiteWrapper, SiteTextWrapper } from './styles';
 
 type SiteDocument = import('@wcpos/common/src/database/sites').SiteDocument;
 type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
+type WPCredentialsDocument = import('@wcpos/common/src/database/wp-credentials').WPCredentialsDocument;
 
 interface ISiteProps {
 	site: SiteDocument;
@@ -28,6 +31,18 @@ const Site = ({ site, user }: ISiteProps) => {
 	const error = useObservableState(site.connection.error$) as string;
 	const name = useObservableState(site.name$) as string;
 	const [visible, setVisible] = React.useState(false);
+
+	const connectedWpUsers = useObservableState(
+		site.wpCredentials$.pipe(
+			switchMap((ids) => {
+				const wpCredentialsCollection = get(site, 'collection.database.collections.wp_credentials');
+				return wpCredentialsCollection.findByIds$(ids);
+			}),
+			// @ts-ignore
+			map((wpCredentialsMap) => Array.from(wpCredentialsMap.values()))
+		),
+		[]
+	) as [];
 
 	const selectStore = async (): Promise<void> => {
 		// const storeDB = await user.getStoreDB(site.wp_credentials[0].stores[0].id);
@@ -59,16 +74,17 @@ const Site = ({ site, user }: ISiteProps) => {
 						setVisible(true);
 					}}
 				/>
-
-				{/* {site.wp_credentials?.length > 0 && <Button title="Enter" onPress={() => selectStore()} />}
-				{site.wc_api_auth_url && site.wp_credentials?.length === 0 && (
-					<Button
-						title="Login"
-						onPress={() => {
-							setVisible(true);
-						}}
-					/>
-				)} */}
+				{connectedWpUsers.map((connectedWpUser: WPCredentialsDocument) => {
+					return (
+						<Button
+							title={connectedWpUser.email}
+							onPress={() => {
+								// set wpUser and dummy store for now
+								console.log(connectedWpUser);
+							}}
+						/>
+					);
+				})}
 			</SiteTextWrapper>
 			<Button onPress={handleRemove}>
 				<Icon name="remove" />

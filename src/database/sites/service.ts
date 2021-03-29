@@ -93,8 +93,13 @@ export class ConnectionService {
 				} else if (!namespaces.includes(wcposNamespace)) {
 					throw Error('WooCommerce POS API not found');
 				}
+
 				return this.site.atomicPatch({
-					...response.data,
+					name: response.data.name,
+					url: response.data.url,
+					home: response.data.home,
+					gmtOffset: response.data.gmtOffset,
+					timezoneString: response.data.timezoneString,
 				});
 				// const baseAuthUrl = response?.data?.authentication?.wcpos?.authorize;
 				// if (baseAuthUrl) {

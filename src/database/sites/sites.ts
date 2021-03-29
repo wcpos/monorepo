@@ -31,6 +31,17 @@ const methods: SiteMethods = {
 			'collection.database.collections.wp_credentials'
 		);
 
+		const parsedData = {
+			id: data.id,
+			username: data.username,
+			displayName: data.display_name,
+			email: data.email,
+			firstName: data.firstname,
+			lastName: data.lastname,
+			jwt: data.jwt,
+			// nicename: data.nicename,
+		};
+
 		try {
 			const wpUser = await wpCredentialsCollection
 				.findOne({
@@ -40,10 +51,10 @@ const methods: SiteMethods = {
 
 			if (wpUser) {
 				// @ts-ignore
-				return wpUser.atomicPatch(data);
+				return wpUser.atomicPatch(parsedData);
 			}
 			// @ts-ignore
-			const newWpUser = wpCredentialsCollection.insert(data);
+			const newWpUser = await wpCredentialsCollection.insert(parsedData);
 			await this.atomicUpdate((oldData) => {
 				oldData.wpCredentials = oldData.wpCredentials || [];
 				// @ts-ignore
