@@ -52,7 +52,7 @@ const Auth = () => {
 					<Segment.Group style={{ width: '90%', maxWidth: 460, height: 'auto' }}>
 						{/* <Segment content="Sites" /> */}
 						{sites.map((site) => (
-							<Segment key={site.localId}>
+							<Segment key={site._id}>
 								<Site site={site} user={user} />
 							</Segment>
 						))}

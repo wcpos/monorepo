@@ -2,6 +2,7 @@ import * as React from 'react';
 import { tap, switchMap, map } from 'rxjs/operators';
 import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
+import isEmpty from 'lodash/isEmpty';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Text from '@wcpos/common/src/components/text';
 import Icon from '@wcpos/common/src/components/icon';
@@ -31,12 +32,13 @@ const Site = ({ site, user }: ISiteProps) => {
 	const error = useObservableState(site.connection.error$) as string;
 	const name = useObservableState(site.name$) as string;
 	const [visible, setVisible] = React.useState(false);
+	const { setStoreDB } = useAppState();
 
 	const connectedWpUsers = useObservableState(
 		site.wpCredentials$.pipe(
 			switchMap((ids) => {
 				const wpCredentialsCollection = get(site, 'collection.database.collections.wp_credentials');
-				return wpCredentialsCollection.findByIds$(ids);
+				return wpCredentialsCollection.findByIds$(ids || []);
 			}),
 			// @ts-ignore
 			map((wpCredentialsMap) => Array.from(wpCredentialsMap.values()))
@@ -44,12 +46,18 @@ const Site = ({ site, user }: ISiteProps) => {
 		[]
 	) as [];
 
-	const selectStore = async (): Promise<void> => {
-		// const storeDB = await user.getStoreDB(site.wp_credentials[0].stores[0].id);
-		// dispatch({
-		// 	type: actions.SET_STORE,
-		// 	payload: { storeDB, storePath: `1.sites.${index}.wp_credentials.0.stores.0` },
-		// });
+	const selectStore = async (wpUser: WPCredentialsDocument): Promise<void> => {
+		let store;
+		// hack: set a default store if none exits
+		if (isEmpty(wpUser.stores)) {
+			const storesCollection = get(wpUser, 'collection.database.collections.stores');
+			// @ts-ignore
+			store = await storesCollection.insert({ id: 0, name: 'Default Store' });
+			wpUser.atomicPatch({ stores: [store._id] });
+		} else {
+			[store] = await wpUser.populate('stores');
+		}
+		setStoreDB(store._id);
 	};
 
 	const handleRemove = async () => {
@@ -77,10 +85,10 @@ const Site = ({ site, user }: ISiteProps) => {
 				{connectedWpUsers.map((connectedWpUser: WPCredentialsDocument) => {
 					return (
 						<Button
-							title={connectedWpUser.email}
+							key={connectedWpUser._id}
+							title={connectedWpUser.displayName}
 							onPress={() => {
-								// set wpUser and dummy store for now
-								console.log(connectedWpUser);
+								selectStore(connectedWpUser);
 							}}
 						/>
 					);

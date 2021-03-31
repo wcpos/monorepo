@@ -5,6 +5,7 @@ import useScreenSize from '../use-screen-size';
 import useOnline from '../use-online';
 import useUser from '../use-user';
 import { getUniqueId, getReadableVersion } from './device-info';
+import useStoreDB from '../use-store';
 
 type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
 type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
@@ -21,6 +22,7 @@ export interface IAppStateProps {
 	setUser: React.Dispatch<React.SetStateAction<UserDocument | undefined>>;
 	userDB: UserDatabase;
 	storeDB?: StoreDatabase;
+	setStoreDB: (id: string | StoreDatabase) => Promise<void>;
 }
 
 export const AppStateContext = React.createContext<unknown>({}) as React.Context<IAppStateProps>;
@@ -44,6 +46,7 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 	const online = useOnline();
 	const { user, setUser, userDB } = useUser();
 	const theme = getTheme('default', 'dark');
+	const { storeDB, setStoreDB } = useStoreDB();
 
 	const value = {
 		info,
@@ -52,7 +55,8 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 		user,
 		setUser,
 		userDB,
-		storeDB: undefined,
+		storeDB,
+		setStoreDB,
 	} as IAppStateProps;
 	console.log(value);
 
