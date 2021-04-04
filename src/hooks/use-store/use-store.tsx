@@ -5,8 +5,36 @@ import DatabaseService from '@wcpos/common/src/database';
 
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
+/**
+ *
+ * @param id
+ * @returns
+ */
+async function getStoreDBById(id: string) {
+	return DatabaseService.getStoreDB(`store_${id.replace(':', '_')}`);
+}
+
+/**
+ *
+ * @returns
+ */
 export function useStore() {
 	const [storeDB, _setStoreDB] = React.useState<StoreDatabase>();
+
+	React.useEffect(() => {
+		(async function init() {
+			const userDB = await DatabaseService.getUserDB();
+			const lastStore = await userDB.users.getLocal('lastStore');
+
+			if (lastStore) {
+				// restore the last storeDB
+				const db = await getStoreDBById(lastStore.get('id'));
+				if (db) {
+					_setStoreDB(db);
+				}
+			}
+		})();
+	}, []);
 
 	async function setStoreDB(id: string | StoreDatabase) {
 		/**
@@ -20,9 +48,10 @@ export function useStore() {
 		 * else if store id has been passed
 		 */
 		if (isString(id)) {
-			const parsedId = `store_${id.replace(':', '_')}`;
-			const db = await DatabaseService.getStoreDB(parsedId);
+			const db = await getStoreDBById(id);
 			if (db) {
+				const userDB = await DatabaseService.getUserDB();
+				await userDB.users.upsertLocal('lastStore', { id });
 				_setStoreDB(db);
 			}
 		}
