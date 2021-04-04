@@ -18,9 +18,9 @@ export interface IAppStateProps {
 	};
 	online: boolean;
 	screen: import('react-native').ScaledSize;
-	user: UserDocument;
+	user?: UserDocument;
 	setUser: React.Dispatch<React.SetStateAction<UserDocument | undefined>>;
-	userDB: UserDatabase;
+	userDB?: UserDatabase;
 	storeDB?: StoreDatabase;
 	setStoreDB: (id: string | StoreDatabase) => Promise<void>;
 }
@@ -57,7 +57,7 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 		userDB,
 		storeDB,
 		setStoreDB,
-	} as IAppStateProps;
+	};
 	console.log(value);
 
 	return (

@@ -1,1 +1,1 @@
-export { default } from './use-ui';
+export { useUI as default } from './use-ui';

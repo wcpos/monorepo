@@ -1,44 +1,45 @@
-import { Q } from '@nozbe/watermelondb';
-import { filter, map, tap } from 'rxjs/operators';
+// import * as React from 'react';
+import { tap, filter } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
 import useAppState from '../use-app-state';
+import initialUI from './ui-initial.json';
 
-type Section = 'pos_products' | 'pos_cart' | 'products';
-type UI = typeof import('../../database/models/store/ui/ui');
+type UIKeys = 'posProducts' | 'posCart';
+type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
+type UIDocument = Record<string, unknown>;
+type UIResource = import('observable-hooks').ObservableResource<UIDocument>;
+
+interface IUIResources {
+	posProducts?: UIResource;
+	posCart?: UIResource;
+}
+
+const uiResources: IUIResources = {
+	posProducts: undefined,
+	posCart: undefined,
+};
 
 /**
  *
- * @param section
+ * @param key
  */
-const useUI = (section: Section): ObservableResource<UI> => {
-	const [{ storeDB }] = useAppState();
-	const uiCollection = storeDB.collections.get('uis');
+export const useUI = (key: UIKeys): UIResource => {
+	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
 
-	const init = async () => {
-		await storeDB.action(async () => {
-			const newUI = await uiCollection.create((ui: UI) => {
-				ui.section = section;
-			});
-			newUI.reset();
-		});
-	};
+	if (uiResources[key]) {
+		return uiResources[key] as UIResource;
+	}
 
-	const ui$ = uiCollection
-		.query(Q.where('section', section))
-		.observeWithColumns(['width', 'sortBy', 'sortDirection'])
-		.pipe(
-			filter((uis: UI[]) => {
-				if (uis.length > 0) {
-					return true;
-				}
-				init();
+	const ui$ = storeDB.getLocal$(`ui${key}`).pipe(
+		filter((uiDoc) => {
+			if (!uiDoc && initialUI[key]) {
+				storeDB.insertLocal(`ui${key}`, initialUI[key]);
 				return false;
-			}),
-			map((uis: UI[]) => uis[0]),
-			tap((result) => console.log('UI found from useUI', result))
-		);
+			}
+			return uiDoc;
+		})
+	);
 
-	return new ObservableResource(ui$);
+	uiResources[key] = new ObservableResource(ui$);
+	return uiResources[key] as UIResource;
 };
-
-export default useUI;
