@@ -11,6 +11,7 @@ type ColumnProps = import('../../../../components/table/types').ColumnProps;
 type Sort = import('../../../../components/table/types').Sort;
 type SortDirection = import('../../../../components/table/types').SortDirection;
 type GetHeaderCellPropsFunction = import('../../../../components/table/header-row').GetHeaderCellPropsFunction;
+type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
 interface Props {
 	columns: any;
@@ -26,7 +27,7 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
  */
 const ProductsTable = ({ columns, display, query, sort }: Props) => {
 	const { t } = useTranslation();
-	const [{ storeDB }] = useAppState();
+	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
 
 	const products$ = useObservable(
 		// A stream of React elements!

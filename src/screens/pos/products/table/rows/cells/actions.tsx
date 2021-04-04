@@ -1,26 +1,27 @@
 import * as React from 'react';
-import Button from '../../../../../../components/button';
-import Popover from '../../../../../../components/popover';
+import Button from '@wcpos/common/src/components/button';
+import Popover from '@wcpos/common/src/components/popover';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Variations from './variations';
-import useAppState from '../../../../../../hooks/use-app-state';
 
 interface Props {
 	product: any;
 }
 
 const Actions: React.FC<Props> = ({ product }) => {
-	const [{ currentOrder, storeDB }] = useAppState();
+	const currentOrder = undefined;
+	const { storeDB } = useAppState();
 
 	const addToCart = async () => {
-		if (currentOrder) {
-			return currentOrder.addOrUpdateLineItem(product);
-		}
-		return storeDB.collections.orders.createNewOrder(product);
+		// if (currentOrder) {
+		// 	return currentOrder.addOrUpdateLineItem(product);
+		// }
+		// return storeDB.collections.orders.createNewOrder(product);
 	};
 
 	if (product.isVariable()) {
 		return (
-			<Popover content={<Variations product={product} addToCart={addToCart} />}>
+			<Popover content={<Variations product={product} />}>
 				<Button title="->" />
 			</Popover>
 		);

@@ -1,23 +1,27 @@
 import * as React from 'react';
 import { View, Text } from 'react-native';
-import { useObservable, useObservableState } from 'observable-hooks';
+import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
 import { from, of } from 'rxjs';
 import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
 // import { PanGestureHandler } from 'react-native-gesture-handler';
 // import { useAnimatedGestureHandler, useSharedValue } from 'react-native-reanimated';
-import Products from './products';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useUIResource from '@wcpos/common/src/hooks/use-ui';
+import ErrorBoundary from '@wcpos/common/src/components/error';
+import Draggable from '@wcpos/common/src/components/draggable';
 import Cart from './cart';
-import ErrorBoundary from '../../components/error';
-import Draggable from '../../components/draggable';
-import useAppState from '../../hooks/use-app-state';
+import Products from './products';
 import * as Styled from './styles';
 
-type OrderDocument = import('../../database').OrderTypes.OrderDocument;
+type OrderDocument = import('@wcpos/common/src/database/orders').OrderDocument;
+type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
 const POS = () => {
-	const [{ storeDB }] = useAppState();
-	const productsUI = storeDB.getUI('pos_products');
-	const cartUI = storeDB.getUI('pos_cart');
+	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
+	const productsUIResource = useUIResource('posProducts');
+	const cartUIResource = useUIResource('posCart');
+	const productsUI = useObservableSuspense(productsUIResource);
+	const cartUI = useObservableSuspense(cartUIResource);
 
 	// fetch order
 	// const orderQuery = storeDB.collections.orders.findOne();
@@ -26,11 +30,8 @@ const POS = () => {
 	// 	switchMap((order: any) => order.$.pipe(map(() => order))),
 	// 	tap((res) => console.log(res))
 	// );
-	const orderQuery = storeDB.collections.orders
-		.find()
-		.where('status')
-		.eq('pending')
-		.sort({ date_created_gmt: -1 });
+	const orderQuery = storeDB.collections.orders.find().where('status').eq('pending');
+	// .sort({ dateCreatedGmt: -1 });
 	const orders: OrderDocument[] | undefined = useObservableState(orderQuery.$);
 	// const order$ = orderQuery.$.pipe(
 	// 	filter((order: any) => order),
@@ -41,7 +42,8 @@ const POS = () => {
 	// 	tap((res) => console.log(res))
 	// );
 
-	const [width] = useObservableState(() => productsUI.get$('width'), productsUI.get('width'));
+	// const [width] = useObservableState(() => productsUI.get$('width'), productsUI.get('width'));
+	const width = '200';
 	console.log('render');
 	// const [width, setWidth] = React.useState(storeDB.ui.pos_products.width);
 	// const width = useObservableState(productsUI.width$);

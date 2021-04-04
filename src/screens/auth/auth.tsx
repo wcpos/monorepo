@@ -8,11 +8,14 @@ import Text from '@wcpos/common/src/components/text';
 import { AuthView } from './styles';
 import Site from './site';
 
+type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
+
 /**
  *
  */
 const Auth = () => {
-	const { user } = useAppState();
+	const { user } = useAppState() as { user: UserDocument };
+
 	// @ts-ignore
 	const [sites] = useObservableState(user.getSites_$);
 

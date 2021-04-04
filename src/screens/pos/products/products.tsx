@@ -24,7 +24,7 @@ interface IPOSProductsProps {
  */
 const Products = ({ ui }: IPOSProductsProps) => {
 	// const { t } = useTranslation();
-	const [{ user, storePath, storeDB }] = useAppState();
+	const { user, storeDB } = useAppState();
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const [display] = useObservableState(() => ui.get$('display'), ui.get('display'));
 
@@ -46,6 +46,7 @@ const Products = ({ ui }: IPOSProductsProps) => {
 	};
 
 	return (
+		// @ts-ignore
 		<Segment.Group>
 			<Segment>
 				<Input value={query.search} placeholder="Search products" onChangeText={onSearch} />
@@ -60,26 +61,18 @@ const Products = ({ ui }: IPOSProductsProps) => {
 				<Button
 					title="Add Products"
 					onPress={async () => {
-						const path = storePath.split('.');
-						const site = user.get(path.slice(1, 3).join('.'));
-						const wpCredentials = user.get(path.slice(1, 5).join('.'));
-
-						// const { data } = await http(`${site.wc_api_url}products`, {
+						// const path = storePath.split('.');
+						// const site = user.get(path.slice(1, 3).join('.'));
+						// const wpCredentials = user.get(path.slice(1, 5).join('.'));
+						// const replicationState = storeDB.products.syncRestApi({
+						// 	url: 'products',
 						// 	auth: {
 						// 		username: wpCredentials.consumer_key,
 						// 		password: wpCredentials.consumer_secret,
 						// 	},
+						// 	pull: {},
 						// });
-						// storeDB.collections.products.bulkInsert(data);
-						const replicationState = storeDB.products.syncRestApi({
-							url: 'products',
-							auth: {
-								username: wpCredentials.consumer_key,
-								password: wpCredentials.consumer_secret,
-							},
-							pull: {},
-						});
-						replicationState.run(false);
+						// replicationState.run(false);
 					}}
 				/>
 			</Segment>

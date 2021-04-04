@@ -13,10 +13,10 @@
 	"dependencies": {
 		"@react-native-community/masked-view": "0.1.10",
 		"@react-native-community/netinfo": "6.0.0",
-		"@react-navigation/drawer": "5.12.4",
-		"@react-navigation/native": "5.9.3",
-		"@react-navigation/stack": "5.14.3",
-		"@sentry/browser": "6.2.4",
+		"@react-navigation/drawer": "5.12.5",
+		"@react-navigation/native": "5.9.4",
+		"@react-navigation/stack": "5.14.4",
+		"@sentry/browser": "6.2.5",
 		"@sentry/electron": "2.4.0",
 		"@sentry/react-native": "2.4.0",
 		"@testing-library/jest-dom": "5.11.10",
@@ -46,10 +46,10 @@
 		"react-cache": "2.0.0-alpha.1",
 		"react-i18next": "11.8.12",
 		"react-native": "0.64.0",
-		"react-native-device-info": "8.0.7",
+		"react-native-device-info": "8.0.8",
 		"react-native-gesture-handler": "1.10.3",
 		"react-native-linear-gradient": "2.5.6",
-		"react-native-reanimated": "2.0.1",
+		"react-native-reanimated": "2.1.0",
 		"react-native-safe-area-context": "3.2.0",
 		"react-native-screens": "3.0.0",
 		"react-native-sqlite-2": "3.3.0",
@@ -62,7 +62,7 @@
 		"rxdb": "9.15.0",
 		"rxdb-utils": "2.0.0-beta.2",
 		"rxjs": "6.6.7",
-		"styled-components": "5.2.2",
+		"styled-components": "5.2.3",
 		"url-parse": "1.5.1"
 	}
 }

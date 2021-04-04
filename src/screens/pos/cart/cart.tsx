@@ -23,7 +23,8 @@ interface ICartProps {
 }
 
 const Cart = ({ ui, orders = [] }: ICartProps) => {
-	const [{ currentOrder, storeDB, storePath, user }, dispatch, actionTypes] = useAppState();
+	const { storeDB, user } = useAppState();
+	const currentOrder: unknown = null;
 
 	// const [order, setOrder] = React.useState<OrderDocument | undefined>(get(orders, '0'));
 	// const order: OrderDocument | undefined = useObservableState(get(orders, '0.$'));
@@ -35,15 +36,16 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 	});
 
 	const setCurrentOrder = (order?: OrderDocument) => {
-		dispatch({ type: actionTypes.SET_CURRENT_ORDER, payload: { currentOrder: order } });
+		// dispatch({ type: actionTypes.SET_CURRENT_ORDER, payload: { currentOrder: order } });
 	};
 
-	React.useEffect(() => {
-		setCurrentOrder(get(orders, '0'));
-	}, []);
+	// React.useEffect(() => {
+	// 	setCurrentOrder(get(orders, '0'));
+	// }, []);
 
 	if (!currentOrder) {
 		return (
+			// @ts-ignore
 			<Segment.Group>
 				<Segment>
 					<CustomerSelect />
@@ -64,6 +66,7 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 	};
 
 	return (
+		// @ts-ignore
 		<Segment.Group>
 			<Segment>
 				<CustomerSelect />
@@ -72,7 +75,12 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				</Popover>
 			</Segment>
 			<Segment grow>
-				<Table order={currentOrder} columns={columns} query={query} onSort={handleSort} />
+				<Table
+					order={currentOrder as OrderDocument}
+					columns={columns}
+					query={query}
+					onSort={handleSort}
+				/>
 			</Segment>
 			<Segment>
 				<Totals order={currentOrder} />
@@ -81,36 +89,31 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				<Button
 					title="Add Fee"
 					onPress={() => {
-						currentOrder.addFeeLine({ name: 'Fee', total: '10' });
+						(currentOrder as OrderDocument).addFeeLine({ name: 'Fee', total: '10' });
 					}}
 				/>
 				<Button
 					title="Add Shipping"
 					onPress={() => {
-						currentOrder.addShippingLine({ method_title: 'Shipping', total: '5' });
+						(currentOrder as OrderDocument).addShippingLine({
+							method_title: 'Shipping',
+							total: '5',
+						});
 					}}
 				/>
 				<Button
 					title="Save"
 					onPress={async () => {
-						const path = storePath.split('.');
-						const wpCredentials = user.get(path.slice(1, 5).join('.'));
-
-						// const { data } = await http(`${site.wc_api_url}products`, {
+						// const path = storePath.split('.');
+						// const wpCredentials = user.get(path.slice(1, 5).join('.'));
+						// const replicationState = currentOrder.syncRestApi({
 						// 	auth: {
 						// 		username: wpCredentials.consumer_key,
 						// 		password: wpCredentials.consumer_secret,
 						// 	},
+						// 	push: {},
 						// });
-						// storeDB.collections.products.bulkInsert(data);
-						const replicationState = currentOrder.syncRestApi({
-							auth: {
-								username: wpCredentials.consumer_key,
-								password: wpCredentials.consumer_secret,
-							},
-							push: {},
-						});
-						replicationState.run(false);
+						// replicationState.run(false);
 					}}
 				/>
 			</Segment>

@@ -1,17 +1,17 @@
 import * as React from 'react';
 import { View } from 'react-native';
-import Text from '../../../../../../components/text';
-import Button from '../../../../../../components/button';
-import useAppState from '../../../../../../hooks/use-app-state';
-import WcApiService from '../../../../../../services/wc-api';
+import Text from '@wcpos/common/src/components/text';
+import Button from '@wcpos/common/src/components/button';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import WcApiService from '@wcpos/common/src/services/wc-api';
 
 interface Props {
 	product: any;
-	addToCart: any;
+	// addToCart: any;
 }
 
 const Variations = ({ product }: Props) => {
-	const [{ user, storeDB, storePath }] = useAppState();
+	const { user, storeDB } = useAppState();
 	const [variations, setVariations] = React.useState([]);
 
 	const addToCart = async (variation: any) => {
@@ -19,26 +19,26 @@ const Variations = ({ product }: Props) => {
 		order.addOrUpdateLineItem(variation, product);
 	};
 
-	React.useEffect(() => {
-		(async () => {
-			const vars = await storeDB.collections.variations.findByIds(product.variations.map(String));
-			setVariations(Array.from(vars.values()));
-		})();
-	}, [product, storeDB.collections.variations]);
+	// React.useEffect(() => {
+	// 	(async () => {
+	// 		const vars = await storeDB.collections.variations.findByIds(product.variations.map(String));
+	// 		setVariations(Array.from(vars.values()));
+	// 	})();
+	// }, [product, storeDB.collections.variations]);
 
 	const fetchData = async (endpoint: string) => {
-		const path = storePath.split('.');
-		const site = user.get(path.slice(1, 3).join('.'));
-		const wpCredentials = user.get(path.slice(1, 5).join('.'));
-		const api = new WcApiService({
-			baseUrl: site.wc_api_url,
-			collection: endpoint,
-			key: wpCredentials.consumer_key,
-			secret: wpCredentials.consumer_secret,
-		});
-		const result = await api.fetch();
-		console.log(result);
-		storeDB.collections.variations.bulkInsert(result);
+		// const path = storePath.split('.');
+		// const site = user.get(path.slice(1, 3).join('.'));
+		// const wpCredentials = user.get(path.slice(1, 5).join('.'));
+		// const api = new WcApiService({
+		// 	baseUrl: site.wc_api_url,
+		// 	collection: endpoint,
+		// 	key: wpCredentials.consumer_key,
+		// 	secret: wpCredentials.consumer_secret,
+		// });
+		// const result = await api.fetch();
+		// console.log(result);
+		// storeDB.collections.variations.bulkInsert(result);
 	};
 
 	if (variations.length === 0) {

@@ -5,7 +5,7 @@ import AuthScreen from '@wcpos/common/src/screens/auth';
 import Text from '@wcpos/common/src/components/text';
 // import MainNavigator from './main';
 // const AuthScreen = React.lazy(() => import('../pages/auth'));
-// const MainNavigator = React.lazy(() => import('./main'));
+const MainNavigator = React.lazy(() => import('./main'));
 
 export type AppNavigatorParams = {
 	Auth: undefined;
@@ -21,7 +21,7 @@ const AppNavigator = (props: Partial<StackNavigatorProps>) => {
 	return (
 		<Stack.Navigator headerMode="none">
 			{storeDB ? (
-				<Stack.Screen name="Main" component={() => <Text>Main</Text>} />
+				<Stack.Screen name="Main" component={MainNavigator} />
 			) : (
 				<Stack.Screen name="Auth" component={AuthScreen} />
 			)}

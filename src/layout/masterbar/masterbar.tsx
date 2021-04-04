@@ -11,7 +11,7 @@ import Header from '../header';
 const MasterBar = () => {
 	const route = useRoute();
 	const navigation = useNavigation();
-	const appState = useAppState();
+	const { user, online, screen } = useAppState();
 
 	const openDrawer = React.useCallback(() => {
 		navigation.dispatch(DrawerActions.openDrawer());
@@ -24,11 +24,11 @@ const MasterBar = () => {
 			</Header.Left>
 			<Header.Title>{route.name}</Header.Title>
 			<Header.Right>
-				<Text type="inverse">{appState.online ? 'online' : 'offline'}</Text>
-				<Text type="inverse">{appState.screen.width}</Text>
+				<Text type="inverse">{online ? 'online' : 'offline'}</Text>
+				<Text type="inverse">{screen.width}</Text>
 			</Header.Right>
 			<Header.Right>
-				<Text>{appState.user.displayName}</Text>
+				<Text>{user?.displayName}</Text>
 				<Button
 					onPress={() => {
 						console.log('logout');
