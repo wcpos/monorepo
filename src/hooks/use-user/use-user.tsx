@@ -16,7 +16,7 @@ export function useUser() {
 
 			if (lastUser) {
 				// restore last user
-				const lastUserDoc = await userDB.users.findOne(lastUser.localId).exec();
+				const lastUserDoc = await userDB.users.findOne(lastUser.get('id')).exec();
 				if (lastUserDoc) {
 					return setUser(lastUserDoc);
 				}
@@ -28,12 +28,12 @@ export function useUser() {
 				// create new user
 				// @ts-ignore
 				const newUserDoc = await userDB.users.insert({ displayName: 'Test' });
-				await userDB.users.upsertLocal('lastUser', { localId: newUserDoc.localId });
+				await userDB.users.upsertLocal('lastUser', { id: newUserDoc._id });
 				return setUser(newUserDoc);
 			}
 
 			// else?? set the first found user
-			await userDB.users.upsertLocal('lastUser', { localId: users[0].localId });
+			await userDB.users.upsertLocal('lastUser', { id: users[0]._id });
 			return setUser(users[0]);
 		})();
 	}, []);
