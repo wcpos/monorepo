@@ -21,13 +21,15 @@ async function getStoreDBById(id: string) {
 export function useStore() {
 	const [storeDB, _setStoreDB] = React.useState<StoreDatabase>();
 
+	/**
+	 * run effect once to get the stored Store ID
+	 */
 	React.useEffect(() => {
 		(async function init() {
 			const userDB = await DatabaseService.getUserDB();
 			const lastStore = await userDB.users.getLocal('lastStore');
 
-			if (lastStore) {
-				// restore the last storeDB
+			if (lastStore?.get('id')) {
 				const db = await getStoreDBById(lastStore.get('id'));
 				if (db) {
 					_setStoreDB(db);
@@ -36,24 +38,18 @@ export function useStore() {
 		})();
 	}, []);
 
-	async function setStoreDB(id: string | StoreDatabase) {
-		/**
-		 * if store database has been passed as arg
-		 */
-		if (isRxDatabase(id)) {
-			_setStoreDB(id as StoreDatabase);
-		}
-
-		/**
-		 * else if store id has been passed
-		 */
-		if (isString(id)) {
+	/**
+	 * when user enters a Store
+	 */
+	async function setStoreDB(id?: string) {
+		const userDB = await DatabaseService.getUserDB();
+		if (id) {
 			const db = await getStoreDBById(id);
-			if (db) {
-				const userDB = await DatabaseService.getUserDB();
-				await userDB.users.upsertLocal('lastStore', { id });
-				_setStoreDB(db);
-			}
+			await userDB.users.upsertLocal('lastStore', { id });
+			_setStoreDB(db);
+		} else {
+			await userDB.users.upsertLocal('lastStore', { id: undefined });
+			_setStoreDB(undefined);
 		}
 	}
 

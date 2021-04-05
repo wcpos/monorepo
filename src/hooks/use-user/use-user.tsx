@@ -6,9 +6,15 @@ type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
 
 let userDB: UserDatabase;
 
+/**
+ *
+ */
 export function useUser() {
 	const [user, setUser] = React.useState<UserDocument>();
 
+	/**
+	 * run effect once to set the User ID
+	 */
 	React.useEffect(() => {
 		(async function init() {
 			userDB = await DatabaseService.getUserDB();
