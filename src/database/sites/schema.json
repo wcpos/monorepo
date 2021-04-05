@@ -33,7 +33,7 @@
 		},
 		"wpCredentials": {
 			"type": "array",
-			"ref": "wpcredentials",
+			"ref": "wp_credentials",
 			"items": {
 				"type": "string"
 			}

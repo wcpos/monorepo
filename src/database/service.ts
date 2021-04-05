@@ -214,9 +214,9 @@ export async function _createStoresDB(name: string) {
  */
 export interface IDatabaseService {
 	USER_DB_CREATE_PROMISE: Promise<UserDatabase>;
-	STORE_DB_CREATE_PROMISE: Promise<StoreDatabase | null>;
+	STORE_DB_CREATE_PROMISE: Promise<StoreDatabase | undefined>;
 	getUserDB: () => Promise<UserDatabase>;
-	getStoreDB: (name: string) => Promise<StoreDatabase | null>;
+	getStoreDB: (name: string) => Promise<StoreDatabase | undefined>;
 }
 
 /**
@@ -224,7 +224,7 @@ export interface IDatabaseService {
  */
 const DatabaseService: IDatabaseService = {
 	USER_DB_CREATE_PROMISE: _createUsersDB(),
-	STORE_DB_CREATE_PROMISE: Promise.resolve(null),
+	STORE_DB_CREATE_PROMISE: Promise.resolve(undefined),
 
 	async getUserDB() {
 		return this.USER_DB_CREATE_PROMISE;
