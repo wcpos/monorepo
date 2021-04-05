@@ -34,17 +34,27 @@ const Site = ({ site, user }: ISiteProps) => {
 	const [visible, setVisible] = React.useState(false);
 	const { setStoreDB } = useAppState();
 
-	const connectedWpUsers = useObservableState(
-		site.wpCredentials$.pipe(
-			switchMap((ids) => {
-				const wpCredentialsCollection = get(site, 'collection.database.collections.wp_credentials');
-				return wpCredentialsCollection.findByIds$(ids || []);
-			}),
-			// @ts-ignore
-			map((wpCredentialsMap) => Array.from(wpCredentialsMap.values()))
-		),
+	const [connectedWpUsers] = useObservableState(
+		() =>
+			site.wpCredentials$.pipe(
+				switchMap((ids) => {
+					const wpCredentialsCollection = get(
+						site,
+						'collection.database.collections.wp_credentials'
+					);
+					return wpCredentialsCollection.findByIds$(ids || []);
+				}),
+				// @ts-ignore
+				map((wpCredentialsMap) => Array.from(wpCredentialsMap.values())),
+				tap((res) => {
+					console.log('@TODO - fix these unnecessary re-renders');
+				})
+			),
 		[]
-	) as [];
+	);
+
+	// const connectedWpUsers: [] = [];
+	// debugger;
 
 	const selectStore = async (wpUser: WPCredentialsDocument): Promise<void> => {
 		let store;

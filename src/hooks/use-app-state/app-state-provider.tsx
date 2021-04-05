@@ -22,7 +22,7 @@ export interface IAppStateProps {
 	setUser: React.Dispatch<React.SetStateAction<UserDocument | undefined>>;
 	userDB?: UserDatabase;
 	storeDB?: StoreDatabase;
-	setStoreDB: (id: string | StoreDatabase) => Promise<void>;
+	setStoreDB: (id?: string) => Promise<void>;
 }
 
 export const AppStateContext = React.createContext<unknown>({}) as React.Context<IAppStateProps>;

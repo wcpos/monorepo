@@ -11,7 +11,7 @@ import Header from '../header';
 const MasterBar = () => {
 	const route = useRoute();
 	const navigation = useNavigation();
-	const { user, online, screen } = useAppState();
+	const { user, online, screen, setStoreDB } = useAppState();
 
 	const openDrawer = React.useCallback(() => {
 		navigation.dispatch(DrawerActions.openDrawer());
@@ -30,8 +30,8 @@ const MasterBar = () => {
 			<Header.Right>
 				<Text>{user?.displayName}</Text>
 				<Button
-					onPress={() => {
-						console.log('logout');
+					onPress={async () => {
+						await setStoreDB();
 					}}
 					title="Logout"
 				/>

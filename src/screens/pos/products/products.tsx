@@ -3,17 +3,18 @@ import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { switchMap } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
-import Segment from '../../../components/segment';
-import Input from '../../../components/textinput';
-import Popover from '../../../components/popover';
-import Table from './table';
+import Segment from '@wcpos/common/src/components/segment';
+import Input from '@wcpos/common/src/components/textinput';
+import Popover from '@wcpos/common/src/components/popover';
+import Text from '@wcpos/common/src/components/text';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import Button from '@wcpos/common/src/components/button';
 import Actions from './actions';
-import Text from '../../../components/text';
-import useAppState from '../../../hooks/use-app-state';
-import Button from '../../../components/button';
-import http from '../../../lib/http';
+import Table from './table';
 
-type Sort = import('../../../components/table/types').Sort;
+type Sort = import('@wcpos/common/src/components/table/types').Sort;
+type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
+type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
 
 interface IPOSProductsProps {
 	ui: any;
@@ -24,7 +25,7 @@ interface IPOSProductsProps {
  */
 const Products = ({ ui }: IPOSProductsProps) => {
 	// const { t } = useTranslation();
-	const { user, storeDB } = useAppState();
+	const { user, storeDB } = useAppState() as { user: UserDocument; storeDB: StoreDatabase };
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const [display] = useObservableState(() => ui.get$('display'), ui.get('display'));
 
@@ -61,18 +62,16 @@ const Products = ({ ui }: IPOSProductsProps) => {
 				<Button
 					title="Add Products"
 					onPress={async () => {
-						// const path = storePath.split('.');
-						// const site = user.get(path.slice(1, 3).join('.'));
-						// const wpCredentials = user.get(path.slice(1, 5).join('.'));
-						// const replicationState = storeDB.products.syncRestApi({
-						// 	url: 'products',
-						// 	auth: {
-						// 		username: wpCredentials.consumer_key,
-						// 		password: wpCredentials.consumer_secret,
-						// 	},
-						// 	pull: {},
-						// });
-						// replicationState.run(false);
+						// get url
+						const sites = await user.populate('sites');
+						const wpUsers = await sites[0].populate('wpCredentials');
+
+						// @ts-ignore
+						const replicationState = storeDB.products.syncRestApi({
+							url: 'products',
+							pull: {},
+						});
+						replicationState.run(false);
 					}}
 				/>
 			</Segment>
