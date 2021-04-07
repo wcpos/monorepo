@@ -12,6 +12,7 @@ type WPCredentialsDocument = import('../wp-credentials').WPCredentialsDocument;
 interface SiteMethods {
 	connect: () => Promise<any>;
 	addOrUpdateWpCredentials: (data: Record<string, unknown>) => Promise<WPCredentialsDocument>;
+	getWcApiUrl: () => string;
 }
 
 const methods: SiteMethods = {
@@ -66,6 +67,13 @@ const methods: SiteMethods = {
 		} catch (error) {
 			throw Error(error);
 		}
+	},
+
+	/**
+	 *
+	 */
+	getWcApiUrl(this: SiteDocument) {
+		return `${this.wpApiUrl}wc/v3`;
 	},
 };
 

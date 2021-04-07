@@ -62,10 +62,6 @@ const Products = ({ ui }: IPOSProductsProps) => {
 				<Button
 					title="Add Products"
 					onPress={async () => {
-						// get url
-						const sites = await user.populate('sites');
-						const wpUsers = await sites[0].populate('wpCredentials');
-
 						// @ts-ignore
 						const replicationState = storeDB.products.syncRestApi({
 							url: 'products',

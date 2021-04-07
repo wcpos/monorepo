@@ -122,7 +122,7 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 		// const latestDocument = await getLastPullDocument(this.collection, this.endpointHash);
 		let result;
 		try {
-			result = await this.client.get(this.collection.name, { auth: this.auth });
+			result = await this.collection.database.httpClient.get(this.collection.name);
 			if (result.errors) {
 				if (typeof result.errors === 'string') {
 					throw new Error(result.errors);
@@ -133,6 +133,7 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 				}
 			}
 		} catch (err) {
+			console.log(err);
 			this._subjects.error.next(err);
 			return false;
 		}

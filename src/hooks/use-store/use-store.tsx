@@ -24,13 +24,16 @@ export function useStore() {
 		(async function init() {
 			const userDB = await DatabaseService.getUserDB();
 			const lastStore = await userDB.users.getLocal('lastStore');
+			const storeID = lastStore?.get('storeID');
+			const site = await userDB.sites.findOne(lastStore?.get('siteID')).exec();
+			const wpUser = await userDB.wp_credentials.findOne(lastStore?.get('wpUserID')).exec();
 
-			// we need to get the wp credentials here as well
-
-			if (lastStore?.get('id')) {
-				debugger;
-				// @ts-ignore
-				const db = await DatabaseService.getStoreDB(sanitizeStoreName(lastStore.get('id')));
+			if (storeID && site && wpUser) {
+				const db = await DatabaseService.getStoreDB(
+					sanitizeStoreName(storeID),
+					site.getWcApiUrl(),
+					wpUser.jwt as string
+				);
 				if (db) {
 					_setStoreDB(db);
 				}
@@ -41,20 +44,23 @@ export function useStore() {
 	/**
 	 * when user enters a Store
 	 */
-	async function setStoreDB(id: string, wpUser: WPCredentialsDocument) {
+	async function setStoreDB(id: string, site: any, wpUser: any) {
 		const userDB = await DatabaseService.getUserDB();
-		if (id) {
-			const db = await DatabaseService.getStoreDB(sanitizeStoreName(id), wpUser);
-			await userDB.users.upsertLocal('lastStore', { id });
-			_setStoreDB(db);
-		} else {
-			await userDB.users.upsertLocal('lastStore', { id: undefined });
-			_setStoreDB(undefined);
-		}
+		const db = await DatabaseService.getStoreDB(
+			sanitizeStoreName(id),
+			site.getWcApiUrl(),
+			wpUser.jwt
+		);
+		await userDB.users.upsertLocal('lastStore', {
+			storeID: id,
+			siteID: site._id,
+			wpUserID: wpUser._id,
+		});
+		_setStoreDB(db);
 	}
 
 	/**
-	 * when user enters a Store
+	 * when user logs out
 	 */
 	async function unsetStoreDB() {
 		const userDB = await DatabaseService.getUserDB();
