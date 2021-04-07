@@ -14,6 +14,7 @@ import set from 'lodash/set';
 import get from 'lodash/get';
 import unset from 'lodash/unset';
 import Platform from '@wcpos/common/src/lib/platform';
+import axios from 'axios';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
 import logs from './logs';
 import users from './users';
@@ -165,12 +166,14 @@ export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
 /**
  * creates the Store database
  */
-export async function _createStoresDB(
-	name: string,
-	wpUser: import('./wp-credentials').WPCredentialsDocument
-) {
+export async function _createStoresDB(name: string, baseURL: string, jwt: string) {
 	const db = await _createDB<StoreDatabaseCollections>(name);
-	Object.assign(db, wpUser);
+	const httpClient = axios.create({
+		baseURL,
+		headers: { 'X-WCPOS': '1', Authorization: `Bearer ${jwt}` },
+	});
+	Object.assign(db, { httpClient });
+	console.log('@TODO: the storeDB is initialized multiple times');
 
 	const collections = await db.addCollections({
 		// @ts-ignore
@@ -220,10 +223,7 @@ export interface IDatabaseService {
 	USER_DB_CREATE_PROMISE: Promise<UserDatabase>;
 	STORE_DB_CREATE_PROMISE: Promise<StoreDatabase | undefined>;
 	getUserDB: () => Promise<UserDatabase>;
-	getStoreDB: (
-		name: string,
-		wpUser: import('./wp-credentials').WPCredentialsDocument
-	) => Promise<StoreDatabase | undefined>;
+	getStoreDB: (name: string, baseURL: string, jwt: string) => Promise<StoreDatabase | undefined>;
 }
 
 /**
@@ -237,14 +237,14 @@ const DatabaseService: IDatabaseService = {
 		return this.USER_DB_CREATE_PROMISE;
 	},
 
-	async getStoreDB(name, wpUser) {
+	async getStoreDB(name, baseURL, jwt) {
 		const db = await this.STORE_DB_CREATE_PROMISE;
 		if (!db) {
-			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name, wpUser);
+			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name, baseURL, jwt);
 		}
 		if (db?.name !== name) {
 			await db?.destroy();
-			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name, wpUser);
+			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name, baseURL, jwt);
 		}
 		return this.STORE_DB_CREATE_PROMISE;
 	},
