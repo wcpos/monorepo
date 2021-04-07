@@ -15,6 +15,7 @@ import get from 'lodash/get';
 import unset from 'lodash/unset';
 import Platform from '@wcpos/common/src/lib/platform';
 import axios from 'axios';
+import difference from 'lodash/difference';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
 import logs from './logs';
 import users from './users';
@@ -52,7 +53,7 @@ addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
  * Parse plain data helper
  * @param plainData
  */
-const parsePlainData = (plainData: Record<string, unknown>) => {
+const parsePlainData = (plainData: Record<string, unknown>, schema: string[] = []) => {
 	/**
 	 * convert all plainData properties to camelCase
 	 */
@@ -63,6 +64,17 @@ const parsePlainData = (plainData: Record<string, unknown>) => {
 			unset(plainData, key);
 		}
 	});
+
+	/**
+	 * remove any properties not in the schema
+	 */
+	const omitProperties = difference(Object.keys(plainData), schema);
+	if (omitProperties.length > 0) {
+		console.log('the following properties are being omiited', omitProperties);
+		omitProperties.forEach((prop: string) => {
+			unset(plainData, prop);
+		});
+	}
 };
 
 /**
@@ -188,7 +200,9 @@ export async function _createStoresDB(name: string, baseURL: string, jwt: string
 
 	forEach(collections, (collection) => {
 		collection.preInsert((plainData: Record<string, unknown>) => {
-			parsePlainData(plainData);
+			const schema = get(collection, 'schema.topLevelFields');
+			parsePlainData(plainData, schema);
+
 			/**
 			 * This allows each collection to manage plainData coming from the WC REST API
 			 * It loops through each property and calls collection.preInsert{Property}

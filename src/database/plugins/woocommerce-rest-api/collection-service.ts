@@ -139,7 +139,7 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 		}
 
 		const { data } = result;
-		console.log(data);
+		this.collection.bulkInsert(data);
 
 		return true;
 	}
