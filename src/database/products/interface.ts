@@ -65,7 +65,7 @@ export interface WooCommerceProductSchema {
   reviewsAllowed?: boolean;
   averageRating?: string;
   ratingCount?: number;
-  related_ids?: number[];
+  relatedIds?: number[];
   upsellIds?: number[];
   crossSellIds?: number[];
   parentId?: number;
@@ -117,6 +117,17 @@ export interface WooCommerceProductSchema {
     value?: string;
     [k: string]: any;
   }[];
+  links?: {
+    collection?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    self?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    [k: string]: any;
+  };
   thumbnail?: string;
   [k: string]: any;
 }
