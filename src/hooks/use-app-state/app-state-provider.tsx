@@ -10,6 +10,7 @@ import useStoreDB from '../use-store';
 type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
 type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
+type WPCredentialsDocument = import('@wcpos/common/src/database/wp-credentials').WPCredentialsDocument;
 
 export interface IAppStateProps {
 	info: {
@@ -22,7 +23,8 @@ export interface IAppStateProps {
 	setUser: React.Dispatch<React.SetStateAction<UserDocument | undefined>>;
 	userDB?: UserDatabase;
 	storeDB?: StoreDatabase;
-	setStoreDB: (id?: string) => Promise<void>;
+	setStoreDB: (id: string, wpUser: WPCredentialsDocument) => Promise<void>;
+	unsetStoreDB: () => Promise<void>;
 }
 
 export const AppStateContext = React.createContext<unknown>({}) as React.Context<IAppStateProps>;
@@ -46,7 +48,7 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 	const online = useOnline();
 	const { user, setUser, userDB } = useUser();
 	const theme = getTheme('default', 'dark');
-	const { storeDB, setStoreDB } = useStoreDB();
+	const { storeDB, setStoreDB, unsetStoreDB } = useStoreDB();
 
 	const value = {
 		info,
@@ -57,6 +59,7 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 		userDB,
 		storeDB,
 		setStoreDB,
+		unsetStoreDB,
 	};
 	console.log(value);
 

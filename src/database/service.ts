@@ -165,8 +165,12 @@ export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
 /**
  * creates the Store database
  */
-export async function _createStoresDB(name: string) {
+export async function _createStoresDB(
+	name: string,
+	wpUser: import('./wp-credentials').WPCredentialsDocument
+) {
 	const db = await _createDB<StoreDatabaseCollections>(name);
+	Object.assign(db, wpUser);
 
 	const collections = await db.addCollections({
 		// @ts-ignore
@@ -216,7 +220,10 @@ export interface IDatabaseService {
 	USER_DB_CREATE_PROMISE: Promise<UserDatabase>;
 	STORE_DB_CREATE_PROMISE: Promise<StoreDatabase | undefined>;
 	getUserDB: () => Promise<UserDatabase>;
-	getStoreDB: (name: string) => Promise<StoreDatabase | undefined>;
+	getStoreDB: (
+		name: string,
+		wpUser: import('./wp-credentials').WPCredentialsDocument
+	) => Promise<StoreDatabase | undefined>;
 }
 
 /**
@@ -230,14 +237,14 @@ const DatabaseService: IDatabaseService = {
 		return this.USER_DB_CREATE_PROMISE;
 	},
 
-	async getStoreDB(name) {
+	async getStoreDB(name, wpUser) {
 		const db = await this.STORE_DB_CREATE_PROMISE;
 		if (!db) {
-			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name);
+			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name, wpUser);
 		}
 		if (db?.name !== name) {
 			await db?.destroy();
-			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name);
+			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name, wpUser);
 		}
 		return this.STORE_DB_CREATE_PROMISE;
 	},

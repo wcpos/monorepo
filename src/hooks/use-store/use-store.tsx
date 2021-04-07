@@ -4,14 +4,10 @@ import isString from 'lodash/isString';
 import DatabaseService from '@wcpos/common/src/database';
 
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
+type WPCredentialsDocument = import('@wcpos/common/src/database/wp-credentials').WPCredentialsDocument;
 
-/**
- *
- * @param id
- * @returns
- */
-async function getStoreDBById(id: string) {
-	return DatabaseService.getStoreDB(`store_${id.replace(':', '_')}`);
+function sanitizeStoreName(id: string) {
+	return `store_${id.replace(':', '_')}`;
 }
 
 /**
@@ -29,8 +25,12 @@ export function useStore() {
 			const userDB = await DatabaseService.getUserDB();
 			const lastStore = await userDB.users.getLocal('lastStore');
 
+			// we need to get the wp credentials here as well
+
 			if (lastStore?.get('id')) {
-				const db = await getStoreDBById(lastStore.get('id'));
+				debugger;
+				// @ts-ignore
+				const db = await DatabaseService.getStoreDB(sanitizeStoreName(lastStore.get('id')));
 				if (db) {
 					_setStoreDB(db);
 				}
@@ -41,10 +41,10 @@ export function useStore() {
 	/**
 	 * when user enters a Store
 	 */
-	async function setStoreDB(id?: string) {
+	async function setStoreDB(id: string, wpUser: WPCredentialsDocument) {
 		const userDB = await DatabaseService.getUserDB();
 		if (id) {
-			const db = await getStoreDBById(id);
+			const db = await DatabaseService.getStoreDB(sanitizeStoreName(id), wpUser);
 			await userDB.users.upsertLocal('lastStore', { id });
 			_setStoreDB(db);
 		} else {
@@ -54,8 +54,17 @@ export function useStore() {
 	}
 
 	/**
+	 * when user enters a Store
+	 */
+	async function unsetStoreDB() {
+		const userDB = await DatabaseService.getUserDB();
+		await userDB.users.upsertLocal('lastStore', { id: undefined });
+		_setStoreDB(undefined);
+	}
+
+	/**
 	 * @TODO - store last store in local storage
 	 */
 
-	return { storeDB, setStoreDB };
+	return { storeDB, setStoreDB, unsetStoreDB };
 }

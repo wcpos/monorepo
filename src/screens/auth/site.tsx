@@ -67,7 +67,7 @@ const Site = ({ site, user }: ISiteProps) => {
 		} else {
 			[store] = await wpUser.populate('stores');
 		}
-		setStoreDB(store._id);
+		setStoreDB(store._id, wpUser);
 	};
 
 	const handleRemove = async () => {
