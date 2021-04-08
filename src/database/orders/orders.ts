@@ -1,5 +1,5 @@
 import map from 'lodash/map';
-import isString from 'lodash/isString';
+import get from 'lodash/get';
 import schema from './schema.json';
 import methods from './methods';
 
@@ -23,24 +23,28 @@ export const statics: OrderStatics = {
 	/**
 	 *
 	 */
-	async preInsertLineItems(this: OrderCollection, plainData: Record<string, unknown>, db: any) {
-		debugger;
-		const result = await db.lineItems.bulkInsert(plainData.line_items);
-		plainData.line_items = map(result.success, 'id').filter((id) => isString(id));
+	async preInsertLineItems(this: OrderCollection, plainData: Record<string, unknown>) {
+		const lineItemsCollection = get(this, 'database.collections.line_items');
+		const result = await lineItemsCollection.bulkInsert(plainData.lineItems);
+		plainData.lineItems = map(result.success, '_id');
 	},
 
 	/**
 	 *
 	 */
-	preInsertFeeLines(this: OrderCollection, plainData: any[]) {
-		debugger;
+	async preInsertFeeLines(this: OrderCollection, plainData: Record<string, unknown>) {
+		const feeLinesCollection = get(this, 'database.collections.fee_lines');
+		const result = await feeLinesCollection.bulkInsert(plainData.feeLines);
+		plainData.feeLines = map(result.success, '_id');
 	},
 
 	/**
 	 *
 	 */
-	preInsertShippingLines(this: OrderCollection, plainData: any[]) {
-		debugger;
+	async preInsertShippingLines(this: OrderCollection, plainData: Record<string, unknown>) {
+		const shippingLinesCollection = get(this, 'database.collections.shipping_lines');
+		const result = await shippingLinesCollection.bulkInsert(plainData.shippingLines);
+		plainData.shippingLines = map(result.success, '_id');
 	},
 };
 

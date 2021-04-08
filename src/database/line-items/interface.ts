@@ -20,11 +20,20 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Product ID.
    */
-  productDd?: number;
+  productId?: number;
   /**
    * Variation ID, if applicable.
    */
   variationId?: number;
+  parentName?: string;
+  /**
+   * Product SKU.
+   */
+  sku?: string;
+  /**
+   * Product price.
+   */
+  price?: number;
   /**
    * Quantity ordered.
    */
@@ -85,13 +94,5 @@ export interface WooCommerceOrderLineItemSchema {
     value?: string;
     [k: string]: any;
   }[];
-  /**
-   * Product SKU.
-   */
-  sku?: string;
-  /**
-   * Product price.
-   */
-  price?: number;
   [k: string]: any;
 }
