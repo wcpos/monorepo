@@ -20,12 +20,16 @@ interface IUIResources {
 	posProducts?: UIResource;
 	posCart?: UIResource;
 	products?: UIResource;
+	orders?: UIResource;
+	customers?: UIResource;
 }
 
 const uiResources: IUIResources = {
 	posProducts: undefined,
 	posCart: undefined,
 	products: undefined,
+	orders: undefined,
+	customers: undefined,
 };
 
 /**
