@@ -44,7 +44,7 @@ export default {
 		this: OrderDocument,
 		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<LineItemDocument[]> {
-		return this.line_items$.pipe(
+		return this.lineItems$.pipe(
 			switchMap(async (ids) => {
 				// note: findByIds returns a map
 				const lineItems = await this.collections().line_items.findByIds(ids || []);
@@ -75,7 +75,7 @@ export default {
 		this: OrderDocument,
 		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<FeeLineDocument[]> {
-		return this.fee_lines$.pipe(
+		return this.feeLines$.pipe(
 			switchMap(async (ids) => {
 				// note: findByIds returns a map
 				const feeLines = await this.collections().fee_lines.findByIds(ids || []);
@@ -106,7 +106,7 @@ export default {
 		this: OrderDocument,
 		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<ShippingLineDocument[]> {
-		return this.shipping_lines$.pipe(
+		return this.shippingLines$.pipe(
 			switchMap(async (ids) => {
 				// note: findByIds returns a map
 				const shippingLines = await this.collections().shipping_lines.findByIds(ids || []);
