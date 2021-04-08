@@ -346,5 +346,16 @@ export interface WooCommerceOrderSchema {
     [k: string]: any;
   }[];
   currencySymbol?: string;
+  links?: {
+    collection?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    self?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    [k: string]: any;
+  };
   [k: string]: any;
 }

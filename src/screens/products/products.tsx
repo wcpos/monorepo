@@ -27,7 +27,7 @@ const Products = () => {
 	});
 
 	if (!storeDB) {
-		return null;
+		throw Error('something went wrong');
 	}
 
 	const products$ = useObservable(

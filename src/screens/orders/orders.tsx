@@ -1,19 +1,20 @@
 import * as React from 'react';
 import { View, Text } from 'react-native';
-import { useObservableState, useObservable } from 'observable-hooks';
+import { useObservableState, useObservable, useObservableSuspense } from 'observable-hooks';
 import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
-import Segment from '../../components/segment';
+import Segment from '@wcpos/common/src/components/segment';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useUIResource from '@wcpos/common/src/hooks/use-ui';
+import Button from '@wcpos/common/src/components/button';
 import Table from './table';
 import Actions from './actions';
-import useAppState from '../../hooks/use-app-state';
-import Button from '../../components/button';
-import WcApiService from '../../services/wc-api';
 
-type Sort = import('../../components/table/types').Sort;
+type Sort = import('@wcpos/common/src/components/table/types').Sort;
 
 const Orders = () => {
-	const [{ user, storeDB, storePath }] = useAppState();
-	const ui = storeDB.getUI('orders');
+	const { storeDB } = useAppState();
+	const productsUIResource = useUIResource('orders');
+	const ui = useObservableSuspense(productsUIResource);
 
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
@@ -24,9 +25,13 @@ const Orders = () => {
 
 	const [query, setQuery] = React.useState({
 		search: '',
-		sortBy: 'date_created_gmt',
+		sortBy: 'dateCreatedGmt',
 		sortDirection: 'desc',
 	});
+
+	if (!storeDB) {
+		throw Error('something went wrong');
+	}
 
 	const orders$ = useObservable(
 		// A stream of React elements!
@@ -43,6 +48,7 @@ const Orders = () => {
 						// 		name: { $regex: regexp },
 						// 	},
 						// })
+						// @ts-ignore
 						.sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
 				}),
@@ -75,26 +81,21 @@ const Orders = () => {
 					<Button
 						title="Fetch orders"
 						onPress={async () => {
-							const path = storePath.split('.');
-							const site = user.get(path.slice(1, 3).join('.'));
-							const wpCredentials = user.get(path.slice(1, 5).join('.'));
-							const baseUrl = site.wc_api_url;
-							const collection = 'orders';
-							const key = wpCredentials.consumer_key;
-							const secret = wpCredentials.consumer_secret;
-							const api = new WcApiService({ baseUrl, collection, key, secret });
-							const data = await api.fetch();
-							console.log(data);
-							storeDB.collections.orders.bulkInsert(data);
+							// @ts-ignore
+							const replicationState = storeDB.orders.syncRestApi({
+								url: 'orders',
+								pull: {},
+							});
+							replicationState.run(false);
 						}}
 					/>
 					<Button
 						title="Insert new order"
 						onPress={async () => {
-							storeDB.collections.orders.insert({
-								id: '1234',
-								number: '1234',
-							});
+							// storeDB.collections.orders.insert({
+							// 	id: 1234,
+							// 	number: '1234',
+							// });
 						}}
 					/>
 				</Segment>

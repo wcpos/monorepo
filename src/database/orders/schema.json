@@ -449,6 +449,33 @@
 		},
 		"currencySymbol": {
 			"type": "string"
+		},
+		"links": {
+			"type": "object",
+			"properties": {
+				"collection": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"href": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"self": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"href": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			}
 		}
 	},
 	"indexes": ["dateCreatedGmt"]

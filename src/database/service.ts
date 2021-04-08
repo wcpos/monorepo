@@ -53,7 +53,11 @@ addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
  * Parse plain data helper
  * @param plainData
  */
-const parsePlainData = (plainData: Record<string, unknown>, schema: string[] = []) => {
+const parsePlainData = (
+	plainData: Record<string, unknown>,
+	collection: import('rxdb').RxCollection
+) => {
+	const topLevelFields = get(collection, 'schema.topLevelFields');
 	/**
 	 * convert all plainData properties to camelCase
 	 */
@@ -68,9 +72,9 @@ const parsePlainData = (plainData: Record<string, unknown>, schema: string[] = [
 	/**
 	 * remove any properties not in the schema
 	 */
-	const omitProperties = difference(Object.keys(plainData), schema);
+	const omitProperties = difference(Object.keys(plainData), topLevelFields);
 	if (omitProperties.length > 0) {
-		console.log('the following properties are being omiited', omitProperties);
+		console.log('the following properties are being omitted', omitProperties);
 		omitProperties.forEach((prop: string) => {
 			unset(plainData, prop);
 		});
@@ -129,7 +133,8 @@ export async function _createUsersDB() {
 
 	forEach(collections, (collection) => {
 		collection.preInsert((plainData: Record<string, unknown>) => {
-			parsePlainData(plainData);
+			const promises: Promise<any>[] = [];
+			parsePlainData(plainData, collection);
 
 			/**
 			 * This allows each collection to manage plainData coming from the WC REST API
@@ -139,16 +144,15 @@ export async function _createUsersDB() {
 			forEach(plainData, (data, key) => {
 				const preInsertKey = camelCase(`preInsert-${key}`);
 				if (isFunction(collection[preInsertKey])) {
-					collection[preInsertKey](plainData, collection, db);
+					promises.push(collection[preInsertKey](plainData, collection));
 				}
 			});
-			return plainData;
+
+			return Promise.all(promises).then(() => plainData);
 		}, false);
 
-		collection.preSave((plainData: Record<string, unknown>, rxDocument) => {
-			const schema = get(rxDocument, 'collection.schema.topLevelFields');
-			console.log(schema);
-			parsePlainData(plainData);
+		collection.preSave((plainData: Record<string, unknown>) => {
+			parsePlainData(plainData, collection);
 		}, false);
 	});
 
@@ -200,8 +204,8 @@ export async function _createStoresDB(name: string, baseURL: string, jwt: string
 
 	forEach(collections, (collection) => {
 		collection.preInsert((plainData: Record<string, unknown>) => {
-			const schema = get(collection, 'schema.topLevelFields');
-			parsePlainData(plainData, schema);
+			const promises: Promise<any>[] = [];
+			parsePlainData(plainData, collection);
 
 			/**
 			 * This allows each collection to manage plainData coming from the WC REST API
@@ -211,14 +215,15 @@ export async function _createStoresDB(name: string, baseURL: string, jwt: string
 			forEach(plainData, (data, key) => {
 				const preInsertKey = camelCase(`preInsert-${key}`);
 				if (isFunction(collection[preInsertKey])) {
-					collection[preInsertKey](plainData, collection, db);
+					promises.push(collection[preInsertKey](plainData, collection, db));
 				}
 			});
-			return plainData;
+
+			return Promise.all(promises).then(() => plainData);
 		}, false);
 
 		collection.preSave((plainData: Record<string, unknown>, rxDocument) => {
-			parsePlainData(plainData);
+			parsePlainData(plainData, collection);
 
 			/**
 			 * add dateCreatedGmt to plain data

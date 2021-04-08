@@ -5,7 +5,7 @@ import MasterBar from '@wcpos/common/src/layout/masterbar';
 import ErrorBoundary from '@wcpos/common/src/components/error';
 import POS from '@wcpos/common/src/screens/pos';
 import Products from '@wcpos/common/src/screens/products';
-// import Orders from '../screens/orders';
+import Orders from '@wcpos/common/src/screens/orders';
 // import Customers from '../screens/customers';
 // import Support from '../screens/support';
 import Text from '@wcpos/common/src/components/text';
@@ -19,7 +19,7 @@ type ScreenProps = {
 const components = {
 	POS: <POS />,
 	Products: <Products />,
-	// Orders: <Orders />,
+	Orders: <Orders />,
 	// Customers: <Customers />,
 	// Support: <Support />,
 };
@@ -43,8 +43,8 @@ const MainNavigator = () => {
 		<Drawer.Navigator>
 			<Drawer.Screen name="POS" component={Screen} />
 			<Drawer.Screen name="Products" component={Screen} />
-			{/* <Drawer.Screen name="Orders" component={Screen} />
-			<Drawer.Screen name="Customers" component={Screen} />
+			<Drawer.Screen name="Orders" component={Screen} />
+			{/* <Drawer.Screen name="Customers" component={Screen} />
 			<Drawer.Screen name="Support" component={Screen} /> */}
 		</Drawer.Navigator>
 	);
