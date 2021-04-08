@@ -4,18 +4,19 @@ import { from, of } from 'rxjs';
 import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
 import sumBy from 'lodash/sumBy';
 import get from 'lodash/get';
-import Segment from '../../../components/segment';
-import Button from '../../../components/button';
-import Popover from '../../../components/popover';
-import Text from '../../../components/text';
+import Segment from '@wcpos/common/src/components/segment';
+import Button from '@wcpos/common/src/components/button';
+import Popover from '@wcpos/common/src/components/popover';
+import Text from '@wcpos/common/src/components/text';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Table from './table';
 import CustomerSelect from './customer-select';
 import Actions from './actions';
 import Totals from './totals';
-import useAppState from '../../../hooks/use-app-state';
+import { POSContext } from '../pos';
 
-type Sort = import('../../../components/table/types').Sort;
-type OrderDocument = import('../../../database').OrderTypes.OrderDocument;
+type Sort = import('@wcpos/common/src/components/table/types').Sort;
+type OrderDocument = import('@wcpos/common/src/database/orders').OrderDocument;
 
 interface ICartProps {
 	ui: any;
@@ -24,7 +25,7 @@ interface ICartProps {
 
 const Cart = ({ ui, orders = [] }: ICartProps) => {
 	const { storeDB, user } = useAppState();
-	const currentOrder: unknown = null;
+	const { currentOrder, setCurrentOrder } = React.useContext(POSContext);
 
 	// const [order, setOrder] = React.useState<OrderDocument | undefined>(get(orders, '0'));
 	// const order: OrderDocument | undefined = useObservableState(get(orders, '0.$'));
@@ -34,10 +35,6 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 		sortBy: 'id',
 		sortDirection: 'asc',
 	});
-
-	const setCurrentOrder = (order?: OrderDocument) => {
-		// dispatch({ type: actionTypes.SET_CURRENT_ORDER, payload: { currentOrder: order } });
-	};
 
 	// React.useEffect(() => {
 	// 	setCurrentOrder(get(orders, '0'));

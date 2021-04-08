@@ -8,7 +8,7 @@ interface Props {
 	product: any;
 }
 
-const Actions: React.FC<Props> = ({ product }) => {
+const Actions = ({ product }: Props) => {
 	const currentOrder = undefined;
 	const { storeDB } = useAppState();
 

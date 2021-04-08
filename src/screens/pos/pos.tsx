@@ -16,12 +16,22 @@ import * as Styled from './styles';
 type OrderDocument = import('@wcpos/common/src/database/orders').OrderDocument;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
+interface IPOSContent {
+	currentOrder?: OrderDocument;
+	setCurrentOrder: React.Dispatch<React.SetStateAction<OrderDocument | undefined>>;
+}
+
+export const POSContext = React.createContext<IPOSContent>({
+	currentOrder: undefined,
+	// @ts-ignore
+	setCurrentOrder: undefined,
+});
+
 const POS = () => {
 	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
-	const productsUIResource = useUIResource('posProducts');
-	const cartUIResource = useUIResource('posCart');
-	const productsUI = useObservableSuspense(productsUIResource);
-	const cartUI = useObservableSuspense(cartUIResource);
+	const productsUI = useObservableSuspense(useUIResource('posProducts'));
+	const cartUI = useObservableSuspense(useUIResource('posCart'));
+	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
 
 	// fetch order
 	// const orderQuery = storeDB.collections.orders.findOne();
@@ -72,28 +82,30 @@ const POS = () => {
 	// });
 
 	return (
-		<Styled.Container>
-			<Styled.Column style={{ width }}>
-				<ErrorBoundary>
-					<React.Suspense fallback={<Text>Loading products...</Text>}>
-						<Products ui={productsUI} />
-					</React.Suspense>
-				</ErrorBoundary>
-			</Styled.Column>
-			<Draggable onUpdate={handleColumnResizeUpdate} onEnd={handleColumnResizeEnd}>
-				<View style={{ backgroundColor: '#000', padding: 20 }} />
-			</Draggable>
-			{/* <PanGestureHandler onGestureEvent={gestureHandler}>
+		<POSContext.Provider value={{ currentOrder, setCurrentOrder }}>
+			<Styled.Container>
+				<Styled.Column style={{ width }}>
+					<ErrorBoundary>
+						<React.Suspense fallback={<Text>Loading products...</Text>}>
+							<Products ui={productsUI} />
+						</React.Suspense>
+					</ErrorBoundary>
+				</Styled.Column>
+				<Draggable onUpdate={handleColumnResizeUpdate} onEnd={handleColumnResizeEnd}>
+					<View style={{ backgroundColor: '#000', padding: 20 }} />
+				</Draggable>
+				{/* <PanGestureHandler onGestureEvent={gestureHandler}>
 				<View style={{ backgroundColor: '#000', padding: 20 }} />
 			</PanGestureHandler> */}
-			<Styled.Column>
-				<ErrorBoundary>
-					<React.Suspense fallback={<Text>Loading cart...</Text>}>
-						{orders ? <Cart ui={cartUI} orders={orders} /> : null}
-					</React.Suspense>
-				</ErrorBoundary>
-			</Styled.Column>
-		</Styled.Container>
+				<Styled.Column>
+					<ErrorBoundary>
+						<React.Suspense fallback={<Text>Loading cart...</Text>}>
+							{orders ? <Cart ui={cartUI} orders={orders} /> : null}
+						</React.Suspense>
+					</ErrorBoundary>
+				</Styled.Column>
+			</Styled.Container>
+		</POSContext.Provider>
 	);
 };
 
