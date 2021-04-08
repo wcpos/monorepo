@@ -1,9 +1,11 @@
 import * as React from 'react';
 import Table from '../../../../components/table';
 import Image from './cells/image';
+import Name from './cells/name';
 import Categories from './cells/categories';
 import Tags from './cells/tags';
 import Actions from './cells/actions';
+import RegularPrice from './cells/regular-price';
 
 type ColumnProps = import('../../../../components/table/types').ColumnProps;
 type GetCellPropsFunction = import('../../../../components/table/row').GetCellPropsFunction;
@@ -23,16 +25,18 @@ const Row = ({ product, columns }: Props) => {
 		<Table.Row rowData={product} columns={columns}>
 			{({ cellData, column, getCellProps }: RowRenderProps) => (
 				<Table.Row.Cell {...getCellProps()}>
-					{((): React.ReactElement | null => {
+					{(() => {
 						switch (column.key) {
 							case 'image':
 								return <Image product={product} />;
+							case 'name':
+								return <Name product={product} />;
 							case 'categories':
-								// @ts-ignore
 								return <Categories categories={cellData} />;
 							case 'tags':
-								// @ts-ignore
 								return <Tags tags={cellData} />;
+							case 'regularPrice':
+								return <RegularPrice regularPrice={cellData} />;
 							case 'actions':
 								return <Actions product={product} />;
 							default:

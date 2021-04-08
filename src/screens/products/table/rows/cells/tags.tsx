@@ -15,11 +15,15 @@ const Tags = ({ tags }: Props) => {
 		console.log('filter by tag ', tag);
 	};
 
-	return tags.map((tag) => (
-		<Text key={tag.id} onPress={() => handleClick(tag)}>
-			{tag.name}
-		</Text>
-	));
+	return (
+		<>
+			{tags.map((tag) => (
+				<Text key={tag.id} onPress={() => handleClick(tag)}>
+					{tag.name}
+				</Text>
+			))}
+		</>
+	);
 };
 
 export default Tags;

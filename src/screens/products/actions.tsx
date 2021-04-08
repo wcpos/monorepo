@@ -50,7 +50,12 @@ const Actions = ({ columns, query, ui }: IProductsActionsProps) => {
 					}}
 				/>
 			))} */}
-			<Button title="Restore Default Settings" onPress={() => {}} />
+			<Button
+				title="Restore Default Settings"
+				onPress={() => {
+					console.log('reset ui');
+				}}
+			/>
 		</>
 	);
 };

@@ -37,8 +37,8 @@
 			{ "key": "sku", "order": 4 },
 			{ "key": "categories", "order": 5 },
 			{ "key": "tags", "order": 6 },
-			{ "key": "regular_price", "order": 7 },
-			{ "key": "sale_price", "order": 8 },
+			{ "key": "regularPrice", "order": 7 },
+			{ "key": "salePrice", "order": 8 },
 			{ "key": "actions", "disableSort": true, "order": 9 }
 		]
 	},
@@ -52,9 +52,9 @@
 			{ "key": "billing", "flexGrow": 1, "order": 4 },
 			{ "key": "shipping", "flexGrow": 1, "order": 5 },
 			{ "key": "note", "width": "10%", "order": 6 },
-			{ "key": "date_created", "flexGrow": 1, "order": 7 },
-			{ "key": "date_modified", "hide": true, "width": "10%", "order": 8 },
-			{ "key": "date_completed", "hide": true, "width": "10%", "order": 9 },
+			{ "key": "dateCreated", "flexGrow": 1, "order": 7 },
+			{ "key": "dateModified", "hide": true, "width": "10%", "order": 8 },
+			{ "key": "dateCompleted", "hide": true, "width": "10%", "order": 9 },
 			{ "key": "total", "width": "10%", "order": 10 },
 			{ "key": "actions", "disableSort": true, "width": "10%", "order": 11 }
 		]
@@ -63,9 +63,9 @@
 		"sortBy": "last_name",
 		"sortDirection": "asc",
 		"columns": [
-			{ "key": "avatar_url", "disableSort": true, "order": 1 },
-			{ "key": "first_name", "order": 2 },
-			{ "key": "last_name", "order": 3 },
+			{ "key": "avatarUrl", "disableSort": true, "order": 1 },
+			{ "key": "firstName", "order": 2 },
+			{ "key": "lastName", "order": 3 },
 			{ "key": "email", "order": 4 },
 			{ "key": "role", "hide": true, "order": 5 },
 			{ "key": "username", "hide": true, "order": 6 },

@@ -15,11 +15,15 @@ const Categories = ({ categories }: Props) => {
 		console.log('filter by cat ', category);
 	};
 
-	return categories.map((category) => (
-		<Text key={category.id} onPress={() => handleClick(category)}>
-			{category.name}
-		</Text>
-	));
+	return (
+		<>
+			{categories.map((category) => (
+				<Text key={category.id} onPress={() => handleClick(category)}>
+					{category.name}
+				</Text>
+			))}
+		</>
+	);
 };
 
 export default Categories;

@@ -11,7 +11,10 @@ const Actions = ({ product }: Props) => {
 	const [visible, setVisible] = React.useState(false);
 
 	const handleSync = () => {
-		console.log('sync');
+		const replicationState = product.syncRestApi({
+			push: {},
+		});
+		replicationState.run(false);
 	};
 
 	const handleDelete = () => {

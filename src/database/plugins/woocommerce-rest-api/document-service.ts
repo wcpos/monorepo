@@ -123,14 +123,16 @@ export class RxDBWooCommerceRestApiSyncDocumentService {
 
 	/**
 	 * @return true if successfull, false if not
+	 * @TODO construct url with document.id or link self href?
 	 */
 	async runPush(): Promise<boolean> {
 		let result;
-		console.log(this.document);
+
 		try {
 			result = await this.client({
 				method: 'post',
-				url: this.document.collection.name,
+				// @ts-ignore
+				url: `${this.document.collection.name}/${this.document.id}`,
 				data: await this.document.toRestApiJSON(),
 				auth: this.auth,
 			});
