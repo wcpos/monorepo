@@ -1,21 +1,22 @@
 import * as React from 'react';
 import { View, Text } from 'react-native';
-import { useObservable, useObservableState } from 'observable-hooks';
+import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
 import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
-import Segment from '../../components/segment';
-import Input from '../../components/textinput';
-import Button from '../../components/button';
+import Segment from '@wcpos/common/src/components/segment';
+import Input from '@wcpos/common/src/components/textinput';
+import Button from '@wcpos/common/src/components/button';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import Table from './table';
 import Actions from './actions';
-import useAppState from '../../hooks/use-app-state';
-import WcApiService from '../../services/wc-api';
 import * as Styled from './styles';
 
-type Sort = import('../../components/table/types').Sort;
+type Sort = import('@wcpos/common/src/components/table/types').Sort;
 
 const Products = () => {
-	const [{ user, storePath, storeDB }] = useAppState();
-	const ui = storeDB.getUI('products');
+	const { storeDB } = useAppState();
+	const productsUIResource = useUIResource('products');
+	const ui = useObservableSuspense(productsUIResource);
 
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
@@ -24,6 +25,10 @@ const Products = () => {
 		sortBy: 'name',
 		sortDirection: 'asc',
 	});
+
+	if (!storeDB) {
+		return null;
+	}
 
 	const products$ = useObservable(
 		// A stream of React elements!
@@ -39,6 +44,7 @@ const Products = () => {
 								name: { $regex: regexp },
 							},
 						})
+						// @ts-ignore
 						.sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
 				}),
@@ -76,47 +82,47 @@ const Products = () => {
 						<Button
 							title="Fetch Tax Rates"
 							onPress={async () => {
-								const path = storePath.split('.');
-								const site = user.get(path.slice(1, 3).join('.'));
-								const wpCredentials = user.get(path.slice(1, 5).join('.'));
-								const baseUrl = site.wc_api_url;
-								const collection = 'taxes';
-								const key = wpCredentials.consumer_key;
-								const secret = wpCredentials.consumer_secret;
-								const api = new WcApiService({ baseUrl, collection, key, secret });
-								const data = await api.fetch();
-								console.log(data);
-								await storeDB.upsertLocal(
-									'tax_rates',
-									// turn array into json
-									data.reduce((obj: Record<string, unknown>, rate: any) => {
-										obj[rate.id] = rate;
-										return obj;
-									}, {})
-								);
+								// const path = storePath.split('.');
+								// const site = user.get(path.slice(1, 3).join('.'));
+								// const wpCredentials = user.get(path.slice(1, 5).join('.'));
+								// const baseUrl = site.wc_api_url;
+								// const collection = 'taxes';
+								// const key = wpCredentials.consumer_key;
+								// const secret = wpCredentials.consumer_secret;
+								// const api = new WcApiService({ baseUrl, collection, key, secret });
+								// const data = await api.fetch();
+								// console.log(data);
+								// await storeDB.upsertLocal(
+								// 	'tax_rates',
+								// 	// turn array into json
+								// 	data.reduce((obj: Record<string, unknown>, rate: any) => {
+								// 		obj[rate.id] = rate;
+								// 		return obj;
+								// 	}, {})
+								// );
 							}}
 						/>
 						<Button
 							title="Fetch Tax Classes"
 							onPress={async () => {
-								const path = storePath.split('.');
-								const site = user.get(path.slice(1, 3).join('.'));
-								const wpCredentials = user.get(path.slice(1, 5).join('.'));
-								const baseUrl = site.wc_api_url;
-								const collection = 'taxes/classes';
-								const key = wpCredentials.consumer_key;
-								const secret = wpCredentials.consumer_secret;
-								const api = new WcApiService({ baseUrl, collection, key, secret });
-								const data = await api.fetch();
-								console.log(data);
-								await storeDB.upsertLocal(
-									'tax_classes',
-									// turn array into json
-									data.reduce((obj: Record<string, unknown>, taxClass: any) => {
-										obj[taxClass.slug] = taxClass;
-										return obj;
-									}, {})
-								);
+								// const path = storePath.split('.');
+								// const site = user.get(path.slice(1, 3).join('.'));
+								// const wpCredentials = user.get(path.slice(1, 5).join('.'));
+								// const baseUrl = site.wc_api_url;
+								// const collection = 'taxes/classes';
+								// const key = wpCredentials.consumer_key;
+								// const secret = wpCredentials.consumer_secret;
+								// const api = new WcApiService({ baseUrl, collection, key, secret });
+								// const data = await api.fetch();
+								// console.log(data);
+								// await storeDB.upsertLocal(
+								// 	'tax_classes',
+								// 	// turn array into json
+								// 	data.reduce((obj: Record<string, unknown>, taxClass: any) => {
+								// 		obj[taxClass.slug] = taxClass;
+								// 		return obj;
+								// 	}, {})
+								// );
 							}}
 						/>
 					</Text>

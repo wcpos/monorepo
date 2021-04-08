@@ -19,7 +19,7 @@ export const SegmentGroup = ({
 	flexDirection = 'column',
 	style,
 	raised = true,
-}: ISegmentGroupProps) => {
+}: ISegmentGroupProps): JSX.Element => {
 	const count = React.Children.count(children);
 
 	if (count === 1) {
