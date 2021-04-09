@@ -60,7 +60,7 @@
 		]
 	},
 	"customers": {
-		"sortBy": "last_name",
+		"sortBy": "lastName",
 		"sortDirection": "asc",
 		"columns": [
 			{ "key": "avatarUrl", "disableSort": true, "order": 1 },
