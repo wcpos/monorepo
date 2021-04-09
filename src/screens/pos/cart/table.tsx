@@ -30,7 +30,6 @@ interface ICartTableProps {
 
 const CartTable = ({ columns, order, query, onSort }: ICartTableProps) => {
 	const { t } = useTranslation();
-	console.log(order.id);
 
 	const items$ = useObservable((inputs$) => inputs$.pipe(switchMap(([o, q]) => o.getCart$(q))), [
 		order,

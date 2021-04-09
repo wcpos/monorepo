@@ -1,18 +1,18 @@
 import * as React from 'react';
-import Table from '../../../../components/table';
-import Button from '../../../../components/button';
+import Table from '@wcpos/common/src/components/table';
+import Button from '@wcpos/common/src/components/button';
 import Price from './cells/price';
 
-type GetCellPropsFunction = import('../../../../components/table/row').GetCellPropsFunction;
+type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 
-type ICartFeeLineProps = {
-	order: any;
-	fee: any;
+interface Props {
+	order: import('@wcpos/common/src/database/orders').OrderDocument;
+	fee: import('@wcpos/common/src/database/fee-lines').FeeLineDocument;
 	columns: any;
-};
+}
 
-const FeeLine = ({ order, fee, columns }: ICartFeeLineProps) => {
-	const onRemove = () => {
+const FeeLine = ({ order, fee, columns }: Props) => {
+	const handleFeeRemove = () => {
 		order.removeFeeLine(fee);
 	};
 
@@ -27,9 +27,9 @@ const FeeLine = ({ order, fee, columns }: ICartFeeLineProps) => {
 								case 'quantity':
 									return null;
 								case 'price':
-									return <Price lineItem={fee} price={cellData} />;
+									return <Price lineItem={fee} />;
 								case 'actions':
-									return <Button title="x" onPress={onRemove} />;
+									return <Button title="x" onPress={handleFeeRemove} />;
 								default:
 									return null;
 							}

@@ -1,6 +1,7 @@
 import { from, of, combineLatest, zip, Observable } from 'rxjs';
 import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import orderBy from 'lodash/orderBy';
+import get from 'lodash/get';
 
 type OrderDocument = import('./orders').OrderDocument;
 type ProductDocument = import('../products/products').ProductDocument;
@@ -184,15 +185,15 @@ export default {
 	 *
 	 */
 	async addFeeLine(this: OrderDocument, data: Record<string, unknown>) {
-		await this.collections()
-			.fee_lines.upsert({ ...data, id: `new-${Date.now()}`, order_id: this.id })
-			.then((newFee: FeeLineDocument) => {
-				return this.update({
-					$push: {
-						fee_lines: newFee.id,
-					},
-				});
+		const feeLineCollection: FeeLineCollection = get(this, 'collection.database.fee_lines');
+		// @ts-ignore
+		await feeLineCollection.insert(data).then((newFee: FeeLineDocument) => {
+			return this.update({
+				$push: {
+					feeLines: newFee._id,
+				},
 			});
+		});
 	},
 
 	/**
@@ -201,7 +202,7 @@ export default {
 	async removeFeeLine(this: OrderDocument, feeLine: FeeLineDocument) {
 		await this.update({
 			$pullAll: {
-				fee_lines: [feeLine.id],
+				feeLines: [feeLine._id],
 			},
 		}).then(() => {
 			return feeLine.remove();
@@ -212,14 +213,23 @@ export default {
 	 *
 	 */
 	async addShippingLine(this: OrderDocument, data: Record<string, unknown>) {
-		await this.collections()
-			.shipping_lines.upsert({ ...data, id: `new-${Date.now()}`, order_id: this.id })
+		const shippingLineCollection: ShippingLineCollection = get(
+			this,
+			'collection.database.shipping_lines'
+		);
+
+		await shippingLineCollection
+			// @ts-ignore
+			.insert(data)
 			.then((newShipping: ShippingLineDocument) => {
 				return this.update({
 					$push: {
-						shipping_lines: newShipping.id,
+						shippingLines: newShipping._id,
 					},
 				});
+			})
+			.catch((err) => {
+				console.log(err);
 			});
 	},
 
@@ -229,7 +239,7 @@ export default {
 	async removeShippingLine(this: OrderDocument, shippingLine: ShippingLineDocument) {
 		await this.update({
 			$pullAll: {
-				shipping_lines: [shippingLine.id],
+				shippingLines: [shippingLine._id],
 			},
 		}).then(() => {
 			return shippingLine.remove();

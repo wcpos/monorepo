@@ -51,7 +51,6 @@ const Auth = () => {
 					/>
 				</Segment>
 				{sites && sites.length > 0 && (
-					// @ts-ignore
 					<Segment.Group style={{ width: '90%', maxWidth: 460, height: 'auto' }}>
 						{/* <Segment content="Sites" /> */}
 						{sites.map((site) => (

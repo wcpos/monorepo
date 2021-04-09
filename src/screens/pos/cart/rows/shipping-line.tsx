@@ -1,19 +1,19 @@
 import * as React from 'react';
-import Table from '../../../../components/table';
-import Button from '../../../../components/button';
-import Text from '../../../../components/text';
+import Table from '@wcpos/common/src/components/table';
+import Button from '@wcpos/common/src/components/button';
+import Text from '@wcpos/common/src/components/text';
 import Price from './cells/price';
 
-type GetCellPropsFunction = import('../../../../components/table/row').GetCellPropsFunction;
+type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 
-type Props = {
-	order: any;
-	shipping: any;
+interface Props {
+	order: import('@wcpos/common/src/database/orders').OrderDocument;
+	shipping: import('@wcpos/common/src/database/shipping-lines').ShippingLineDocument;
 	columns: any;
-};
+}
 
-const ShippingLine = ({ order, shipping, columns }: Props): React.ReactElement => {
-	const onRemove = () => {
+const ShippingLine = ({ order, shipping, columns }: Props) => {
+	const handleRemove = () => {
 		order.removeShippingLine(shipping);
 	};
 
@@ -28,11 +28,11 @@ const ShippingLine = ({ order, shipping, columns }: Props): React.ReactElement =
 								case 'quantity':
 									return null;
 								case 'price':
-									return <Price lineItem={shipping} price={cellData} />;
+									return <Price lineItem={shipping} />;
 								case 'name':
-									return <Text>{shipping.method_title}</Text>;
+									return <Text>{shipping.methodTitle}</Text>;
 								case 'actions':
-									return <Button title="x" onPress={onRemove} />;
+									return <Button title="x" onPress={handleRemove} />;
 								default:
 									return null;
 							}

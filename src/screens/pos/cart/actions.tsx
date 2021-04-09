@@ -50,22 +50,7 @@ const Actions = ({ columns, ui }: ICartActionsProps) => {
 			<Button
 				title="Restore Default Settings"
 				onPress={() => {
-					ui.parent.upsertLocal('pos_cart', {
-						width: '40%',
-						sortBy: 'id',
-						sortDirection: 'asc',
-						columns: [
-							{ key: 'quantity', order: 0 },
-							{ key: 'name', order: 1 },
-							{ key: 'sku', order: 2 },
-							{ key: 'price', order: 3 },
-							{ key: 'subtotal', order: 4 },
-							{ key: 'subtotal_tax', order: 5 },
-							{ key: 'total_tax', order: 6 },
-							{ key: 'total', order: 7 },
-							{ key: 'actions', order: 8 },
-						],
-					});
+					ui.reset();
 				}}
 			/>
 		</>

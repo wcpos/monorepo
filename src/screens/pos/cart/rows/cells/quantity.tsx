@@ -1,21 +1,16 @@
 import * as React from 'react';
-import TextInput from '../../../../../components/textinput';
+import TextInput from '@wcpos/common/src/components/textinput';
 
-type Props = {
-	lineItem: any;
-	quantity: number;
-};
+interface Props {
+	lineItem: import('@wcpos/common/src/database/line-items').LineItemDocument;
+}
 
-const Quantity = ({ lineItem, quantity }: Props): React.ReactElement => {
+const Quantity = ({ lineItem }: Props) => {
 	const handleChangeText = async (newValue: string): Promise<void> => {
-		lineItem.update({
-			$set: {
-				quantity: Number(newValue),
-			},
-		});
+		lineItem.atomicPatch({ quantity: Number(newValue) });
 	};
 
-	return <TextInput value={String(quantity)} onChangeText={handleChangeText} />;
+	return <TextInput value={String(lineItem.quantity)} onChangeText={handleChangeText} />;
 };
 
 export default Quantity;

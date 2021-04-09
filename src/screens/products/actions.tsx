@@ -53,7 +53,7 @@ const Actions = ({ columns, query, ui }: IProductsActionsProps) => {
 			<Button
 				title="Restore Default Settings"
 				onPress={() => {
-					console.log('reset ui');
+					ui.reset();
 				}}
 			/>
 		</>

@@ -1,18 +1,18 @@
 import * as React from 'react';
-import Table from '../../../../components/table';
-import Button from '../../../../components/button';
+import Table from '@wcpos/common/src/components/table';
+import Button from '@wcpos/common/src/components/button';
 import Quantity from './cells/quantity';
 import Price from './cells/price';
 
-type GetCellPropsFunction = import('../../../../components/table/row').GetCellPropsFunction;
+type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 
-type Props = {
-	order: any;
-	item: any;
+interface Props {
+	order: import('@wcpos/common/src/database/orders').OrderDocument;
+	item: import('@wcpos/common/src/database/line-items').LineItemDocument;
 	columns: any;
-};
+}
 
-const LineItem = ({ order, item, columns }: Props): React.ReactElement => {
+const LineItem = ({ order, item, columns }: Props) => {
 	const onRemove = () => {
 		order.removeLineItem(item);
 	};
@@ -26,9 +26,9 @@ const LineItem = ({ order, item, columns }: Props): React.ReactElement => {
 						{((): React.ReactElement | null => {
 							switch (column.key) {
 								case 'quantity':
-									return <Quantity lineItem={item} quantity={cellData} />;
+									return <Quantity lineItem={item} />;
 								case 'price':
-									return <Price lineItem={item} price={cellData} />;
+									return <Price lineItem={item} />;
 								case 'actions':
 									return <Button title="x" onPress={onRemove} />;
 								default:

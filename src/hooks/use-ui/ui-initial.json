@@ -23,8 +23,13 @@
 		"columns": [
 			{ "key": "quantity", "order": 0 },
 			{ "key": "name", "order": 1 },
-			{ "key": "price", "order": 2 },
-			{ "key": "total", "order": 3 }
+			{ "key": "sku", "hide": true, "order": 2 },
+			{ "key": "price", "order": 3 },
+			{ "key": "subtotal", "hide": true, "order": 4 },
+			{ "key": "subtotalTax", "hide": true, "order": 5 },
+			{ "key": "totalTax", "hide": true, "order": 6 },
+			{ "key": "total", "order": 7 },
+			{ "key": "actions", "order": 8 }
 		]
 	},
 	"products": {

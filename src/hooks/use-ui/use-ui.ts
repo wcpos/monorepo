@@ -49,6 +49,10 @@ export const useUI = (key: Extract<keyof IUIResources, string>) => {
 				storeDB.insertLocal(`ui${key}`, initialUI[key]);
 				return false;
 			}
+			// add helper function to reset the ui settings
+			uiDoc.reset = () => {
+				storeDB.upsertLocal(`ui${key}`, initialUI[key]);
+			};
 			return uiDoc;
 		})
 	);

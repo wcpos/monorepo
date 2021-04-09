@@ -26,23 +26,14 @@ interface ICartProps {
 const Cart = ({ ui, orders = [] }: ICartProps) => {
 	const { storeDB, user } = useAppState();
 	const { currentOrder, setCurrentOrder } = React.useContext(POSContext);
-
-	// const [order, setOrder] = React.useState<OrderDocument | undefined>(get(orders, '0'));
-	// const order: OrderDocument | undefined = useObservableState(get(orders, '0.$'));
-	// debugger;
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const [query, setQuery] = React.useState({
 		sortBy: 'id',
 		sortDirection: 'asc',
 	});
 
-	// React.useEffect(() => {
-	// 	setCurrentOrder(get(orders, '0'));
-	// }, []);
-
 	if (!currentOrder) {
 		return (
-			// @ts-ignore
 			<Segment.Group>
 				<Segment>
 					<CustomerSelect />
@@ -63,7 +54,6 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 	};
 
 	return (
-		// @ts-ignore
 		<Segment.Group>
 			<Segment>
 				<CustomerSelect />
@@ -72,12 +62,7 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				</Popover>
 			</Segment>
 			<Segment grow>
-				<Table
-					order={currentOrder as OrderDocument}
-					columns={columns}
-					query={query}
-					onSort={handleSort}
-				/>
+				<Table order={currentOrder} columns={columns} query={query} onSort={handleSort} />
 			</Segment>
 			<Segment>
 				<Totals order={currentOrder} />
@@ -86,14 +71,14 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				<Button
 					title="Add Fee"
 					onPress={() => {
-						(currentOrder as OrderDocument).addFeeLine({ name: 'Fee', total: '10' });
+						currentOrder.addFeeLine({ name: 'Fee', total: '10' });
 					}}
 				/>
 				<Button
 					title="Add Shipping"
 					onPress={() => {
-						(currentOrder as OrderDocument).addShippingLine({
-							method_title: 'Shipping',
+						currentOrder.addShippingLine({
+							methodTitle: 'Shipping',
 							total: '5',
 						});
 					}}
@@ -101,16 +86,10 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				<Button
 					title="Save"
 					onPress={async () => {
-						// const path = storePath.split('.');
-						// const wpCredentials = user.get(path.slice(1, 5).join('.'));
-						// const replicationState = currentOrder.syncRestApi({
-						// 	auth: {
-						// 		username: wpCredentials.consumer_key,
-						// 		password: wpCredentials.consumer_secret,
-						// 	},
-						// 	push: {},
-						// });
-						// replicationState.run(false);
+						const replicationState = currentOrder.syncRestApi({
+							push: {},
+						});
+						replicationState.run(false);
 					}}
 				/>
 			</Segment>

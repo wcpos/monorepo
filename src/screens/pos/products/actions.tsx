@@ -57,29 +57,13 @@ const Actions = ({ columns, display, ui }: IPOSProductActionsProps) => {
 			<Button
 				title="Restore Default Settings"
 				onPress={() => {
-					ui.parent.upsertLocal('pos_products', {
-						sortBy: 'name',
-						sortDirection: 'asc',
-						width: '60%',
-						columns: [
-							{ key: 'image', disableSort: true, order: 1 },
-							{ key: 'name', order: 2 },
-							{ key: 'sku', hide: true, order: 3 },
-							{ key: 'price', order: 4 },
-							{ key: 'actions', disableSort: true, order: 5 },
-						],
-						display: [
-							{ key: 'sku', hide: true, order: 1 },
-							{ key: 'categories', order: 2 },
-							{ key: 'tags', hide: true, order: 3 },
-						],
-					});
+					ui.reset();
 				}}
 			/>
 			<Button
 				title="Change width"
 				onPress={() => {
-					ui.atomicSet('width', '40%');
+					ui.set('width', '40%');
 				}}
 			/>
 		</>
