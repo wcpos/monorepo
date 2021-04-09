@@ -79,6 +79,7 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 					onPress={() => {
 						currentOrder.addShippingLine({
 							methodTitle: 'Shipping',
+							methodId: 'test',
 							total: '5',
 						});
 					}}

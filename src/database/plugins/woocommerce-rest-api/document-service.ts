@@ -146,6 +146,7 @@ export class RxDBWooCommerceRestApiSyncDocumentService {
 				}
 			}
 		} catch (err) {
+			console.log(err);
 			this._subjects.error.next(err);
 			return false;
 		}

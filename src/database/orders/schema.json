@@ -309,7 +309,7 @@
 		"lineItems": {
 			"description": "Line items data.",
 			"type": "array",
-			"ref": "lineItems",
+			"ref": "line_items",
 			"items": {
 				"type": "string"
 			}
@@ -370,7 +370,7 @@
 		"shippingLines": {
 			"description": "Shipping lines data.",
 			"type": "array",
-			"ref": "shippingLines",
+			"ref": "shipping_lines",
 			"items": {
 				"type": "string"
 			}
@@ -378,7 +378,7 @@
 		"feeLines": {
 			"description": "Fee lines data.",
 			"type": "array",
-			"ref": "feeLines",
+			"ref": "fee_lines",
 			"items": {
 				"type": "string"
 			}
