@@ -28,6 +28,7 @@ import orders from './orders';
 import line_items from './line-items';
 import fee_lines from './fee-lines';
 import shipping_lines from './shipping-lines';
+import customers from './customers';
 import { config } from './adapter';
 import { ConnectionService } from './sites/service';
 
@@ -176,6 +177,7 @@ export type StoreDatabaseCollections = {
 	line_items: import('./line-items').LineItemCollection;
 	fee_lines: import('./fee-lines').FeeLineCollection;
 	shipping_lines: import('./shipping-lines').ShippingLineCollection;
+	customers: import('./customers').CustomerCollection;
 };
 export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
 
@@ -200,6 +202,7 @@ export async function _createStoresDB(name: string, baseURL: string, jwt: string
 		line_items,
 		fee_lines,
 		shipping_lines,
+		customers,
 	});
 
 	forEach(collections, (collection) => {
