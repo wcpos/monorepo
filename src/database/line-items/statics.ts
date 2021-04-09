@@ -1,25 +1,16 @@
-type OrderLineItemDocument = import('../../../types').OrderLineItemDocument;
+type LineItemCollection = import('./').LineItemCollection;
 
 /**
  * WooCommerce Order Line Item statics
  */
 export default {
 	/**
-	 *
+	 * Fix for WC REST Api error, line_item.parent_name can be null
 	 */
-	// async bulkInsertFromOrder(
-	// 	this: OrderLineItemDocument,
-	// 	data: Record<string, unknown>[],
-	// 	orderId: string
-	// ) {
-	// 	if (Array.isArray(data) && data.length > 0) {
-	// 		return this.bulkInsert(
-	// 			data.map((d) => {
-	// 				d.order_id = orderId;
-	// 				return d;
-	// 			})
-	// 		);
-	// 	}
-	// 	return [];
-	// },
+	preInsertParentName(this: LineItemCollection, plainData: Record<string, unknown>) {
+		if (!plainData.parentName) {
+			plainData.parentName = '';
+		}
+		return plainData;
+	},
 };

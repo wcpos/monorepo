@@ -90,5 +90,16 @@ export interface WooCommerceCustomerSchema {
     value?: string;
     [k: string]: any;
   }[];
+  links?: {
+    collection?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    self?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    [k: string]: any;
+  };
   [k: string]: any;
 }

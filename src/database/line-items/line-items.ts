@@ -1,4 +1,5 @@
 import schema from './schema.json';
+import statics from './statics';
 
 export type LineItemSchema = import('./interface').WooCommerceOrderLineItemSchema;
 export type LineItemDocument = import('rxdb').RxDocument<LineItemSchema, LineItemMethods>;
@@ -8,12 +9,12 @@ export type LineItemCollection = import('rxdb').RxCollection<
 	LineItemStatics
 >;
 type LineItemMethods = Record<string, never>;
-type LineItemStatics = Record<string, never>;
+type LineItemStatics = typeof import('./statics');
 
 export const lineItems = {
 	schema,
 	// pouchSettings: {},
-	// statics: {},
+	statics,
 	// methods: {},
 	// attachments: {},
 	// options: {},

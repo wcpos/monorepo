@@ -17,7 +17,7 @@ export interface WooCommerceOrderShippingLineSchema {
   /**
    * Shipping method ID.
    */
-  methodId?: string;
+  methodId: string;
   /**
    * Shipping instance ID.
    */

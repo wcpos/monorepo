@@ -1,4 +1,8 @@
 import isFunction from 'lodash/isFunction';
+import unset from 'lodash/unset';
+import snakeCase from 'lodash/snakeCase';
+import forEach from 'lodash/forEach';
+import invokeMap from 'lodash/invokeMap';
 import { DEFAULT_MODIFIER } from './helpers';
 import { RxDBWooCommerceRestApiSyncCollectionService } from './collection-service';
 import { RxDBWooCommerceRestApiSyncDocumentService } from './document-service';
@@ -103,21 +107,31 @@ export function syncRestApiDocument(
 export async function toRestApiJSON(this: Document) {
 	const json: Record<string, unknown> = this.toJSON();
 
-	if (typeof json.id === 'string' && json.id.substring(0, 3) === 'new') {
-		json.id = undefined;
-	}
-
 	if (this.collection.name === 'orders') {
-		// add line_items
-		// @ts-ignore
-		const lineItems = await this.collections().line_items.findByIds(this.line_items || []);
-		json.line_items = await Promise.all(
-			Array.from(lineItems.values()).map((doc) => doc.toRestApiJSON())
+		json.line_items = await this.populate('lineItems').then((items) =>
+			Promise.all(invokeMap(items, toRestApiJSON))
 		);
+		json.fee_lines = await this.populate('feeLines').then((items) =>
+			Promise.all(invokeMap(items, toRestApiJSON))
+		);
+		json.shipping_lines = await this.populate('shippingLines').then((items) =>
+			Promise.all(invokeMap(items, toRestApiJSON))
+		);
+
+		unset(json, 'lineItems');
+		unset(json, 'feeLines');
+		unset(json, 'shippingLines');
 	}
 
-	// if (this.collection.name === 'line_items') {
-	// }
+	// reverse camelCase for WC REST API
+	forEach(json, (data, key) => {
+		const privateProperties = ['_id', '_attachments', '_rev'];
+		const snakeCaseKey = snakeCase(key);
+		if (!privateProperties.includes(key) && key !== snakeCaseKey) {
+			json[snakeCaseKey] = data;
+			unset(json, key);
+		}
+	});
 
 	return json;
 }
