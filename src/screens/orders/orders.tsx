@@ -13,9 +13,7 @@ type Sort = import('@wcpos/common/src/components/table/types').Sort;
 
 const Orders = () => {
 	const { storeDB } = useAppState();
-	const productsUIResource = useUIResource('orders');
-	const ui = useObservableSuspense(productsUIResource);
-
+	const ui = useObservableSuspense(useUIResource('orders'));
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
 	const onSort: Sort = ({ sortBy, sortDirection }) => {

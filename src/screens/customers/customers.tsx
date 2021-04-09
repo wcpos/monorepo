@@ -1,20 +1,19 @@
 import * as React from 'react';
 import { View, Text } from 'react-native';
-import { useObservableState, useObservable } from 'observable-hooks';
+import { useObservableState, useObservable, useObservableSuspense } from 'observable-hooks';
 import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
-import Segment from '../../components/segment';
-import Table from './table';
+import Segment from '@wcpos/common/src/components/segment';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useUIResource from '@wcpos/common/src/hooks/use-ui';
+import Button from '@wcpos/common/src/components/button';
 import Actions from './actions';
-import useAppState from '../../hooks/use-app-state';
-import Button from '../../components/button';
-import WcApiService from '../../services/wc-api';
+import Table from './table';
 
-type Sort = import('../../components/table/types').Sort;
+type Sort = import('@wcpos/common/src/components/table/types').Sort;
 
 const Customers = () => {
-	const [{ user, storeDB, storePath }] = useAppState();
-	const ui = storeDB.getUI('customers');
-
+	const { user, storeDB } = useAppState();
+	const ui = useObservableSuspense(useUIResource('customers'));
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
 	const onSort: Sort = ({ sortBy, sortDirection }) => {
@@ -24,9 +23,13 @@ const Customers = () => {
 
 	const [query, setQuery] = React.useState({
 		search: '',
-		sortBy: 'first_name',
+		sortBy: 'firstName',
 		sortDirection: 'asc',
 	});
+
+	if (!storeDB) {
+		throw Error('something went wrong');
+	}
 
 	const customers$ = useObservable(
 		// A stream of React elements!
@@ -43,6 +46,7 @@ const Customers = () => {
 						// 		name: { $regex: regexp },
 						// 	},
 						// })
+						// @ts-ignore
 						.sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
 				}),
@@ -75,17 +79,11 @@ const Customers = () => {
 					<Button
 						title="Fetch customers"
 						onPress={async () => {
-							const path = storePath.split('.');
-							const site = user.get(path.slice(1, 3).join('.'));
-							const wpCredentials = user.get(path.slice(1, 5).join('.'));
-							const baseUrl = site.wc_api_url;
-							const collection = 'customers';
-							const key = wpCredentials.consumer_key;
-							const secret = wpCredentials.consumer_secret;
-							const api = new WcApiService({ baseUrl, collection, key, secret });
-							const data = await api.fetch();
-							console.log(data);
-							storeDB.collections.customers.bulkInsert(data);
+							// @ts-ignore
+							const replicationState = storeDB.customers.syncRestApi({
+								pull: {},
+							});
+							replicationState.run(false);
 						}}
 					/>
 				</Segment>

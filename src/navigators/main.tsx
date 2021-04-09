@@ -6,8 +6,8 @@ import ErrorBoundary from '@wcpos/common/src/components/error';
 import POS from '@wcpos/common/src/screens/pos';
 import Products from '@wcpos/common/src/screens/products';
 import Orders from '@wcpos/common/src/screens/orders';
-// import Customers from '../screens/customers';
-// import Support from '../screens/support';
+import Customers from '@wcpos/common/src/screens/customers';
+import Support from '@wcpos/common/src/screens/support';
 import Text from '@wcpos/common/src/components/text';
 
 type ScreenProps = {
@@ -20,8 +20,8 @@ const components = {
 	POS: <POS />,
 	Products: <Products />,
 	Orders: <Orders />,
-	// Customers: <Customers />,
-	// Support: <Support />,
+	Customers: <Customers />,
+	Support: <Support />,
 };
 
 const Screen = ({ route }: ScreenProps) => {
@@ -44,8 +44,8 @@ const MainNavigator = () => {
 			<Drawer.Screen name="POS" component={Screen} />
 			<Drawer.Screen name="Products" component={Screen} />
 			<Drawer.Screen name="Orders" component={Screen} />
-			{/* <Drawer.Screen name="Customers" component={Screen} />
-			<Drawer.Screen name="Support" component={Screen} /> */}
+			<Drawer.Screen name="Customers" component={Screen} />
+			<Drawer.Screen name="Support" component={Screen} />
 		</Drawer.Navigator>
 	);
 };

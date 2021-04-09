@@ -9,11 +9,11 @@
 			"column": {
 				"label": {
 					"actions": "Actions",
-					"avatar_url": "Image",
+					"avatarUrl": "Image",
 					"billing": "Billing Address",
 					"email": "Email",
-					"first_name": "First Name",
-					"last_name": "Last Name",
+					"firstName": "First Name",
+					"lastName": "Last Name",
 					"role": "Role",
 					"shipping": "Shipping Address",
 					"username": "Username"
@@ -27,9 +27,9 @@
 					"customer": "Customer",
 					"billing": "Billing",
 					"shipping": "Shipping",
-					"date_completed": "Date Completed",
-					"date_created": "Date Created",
-					"date_modified": "Date Modified",
+					"dateCompleted": "Date Completed",
+					"dateCreated": "Date Created",
+					"dateModified": "Date Modified",
 					"note": "Note",
 					"number": "Order Number",
 					"status": "Status",
@@ -46,8 +46,8 @@
 					"total": "Total",
 					"sku": "SKU",
 					"subtotal": "Subtotal",
-					"subtotal_tax": "Subtotal Tax",
-					"total_tax": "Total Tax",
+					"subtotalTax": "Subtotal Tax",
+					"totalTax": "Total Tax",
 					"actions": "Actions"
 				}
 			}
@@ -60,8 +60,8 @@
 					"image": "Image",
 					"name": "Product",
 					"price": "Price",
-					"regular_price": "Regular Price",
-					"sale_price": "Sale Price",
+					"regularPrice": "Regular Price",
+					"salePrice": "Sale Price",
 					"sku": "SKU",
 					"stock": "Stock"
 				}
@@ -82,14 +82,14 @@
 				"label": {
 					"actions": "Actions",
 					"customer": "Customer",
-					"date_created": "Created",
+					"dateCreated": "Created",
 					"id": "ID",
 					"image": "Image",
 					"name": "Product",
 					"price": "Price",
 					"qty": "Qty",
-					"regular_price": "Regular Price",
-					"sale_price": "Sale Price",
+					"regularPrice": "Regular Price",
+					"salePrice": "Sale Price",
 					"sku": "SKU",
 					"status": "Status",
 					"stock": "Stock",
@@ -108,7 +108,7 @@
 				"loading": "Loading"
 			},
 			"showing": "Showing {{showing}} of {{total}}",
-			"in_stock": "{{quantity}} in stock"
+			"inStock": "{{quantity}} in stock"
 		}
 	}
 }
