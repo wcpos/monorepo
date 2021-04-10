@@ -1,6 +1,5 @@
 import get from 'lodash/get';
 import schema from './schema.json';
-import { ConnectionService } from './service';
 
 export type SiteSchema = import('./interface').SiteSchema;
 export type SiteDocument = import('rxdb').RxDocument<SiteSchema, SiteMethods>;
@@ -10,12 +9,20 @@ type WPCredentialsCollection = import('../wp-credentials').WPCredentialsCollecti
 type WPCredentialsDocument = import('../wp-credentials').WPCredentialsDocument;
 
 interface SiteMethods {
+	getUrlWithoutProtocol: () => string;
 	connect: () => Promise<any>;
 	addOrUpdateWpCredentials: (data: Record<string, unknown>) => Promise<WPCredentialsDocument>;
 	getWcApiUrl: () => string;
 }
 
 const methods: SiteMethods = {
+	/**
+	 *
+	 */
+	getUrlWithoutProtocol(this: SiteDocument) {
+		return this?.url?.replace(/^.*:\/{2,}|\s|\/+$/g, '') || '';
+	},
+
 	/**
 	 *
 	 */

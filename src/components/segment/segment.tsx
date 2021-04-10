@@ -30,7 +30,7 @@ export const Segment = ({
 	}
 
 	return (
-		<Styled.Segment group={group} type={type} raised={raised} grow={grow}>
+		<Styled.Segment style={style} group={group} type={type} raised={raised} grow={grow}>
 			{segment}
 		</Styled.Segment>
 	);

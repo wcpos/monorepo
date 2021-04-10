@@ -15,6 +15,7 @@ export const Segment = styled.View<SegmentProps>`
 	flex-shrink: ${({ grow }) => (grow ? '1' : '0')};
 	flex-grow: 0;
 	flex-basis: auto;
+	width: 100%;
 
 	${({ group }) =>
 		group === 'first' &&

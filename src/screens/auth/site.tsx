@@ -82,8 +82,10 @@ const Site = ({ site, user }: ISiteProps) => {
 				<Text size="small" type="secondary">
 					{site.url}
 				</Text>
-				{error && <Text size="small">{error}</Text>}
-				{status && !error && <Text size="small">{status}</Text>}
+				<Text size="small">{error}</Text>
+				<Text size="small">{!error && status}</Text>
+				{/* {error && <Text size="small">{error}</Text>}
+				{status && !error && <Text size="small">{status}</Text>} */}
 
 				<Button title="Connect" onPress={() => site.connect()} />
 				<Button
