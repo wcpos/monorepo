@@ -9,4 +9,5 @@ addRxPlugin(require('pouchdb-adapter-http'));
 export const config = {
 	adapter: 'react-native-sqlite',
 	multiInstance: false,
+	ignoreDuplicate: true, // @TODO - not sure why this is needed for storeDB to load
 };

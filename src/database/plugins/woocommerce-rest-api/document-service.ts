@@ -1,5 +1,4 @@
 import { BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
-import httpClient from './http-client';
 
 type RestApiSyncPullOptions = import('./types').RestApiSyncPullOptions;
 type RestApiSyncPushOptions = import('./types').RestApiSyncPushOptions;
@@ -23,7 +22,7 @@ export class RxDBWooCommerceRestApiSyncDocumentService {
 		// 	url,
 		// 	headers,
 		// });
-		this.client = httpClient;
+		this.client = '';
 		// this.endpointHash = hash(url);
 		this.endpointHash = '';
 		this._prepare();
@@ -129,7 +128,8 @@ export class RxDBWooCommerceRestApiSyncDocumentService {
 		let result;
 
 		try {
-			result = await this.client({
+			// @ts-ignore
+			result = await this.document.collection.database.httpClient({
 				method: 'post',
 				// @ts-ignore
 				url: `${this.document.collection.name}/${this.document.id}`,

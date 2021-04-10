@@ -53,7 +53,6 @@ const POS = () => {
 	// );
 
 	// const [width] = useObservableState(() => productsUI.get$('width'), productsUI.get('width'));
-	const width = '200';
 	console.log('render');
 	// const [width, setWidth] = React.useState(storeDB.ui.pos_products.width);
 	// const width = useObservableState(productsUI.width$);
@@ -84,7 +83,7 @@ const POS = () => {
 	return (
 		<POSContext.Provider value={{ currentOrder, setCurrentOrder }}>
 			<Styled.Container>
-				<Styled.Column style={{ width }}>
+				<Styled.Column>
 					<ErrorBoundary>
 						<React.Suspense fallback={<Text>Loading products...</Text>}>
 							<Products ui={productsUI} />
