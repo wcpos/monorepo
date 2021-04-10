@@ -69,14 +69,16 @@ export class ConnectionService {
 	 */
 	async _fetchHead(): Promise<any> {
 		const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
-		return this.client.head(`${protocol}://${this.site.url}`).then((response) => {
-			const wpApiUrl = parseApiUrlFromHeaders(response.headers);
-			if (wpApiUrl) {
-				this._subjects.status.next('WordPress website found');
-				return this.site.atomicPatch({ wpApiUrl });
-			}
-			throw Error('Site does not seem to be a WordPress site');
-		});
+		return this.client
+			.head(`${protocol}://${this.site.getUrlWithoutProtocol()}`)
+			.then((response) => {
+				const wpApiUrl = parseApiUrlFromHeaders(response.headers);
+				if (wpApiUrl) {
+					this._subjects.status.next('WordPress website found');
+					return this.site.atomicPatch({ wpApiUrl });
+				}
+				throw Error('Site does not seem to be a WordPress site');
+			});
 	}
 
 	/**
