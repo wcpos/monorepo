@@ -2,7 +2,7 @@ import * as React from 'react';
 import DatabaseService from '@wcpos/common/src/database';
 
 type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
-type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
+type UserDocument = import('@wcpos/common/src/database').UserDocument;
 
 let userDB: UserDatabase;
 

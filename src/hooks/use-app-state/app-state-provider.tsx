@@ -7,11 +7,11 @@ import useUser from '../use-user';
 import { getUniqueId, getReadableVersion } from './device-info';
 import useStoreDB from '../use-store';
 
-type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
+type UserDocument = import('@wcpos/common/src/database').UserDocument;
 type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
-type SiteDocument = import('@wcpos/common/src/database/sites').SiteDocument;
-type WPCredentialsDocument = import('@wcpos/common/src/database/wp-credentials').WPCredentialsDocument;
+type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
+type WPCredentialsDocument = import('@wcpos/common/src/database').WPCredentialsDocument;
 
 export interface IAppStateProps {
 	info: {
