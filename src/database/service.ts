@@ -205,35 +205,38 @@ export async function _createStoresDB(name: string, baseURL: string, jwt: string
 		customers,
 	});
 
-	forEach(collections, (collection) => {
-		collection.preInsert((plainData: Record<string, unknown>) => {
-			const promises: Promise<any>[] = [];
-			parsePlainData(plainData, collection);
+	/**
+	 * Attach hooks for each collection
+	 */
+	// forEach(collections, (collection) => {
+	// 	forEach(collection.options.hooks, (hook, key) => {
+	// 		const { handle, parallel } = hook;
+	// 		collection[key](handle, parallel);
+	// 	});
 
-			/**
-			 * This allows each collection to manage plainData coming from the WC REST API
-			 * It loops through each property and calls collection.preInsert{Property}
-			 * if it exists
-			 */
-			forEach(plainData, (data, key) => {
-				const preInsertKey = camelCase(`preInsert-${key}`);
-				if (isFunction(collection[preInsertKey])) {
-					promises.push(collection[preInsertKey](plainData, collection, db));
-				}
-			});
+	// 	collection.preInsert((plainData: Record<string, unknown>) => {
+	// 		const promises: Promise<any>[] = [];
+	// 		parsePlainData(plainData, collection);
 
-			return Promise.all(promises).then(() => plainData);
-		}, false);
+	// 		/**
+	// 		 * This allows each collection to manage plainData coming from the WC REST API
+	// 		 * It loops through each property and calls collection.preInsert{Property}
+	// 		 * if it exists
+	// 		 */
+	// 		forEach(plainData, (data, key) => {
+	// 			const preInsertKey = camelCase(`preInsert-${key}`);
+	// 			if (isFunction(collection[preInsertKey])) {
+	// 				promises.push(collection[preInsertKey](plainData, collection, db));
+	// 			}
+	// 		});
 
-		collection.preSave((plainData: Record<string, unknown>, rxDocument) => {
-			parsePlainData(plainData, collection);
+	// 		return Promise.all(promises).then(() => plainData);
+	// 	}, false);
 
-			/**
-			 * add dateCreatedGmt to plain data
-			 */
-			if (!plainData.dateCreatedGmt) plainData.dateCreatedGmt = Date.now();
-		}, false);
-	});
+	// 	collection.preSave((plainData: Record<string, unknown>, rxDocument) => {
+	// 		parsePlainData(plainData, collection);
+	// 	}, false);
+	// });
 
 	return db;
 }

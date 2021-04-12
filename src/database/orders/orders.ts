@@ -48,13 +48,31 @@ export const statics: OrderStatics = {
 	},
 };
 
+/**
+ *
+ */
+function postCreate(
+	this: OrderCollection,
+	plainData: Record<string, unknown>,
+	orderDocument: OrderDocument
+) {
+	console.log('watch lineItems');
+}
+
 export const orders = {
 	schema,
 	// pouchSettings: {},
 	statics,
 	methods,
 	// attachments: {},
-	// options: {},
+	options: {
+		middlewares: {
+			postCreate: {
+				handle: postCreate,
+				parallel: false,
+			},
+		},
+	},
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},
