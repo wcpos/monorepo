@@ -4,22 +4,22 @@ import { from, of, combineLatest, zip, Observable } from 'rxjs';
 import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
-import Table from '../../../components/table';
-import Text from '../../../components/text';
-import TextInput from '../../../components/textinput';
-import Button from '../../../components/button';
+import Table from '@wcpos/common/src/components/table';
+import Text from '@wcpos/common/src/components/text';
+import TextInput from '@wcpos/common/src/components/textinput';
+import Button from '@wcpos/common/src/components/button';
 import LineItem from './rows/line-item';
 import FeeLine from './rows/fee-line';
 import ShippingLine from './rows/shipping-line';
 
-type ColumnProps = import('../../../components/table/types').ColumnProps;
-type Sort = import('../../../components/table/types').Sort;
-type SortDirection = import('../../../components/table/types').SortDirection;
-type GetHeaderCellPropsFunction = import('../../../components/table/header-row').GetHeaderCellPropsFunction;
-type OrderDocument = import('../../../database').OrderTypes.OrderDocument;
-type LineItemDocument = import('../../../database').LineItemTypes.LineItemDocument;
-type FeeLineDocument = import('../../../database').FeeLineTypes.FeeLineDocument;
-type ShippingLineDocument = import('../../../database').ShippingLineTypes.ShippingLineDocument;
+type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
+type Sort = import('@wcpos/common/src/components/table/types').Sort;
+type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
+type GetHeaderCellPropsFunction = import('@wcpos/common/src/components/table/header-row').GetHeaderCellPropsFunction;
+type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type LineItemDocument = import('@wcpos/common/src/database').LineItemDocument;
+type FeeLineDocument = import('@wcpos/common/src/database').FeeLineDocument;
+type ShippingLineDocument = import('@wcpos/common/src/database').ShippingLineDocument;
 
 interface ICartTableProps {
 	columns: ColumnProps[];

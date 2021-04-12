@@ -13,7 +13,7 @@ import Cart from './cart';
 import Products from './products';
 import * as Styled from './styles';
 
-type OrderDocument = import('@wcpos/common/src/database/orders').OrderDocument;
+type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
 interface IPOSContent {

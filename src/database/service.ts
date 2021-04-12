@@ -17,20 +17,21 @@ import Platform from '@wcpos/common/src/lib/platform';
 import axios from 'axios';
 import difference from 'lodash/difference';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
-import logs from './logs';
-import users from './users';
-import sites from './sites';
-import wp_credentials from './wp-credentials';
-import stores from './stores';
-import products from './products';
-import product_variations from './product-variations';
-import orders from './orders';
-import line_items from './line-items';
-import fee_lines from './fee-lines';
-import shipping_lines from './shipping-lines';
-import customers from './customers';
+import { userCollections, storeCollections } from './collections';
+import logs from './collections/logs';
+import users from './collections/users';
+import sites from './collections/sites';
+import wp_credentials from './collections/wp-credentials';
+import stores from './collections/stores';
+import products from './collections/products';
+import product_variations from './collections/product-variations';
+import orders from './collections/orders';
+import line_items from './collections/line-items';
+import fee_lines from './collections/fee-lines';
+import shipping_lines from './collections/shipping-lines';
+import customers from './collections/customers';
 import { config } from './adapter';
-import { ConnectionService } from './sites/service';
+import { ConnectionService } from './collections/sites/service';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -107,11 +108,11 @@ export async function _createDB<T>(name: string) {
  * types for the Users database
  */
 export type UserDatabaseCollections = {
-	logs: import('./logs').LogCollection;
-	users: import('./users').UserCollection;
-	sites: import('./sites').SiteCollection;
-	wp_credentials: import('./wp-credentials').WPCredentialsCollection;
-	stores: import('./sites').SiteCollection;
+	logs: import('./collections/logs').LogCollection;
+	users: import('./collections/users').UserCollection;
+	sites: import('./collections/sites').SiteCollection;
+	wp_credentials: import('./collections/wp-credentials').WPCredentialsCollection;
+	stores: import('./collections/sites').SiteCollection;
 };
 export type UserDatabase = import('rxdb').RxDatabase<UserDatabaseCollections>;
 
@@ -120,42 +121,33 @@ export type UserDatabase = import('rxdb').RxDatabase<UserDatabaseCollections>;
  */
 export async function _createUsersDB() {
 	const db = await _createDB<UserDatabaseCollections>('wcposusers');
+	// @ts-ignore
+	const collections = await db.addCollections(userCollections);
 
-	const collections = await db.addCollections({
-		logs,
-		// @ts-ignore
-		users,
-		// @ts-ignore
-		sites,
-		// @ts-ignore
-		wp_credentials,
-		stores,
-	});
+	// forEach(collections, (collection) => {
+	// collection.preInsert((plainData: Record<string, unknown>) => {
+	// 	const promises: Promise<any>[] = [];
+	// 	parsePlainData(plainData, collection);
 
-	forEach(collections, (collection) => {
-		collection.preInsert((plainData: Record<string, unknown>) => {
-			const promises: Promise<any>[] = [];
-			parsePlainData(plainData, collection);
+	// 	/**
+	// 	 * This allows each collection to manage plainData coming from the WC REST API
+	// 	 * It loops through each property and calls collection.preInsert{Property}
+	// 	 * if it exists
+	// 	 */
+	// 	forEach(plainData, (data, key) => {
+	// 		const preInsertKey = camelCase(`preInsert-${key}`);
+	// 		if (isFunction(collection[preInsertKey])) {
+	// 			promises.push(collection[preInsertKey](plainData, collection));
+	// 		}
+	// 	});
 
-			/**
-			 * This allows each collection to manage plainData coming from the WC REST API
-			 * It loops through each property and calls collection.preInsert{Property}
-			 * if it exists
-			 */
-			forEach(plainData, (data, key) => {
-				const preInsertKey = camelCase(`preInsert-${key}`);
-				if (isFunction(collection[preInsertKey])) {
-					promises.push(collection[preInsertKey](plainData, collection));
-				}
-			});
+	// 	return Promise.all(promises).then(() => plainData);
+	// }, false);
 
-			return Promise.all(promises).then(() => plainData);
-		}, false);
-
-		collection.preSave((plainData: Record<string, unknown>) => {
-			parsePlainData(plainData, collection);
-		}, false);
-	});
+	// collection.preSave((plainData: Record<string, unknown>) => {
+	// 	parsePlainData(plainData, collection);
+	// }, false);
+	// });
 
 	// add connection service to site documents
 	collections.sites.postCreate((plainData, rxDocument) => {
@@ -172,12 +164,12 @@ export async function _createUsersDB() {
  * types for the Store database
  */
 export type StoreDatabaseCollections = {
-	products: import('./products').ProductCollection;
-	orders: import('./orders').OrderCollection;
-	line_items: import('./line-items').LineItemCollection;
-	fee_lines: import('./fee-lines').FeeLineCollection;
-	shipping_lines: import('./shipping-lines').ShippingLineCollection;
-	customers: import('./customers').CustomerCollection;
+	products: import('./collections/products').ProductCollection;
+	orders: import('./collections/orders').OrderCollection;
+	line_items: import('./collections/line-items').LineItemCollection;
+	fee_lines: import('./collections/fee-lines').FeeLineCollection;
+	shipping_lines: import('./collections/shipping-lines').ShippingLineCollection;
+	customers: import('./collections/customers').CustomerCollection;
 };
 export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
 
@@ -193,17 +185,8 @@ export async function _createStoresDB(name: string, baseURL: string, jwt: string
 	Object.assign(db, { httpClient });
 	console.log('@TODO: the storeDB is initialized multiple times');
 
-	const collections = await db.addCollections({
-		// @ts-ignore
-		products,
-		product_variations,
-		// @ts-ignore
-		orders,
-		line_items,
-		fee_lines,
-		shipping_lines,
-		customers,
-	});
+	// @ts-ignore
+	const collections = await db.addCollections(storeCollections);
 
 	/**
 	 * Attach hooks for each collection

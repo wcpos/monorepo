@@ -8,7 +8,7 @@ import Text from '@wcpos/common/src/components/text';
 import { AuthView } from './styles';
 import Site from './site';
 
-type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
+type UserDocument = import('@wcpos/common/src/database').UserDocument;
 
 /**
  *

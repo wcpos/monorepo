@@ -16,7 +16,7 @@ import Totals from './totals';
 import { POSContext } from '../pos';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
-type OrderDocument = import('@wcpos/common/src/database/orders').OrderDocument;
+type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 
 interface ICartProps {
 	ui: any;

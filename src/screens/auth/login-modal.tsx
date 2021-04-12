@@ -5,8 +5,8 @@ import Segment from '@wcpos/common/src/components/segment';
 import TextInput from '@wcpos/common/src/components/textinput';
 import http from '@wcpos/common/src/lib/http';
 
-type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
-type SiteDocument = import('@wcpos/common/src/database/sites').SiteDocument;
+type UserDocument = import('@wcpos/common/src/database').UserDocument;
+type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
 
 interface ILoginModalProps {
 	visible: boolean;

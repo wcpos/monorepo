@@ -14,7 +14,7 @@ import Table from './table';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
-type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
+type UserDocument = import('@wcpos/common/src/database').UserDocument;
 
 interface IPOSProductsProps {
 	ui: any;

@@ -2,7 +2,7 @@ import * as React from 'react';
 import TextInput from '@wcpos/common/src/components/textinput';
 
 interface Props {
-	lineItem: import('@wcpos/common/src/database/line-items').LineItemDocument;
+	lineItem: import('@wcpos/common/src/database').LineItemDocument;
 }
 
 const Quantity = ({ lineItem }: Props) => {

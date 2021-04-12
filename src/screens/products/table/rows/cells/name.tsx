@@ -1,7 +1,7 @@
 import * as React from 'react';
 import TextInput from '@wcpos/common/src/components/textinput';
 
-type ProductDocument = import('@wcpos/common/src/database/products').ProductDocument;
+type ProductDocument = import('@wcpos/common/src/database').ProductDocument;
 
 interface Props {
 	product: ProductDocument;

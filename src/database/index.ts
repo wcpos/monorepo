@@ -1,24 +1,42 @@
-import type {
+export type {
 	UserDatabase,
 	UserDatabaseCollections,
 	StoreDatabase,
 	StoreDatabaseCollections,
 } from './service';
-import type * as OrderTypes from './orders';
-import type * as ProductTypes from './products';
-import type * as LineItemTypes from './line-items';
-import type * as FeeLineTypes from './fee-lines';
-import type * as ShippingLineTypes from './shipping-lines';
 
+/**
+ * User Collections
+ */
+export type { LogCollection, LogDocument, LogSchema } from './collections/logs';
+export type { UserCollection, UserDocument, UserSchema } from './collections/users';
+export type { SiteCollection, SiteDocument, SiteSchema } from './collections/sites';
 export type {
-	OrderTypes,
-	ProductTypes,
-	LineItemTypes,
-	FeeLineTypes,
-	ShippingLineTypes,
-	UserDatabase,
-	UserDatabaseCollections,
-	StoreDatabase,
-	StoreDatabaseCollections,
-};
+	WPCredentialsCollection,
+	WPCredentialsDocument,
+	WPCredentialsSchema,
+} from './collections/wp-credentials';
+export type { StoreCollection, StoreDocument, StoreSchema } from './collections/stores';
+/**
+ * Store Collections
+ */
+export type { OrderCollection, OrderDocument, OrderSchema } from './collections/orders';
+export type { ProductCollection, ProductDocument, ProductSchema } from './collections/products';
+export type {
+	LineItemCollection,
+	LineItemDocument,
+	LineItemSchema,
+} from './collections/line-items';
+export type { FeeLineCollection, FeeLineDocument, FeeLineSchema } from './collections/fee-lines';
+export type {
+	ShippingLineCollection,
+	ShippingLineDocument,
+	ShippingLineSchema,
+} from './collections/shipping-lines';
+export type { CustomerCollection, CustomerDocument, CustomerSchema } from './collections/customers';
+
+/**
+ * This is the main export
+ * @TODO - move the types?
+ */
 export { DatabaseService as default } from './service';

@@ -5,8 +5,8 @@ import Button from '@wcpos/common/src/components/button';
 import Url from '@wcpos/common/src/lib/url-parse';
 import WebView from '@wcpos/common/src/components/webview';
 
-type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
-type SiteDocument = import('@wcpos/common/src/database/sites').SiteDocument;
+type UserDocument = import('@wcpos/common/src/database').UserDocument;
+type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
 
 interface IAuthModalProps {
 	visible: boolean;

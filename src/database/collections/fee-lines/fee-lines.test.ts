@@ -1,5 +1,5 @@
 import { isRxDocument, isRxCollection } from 'rxdb/plugins/core';
-import { DatabaseService } from '../service';
+import { DatabaseService } from '../../service';
 
 describe('Fee Lines Collection', () => {
 	let db: any = null;

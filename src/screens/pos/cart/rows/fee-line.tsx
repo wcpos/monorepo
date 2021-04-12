@@ -6,8 +6,8 @@ import Price from './cells/price';
 type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 
 interface Props {
-	order: import('@wcpos/common/src/database/orders').OrderDocument;
-	fee: import('@wcpos/common/src/database/fee-lines').FeeLineDocument;
+	order: import('@wcpos/common/src/database').OrderDocument;
+	fee: import('@wcpos/common/src/database').FeeLineDocument;
 	columns: any;
 }
 

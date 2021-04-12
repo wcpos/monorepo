@@ -4,7 +4,7 @@ import isString from 'lodash/isString';
 import DatabaseService from '@wcpos/common/src/database';
 
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
-type WPCredentialsDocument = import('@wcpos/common/src/database/wp-credentials').WPCredentialsDocument;
+type WPCredentialsDocument = import('@wcpos/common/src/database').WPCredentialsDocument;
 
 function sanitizeStoreName(id: string) {
 	return `store_${id.replace(':', '_')}`;

@@ -3,9 +3,9 @@ import TextInput from '@wcpos/common/src/components/textinput';
 
 interface Props {
 	lineItem:
-		| import('@wcpos/common/src/database/line-items').LineItemDocument
-		| import('@wcpos/common/src/database/fee-lines').FeeLineDocument
-		| import('@wcpos/common/src/database/shipping-lines').ShippingLineDocument;
+		| import('@wcpos/common/src/database').LineItemDocument
+		| import('@wcpos/common/src/database').FeeLineDocument
+		| import('@wcpos/common/src/database').ShippingLineDocument;
 }
 
 const Price = ({ lineItem }: Props) => {

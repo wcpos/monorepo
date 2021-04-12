@@ -11,9 +11,9 @@ import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Modal from './login-modal';
 import { SiteWrapper, SiteTextWrapper } from './styles';
 
-type SiteDocument = import('@wcpos/common/src/database/sites').SiteDocument;
-type UserDocument = import('@wcpos/common/src/database/users').UserDocument;
-type WPCredentialsDocument = import('@wcpos/common/src/database/wp-credentials').WPCredentialsDocument;
+type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
+type UserDocument = import('@wcpos/common/src/database').UserDocument;
+type WPCredentialsDocument = import('@wcpos/common/src/database').WPCredentialsDocument;
 
 interface ISiteProps {
 	site: SiteDocument;
