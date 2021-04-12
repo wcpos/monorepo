@@ -1,4 +1,4 @@
-type LineItemCollection = import('./').LineItemCollection;
+type LineItemCollection = import('.').LineItemCollection;
 
 /**
  * WooCommerce Order Line Item statics

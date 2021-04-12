@@ -1,7 +1,7 @@
 import { isRxDocument } from 'rxdb/plugins/core';
-import { DatabaseService } from '../service';
+import { DatabaseService } from '../../service';
 
-describe('Logs Collection', () => {
+describe('Stores Collection', () => {
 	let db: any = null;
 
 	beforeAll(async () => {
@@ -12,12 +12,11 @@ describe('Logs Collection', () => {
 	afterAll(async () => db?.destroy());
 
 	it('should create new documents with default data', async () => {
-		const logDoc = await db.logs.insert({ message: 'Log message' });
-		expect(isRxDocument(logDoc)).toBe(true);
-		expect(logDoc).toMatchObject({
+		const storeDoc = await db.stores.insert({ name: 'Example Store' });
+		expect(isRxDocument(storeDoc)).toBe(true);
+		expect(storeDoc).toMatchObject({
 			localId: expect.any(String),
-			dateCreatedGmt: expect.any(Number),
-			message: 'Log message',
+			name: 'Example Store',
 		});
 	});
 });

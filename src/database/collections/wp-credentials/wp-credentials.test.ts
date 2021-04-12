@@ -1,7 +1,7 @@
 import { isRxDocument } from 'rxdb/plugins/core';
-import { DatabaseService } from '../service';
+import { DatabaseService } from '../../service';
 
-describe('Stores Collection', () => {
+describe('Logs Collection', () => {
 	let db: any = null;
 
 	beforeAll(async () => {
@@ -12,11 +12,11 @@ describe('Stores Collection', () => {
 	afterAll(async () => db?.destroy());
 
 	it('should create new documents with default data', async () => {
-		const storeDoc = await db.stores.insert({ name: 'Example Store' });
-		expect(isRxDocument(storeDoc)).toBe(true);
-		expect(storeDoc).toMatchObject({
-			localId: expect.any(String),
-			name: 'Example Store',
+		const userDoc = await db.users.insert({ displayName: 'John' });
+		expect(isRxDocument(userDoc)).toBe(true);
+		expect(userDoc).toMatchObject({
+			_id: expect.any(String),
+			displayName: 'John',
 		});
 	});
 });

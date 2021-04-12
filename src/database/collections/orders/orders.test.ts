@@ -1,6 +1,6 @@
 import { skip } from 'rxjs/operators';
 import { isRxCollection } from 'rxdb/plugins/core';
-import { DatabaseService } from '../service';
+import { DatabaseService } from '../../service';
 
 describe('Orders collection', () => {
 	const subscription: any = null;

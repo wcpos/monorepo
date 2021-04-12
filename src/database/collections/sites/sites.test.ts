@@ -1,5 +1,5 @@
 import { isRxDocument } from 'rxdb/plugins/core';
-import { DatabaseService } from '../service';
+import { DatabaseService } from '../../service';
 import { ConnectionService } from './service';
 
 describe('Sites Collection', () => {

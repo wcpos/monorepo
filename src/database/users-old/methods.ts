@@ -4,7 +4,7 @@ import { Subject, BehaviorSubject, of } from 'rxjs';
 import findIndex from 'lodash/findIndex';
 import pick from 'lodash/pick';
 import getDatabase from '../adapter';
-import createCollectionMap from '../stores';
+import createCollectionMap from '../collections/stores';
 import { generateId } from '../../utils';
 import wcAuthService from '../../services/wc-auth';
 import initialUI from './ui-initial.json';

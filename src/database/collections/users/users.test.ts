@@ -1,7 +1,7 @@
 import { isObservable } from 'rxjs';
 import { take } from 'rxjs/operators';
 import { isRxDocument } from 'rxdb/plugins/core';
-import { DatabaseService } from '../service';
+import { DatabaseService } from '../../service';
 
 describe('Users Collection', () => {
 	let db: any = null;
