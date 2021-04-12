@@ -1,5 +1,6 @@
 import schema from './schema.json';
 import statics from './statics';
+import { postCreate } from './postCreate';
 
 export type LineItemSchema = import('./interface').WooCommerceOrderLineItemSchema;
 export type LineItemDocument = import('rxdb').RxDocument<LineItemSchema, LineItemMethods>;
@@ -17,7 +18,14 @@ export const lineItems = {
 	statics,
 	// methods: {},
 	// attachments: {},
-	// options: {},
+	options: {
+		middlewares: {
+			postCreate: {
+				handle: postCreate,
+				parallel: false,
+			},
+		},
+	},
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},

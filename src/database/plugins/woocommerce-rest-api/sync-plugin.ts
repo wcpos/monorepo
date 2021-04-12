@@ -3,7 +3,7 @@ import unset from 'lodash/unset';
 import snakeCase from 'lodash/snakeCase';
 import forEach from 'lodash/forEach';
 import invokeMap from 'lodash/invokeMap';
-import { DEFAULT_MODIFIER } from './helpers';
+import { DEFAULT_MODIFIER, parsePlainData } from './helpers';
 import { RxDBWooCommerceRestApiSyncCollectionService } from './collection-service';
 import { RxDBWooCommerceRestApiSyncDocumentService } from './document-service';
 
@@ -152,7 +152,24 @@ const prototypes = {
 /**
  *
  */
-const hooks = {};
+const hooks = {
+	createRxCollection(collection: RxCollection) {
+		/**
+		 * Parse plaindata on insert and save
+		 */
+		collection.preInsert(parsePlainData, false);
+		collection.preSave(parsePlainData, false);
+
+		/**
+		 * Allow colections to set middleware-hooks via config options
+		 * needs to allow for promises
+		 */
+		forEach(collection.options.middlewares, (middleware, hook) => {
+			const { handle, parallel } = middleware;
+			collection[hook](handle, parallel);
+		});
+	},
+};
 
 export const RxDBWooCommerceRestApiSyncPlugin: RxPlugin = {
 	name: 'woocommerce-rest-api-sync',
