@@ -24,19 +24,19 @@ export default {
 		return this.status === 'pending';
 	},
 
-	/**
-	 *
-	 */
-	async getLineItems(
-		this: OrderDocument,
-		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Promise<LineItemDocument[]> {
-		// note: findByIds returns a map
-		const collection: LineItemCollection = this.collections().line_items;
-		const lineItems = await collection.findByIds(this.line_items || []);
-		const lineItemsArray = Array.from(lineItems.values());
-		return orderBy(lineItemsArray, q.sortBy, q.sortDirection);
-	},
+	// /**
+	//  *
+	//  */
+	// async getLineItems(
+	// 	this: OrderDocument,
+	// 	q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+	// ): Promise<LineItemDocument[]> {
+	// 	// note: findByIds returns a map
+	// 	const collection: LineItemCollection = this.collections().line_items;
+	// 	const lineItems = await collection.findByIds(this.line_items || []);
+	// 	const lineItemsArray = Array.from(lineItems.values());
+	// 	return orderBy(lineItemsArray, q.sortBy, q.sortDirection);
+	// },
 
 	/**
 	 *
@@ -47,27 +47,25 @@ export default {
 	): Observable<LineItemDocument[]> {
 		return this.lineItems$.pipe(
 			switchMap(async (ids) => {
-				// note: findByIds returns a map
-				const lineItems = await this.collections().line_items.findByIds(ids || []);
-				const lineItemsArray = Array.from(lineItems.values());
-				return orderBy(lineItemsArray, q.sortBy, q.sortDirection);
+				const lineItems = await this.populate('lineItems');
+				return orderBy(lineItems, q.sortBy, q.sortDirection);
 			})
 		);
 	},
 
-	/**
-	 *
-	 */
-	async getFeeLines(
-		this: OrderDocument,
-		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Promise<FeeLineDocument[]> {
-		// note: findByIds returns a map
-		const collection: FeeLineCollection = this.collections().fee_lines;
-		const feeLines = await collection.findByIds(this.fee_lines || []);
-		const feeLinesArray = Array.from(feeLines.values());
-		return orderBy(feeLinesArray, q.sortBy, q.sortDirection);
-	},
+	// /**
+	//  *
+	//  */
+	// async getFeeLines(
+	// 	this: OrderDocument,
+	// 	q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+	// ): Promise<FeeLineDocument[]> {
+	// 	// note: findByIds returns a map
+	// 	const collection: FeeLineCollection = this.collections().fee_lines;
+	// 	const feeLines = await collection.findByIds(this.fee_lines || []);
+	// 	const feeLinesArray = Array.from(feeLines.values());
+	// 	return orderBy(feeLinesArray, q.sortBy, q.sortDirection);
+	// },
 
 	/**
 	 *
@@ -78,27 +76,25 @@ export default {
 	): Observable<FeeLineDocument[]> {
 		return this.feeLines$.pipe(
 			switchMap(async (ids) => {
-				// note: findByIds returns a map
-				const feeLines = await this.collections().fee_lines.findByIds(ids || []);
-				const feeLinesArray = Array.from(feeLines.values());
-				return orderBy(feeLinesArray, q.sortBy, q.sortDirection);
+				const feeLines = await this.populate('feeLines');
+				return orderBy(feeLines, q.sortBy, q.sortDirection);
 			})
 		);
 	},
 
-	/**
-	 *
-	 */
-	async getShippingLines(
-		this: OrderDocument,
-		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Promise<ShippingLineDocument[]> {
-		// note: findByIds returns a map
-		const collection: ShippingLineCollection = this.collections().shipping_lines;
-		const shippingLines = await collection.findByIds(this.shipping_lines || []);
-		const shippingLinesArray = Array.from(shippingLines.values());
-		return orderBy(shippingLinesArray, q.sortBy, q.sortDirection);
-	},
+	// /**
+	//  *
+	//  */
+	// async getShippingLines(
+	// 	this: OrderDocument,
+	// 	q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+	// ): Promise<ShippingLineDocument[]> {
+	// 	// note: findByIds returns a map
+	// 	const collection: ShippingLineCollection = this.collections().shipping_lines;
+	// 	const shippingLines = await collection.findByIds(this.shipping_lines || []);
+	// 	const shippingLinesArray = Array.from(shippingLines.values());
+	// 	return orderBy(shippingLinesArray, q.sortBy, q.sortDirection);
+	// },
 
 	/**
 	 *
@@ -109,10 +105,8 @@ export default {
 	): Observable<ShippingLineDocument[]> {
 		return this.shippingLines$.pipe(
 			switchMap(async (ids) => {
-				// note: findByIds returns a map
-				const shippingLines = await this.collections().shipping_lines.findByIds(ids || []);
-				const shippingLinesArray = Array.from(shippingLines.values());
-				return orderBy(shippingLinesArray, q.sortBy, q.sortDirection);
+				const shippingLines = await this.populate('shippingLines');
+				return orderBy(shippingLines, q.sortBy, q.sortDirection);
 			})
 		);
 	},
