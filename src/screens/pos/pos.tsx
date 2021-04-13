@@ -53,7 +53,7 @@ const POS = () => {
 	// );
 
 	// const [width] = useObservableState(() => productsUI.get$('width'), productsUI.get('width'));
-	console.log('render');
+	console.log('Entire POS render');
 	// const [width, setWidth] = React.useState(storeDB.ui.pos_products.width);
 	// const width = useObservableState(productsUI.width$);
 	// console.log(width);

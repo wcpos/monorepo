@@ -21,44 +21,45 @@ const Orders = () => {
 		// ui.updateWithJson({ sortBy, sortDirection });
 	};
 
-	const [query, setQuery] = React.useState({
-		search: '',
-		sortBy: 'dateCreatedGmt',
-		sortDirection: 'desc',
-	});
+	// const [query, setQuery] = React.useState({
+	// 	search: '',
+	// 	sortBy: 'dateCreatedGmt',
+	// 	sortDirection: 'desc',
+	// });
 
 	if (!storeDB) {
 		throw Error('something went wrong');
 	}
 
-	const orders$ = useObservable(
-		// A stream of React elements!
-		(inputs$) =>
-			inputs$.pipe(
-				distinctUntilChanged((a, b) => a[0] === b[0]),
-				debounceTime(150),
-				switchMap(([q]) => {
-					const regexp = new RegExp(escape(q.search), 'i');
-					const RxQuery = storeDB.collections.orders
-						.find()
-						// .find({
-						// 	selector: {
-						// 		name: { $regex: regexp },
-						// 	},
-						// })
-						// @ts-ignore
-						.sort({ [q.sortBy]: q.sortDirection });
-					return RxQuery.$;
-				}),
-				catchError((err) => {
-					console.error(err);
-					return err;
-				})
-			),
-		[query]
-	);
+	// const orders$ = useObservable(
+	// 	// A stream of React elements!
+	// 	(inputs$) =>
+	// 		inputs$.pipe(
+	// 			distinctUntilChanged((a, b) => a[0] === b[0]),
+	// 			debounceTime(150),
+	// 			switchMap(([q]) => {
+	// 				const regexp = new RegExp(escape(q.search), 'i');
+	// 				const RxQuery = storeDB.collections.orders
+	// 					.find()
+	// 					// .find({
+	// 					// 	selector: {
+	// 					// 		name: { $regex: regexp },
+	// 					// 	},
+	// 					// })
+	// 					// @ts-ignore
+	// 					.sort({ [q.sortBy]: q.sortDirection });
+	// 				return RxQuery.$;
+	// 			}),
+	// 			catchError((err) => {
+	// 				console.error(err);
+	// 				return err;
+	// 			})
+	// 		),
+	// 	[query]
+	// );
 
-	const orders = useObservableState(orders$, []);
+	const query = storeDB.collections.orders.find();
+	const orders = useObservableState(query.$, []);
 
 	return (
 		<React.Suspense fallback={<Text>loading orders...</Text>}>
@@ -90,10 +91,12 @@ const Orders = () => {
 					<Button
 						title="Insert new order"
 						onPress={async () => {
-							// storeDB.collections.orders.insert({
-							// 	id: 1234,
-							// 	number: '1234',
-							// });
+							// @ts-ignore
+							storeDB.collections.orders.insert({
+								id: 1234,
+								number: '1234',
+								line_items: [{ name: 'Test', price: 8 }],
+							});
 						}}
 					/>
 				</Segment>
