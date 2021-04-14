@@ -18,18 +18,6 @@ import axios from 'axios';
 import difference from 'lodash/difference';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
 import { userCollections, storeCollections } from './collections';
-import logs from './collections/logs';
-import users from './collections/users';
-import sites from './collections/sites';
-import wp_credentials from './collections/wp-credentials';
-import stores from './collections/stores';
-import products from './collections/products';
-import product_variations from './collections/product-variations';
-import orders from './collections/orders';
-import line_items from './collections/line-items';
-import fee_lines from './collections/fee-lines';
-import shipping_lines from './collections/shipping-lines';
-import customers from './collections/customers';
 import { config } from './adapter';
 import { ConnectionService } from './collections/sites/service';
 
@@ -50,38 +38,6 @@ addRxPlugin(RxDBValidatePlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
-
-/**
- * Parse plain data helper
- * @param plainData
- */
-const parsePlainData = (
-	plainData: Record<string, unknown>,
-	collection: import('rxdb').RxCollection
-) => {
-	const topLevelFields = get(collection, 'schema.topLevelFields');
-	/**
-	 * convert all plainData properties to camelCase
-	 */
-	forEach(plainData, (data, key) => {
-		const privateProperties = ['_id', '_attachments', '_rev'];
-		if (!privateProperties.includes(key) && key.includes('_')) {
-			plainData[camelCase(key)] = data;
-			unset(plainData, key);
-		}
-	});
-
-	/**
-	 * remove any properties not in the schema
-	 */
-	const omitProperties = difference(Object.keys(plainData), topLevelFields);
-	if (omitProperties.length > 0) {
-		console.log('the following properties are being omitted', omitProperties);
-		omitProperties.forEach((prop: string) => {
-			unset(plainData, prop);
-		});
-	}
-};
 
 /**
  * creates the generic database

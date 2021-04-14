@@ -18,6 +18,7 @@ export const DEFAULT_MODIFIER = (d: any) => Promise.resolve(d);
  */
 export function parsePlainData(this: RxCollection, plainData: Record<string, unknown>) {
 	const topLevelFields = get(this, 'schema.topLevelFields');
+
 	/**
 	 * convert all plainData properties to camelCase
 	 */

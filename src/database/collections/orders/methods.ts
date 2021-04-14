@@ -136,10 +136,8 @@ export default {
 		product: ProductDocument | ProductVariationDocument,
 		parent: ProductDocument
 	) {
-		await this.collections()
+		return this.collections()
 			.line_items.upsert({
-				id: `new-${Date.now()}`,
-				order_id: this.id,
 				name: product.name || parent.name,
 				product_id: parent ? parent.id : product.id,
 				variation_id: parent && product.id,
@@ -179,15 +177,15 @@ export default {
 	 *
 	 */
 	async addFeeLine(this: OrderDocument, data: Record<string, unknown>) {
-		const feeLineCollection: FeeLineCollection = get(this, 'collection.database.fee_lines');
-		// @ts-ignore
-		await feeLineCollection.insert(data).then((newFee: FeeLineDocument) => {
-			return this.update({
-				$push: {
-					feeLines: newFee._id,
-				},
+		await this.collections()
+			.fee_lines.insert(data)
+			.then((newFee: FeeLineDocument) => {
+				return this.update({
+					$push: {
+						feeLines: newFee._id,
+					},
+				});
 			});
-		});
 	},
 
 	/**
@@ -207,14 +205,8 @@ export default {
 	 *
 	 */
 	async addShippingLine(this: OrderDocument, data: Record<string, unknown>) {
-		const shippingLineCollection: ShippingLineCollection = get(
-			this,
-			'collection.database.shipping_lines'
-		);
-
-		await shippingLineCollection
-			// @ts-ignore
-			.insert(data)
+		await this.collections()
+			.shipping_lines.insert(data)
 			.then((newShipping: ShippingLineDocument) => {
 				return this.update({
 					$push: {
@@ -222,7 +214,7 @@ export default {
 					},
 				});
 			})
-			.catch((err) => {
+			.catch((err: any) => {
 				console.log(err);
 			});
 	},
