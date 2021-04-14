@@ -1,7 +1,7 @@
 import { from, of, combineLatest, zip, Observable } from 'rxjs';
 import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import orderBy from 'lodash/orderBy';
-import get from 'lodash/get';
+import filter from 'lodash/filter';
 
 type OrderDocument = import('./orders').OrderDocument;
 type ProductDocument = import('../products/products').ProductDocument;
@@ -135,24 +135,48 @@ export default {
 		this: OrderDocument,
 		product: ProductDocument | ProductVariationDocument,
 		parent: ProductDocument
-	) {
-		return this.collections()
-			.line_items.upsert({
+	): Promise<OrderDocument> {
+		// check lineItems for same product id
+		const productId = parent ? parent.id : product.id;
+		const populatedLineItems = await this.populate('lineItems');
+		const existingProducts = filter(populatedLineItems, { productId }) as LineItemDocument[];
+
+		// if product exists, increase quantity by 1
+		if (existingProducts.length === 1) {
+			await existingProducts[0]
+				.update({
+					$inc: {
+						quantity: 1,
+					},
+				})
+				.catch((err: any) => {
+					debugger;
+				});
+			return this;
+		}
+
+		// else, create new lineItem
+		const newLineItem: LineItemDocument = await this.collections()
+			.line_items.insert({
+				productId,
 				name: product.name || parent.name,
-				product_id: parent ? parent.id : product.id,
-				variation_id: parent && product.id,
+				variationId: parent && product.id,
 				quantity: 1,
 				price: parseFloat(product.price || ''),
 				sku: product.sku,
 				tax_class: product.tax_class,
 			})
-			.then((newLineItem: LineItemDocument) => {
-				return this.update({
-					$push: {
-						line_items: newLineItem.id,
-					},
-				});
+			.catch((err: any) => {
+				debugger;
 			});
+
+		return this.update({
+			$push: {
+				lineItems: newLineItem._id,
+			},
+		}).catch((err: any) => {
+			debugger;
+		});
 	},
 
 	/**
