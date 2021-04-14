@@ -1,6 +1,6 @@
 import styled from 'styled-components/native';
 
-type ITextInputProps = import('./textinput').ITextInputProps;
+// type ITextInputProps = import('./textinput').ITextInputProps;
 
 export const Box = styled.View`
 	flex-direction: row;
@@ -13,7 +13,7 @@ export const Box = styled.View`
 	padding: ${({ theme }) => theme.SEGMENT_PADDING};
 `;
 
-export const TextInput = styled.TextInput<ITextInputProps>`
+export const TextInput = styled.TextInput`
 	flex: 1;
 	align-self: center;
 	font-size: ${({ theme }) => theme.INPUT_FONT_SIZE};

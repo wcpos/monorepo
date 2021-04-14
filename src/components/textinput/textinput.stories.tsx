@@ -1,34 +1,55 @@
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-import TextInput, { ITextInputProps } from './textinput';
+import { TextInput } from './textinput';
 import Portal from '../portal';
+
+type StoryFn<T> = import('../storybook-types').StoryFn<T>;
+type ITextFieldProps = import('./textinput').ITextInputProps;
 
 export default {
 	title: 'Components/TextInput',
 	component: TextInput,
-	argTypes: {
-		placeholder: 'Placeholder text',
-		prefix: 'http://',
-		action: 'Submit',
-	},
 };
 
-export const basicUsage = ({ placeholder }: ITextInputProps) => (
-	<TextInput placeholder={placeholder} />
-);
+export const basicUsage: StoryFn<ITextFieldProps> = (props) => {
+	const [value, setValue] = React.useState(props.value);
+	const onTextChanged = (newText: string): void => {
+		setValue(newText);
+		action('Text changed')(newText);
+	};
+
+	return <TextInput value={value} onChange={onTextChanged} {...props} />;
+};
+basicUsage.args = {
+	label: 'Label',
+	placeholder: 'Placeholder Text',
+	returnKeyType: 'done',
+	helpText: 'Help Text meant to help you',
+	onFocus: action('Focused'),
+	onBlur: action('Blurred'),
+	onSubmit: action('Submitted'),
+	onKeyPress: action('Key Pressed'),
+};
 
 export const withAction = ({ placeholder }: ITextInputProps) => (
 	<TextInput placeholder={placeholder} onAction={action('submit')} />
 );
 
-export const withPrefix = ({ placeholder, prefix }: ITextInputProps) => (
-	<TextInput
-		placeholder={placeholder}
-		// action={action}
-		onAction={action('submit')}
-		prefix={prefix}
-	/>
-);
+export const integerWithPrefix = () => {
+	const [value, setValue] = React.useState('');
+
+	return (
+		<TextInput
+			label="Amount"
+			type="integer"
+			prefix="$"
+			placeholder="10"
+			returnKeyType="done"
+			value={value}
+			onChange={setValue}
+		/>
+	);
+};
 
 export const clearable = ({ placeholder, prefix, clearable }: ITextInputProps) => (
 	<TextInput
@@ -45,3 +66,5 @@ export const autosize = ({ placeholder, autosize }: ITextInputProps) => (
 		<TextInput placeholder={placeholder} autosize />
 	</Portal.Host>
 );
+
+export const uncontrolled = () => <TextInput label="Uncontrolled" />;

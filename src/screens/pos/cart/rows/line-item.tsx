@@ -15,9 +15,6 @@ interface Props {
 }
 
 const LineItem = ({ order, item, columns }: Props) => {
-	const i = useObservableState(item.$);
-	console.log('This just triggers the render, surely there is a better way', i);
-
 	const onRemove = () => {
 		order.removeLineItem(item);
 	};
@@ -35,7 +32,7 @@ const LineItem = ({ order, item, columns }: Props) => {
 								case 'price':
 									return <Price lineItem={item} />;
 								case 'Total':
-									return <Total item={item} />;
+									return <Total item={item} total={cellData} />;
 								case 'actions':
 									return <Button title="x" onPress={onRemove} />;
 								default:

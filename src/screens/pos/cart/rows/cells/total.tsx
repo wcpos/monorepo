@@ -3,14 +3,19 @@ import { useObservableState } from 'observable-hooks';
 import Text from '@wcpos/common/src/components/text';
 
 interface Props {
-	item:
+	item?:
 		| import('@wcpos/common/src/database').LineItemDocument
 		| import('@wcpos/common/src/database').FeeLineDocument
 		| import('@wcpos/common/src/database').ShippingLineDocument;
+	total: string;
 }
 
 const Total = ({ item }: Props) => {
-	return <Text>{item.total}</Text>;
+	// @ts-ignore
+	const total = useObservableState(item.total$, item.total);
+	console.log(total);
+
+	return <Text>{total}</Text>;
 };
 
 export default Total;
