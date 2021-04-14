@@ -33,7 +33,7 @@
 		},
 		"quantity": {
 			"description": "Quantity ordered.",
-			"type": "integer"
+			"type": "number"
 		},
 		"taxClass": {
 			"description": "Tax class of product.",
