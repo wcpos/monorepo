@@ -14,7 +14,7 @@ type SiteCollection = import('../sites').SiteCollection;
 type SiteDocument = import('../sites').SiteDocument;
 
 interface UserMethods {
-	addSiteByUrl: (url: string) => Promise<SiteDocument | undefined>;
+	addSiteByUrl: (url: string) => Promise<void>;
 	removeSite: (site: SiteDocument) => Promise<void>;
 	getSites_$: () => Observable<SiteDocument[]>;
 }
@@ -25,21 +25,13 @@ const methods: UserMethods = {
 	 */
 	async addSiteByUrl(this: UserDocument, url) {
 		const cleanUrl = isString(url) && url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
-		if (cleanUrl) {
-			const sitesCollection: SiteCollection = get(this, 'collection.database.collections.sites');
+		if (!cleanUrl) return;
 
-			if (sitesCollection) {
-				// @ts-ignore
-				const site = await sitesCollection.insert({ url: cleanUrl });
-				await this.update({ $push: { sites: site._id } }).catch((err) => {
-					console.log(err);
-					return err;
-				});
-
-				return site;
-			}
-		}
-		return undefined;
+		const site = await this.collections().sites.insert({ url: cleanUrl });
+		await this.update({ $push: { sites: site._id } }).catch((err) => {
+			console.log(err);
+			return err;
+		});
 	},
 
 	/**
@@ -56,6 +48,7 @@ const methods: UserMethods = {
 	 *
 	 */
 	getSites_$(this: UserDocument) {
+		console.log('@TODO - fix this');
 		const sitesCollection: SiteCollection = get(this, 'collection.database.collections.sites');
 
 		// @ts-ignore

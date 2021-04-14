@@ -29,7 +29,7 @@ export const Table = ({
 	sortBy,
 	sortDirection,
 }: ITableProps) => {
-	const keyExtractor = (item: any, index: number) => item.id || index;
+	const keyExtractor = (item: any, index: number) => item._id || index;
 	const childCount = React.Children.count(children);
 	let renderItem: React.FunctionComponent<any> = ({ item }: any) => (
 		<Row rowData={item} columns={columns} />

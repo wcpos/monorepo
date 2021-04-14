@@ -37,6 +37,7 @@ const CartTable = ({ columns, order, query, onSort }: ICartTableProps) => {
 	]) as Observable<any[]>;
 
 	const items = useObservableState(items$, []);
+	console.log(items);
 
 	return (
 		<Table

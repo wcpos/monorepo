@@ -40,7 +40,10 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				</Segment>
 				<Segment>
 					{orders.map((order) => (
-						<Text onPress={() => setCurrentOrder(order)}>{`${order.id}: ${order.total}`}</Text>
+						<Text
+							key={order._id}
+							onPress={() => setCurrentOrder(order)}
+						>{`${order.id}: ${order.total}`}</Text>
 					))}
 					<Text onPress={() => setCurrentOrder(undefined)}>New</Text>
 				</Segment>
@@ -96,7 +99,10 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 			</Segment>
 			<Segment>
 				{orders.map((order) => (
-					<Text onPress={() => setCurrentOrder(order)}>{`${order.id}: ${order.total}`}</Text>
+					<Text
+						key={order._id}
+						onPress={() => setCurrentOrder(order)}
+					>{`${order.id}: ${order.total}`}</Text>
 				))}
 				<Text onPress={() => setCurrentOrder(undefined)}>New</Text>
 			</Segment>
