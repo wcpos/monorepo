@@ -1,7 +1,7 @@
 import * as React from 'react';
 import Table from '@wcpos/common/src/components/table';
 import Button from '@wcpos/common/src/components/button';
-import Price from './cells/price';
+import Price from './cells/fee-and-shipping-price';
 
 type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 
@@ -27,7 +27,7 @@ const FeeLine = ({ order, fee, columns }: Props) => {
 								case 'quantity':
 									return null;
 								case 'price':
-									return <Price lineItem={fee} />;
+									return <Price item={fee} />;
 								case 'actions':
 									return <Button title="x" onPress={handleFeeRemove} />;
 								default:

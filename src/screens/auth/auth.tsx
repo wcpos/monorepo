@@ -42,13 +42,7 @@ const Auth = () => {
 				<Segment style={{ width: '90%', maxWidth: 460 }}>
 					<Text size="large">Connect!</Text>
 					<Text>Enter the URL of your WooCommerce store:</Text>
-					<TextInput
-						prefix="https://"
-						action="Connect"
-						onAction={onConnect}
-						keyboardType="url"
-						clearable
-					/>
+					<TextInput prefix="https://" action="Connect" onAction={onConnect} type="url" clearable />
 				</Segment>
 				{sites && sites.length > 0 && (
 					<Segment.Group style={{ width: '90%', maxWidth: 460, height: 'auto' }}>

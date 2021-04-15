@@ -50,7 +50,7 @@ const Products = ({ ui }: IPOSProductsProps) => {
 		// @ts-ignore
 		<Segment.Group>
 			<Segment>
-				<Input value={query.search} placeholder="Search products" onChangeText={onSearch} />
+				<Input value={query.search} placeholder="Search products" onChange={onSearch} />
 				<Popover content={<Actions columns={columns} display={display} ui={ui} />}>
 					<Button title="Table Settings" />
 				</Popover>

@@ -2,7 +2,7 @@ import * as React from 'react';
 import Table from '@wcpos/common/src/components/table';
 import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
-import Price from './cells/price';
+import Price from './cells/fee-and-shipping-price';
 
 type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 
@@ -28,7 +28,7 @@ const ShippingLine = ({ order, shipping, columns }: Props) => {
 								case 'quantity':
 									return null;
 								case 'price':
-									return <Price lineItem={shipping} />;
+									return <Price item={shipping} />;
 								case 'name':
 									return <Text>{shipping.methodTitle}</Text>;
 								case 'actions':

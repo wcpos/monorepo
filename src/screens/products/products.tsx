@@ -71,7 +71,7 @@ const Products = () => {
 		<Styled.Container>
 			<Segment.Group>
 				<Segment>
-					<Input placeholder="Search products" onChangeText={onSearch} />
+					<Input placeholder="Search products" onChange={onSearch} />
 					<Actions columns={columns} query={query} ui={ui} />
 				</Segment>
 				<Segment grow>

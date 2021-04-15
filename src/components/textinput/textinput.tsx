@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { View, TextInputProps, TextInput as RNTextInput } from 'react-native';
-import noop from 'lodash/noop';
+import isFunction from 'lodash/isFunction';
 import useUncontrolledState from '@wcpos/common/src/hooks/use-uncontrolled-state';
 import * as Styled from './styles';
 import Button from '../button';
@@ -25,7 +25,15 @@ export interface ITextInputProps {
 	 *
 	 * Also defines the type of keyboard displayed and the value for autocomplete/autofill properties.
 	 */
-	type?: 'text' | 'email' | 'password' | 'new-password' | 'first-name' | 'last-name' | 'integer';
+	type?:
+		| 'text'
+		| 'email'
+		| 'password'
+		| 'new-password'
+		| 'first-name'
+		| 'last-name'
+		| 'integer'
+		| 'url'; // iOS only
 	/**
 	 * Placeholder text when input is empty.
 	 */
@@ -107,6 +115,11 @@ export interface ITextInputProps {
 	 * Called when a key is pressed.
 	 */
 	onKeyPress?: TextInputProps['onKeyPress'];
+	/**
+	 * Common action button (WIP)
+	 */
+	action?: string;
+	onAction?: (value: string) => void;
 }
 
 /**
@@ -130,6 +143,8 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 			onKeyPress,
 			onFocus: onFocusProp,
 			onBlur: onBlurProp,
+			action,
+			onAction,
 		},
 		ref
 	) => {
@@ -156,17 +171,9 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 				input.focus();
 			}
 		}, []);
-		// const handleChangeText = (val: string) => {
-		// 	setText(val);
-		// 	// onChangeText(val);
-		// };
-
-		// const handleClear = () => {
-		// 	setText('');
-		// };
 
 		const handleOnAction = () => {
-			// onAction(text);
+			if (isFunction(onAction)) onAction(value);
 		};
 
 		/**
@@ -220,10 +227,12 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 					return { textContentType: 'familyName', autoCapitalize: 'words' };
 				case 'integer':
 					return { textContentType: 'none', keyboardType: 'number-pad' };
+				case 'url':
+					return { textContentType: 'none', keyboardType: 'url' };
 				default:
 					return {};
 			}
-		}, [type]);
+		}, [type, autoCapitalize]);
 
 		return (
 			<Styled.Box>
@@ -248,13 +257,13 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 					onKeyPress={onKeyPress}
 				/>
 				{/* {clearable && text !== '' && <Icon name="clear" onPress={handleClear} />} */}
-				{/* {action && (
-				<Button
-					title={action}
-					onPress={handleOnAction}
-					style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
-				/>
-			)} */}
+				{action && (
+					<Button
+						title={action}
+						onPress={handleOnAction}
+						style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+					/>
+				)}
 			</Styled.Box>
 		);
 	}
