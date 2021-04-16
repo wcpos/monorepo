@@ -12,6 +12,7 @@ interface Props {
 const Actions = ({ product }: Props) => {
 	const { currentOrder } = React.useContext(POSContext);
 	const { storeDB } = useAppState();
+	const [visible, setVisible] = React.useState(false);
 
 	const addToCart = async () => {
 		if (currentOrder) {
@@ -23,8 +24,12 @@ const Actions = ({ product }: Props) => {
 
 	if (product.isVariable()) {
 		return (
-			<Popover content={<Variations product={product} />}>
-				<Button title="->" />
+			<Popover
+				open={visible}
+				onRequestClose={() => setVisible(false)}
+				activator={<Button title="->" onPress={() => setVisible(true)} />}
+			>
+				<Variations product={product} />
 			</Popover>
 		);
 	}

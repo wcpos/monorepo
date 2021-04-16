@@ -51,9 +51,7 @@ const Products = ({ ui }: IPOSProductsProps) => {
 		<Segment.Group>
 			<Segment>
 				<Input value={query.search} placeholder="Search products" onChange={onSearch} />
-				<Popover content={<Actions columns={columns} display={display} ui={ui} />}>
-					<Button title="Table Settings" />
-				</Popover>
+				<Actions columns={columns} display={display} ui={ui} />
 			</Segment>
 			<Segment grow>
 				<Table query={query} columns={columns} display={display} sort={onSort} />

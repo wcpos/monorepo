@@ -6,7 +6,6 @@ import sumBy from 'lodash/sumBy';
 import get from 'lodash/get';
 import Segment from '@wcpos/common/src/components/segment';
 import Button from '@wcpos/common/src/components/button';
-import Popover from '@wcpos/common/src/components/popover';
 import Text from '@wcpos/common/src/components/text';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Table from './table';
@@ -60,9 +59,7 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 		<Segment.Group>
 			<Segment>
 				<CustomerSelect />
-				<Popover content={<Actions columns={columns} ui={ui} />}>
-					<Button title="Table Settings" />
-				</Popover>
+				<Actions columns={columns} ui={ui} />
 			</Segment>
 			<Segment grow>
 				<Table order={currentOrder} columns={columns} query={query} onSort={handleSort} />

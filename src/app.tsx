@@ -1,5 +1,6 @@
 import 'react-native-gesture-handler';
 import * as React from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Text } from 'react-native';
 import { NavigationContainer, useLinking, NavigationContainerRef } from '@react-navigation/native';
 import { ThemeProvider } from 'styled-components/native';
@@ -74,15 +75,18 @@ const App = () => {
 				<AppStateProvider i18n={i18n}>
 					{(isAppStateReady: boolean, theme: any) => (
 						<ThemeProvider theme={theme}>
-							<Portal.Host>
-								{isAppStateReady && isNavReady ? (
-									<NavigationContainer ref={navigationRef} initialState={initialNavState}>
-										<AppNavigator />
-									</NavigationContainer>
-								) : (
-									<SplashScreen />
-								)}
-							</Portal.Host>
+							<SafeAreaProvider>
+								<Portal.Provider>
+									{isAppStateReady && isNavReady ? (
+										<NavigationContainer ref={navigationRef} initialState={initialNavState}>
+											<AppNavigator />
+										</NavigationContainer>
+									) : (
+										<SplashScreen />
+									)}
+									<Portal.Manager />
+								</Portal.Provider>
+							</SafeAreaProvider>
 						</ThemeProvider>
 					)}
 				</AppStateProvider>

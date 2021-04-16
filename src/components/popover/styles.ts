@@ -1,16 +1,18 @@
 import styled from 'styled-components/native';
 
-type ThemeProps = import('../../lib/theme').ThemeProps;
-
-export const Wrapper = styled.View<{ theme: ThemeProps }>`
-	align-self: flex-start;
+export const Container = styled.View`
+	position: 'absolute';
+	top: 0;
+	left: 0;
+	align-items: 'flex-start';
+	z-index: ${({ theme }) => theme.POPOVER_Z_INDEX};
 `;
 
-export const ContentView = styled.View<{ theme: ThemeProps }>`
-	justify-content: center;
-	background-color: white;
-	border-radius: 3px;
-	box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
-	padding: 5px;
-	min-width: 300px;
+export const Popover = styled.View`
+	background-color: ${({ theme }) => theme.POPOVER_BACKGROUND_COLOR};
+	shadow-offset: { width: 0, height: 1 };
+	shadow-opacity: 0.22;
+	shadow-radius: 7.5;
+	shadow-color: '#000';
+	elevation: 8;
 `;

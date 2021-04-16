@@ -31,6 +31,9 @@ const fonts = Platform.select({
 const theme = {
 	APP_BACKGROUND_COLOR: colors.background,
 
+	BACKDROP_COLOR: 'rgba(0, 0, 0, 0.3)',
+	BACKDROP_Z_INDEX: 1000,
+
 	BUTTON_BORDER_RADIUS: '3px',
 	BUTTON_COLOR: colors.primary,
 	BUTTON_COLOR_SECONDARY: colors.secondary,
@@ -93,6 +96,9 @@ const theme = {
 	PAGE_MAIN_BACKGROUND_COLOR: 'yellow',
 	PAGE_MAIN_PADDING_X: '5px',
 	PAGE_MAIN_PADDING_Y: '5px',
+
+	POPOVER_BACKGROUND_COLOR: '#FFFFFF',
+	POPOVER_Z_INDEX: 99999,
 
 	SEGMENT_BACKGROUND_COLOR: '#FFFFFF',
 	SEGMENT_BORDER_COLOR: colors.primary,

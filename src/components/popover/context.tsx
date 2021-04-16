@@ -7,6 +7,5 @@ export interface PopoverContext {
 /**
  * Context providing ability to Popover Items to dismiss the Popover.
  */
-const PopoverContext = React.createContext<PopoverContext>({ requestClose: () => {} });
-
-export default PopoverContext;
+// @ts-ignore
+export const PopoverContext = React.createContext<PopoverContext>({ requestClose: () => {} });

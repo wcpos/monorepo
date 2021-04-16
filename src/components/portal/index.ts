@@ -1,2 +1,5 @@
 import Portal from './portal';
-export default Portal;
+import Provider from './provider';
+import Manager from './manager';
+
+export default Object.assign(Portal, { Provider, Manager });

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import PortalManager from './manager';
+// import PortalManager from './manager';
 
 interface PortalContext {
 	components: { [key: string]: React.ReactNode };
@@ -28,7 +28,7 @@ const Provider = ({ children }: Props) => {
 	return (
 		<PortalContext.Provider value={{ components, setComponent }}>
 			{children}
-			<PortalManager />
+			{/* <PortalManager /> */}
 		</PortalContext.Provider>
 	);
 };

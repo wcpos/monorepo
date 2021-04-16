@@ -46,7 +46,7 @@ const App: React.FC = () => {
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<AppStateProvider i18n={i18n}>
 					<ThemeProvider>
-						<Portal.Host>
+						<Portal.Provider>
 							{/* <Navigator /> */}
 							<SafeAreaView
 								style={{
@@ -95,7 +95,8 @@ const App: React.FC = () => {
 									</View>
 								</View>
 							</SafeAreaView>
-						</Portal.Host>
+							<Portal.Manager />
+						</Portal.Provider>
 					</ThemeProvider>
 				</AppStateProvider>
 			</React.Suspense>

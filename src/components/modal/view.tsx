@@ -163,12 +163,10 @@ export default class RCModal extends React.Component<IModalPropTypes, any> {
 					this.props.onAnimationEnd(visible);
 				}
 			});
-		} else {
-			if (!visible) {
-				this.setState({
-					modalVisible: false,
-				});
-			}
+		} else if (!visible) {
+			this.setState({
+				modalVisible: false,
+			});
 		}
 	};
 
@@ -215,7 +213,7 @@ export default class RCModal extends React.Component<IModalPropTypes, any> {
 		};
 
 		return (
-			<Portal>
+			<Portal keyPrefix="Modal">
 				<Dimmer onPress={this.onMaskClose} />
 				<Animated.View
 					style={[styles.content, props.style, animationStyleMap[props.animationType]]}

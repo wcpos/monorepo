@@ -6,8 +6,8 @@ import * as Styled from './styles';
 import Button from '../button';
 import Text from '../text';
 import Icon from '../icon';
-import Portal from '../portal';
-import useMeasure from '../../hooks/use-measure';
+// import Portal from '../portal';
+// import useMeasure from '../../hooks/use-measure';
 
 export interface ITextInputProps {
 	/**

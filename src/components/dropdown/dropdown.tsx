@@ -6,7 +6,7 @@ export type Props = {};
 
 const Content = <Text style={{ color: 'white' }}>Content</Text>;
 
-const Dropdown = ({  }: Props) => {
+const Dropdown = ({}: Props) => {
 	const [key, setKey] = useState();
 
 	return (

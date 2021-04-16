@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { useTranslation } from 'react-i18next';
-import Checkbox from '../../../components/checkbox';
-import Button from '../../../components/button';
-import Text from '../../../components/text';
+import Checkbox from '@wcpos/common/src/components/checkbox';
+import Button from '@wcpos/common/src/components/button';
+import Text from '@wcpos/common/src/components/text';
+import Popover from '@wcpos/common/src/components/popover';
 
 type ColumnProps = import('../../../components/table/types').ColumnProps;
 
@@ -17,13 +18,19 @@ interface IPOSProductActionsProps {
  */
 const Actions = ({ columns, display, ui }: IPOSProductActionsProps) => {
 	const [t] = useTranslation();
+	const [visible, setVisible] = React.useState(false);
 
 	const onFilter = () => {
 		console.log('change query');
 	};
 
 	return (
-		<>
+		<Popover
+			hideBackdrop
+			open={visible}
+			onRequestClose={() => setVisible(false)}
+			activator={<Button title="Table Settings" onPress={() => setVisible(true)} />}
+		>
 			<Text>Columns</Text>
 			{columns.map((column: any, index) => (
 				<Checkbox
@@ -66,7 +73,7 @@ const Actions = ({ columns, display, ui }: IPOSProductActionsProps) => {
 					ui.set('width', '40%');
 				}}
 			/>
-		</>
+		</Popover>
 	);
 };
 
