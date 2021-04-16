@@ -11,6 +11,7 @@ import Portal from './components/portal';
 import ErrorBoundary from './components/error';
 import SplashScreen from './screens/splash';
 import Platform from './lib/platform';
+import { AppProviderSizeProvider } from './hooks/use-position-in-app';
 
 const i18n = new TranslationService();
 const prefixes =
@@ -76,16 +77,18 @@ const App = () => {
 					{(isAppStateReady: boolean, theme: any) => (
 						<ThemeProvider theme={theme}>
 							<SafeAreaProvider>
-								<Portal.Provider>
-									{isAppStateReady && isNavReady ? (
-										<NavigationContainer ref={navigationRef} initialState={initialNavState}>
-											<AppNavigator />
-										</NavigationContainer>
-									) : (
-										<SplashScreen />
-									)}
-									<Portal.Manager />
-								</Portal.Provider>
+								<AppProviderSizeProvider>
+									<Portal.Provider>
+										{isAppStateReady && isNavReady ? (
+											<NavigationContainer ref={navigationRef} initialState={initialNavState}>
+												<AppNavigator />
+											</NavigationContainer>
+										) : (
+											<SplashScreen />
+										)}
+										<Portal.Manager />
+									</Portal.Provider>
+								</AppProviderSizeProvider>
 							</SafeAreaProvider>
 						</ThemeProvider>
 					)}

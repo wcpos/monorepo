@@ -76,11 +76,7 @@ export const PopoverView: React.FC<PopoverViewProps> = ({
 	return (
 		<Styled.Container
 			as={Animated.View}
-			style={[
-				{ position: 'absolute' }, // @TODO - for some reason the styles are not coming through
-				{ width: windowWidth, height: windowHeight },
-				{ opacity: anim },
-			]}
+			style={[{ width: windowWidth, height: windowHeight }, { opacity: anim }]}
 			pointerEvents="box-none" // Children views can receive touches but not this View
 		>
 			<Styled.Popover
