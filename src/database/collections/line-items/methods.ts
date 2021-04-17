@@ -1,4 +1,4 @@
-type OrderFeeLineDocument = import('../../../types').OrderFeeLineDocument;
+type LineItemDocument = import('../../').LineItemDocument;
 
 /**
  * WooCommerce Order Line Item methods
@@ -7,13 +7,14 @@ export default {
 	/**
 	 *
 	 */
-	computedTotal(this: OrderFeeLineDocument) {
+	computedTotal(this: LineItemDocument) {
 		return this.get('quantity') * this.get('price');
 	},
+
 	/**
 	 *
 	 */
-	computedSubtotal(this: OrderFeeLineDocument) {
+	computedSubtotal(this: LineItemDocument) {
 		return this.get('quantity') * this.get('price');
 	},
 };

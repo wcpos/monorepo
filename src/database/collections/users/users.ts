@@ -48,13 +48,10 @@ const methods: UserMethods = {
 	 *
 	 */
 	getSites_$(this: UserDocument) {
-		console.log('@TODO - fix this');
-		const sitesCollection: SiteCollection = get(this, 'collection.database.collections.sites');
-
-		// @ts-ignore
 		return this.sites$.pipe(
-			switchMap((ids: string[]) => sitesCollection.findByIds(ids || [])),
-			map((sitesMap: Map<string, SiteDocument>) => Array.from(sitesMap.values()))
+			switchMap((ids: string[]) => this.populate('sites'))
+			// switchMap((ids: string[]) => this.collections().sites.findByIds(ids || [])),
+			// map((sitesMap: Map<string, SiteDocument>) => Array.from(sitesMap.values()))
 		);
 	},
 };

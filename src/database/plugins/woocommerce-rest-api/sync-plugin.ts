@@ -161,6 +161,26 @@ const hooks = {
 		collection.preSave(parsePlainData, false);
 
 		/**
+		 * Add _posLocalId to meta if no id
+		 */
+		collection.postInsert(function maybeAddMeta(
+			this: RxCollection,
+			plainData: Record<string, unknown>,
+			document: RxDocument
+		) {
+			// @ts-ignore
+			if (!document.id) {
+				document.update({
+					$push: {
+						// @ts-ignore
+						metaData: { key: '_pos', value: document._id },
+					},
+				});
+			}
+		},
+		false);
+
+		/**
 		 * Allow colections to set middleware-hooks via config options
 		 * needs to allow for promises
 		 */
@@ -168,6 +188,8 @@ const hooks = {
 			const { handle, parallel } = middleware;
 			collection[hook](handle, parallel);
 		});
+
+		return collection;
 	},
 };
 

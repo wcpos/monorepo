@@ -1,7 +1,6 @@
 import { createRxDatabase, addRxPlugin, checkAdapter, isRxDatabase } from 'rxdb/plugins/core';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
-import collectionsHelper from 'rxdb-utils/dist/collections';
 import { RxDBAdapterCheckPlugin } from 'rxdb/plugins/adapter-check';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 // import { RxDBNoValidatePlugin } from 'rxdb/plugins/no-validate';
@@ -16,6 +15,7 @@ import unset from 'lodash/unset';
 import Platform from '@wcpos/common/src/lib/platform';
 import axios from 'axios';
 import difference from 'lodash/difference';
+import collectionsHelper from './plugins/utils/collections';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
 import { userCollections, storeCollections } from './collections';
 import { config } from './adapter';

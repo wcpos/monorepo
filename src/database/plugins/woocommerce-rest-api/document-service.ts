@@ -126,15 +126,19 @@ export class RxDBWooCommerceRestApiSyncDocumentService {
 	 */
 	async runPush(): Promise<boolean> {
 		let result;
+		let url = this.document.collection.name;
+		// @ts-ignore
+		if (this.document.id) {
+			// @ts-ignore
+			url = `${this.document.collection.name}/${this.document.id}`;
+		}
 
 		try {
 			// @ts-ignore
 			result = await this.document.collection.database.httpClient({
 				method: 'post',
-				// @ts-ignore
-				url: `${this.document.collection.name}/${this.document.id}`,
+				url,
 				data: await this.document.toRestApiJSON(),
-				auth: this.auth,
 			});
 			if (result.errors) {
 				if (typeof result.errors === 'string') {

@@ -5,6 +5,8 @@ import { View } from 'react-native';
 import { action } from '@storybook/addon-actions';
 import Icon from '@wcpos/common/src/components/icon';
 import Button from '@wcpos/common/src/components/button';
+import { AppProviderSizeProvider } from '@wcpos/common/src/hooks/use-position-in-app';
+
 // import { getStoryTitle } from '../../../storybook/get-story-title';
 // import { PhoneScreen } from '../../../storybook/decorators/PhoneScreen';
 // import { Screen } from '../../structure/Screen/Screen';
@@ -31,14 +33,17 @@ export default {
  * Popovers require
  * - SafeAreaProvider
  * - Portals
+ * - AppProviderSizeProvider
  */
 const AppProvider = ({ children }) => {
 	return (
 		<SafeAreaProvider>
-			<Portal.Provider>
-				{children}
-				<Portal.Manager />
-			</Portal.Provider>
+			<AppProviderSizeProvider>
+				<Portal.Provider>
+					{children}
+					<Portal.Manager />
+				</Portal.Provider>
+			</AppProviderSizeProvider>
 		</SafeAreaProvider>
 	);
 };

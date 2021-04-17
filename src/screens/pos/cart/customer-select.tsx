@@ -2,9 +2,23 @@ import * as React from 'react';
 import Button from '@wcpos/common/src/components/button';
 import Popover from '@wcpos/common/src/components/popover';
 import Text from '@wcpos/common/src/components/text';
+import Pressable from '@wcpos/common/src/components/pressable';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+
+type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
 
 const CustomerSelect = () => {
 	const [visible, setVisible] = React.useState(false);
+	const { storeDB } = useAppState();
+	const [customers, setCustomers] = React.useState<CustomerDocument[]>([]);
+
+	React.useEffect(() => {
+		async function fetch() {
+			const c = await storeDB?.customers.find().exec();
+			if (c) setCustomers(c);
+		}
+		fetch();
+	}, []);
 
 	return (
 		<Popover
@@ -13,7 +27,19 @@ const CustomerSelect = () => {
 			onRequestClose={() => setVisible(false)}
 			activator={<Button title="Select Customer" onPress={() => setVisible(!visible)} />}
 		>
-			<Text>hi</Text>
+			{customers.map((customer) => {
+				return (
+					<Pressable
+						onPress={() => {
+							console.log(customer);
+						}}
+					>
+						<Text>
+							{customer.firstName} {customer.lastName}
+						</Text>
+					</Pressable>
+				);
+			})}
 		</Popover>
 	);
 };
