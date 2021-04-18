@@ -12,6 +12,7 @@ type FeeLineCollection = import('../fee-lines').FeeLineCollection;
 type ShippingLineDocument = import('../shipping-lines').ShippingLineDocument;
 type ShippingLineCollection = import('../shipping-lines').ShippingLineCollection;
 type ProductVariationDocument = import('../product-variations').ProductVariationDocument;
+type CustomerDocument = import('../customers').CustomerDocument;
 
 /**
  * WooCommerce Order Model methods
@@ -253,6 +254,20 @@ export default {
 			},
 		}).then(() => {
 			return shippingLine.remove();
+		});
+	},
+
+	/**
+	 *
+	 */
+	async addCustomer(this: OrderDocument, customer: CustomerDocument) {
+		await this.atomicPatch({
+			customerId: customer.id,
+			billing: {
+				email: customer.email,
+			},
+		}).then((res) => {
+			console.log(res);
 		});
 	},
 };

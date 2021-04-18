@@ -6,8 +6,13 @@ import Pressable from '@wcpos/common/src/components/pressable';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 
 type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
+type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 
-const CustomerSelect = () => {
+interface CustomerSelectProps {
+	order?: OrderDocument;
+}
+
+const CustomerSelect = ({ order }: CustomerSelectProps) => {
 	const [visible, setVisible] = React.useState(false);
 	const { storeDB } = useAppState();
 	const [customers, setCustomers] = React.useState<CustomerDocument[]>([]);
@@ -31,7 +36,7 @@ const CustomerSelect = () => {
 				return (
 					<Pressable
 						onPress={() => {
-							console.log(customer);
+							order?.addCustomer(customer);
 						}}
 					>
 						<Text>

@@ -58,7 +58,7 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 	return (
 		<Segment.Group>
 			<Segment>
-				<CustomerSelect />
+				<CustomerSelect order={currentOrder} />
 				<Actions columns={columns} ui={ui} />
 			</Segment>
 			<Segment grow>
