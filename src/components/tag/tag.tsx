@@ -6,15 +6,37 @@ import * as Styled from './styles';
 import Text from '../text';
 import Icon from '../icon';
 import Button from '../button';
+import Pressable from '../pressable';
 
-type ThemeProps = import('@wcpos/common/src/themes').ThemeProps;
-
-export interface ITagProps {
+export interface TagProps {
 	children: string;
 	closable?: boolean;
 	disabled?: boolean;
 	onClose?: () => void;
+	onPress?: () => void;
 }
+
+/**
+ *
+ */
+export const Tag = ({ children, closable, disabled, onClose, onPress }: TagProps) => {
+	const theme = useTheme();
+
+	return (
+		<Pressable onPress={onPress} style={{ marginRight: '5px', marginBottom: '5px' }}>
+			<Styled.Tag disabled={disabled}>
+				<Text size="small" style={{ color: theme.TAG_TEXT_COLOR }}>
+					{children}
+				</Text>
+				{closable && (
+					<Button disabled={disabled} onPress={onClose}>
+						<Icon name="clear" />
+					</Button>
+				)}
+			</Styled.Tag>
+		</Pressable>
+	);
+};
 
 export interface SkeletonProps {
 	backgroundColor?: string;
@@ -23,6 +45,9 @@ export interface SkeletonProps {
 	style?: ViewStyle;
 }
 
+/**
+ *
+ */
 const Skeleton = ({
 	backgroundColor = '#E1E9EE',
 	highlightColor = '#F2F8FC',
@@ -67,23 +92,6 @@ const Skeleton = ({
 				</Animated.View>
 			</View>
 		</View>
-	);
-};
-
-export const Tag = ({ children, closable, disabled, onClose }: ITagProps) => {
-	const theme = useTheme() as ThemeProps;
-
-	return (
-		<Styled.Tag disabled={disabled}>
-			<Text size="small" style={{ color: theme.TAG_TEXT_COLOR }}>
-				{children}
-			</Text>
-			{closable && (
-				<Button disabled={disabled} onPress={onClose}>
-					<Icon name="clear" />
-				</Button>
-			)}
-		</Styled.Tag>
 	);
 };
 

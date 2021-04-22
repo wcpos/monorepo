@@ -1,1 +1,1 @@
-export { default } from './pressable';
+export { Pressable as default } from './pressable';

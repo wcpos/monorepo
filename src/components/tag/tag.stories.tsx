@@ -1,20 +1,21 @@
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-import { Tag, ITagProps } from './tag';
+import { Tag, TagProps } from './tag';
 
 export default {
 	title: 'Components/Tag',
 	component: Tag,
 };
 
-export const basicUsage = ({ disabled, label }: ITagProps & { label: string }) => (
-	<Tag disabled={disabled}>{label}</Tag>
+export const basicUsage = (props: TagProps) => (
+	<>
+		<Tag {...props}>Tag 1</Tag>
+		<Tag {...props}>Tag 2</Tag>
+		<Tag {...props}>Tag 3</Tag>
+	</>
 );
-basicUsage.args = {
-	label: 'Label',
-};
 
-export const closable = ({ disabled, label }: ITagProps & { label: string }) => (
+export const closable = ({ disabled, label }: TagProps & { label: string }) => (
 	<Tag closable onClose={action('close')} disabled={disabled}>
 		{label}
 	</Tag>

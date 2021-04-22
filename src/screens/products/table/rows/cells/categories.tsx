@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Text from '../../../../../components/text';
+import Tag from '@wcpos/common/src/components/tag';
 
 type Category = {
 	id: string;
@@ -18,9 +18,9 @@ const Categories = ({ categories }: Props) => {
 	return (
 		<>
 			{categories.map((category) => (
-				<Text key={category.id} onPress={() => handleClick(category)}>
+				<Tag key={category.id} onPress={() => handleClick(category)}>
 					{category.name}
-				</Text>
+				</Tag>
 			))}
 		</>
 	);

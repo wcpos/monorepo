@@ -1,9 +1,6 @@
 import styled from 'styled-components/native';
 
-type TagProps = import('./tag').ITagProps;
-
-// eslint-disable-next-line import/prefer-default-export
-export const Tag = styled.View<Pick<TagProps, 'disabled'>>`
+export const Tag = styled.View<{ disabled?: boolean }>`
 	flex-direction: row;
 	background-color: ${({ theme, disabled }) =>
 		disabled ? theme.TAG_BACKGROUND_DISABLED : theme.TAG_BACKGROUND_COLOR};
