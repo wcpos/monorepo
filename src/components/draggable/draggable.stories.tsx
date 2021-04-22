@@ -1,14 +1,18 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import { action } from '@storybook/addon-actions';
-import Draggable from '.';
+import Icon from '../icon';
+import { Draggable } from './draggable';
 
 export default {
 	title: 'Components/Draggable',
+	component: Draggable,
 };
 
 export const basicUsage = () => (
-	<Draggable onStart={action('onStart')} onUpdate={action('onUpdate')} onEnd={action('onEnd')}>
-		<View style={{ backgroundColor: '#000', width: 100, height: 100 }} />
-	</Draggable>
+	<View style={{ height: 300 }}>
+		<Draggable onStart={action('onStart')} onUpdate={action('onUpdate')} onEnd={action('onEnd')}>
+			<Icon name="more-vert" />
+		</Draggable>
+	</View>
 );

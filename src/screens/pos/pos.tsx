@@ -9,6 +9,7 @@ import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import ErrorBoundary from '@wcpos/common/src/components/error';
 import Draggable from '@wcpos/common/src/components/draggable';
+import Icon from '@wcpos/common/src/components/icon';
 import Cart from './cart';
 import Products from './products';
 import * as Styled from './styles';
@@ -91,7 +92,7 @@ const POS = () => {
 					</ErrorBoundary>
 				</Styled.Column>
 				<Draggable onUpdate={handleColumnResizeUpdate} onEnd={handleColumnResizeEnd}>
-					<View style={{ backgroundColor: '#000', padding: 20 }} />
+					<Icon name="more-vert" />
 				</Draggable>
 				{/* <PanGestureHandler onGestureEvent={gestureHandler}>
 				<View style={{ backgroundColor: '#000', padding: 20 }} />

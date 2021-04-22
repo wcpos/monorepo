@@ -1,21 +1,24 @@
 import * as React from 'react';
-import { View, PanResponder } from 'react-native';
+import { PanResponder } from 'react-native';
 import noop from 'lodash/noop';
+import Hoverable from '../hoverable';
+import * as Styled from './styles';
 
 type PanResponderGestureState = import('react-native').PanResponderGestureState;
 
-interface Props {
+interface DraggableProps {
+	children?: React.ReactNode;
 	onStart?: (gestureState: PanResponderGestureState) => void;
 	onUpdate?: (gestureState: PanResponderGestureState) => void;
 	onEnd?: (gestureState: PanResponderGestureState) => void;
 }
 
-const Draggable: React.FC<Props> = ({
+export const Draggable = ({
 	onStart = noop,
 	onUpdate = noop,
 	onEnd = noop,
 	children,
-}) => {
+}: DraggableProps) => {
 	const panResponder = React.useRef(
 		PanResponder.create({
 			onMoveShouldSetPanResponder: () => true,
@@ -34,7 +37,18 @@ const Draggable: React.FC<Props> = ({
 		})
 	).current;
 
-	return <View {...panResponder.panHandlers}>{children}</View>;
+	return (
+		<Hoverable>
+			{(isHovered) => (
+				<Styled.View
+					hovered={isHovered}
+					{...panResponder.panHandlers}
+					// @TODO - why does this not work in styled component
+					style={[isHovered && { backgroundColor: '#f5f5f5' }]}
+				>
+					{children}
+				</Styled.View>
+			)}
+		</Hoverable>
+	);
 };
-
-export default Draggable;

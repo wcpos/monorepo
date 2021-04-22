@@ -1,1 +1,1 @@
-export { default } from './draggable';
+export { Draggable as default } from './draggable';

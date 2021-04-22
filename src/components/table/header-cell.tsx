@@ -4,6 +4,7 @@ import { HeaderCell as StyledView } from './styles';
 import Text from '../text';
 import Icon from '../icon';
 import Touchable from '../touchable';
+import SortIcon from '../sort-icon';
 
 export interface IHeaderCellProps {
 	children?: React.ReactNode;
@@ -65,10 +66,7 @@ export const HeaderCell = ({
 				<Touchable onPress={onPress}>
 					<View style={{ flexDirection: 'row' }}>
 						<Text>{children || label}</Text>
-						{showSortIndicator && (
-							// @ts-ignore ts(2322)
-							<Icon name={`${sortDirection === 'asc' ? 'arrow-up' : 'arrow-down'}`} />
-						)}
+						{showSortIndicator && <SortIcon direction={sortDirection} />}
 					</View>
 				</Touchable>
 			) : (

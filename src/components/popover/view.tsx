@@ -92,6 +92,7 @@ export const PopoverView: React.FC<PopoverViewProps> = ({
 						  },
 					{ maxWidth: windowWidth, maxHeight: windowHeight }, // Set max dimensions to prevent going out of Window
 					matchWidth ? { width: activatorLayout.width } : null,
+					// @ts-ignore
 					style,
 				]}
 				onLayout={onLayout}

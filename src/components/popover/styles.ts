@@ -1,4 +1,5 @@
 import styled from 'styled-components/native';
+import { LayoutRectangle, ViewProps, Animated, StyleProp, ViewStyle, Easing } from 'react-native';
 
 export const Container = styled.View`
 	position: absolute;

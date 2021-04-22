@@ -3,6 +3,9 @@ import Text from '../text';
 import * as Styled from './styles';
 import { SegmentGroup } from './group';
 
+type StyleProp<T> = import('react-native').StyleProp<T>;
+type ViewStyle = import('react-native').ViewStyle;
+
 export interface ISegmentProps {
 	children?: React.ReactNode;
 	content?: React.ReactNode;
@@ -11,7 +14,7 @@ export interface ISegmentProps {
 	loading?: boolean;
 	raised?: boolean;
 	group?: 'first' | 'middle' | 'last';
-	style?: import('react-native').ViewStyle;
+	style?: StyleProp<ViewStyle>;
 	grow?: boolean;
 }
 
@@ -30,6 +33,7 @@ export const Segment = ({
 	}
 
 	return (
+		// @ts-ignore
 		<Styled.Segment style={style} group={group} type={type} raised={raised} grow={grow}>
 			{segment}
 		</Styled.Segment>

@@ -242,6 +242,7 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 					</View>
 				) : null}
 				<Styled.TextInput
+					// @ts-ignore
 					ref={inputRef}
 					{...inputType}
 					placeholder={placeholder}
