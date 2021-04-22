@@ -1,7 +1,6 @@
 import * as React from 'react';
-import { PanResponder } from 'react-native';
+import { PanResponder, Pressable } from 'react-native';
 import noop from 'lodash/noop';
-import Hoverable from '../hoverable';
 import * as Styled from './styles';
 
 type PanResponderGestureState = import('react-native').PanResponderGestureState;
@@ -19,6 +18,8 @@ export const Draggable = ({
 	onEnd = noop,
 	children,
 }: DraggableProps) => {
+	const [hovered, setHovered] = React.useState(false);
+
 	const panResponder = React.useRef(
 		PanResponder.create({
 			onMoveShouldSetPanResponder: () => true,
@@ -38,17 +39,11 @@ export const Draggable = ({
 	).current;
 
 	return (
-		<Hoverable>
-			{(isHovered) => (
-				<Styled.View
-					hovered={isHovered}
-					{...panResponder.panHandlers}
-					// @TODO - why does this not work in styled component
-					style={[isHovered && { backgroundColor: '#f5f5f5' }]}
-				>
-					{children}
-				</Styled.View>
-			)}
-		</Hoverable>
+		// @ts-ignore
+		<Pressable onHoverIn={() => setHovered(true)} onHoverOut={() => setHovered(false)}>
+			<Styled.View hovered={hovered} {...panResponder.panHandlers}>
+				{children}
+			</Styled.View>
+		</Pressable>
 	);
 };

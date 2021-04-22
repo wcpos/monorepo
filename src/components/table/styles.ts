@@ -19,6 +19,7 @@ export const Cell = styled.View<CellProps>`
 	flex-shrink: ${({ flexShrink }) => (isNil(flexShrink) ? 1 : flexShrink)};
 	width: ${({ width }) => (isNil(width) ? '100%' : width)};
 	padding: 5px;
+	align-items: flex-start;
 `;
 
 type HeaderRowProps = { theme: ThemeProps } & Pick<import('./header-row').IHeaderRowProps, 'style'>;
