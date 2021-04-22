@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { useTranslation } from 'react-i18next';
-import Input from '../../components/textinput';
-import Checkbox from '../../components/checkbox';
-import Button from '../../components/button';
-import Text from '../../components/text';
+import Popover from '@wcpos/common/src/components/popover';
+import Checkbox from '@wcpos/common/src/components/checkbox';
+import Button from '@wcpos/common/src/components/button';
+import Text from '@wcpos/common/src/components/text';
 
 interface Props {
 	columns: any;
@@ -16,14 +16,15 @@ interface Props {
  */
 const Actions: React.FC<Props> = ({ ui, columns }) => {
 	const { t } = useTranslation();
-
-	const onFilter = () => {
-		console.log('change query');
-	};
+	const [visible, setVisible] = React.useState(false);
 
 	return (
-		<>
-			<Input placeholder="Search orders" onChange={onFilter} />
+		<Popover
+			hideBackdrop
+			open={visible}
+			onRequestClose={() => setVisible(false)}
+			activator={<Button title="Table Settings" onPress={() => setVisible(true)} />}
+		>
 			<Text>Columns</Text>
 			{columns.map((column: any, index: number) => (
 				<Checkbox
@@ -50,7 +51,7 @@ const Actions: React.FC<Props> = ({ ui, columns }) => {
 				/>
 			))} */}
 			<Button title="Restore Default Settings" onPress={ui.reset} />
-		</>
+		</Popover>
 	);
 };
 

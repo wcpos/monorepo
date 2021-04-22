@@ -1,14 +1,12 @@
 import * as React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useObservableState } from 'observable-hooks';
-import Input from '../../components/textinput';
-import Checkbox from '../../components/checkbox';
-import Button from '../../components/button';
-import Text from '../../components/text';
+import Popover from '@wcpos/common/src/components/popover';
+import Checkbox from '@wcpos/common/src/components/checkbox';
+import Button from '@wcpos/common/src/components/button';
+import Text from '@wcpos/common/src/components/text';
 
-interface IProductsActionsProps {
+interface ProductsActionsProps {
 	columns: any[];
-	resetUI?: () => void;
 	query?: any;
 	ui: any;
 }
@@ -16,15 +14,21 @@ interface IProductsActionsProps {
 /**
  *
  */
-const Actions = ({ columns, query, ui }: IProductsActionsProps) => {
+const Actions = ({ columns, query, ui }: ProductsActionsProps) => {
 	const { t } = useTranslation();
+	const [visible, setVisible] = React.useState(false);
 
 	const onFilter = () => {
 		console.log('change query');
 	};
 
 	return (
-		<>
+		<Popover
+			hideBackdrop
+			open={visible}
+			onRequestClose={() => setVisible(false)}
+			activator={<Button title="Table Settings" onPress={() => setVisible(true)} />}
+		>
 			<Text>Columns</Text>
 			{columns.map((column: any, index: number) => (
 				<Checkbox
@@ -56,7 +60,7 @@ const Actions = ({ columns, query, ui }: IProductsActionsProps) => {
 					ui.reset();
 				}}
 			/>
-		</>
+		</Popover>
 	);
 };
 

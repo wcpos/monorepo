@@ -15,8 +15,7 @@ type Sort = import('@wcpos/common/src/components/table/types').Sort;
 
 const Products = () => {
 	const { storeDB } = useAppState();
-	const productsUIResource = useUIResource('products');
-	const ui = useObservableSuspense(productsUIResource);
+	const ui = useObservableSuspense(useUIResource('products'));
 
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 

@@ -3,6 +3,7 @@ import { View, Text } from 'react-native';
 import { useObservableState, useObservable, useObservableSuspense } from 'observable-hooks';
 import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
 import Segment from '@wcpos/common/src/components/segment';
+import Input from '@wcpos/common/src/components/textinput';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import Button from '@wcpos/common/src/components/button';
@@ -58,6 +59,10 @@ const Orders = () => {
 	// 	[query]
 	// );
 
+	const onSearch = (value: string) => {
+		console.log(value);
+	};
+
 	const query = storeDB.collections.orders.find();
 	const orders = useObservableState(query.$, []);
 
@@ -65,6 +70,7 @@ const Orders = () => {
 		<React.Suspense fallback={<Text>loading orders...</Text>}>
 			<Segment.Group>
 				<Segment>
+					<Input placeholder="Search orders" onChange={onSearch} />
 					<Actions ui={ui} columns={columns} />
 				</Segment>
 				<Segment grow>
