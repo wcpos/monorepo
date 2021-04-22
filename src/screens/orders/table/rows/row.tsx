@@ -4,6 +4,7 @@ import Status from './cells/status';
 import Customer from './cells/customer';
 import Actions from './cells/actions';
 import Address from './cells/address';
+import Note from './cells/note';
 
 type ColumnProps = import('../../../../components/table/types').ColumnProps;
 type GetCellPropsFunction = import('../../../../components/table/row').GetCellPropsFunction;
@@ -32,6 +33,8 @@ const Row = ({ order, columns }: Props) => {
 							case 'billing':
 							case 'shipping':
 								return <Address order={order} type={column.key} />;
+							case 'customerNote':
+								return <Note note={cellData} />;
 							case 'actions':
 								return <Actions order={order} />;
 							default:

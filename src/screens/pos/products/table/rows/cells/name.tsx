@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { View } from 'react-native';
-import Text from '../../../../../../components/text';
+import Text from '@wcpos/common/src/components/text';
+import Tag from '@wcpos/common/src/components/tag';
 
 interface Props {
-	product: any;
+	product: import('@wcpos/common/src/database').ProductDocument;
 	showSKU: boolean;
 	showCategories: boolean;
 	showTags: boolean;
@@ -19,7 +20,16 @@ const Name = ({ product, showSKU, showCategories, showTags }: Props) => (
 					<Text size="small" type="secondary">
 						Categories:
 					</Text>
-					{product.categories.map((cat: any) => cat.name).join(', ')}
+					{(product.categories as []).map((cat: any) => (
+						<Tag
+							key={cat}
+							onPress={() => {
+								console.log(cat);
+							}}
+						>
+							{cat.name}
+						</Tag>
+					))}
 				</Text>
 			</View>
 		)}
@@ -29,13 +39,13 @@ const Name = ({ product, showSKU, showCategories, showTags }: Props) => (
 					<Text size="small" type="secondary">
 						Tags:
 					</Text>
-					{product.tags.map((tag: any) => tag.name).join(', ')}
+					{(product.tags as []).map((tag: any) => tag.name).join(', ')}
 				</Text>
 			</View>
 		)}
 		{product.type === 'variable' && (
 			<View>
-				{product.attributes
+				{(product.attributes as [])
 					.filter((attr: any) => attr.variation)
 					.map((attr: any) => (
 						<Text size="small">

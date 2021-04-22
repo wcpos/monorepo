@@ -85,6 +85,12 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 					}}
 				/>
 				<Button
+					title="Add Note"
+					onPress={() => {
+						currentOrder.atomicPatch({ customerNote: 'This is a note!' });
+					}}
+				/>
+				<Button
 					title="Save"
 					onPress={async () => {
 						const replicationState = currentOrder.syncRestApi({

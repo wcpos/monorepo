@@ -56,7 +56,7 @@
 			{ "key": "customer", "flexGrow": 1, "order": 3 },
 			{ "key": "billing", "flexGrow": 1, "order": 4 },
 			{ "key": "shipping", "flexGrow": 1, "order": 5 },
-			{ "key": "note", "width": "10%", "order": 6 },
+			{ "key": "customerNote", "width": "10%", "order": 6 },
 			{ "key": "dateCreated", "flexGrow": 1, "order": 7 },
 			{ "key": "dateModified", "hide": true, "width": "10%", "order": 8 },
 			{ "key": "dateCompleted", "hide": true, "width": "10%", "order": 9 },

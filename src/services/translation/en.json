@@ -30,7 +30,7 @@
 					"dateCompleted": "Date Completed",
 					"dateCreated": "Date Created",
 					"dateModified": "Date Modified",
-					"note": "Note",
+					"customerNote": "Note",
 					"number": "Order Number",
 					"status": "Status",
 					"total": "Total"
