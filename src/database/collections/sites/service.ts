@@ -1,6 +1,7 @@
 import { BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 import httpClient from '@wcpos/common/src/lib/http';
 import Url from '@wcpos/common/src/lib/url-parse';
+import Platform from '@wcpos/common/src/lib/platform';
 
 type SiteDocument = import('./sites').SiteDocument;
 
@@ -68,7 +69,10 @@ export class ConnectionService {
 	 * @param url WordPress URL
 	 */
 	async _fetchHead(): Promise<any> {
-		const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
+		let protocol = 'https';
+		if (Platform.OS === 'web' && process.env.NODE_ENV === 'development') {
+			protocol = 'http';
+		}
 		return this.client
 			.head(`${protocol}://${this.site.getUrlWithoutProtocol()}`)
 			.then((response) => {
