@@ -32,6 +32,7 @@
 		"@types/styled-components-react-native": "^5.1.1",
 		"@types/url-parse": "1.4.3",
 		"axios": "0.21.1",
+		"expo-haptics": "10.0.0",
 		"i18next": "20.2.1",
 		"jsonschema-to-interface": "1.0.5",
 		"lodash": "4.17.21",
