@@ -1,7 +1,14 @@
 import * as React from 'react';
-import { View, TextInputProps, TextInput as RNTextInput } from 'react-native';
+import {
+	View,
+	TextInputProps,
+	TextInput as RNTextInput,
+	NativeSyntheticEvent,
+	TextInputContentSizeChangeEventData,
+} from 'react-native';
 import isFunction from 'lodash/isFunction';
 import useUncontrolledState from '@wcpos/common/src/hooks/use-uncontrolled-state';
+import get from 'lodash/get';
 import * as Styled from './styles';
 import Button from '../button';
 import Text from '../text';
@@ -172,6 +179,23 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 			}
 		}, []);
 
+		/**
+		 * autosize
+		 */
+		const [width, setWidth] = React.useState(50);
+		const [height, setHeight] = React.useState(0);
+		const handleContentSizeChange = (
+			event: NativeSyntheticEvent<TextInputContentSizeChangeEventData>
+		) => {
+			const contentSize = get(event, 'nativeEvent.contentSize');
+			console.log(contentSize.width);
+			setWidth(contentSize.width);
+			setHeight(contentSize.height);
+		};
+
+		/**
+		 * action
+		 */
 		const handleOnAction = () => {
 			if (isFunction(onAction)) onAction(value);
 		};
@@ -256,6 +280,9 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 					onSubmitEditing={onSubmit}
 					selectTextOnFocus={selectTextOnFocus}
 					onKeyPress={onKeyPress}
+					multiline
+					onContentSizeChange={handleContentSizeChange}
+					style={{ width, height }}
 				/>
 				{/* {clearable && text !== '' && <Icon name="clear" onPress={handleClear} />} */}
 				{action && (
