@@ -41,7 +41,7 @@ const adjustPageY = (pageY: number) => {
  * A render prop to measure given node by passing `onLayout` and `ref` handlers.
  * This differs from `ViewMeasure` in that it does not create any node in the tree
  */
-const useMeasure = (props: UseMeasureProps) => {
+export const useMeasure = (props: UseMeasureProps) => {
 	const { onMeasure, ref } = props;
 	const [measurements, setMeasurements] = React.useState(initialMeasurements);
 
@@ -94,5 +94,3 @@ const useMeasure = (props: UseMeasureProps) => {
 		onMeasure: handleMeasure,
 	};
 };
-
-export default useMeasure;
