@@ -76,9 +76,9 @@ const App = () => {
 				<AppStateProvider i18n={i18n}>
 					{(isAppStateReady: boolean, theme: any) => (
 						<ThemeProvider theme={theme}>
-							<SafeAreaProvider>
-								<AppProviderSizeProvider>
-									<Portal.Provider>
+							<SafeAreaProvider style={{ overflow: 'hidden' }}>
+								<Portal.Provider>
+									<AppProviderSizeProvider>
 										{isAppStateReady && isNavReady ? (
 											<NavigationContainer ref={navigationRef} initialState={initialNavState}>
 												<AppNavigator />
@@ -86,9 +86,9 @@ const App = () => {
 										) : (
 											<SplashScreen />
 										)}
-										<Portal.Manager />
-									</Portal.Provider>
-								</AppProviderSizeProvider>
+									</AppProviderSizeProvider>
+									<Portal.Manager />
+								</Portal.Provider>
 							</SafeAreaProvider>
 						</ThemeProvider>
 					)}

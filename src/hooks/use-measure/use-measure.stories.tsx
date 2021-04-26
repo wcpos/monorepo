@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import Text from '../../components/text';
+import Text from '@wcpos/common/src/components/text';
 
-import useMeasure from './';
+import { useMeasure } from './use-measure';
 
 export default {
 	title: 'Hooks/useMeasure',

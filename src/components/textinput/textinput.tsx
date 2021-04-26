@@ -5,16 +5,17 @@ import {
 	TextInput as RNTextInput,
 	NativeSyntheticEvent,
 	TextInputContentSizeChangeEventData,
+	Text as RNText,
 } from 'react-native';
 import isFunction from 'lodash/isFunction';
 import useUncontrolledState from '@wcpos/common/src/hooks/use-uncontrolled-state';
 import get from 'lodash/get';
+import useMeasure from '@wcpos/common/src/hooks/use-measure';
 import * as Styled from './styles';
 import Button from '../button';
 import Text from '../text';
 import Icon from '../icon';
-// import Portal from '../portal';
-// import useMeasure from '../../hooks/use-measure';
+import Portal from '../portal';
 
 export interface ITextInputProps {
 	/**
@@ -130,6 +131,33 @@ export interface ITextInputProps {
 }
 
 /**
+ * Measure Text
+ */
+const MeasureText = ({
+	value,
+	onMeasure,
+}: {
+	value: string;
+	onMeasure: ({ width }: { width: number }) => void;
+}) => {
+	const ref = React.useRef<RNText>(null);
+	const { onLayout } = useMeasure({ onMeasure, ref });
+	console.log('render measure text');
+	/**
+	 * Place text in hidden portal
+	 */
+	return (
+		<Portal keyPrefix="TextInputSize">
+			<View style={{ position: 'absolute', top: '100%', height: 0, alignItems: 'flex-start' }}>
+				<RNText onLayout={onLayout} ref={ref}>
+					{value}
+				</RNText>
+			</View>
+		</Portal>
+	);
+};
+
+/**
  * Input field that users can type into.
  */
 export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
@@ -152,6 +180,7 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 			onBlur: onBlurProp,
 			action,
 			onAction,
+			autosize = false,
 		},
 		ref
 	) => {
@@ -182,15 +211,18 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 		/**
 		 * autosize
 		 */
-		const [width, setWidth] = React.useState(50);
-		const [height, setHeight] = React.useState(0);
-		const handleContentSizeChange = (
-			event: NativeSyntheticEvent<TextInputContentSizeChangeEventData>
-		) => {
-			const contentSize = get(event, 'nativeEvent.contentSize');
-			console.log(contentSize.width);
-			setWidth(contentSize.width);
-			setHeight(contentSize.height);
+		const [measuredWidth, setMeasuredWidth] = React.useState(0);
+		// const [measuredHeight, setMeasureHeight] = React.useState(0);
+		// const handleContentSizeChange = (
+		// 	event: NativeSyntheticEvent<TextInputContentSizeChangeEventData>
+		// ) => {
+		// 	const contentSize = get(event, 'nativeEvent.contentSize');
+		// 	console.log(contentSize.width);
+		// 	// setWidth(contentSize.width);
+		// 	setMeasureHeight(contentSize.height);
+		// };
+		const handleMeasure = ({ width }: { width: number }) => {
+			setMeasuredWidth(width + 3);
 		};
 
 		/**
@@ -280,9 +312,9 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 					onSubmitEditing={onSubmit}
 					selectTextOnFocus={selectTextOnFocus}
 					onKeyPress={onKeyPress}
-					multiline
-					onContentSizeChange={handleContentSizeChange}
-					style={{ width, height }}
+					// multiline
+					// onContentSizeChange={handleContentSizeChange}
+					style={{ width: autosize ? measuredWidth : '100%' }}
 				/>
 				{/* {clearable && text !== '' && <Icon name="clear" onPress={handleClear} />} */}
 				{action && (
@@ -292,6 +324,7 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 						style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
 					/>
 				)}
+				{autosize && <MeasureText value={value} onMeasure={handleMeasure} />}
 			</Styled.Box>
 		);
 	}

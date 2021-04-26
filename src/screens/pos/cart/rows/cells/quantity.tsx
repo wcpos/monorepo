@@ -18,8 +18,7 @@ const Quantity = ({ lineItem }: Props) => {
 
 	return (
 		<>
-			<TextInput value={String(quantity)} onChange={handleChangeText} />
-			<Text>{quantity}</Text>
+			<TextInput autosize value={String(quantity)} onChange={handleChangeText} />
 		</>
 	);
 };
