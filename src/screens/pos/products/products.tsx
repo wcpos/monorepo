@@ -20,6 +20,16 @@ interface IPOSProductsProps {
 	ui: any;
 }
 
+interface ProductQueryContextProps {
+	query: any;
+	setQuery: any;
+}
+
+export const ProductQueryContext = React.createContext<ProductQueryContextProps>({
+	query: undefined,
+	setQuery: undefined,
+});
+
 /**
  *
  */
@@ -34,6 +44,10 @@ const Products = ({ ui }: IPOSProductsProps) => {
 		search: '',
 		sortBy: 'name',
 		sortDirection: 'asc',
+		filter: {
+			categories: [],
+			tags: [],
+		},
 	});
 
 	const onSort: Sort = ({ sortBy, sortDirection }) => {
@@ -47,29 +61,30 @@ const Products = ({ ui }: IPOSProductsProps) => {
 	};
 
 	return (
-		// @ts-ignore
-		<Segment.Group>
-			<Segment>
-				<Input value={query.search} placeholder="Search products" onChange={onSearch} />
-				<Actions columns={columns} display={display} ui={ui} />
-			</Segment>
-			<Segment grow>
-				<Table query={query} columns={columns} display={display} sort={onSort} />
-			</Segment>
-			<Segment>
-				<Button
-					title="Add Products"
-					onPress={async () => {
-						// @ts-ignore
-						const replicationState = storeDB.products.syncRestApi({
-							url: 'products',
-							pull: {},
-						});
-						replicationState.run(false);
-					}}
-				/>
-			</Segment>
-		</Segment.Group>
+		<ProductQueryContext.Provider value={{ query, setQuery }}>
+			<Segment.Group>
+				<Segment>
+					<Input value={query.search} placeholder="Search products" onChange={onSearch} />
+					<Actions columns={columns} display={display} ui={ui} />
+				</Segment>
+				<Segment grow>
+					<Table query={query} columns={columns} display={display} sort={onSort} />
+				</Segment>
+				<Segment>
+					<Button
+						title="Add Products"
+						onPress={async () => {
+							// @ts-ignore
+							const replicationState = storeDB.products.syncRestApi({
+								url: 'products',
+								pull: {},
+							});
+							replicationState.run(false);
+						}}
+					/>
+				</Segment>
+			</Segment.Group>
+		</ProductQueryContext.Provider>
 	);
 };
 

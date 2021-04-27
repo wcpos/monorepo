@@ -17,12 +17,12 @@ import * as Styled from './styles';
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
-interface IPOSContent {
+interface POSContextProps {
 	currentOrder?: OrderDocument;
 	setCurrentOrder: React.Dispatch<React.SetStateAction<OrderDocument | undefined>>;
 }
 
-export const POSContext = React.createContext<IPOSContent>({
+export const POSContext = React.createContext<POSContextProps>({
 	currentOrder: undefined,
 	// @ts-ignore
 	setCurrentOrder: undefined,

@@ -3,14 +3,15 @@ import { useObservable, useObservableState } from 'observable-hooks';
 import { from } from 'rxjs';
 import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
-import Table from '../../../../components/table';
-import useAppState from '../../../../hooks/use-app-state';
+import Table from '@wcpos/common/src/components/table';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import forEach from 'lodash/forEach';
 import Row from './rows';
 
-type ColumnProps = import('../../../../components/table/types').ColumnProps;
-type Sort = import('../../../../components/table/types').Sort;
-type SortDirection = import('../../../../components/table/types').SortDirection;
-type GetHeaderCellPropsFunction = import('../../../../components/table/header-row').GetHeaderCellPropsFunction;
+type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
+type Sort = import('@wcpos/common/src/components/table/types').Sort;
+type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
+type GetHeaderCellPropsFunction = import('@wcpos/common/src/components/table/header-row').GetHeaderCellPropsFunction;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
 interface Props {
@@ -30,19 +31,25 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
 
 	const products$ = useObservable(
-		// A stream of React elements!
 		(inputs$) =>
 			inputs$.pipe(
 				distinctUntilChanged((a, b) => a[0] === b[0]),
 				debounceTime(150),
 				switchMap(([q]) => {
+					console.log(q);
 					const regexp = new RegExp(escape(q.search), 'i');
+					const selector = {
+						name: { $regex: regexp },
+						// categories: { $elemMatch: { id: 20 } },
+					};
+					forEach(q.filter, (value, key) => {
+						if (value.length > 0) {
+							// @ts-ignore
+							selector[key] = { $elemMatch: { id: value[0].id } };
+						}
+					});
 					const RxQuery = storeDB.collections.products
-						.find({
-							selector: {
-								name: { $regex: regexp },
-							},
-						})
+						.find({ selector })
 						.sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
 				}),

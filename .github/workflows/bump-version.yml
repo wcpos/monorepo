@@ -27,6 +27,7 @@ jobs:
         with:
           default: prerelease
           preid: 'alpha'
+          skip-tag: 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "cat package.json"

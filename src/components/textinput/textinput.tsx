@@ -142,7 +142,7 @@ const MeasureText = ({
 }) => {
 	const ref = React.useRef<RNText>(null);
 	const { onLayout } = useMeasure({ onMeasure, ref });
-	console.log('render measure text');
+
 	/**
 	 * Place text in hidden portal
 	 */
@@ -291,7 +291,7 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 		}, [type, autoCapitalize]);
 
 		return (
-			<Styled.Box>
+			<Styled.Box focused={hasFocus}>
 				{prefix ? (
 					<View>
 						<Text>{prefix}</Text>
