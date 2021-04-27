@@ -120,6 +120,10 @@ export interface ITextInputProps {
 	 */
 	prefix?: string;
 	/**
+	 * Adds functionality to the TextInput, eg: buttons, tags
+	 */
+	leftAccessory?: React.ReactNode;
+	/**
 	 * Called when a key is pressed.
 	 */
 	onKeyPress?: TextInputProps['onKeyPress'];
@@ -175,6 +179,7 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 			selectTextOnFocus = false,
 			autoCapitalize,
 			prefix,
+			leftAccessory,
 			onKeyPress,
 			onFocus: onFocusProp,
 			onBlur: onBlurProp,
@@ -292,6 +297,7 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 
 		return (
 			<Styled.Box focused={hasFocus}>
+				{leftAccessory || null}
 				{prefix ? (
 					<View>
 						<Text>{prefix}</Text>

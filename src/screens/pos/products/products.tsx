@@ -4,9 +4,9 @@ import { switchMap } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import Segment from '@wcpos/common/src/components/segment';
-import Input from '@wcpos/common/src/components/textinput';
+import TextInput from '@wcpos/common/src/components/textinput';
 import Popover from '@wcpos/common/src/components/popover';
-import Text from '@wcpos/common/src/components/text';
+import Tag from '@wcpos/common/src/components/tag';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Button from '@wcpos/common/src/components/button';
 import Actions from './actions';
@@ -60,11 +60,30 @@ const Products = ({ ui }: IPOSProductsProps) => {
 		setQuery({ ...query, search });
 	};
 
+	const handleRemoveFilter = () => {
+		query.filter.categories = [];
+		setQuery({ ...query });
+	};
+
+	const renderActiveFilters = () => {
+		return query.filter.categories.map((category) => (
+			// @ts-ignore
+			<Tag key={category.id} removable onRemove={handleRemoveFilter}>
+				{category.name}
+			</Tag>
+		));
+	};
+
 	return (
 		<ProductQueryContext.Provider value={{ query, setQuery }}>
 			<Segment.Group>
 				<Segment>
-					<Input value={query.search} placeholder="Search products" onChange={onSearch} />
+					<TextInput
+						leftAccessory={renderActiveFilters()}
+						value={query.search}
+						placeholder="Search products"
+						onChange={onSearch}
+					/>
 					<Actions columns={columns} display={display} ui={ui} />
 				</Segment>
 				<Segment grow>

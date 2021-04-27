@@ -16,7 +16,7 @@ export const basicUsage = (props: TagProps) => (
 );
 
 export const closable = ({ disabled, label }: TagProps & { label: string }) => (
-	<Tag closable onClose={action('close')} disabled={disabled}>
+	<Tag removable onClose={action('close')} disabled={disabled}>
 		{label}
 	</Tag>
 );

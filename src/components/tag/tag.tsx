@@ -10,16 +10,16 @@ import Pressable from '../pressable';
 
 export interface TagProps {
 	children: string;
-	closable?: boolean;
+	removable?: boolean;
 	disabled?: boolean;
-	onClose?: () => void;
+	onRemove?: () => void;
 	onPress?: () => void;
 }
 
 /**
  *
  */
-export const Tag = ({ children, closable, disabled, onClose, onPress }: TagProps) => {
+export const Tag = ({ children, removable, disabled, onRemove, onPress }: TagProps) => {
 	const theme = useTheme();
 
 	return (
@@ -28,8 +28,8 @@ export const Tag = ({ children, closable, disabled, onClose, onPress }: TagProps
 				<Text size="small" style={{ color: theme.TAG_TEXT_COLOR }}>
 					{children}
 				</Text>
-				{closable && (
-					<Button disabled={disabled} onPress={onClose}>
+				{removable && (
+					<Button disabled={disabled} onPress={onRemove}>
 						<Icon name="clear" />
 					</Button>
 				)}
