@@ -10,6 +10,7 @@ import line_items from './line-items';
 import fee_lines from './fee-lines';
 import shipping_lines from './shipping-lines';
 import customers from './customers';
+import taxes from './taxes';
 
 export const userCollections = { logs, users, sites, wp_credentials, stores };
 export const storeCollections = {
@@ -20,4 +21,5 @@ export const storeCollections = {
 	fee_lines,
 	shipping_lines,
 	customers,
+	taxes,
 };
