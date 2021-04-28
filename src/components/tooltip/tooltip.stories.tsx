@@ -15,7 +15,7 @@ export default {
 };
 
 /**
- * Popovers require
+ * Tooltips require
  * - SafeAreaProvider
  * - Portals
  * - AppProviderSizeProvider

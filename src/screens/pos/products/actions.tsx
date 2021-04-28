@@ -4,6 +4,8 @@ import Checkbox from '@wcpos/common/src/components/checkbox';
 import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
 import Popover from '@wcpos/common/src/components/popover';
+import Icon from '@wcpos/common/src/components/icon';
+import Tooltip from '@wcpos/common/src/components/tooltip';
 
 type ColumnProps = import('../../../components/table/types').ColumnProps;
 
@@ -29,7 +31,7 @@ const Actions = ({ columns, display, ui }: IPOSProductActionsProps) => {
 			hideBackdrop
 			open={visible}
 			onRequestClose={() => setVisible(false)}
-			activator={<Button title="Table Settings" onPress={() => setVisible(true)} />}
+			activator={<Icon name="settings" onPress={() => setVisible(true)} tooltip="Table Settings" />}
 		>
 			<Text>Columns</Text>
 			{columns.map((column: any, index) => (

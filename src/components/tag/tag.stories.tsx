@@ -15,13 +15,11 @@ export const basicUsage = (props: TagProps) => (
 	</>
 );
 
-export const closable = ({ disabled, label }: TagProps & { label: string }) => (
-	<Tag removable onClose={action('close')} disabled={disabled}>
-		{label}
-	</Tag>
-);
+export const closable = (props: TagProps) => <Tag {...props}>{props.children}</Tag>;
 closable.args = {
-	label: 'Label',
+	children: 'Label',
+	removable: true,
+	onRemove: action('Remove'),
 };
 
 export const skeleton = () => <Tag.Skeleton />;

@@ -1,6 +1,7 @@
 import arrow from './arrow.svg';
 import arrowDown from './arrow-down.svg';
 import check from './check.svg';
+import cog from './cog.svg';
 import comment from './comment.svg';
 import error from './error.svg';
 import moreHoriz from './more-horiz.svg';
@@ -14,6 +15,7 @@ export default {
 	'arrow-down': arrowDown,
 	check,
 	comment,
+	cog,
 	clear: remove,
 	delete: remove,
 	error,
@@ -23,4 +25,5 @@ export default {
 	note: comment,
 	remove,
 	wcpos,
+	settings: cog,
 };

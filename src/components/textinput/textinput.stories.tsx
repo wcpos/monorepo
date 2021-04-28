@@ -4,14 +4,14 @@ import { TextInput } from './textinput';
 import Portal from '../portal';
 
 type StoryFn<T> = import('../storybook-types').StoryFn<T>;
-type ITextFieldProps = import('./textinput').ITextInputProps;
+type TextFieldProps = import('./textinput').TextInputProps;
 
 export default {
 	title: 'Components/TextInput',
 	component: TextInput,
 };
 
-export const basicUsage: StoryFn<ITextFieldProps> = (props) => {
+export const basicUsage: StoryFn<TextFieldProps> = (props) => {
 	const [value, setValue] = React.useState(props.value);
 	const onTextChanged = (newText: string): void => {
 		setValue(newText);
@@ -31,7 +31,7 @@ basicUsage.args = {
 	onKeyPress: action('Key Pressed'),
 };
 
-export const withAction = ({ placeholder }: ITextInputProps) => (
+export const withAction = ({ placeholder }: TextInputProps) => (
 	<TextInput placeholder={placeholder} onAction={action('submit')} />
 );
 
@@ -51,7 +51,7 @@ export const integerWithPrefix = () => {
 	);
 };
 
-export const clearable = ({ placeholder, prefix, clearable }: ITextInputProps) => (
+export const clearable = ({ placeholder, prefix, clearable }: TextInputProps) => (
 	<TextInput
 		placeholder={placeholder}
 		// action={action}
@@ -61,7 +61,7 @@ export const clearable = ({ placeholder, prefix, clearable }: ITextInputProps) =
 	/>
 );
 
-export const autosize = ({ placeholder, autosize }: ITextInputProps) => (
+export const autosize = ({ placeholder, autosize }: TextInputProps) => (
 	<Portal.Host>
 		<TextInput placeholder={placeholder} autosize />
 	</Portal.Host>

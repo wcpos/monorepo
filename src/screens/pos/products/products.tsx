@@ -66,8 +66,7 @@ const Products = ({ ui }: IPOSProductsProps) => {
 	};
 
 	const renderActiveFilters = () => {
-		return query.filter.categories.map((category) => (
-			// @ts-ignore
+		return query.filter.categories.map((category: { id: number; name: string }) => (
 			<Tag key={category.id} removable onRemove={handleRemoveFilter}>
 				{category.name}
 			</Tag>
@@ -77,12 +76,14 @@ const Products = ({ ui }: IPOSProductsProps) => {
 	return (
 		<ProductQueryContext.Provider value={{ query, setQuery }}>
 			<Segment.Group>
-				<Segment>
+				<Segment style={{ flexDirection: 'row' }}>
 					<TextInput
 						leftAccessory={renderActiveFilters()}
 						value={query.search}
 						placeholder="Search products"
 						onChange={onSearch}
+						clearable
+						style={{ flex: 1 }}
 					/>
 					<Actions columns={columns} display={display} ui={ui} />
 				</Segment>

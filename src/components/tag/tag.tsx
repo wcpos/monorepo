@@ -5,14 +5,28 @@ import { useTheme } from 'styled-components/native';
 import * as Styled from './styles';
 import Text from '../text';
 import Icon from '../icon';
-import Button from '../button';
 import Pressable from '../pressable';
 
 export interface TagProps {
+	/**
+	 * Tag label
+	 */
 	children: string;
+	/**
+	 * Set to `true` add remove icon.
+	 */
 	removable?: boolean;
+	/**
+	 * Set to `true` to disable.
+	 */
 	disabled?: boolean;
+	/**
+	 * Called if remove icon is pressed
+	 */
 	onRemove?: () => void;
+	/**
+	 * Called if tag is pressed
+	 */
 	onPress?: () => void;
 }
 
@@ -28,11 +42,7 @@ export const Tag = ({ children, removable, disabled, onRemove, onPress }: TagPro
 				<Text size="small" style={{ color: theme.TAG_TEXT_COLOR }}>
 					{children}
 				</Text>
-				{removable && (
-					<Button disabled={disabled} onPress={onRemove}>
-						<Icon name="clear" />
-					</Button>
-				)}
+				{removable && <Icon name="clear" disabled={disabled} onPress={onRemove} />}
 			</Styled.Tag>
 		</Pressable>
 	);

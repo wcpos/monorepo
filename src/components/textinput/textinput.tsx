@@ -1,11 +1,13 @@
 import * as React from 'react';
 import {
 	View,
-	TextInputProps,
+	TextInputProps as RNTextInputProps,
 	TextInput as RNTextInput,
 	NativeSyntheticEvent,
 	TextInputContentSizeChangeEventData,
 	Text as RNText,
+	StyleProp,
+	ViewStyle,
 } from 'react-native';
 import isFunction from 'lodash/isFunction';
 import useUncontrolledState from '@wcpos/common/src/hooks/use-uncontrolled-state';
@@ -17,7 +19,7 @@ import Text from '../text';
 import Icon from '../icon';
 import Portal from '../portal';
 
-export interface ITextInputProps {
+export interface TextInputProps {
 	/**
 	 * Label to display above the input.
 	 */
@@ -91,7 +93,7 @@ export interface ITextInputProps {
 	 *
 	 * @see https://reactnative.dev/docs/textinput#autocapitalize
 	 */
-	autoCapitalize?: TextInputProps['autoCapitalize'];
+	autoCapitalize?: RNTextInputProps['autoCapitalize'];
 	/**
 	 * Called when the input value changes. `value` property should be changed to reflect this new value.
 	 *
@@ -126,12 +128,19 @@ export interface ITextInputProps {
 	/**
 	 * Called when a key is pressed.
 	 */
-	onKeyPress?: TextInputProps['onKeyPress'];
+	onKeyPress?: RNTextInputProps['onKeyPress'];
 	/**
 	 * Common action button (WIP)
 	 */
 	action?: string;
+	/**
+	 * Called when action is pressed
+	 */
 	onAction?: (value: string) => void;
+	/**
+	 * Styles for the textinput container
+	 */
+	style?: StyleProp<ViewStyle>;
 }
 
 /**
@@ -164,7 +173,7 @@ const MeasureText = ({
 /**
  * Input field that users can type into.
  */
-export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
+export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 	(
 		{
 			placeholder,
@@ -186,6 +195,8 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 			action,
 			onAction,
 			autosize = false,
+			clearable = false,
+			style,
 		},
 		ref
 	) => {
@@ -212,6 +223,13 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 				input.focus();
 			}
 		}, []);
+
+		/**
+		 * clearable
+		 */
+		const handleClear = () => {
+			onChange('');
+		};
 
 		/**
 		 * autosize
@@ -258,7 +276,7 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 		 *
 		 */
 		const inputType = React.useMemo<
-			Pick<TextInputProps, 'keyboardType' | 'textContentType' | 'autoCapitalize'>
+			Pick<RNTextInputProps, 'keyboardType' | 'textContentType' | 'autoCapitalize'>
 		>(() => {
 			switch (type) {
 				case 'text':
@@ -296,7 +314,7 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 		}, [type, autoCapitalize]);
 
 		return (
-			<Styled.Box focused={hasFocus}>
+			<Styled.Box focused={hasFocus} style={style}>
 				{leftAccessory || null}
 				{prefix ? (
 					<View>
@@ -322,7 +340,7 @@ export const TextInput = React.forwardRef<RNTextInput, ITextInputProps>(
 					// onContentSizeChange={handleContentSizeChange}
 					style={{ width: autosize ? measuredWidth : '100%' }}
 				/>
-				{/* {clearable && text !== '' && <Icon name="clear" onPress={handleClear} />} */}
+				{clearable && value !== '' && <Icon name="clear" onPress={handleClear} />}
 				{action && (
 					<Button
 						title={action}
