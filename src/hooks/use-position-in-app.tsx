@@ -71,17 +71,11 @@ export const AppProviderSizeProvider: React.FC<AppProviderSizeProviderProps> = (
 	);
 
 	return (
-		<View ref={ref} style={styles.root} onLayout={onLayout}>
+		<View ref={ref} style={{ flex: 1 }} onLayout={onLayout}>
 			<SizeContext.Provider value={{ layout, measure }}>{children}</SizeContext.Provider>
 		</View>
 	);
 };
-
-const styles = StyleSheet.create({
-	root: {
-		flex: 1,
-	},
-});
 
 /**
  * Provide dimensions of `AppProvider`. X and Y positions are relative to Window.
