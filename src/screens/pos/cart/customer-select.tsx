@@ -35,6 +35,7 @@ const CustomerSelect = ({ order }: CustomerSelectProps) => {
 			{customers.map((customer) => {
 				return (
 					<Pressable
+						key={customer._id}
 						onPress={() => {
 							order?.addCustomer(customer);
 						}}

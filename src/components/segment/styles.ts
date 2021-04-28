@@ -60,7 +60,7 @@ type GroupProps = Pick<ISegmentGroupProps, 'raised' | 'flexDirection'>;
 export const Group = styled.View<GroupProps>`
 	flex-direction: ${({ flexDirection }) => flexDirection};
 	width: 100%;
-	height: 100%;
+	max-height: 100%;
 
 	${({ raised }) =>
 		raised &&

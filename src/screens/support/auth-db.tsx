@@ -1,29 +1,45 @@
 import * as React from 'react';
-import Table from '../../components/table';
-import Button from '../../components/button';
-import { usersDatabase } from '../../database';
-import useObservable from '../../hooks/use-observable';
+import Table from '@wcpos/common/src/components/table';
+import Button from '@wcpos/common/src/components/button';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import forEach from 'lodash/forEach';
+import map from 'lodash/map';
 
-interface Props {}
+type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
 
-const Sites: React.FC<Props> = () => {
-	const tableCounts = Object.keys(usersDatabase.collections.map).reduce((result: any[], key) => {
-		result.push({
-			name: key,
-			count: useObservable(usersDatabase.collections.map[key].query().observeCount(), []),
-		});
-		return result;
+const AuthDB = () => {
+	const { userDB } = useAppState() as { userDB: UserDatabase };
+	const [counts, setCounts] = React.useState<any[]>([]);
+
+	// subscribe to all collection changes
+	forEach(userDB.collections, (collection, key) => {
+		collection.$.subscribe((changeEvent) => console.log(key, changeEvent));
+	});
+
+	React.useEffect(() => {
+		(async function init() {
+			const promises = map(userDB.collections, async (collection, key) => {
+				const records = await collection.find().exec();
+				return {
+					name: key,
+					count: records.length,
+				};
+			});
+			const resolved = await Promise.all(promises);
+
+			setCounts(resolved);
+		})();
 	}, []);
-
 	const deleteAll = async (table: string) => {
-		const query = usersDatabase.collections.map[table].query();
-		await usersDatabase.action(async () => {
-			await query.destroyAllPermanently();
-		});
+		// const query = userDB.collections.map[table].query();
+		// await userDB.action(async () => {
+		// 	await query.destroyAllPermanently();
+		// });
 	};
 
-	const printToConsole = async (table: string) => {
-		const data = await usersDatabase.collections.map[table].query().fetch();
+	const printToConsole = async (collection: string) => {
+		// @ts-ignore
+		const data = await userDB.collections[collection].find().exec();
 		console.log(data);
 	};
 
@@ -34,7 +50,7 @@ const Sites: React.FC<Props> = () => {
 	];
 
 	return (
-		<Table columns={columns} data={tableCounts}>
+		<Table columns={columns} data={counts}>
 			<Table.Header>
 				<Table.HeaderRow>
 					{columns.map(({ key, flexGrow, flexShrink, width, label }) => {
@@ -65,7 +81,7 @@ const Sites: React.FC<Props> = () => {
 								return (
 									<Table.Row.Cell>
 										<Button
-											title="Delete"
+											title="Delete All"
 											onPress={() => {
 												deleteAll(item.name);
 											}}
@@ -88,4 +104,4 @@ const Sites: React.FC<Props> = () => {
 	);
 };
 
-export default Sites;
+export default AuthDB;

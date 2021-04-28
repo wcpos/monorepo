@@ -1,30 +1,46 @@
 import * as React from 'react';
-import useAppState from '../../hooks/use-app-state';
-import useObservable from '../../hooks/use-observable';
-import Table from '../../components/table';
-import Button from '../../components/button';
+import map from 'lodash/map';
+import forEach from 'lodash/forEach';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import Table from '@wcpos/common/src/components/table';
+import Button from '@wcpos/common/src/components/button';
 
-interface Props {}
+type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
-const Stores: React.FC<Props> = ({ header, main, title }) => {
-	const [{ storeDB }] = useAppState();
-	const tableCounts = Object.keys(storeDB.collections.map).reduce((result: any[], key) => {
-		result.push({
-			name: key,
-			count: useObservable(storeDB.collections.map[key].query().observeCount(), []),
-		});
-		return result;
+const StoreDB = () => {
+	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
+	const [counts, setCounts] = React.useState<any[]>([]);
+
+	// subscribe to all collection changes
+	forEach(storeDB.collections, (collection, key) => {
+		collection.$.subscribe((changeEvent) => console.log(key, changeEvent));
+	});
+
+	React.useEffect(() => {
+		(async function init() {
+			const promises = map(storeDB.collections, async (collection, key) => {
+				const records = await collection.find().exec();
+				return {
+					name: key,
+					count: records.length,
+				};
+			});
+			const resolved = await Promise.all(promises);
+
+			setCounts(resolved);
+		})();
 	}, []);
 
 	const deleteAll = async (table: string) => {
-		const query = storeDB.collections.map[table].query();
-		await storeDB.action(async () => {
-			await query.destroyAllPermanently();
-		});
+		// const query = storeDB.collections.map[table].query();
+		// await storeDB.action(async () => {
+		// 	await query.destroyAllPermanently();
+		// });
 	};
 
-	const printToConsole = async (table: string) => {
-		const data = await storeDB.collections.map[table].query().fetch();
+	const printToConsole = async (collection: string) => {
+		// @ts-ignore
+		const data = await storeDB.collections[collection].find().exec();
 		console.log(data);
 	};
 
@@ -35,7 +51,7 @@ const Stores: React.FC<Props> = ({ header, main, title }) => {
 	];
 
 	return (
-		<Table columns={columns} data={tableCounts}>
+		<Table columns={columns} data={counts}>
 			<Table.Header>
 				<Table.HeaderRow>
 					{columns.map(({ key, flexGrow, flexShrink, width, label }) => {
@@ -66,7 +82,7 @@ const Stores: React.FC<Props> = ({ header, main, title }) => {
 								return (
 									<Table.Row.Cell>
 										<Button
-											title="Delete"
+											title="Delete All"
 											onPress={() => {
 												deleteAll(item.name);
 											}}
@@ -80,7 +96,7 @@ const Stores: React.FC<Props> = ({ header, main, title }) => {
 									</Table.Row.Cell>
 								);
 							}
-							return <Table.Row.Cell cellData={cellData} columnData={column} />;
+							return <Table.Row.Cell cellData={cellData} />;
 						}}
 					</Table.Row>
 				)}
@@ -89,4 +105,7 @@ const Stores: React.FC<Props> = ({ header, main, title }) => {
 	);
 };
 
-export default Stores;
+export default StoreDB;
+function countRecords() {
+	throw new Error('Function not implemented.');
+}
