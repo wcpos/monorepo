@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import Table from '@wcpos/common/src/components/table';
 import Button from '@wcpos/common/src/components/button';
+import { useSnackbar } from '@wcpos/common/src/components/snackbar/use-snackbar';
 import Quantity from './cells/quantity';
 import Price from './cells/price';
 import Total from './cells/total';
@@ -15,8 +16,11 @@ interface Props {
 }
 
 const LineItem = ({ order, item, columns }: Props) => {
+	const showSnackbar = useSnackbar({ message: 'hi' });
+
 	const onRemove = () => {
 		order.removeLineItem(item);
+		showSnackbar();
 	};
 
 	return (

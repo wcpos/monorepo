@@ -1,0 +1,45 @@
+import React, { useState, useCallback } from 'react';
+import wrap from 'lodash/wrap';
+import { View } from 'react-native';
+import { SnackbarProps, Snackbar } from './snackbar';
+
+export type SnackbarOptions = SnackbarProps;
+
+export interface SnackbarContext {
+	show: (options: SnackbarOptions) => void;
+}
+
+export const SnackbarContext = React.createContext<SnackbarContext>(
+	(undefined as unknown) as SnackbarContext
+);
+
+export interface SnackbarProviderProps {
+	children: React.ReactNode;
+}
+
+export const SnackbarProvider = ({ children }: SnackbarProviderProps) => {
+	const [snackbarOptions, setSnackbarOptions] = useState<SnackbarOptions>();
+
+	const show = useCallback<SnackbarContext['show']>(
+		(options) => {
+			// Wrap the onDismiss callback to unmount the component on dismiss
+			options.onDismiss = wrap(options.onDismiss, (origOnDismiss) => {
+				origOnDismiss?.();
+				setSnackbarOptions(undefined); // Unmount the Snackbar
+			}) as () => void;
+
+			setSnackbarOptions(options);
+		},
+		[setSnackbarOptions]
+	);
+
+	return (
+		<SnackbarContext.Provider value={{ show }}>
+			{/* Wrapper for Snackbar which is necessary to make sure the Snackbar is displayed within AppProvider bounds */}
+			<View style={{ height: '100%' }}>
+				{children}
+				{snackbarOptions ? <Snackbar key={snackbarOptions.message} {...snackbarOptions} /> : null}
+			</View>
+		</SnackbarContext.Provider>
+	);
+};
