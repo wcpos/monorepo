@@ -126,6 +126,7 @@ export type StoreDatabaseCollections = {
 	fee_lines: import('./collections/fee-lines').FeeLineCollection;
 	shipping_lines: import('./collections/shipping-lines').ShippingLineCollection;
 	customers: import('./collections/customers').CustomerCollection;
+	taxes: import('./collections/taxes').TaxRateCollection;
 };
 export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
 

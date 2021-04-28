@@ -81,24 +81,11 @@ const Products = () => {
 						<Button
 							title="Fetch Tax Rates"
 							onPress={async () => {
-								// const path = storePath.split('.');
-								// const site = user.get(path.slice(1, 3).join('.'));
-								// const wpCredentials = user.get(path.slice(1, 5).join('.'));
-								// const baseUrl = site.wc_api_url;
-								// const collection = 'taxes';
-								// const key = wpCredentials.consumer_key;
-								// const secret = wpCredentials.consumer_secret;
-								// const api = new WcApiService({ baseUrl, collection, key, secret });
-								// const data = await api.fetch();
-								// console.log(data);
-								// await storeDB.upsertLocal(
-								// 	'tax_rates',
-								// 	// turn array into json
-								// 	data.reduce((obj: Record<string, unknown>, rate: any) => {
-								// 		obj[rate.id] = rate;
-								// 		return obj;
-								// 	}, {})
-								// );
+								// @ts-ignore
+								const replicationState = storeDB.taxes.syncRestApi({
+									pull: {},
+								});
+								replicationState.run(false);
 							}}
 						/>
 						<Button
