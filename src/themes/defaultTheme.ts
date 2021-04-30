@@ -111,6 +111,13 @@ const theme = {
 
 	SIDEBAR_BACKGROUND_COLOR: '#FFFFFF',
 
+	SNACKBAR_BACKGROUND_COLOR: colors.secondary,
+	SNACKBAR_TEXT_COLOR: colors.inverse,
+	SNACKBAR_PADDING_X: '5px',
+	SNACKBAR_PADDING_Y: '5px',
+	SNACKBAR_RADIUS: '3px',
+	SNACKBAR_WIDTH: '400px',
+
 	TAG_BACKGROUND_COLOR: colors.secondary,
 	TAG_BACKGROUND_DISABLED: colors.disabled,
 	TAG_TEXT_COLOR: colors.inverse,

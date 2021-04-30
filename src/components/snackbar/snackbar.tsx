@@ -1,9 +1,9 @@
 import React, { useCallback } from 'react';
-import { View, Animated, Easing } from 'react-native';
+import { Animated, Easing } from 'react-native';
 import useAnimation from '@wcpos/common/src/hooks/use-animation';
 import useTimeout from '@wcpos/common/src/hooks/use-timeout';
-import Text from '../text';
 import Button from '../button';
+import Icon from '../icon';
 import * as Styled from './styles';
 
 export interface SnackbarProps {
@@ -23,6 +23,10 @@ export interface SnackbarProps {
 	 * Function to call when the Snackbar is dismissed.
 	 */
 	onDismiss?: () => void;
+	/**
+	 * Function to call when the Snackbar is dismissed.
+	 */
+	dismissable?: boolean;
 }
 
 const durationValues = {
@@ -34,15 +38,13 @@ const durationValues = {
  * Confirm a User's action by displaying a small text at the bottom of the screen.
  * Can also provide the user a quick action.
  */
-export const Snackbar = ({ message, action, duration = 'default', onDismiss }: SnackbarProps) => {
-	const styles = {
-		snackbar: {
-			marginHorizontal: 10,
-			marginBottom: 10,
-			backgroundColor: 'grey',
-			borderRadius: 3,
-		},
-	};
+export const Snackbar = ({
+	message,
+	action,
+	duration = 'default',
+	onDismiss,
+	dismissable,
+}: SnackbarProps) => {
 	const animation = {
 		duration: {
 			default: 300,
@@ -86,9 +88,9 @@ export const Snackbar = ({ message, action, duration = 'default', onDismiss }: S
 
 	return (
 		<Styled.Container>
-			<Animated.View
+			<Styled.Snackbar
+				as={Animated.View}
 				style={[
-					styles.snackbar,
 					{
 						transform: [
 							{
@@ -101,13 +103,10 @@ export const Snackbar = ({ message, action, duration = 'default', onDismiss }: S
 					},
 				]}
 			>
-				<View>
-					<View>
-						<Text>{message}</Text>
-					</View>
-					{action ? <Button onPress={onActionClick}>{action.label}</Button> : null}
-				</View>
-			</Animated.View>
+				<Styled.Text>{message}</Styled.Text>
+				{action ? <Button onPress={onActionClick}>{action.label}</Button> : null}
+				{dismissable ? <Icon name="remove" onPress={dismiss} /> : null}
+			</Styled.Snackbar>
 		</Styled.Container>
 	);
 };

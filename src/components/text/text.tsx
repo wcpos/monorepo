@@ -1,11 +1,11 @@
 import * as React from 'react';
-import { StyledText } from './styles';
+import * as Styled from './styles';
 
 /**
  * note: weird bug in storybook when importing * as Styled
  */
 
-export interface ITextProps {
+export interface TextProps {
 	align?: 'left' | 'right' | 'center' | 'justify';
 	children: React.ReactNode;
 	italic?: boolean;
@@ -35,9 +35,9 @@ export const Text = ({
 	type = 'primary',
 	uppercase,
 	weight = 'normal',
-}: ITextProps) => {
+}: TextProps) => {
 	return (
-		<StyledText
+		<Styled.Text
 			align={align}
 			italic={italic}
 			onPress={onPress}
@@ -48,6 +48,6 @@ export const Text = ({
 			weight={weight}
 		>
 			{children}
-		</StyledText>
+		</Styled.Text>
 	);
 };

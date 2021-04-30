@@ -37,7 +37,7 @@ export const BasicUsage: React.FC<SnackbarProps> = (props) => {
 	const showSnackbar = useSnackbar(props);
 
 	return (
-		<View style={{ height: '300px', alignItems: 'flex-start' }}>
+		<View style={{ height: '300px', alignItems: 'flex-start', backgroundColor: 'grey' }}>
 			<Button
 				onPress={() => {
 					showSnackbar();
@@ -50,6 +50,7 @@ export const BasicUsage: React.FC<SnackbarProps> = (props) => {
 };
 BasicUsage.args = {
 	message: 'This is a Snackbar!',
+	onDismiss: action('Dismissed'),
 };
 
 /**

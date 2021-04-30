@@ -13,12 +13,23 @@ interface Props {
 }
 
 const FeeLine = ({ order, fee, columns }: Props) => {
-	const showSnackbar = useSnackbar({ message: 'hi' });
-
+	/**  */
 	const handleFeeRemove = () => {
 		order.removeFeeLine(fee);
 		showSnackbar();
 	};
+
+	/**  */
+	const undoFeeRemove = () => {
+		console.log('undo');
+	};
+
+	/**  */
+	const showSnackbar = useSnackbar({
+		message: 'Fee removed',
+		dismissable: true,
+		action: { label: 'Undo', action: undoFeeRemove },
+	});
 
 	return (
 		<Table.Row rowData={fee} columns={columns}>

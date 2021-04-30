@@ -1,18 +1,14 @@
 import * as React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View } from 'react-native';
+import { StoryWrapper } from '@storybook/addons';
 import { action } from '@storybook/addon-actions';
 import { AppProviderSizeProvider } from '@wcpos/common/src/hooks/use-position-in-app';
 import Text from '../text';
-import Button from '../button';
+import Icon from '../icon';
 import Portal from '../portal';
 
 import { Tooltip, TooltipProps } from './tooltip';
-
-export default {
-	title: 'Components/Tooltip',
-	component: Tooltip,
-};
 
 /**
  * Tooltips require
@@ -20,12 +16,12 @@ export default {
  * - Portals
  * - AppProviderSizeProvider
  */
-const AppProvider: React.FC = ({ children }) => {
+const AppProvider: StoryWrapper = (Story, context) => {
 	return (
 		<SafeAreaProvider>
 			<AppProviderSizeProvider>
 				<Portal.Provider>
-					{children}
+					<Story {...context} />
 					<Portal.Manager />
 				</Portal.Provider>
 			</AppProviderSizeProvider>
@@ -33,12 +29,34 @@ const AppProvider: React.FC = ({ children }) => {
 	);
 };
 
+export default {
+	title: 'Components/Tooltip',
+	component: Tooltip,
+	decorators: [AppProvider],
+};
+
+// const AppProvider: StoryWrapper = (Story, context) => {
+// 	return (
+// 		<SafeAreaProvider>
+// 			<SnackbarProvider>
+// 				<Story {...context} />
+// 			</SnackbarProvider>
+// 		</SafeAreaProvider>
+// 	);
+// };
+
+// export default {
+// 	title: 'Components/Snackbar',
+// 	component: Snackbar,
+// 	decorators: [AppProvider],
+// };
+
 export const basicUsage = (props: TooltipProps) => (
-	<AppProvider>
+	<View style={{ padding: 50, alignItems: 'flex-start' }}>
 		<Tooltip {...props}>
 			<Text>This is some unclear text.</Text>
 		</Tooltip>
-	</AppProvider>
+	</View>
 );
 
 basicUsage.args = {
@@ -50,9 +68,9 @@ basicUsage.argTypes = {
 };
 
 export const withClickableChildren = () => (
-	<AppProvider>
+	<View style={{ padding: 50, alignItems: 'flex-start' }}>
 		<Tooltip content="Edit" preferredPlacement="below">
-			<Button onPress={action('Icon clicked')} />
+			<Icon name="edit" onPress={action('Icon clicked')} />
 		</Tooltip>
-	</AppProvider>
+	</View>
 );

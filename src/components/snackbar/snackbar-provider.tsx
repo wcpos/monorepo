@@ -2,6 +2,7 @@ import * as React from 'react';
 import wrap from 'lodash/wrap';
 import { View } from 'react-native';
 import { SnackbarProps, Snackbar } from './snackbar';
+import * as Styled from './styles';
 
 export type SnackbarOptions = SnackbarProps;
 
@@ -36,10 +37,10 @@ export const SnackbarProvider = ({ children }: SnackbarProviderProps) => {
 	return (
 		<SnackbarContext.Provider value={{ show }}>
 			{/* Wrapper for Snackbar which is necessary to make sure the Snackbar is displayed within AppProvider bounds */}
-			<View style={{ height: '100%' }}>
+			<Styled.Provider pointerEvents="auto">
 				{children}
 				{snackbarOptions ? <Snackbar key={snackbarOptions.message} {...snackbarOptions} /> : null}
-			</View>
+			</Styled.Provider>
 		</SnackbarContext.Provider>
 	);
 };

@@ -1,8 +1,8 @@
 import styled from 'styled-components/native';
 
-type ITextProps = import('./text').ITextProps;
+type TextProps = import('./text').TextProps;
 
-export const StyledText = styled.Text<ITextProps>`
+export const Text = styled.Text<TextProps>`
 	color: ${({ type, theme }) => {
 		switch (type) {
 			case 'secondary':

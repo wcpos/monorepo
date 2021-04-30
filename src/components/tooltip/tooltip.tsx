@@ -19,6 +19,7 @@ import Text from '../text';
 // import { Button, ButtonProps } from '../../actions/Button/Button';
 // import { Touchable, TouchableProps } from '../../base/Touchable/Touchable';
 // import { shameStyles } from '../../../theme/shame-styles';
+import * as Styled from './styles';
 
 export interface TooltipProps {
 	/**
@@ -151,7 +152,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
 			clickThrough
 			popoverStyle={{ backgroundColor: 'black' }}
 		>
-			<Text type="inverse">{content}</Text>
+			<Styled.Text type="inverse">{content}</Styled.Text>
 		</Popover>
 	);
 };

@@ -1,5 +1,5 @@
 import styled from 'styled-components/native';
-import { StyledText } from '../text/styles';
+import { Text as StyledText } from '../text/styles';
 
 type ThemeProps = import('../../lib/theme').ThemeProps;
 
