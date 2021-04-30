@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import * as React from 'react';
 import wrap from 'lodash/wrap';
 import { View } from 'react-native';
 import { SnackbarProps, Snackbar } from './snackbar';
@@ -18,9 +18,9 @@ export interface SnackbarProviderProps {
 }
 
 export const SnackbarProvider = ({ children }: SnackbarProviderProps) => {
-	const [snackbarOptions, setSnackbarOptions] = useState<SnackbarOptions>();
+	const [snackbarOptions, setSnackbarOptions] = React.useState<SnackbarOptions>();
 
-	const show = useCallback<SnackbarContext['show']>(
+	const show = React.useCallback<SnackbarContext['show']>(
 		(options) => {
 			// Wrap the onDismiss callback to unmount the component on dismiss
 			options.onDismiss = wrap(options.onDismiss, (origOnDismiss) => {

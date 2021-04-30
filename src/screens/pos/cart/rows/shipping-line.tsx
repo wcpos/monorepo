@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useSnackbar } from '@wcpos/common/src/components/snackbar/use-snackbar';
 import Table from '@wcpos/common/src/components/table';
 import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
@@ -13,8 +14,11 @@ interface Props {
 }
 
 const ShippingLine = ({ order, shipping, columns }: Props) => {
+	const showSnackbar = useSnackbar({ message: 'hi' });
+
 	const handleRemove = () => {
 		order.removeShippingLine(shipping);
+		showSnackbar();
 	};
 
 	return (

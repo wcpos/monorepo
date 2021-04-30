@@ -54,14 +54,11 @@ const StoreDB = () => {
 		<Table columns={columns} data={counts}>
 			<Table.Header>
 				<Table.HeaderRow>
-					{columns.map(({ key, flexGrow, flexShrink, width, label }) => {
+					{columns.map(({ key, label }) => {
 						return (
 							<Table.HeaderRow.HeaderCell
 								key={key}
 								dataKey={key}
-								flexGrow={flexGrow}
-								flexShrink={flexShrink}
-								width={width}
 								sort={() => {
 									console.log('sort');
 								}}
@@ -75,9 +72,9 @@ const StoreDB = () => {
 				</Table.HeaderRow>
 			</Table.Header>
 			<Table.Body>
-				{({ item }) => (
+				{({ item }: any) => (
 					<Table.Row rowData={item} columns={columns}>
-						{({ cellData, column }) => {
+						{({ cellData, column }: any) => {
 							if (column.key === 'actions') {
 								return (
 									<Table.Row.Cell>

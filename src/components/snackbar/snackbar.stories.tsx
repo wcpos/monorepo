@@ -1,39 +1,60 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StoryWrapper } from '@storybook/addons';
 import { action } from '@storybook/addon-actions';
 import { Snackbar, SnackbarProps } from './snackbar';
 import { SnackbarProvider } from './snackbar-provider';
 import { useSnackbar } from './use-snackbar';
 import Button from '../button';
 
+/**
+ * Snackbar require
+ * - SafeAreaProvider
+ * - SnackbarProvider
+ * - AppProviderSizeProvider
+ */
+const AppProvider: StoryWrapper = (Story, context) => {
+	return (
+		<SafeAreaProvider>
+			<SnackbarProvider>
+				<Story {...context} />
+			</SnackbarProvider>
+		</SafeAreaProvider>
+	);
+};
+
 export default {
 	title: 'Components/Snackbar',
 	component: Snackbar,
+	decorators: [AppProvider],
 };
 
 /**
- * Popovers require
- * - SafeAreaProvider
- * - Portals
- * - AppProviderSizeProvider
+ *
  */
-const AppProvider: React.FC = ({ children }) => {
-	return <SnackbarProvider>{children}</SnackbarProvider>;
-};
-
-export const BasicUsage = (props: SnackbarProps) => {
+export const BasicUsage: React.FC<SnackbarProps> = (props) => {
 	const showSnackbar = useSnackbar(props);
 
 	return (
-		<AppProvider>
-			<Button onPress={showSnackbar}>Show Snackbar</Button>
-		</AppProvider>
+		<View style={{ height: '300px', alignItems: 'flex-start' }}>
+			<Button
+				onPress={() => {
+					showSnackbar();
+				}}
+			>
+				Show Snackbar
+			</Button>
+		</View>
 	);
 };
 BasicUsage.args = {
 	message: 'This is a Snackbar!',
 };
 
+/**
+ *
+ */
 export const WithAction = () => {
 	const showSnackbar = useSnackbar({
 		message: 'Blog post saved.',
@@ -42,8 +63,8 @@ export const WithAction = () => {
 	});
 
 	return (
-		<AppProvider>
+		<View style={{ height: '300px', alignItems: 'flex-start' }}>
 			<Button onPress={showSnackbar}>Show Snackbar</Button>
-		</AppProvider>
+		</View>
 	);
 };

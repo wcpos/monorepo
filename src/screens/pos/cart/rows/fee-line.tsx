@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useSnackbar } from '@wcpos/common/src/components/snackbar/use-snackbar';
 import Table from '@wcpos/common/src/components/table';
 import Button from '@wcpos/common/src/components/button';
 import Price from './cells/fee-and-shipping-price';
@@ -12,8 +13,11 @@ interface Props {
 }
 
 const FeeLine = ({ order, fee, columns }: Props) => {
+	const showSnackbar = useSnackbar({ message: 'hi' });
+
 	const handleFeeRemove = () => {
 		order.removeFeeLine(fee);
+		showSnackbar();
 	};
 
 	return (

@@ -25,23 +25,16 @@ export interface SnackbarProps {
 	onDismiss?: () => void;
 }
 
-const { duration: durationValues } = {
-	duration: {
-		default: 2500,
-		longer: 4000,
-	},
+const durationValues = {
+	default: 2500,
+	longer: 4000,
 };
 
 /**
  * Confirm a User's action by displaying a small text at the bottom of the screen.
  * Can also provide the user a quick action.
  */
-export const Snackbar: React.FC<SnackbarProps> = ({
-	message,
-	action,
-	duration = 'default',
-	onDismiss,
-}) => {
+export const Snackbar = ({ message, action, duration = 'default', onDismiss }: SnackbarProps) => {
 	const styles = {
 		snackbar: {
 			marginHorizontal: 10,
