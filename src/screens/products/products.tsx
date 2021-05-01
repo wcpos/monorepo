@@ -5,8 +5,10 @@ import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from '
 import Segment from '@wcpos/common/src/components/segment';
 import Input from '@wcpos/common/src/components/textinput';
 import Button from '@wcpos/common/src/components/button';
+import Dialog from '@wcpos/common/src/components/dialog';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
+import useAuthLogin from '@wcpos/common/src/hooks/use-auth-login';
 import Table from './table';
 import Actions from './actions';
 import * as Styled from './styles';
@@ -16,6 +18,7 @@ type Sort = import('@wcpos/common/src/components/table/types').Sort;
 const Products = () => {
 	const { storeDB } = useAppState();
 	const ui = useObservableSuspense(useUIResource('products'));
+	const showAuthLogin = useAuthLogin();
 
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
@@ -84,6 +87,11 @@ const Products = () => {
 								// @ts-ignore
 								const replicationState = storeDB.taxes.syncRestApi({
 									pull: {},
+								});
+								replicationState.error$.subscribe((err: any) => {
+									if (err.code === 401) {
+										showAuthLogin();
+									}
 								});
 								replicationState.run(false);
 							}}

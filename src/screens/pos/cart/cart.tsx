@@ -68,37 +68,39 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				<Totals order={currentOrder} />
 			</Segment>
 			<Segment>
-				<Button
-					title="Add Fee"
-					onPress={() => {
-						currentOrder.addFeeLine({ name: 'Fee', total: '10' });
-					}}
-				/>
-				<Button
-					title="Add Shipping"
-					onPress={() => {
-						currentOrder.addShippingLine({
-							methodTitle: 'Shipping',
-							methodId: 'test',
-							total: '5',
-						});
-					}}
-				/>
-				<Button
-					title="Add Note"
-					onPress={() => {
-						currentOrder.atomicPatch({ customerNote: 'This is a note!' });
-					}}
-				/>
-				<Button
-					title="Save"
-					onPress={async () => {
-						const replicationState = currentOrder.syncRestApi({
-							push: {},
-						});
-						replicationState.run(false);
-					}}
-				/>
+				<Button.Group>
+					<Button
+						title="Add Fee"
+						onPress={() => {
+							currentOrder.addFeeLine({ name: 'Fee', total: '10' });
+						}}
+					/>
+					<Button
+						title="Add Shipping"
+						onPress={() => {
+							currentOrder.addShippingLine({
+								methodTitle: 'Shipping',
+								methodId: 'test',
+								total: '5',
+							});
+						}}
+					/>
+					<Button
+						title="Add Note"
+						onPress={() => {
+							currentOrder.atomicPatch({ customerNote: 'This is a note!' });
+						}}
+					/>
+					<Button
+						title="Save"
+						onPress={async () => {
+							const replicationState = currentOrder.syncRestApi({
+								push: {},
+							});
+							replicationState.run(false);
+						}}
+					/>
+				</Button.Group>
 			</Segment>
 			<Segment>
 				{orders.map((order) => (

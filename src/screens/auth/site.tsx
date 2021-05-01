@@ -32,7 +32,7 @@ const Site = ({ site, user }: ISiteProps) => {
 	const error = useObservableState(site.connection.error$) as string;
 	const name = useObservableState(site.name$) as string;
 	const [visible, setVisible] = React.useState(false);
-	const { setStoreDB } = useAppState();
+	const { setLastUser } = useAppState();
 
 	const [connectedWpUsers] = useObservableState(
 		() =>
@@ -67,7 +67,7 @@ const Site = ({ site, user }: ISiteProps) => {
 		} else {
 			[store] = await wpUser.populate('stores');
 		}
-		setStoreDB(store._id, site, wpUser);
+		setLastUser(store._id, site, wpUser);
 	};
 
 	const handleRemove = async () => {

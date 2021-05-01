@@ -13,6 +13,7 @@ import SplashScreen from './screens/splash';
 import Platform from './lib/platform';
 import { AppProviderSizeProvider } from './hooks/use-position-in-app';
 import { SnackbarProvider } from './components/snackbar/snackbar-provider';
+import { AuthLoginProvider } from './hooks/use-auth-login';
 
 const i18n = new TranslationService();
 const prefixes =
@@ -83,7 +84,9 @@ const App = () => {
 										<Portal.Provider>
 											{isAppStateReady && isNavReady ? (
 												<NavigationContainer ref={navigationRef} initialState={initialNavState}>
-													<AppNavigator />
+													<AuthLoginProvider>
+														<AppNavigator />
+													</AuthLoginProvider>
 												</NavigationContainer>
 											) : (
 												<SplashScreen />

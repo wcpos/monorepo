@@ -1,5 +1,4 @@
 import * as React from 'react';
-import Text from '../text';
 import Icon from '../icon';
 import * as Styled from './styles';
 
@@ -14,7 +13,7 @@ export interface HeaderProps {
  */
 export const Header = ({ title, onClose, hideClose }: HeaderProps) => (
 	<Styled.Header>
-		<Text size="large">{title}</Text>
+		<Styled.HeaderText size="large">{title}</Styled.HeaderText>
 		{hideClose ? null : <Icon name="close" onPress={onClose} />}
 	</Styled.Header>
 );

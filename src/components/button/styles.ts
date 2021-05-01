@@ -79,4 +79,5 @@ export const Group = styled.View<ButtonGroupProps>`
 export const GroupChild = styled.View<ButtonGroupProps & { last: boolean }>`
 	margin-end: ${({ last }) => (last ? '0' : '10px')};
 	flex: ${({ alignment }) => (alignment === 'fill' ? 1 : 0)};
+	flex-basis: auto;
 `;

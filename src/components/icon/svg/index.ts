@@ -17,6 +17,7 @@ export default {
 	comment,
 	cog,
 	clear: remove,
+	close: remove,
 	delete: remove,
 	error,
 	more: moreVert,

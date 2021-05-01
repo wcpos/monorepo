@@ -1,6 +1,6 @@
 import * as React from 'react';
-import Button from '../../../../../components/button';
-import Modal from '../../../../../components/modal';
+import Button from '@wcpos/common/src/components/button';
+import Dialog from '@wcpos/common/src/components/dialog';
 import ProductModal from './modal';
 
 interface Props {
@@ -27,9 +27,19 @@ const Actions = ({ product }: Props) => {
 			<Button title="Sync" onPress={handleSync} />
 			<Button title="Delete" onPress={handleDelete} />
 			{visible && (
-				<Modal visible={visible}>
+				<Dialog
+					sectioned
+					title={product.name}
+					open={visible}
+					onClose={() => setVisible(false)}
+					primaryAction={{ label: 'Got it!', action: () => setVisible(false) }}
+					secondaryActions={[
+						{ label: 'I am dumb', action: () => setVisible(false) },
+						{ label: 'Share', action: () => setVisible(false) },
+					]}
+				>
 					<ProductModal product={product} setVisible={setVisible} />
-				</Modal>
+				</Dialog>
 			)}
 		</>
 	);

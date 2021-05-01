@@ -37,10 +37,10 @@ export const SnackbarProvider = ({ children }: SnackbarProviderProps) => {
 	return (
 		<SnackbarContext.Provider value={{ show }}>
 			{/* Wrapper for Snackbar which is necessary to make sure the Snackbar is displayed within AppProvider bounds */}
-			<Styled.Provider pointerEvents="auto">
+			<Styled.View pointerEvents="auto">
 				{children}
 				{snackbarOptions ? <Snackbar key={snackbarOptions.message} {...snackbarOptions} /> : null}
-			</Styled.Provider>
+			</Styled.View>
 		</SnackbarContext.Provider>
 	);
 };

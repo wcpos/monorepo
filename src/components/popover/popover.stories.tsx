@@ -1,46 +1,26 @@
 import * as React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View } from 'react-native';
-// import { fileAbsolute } from 'paths.macro';
 import { action } from '@storybook/addon-actions';
+import { StoryWrapper } from '@storybook/addons';
 import Icon from '@wcpos/common/src/components/icon';
 import Button from '@wcpos/common/src/components/button';
 import { AppProviderSizeProvider } from '@wcpos/common/src/hooks/use-position-in-app';
-
-// import { getStoryTitle } from '../../../storybook/get-story-title';
-// import { PhoneScreen } from '../../../storybook/decorators/PhoneScreen';
-// import { Screen } from '../../structure/Screen/Screen';
-// import { Box } from '../../structure/Box/Box';
-// import { Button } from '../../actions/Button/Button';
-// import { StoryFn } from '../../../storybook/utils/storybook-types';
-// import { DisplayText, TextContainer, BodyText } from '../../text';
-// import { LOREM_IPSUM } from '../../../storybook/utils/constants';
 import { Popover, PopoverProps } from './popover';
 import Portal from '../portal';
 
-export default {
-	title: 'Components/Popover',
-	component: Popover,
-	subcomponents: { 'Popover.Item': Popover.Item },
-	// decorators: [PhoneScreen],
-	parameters: {
-		chromatic: { pauseAnimationAtEnd: true, delay: 300 },
-	},
-};
-
-// const isInitiallyVisible = isChromatic();
 /**
  * Popovers require
  * - SafeAreaProvider
  * - Portals
  * - AppProviderSizeProvider
  */
-const AppProvider = ({ children }) => {
+const AppProvider: StoryWrapper = (Story, context) => {
 	return (
 		<SafeAreaProvider>
 			<AppProviderSizeProvider>
 				<Portal.Provider>
-					{children}
+					<Story {...context} />
 					<Portal.Manager />
 				</Portal.Provider>
 			</AppProviderSizeProvider>
@@ -48,26 +28,34 @@ const AppProvider = ({ children }) => {
 	);
 };
 
-export const Basic: React.FC<PopoverProps> = (props) => {
+export default {
+	title: 'Components/Popover',
+	component: Popover,
+	subcomponents: { 'Popover.Item': Popover.Item },
+	decorators: [AppProvider],
+	parameters: {
+		chromatic: { pauseAnimationAtEnd: true, delay: 300 },
+	},
+};
+
+export const BasicUsage: React.FC<PopoverProps> = (props) => {
 	const [visible, setVisible] = React.useState(false);
 
 	return (
-		<AppProvider>
-			<View style={{ width: 600, height: 600 }}>
-				<View style={{ width: 300, height: 300 }}>
-					<Popover
-						{...props}
-						open={visible}
-						onRequestClose={() => setVisible(false)}
-						activator={<Button title="Open" onPress={() => setVisible(true)} />}
-					/>
-				</View>
+		<View style={{ width: 600, height: 600 }}>
+			<View style={{ width: 300, height: 300 }}>
+				<Popover
+					{...props}
+					open={visible}
+					onRequestClose={() => setVisible(false)}
+					activator={<Button title="Open" onPress={() => setVisible(true)} />}
+				/>
 			</View>
-		</AppProvider>
+		</View>
 	);
 };
 
-Basic.args = {
+BasicUsage.args = {
 	placement: 'left-end',
 	actions: [
 		{ label: 'Edit', action: action('Option selected: Edit'), icon: 'edit' },
@@ -80,7 +68,7 @@ Basic.args = {
 	],
 };
 
-Basic.argTypes = {
+BasicUsage.argTypes = {
 	open: { control: null },
 	children: { control: null },
 	activator: { control: null },
@@ -90,23 +78,21 @@ export const UsingChildrenItems: React.FC<PopoverProps> = () => {
 	const [visible, setVisible] = React.useState(false);
 
 	return (
-		<AppProvider>
-			<View>
-				<Popover
-					open={visible}
-					onRequestClose={() => setVisible(false)}
-					activator={<Button title="more" onPress={() => setVisible(true)} />}
-				>
-					<Popover.Item label="Edit" icon="edit" onSelect={action('Edit selected')} />
-					<Popover.Item
-						label="Unlink"
-						icon="link"
-						iconColor="accent"
-						onSelect={action('Unlink selected')}
-					/>
-				</Popover>
-			</View>
-		</AppProvider>
+		<View>
+			<Popover
+				open={visible}
+				onRequestClose={() => setVisible(false)}
+				activator={<Button title="more" onPress={() => setVisible(true)} />}
+			>
+				<Popover.Item label="Edit" icon="edit" onSelect={action('Edit selected')} />
+				<Popover.Item
+					label="Unlink"
+					icon="link"
+					iconColor="accent"
+					onSelect={action('Unlink selected')}
+				/>
+			</Popover>
+		</View>
 	);
 };
 
@@ -114,20 +100,18 @@ export const MatchWidth: React.FC = () => {
 	const [visible, setVisible] = React.useState(false);
 
 	return (
-		<AppProvider>
-			<View>
-				<Popover
-					matchWidth
-					open={visible}
-					onRequestClose={() => setVisible(false)}
-					activator={<Button onPress={() => setVisible(true)}>Show Popover</Button>}
-					actions={[
-						{ label: 'A pizza', action: action('Option selected: A pizza') },
-						{ label: 'A taco', action: action('Option selected: A taco') },
-					]}
-				/>
-			</View>
-		</AppProvider>
+		<View>
+			<Popover
+				matchWidth
+				open={visible}
+				onRequestClose={() => setVisible(false)}
+				activator={<Button onPress={() => setVisible(true)}>Show Popover</Button>}
+				actions={[
+					{ label: 'A pizza', action: action('Option selected: A pizza') },
+					{ label: 'A taco', action: action('Option selected: A taco') },
+				]}
+			/>
+		</View>
 	);
 };
 
@@ -135,22 +119,20 @@ export const AboveActivatorAndHideBackdrop: React.FC = () => {
 	const [visible, setVisible] = React.useState(false);
 
 	return (
-		<AppProvider>
-			<View>
-				<Popover
-					aboveActivator
-					hideBackdrop
-					placement="bottom-end"
-					open={visible}
-					onRequestClose={() => setVisible(false)}
-					activator={<Button title="more" onPress={() => setVisible(true)} />}
-					actions={[
-						{ label: 'A pizza', action: action('Option selected: A pizza') },
-						{ label: 'A taco', action: action('Option selected: A taco') },
-					]}
-				/>
-			</View>
-		</AppProvider>
+		<View>
+			<Popover
+				aboveActivator
+				hideBackdrop
+				placement="bottom-end"
+				open={visible}
+				onRequestClose={() => setVisible(false)}
+				activator={<Button title="more" onPress={() => setVisible(true)} />}
+				actions={[
+					{ label: 'A pizza', action: action('Option selected: A pizza') },
+					{ label: 'A taco', action: action('Option selected: A taco') },
+				]}
+			/>
+		</View>
 	);
 };
 
@@ -158,19 +140,17 @@ export const AutomaticPlacementCorrection: React.FC<PopoverProps> = () => {
 	const [visible, setVisible] = React.useState(false);
 
 	return (
-		<AppProvider>
-			<View>
-				<Popover
-					open={visible}
-					onRequestClose={() => setVisible(false)}
-					activator={<Button onPress={() => setVisible(true)}>Show Popover</Button>}
-					actions={[
-						{ label: 'A pizza', action: action('Option selected: A pizza') },
-						{ label: 'A taco', action: action('Option selected: A taco') },
-					]}
-				/>
-			</View>
-		</AppProvider>
+		<View>
+			<Popover
+				open={visible}
+				onRequestClose={() => setVisible(false)}
+				activator={<Button onPress={() => setVisible(true)}>Show Popover</Button>}
+				actions={[
+					{ label: 'A pizza', action: action('Option selected: A pizza') },
+					{ label: 'A taco', action: action('Option selected: A taco') },
+				]}
+			/>
+		</View>
 	);
 };
 

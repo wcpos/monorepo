@@ -2,7 +2,7 @@ import styled from 'styled-components/native';
 import { StyleSheet } from 'react-native';
 import { Text as StyledText } from '../text/styles';
 
-export const Provider = styled.View`
+export const View = styled.View`
 	${{ ...StyleSheet.absoluteFillObject }}
 `;
 

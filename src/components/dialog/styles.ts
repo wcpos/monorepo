@@ -1,4 +1,5 @@
 import styled from 'styled-components/native';
+import { Text as StyledText } from '../text/styles';
 
 export const Container = styled.View`
 	background-color: ${({ theme }) => theme.DIALOG_BACKGROUND_COLOR};
@@ -14,6 +15,11 @@ export const Container = styled.View`
 
 export const Header = styled.View`
 	padding: 10px;
+	flex-direction: row;
+`;
+
+export const HeaderText = styled(StyledText)`
+	flex: 1;
 `;
 
 export const Section = styled.View`
