@@ -57,8 +57,26 @@ export const Background = styled.View<BackgroundProps>`
 	border-width: ${({ background }) => (background === 'outline' ? StyleSheet.hairlineWidth : 0)};
 	padding: ${({ theme }) => theme.BUTTON_PADDING_Y} ${({ theme }) => theme.BUTTON_PADDING_X};
 	flex-direction: row;
+	align-items: center;
 `;
 
-type GroupProps = import('./group').Props;
+type ButtonGroupProps = import('./group').ButtonGroupProps;
 
-export const Group = styled.View<GroupProps>``;
+export const Group = styled.View<ButtonGroupProps>`
+	flex-direction: row;
+	justify-content: ${({ alignment }) => {
+		switch (alignment) {
+			case 'start':
+				return 'flex-start';
+			case 'end':
+				return 'flex-end';
+			default:
+				return 'center';
+		}
+	}};
+`;
+
+export const GroupChild = styled.View<ButtonGroupProps & { last: boolean }>`
+	margin-end: ${({ last }) => (last ? '0' : '10px')};
+	flex: ${({ alignment }) => (alignment === 'fill' ? 1 : 0)};
+`;

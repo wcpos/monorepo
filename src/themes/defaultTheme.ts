@@ -62,6 +62,11 @@ const theme = {
 	CHECKBOX_WIDTH: `${normalizeText(14)}px`,
 	CHECKBOX_HEIGHT: `${normalizeText(14)}px`,
 
+	DIALOG_BACKGROUND_COLOR: colors.background,
+	DIALOG_WIDTH: '600px',
+	DIALOG_MIN_WIDTH: '300px',
+	DIALOG_BORDER_RADIUS: '3px',
+
 	FONT_FAMILY: fonts.regular,
 
 	FONT_SIZE: `${normalizeText(14)}px`,

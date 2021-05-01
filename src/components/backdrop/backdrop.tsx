@@ -18,28 +18,34 @@ export interface BackdropProps {
 	/**
 	 * Determines if Popover is transparent or not.
 	 */
-	invisible: boolean;
+	invisible?: boolean;
 	/**
 	 * If true, the popover and its backdrop won't be clickable and won't receive mouse events.
 	 *
 	 * For example, this is used by the `Tooltip` component. Prefer using the `Tooltip` component instead
 	 * of this property.
 	 */
-	clickThrough: boolean;
+	clickThrough?: boolean;
 	/**
 	 * Called when the Backdrop is pressed
 	 */
-	onPress: (event: NativeSyntheticEvent<NativeTouchEvent>) => void;
+	onPress?: (event: NativeSyntheticEvent<NativeTouchEvent>) => void;
 	/**
 	 * Backdrop children
 	 */
-	children?: React.ReactChildren;
+	children?: React.ReactNode;
 }
 
 /**
  *
  */
-export const Backdrop = ({ open, invisible, clickThrough, onPress, children }: BackdropProps) => {
+export const Backdrop = ({
+	open,
+	invisible = false,
+	clickThrough = false,
+	onPress,
+	children,
+}: BackdropProps) => {
 	const animation = {
 		duration: {
 			default: 300,

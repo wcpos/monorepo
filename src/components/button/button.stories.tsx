@@ -116,9 +116,13 @@ export const borderOutline = () => (
 export const buttonGroup = () => (
 	<Button.Group
 		onPress={action('pressed')}
-		selectedIndex={select('selectedIndex', [0, 1, 2], 0)}
-		buttons={['Hello', 'World', 'Buttons']}
-	/>
+		// selectedIndex={select('selectedIndex', [0, 1, 2], 0)}
+		// buttons={['Hello', 'World', 'Buttons']}
+	>
+		<Button onPress={action('pressed')} title="Primary" />
+		<Button onPress={action('pressed')} title="Primary" />
+		<Button onPress={action('pressed')} title="Primary" />
+	</Button.Group>
 );
 
 export const buttonWithIcon = ({ title }) => (
