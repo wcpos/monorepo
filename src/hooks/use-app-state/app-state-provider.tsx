@@ -5,7 +5,8 @@ import useScreenSize from '../use-screen-size';
 import useOnline from '../use-online';
 import useUser from '../use-user';
 import { getUniqueId, getReadableVersion } from './device-info';
-import useStoreDB from '../use-store';
+// import useStoreDB from '../use-store';
+import { useLastUser } from './use-last-user';
 
 type UserDocument = import('@wcpos/common/src/database').UserDocument;
 type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
@@ -23,9 +24,11 @@ export interface IAppStateProps {
 	user?: UserDocument;
 	setUser: React.Dispatch<React.SetStateAction<UserDocument | undefined>>;
 	userDB?: UserDatabase;
+	site?: SiteDocument;
+	wpUser?: WPCredentialsDocument;
 	storeDB?: StoreDatabase;
-	setStoreDB: (id: string, site: SiteDocument, wpUser: WPCredentialsDocument) => Promise<void>;
-	unsetStoreDB: () => Promise<void>;
+	setLastUser: (id: string, site: SiteDocument, wpUser: WPCredentialsDocument) => Promise<void>;
+	unsetLastUser: () => Promise<void>;
 }
 
 export const AppStateContext = React.createContext<unknown>({}) as React.Context<IAppStateProps>;
@@ -49,7 +52,7 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 	const online = useOnline();
 	const { user, setUser, userDB } = useUser();
 	const theme = getTheme('default', 'dark');
-	const { storeDB, setStoreDB, unsetStoreDB } = useStoreDB();
+	const { site, wpUser, storeDB, setLastUser, unsetLastUser } = useLastUser();
 
 	const value = {
 		info,
@@ -58,9 +61,11 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 		user,
 		setUser,
 		userDB,
+		site,
+		wpUser,
 		storeDB,
-		setStoreDB,
-		unsetStoreDB,
+		setLastUser,
+		unsetLastUser,
 	};
 	console.log(value);
 
