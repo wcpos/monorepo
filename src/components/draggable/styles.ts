@@ -11,7 +11,7 @@ export const View = styled.View<{ hovered: boolean }>`
 		Plaform.OS !== 'ios' &&
 		Plaform.OS !== 'android' &&
 		css`
-			cursor: grab;
+			cursor: col-resize;
 		`
 	}}
 	

@@ -40,7 +40,7 @@ const FeeLine = ({ order, fee, columns }: Props) => {
 						{((): React.ReactElement | null => {
 							switch (column.key) {
 								case 'quantity':
-									return null;
+									return <></>;
 								case 'price':
 									return <Price item={fee} />;
 								case 'actions':

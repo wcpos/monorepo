@@ -8,9 +8,7 @@ interface Props {
 }
 
 const Quantity = ({ lineItem }: Props) => {
-	// @ts-ignore
 	const quantity = useObservableState(lineItem.quantity$, lineItem.quantity);
-	console.log(quantity);
 
 	const handleChangeText = async (newValue: string): Promise<void> => {
 		lineItem.atomicPatch({ quantity: Number(newValue) });

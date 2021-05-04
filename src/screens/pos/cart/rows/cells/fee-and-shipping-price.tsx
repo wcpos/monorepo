@@ -15,7 +15,7 @@ const FeeAndShippingPrice = ({ item }: Props) => {
 		item.atomicPatch({ total: newValue });
 	};
 
-	return <TextInput value={price} onChange={handleChange} />;
+	return <TextInput autosize value={price} onChange={handleChange} />;
 };
 
 export default FeeAndShippingPrice;

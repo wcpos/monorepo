@@ -1,10 +1,8 @@
 import * as React from 'react';
-import Text from '@wcpos/common/src/components/text';
-import Icon from '@wcpos/common/src/components/icon';
-import { Box } from './box';
-import { Touchable } from './touchable';
+import Text from '../text';
+import Icon from '../icon';
+import Pressable from '../pressable';
 import { PopoverContext } from './context';
-// import { useStyles } from '../../../../theme';
 
 export interface ItemProps {
 	/**
@@ -55,11 +53,13 @@ export const Item: React.FC<ItemProps> = ({
 
 	return (
 		// <Touchable onClick={onSelect} disabled={disabled} viewStyle={disabled && styles.disabled}>
-		<Touchable onClick={onSelect} disabled={disabled}>
-			<Box horizontal space="small" paddingX="medium" paddingY="small" align="center">
-				{icon ? <Icon name={icon} color={iconColor} /> : null}
-				<Text>{label}</Text>
-			</Box>
-		</Touchable>
+		<Pressable
+			onPress={onSelect}
+			disabled={disabled}
+			style={{ padding: '5px', flexDirection: 'row' }}
+		>
+			{icon ? <Icon name={icon} color={iconColor} /> : null}
+			<Text>{label}</Text>
+		</Pressable>
 	);
 };

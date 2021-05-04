@@ -1,3 +1,3 @@
 import styled from 'styled-components/native';
 
-export const TriggerWrapper = styled.View``;
+export const Container = styled.View``;

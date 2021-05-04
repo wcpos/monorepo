@@ -1,52 +1,83 @@
 import * as React from 'react';
+import { useObservable, useObservableState } from 'observable-hooks';
+import {
+	switchMap,
+	tap,
+	debounceTime,
+	catchError,
+	distinctUntilChanged,
+	map,
+} from 'rxjs/operators';
+import { useTranslation } from 'react-i18next';
 import Button from '@wcpos/common/src/components/button';
-import Popover from '@wcpos/common/src/components/popover';
+import Combobox from '@wcpos/common/src/components/combobox';
 import Text from '@wcpos/common/src/components/text';
 import Pressable from '@wcpos/common/src/components/pressable';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 
 type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
 interface CustomerSelectProps {
 	order?: OrderDocument;
 }
 
 const CustomerSelect = ({ order }: CustomerSelectProps) => {
-	const [visible, setVisible] = React.useState(false);
-	const { storeDB } = useAppState();
-	const [customers, setCustomers] = React.useState<CustomerDocument[]>([]);
+	const [search, setSearch] = React.useState('');
+	const [selectedCustomer, setSelectedCustomer] = React.useState();
+	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
+	const { t } = useTranslation();
 
-	React.useEffect(() => {
-		async function fetch() {
-			const c = await storeDB?.customers.find().exec();
-			if (c) setCustomers(c);
+	const customers$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				distinctUntilChanged((a, b) => a[0] === b[0]),
+				debounceTime(150),
+				switchMap(([q]) => {
+					console.log(q);
+					const regexp = new RegExp(escape(q), 'i');
+					const selector = {
+						firstName: { $regex: regexp },
+						// categories: { $elemMatch: { id: 20 } },
+					};
+					const RxQuery = storeDB.collections.customers.find({ selector });
+					// .sort({ [q.sortBy]: q.sortDirection });
+					return RxQuery.$;
+				}),
+				catchError((err) => {
+					console.error(err);
+					return err;
+				})
+			),
+		[search]
+	);
+
+	const customers = useObservableState(customers$, []) as any[];
+
+	const handleSelectCustomer = (value) => {
+		if (order) {
+			order.addCustomer(value);
 		}
-		fetch();
-	}, []);
+		setSelectedCustomer(value);
+	};
 
 	return (
-		<Popover
-			hideBackdrop
-			open={visible}
-			onRequestClose={() => setVisible(false)}
-			activator={<Button title="Select Customer" onPress={() => setVisible(!visible)} />}
-		>
-			{customers.map((customer) => {
-				return (
-					<Pressable
-						key={customer._id}
-						onPress={() => {
-							order?.addCustomer(customer);
-						}}
-					>
-						<Text>
-							{customer.firstName} {customer.lastName}
-						</Text>
-					</Pressable>
-				);
-			})}
-		</Popover>
+		<Combobox
+			choices={customers.map((customer) => ({
+				label: `${customer.firstName} ${customer.lastName}`,
+				value: customer,
+			}))}
+			placeholder={
+				selectedCustomer
+					? // @ts-ignore
+					  `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
+					: t('Search customers')
+			}
+			onSearch={setSearch}
+			searchValue={search}
+			onChange={handleSelectCustomer}
+		/>
 	);
 };
 

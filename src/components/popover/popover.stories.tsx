@@ -54,7 +54,6 @@ export const BasicUsage: React.FC<PopoverProps> = (props) => {
 		</View>
 	);
 };
-
 BasicUsage.args = {
 	placement: 'left-end',
 	actions: [
@@ -67,7 +66,6 @@ BasicUsage.args = {
 		},
 	],
 };
-
 BasicUsage.argTypes = {
 	open: { control: null },
 	children: { control: null },

@@ -30,7 +30,7 @@ const ShippingLine = ({ order, shipping, columns }: Props) => {
 						{((): React.ReactElement | null => {
 							switch (column.key) {
 								case 'quantity':
-									return null;
+									return <></>;
 								case 'price':
 									return <Price item={shipping} />;
 								case 'name':

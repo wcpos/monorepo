@@ -15,4 +15,6 @@ export const Popover = styled.View`
 	shadow-radius: 7.5;
 	shadow-color: #000;
 	elevation: 8;
+	padding: 5px;
+	border-radius: 3px;
 `;

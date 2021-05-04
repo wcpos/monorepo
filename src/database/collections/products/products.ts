@@ -32,7 +32,14 @@ export const products = {
 	// statics: {},
 	methods,
 	// attachments: {},
-	// options: {},
+	// options: {
+	// 	middlewares: {
+	// 		postCreate: {
+	// 			handle: postCreate,
+	// 			parallel: false,
+	// 		},
+	// 	},
+	// },
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},
