@@ -1,5 +1,5 @@
 import styled, { css } from 'styled-components/native';
-import Plaform from '@wcpos/common/src/lib/platform';
+import Platform from '@wcpos/common/src/lib/platform';
 
 export const View = styled.View<{ hovered: boolean }>`
 	height: 100%;
@@ -8,8 +8,8 @@ export const View = styled.View<{ hovered: boolean }>`
 	background-color: ${({ hovered }) => (hovered ? '#f5f5f5' : 'transparent')};
 
 	${
-		Plaform.OS !== 'ios' &&
-		Plaform.OS !== 'android' &&
+		Platform.OS !== 'ios' &&
+		Platform.OS !== 'android' &&
 		css`
 			cursor: col-resize;
 		`

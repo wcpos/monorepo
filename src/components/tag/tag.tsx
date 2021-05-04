@@ -37,7 +37,7 @@ export const Tag = ({ children, removable, disabled, onRemove, onPress }: TagPro
 	const theme = useTheme();
 
 	return (
-		<Pressable onPress={onPress} style={{ marginRight: '5px', marginBottom: '5px' }}>
+		<Pressable onPress={onPress} style={{ marginRight: 5, marginBottom: 5 }}>
 			<Styled.Tag disabled={disabled}>
 				<Text size="small" style={{ color: theme.TAG_TEXT_COLOR }}>
 					{children}

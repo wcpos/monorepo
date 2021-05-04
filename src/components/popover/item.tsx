@@ -53,11 +53,7 @@ export const Item: React.FC<ItemProps> = ({
 
 	return (
 		// <Touchable onClick={onSelect} disabled={disabled} viewStyle={disabled && styles.disabled}>
-		<Pressable
-			onPress={onSelect}
-			disabled={disabled}
-			style={{ padding: '5px', flexDirection: 'row' }}
-		>
+		<Pressable onPress={onSelect} disabled={disabled} style={{ padding: 5, flexDirection: 'row' }}>
 			{icon ? <Icon name={icon} color={iconColor} /> : null}
 			<Text>{label}</Text>
 		</Pressable>

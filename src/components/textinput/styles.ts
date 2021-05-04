@@ -1,6 +1,5 @@
-import styled from 'styled-components/native';
-
-// type ITextInputProps = import('./textinput').ITextInputProps;
+import styled, { css } from 'styled-components/native';
+import Platform from '@wcpos/common/src/lib/platform';
 
 export const Box = styled.View<{ focused: boolean }>`
 	flex-direction: row;
@@ -18,5 +17,12 @@ export const TextInput = styled.TextInput`
 	align-self: center;
 	font-size: ${({ theme }) => theme.INPUT_FONT_SIZE};
 	padding: 0;
-	outline-width: 0;
+
+	${
+		Platform.OS !== 'ios' &&
+		Platform.OS !== 'android' &&
+		css`
+			outline-width: 0;
+		`
+	}}
 `;
