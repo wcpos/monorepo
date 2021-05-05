@@ -9,7 +9,13 @@ export default {
 };
 
 export const basicUsage = (props: PressableProps) => (
-	<Pressable {...props} onLongPress={action('Long Press')} onPress={action('Press')}>
+	<Pressable {...props}>
 		<Text>I'm pressable!</Text>
 	</Pressable>
 );
+basicUsage.args = {
+	onLongPress: action('Long Press'),
+	onPress: action('Press'),
+	onHoverIn: action('Mouse In'),
+	onHoverOut: action('Mouse Out'),
+};

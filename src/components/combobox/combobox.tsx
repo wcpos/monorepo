@@ -31,7 +31,7 @@ export interface ComboboxProps {
 	/**
 	 * Callback called when selection is changed.
 	 */
-	onChange?: (selected: string) => void;
+	onChange?: (selected: any) => void;
 	/**
 	 * Callback called when selection is changed.
 	 */

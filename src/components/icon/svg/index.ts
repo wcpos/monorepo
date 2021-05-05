@@ -1,5 +1,6 @@
 import arrow from './arrow.svg';
 import arrowDown from './arrow-down.svg';
+import backspace from './backspace.svg';
 import check from './check.svg';
 import cog from './cog.svg';
 import comment from './comment.svg';
@@ -13,6 +14,7 @@ export default {
 	arrow,
 	'arrow-up': arrow,
 	'arrow-down': arrowDown,
+	backspace,
 	check,
 	comment,
 	cog,

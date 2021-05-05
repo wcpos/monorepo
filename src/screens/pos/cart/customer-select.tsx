@@ -9,10 +9,7 @@ import {
 	map,
 } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
-import Button from '@wcpos/common/src/components/button';
 import Combobox from '@wcpos/common/src/components/combobox';
-import Text from '@wcpos/common/src/components/text';
-import Pressable from '@wcpos/common/src/components/pressable';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 
 type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
@@ -25,7 +22,7 @@ interface CustomerSelectProps {
 
 const CustomerSelect = ({ order }: CustomerSelectProps) => {
 	const [search, setSearch] = React.useState('');
-	const [selectedCustomer, setSelectedCustomer] = React.useState();
+	const [selectedCustomer, setSelectedCustomer] = React.useState<CustomerDocument>();
 	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
 	const { t } = useTranslation();
 
@@ -55,7 +52,7 @@ const CustomerSelect = ({ order }: CustomerSelectProps) => {
 
 	const customers = useObservableState(customers$, []) as any[];
 
-	const handleSelectCustomer = (value) => {
+	const handleSelectCustomer = (value: CustomerDocument) => {
 		if (order) {
 			order.addCustomer(value);
 		}

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import {
-	Pressable as RNPressable,
+	Pressable as RNWPressable,
 	GestureResponderEvent,
 	StyleProp,
 	ViewStyle,
@@ -28,15 +28,25 @@ export interface PressableProps {
 	/**
 	 *
 	 */
-	onHoverIn?: (event: GestureResponderEvent) => void;
+	onHoverIn?: (event: PointerEvent) => void;
 	/**
 	 *
 	 */
-	onHoverOut?: (event: GestureResponderEvent) => void;
+	onHoverOut?: (event: PointerEvent) => void;
 	/**
 	 *
 	 */
 	style?: StyleProp<ViewStyle>;
+}
+
+/**
+ * The state object passed to function values of children and style reflects the
+ * current state of the user interaction with the view.
+ */
+interface PressableStateCallbackType {
+	focused: boolean;
+	hovered: boolean;
+	pressed: boolean;
 }
 
 export const Pressable = ({
@@ -49,31 +59,17 @@ export const Pressable = ({
 	style,
 }: PressableProps) => {
 	const theme = useTheme();
-	const [hovered, setHovered] = React.useState(false);
-
-	const handleHoverIn = (event) => {
-		setHovered(true);
-		if (onHoverIn) {
-			onHoverIn(event);
-		}
-	};
-
-	const handleHoverOut = (event) => {
-		setHovered(false);
-		if (onHoverOut) {
-			onHoverOut(event);
-		}
-	};
 
 	return (
-		<RNPressable
+		<RNWPressable
 			disabled={disabled}
 			onLongPress={onLongPress}
 			onPress={onPress}
 			// @ts-ignore
-			onHoverIn={handleHoverIn}
-			onHoverOut={handleHoverOut}
-			style={({ pressed }: { pressed: boolean }) => [
+			onHoverIn={onHoverIn}
+			onHoverOut={onHoverOut}
+			// @ts-ignore
+			style={({ hovered, pressed }: PressableStateCallbackType) => [
 				{
 					// @ts-ignore
 					backgroundColor: hovered ? (pressed ? '#DDD' : '#EEE') : '#F5F5F5',
@@ -82,6 +78,6 @@ export const Pressable = ({
 			]}
 		>
 			{children}
-		</RNPressable>
+		</RNWPressable>
 	);
 };
