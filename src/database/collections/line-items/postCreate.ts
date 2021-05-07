@@ -18,14 +18,14 @@ export function postCreate(
 	 * @TODO - question: is it possible to hook in before qty or price
 	 * changes and then emit with updated total?
 	 */
-	combineLatest<{
-		quantity: Observable<number | undefined>;
-		price: Observable<number | undefined>;
-	}>({
-		quantity: lineItem.quantity$,
-		price: lineItem.price$,
-	}).subscribe(({ quantity = 0, price = 0 }) => {
-		const total = quantity * price;
-		lineItem.atomicPatch({ total: String(total) });
-	});
+	// combineLatest<{
+	// 	quantity: Observable<number | undefined>;
+	// 	price: Observable<number | undefined>;
+	// }>({
+	// 	quantity: lineItem.quantity$,
+	// 	price: lineItem.price$,
+	// }).subscribe(({ quantity = 0, price = 0 }) => {
+	// 	const total = quantity * price;
+	// 	lineItem.atomicPatch({ total: String(total) });
+	// });
 }
