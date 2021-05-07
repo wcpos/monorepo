@@ -3,6 +3,7 @@ import { useObservableState } from 'observable-hooks';
 import Table from '@wcpos/common/src/components/table';
 import Button from '@wcpos/common/src/components/button';
 import { useSnackbar } from '@wcpos/common/src/components/snackbar/use-snackbar';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Quantity from './cells/quantity';
 import Price from './cells/price';
 import Total from './cells/total';
@@ -16,6 +17,7 @@ interface Props {
 }
 
 const LineItem = ({ order, item, columns }: Props) => {
+	useWhyDidYouUpdate('CartLineItem', { order, item, columns });
 	const showSnackbar = useSnackbar({ message: 'hi' });
 
 	const onRemove = () => {
@@ -35,8 +37,8 @@ const LineItem = ({ order, item, columns }: Props) => {
 									return <Quantity lineItem={item} />;
 								case 'price':
 									return <Price lineItem={item} />;
-								case 'Total':
-									return <Total item={item} total={cellData} />;
+								case 'total':
+									return <Total item={item} />;
 								case 'actions':
 									return <Button title="x" onPress={onRemove} />;
 								default:

@@ -7,7 +7,7 @@ import get from 'lodash/get';
 import Segment from '@wcpos/common/src/components/segment';
 import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Table from './table';
 import CustomerSelect from './customer-select';
 import Actions from './actions';
@@ -23,13 +23,21 @@ interface ICartProps {
 }
 
 const Cart = ({ ui, orders = [] }: ICartProps) => {
-	const { storeDB, user } = useAppState();
+	useWhyDidYouUpdate('Cart', { ui, orders });
 	const { currentOrder, setCurrentOrder } = React.useContext(POSContext);
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const [query, setQuery] = React.useState({
 		sortBy: 'id',
 		sortDirection: 'asc',
 	});
+
+	const handleSort = React.useCallback<Sort>(
+		({ sortBy, sortDirection }) => {
+			// @ts-ignore
+			setQuery({ ...query, sortBy, sortDirection });
+		},
+		[query]
+	);
 
 	if (!currentOrder) {
 		return (
@@ -49,11 +57,6 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 			</Segment.Group>
 		);
 	}
-
-	const handleSort: Sort = ({ sortBy, sortDirection }) => {
-		// @ts-ignore
-		setQuery({ ...query, sortBy, sortDirection });
-	};
 
 	return (
 		<Segment.Group>
@@ -106,10 +109,18 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				{orders.map((order) => (
 					<Text
 						key={order._id}
-						onPress={() => setCurrentOrder(order)}
+						onPress={() => {
+							setCurrentOrder(order);
+						}}
 					>{`${order.id}: ${order.total}`}</Text>
 				))}
-				<Text onPress={() => setCurrentOrder(undefined)}>New</Text>
+				<Text
+					onPress={() => {
+						setCurrentOrder(undefined);
+					}}
+				>
+					New
+				</Text>
 			</Segment>
 		</Segment.Group>
 	);

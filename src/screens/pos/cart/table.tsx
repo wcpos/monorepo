@@ -8,6 +8,7 @@ import Table from '@wcpos/common/src/components/table';
 import Text from '@wcpos/common/src/components/text';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Button from '@wcpos/common/src/components/button';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import LineItem from './rows/line-item';
 import FeeLine from './rows/fee-line';
 import ShippingLine from './rows/shipping-line';
@@ -31,13 +32,18 @@ interface ICartTableProps {
 const CartTable = ({ columns, order, query, onSort }: ICartTableProps) => {
 	const { t } = useTranslation();
 
-	const items$ = useObservable((inputs$) => inputs$.pipe(switchMap(([o, q]) => o.getCart$(q))), [
-		order,
-		query,
-	]) as Observable<any[]>;
+	const items$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				// @ts-ignore
+				switchMap(([o, q]) => o.getCart$(q))
+			),
+		[order, query]
+	) as Observable<any[]>;
 
 	const items = useObservableState(items$, []);
-	console.log(items);
+
+	useWhyDidYouUpdate('CartTable', { columns, order, query, onSort, items });
 
 	return (
 		<Table

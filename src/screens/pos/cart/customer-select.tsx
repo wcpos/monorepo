@@ -69,7 +69,7 @@ const CustomerSelect = ({ order }: CustomerSelectProps) => {
 				selectedCustomer
 					? // @ts-ignore
 					  `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
-					: t('Search customers')
+					: t('customers.search.placeholder')
 			}
 			onSearch={setSearch}
 			searchValue={search}

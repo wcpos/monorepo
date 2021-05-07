@@ -1,7 +1,8 @@
 import { from, of, combineLatest, zip, Observable } from 'rxjs';
-import { switchMap, tap, catchError, map } from 'rxjs/operators';
+import { switchMap, tap, catchError, map, mergeWith } from 'rxjs/operators';
 import orderBy from 'lodash/orderBy';
 import filter from 'lodash/filter';
+import sumBy from 'lodash/sumBy';
 
 type OrderDocument = import('./orders').OrderDocument;
 type ProductDocument = import('../products/products').ProductDocument;
@@ -25,89 +26,51 @@ export default {
 		return this.status === 'pending';
 	},
 
-	// /**
-	//  *
-	//  */
-	// async getLineItems(
-	// 	this: OrderDocument,
-	// 	q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	// ): Promise<LineItemDocument[]> {
-	// 	// note: findByIds returns a map
-	// 	const collection: LineItemCollection = this.collections().line_items;
-	// 	const lineItems = await collection.findByIds(this.line_items || []);
-	// 	const lineItemsArray = Array.from(lineItems.values());
-	// 	return orderBy(lineItemsArray, q.sortBy, q.sortDirection);
-	// },
-
 	/**
 	 *
 	 */
 	getLineItems$(
 		this: OrderDocument,
-		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<LineItemDocument[]> {
 		return this.lineItems$.pipe(
-			switchMap(async (ids) => {
+			switchMap(async () => {
 				const lineItems = await this.populate('lineItems');
-				return orderBy(lineItems, q.sortBy, q.sortDirection);
+				return q ? orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
 			})
 		);
 	},
-
-	// /**
-	//  *
-	//  */
-	// async getFeeLines(
-	// 	this: OrderDocument,
-	// 	q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	// ): Promise<FeeLineDocument[]> {
-	// 	// note: findByIds returns a map
-	// 	const collection: FeeLineCollection = this.collections().fee_lines;
-	// 	const feeLines = await collection.findByIds(this.fee_lines || []);
-	// 	const feeLinesArray = Array.from(feeLines.values());
-	// 	return orderBy(feeLinesArray, q.sortBy, q.sortDirection);
-	// },
 
 	/**
 	 *
 	 */
 	getFeeLines$(
 		this: OrderDocument,
-		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<FeeLineDocument[]> {
 		return this.feeLines$.pipe(
-			switchMap(async (ids) => {
+			switchMap(async () => {
 				const feeLines = await this.populate('feeLines');
-				return orderBy(feeLines, q.sortBy, q.sortDirection);
+				return q ? orderBy(feeLines, q.sortBy, q.sortDirection) : feeLines;
 			})
+			// tap((res) => {
+			// 	debugger;
+			// })
 		);
 	},
-
-	// /**
-	//  *
-	//  */
-	// async getShippingLines(
-	// 	this: OrderDocument,
-	// 	q: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	// ): Promise<ShippingLineDocument[]> {
-	// 	// note: findByIds returns a map
-	// 	const collection: ShippingLineCollection = this.collections().shipping_lines;
-	// 	const shippingLines = await collection.findByIds(this.shipping_lines || []);
-	// 	const shippingLinesArray = Array.from(shippingLines.values());
-	// 	return orderBy(shippingLinesArray, q.sortBy, q.sortDirection);
-	// },
 
 	/**
 	 *
 	 */
 	getShippingLines$(
 		this: OrderDocument,
-		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<ShippingLineDocument[]> {
 		return this.shippingLines$.pipe(
-			switchMap(async (ids) => {
+			tap(() => console.log('@TODO - fix these unnecessary emissions')),
+			switchMap(async () => {
 				const shippingLines = await this.populate('shippingLines');
-				return orderBy(shippingLines, q.sortBy, q.sortDirection);
+				return q ? orderBy(shippingLines, q.sortBy, q.sortDirection) : shippingLines;
 			})
 		);
 	},
@@ -117,7 +80,7 @@ export default {
 	 */
 	getCart$(
 		this: OrderDocument,
-		q: { sortBy: string; sortDirection: 'asc' | 'desc' }
+		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>> {
 		return combineLatest([
 			this.getLineItems$(q),
@@ -125,8 +88,9 @@ export default {
 			this.getShippingLines$(q),
 		]).pipe(
 			// @ts-ignore
-			map(([lineItems, feeLines, shippingLines]) => lineItems.concat(feeLines, shippingLines))
+			map(([lineItems = [], feeLines, shippingLines]) => lineItems.concat(feeLines, shippingLines))
 		);
+		// return this.getLineItems$(q).pipe(mergeWith(this.getFeeLines$(q), this.getShippingLines$(q)));
 	},
 
 	/**
@@ -179,11 +143,6 @@ export default {
 			debugger;
 		});
 	},
-
-	/**
-	 *
-	 */
-	async computedSubtotal() {},
 
 	/**
 	 *
@@ -269,5 +228,19 @@ export default {
 		}).then((res) => {
 			console.log(res);
 		});
+	},
+
+	/**
+	 *
+	 */
+	computedTotal$(this: OrderDocument) {
+		return this.getCart$().pipe(
+			// @ts-ignore
+			switchMap((cartLines) => combineLatest(cartLines.map((cartLine) => cartLine.total$))),
+			map((totals: string[]) => String(sumBy(totals, (total) => Number(total)))),
+			tap((total: string) => {
+				if (total !== this.total) this.atomicPatch({ total });
+			})
+		);
 	},
 };

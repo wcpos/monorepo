@@ -5,6 +5,7 @@ import { from, of } from 'rxjs';
 import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
 // import { PanGestureHandler } from 'react-native-gesture-handler';
 // import { useAnimatedGestureHandler, useSharedValue } from 'react-native-reanimated';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import ErrorBoundary from '@wcpos/common/src/components/error';
@@ -54,7 +55,7 @@ const POS = () => {
 	// );
 
 	// const [width] = useObservableState(() => productsUI.get$('width'), productsUI.get('width'));
-	console.log('Entire POS render');
+
 	// const [width, setWidth] = React.useState(storeDB.ui.pos_products.width);
 	// const width = useObservableState(productsUI.width$);
 	// console.log(width);
@@ -80,6 +81,16 @@ const POS = () => {
 	// 	},
 	// 	onEnd: (event) => {},
 	// });
+	useWhyDidYouUpdate('POS', {
+		storeDB,
+		productsUI,
+		cartUI,
+		currentOrder,
+		orderQuery,
+		orders,
+		handleColumnResizeUpdate,
+		handleColumnResizeEnd,
+	});
 
 	return (
 		<POSContext.Provider value={{ currentOrder, setCurrentOrder }}>

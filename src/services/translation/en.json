@@ -18,6 +18,10 @@
 					"shipping": "Shipping Address",
 					"username": "Username"
 				}
+			},
+			"search": {
+				"placeholder": "Search customers",
+				"empty": "Customer not found"
 			}
 		},
 		"orders": {
@@ -99,7 +103,7 @@
 				}
 			},
 			"search": {
-				"placeholder": "Search Products",
+				"placeholder": "Search products",
 				"empty": "Product not found"
 			},
 			"select": {

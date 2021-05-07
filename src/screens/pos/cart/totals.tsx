@@ -1,18 +1,16 @@
 import * as React from 'react';
 import { useObservableSuspense, useObservableState, useObservable } from 'observable-hooks';
 import { View } from 'react-native';
-import Text from '../../../components/text';
+import Text from '@wcpos/common/src/components/text';
+
+type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 
 interface Props {
-	order: any;
+	order: OrderDocument;
 }
 
 const Totals = ({ order }: Props) => {
-	// const order: any = useObservableState(order$);
-
-	// if (!order) {
-	// 	return null;
-	// }
+	const total = useObservableState(order.computedTotal$(), order.total);
 
 	return (
 		<>
@@ -37,7 +35,7 @@ const Totals = ({ order }: Props) => {
 					<Text>Order Total:</Text>
 				</View>
 				<View>
-					<Text>{order.total}</Text>
+					<Text>{total}</Text>
 				</View>
 			</View>
 		</>

@@ -1,19 +1,18 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import Text from '@wcpos/common/src/components/text';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 
 interface Props {
-	item?:
+	item:
 		| import('@wcpos/common/src/database').LineItemDocument
 		| import('@wcpos/common/src/database').FeeLineDocument
 		| import('@wcpos/common/src/database').ShippingLineDocument;
-	total: string;
 }
 
 const Total = ({ item }: Props) => {
-	// @ts-ignore
-	const total = useObservableState(item.total$, item.total);
-	console.log(total);
+	const total = useObservableState(item.computedTotal$(), item.total);
+	useWhyDidYouUpdate('CartLineItemTotal', { item, total });
 
 	return <Text>{total}</Text>;
 };
