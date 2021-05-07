@@ -12,6 +12,7 @@ import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import LineItem from './rows/line-item';
 import FeeLine from './rows/fee-line';
 import ShippingLine from './rows/shipping-line';
+import TableSettings from './actions';
 
 type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
@@ -27,9 +28,10 @@ interface ICartTableProps {
 	order: OrderDocument;
 	query: any;
 	onSort: Sort;
+	ui: any;
 }
 
-const CartTable = ({ columns, order, query, onSort }: ICartTableProps) => {
+const CartTable = ({ columns, order, query, onSort, ui }: ICartTableProps) => {
 	const { t } = useTranslation();
 
 	const items$ = useObservable(
@@ -43,7 +45,7 @@ const CartTable = ({ columns, order, query, onSort }: ICartTableProps) => {
 
 	const items = useObservableState(items$, []);
 
-	useWhyDidYouUpdate('CartTable', { columns, order, query, onSort, items });
+	useWhyDidYouUpdate('CartTable', { columns, order, query, onSort, items, ui });
 
 	return (
 		<Table
@@ -59,7 +61,11 @@ const CartTable = ({ columns, order, query, onSort }: ICartTableProps) => {
 						const { column } = getHeaderCellProps();
 						return (
 							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
-								{t(`cart.column.label.${column.key}`)}
+								{column.key === 'actions' ? (
+									<TableSettings columns={columns} ui={ui} />
+								) : (
+									t(`cart.column.label.${column.key}`)
+								)}
 							</Table.HeaderRow.HeaderCell>
 						);
 					}}

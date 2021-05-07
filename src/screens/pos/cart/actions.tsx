@@ -4,6 +4,7 @@ import Checkbox from '@wcpos/common/src/components/checkbox';
 import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
 import Popover from '@wcpos/common/src/components/popover';
+import Icon from '@wcpos/common/src/components/icon';
 
 interface CartActionsProps {
 	ui: any;
@@ -22,7 +23,7 @@ const Actions = ({ columns, ui }: CartActionsProps) => {
 			hideBackdrop
 			open={visible}
 			onRequestClose={() => setVisible(false)}
-			activator={<Button title="Table Settings" onPress={() => setVisible(true)} />}
+			activator={<Icon name="cog" onPress={() => setVisible(true)} />}
 		>
 			<Text>Columns</Text>
 			{columns.map((column: any, index) => (
