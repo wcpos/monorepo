@@ -314,6 +314,7 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 		}, [type, autoCapitalize]);
 
 		return (
+			// @ts-ignore
 			<Styled.Box focused={hasFocus} style={style}>
 				{leftAccessory || null}
 				{prefix ? (

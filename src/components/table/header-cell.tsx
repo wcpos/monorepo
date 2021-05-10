@@ -1,9 +1,8 @@
 import * as React from 'react';
 import { View, GestureResponderEvent } from 'react-native';
-import { HeaderCell as StyledView } from './styles';
+import * as Styled from './styles';
 import Text from '../text';
-import Icon from '../icon';
-import Touchable from '../touchable';
+import Pressable from '../pressable';
 import SortIcon from '../sort-icon';
 
 export interface IHeaderCellProps {
@@ -41,7 +40,7 @@ export const HeaderCell = ({
 	const newSortDirection =
 		sortBy !== dataKey ? defaultSortDirection : sortDirection === 'desc' ? 'asc' : 'desc';
 
-	const onPress = (event: GestureResponderEvent) => {
+	const handlePress = (event: GestureResponderEvent) => {
 		if (typeof sort === 'function') {
 			sort({
 				defaultSortDirection,
@@ -61,18 +60,26 @@ export const HeaderCell = ({
 	// }
 
 	return (
-		<StyledView flexGrow={flexGrow} flexShrink={flexShrink} width={width}>
+		<Styled.HeaderCell flexGrow={flexGrow} flexShrink={flexShrink} width={width}>
 			{sortable ? (
-				<Touchable onPress={onPress}>
-					<View style={{ flexDirection: 'row' }}>
-						<Text>{children || label}</Text>
-						{showSortIndicator && <SortIcon direction={sortDirection} />}
-					</View>
-				</Touchable>
+				<Pressable onPress={handlePress}>
+					{
+						// @ts-ignore
+						({ hovered }) => (
+							<Styled.HeaderTextWrapper>
+								<Text>{children || label}</Text>
+								<SortIcon
+									visible={hovered || showSortIndicator}
+									direction={showSortIndicator ? sortDirection : undefined}
+								/>
+							</Styled.HeaderTextWrapper>
+						)
+					}
+				</Pressable>
 			) : (
 				<Text>{children || label}</Text>
 			)}
-		</StyledView>
+		</Styled.HeaderCell>
 	);
 };
 

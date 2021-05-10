@@ -1,4 +1,5 @@
 import Platform from '@wcpos/common/src/lib/platform';
+import { math } from 'polished';
 import palette from './palettes/blue-grey.json';
 import normalizeText from './normalize-text';
 
@@ -15,6 +16,9 @@ const colors = {
 	inverse: 'rgba(256, 256, 256, 0.8)',
 	disabled: palette['blue-grey-400'],
 };
+
+const baseRadius = '3px';
+const basePadding = '5px';
 
 const fonts = Platform.select({
 	android: {
@@ -34,7 +38,7 @@ const theme = {
 	BACKDROP_COLOR: 'rgba(0, 0, 0, 0.3)',
 	BACKDROP_Z_INDEX: 1000,
 
-	BUTTON_BORDER_RADIUS: '3px',
+	BUTTON_BORDER_RADIUS: baseRadius,
 	BUTTON_COLOR: colors.primary,
 	BUTTON_COLOR_SECONDARY: colors.secondary,
 	BUTTON_COLOR_ATTENTION: colors.attention,
@@ -44,8 +48,8 @@ const theme = {
 	BUTTON_COLOR_WARNING: colors.warning,
 	BUTTON_COLOR_INVERSE: colors.inverse,
 	BUTTON_COLOR_DISABLED: colors.disabled,
-	BUTTON_PADDING_X: '10px',
-	BUTTON_PADDING_Y: '5px',
+	BUTTON_PADDING_X: `${math(`2 * ${basePadding}`)}`,
+	BUTTON_PADDING_Y: basePadding,
 
 	BUTTONGROUP_BORDER_COLOR: colors.border,
 	BUTTONGROUP_TEXT_COLOR: colors.background,
@@ -53,7 +57,7 @@ const theme = {
 	CHECKBOX_BACKGROUND_COLOR: colors.primary,
 	CHECKBOX_BACKGROUND_COLOR_DISABLED: colors.disabled,
 	CHECKBOX_BORDER_COLOR: colors.primary,
-	CHECKBOX_BORDER_RADIUS: '3px',
+	CHECKBOX_BORDER_RADIUS: baseRadius,
 	CHECKBOX_BORDER_WIDTH: '1px',
 	CHECKBOX_INFO_COLOR: colors.secondary,
 	CHECKBOX_INFO_FONT_SIZE: `${normalizeText(12)}px`,
@@ -62,10 +66,20 @@ const theme = {
 	CHECKBOX_WIDTH: `${normalizeText(14)}px`,
 	CHECKBOX_HEIGHT: `${normalizeText(14)}px`,
 
+	COLOR_PRIMARY: colors.primary,
+	COLOR_SECONDARY: colors.secondary,
+	COLOR_ATTENTION: colors.attention,
+	COLOR_CRITICAL: colors.critical,
+	COLOR_INFO: colors.info,
+	COLOR_SUCCESS: colors.success,
+	COLOR_WARNING: colors.warning,
+	COLOR_INVERSE: colors.inverse,
+	COLOR_DISABLED: colors.disabled,
+
 	DIALOG_BACKGROUND_COLOR: colors.background,
 	DIALOG_WIDTH: '600px',
 	DIALOG_MIN_WIDTH: '300px',
-	DIALOG_BORDER_RADIUS: '3px',
+	DIALOG_BORDER_RADIUS: baseRadius,
 
 	FONT_FAMILY: fonts.regular,
 
@@ -79,7 +93,7 @@ const theme = {
 
 	INPUT_BACKGROUND_COLOR: '#FFFFFF',
 	INPUT_BORDER_COLOR: colors.primary,
-	INPUT_BORDER_RADIUS: '3px',
+	INPUT_BORDER_RADIUS: baseRadius,
 	INPUT_BORDER_WIDTH: '1px',
 	INPUT_ERROR_TEXT_COLOR: colors.primary,
 	INPUT_PADDING: '5px',
@@ -96,20 +110,20 @@ const theme = {
 
 	PAGE_BACKGROUND_COLOR: colors.background,
 	PAGE_HEADER_BACKGROUND_COLOR: 'red',
-	PAGE_HEADER_PADDING_X: '5px',
-	PAGE_HEADER_PADDING_Y: '5px',
+	PAGE_HEADER_PADDING_X: basePadding,
+	PAGE_HEADER_PADDING_Y: basePadding,
 	PAGE_MAIN_BACKGROUND_COLOR: 'yellow',
-	PAGE_MAIN_PADDING_X: '5px',
-	PAGE_MAIN_PADDING_Y: '5px',
+	PAGE_MAIN_PADDING_X: basePadding,
+	PAGE_MAIN_PADDING_Y: basePadding,
 
 	POPOVER_BACKGROUND_COLOR: '#FFFFFF',
 	POPOVER_Z_INDEX: 99999,
 
 	SEGMENT_BACKGROUND_COLOR: '#FFFFFF',
 	SEGMENT_BORDER_COLOR: colors.primary,
-	SEGMENT_BORDER_RADIUS: '3px',
+	SEGMENT_BORDER_RADIUS: baseRadius,
 	SEGMENT_BORDER_WIDTH: '1px',
-	SEGMENT_PADDING: '5px',
+	SEGMENT_PADDING: basePadding,
 
 	SEGMENT_GROUP_PADDING: '10px',
 	SEGMENT_MARGIN_BOTTOM: '10px',
@@ -118,17 +132,17 @@ const theme = {
 
 	SNACKBAR_BACKGROUND_COLOR: colors.secondary,
 	SNACKBAR_TEXT_COLOR: colors.inverse,
-	SNACKBAR_PADDING_X: '5px',
-	SNACKBAR_PADDING_Y: '5px',
-	SNACKBAR_RADIUS: '3px',
+	SNACKBAR_PADDING_X: `${math(`2 * ${basePadding}`)}`,
+	SNACKBAR_PADDING_Y: basePadding,
+	SNACKBAR_RADIUS: baseRadius,
 	SNACKBAR_WIDTH: '400px',
 
 	TAG_BACKGROUND_COLOR: colors.secondary,
 	TAG_BACKGROUND_DISABLED: colors.disabled,
 	TAG_TEXT_COLOR: colors.inverse,
-	TAG_BORDER_RADIUS: '10px',
-	TAG_PADDING_X: '5px',
-	TAG_PADDING_Y: '5px',
+	TAG_BORDER_RADIUS: `${math(`${baseRadius} * 4`)}`,
+	TAG_PADDING_X: basePadding,
+	TAG_PADDING_Y: `${math(`${basePadding}/2`)}`,
 
 	TEXT_COLOR: colors.primary,
 	TEXT_COLOR_SECONDARY: colors.secondary,
@@ -141,7 +155,7 @@ const theme = {
 
 	TOAST_BACKGROUND_COLOR: '#000000',
 	TOAST_Z_INDEX: 1001,
-	TOAST_BORDER_RADIUS: '3px',
+	TOAST_BORDER_RADIUS: baseRadius,
 	TOAST_PADDING_X: '10px',
 	TOAST_PADDING_Y: '5px',
 	TOAST_TEXT_COLOR: '#FFFFFF',

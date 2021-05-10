@@ -38,9 +38,13 @@ type HeaderCellProps = { theme: ThemeProps } & Omit<
 >;
 
 export const HeaderCell = styled.View<HeaderCellProps>`
-	flex-direction: row;
 	flex-grow: ${({ flexGrow }) => (isNil(flexGrow) ? 1 : flexGrow)};
 	flex-shrink: ${({ flexShrink }) => (isNil(flexShrink) ? 1 : flexShrink)};
 	width: ${({ width }) => (isNil(width) ? '100%' : width)};
 	padding: 5px;
+`;
+
+export const HeaderTextWrapper = styled.View`
+	flex-direction: row;
+	align-items: center;
 `;

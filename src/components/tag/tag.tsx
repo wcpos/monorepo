@@ -39,10 +39,8 @@ export const Tag = ({ children, removable, disabled, onRemove, onPress }: TagPro
 	return (
 		<Pressable onPress={onPress} style={{ marginRight: 5, marginBottom: 5 }}>
 			<Styled.Tag disabled={disabled}>
-				<Text size="small" style={{ color: theme.TAG_TEXT_COLOR }}>
-					{children}
-				</Text>
-				{removable && <Icon name="clear" disabled={disabled} onPress={onRemove} />}
+				<Styled.Label size="small">{children}</Styled.Label>
+				{removable && <Icon name="clear" size="small" disabled={disabled} onPress={onRemove} />}
 			</Styled.Tag>
 		</Pressable>
 	);

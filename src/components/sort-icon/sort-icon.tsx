@@ -8,13 +8,17 @@ export interface SortIconProps {
 	 *
 	 */
 	direction?: SortDirection;
+	/**
+	 *
+	 */
+	visible?: boolean;
 }
 
-export const SortIcon = ({ direction }: SortIconProps) => {
+export const SortIcon = ({ direction, visible = true }: SortIconProps) => {
 	return (
-		<Styled.Container>
-			<Styled.Up active={direction !== 'desc'} />
-			<Styled.Down active={direction !== 'asc'} />
+		<Styled.Container visible={visible}>
+			<Styled.Up active={direction === 'asc'} />
+			<Styled.Down active={direction === 'desc'} />
 		</Styled.Container>
 	);
 };
