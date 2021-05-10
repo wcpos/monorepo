@@ -1,24 +1,39 @@
-import React, { useState } from 'react';
+import * as React from 'react';
+import { View } from 'react-native';
+import Popover from '../popover';
+import Menu from '../menu';
 import Text from '../text';
-import Portal from '../portal';
 
-export type Props = {};
+export interface DropdownProps {
+	/**
+	 *
+	 */
+	items: any[];
+	/**
+	 *
+	 */
+	onSelect: (value: any) => void;
+	/**
+	 *
+	 */
+	activator: React.ReactNode;
+}
 
-const Content = <Text style={{ color: 'white' }}>Content</Text>;
-
-const Dropdown = ({}: Props) => {
-	const [key, setKey] = useState();
+export const Dropdown = ({ items, onSelect, activator }: DropdownProps) => {
+	const [open, setOpen] = React.useState(false);
+	const show = React.useCallback(() => setOpen(true), []);
+	const hide = React.useCallback(() => setOpen(false), []);
 
 	return (
-		<Text
-			onPress={() => {
-				const key = Portal.add(Content);
-				setKey(key);
-			}}
-		>
-			Dropdown
-		</Text>
+		<View style={{ padding: '300px' }}>
+			<Popover
+				activator={<Text onPress={show}>{activator}</Text>}
+				onRequestClose={hide}
+				open={open}
+				hideBackdrop
+			>
+				<Menu items={items} onSelect={onSelect} />
+			</Popover>
+		</View>
 	);
 };
-
-export default Dropdown;

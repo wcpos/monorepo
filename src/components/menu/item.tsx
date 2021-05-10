@@ -1,12 +1,25 @@
 import * as React from 'react';
-import { MenuItemText } from './styles';
+import * as Styled from './styles';
 
-interface Props {
-	label: string;
+export interface ItemProps {
+	/**
+	 *
+	 */
+	children?: string;
+	/**
+	 *
+	 */
+	label?: string;
+	/**
+	 *
+	 */
+	onPress: (value: any) => void;
 }
 
-const Item = ({ label }: Props) => {
-	return <MenuItemText>{label}</MenuItemText>;
+export const Item = ({ children, label = '', onPress }: ItemProps) => {
+	return (
+		<Styled.Item onPress={onPress}>
+			<Styled.Label>{children || label}</Styled.Label>
+		</Styled.Item>
+	);
 };
-
-export default Item;

@@ -1,19 +1,42 @@
 import * as React from 'react';
-import { Wrapper } from './styles';
-import Item from './item';
+import { Item, ItemProps } from './item';
+import * as Styled from './styles';
 
-interface Props {
+export interface MenuProps {
+	/**
+	 *
+	 */
 	items: any[];
-};
+	/**
+	 *
+	 */
+	onSelect: (value: any) => void;
+}
 
-const Menu = ({ items }: Props) => {
+export const Menu: React.FC<MenuProps> & { Item: typeof Item } = ({ items, onSelect }) => {
 	return (
-		<Wrapper>
-			{items.map((item, index) => (
-				<Item key={index} {...item} />
-			))}
-		</Wrapper>
+		<Styled.Container>
+			{items.map((item, index) =>
+				typeof item === 'string' ? (
+					<Item
+						onPress={() => {
+							onSelect(item);
+						}}
+					>
+						{item}
+					</Item>
+				) : (
+					<Item
+						{...item}
+						onPress={() => {
+							onSelect(item);
+						}}
+					/>
+				)
+			)}
+		</Styled.Container>
 	);
 };
 
-export default Menu;
+export type MenuItemProps = ItemProps;
+Menu.Item = Item;
