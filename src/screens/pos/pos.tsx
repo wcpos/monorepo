@@ -10,7 +10,7 @@ import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import ErrorBoundary from '@wcpos/common/src/components/error';
 import Draggable from '@wcpos/common/src/components/draggable';
-import Icon from '@wcpos/common/src/components/icon';
+import Gutter from '@wcpos/common/src/components/gutter';
 import Cart from './cart';
 import Products from './products';
 import * as Styled from './styles';
@@ -60,14 +60,15 @@ const POS = () => {
 	// const width = useObservableState(productsUI.width$);
 	// console.log(width);
 
-	const handleColumnResizeUpdate = ({ dx }: { dx: number }) => {
-		// console.log(ui.width + dx);
-		// ui.updateWithJson({ width: ui.width + dx });
-	};
+	// const handleColumnResizeUpdate = ({ dx }: { dx: number }) => {
+	// 	// console.log(ui.width + dx);
+	// 	// ui.updateWithJson({ width: ui.width + dx });
+	// };
 
-	const handleColumnResizeEnd = ({ dx }: { dx: number }) => {
+	const handleDragRelease = (event: any) => {
 		// console.log(ui.width + dx);
 		// ui.updateWithJson({ width: ui.width + dx });
+		console.log(event);
 	};
 
 	// @TODO - wait until react-native-reanimated v2 is stable
@@ -88,8 +89,7 @@ const POS = () => {
 		currentOrder,
 		orderQuery,
 		orders,
-		handleColumnResizeUpdate,
-		handleColumnResizeEnd,
+		handleDragRelease,
 	});
 
 	return (
@@ -102,8 +102,8 @@ const POS = () => {
 						</React.Suspense>
 					</ErrorBoundary>
 				</Styled.Column>
-				<Draggable onUpdate={handleColumnResizeUpdate} onEnd={handleColumnResizeEnd}>
-					<Icon name="more-vert" />
+				<Draggable>
+					<Gutter />
 				</Draggable>
 				{/* <PanGestureHandler onGestureEvent={gestureHandler}>
 				<View style={{ backgroundColor: '#000', padding: 20 }} />
