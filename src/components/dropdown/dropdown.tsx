@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 import Popover from '../popover';
 import Menu from '../menu';
 import Text from '../text';
@@ -12,7 +11,7 @@ export interface DropdownProps {
 	/**
 	 *
 	 */
-	onSelect: (value: any) => void;
+	onSelect?: (value: any) => void;
 	/**
 	 *
 	 */
@@ -25,15 +24,14 @@ export const Dropdown = ({ items, onSelect, activator }: DropdownProps) => {
 	const hide = React.useCallback(() => setOpen(false), []);
 
 	return (
-		<View style={{ padding: '300px' }}>
-			<Popover
-				activator={<Text onPress={show}>{activator}</Text>}
-				onRequestClose={hide}
-				open={open}
-				hideBackdrop
-			>
-				<Menu items={items} onSelect={onSelect} />
-			</Popover>
-		</View>
+		<Popover
+			activator={<Text onPress={show}>{activator}</Text>}
+			onRequestClose={hide}
+			open={open}
+			hideBackdrop
+			placement="bottom-end"
+		>
+			<Menu items={items} onSelect={onSelect} />
+		</Popover>
 	);
 };

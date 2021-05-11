@@ -10,10 +10,14 @@ export interface MenuProps {
 	/**
 	 *
 	 */
-	onSelect: (value: any) => void;
+	onSelect?: (value: any) => void;
 }
 
-export const Menu: React.FC<MenuProps> & { Item: typeof Item } = ({ items, onSelect }) => {
+export const Menu: React.FC<MenuProps> & { Item: typeof Item } = ({
+	items,
+	// @ts-ignore
+	onSelect = () => {},
+}) => {
 	return (
 		<Styled.Container>
 			{items.map((item, index) =>

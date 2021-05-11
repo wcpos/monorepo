@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { action } from '@storybook/addon-actions';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StoryWrapper } from '@storybook/addons';
@@ -32,7 +33,11 @@ export default {
 	decorators: [AppProvider],
 };
 
-export const BasicUsage = (props: DropdownProps) => <Dropdown {...props} />;
+export const BasicUsage = (props: DropdownProps) => (
+	<View style={{ padding: '100px' }}>
+		<Dropdown {...props} />
+	</View>
+);
 BasicUsage.args = {
 	activator: 'Click me',
 	items: ['Item 1', 'Item 2', 'Item 3', 'Item 4'],

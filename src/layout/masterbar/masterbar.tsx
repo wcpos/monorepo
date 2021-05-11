@@ -5,6 +5,7 @@ import Button from '@wcpos/common/src/components/button';
 import Popover from '@wcpos/common/src/components/popover';
 import Text from '@wcpos/common/src/components/text';
 import Avatar from '@wcpos/common/src/components/avatar';
+import Dropdown from '@wcpos/common/src/components/dropdown';
 import UserMenu from './user-menu';
 import Header from '../header';
 
@@ -28,7 +29,7 @@ const MasterBar = () => {
 				<Text type="inverse">{screen.width}</Text>
 			</Header.Right>
 			<Header.Right>
-				<Text>{user?.displayName}</Text>
+				<Dropdown activator={user?.displayName} items={['Logout']} />
 				<Button
 					onPress={async () => {
 						await unsetLastUser();
