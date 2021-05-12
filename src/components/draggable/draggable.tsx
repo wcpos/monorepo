@@ -1,23 +1,51 @@
 import * as React from 'react';
-import { PanResponder, Pressable } from 'react-native';
-import noop from 'lodash/noop';
+import {
+	PanResponder,
+	PanResponderGestureState,
+	GestureResponderEvent,
+	StyleProp,
+	ViewStyle,
+} from 'react-native';
 import * as Styled from './styles';
 
-type PanResponderGestureState = import('react-native').PanResponderGestureState;
-
-interface DraggableProps {
+export interface DraggableProps {
 	children?: React.ReactNode;
-	onStart?: (gestureState: PanResponderGestureState) => void;
-	onUpdate?: (gestureState: PanResponderGestureState) => void;
-	onEnd?: (gestureState: PanResponderGestureState) => void;
+	onDrag?: (gestureState: PanResponderGestureState) => void;
+	onDragRelease?: (gestureState: PanResponderGestureState) => void;
+	style: StyleProp<ViewStyle>;
 }
 
 export const Draggable = ({
-	onStart = noop,
-	onUpdate = noop,
-	onEnd = noop,
 	children,
+	onDrag = () => {},
+	onDragRelease = () => {},
+	style,
 }: DraggableProps) => {
+	/**
+	 *
+	 */
+	const onPanResponderMove = React.useCallback(
+		(e: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+			// const { dx, dy } = gestureState;
+			onDrag(gestureState);
+		},
+		[onDrag]
+	);
+
+	/**
+	 *
+	 */
+	const onPanResponderRelease = React.useCallback(
+		(e: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+			// const { dx, dy } = gestureState;
+			onDragRelease(gestureState);
+		},
+		[onDragRelease]
+	);
+
+	/**
+	 * https://reactnative.dev/docs/panresponder
+	 */
 	const panResponder = React.useRef(
 		PanResponder.create({
 			// Ask to be the responder:
@@ -32,18 +60,14 @@ export const Draggable = ({
 				// what is happening!
 				// gestureState.d{x,y} will be set to zero now
 			},
-			onPanResponderMove: (evt, gestureState) => {
-				console.log(gestureState);
-				// The most recent move distance is gestureState.move{X,Y}
-				// The accumulated gesture distance since becoming responder is
-				// gestureState.d{x,y}
-			},
+			// The most recent move distance is gestureState.move{X,Y}
+			// The accumulated gesture distance since becoming responder is
+			// gestureState.d{x,y}
+			onPanResponderMove,
 			onPanResponderTerminationRequest: (evt, gestureState) => true,
-			onPanResponderRelease: (evt, gestureState) => {
-				console.log(gestureState);
-				// The user has released all touches while this view is the
-				// responder. This typically means a gesture has succeeded
-			},
+			// The user has released all touches while this view is the
+			// responder. This typically means a gesture has succeeded
+			onPanResponderRelease,
 			onPanResponderTerminate: (evt, gestureState) => {
 				// Another component has become the responder, so this gesture
 				// should be cancelled
@@ -56,12 +80,10 @@ export const Draggable = ({
 		})
 	).current;
 
-	// return (
-	// 	<Pressable>
-	// 		<Styled.View {...panResponder.panHandlers} />
-	// 		{children}
-	// 	</Pressable>
-	// );
-
-	return <Styled.View {...panResponder.panHandlers} />;
+	return (
+		// @ts-ignore
+		<Styled.View pointerEvents="box-none" {...panResponder.panHandlers} style={style}>
+			{children}
+		</Styled.View>
+	);
 };
