@@ -9,9 +9,10 @@ import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import ErrorBoundary from '@wcpos/common/src/components/error';
-import Draggable from '@wcpos/common/src/components/draggable';
+import Draggable from '@wcpos/common/src/components/draggable3';
 import Gutter from '@wcpos/common/src/components/gutter';
 import useOnLayout from '@wcpos/common/src/hooks/use-on-layout';
+import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import Cart from './cart';
 import Products from './products';
 import * as Styled from './styles';
@@ -45,21 +46,18 @@ const POS = () => {
 	 */
 	const [containerLayout, setContainerLayout] = useOnLayout();
 	const [productColumnLayout, setProductColumnLayout] = useOnLayout();
-	const handleDrag = React.useCallback(
-		(gestureState: PanResponderGestureState) => {
+	const handleColumnResize = React.useCallback(
+		(event, context) => {
 			if (productColumnLayout && containerLayout) {
 				productsUI.atomicPatch({
-					width: (productColumnLayout.width + gestureState.dx) / containerLayout.width,
+					width: (productColumnLayout.width + event.translationX) / containerLayout.width,
 				});
-				// console.log(containerLayout.width);
-				// console.log(productColumnLayout.width);
-				// console.log(gestureState.dx);
 			} else {
 				console.log('@TODO - why null?', productColumnLayout);
 			}
 		},
 		// [containerLayout, productColumnLayout]
-		[productColumnWidth]
+		[]
 	);
 
 	// fetch order
@@ -110,7 +108,7 @@ const POS = () => {
 		currentOrder,
 		orderQuery,
 		orders,
-		handleDrag,
+		handleColumnResize,
 	});
 
 	return (
@@ -126,8 +124,10 @@ const POS = () => {
 						</React.Suspense>
 					</ErrorBoundary>
 				</Styled.Column>
-				<Draggable onDrag={handleDrag}>
-					<Gutter />
+				<Draggable onActive={handleColumnResize}>
+					<Animated.View>
+						<Gutter />
+					</Animated.View>
 				</Draggable>
 				<Styled.Column style={{ flexBasis: `${(1 - productColumnWidth) * 100}%` }}>
 					<ErrorBoundary>
