@@ -7,7 +7,7 @@ import initialUI from './ui-initial.json';
 interface UISchema {
 	sortBy: string;
 	sortDirection: import('@wcpos/common/src/components/table/types').SortDirection;
-	width: string;
+	width: number;
 	columns: [{ key: string; disableSort: boolean; order: number }];
 	display: [{ key: string; hide: boolean; order: number }];
 }
