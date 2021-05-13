@@ -2,7 +2,7 @@
 	"posProducts": {
 		"sortBy": "name",
 		"sortDirection": "asc",
-		"width": "60%",
+		"width": 0.6,
 		"columns": [
 			{ "key": "image", "disableSort": true, "order": 1 },
 			{ "key": "name", "order": 2 },
@@ -17,7 +17,6 @@
 		]
 	},
 	"posCart": {
-		"width": "40%",
 		"sortBy": "id",
 		"sortDirection": "asc",
 		"columns": [

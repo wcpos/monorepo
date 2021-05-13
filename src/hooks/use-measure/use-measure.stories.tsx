@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 import Text from '@wcpos/common/src/components/text';
+import styled from 'styled-components/native';
 
 import { useMeasure } from './use-measure';
 
 export default {
 	title: 'Hooks/useMeasure',
 };
+
+const TestView = styled.View``;
 
 const MyComponent = () => {
 	const [measurements, onMeasure] = useState({
@@ -21,14 +24,14 @@ const MyComponent = () => {
 	const { onLayout } = useMeasure({ onMeasure, ref });
 
 	return (
-		<View onLayout={onLayout} ref={ref}>
+		<TestView onLayout={onLayout} ref={ref}>
 			<Text>height: {measurements.height}</Text>
 			<Text>pageX: {measurements.pageX}</Text>
 			<Text>pageY: {measurements.pageY}</Text>
 			<Text>width: {measurements.width}</Text>
 			<Text>x: {measurements.x}</Text>
 			<Text>y: {measurements.y}</Text>
-		</View>
+		</TestView>
 	);
 };
 

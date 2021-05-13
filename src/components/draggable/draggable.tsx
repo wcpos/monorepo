@@ -10,9 +10,18 @@ import * as Styled from './styles';
 
 export interface DraggableProps {
 	children?: React.ReactNode;
+	/**
+	 *
+	 */
 	onDrag?: (gestureState: PanResponderGestureState) => void;
+	/**
+	 *
+	 */
 	onDragRelease?: (gestureState: PanResponderGestureState) => void;
-	style: StyleProp<ViewStyle>;
+	/**
+	 *
+	 */
+	style?: StyleProp<ViewStyle>;
 }
 
 export const Draggable = ({

@@ -1,13 +1,12 @@
-import styled, { css } from 'styled-components/native';
+import styled from 'styled-components/native';
 
-type ThemeProps = import('../../lib/theme').ThemeProps;
-
-export const Container = styled.View<{ theme: ThemeProps }>`
+export const Container = styled.View`
 	height: 100%;
 	flex-direction: row;
+	justify-content: stretch;
 `;
 
-export const Column = styled.View<{ theme: ThemeProps }>`
+export const Column = styled.View`
 	height: 100%;
 	flex: 1;
 `;

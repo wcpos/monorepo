@@ -72,7 +72,7 @@ const Actions = ({ columns, display, ui }: IPOSProductActionsProps) => {
 			<Button
 				title="Change width"
 				onPress={() => {
-					ui.set('width', '40%');
+					ui.atomicSet('width', 0.4);
 				}}
 			/>
 		</Popover>

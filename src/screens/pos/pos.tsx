@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, PanResponderGestureState } from 'react-native';
 import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
 import { from, of } from 'rxjs';
 import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
@@ -11,6 +11,7 @@ import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import ErrorBoundary from '@wcpos/common/src/components/error';
 import Draggable from '@wcpos/common/src/components/draggable';
 import Gutter from '@wcpos/common/src/components/gutter';
+import useOnLayout from '@wcpos/common/src/hooks/use-on-layout';
 import Cart from './cart';
 import Products from './products';
 import * as Styled from './styles';
@@ -34,6 +35,32 @@ const POS = () => {
 	const productsUI = useObservableSuspense(useUIResource('posProducts'));
 	const cartUI = useObservableSuspense(useUIResource('posCart'));
 	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
+	const [productColumnWidth] = useObservableState(
+		() => productsUI.get$('width'),
+		productsUI.get('width')
+	);
+
+	/**
+	 *
+	 */
+	const [containerLayout, setContainerLayout] = useOnLayout();
+	const [productColumnLayout, setProductColumnLayout] = useOnLayout();
+	const handleDrag = React.useCallback(
+		(gestureState: PanResponderGestureState) => {
+			if (productColumnLayout && containerLayout) {
+				productsUI.atomicPatch({
+					width: (productColumnLayout.width + gestureState.dx) / containerLayout.width,
+				});
+				// console.log(containerLayout.width);
+				// console.log(productColumnLayout.width);
+				// console.log(gestureState.dx);
+			} else {
+				console.log('@TODO - why null?', productColumnLayout);
+			}
+		},
+		// [containerLayout, productColumnLayout]
+		[productColumnWidth]
+	);
 
 	// fetch order
 	// const orderQuery = storeDB.collections.orders.findOne();
@@ -65,12 +92,6 @@ const POS = () => {
 	// 	// ui.updateWithJson({ width: ui.width + dx });
 	// };
 
-	const handleDragRelease = (event: any) => {
-		// console.log(ui.width + dx);
-		// ui.updateWithJson({ width: ui.width + dx });
-		console.log(event);
-	};
-
 	// @TODO - wait until react-native-reanimated v2 is stable
 	// const translateX = useSharedValue(0);
 	// const gestureHandler = useAnimatedGestureHandler({
@@ -89,26 +110,26 @@ const POS = () => {
 		currentOrder,
 		orderQuery,
 		orders,
-		handleDragRelease,
+		handleDrag,
 	});
 
 	return (
 		<POSContext.Provider value={{ currentOrder, setCurrentOrder }}>
-			<Styled.Container>
-				<Styled.Column>
+			<Styled.Container onLayout={setContainerLayout}>
+				<Styled.Column
+					onLayout={setProductColumnLayout}
+					style={{ flexBasis: `${productColumnWidth * 100}%` }}
+				>
 					<ErrorBoundary>
 						<React.Suspense fallback={<Text>Loading products...</Text>}>
 							<Products ui={productsUI} />
 						</React.Suspense>
 					</ErrorBoundary>
 				</Styled.Column>
-				<Draggable>
+				<Draggable onDrag={handleDrag}>
 					<Gutter />
 				</Draggable>
-				{/* <PanGestureHandler onGestureEvent={gestureHandler}>
-				<View style={{ backgroundColor: '#000', padding: 20 }} />
-			</PanGestureHandler> */}
-				<Styled.Column>
+				<Styled.Column style={{ flexBasis: `${(1 - productColumnWidth) * 100}%` }}>
 					<ErrorBoundary>
 						<React.Suspense fallback={<Text>Loading cart...</Text>}>
 							{orders ? <Cart ui={cartUI} orders={orders} /> : null}
