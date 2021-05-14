@@ -7,15 +7,15 @@ import Price from './cells/fee-and-shipping-price';
 type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 
 interface Props {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	// order: import('@wcpos/common/src/database').OrderDocument;
 	fee: import('@wcpos/common/src/database').FeeLineDocument;
 	columns: any;
 }
 
-const FeeLine = ({ order, fee, columns }: Props) => {
+const FeeLine = ({ fee, columns }: Props) => {
 	/**  */
 	const handleFeeRemove = () => {
-		order.removeFeeLine(fee);
+		// order.removeFeeLine(fee);
 		showSnackbar();
 	};
 

@@ -86,9 +86,21 @@ const POS = () => {
 	// 	switchMap((order: any) => order.$.pipe(map(() => order))),
 	// 	tap((res) => console.log(res))
 	// );
-	const orderQuery = storeDB.collections.orders.find().where('status').eq('pending');
+	const orderQuery = storeDB.collections.orders.find({ selector: { status: { $eq: 'pending' } } });
+	// orderQuery.$.subscribe((results) => {
+	// 	console.log(`got results: ${results.length}`);
+	// });
 	// .sort({ dateCreatedGmt: -1 });
-	const orders: OrderDocument[] | undefined = useObservableState(orderQuery.$);
+	const orders: OrderDocument[] | undefined = useObservableState(
+		orderQuery.$.pipe(
+			filter((o) => {
+				/** @TODO - remove this hack!
+				 * why is orderQuery emitting on changes to order.lineItems??
+				 */
+				return orders?.length !== o.length;
+			})
+		)
+	);
 	// const order$ = orderQuery.$.pipe(
 	// 	filter((order: any) => order),
 	// 	tap((res) => {
@@ -106,6 +118,11 @@ const POS = () => {
 		orderQuery,
 		orders,
 		handleColumnResize,
+		handleStartColumnResize,
+		handleEndColumnResize,
+		productsColumnStyle,
+		handleContainerLayout,
+		handleProductColumnLayout,
 	});
 
 	return (

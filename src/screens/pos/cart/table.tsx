@@ -31,21 +31,21 @@ interface ICartTableProps {
 	ui: any;
 }
 
-const CartTable = ({ columns, order, query, onSort, ui }: ICartTableProps) => {
+const CartTable = ({ columns, items, query, onSort, ui }: ICartTableProps) => {
 	const { t } = useTranslation();
 
-	const items$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				// @ts-ignore
-				switchMap(([o, q]) => o.getCart$(q))
-			),
-		[order, query]
-	) as Observable<any[]>;
+	// const items$ = useObservable(
+	// 	(inputs$) =>
+	// 		inputs$.pipe(
+	// 			// @ts-ignore
+	// 			switchMap(([o, q]) => o.getCart$(q))
+	// 		),
+	// 	[order, query]
+	// ) as Observable<any[]>;
 
-	const items = useObservableState(items$, []);
+	// const items = useObservableState(items$, []);
 
-	useWhyDidYouUpdate('CartTable', { columns, order, query, onSort, items, ui });
+	useWhyDidYouUpdate('CartTable', { columns, items, query, onSort, items, ui });
 
 	return (
 		<Table
@@ -75,11 +75,11 @@ const CartTable = ({ columns, order, query, onSort, ui }: ICartTableProps) => {
 				{({ item }: { item: any }): React.ReactElement | null => {
 					switch (item.collection.name) {
 						case 'line_items':
-							return <LineItem order={order} item={item} columns={columns} />;
+							return <LineItem item={item} columns={columns} />;
 						case 'fee_lines':
-							return <FeeLine order={order} fee={item} columns={columns} />;
+							return <FeeLine fee={item} columns={columns} />;
 						case 'shipping_lines':
-							return <ShippingLine order={order} shipping={item} columns={columns} />;
+							return <ShippingLine shipping={item} columns={columns} />;
 						default:
 							return null;
 					}

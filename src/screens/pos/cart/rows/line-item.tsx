@@ -11,17 +11,17 @@ import Total from './cells/total';
 type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 
 interface Props {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	// order: import('@wcpos/common/src/database').OrderDocument;
 	item: import('@wcpos/common/src/database').LineItemDocument;
 	columns: any;
 }
 
-const LineItem = ({ order, item, columns }: Props) => {
-	useWhyDidYouUpdate('CartLineItem', { order, item, columns });
+const LineItem = ({ item, columns }: Props) => {
+	useWhyDidYouUpdate('CartLineItem', { item, columns });
 	const showSnackbar = useSnackbar({ message: 'hi' });
 
 	const onRemove = () => {
-		order.removeLineItem(item);
+		// order.removeLineItem(item);
 		showSnackbar();
 	};
 

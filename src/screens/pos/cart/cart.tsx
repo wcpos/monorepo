@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { useObservableSuspense, useObservableState, useObservable } from 'observable-hooks';
-import { from, of } from 'rxjs';
+import { from, of, Observable } from 'rxjs';
 import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
+import { isRxDocument } from 'rxdb/plugins/core';
 import sumBy from 'lodash/sumBy';
 import get from 'lodash/get';
 import Segment from '@wcpos/common/src/components/segment';
@@ -39,6 +40,18 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 		[query]
 	);
 
+	const items$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				filter(([o, q]) => isRxDocument(o)),
+				// @ts-ignore
+				switchMap(([o, q]) => o.getCart$(q))
+			),
+		[currentOrder, query]
+	) as Observable<any[]>;
+
+	const items = useObservableState(items$, []);
+
 	if (!currentOrder) {
 		return (
 			<Segment.Group>
@@ -64,7 +77,7 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				<CustomerSelect order={currentOrder} />
 			</Segment>
 			<Segment grow>
-				<Table order={currentOrder} columns={columns} query={query} onSort={handleSort} ui={ui} />
+				<Table items={items} columns={columns} query={query} onSort={handleSort} ui={ui} />
 			</Segment>
 			<Segment>
 				<Totals order={currentOrder} />
