@@ -6,7 +6,14 @@ export const Container = styled.View`
 	justify-content: stretch;
 `;
 
-export const Column = styled.View`
+export const ProductsColumn = styled.View`
+	height: 100%;
+	flex-grow: 0;
+	flex-shrink: 0;
+	flex-basis: 60%;
+`;
+
+export const CartColumn = styled.View`
 	height: 100%;
 	flex: 1;
 `;
