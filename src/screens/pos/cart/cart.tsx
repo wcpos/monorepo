@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { useObservableSuspense, useObservableState, useObservable } from 'observable-hooks';
-import { from, of, Observable } from 'rxjs';
-import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
+import { useObservableState, useObservable } from 'observable-hooks';
+import { Observable } from 'rxjs';
+import { switchMap, filter } from 'rxjs/operators';
 import { isRxDocument } from 'rxdb/plugins/core';
 import sumBy from 'lodash/sumBy';
 import get from 'lodash/get';

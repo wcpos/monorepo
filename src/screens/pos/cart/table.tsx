@@ -17,7 +17,8 @@ import TableSettings from './actions';
 type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
-type GetHeaderCellPropsFunction = import('@wcpos/common/src/components/table/header-row').GetHeaderCellPropsFunction;
+type GetHeaderCellPropsFunction =
+	import('@wcpos/common/src/components/table/header-row').GetHeaderCellPropsFunction;
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 type LineItemDocument = import('@wcpos/common/src/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/common/src/database').FeeLineDocument;
@@ -25,7 +26,7 @@ type ShippingLineDocument = import('@wcpos/common/src/database').ShippingLineDoc
 
 interface ICartTableProps {
 	columns: ColumnProps[];
-	order: OrderDocument;
+	items: any;
 	query: any;
 	onSort: Sort;
 	ui: any;
@@ -45,7 +46,7 @@ const CartTable = ({ columns, items, query, onSort, ui }: ICartTableProps) => {
 
 	// const items = useObservableState(items$, []);
 
-	useWhyDidYouUpdate('CartTable', { columns, items, query, onSort, items, ui });
+	useWhyDidYouUpdate('CartTable', { columns, items, query, onSort, ui });
 
 	return (
 		<Table

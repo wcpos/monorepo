@@ -17,10 +17,9 @@ export default {
 
 			model.methods.collections = function collections(this: RxDocument) {
 				if (!this.collection.collections) {
-					console.log('@TODO - fix for weird error on User collection??');
+					console.log('@TODO - why does this collection not have helper??');
 					return this.collection.database.collections;
 				}
-				console.log('@TODO - why does this collection have collections helper');
 				return this.collection.collections();
 			};
 

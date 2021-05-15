@@ -1,5 +1,5 @@
 import { from, of, combineLatest, zip, Observable } from 'rxjs';
-import { switchMap, tap, catchError, map, mergeWith } from 'rxjs/operators';
+import { switchMap, tap, catchError, map, zipWith } from 'rxjs/operators';
 import orderBy from 'lodash/orderBy';
 import filter from 'lodash/filter';
 import sumBy from 'lodash/sumBy';
@@ -67,7 +67,6 @@ export default {
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<ShippingLineDocument[]> {
 		return this.shippingLines$.pipe(
-			tap(() => console.log('@TODO - fix these unnecessary emissions')),
 			switchMap(async () => {
 				const shippingLines = await this.populate('shippingLines');
 				return q ? orderBy(shippingLines, q.sortBy, q.sortDirection) : shippingLines;
@@ -82,15 +81,10 @@ export default {
 		this: OrderDocument,
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>> {
-		return combineLatest([
-			this.getLineItems$(q),
-			this.getFeeLines$(q),
-			this.getShippingLines$(q),
-		]).pipe(
-			// @ts-ignore
+		return this.getLineItems$(q).pipe(
+			zipWith(this.getFeeLines$(q), this.getShippingLines$(q)),
 			map(([lineItems = [], feeLines, shippingLines]) => lineItems.concat(feeLines, shippingLines))
 		);
-		// return this.getLineItems$(q).pipe(mergeWith(this.getFeeLines$(q), this.getShippingLines$(q)));
 	},
 
 	/**

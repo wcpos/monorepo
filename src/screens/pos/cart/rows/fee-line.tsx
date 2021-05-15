@@ -3,6 +3,7 @@ import { useSnackbar } from '@wcpos/common/src/components/snackbar/use-snackbar'
 import Table from '@wcpos/common/src/components/table';
 import Button from '@wcpos/common/src/components/button';
 import Price from './cells/fee-and-shipping-price';
+import { POSContext } from '../../pos';
 
 type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 
@@ -13,9 +14,11 @@ interface Props {
 }
 
 const FeeLine = ({ fee, columns }: Props) => {
+	const { currentOrder } = React.useContext(POSContext);
+
 	/**  */
 	const handleFeeRemove = () => {
-		// order.removeFeeLine(fee);
+		currentOrder?.removeFeeLine(fee);
 		showSnackbar();
 	};
 
