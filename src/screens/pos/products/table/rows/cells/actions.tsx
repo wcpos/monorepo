@@ -10,7 +10,7 @@ interface Props {
 }
 
 const Actions = ({ product }: Props) => {
-	const { currentOrder } = React.useContext(POSContext);
+	const { currentOrder, setCurrentOrder } = React.useContext(POSContext);
 	const { storeDB } = useAppState();
 	const [visible, setVisible] = React.useState(false);
 
@@ -19,7 +19,9 @@ const Actions = ({ product }: Props) => {
 			return currentOrder.addOrUpdateLineItem(product);
 		}
 		// @ts-ignore
-		return storeDB?.collections.orders.createNewOrderWithProduct(product);
+		const newOrder = await storeDB?.collections.orders.createNewOrderWithProduct(product);
+		setCurrentOrder(newOrder);
+		return newOrder;
 	};
 
 	if (product.isVariable()) {
