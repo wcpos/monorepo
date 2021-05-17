@@ -34,6 +34,7 @@ export type {
 	ShippingLineSchema,
 } from './collections/shipping-lines';
 export type { CustomerCollection, CustomerDocument, CustomerSchema } from './collections/customers';
+export type { TaxRateCollection, TaxRateDocument, TaxRateSchema } from './collections/taxes';
 
 /**
  * This is the main export

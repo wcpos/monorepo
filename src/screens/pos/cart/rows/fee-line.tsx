@@ -3,6 +3,7 @@ import { useSnackbar } from '@wcpos/common/src/components/snackbar/use-snackbar'
 import Table from '@wcpos/common/src/components/table';
 import Button from '@wcpos/common/src/components/button';
 import Price from './cells/fee-and-shipping-price';
+import Tax from './cells/tax'
 import { POSContext } from '../../pos';
 
 type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
@@ -46,6 +47,8 @@ const FeeLine = ({ fee, columns }: Props) => {
 									return <></>;
 								case 'price':
 									return <Price item={fee} />;
+								case 'totalTax':
+									return <Tax item={fee} />;
 								case 'actions':
 									return <Button title="x" onPress={handleFeeRemove} />;
 								default:
