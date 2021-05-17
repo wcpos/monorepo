@@ -1,9 +1,10 @@
 import { from, of, combineLatest, Observable } from 'rxjs';
 import { switchMap, tap, catchError, map, debounceTime } from 'rxjs/operators';
-import orderBy from 'lodash/orderBy';
-import filter from 'lodash/filter';
-import sumBy from 'lodash/sumBy';
-import isArray from 'lodash/isArray';
+import _orderBy from 'lodash/orderBy';
+import _filter from 'lodash/filter';
+import _sumBy from 'lodash/sumBy';
+import _isArray from 'lodash/isArray';
+import _map from 'lodash/map';
 
 type OrderDocument = import('./orders').OrderDocument;
 type ProductDocument = import('../products/products').ProductDocument;
@@ -15,6 +16,7 @@ type ShippingLineDocument = import('../shipping-lines').ShippingLineDocument;
 type ShippingLineCollection = import('../shipping-lines').ShippingLineCollection;
 type ProductVariationDocument = import('../product-variations').ProductVariationDocument;
 type CustomerDocument = import('../customers').CustomerDocument;
+type CartLines = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
 
 /**
  * WooCommerce Order Model methods
@@ -36,9 +38,8 @@ export default {
 	): Observable<LineItemDocument[]> {
 		return this.lineItems$.pipe(
 			switchMap(async (ids) => {
-				console.log(ids);
 				const lineItems = await this.populate('lineItems');
-				return q ? orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
+				return q ? _orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
 			})
 		);
 	},
@@ -52,9 +53,8 @@ export default {
 	): Observable<FeeLineDocument[]> {
 		return this.feeLines$.pipe(
 			switchMap(async (ids) => {
-				console.log(ids);
 				const feeLines = await this.populate('feeLines');
-				return q ? orderBy(feeLines, q.sortBy, q.sortDirection) : feeLines;
+				return q ? _orderBy(feeLines, q.sortBy, q.sortDirection) : feeLines;
 			})
 			// tap((res) => {
 			// 	debugger;
@@ -71,9 +71,8 @@ export default {
 	): Observable<ShippingLineDocument[]> {
 		return this.shippingLines$.pipe(
 			switchMap(async (ids) => {
-				console.log(ids);
 				const shippingLines = await this.populate('shippingLines');
-				return q ? orderBy(shippingLines, q.sortBy, q.sortDirection) : shippingLines;
+				return q ? _orderBy(shippingLines, q.sortBy, q.sortDirection) : shippingLines;
 			})
 		);
 	},
@@ -84,7 +83,7 @@ export default {
 	getCart$(
 		this: OrderDocument,
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Observable<Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>> {
+	): Observable<CartLines> {
 		return combineLatest([
 			this.getLineItems$(q),
 			this.getFeeLines$(q),
@@ -113,7 +112,7 @@ export default {
 		// check lineItems for same product id
 		const productId = parent ? parent.id : product.id;
 		const populatedLineItems = await this.populate('lineItems');
-		const existingProducts = filter(populatedLineItems, { productId }) as LineItemDocument[];
+		const existingProducts = _filter(populatedLineItems, { productId }) as LineItemDocument[];
 
 		// if product exists, increase quantity by 1
 		if (existingProducts.length === 1) {
@@ -250,13 +249,27 @@ export default {
 	 */
 	computedTotal$(this: OrderDocument) {
 		return this.getCart$().pipe(
-			// @ts-ignore
-			switchMap((cartLines) => combineLatest(cartLines.map((cartLine) => cartLine.total$))),
-			map((totals: string[]) => String(sumBy(totals, (total) => Number(total)))),
+			switchMap((cartLines: CartLines) => {
+				const totals$ = _map(cartLines, 'total$');
+				return combineLatest(totals$);
+			}),
+			map((totals: string[]) => String(_sumBy(totals, (total) => Number(total ?? 0)))),
 			tap((total: string) => {
-				console.log(`Order Total: ${total}`);
 				if (total !== this.total) this.atomicPatch({ total });
 			})
+		);
+	},
+
+	/**
+	 *
+	 */
+	computedSubtotal$(this: OrderDocument) {
+		return this.getLineItems$().pipe(
+			switchMap((lineItems: LineItemDocument[]) => {
+				const subtotals$ = _map(lineItems, 'subtotal$');
+				return combineLatest(subtotals$);
+			}),
+			map((subtotals: string[]) => String(_sumBy(subtotals, (subtotal) => Number(subtotal ?? 0))))
 		);
 	},
 };

@@ -9,7 +9,7 @@ type LineItemDocument = import('../../').LineItemDocument;
  */
 export default {
 	/**
-	 *
+	 * After discounts
 	 */
 	computedTotal$(this: LineItemDocument) {
 		return combineLatest([this.quantity$, this.price$]).pipe(
@@ -21,9 +21,14 @@ export default {
 	},
 
 	/**
-	 *
+	 * Before discounts
 	 */
-	// computedSubtotal(this: LineItemDocument) {
-	// 	return this.get('quantity') * this.get('price');
-	// },
+	computedSubtotal$(this: LineItemDocument) {
+		return combineLatest([this.quantity$, this.price$]).pipe(
+			map(([quantity = 0, price = 0]) => String(quantity * price)),
+			tap((subtotal: string) => {
+				if (subtotal !== this.subtotal) this.atomicPatch({ subtotal });
+			})
+		);
+	},
 };
