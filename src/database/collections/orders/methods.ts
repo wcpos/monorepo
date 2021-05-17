@@ -1,8 +1,9 @@
 import { from, of, combineLatest, Observable } from 'rxjs';
-import { switchMap, tap, catchError, map } from 'rxjs/operators';
+import { switchMap, tap, catchError, map, debounceTime } from 'rxjs/operators';
 import orderBy from 'lodash/orderBy';
 import filter from 'lodash/filter';
 import sumBy from 'lodash/sumBy';
+import isArray from 'lodash/isArray';
 
 type OrderDocument = import('./orders').OrderDocument;
 type ProductDocument = import('../products/products').ProductDocument;
@@ -89,6 +90,12 @@ export default {
 			this.getFeeLines$(q),
 			this.getShippingLines$(q),
 		]).pipe(
+			/**
+			 * the population promises return at different times
+			 * debounce emissions to prevent unneccesary re-renders
+			 * @TODO - is there a better way?
+			 */
+			debounceTime(10),
 			map(([lineItems = [], feeLines = [], shippingLines = []]) =>
 				lineItems.concat(feeLines, shippingLines)
 			)
@@ -102,7 +109,7 @@ export default {
 		this: OrderDocument,
 		product: ProductDocument | ProductVariationDocument,
 		parent: ProductDocument
-	): Promise<OrderDocument> {
+	): Promise<OrderDocument | void> {
 		// check lineItems for same product id
 		const productId = parent ? parent.id : product.id;
 		const populatedLineItems = await this.populate('lineItems');
@@ -137,10 +144,16 @@ export default {
 				debugger;
 			});
 
-		return this.update({
-			$push: {
-				lineItems: newLineItem._id,
-			},
+		/**
+		 * Add new line item id to the lineItems
+		 * - use atomicUpdate just in case lineItems is undefined
+		 */
+		return this.atomicUpdate((order) => {
+			if (!isArray(order.lineItems)) {
+				order.lineItems = [];
+			}
+			order.lineItems.push(newLineItem._id);
+			return order;
 		}).catch((err: any) => {
 			debugger;
 		});
@@ -152,7 +165,7 @@ export default {
 	async removeLineItem(this: OrderDocument, lineItem: LineItemDocument) {
 		await this.update({
 			$pullAll: {
-				line_items: [lineItem._id],
+				lineItems: [lineItem._id],
 			},
 		}).then(() => {
 			return lineItem.remove();
