@@ -53,6 +53,7 @@ const theme = {
 
 	BUTTONGROUP_BORDER_COLOR: colors.border,
 	BUTTONGROUP_TEXT_COLOR: colors.background,
+	BUTTONGROUP_SPACING: basePadding,
 
 	CHECKBOX_BACKGROUND_COLOR: colors.primary,
 	CHECKBOX_BACKGROUND_COLOR_DISABLED: colors.disabled,

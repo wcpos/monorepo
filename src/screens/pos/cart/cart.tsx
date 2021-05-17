@@ -115,6 +115,14 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 							replicationState.run(false);
 						}}
 					/>
+					<Button
+						title="Void"
+						type="critical"
+						onPress={async () => {
+							currentOrder.remove();
+							setCurrentOrder(undefined);
+						}}
+					/>
 				</Button.Group>
 			</Segment>
 			<Segment>

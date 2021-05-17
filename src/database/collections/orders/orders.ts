@@ -23,13 +23,13 @@ export type OrderCollection = import('rxdb').RxCollection<
 /**
  *
  */
-function postCreate(
-	this: OrderCollection,
-	plainData: Record<string, unknown>,
-	orderDocument: OrderDocument
-) {
-	console.log('watch lineItems');
-}
+// function postCreate(
+// 	this: OrderCollection,
+// 	plainData: Record<string, unknown>,
+// 	orderDocument: OrderDocument
+// ) {
+// 	console.log('watch lineItems');
+// }
 
 /**
  * @TODO - how to add collection statics types for ALL collections
@@ -78,6 +78,24 @@ async function preSave(
 	return plainData;
 }
 
+async function preRemove(this: OrderCollection, order: OrderDocument) {
+	// remove all lineItems
+	if (isArray(order.lineItems) && order.lineItems.length > 0) {
+		const result = await this.collections().line_items.bulkRemove(order.lineItems);
+		console.log(result);
+	}
+	// remove all feeLines
+	if (isArray(order.feeLines) && order.feeLines.length > 0) {
+		const result = await this.collections().fee_lines.bulkRemove(order.feeLines);
+		console.log(result);
+	}
+	// remove all shippingLines
+	if (isArray(order.shippingLines) && order.shippingLines.length > 0) {
+		const result = await this.collections().shipping_lines.bulkRemove(order.shippingLines);
+		console.log(result);
+	}
+}
+
 /**
  *
  */
@@ -89,16 +107,20 @@ export const orders = {
 	// attachments: {},
 	options: {
 		middlewares: {
-			postCreate: {
-				handle: postCreate,
-				parallel: false,
-			},
+			// postCreate: {
+			// 	handle: postCreate,
+			// 	parallel: false,
+			// },
 			preInsert: {
 				handle: preInsert,
 				parallel: false,
 			},
 			preSave: {
 				handle: preSave,
+				parallel: false,
+			},
+			preRemove: {
+				handle: preRemove,
 				parallel: false,
 			},
 		},

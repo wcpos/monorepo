@@ -1,5 +1,5 @@
-import { from, of, combineLatest, zip, Observable } from 'rxjs';
-import { switchMap, tap, catchError, map, zipWith } from 'rxjs/operators';
+import { from, of, combineLatest, Observable } from 'rxjs';
+import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import orderBy from 'lodash/orderBy';
 import filter from 'lodash/filter';
 import sumBy from 'lodash/sumBy';
@@ -34,7 +34,8 @@ export default {
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<LineItemDocument[]> {
 		return this.lineItems$.pipe(
-			switchMap(async () => {
+			switchMap(async (ids) => {
+				console.log(ids);
 				const lineItems = await this.populate('lineItems');
 				return q ? orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
 			})
@@ -49,7 +50,8 @@ export default {
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<FeeLineDocument[]> {
 		return this.feeLines$.pipe(
-			switchMap(async () => {
+			switchMap(async (ids) => {
+				console.log(ids);
 				const feeLines = await this.populate('feeLines');
 				return q ? orderBy(feeLines, q.sortBy, q.sortDirection) : feeLines;
 			})
@@ -67,7 +69,8 @@ export default {
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<ShippingLineDocument[]> {
 		return this.shippingLines$.pipe(
-			switchMap(async () => {
+			switchMap(async (ids) => {
+				console.log(ids);
 				const shippingLines = await this.populate('shippingLines');
 				return q ? orderBy(shippingLines, q.sortBy, q.sortDirection) : shippingLines;
 			})
@@ -81,9 +84,14 @@ export default {
 		this: OrderDocument,
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>> {
-		return this.getLineItems$(q).pipe(
-			zipWith(this.getFeeLines$(q), this.getShippingLines$(q)),
-			map(([lineItems = [], feeLines, shippingLines]) => lineItems.concat(feeLines, shippingLines))
+		return combineLatest([
+			this.getLineItems$(q),
+			this.getFeeLines$(q),
+			this.getShippingLines$(q),
+		]).pipe(
+			map(([lineItems = [], feeLines = [], shippingLines = []]) =>
+				lineItems.concat(feeLines, shippingLines)
+			)
 		);
 	},
 
@@ -144,7 +152,7 @@ export default {
 	async removeLineItem(this: OrderDocument, lineItem: LineItemDocument) {
 		await this.update({
 			$pullAll: {
-				line_items: [lineItem.id],
+				line_items: [lineItem._id],
 			},
 		}).then(() => {
 			return lineItem.remove();
@@ -233,6 +241,7 @@ export default {
 			switchMap((cartLines) => combineLatest(cartLines.map((cartLine) => cartLine.total$))),
 			map((totals: string[]) => String(sumBy(totals, (total) => Number(total)))),
 			tap((total: string) => {
+				console.log(`Order Total: ${total}`);
 				if (total !== this.total) this.atomicPatch({ total });
 			})
 		);

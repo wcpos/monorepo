@@ -31,8 +31,12 @@ const StoreDB = () => {
 		})();
 	}, []);
 
-	const deleteAll = async (table: string) => {
-		// const query = storeDB.collections.map[table].query();
+	const deleteAll = async (name: string) => {
+		// @ts-ignore
+		const collection = storeDB.collections[name];
+		const result = await collection.remove();
+		console.log(result);
+
 		// await storeDB.action(async () => {
 		// 	await query.destroyAllPermanently();
 		// });
@@ -87,7 +91,7 @@ const StoreDB = () => {
 										<Button
 											title="Info"
 											onPress={() => {
-												printToConsole(item.name);
+												console.log(item.name);
 											}}
 										/>
 									</Table.Row.Cell>
