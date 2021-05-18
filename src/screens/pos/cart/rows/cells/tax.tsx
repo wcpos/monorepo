@@ -3,7 +3,10 @@ import { useObservableState } from 'observable-hooks';
 import Text from '@wcpos/common/src/components/text';
 
 interface Props {
-	item: import('@wcpos/common/src/database').FeeLineDocument;
+	item:
+		| import('@wcpos/common/src/database').LineItemDocument
+		| import('@wcpos/common/src/database').FeeLineDocument
+		| import('@wcpos/common/src/database').ShippingLineDocument;
 }
 
 const TotalTax = ({ item }: Props) => {

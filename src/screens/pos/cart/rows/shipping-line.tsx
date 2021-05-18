@@ -4,6 +4,7 @@ import Table from '@wcpos/common/src/components/table';
 import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
 import Price from './cells/fee-and-shipping-price';
+import Tax from './cells/tax';
 import { POSContext } from '../../pos';
 
 type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
@@ -38,6 +39,8 @@ const ShippingLine = ({ shipping, columns }: Props) => {
 									return <Price item={shipping} />;
 								case 'name':
 									return <Text>{shipping.methodTitle}</Text>;
+								case 'totalTax':
+									return <Tax item={shipping} />;
 								case 'actions':
 									return <Button title="x" onPress={handleRemove} />;
 								default:

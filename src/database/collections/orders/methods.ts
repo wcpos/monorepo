@@ -3,7 +3,6 @@ import { switchMap, tap, catchError, map, debounceTime } from 'rxjs/operators';
 import _orderBy from 'lodash/orderBy';
 import _filter from 'lodash/filter';
 import _sumBy from 'lodash/sumBy';
-import _isArray from 'lodash/isArray';
 import _map from 'lodash/map';
 
 type OrderDocument = import('./orders').OrderDocument;
@@ -148,9 +147,7 @@ export default {
 		 * - use atomicUpdate just in case lineItems is undefined
 		 */
 		return this.atomicUpdate((order) => {
-			if (!isArray(order.lineItems)) {
-				order.lineItems = [];
-			}
+			order.lineItems = order.lineItems ?? [];
 			order.lineItems.push(newLineItem._id);
 			return order;
 		}).catch((err: any) => {
@@ -270,6 +267,22 @@ export default {
 				return combineLatest(subtotals$);
 			}),
 			map((subtotals: string[]) => String(_sumBy(subtotals, (subtotal) => Number(subtotal ?? 0))))
+		);
+	},
+
+	/**
+	 *
+	 */
+	computedTotalTax$(this: OrderDocument) {
+		return this.getCart$().pipe(
+			switchMap((cartLines: CartLines) => {
+				const totalTax$ = _map(cartLines, (cartLine) => cartLine.computedTotalTax$());
+				return combineLatest(totalTax$);
+			}),
+			map((totals: string[]) => String(_sumBy(totals, (total) => Number(total ?? 0)))),
+			tap((totalTax: string) => {
+				if (totalTax !== this.totalTax) this.atomicPatch({ totalTax });
+			})
 		);
 	},
 };

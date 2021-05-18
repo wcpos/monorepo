@@ -11,6 +11,7 @@ interface Props {
 
 const Totals = ({ order }: Props) => {
 	const total = useObservableState(order.computedTotal$(), order.total);
+	const totalTax = useObservableState(order.computedTotalTax$(), order.totalTax);
 	const subtotal = useObservableState(order.computedSubtotal$(), order.subtotal);
 
 	return (
@@ -28,7 +29,7 @@ const Totals = ({ order }: Props) => {
 					<Text>Total Tax:</Text>
 				</View>
 				<View>
-					<Text>{order.total_tax}</Text>
+					<Text>{totalTax}</Text>
 				</View>
 			</View>
 			<View style={{ flexDirection: 'row' }}>

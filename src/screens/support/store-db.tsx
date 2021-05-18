@@ -23,6 +23,7 @@ const StoreDB = () => {
 				return {
 					name: key,
 					count: records.length,
+					records,
 				};
 			});
 			const resolved = await Promise.all(promises);
@@ -42,10 +43,8 @@ const StoreDB = () => {
 		// });
 	};
 
-	const printToConsole = async (collection: string) => {
-		// @ts-ignore
-		const data = await storeDB.collections[collection].find().exec();
-		console.log(data);
+	const printRecordsToConsole = async (collection: []) => {
+		console.log(collection);
 	};
 
 	const columns = [
@@ -91,7 +90,7 @@ const StoreDB = () => {
 										<Button
 											title="Info"
 											onPress={() => {
-												console.log(item.name);
+												printRecordsToConsole(item.records);
 											}}
 										/>
 									</Table.Row.Cell>

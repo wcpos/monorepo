@@ -7,6 +7,7 @@ import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Quantity from './cells/quantity';
 import Price from './cells/price';
 import Total from './cells/total';
+import Tax from './cells/tax';
 import { POSContext } from '../../pos';
 
 type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
@@ -40,6 +41,8 @@ const LineItem = ({ item, columns }: Props) => {
 									return <Quantity lineItem={item} />;
 								case 'price':
 									return <Price lineItem={item} />;
+								case 'totalTax':
+									return <Tax item={item} />;
 								case 'total':
 									return <Total item={item} />;
 								case 'actions':
