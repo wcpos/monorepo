@@ -1,11 +1,6 @@
-import { from, of, combineLatest, Observable } from 'rxjs';
-import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
-// import _orderBy from 'lodash/orderBy';
-// import _filter from 'lodash/filter';
-// import _sumBy from 'lodash/sumBy';
-// import _isArray from 'lodash/isArray';
-// import _map from 'lodash/map';
+import { map } from 'rxjs/operators';
 import schema from './schema.json';
+import { calcTaxes, sumTaxes } from '../utils';
 
 export type FeeLineSchema = import('./interface').WooCommerceOrderFeeLineSchema;
 export type FeeLineDocument = import('rxdb').RxDocument<FeeLineSchema, FeeLineMethods>;
@@ -17,7 +12,7 @@ export type FeeLineCollection = import('rxdb').RxCollection<
 type FeeLineMethods = Record<string, never>;
 type FeeLineStatics = Record<string, never>;
 
-const taxes = [
+const taxRates = [
 	{
 		id: 72,
 		country: 'US',
@@ -36,19 +31,13 @@ const taxes = [
 	},
 ];
 
-function calcInclusiveTax(price) {}
-
-function calcTaxes(price) {
-	return calcInclusiveTax(price);
-}
-
 const methods = {
 	/**
 	 *
 	 */
 	computedTaxes$(this: FeeLineDocument) {
 		// @ts-ignore
-		return this.total$.pipe(tap((total) => calculateTaxes(total)));
+		return this.total$.pipe(map((total) => calcTaxes(total, taxRates)));
 	},
 
 	/**
@@ -56,11 +45,7 @@ const methods = {
 	 */
 	computedTotalTax$(this: FeeLineDocument) {
 		// @ts-ignore
-		return this.taxes$.pipe(
-			map((result) => {
-				return result ?? 0;
-			})
-		);
+		return this.computedTaxes$().pipe(map((taxes) => sumTaxes(taxes)));
 	},
 };
 

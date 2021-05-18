@@ -6,6 +6,10 @@ import round from 'lodash/round';
 import map from 'lodash/map';
 
 type TaxRateSchema = import('@wcpos/common/src/database').TaxRateSchema;
+interface Taxes {
+	id: number;
+	taxAmount: number;
+}
 
 /**
  * Calculate taxes when price includes tax
@@ -111,4 +115,11 @@ export function calcTaxes(price: number, rates: TaxRateSchema[], priceIncludesTa
 	return priceIncludesTax
 		? calcInclusiveTax(price, sortedRates)
 		: calcExclusiveTax(price, sortedRates);
+}
+
+/**
+ *
+ */
+export function sumTaxes(taxes: Taxes[]) {
+	return sumBy(taxes, (tax) => tax.taxAmount);
 }
