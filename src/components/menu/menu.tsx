@@ -1,12 +1,45 @@
 import * as React from 'react';
+import snakeCase from 'lodash/snakeCase';
 import { Item, ItemProps } from './item';
 import * as Styled from './styles';
+
+/**
+ * Action with a Label.
+ */
+export interface TextAction {
+	/**
+	 * Label to display.
+	 */
+	label: string;
+	/**
+	 * Action to execute on click.
+	 */
+	action?: () => void;
+}
+
+// export interface IconAction {
+// 	/**
+// 	 * Icon to display.
+// 	 */
+// 	icon: IconName;
+// 	/**
+// 	 * Color of the icon.
+// 	 */
+// 	color?: IconProps['color'];
+// 	/**
+// 	 * Action to execute on click.
+// 	 */
+// 	action?: () => void;
+// }
+
+// export type TextWithIconAction = TextAction & IconAction;
+// export type TextWithOptionalIconAction = TextAction & Partial<IconAction>;
 
 export interface MenuProps {
 	/**
 	 *
 	 */
-	items: any[];
+	items: (TextAction | string)[];
 	/**
 	 *
 	 */
@@ -20,24 +53,18 @@ export const Menu: React.FC<MenuProps> & { Item: typeof Item } = ({
 }) => {
 	return (
 		<Styled.Container>
-			{items.map((item, index) =>
-				typeof item === 'string' ? (
+			{items.map((rawItem, index) => {
+				const item = typeof rawItem === 'string' ? { label: rawItem } : rawItem;
+				return (
 					<Item
-						onPress={() => {
-							onSelect(item);
-						}}
-					>
-						{item}
-					</Item>
-				) : (
-					<Item
+						key={snakeCase(`${item.label}_${index}`)}
 						{...item}
 						onPress={() => {
 							onSelect(item);
 						}}
 					/>
-				)
-			)}
+				);
+			})}
 		</Styled.Container>
 	);
 };
