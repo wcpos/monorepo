@@ -1,11 +1,9 @@
 import * as React from 'react';
-import { useSnackbar } from '@wcpos/common/src/components/snackbar/use-snackbar';
 import Table from '@wcpos/common/src/components/table';
-import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
 import Price from './cells/fee-and-shipping-price';
 import Tax from './cells/tax';
-import { POSContext } from '../../pos';
+import Actions from './cells/actions';
 
 type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 
@@ -16,15 +14,6 @@ interface Props {
 }
 
 const ShippingLine = ({ shipping, columns }: Props) => {
-	const { currentOrder } = React.useContext(POSContext);
-
-	const showSnackbar = useSnackbar({ message: 'hi' });
-
-	const handleRemove = () => {
-		currentOrder?.removeShippingLine(shipping);
-		showSnackbar();
-	};
-
 	return (
 		<Table.Row rowData={shipping} columns={columns}>
 			{({ getCellProps }: { getCellProps: GetCellPropsFunction }) => {
@@ -42,7 +31,7 @@ const ShippingLine = ({ shipping, columns }: Props) => {
 								case 'totalTax':
 									return <Tax item={shipping} />;
 								case 'actions':
-									return <Button title="x" onPress={handleRemove} />;
+									return <Actions item={shipping} />;
 								default:
 									return null;
 							}

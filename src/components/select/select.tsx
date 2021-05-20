@@ -12,7 +12,7 @@ export interface SelectChoice {
 	/**
 	 * Value for the option.
 	 */
-	value: string;
+	value: any;
 	/**
 	 * Disable this option.
 	 */
@@ -77,10 +77,10 @@ export const Select = ({
 		onChangeRaw as ((value: string | null) => string) | undefined // This will never be called with a null parameter
 	);
 
-	const selectedChoice = React.useMemo(() => choices.find((x) => x.value === selected), [
-		choices,
-		selected,
-	]);
+	const selectedChoice = React.useMemo(
+		() => choices.find((x) => x.value === selected),
+		[choices, selected]
+	);
 
 	const choiceComponents = React.useMemo(
 		() =>
