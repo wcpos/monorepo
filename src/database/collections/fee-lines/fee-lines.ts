@@ -1,3 +1,4 @@
+import { combineLatest } from 'rxjs';
 import { map } from 'rxjs/operators';
 import schema from './schema.json';
 import { calcTaxes, sumTaxes } from '../utils';
@@ -36,8 +37,10 @@ const methods = {
 	 *
 	 */
 	computedTaxes$(this: FeeLineDocument) {
-		// @ts-ignore
-		return this.total$.pipe(map((total) => calcTaxes(total, taxRates)));
+		return combineLatest([this.total$, this.taxStatus$]).pipe(
+			// @ts-ignore
+			map(([total, taxStatus]) => (taxStatus === 'taxable' ? calcTaxes(total, taxRates) : 0))
+		);
 	},
 
 	/**

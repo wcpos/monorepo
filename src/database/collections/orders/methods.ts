@@ -15,6 +15,7 @@ type ShippingLineDocument = import('../shipping-lines').ShippingLineDocument;
 type ShippingLineCollection = import('../shipping-lines').ShippingLineCollection;
 type ProductVariationDocument = import('../product-variations').ProductVariationDocument;
 type CustomerDocument = import('../customers').CustomerDocument;
+type CartLine = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
 type CartLines = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
 
 /**
@@ -225,6 +226,23 @@ export default {
 		}).then(() => {
 			return shippingLine.remove();
 		});
+	},
+
+	/**
+	 *
+	 */
+	async removeCartLine(this: OrderDocument, item: CartLine) {
+		// @ts-ignore
+		switch (item.collection.name) {
+			case 'line_items':
+				return this.removeLineItem(item);
+			case 'fee_lines':
+				return this.removeFeeLine(item);
+			case 'shipping_lines':
+				return this.removeShippingLine(item);
+			default:
+				return null;
+		}
 	},
 
 	/**
