@@ -1,4 +1,4 @@
-import { calcTaxes, sumTaxes } from './utils';
+import { calcTaxes, sumTaxes, sumItemizedTaxes } from './utils';
 
 /**
  * https://github.com/woocommerce/woocommerce/blob/trunk/tests/legacy/unit-tests/tax/tax.php
@@ -79,5 +79,21 @@ describe('Calculate Taxes', () => {
 			{ id: 2, taxAmount: 2 },
 		];
 		expect(sumTaxes(taxes)).toEqual(3.665);
+	});
+
+	it('should sum itemized taxes', () => {
+		const taxes1 = [
+			{ id: 1, taxAmount: 1.665 },
+			{ id: 2, taxAmount: 2 },
+		];
+		const taxes2 = [
+			{ id: 1, taxAmount: 1 },
+			{ id: 2, taxAmount: 2 },
+		];
+
+		expect(sumItemizedTaxes([taxes1, taxes2])).toEqual([
+			{ id: 1, taxAmount: 2.665 },
+			{ id: 2, taxAmount: 4 },
+		]);
 	});
 });

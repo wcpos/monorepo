@@ -1,9 +1,24 @@
 import { from, combineLatest, Observable } from 'rxjs';
 import { switchMap, map, tap } from 'rxjs/operators';
-import isFinite from 'lodash/isFinite';
+import _map from 'lodash/map';
+import { calcTaxes, sumTaxes, sumItemizedTaxes } from '../utils';
 
 type LineItemCollection = import('./line-items').LineItemCollection;
 type LineItemDocument = import('./line-items').LineItemDocument;
+
+const rates: any[] = [
+	{
+		id: 2,
+		country: 'GB',
+		rate: '20.0000',
+		name: 'VAT',
+		priority: 1,
+		compound: true,
+		shipping: true,
+		order: 1,
+		class: 'standard',
+	},
+];
 
 /**
  *
@@ -14,18 +29,35 @@ export function postCreate(
 	lineItem: LineItemDocument
 ) {
 	/**
-	 * Calculate quantity * price
-	 * @TODO - question: is it possible to hook in before qty or price
-	 * changes and then emit with updated total?
+	 * add changes for taxes
 	 */
-	// combineLatest<{
-	// 	quantity: Observable<number | undefined>;
-	// 	price: Observable<number | undefined>;
-	// }>({
-	// 	quantity: lineItem.quantity$,
-	// 	price: lineItem.price$,
-	// }).subscribe(({ quantity = 0, price = 0 }) => {
-	// 	const total = quantity * price;
-	// 	lineItem.atomicPatch({ total: String(total) });
-	// });
+	combineLatest([lineItem.quantity$, lineItem.price$]).subscribe((array) => {
+		const [quantity = 0, price = 0] = array;
+		const discounts = 0;
+		const subtotal = quantity * price;
+		const subtotalTaxes = calcTaxes(subtotal, rates);
+		const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes);
+		const total = subtotal - discounts;
+		const totalTaxes = calcTaxes(subtotal, rates);
+		const itemizedTotalTaxes = sumItemizedTaxes(totalTaxes);
+		// itemizedSubTotalTaxes & itemizedTotalTaxes should be same size
+		// is there a case where they are not?
+		const taxes = _map(itemizedSubTotalTaxes, (obj) => {
+			const index = itemizedTotalTaxes.findIndex((el) => el.id === obj.id);
+			const totalTax = index !== -1 ? itemizedTotalTaxes[index] : { taxAmount: 0 };
+			return {
+				id: obj.id,
+				subtotal: String(obj.taxAmount ?? 0),
+				total: String(totalTax.taxAmount ?? 0),
+			};
+		});
+
+		lineItem.atomicPatch({
+			subtotal: String(subtotal),
+			subtotalTax: String(sumTaxes(subtotalTaxes)),
+			total: String(total),
+			totalTax: String(sumTaxes(totalTaxes)),
+			taxes,
+		});
+	});
 }

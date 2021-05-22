@@ -8,10 +8,11 @@ interface Props {
 		| import('@wcpos/common/src/database').LineItemDocument
 		| import('@wcpos/common/src/database').FeeLineDocument
 		| import('@wcpos/common/src/database').ShippingLineDocument;
+	type?: 'total' | 'subtotal';
 }
 
-const Total = ({ item }: Props) => {
-	const total = useObservableState(item.computedTotal$(), item.total);
+const Total = ({ item, type = 'total' }: Props) => {
+	const total = useObservableState(item[`${type}$`], item[type]);
 	useWhyDidYouUpdate('CartLineItemTotal', { item, total });
 
 	return <Text>{total}</Text>;

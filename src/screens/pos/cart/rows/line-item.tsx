@@ -30,6 +30,10 @@ const LineItem = ({ item, columns }: Props) => {
 									return <Quantity lineItem={item} />;
 								case 'price':
 									return <Price lineItem={item} />;
+								case 'subtotalTax':
+									return <Tax item={item} type="subtotalTax" />;
+								case 'subtotal':
+									return <Total item={item} type="subtotal" />;
 								case 'totalTax':
 									return <Tax item={item} />;
 								case 'total':
