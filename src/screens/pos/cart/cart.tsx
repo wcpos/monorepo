@@ -9,6 +9,7 @@ import Segment from '@wcpos/common/src/components/segment';
 import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
+import ErrorBoundary from '@wcpos/common/src/components/error';
 import Table from './table';
 import CustomerSelect from './customer-select';
 import Actions from './actions';
@@ -74,13 +75,19 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 	return (
 		<Segment.Group>
 			<Segment>
-				<CustomerSelect order={currentOrder} />
+				<ErrorBoundary>
+					<CustomerSelect order={currentOrder} />
+				</ErrorBoundary>
 			</Segment>
 			<Segment grow>
-				<Table items={items} columns={columns} query={query} onSort={handleSort} ui={ui} />
+				<ErrorBoundary>
+					<Table items={items} columns={columns} query={query} onSort={handleSort} ui={ui} />
+				</ErrorBoundary>
 			</Segment>
 			<Segment>
-				<Totals order={currentOrder} />
+				<ErrorBoundary>
+					<Totals order={currentOrder} />
+				</ErrorBoundary>
 			</Segment>
 			<Segment>
 				<Button.Group>

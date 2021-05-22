@@ -37,8 +37,11 @@ export default {
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<LineItemDocument[]> {
 		return this.lineItems$.pipe(
-			switchMap(async (ids) => {
+			switchMap(async () => {
 				const lineItems = await this.populate('lineItems');
+				if (!lineItems) {
+					return [];
+				}
 				return q ? _orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
 			})
 		);
@@ -52,8 +55,11 @@ export default {
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<FeeLineDocument[]> {
 		return this.feeLines$.pipe(
-			switchMap(async (ids) => {
+			switchMap(async () => {
 				const feeLines = await this.populate('feeLines');
+				if (!feeLines) {
+					return [];
+				}
 				return q ? _orderBy(feeLines, q.sortBy, q.sortDirection) : feeLines;
 			})
 			// tap((res) => {
@@ -70,8 +76,11 @@ export default {
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<ShippingLineDocument[]> {
 		return this.shippingLines$.pipe(
-			switchMap(async (ids) => {
+			switchMap(async () => {
 				const shippingLines = await this.populate('shippingLines');
+				if (!shippingLines) {
+					return [];
+				}
 				return q ? _orderBy(shippingLines, q.sortBy, q.sortDirection) : shippingLines;
 			})
 		);
@@ -95,9 +104,10 @@ export default {
 			 * @TODO - is there a better way?
 			 */
 			debounceTime(10),
-			map(([lineItems = [], feeLines = [], shippingLines = []]) =>
-				lineItems.concat(feeLines, shippingLines)
-			)
+			map((cartLines) => {
+				const [lineItems = [], feeLines = [], shippingLines = []] = cartLines;
+				return lineItems.concat(feeLines, shippingLines);
+			})
 		);
 	},
 

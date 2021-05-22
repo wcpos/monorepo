@@ -10,7 +10,7 @@ interface Props {
 }
 
 const TotalTax = ({ item }: Props) => {
-	const totalTax = useObservableState(item.computedTotalTax$, item.totalTax);
+	const totalTax = useObservableState(item.computedTotalTax$(), item.totalTax);
 
 	return <Text>{totalTax}</Text>;
 };

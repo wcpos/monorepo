@@ -79,19 +79,13 @@ const POS = () => {
 		}
 	};
 
-	// fetch order
-	// const orderQuery = storeDB.collections.orders.findOne();
-	// const order$ = orderQuery.$.pipe(
-	// 	filter((order: any) => order),
-	// 	switchMap((order: any) => order.$.pipe(map(() => order))),
-	// 	tap((res) => console.log(res))
-	// );
-	const orderQuery = storeDB.collections.orders.find({ selector: { status: { $eq: 'pending' } } });
-	// orderQuery.$.subscribe((results) => {
-	// 	console.log(`got results: ${results.length}`);
-	// });
-	// .sort({ dateCreatedGmt: -1 });
-	const orders: OrderDocument[] | undefined = useObservableState(
+	const orderQuery = storeDB.collections.orders
+		.find()
+		.where('status')
+		.eq('pending')
+		.sort({ dateCreatedGmt: 'desc' });
+
+	const orders: OrderDocument[] = useObservableState(
 		orderQuery.$.pipe(
 			filter((o) => {
 				/** @TODO - remove this hack!
@@ -99,16 +93,9 @@ const POS = () => {
 				 */
 				return orders?.length !== o.length;
 			})
-		)
+		),
+		[]
 	);
-	// const order$ = orderQuery.$.pipe(
-	// 	filter((order: any) => order),
-	// 	tap((res) => {
-	// 		debugger;
-	// 	}),
-	// 	switchMap((order: any) => order.$.pipe(map(() => order))),
-	// 	tap((res) => console.log(res))
-	// );
 
 	useWhyDidYouUpdate('POS', {
 		storeDB,
@@ -151,7 +138,7 @@ const POS = () => {
 				<Styled.CartColumn>
 					<ErrorBoundary>
 						<React.Suspense fallback={<Text>Loading cart...</Text>}>
-							{orders ? <Cart ui={cartUI} orders={orders} /> : null}
+							<Cart ui={cartUI} orders={orders} />
 						</React.Suspense>
 					</ErrorBoundary>
 				</Styled.CartColumn>
