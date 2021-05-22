@@ -4,6 +4,8 @@ import sumBy from 'lodash/sumBy';
 import sortBy from 'lodash/sortBy';
 import round from 'lodash/round';
 import map from 'lodash/map';
+import flatten from 'lodash/flatten';
+import groupBy from 'lodash/groupBy';
 
 type TaxRateSchema = import('@wcpos/common/src/database').TaxRateSchema;
 interface Taxes {
@@ -121,5 +123,17 @@ export function calcTaxes(price: number, rates: TaxRateSchema[], priceIncludesTa
  *
  */
 export function sumTaxes(taxes: Taxes[]) {
-	return sumBy(taxes, (tax) => tax.taxAmount);
+	return sumBy(taxes, 'taxAmount');
+}
+
+/**
+ *
+ */
+export function sumItemizedTaxes(taxes: Taxes[]) {
+	// group taxes by id
+	const groupedTaxes = groupBy(flatten(taxes), 'id');
+	return map(groupedTaxes, (itemized, id) => ({
+		id: +id,
+		taxAmount: sumTaxes(itemized),
+	}));
 }
