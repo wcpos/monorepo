@@ -1,7 +1,7 @@
 import { combineLatest } from 'rxjs';
 import { map } from 'rxjs/operators';
 import schema from './schema.json';
-import { calcTaxes, sumTaxes } from '../utils';
+import { calcTaxes, sumTaxes, sumItemizedTaxes } from '../utils';
 
 export type FeeLineSchema = import('./interface').WooCommerceOrderFeeLineSchema;
 export type FeeLineDocument = import('rxdb').RxDocument<FeeLineSchema, FeeLineMethods>;
@@ -13,52 +13,61 @@ export type FeeLineCollection = import('rxdb').RxCollection<
 type FeeLineMethods = Record<string, never>;
 type FeeLineStatics = Record<string, never>;
 
-const taxRates = [
+const rates: any[] = [
 	{
-		id: 72,
-		country: 'US',
-		state: 'AL',
-		postcode: '35041',
-		city: 'Cardiff',
-		postcodes: ['35014', '35036', '35041'],
-		cities: ['Alpine', 'Brookside', 'Cardiff'],
-		rate: '4.0000',
-		name: 'State Tax',
-		priority: 0,
-		compound: false,
-		shipping: false,
+		id: 2,
+		country: 'GB',
+		rate: '20.0000',
+		name: 'VAT',
+		priority: 1,
+		compound: true,
+		shipping: true,
 		order: 1,
 		class: 'standard',
 	},
 ];
 
-const methods = {
+/**
+ *
+ */
+export function postCreate(
+	this: FeeLineCollection,
+	plainData: Record<string, unknown>,
+	feeLine: FeeLineDocument
+) {
 	/**
-	 *
+	 * add changes for taxes
 	 */
-	computedTaxes$(this: FeeLineDocument) {
-		return combineLatest([this.total$, this.taxStatus$]).pipe(
-			// @ts-ignore
-			map(([total, taxStatus]) => (taxStatus === 'taxable' ? calcTaxes(total, taxRates) : 0))
-		);
-	},
+	combineLatest([feeLine.total$]).subscribe((array) => {
+		const [total = 0] = array;
+		const discounts = 0;
+		// const total = subtotal - discounts;
+		// @ts-ignore note: total is a string
+		const totalTaxes = calcTaxes(+total, rates);
+		const taxes = sumItemizedTaxes(totalTaxes);
 
-	/**
-	 *
-	 */
-	computedTotalTax$(this: FeeLineDocument) {
-		// @ts-ignore
-		return this.computedTaxes$().pipe(map((taxes) => sumTaxes(taxes)));
-	},
-};
+		// fee has a subtotal?
+		feeLine.atomicPatch({
+			totalTax: String(sumTaxes(totalTaxes)),
+			taxes,
+		});
+	});
+}
 
 export const feeLines = {
 	schema,
 	// pouchSettings: {},
 	// statics: {},
-	methods,
+	// methods: {},
 	// attachments: {},
-	// options: {},
+	options: {
+		middlewares: {
+			postCreate: {
+				handle: postCreate,
+				parallel: false,
+			},
+		},
+	},
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},
