@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/common",
-	"version": "1.0.0",
+	"version": "1.0.0-alpha.33",
 	"private": true,
 	"license": "MIT",
 	"main": "dist",
