@@ -10,12 +10,12 @@ interface Props {
 }
 
 const Totals = ({ order }: Props) => {
-	// const total = useObservableState(order.computedTotal$(), order.total);
-	// const totalTax = useObservableState(order.computedTotalTax$(), order.totalTax);
+	const total = useObservableState(order.total$, order.total);
+	const totalTax = useObservableState(order.totalTax$, order.totalTax);
 	// const subtotal = useObservableState(order.computedSubtotal$(), order.subtotal);
 	const subtotal = 'TODO';
-	const totalTax = 'TODO';
-	const total = 'TODO';
+	// const totalTax = 'TODO';
+	// const total = 'TODO';
 
 	return (
 		<>

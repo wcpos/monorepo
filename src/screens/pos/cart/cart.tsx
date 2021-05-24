@@ -46,7 +46,8 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 			inputs$.pipe(
 				filter(([o, q]) => isRxDocument(o)),
 				// @ts-ignore
-				switchMap(([o, q]) => o.getCart$(q))
+				// switchMap(([o, q]) => o.getCart$(q))
+				switchMap(([o, q]) => o.cart$)
 			),
 		[currentOrder, query]
 	) as Observable<any[]>;

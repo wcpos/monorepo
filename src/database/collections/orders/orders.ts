@@ -7,6 +7,7 @@ import forEach from 'lodash/forEach';
 import schema from './schema.json';
 import methods from './methods';
 import statics from './statics';
+import postCreate from './postCreate';
 
 type BaseColection = import('rxdb').RxCollection;
 
@@ -19,17 +20,6 @@ export type OrderCollection = import('rxdb').RxCollection<
 	OrderMethods,
 	OrderStatics & { collections: () => Record<string, import('rxdb').RxCollection> }
 >;
-
-/**
- *
- */
-// function postCreate(
-// 	this: OrderCollection,
-// 	plainData: Record<string, unknown>,
-// 	orderDocument: OrderDocument
-// ) {
-// 	console.log('watch lineItems');
-// }
 
 /**
  * @TODO - how to add collection statics types for ALL collections
@@ -107,10 +97,10 @@ export const orders = {
 	// attachments: {},
 	options: {
 		middlewares: {
-			// postCreate: {
-			// 	handle: postCreate,
-			// 	parallel: false,
-			// },
+			postCreate: {
+				handle: postCreate,
+				parallel: false,
+			},
 			preInsert: {
 				handle: preInsert,
 				parallel: false,
