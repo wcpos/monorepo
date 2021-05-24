@@ -114,9 +114,10 @@ function calcExclusiveTax(price: number, rates: TaxRateSchema[]) {
  */
 export function calcTaxes(price: number, rates: TaxRateSchema[], priceIncludesTax = false) {
 	const sortedRates = sortBy(rates, 'order');
+
 	return priceIncludesTax
-		? calcInclusiveTax(price, sortedRates)
-		: calcExclusiveTax(price, sortedRates);
+		? calcInclusiveTax(+price, sortedRates)
+		: calcExclusiveTax(+price, sortedRates);
 }
 
 /**

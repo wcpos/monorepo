@@ -36,7 +36,7 @@ export const Cell = ({
 
 	return (
 		<Styled.Cell flexGrow={flexGrow} flexShrink={flexShrink} width={width}>
-			<Text>{String(cellData)}</Text>
+			<Text>{String(cellData ?? '')}</Text>
 		</Styled.Cell>
 	);
 };
