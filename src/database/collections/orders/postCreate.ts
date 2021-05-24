@@ -1,45 +1,102 @@
 import { from, of, combineLatest } from 'rxjs';
-import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
+import { switchMap, tap, catchError, map, debounceTime } from 'rxjs/operators';
 import sumBy from 'lodash/sumBy';
+import { sumItemizedTaxes } from '../utils';
 
-type OrderDocument = import('../../types').OrderDocument;
-type OrderLineItemDocument = import('../../types').OrderLineItemDocument;
+type OrderDocument = import('./').OrderDocument;
+type OrderCollection = import('./').OrderCollection;
+type LineItemDocument = import('../line-items').LineItemDocument;
 
 /**
- * wire up total
+ *
  */
-export default (plainData: Record<string, unknown>, rxDocument: OrderDocument) => {
-	// combineLatest(rxDocument.quantity$, rxDocument.price$).subscribe((val) => {
-	// 	rxDocument.atomicSet('total', String(val[0] * val[1]));
-	// });
-
-	// @TODO - why does this effect line_item subscriptions?
-	rxDocument.line_items$
-		.pipe(
-			switchMap((ids: string[]) => {
-				return from(rxDocument.collections().line_items.findByIds(ids || []));
-			}),
-			// map((result) => Array.from(result.values())),
-			// switchMap((array) => combineLatest(array.map((item) => item.$))),
-			switchMap((items: Map<string, OrderLineItemDocument>) => {
-				return combineLatest(Array.from(items.values()).map((item) => item.$));
-			}),
-			catchError((err) => {
-				console.error(err);
-				return err;
-			})
-		)
-		.subscribe((lineItems: OrderLineItemDocument[]) => {
-			const totalAsNumber = sumBy(lineItems, (item) => Number(item.total));
-			const total = String(totalAsNumber);
-			if (total !== rxDocument.total) {
-				rxDocument.atomicPatch({ total });
+function postCreate(
+	this: OrderCollection,
+	plainData: Record<string, unknown>,
+	order: OrderDocument
+) {
+	/**
+	 *
+	 */
+	const populatedLineItems$ = order.lineItems$.pipe(
+		switchMap(async () => {
+			const lineItems = await order.populate('lineItems');
+			if (!lineItems) {
+				return [];
 			}
+			// return q ? _orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
+			return lineItems;
+		})
+	);
 
-			const totalTaxAsNumber = sumBy(lineItems, (item) => Number(item.total_tax));
-			const total_tax = String(totalTaxAsNumber);
-			if (total_tax !== rxDocument.total_tax) {
-				rxDocument.atomicPatch({ total_tax });
+	/**
+	 *
+	 */
+	const populatedFeeLines$ = order.feeLines$.pipe(
+		switchMap(async () => {
+			const feeLines = await order.populate('feeLines');
+			if (!feeLines) {
+				return [];
+			}
+			// return q ? _orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
+			return feeLines;
+		})
+	);
+
+	/**
+	 *
+	 */
+	const populatedshippingLines$ = order.shippingLines$.pipe(
+		switchMap(async () => {
+			const shippingLines = await order.populate('shippingLines');
+			if (!shippingLines) {
+				return [];
+			}
+			// return q ? _orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
+			return shippingLines;
+		})
+	);
+
+	/**
+	 *
+	 */
+	const cart$ = combineLatest([
+		populatedLineItems$,
+		populatedFeeLines$,
+		populatedshippingLines$,
+	]).pipe(
+		/**
+		 * the population promises return at different times
+		 * debounce emissions to prevent unneccesary re-renders
+		 * @TODO - is there a better way?
+		 */
+		// debounceTime(100),
+		map((lines) => {
+			const [lineItems = [], feeLines = [], shippingLines = []] = lines;
+			return lineItems.concat(feeLines, shippingLines);
+		})
+	);
+
+	/**
+	 *
+	 */
+	cart$
+		.pipe(switchMap((lines: LineItemDocument[]) => combineLatest(lines.map((line) => line.$))))
+		.subscribe((lines) => {
+			const total = String(sumBy(lines, (item) => +item.total ?? 0));
+			const totalTax = String(sumBy(lines, (item) => +item.totalTax ?? 0));
+			const itemizedTaxes = sumItemizedTaxes(lines.map((line) => line.taxes ?? []));
+			const taxLines = itemizedTaxes.map((tax) => ({
+				id: tax.id,
+				taxTotal: String(tax.taxAmount),
+			}));
+			if (total !== order.total) {
+				// @ts-ignore
+				order.atomicPatch({ total, totalTax, taxLines });
 			}
 		});
-};
+
+	Object.assign(order, { populatedLineItems$, cart$ });
+}
+
+export default postCreate;
