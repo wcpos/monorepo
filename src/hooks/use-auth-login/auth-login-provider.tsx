@@ -42,18 +42,20 @@ export const AuthLoginProvider: React.FC = ({ children }) => {
 				onClose={() => setVisible(false)}
 				primaryAction={{ label: 'Login', action: handleLogin }}
 			>
-				<TextInput
-					label="Username"
-					placeholder="username"
-					value={username}
-					onChange={setUsername}
-				/>
-				<TextInput
-					label="Password"
-					placeholder="password"
-					value={password}
-					onChange={setPassword}
-				/>
+				<Dialog.Section>
+					<TextInput
+						label="Username"
+						placeholder="username"
+						value={username}
+						onChange={setUsername}
+					/>
+					<TextInput
+						label="Password"
+						placeholder="password"
+						value={password}
+						onChange={setPassword}
+					/>
+				</Dialog.Section>
 			</Dialog>
 		</AuthLoginContext.Provider>
 	);
