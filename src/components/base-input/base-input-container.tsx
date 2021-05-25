@@ -38,7 +38,7 @@ export interface BaseInputContainerProps {
 /**
  * Wraps a basic Input field with label, helpText and error features.
  */
-export const BaseInputContainer: React.FC<BaseInputContainerProps> = ({
+export const BaseInputContainer = ({
 	label,
 	error,
 	helpText,
@@ -46,7 +46,7 @@ export const BaseInputContainer: React.FC<BaseInputContainerProps> = ({
 	children,
 	onLabelClick,
 	hideLabel = false,
-}) => (
+}: BaseInputContainerProps) => (
 	<Styled.Container>
 		{!hideLabel && (
 			<TouchableWithoutFeedback onPress={onLabelClick} disabled={disabled}>

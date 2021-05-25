@@ -49,6 +49,15 @@ const Actions = ({ item }: ActionProps) => {
 						checked={item.taxStatus === 'taxable'}
 						onChange={(value) => item.atomicPatch({ taxStatus: value ? 'taxable' : 'none' })}
 					/>
+					<TextInput label="Tax Class" value={item.taxClass} />
+					{item.metaData?.map((meta) => {
+						return (
+							<View key={meta.key} style={{ flexDirection: 'row' }}>
+								<TextInput label="Tax Class" value={meta.key} />
+								<TextInput label="Tax Class" value={meta.value} />
+							</View>
+						);
+					})}
 				</Dialog>
 			)}
 		</View>

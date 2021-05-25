@@ -61,6 +61,8 @@ const CustomerSelect = ({ order }: CustomerSelectProps) => {
 
 	return (
 		<Combobox
+			label="Search customers"
+			hideLabel
 			choices={customers.map((customer) => ({
 				label: `${customer.firstName} ${customer.lastName}`,
 				value: customer,

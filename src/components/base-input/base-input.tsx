@@ -38,8 +38,7 @@ export const BaseInput = ({ value, placeholder, onPress, focused, disabled }: Ba
 	// 		opacity: theme.opacity.disabled,
 	// 	},
 	// }));
-
-	const showPlaceholder = value.length === 0;
+	const showPlaceholder = !value || value.length === 0;
 
 	return (
 		<Pressable

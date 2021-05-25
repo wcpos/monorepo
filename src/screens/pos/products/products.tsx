@@ -4,6 +4,7 @@ import { switchMap } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import Segment from '@wcpos/common/src/components/segment';
+import ErrorBoundary from '@wcpos/common/src/components/error';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Popover from '@wcpos/common/src/components/popover';
 import Tag from '@wcpos/common/src/components/tag';
@@ -77,31 +78,39 @@ const Products = ({ ui }: IPOSProductsProps) => {
 		<ProductQueryContext.Provider value={{ query, setQuery }}>
 			<Segment.Group>
 				<Segment style={{ flexDirection: 'row' }}>
-					<TextInput
-						leftAccessory={renderActiveFilters()}
-						value={query.search}
-						placeholder="Search products"
-						onChange={onSearch}
-						clearable
-						style={{ flex: 1 }}
-					/>
-					<Actions columns={columns} display={display} ui={ui} />
+					<ErrorBoundary>
+						<TextInput
+							label="Search products"
+							hideLabel
+							leftAccessory={renderActiveFilters()}
+							value={query.search}
+							placeholder="Search products"
+							onChange={onSearch}
+							clearable
+							style={{ flex: 1 }}
+						/>
+						<Actions columns={columns} display={display} ui={ui} />
+					</ErrorBoundary>
 				</Segment>
 				<Segment grow>
-					<Table query={query} columns={columns} display={display} sort={onSort} />
+					<ErrorBoundary>
+						<Table query={query} columns={columns} display={display} sort={onSort} />
+					</ErrorBoundary>
 				</Segment>
 				<Segment>
-					<Button
-						title="Add Products"
-						onPress={async () => {
-							// @ts-ignore
-							const replicationState = storeDB.products.syncRestApi({
-								url: 'products',
-								pull: {},
-							});
-							replicationState.run(false);
-						}}
-					/>
+					<ErrorBoundary>
+						<Button
+							title="Add Products"
+							onPress={async () => {
+								// @ts-ignore
+								const replicationState = storeDB.products.syncRestApi({
+									url: 'products',
+									pull: {},
+								});
+								replicationState.run(false);
+							}}
+						/>
+					</ErrorBoundary>
 				</Segment>
 			</Segment.Group>
 		</ProductQueryContext.Provider>

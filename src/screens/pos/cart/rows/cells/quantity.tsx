@@ -22,6 +22,8 @@ const Quantity = ({ lineItem }: Props) => {
 			onRequestClose={() => setVisible(false)}
 			activator={
 				<TextInput
+					label="Quantity"
+					hideLabel
 					autosize
 					value={String(quantity)}
 					onChange={handleChangeText}

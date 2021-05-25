@@ -70,7 +70,7 @@ const Orders = () => {
 		<React.Suspense fallback={<Text>loading orders...</Text>}>
 			<Segment.Group>
 				<Segment>
-					<Input placeholder="Search orders" onChange={onSearch} />
+					<Input label="Search orders" placeholder="Search orders" onChange={onSearch} />
 					<Actions ui={ui} columns={columns} />
 				</Segment>
 				<Segment grow>

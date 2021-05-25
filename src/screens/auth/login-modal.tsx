@@ -36,8 +36,18 @@ const LoginModal = ({ visible, setVisible, site, user }: ILoginModalProps) => {
 	return (
 		<Modal visible={visible}>
 			<Segment>
-				<TextInput placeholder="username" value={username} onChange={setUsername} />
-				<TextInput placeholder="password" value={password} onChange={setPassword} />
+				<TextInput
+					label="Username"
+					placeholder="username"
+					value={username}
+					onChange={setUsername}
+				/>
+				<TextInput
+					label="Password"
+					placeholder="password"
+					value={password}
+					onChange={setPassword}
+				/>
 				<Button title="Login" onPress={handleLogin} />
 			</Segment>
 			<Button

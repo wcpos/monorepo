@@ -13,7 +13,9 @@ const Price = ({ lineItem }: Props) => {
 		lineItem.atomicPatch({ price: Number(newValue) });
 	};
 
-	return <TextInput autosize value={String(price)} onChange={handleChange} />;
+	return (
+		<TextInput label="Price" hideLabel autosize value={String(price)} onChange={handleChange} />
+	);
 };
 
 export default Price;

@@ -18,12 +18,13 @@ import Button from '../button';
 import Text from '../text';
 import Icon from '../icon';
 import Portal from '../portal';
+import { BaseInputContainer } from '../base-input';
 
 export interface TextInputProps {
 	/**
 	 * Label to display above the input.
 	 */
-	label?: string;
+	label: string;
 	/**
 	 * Text value in the input.
 	 */
@@ -84,6 +85,10 @@ export interface TextInputProps {
 	 * ```
 	 */
 	focused?: boolean;
+	/**
+	 * Set this to `true` to hide the label on top of the input. `label` property is still mandatory for accessibility purposes, even if not shown.
+	 */
+	hideLabel?: boolean;
 	/**
 	 * Set to `true` to select all text when focused.
 	 */
@@ -176,15 +181,18 @@ const MeasureText = ({
 export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 	(
 		{
-			placeholder,
+			label,
 			value: valueRaw = '',
 			onChange: onChangeRaw,
 			type = 'text',
-			focused = false,
+			placeholder,
+			helpText,
 			disabled = false,
 			error = false,
 			returnKeyType = 'next',
+			focused = false,
 			onSubmit,
+			hideLabel = false,
 			selectTextOnFocus = false,
 			autoCapitalize,
 			prefix,
@@ -314,43 +322,55 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 		}, [type, autoCapitalize]);
 
 		return (
-			// @ts-ignore
-			<Styled.Box focused={hasFocus} style={style}>
-				{leftAccessory || null}
-				{prefix ? (
-					<View>
-						<Text>{prefix}</Text>
-					</View>
-				) : null}
-				<Styled.TextInput
+			<BaseInputContainer
+				label={label}
+				hideLabel={hideLabel}
+				error={error}
+				helpText={helpText}
+				onLabelClick={onLabelClick}
+				disabled={disabled}
+			>
+				<Styled.Box
+					focused={hasFocus}
 					// @ts-ignore
-					ref={inputRef}
-					{...inputType}
-					placeholder={placeholder}
-					editable={!disabled}
-					value={value}
-					onChangeText={onChange}
-					returnKeyType={returnKeyType}
-					blurOnSubmit={returnKeyType !== 'next'} // Prevent keyboard flicker when going from one field to another
-					onFocus={onFocus}
-					onBlur={onBlur}
-					onSubmitEditing={onSubmit}
-					selectTextOnFocus={selectTextOnFocus}
-					onKeyPress={onKeyPress}
-					// multiline
-					// onContentSizeChange={handleContentSizeChange}
-					style={{ width: autosize ? measuredWidth : '100%' }}
-				/>
-				{clearable && value !== '' && <Icon name="clear" onPress={handleClear} />}
-				{action && (
-					<Button
-						title={action}
-						onPress={handleOnAction}
-						style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+					style={style}
+				>
+					{leftAccessory || null}
+					{prefix ? (
+						<View>
+							<Text>{prefix}</Text>
+						</View>
+					) : null}
+					<Styled.TextInput
+						// @ts-ignore
+						ref={inputRef}
+						{...inputType}
+						placeholder={placeholder}
+						editable={!disabled}
+						value={value}
+						onChangeText={onChange}
+						returnKeyType={returnKeyType}
+						blurOnSubmit={returnKeyType !== 'next'} // Prevent keyboard flicker when going from one field to another
+						onFocus={onFocus}
+						onBlur={onBlur}
+						onSubmitEditing={onSubmit}
+						selectTextOnFocus={selectTextOnFocus}
+						onKeyPress={onKeyPress}
+						// multiline
+						// onContentSizeChange={handleContentSizeChange}
+						style={{ width: autosize ? measuredWidth : '100%' }}
 					/>
-				)}
-				{autosize && <MeasureText value={value} onMeasure={handleMeasure} />}
-			</Styled.Box>
+					{clearable && value !== '' && <Icon name="clear" onPress={handleClear} />}
+					{action && (
+						<Button
+							title={action}
+							onPress={handleOnAction}
+							style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+						/>
+					)}
+					{autosize && <MeasureText value={value} onMeasure={handleMeasure} />}
+				</Styled.Box>
+			</BaseInputContainer>
 		);
 	}
 );

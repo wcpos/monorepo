@@ -21,6 +21,10 @@ export interface ComboboxChoice {
 
 export interface ComboboxProps {
 	/**
+	 * Label to display above the input.
+	 */
+	label: string;
+	/**
 	 * Choices available in the Select.
 	 */
 	choices: ComboboxChoice[];
@@ -44,18 +48,24 @@ export interface ComboboxProps {
 	 * Text to display as a placeholder.
 	 */
 	placeholder?: string;
+	/**
+	 * Set this to `true` to hide the label on top of the input. `label` property is still mandatory for accessibility purposes, even if not shown.
+	 */
+	hideLabel?: boolean;
 }
 
 /**
  * Let the user search and choose one option from multiple ones.
  */
 export const Combobox = ({
+	label,
 	choices,
 	selected: selectedRaw = null,
 	onChange: onChangeRaw,
 	placeholder,
 	searchValue,
 	onSearch,
+	hideLabel,
 }: ComboboxProps) => {
 	const [open, setOpen] = React.useState(false);
 	const showPopover = React.useCallback(() => setOpen(true), []);
@@ -83,6 +93,8 @@ export const Combobox = ({
 			open={open}
 			activator={
 				<TextInput
+					label={label}
+					hideLabel={hideLabel}
 					onFocus={showPopover}
 					placeholder={placeholder}
 					onChange={onSearch}

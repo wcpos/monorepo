@@ -14,6 +14,7 @@ import Table from './table';
 import CustomerSelect from './customer-select';
 import Actions from './actions';
 import Totals from './totals';
+import Buttons from './buttons';
 import { POSContext } from '../pos';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
@@ -91,47 +92,7 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				</ErrorBoundary>
 			</Segment>
 			<Segment>
-				<Button.Group>
-					<Button
-						title="Add Fee"
-						onPress={() => {
-							currentOrder.addFeeLine({ name: 'Fee', total: '10' });
-						}}
-					/>
-					<Button
-						title="Add Shipping"
-						onPress={() => {
-							currentOrder.addShippingLine({
-								methodTitle: 'Shipping',
-								methodId: 'test',
-								total: '5',
-							});
-						}}
-					/>
-					<Button
-						title="Add Note"
-						onPress={() => {
-							currentOrder.atomicPatch({ customerNote: 'This is a note!' });
-						}}
-					/>
-					<Button
-						title="Save"
-						onPress={async () => {
-							const replicationState = currentOrder.syncRestApi({
-								push: {},
-							});
-							replicationState.run(false);
-						}}
-					/>
-					<Button
-						title="Void"
-						type="critical"
-						onPress={async () => {
-							currentOrder.remove();
-							setCurrentOrder(undefined);
-						}}
-					/>
-				</Button.Group>
+				<Buttons order={currentOrder} />
 			</Segment>
 			<Segment>
 				{orders.map((order) => (
