@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useObservableState } from 'observable-hooks';
 import { View } from 'react-native';
 import Icon from '@wcpos/common/src/components/icon';
 import Dialog from '@wcpos/common/src/components/dialog';
@@ -17,6 +18,7 @@ interface ActionProps {
 }
 
 const Actions = ({ item }: ActionProps) => {
+	const taxClass = useObservableState(item.taxClass$, item.taxClass);
 	const [visible, setVisible] = React.useState(false);
 	const { currentOrder } = React.useContext(POSContext);
 	const undoFeeRemove = () => {
@@ -32,6 +34,10 @@ const Actions = ({ item }: ActionProps) => {
 	const handleRemove = () => {
 		currentOrder?.removeCartLine(item);
 		showSnackbar();
+	};
+
+	const handleChangeTaxClass = async (newValue: string): Promise<void> => {
+		item.atomicPatch({ taxClass: newValue });
 	};
 
 	return (
@@ -51,7 +57,7 @@ const Actions = ({ item }: ActionProps) => {
 							checked={item.taxStatus === 'taxable'}
 							onChange={(value) => item.atomicPatch({ taxStatus: value ? 'taxable' : 'none' })}
 						/>
-						<TextInput label="Tax Class" value={item.taxClass} />
+						<TextInput label="Tax Class" value={taxClass} onChange={handleChangeTaxClass} />
 						<MetaData
 							// @ts-ignore
 							data={item.metaData}

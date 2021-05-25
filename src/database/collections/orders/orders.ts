@@ -27,7 +27,6 @@ export type OrderCollection = import('rxdb').RxCollection<
 async function preInsert(this: OrderCollection, plainData: Record<string, unknown>) {
 	if (isArray(plainData.lineItems)) {
 		const result = await this.collections().line_items.bulkInsert(plainData.lineItems);
-		debugger;
 		plainData.lineItems = map(result.success, '_id');
 	}
 	if (isArray(plainData.feeLines)) {
@@ -54,7 +53,6 @@ async function preSave(
 	const { lineItems, feeLines, shippingLines } = plainData;
 	if (isArray(lineItems) && lineItems.length > 0 && !isString(lineItems[0])) {
 		const result = await this.collections().line_items.bulkUpsert(lineItems);
-		debugger;
 		plainData.lineItems = map(result, '_id');
 	}
 	if (isArray(feeLines) && feeLines.length > 0 && !isString(feeLines[0])) {

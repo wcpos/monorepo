@@ -5,6 +5,7 @@ import Dialog from '@wcpos/common/src/components/dialog';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Checkbox from '@wcpos/common/src/components/checkbox';
 import MetaData from '@wcpos/common/src/components/meta-data';
+import useAuthLogin from '@wcpos/common/src/hooks/use-auth-login';
 
 export interface ButtonsProps {
 	order: import('@wcpos/common/src/database').OrderDocument;
@@ -12,6 +13,8 @@ export interface ButtonsProps {
 
 const Buttons = ({ order }: ButtonsProps) => {
 	const [visible, setVisible] = React.useState(false);
+	const showAuthLogin = useAuthLogin();
+
 	return (
 		<>
 			<Button.Group>
@@ -48,6 +51,11 @@ const Buttons = ({ order }: ButtonsProps) => {
 					onPress={async () => {
 						const replicationState = order.syncRestApi({
 							push: {},
+						});
+						replicationState.error$.subscribe((err: any) => {
+							if (err.code === 401) {
+								showAuthLogin();
+							}
 						});
 						replicationState.run(false);
 					}}

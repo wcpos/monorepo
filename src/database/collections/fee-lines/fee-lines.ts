@@ -2,6 +2,7 @@ import { combineLatest } from 'rxjs';
 import { map } from 'rxjs/operators';
 import schema from './schema.json';
 import { calcTaxes, sumTaxes, sumItemizedTaxes } from '../utils';
+import statics from './statics';
 
 export type FeeLineSchema = import('./interface').WooCommerceOrderFeeLineSchema;
 export type FeeLineDocument = import('rxdb').RxDocument<FeeLineSchema, FeeLineMethods>;
@@ -57,7 +58,7 @@ export function postCreate(
 export const feeLines = {
 	schema,
 	// pouchSettings: {},
-	// statics: {},
+	statics,
 	// methods: {},
 	// attachments: {},
 	options: {
