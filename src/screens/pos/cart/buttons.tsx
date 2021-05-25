@@ -4,6 +4,7 @@ import Button from '@wcpos/common/src/components/button';
 import Dialog from '@wcpos/common/src/components/dialog';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Checkbox from '@wcpos/common/src/components/checkbox';
+import MetaData from '@wcpos/common/src/components/meta-data';
 
 export interface ButtonsProps {
 	order: import('@wcpos/common/src/database').OrderDocument;
@@ -74,14 +75,10 @@ const Buttons = ({ order }: ButtonsProps) => {
 							checked={order.pricesIncludeTax}
 							onChange={(value) => order.atomicPatch({ pricesIncludeTax: value })}
 						/>
-						{order.metaData?.map((meta) => {
-							return (
-								<View key={meta.key} style={{ flexDirection: 'row' }}>
-									<TextInput label="Key" value={meta.key} />
-									<TextInput label="Value" value={meta.value} />
-								</View>
-							);
-						})}
+						<MetaData
+							// @ts-ignore
+							data={order.metaData}
+						/>
 						<TextInput label="Currency Symbol" value={order.currencySymbol} />
 					</Dialog.Section>
 				</Dialog>

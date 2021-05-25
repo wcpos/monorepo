@@ -1,3 +1,4 @@
+import add from './add.svg';
 import arrow from './arrow.svg';
 import arrowDown from './arrow-down.svg';
 import backspace from './backspace.svg';
@@ -11,6 +12,7 @@ import remove from './remove.svg';
 import wcpos from './wcpos-icon.svg';
 
 export default {
+	add,
 	arrow,
 	'arrow-up': arrow,
 	'arrow-down': arrowDown,
