@@ -3,6 +3,7 @@ import { map } from 'rxjs/operators';
 import _filter from 'lodash/filter';
 import schema from './schema.json';
 import { calcTaxes, sumTaxes, sumItemizedTaxes } from '../utils';
+import statics from './statics';
 
 export type ShippingLineSchema = import('./interface').WooCommerceOrderShippingLineSchema;
 export type ShippingLineDocument = import('rxdb').RxDocument<
@@ -61,8 +62,8 @@ export function postCreate(
 export const shippingLines = {
 	schema,
 	// pouchSettings: {},
-	// statics: {},
-	methods: {},
+	statics,
+	// methods: {},
 	// attachments: {},
 	options: {
 		middlewares: {

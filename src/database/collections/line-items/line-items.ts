@@ -1,6 +1,6 @@
 import schema from './schema.json';
 import statics from './statics';
-import methods from './methods';
+// import methods from './methods';
 import { postCreate } from './postCreate';
 
 export type LineItemSchema = import('./interface').WooCommerceOrderLineItemSchema;
@@ -25,7 +25,7 @@ export const lineItems = {
 	schema,
 	// pouchSettings: {},
 	statics,
-	methods,
+	// methods,
 	// attachments: {},
 	options: {
 		middlewares: {
