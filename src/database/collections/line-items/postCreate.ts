@@ -44,11 +44,11 @@ export function postCreate(
 		// is there a case where they are not?
 		const taxes = _map(itemizedSubTotalTaxes, (obj) => {
 			const index = itemizedTotalTaxes.findIndex((el) => el.id === obj.id);
-			const totalTax = index !== -1 ? itemizedTotalTaxes[index] : { taxAmount: 0 };
+			const totalTax = index !== -1 ? itemizedTotalTaxes[index] : { total: 0 };
 			return {
 				id: obj.id,
-				subtotal: String(obj.taxAmount ?? 0),
-				total: String(totalTax.taxAmount ?? 0),
+				subtotal: String(obj.total ?? 0),
+				total: String(totalTax.total ?? 0),
 			};
 		});
 

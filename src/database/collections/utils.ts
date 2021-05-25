@@ -10,14 +10,25 @@ import groupBy from 'lodash/groupBy';
 type TaxRateSchema = import('@wcpos/common/src/database').TaxRateSchema;
 interface Taxes {
 	id: number;
-	taxAmount: number;
+	total: string;
+}
+
+/**
+ * Round taxes and convert total to string
+ */
+function roundedTaxStrings(taxes: { id: number; total: number }[]) {
+	const roundedTaxes: { id: number; total: string }[] = [];
+	forEach(taxes, (tax) => {
+		roundedTaxes.push({ id: tax.id, total: String(round(tax.total, 4)) });
+	});
+	return roundedTaxes;
 }
 
 /**
  * Calculate taxes when price includes tax
  */
 function calcInclusiveTax(price: number, rates: TaxRateSchema[]) {
-	const taxes: { id: number; taxAmount: number }[] = [];
+	const taxes: { id: number; total: number }[] = [];
 	const compoundRates: { id: number; rate: string }[] = [];
 	const regularRates: { id: number; rate: string }[] = [];
 	let nonCompoundPrice = price;
@@ -37,9 +48,9 @@ function calcInclusiveTax(price: number, rates: TaxRateSchema[]) {
 
 	forEach(compoundRates, (compoundRate) => {
 		const { id, rate } = compoundRate;
-		const taxAmount = nonCompoundPrice - nonCompoundPrice / (1 + +rate / 100);
-		taxes.push({ id, taxAmount });
-		nonCompoundPrice -= taxAmount;
+		const total = nonCompoundPrice - nonCompoundPrice / (1 + +rate / 100);
+		taxes.push({ id, total });
+		nonCompoundPrice -= total;
 	});
 
 	// Regular taxes.
@@ -49,8 +60,8 @@ function calcInclusiveTax(price: number, rates: TaxRateSchema[]) {
 		const { id, rate } = regularRate;
 		const theRate = +rate / 100 / regularTaxRate;
 		const netPrice = price - theRate * nonCompoundPrice;
-		const taxAmount = price - netPrice;
-		taxes.push({ id, taxAmount });
+		const total = price - netPrice;
+		taxes.push({ id, total });
 	});
 
 	/**
@@ -58,30 +69,30 @@ function calcInclusiveTax(price: number, rates: TaxRateSchema[]) {
 	 * as in the cart calculation class which, depending on settings, will round to 2DP when calculating
 	 * final totals. Also unlike that class, this rounds .5 up for all cases.
 	 */
-	const roundedTaxes = map(taxes, (tax) => {
-		tax.taxAmount = round(tax.taxAmount, 4);
-		return tax;
-	});
+	// const roundedTaxes = map(taxes, (tax) => {
+	// 	tax.total = round(tax.total, 4);
+	// 	return tax;
+	// });
 
-	return roundedTaxes;
+	return roundedTaxStrings(taxes);
 }
 
 /**
  * Calculate taxes when price excludes tax
  */
 function calcExclusiveTax(price: number, rates: TaxRateSchema[]) {
-	const taxes: { id: number; taxAmount: number }[] = [];
+	const taxes: { id: number; total: number }[] = [];
 
 	forEach(rates, (_rate) => {
 		const { id = 0, rate = '0', compound = false } = _rate;
 
 		if (!compound) {
-			const taxAmount = price * (+rate / 100);
-			taxes.push({ id, taxAmount });
+			const total = price * (+rate / 100);
+			taxes.push({ id, total });
 		}
 	});
 
-	let preCompoundTotal = sumBy(taxes, (tax) => tax.taxAmount);
+	let preCompoundTotal = sumBy(taxes, (tax) => tax.total);
 
 	// Compound taxes.
 	forEach(rates, (_rate) => {
@@ -89,9 +100,9 @@ function calcExclusiveTax(price: number, rates: TaxRateSchema[]) {
 
 		if (compound) {
 			const thePriceIncTax = price + preCompoundTotal;
-			const taxAmount = thePriceIncTax * (+rate / 100);
-			taxes.push({ id, taxAmount });
-			preCompoundTotal = sumBy(taxes, (tax) => tax.taxAmount);
+			const total = thePriceIncTax * (+rate / 100);
+			taxes.push({ id, total });
+			preCompoundTotal = sumBy(taxes, (tax) => tax.total);
 		}
 	});
 
@@ -100,17 +111,17 @@ function calcExclusiveTax(price: number, rates: TaxRateSchema[]) {
 	 * as in the cart calculation class which, depending on settings, will round to 2DP when calculating
 	 * final totals. Also unlike that class, this rounds .5 up for all cases.
 	 */
-	const roundedTaxes = map(taxes, (tax) => {
-		tax.taxAmount = round(tax.taxAmount, 4);
-		return tax;
-	});
+	// const roundedTaxes = map(taxes, (tax) => {
+	// 	tax.total = round(tax.total, 4);
+	// 	return tax;
+	// });
 
-	return roundedTaxes;
+	return roundedTaxStrings(taxes);
 }
 
 /**
  * Takes a price and an array of tax rates, eg: [{ id: 1, rate: '4.0000', order: 1 }]
- * Returns the calculated array of taxes tax, eg: [{ id: 1, taxAmount: 1.2345 }]
+ * Returns the calculated array of taxes tax, eg: [{ id: 1, total: 1.2345 }]
  */
 export function calcTaxes(price: number, rates: TaxRateSchema[], priceIncludesTax = false) {
 	const sortedRates = sortBy(rates, 'order');
@@ -124,7 +135,7 @@ export function calcTaxes(price: number, rates: TaxRateSchema[], priceIncludesTa
  *
  */
 export function sumTaxes(taxes: Taxes[]) {
-	return sumBy(taxes, 'taxAmount');
+	return sumBy(taxes, (tax) => +tax.total);
 }
 
 /**
@@ -135,6 +146,6 @@ export function sumItemizedTaxes(taxes: Taxes[]) {
 	const groupedTaxes = groupBy(flatten(taxes), 'id');
 	return map(groupedTaxes, (itemized, id) => ({
 		id: +id,
-		taxAmount: sumTaxes(itemized),
+		total: String(sumTaxes(itemized)),
 	}));
 }
