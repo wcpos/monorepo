@@ -25,6 +25,7 @@ export type OrderCollection = import('rxdb').RxCollection<
  * @TODO - how to add collection statics types for ALL collections
  */
 async function preInsert(this: OrderCollection, plainData: Record<string, unknown>) {
+	console.log('Order pre-insert', plainData);
 	if (isArray(plainData.lineItems)) {
 		const result = await this.collections().line_items.bulkInsert(plainData.lineItems);
 		plainData.lineItems = map(result.success, '_id');
@@ -49,6 +50,7 @@ async function preSave(
 	plainData: Record<string, unknown>,
 	order: OrderDocument
 ) {
+	console.log('Order pre-save', plainData);
 	// @TODO - bulkInsert should match bulkInsert, eg: result.success
 	const { lineItems, feeLines, shippingLines } = plainData;
 	if (isArray(lineItems) && lineItems.length > 0 && !isString(lineItems[0])) {
@@ -66,6 +68,9 @@ async function preSave(
 	return plainData;
 }
 
+/**
+ *
+ */
 async function preRemove(this: OrderCollection, order: OrderDocument) {
 	// remove all lineItems
 	if (isArray(order.lineItems) && order.lineItems.length > 0) {
