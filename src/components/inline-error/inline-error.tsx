@@ -20,10 +20,8 @@ export interface InlineErrorProps {
  */
 export const InlineError = ({ message }: InlineErrorProps) => (
 	<Styled.Container>
-		<Icon name="error" color="error" />
-		<Text
-		// variation="error"
-		>
+		<Icon name="error" color="critical" size="small" />
+		<Text type="critical" size="small">
 			{message}
 		</Text>
 	</Styled.Container>

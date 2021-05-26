@@ -68,9 +68,7 @@ export const BaseInputContainer = ({
 		) : null}
 		{helpText ? (
 			<Styled.MessageContainer>
-				<Text
-				// variation="subdued"
-				>
+				<Text type="secondary" size="small">
 					{helpText}
 				</Text>
 			</Styled.MessageContainer>

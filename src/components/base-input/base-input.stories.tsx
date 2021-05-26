@@ -20,13 +20,20 @@ BasicUsage.args = {
 };
 
 export const WithContainer = (props: BaseInputContainerProps) => {
-	return <BaseInputContainer {...props} />;
+	return (
+		<BaseInputContainer {...props}>
+			<BaseInput
+				value=""
+				placeholder="Placeholder"
+				focused={false}
+				disabled={false}
+				onPress={() => action('Base Input Press')}
+			/>
+		</BaseInputContainer>
+	);
 };
 WithContainer.args = {
 	label: 'Label',
-	value: '',
-	placeholder: 'Placeholder',
-	onPress: () => action('Base Input Press'),
 	helpText: 'Help text',
 	error: 'Error text',
 };

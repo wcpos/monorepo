@@ -1,6 +1,5 @@
 import React from 'react';
-import Pressable from '../pressable';
-import Text from '../text';
+import * as Styled from './styles';
 
 export interface BaseInputProps {
 	value: string;
@@ -41,7 +40,7 @@ export const BaseInput = ({ value, placeholder, onPress, focused, disabled }: Ba
 	const showPlaceholder = !value || value.length === 0;
 
 	return (
-		<Pressable
+		<Styled.Box
 			// viewStyle={[
 			// 	styles.inputContainer,
 			// 	focused && styles.inputContainerFocused,
@@ -50,12 +49,12 @@ export const BaseInput = ({ value, placeholder, onPress, focused, disabled }: Ba
 			onPress={onPress}
 			disabled={disabled}
 		>
-			<Text
-			// maxLines={1}
-			// variation={showPlaceholder ? 'subdued' : undefined}
+			<Styled.InputText
+				// maxLines={1}
+				type={showPlaceholder ? 'secondary' : undefined}
 			>
 				{showPlaceholder ? placeholder : value}
-			</Text>
-		</Pressable>
+			</Styled.InputText>
+		</Styled.Box>
 	);
 };
