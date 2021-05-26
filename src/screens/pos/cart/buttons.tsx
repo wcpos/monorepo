@@ -6,12 +6,14 @@ import TextInput from '@wcpos/common/src/components/textinput';
 import Checkbox from '@wcpos/common/src/components/checkbox';
 import MetaData from '@wcpos/common/src/components/meta-data';
 import useAuthLogin from '@wcpos/common/src/hooks/use-auth-login';
+import { POSContext } from '../pos';
 
 export interface ButtonsProps {
 	order: import('@wcpos/common/src/database').OrderDocument;
 }
 
 const Buttons = ({ order }: ButtonsProps) => {
+	const { setCurrentOrder } = React.useContext(POSContext);
 	const [visible, setVisible] = React.useState(false);
 	const showAuthLogin = useAuthLogin();
 
@@ -65,7 +67,7 @@ const Buttons = ({ order }: ButtonsProps) => {
 					type="critical"
 					onPress={async () => {
 						order.remove();
-						// setCurrentOrder(undefined);
+						setCurrentOrder(undefined);
 					}}
 				/>
 			</Button.Group>

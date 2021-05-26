@@ -83,17 +83,20 @@ function postCreate(
 	cart$
 		.pipe(switchMap((lines: LineItemDocument[]) => combineLatest(lines.map((line) => line.$))))
 		.subscribe((lines) => {
-			const total = String(sumBy(lines, (item) => +(item.total ?? 0)));
-			const totalTax = String(sumBy(lines, (item) => +(item.totalTax ?? 0)));
+			const total = sumBy(lines, (item) => +(item.total ?? 0));
+			const totalTax = sumBy(lines, (item) => +(item.totalTax ?? 0));
+			const totalWithTax = total + totalTax;
+			const totalTaxString = String(totalTax);
+			const totalWithTaxString = String(totalWithTax);
 			const itemizedTaxes = sumItemizedTaxes(lines.map((line) => line.taxes ?? []));
 			const taxLines = itemizedTaxes.map((tax) => ({
 				id: tax.id,
 				taxTotal: String(tax.total),
 			}));
 
-			if (total !== order.total || totalTax !== order.totalTax) {
+			if (totalWithTaxString !== order.total || totalTaxString !== order.totalTax) {
 				// @ts-ignore
-				order.atomicPatch({ total, totalTax, taxLines });
+				order.atomicPatch({ total: totalWithTaxString, totalTax: totalTaxString, taxLines });
 			}
 		});
 
