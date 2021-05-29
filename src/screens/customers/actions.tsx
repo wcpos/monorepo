@@ -1,9 +1,13 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import Input from '../../components/textinput';
-import Checkbox from '../../components/checkbox';
-import Button from '../../components/button';
-import Text from '../../components/text';
+import Popover from '@wcpos/common/src/components/popover';
+import Input from '@wcpos/common/src/components/textinput';
+import Checkbox from '@wcpos/common/src/components/checkbox';
+import Button from '@wcpos/common/src/components/button';
+import Text from '@wcpos/common/src/components/text';
+import Icon from '@wcpos/common/src/components/icon';
+import AddCustomer from './add-customer-modal';
 
 interface Props {
 	ui: any;
@@ -17,28 +21,42 @@ interface Props {
  */
 const Actions: React.FC<Props> = ({ ui, columns }) => {
 	const { t } = useTranslation();
+	const [visible, setVisible] = React.useState(false);
+	const [showModal, setShowModal] = React.useState(false);
 
 	const onFilter = () => {
 		console.log('change query');
 	};
 
 	return (
-		<>
-			<Input label="Search customers" placeholder="Search customers" onChange={onFilter} />
-			<Text>Columns</Text>
-			{columns.map((column: any, index: number) => (
-				<Checkbox
-					key={column.key}
-					name={column.key}
-					label={t(`customers.column.label.${column.key}`)}
-					checked={!column.hide}
-					onChange={(checked) => {
-						columns[index] = { ...column, hide: !checked };
-						ui.atomicSet('columns', columns);
-					}}
-				/>
-			))}
-			{/* <Text>Display</Text>
+		<View style={{ flexDirection: 'row' }}>
+			<Input
+				label="Search customers"
+				hideLabel
+				placeholder="Search customers"
+				onChange={onFilter}
+			/>
+			<Icon name="add" onPress={() => setShowModal(true)} />
+			{showModal && <AddCustomer onClose={() => setShowModal(false)} />}
+			<Popover
+				open={visible}
+				activator={<Icon name="cog" onPress={() => setVisible(true)} />}
+				onRequestClose={() => setVisible(false)}
+			>
+				<Text>Columns</Text>
+				{columns.map((column: any, index: number) => (
+					<Checkbox
+						key={column.key}
+						name={column.key}
+						label={t(`customers.column.label.${column.key}`)}
+						checked={!column.hide}
+						onChange={(checked) => {
+							columns[index] = { ...column, hide: !checked };
+							ui.atomicSet('columns', columns);
+						}}
+					/>
+				))}
+				{/* <Text>Display</Text>
 			{display.map((d: any) => (
 				<Checkbox
 					key={d.key}
@@ -50,8 +68,9 @@ const Actions: React.FC<Props> = ({ ui, columns }) => {
 					}}
 				/>
 			))} */}
-			<Button title="Restore Default Settings" onPress={ui.reset} />
-		</>
+				<Button title="Restore Default Settings" onPress={ui.reset} />
+			</Popover>
+		</View>
 	);
 };
 

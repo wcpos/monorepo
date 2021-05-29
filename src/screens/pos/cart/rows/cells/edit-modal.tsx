@@ -21,18 +21,27 @@ const EditModal = ({ item, onClose }: EditModalProps) => {
 		item.atomicPatch({ taxClass: newValue });
 	};
 
+	const hasProperty = (property: string) => {
+		return item.collection.schema.topLevelFields.includes(property);
+	};
+
 	return (
-		<Dialog open onClose={onClose} primaryAction={{ label: 'Save', action: onClose }}>
+		<Dialog
+			title={item.name || item.methodTitle}
+			open
+			onClose={onClose}
+			primaryAction={{ label: 'Save', action: onClose }}
+		>
 			<Dialog.Section>
-				{item.name && <TextInput label="Name" value={item.name} />}
-				{item.taxStatus && (
+				{hasProperty('name') && <TextInput label="Name" value={item.name} />}
+				{hasProperty('taxStatus') && (
 					<Checkbox
 						label="Taxable"
 						checked={item.taxStatus === 'taxable'}
 						onChange={(value) => item.atomicPatch({ taxStatus: value ? 'taxable' : 'none' })}
 					/>
 				)}
-				{item.taxClass && (
+				{hasProperty('taxClass') && (
 					<TextInput label="Tax Class" value={item.taxClass} onChange={handleChangeTaxClass} />
 				)}
 				<MetaData

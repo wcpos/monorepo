@@ -1,14 +1,15 @@
 import * as React from 'react';
-import Button from '../../../../../components/button';
-import Modal from '../../../../../components/modal';
+import Button from '@wcpos/common/src/components/button';
+import Modal from '@wcpos/common/src/components/modal';
 import CustomerModal from './modal';
+import EditCustomer from '../../../add-customer-modal';
 
 interface Props {
 	customer: any;
 }
 
 const Actions = ({ customer }: Props) => {
-	const [visible, setVisible] = React.useState(false);
+	const [showModal, setShowModal] = React.useState(false);
 
 	const handleSync = () => {
 		console.log('sync');
@@ -20,14 +21,10 @@ const Actions = ({ customer }: Props) => {
 
 	return (
 		<>
-			<Button title="Show" onPress={() => setVisible(true)} />
+			<Button title="Edit" onPress={() => setShowModal(true)} />
 			<Button title="Sync" onPress={handleSync} />
 			<Button title="Delete" onPress={handleDelete} />
-			{visible && (
-				<Modal visible={visible}>
-					<CustomerModal customer={customer} setVisible={setVisible} />
-				</Modal>
-			)}
+			{showModal && <EditCustomer onClose={() => setShowModal(false)} customer={customer} />}
 		</>
 	);
 };
