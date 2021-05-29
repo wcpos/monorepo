@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Format from '../../../../../components/format';
+import Format from '@wcpos/common/src/components/format';
 
 type Props = {
 	customer: any;

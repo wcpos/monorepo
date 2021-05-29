@@ -24,7 +24,7 @@ const Row = ({ customer, columns }: ICustomerRowProps) => {
 				<Table.Row.Cell {...getCellProps()}>
 					{((): React.ReactElement | null => {
 						switch (column.key) {
-							case 'avatar_url':
+							case 'avatarUrl':
 								return <Image customer={customer} />;
 							case 'billing':
 							case 'shipping':
