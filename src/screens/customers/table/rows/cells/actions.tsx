@@ -1,7 +1,5 @@
 import * as React from 'react';
 import Button from '@wcpos/common/src/components/button';
-import Modal from '@wcpos/common/src/components/modal';
-import CustomerModal from './modal';
 import EditCustomer from '../../../add-customer-modal';
 
 interface Props {

@@ -1,6 +1,5 @@
 import * as React from 'react';
-import Button from '../../../../../components/button';
-import Modal from '../../../../../components/modal';
+import Button from '@wcpos/common/src/components/button';
 import OrderModal from './modal';
 
 interface Props {
@@ -23,11 +22,7 @@ const Actions = ({ order }: Props) => {
 			<Button title="Show" onPress={() => setVisible(true)} />
 			<Button title="Sync" onPress={handleSync} />
 			<Button title="Delete" onPress={handleDelete} />
-			{visible && (
-				<Modal visible={visible}>
-					<OrderModal order={order} setVisible={setVisible} />
-				</Modal>
-			)}
+			{visible && <OrderModal order={order} onClose={() => setVisible(false)} />}
 		</>
 	);
 };

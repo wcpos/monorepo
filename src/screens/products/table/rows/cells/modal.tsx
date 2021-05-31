@@ -1,30 +1,34 @@
 import * as React from 'react';
-import AceEditor from 'react-ace';
-import Button from '@wcpos/common/src/components/button';
+import Dialog from '@wcpos/common/src/components/dialog';
+import TextInput from '@wcpos/common/src/components/textinput';
+import Tabs from '@wcpos/common/src/components/tabs';
+import Text from '@wcpos/common/src/components/text';
 
-import 'ace-builds/src-noconflict/mode-json';
-import 'ace-builds/src-noconflict/theme-github';
-
-type Props = {
-	product: any;
-	setVisible: any;
+type ProductModalProps = {
+	product: import('@wcpos/common/src/database').ProductDocument;
+	onClose: () => void;
 };
 
-const Modal = ({ product, setVisible }: Props) => {
-	const close = () => {
-		setVisible(false);
-	};
+const Modal = ({ product, onClose }: ProductModalProps) => {
+	const [selected, setSelected] = React.useState(0);
+
+	const content =
+		selected === 0 ? (
+			<Dialog.Section>
+				<TextInput label="Name" value={product.name} />
+			</Dialog.Section>
+		) : (
+			<Dialog.Section>
+				<Text>JSON</Text>
+			</Dialog.Section>
+		);
 
 	return (
-		<>
-			<AceEditor
-				mode="json"
-				theme="github"
-				value={JSON.stringify(product, null, ' ')}
-				setOptions={{ tabSize: 2 }}
-			/>
-			<Button onPress={close} title="Close" />
-		</>
+		<Dialog title={product.name} open onClose={onClose} primaryAction={{ label: 'Save' }}>
+			<Tabs tabs={['Product', 'JSON']} selected={selected} onSelect={setSelected}>
+				{content}
+			</Tabs>
+		</Dialog>
 	);
 };
 

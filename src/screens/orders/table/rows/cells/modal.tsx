@@ -1,30 +1,20 @@
 import * as React from 'react';
-import AceEditor from 'react-ace';
-import Button from '../../../../../components/button';
+import Dialog from '@wcpos/common/src/components/dialog';
+import Tabs from '@wcpos/common/src/components/tabs';
+import TextInput from '@wcpos/common/src/components/textinput';
 
-import 'ace-builds/src-noconflict/mode-json';
-import 'ace-builds/src-noconflict/theme-github';
-
-type Props = {
-	order: any;
-	setVisible: any;
+type OrderModalProps = {
+	order: import('@wcpos/common/src/database').OrderDocument;
+	onClose: () => void;
 };
 
-const Modal = ({ order, setVisible }: Props) => {
-	const close = () => {
-		setVisible(false);
-	};
-
+const Modal = ({ order, onClose }: OrderModalProps) => {
 	return (
-		<>
-			<AceEditor
-				mode="json"
-				theme="github"
-				value={JSON.stringify(order, null, ' ')}
-				setOptions={{ tabSize: 2 }}
-			/>
-			<Button onPress={close} title="Close" />
-		</>
+		<Dialog open title="Order" onClose={onClose} primaryAction={{ label: 'Save ' }}>
+			<Dialog.Section>
+				<TextInput label="Order Number" />
+			</Dialog.Section>
+		</Dialog>
 	);
 };
 
