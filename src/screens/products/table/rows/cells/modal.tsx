@@ -2,7 +2,7 @@ import * as React from 'react';
 import Dialog from '@wcpos/common/src/components/dialog';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Tabs from '@wcpos/common/src/components/tabs';
-import Text from '@wcpos/common/src/components/text';
+import Tree from '@wcpos/common/src/components/tree';
 
 type ProductModalProps = {
 	product: import('@wcpos/common/src/database').ProductDocument;
@@ -19,7 +19,7 @@ const Modal = ({ product, onClose }: ProductModalProps) => {
 			</Dialog.Section>
 		) : (
 			<Dialog.Section>
-				<Text>JSON</Text>
+				<Tree data={product.toJSON()} />
 			</Dialog.Section>
 		);
 

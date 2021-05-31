@@ -1,0 +1,1 @@
+Based on https://github.com/oxyno-zeta/react-editable-json-tree

@@ -80,7 +80,8 @@ const Button = ({
 					background={background}
 					disabled={disabled}
 					pressed={pressed}
-					// style={style}
+					// @ts-ignore
+					style={style}
 					type={type}
 				>
 					{accessoryLeft && React.cloneElement(accessoryLeft, { color: '#FFF' })}
