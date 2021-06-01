@@ -1,5 +1,6 @@
 import * as React from 'react';
 import Text from '../../text';
+import * as Styled from './styles';
 
 export interface JsonValueProps {
 	name: string;
@@ -13,8 +14,9 @@ export interface JsonValueProps {
 
 export const JsonValue = ({ name, value, keyPath = [], deep = 0 }: JsonValueProps) => {
 	return (
-		<Text>
-			{name} : {String(value)}
-		</Text>
+		<Styled.ObjectNode style={{ flexDirection: 'row' }}>
+			<Text type="info">{name} : </Text>
+			<Text>{String(value)}</Text>
+		</Styled.ObjectNode>
 	);
 };

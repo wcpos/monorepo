@@ -62,22 +62,20 @@ export const JsonObject = ({
 			/>
 		));
 
-		return (
-			<>
-				<Text>{' {'}</Text>
-				<View>{list}</View>
-				<Text>{'}'}</Text>
-			</>
-		);
+		return <View>{list}</View>;
 	};
 
 	return (
 		<Styled.ObjectNode>
-			<Pressable onPress={handleCollapse} style={{ flexDirection: 'row' }}>
-				<Arrow direction={collapsed ? 'right' : 'down'} />
-				<Text type="info">{name} :</Text>
-			</Pressable>
-			{collapsed ? renderCollapsed() : renderNotCollapsed()}
+			<View style={{ flexDirection: 'row' }}>
+				<Pressable onPress={handleCollapse} style={{ flexDirection: 'row', alignItems: 'center' }}>
+					<Arrow direction={collapsed ? 'right' : 'down'} />
+					<Text type="info">{name} :</Text>
+				</Pressable>
+				{collapsed ? renderCollapsed() : <Text>{' {'}</Text>}
+			</View>
+			{!collapsed && renderNotCollapsed()}
+			{!collapsed && <Text>{'}'}</Text>}
 		</Styled.ObjectNode>
 	);
 };

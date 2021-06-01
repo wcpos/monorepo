@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 import Text from '../../text';
 import Arrow from '../../arrow';
+import Pressable from '../../pressable';
 import { JsonNode } from './node';
 import * as Styled from './styles';
 
@@ -60,22 +61,20 @@ export const JsonArray = ({
 			/>
 		));
 
-		return (
-			<>
-				<Text> [</Text>
-				<View>{list}</View>
-				<Text>]</Text>
-			</>
-		);
+		return <View>{list}</View>;
 	};
 
 	return (
 		<Styled.ObjectNode>
-			<Arrow direction={collapsed ? 'right' : 'down'} />
-			<Text type="info" onPress={handleCollapse}>
-				{name} :
-			</Text>
-			{collapsed ? renderCollapsed() : renderNotCollapsed()}
+			<View style={{ flexDirection: 'row' }}>
+				<Pressable onPress={handleCollapse} style={{ flexDirection: 'row', alignItems: 'center' }}>
+					<Arrow direction={collapsed ? 'right' : 'down'} />
+					<Text type="info">{name} :</Text>
+				</Pressable>
+				{collapsed ? renderCollapsed() : <Text> [</Text>}
+			</View>
+			{!collapsed && renderNotCollapsed()}
+			{!collapsed && <Text>]</Text>}
 		</Styled.ObjectNode>
 	);
 };
