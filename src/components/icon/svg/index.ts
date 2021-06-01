@@ -10,6 +10,8 @@ import moreHoriz from './more-horiz.svg';
 import moreVert from './more-vert.svg';
 import remove from './remove.svg';
 import wcpos from './wcpos-icon.svg';
+import visibility from './visibility.svg';
+import visibilityOff from './visibility-off.svg';
 
 export default {
 	add,
@@ -31,4 +33,6 @@ export default {
 	remove,
 	wcpos,
 	settings: cog,
+	visibility,
+	'visibility-off': visibilityOff,
 };

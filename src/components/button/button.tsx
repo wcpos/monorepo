@@ -83,8 +83,10 @@ const Button = ({
 					// @ts-ignore
 					style={style}
 					type={type}
+					size={size}
 				>
-					{accessoryLeft && React.cloneElement(accessoryLeft, { color: '#FFF' })}
+					{/* {accessoryLeft && React.cloneElement(accessoryLeft, { color: '#FFF' })} */}
+					{accessoryLeft && React.cloneElement(accessoryLeft)}
 					{renderTitle()}
 					{accessoryRight && React.cloneElement(accessoryRight, { color: '#FFF' })}
 				</Styled.Background>

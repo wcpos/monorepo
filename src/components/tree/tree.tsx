@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Raw } from './raw';
 import { JsonNode } from './json/node';
 import Button from '../button';
+import Icon from '../icon';
 import * as Styled from './styles';
 
 export interface TreeProps {
@@ -41,6 +42,13 @@ export const Tree = ({
 					background="outline"
 					size="small"
 					onPress={() => setRaw(!raw)}
+					accessoryLeft={
+						raw ? (
+							<Icon size="small" name="visibility-off" />
+						) : (
+							<Icon size="small" name="visibility" />
+						)
+					}
 				/>
 			</Styled.RawButtonContainer>
 		</Styled.Container>

@@ -1,8 +1,9 @@
 import styled from 'styled-components/native';
 import { StyleSheet } from 'react-native';
+import { math } from 'polished';
 
 type ButtonProps = import('./button').Props;
-type BackgroundProps = Pick<ButtonProps, 'background' | 'type' | 'disabled'> & {
+type BackgroundProps = Pick<ButtonProps, 'background' | 'type' | 'disabled' | 'size'> & {
 	pressed: boolean;
 };
 
@@ -55,7 +56,14 @@ export const Background = styled.View<BackgroundProps>`
 	opacity: ${({ disabled }) => (disabled ? 0.5 : 1)}
 	border-radius: ${({ theme }) => theme.BUTTON_BORDER_RADIUS};
 	border-width: ${({ background }) => (background === 'outline' ? StyleSheet.hairlineWidth : 0)};
-	padding: ${({ theme }) => theme.BUTTON_PADDING_Y} ${({ theme }) => theme.BUTTON_PADDING_X};
+	padding: ${({ theme, size }) => {
+		switch (size) {
+			case 'small':
+				return `${math(`${theme.BUTTON_PADDING_Y} / 2`)} ${math(`${theme.BUTTON_PADDING_X} /2`)}`;
+			default:
+				return `${theme.BUTTON_PADDING_Y} ${theme.BUTTON_PADDING_X}`;
+		}
+	}}
 	flex-direction: row;
 	align-items: center;
 `;
