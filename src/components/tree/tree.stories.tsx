@@ -15,6 +15,18 @@ BasicUsage.args = {
 		foo: 'bar',
 		baz: {
 			foo: 'bar',
+			baz: {
+				foo: 'bar',
+				baz: {
+					foo: 'bar',
+					baz: {
+						foo: 'bar',
+					},
+				},
+			},
 		},
+		bam: ['foo', 'bar'],
+		zero: [],
 	},
+	onExpand: action('Expand'),
 };

@@ -2,11 +2,10 @@ import * as React from 'react';
 import { View } from 'react-native';
 import Text from '../../text';
 import Arrow from '../../arrow';
-import Pressable from '../../pressable';
 import { JsonNode } from './node';
 import * as Styled from './styles';
 
-export interface JsonObjectProps {
+export interface JsonArrayProps {
 	data: any;
 	name: string;
 	isCollapsed: (keyPath: string[], deep: number, data: any) => boolean;
@@ -15,14 +14,14 @@ export interface JsonObjectProps {
 	deep?: number;
 }
 
-export const JsonObject = ({
+export const JsonArray = ({
 	data,
 	name,
 	isCollapsed,
 	onExpand,
 	keyPath = [],
 	deep = 0,
-}: JsonObjectProps) => {
+}: JsonArrayProps) => {
 	const _keyPath = deep === -1 ? [] : [...keyPath, name];
 	const nextDeep = deep + 1;
 	const [collapsed, setCollapsed] = React.useState(isCollapsed(_keyPath, deep, data));
@@ -35,10 +34,9 @@ export const JsonObject = ({
 	};
 
 	const renderCollapsed = () => {
-		const keyList = Object.getOwnPropertyNames(data);
-		const collapseValue = ' {...}';
-		const numberOfItems = keyList.length;
-		const itemName = numberOfItems === 0 || numberOfItems > 1 ? 'keys' : 'key';
+		const collapseValue = ' [...]';
+		const numberOfItems = data.length;
+		const itemName = numberOfItems === 0 || numberOfItems > 1 ? 'items' : 'item';
 
 		return (
 			<Text type="secondary">
@@ -50,11 +48,11 @@ export const JsonObject = ({
 	const renderNotCollapsed = () => {
 		const keyList = Object.getOwnPropertyNames(data);
 
-		const list = keyList.map((key) => (
+		const list = data.map((item: any, index: number) => (
 			<JsonNode
-				key={key}
-				name={key}
-				data={data[key]}
+				key={index}
+				name={`${index}`}
+				data={item}
 				keyPath={_keyPath}
 				deep={nextDeep}
 				isCollapsed={isCollapsed}
@@ -64,19 +62,19 @@ export const JsonObject = ({
 
 		return (
 			<>
-				<Text>{' {'}</Text>
+				<Text> [</Text>
 				<View>{list}</View>
-				<Text>{'}'}</Text>
+				<Text>]</Text>
 			</>
 		);
 	};
 
 	return (
 		<Styled.ObjectNode>
-			<Pressable onPress={handleCollapse} style={{ flexDirection: 'row' }}>
-				<Arrow direction={collapsed ? 'right' : 'down'} />
-				<Text type="info">{name} :</Text>
-			</Pressable>
+			<Arrow direction={collapsed ? 'right' : 'down'} />
+			<Text type="info" onPress={handleCollapse}>
+				{name} :
+			</Text>
 			{collapsed ? renderCollapsed() : renderNotCollapsed()}
 		</Styled.ObjectNode>
 	);

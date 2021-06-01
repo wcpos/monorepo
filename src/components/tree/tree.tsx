@@ -6,15 +6,34 @@ import * as Styled from './styles';
 
 export interface TreeProps {
 	data: any;
+	rootName?: string;
+	isCollapsed?: (keyPath: string[], deep: number, data: any) => boolean;
+	onExpand?: (keyPath: string[], deep: number, data: any) => void;
 	fallback?: React.ReactNode;
 }
 
-export const Tree = ({ data, fallback = null }: TreeProps) => {
+export const Tree = ({
+	data,
+	rootName = 'root',
+	isCollapsed,
+	onExpand,
+	fallback = null,
+}: TreeProps) => {
 	const [raw, setRaw] = React.useState(false);
 
 	return (
 		<Styled.Container>
-			{raw ? <Raw data={data} /> : <JsonNode data={data} name="root" />}
+			{raw ? (
+				<Raw data={data} />
+			) : (
+				<JsonNode
+					data={data}
+					name={rootName}
+					deep={-1}
+					isCollapsed={isCollapsed}
+					onExpand={onExpand}
+				/>
+			)}
 			<Styled.RawButtonContainer>
 				<Button
 					title="raw"

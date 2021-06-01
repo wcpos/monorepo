@@ -1,9 +1,9 @@
 import * as React from 'react';
-
-import Arrow from '.';
+import { Arrow, ArrowProps } from './arrow';
 
 export default {
 	title: 'Components/Arrow',
+	component: Arrow,
 };
 
-export const basic = () => <Arrow />;
+export const BasicUsage = (props: ArrowProps) => <Arrow {...props} />;
