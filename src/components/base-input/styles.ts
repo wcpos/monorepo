@@ -15,7 +15,9 @@ export const Box = styled(Pressable)`
 
 export const InputText = styled(Text)``;
 
-export const Container = styled.View``;
+export const Container = styled.View`
+	align-items: flex-start;
+`;
 
 export const MessageContainer = styled.View``;
 

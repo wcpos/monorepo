@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StoryWrapper } from '@storybook/addons';
 import { AppProviderSizeProvider } from '@wcpos/common/src/hooks/use-position-in-app';
@@ -16,7 +17,9 @@ const AppProvider: StoryWrapper = (Story, context) => {
 		<SafeAreaProvider>
 			<AppProviderSizeProvider>
 				<Portal.Provider>
-					<Story {...context} />
+					<View style={{ height: '600px' }}>
+						<Story {...context} />
+					</View>
 					<Portal.Manager />
 				</Portal.Provider>
 			</AppProviderSizeProvider>
@@ -59,6 +62,7 @@ export const WithManyChoices: React.FC = () => {
 	return (
 		<Select
 			label="Choose a number"
+			placeholder="choose"
 			selected={selected}
 			choices={choices.map((x) => ({
 				label: x.toString(),

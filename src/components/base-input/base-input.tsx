@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleProp, ViewStyle } from 'react-native';
 import * as Styled from './styles';
 
 export interface BaseInputProps {
@@ -7,12 +8,33 @@ export interface BaseInputProps {
 	onPress: () => void;
 	focused: boolean;
 	disabled: boolean;
+	/**
+	 * Adds functionality to the TextInput, eg: buttons, tags
+	 */
+	leftAccessory?: React.ReactNode;
+	/**
+	 * Adds functionality to the TextInput, eg: buttons, tags
+	 */
+	rightAccessory?: React.ReactNode;
+	/**
+	 * Styles for the textinput container
+	 */
+	style?: StyleProp<ViewStyle>;
 }
 
 /**
  * Gives the look of a basic Input component. Use for components that look like a `TextField` but are not.
  */
-export const BaseInput = ({ value, placeholder, onPress, focused, disabled }: BaseInputProps) => {
+export const BaseInput = ({
+	value,
+	placeholder,
+	onPress,
+	focused,
+	disabled,
+	leftAccessory,
+	rightAccessory,
+	style,
+}: BaseInputProps) => {
 	// const styles = useStyles((theme) => ({
 	// 	// Base Styles
 	// 	inputContainer: {
@@ -48,13 +70,16 @@ export const BaseInput = ({ value, placeholder, onPress, focused, disabled }: Ba
 			// ]}
 			onPress={onPress}
 			disabled={disabled}
+			style={style}
 		>
+			{leftAccessory}
 			<Styled.InputText
 				// maxLines={1}
 				type={showPlaceholder ? 'secondary' : undefined}
 			>
 				{showPlaceholder ? placeholder : value}
 			</Styled.InputText>
+			{rightAccessory}
 		</Styled.Box>
 	);
 };
