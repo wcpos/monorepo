@@ -1,10 +1,10 @@
-import React from 'react';
+import * as React from 'react';
 import { render } from '@testing-library/react';
 import { ThemeProvider } from 'styled-components/native';
-import { defaultTheme } from '../src/lib/theme';
+import getTheme from '@wcpos/common/src/themes';
 
-function renderWithTheme(Component) {
-	return render(<ThemeProvider theme={defaultTheme}>{Component}</ThemeProvider>);
+function renderWithTheme(Component: React.ReactNode) {
+	return render(<ThemeProvider theme={getTheme('default')}>{Component}</ThemeProvider>);
 }
 
 export default renderWithTheme;

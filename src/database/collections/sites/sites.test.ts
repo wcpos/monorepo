@@ -34,6 +34,7 @@ describe('Sites Collection', () => {
 		expect(isRxDocument(siteDoc)).toBe(true);
 		await siteDoc.connect();
 		expect(siteDoc).toMatchObject({
+			_id: expect.any(String),
 			url: 'example.com',
 			name: 'Test Site',
 		});
