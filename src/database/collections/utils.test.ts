@@ -18,10 +18,10 @@ describe('Calculate Taxes', () => {
 		};
 
 		const inclusiveTaxes = calcTaxes(9.99, [taxRate], true);
-		expect(inclusiveTaxes).toEqual([{ id: 72, total: 1.665 }]);
+		expect(inclusiveTaxes).toEqual([{ id: 72, total: '1.665' }]);
 
 		const exclusiveTaxes = calcTaxes(9.99, [taxRate], false);
-		expect(exclusiveTaxes).toEqual([{ id: 72, total: 1.998 }]);
+		expect(exclusiveTaxes).toEqual([{ id: 72, total: '1.998' }]);
 	});
 
 	it('should calculate the compound tax', () => {
@@ -54,8 +54,8 @@ describe('Calculate Taxes', () => {
 		// prices exclusive of tax.
 		const exclusiveTaxes = calcTaxes(100, taxRates, false);
 		expect(exclusiveTaxes).toEqual([
-			{ id: 72, total: 5.0 },
-			{ id: 17, total: 8.925 },
+			{ id: 72, total: '5' },
+			{ id: 17, total: '8.925' },
 		]);
 
 		// prices inclusive of tax.
@@ -68,8 +68,8 @@ describe('Calculate Taxes', () => {
 		 * 92.1659 - ( 92.1659 / 1.05 ) = 4.38885.
 		 */
 		expect(inclusiveTaxes).toEqual([
-			{ id: 17, total: 7.8341 },
-			{ id: 72, total: 4.3889 },
+			{ id: 17, total: '7.8341' },
+			{ id: 72, total: '4.3889' },
 		]);
 	});
 
@@ -92,8 +92,8 @@ describe('Calculate Taxes', () => {
 		];
 
 		expect(sumItemizedTaxes([taxes1, taxes2])).toEqual([
-			{ id: 1, total: 2.665 },
-			{ id: 2, total: 4 },
+			{ id: 1, total: '2.665' },
+			{ id: 2, total: '4' },
 		]);
 	});
 });

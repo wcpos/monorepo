@@ -27,7 +27,7 @@ describe('Line Items Collection', () => {
 
 		// check default
 		expect(lineItem).toMatchObject({
-			localId: expect.any(String),
+			_id: expect.any(String),
 			name: 'Product',
 		});
 	});
@@ -52,7 +52,7 @@ describe('Line Items Collection', () => {
 	it('should update on quantity change', async (done) => {
 		const lineItem = await db.line_items.findOne('12345').exec();
 
-		subscription = lineItem.$.pipe(skip(2)).subscribe((result) => {
+		subscription = lineItem.$.subscribe((result) => {
 			expect(result).toMatchObject({
 				id: '12345',
 				quantity: 2,
