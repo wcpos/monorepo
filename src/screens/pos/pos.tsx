@@ -9,7 +9,7 @@ import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import ErrorBoundary from '@wcpos/common/src/components/error';
-import Draggable from '@wcpos/common/src/components/draggable3';
+import Draggable from '@wcpos/common/src/components/draggable';
 import Gutter from '@wcpos/common/src/components/gutter';
 import useOnLayout from '@wcpos/common/src/hooks/use-on-layout';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';

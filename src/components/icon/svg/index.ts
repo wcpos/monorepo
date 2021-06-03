@@ -12,6 +12,8 @@ import remove from './remove.svg';
 import wcpos from './wcpos-icon.svg';
 import visibility from './visibility.svg';
 import visibilityOff from './visibility-off.svg';
+import resize from './resize.svg';
+import drag from './drag.svg';
 
 export default {
 	add,
@@ -35,4 +37,6 @@ export default {
 	settings: cog,
 	visibility,
 	'visibility-off': visibilityOff,
+	resize,
+	drag,
 };
