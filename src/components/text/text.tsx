@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { StyleProp, ViewStyle } from 'react-native';
 import * as Styled from './styles';
 
 /**
@@ -11,7 +12,10 @@ export interface TextProps {
 	italic?: boolean;
 	onPress?: () => void;
 	size?: 'normal' | 'large' | 'small';
-	style?: import('react-native').TextStyle;
+	/**
+	 *
+	 */
+	style?: StyleProp<ViewStyle>;
 	type?:
 		| 'attention'
 		| 'critical'
@@ -42,7 +46,8 @@ export const Text = ({
 			italic={italic}
 			onPress={onPress}
 			size={size}
-			// style={style}
+			// @ts-ignore
+			style={style}
 			type={type}
 			uppercase={uppercase}
 			weight={weight}
