@@ -91,6 +91,11 @@ export const Select = ({
 		[choices, selected]
 	);
 
+	const handleSelect = (value: string) => {
+		onChange(value);
+		setOpen(false);
+	};
+
 	const choiceComponents = React.useMemo(
 		() =>
 			choices.map((choice) => (
@@ -99,7 +104,7 @@ export const Select = ({
 					label={choice.label}
 					disabled={choice.disabled}
 					// eslint-disable-next-line react/jsx-no-bind
-					onSelect={() => onChange(choice.value)}
+					onSelect={() => handleSelect(choice.value)}
 				/>
 			)),
 		[choices, onChange]
@@ -122,7 +127,7 @@ export const Select = ({
 						disabled={disabled}
 						focused={open}
 						onPress={showPopover}
-						rightAccessory={<Arrow direction="down" />}
+						rightAccessory={<Arrow direction={open ? 'up' : 'down'} />}
 						style={{ minWidth: '100px' }}
 					/>
 				}

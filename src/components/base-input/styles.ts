@@ -1,4 +1,5 @@
-import styled from 'styled-components/native';
+import styled, { css } from 'styled-components/native';
+import Platform from '@wcpos/common/src/lib/platform';
 import Pressable from '../pressable';
 import { Text } from '../text/styles';
 
@@ -11,9 +12,16 @@ export const Box = styled(Pressable)`
 	border-style: solid;
 	border-radius: ${({ theme }) => theme.SEGMENT_BORDER_RADIUS};
 	padding: ${({ theme }) => theme.SEGMENT_PADDING};
+
+	${Platform.OS === 'ios' &&
+	css`
+		height: 30px;
+	`}
 `;
 
-export const InputText = styled(Text)``;
+export const InputText = styled(Text)`
+	flex: 1;
+`;
 
 export const Container = styled.View`
 	align-items: flex-start;

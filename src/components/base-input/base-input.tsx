@@ -35,31 +35,9 @@ export const BaseInput = ({
 	rightAccessory,
 	style,
 }: BaseInputProps) => {
-	// const styles = useStyles((theme) => ({
-	// 	// Base Styles
-	// 	inputContainer: {
-	// 		flexDirection: 'row',
-	// 		backgroundColor: theme.colors.fill.background.lighter,
-	// 		borderColor: theme.colors.fill.primary.default,
-	// 		borderWidth: theme.border.small,
-	// 		borderRadius: theme.radius.medium,
-	// 		height: 40, // Need to enforce height for iOS.
-	// 		paddingHorizontal: theme.spacing.medium,
-	// 		paddingVertical: theme.spacing.small - theme.border.small,
-	// 		alignItems: 'center',
-	// 	},
-
-	// 	// Focused Styles
-	// 	inputContainerFocused: {
-	// 		borderColor: theme.colors.fill.primary.default,
-	// 	},
-
-	// 	// Disabled Styles
-	// 	inputContainerDisabled: {
-	// 		opacity: theme.opacity.disabled,
-	// 	},
-	// }));
 	const showPlaceholder = !value || value.length === 0;
+
+	// const renderLeftAccessory = leftAccessory && 
 
 	return (
 		<Styled.Box
