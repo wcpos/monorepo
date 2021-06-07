@@ -1,7 +1,7 @@
 import styled, { css } from 'styled-components/native';
 
 type Props = import('@wcpos/common/src/lib/utility-types').Omit<
-	import('./image').IImageProps,
+	import('./image').ImageProps,
 	'src'
 >;
 

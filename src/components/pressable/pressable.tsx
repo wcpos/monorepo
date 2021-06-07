@@ -71,8 +71,9 @@ export const Pressable = ({
 			// @ts-ignore
 			style={({ hovered, pressed }: PressableStateCallbackType) => [
 				{
+					flexDirection: 'row',
 					// @ts-ignore
-					backgroundColor: hovered ? (pressed ? '#DDD' : '#EEE') : '#F5F5F5',
+					// backgroundColor: hovered ? (pressed ? '#DDD' : '#EEE') : '#F5F5F5',
 				},
 				style,
 			]}

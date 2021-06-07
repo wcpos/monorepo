@@ -8,6 +8,10 @@ export interface ComboboxChoice {
 	/**
 	 * Label for the Option.
 	 */
+	key: string;
+	/**
+	 * Label for the Option.
+	 */
 	label: string;
 	/**
 	 * Value for the option.
@@ -78,7 +82,7 @@ export const Combobox = ({
 		() =>
 			choices.map((choice) => (
 				<Popover.Item
-					key={choice.value}
+					key={choice.key}
 					label={choice.label}
 					disabled={choice.disabled}
 					// eslint-disable-next-line react/jsx-no-bind

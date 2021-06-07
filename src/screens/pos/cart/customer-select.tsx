@@ -66,6 +66,7 @@ const CustomerSelect = ({ order }: CustomerSelectProps) => {
 			choices={customers.map((customer) => ({
 				label: `${customer.firstName} ${customer.lastName}`,
 				value: customer,
+				key: customer._id,
 			}))}
 			placeholder={
 				selectedCustomer

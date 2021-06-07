@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Animated, View, StyleSheet, Easing, ViewStyle, Platform } from 'react-native';
+import { Animated, View, StyleSheet, Easing, ViewStyle, Platform, StyleProp } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 
 interface PlaceholderProps {
@@ -21,12 +21,7 @@ interface PlaceholderProps {
 	speed?: number;
 }
 
-const Placeholder = ({
-	children,
-	backgroundColor,
-	speed,
-	highlightColor,
-}: PlaceholderProps) => {
+const Placeholder = ({ children, backgroundColor, speed, highlightColor }: PlaceholderProps) => {
 	const animatedValue = new Animated.Value(0);
 
 	React.useEffect(() => {
@@ -86,14 +81,14 @@ const Placeholder = ({
 	};
 
 	return <>{getChildren(children)}</>;
-}
+};
 
 interface PlaceholderItem extends ViewStyle {
 	children?: JSX.Element | JSX.Element[];
-	style?: ViewStyle;
+	style?: StyleProp<ViewStyle>;
 }
 
-Placeholder.Item = ({ children, ...style }: PlaceholderItem): JSX.Element => (
+Placeholder.Item = ({ children, style }: PlaceholderItem): JSX.Element => (
 	<View style={style}>{children}</View>
 );
 

@@ -22,7 +22,7 @@ export const Main = styled.View`
 	background-color: ${({ theme }) => theme.PAGE_MAIN_BACKGROUND_COLOR};
 	padding: ${({ theme }) => `${theme.PAGE_MAIN_PADDING_Y} ${theme.PAGE_MAIN_PADDING_X}`};
 	position: absolute;
-	top: 100px;
+	top: 50px;
 	bottom: 0;
 	left: 0;
 	right: 0;

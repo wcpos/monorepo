@@ -140,7 +140,6 @@ export async function _createStoresDB(name: string, baseURL: string, jwt: string
 		headers: { 'X-WCPOS': '1', Authorization: `Bearer ${jwt}` },
 	});
 	Object.assign(db, { httpClient });
-	console.log('@TODO: the storeDB is initialized multiple times');
 
 	// @ts-ignore
 	const collections = await db.addCollections(storeCollections);
@@ -206,8 +205,7 @@ const DatabaseService: IDatabaseService = {
 		const db = await this.STORE_DB_CREATE_PROMISE;
 		if (!db) {
 			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name, baseURL, jwt);
-		}
-		if (db?.name !== name) {
+		} else if (db?.name !== name) {
 			await db?.destroy();
 			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name, baseURL, jwt);
 		}

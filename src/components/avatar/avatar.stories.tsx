@@ -1,7 +1,5 @@
 import * as React from 'react';
-import Avatar from './avatar';
-
-type IAvatarProps = import('./avatar').IAvatarProps
+import { Avatar, AvatarProps } from './avatar';
 
 export default {
 	title: 'Components/Avatar',
@@ -10,45 +8,27 @@ export default {
 		size: {
 			control: {
 				type: 'inline-radio',
-				options: [
-					'default', 'small', 'large'
-				],
+				options: ['default', 'small', 'large'],
 			},
 		},
-	}
+	},
 };
 
-export const basicUsage = ({ src, size }: IAvatarProps) => (
-	<Avatar
-	src={src}
-	size={size}
-	/>
-);
+export const basicUsage = (props: AvatarProps) => <Avatar {...props} />;
 basicUsage.args = {
 	src: 'https://picsum.photos/200/200/?people',
-	size: 'default'
-}
+	size: 'default',
+};
 
-export const brokenImage = ({ src, size }: IAvatarProps) => (
-	<Avatar
-	src={src}
-	size={size}
-	/>
-);
+export const brokenImage = (props: AvatarProps) => <Avatar {...props} />;
 brokenImage.args = {
 	src: 'https://example.com/pic.jpg',
-	size: 'default'
-}
+	size: 'default',
+};
 
-export const withPlaceholder = ({ src, size, placeholder }: IAvatarProps) => (
-	<Avatar
-		src={src}
-		size={size}
-		placeholder={placeholder}
-	/>
-);
+export const withPlaceholder = (props: AvatarProps) => <Avatar {...props} />;
 withPlaceholder.args = {
 	src: 'https://example.com/pic.jpg',
 	size: 'default',
-	placeholder: 'PK'
-}
+	placeholder: 'PK',
+};

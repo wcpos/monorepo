@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { SuspendedImage as Image, ImageProps } from './image';
+import { Image, ImageProps } from './image';
 import Text from '../text';
 
 export default {
-	title: 'Components/Image',
+	title: 'Components/Image2',
 	component: Image,
 	argTypes: {
 		border: {
