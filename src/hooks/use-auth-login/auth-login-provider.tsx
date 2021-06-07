@@ -35,7 +35,7 @@ export const AuthLoginProvider: React.FC = ({ children }) => {
 
 	return (
 		<AuthLoginContext.Provider value={show}>
-			{children}{' '}
+			{children}
 			<Dialog
 				title="Login"
 				open={visible}

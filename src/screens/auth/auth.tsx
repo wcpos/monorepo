@@ -5,6 +5,7 @@ import PageLayout from '@wcpos/common/src/layout/page';
 import Segment from '@wcpos/common/src/components/segment';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Text from '@wcpos/common/src/components/text';
+import useOnline from '@wcpos/common/src/hooks/use-online';
 import { AuthView } from './styles';
 import Site from './site';
 
@@ -15,6 +16,7 @@ type UserDocument = import('@wcpos/common/src/database').UserDocument;
  */
 const Auth = () => {
 	const { user } = useAppState() as { user: UserDocument };
+	const online = useOnline();
 
 	// @ts-ignore
 	const [sites] = useObservableState(user.getSites_$);
@@ -38,6 +40,7 @@ const Auth = () => {
 
 	return (
 		<PageLayout>
+			<Text>{online ? 'Online' : 'Offline '}</Text>
 			<AuthView>
 				<Segment style={{ width: '90%', maxWidth: 460 }}>
 					<Text size="large">Connect!</Text>

@@ -1,7 +1,6 @@
 import styled from 'styled-components/native';
 
-export const Container = styled.View<{ visible: boolean }>`
-	visibility: ${({ visible }) => (visible ? 'visible' : 'hidden')};
+export const Container = styled.View`
 	padding: 3px;
 	opacity: 0.6;
 `;

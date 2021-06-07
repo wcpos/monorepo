@@ -16,7 +16,7 @@ export interface SortIconProps {
 
 export const SortIcon = ({ direction, visible = true }: SortIconProps) => {
 	return (
-		<Styled.Container visible={visible}>
+		<Styled.Container>
 			<Styled.Up active={direction === 'asc'} />
 			<Styled.Down active={direction === 'desc'} />
 		</Styled.Container>

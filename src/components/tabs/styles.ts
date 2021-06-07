@@ -6,7 +6,6 @@ export const Container = styled.View``;
 
 export const TabsContainer = styled.View`
 	flex-direction: row;
-	align-items: stretch;
 `;
 
 export const Tab = styled(Pressable)<{ selected: boolean }>`
