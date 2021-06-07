@@ -60,6 +60,8 @@ export class ConnectionService {
 				return this._fetchWcApiUrl();
 			})
 			.catch((err) => {
+				console.log(err);
+				debugger;
 				this._subjects.error.next(err.message);
 			});
 	}
