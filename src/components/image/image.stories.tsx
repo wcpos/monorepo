@@ -20,7 +20,7 @@ export default {
  *
  */
 export const BasicUsage = (props: ImageProps) => {
-	<Image {...props} />;
+	return <Image {...props} />;
 };
 BasicUsage.args = {
 	src: 'https://picsum.photos/200/300/?random',

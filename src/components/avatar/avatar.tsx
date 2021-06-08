@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { StyleProp, ViewStyle } from 'react-native';
-import Image from '../image';
+import Image from '../image3';
 
 /**
  * Avatar properties
@@ -31,5 +31,15 @@ const map = {
  * Avatar
  */
 export const Avatar = ({ src, size = 'default', placeholder, style }: AvatarProps) => {
-	return <Image border="circular" src={src} placeholder={placeholder} style={[map[size], style]} />;
+	const { width, height } = map[size];
+
+	return (
+		<Image
+			border="circular"
+			src={src}
+			placeholder={placeholder} // style={[map[size], style]}
+			width={width}
+			height={height}
+		/>
+	);
 };

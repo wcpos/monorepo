@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Animated, View, StyleSheet, Easing, ViewStyle, Platform, StyleProp } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 
-interface PlaceholderProps {
+export interface SkeletonProps {
 	/**
 	 * Determines component's children.
 	 */
@@ -19,9 +19,16 @@ interface PlaceholderProps {
 	 * Determines the animation speed in milliseconds. By default is 800
 	 */
 	speed?: number;
+	style?: any;
 }
 
-const Placeholder = ({ children, backgroundColor, speed, highlightColor }: PlaceholderProps) => {
+export const Skeleton = ({
+	children,
+	backgroundColor = '#E1E9EE',
+	speed = 800,
+	highlightColor = '#F2F8FC',
+	style,
+}: SkeletonProps) => {
 	const animatedValue = new Animated.Value(0);
 
 	React.useEffect(() => {
@@ -43,7 +50,7 @@ const Placeholder = ({ children, backgroundColor, speed, highlightColor }: Place
 	const getChildren = (element: JSX.Element | JSX.Element[]) => {
 		return React.Children.map(element, (child: JSX.Element, index: number) => {
 			let style;
-			if (child.type.displayName === 'PlaceholderItem') {
+			if (child.type.displayName === 'SkeletonItem') {
 				const { children, ...styles } = child.props;
 				style = { ...child.props.style, ...styles };
 			} else {
@@ -56,8 +63,9 @@ const Placeholder = ({ children, backgroundColor, speed, highlightColor }: Place
 					</View>
 				);
 			}
+
 			return (
-				<View key={index} style={{ position: 'relative' }}>
+				<View key={index} style={[{ position: 'relative' }, style]}>
 					<View style={[style, { backgroundColor, overflow: 'hidden' }]}>
 						<Animated.View
 							style={[
@@ -82,23 +90,3 @@ const Placeholder = ({ children, backgroundColor, speed, highlightColor }: Place
 
 	return <>{getChildren(children)}</>;
 };
-
-interface PlaceholderItem extends ViewStyle {
-	children?: JSX.Element | JSX.Element[];
-	style?: StyleProp<ViewStyle>;
-}
-
-Placeholder.Item = ({ children, style }: PlaceholderItem): JSX.Element => (
-	<View style={style}>{children}</View>
-);
-
-// @ts-ignore
-Placeholder.Item.displayName = 'PlaceholderItem';
-
-Placeholder.defaultProps = {
-	backgroundColor: '#E1E9EE',
-	highlightColor: '#F2F8FC',
-	speed: 800,
-};
-
-export default Placeholder;

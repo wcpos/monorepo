@@ -67,7 +67,12 @@ export const SuspendedImage = ({
 					</View>
 				}
 			>
-				<Image src={src} srcSet={srcSet} border={border} style={[style]} {...rest} />
+				<Image
+					src={src}
+					srcSet={srcSet}
+					border={border} // style={[style]}
+					{...rest}
+				/>
 			</ErrorBoundary>
 		</React.Suspense>
 	);

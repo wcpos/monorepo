@@ -1,12 +1,20 @@
 import * as React from 'react';
-import Img from '../../../../../../components/image';
+import Img from '@wcpos/common/src/components/image3';
+import get from 'lodash/get';
 
 type Props = {
-	product: any;
+	product: import('@wcpos/common/src/database').ProductDocument;
 };
 
 const Image = ({ product }: Props) => {
-	return <Img src={product.thumbnail} style={{ width: 100, height: 100 }} />;
+	const { src } = get(product, 'images.0');
+
+	return (
+		<Img
+			src={src}
+			// placeholder={<Img source={require('@wcpos/common/src/assets/placeholder.png')} />}
+		/>
+	);
 };
 
 export default Image;
