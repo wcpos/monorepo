@@ -9,6 +9,7 @@ import TextInput from '@wcpos/common/src/components/textinput';
 import Popover from '@wcpos/common/src/components/popover';
 import Tag from '@wcpos/common/src/components/tag';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useAuthLogin from '@wcpos/common/src/hooks/use-auth-login';
 import Button from '@wcpos/common/src/components/button';
 import Actions from './actions';
 import Table from './table';
@@ -39,6 +40,7 @@ const Products = ({ ui }: IPOSProductsProps) => {
 	const { user, storeDB } = useAppState() as { user: UserDocument; storeDB: StoreDatabase };
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const [display] = useObservableState(() => ui.get$('display'), ui.get('display'));
+	const showAuthLogin = useAuthLogin();
 
 	// const [columns, setColumns] = React.useState([]);
 	const [query, setQuery] = React.useState({
@@ -100,12 +102,20 @@ const Products = ({ ui }: IPOSProductsProps) => {
 				<Segment>
 					<ErrorBoundary>
 						<Button
-							title="Add Products"
+							title="Start Sync"
 							onPress={async () => {
 								// @ts-ignore
 								const replicationState = storeDB.products.syncRestApi({
 									url: 'products',
 									pull: {},
+									live: true,
+								});
+								replicationState.error$.subscribe((err: any) => {
+									console.error('replication error:');
+									console.dir(err);
+									if (err.code === 401) {
+										showAuthLogin();
+									}
 								});
 								replicationState.run(false);
 							}}

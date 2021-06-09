@@ -22,9 +22,8 @@ const UserMenu = () => {
 						<Text type="inverse">{user?.displayName}</Text>
 						<Avatar
 							src="https://secure.gravatar.com/avatar/a2a53c07cdd4a8aa81c043baafd0915f"
-							placeholder="PK"
+							// placeholder="PK"
 							size="small"
-							style={{ width: '20px' }}
 						/>
 					</Styled.DropDown>
 				}

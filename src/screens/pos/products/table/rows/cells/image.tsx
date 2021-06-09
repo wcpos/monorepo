@@ -7,7 +7,7 @@ type Props = {
 };
 
 const Image = ({ product }: Props) => {
-	const { src } = get(product, 'images.0');
+	const src = get(product, 'images.0.src');
 
 	return (
 		<Img
