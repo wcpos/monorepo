@@ -6,6 +6,8 @@ import difference from 'lodash/difference';
 
 type RxCollection = import('rxdb').RxCollection;
 
+export const PLUGIN_IDENT = 'woocommercerestapisync';
+
 // does nothing
 export const DEFAULT_MODIFIER = (d: any) => Promise.resolve(d);
 
@@ -42,4 +44,20 @@ export function parsePlainData(this: RxCollection, plainData: Record<string, unk
 	}
 
 	return plainData;
+}
+
+/**
+ *
+ */
+export function promiseWait(ms = 0): Promise<void> {
+	return new Promise((res) => setTimeout(res, ms));
+}
+
+/**
+ *
+ */
+export function wasRevisionfromPullReplication(endpointHash: string, revision: string) {
+	const ending = endpointHash.substring(0, 8) + PLUGIN_IDENT;
+	const ret = revision.endsWith(ending);
+	return ret;
 }

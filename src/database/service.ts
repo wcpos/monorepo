@@ -6,6 +6,7 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 // import { RxDBNoValidatePlugin } from 'rxdb/plugins/no-validate';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
+import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import forEach from 'lodash/forEach';
 import isFunction from 'lodash/isFunction';
 import camelCase from 'lodash/camelCase';
@@ -37,6 +38,7 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 addRxPlugin(RxDBValidatePlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
+addRxPlugin(RxDBLeaderElectionPlugin);
 addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
 
 /**

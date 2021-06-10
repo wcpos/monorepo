@@ -1,5 +1,5 @@
 import { RxDBWooCommerceRestApiSyncCollectionService } from './collection-service';
-import { DEFAULT_MODIFIER } from './helpers';
+import { DEFAULT_MODIFIER, promiseWait, wasRevisionfromPullReplication } from './helpers';
 
 type RxCollection = import('rxdb/dist/types').RxCollection;
 type Collection = RxCollection & { collections: () => Record<string, RxCollection> };
@@ -7,7 +7,7 @@ type Collection = RxCollection & { collections: () => Record<string, RxCollectio
 /**
  *
  */
- export function syncRestApiCollection(
+export function syncRestApiCollection(
 	this: Collection,
 	{
 		url,
@@ -24,7 +24,7 @@ type Collection = RxCollection & { collections: () => Record<string, RxCollectio
 		syncRevisions = false,
 	}: any
 ) {
-	// const collection = this;
+	const collection = this;
 
 	// fill in defaults for pull & push
 	if (pull) {
@@ -33,6 +33,9 @@ type Collection = RxCollection & { collections: () => Record<string, RxCollectio
 	if (push) {
 		if (!push.modifier) push.modifier = DEFAULT_MODIFIER;
 	}
+
+	// ensure the collection is listening to plain-pouchdb writes
+	//  collection.watchForChanges();
 
 	const replicationState = new RxDBWooCommerceRestApiSyncCollectionService(
 		this,
@@ -48,6 +51,57 @@ type Collection = RxCollection & { collections: () => Record<string, RxCollectio
 		syncRevisions
 	);
 
-	// if (!autoStart) return replicationState;
+	if (!autoStart) {
+		return replicationState;
+	}
+
+	// run internal so .sync() does not have to be async
+	const waitTillRun: any =
+		waitForLeadership && this.database.multiInstance // do not await leadership if not multiInstance
+			? this.database.waitForLeadership()
+			: promiseWait(0);
+
+	waitTillRun.then(() => {
+		if (collection.destroyed) {
+			return;
+		}
+
+		// trigger run once
+		replicationState.run();
+
+		// start sync-interval
+		if (replicationState.live) {
+			if (pull) {
+				(async () => {
+					while (!replicationState.isStopped()) {
+						await promiseWait(replicationState.liveInterval);
+						if (replicationState.isStopped()) return;
+						await replicationState.run(
+							// do not retry on liveInterval-runs because they might stack up
+							// when failing
+							false
+						);
+					}
+				})();
+			}
+
+			if (push) {
+				/**
+				 * we have to use the rxdb changestream
+				 * because the pouchdb.changes stream sometimes
+				 * does not emit events or stucks
+				 */
+				const changeEventsSub = collection.$.subscribe((changeEvent) => {
+					if (replicationState.isStopped()) return;
+					const rev = changeEvent.documentData._rev;
+					if (rev && !wasRevisionfromPullReplication(replicationState.endpointHash, rev)) {
+						replicationState.run();
+					}
+				});
+				replicationState._subs.push(changeEventsSub);
+			}
+		}
+	});
+
 	return replicationState;
 }
