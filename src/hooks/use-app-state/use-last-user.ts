@@ -77,7 +77,8 @@ export function useLastUser() {
 	 */
 	async function unsetLastUser() {
 		const userDB = await DatabaseService.getUserDB();
-		await userDB.users.upsertLocal('lastStore', undefined);
+		const lastStore = await userDB.users.getLocal('lastStore');
+		lastStore.remove();
 		_setLastUser(undefined);
 	}
 
