@@ -8,15 +8,11 @@ import ErrorBoundary from '@wcpos/common/src/components/error';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Popover from '@wcpos/common/src/components/popover';
 import Tag from '@wcpos/common/src/components/tag';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import useAuthLogin from '@wcpos/common/src/hooks/use-auth-login';
-import Button from '@wcpos/common/src/components/button';
 import Actions from './actions';
 import Table from './table';
+import Footer from './footer';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
-type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
-type UserDocument = import('@wcpos/common/src/database').UserDocument;
 
 interface IPOSProductsProps {
 	ui: any;
@@ -37,10 +33,8 @@ export const ProductQueryContext = React.createContext<ProductQueryContextProps>
  */
 const Products = ({ ui }: IPOSProductsProps) => {
 	// const { t } = useTranslation();
-	const { user, storeDB } = useAppState() as { user: UserDocument; storeDB: StoreDatabase };
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const [display] = useObservableState(() => ui.get$('display'), ui.get('display'));
-	const showAuthLogin = useAuthLogin();
 
 	// const [columns, setColumns] = React.useState([]);
 	const [query, setQuery] = React.useState({
@@ -101,25 +95,7 @@ const Products = ({ ui }: IPOSProductsProps) => {
 				</Segment>
 				<Segment>
 					<ErrorBoundary>
-						<Button
-							title="Start Sync"
-							onPress={async () => {
-								// @ts-ignore
-								const replicationState = storeDB.products.syncRestApi({
-									url: 'products',
-									pull: {},
-									live: true,
-								});
-								replicationState.error$.subscribe((err: any) => {
-									console.error('replication error:');
-									console.dir(err);
-									if (err.code === 401) {
-										showAuthLogin();
-									}
-								});
-								replicationState.run(false);
-							}}
-						/>
+						<Footer />
 					</ErrorBoundary>
 				</Segment>
 			</Segment.Group>
