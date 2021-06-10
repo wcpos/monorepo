@@ -73,22 +73,51 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 	}
 
 	isStopped(): boolean {
-		// if (!this.live && this._subjects.initialReplicationComplete._value) return true;
-		// if (this._subjects.canceled._value) return true;
+		if (this.collection.destroyed) {
+			return true;
+		}
+		// @ts-ignore
+		if (!this.live && this._subjects.initialReplicationComplete._value) {
+			return true;
+		}
+		// @ts-ignore
+		if (this._subjects.canceled._value) {
+			return true;
+		}
+
 		return false;
 	}
 
 	// ensures this._run() does not run in parallel
-	async run(retryOnFail = true): Promise<boolean> {
-		return this._run(retryOnFail);
+	async run(retryOnFail = true): Promise<void> {
+		if (this.isStopped()) {
+			return Promise.resolve();
+		}
+
+		if (this._runQueueCount > 2) {
+			return this._runningPromise;
+		}
+
+		this._runQueueCount += 1;
+		this._runningPromise = this._runningPromise.then(async () => {
+			this._subjects.active.next(true);
+			const willRetry = await this._run(retryOnFail);
+			this._subjects.active.next(false);
+			// @ts-ignore
+			if (retryOnFail && !willRetry && this._subjects.initialReplicationComplete._value === false) {
+				this._subjects.initialReplicationComplete.next(true);
+			}
+			this._runQueueCount -= 1;
+		});
+
+		return this._runningPromise;
 	}
 
 	/**
 	 * returns true if retry must be done
 	 */
 	async _run(retryOnFail = true): Promise<boolean> {
-		// eslint-disable-next-line no-plusplus
-		this._runCount++;
+		this._runCount += 1;
 
 		if (this.push) {
 			const ok = await this.runPush();
@@ -118,7 +147,10 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 	 * @return true if sucessfull
 	 */
 	async runPull(): Promise<boolean> {
-		// const latestDocument = await getLastPullDocument(this.collection, this.endpointHash);
+		if (this.isStopped()) {
+			return Promise.resolve(false);
+		}
+
 		let result;
 		try {
 			result = await this.collection.database.httpClient.get(this.collection.name);
