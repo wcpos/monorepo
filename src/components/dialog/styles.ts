@@ -8,7 +8,7 @@ export const Container = styled.View`
 	border-radius: ${({ theme }) => theme.DIALOG_BORDER_RADIUS};
 	shadow-offset: { width: 0, height: 1 };
 	shadow-opacity: 0.22;
-	shadow-radius: 7.5;
+	shadow-radius: 7.5px;
 	shadow-color: #000;
 	elevation: 8;
 `;

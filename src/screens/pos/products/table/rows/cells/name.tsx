@@ -31,7 +31,7 @@ const Name = ({ product, showSKU, showCategories, showTags }: Props) => {
 						</Text>
 						{(product.categories as []).map((cat: any) => (
 							<Tag
-								key={cat}
+								key={cat.id}
 								onPress={() => {
 									handleSelectCategory(cat);
 								}}

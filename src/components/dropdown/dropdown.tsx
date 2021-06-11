@@ -29,11 +29,13 @@ export const Dropdown = ({ items, onSelect, activator }: DropdownProps) => {
 	const _activator =
 		typeof activator === 'string' ? (
 			<Text onPress={show}>
-				{activator} <Arrow direction={open ? 'up' : 'down'} />
+				{activator}
+				<Arrow direction={open ? 'up' : 'down'} />
 			</Text>
 		) : (
 			<Pressable onPress={show}>
-				{activator} <Arrow direction={open ? 'up' : 'down'} />
+				{activator}
+				<Arrow direction={open ? 'up' : 'down'} />
 			</Pressable>
 		);
 

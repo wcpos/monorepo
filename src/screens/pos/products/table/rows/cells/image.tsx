@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Img from '@wcpos/common/src/components/image3';
+import Img from '@wcpos/common/src/components/image';
 import get from 'lodash/get';
 
 type Props = {

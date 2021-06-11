@@ -1,20 +1,20 @@
 import styled, { css } from 'styled-components/native';
 
-type Props = import('@wcpos/common/src/lib/utility-types').Omit<
-	import('./image').ImageProps,
-	'src'
->;
+type Props = Pick<import('./image').ImageProps, 'border'>;
 
-export const Img = styled.Image<Props>`
-	width: 100px;
-	height: 100px;
+export const Image = styled.Image<Props>`
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
 
-	/** Rounded */
-	${(props) => {
-		switch (props.border) {
+	/** Border */
+	${({ border, theme }) => {
+		switch (border) {
 			case 'rounded':
 				return css`
-					border-radius: 3px;
+					border-radius: ${theme.IMAGE_BORDER_RADIUS};
 				`;
 			case 'circular':
 				return css`
@@ -26,4 +26,10 @@ export const Img = styled.Image<Props>`
 				`;
 		}
 	}}
+`;
+
+export const Container = styled.View`
+	background-color: transparent;
+	position: relative;
+	overflow: hidden;
 `;

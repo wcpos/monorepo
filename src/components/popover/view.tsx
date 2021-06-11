@@ -1,9 +1,9 @@
 import _ from 'lodash';
 import * as React from 'react';
-import { LayoutRectangle, ViewProps, Animated, StyleProp, ViewStyle, Easing } from 'react-native';
+import { LayoutRectangle, ViewProps, StyleProp, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppProviderDimensions } from '@wcpos/common/src/hooks/use-position-in-app';
-import useAnimation from '@wcpos/common/src/hooks/use-animation';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { PopoverPlacement, isLeft, isRight, isStart, isEnd, isTop, isBottom } from './placements';
 import * as Styled from './styles';
 
@@ -33,29 +33,7 @@ export const PopoverView: React.FC<PopoverViewProps> = ({
 	clickThrough,
 	style,
 }) => {
-	const animation = {
-		duration: {
-			default: 300,
-			shorter: 150,
-			longer: 400,
-		},
-		easing: {
-			enter: Easing.out(Easing.ease), // Ease out
-			exit: Easing.ease, // Ease in
-			move: Easing.inOut(Easing.ease), // Ease in-out
-		},
-	};
-
-	const anim = useAnimation({
-		toValue: open ? 1 : 0,
-		type: 'timing',
-		easing: animation.easing.move,
-		duration: animation.duration.shorter,
-		useNativeDriver: true,
-	});
-
 	const { width: windowWidth, height: windowHeight } = useAppProviderDimensions();
-
 	const [layout, setLayout] = React.useState<LayoutRectangle | null>(null);
 	const onLayout = React.useCallback<Required<ViewProps>['onLayout']>(
 		({ nativeEvent }) => setLayout(nativeEvent.layout),
@@ -73,10 +51,19 @@ export const PopoverView: React.FC<PopoverViewProps> = ({
 		windowHeight
 	);
 
+	// Fade in and out
+	const opacity = useSharedValue(0);
+	const animatedStyle = useAnimatedStyle(() => ({
+		opacity: withTiming(opacity.value, { duration: 150 }),
+	}));
+	React.useEffect(() => {
+		opacity.value = open ? 1 : 0;
+	}, [open]);
+
 	return (
 		<Styled.Container
 			as={Animated.View}
-			style={[{ width: windowWidth, height: windowHeight }, { opacity: anim }]}
+			style={[{ width: windowWidth, height: windowHeight }, animatedStyle]}
 			pointerEvents="box-none" // Children views can receive touches but not this View
 		>
 			<Styled.Popover

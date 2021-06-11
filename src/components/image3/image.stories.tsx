@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Image, ImageProps } from './image';
+import { SuspendedImage as Image, ImageProps } from './image';
+import Text from '../text';
 
 export default {
 	title: 'Components/Image3',
@@ -22,15 +23,22 @@ export const BasicUsage = (props: ImageProps) => {
 	return <Image {...props} />;
 };
 BasicUsage.args = {
-	src: 'https://i.imgur.com/0y8Ftya.jpg',
+	src: 'https://picsum.photos/200/300/?random',
 };
 
 /**
  *
  */
-export const LocalAssets = (props: ImageProps) => {
-	return <Image {...props} />;
+export const BrokenImage = (props: ImageProps) => <Image {...props} />;
+BrokenImage.args = {
+	src: 'https://example.com/image.jpg',
 };
-LocalAssets.args = {
-	source: { require('@wcpos/common/src/assets/placeholder.png') },
+
+/**
+ *
+ */
+export const WithPlaceholder = (props: ImageProps) => <Image {...props} />;
+WithPlaceholder.args = {
+	src: 'https://example.com/image.jpg',
+	placeholder: 'Joe Bloggs',
 };

@@ -1,60 +1,79 @@
 import * as React from 'react';
-import { ImageSourcePropType } from 'react-native';
-import * as Styled from './styles';
-import Skeleton from '../skeleton';
+import { View, StyleProp, ViewStyle } from 'react-native';
+import { ImgResource } from './resource';
+import { Img } from './styles';
+import Placeholder from '../skeleton';
+import ErrorBoundary from '../error';
 import Text from '../text';
 
 export interface ImageProps {
+	src: string;
+	srcSet?: string;
+	border?: 'rounded' | 'circular';
 	/**
-	 * Image source (simple)
+	 *
 	 */
-	src?: string;
-	/**
-	 * Image source (which is the same as React Native `Image` component).
-	 */
-	source?: ImageSourcePropType;
-	/**
-	 * Image border shape
-	 */
-	border?: 'default' | 'rounded' | 'circular';
-	/**
-	 * Placeholder to show if image not available / fallback?
-	 */
-	placeholder?: string | React.ReactNode;
-	/**
-	 * Style
-	 */
-	style?: any;
-	/**
-	 * Width
-	 */
-	width?: number;
-	/**
-	 * Height
-	 */
-	height?: number;
+	style?: StyleProp<ViewStyle>;
+	placeholder?: React.ReactNode;
 }
 
-export const Image = ({
-	src,
-	source,
-	border = 'default',
-	width = 100,
-	height = 100,
-	style,
-}: ImageProps) => {
-	const [loaded, setLoaded] = React.useState(false);
+const Image = ({ src, srcSet, border, style }: ImageProps) => {
+	if (src) {
+		ImgResource.read({ src, srcSet });
+	}
 
-	const handleLoad = () => {
-		setLoaded(true);
+	return <Img source={{ uri: src }} border={border} style={[style]} />;
+};
+
+export const SuspendedImage = ({
+	src,
+	srcSet,
+	border,
+	style,
+	placeholder,
+	...rest
+}: ImageProps) => {
+	const getPlaceholder = () => {
+		if (typeof placeholder === 'string') {
+			return (
+				<Text type="inverse" weight="bold">
+					{placeholder}
+				</Text>
+			);
+		}
+		return placeholder;
 	};
 
 	return (
-		<Styled.Container style={[style, { width, height }]}>
-			<Styled.Image source={source || { uri: src }} onLoad={handleLoad} border={border} />
-			<Skeleton>
-				<Skeleton.Item width={width} height={height} style={{ opacity: loaded ? 0 : 1 }} />
-			</Skeleton>
-		</Styled.Container>
+		<React.Suspense
+			fallback={
+				<Placeholder>
+					<Placeholder.Item style={[style]} />
+				</Placeholder>
+			}
+		>
+			<ErrorBoundary
+				fallback={
+					<View
+						style={{
+							backgroundColor: '#000',
+							height: 100,
+							width: 100,
+							alignItems: 'center',
+							justifyContent: 'center',
+						}}
+					>
+						{getPlaceholder()}
+					</View>
+				}
+			>
+				<Image
+					src={src}
+					srcSet={srcSet}
+					border={border} // style={[style]}
+					{...rest}
+				/>
+			</ErrorBoundary>
+		</React.Suspense>
 	);
 };

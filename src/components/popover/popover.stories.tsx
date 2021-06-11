@@ -33,9 +33,6 @@ export default {
 	component: Popover,
 	subcomponents: { 'Popover.Item': Popover.Item },
 	decorators: [AppProvider],
-	parameters: {
-		chromatic: { pauseAnimationAtEnd: true, delay: 300 },
-	},
 };
 
 export const BasicUsage: React.FC<PopoverProps> = (props) => {
@@ -43,7 +40,7 @@ export const BasicUsage: React.FC<PopoverProps> = (props) => {
 
 	return (
 		<View style={{ width: 600, height: 600 }}>
-			<View style={{ width: 300, height: 300 }}>
+			<View style={{ width: 200, height: 300, margin: 100 }}>
 				<Popover
 					{...props}
 					open={visible}
@@ -76,9 +73,10 @@ export const UsingChildrenItems: React.FC<PopoverProps> = () => {
 	const [visible, setVisible] = React.useState(false);
 
 	return (
-		<View>
+		<View style={{ width: '100%', height: 600 }}>
 			<Popover
 				open={visible}
+				placement="bottom"
 				onRequestClose={() => setVisible(false)}
 				activator={<Button title="more" onPress={() => setVisible(true)} />}
 			>
@@ -98,7 +96,7 @@ export const MatchWidth: React.FC = () => {
 	const [visible, setVisible] = React.useState(false);
 
 	return (
-		<View>
+		<View style={{ width: '100%', height: 600 }}>
 			<Popover
 				matchWidth
 				open={visible}
@@ -138,7 +136,7 @@ export const AutomaticPlacementCorrection: React.FC<PopoverProps> = () => {
 	const [visible, setVisible] = React.useState(false);
 
 	return (
-		<View>
+		<View style={{ width: '100%', height: 600 }}>
 			<Popover
 				open={visible}
 				onRequestClose={() => setVisible(false)}

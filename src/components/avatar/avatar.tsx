@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { StyleProp, ViewStyle } from 'react-native';
-import Image from '../image3';
+import Image from '../image';
 
 /**
  * Avatar properties

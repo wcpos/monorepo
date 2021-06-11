@@ -1,13 +1,7 @@
 import * as React from 'react';
-import {
-	TouchableWithoutFeedback,
-	Animated,
-	Easing,
-	NativeSyntheticEvent,
-	NativeTouchEvent,
-} from 'react-native';
+import { TouchableWithoutFeedback, NativeSyntheticEvent, NativeTouchEvent } from 'react-native';
 import isFunction from 'lodash/isFunction';
-import useAnimation from '@wcpos/common/src/hooks/use-animation';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import * as Styled from './styles';
 
 export interface BackdropProps {
@@ -46,26 +40,14 @@ export const Backdrop = ({
 	onPress,
 	children,
 }: BackdropProps) => {
-	const animation = {
-		duration: {
-			default: 300,
-			shorter: 150,
-			longer: 400,
-		},
-		easing: {
-			enter: Easing.out(Easing.ease), // Ease out
-			exit: Easing.ease, // Ease in
-			move: Easing.inOut(Easing.ease), // Ease in-out
-		},
-	};
-
-	const anim = useAnimation({
-		toValue: open ? 1 : 0,
-		type: 'timing',
-		easing: animation.easing.move,
-		duration: animation.duration.shorter,
-		useNativeDriver: true,
-	});
+	// Fade in and out
+	const opacity = useSharedValue(0);
+	const animatedStyle = useAnimatedStyle(() => ({
+		opacity: withTiming(opacity.value, { duration: 150 }),
+	}));
+	React.useEffect(() => {
+		opacity.value = open ? 1 : 0;
+	}, [open]);
 
 	const handlePress = (event: NativeSyntheticEvent<NativeTouchEvent>) => {
 		if (isFunction(onPress)) onPress(event);
@@ -74,7 +56,7 @@ export const Backdrop = ({
 	const contentView = (
 		<Styled.Backdrop
 			as={Animated.View}
-			style={[!invisible && { opacity: anim }]}
+			style={[!invisible && animatedStyle]}
 			pointerEvents={open && !clickThrough ? 'auto' : 'none'}
 		>
 			{children}

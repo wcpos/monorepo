@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react';
-import { Animated, Easing } from 'react-native';
-import useAnimation from '@wcpos/common/src/hooks/use-animation';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import useTimeout from '@wcpos/common/src/hooks/use-timeout';
 import Button from '../button';
 import Icon from '../icon';
@@ -42,40 +41,26 @@ export const Snackbar = ({
 	message,
 	action,
 	duration = 'default',
-	onDismiss,
+	onDismiss = () => {},
 	dismissable,
 }: SnackbarProps) => {
-	const animation = {
-		duration: {
-			default: 300,
-			shorter: 150,
-			longer: 400,
-		},
-		easing: {
-			enter: Easing.out(Easing.ease), // Ease out
-			exit: Easing.ease, // Ease in
-			move: Easing.inOut(Easing.ease), // Ease in-out
-		},
-	};
-	const showDuration = animation.duration.shorter;
+	const showDuration = 150;
+
+	// Fade in
+	const opacity = useSharedValue(0);
+	const animatedStyle = useAnimatedStyle(() => ({
+		opacity: withTiming(opacity.value, { duration: showDuration }),
+	}));
+	React.useEffect(() => {
+		opacity.value = 1;
+	}, []);
+
 	const durationValue = durationValues[duration];
-	const anim = useAnimation({
-		initialValue: 0,
-		toValue: 1,
-		type: 'timing',
-		easing: animation.easing.enter,
-		duration: showDuration,
-		useNativeDriver: true,
-	});
 
 	const dismiss = useCallback(() => {
-		Animated.timing(anim, {
-			easing: animation.easing.exit,
-			toValue: 0,
-			duration: showDuration,
-			useNativeDriver: true,
-		}).start(onDismiss);
-	}, [onDismiss, animation, showDuration]);
+		// fade out
+		onDismiss();
+	}, [onDismiss, showDuration]);
 
 	const onActionClick = useCallback(() => {
 		if (action && action.action) {
@@ -88,21 +73,7 @@ export const Snackbar = ({
 
 	return (
 		<Styled.Container>
-			<Styled.Snackbar
-				as={Animated.View}
-				style={[
-					{
-						transform: [
-							{
-								translateY: anim.interpolate({
-									inputRange: [0, 1],
-									outputRange: ['100%', '0%'],
-								}),
-							},
-						],
-					},
-				]}
-			>
+			<Styled.Snackbar as={Animated.View} style={animatedStyle}>
 				<Styled.Text>{message}</Styled.Text>
 				{action ? <Button onPress={onActionClick}>{action.label}</Button> : null}
 				{dismissable ? <Icon name="remove" onPress={dismiss} /> : null}
