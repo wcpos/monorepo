@@ -143,6 +143,9 @@
 		"backordered": {
 			"type": "boolean"
 		},
+		"lowStockAmount": {
+			"type": ["integer", "null"]
+		},
 		"soldIndividually": {
 			"type": "boolean"
 		},
@@ -386,5 +389,5 @@
 			"type": "string"
 		}
 	},
-	"indexes": ["name", "sku", "price", "regularPrice", "salePrice"]
+	"indexes": ["id", "name", "sku", "price", "regularPrice", "salePrice", "dateModifiedGmt"]
 }

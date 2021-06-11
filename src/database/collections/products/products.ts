@@ -26,20 +26,54 @@ export const methods: ProductMethods = {
 	},
 };
 
+/**
+ *
+ */
+async function preInsert(this: ProductCollection, plainData: Record<string, any>) {
+	// totalSales is meant to be interger, but comes as string
+	const { totalSales } = plainData;
+	if (totalSales) {
+		plainData.totalSales = parseFloat(totalSales);
+	}
+
+	return plainData;
+}
+
+/**
+ *
+ */
+async function preSave(
+	this: ProductCollection,
+	plainData: Record<string, any>,
+	product: ProductDocument
+) {
+	// totalSales is meant to be interger, but comes as string
+	const { totalSales } = plainData;
+	if (totalSales) {
+		plainData.totalSales = parseFloat(totalSales);
+	}
+
+	return plainData;
+}
+
 export const products = {
 	schema,
 	// pouchSettings: {},
 	// statics: {},
 	methods,
 	// attachments: {},
-	// options: {
-	// 	middlewares: {
-	// 		postCreate: {
-	// 			handle: postCreate,
-	// 			parallel: false,
-	// 		},
-	// 	},
-	// },
+	options: {
+		middlewares: {
+			preInsert: {
+				handle: preInsert,
+				parallel: false,
+			},
+			preSave: {
+				handle: preSave,
+				parallel: false,
+			},
+		},
+	},
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},
