@@ -1,5 +1,5 @@
 import styled from 'styled-components/native';
-import { Text } from '../text/styles';
+import { Text } from '../text/text';
 
 export const Tag = styled.View<{ disabled?: boolean }>`
 	flex-direction: row;

@@ -1,21 +1,36 @@
 import * as React from 'react';
 import { StyleProp, ViewStyle } from 'react-native';
+import { decode } from 'html-entities';
 import * as Styled from './styles';
 
-/**
- * note: weird bug in storybook when importing * as Styled
- */
-
 export interface TextProps {
+	/**
+	 *
+	 */
 	align?: 'left' | 'right' | 'center' | 'justify';
+	/**
+	 *
+	 */
 	children: React.ReactNode;
+	/**
+	 *
+	 */
 	italic?: boolean;
+	/**
+	 *
+	 */
 	onPress?: () => void;
+	/**
+	 *
+	 */
 	size?: 'normal' | 'large' | 'small';
 	/**
 	 *
 	 */
 	style?: StyleProp<ViewStyle>;
+	/**
+	 *
+	 */
 	type?:
 		| 'attention'
 		| 'critical'
@@ -25,7 +40,13 @@ export interface TextProps {
 		| 'success'
 		| 'warning'
 		| 'inverse';
+	/**
+	 *
+	 */
 	uppercase?: boolean;
+	/**
+	 *
+	 */
 	weight?: 'normal' | 'bold' | 'light';
 }
 
@@ -52,7 +73,7 @@ export const Text = ({
 			uppercase={uppercase}
 			weight={weight}
 		>
-			{children}
+			{typeof children === 'string' ? decode(children) : children}
 		</Styled.Text>
 	);
 };
