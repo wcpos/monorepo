@@ -151,9 +151,16 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 			return Promise.resolve(false);
 		}
 
+		// get last date_modified_gmt
+		const lastModified = await this.collection.findOne().sort({ dateModifiedGmt: 'desc' }).exec();
+
 		let result;
 		try {
-			result = await this.collection.database.httpClient.get(this.collection.name);
+			result = await this.collection.database.httpClient.get(this.collection.name, {
+				params: {
+					date_modified_gmt_after: lastModified.dateModifiedGmt,
+				},
+			});
 			// if (result.errors) {
 			// 	if (typeof result.errors === 'string') {
 			// 		throw new Error(result.errors);
