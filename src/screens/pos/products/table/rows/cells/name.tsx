@@ -3,6 +3,8 @@ import { View } from 'react-native';
 import Text from '@wcpos/common/src/components/text';
 import Tag from '@wcpos/common/src/components/tag';
 import { ProductQueryContext } from '../../../products';
+import Categories from './categories';
+import Tags from './tags';
 
 interface Props {
 	product: import('@wcpos/common/src/database').ProductDocument;
@@ -23,35 +25,8 @@ const Name = ({ product, showSKU, showCategories, showTags }: Props) => {
 		<>
 			<Text>{product.name}</Text>
 			{showSKU && <Text size="small">{product.sku}</Text>}
-			{showCategories && (
-				<View>
-					<Text size="small">
-						<Text size="small" type="secondary">
-							Categories:
-						</Text>
-						{(product.categories as []).map((cat: any) => (
-							<Tag
-								key={cat.id}
-								onPress={() => {
-									handleSelectCategory(cat);
-								}}
-							>
-								{cat.name}
-							</Tag>
-						))}
-					</Text>
-				</View>
-			)}
-			{showTags && (
-				<View>
-					<Text size="small">
-						<Text size="small" type="secondary">
-							Tags:
-						</Text>
-						{(product.tags as []).map((tag: any) => tag.name).join(', ')}
-					</Text>
-				</View>
-			)}
+			{showCategories && <Categories product={product} />}
+			{showTags && <Tags product={product} />}
 			{product.type === 'variable' && (
 				<View>
 					{(product.attributes as [])

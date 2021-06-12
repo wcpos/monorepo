@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-import { Text, TextProps } from './text';
+import Text from '.';
+import { TextProps } from './text';
 import AutoSize from './auto-size';
 import type {
 	MaxLinesProps,
@@ -14,6 +15,7 @@ import type {
 export default {
 	title: 'Components/Text',
 	component: Text,
+	subcomponents: { Skeleton: Text.Skeleton },
 };
 
 const lorem =
@@ -110,4 +112,11 @@ OverflowReplacement.args = {
 	fontSize: 32,
 	numberOfLines: 3,
 	overFlowReplacement: 'Text overflowing',
+};
+
+/**
+ *
+ */
+export const Skeleton = () => {
+	return <Text.Skeleton />;
 };

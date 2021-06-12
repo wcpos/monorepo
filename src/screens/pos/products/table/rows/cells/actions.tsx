@@ -1,4 +1,5 @@
 import * as React from 'react';
+import Icon from '@wcpos/common/src/components/icon';
 import Button from '@wcpos/common/src/components/button';
 import Popover from '@wcpos/common/src/components/popover';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
@@ -37,8 +38,9 @@ const Actions = ({ product }: Props) => {
 	}
 
 	return (
-		<Button
-			title="+"
+		<Icon
+			name="addCircle"
+			size="large"
 			onPress={() => {
 				addToCart();
 			}}

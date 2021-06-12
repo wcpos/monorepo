@@ -1,4 +1,5 @@
 import add from './add.svg';
+import addCircle from './add-circle.svg';
 import arrow from './arrow.svg';
 import arrowDown from './arrow-down.svg';
 import backspace from './backspace.svg';
@@ -17,6 +18,7 @@ import drag from './drag.svg';
 
 export default {
 	add,
+	addCircle,
 	arrow,
 	'arrow-up': arrow,
 	'arrow-down': arrowDown,

@@ -1,1 +1,0 @@
-from https://github.com/chramos/react-native-skeleton-placeholder

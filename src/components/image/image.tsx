@@ -52,11 +52,7 @@ export const Image = ({
 	return (
 		<Styled.Container style={[style, { width, height }]}>
 			<Styled.Image source={source || { uri: src }} onLoad={handleLoad} border={border} />
-			{!loaded && (
-				<Skeleton>
-					<Skeleton.Item width={width} height={height} />
-				</Skeleton>
-			)}
+			{!loaded && <Skeleton width={width} height={height} />}
 		</Styled.Container>
 	);
 };

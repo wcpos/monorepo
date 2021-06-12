@@ -4,6 +4,8 @@ import Table from '../../../../../components/table';
 import Button from '../../../../../components/button';
 import Image from './cells/image';
 import Name from './cells/name';
+import Price from './cells/price';
+import SKU from './cells/sku';
 import Actions from './cells/actions';
 
 type GetCellPropsFunction = import('../../../../../components/table/row').GetCellPropsFunction;
@@ -39,6 +41,10 @@ const Row = ({ product, columns, display }: IPOSProductsTableRowProps) => {
 											showTags={show('tags')}
 										/>
 									);
+								case 'sku':
+									return <SKU product={product} />;
+								case 'price':
+									return <Price product={product} />;
 								case 'actions':
 									return <Actions product={product} />;
 								default:

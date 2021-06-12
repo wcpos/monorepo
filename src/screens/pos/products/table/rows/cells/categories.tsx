@@ -8,7 +8,7 @@ interface POSProductCategoryProps {
 }
 
 const Categories = ({ product }: POSProductCategoryProps) => {
-	const categories = useObservable(product.categories$, []);
+	const categories = useObservable(product.categories$) || [];
 	const { query, setQuery } = React.useContext(ProductQueryContext);
 
 	const handleSelectCategory = (category: any) => {
