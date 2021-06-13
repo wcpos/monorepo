@@ -32,9 +32,9 @@ const Row = ({ product, columns }: Props) => {
 							case 'name':
 								return <Name product={product} />;
 							case 'categories':
-								return <Categories categories={cellData} />;
+								return <Categories product={product} />;
 							case 'tags':
-								return <Tags tags={cellData} />;
+								return <Tags product={product} />;
 							case 'regularPrice':
 								return <RegularPrice regularPrice={cellData} />;
 							case 'actions':

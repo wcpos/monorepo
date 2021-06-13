@@ -116,8 +116,50 @@ export class RxDBWooCommerceRestApiSyncDocumentService {
 	 * @return true if successfull, false if not
 	 */
 	async runPull(): Promise<boolean> {
-		console.log('pull');
-		return false;
+		let result;
+		let url = this.document.collection.name;
+		// @ts-ignore
+		if (this.document.id) {
+			// @ts-ignore
+			url = `${this.document.collection.name}/${this.document.id}`;
+		}
+
+		try {
+			// @ts-ignore
+			result = await this.document.collection.database.httpClient({
+				method: 'get',
+				url,
+			});
+			// if (result.errors) {
+			// 	if (typeof result.errors === 'string') {
+			// 		throw new Error(result.errors);
+			// 	} else {
+			// 		const err: any = new Error('unknown errors occured - see innerErrors for more details');
+			// 		err.innerErrors = result.errors;
+			// 		throw err;
+			// 	}
+			// }
+		} catch (err) {
+			if (err.response) {
+				// client received an error response (5xx, 4xx)
+				console.log(err.response);
+				this._subjects.error.next({ code: err.response.status, message: err.response.statusText });
+			} else if (err.request) {
+				// client never received a response, or request never left
+				console.log(err.request);
+				this._subjects.error.next({ message: 'Request Error' });
+			} else {
+				// anything else
+				console.log(err);
+				this._subjects.error.next({ message: 'Unknown Error' });
+			}
+			return false;
+		}
+
+		const { data } = result;
+		await this.document.atomicPatch(data);
+
+		return true;
 	}
 
 	/**

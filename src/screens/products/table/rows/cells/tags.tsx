@@ -1,29 +1,30 @@
 import * as React from 'react';
-import Text from '../../../../../components/text';
+import useObservable from '@wcpos/common/src/hooks/use-observable';
+import Tag from '@wcpos/common/src/components/tag';
+// import { ProductQueryContext } from '../../../products';
 
-type Tag = {
-	id: string;
-	name: string;
+type ProductTagsProps = {
+	product: import('@wcpos/common/src/database').ProductDocument;
 };
 
-interface Props {
-	tags: Tag[];
-}
+const ProductTags = ({ product }: ProductTagsProps) => {
+	const tags = useObservable(product.tags$);
+	// const { query, setQuery } = React.useContext(ProductQueryContext);
 
-const Tags = ({ tags }: Props) => {
-	const handleClick = (tag: Tag) => {
-		console.log('filter by tag ', tag);
+	const handleSelectTag = (tag: any) => {
+		// query.filter.tags = [tag];
+		// setQuery({ ...query });
 	};
 
-	return (
-		<>
-			{tags.map((tag) => (
-				<Text key={tag.id} onPress={() => handleClick(tag)}>
-					{tag.name}
-				</Text>
-			))}
-		</>
-	);
+	const tagsArray =
+		tags &&
+		tags.map((tag: any) => ({
+			key: tag.id,
+			label: tag.name,
+			action: () => handleSelectTag(tag),
+		}));
+
+	return tags ? <Tag.Group tags={tagsArray} /> : <Tag.Group.Skeleton numberOfTags={2} />;
 };
 
-export default Tags;
+export default ProductTags;
