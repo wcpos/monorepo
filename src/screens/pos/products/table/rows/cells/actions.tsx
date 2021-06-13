@@ -7,7 +7,7 @@ import Variations from './variations';
 import { POSContext } from '../../../../pos';
 
 interface Props {
-	product: any;
+	product: import('@wcpos/common/src/database').ProductDocument;
 }
 
 const Actions = ({ product }: Props) => {
@@ -25,6 +25,10 @@ const Actions = ({ product }: Props) => {
 		return newOrder;
 	};
 
+	if (!product.isSynced()) {
+		return <Icon.Skeleton size="x-large" />;
+	}
+
 	if (product.isVariable()) {
 		return (
 			<Popover
@@ -40,7 +44,7 @@ const Actions = ({ product }: Props) => {
 	return (
 		<Icon
 			name="addCircle"
-			size="large"
+			size="x-large"
 			onPress={() => {
 				addToCart();
 			}}

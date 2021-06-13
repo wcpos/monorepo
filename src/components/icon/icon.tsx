@@ -3,8 +3,15 @@ import { useTheme } from 'styled-components/native';
 import Svgs from './svg';
 import Pressable from '../pressable';
 import Tooltip from '../tooltip';
+import Skeleton from '../skeleton';
 
-type Sizes = 'default' | 'small' | 'large';
+const sizeMap = {
+	default: 20,
+	small: 16,
+	'x-small': 12,
+	large: 24,
+	'x-large': 30,
+};
 
 export interface IconProps {
 	/**
@@ -26,7 +33,7 @@ export interface IconProps {
 	/**
 	 * Set icon size.
 	 */
-	size?: Sizes;
+	size?: Extract<keyof typeof sizeMap, string>;
 	/**
 	 * Set icon width.
 	 */
@@ -41,17 +48,9 @@ export interface IconProps {
 	tooltip?: string;
 }
 
-const getSize = (size: Sizes) => {
-	switch (size) {
-		case 'small':
-			return 16;
-		case 'large':
-			return 24;
-		default:
-			return 20;
-	}
-};
-
+/**
+ * Icon component
+ */
 export const Icon = ({
 	color,
 	disabled,
@@ -81,12 +80,29 @@ export const Icon = ({
 		<SvgIcon
 			// @TODO - clean up this component
 			// @ts-ignore
-			width={width || getSize(size)}
+			width={width || sizeMap[size]}
 			// @ts-ignore
-			height={height || getSize(size)}
+			height={height || sizeMap[size]}
 			fill={color || theme?.TEXT_COLOR}
 		/>
 	);
 };
 
-// export default Icon;
+/**
+ *
+ */
+export interface IconSkeletonProps {
+	/**
+	 *
+	 */
+	size?: Extract<keyof typeof sizeMap, string>;
+}
+
+/**
+ *
+ */
+export const IconSkeleton = ({ size = 'default' }: IconSkeletonProps) => {
+	return <Skeleton border="circular" width={sizeMap[size]} height={sizeMap[size]} />;
+};
+
+Icon.Skeleton = IconSkeleton;

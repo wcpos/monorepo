@@ -2,11 +2,9 @@ import * as React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { action } from '@storybook/addon-actions';
 import { AppProviderSizeProvider } from '@wcpos/common/src/hooks/use-position-in-app';
-import { Icon } from './icon';
+import { Icon, IconProps, IconSkeletonProps } from './icon';
 import svgs from './svg';
 import Portal from '../portal';
-
-type IconProps = import('./icon').IconProps;
 
 const iconNames = Object.keys(svgs);
 
@@ -45,18 +43,20 @@ const AppProvider: React.FC = ({ children }) => {
 	);
 };
 
-export const basicUsage = (props: IconProps) => <Icon {...props} />;
+export const BasicUsage = (props: IconProps) => <Icon {...props} />;
 
-export const pressableIcon = (props: IconProps) => <Icon {...props} />;
-pressableIcon.args = {
+export const PressableIcon = (props: IconProps) => <Icon {...props} />;
+PressableIcon.args = {
 	onPress: action('Pressed'),
 };
 
-export const iconWithTooltip = (props: IconProps) => (
+export const IconWithTooltip = (props: IconProps) => (
 	<AppProvider>
 		<Icon {...props} />
 	</AppProvider>
 );
-iconWithTooltip.args = {
+IconWithTooltip.args = {
 	tooltip: 'Icon label',
 };
+
+export const Skeleton = (props: IconSkeletonProps) => <Icon.Skeleton {...props} />;

@@ -7,6 +7,10 @@ import * as Styled from './styles';
  */
 export interface TextAction {
 	/**
+	 * Unique key identifier
+	 */
+	key?: string | number;
+	/**
 	 * Label to display.
 	 */
 	label: string;
@@ -32,11 +36,11 @@ export interface TagGroupProps {
 export const TagGroup = ({ tags }: TagGroupProps) => {
 	return (
 		<Styled.Group>
-			{tags.map((tag, index) =>
+			{tags.map((tag, i) =>
 				typeof tag === 'string' ? (
-					<Tag key={index}>tag</Tag>
+					<Tag key={i}>tag</Tag>
 				) : (
-					<Tag key={index} onPress={tag.action}>
+					<Tag key={tag.key || i} onPress={tag.action}>
 						{tag.label}
 					</Tag>
 				)
