@@ -3,12 +3,12 @@ import useObservable from '@wcpos/common/src/hooks/use-observable';
 import Tag from '@wcpos/common/src/components/tag';
 import { ProductQueryContext } from '../../../products';
 
-type Props = {
+type ProductTagsProps = {
 	product: import('@wcpos/common/src/database').ProductDocument;
 };
 
-const Tags = ({ product }: Props) => {
-	const tags = useObservable(product.tags$) || [];
+const ProductTags = ({ product }: ProductTagsProps) => {
+	const tags = useObservable(product.tags$);
 	const { query, setQuery } = React.useContext(ProductQueryContext);
 
 	const handleSelectTag = (tag: any) => {
@@ -16,11 +16,15 @@ const Tags = ({ product }: Props) => {
 		setQuery({ ...query });
 	};
 
-	return tags.map((tag: any) => (
-		<Tag key={tag.id} onPress={() => handleSelectTag(tag)}>
-			{tag.name}
-		</Tag>
-	));
+	const tagsArray =
+		tags &&
+		tags.map((tag: any) => ({
+			key: tag.id,
+			label: tag.name,
+			action: () => handleSelectTag(tag),
+		}));
+
+	return tags ? <Tag.Group tags={tagsArray} /> : <Tag.Group.Skeleton numberOfTags={2} />;
 };
 
-export default Tags;
+export default ProductTags;

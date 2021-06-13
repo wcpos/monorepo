@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import Text from '@wcpos/common/src/components/text';
-import Tag from '@wcpos/common/src/components/tag';
-import { ProductQueryContext } from '../../../products';
 import Categories from './categories';
 import Tags from './tags';
 
@@ -14,13 +12,6 @@ interface Props {
 }
 
 const Name = ({ product, showSKU, showCategories, showTags }: Props) => {
-	const { query, setQuery } = React.useContext(ProductQueryContext);
-
-	const handleSelectCategory = (category: any) => {
-		query.filter.categories = [category];
-		setQuery({ ...query });
-	};
-
 	return (
 		<>
 			<Text>{product.name}</Text>

@@ -3,12 +3,12 @@ import useObservable from '@wcpos/common/src/hooks/use-observable';
 import Tag from '@wcpos/common/src/components/tag';
 import { ProductQueryContext } from '../../../products';
 
-interface POSProductCategoryProps {
+interface ProductCategoriesProps {
 	product: import('@wcpos/common/src/database').ProductDocument;
 }
 
-const Categories = ({ product }: POSProductCategoryProps) => {
-	const categories = useObservable(product.categories$) || [];
+const ProductCategories = ({ product }: ProductCategoriesProps) => {
+	const categories = useObservable(product.categories$);
 	const { query, setQuery } = React.useContext(ProductQueryContext);
 
 	const handleSelectCategory = (category: any) => {
@@ -16,11 +16,15 @@ const Categories = ({ product }: POSProductCategoryProps) => {
 		setQuery({ ...query });
 	};
 
-	return categories.map((category: any) => (
-		<Tag key={category.id} onPress={() => handleSelectCategory(category)}>
-			{category.name}
-		</Tag>
-	));
+	const tagsArray =
+		categories &&
+		categories.map((cat: any) => ({
+			key: cat.id,
+			label: cat.name,
+			action: () => handleSelectCategory(cat),
+		}));
+
+	return categories ? <Tag.Group tags={tagsArray} /> : <Tag.Group.Skeleton numberOfTags={2} />;
 };
 
-export default Categories;
+export default ProductCategories;

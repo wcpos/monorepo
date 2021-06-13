@@ -11,6 +11,14 @@ import Animated, {
 import { StyleSheet, ViewStyle } from 'react-native';
 import * as Styled from './styles';
 
+/**
+ *
+ */
+export type Borders = 'square' | 'rounded' | 'circular';
+
+/**
+ *
+ */
 export interface SkeletonProps {
 	/**
 	 *
@@ -20,6 +28,10 @@ export interface SkeletonProps {
 	 *
 	 */
 	height: number;
+	/**
+	 *
+	 */
+	border?: Borders;
 	/**
 	 *
 	 */
@@ -34,7 +46,7 @@ const timingConfig: Animated.WithTimingConfig = {
 /**
  * @TODO - translating is quite CPU intensive, perhaps a simple pulse would be better?
  */
-export const Skeleton = ({ width, height, style }: SkeletonProps) => {
+export const Skeleton = ({ width, height, border = 'rounded', style }: SkeletonProps) => {
 	const translateX = useSharedValue(-width);
 	const animatedStyle = useAnimatedStyle(() => {
 		return {
@@ -56,7 +68,7 @@ export const Skeleton = ({ width, height, style }: SkeletonProps) => {
 	// }, [translateX, width]);
 
 	return (
-		<Styled.Container style={[{ width, height }, style]}>
+		<Styled.Container style={[{ width, height }, style]} border={border}>
 			<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
 				<LinearGradient
 					colors={['transparent', 'rgba(255, 255, 255, 0.4)', 'transparent']}
