@@ -11,7 +11,8 @@ import Row from './rows';
 type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
-type GetHeaderCellPropsFunction = import('@wcpos/common/src/components/table/header-row').GetHeaderCellPropsFunction;
+type GetHeaderCellPropsFunction =
+	import('@wcpos/common/src/components/table/header-row').GetHeaderCellPropsFunction;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
 interface Props {

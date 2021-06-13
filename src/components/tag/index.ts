@@ -1,1 +1,4 @@
-export { Tag as default } from './tag';
+import { Tag } from './tag';
+import { TagGroup } from './group';
+
+export default Object.assign(Tag, { Group: TagGroup });

@@ -1,25 +1,40 @@
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-import { Tag, TagProps } from './tag';
+import Tag from '.';
+import { TagProps, TagSkeletonProps } from './tag';
+import { TagGroupProps, TagGroupSkeletonProps } from './group';
 
 export default {
 	title: 'Components/Tag',
 	component: Tag,
+	subcomponents: { Skeleton: Tag.Skeleton },
 };
 
-export const basicUsage = (props: TagProps) => (
-	<>
-		<Tag {...props}>Tag 1</Tag>
-		<Tag {...props}>Tag 2</Tag>
-		<Tag {...props}>Tag 3</Tag>
-	</>
-);
+export const BasicUsage = (props: TagProps) => <Tag {...props} />;
+BasicUsage.args = {
+	children: 'Label',
+	onPress: action('Pressed'),
+};
 
-export const closable = (props: TagProps) => <Tag {...props}>{props.children}</Tag>;
-closable.args = {
+export const Removable = (props: TagProps) => <Tag {...props} />;
+Removable.args = {
 	children: 'Label',
 	removable: true,
 	onRemove: action('Remove'),
 };
 
-export const skeleton = () => <Tag.Skeleton />;
+export const Skeleton = (props: TagSkeletonProps) => <Tag.Skeleton {...props} />;
+
+export const Group = (props: TagGroupProps) => <Tag.Group {...props} />;
+Group.args = {
+	tags: [
+		{ label: 'Tag 1', action: action('Tag 1 pressed') },
+		{ label: 'Tag 2', action: action('Tag 2 pressed') },
+		{ label: 'Tag 3', action: action('Tag 3 pressed') },
+	],
+};
+
+export const GroupSkeleton = (props: TagGroupSkeletonProps) => <Tag.Group.Skeleton {...props} />;
+GroupSkeleton.args = {
+	numberOfTags: 2,
+};

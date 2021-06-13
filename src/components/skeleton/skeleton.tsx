@@ -31,6 +31,9 @@ const timingConfig: Animated.WithTimingConfig = {
 	easing: Easing.bezier(0.22, 1, 0.36, 1),
 };
 
+/**
+ * @TODO - translating is quite CPU intensive, perhaps a simple pulse would be better?
+ */
 export const Skeleton = ({ width, height, style }: SkeletonProps) => {
 	const translateX = useSharedValue(-width);
 	const animatedStyle = useAnimatedStyle(() => {
@@ -43,14 +46,14 @@ export const Skeleton = ({ width, height, style }: SkeletonProps) => {
 		};
 	});
 
-	React.useEffect(() => {
-		translateX.value = withRepeat(withTiming(width, timingConfig), -1);
-		// runOnUI(() => {
-		// 	'worklet';
+	// React.useEffect(() => {
+	// 	translateX.value = withRepeat(withTiming(width, timingConfig), -1);
+	// 	// runOnUI(() => {
+	// 	// 	'worklet';
 
-		// 	translateX.value = withRepeat(withTiming(width, timingConfig), -1);
-		// })();
-	}, [translateX, width]);
+	// 	// 	translateX.value = withRepeat(withTiming(width, timingConfig), -1);
+	// 	// })();
+	// }, [translateX, width]);
 
 	return (
 		<Styled.Container style={[{ width, height }, style]}>

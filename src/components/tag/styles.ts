@@ -1,5 +1,6 @@
 import styled from 'styled-components/native';
 import { Text } from '../text/text';
+import { Skeleton } from '../skeleton/skeleton';
 
 export const Tag = styled.View<{ disabled?: boolean }>`
 	flex-direction: row;
@@ -12,4 +13,13 @@ export const Tag = styled.View<{ disabled?: boolean }>`
 
 export const Label = styled(Text)`
 	color: ${({ theme }) => theme.TAG_TEXT_COLOR};
+`;
+
+export const Group = styled.View`
+	flex-direction: row;
+	gap: 5px 5px;
+`;
+
+export const TagSkeleton = styled(Skeleton)`
+	border-radius: ${({ theme }) => theme.TAG_BORDER_RADIUS};
 `;
