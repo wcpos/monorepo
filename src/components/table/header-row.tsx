@@ -29,7 +29,15 @@ export const HeaderRow = ({
 				columns.map((column, index) => {
 					if (column.hide) return;
 					const dataKey = column.key || index;
-					const { defaultSortDirection, disableSort, label, flexGrow, flexShrink, width } = column;
+					const {
+						defaultSortDirection,
+						disableSort,
+						label,
+						flexGrow,
+						flexShrink,
+						width,
+						hideLabel,
+					} = column;
 
 					const getHeaderCellProps: GetHeaderCellPropsFunction = () => ({
 						column,
@@ -43,6 +51,7 @@ export const HeaderRow = ({
 						sortBy,
 						sortDirection,
 						width,
+						hideLabel,
 						key: dataKey,
 					});
 

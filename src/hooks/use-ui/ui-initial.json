@@ -4,11 +4,25 @@
 		"sortDirection": "asc",
 		"width": 0.6,
 		"columns": [
-			{ "key": "image", "disableSort": true, "order": 1 },
+			{
+				"key": "image",
+				"disableSort": true,
+				"order": 1,
+				"width": "20%",
+				"flexShrink": 0,
+				"hideLabel": true
+			},
 			{ "key": "name", "order": 2 },
-			{ "key": "sku", "hide": true, "order": 3 },
-			{ "key": "price", "order": 4 },
-			{ "key": "actions", "disableSort": true, "order": 5 }
+			{ "key": "sku", "hide": true, "order": 3, "width": "20%", "flexShrink": 0 },
+			{ "key": "price", "order": 4, "width": "20%", "flexShrink": 0 },
+			{
+				"key": "actions",
+				"disableSort": true,
+				"order": 5,
+				"width": "10%",
+				"flexShrink": 0,
+				"hideLabel": true
+			}
 		],
 		"display": [
 			{ "key": "sku", "hide": true, "order": 1 },

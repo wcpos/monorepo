@@ -64,6 +64,36 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 
 	const products = useObservableState(products$, []) as any[];
 
+	const handleVieweableItemsChanged = React.useCallback(({ changed }) => {
+		console.log(changed);
+		// setViewedItems(oldViewedItems => {
+		//   // We can have access to the current state without adding it
+		//   //  to the useCallback dependencies
+
+		//   let newViewedItems = null;
+
+		//   changed.forEach(({ index, isViewable }) => {
+		//     if (index != null && isViewable && !oldViewedItems.includes(index)) {
+
+		//        if (newViewedItems == null) {
+		//          newViewedItems = [...oldViewedItems];
+		//        }
+		//        newViewedItems.push(index);
+		//     }
+		//   });
+
+		//   // If the items didn't change, we return the old items so
+		//   //  an unnecessary re-render is avoided.
+		//   return newViewedItems == null ? oldViewedItems : newViewedItems;
+		// });
+
+		// Since it has no dependencies, this function is created only once
+	}, []);
+	const viewConfigRef = React.useRef({
+		minimumViewTime: 1000,
+		viewAreaCoveragePercentThreshold: 0,
+	});
+
 	return (
 		<Table
 			columns={columns}
@@ -71,6 +101,10 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 			sort={sort}
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}
+			// @ts-ignore
+			onViewableItemsChanged={handleVieweableItemsChanged}
+			// @ts-ignore
+			viewabilityConfig={viewConfigRef.current}
 		>
 			<Table.Header>
 				<Table.HeaderRow columns={columns}>

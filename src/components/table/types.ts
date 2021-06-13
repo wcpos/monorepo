@@ -29,6 +29,7 @@ export interface ColumnProps {
 	// headerCellRenderer?: HeaderCellRenderer;
 	hide?: boolean;
 	disableSort?: boolean;
+	hideLabel?: boolean;
 	flexGrow?: 0 | 1;
 	flexShrink?: 0 | 1;
 	width?: string;

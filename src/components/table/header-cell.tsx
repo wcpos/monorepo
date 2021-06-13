@@ -18,6 +18,8 @@ export interface IHeaderCellProps {
 	flexGrow?: 0 | 1;
 	flexShrink?: 0 | 1;
 	width?: string;
+	disableSort?: boolean;
+	hideLabel?: boolean;
 }
 
 export const HeaderCell = ({
@@ -30,11 +32,13 @@ export const HeaderCell = ({
 	// headerCellRenderer,
 	label,
 	// style,
-	flexGrow,
-	flexShrink,
+	flexGrow = 1,
+	flexShrink = 1,
 	width,
+	disableSort = false,
+	hideLabel = false,
 }: IHeaderCellProps) => {
-	const sortable = typeof sort === 'function';
+	const sortable = !disableSort && typeof sort === 'function';
 	const showSortIndicator = sortable && sortBy === dataKey;
 
 	const newSortDirection =
@@ -77,7 +81,7 @@ export const HeaderCell = ({
 					}
 				</Pressable>
 			) : (
-				<Text>{children || label}</Text>
+				!hideLabel && <Text>{children || label}</Text>
 			)}
 		</Styled.HeaderCell>
 	);

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { FlatListProps } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler'; // swipeable rows?
 import get from 'lodash/get';
 import { Body } from './body';
@@ -7,7 +8,7 @@ import { Row } from './row';
 import { HeaderRow } from './header-row';
 import Text from '../text';
 
-export interface ITableProps {
+export interface TableProps {
 	children?: React.ReactElement | React.ReactElement[];
 	columns: import('./types').ColumnProps[];
 	data: any[];
@@ -28,7 +29,8 @@ export const Table = ({
 	sort,
 	sortBy,
 	sortDirection,
-}: ITableProps) => {
+	...rest
+}: TableProps) => {
 	const keyExtractor = (item: any, index: number) => item._id || index;
 	const childCount = React.Children.count(children);
 	let renderItem: React.FunctionComponent<any> = ({ item }: any) => (
@@ -69,6 +71,7 @@ export const Table = ({
 			ListFooterComponent={footer}
 			ListEmptyComponent={<Text>{empty}</Text>}
 			stickyHeaderIndices={[0]}
+			{...rest}
 		/>
 	);
 };
