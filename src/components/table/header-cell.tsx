@@ -1,11 +1,14 @@
 import * as React from 'react';
-import { View, GestureResponderEvent } from 'react-native';
+import { GestureResponderEvent, ViewStyle } from 'react-native';
 import * as Styled from './styles';
 import Text from '../text';
 import Pressable from '../pressable';
 import SortIcon from '../sort-icon';
 
-export interface IHeaderCellProps {
+/**
+ *
+ */
+export interface HeaderCellProps {
 	children?: React.ReactNode;
 	dataKey: string | number;
 	defaultSortDirection?: import('./types').SortDirection;
@@ -14,15 +17,19 @@ export interface IHeaderCellProps {
 	sort?: import('./types').Sort;
 	sortBy?: string;
 	sortDirection?: import('./types').SortDirection;
-	// style?: any;
+	style?: ViewStyle;
 	flexGrow?: 0 | 1;
 	flexShrink?: 0 | 1;
+	flexBasis?: any;
 	width?: string;
 	disableSort?: boolean;
 	hideLabel?: boolean;
 }
 
-export const HeaderCell = ({
+/**
+ *
+ */
+const HeaderCell = ({
 	children,
 	sort,
 	sortBy,
@@ -31,13 +38,14 @@ export const HeaderCell = ({
 	sortDirection,
 	// headerCellRenderer,
 	label,
-	// style,
+	style,
 	flexGrow = 1,
-	flexShrink = 1,
+	flexShrink = 0,
+	flexBasis = 'fill',
 	width,
 	disableSort = false,
 	hideLabel = false,
-}: IHeaderCellProps) => {
+}: HeaderCellProps) => {
 	const sortable = !disableSort && typeof sort === 'function';
 	const showSortIndicator = sortable && sortBy === dataKey;
 
@@ -64,7 +72,7 @@ export const HeaderCell = ({
 	// }
 
 	return (
-		<Styled.HeaderCell flexGrow={flexGrow} flexShrink={flexShrink} width={width}>
+		<Styled.HeaderCell style={[{ flexGrow, flexShrink, flexBasis, width }, style]}>
 			{sortable ? (
 				<Pressable onPress={handlePress}>
 					{
@@ -87,4 +95,10 @@ export const HeaderCell = ({
 	);
 };
 
-HeaderCell.displayName = 'Table.Header.Cell';
+/**
+ * note: statics need to be added after React.memo
+ */
+const MemoizedHeaderCell = React.memo(HeaderCell);
+MemoizedHeaderCell.displayName = 'Table.Header.Row.Cell';
+
+export default MemoizedHeaderCell;

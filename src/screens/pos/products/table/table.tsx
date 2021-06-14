@@ -96,16 +96,16 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 			viewabilityConfig={viewConfigRef.current}
 		>
 			<Table.Header>
-				<Table.HeaderRow columns={columns}>
+				<Table.Header.Row columns={columns}>
 					{({ getHeaderCellProps }: { getHeaderCellProps: GetHeaderCellPropsFunction }) => {
 						const { column } = getHeaderCellProps();
 						return (
-							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
+							<Table.Header.Row.Cell {...getHeaderCellProps()}>
 								{t(`products.column.label.${column.key}`)}
-							</Table.HeaderRow.HeaderCell>
+							</Table.Header.Row.Cell>
 						);
 					}}
-				</Table.HeaderRow>
+				</Table.Header.Row>
 			</Table.Header>
 			<Table.Body>
 				{({ item }: { item: any }) => <Row product={item} columns={columns} display={display} />}

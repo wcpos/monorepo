@@ -19,9 +19,9 @@ interface ICustomerRowProps {
 
 const Row = ({ customer, columns }: ICustomerRowProps) => {
 	return (
-		<Table.Row rowData={customer} columns={columns}>
+		<Table.Body.Row rowData={customer} columns={columns}>
 			{({ cellData, column, getCellProps }: CellRenderProps): React.ReactElement => (
-				<Table.Row.Cell {...getCellProps()}>
+				<Table.Body.Row.Cell {...getCellProps()}>
 					{((): React.ReactElement | null => {
 						switch (column.key) {
 							case 'avatarUrl':
@@ -35,9 +35,9 @@ const Row = ({ customer, columns }: ICustomerRowProps) => {
 								return null;
 						}
 					})()}
-				</Table.Row.Cell>
+				</Table.Body.Row.Cell>
 			)}
-		</Table.Row>
+		</Table.Body.Row>
 	);
 };
 

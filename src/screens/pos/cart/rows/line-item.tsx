@@ -19,11 +19,11 @@ const LineItem = ({ item, columns }: Props) => {
 	useWhyDidYouUpdate('CartLineItem', { item, columns });
 
 	return (
-		<Table.Row rowData={item} columns={columns}>
+		<Table.Body.Row rowData={item} columns={columns}>
 			{({ getCellProps }: { getCellProps: GetCellPropsFunction }) => {
 				const { cellData, column } = getCellProps();
 				return (
-					<Table.Row.Cell {...getCellProps()}>
+					<Table.Body.Row.Cell {...getCellProps()}>
 						{((): React.ReactElement | null => {
 							switch (column.key) {
 								case 'quantity':
@@ -44,10 +44,10 @@ const LineItem = ({ item, columns }: Props) => {
 									return null;
 							}
 						})()}
-					</Table.Row.Cell>
+					</Table.Body.Row.Cell>
 				);
 			}}
-		</Table.Row>
+		</Table.Body.Row>
 	);
 };
 

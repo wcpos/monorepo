@@ -7,7 +7,8 @@ import Row from './rows';
 
 type Sort = import('../../../components/table/types').Sort;
 type SortDirection = import('../../../components/table/types').SortDirection;
-type GetHeaderCellPropsFunction = import('../../../components/table/header-row').GetHeaderCellPropsFunction;
+type GetHeaderCellPropsFunction =
+	import('../../../components/table/header-row').GetHeaderCellPropsFunction;
 
 interface Props {
 	columns: any;
@@ -32,16 +33,16 @@ const ProductsTable = ({ columns, products }: Props) => {
 			// sortDirection={sortDirection}
 		>
 			<Table.Header>
-				<Table.HeaderRow>
+				<Table.Header.Row>
 					{({ getHeaderCellProps }: { getHeaderCellProps: GetHeaderCellPropsFunction }) => {
 						const { column } = getHeaderCellProps();
 						return (
-							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
+							<Table.Header.Row.Cell {...getHeaderCellProps()}>
 								{t(`products.column.label.${column.key}`)}
-							</Table.HeaderRow.HeaderCell>
+							</Table.Header.Row.Cell>
 						);
 					}}
-				</Table.HeaderRow>
+				</Table.Header.Row>
 			</Table.Header>
 			<Table.Body>
 				{({ item }: { item: any }) => <Row product={item} columns={columns} />}

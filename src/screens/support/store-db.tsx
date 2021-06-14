@@ -56,10 +56,10 @@ const StoreDB = () => {
 	return (
 		<Table columns={columns} data={counts}>
 			<Table.Header>
-				<Table.HeaderRow>
+				<Table.Header.Row>
 					{columns.map(({ key, label }) => {
 						return (
-							<Table.HeaderRow.HeaderCell
+							<Table.Header.Row.Cell
 								key={key}
 								dataKey={key}
 								sort={() => {
@@ -69,18 +69,18 @@ const StoreDB = () => {
 								sortDirection="asc"
 							>
 								{label}
-							</Table.HeaderRow.HeaderCell>
+							</Table.Header.Row.Cell>
 						);
 					})}
-				</Table.HeaderRow>
+				</Table.Header.Row>
 			</Table.Header>
 			<Table.Body>
 				{({ item }: any) => (
-					<Table.Row rowData={item} columns={columns}>
+					<Table.Body.Row rowData={item} columns={columns}>
 						{({ cellData, column }: any) => {
 							if (column.key === 'actions') {
 								return (
-									<Table.Row.Cell>
+									<Table.Body.Row.Cell>
 										<Button
 											title="Delete All"
 											onPress={() => {
@@ -93,12 +93,12 @@ const StoreDB = () => {
 												printRecordsToConsole(item.records);
 											}}
 										/>
-									</Table.Row.Cell>
+									</Table.Body.Row.Cell>
 								);
 							}
-							return <Table.Row.Cell cellData={cellData} />;
+							return <Table.Body.Row.Cell cellData={cellData} />;
 						}}
-					</Table.Row>
+					</Table.Body.Row>
 				)}
 			</Table.Body>
 		</Table>

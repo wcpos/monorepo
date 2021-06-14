@@ -57,20 +57,20 @@ const CartTable = ({ columns, items, query, onSort, ui }: ICartTableProps) => {
 			sortDirection={query.sortDirection}
 		>
 			<Table.Header>
-				<Table.HeaderRow columns={columns}>
+				<Table.Header.Row columns={columns}>
 					{({ getHeaderCellProps }: { getHeaderCellProps: GetHeaderCellPropsFunction }) => {
 						const { column } = getHeaderCellProps();
 						return (
-							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
+							<Table.Header.Row.Cell {...getHeaderCellProps()}>
 								{column.key === 'actions' ? (
 									<TableSettings columns={columns} ui={ui} />
 								) : (
 									t(`cart.column.label.${column.key}`)
 								)}
-							</Table.HeaderRow.HeaderCell>
+							</Table.Header.Row.Cell>
 						);
 					}}
-				</Table.HeaderRow>
+				</Table.Header.Row>
 			</Table.Header>
 			<Table.Body>
 				{({ item }: { item: any }): React.ReactElement | null => {

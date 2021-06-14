@@ -15,11 +15,11 @@ interface Props {
 
 const ShippingLine = ({ shipping, columns }: Props) => {
 	return (
-		<Table.Row rowData={shipping} columns={columns}>
+		<Table.Body.Row rowData={shipping} columns={columns}>
 			{({ getCellProps }: { getCellProps: GetCellPropsFunction }) => {
 				const { cellData, column } = getCellProps();
 				return (
-					<Table.Row.Cell {...getCellProps()}>
+					<Table.Body.Row.Cell {...getCellProps()}>
 						{((): React.ReactElement | null => {
 							switch (column.key) {
 								case 'quantity':
@@ -36,10 +36,10 @@ const ShippingLine = ({ shipping, columns }: Props) => {
 									return null;
 							}
 						})()}
-					</Table.Row.Cell>
+					</Table.Body.Row.Cell>
 				);
 			}}
-		</Table.Row>
+		</Table.Body.Row>
 	);
 };
 

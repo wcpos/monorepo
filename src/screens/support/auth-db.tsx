@@ -52,10 +52,10 @@ const AuthDB = () => {
 	return (
 		<Table columns={columns} data={counts}>
 			<Table.Header>
-				<Table.HeaderRow>
+				<Table.Header.Row>
 					{columns.map(({ key, label }) => {
 						return (
-							<Table.HeaderRow.HeaderCell
+							<Table.Header.Row.Cell
 								key={key}
 								dataKey={key}
 								// flexGrow={flexGrow}
@@ -68,18 +68,18 @@ const AuthDB = () => {
 								sortDirection="asc"
 							>
 								{label}
-							</Table.HeaderRow.HeaderCell>
+							</Table.Header.Row.Cell>
 						);
 					})}
-				</Table.HeaderRow>
+				</Table.Header.Row>
 			</Table.Header>
 			<Table.Body>
 				{({ item }: any) => (
-					<Table.Row rowData={item} columns={columns}>
+					<Table.Body.Row rowData={item} columns={columns}>
 						{({ column, getCellProps }: any) => {
 							if (column.key === 'actions') {
 								return (
-									<Table.Row.Cell>
+									<Table.Body.Row.Cell>
 										<Button
 											title="Delete All"
 											onPress={() => {
@@ -92,12 +92,12 @@ const AuthDB = () => {
 												printToConsole(item.name);
 											}}
 										/>
-									</Table.Row.Cell>
+									</Table.Body.Row.Cell>
 								);
 							}
-							return <Table.Row.Cell {...getCellProps()} />;
+							return <Table.Body.Row.Cell {...getCellProps()} />;
 						}}
-					</Table.Row>
+					</Table.Body.Row>
 				)}
 			</Table.Body>
 		</Table>

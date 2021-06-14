@@ -14,7 +14,8 @@ interface ICustomersTableProps {
 	sortDirection: SortDirection;
 }
 
-type GetHeaderCellPropsFunction = import('../../../components/table/header-row').GetHeaderCellPropsFunction;
+type GetHeaderCellPropsFunction =
+	import('../../../components/table/header-row').GetHeaderCellPropsFunction;
 
 /**
  *
@@ -37,16 +38,16 @@ const CustomersTable = ({
 			sortDirection={sortDirection}
 		>
 			<Table.Header>
-				<Table.HeaderRow>
+				<Table.Header.Row>
 					{({ getHeaderCellProps }: { getHeaderCellProps: GetHeaderCellPropsFunction }) => {
 						const { column } = getHeaderCellProps();
 						return (
-							<Table.HeaderRow.HeaderCell {...getHeaderCellProps()}>
+							<Table.Header.Row.Cell {...getHeaderCellProps()}>
 								{t(`customers.column.label.${column.key}`)}
-							</Table.HeaderRow.HeaderCell>
+							</Table.Header.Row.Cell>
 						);
 					}}
-				</Table.HeaderRow>
+				</Table.Header.Row>
 			</Table.Header>
 			<Table.Body>
 				{({ item }: { item: any }) => <Row customer={item} columns={columns} />}

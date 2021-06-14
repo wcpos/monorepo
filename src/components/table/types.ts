@@ -32,6 +32,7 @@ export interface ColumnProps {
 	hideLabel?: boolean;
 	flexGrow?: 0 | 1;
 	flexShrink?: 0 | 1;
+	flexBasis?: any;
 	width?: string;
 	cellRenderer?: CellRenderer;
 	cellDataGetter?: CellDataGetter;

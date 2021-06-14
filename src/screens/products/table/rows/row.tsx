@@ -22,9 +22,9 @@ interface Props {
 
 const Row = ({ product, columns }: Props) => {
 	return (
-		<Table.Row rowData={product} columns={columns}>
+		<Table.Body.Row rowData={product} columns={columns}>
 			{({ cellData, column, getCellProps }: RowRenderProps) => (
-				<Table.Row.Cell {...getCellProps()}>
+				<Table.Body.Row.Cell {...getCellProps()}>
 					{(() => {
 						switch (column.key) {
 							case 'image':
@@ -43,9 +43,9 @@ const Row = ({ product, columns }: Props) => {
 								return null;
 						}
 					})()}
-				</Table.Row.Cell>
+				</Table.Body.Row.Cell>
 			)}
-		</Table.Row>
+		</Table.Body.Row>
 	);
 };
 

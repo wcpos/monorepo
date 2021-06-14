@@ -1,11 +1,10 @@
 import * as React from 'react';
+import HeaderRow from './header-row';
 
-type Props = {
-	children: React.ReactNode;
-};
-
-export const Header: React.FC<Props> = ({ children }) => {
+const Header: React.FC = ({ children }) => {
 	return <>{children}</>;
 };
 
 Header.displayName = 'Table.Header';
+
+export default Object.assign(Header, { Row: HeaderRow });

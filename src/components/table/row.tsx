@@ -1,32 +1,29 @@
 import * as React from 'react';
+import { ViewStyle } from 'react-native';
 import * as Styled from './styles';
-import { Cell } from './cell';
+import Cell, { TableCellProps } from './cell';
 
 type ColumnProps = import('./types').ColumnProps;
-type ITableCellProps = import('./cell').ITableCellProps;
-export type GetCellPropsFunction = () => ITableCellProps;
+export type GetCellPropsFunction = () => TableCellProps;
 
-export interface ITableRowProps {
+export interface TableRowProps {
 	children?: React.ReactNode;
 	rowData: any;
 	columns?: ColumnProps[];
-	style?: import('react-native').ViewStyle;
+	style?: ViewStyle;
 }
 
-type IsFunction<T> = T extends (...args: any[]) => any ? T : never;
-const isFunction = <T extends {}>(value: T): value is IsFunction<T> => typeof value === 'function';
-
-export const Row = ({ rowData, columns, style, children }: ITableRowProps) => {
+const Row = ({ rowData, columns, style, children }: TableRowProps) => {
 	// const key = rowData.id;
 
 	return (
-		<Styled.Row>
+		<Styled.Row style={style}>
 			{columns &&
 				columns.map((column: ColumnProps, index: number) => {
 					if (column.hide) return;
 					const dataKey = column.key || index;
 					const cellData = rowData[dataKey];
-					const { flexGrow, flexShrink, width } = column;
+					const { flexGrow, flexShrink, flexBasis, width } = column;
 
 					const getCellProps: GetCellPropsFunction = () => ({
 						cellData,
@@ -34,13 +31,14 @@ export const Row = ({ rowData, columns, style, children }: ITableRowProps) => {
 						dataKey,
 						flexGrow,
 						flexShrink,
+						flexBasis,
 						width,
 						rowData,
 						index,
 						key: dataKey,
 					});
 
-					if (children && isFunction(children)) {
+					if (typeof children === 'function') {
 						// @ts-ignore
 						return children({ cellData, column, getCellProps });
 					}
@@ -51,5 +49,11 @@ export const Row = ({ rowData, columns, style, children }: ITableRowProps) => {
 	);
 };
 
-Row.Cell = Cell;
-Row.displayName = 'Table.Row';
+/**
+ * note: statics need to be added after React.memo
+ */
+const MemoizedRow = React.memo(Row) as unknown as React.FC<TableRowProps> & { Cell: typeof Cell };
+MemoizedRow.displayName = 'Table.Row';
+MemoizedRow.Cell = Cell;
+
+export default MemoizedRow;

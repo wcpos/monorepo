@@ -1,12 +1,14 @@
 import * as React from 'react';
 import * as Styled from './styles';
-import { HeaderCell } from './header-cell';
+import HeaderCell, { HeaderCellProps } from './header-cell';
 
 type ColumnProps = import('./types').ColumnProps;
-type IHeaderCellProps = import('./header-cell').IHeaderCellProps;
-export type GetHeaderCellPropsFunction = () => IHeaderCellProps & { column: ColumnProps };
+export type GetHeaderCellPropsFunction = () => HeaderCellProps & { column: ColumnProps };
 
-export interface IHeaderRowProps {
+/**
+ *
+ */
+export interface HeaderRowProps {
 	children?: React.ReactNode;
 	columns?: import('./types').ColumnProps[];
 	sort?: import('./types').Sort;
@@ -15,14 +17,10 @@ export interface IHeaderRowProps {
 	style?: import('react-native').ViewStyle;
 }
 
-export const HeaderRow = ({
-	columns,
-	sort,
-	sortBy,
-	sortDirection,
-	children,
-	style,
-}: IHeaderRowProps) => {
+/**
+ *
+ */
+const HeaderRow = ({ columns, sort, sortBy, sortDirection, children, style }: HeaderRowProps) => {
 	return (
 		<Styled.HeaderRow>
 			{columns &&
@@ -35,6 +33,7 @@ export const HeaderRow = ({
 						label,
 						flexGrow,
 						flexShrink,
+						flexBasis,
 						width,
 						hideLabel,
 					} = column;
@@ -46,6 +45,7 @@ export const HeaderRow = ({
 						disableSort,
 						flexGrow,
 						flexShrink,
+						flexBasis,
 						label,
 						sort,
 						sortBy,
@@ -65,5 +65,13 @@ export const HeaderRow = ({
 	);
 };
 
-HeaderRow.HeaderCell = HeaderCell;
-HeaderRow.displayName = 'Table.HeaderRow';
+/**
+ * note: statics need to be added after React.memo
+ */
+const MemoizedHeaderRow = React.memo(HeaderRow) as unknown as React.FC<HeaderRowProps> & {
+	Cell: typeof HeaderCell;
+};
+MemoizedHeaderRow.displayName = 'Table.Header.Row';
+MemoizedHeaderRow.Cell = HeaderCell;
+
+export default MemoizedHeaderRow;

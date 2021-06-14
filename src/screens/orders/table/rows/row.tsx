@@ -21,9 +21,9 @@ interface Props {
 
 const Row = ({ order, columns }: Props) => {
 	return (
-		<Table.Row rowData={order} columns={columns}>
+		<Table.Body.Row rowData={order} columns={columns}>
 			{({ cellData, column, getCellProps }: CellRenderProps) => (
-				<Table.Row.Cell {...getCellProps()}>
+				<Table.Body.Row.Cell {...getCellProps()}>
 					{((): React.ReactElement | null => {
 						switch (column.key) {
 							case 'status':
@@ -41,9 +41,9 @@ const Row = ({ order, columns }: Props) => {
 								return null;
 						}
 					})()}
-				</Table.Row.Cell>
+				</Table.Body.Row.Cell>
 			)}
-		</Table.Row>
+		</Table.Body.Row>
 	);
 };
 

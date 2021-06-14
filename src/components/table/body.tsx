@@ -1,11 +1,10 @@
 import * as React from 'react';
+import Row from './row';
 
-type Props = {
-	children: React.ReactNode;
-};
-
-export const Body: React.FC<Props> = ({ children }) => {
+const Body: React.FC = ({ children }) => {
 	return <>{children}</>;
 };
 
 Body.displayName = 'Table.Body';
+
+export default Object.assign(Body, { Row });

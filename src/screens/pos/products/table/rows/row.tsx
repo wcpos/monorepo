@@ -23,11 +23,11 @@ const Row = ({ product, columns, display }: IPOSProductsTableRowProps) => {
 	};
 
 	return (
-		<Table.Row rowData={product} columns={columns}>
+		<Table.Body.Row rowData={product} columns={columns}>
 			{({ getCellProps }: { getCellProps: GetCellPropsFunction }) => {
 				const { cellData, column } = getCellProps();
 				return (
-					<Table.Row.Cell {...getCellProps()}>
+					<Table.Body.Row.Cell {...getCellProps()}>
 						{((): React.ReactElement | null => {
 							switch (column.key) {
 								case 'image':
@@ -51,10 +51,10 @@ const Row = ({ product, columns, display }: IPOSProductsTableRowProps) => {
 									return null;
 							}
 						})()}
-					</Table.Row.Cell>
+					</Table.Body.Row.Cell>
 				);
 			}}
-		</Table.Row>
+		</Table.Body.Row>
 	);
 };
 
