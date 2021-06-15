@@ -30,6 +30,7 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
 const ProductsTable = ({ columns, display, query, sort }: Props) => {
 	const { t } = useTranslation();
 	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
+	const syncingProducts = React.useRef<number[]>([]);
 
 	const products$ = useObservable(
 		(inputs$) =>
@@ -66,22 +67,15 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 
 	const handleVieweableItemsChanged = React.useCallback(({ changed }) => {
 		forEach(changed, ({ item, isViewable }) => {
-			if (isViewable && !item.isSynced()) {
+			if (isViewable && !item.isSynced() && !syncingProducts.current.includes(item.id)) {
+				syncingProducts.current.push(item.id);
 				const replicationState = item.syncRestApi({
 					pull: {},
 				});
-				// replicationState.error$.subscribe((err: any) => {
-				// 	console.error('replication error:');
-				// 	console.dir(err);
-				// });
 				replicationState.run(false);
 			}
 		});
 	}, []);
-	const viewConfigRef = React.useRef({
-		minimumViewTime: 1000,
-		viewAreaCoveragePercentThreshold: 0,
-	});
 
 	return (
 		<Table
@@ -93,7 +87,7 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 			// @ts-ignore
 			onViewableItemsChanged={handleVieweableItemsChanged}
 			// @ts-ignore
-			viewabilityConfig={viewConfigRef.current}
+			getItemLayout={(data, index) => ({ length: 100, offset: 100 * index, index })}
 		>
 			<Table.Header>
 				<Table.Header.Row columns={columns}>

@@ -84,6 +84,10 @@ const Table = ({
 			ListFooterComponent={footer}
 			ListEmptyComponent={<Text>{empty}</Text>}
 			stickyHeaderIndices={[0]}
+			viewabilityConfig={{
+				minimumViewTime: 500,
+				viewAreaCoveragePercentThreshold: 0,
+			}}
 			{...rest}
 		/>
 	);

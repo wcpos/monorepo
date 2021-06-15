@@ -31,7 +31,7 @@ const Row = ({ product, columns, display }: IPOSProductsTableRowProps) => {
 	);
 
 	return (
-		<Table.Body.Row rowData={product} columns={columns}>
+		<Table.Body.Row rowData={product} columns={columns} style={{ height: 100 }}>
 			{({ getCellProps }: { getCellProps: GetCellPropsFunction }) => {
 				const { cellData, column } = getCellProps();
 				return (
