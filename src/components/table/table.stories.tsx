@@ -128,13 +128,15 @@ export const CustomTable = (props: TableProps) => {
 				</Table.Header.Row>
 			</Table.Header>
 			<Table.Body>
-				{({ item }) => (
-					<Table.Body.Row rowData={item}>
-						{({ cellData, column, getCellProps }) => (
-							<Table.Body.Row.Cell {...getCellProps()} cellData={cellData} columnData={column} />
-						)}
-					</Table.Body.Row>
-				)}
+				{({ item, columns }) => {
+					return (
+						<Table.Body.Row rowData={item} columns={columns}>
+							{({ cellData, column, getCellProps }) => (
+								<Table.Body.Row.Cell {...getCellProps()} cellData={cellData} columnData={column} />
+							)}
+						</Table.Body.Row>
+					);
+				}}
 			</Table.Body>
 		</Table>
 	);

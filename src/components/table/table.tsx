@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { FlatListProps } from 'react-native';
+import { FlatListProps, ListRenderItem } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler'; // swipeable rows?
 import get from 'lodash/get';
 import Row from './row';
@@ -31,42 +31,49 @@ const Table = ({
 	sortDirection,
 	...rest
 }: TableProps) => {
-	// const keyExtractor = (item: any, index: number) => item._id || index;
 	const keyExtractor = React.useCallback(
 		(item: any, index: number) => get(item, '_id') || index,
 		[]
 	);
 	const childCount = React.Children.count(children);
-	let renderItem = ({ item }: any) => <Row rowData={item} columns={columns} />;
 
-	let headerComponent = (
-		<HeaderRow columns={columns} sort={sort} sortBy={sortBy} sortDirection={sortDirection} />
-	);
-
-	// sub components
-	if (Array.isArray(children) && childCount > 0) {
-		children.forEach((child) => {
+	/**
+	 * create and memoize the renderItem function
+	 */
+	const renderItemFunction: ListRenderItem<typeof Row> = React.useMemo(() => {
+		if (Array.isArray(children) && childCount > 0) {
+			const child = children.find(({ type }: any) => type === Body);
 			if (React.isValidElement(child)) {
-				if (get(child, 'type.displayName') === 'Table.Header') {
-					headerComponent = React.cloneElement(child?.props?.children, {
-						columns,
-						sort,
-						sortBy,
-						sortDirection,
-					});
-				}
-				if (get(child, 'type.displayName') === 'Table.Body') {
-					renderItem = child.props.children;
-				}
+				return ({ item, index }) => child.props.children({ item, columns, index });
 			}
-		});
-	}
+		}
+		if (typeof children === 'function') {
+			return ({ item, index }) => children({ item, columns, index });
+		}
+		return ({ item }: any) => <Row rowData={item} columns={columns} />;
+	}, [children, childCount, columns]);
 
-	// function
-	if (typeof children === 'function') {
-		// @ts-ignore
-		renderItem = children;
-	}
+	const renderItem = React.useCallback(renderItemFunction, [renderItemFunction]);
+
+	/**
+	 * create and memoize the headerComponent
+	 */
+	const headerComponent = React.useMemo(() => {
+		if (Array.isArray(children) && childCount > 0) {
+			const child = children.find(({ type }: any) => type === Header);
+			if (React.isValidElement(child)) {
+				return React.cloneElement(child.props.children, {
+					columns,
+					sort,
+					sortBy,
+					sortDirection,
+				});
+			}
+		}
+		return (
+			<HeaderRow columns={columns} sort={sort} sortBy={sortBy} sortDirection={sortDirection} />
+		);
+	}, [children, childCount, columns, sort, sortBy, sortDirection]);
 
 	return (
 		<FlatList
