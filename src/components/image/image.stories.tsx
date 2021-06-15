@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { Image, ImageProps } from './image';
 
 export default {
@@ -11,7 +12,6 @@ export default {
 				options: ['none', 'rounded', 'circular'],
 			},
 		},
-		style: { width: 300, height: 200 },
 	},
 };
 
@@ -19,10 +19,28 @@ export default {
  *
  */
 export const BasicUsage = (props: ImageProps) => {
-	return <Image {...props} />;
+	return (
+		<View style={{ height: '150px', width: '50%' }}>
+			<Image {...props} />
+		</View>
+	);
 };
 BasicUsage.args = {
 	src: 'https://i.imgur.com/0y8Ftya.jpg',
+};
+
+/**
+ *
+ */
+export const BrokenImage = (props: ImageProps) => {
+	return (
+		<View style={{ height: '150px', width: '50%' }}>
+			<Image {...props} />
+		</View>
+	);
+};
+BrokenImage.args = {
+	src: 'https://example.com/test.jpg',
 };
 
 /**

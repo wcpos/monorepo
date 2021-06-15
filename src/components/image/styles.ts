@@ -1,13 +1,18 @@
 import styled, { css } from 'styled-components/native';
+import { Skeleton } from '../skeleton/skeleton';
 
 type Props = Pick<import('./image').ImageProps, 'border'>;
 
+export const Container = styled.View`
+	position: relative;
+	overflow: hidden;
+`;
+
 export const Image = styled.Image<Props>`
-	position: absolute;
-	left: 0;
-	right: 0;
-	top: 0;
-	bottom: 0;
+	aspectratio: 1;
+	resizemode: contain;
+	width: 100%;
+	height: 100%;
 
 	/** Border */
 	${({ border, theme }) => {
@@ -28,8 +33,10 @@ export const Image = styled.Image<Props>`
 	}}
 `;
 
-export const Container = styled.View`
-	background-color: transparent;
-	position: relative;
-	overflow: hidden;
+export const ImageSkeleton = styled(Skeleton)`
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
 `;

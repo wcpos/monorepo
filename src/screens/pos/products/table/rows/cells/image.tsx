@@ -1,17 +1,16 @@
 import * as React from 'react';
 import Img from '@wcpos/common/src/components/image';
-import get from 'lodash/get';
 
 type Props = {
 	product: import('@wcpos/common/src/database').ProductDocument;
 };
 
 const Image = ({ product }: Props) => {
-	const src = get(product, 'images.0.src');
+	const { thumbnail } = product;
 
 	return (
 		<Img
-			src={src}
+			src={thumbnail}
 			// placeholder={<Img source={require('@wcpos/common/src/assets/placeholder.png')} />}
 		/>
 	);

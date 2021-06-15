@@ -1,5 +1,4 @@
 import * as React from 'react';
-import useObservable from '@wcpos/common/src/hooks/use-observable';
 import Tag from '@wcpos/common/src/components/tag';
 import { ProductQueryContext } from '../../../products';
 
@@ -8,22 +7,39 @@ type ProductTagsProps = {
 };
 
 const ProductTags = ({ product }: ProductTagsProps) => {
-	const tags = useObservable(product.tags$);
 	const { query, setQuery } = React.useContext(ProductQueryContext);
+	const { tags } = product;
 
-	const handleSelectTag = (tag: any) => {
-		query.filter.tags = [tag];
-		setQuery({ ...query });
-	};
+	/**
+	 *
+	 */
+	const handleSelectTag = React.useCallback(
+		(tag: any) => {
+			query.filter.tags = [tag];
+			setQuery({ ...query });
+		},
+		[query, setQuery]
+	);
 
-	const tagsArray =
-		tags &&
-		tags.map((tag: any) => ({
-			key: tag.id,
-			label: tag.name,
-			action: () => handleSelectTag(tag),
-		}));
+	/**
+	 *
+	 */
+	const tagsArray = React.useMemo(() => {
+		if (Array.isArray(tags)) {
+			return tags.map((tag: any) => {
+				return {
+					key: tag.id,
+					label: tag.name,
+					action: () => handleSelectTag(tag),
+				};
+			});
+		}
+		return [];
+	}, [tags, handleSelectTag]);
 
+	/**
+	 *
+	 */
 	return tags ? <Tag.Group tags={tagsArray} /> : <Tag.Group.Skeleton numberOfTags={2} />;
 };
 

@@ -16,7 +16,7 @@ export interface ImageProps {
 	/**
 	 * Image border shape
 	 */
-	border?: 'default' | 'rounded' | 'circular';
+	border?: 'square' | 'rounded' | 'circular';
 	/**
 	 * Placeholder to show if image not available / fallback?
 	 */
@@ -28,19 +28,19 @@ export interface ImageProps {
 	/**
 	 * Width
 	 */
-	width?: number;
+	width?: number | string;
 	/**
 	 * Height
 	 */
-	height?: number;
+	height?: number | string;
 }
 
 export const Image = ({
 	src,
 	source,
-	border = 'default',
-	width = 100,
-	height = 100,
+	border = 'rounded',
+	width = '100%',
+	height = '100%',
 	style,
 }: ImageProps) => {
 	const [loaded, setLoaded] = React.useState(false);
@@ -52,7 +52,7 @@ export const Image = ({
 	return (
 		<Styled.Container style={[style, { width, height }]}>
 			<Styled.Image source={source || { uri: src }} onLoad={handleLoad} border={border} />
-			{!loaded && <Skeleton width={width} height={height} />}
+			{!loaded && <Styled.ImageSkeleton />}
 		</Styled.Container>
 	);
 };

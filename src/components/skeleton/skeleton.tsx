@@ -21,11 +21,11 @@ export interface SkeletonProps {
 	/**
 	 *
 	 */
-	width: number;
+	width?: number | string;
 	/**
 	 *
 	 */
-	height: number;
+	height?: number | string;
 	/**
 	 *
 	 */
@@ -59,7 +59,7 @@ export const Skeleton = ({ width, height, border = 'rounded', style }: SkeletonP
 	return (
 		<Styled.Container
 			as={Animated.View}
-			style={[StyleSheet.absoluteFill, { width, height }, animatedBackground]}
+			style={[{ width, height }, style, animatedBackground]}
 			border={border}
 		/>
 	);

@@ -1,14 +1,14 @@
 import * as React from 'react';
+import { useObservableState } from 'observable-hooks';
 import find from 'lodash/find';
-import Table from '../../../../../components/table';
-import Button from '../../../../../components/button';
+import Table from '@wcpos/common/src/components/table';
 import Image from './cells/image';
 import Name from './cells/name';
 import Price from './cells/price';
 import SKU from './cells/sku';
 import Actions from './cells/actions';
 
-type GetCellPropsFunction = import('../../../../../components/table/row').GetCellPropsFunction;
+type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 
 interface IPOSProductsTableRowProps {
 	product: any;
@@ -17,10 +17,18 @@ interface IPOSProductsTableRowProps {
 }
 
 const Row = ({ product, columns, display }: IPOSProductsTableRowProps) => {
-	const show = (key: string): boolean => {
-		const d = find(display, { key });
-		return !d.hide;
-	};
+	const forceRender = useObservableState(product.$);
+
+	/**
+	 * Helper function
+	 */
+	const show = React.useCallback(
+		(key: string): boolean => {
+			const d = find(display, { key });
+			return !d.hide;
+		},
+		[display]
+	);
 
 	return (
 		<Table.Body.Row rowData={product} columns={columns}>
