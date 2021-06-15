@@ -1,12 +1,10 @@
 import * as React from 'react';
-import LinearGradient from 'react-native-linear-gradient';
 import Animated, {
 	useSharedValue,
 	useAnimatedStyle,
-	runOnUI,
 	withRepeat,
 	withTiming,
-	Easing,
+	withSequence,
 } from 'react-native-reanimated';
 import { StyleSheet, ViewStyle } from 'react-native';
 import * as Styled from './styles';
@@ -40,43 +38,29 @@ export interface SkeletonProps {
 
 const timingConfig: Animated.WithTimingConfig = {
 	duration: 1600,
-	easing: Easing.bezier(0.22, 1, 0.36, 1),
 };
 
 /**
- * @TODO - translating is quite CPU intensive, perhaps a simple pulse would be better?
+ *
  */
 export const Skeleton = ({ width, height, border = 'rounded', style }: SkeletonProps) => {
-	const translateX = useSharedValue(-width);
-	const animatedStyle = useAnimatedStyle(() => {
-		return {
-			transform: [
-				{
-					translateX: translateX.value,
-				},
-			],
-		};
-	});
+	const pulseColor = useSharedValue('#e1e9ee');
+	const animatedBackground = useAnimatedStyle(() => ({
+		backgroundColor: pulseColor.value,
+	}));
 
-	// React.useEffect(() => {
-	// 	translateX.value = withRepeat(withTiming(width, timingConfig), -1);
-	// 	// runOnUI(() => {
-	// 	// 	'worklet';
-
-	// 	// 	translateX.value = withRepeat(withTiming(width, timingConfig), -1);
-	// 	// })();
-	// }, [translateX, width]);
+	React.useEffect(() => {
+		pulseColor.value = withRepeat(
+			withSequence(withTiming('#edf2f5', timingConfig), withTiming('#e1e9ee', timingConfig)),
+			-1
+		) as unknown as string; // typings are wrong for withTiming
+	}, []);
 
 	return (
-		<Styled.Container style={[{ width, height }, style]} border={border}>
-			<Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
-				<LinearGradient
-					colors={['transparent', 'rgba(255, 255, 255, 0.4)', 'transparent']}
-					start={{ x: 0, y: 0 }}
-					end={{ x: 1, y: 0 }}
-					style={StyleSheet.absoluteFill}
-				/>
-			</Animated.View>
-		</Styled.Container>
+		<Styled.Container
+			as={Animated.View}
+			style={[StyleSheet.absoluteFill, { width, height }, animatedBackground]}
+			border={border}
+		/>
 	);
 };

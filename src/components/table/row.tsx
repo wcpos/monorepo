@@ -15,6 +15,9 @@ export interface TableRowProps {
 
 const Row = ({ rowData, columns, style, children }: TableRowProps) => {
 	// const key = rowData.id;
+	// const renderCells = React.memo(() => {
+
+	// }, [columns])
 
 	return (
 		<Styled.Row style={style}>
@@ -39,7 +42,6 @@ const Row = ({ rowData, columns, style, children }: TableRowProps) => {
 					});
 
 					if (typeof children === 'function') {
-						// @ts-ignore
 						return children({ cellData, column, getCellProps });
 					}
 

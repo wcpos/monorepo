@@ -17,7 +17,9 @@ export const Label = styled(Text)`
 
 export const Group = styled.View`
 	flex-direction: row;
-	gap: 5px 5px;
+	flex-flow: wrap;
+	gap: 2px 2px;
+	margin-bottom: 2px;
 `;
 
 export const TagSkeleton = styled(Skeleton)`

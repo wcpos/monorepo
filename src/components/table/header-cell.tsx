@@ -40,9 +40,9 @@ const HeaderCell = ({
 	label,
 	style,
 	flexGrow = 1,
-	flexShrink = 0,
-	flexBasis = 'fill',
-	width,
+	flexShrink = 1,
+	flexBasis = 'auto',
+	width = '100%',
 	disableSort = false,
 	hideLabel = false,
 }: HeaderCellProps) => {
@@ -62,14 +62,6 @@ const HeaderCell = ({
 			});
 		}
 	};
-
-	// if (typeof headerCellRenderer === 'function') {
-	// 	return (
-	// 		<StyledView flexGrow={flexGrow} flexShrink={flexShrink} width={width}>
-	// 			{headerCellRenderer({ dataKey })}
-	// 		</StyledView>
-	// 	);
-	// }
 
 	return (
 		<Styled.HeaderCell style={[{ flexGrow, flexShrink, flexBasis, width }, style]}>
