@@ -6,19 +6,32 @@ import Row from './row';
 import HeaderRow from './header-row';
 import Body from './body';
 import Header from './header';
-import Text from '../text';
+import EmptyRow from './empty-row';
 
 export interface TableProps {
 	children?: React.ReactNode;
 	columns: import('./types').ColumnProps[];
 	data: any[];
-	empty?: React.ReactElement;
+	empty?: string;
 	footer?: React.ReactElement;
 	sort?: import('./types').Sort;
 	sortBy?: string;
 	sortDirection?: import('./types').SortDirection;
 	style?: any;
 }
+
+/**
+ * Tables rows must be onscreen for minimumViewTime to trigger onViewableItemsChanged
+ */
+const viewabilityConfig = {
+	minimumViewTime: 500,
+	viewAreaCoveragePercentThreshold: 0,
+};
+
+/**
+ * Keeps the header row pinned to the top of the table
+ */
+const stickyHeaderIndices = [0];
 
 const Table = ({
 	children,
@@ -82,12 +95,9 @@ const Table = ({
 			keyExtractor={keyExtractor}
 			ListHeaderComponent={headerComponent}
 			ListFooterComponent={footer}
-			ListEmptyComponent={<Text>{empty}</Text>}
-			stickyHeaderIndices={[0]}
-			viewabilityConfig={{
-				minimumViewTime: 500,
-				viewAreaCoveragePercentThreshold: 0,
-			}}
+			ListEmptyComponent={EmptyRow}
+			stickyHeaderIndices={stickyHeaderIndices}
+			viewabilityConfig={viewabilityConfig}
 			{...rest}
 		/>
 	);

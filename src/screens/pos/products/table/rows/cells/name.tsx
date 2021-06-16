@@ -23,7 +23,7 @@ const Name = ({ product, showSKU, showCategories, showTags }: Props) => {
 					{(product.attributes as [])
 						.filter((attr: any) => attr.variation)
 						.map((attr: any) => (
-							<Text size="small">
+							<Text key={attr.id} size="small">
 								<Text size="small" type="secondary">
 									{attr.name}:
 								</Text>

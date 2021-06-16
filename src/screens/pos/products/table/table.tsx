@@ -77,6 +77,11 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 		});
 	}, []);
 
+	const getItemLayout = React.useCallback(
+		(data, index) => ({ length: 100, offset: 100 * index, index }),
+		[]
+	);
+
 	return (
 		<Table
 			columns={columns}
@@ -87,7 +92,7 @@ const ProductsTable = ({ columns, display, query, sort }: Props) => {
 			// @ts-ignore
 			onViewableItemsChanged={handleVieweableItemsChanged}
 			// @ts-ignore
-			getItemLayout={(data, index) => ({ length: 100, offset: 100 * index, index })}
+			getItemLayout={getItemLayout}
 		>
 			<Table.Header>
 				<Table.Header.Row columns={columns}>
