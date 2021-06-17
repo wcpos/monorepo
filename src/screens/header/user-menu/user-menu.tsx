@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Dropdown from '@wcpos/common/src/components/dropdown';
@@ -42,7 +42,10 @@ export const UserMenu = () => {
 					},
 					{
 						label: 'Modal',
-						action: () => navigation.navigate('Modal'),
+						action: () =>
+							navigation.dispatch(
+								CommonActions.navigate({ name: 'Modal', params: { foo: 'bar' } })
+							),
 					},
 				]}
 			/>

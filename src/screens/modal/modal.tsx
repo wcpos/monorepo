@@ -1,12 +1,10 @@
 import * as React from 'react';
-import { useNavigation } from '@react-navigation/native';
 import Text from '@wcpos/common/src/components/text';
 import Dialog from '@wcpos/common/src/components/dialog';
 
-export const ModalScreen = () => {
-	const navigation = useNavigation();
+type ModalScreenProps = import('@wcpos/common/src/navigators/app').ModalScreenProps;
 
-	// return <Button title="Close" onPress={() => navigation.goBack()} />;
+export const ModalScreen = ({ route, navigation }: ModalScreenProps) => {
 	return (
 		<Dialog
 			sectioned
@@ -20,6 +18,7 @@ export const ModalScreen = () => {
 			]}
 		>
 			<Text>Text inside the Dialog!</Text>
+			<Text>Params from route: {route.params.foo}</Text>
 		</Dialog>
 	);
 };

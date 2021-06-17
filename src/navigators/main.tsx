@@ -1,6 +1,10 @@
 import * as React from 'react';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
-import { createDrawerNavigator, DrawerNavigationOptions } from '@react-navigation/drawer';
+import { useNavigation, DrawerActions, RouteProp } from '@react-navigation/native';
+import {
+	createDrawerNavigator,
+	DrawerNavigationOptions,
+	DrawerNavigationProp,
+} from '@react-navigation/drawer';
 import POS from '@wcpos/common/src/screens/pos';
 import Products from '@wcpos/common/src/screens/products';
 import Orders from '@wcpos/common/src/screens/orders';
@@ -9,36 +13,48 @@ import Support from '@wcpos/common/src/screens/support';
 import Button from '@wcpos/common/src/components/button';
 import HeaderRight from '@wcpos/common/src/screens/header/right';
 
-// type ScreenProps = {
-// 	route: {
-// 		name: Extract<keyof typeof components, string>;
-// 	};
-// };
+type MainScreenProps = import('./app').MainScreenProps;
 
-// const components = {
-// 	POS: <POS />,
-// 	Products: <Products />,
-// 	Orders: <Orders />,
-// 	Customers: <Customers />,
-// 	Support: <Support />,
-// };
+export type DrawerParamList = {
+	POS: undefined;
+	Products: undefined;
+	Orders: undefined;
+	Customers: undefined;
+	Support: undefined;
+};
 
-// const Screen = ({ route }: ScreenProps) => {
-// 	return (
-// 		<PageLayout header={<MasterBar />}>
-// 			<ErrorBoundary>
-// 				<React.Suspense fallback={<Text>{`Loading ${route.name} page...`}</Text>}>
-// 					{components[route.name]}
-// 				</React.Suspense>
-// 			</ErrorBoundary>
-// 		</PageLayout>
-// 	);
-// };
+export interface POSScreenProps {
+	navigation: DrawerNavigationProp<DrawerParamList, 'POS'>;
+	route: RouteProp<DrawerParamList, 'POS'>;
+}
 
-const Drawer = createDrawerNavigator();
+export interface ProductsScreenProps {
+	navigation: DrawerNavigationProp<DrawerParamList, 'Products'>;
+	route: RouteProp<DrawerParamList, 'Products'>;
+}
 
-const MainNavigator = () => {
-	const navigation = useNavigation();
+export interface OrdersScreenProps {
+	navigation: DrawerNavigationProp<DrawerParamList, 'Orders'>;
+	route: RouteProp<DrawerParamList, 'Orders'>;
+}
+
+export interface CustomersScreenProps {
+	navigation: DrawerNavigationProp<DrawerParamList, 'Customers'>;
+	route: RouteProp<DrawerParamList, 'Customers'>;
+}
+
+export interface SupportScreenProps {
+	navigation: DrawerNavigationProp<DrawerParamList, 'Support'>;
+	route: RouteProp<DrawerParamList, 'Support'>;
+}
+
+const Drawer = createDrawerNavigator<DrawerParamList>();
+
+/**
+ *
+ */
+const MainNavigator = ({ navigation, route }: MainScreenProps) => {
+	// const navigation = useNavigation();
 
 	const openDrawer = React.useCallback(() => {
 		navigation.dispatch(DrawerActions.openDrawer());

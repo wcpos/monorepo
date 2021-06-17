@@ -1,22 +1,45 @@
 import * as React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { RouteProp, CompositeNavigationProp } from '@react-navigation/native';
+import { createStackNavigator, StackNavigationProp } from '@react-navigation/stack';
+import { DrawerNavigationProp } from '@react-navigation/drawer';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Auth from '@wcpos/common/src/screens/auth';
 import Modal from '@wcpos/common/src/screens/modal';
 
-// import MainNavigator from './main';
-// const AuthScreen = React.lazy(() => import('../pages/auth'));
+type DrawerParamList = import('./main').DrawerParamList;
+
 const MainNavigator = React.lazy(() => import('./main'));
 
-export type AppNavigatorParams = {
+export type AppStackParamList = {
 	Auth: undefined;
 	Main: undefined;
-	Modal: undefined;
+	Modal: { foo: string };
 };
 
-const Stack = createStackNavigator<AppNavigatorParams>();
+const Stack = createStackNavigator<AppStackParamList>();
 type StackNavigatorProps = React.ComponentProps<typeof Stack.Navigator>;
 
+export interface MainScreenProps {
+	navigation: CompositeNavigationProp<
+		DrawerNavigationProp<DrawerParamList>,
+		StackNavigationProp<AppStackParamList, 'Main'>
+	>;
+	route: RouteProp<AppStackParamList, 'Main'>;
+}
+
+export interface AuthScreenProps {
+	navigation: StackNavigationProp<AppStackParamList, 'Auth'>;
+	route: RouteProp<AppStackParamList, 'Auth'>;
+}
+
+export interface ModalScreenProps {
+	navigation: StackNavigationProp<AppStackParamList, 'Modal'>;
+	route: RouteProp<AppStackParamList, 'Modal'>;
+}
+
+/**
+ *
+ */
 const AppNavigator = (props: Partial<StackNavigatorProps>) => {
 	const { storeDB } = useAppState();
 

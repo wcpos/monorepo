@@ -32,6 +32,9 @@ export const POSContext = React.createContext<POSContextProps>({
 	setCurrentOrder: undefined,
 });
 
+/**
+ *
+ */
 const POS = () => {
 	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
 	const productsUI = useObservableSuspense(useUIResource('posProducts'));
