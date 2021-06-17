@@ -10,7 +10,7 @@ import * as Styled from './styles';
 // user: import('@wcpos/common/src/database').UserDocument;
 // }
 
-const UserMenu = () => {
+export const UserMenu = () => {
 	const { user, unsetLastUser } = useAppState();
 	const [showSettings, setShowSettings] = React.useState(false);
 
@@ -45,5 +45,3 @@ const UserMenu = () => {
 		</>
 	);
 };
-
-export default UserMenu;

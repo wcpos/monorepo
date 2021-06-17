@@ -15,6 +15,9 @@ import visibility from './visibility.svg';
 import visibilityOff from './visibility-off.svg';
 import resize from './resize.svg';
 import drag from './drag.svg';
+import notifications from './notifications.svg';
+import circle from './circle.svg';
+import chevronRight from './chevron-right.svg';
 
 export default {
 	add,
@@ -41,4 +44,7 @@ export default {
 	'visibility-off': visibilityOff,
 	resize,
 	drag,
+	notifications,
+	circle,
+	chevronRight,
 };

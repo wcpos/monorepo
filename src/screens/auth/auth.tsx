@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { useObservable, useObservableState } from 'observable-hooks';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import PageLayout from '@wcpos/common/src/layout/page';
 import Segment from '@wcpos/common/src/components/segment';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Text from '@wcpos/common/src/components/text';
 import useOnline from '@wcpos/common/src/hooks/use-online';
 import { AuthView } from './styles';
 import Site from './site';
+import * as Styled from './styles';
 
 type UserDocument = import('@wcpos/common/src/database').UserDocument;
 
@@ -39,7 +39,7 @@ const Auth = () => {
 	};
 
 	return (
-		<PageLayout>
+		<Styled.Container>
 			<Text>{online ? 'Online' : 'Offline '}</Text>
 			<AuthView>
 				<Segment style={{ width: '90%', maxWidth: 460 }}>
@@ -65,7 +65,7 @@ const Auth = () => {
 					</Segment.Group>
 				)}
 			</AuthView>
-		</PageLayout>
+		</Styled.Container>
 	);
 };
 

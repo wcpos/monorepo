@@ -2,7 +2,7 @@ import 'react-native-gesture-handler';
 import * as React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Text } from 'react-native';
-import { NavigationContainer, useLinking, NavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { ThemeProvider } from 'styled-components/native';
 import { AppStateProvider } from './hooks/use-app-state';
 import TranslationService from './services/translation';
@@ -18,57 +18,63 @@ import { AuthLoginProvider } from './hooks/use-auth-login';
 const i18n = new TranslationService();
 const prefixes =
 	Platform.OS === 'android' || Platform.OS === 'ios' ? 'wcpos://' : (window as any).location.origin;
-const routes = {
-	Auth: 'connect',
-	Main: {
-		path: '',
+
+const linking = {
+	prefixes: [prefixes],
+	config: {
 		screens: {
-			POS: {
+			Auth: 'connect',
+			Main: {
 				path: '',
-			},
-			Products: {
-				path: 'products',
-			},
-			Orders: {
-				path: 'orders',
-			},
-			Customers: {
-				path: 'customers',
-			},
-			Support: {
-				path: 'support',
+				screens: {
+					POS: {
+						path: '',
+					},
+					Products: {
+						path: 'products',
+					},
+					Orders: {
+						path: 'orders',
+					},
+					Customers: {
+						path: 'customers',
+					},
+					Support: {
+						path: 'support',
+					},
+				},
 			},
 		},
 	},
 };
 
 const App = () => {
-	const navigationRef = React.useRef<NavigationContainerRef>(null);
-	const [isNavReady, setNavIsReady] = React.useState(false);
-	const [initialNavState, setInitialNavState] = React.useState<any>();
+	// const navigationRef = React.useRef<NavigationContainerRef>(null);
+	// const [isNavReady, setNavIsReady] = React.useState(false);
+	// const [initialNavState, setInitialNavState] = React.useState<any>();
 
 	/**
 	 * Deep linking for react-navigation
 	 */
-	const { getInitialState } = useLinking(navigationRef, {
-		prefixes: [prefixes],
-		config: { screens: routes },
-	});
+	// const { getInitialState } = useLinking(navigationRef, {
+	// 	prefixes: [prefixes],
+	// 	config: { screens: routes },
+	// });
 
-	React.useEffect(() => {
-		(async () => {
-			try {
-				const state = await getInitialState();
-				if (state !== undefined) {
-					setInitialNavState(state);
-				}
-			} catch (e) {
-				console.warn(e);
-			} finally {
-				setNavIsReady(true);
-			}
-		})();
-	}, [getInitialState]);
+	// React.useEffect(() => {
+	// 	(async () => {
+	// 		try {
+	// 			const state = await getInitialState();
+	// 			if (state !== undefined) {
+	// 				setInitialNavState(state);
+	// 			}
+	// 		} catch (e) {
+	// 			console.warn(e);
+	// 		} finally {
+	// 			setNavIsReady(true);
+	// 		}
+	// 	})();
+	// }, [getInitialState]);
 
 	return (
 		// <React.StrictMode>
@@ -82,8 +88,8 @@ const App = () => {
 								<AppProviderSizeProvider>
 									<SnackbarProvider>
 										<Portal.Provider>
-											{isAppStateReady && isNavReady ? (
-												<NavigationContainer ref={navigationRef} initialState={initialNavState}>
+											{isAppStateReady ? (
+												<NavigationContainer linking={linking}>
 													<AuthLoginProvider>
 														<AppNavigator />
 													</AuthLoginProvider>

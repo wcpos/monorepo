@@ -19,15 +19,13 @@ const AppNavigator = (props: Partial<StackNavigatorProps>) => {
 	const { storeDB } = useAppState();
 
 	return (
-		<>
-			<Stack.Navigator headerMode="none">
-				{storeDB ? (
-					<Stack.Screen name="Main" component={MainNavigator} />
-				) : (
-					<Stack.Screen name="Auth" component={AuthScreen} />
-				)}
-			</Stack.Navigator>
-		</>
+		<Stack.Navigator screenOptions={{ headerShown: false }}>
+			{storeDB ? (
+				<Stack.Screen name="Main" component={MainNavigator} />
+			) : (
+				<Stack.Screen name="Auth" component={AuthScreen} />
+			)}
+		</Stack.Navigator>
 	);
 };
 

@@ -1,10 +1,8 @@
-import styled, { css } from 'styled-components/native';
+import styled from 'styled-components/native';
 
-type ThemeProps = import('../../lib/theme').ThemeProps;
-
-// eslint-disable-next-line import/prefer-default-export
-export const Container = styled.View<{ theme: ThemeProps }>`
+export const Container = styled.View`
 	height: 100%;
 	flex-direction: row;
 	flex: 1;
+	padding: ${({ theme }) => `${theme.PAGE_MAIN_PADDING_Y} ${theme.PAGE_MAIN_PADDING_X}`};
 `;

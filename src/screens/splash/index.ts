@@ -1,1 +1,1 @@
-export { MemoizedSplash as default } from './splash';
+export { Splash as default } from './splash';

@@ -21,6 +21,7 @@ export interface LastUser {
  */
 export function useLastUser() {
 	const [lastUser, _setLastUser] = React.useState<LastUser>();
+	const [ready, setReady] = React.useState(false);
 
 	/**
 	 * run effect once to get the last user from local storage
@@ -47,6 +48,8 @@ export function useLastUser() {
 					});
 				}
 			}
+
+			setReady(true);
 		})();
 	}, []);
 
@@ -88,5 +91,6 @@ export function useLastUser() {
 		storeDB: lastUser?.storeDB,
 		setLastUser,
 		unsetLastUser,
+		ready,
 	};
 }
