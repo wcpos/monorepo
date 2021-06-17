@@ -52,7 +52,7 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 	const online = useOnline();
 	const { user, setUser, userDB } = useUser();
 	const theme = getTheme('default', 'dark');
-	const { site, wpUser, storeDB, setLastUser, unsetLastUser } = useLastUser();
+	const { site, wpUser, storeDB, setLastUser, unsetLastUser, ready } = useLastUser();
 
 	const value = {
 		info,
@@ -70,9 +70,7 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 	console.log(value);
 
 	return (
-		<AppStateContext.Provider value={value}>
-			{children(isRxDocument(user), theme)}
-		</AppStateContext.Provider>
+		<AppStateContext.Provider value={value}>{children(ready, theme)}</AppStateContext.Provider>
 	);
 };
 
