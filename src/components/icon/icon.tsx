@@ -4,6 +4,7 @@ import Svgs from './svg';
 import Pressable from '../pressable';
 import Tooltip from '../tooltip';
 import Skeleton from '../skeleton';
+import * as Styled from './styles';
 
 const sizeMap = {
 	default: 20,
@@ -71,7 +72,13 @@ export const Icon = ({
 
 	const maybeWrapIcon = (icon: React.ReactElement) => {
 		let wrappedIcon = icon;
-		wrappedIcon = onPress ? <Pressable onPress={onPress}>{wrappedIcon}</Pressable> : wrappedIcon;
+		wrappedIcon = onPress ? (
+			<Styled.PressableIcon onPress={onPress} style={{ backgroundColor: '#ccc' }}>
+				{wrappedIcon}
+			</Styled.PressableIcon>
+		) : (
+			wrappedIcon
+		);
 		wrappedIcon = tooltip ? <Tooltip content={tooltip}>{wrappedIcon}</Tooltip> : wrappedIcon;
 		return wrappedIcon;
 	};

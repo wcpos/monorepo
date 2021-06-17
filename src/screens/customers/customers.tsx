@@ -8,6 +8,7 @@ import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import Button from '@wcpos/common/src/components/button';
 import Actions from './actions';
 import Table from './table';
+import * as Styled from './styles';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 
@@ -61,34 +62,36 @@ const Customers = () => {
 	const customers = useObservableState(customers$, []);
 
 	return (
-		<React.Suspense fallback={<Text>loading customers...</Text>}>
-			<Segment.Group>
-				<Segment>
-					<Actions columns={columns} query={query} ui={ui} />
-				</Segment>
-				<Segment grow>
-					<Table
-						customers={customers}
-						columns={columns}
-						sort={onSort}
-						sortBy={ui.sortBy}
-						sortDirection={ui.sortDirection}
-					/>
-				</Segment>
-				<Segment>
-					<Button
-						title="Fetch customers"
-						onPress={async () => {
-							// @ts-ignore
-							const replicationState = storeDB.customers.syncRestApi({
-								pull: {},
-							});
-							replicationState.run(false);
-						}}
-					/>
-				</Segment>
-			</Segment.Group>
-		</React.Suspense>
+		<Styled.Container>
+			<React.Suspense fallback={<Text>loading customers...</Text>}>
+				<Segment.Group>
+					<Segment>
+						<Actions columns={columns} query={query} ui={ui} />
+					</Segment>
+					<Segment grow>
+						<Table
+							customers={customers}
+							columns={columns}
+							sort={onSort}
+							sortBy={ui.sortBy}
+							sortDirection={ui.sortDirection}
+						/>
+					</Segment>
+					<Segment>
+						<Button
+							title="Fetch customers"
+							onPress={async () => {
+								// @ts-ignore
+								const replicationState = storeDB.customers.syncRestApi({
+									pull: {},
+								});
+								replicationState.run(false);
+							}}
+						/>
+					</Segment>
+				</Segment.Group>
+			</React.Suspense>
+		</Styled.Container>
 	);
 };
 

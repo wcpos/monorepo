@@ -12,7 +12,7 @@ const Name = ({ product }: Props) => {
 		await product.atomicPatch({ name: newValue });
 	};
 
-	return <TextInput label="Name" value={product.name} onChange={handleChangeText} />;
+	return <TextInput label="Name" value={product.name} onChange={handleChangeText} hideLabel />;
 };
 
 export default Name;
