@@ -9,7 +9,6 @@ export const Container = styled.View`
 `;
 
 export const Image = styled.Image<Props>`
-	resizemode: contain;
 	width: 100%;
 	height: 100%;
 

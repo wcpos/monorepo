@@ -5,7 +5,6 @@ import Segment from '@wcpos/common/src/components/segment';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Text from '@wcpos/common/src/components/text';
 import useOnline from '@wcpos/common/src/hooks/use-online';
-import { AuthView } from './styles';
 import Site from './site';
 import * as Styled from './styles';
 
@@ -40,31 +39,28 @@ const Auth = () => {
 
 	return (
 		<Styled.Container>
-			<Text>{online ? 'Online' : 'Offline '}</Text>
-			<AuthView>
-				<Segment style={{ width: '90%', maxWidth: 460 }}>
-					<Text size="large">Connect!</Text>
-					<Text>Enter the URL of your WooCommerce store:</Text>
-					<TextInput
-						label="Connect"
-						prefix="https://"
-						action="Connect"
-						onAction={onConnect}
-						type="url"
-						clearable
-					/>
-				</Segment>
-				{sites && sites.length > 0 && (
-					<Segment.Group style={{ width: '90%', maxWidth: 460, height: 'auto' }}>
-						{/* <Segment content="Sites" /> */}
-						{sites.map((site) => (
-							<Segment key={site._id}>
-								<Site site={site} user={user} />
-							</Segment>
-						))}
-					</Segment.Group>
-				)}
-			</AuthView>
+			<Segment style={{ width: '90%', maxWidth: 460 }}>
+				<Text size="large">Connect!</Text>
+				<Text>Enter the URL of your WooCommerce store:</Text>
+				<TextInput
+					label="Connect"
+					prefix="https://"
+					action="Connect"
+					onAction={onConnect}
+					type="url"
+					clearable
+				/>
+			</Segment>
+			{sites && sites.length > 0 && (
+				<Segment.Group style={{ width: '90%', maxWidth: 460, height: 'auto' }}>
+					{/* <Segment content="Sites" /> */}
+					{sites.map((site) => (
+						<Segment key={site._id}>
+							<Site site={site} user={user} />
+						</Segment>
+					))}
+				</Segment.Group>
+			)}
 		</Styled.Container>
 	);
 };

@@ -18,7 +18,6 @@ export const Label = styled(Text)`
 export const Group = styled.View`
 	flex-direction: row;
 	flex-flow: wrap;
-	gap: 2px 2px;
 	margin-bottom: 2px;
 `;
 
