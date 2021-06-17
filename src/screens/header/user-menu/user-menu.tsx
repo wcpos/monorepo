@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useNavigation } from '@react-navigation/native';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Dropdown from '@wcpos/common/src/components/dropdown';
@@ -13,6 +14,7 @@ import * as Styled from './styles';
 export const UserMenu = () => {
 	const { user, unsetLastUser } = useAppState();
 	const [showSettings, setShowSettings] = React.useState(false);
+	const navigation = useNavigation();
 
 	return (
 		<>
@@ -37,6 +39,10 @@ export const UserMenu = () => {
 					{
 						label: 'Settings',
 						action: () => setShowSettings(true),
+					},
+					{
+						label: 'Modal',
+						action: () => navigation.navigate('Modal'),
 					},
 				]}
 			/>

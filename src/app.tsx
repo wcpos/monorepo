@@ -44,38 +44,12 @@ const linking = {
 					},
 				},
 			},
+			Modal: '#',
 		},
 	},
 };
 
 const App = () => {
-	// const navigationRef = React.useRef<NavigationContainerRef>(null);
-	// const [isNavReady, setNavIsReady] = React.useState(false);
-	// const [initialNavState, setInitialNavState] = React.useState<any>();
-
-	/**
-	 * Deep linking for react-navigation
-	 */
-	// const { getInitialState } = useLinking(navigationRef, {
-	// 	prefixes: [prefixes],
-	// 	config: { screens: routes },
-	// });
-
-	// React.useEffect(() => {
-	// 	(async () => {
-	// 		try {
-	// 			const state = await getInitialState();
-	// 			if (state !== undefined) {
-	// 				setInitialNavState(state);
-	// 			}
-	// 		} catch (e) {
-	// 			console.warn(e);
-	// 		} finally {
-	// 			setNavIsReady(true);
-	// 		}
-	// 	})();
-	// }, [getInitialState]);
-
 	return (
 		// <React.StrictMode>
 		<ErrorBoundary>
