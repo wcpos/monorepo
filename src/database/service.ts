@@ -1,4 +1,10 @@
-import { createRxDatabase, addRxPlugin, checkAdapter, isRxDatabase } from 'rxdb/plugins/core';
+import {
+	createRxDatabase,
+	addRxPlugin,
+	checkAdapter,
+	isRxDatabase,
+	PouchDB,
+} from 'rxdb/plugins/core';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
 import { RxDBAdapterCheckPlugin } from 'rxdb/plugins/adapter-check';
@@ -29,6 +35,13 @@ if (process.env.NODE_ENV === 'development') {
 	if (!module?.hot?.data) {
 		addRxPlugin(RxDBDevModePlugin);
 	}
+
+	// add debugging
+	// @ts-ignore
+	import('pouchdb-debug').then((pouchdbDebug) => {
+		PouchDB.plugin(pouchdbDebug.default);
+		PouchDB.debug.enable('*');
+	});
 }
 
 addRxPlugin(collectionsHelper);
