@@ -11,8 +11,9 @@ import Table from './table';
 import * as Styled from './styles';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
+type CustomersScreenProps = import('@wcpos/common/src/navigators/main').CustomersScreenProps;
 
-const Customers = () => {
+const Customers = ({ navigation }: CustomersScreenProps) => {
 	const { user, storeDB } = useAppState();
 	const ui = useObservableSuspense(useUIResource('customers'));
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
@@ -33,7 +34,6 @@ const Customers = () => {
 	}
 
 	const customers$ = useObservable(
-		// A stream of React elements!
 		(inputs$) =>
 			inputs$.pipe(
 				distinctUntilChanged((a, b) => a[0] === b[0]),
@@ -41,12 +41,11 @@ const Customers = () => {
 				switchMap(([q]) => {
 					const regexp = new RegExp(escape(q.search), 'i');
 					const RxQuery = storeDB.collections.customers
-						.find()
-						// .find({
-						// 	selector: {
-						// 		name: { $regex: regexp },
-						// 	},
-						// })
+						.find({
+							selector: {
+								firstName: { $regex: regexp },
+							},
+						})
 						// @ts-ignore
 						.sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
@@ -78,6 +77,27 @@ const Customers = () => {
 						/>
 					</Segment>
 					<Segment>
+						<Button
+							title="Fetch all ids"
+							onPress={async () => {
+								// @ts-ignore
+								const result = await storeDB.httpClient
+									.get('customers', {
+										params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: -1 },
+									})
+									.then(({ data }: any) => {
+										// @ts-ignore
+										return storeDB.collections.customers.auditIdsFromServer(data);
+									})
+									.catch((err: any) => {
+										if (err && err.response && err.response.status === 401) {
+											// @ts-ignore
+											navigation.navigate('Modal', { login: true });
+										}
+										console.warn(err);
+									});
+							}}
+						/>
 						<Button
 							title="Fetch customers"
 							onPress={async () => {

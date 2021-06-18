@@ -59,6 +59,7 @@ const Products = () => {
 	);
 
 	const products = useObservableState(products$, []);
+	console.log(products);
 
 	const onSearch = (value: string) => {
 		console.log(value);

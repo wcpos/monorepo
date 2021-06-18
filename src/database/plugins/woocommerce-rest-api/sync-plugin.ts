@@ -3,6 +3,7 @@ import { syncRestApiCollection } from './sync-collection';
 import { syncRestApiDocument } from './sync-document';
 import { toRestApiJSON } from './to-json';
 import { bulkUpsertFromServer } from './bulk-upsert';
+import { auditIdsFromServer } from './audit-ids';
 
 import { parsePlainData } from './helpers';
 
@@ -22,6 +23,7 @@ const prototypes = {
 	RxCollection: (proto: any) => {
 		proto.syncRestApi = syncRestApiCollection;
 		proto.bulkUpsertFromServer = bulkUpsertFromServer;
+		proto.auditIdsFromServer = auditIdsFromServer;
 	},
 	RxDocument: (proto: any) => {
 		proto.syncRestApi = syncRestApiDocument;

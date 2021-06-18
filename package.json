@@ -43,6 +43,7 @@
 		"pouchdb-adapter-idb": "7.2.2",
 		"pouchdb-adapter-memory": "7.2.2",
 		"pouchdb-adapter-react-native-sqlite": "3.0.1",
+		"pouchdb-debug": "^7.2.1",
 		"react": "17.0.2",
 		"react-cache": "2.0.0-alpha.1",
 		"react-i18next": "11.11.0",
