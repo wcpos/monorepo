@@ -61,7 +61,6 @@ export class ConnectionService {
 			})
 			.catch((err) => {
 				console.log(err);
-				debugger;
 				this._subjects.error.next(err.message);
 			});
 	}

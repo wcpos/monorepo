@@ -9,6 +9,7 @@ import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import Button from '@wcpos/common/src/components/button';
 import Table from './table';
 import Actions from './actions';
+import * as Styled from './styles';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 
@@ -67,47 +68,53 @@ const Orders = () => {
 	const orders = useObservableState(query.$, []);
 
 	return (
-		<React.Suspense fallback={<Text>loading orders...</Text>}>
-			<Segment.Group>
-				<Segment>
-					<Input label="Search orders" placeholder="Search orders" onChange={onSearch} />
-					<Actions ui={ui} columns={columns} />
-				</Segment>
-				<Segment grow>
-					<Table
-						orders={orders}
-						columns={columns}
-						sort={onSort}
-						sortBy={ui.sortBy}
-						sortDirection={ui.sortDirection}
-					/>
-				</Segment>
-				<Segment>
-					<Button
-						title="Fetch orders"
-						onPress={async () => {
-							// @ts-ignore
-							const replicationState = storeDB.orders.syncRestApi({
-								url: 'orders',
-								pull: {},
-							});
-							replicationState.run(false);
-						}}
-					/>
-					<Button
-						title="Insert new order"
-						onPress={async () => {
-							// @ts-ignore
-							storeDB.collections.orders.insert({
-								id: 1234,
-								number: '1234',
-								line_items: [{ name: 'Test', price: 8 }],
-							});
-						}}
-					/>
-				</Segment>
-			</Segment.Group>
-		</React.Suspense>
+		<Styled.Container>
+			<React.Suspense fallback={<Text>loading orders...</Text>}>
+				<Segment.Group>
+					<Segment>
+						<Input
+							label="Search orders"
+							placeholder="Search orders"
+							onChange={onSearch}
+							hideLabel
+						/>
+						<Actions ui={ui} columns={columns} />
+					</Segment>
+					<Segment grow>
+						<Table
+							orders={orders}
+							columns={columns}
+							sort={onSort}
+							sortBy={ui.sortBy}
+							sortDirection={ui.sortDirection}
+						/>
+					</Segment>
+					<Segment>
+						<Button
+							title="Fetch all ids"
+							onPress={async () => {
+								// @ts-ignore
+								const result = await storeDB.httpClient
+									.get('orders', {
+										params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: -1 },
+									})
+									.then(({ data }: any) => {
+										// @ts-ignore
+										return storeDB.collections.orders.auditIdsFromServer(data);
+									})
+									.catch((err: any) => {
+										if (err && err.response && err.response.status === 401) {
+											// @ts-ignore
+											navigation.navigate('Modal', { login: true });
+										}
+										console.warn(err);
+									});
+							}}
+						/>
+					</Segment>
+				</Segment.Group>
+			</React.Suspense>
+		</Styled.Container>
 	);
 };
 
