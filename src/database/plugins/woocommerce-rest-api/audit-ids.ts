@@ -1,6 +1,7 @@
 import forEach from 'lodash/forEach';
+import find from 'lodash/find';
+import pull from 'lodash/pull';
 import map from 'lodash/map';
-import get from 'lodash/get';
 
 type RxCollection = import('rxdb').RxCollection;
 type RxDocument = import('rxdb').RxDocument;
@@ -9,16 +10,38 @@ export async function auditIdsFromServer(this: RxCollection, data: Record<string
 	const collection = this;
 
 	// @ts-ignore
-	const { docs } = await collection.pouch.find({ selector: {}, fields: ['_id', 'id'] });
-	debugger;
-	// no local docs
+	const { docs } = await collection.pouch
+		.find({
+			selector: { id: { $exists: true } },
+			// @ts-ignore
+			fields: ['_id', 'id'],
+		})
+		.catch((err) => {
+			console.log(err);
+		});
+
+	// no synced local docs
 	if (docs.length === 0) {
-		return collection.bulkInsert(data);
+		return collection.bulkInsert(data).catch((err) => {
+			console.log(err);
+		});
 	}
 
-	// get all localIds
-	// compare to list from server
-	// bulkinsert, bulkupsert or bulkdelete
+	//
+	const remove = map(docs, '_id');
 
-	return null;
+	forEach(docs, (doc) => {
+		const intersection = find(data, { id: doc.id });
+		if (intersection) {
+			pull(remove, doc._id);
+			pull(data, intersection);
+		}
+	});
+
+	await collection.bulkRemove(remove).catch((err) => {
+		console.log(err);
+	});
+	return collection.bulkInsert(data).catch((err) => {
+		console.log(err);
+	});
 }
