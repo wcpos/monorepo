@@ -32,9 +32,18 @@ export interface TagProps {
  */
 export const Tag = ({ children, removable, disabled, onRemove, onPress }: TagProps) => {
 	const tag = (
-		<Styled.Tag disabled={disabled}>
+		<Styled.Tag disabled={disabled} style={removable ? { paddingRight: 1 } : {}}>
 			<Styled.Label size="small">{children}</Styled.Label>
-			{removable && <Icon name="clear" size="small" disabled={disabled} onPress={onRemove} />}
+			{removable && (
+				<Icon
+					name="clear"
+					size="small"
+					disabled={disabled}
+					onPress={onRemove}
+					backgroundStyle={{ marginLeft: 2, padding: 0, backgroundColor: 'transparent' }}
+					color="rgba(255, 255, 255, 0.5)"
+				/>
+			)}
 		</Styled.Tag>
 	);
 

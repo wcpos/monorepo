@@ -1,11 +1,15 @@
 import * as React from 'react';
+import { ViewStyle } from 'react-native';
+import get from 'lodash/get';
 import { useTheme } from 'styled-components/native';
 import Svgs from './svg';
-import Pressable from '../pressable';
 import Tooltip from '../tooltip';
 import Skeleton from '../skeleton';
 import * as Styled from './styles';
 
+/**
+ *
+ */
 const sizeMap = {
 	default: 20,
 	small: 16,
@@ -14,6 +18,9 @@ const sizeMap = {
 	'x-large': 30,
 };
 
+/**
+ *
+ */
 export interface IconProps {
 	/**
 	 * Icon colour
@@ -47,6 +54,10 @@ export interface IconProps {
 	 * Wraps the icon in a Tooltip component
 	 */
 	tooltip?: string;
+	/**
+	 * Styling for Pressable icons
+	 */
+	backgroundStyle?: 'none' | ViewStyle;
 }
 
 /**
@@ -61,38 +72,46 @@ export const Icon = ({
 	height,
 	onPress,
 	tooltip,
+	backgroundStyle,
 }: IconProps) => {
 	const theme = useTheme();
 
-	let SvgIcon = Svgs[name];
-
-	if (!SvgIcon) {
-		SvgIcon = Svgs.error;
-	}
-
-	const maybeWrapIcon = (icon: React.ReactElement) => {
-		let wrappedIcon = icon;
-		wrappedIcon = onPress ? (
-			<Styled.PressableIcon onPress={onPress} style={{ backgroundColor: '#ccc' }}>
-				{wrappedIcon}
-			</Styled.PressableIcon>
-		) : (
-			wrappedIcon
-		);
-		wrappedIcon = tooltip ? <Tooltip content={tooltip}>{wrappedIcon}</Tooltip> : wrappedIcon;
-		return wrappedIcon;
-	};
-
-	return maybeWrapIcon(
+	const SvgIcon = get(Svgs, name, Svgs.error);
+	let IconComponent = (
 		<SvgIcon
 			// @TODO - clean up this component
 			// @ts-ignore
 			width={width || sizeMap[size]}
 			// @ts-ignore
 			height={height || sizeMap[size]}
-			fill={color || theme?.TEXT_COLOR}
+			fill={color || theme.TEXT_COLOR}
 		/>
 	);
+
+	const pressableStyle = React.useCallback(
+		({ hovered }) =>
+			backgroundStyle !== 'none'
+				? [
+						{ backgroundColor: hovered ? theme.ICON_BACKGROUND_COLOR : 'transparent' },
+						backgroundStyle,
+				  ]
+				: { padding: 0 },
+		[backgroundStyle, theme.ICON_BACKGROUND_COLOR]
+	);
+
+	if (onPress) {
+		IconComponent = (
+			<Styled.PressableIcon onPress={onPress} style={pressableStyle}>
+				{IconComponent}
+			</Styled.PressableIcon>
+		);
+	}
+
+	if (tooltip) {
+		IconComponent = <Tooltip content={tooltip}>{IconComponent}</Tooltip>;
+	}
+
+	return IconComponent;
 };
 
 /**

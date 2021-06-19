@@ -15,6 +15,13 @@ const colors = {
 	warning: palette['yellow-vivid-800'],
 	inverse: 'rgba(256, 256, 256, 0.8)',
 	disabled: palette['blue-grey-400'],
+
+	// greys
+	'lightest-grey': '#E1E1E1',
+	'light-grey': '#AFAFAF',
+	grey: '#808080',
+	'dark-grey': '#545454',
+	'darkest-grey': '#2B2B2B',
 };
 
 const baseRadius = '3px';
@@ -91,6 +98,8 @@ const theme = {
 	FONT_WEIGHT: 400,
 	FONT_WEIGHT_BOLD: 700,
 	FONT_WEIGHT_LIGHT: 300,
+
+	ICON_BACKGROUND_COLOR: colors['lightest-grey'],
 
 	IMAGE_BORDER_RADIUS: baseRadius,
 

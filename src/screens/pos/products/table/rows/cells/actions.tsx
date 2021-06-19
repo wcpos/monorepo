@@ -45,6 +45,7 @@ const Actions = ({ product }: Props) => {
 		<Icon
 			name="addCircle"
 			size="x-large"
+			backgroundStyle="none"
 			onPress={() => {
 				addToCart();
 			}}

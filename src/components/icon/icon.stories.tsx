@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { action } from '@storybook/addon-actions';
 import { AppProviderSizeProvider } from '@wcpos/common/src/hooks/use-position-in-app';
@@ -52,7 +53,9 @@ PressableIcon.args = {
 
 export const IconWithTooltip = (props: IconProps) => (
 	<AppProvider>
-		<Icon {...props} />
+		<View style={{ padding: '30px', alignItems: 'flex-start' }}>
+			<Icon {...props} />
+		</View>
 	</AppProvider>
 );
 IconWithTooltip.args = {
