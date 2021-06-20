@@ -64,17 +64,17 @@
 		"sortBy": "number",
 		"sortDirection": "desc",
 		"columns": [
-			{ "key": "status", "width": "10%", "order": 1 },
-			{ "key": "number", "width": "10%", "order": 2 },
-			{ "key": "customer", "flexGrow": 1, "order": 3 },
-			{ "key": "billing", "flexGrow": 1, "order": 4 },
-			{ "key": "shipping", "flexGrow": 1, "order": 5 },
-			{ "key": "customerNote", "width": "10%", "order": 6 },
-			{ "key": "dateCreated", "flexGrow": 1, "order": 7 },
-			{ "key": "dateModified", "hide": true, "width": "10%", "order": 8 },
-			{ "key": "dateCompleted", "hide": true, "width": "10%", "order": 9 },
-			{ "key": "total", "width": "10%", "order": 10 },
-			{ "key": "actions", "disableSort": true, "width": "10%", "order": 11 }
+			{ "key": "status", "width": "38px", "order": 1, "hideLabel": true },
+			{ "key": "number", "width": "38px", "order": 2, "hideLabel": true },
+			{ "key": "customer", "width": "20%", "order": 3 },
+			{ "key": "billing", "width": "20%", "order": 4 },
+			{ "key": "shipping", "width": "20%", "order": 5 },
+			{ "key": "customerNote", "width": "38px", "order": 6 },
+			{ "key": "dateCreated", "width": "100px", "order": 7 },
+			{ "key": "dateModified", "hide": true, "width": "100px", "order": 8 },
+			{ "key": "dateCompleted", "hide": true, "width": "100px", "order": 9 },
+			{ "key": "total", "width": "90px", "order": 10 },
+			{ "key": "actions", "disableSort": true, "width": "38px", "order": 11, "hideLabel": true }
 		]
 	},
 	"customers": {
