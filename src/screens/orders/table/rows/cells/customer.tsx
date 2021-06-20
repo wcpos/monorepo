@@ -1,12 +1,12 @@
 import * as React from 'react';
-import Text from '../../../../../components/text';
+import Text from '@wcpos/common/src/components/text';
 
 type Props = {
-	order: any;
+	order: import('@wcpos/common/src/database').OrderDocument;
 };
 
 const Customer = ({ order }: Props) => {
-	return <Text>{order.customer_id}</Text>;
+	return order.customer_id ? <Text>{order.customer_id}</Text> : <Text.Skeleton />;
 };
 
 export default Customer;

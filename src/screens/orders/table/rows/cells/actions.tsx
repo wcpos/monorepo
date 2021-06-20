@@ -1,9 +1,11 @@
 import * as React from 'react';
 import Button from '@wcpos/common/src/components/button';
+import Dropdown from '@wcpos/common/src/components/dropdown';
+import Icon from '@wcpos/common/src/components/icon';
 import OrderModal from './modal';
 
 interface Props {
-	order: any;
+	order: import('@wcpos/common/src/database').OrderDocument;
 }
 
 const Actions = ({ order }: Props) => {
@@ -19,9 +21,14 @@ const Actions = ({ order }: Props) => {
 
 	return (
 		<>
-			<Button title="Show" onPress={() => setVisible(true)} />
-			<Button title="Sync" onPress={handleSync} />
-			<Button title="Delete" onPress={handleDelete} />
+			<Dropdown
+				items={[
+					{ label: 'Show', action: () => setVisible(true) },
+					{ label: 'Sync', action: handleSync },
+					{ label: 'Delete', action: handleDelete },
+				]}
+				activator={<Icon name="more" />}
+			/>
 			{visible && <OrderModal order={order} onClose={() => setVisible(false)} />}
 		</>
 	);

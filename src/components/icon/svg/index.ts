@@ -18,6 +18,13 @@ import drag from './drag.svg';
 import notifications from './notifications.svg';
 import circle from './circle.svg';
 import chevronRight from './chevron-right.svg';
+import pending from './pending.svg';
+import processing from './processing.svg';
+import onHold from './on-hold.svg';
+import completed from './completed.svg';
+import cancelled from './cancelled.svg';
+import refunded from './refunded.svg';
+import failed from './failed.svg';
 
 export default {
 	add,
@@ -47,4 +54,11 @@ export default {
 	notifications,
 	circle,
 	chevronRight,
+	pending,
+	processing,
+	'on-hold': onHold,
+	completed,
+	cancelled,
+	refunded,
+	failed,
 };

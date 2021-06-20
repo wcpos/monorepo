@@ -23,9 +23,8 @@ const ProductsFooter = () => {
 					const { data } = await storeDB.httpClient.get('products', {
 						params: { fields: ['id', 'name'], posts_per_page: -1 },
 					});
-					debugger;
 					// @ts-ignore
-					await storeDB.collections.products.bulkUpsertFromServer(data);
+					await storeDB.collections.products.auditIdsFromServer(data);
 				}}
 			/>
 			<Button

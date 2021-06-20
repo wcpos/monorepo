@@ -1,13 +1,16 @@
 import * as React from 'react';
-import Format from '../../../../../components/format';
+import Format from '@wcpos/common/src/components/format';
+import Text from '@wcpos/common/src/components/text';
 
 type Props = {
-	order: any;
+	order: import('@wcpos/common/src/database').OrderDocument;
 	type: 'shipping' | 'billing';
 };
 
 const Address = ({ order, type }: Props) => {
-	return <Format.Address address={order[type]} showName={false} />;
+	const address = order[type];
+
+	return address ? <Format.Address address={address} showName={false} /> : <Text.Skeleton />;
 };
 
 export default Address;

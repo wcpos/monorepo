@@ -1,13 +1,19 @@
 import * as React from 'react';
-import Icon from '../../../../../components/icon';
+import Icon from '@wcpos/common/src/components/icon';
+import Tooltip from '@wcpos/common/src/components/tooltip';
 
 type Props = {
-	status: string;
+	order: import('@wcpos/common/src/database').OrderDocument;
 };
 
-const Status = ({ status }: Props) => {
-	// @ts-ignore
-	return <Icon name={status} />;
+const Status = ({ order }: Props) => {
+	return order.status ? (
+		<Tooltip content={order.status}>
+			<Icon name={order.status} />
+		</Tooltip>
+	) : (
+		<Icon.Skeleton />
+	);
 };
 
 export default Status;

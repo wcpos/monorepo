@@ -3,16 +3,16 @@ import Icon from '@wcpos/common/src/components/icon';
 import Tooltip from '@wcpos/common/src/components/tooltip';
 
 type OrderNoteProps = {
-	note: string;
+	order: import('@wcpos/common/src/database').OrderDocument;
 };
 
-const Note = ({ note }: OrderNoteProps) => {
-	if (!note) {
+const Note = ({ order }: OrderNoteProps) => {
+	if (!order.note) {
 		return null;
 	}
 
 	return (
-		<Tooltip content={note}>
+		<Tooltip content={order.note}>
 			<Icon name="note" />
 		</Tooltip>
 	);

@@ -27,14 +27,14 @@ const Row = ({ order, columns }: Props) => {
 					{((): React.ReactElement | null => {
 						switch (column.key) {
 							case 'status':
-								return <Status status={order.status} />;
+								return <Status order={order} />;
 							case 'customer':
 								return <Customer order={order} />;
 							case 'billing':
 							case 'shipping':
 								return <Address order={order} type={column.key} />;
 							case 'customerNote':
-								return <Note note={cellData} />;
+								return <Note order={order} />;
 							case 'actions':
 								return <Actions order={order} />;
 							default:

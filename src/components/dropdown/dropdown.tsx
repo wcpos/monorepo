@@ -6,11 +6,13 @@ import Pressable from '../pressable';
 import Arrow from '../arrow';
 import * as Styled from './styles';
 
+type TextAction = import('../menu/menu').TextAction;
+
 export interface DropdownProps {
 	/**
 	 *
 	 */
-	items: any[];
+	items: string[] | TextAction[];
 	/**
 	 *
 	 */
