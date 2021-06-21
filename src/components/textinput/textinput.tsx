@@ -360,7 +360,9 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 						// onContentSizeChange={handleContentSizeChange}
 						style={{ width: autosize ? measuredWidth : '100%' }}
 					/>
-					{clearable && value !== '' && <Icon name="clear" onPress={handleClear} />}
+					{clearable && value !== '' && (
+						<Icon name="clear" onPress={handleClear} backgroundStyle="none" />
+					)}
 					{action && (
 						<Button
 							title={action}

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 import forEach from 'lodash/forEach';
 import Table from '@wcpos/common/src/components/table';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Row from './rows';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
@@ -43,6 +44,21 @@ const CustomersTable = ({
 		});
 	}, []);
 
+	const getItemLayout = React.useCallback(
+		(data, index) => ({ length: 100, offset: 100 * index, index }),
+		[]
+	);
+
+	useWhyDidYouUpdate('Customers Page Table', {
+		columns,
+		customers,
+		sort,
+		sortBy,
+		sortDirection,
+		syncingCustomers,
+		t,
+	});
+
 	return (
 		<Table
 			columns={columns}
@@ -52,6 +68,8 @@ const CustomersTable = ({
 			sortDirection={sortDirection}
 			// @ts-ignore
 			onViewableItemsChanged={handleVieweableItemsChanged}
+			// @ts-ignore
+			getItemLayout={getItemLayout}
 		>
 			<Table.Header>
 				<Table.Header.Row>

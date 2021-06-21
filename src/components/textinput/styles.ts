@@ -10,6 +10,7 @@ export const Box = styled.View<{ focused: boolean }>`
 	border-style: solid;
 	border-radius: ${({ theme }) => theme.SEGMENT_BORDER_RADIUS};
 	padding: ${({ theme }) => theme.SEGMENT_PADDING};
+	width: 100%;
 `;
 
 export const TextInput = styled.TextInput`

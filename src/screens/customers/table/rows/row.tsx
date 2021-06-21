@@ -1,13 +1,14 @@
 import * as React from 'react';
-import Table from '../../../../components/table';
+import Table from '@wcpos/common/src/components/table';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Image from './cells/image';
 import Actions from './cells/actions';
 import Address from './cells/address';
 import Name from './cells/name';
 import Email from './cells/email';
 
-type ColumnProps = import('../../../../components/table/types').ColumnProps;
-type GetCellPropsFunction = import('../../../../components/table/row').GetCellPropsFunction;
+type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
+type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
 type CellRenderProps = {
 	cellData: any;
 	column: ColumnProps;
@@ -20,6 +21,8 @@ interface ICustomerRowProps {
 }
 
 const Row = ({ customer, columns }: ICustomerRowProps) => {
+	useWhyDidYouUpdate('Customers Page Row', { customer, columns });
+
 	return (
 		<Table.Body.Row rowData={customer} columns={columns}>
 			{({ cellData, column, getCellProps }: CellRenderProps): React.ReactElement => (

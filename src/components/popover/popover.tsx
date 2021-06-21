@@ -148,27 +148,29 @@ export const Popover: React.FC<PopoverProps> & { Item: typeof Item } = ({
 	return (
 		<View ref={ref}>
 			{activator}
-			<Portal keyPrefix="Popover">
-				{/* <PopoverContext.Provider value={{ requestClose: onRequestClose }}> */}
-				<Backdrop
-					open={open}
-					invisible={hideBackdrop}
-					clickThrough={clickThrough}
-					onPress={onRequestClose}
-				/>
-				<PopoverView
-					style={popoverStyle}
-					open={open}
-					placement={placement}
-					matchWidth={matchWidth}
-					activatorLayout={activatorLayout ?? LAYOUT_ZERO}
-					aboveActivator={aboveActivator}
-					clickThrough={clickThrough}
-				>
-					{content}
-				</PopoverView>
-				{/* </PopoverContext.Provider> */}
-			</Portal>
+			{open && (
+				<Portal keyPrefix="Popover">
+					{/* <PopoverContext.Provider value={{ requestClose: onRequestClose }}> */}
+					<Backdrop
+						open
+						invisible={hideBackdrop}
+						clickThrough={clickThrough}
+						onPress={onRequestClose}
+					/>
+					<PopoverView
+						style={popoverStyle}
+						open
+						placement={placement}
+						matchWidth={matchWidth}
+						activatorLayout={activatorLayout ?? LAYOUT_ZERO}
+						aboveActivator={aboveActivator}
+						clickThrough={clickThrough}
+					>
+						{content}
+					</PopoverView>
+					{/* </PopoverContext.Provider> */}
+				</Portal>
+			)}
 		</View>
 	);
 };

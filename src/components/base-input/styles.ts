@@ -24,6 +24,7 @@ export const InputText = styled(Text)`
 `;
 
 export const Container = styled.View`
+	flex: 1;
 	align-items: flex-start;
 `;
 

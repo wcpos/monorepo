@@ -6,6 +6,7 @@ import Segment from '@wcpos/common/src/components/segment';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import Button from '@wcpos/common/src/components/button';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Actions from './actions';
 import Table from './table';
 import * as Styled from './styles';
@@ -53,13 +54,18 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 						// @ts-ignore
 						.find({
 							selector: {
-								username: { $regex: regexp },
+								$or: [
+									{ username: { $regex: regexp } },
+									{ firstName: { $regex: regexp } },
+									{ lastName: { $regex: regexp } },
+								],
 							},
 						});
 					// @ts-ignore
 					// .sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
 				}),
+				debounceTime(150),
 				catchError((err) => {
 					console.error(err);
 					return err;
@@ -69,6 +75,8 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 	);
 
 	const customers = useObservableState(customers$, []);
+
+	useWhyDidYouUpdate('Customer Page', { customers, query, ui, columns, storeDB, navigation });
 
 	return (
 		<Styled.Container>

@@ -81,15 +81,15 @@
 		"sortBy": "lastName",
 		"sortDirection": "asc",
 		"columns": [
-			{ "key": "avatarUrl", "disableSort": true, "order": 1 },
-			{ "key": "firstName", "order": 2 },
-			{ "key": "lastName", "order": 3 },
-			{ "key": "email", "order": 4 },
-			{ "key": "role", "hide": true, "order": 5 },
-			{ "key": "username", "hide": true, "order": 6 },
-			{ "key": "billing", "order": 7 },
-			{ "key": "shipping", "order": 8 },
-			{ "key": "actions", "disableSort": true, "order": 9 }
+			{ "key": "avatarUrl", "disableSort": true, "width": "15%", "order": 1, "hideLabel": true },
+			{ "key": "firstName", "width": "20%", "order": 2 },
+			{ "key": "lastName", "width": "20%", "order": 3 },
+			{ "key": "email", "width": "20%", "order": 4 },
+			{ "key": "role", "width": "20%", "hide": true, "order": 5 },
+			{ "key": "username", "width": "20%", "hide": true, "order": 6 },
+			{ "key": "billing", "width": "20%", "order": 7 },
+			{ "key": "shipping", "width": "20%", "order": 8 },
+			{ "key": "actions", "disableSort": true, "width": "38px", "order": 9, "hideLabel": true }
 		]
 	}
 }
