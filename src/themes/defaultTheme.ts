@@ -116,6 +116,8 @@ const theme = {
 	MASTERBAR_TITLE_COLOR: '#FFFFFF',
 	MASTERBAR_TITLE_SIZE: '18px',
 
+	MENU_ITEM_HOVER_BACKGROUND_COLOR: colors['lightest-grey'],
+
 	LIST_ITEM_PADDING: '10px',
 
 	LOADER_COLOR: colors.primary,

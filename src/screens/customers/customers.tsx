@@ -39,15 +39,18 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 				distinctUntilChanged((a, b) => a[0] === b[0]),
 				debounceTime(150),
 				switchMap(([q]) => {
-					const regexp = new RegExp(escape(q.search), 'i');
-					const RxQuery = storeDB.collections.customers
-						.find({
-							selector: {
-								firstName: { $regex: regexp },
-							},
-						})
-						// @ts-ignore
-						.sort({ [q.sortBy]: q.sortDirection });
+					// const regexp = new RegExp(escape(q.search), 'i');
+					const regexp = new RegExp('', 'i');
+					const RxQuery = storeDB.collections.customers.find();
+					// @ts-ignore
+					// .sort({ [q.sortBy]: q.sortDirection });
+					// .find({
+					// 	selector: {
+					// 		firstName: { $regex: regexp },
+					// 	},
+					// })
+					// // @ts-ignore
+					// .sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
 				}),
 				catchError((err) => {
@@ -100,12 +103,12 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 						/>
 						<Button
 							title="Fetch customers"
-							onPress={async () => {
-								// @ts-ignore
-								const replicationState = storeDB.customers.syncRestApi({
-									pull: {},
+							onPress={() => {
+								setQuery({
+									search: 'test',
+									sortBy: 'firstName',
+									sortDirection: 'asc',
 								});
-								replicationState.run(false);
 							}}
 						/>
 					</Segment>

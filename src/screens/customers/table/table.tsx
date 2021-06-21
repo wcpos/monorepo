@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useTranslation } from 'react-i18next';
+import forEach from 'lodash/forEach';
 import Table from '../../../components/table';
 import Row from './rows';
 
@@ -28,6 +29,19 @@ const CustomersTable = ({
 	sortDirection,
 }: ICustomersTableProps) => {
 	const { t } = useTranslation();
+	const syncingCustomers = React.useRef<number[]>([]);
+
+	const handleVieweableItemsChanged = React.useCallback(({ changed }) => {
+		forEach(changed, ({ item, isViewable }) => {
+			if (isViewable && !item.isSynced() && !syncingCustomers.current.includes(item.id)) {
+				syncingCustomers.current.push(item.id);
+				const replicationState = item.syncRestApi({
+					pull: {},
+				});
+				replicationState.run(false);
+			}
+		});
+	}, []);
 
 	return (
 		<Table
@@ -36,6 +50,8 @@ const CustomersTable = ({
 			sort={sort}
 			sortBy={sortBy}
 			sortDirection={sortDirection}
+			// @ts-ignore
+			onViewableItemsChanged={handleVieweableItemsChanged}
 		>
 			<Table.Header>
 				<Table.Header.Row>

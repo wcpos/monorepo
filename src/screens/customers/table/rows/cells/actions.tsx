@@ -1,5 +1,6 @@
 import * as React from 'react';
-import Button from '@wcpos/common/src/components/button';
+import Dropdown from '@wcpos/common/src/components/dropdown';
+import Icon from '@wcpos/common/src/components/icon';
 import EditCustomer from '../../../add-customer-modal';
 
 interface Props {
@@ -19,9 +20,14 @@ const Actions = ({ customer }: Props) => {
 
 	return (
 		<>
-			<Button title="Edit" onPress={() => setShowModal(true)} />
-			<Button title="Sync" onPress={handleSync} />
-			<Button title="Delete" onPress={handleDelete} />
+			<Dropdown
+				activator={<Icon name="more" />}
+				items={[
+					{ label: 'Edit', action: () => setShowModal(true) },
+					{ label: 'Sync', action: handleSync },
+					{ label: 'Delete', action: handleDelete },
+				]}
+			/>
 			{showModal && <EditCustomer onClose={() => setShowModal(false)} customer={customer} />}
 		</>
 	);

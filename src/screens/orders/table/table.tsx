@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useTranslation } from 'react-i18next';
+import forEach from 'lodash/forEach';
 import Table from '../../../components/table';
 import Row from './rows';
 
@@ -21,6 +22,19 @@ interface Props {
  */
 const OrdersTable: React.FC<Props> = ({ columns, orders, sort, sortBy, sortDirection }) => {
 	const { t } = useTranslation();
+	const syncingOrders = React.useRef<number[]>([]);
+
+	const handleVieweableItemsChanged = React.useCallback(({ changed }) => {
+		forEach(changed, ({ item, isViewable }) => {
+			if (isViewable && !item.isSynced() && !syncingOrders.current.includes(item.id)) {
+				syncingOrders.current.push(item.id);
+				const replicationState = item.syncRestApi({
+					pull: {},
+				});
+				replicationState.run(false);
+			}
+		});
+	}, []);
 
 	return (
 		<Table
@@ -29,6 +43,8 @@ const OrdersTable: React.FC<Props> = ({ columns, orders, sort, sortBy, sortDirec
 			sort={sort}
 			sortBy={sortBy}
 			sortDirection={sortDirection}
+			// @ts-ignore
+			onViewableItemsChanged={handleVieweableItemsChanged}
 		>
 			<Table.Header>
 				<Table.Header.Row>

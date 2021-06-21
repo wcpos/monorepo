@@ -19,6 +19,13 @@ export type Collection = RxCollection & { collections: () => Record<string, RxCo
 /**
  *
  */
+function isSynced(this: Collection) {
+	return !!this.dateModifiedGmt;
+}
+
+/**
+ *
+ */
 const prototypes = {
 	RxCollection: (proto: any) => {
 		proto.syncRestApi = syncRestApiCollection;
@@ -28,6 +35,7 @@ const prototypes = {
 	RxDocument: (proto: any) => {
 		proto.syncRestApi = syncRestApiDocument;
 		proto.toRestApiJSON = toRestApiJSON;
+		proto.isSynced = isSynced;
 	},
 };
 
