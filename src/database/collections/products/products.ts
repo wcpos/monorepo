@@ -10,7 +10,7 @@ export type ProductCollection = import('rxdb').RxCollection<
 
 interface ProductMethods {
 	isVariable: (this: ProductDocument) => boolean;
-	isSynced: (this: ProductDocument) => boolean;
+	// isSynced: (this: ProductDocument) => boolean;
 }
 
 type ProductStatics = Record<string, never>;
@@ -28,9 +28,9 @@ export const methods: ProductMethods = {
 	/**
 	 *
 	 */
-	isSynced(this) {
-		return !!this.dateModifiedGmt;
-	},
+	// isSynced(this) {
+	// 	return !!this.dateModifiedGmt;
+	// },
 };
 
 /**
