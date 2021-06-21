@@ -20,7 +20,7 @@ export type Collection = RxCollection & { collections: () => Record<string, RxCo
  *
  */
 function isSynced(this: Collection) {
-	return !!this.dateModifiedGmt;
+	return !!this.dateCreated;
 }
 
 /**
