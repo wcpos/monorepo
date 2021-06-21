@@ -33,6 +33,26 @@ export function parsePlainData(this: RxCollection, plainData: Record<string, unk
 	});
 
 	/**
+	 * @TODO - change this to a validator 
+	 * special fix for metaData values to make sure they are strings
+	 * fixes bug where WC REST API customer endpoint for returns:
+	 * {
+			"id": 18,
+			"key": "community-events-location",
+			"value": {
+				"ip": "XXX.XXX.XXX.XXX"
+			}
+		}
+		*/
+	if (Array.isArray(plainData.metaData)) {
+		forEach(plainData.metaData, (meta) => {
+			if (typeof meta.value === 'object' && meta.value !== null) {
+				meta.value = JSON.stringify(meta.value);
+			}
+		});
+	}
+
+	/**
 	 * remove any properties not in the schema
 	 */
 	const omitProperties = difference(Object.keys(plainData), topLevelFields);
