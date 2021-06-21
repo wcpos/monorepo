@@ -11,7 +11,10 @@ const Actions = ({ customer }: Props) => {
 	const [showModal, setShowModal] = React.useState(false);
 
 	const handleSync = () => {
-		console.log('sync');
+		const replicationState = customer.syncRestApi({
+			push: {},
+		});
+		replicationState.run(false);
 	};
 
 	const handleDelete = () => {

@@ -13,21 +13,30 @@ import * as Styled from './styles';
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type CustomersScreenProps = import('@wcpos/common/src/navigators/main').CustomersScreenProps;
 
+const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+
 const Customers = ({ navigation }: CustomersScreenProps) => {
 	const { user, storeDB } = useAppState();
 	const ui = useObservableSuspense(useUIResource('customers'));
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
-	const onSort: Sort = ({ sortBy, sortDirection }) => {
-		console.log({ sortBy, sortDirection });
-		// ui.updateWithJson({ sortBy, sortDirection });
-	};
-
 	const [query, setQuery] = React.useState({
 		search: '',
-		sortBy: 'firstName',
+		sortBy: 'lastName',
 		sortDirection: 'asc',
+		filter: {
+			role: [],
+		},
 	});
+
+	const onSort: Sort = ({ sortBy, sortDirection }) => {
+		// @ts-ignore
+		setQuery({ ...query, sortBy, sortDirection });
+	};
+
+	// const onSearch = (search: string) => {
+	// 	setQuery({ ...query, search });
+	// };
 
 	if (!storeDB) {
 		throw Error('something went wrong');
@@ -39,17 +48,15 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 				distinctUntilChanged((a, b) => a[0] === b[0]),
 				debounceTime(150),
 				switchMap(([q]) => {
-					// const regexp = new RegExp(escape(q.search), 'i');
-					const regexp = new RegExp('', 'i');
-					const RxQuery = storeDB.collections.customers.find();
+					const regexp = new RegExp(escape(q.search), 'i');
+					const RxQuery = storeDB.collections.customers
+						// @ts-ignore
+						.find({
+							selector: {
+								username: { $regex: regexp },
+							},
+						});
 					// @ts-ignore
-					// .sort({ [q.sortBy]: q.sortDirection });
-					// .find({
-					// 	selector: {
-					// 		firstName: { $regex: regexp },
-					// 	},
-					// })
-					// // @ts-ignore
 					// .sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
 				}),
@@ -68,15 +75,16 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 			<React.Suspense fallback={<Text>loading customers...</Text>}>
 				<Segment.Group>
 					<Segment>
-						<Actions columns={columns} query={query} ui={ui} />
+						<Actions columns={columns} query={query} ui={ui} setQuery={setQuery} />
 					</Segment>
 					<Segment grow>
 						<Table
 							customers={customers}
 							columns={columns}
 							sort={onSort}
-							sortBy={ui.sortBy}
-							sortDirection={ui.sortDirection}
+							sortBy={query.sortBy}
+							// @ts-ignore
+							sortDirection={query.sortDirection}
 						/>
 					</Segment>
 					<Segment>
@@ -99,16 +107,6 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 										}
 										console.warn(err);
 									});
-							}}
-						/>
-						<Button
-							title="Fetch customers"
-							onPress={() => {
-								setQuery({
-									search: 'test',
-									sortBy: 'firstName',
-									sortDirection: 'asc',
-								});
 							}}
 						/>
 					</Segment>

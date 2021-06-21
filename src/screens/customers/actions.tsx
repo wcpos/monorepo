@@ -14,18 +14,19 @@ interface Props {
 	columns: any;
 	resetUI?: () => void;
 	query: any;
+	setQuery: (args: any) => void;
 }
 
 /**
  *
  */
-const Actions: React.FC<Props> = ({ ui, columns }) => {
+const Actions: React.FC<Props> = ({ ui, columns, query, setQuery }) => {
 	const { t } = useTranslation();
 	const [visible, setVisible] = React.useState(false);
 	const [showModal, setShowModal] = React.useState(false);
 
-	const onFilter = () => {
-		console.log('change query');
+	const onSearch = (search: string) => {
+		setQuery({ ...query, search });
 	};
 
 	return (
@@ -34,7 +35,9 @@ const Actions: React.FC<Props> = ({ ui, columns }) => {
 				label="Search customers"
 				hideLabel
 				placeholder="Search customers"
-				onChange={onFilter}
+				onChange={onSearch}
+				value={query.search}
+				clearable
 			/>
 			<Icon name="add" onPress={() => setShowModal(true)} />
 			{showModal && <AddCustomer onClose={() => setShowModal(false)} />}

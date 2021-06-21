@@ -15,10 +15,10 @@
 			"type": "string"
 		},
 		"dateModified": {
-			"type": "string"
+			"type": ["string", "null"]
 		},
 		"dateModifiedGmt": {
-			"type": "string"
+			"type": ["string", "null"]
 		},
 		"email": {
 			"description": "The email address for the customer.",

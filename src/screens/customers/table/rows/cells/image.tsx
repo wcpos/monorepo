@@ -2,7 +2,7 @@ import * as React from 'react';
 import Img from '@wcpos/common/src/components/image';
 
 type Props = {
-	customer: any;
+	customer: import('@wcpos/common/src/database').CustomerDocument;
 };
 
 const Image = ({ customer }: Props) => {

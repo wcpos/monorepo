@@ -39,7 +39,7 @@ export const Dropdown = ({ items, onSelect, activator }: DropdownProps) => {
 		// wrap string
 		if (typeof activator === 'string') {
 			return (
-				<Text onPress={show}>
+				<Text onPress={show} style={{ alignItems: 'center' }}>
 					{activator}
 					<Arrow direction={open ? 'up' : 'down'} />
 				</Text>
@@ -52,7 +52,7 @@ export const Dropdown = ({ items, onSelect, activator }: DropdownProps) => {
 		}
 		// else wrap in Pressable
 		return (
-			<Pressable onPress={show}>
+			<Pressable onPress={show} style={{ alignItems: 'center' }}>
 				{activator}
 				<Arrow direction={open ? 'up' : 'down'} />
 			</Pressable>

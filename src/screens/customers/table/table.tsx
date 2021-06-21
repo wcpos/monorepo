@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 import forEach from 'lodash/forEach';
-import Table from '../../../components/table';
+import Table from '@wcpos/common/src/components/table';
 import Row from './rows';
 
-type Sort = import('../../../components/table/types').Sort;
-type SortDirection = import('../../../components/table/types').SortDirection;
+type Sort = import('@wcpos/common/src/components/table/types').Sort;
+type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
 
 interface ICustomersTableProps {
 	columns: any;
@@ -16,7 +16,7 @@ interface ICustomersTableProps {
 }
 
 type GetHeaderCellPropsFunction =
-	import('../../../components/table/header-row').GetHeaderCellPropsFunction;
+	import('@wcpos/common/src/components/table/header-row').GetHeaderCellPropsFunction;
 
 /**
  *
