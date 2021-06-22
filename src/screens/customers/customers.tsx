@@ -6,9 +6,10 @@ import Segment from '@wcpos/common/src/components/segment';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import Button from '@wcpos/common/src/components/button';
+import Search from '@wcpos/common/src/components/search';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-import Actions from './actions';
 import Table from './table';
+import UiSettings from '../common/ui-settings';
 import * as Styled from './styles';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
@@ -33,6 +34,10 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 	const onSort: Sort = ({ sortBy, sortDirection }) => {
 		// @ts-ignore
 		setQuery({ ...query, sortBy, sortDirection });
+	};
+
+	const onSearch = (search: string) => {
+		setQuery({ ...query, search });
 	};
 
 	// const onSearch = (search: string) => {
@@ -83,7 +88,21 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 			<React.Suspense fallback={<Text>loading customers...</Text>}>
 				<Segment.Group>
 					<Segment>
-						<Actions columns={columns} query={query} ui={ui} setQuery={setQuery} />
+						<Search
+							label="Search Customers"
+							placeholder="Search Customers"
+							value={query.search}
+							onSearch={onSearch}
+							actions={[
+								{
+									name: 'add',
+									action: () => {
+										console.log('show modal');
+									},
+								},
+								<UiSettings ui={ui} />,
+							]}
+						/>
 					</Segment>
 					<Segment grow>
 						<Table

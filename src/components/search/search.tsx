@@ -35,17 +35,20 @@ export type SearchProps = {
 	/**
 	 * Buttons displayed to the right of the search field
 	 */
-	actions?: SearchActionsProps[];
+	actions?: (SearchActionsProps | React.ReactElement)[];
 	/**
 	 * Tags displayed in the search field
 	 */
 	filters?: SearchFiltersProps[];
-} & Pick<import('../textinput/textinput').TextInputProps, 'label' | 'value' | 'onClear'>; // pass-through props
+} & Pick<
+	import('../textinput/textinput').TextInputProps,
+	'label' | 'value' | 'onClear' | 'placeholder'
+>; // pass-through props
 
 /**
  *
  */
-export const Search = ({ label, value, actions, onSearch, filters, onClear }: SearchProps) => {
+export const Search = ({ actions, onSearch, filters, ...rest }: SearchProps) => {
 	const renderFilters = React.useMemo(() => {
 		if (filters) {
 			return filters.map(({ label: filterLabel, onRemove }) => (
@@ -61,20 +64,21 @@ export const Search = ({ label, value, actions, onSearch, filters, onClear }: Se
 		<Styled.Container>
 			<Styled.Input>
 				<TextInput
-					label={label}
 					hideLabel
-					value={value}
 					clearable
 					onChange={onSearch}
-					onClear={onClear}
 					leftAccessory={renderFilters}
+					{...rest}
 				/>
 			</Styled.Input>
 			{actions && (
 				<Styled.Actions>
-					{actions.map(({ name, action }) => (
-						<Icon name={name} onPress={action} />
-					))}
+					{actions.map((action) => {
+						if (React.isValidElement(action)) {
+							return action;
+						}
+						return <Icon name={action.name} onPress={action.action} />;
+					})}
 				</Styled.Actions>
 			)}
 		</Styled.Container>

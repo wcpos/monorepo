@@ -21,6 +21,7 @@ BasicUsage.args = {
 	label: 'Search',
 	onSearch: action('Search'),
 	onClear: action('Clear'),
+	placeholder: 'Placeholder',
 	actions: [
 		{ name: 'add', action: action('Add Pressed') },
 		{ name: 'cog', action: action('Cog Pressed') },
