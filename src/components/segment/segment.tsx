@@ -1,12 +1,17 @@
 import * as React from 'react';
+import { ViewStyle } from 'react-native';
 import Text from '../text';
+import ErrorBoundary from '../error-boundary';
 import * as Styled from './styles';
 import { SegmentGroup } from './group';
 
-type StyleProp<T> = import('react-native').StyleProp<T>;
-type ViewStyle = import('react-native').ViewStyle;
-
+/**
+ *
+ */
 export interface ISegmentProps {
+	/**
+	 *
+	 */
 	children?: React.ReactNode;
 	content?: React.ReactNode;
 	type?: 'body' | 'footer' | 'header';
@@ -14,10 +19,13 @@ export interface ISegmentProps {
 	loading?: boolean;
 	raised?: boolean;
 	group?: 'first' | 'middle' | 'last';
-	style?: StyleProp<ViewStyle>;
+	style?: ViewStyle;
 	grow?: boolean;
 }
 
+/**
+ *
+ */
 export const Segment = ({
 	children,
 	content,
@@ -33,9 +41,8 @@ export const Segment = ({
 	}
 
 	return (
-		// @ts-ignore
-		<Styled.Segment style={style} group={group} type={type} raised={raised} grow={grow}>
-			{segment}
+		<Styled.Segment style={[style]} group={group} type={type} raised={raised} grow={grow}>
+			<ErrorBoundary>{segment}</ErrorBoundary>
 		</Styled.Segment>
 	);
 };

@@ -1,23 +1,33 @@
 import * as React from 'react';
 import { View } from 'react-native';
+import find from 'lodash/find';
 import Text from '@wcpos/common/src/components/text';
 import Categories from './categories';
 import Tags from './tags';
 
 interface Props {
 	product: import('@wcpos/common/src/database').ProductDocument;
-	showSKU: boolean;
-	showCategories: boolean;
-	showTags: boolean;
+	display: any;
 }
 
-const Name = ({ product, showSKU, showCategories, showTags }: Props) => {
+const Name = ({ product, display }: Props) => {
+	/**
+	 *
+	 */
+	const show = React.useCallback(
+		(key: string): boolean => {
+			const d = find(display, { key });
+			return !(d && d.hide);
+		},
+		[display]
+	);
+
 	return (
 		<>
 			<Text>{product.name}</Text>
-			{showSKU && <Text size="small">{product.sku}</Text>}
-			{showCategories && <Categories product={product} />}
-			{showTags && <Tags product={product} />}
+			{show('sku') && <Text size="small">{product.sku}</Text>}
+			{show('categories') && <Categories product={product} />}
+			{show('tags') && <Tags product={product} />}
 			{product.type === 'variable' && (
 				<View>
 					{(product.attributes as [])

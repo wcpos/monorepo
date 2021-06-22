@@ -56,7 +56,7 @@
 				}
 			}
 		},
-		"pos_products": {
+		"posProducts": {
 			"column": {
 				"label": {
 					"actions": "Actions",
@@ -67,12 +67,7 @@
 					"regularPrice": "Regular Price",
 					"salePrice": "Sale Price",
 					"sku": "SKU",
-					"stock": "Stock"
-				}
-			},
-			"display": {
-				"label": {
-					"sku": "SKU",
+					"stock": "Stock",
 					"categories": "Categories",
 					"tags": "Tags"
 				}

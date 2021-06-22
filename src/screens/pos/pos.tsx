@@ -8,7 +8,7 @@ import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
-import ErrorBoundary from '@wcpos/common/src/components/error';
+import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
 import Draggable from '@wcpos/common/src/components/draggable';
 import Gutter from '@wcpos/common/src/components/gutter';
 import useOnLayout from '@wcpos/common/src/hooks/use-on-layout';
@@ -38,7 +38,7 @@ export const POSContext = React.createContext<POSContextProps>({
 const POS = () => {
 	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
 	const productsUI = useObservableSuspense(useUIResource('posProducts'));
-	const cartUI = useObservableSuspense(useUIResource('posCart'));
+	const cartUI = useObservableSuspense(useUIResource('cart'));
 	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
 
 	/**

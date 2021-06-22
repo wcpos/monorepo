@@ -5,7 +5,7 @@ import { AppStateProvider } from './hooks/use-app-state';
 import TranslationService from './services/translation';
 import Navigator from './navigators';
 import Portal from './components/portal';
-import ErrorBoundary from './components/error';
+import ErrorBoundary from './components/error-boundary';
 
 const i18n = new TranslationService();
 

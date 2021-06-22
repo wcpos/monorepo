@@ -4,13 +4,14 @@ import { switchMap } from 'rxjs/operators';
 import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import Segment from '@wcpos/common/src/components/segment';
-import ErrorBoundary from '@wcpos/common/src/components/error';
+import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
 import TextInput from '@wcpos/common/src/components/textinput';
-import Popover from '@wcpos/common/src/components/popover';
+import Search from '@wcpos/common/src/components/search';
 import Tag from '@wcpos/common/src/components/tag';
 import Actions from './actions';
 import Table from './table';
 import Footer from './footer';
+import UiSettings from '../../common/ui-settings';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 
@@ -74,29 +75,20 @@ const Products = ({ ui }: IPOSProductsProps) => {
 		<ProductQueryContext.Provider value={{ query, setQuery }}>
 			<Segment.Group>
 				<Segment style={{ flexDirection: 'row' }}>
-					<ErrorBoundary>
-						<TextInput
-							label="Search products"
-							hideLabel
-							leftAccessory={renderActiveFilters()}
-							value={query.search}
-							placeholder="Search products"
-							onChange={onSearch}
-							clearable
-							style={{ flex: 1 }}
-						/>
-						<Actions columns={columns} display={display} ui={ui} />
-					</ErrorBoundary>
+					<Search
+						label="Search products"
+						placeholder="Search products"
+						value={query.search}
+						filters={query.filter.categories}
+						onSearch={onSearch}
+						actions={[<UiSettings ui={ui} />]}
+					/>
 				</Segment>
 				<Segment grow>
-					<ErrorBoundary>
-						<Table query={query} columns={columns} display={display} sort={onSort} />
-					</ErrorBoundary>
+					<Table query={query} columns={columns} display={display} sort={onSort} />
 				</Segment>
 				<Segment>
-					<ErrorBoundary>
-						<Footer />
-					</ErrorBoundary>
+					<Footer />
 				</Segment>
 			</Segment.Group>
 		</ProductQueryContext.Provider>

@@ -12,7 +12,15 @@
 				"flexShrink": 0,
 				"hideLabel": true
 			},
-			{ "key": "name", "order": 2 },
+			{
+				"key": "name",
+				"order": 2,
+				"display": [
+					{ "key": "sku", "hide": true, "order": 1 },
+					{ "key": "categories", "order": 2 },
+					{ "key": "tags", "hide": true, "order": 3 }
+				]
+			},
 			{ "key": "sku", "hide": true, "order": 3, "width": "20%", "flexShrink": 0 },
 			{ "key": "price", "order": 4, "width": "90px", "flexShrink": 0, "align": "right" },
 			{
@@ -23,14 +31,9 @@
 				"flexShrink": 0,
 				"hideLabel": true
 			}
-		],
-		"display": [
-			{ "key": "sku", "hide": true, "order": 1 },
-			{ "key": "categories", "order": 2 },
-			{ "key": "tags", "hide": true, "order": 3 }
 		]
 	},
-	"posCart": {
+	"cart": {
 		"sortBy": "id",
 		"sortDirection": "asc",
 		"columns": [

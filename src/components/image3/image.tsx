@@ -3,7 +3,7 @@ import { View, StyleProp, ViewStyle } from 'react-native';
 import { ImgResource } from './resource';
 import { Img } from './styles';
 import Placeholder from '../skeleton';
-import ErrorBoundary from '../error';
+import ErrorBoundary from '../error-boundary';
 import Text from '../text';
 
 export interface ImageProps {

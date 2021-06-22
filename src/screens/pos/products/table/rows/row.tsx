@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import find from 'lodash/find';
 import Table from '@wcpos/common/src/components/table';
 import Image from './cells/image';
 import Name from './cells/name';
@@ -16,19 +15,8 @@ interface IPOSProductsTableRowProps {
 	display: any;
 }
 
-const Row = ({ product, columns, display }: IPOSProductsTableRowProps) => {
+const Row = ({ product, columns }: IPOSProductsTableRowProps) => {
 	const forceRender = useObservableState(product.$);
-
-	/**
-	 * Helper function
-	 */
-	const show = React.useCallback(
-		(key: string): boolean => {
-			const d = find(display, { key });
-			return !d.hide;
-		},
-		[display]
-	);
 
 	return (
 		<Table.Body.Row rowData={product} columns={columns} style={{ height: 100 }}>
@@ -41,14 +29,7 @@ const Row = ({ product, columns, display }: IPOSProductsTableRowProps) => {
 								case 'image':
 									return <Image product={product} />;
 								case 'name':
-									return (
-										<Name
-											product={product}
-											showSKU={show('sku')}
-											showCategories={show('categories')}
-											showTags={show('tags')}
-										/>
-									);
+									return <Name product={product} display={column.display} />;
 								case 'sku':
 									return <SKU product={product} />;
 								case 'price':

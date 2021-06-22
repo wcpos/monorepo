@@ -7,11 +7,12 @@ import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
 
 interface UiSettingsProps {
-	ui: any;
+	ui: import('@wcpos/common/src/hooks/use-ui/use-ui').UIDocument;
 }
 
 const UiSettings = ({ ui }: UiSettingsProps) => {
 	const { t } = useTranslation();
+	const key = ui.id.split('_')[1];
 	const columns = ui.get('columns');
 	const [visible, setVisible] = React.useState(false);
 
@@ -23,29 +24,34 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 		>
 			<Text>Columns</Text>
 			{columns.map((column: any, index: number) => (
-				<Checkbox
-					key={column.key}
-					name={column.key}
-					label={t(`customers.column.label.${column.key}`)}
-					checked={!column.hide}
-					onChange={(checked) => {
-						columns[index] = { ...column, hide: !checked };
-						ui.atomicSet('columns', columns);
-					}}
-				/>
+				<>
+					<Checkbox
+						key={column.key}
+						name={column.key}
+						label={t(`${key}.column.label.${column.key}`)}
+						checked={!column.hide}
+						onChange={(checked) => {
+							columns[index] = { ...column, hide: !checked };
+							ui.atomicSet('columns', columns);
+						}}
+					/>
+					{column.display
+						? column.display.map((display: any, i: number) => (
+								// eslint-disable-next-line react/jsx-indent
+								<Checkbox
+									key={display.key}
+									name={display.key}
+									label={t(`${key}.column.label.${display.key}`)}
+									checked={!display.hide}
+									onChange={(checked) => {
+										column.display[i] = { ...display, hide: !checked };
+										ui.atomicSet('columns', columns);
+									}}
+								/>
+						  ))
+						: null}
+				</>
 			))}
-			{/* <Text>Display</Text>
-			{display.map((d: any) => (
-				<Checkbox
-					key={d.key}
-					name={d.key}
-					label={d.label}
-					checked={!d.hide}
-					onChange={(checked) => {
-						d.updateWithJson({ hide: !checked });
-					}}
-				/>
-			))} */}
 			<Button title="Restore Default Settings" onPress={ui.reset} />
 		</Popover>
 	);

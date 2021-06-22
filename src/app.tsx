@@ -8,7 +8,7 @@ import { AppStateProvider } from './hooks/use-app-state';
 import TranslationService from './services/translation';
 import AppNavigator from './navigators';
 import Portal from './components/portal';
-import ErrorBoundary from './components/error';
+import ErrorBoundary from './components/error-boundary';
 import SplashScreen from './screens/splash';
 import Platform from './lib/platform';
 import { AppProviderSizeProvider } from './hooks/use-position-in-app';
