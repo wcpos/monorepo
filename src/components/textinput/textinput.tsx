@@ -118,10 +118,12 @@ export interface TextInputProps {
 	 */
 	onSubmit?: () => void;
 	// action?: string;
-	// clearable?: boolean;
 	// invalid?: boolean;
 	// onAction?: (value: string) => void;
-	// onClear?: () => void;
+	/**
+	 * Called when the clear icon is pressed
+	 */
+	onClear?: () => void;
 	/**
 	 * Display a prefix label on the input.
 	 */
@@ -192,6 +194,7 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 			returnKeyType = 'next',
 			focused = false,
 			onSubmit,
+			onClear,
 			hideLabel = false,
 			selectTextOnFocus = false,
 			autoCapitalize,
@@ -235,9 +238,9 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 		/**
 		 * clearable
 		 */
-		const handleClear = () => {
-			onChange('');
-		};
+		const handleClear = React.useCallback(() => {
+			return typeof onClear === 'function' ? onClear() : onChange('');
+		}, [onChange, onClear]);
 
 		/**
 		 * autosize
@@ -361,7 +364,13 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 						style={{ width: autosize ? measuredWidth : '100%' }}
 					/>
 					{clearable && value !== '' && (
-						<Icon name="clear" onPress={handleClear} backgroundStyle="none" />
+						<Icon
+							name="clear"
+							size="small"
+							// type="secondary"
+							onPress={handleClear}
+							backgroundStyle="none"
+						/>
 					)}
 					{action && (
 						<Button
