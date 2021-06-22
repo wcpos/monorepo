@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useObservableState, useObservable, useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import forEach from 'lodash/forEach';
 import Table from '@wcpos/common/src/components/table';
@@ -10,8 +11,8 @@ type SortDirection = import('@wcpos/common/src/components/table/types').SortDire
 
 interface ICustomersTableProps {
 	columns: any;
-	customers: any;
-	sort: Sort;
+	customers$: any;
+	setQuery: any;
 	sortBy: string;
 	sortDirection: SortDirection;
 }
@@ -24,13 +25,22 @@ type GetHeaderCellPropsFunction =
  */
 const CustomersTable = ({
 	columns,
-	customers,
-	sort,
-	sortBy,
-	sortDirection,
+	customers$,
+	setQuery,
+	sortBy: _sortBy,
+	sortDirection: _sortDirection,
 }: ICustomersTableProps) => {
 	const { t } = useTranslation();
+	const customers = useObservableState(customers$, []);
 	const syncingCustomers = React.useRef<number[]>([]);
+
+	const handleSort: Sort = React.useCallback(
+		({ sortBy, sortDirection }) => {
+			// @ts-ignore
+			setQuery((prev) => ({ ...prev, sortBy, sortDirection }));
+		},
+		[setQuery]
+	);
 
 	const handleVieweableItemsChanged = React.useCallback(({ changed }) => {
 		forEach(changed, ({ item, isViewable }) => {
@@ -52,9 +62,9 @@ const CustomersTable = ({
 	useWhyDidYouUpdate('Customers Page Table', {
 		columns,
 		customers,
-		sort,
-		sortBy,
-		sortDirection,
+		setQuery,
+		_sortBy,
+		_sortDirection,
 		syncingCustomers,
 		t,
 	});
@@ -63,9 +73,9 @@ const CustomersTable = ({
 		<Table
 			columns={columns}
 			data={customers}
-			sort={sort}
-			sortBy={sortBy}
-			sortDirection={sortDirection}
+			sort={handleSort}
+			sortBy={_sortBy}
+			sortDirection={_sortDirection}
 			// @ts-ignore
 			onViewableItemsChanged={handleVieweableItemsChanged}
 			// @ts-ignore
@@ -90,4 +100,4 @@ const CustomersTable = ({
 	);
 };
 
-export default CustomersTable;
+export default React.memo(CustomersTable);

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View, Text } from 'react-native';
 import { useObservableState, useObservable, useObservableSuspense } from 'observable-hooks';
-import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
+import { switchMap, tap, throttleTime, catchError, distinctUntilChanged } from 'rxjs/operators';
 import Segment from '@wcpos/common/src/components/segment';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
@@ -31,14 +31,12 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 		},
 	});
 
-	const onSort: Sort = ({ sortBy, sortDirection }) => {
-		// @ts-ignore
-		setQuery({ ...query, sortBy, sortDirection });
-	};
-
-	const onSearch = (search: string) => {
-		setQuery({ ...query, search });
-	};
+	const onSearch = React.useCallback(
+		(search: string) => {
+			setQuery({ ...query, search });
+		},
+		[query]
+	);
 
 	// const onSearch = (search: string) => {
 	// 	setQuery({ ...query, search });
@@ -51,8 +49,8 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 	const customers$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
-				distinctUntilChanged((a, b) => a[0] === b[0]),
-				debounceTime(150),
+				// distinctUntilChanged((a, b) => a[0] === b[0]),
+				// throttleTime(150),
 				switchMap(([q]) => {
 					const regexp = new RegExp(escape(q.search), 'i');
 					const RxQuery = storeDB.collections.customers
@@ -70,7 +68,7 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 					// .sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
 				}),
-				debounceTime(150),
+				// throttleTime(150),
 				catchError((err) => {
 					console.error(err);
 					return err;
@@ -79,9 +77,9 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 		[query]
 	);
 
-	const customers = useObservableState(customers$, []);
+	// const customers = useObservableState(customers$, []);
 
-	useWhyDidYouUpdate('Customer Page', { customers, query, ui, columns, storeDB, navigation });
+	useWhyDidYouUpdate('Customer Page', { customers$, query, ui, columns, storeDB, navigation });
 
 	return (
 		<Styled.Container>
@@ -106,9 +104,9 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 					</Segment>
 					<Segment grow>
 						<Table
-							customers={customers}
+							customers$={customers$}
 							columns={columns}
-							sort={onSort}
+							setQuery={setQuery}
 							sortBy={query.sortBy}
 							// @ts-ignore
 							sortDirection={query.sortDirection}
