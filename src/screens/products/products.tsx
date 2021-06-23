@@ -1,9 +1,16 @@
 import * as React from 'react';
-import { View, Text } from 'react-native';
 import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
-import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
+import {
+	switchMap,
+	tap,
+	debounceTime,
+	catchError,
+	distinctUntilChanged,
+	share,
+	map,
+} from 'rxjs/operators';
 import Segment from '@wcpos/common/src/components/segment';
-import Input from '@wcpos/common/src/components/textinput';
+import Text from '@wcpos/common/src/components/text';
 import Button from '@wcpos/common/src/components/button';
 import Dialog from '@wcpos/common/src/components/dialog';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
@@ -16,7 +23,7 @@ import Row from './table/rows/row';
 import * as Styled from './styles';
 
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
-type Query = {
+type QueryState = {
 	search: string;
 	sortBy: string;
 	sortDirection: SortDirection;
@@ -28,8 +35,11 @@ const Products = () => {
 	const { storeDB } = useAppState();
 	const ui = useObservableSuspense(useUIResource('products'));
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
+	const [isSyncing, setIsSyncing] = React.useState<boolean>(false);
+	const [recordsTotal, setRecordsTotal] = React.useState<number | undefined>();
+	const [recordsShowing, setRecordsShowing] = React.useState<number | undefined>();
 
-	const [query, setQuery] = React.useState<Query>({
+	const [query, setQuery] = React.useState<QueryState>({
 		search: '',
 		sortBy: 'name',
 		sortDirection: 'asc',
@@ -50,8 +60,8 @@ const Products = () => {
 		// A stream of React elements!
 		(inputs$) =>
 			inputs$.pipe(
-				distinctUntilChanged((a, b) => a[0] === b[0]),
-				debounceTime(150),
+				// distinctUntilChanged((a, b) => a[0] === b[0]),
+				// debounceTime(150),
 				switchMap(([q]) => {
 					const regexp = new RegExp(escape(q.search), 'i');
 					const RxQuery = storeDB.collections.products
@@ -64,6 +74,9 @@ const Products = () => {
 						.sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
 				}),
+				tap((records) => {
+					setRecordsShowing(records.length);
+				}),
 				catchError((err) => {
 					console.error(err);
 					return err;
@@ -71,6 +84,19 @@ const Products = () => {
 			),
 		[query]
 	);
+
+	// first render
+	React.useEffect(() => {
+		async function countRecordsTotal() {
+			if (storeDB) {
+				storeDB.collections.products.pouch.allDocs().then((records) => {
+					setRecordsTotal(records.total_rows);
+				});
+			}
+		}
+
+		countRecordsTotal();
+	}, []);
 
 	return (
 		<Styled.Container>
@@ -95,7 +121,13 @@ const Products = () => {
 						RowComponent={Row}
 					/>
 				</Segment>
-				<Segment />
+				<Segment style={{ alignItems: 'flex-end' }}>
+					<>
+						<Text>
+							Showing {recordsShowing} of {recordsTotal}
+						</Text>
+					</>
+				</Segment>
 			</Segment.Group>
 		</Styled.Container>
 	);
