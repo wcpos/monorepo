@@ -9,24 +9,38 @@ import Dialog from '@wcpos/common/src/components/dialog';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import useAuthLogin from '@wcpos/common/src/hooks/use-auth-login';
-import Table from './table';
-import Actions from './actions';
+import Search from '@wcpos/common/src/components/search';
+import Table from '../common/table';
+import UiSettings from '../common/ui-settings';
+import Row from './table/rows/row';
 import * as Styled from './styles';
 
-type Sort = import('@wcpos/common/src/components/table/types').Sort;
+type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
+type Query = {
+	search: string;
+	sortBy: string;
+	sortDirection: SortDirection;
+};
+
+const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
 const Products = () => {
 	const { storeDB } = useAppState();
 	const ui = useObservableSuspense(useUIResource('products'));
-	const showAuthLogin = useAuthLogin();
-
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
-	const [query, setQuery] = React.useState({
+	const [query, setQuery] = React.useState<Query>({
 		search: '',
 		sortBy: 'name',
 		sortDirection: 'asc',
 	});
+
+	const onSearch = React.useCallback(
+		(search: string) => {
+			setQuery({ ...query, search });
+		},
+		[query]
+	);
 
 	if (!storeDB) {
 		throw Error('something went wrong');
@@ -58,75 +72,30 @@ const Products = () => {
 		[query]
 	);
 
-	const products = useObservableState(products$, []);
-	console.log(products);
-
-	const onSearch = (value: string) => {
-		console.log(value);
-	};
-
-	const onSort: Sort = ({ sortBy, sortDirection }) => {
-		console.log({ sortBy, sortDirection });
-		// ui.updateWithJson({ sortBy, sortDirection });
-	};
-
 	return (
 		<Styled.Container>
 			<Segment.Group>
 				<Segment>
-					<Input
-						label="Search products"
-						placeholder="Search products"
-						onChange={onSearch}
-						hideLabel
+					<Search
+						label="Search Customers"
+						placeholder="Search Customers"
+						value={query.search}
+						onSearch={onSearch}
+						actions={[<UiSettings ui={ui} />]}
 					/>
-					<Actions columns={columns} query={query} ui={ui} />
 				</Segment>
 				<Segment grow>
-					<Table columns={columns} products={products} />
+					<Table
+						collectionName="products"
+						columns={columns}
+						data$={products$}
+						setQuery={setQuery}
+						sortBy={query.sortBy}
+						sortDirection={query.sortDirection}
+						RowComponent={Row}
+					/>
 				</Segment>
-				<Segment>
-					<Text>
-						<Button
-							title="Fetch Tax Rates"
-							onPress={async () => {
-								// @ts-ignore
-								const replicationState = storeDB.taxes.syncRestApi({
-									pull: {},
-								});
-								replicationState.error$.subscribe((err: any) => {
-									if (err.code === 401) {
-										showAuthLogin();
-									}
-								});
-								replicationState.run(false);
-							}}
-						/>
-						<Button
-							title="Fetch Tax Classes"
-							onPress={async () => {
-								// const path = storePath.split('.');
-								// const site = user.get(path.slice(1, 3).join('.'));
-								// const wpCredentials = user.get(path.slice(1, 5).join('.'));
-								// const baseUrl = site.wc_api_url;
-								// const collection = 'taxes/classes';
-								// const key = wpCredentials.consumer_key;
-								// const secret = wpCredentials.consumer_secret;
-								// const api = new WcApiService({ baseUrl, collection, key, secret });
-								// const data = await api.fetch();
-								// console.log(data);
-								// await storeDB.upsertLocal(
-								// 	'tax_classes',
-								// 	// turn array into json
-								// 	data.reduce((obj: Record<string, unknown>, taxClass: any) => {
-								// 		obj[taxClass.slug] = taxClass;
-								// 		return obj;
-								// 	}, {})
-								// );
-							}}
-						/>
-					</Text>
-				</Segment>
+				<Segment />
 			</Segment.Group>
 		</Styled.Container>
 	);

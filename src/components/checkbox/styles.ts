@@ -1,7 +1,8 @@
 import styled, { css } from 'styled-components/native';
 import Icon from '../icon';
+import Pressable from '../pressable';
 
-export const Wrapper = styled.View<{ disabled?: boolean }>`
+export const PressableContainer = styled(Pressable)`
 	display: flex;
 	flex-direction: row;
 	${({ disabled }) =>

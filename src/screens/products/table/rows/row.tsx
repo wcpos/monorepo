@@ -16,11 +16,11 @@ type RowRenderProps = {
 };
 
 interface Props {
-	product: any;
+	item: any;
 	columns: ColumnProps[];
 }
 
-const Row = ({ product, columns }: Props) => {
+const Row = ({ item: product, columns }: Props) => {
 	return (
 		<Table.Body.Row rowData={product} columns={columns}>
 			{({ cellData, column, getCellProps }: RowRenderProps) => (

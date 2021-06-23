@@ -1,5 +1,4 @@
 import * as React from 'react';
-import Icon from '../icon';
 import { Box, Check } from './styles';
 
 type Props = {
@@ -22,16 +21,7 @@ export default function CheckboxIcon({
 	const errorState = hasError && !disabled && !checked;
 	const iconColor = disabled ? '#ccc' : '#FFFFFF';
 	return (
-		<Box
-			checked={checked}
-			// style={[
-			//   styles.box,
-			//   errorState && styles.boxError,
-			//   focused && styles.boxFocused,
-			//   hovered && !disabled && styles.boxHover,
-			//   pressed && styles.boxPressed,
-			// ]}
-		>
+		<Box checked={checked}>
 			{checked && <Check name="check" size="small" disabled={disabled} color="#FFF" />}
 		</Box>
 	);

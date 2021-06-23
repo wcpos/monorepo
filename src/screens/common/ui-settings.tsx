@@ -23,35 +23,35 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 			onRequestClose={() => setVisible(false)}
 		>
 			<Text>Columns</Text>
-			{columns.map((column: any, index: number) => (
-				<>
-					<Checkbox
-						key={column.key}
-						name={column.key}
-						label={t(`${key}.column.label.${column.key}`)}
-						checked={!column.hide}
-						onChange={(checked) => {
-							columns[index] = { ...column, hide: !checked };
-							ui.atomicSet('columns', columns);
-						}}
-					/>
-					{column.display
-						? column.display.map((display: any, i: number) => (
-								// eslint-disable-next-line react/jsx-indent
-								<Checkbox
-									key={display.key}
-									name={display.key}
-									label={t(`${key}.column.label.${display.key}`)}
-									checked={!display.hide}
-									onChange={(checked) => {
-										column.display[i] = { ...display, hide: !checked };
-										ui.atomicSet('columns', columns);
-									}}
-								/>
-						  ))
-						: null}
-				</>
-			))}
+			{columns.map((column: any, index: number) => {
+				return (
+					<>
+						<Checkbox
+							key={column.key}
+							label={t(`${key}.column.label.${column.key}`)}
+							checked={!column.hide}
+							onChange={(checked) => {
+								columns[index] = { ...column, hide: !checked };
+								ui.atomicSet('columns', columns);
+							}}
+						/>
+						{column.display
+							? column.display.map((display: any, i: number) => (
+									// eslint-disable-next-line react/jsx-indent
+									<Checkbox
+										key={display.key}
+										label={t(`${key}.column.label.${display.key}`)}
+										checked={!display.hide}
+										onChange={(checked) => {
+											column.display[i] = { ...display, hide: !checked };
+											ui.atomicSet('columns', columns);
+										}}
+									/>
+							  ))
+							: null}
+					</>
+				);
+			})}
 			<Button title="Restore Default Settings" onPress={ui.reset} />
 		</Popover>
 	);

@@ -1,74 +1,64 @@
 import * as React from 'react';
-import { TouchableWithoutFeedback } from 'react-native';
+import useUncontrolledState from '@wcpos/common/src/hooks/use-uncontrolled-state';
 import Label from './label';
 import Icon from './icon';
-import { Wrapper } from './styles';
-// import { Hoverable } from '../Hoverable';
+import * as Styled from './styles';
 
-export interface ICheckboxProps {
-	label?: React.ReactNode;
-	hasError?: boolean;
-	disabled?: boolean;
+export interface CheckboxProps {
+	/**
+	 * True if selected.
+	 */
 	checked?: boolean;
-	info?: React.ReactNode;
-	onChange?: (checked: boolean, event: { target: {} }) => void;
-	children?: React.ReactNode;
-	name?: string;
-};
+	/**
+	 * Label to display next to the Checkbox.
+	 */
+	label: React.ReactNode;
+	/**
+	 * Additional text to aid in use.
+	 */
+	helpText?: React.ReactNode;
+	/**
+	 * Disables the input.
+	 */
+	disabled?: boolean;
+	/**
+	 * Called when selection state changes. Should propagate change to `checked` prop.
+	 *
+	 * If not set, component will be an uncontrolled component. @see https://reactjs.org/docs/uncontrolled-components.html
+	 */
+	onChange?: (checked: boolean) => void;
 
-// @TODO - hover, focus states
-// type State = {
-//   focusDisplayed: boolean;
-//   hovered: boolean;
-//   pressed: boolean;
-// };
+	// helpText?: React.ReactNode;
+}
 
+/**
+ * @TODO - hover, focus states
+ */
 export const Checkbox = ({
 	label,
-	hasError,
 	disabled,
-	info,
-	onChange,
-	children,
-	name,
-	...props
-}: ICheckboxProps) => {
-	const [checked, setChecked] = React.useState(!!props.checked);
+	helpText,
+	checked: checkedRaw = false,
+	onChange: onChangeRaw,
+}: CheckboxProps) => {
+	const [checked, onChange] = useUncontrolledState(checkedRaw, onChangeRaw);
+	const onPress = React.useCallback(() => onChange?.(!checked), [checked, onChange]);
 
-	const onPress = () => {
-		if (disabled) {
-			return;
-		}
-		const _checked = !checked;
-		setChecked(_checked);
-		if (typeof onChange === 'function') {
-			onChange(_checked, { target: { name, checked: _checked } });
-		}
-	};
+	// const onPress = () => {
+	// 	if (disabled) {
+	// 		return;
+	// 	}
+	// 	const _checked = !checked;
+	// 	setChecked(_checked);
+	// 	if (typeof onChange === 'function') {
+	// 		onChange(_checked, { target: { name, checked: _checked } });
+	// 	}
+	// };
 
 	return (
-		<TouchableWithoutFeedback
-			accessibilityRole="button"
-			onPress={onPress}
-			// onPressIn={this.handleOnPressIn}
-			// onPressOut={this.handleOnPressOut}
-			// onFocus={this.handleOnFocus}
-			// onBlur={this.handleOnBlur}
-			disabled={disabled}
-		>
-			<Wrapper disabled={disabled}>
-				<Icon
-					checked={checked}
-					hasError={hasError}
-					disabled={disabled}
-					// focused={focusDisplayed}
-					// hovered={hovered}
-					// pressed={pressed}
-				/>
-				{children || <Label label={label} checked={checked} info={info} />}
-			</Wrapper>
-		</TouchableWithoutFeedback>
+		<Styled.PressableContainer disabled={disabled} onPress={onPress}>
+			<Icon checked={checked} disabled={disabled} />
+			<Label label={label} checked={checked} info={helpText} />
+		</Styled.PressableContainer>
 	);
 };
-
-export default Checkbox;

@@ -29,7 +29,6 @@ const Actions: React.FC<Props> = ({ ui, columns }) => {
 			{columns.map((column: any, index: number) => (
 				<Checkbox
 					key={column.key}
-					name={column.key}
 					label={t(`orders.column.label.${column.key}`)}
 					checked={!column.hide}
 					onChange={(checked) => {

@@ -37,7 +37,6 @@ const Actions = ({ columns, display, ui }: IPOSProductActionsProps) => {
 			{columns.map((column: any, index) => (
 				<Checkbox
 					key={column.key}
-					name={column.key}
 					label={t(`pos_products.column.label.${column.key}`)}
 					checked={!column.hide}
 					onChange={(checked) => {
@@ -52,7 +51,6 @@ const Actions = ({ columns, display, ui }: IPOSProductActionsProps) => {
 			{display.map((d: any, index) => (
 				<Checkbox
 					key={d.key}
-					name={d.key}
 					label={t(`pos_products.display.label.${d.key}`)}
 					checked={!d.hide}
 					onChange={(checked) => {

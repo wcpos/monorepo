@@ -29,7 +29,6 @@ const Actions = ({ columns, ui }: CartActionsProps) => {
 			{columns.map((column: any, index) => (
 				<Checkbox
 					key={column.key}
-					name={column.key}
 					label={t(`cart.column.label.${column.key}`)}
 					checked={!column.hide}
 					onChange={(checked) => {

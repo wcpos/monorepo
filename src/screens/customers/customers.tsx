@@ -62,10 +62,11 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 									{ firstName: { $regex: regexp } },
 									{ lastName: { $regex: regexp } },
 								],
+								$and: [{ [q.sortBy]: { $exists: false } }],
 							},
-						});
-					// @ts-ignore
-					// .sort({ [q.sortBy]: q.sortDirection });
+						})
+						// @ts-ignore
+						.sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
 				}),
 				// throttleTime(150),

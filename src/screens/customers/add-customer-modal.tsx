@@ -2,6 +2,8 @@ import * as React from 'react';
 import Dialog from '@wcpos/common/src/components/dialog';
 import TextInput from '@wcpos/common/src/components/textinput';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import Tabs from '@wcpos/common/src/components/tabs';
+import Tree from '@wcpos/common/src/components/tree';
 
 export interface AddCustomerProps {
 	onClose: () => void;
@@ -12,6 +14,7 @@ const AddCustomer = ({ onClose, customer }: AddCustomerProps) => {
 	const { storeDB } = useAppState();
 	const [firstName, setFirstName] = React.useState(customer?.firstName);
 	const [email, setEmail] = React.useState(customer?.email);
+	const [selected, setSelected] = React.useState(0);
 
 	const title = customer ? 'Edit Customer' : 'Add Customer';
 
@@ -40,6 +43,16 @@ const AddCustomer = ({ onClose, customer }: AddCustomerProps) => {
 		}
 	};
 
+	const content =
+		selected === 0 ? (
+			<Dialog.Section>
+				<TextInput label="First Name" value={firstName} onChange={setFirstName} />
+				<TextInput label="Email" value={email} onChange={setEmail} />
+			</Dialog.Section>
+		) : (
+			<Dialog.Section>{customer ? <Tree data={customer.toJSON()} /> : null}</Dialog.Section>
+		);
+
 	return (
 		<Dialog
 			title={title}
@@ -47,10 +60,9 @@ const AddCustomer = ({ onClose, customer }: AddCustomerProps) => {
 			onClose={onClose}
 			primaryAction={{ label: 'Save', action: handleSave }}
 		>
-			<Dialog.Section>
-				<TextInput label="First Name" value={firstName} onChange={setFirstName} />
-				<TextInput label="Email" value={email} onChange={setEmail} />
-			</Dialog.Section>
+			<Tabs tabs={['Form', 'JSON']} selected={selected} onSelect={setSelected}>
+				{content}
+			</Tabs>
 		</Dialog>
 	);
 };

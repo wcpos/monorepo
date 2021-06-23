@@ -1,41 +1,32 @@
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-import Checkbox from './checkbox';
-
-type ICheckboxProps = import('./checkbox').ICheckboxProps;
+import { Checkbox, CheckboxProps } from './checkbox';
 
 export default {
 	title: 'Components/Checkbox',
-	component: Checkbox
+	component: Checkbox,
 };
 
-export const basicUsage = ({ label, checked, hasError, disabled }: ICheckboxProps) => (
-	<Checkbox
-		label={label}
-		checked={checked}
-		onChange={action('onChange')}
-		hasError={hasError}
-		disabled={disabled}
-		name="test"
-	/>
-);
-basicUsage.args = {
+export const BasicUsage = (props: CheckboxProps) => {
+	const [checked, setChecked] = React.useState(props.checked);
+	return <Checkbox {...props} checked={checked} onChange={setChecked} />;
+};
+BasicUsage.args = {
 	label: 'Label',
 	checked: true,
 	hasError: false,
-	disabled: false
-}
+	disabled: false,
+	onChange: action('Change'),
+};
 
-export const withInfo = ({ label, checked, info }: ICheckboxProps) => (
-	<Checkbox
-		label={label}
-		info={info}
-		checked={checked}
-		onChange={action('onChange')}
-	/>
-);
-withInfo.args = {
+export const WithInfo = (props: CheckboxProps) => {
+	const [checked, setChecked] = React.useState(props.checked);
+	return <Checkbox {...props} checked={checked} onChange={setChecked} />;
+};
+WithInfo.args = {
 	label: 'Label',
 	info: 'Lorem ipsum dolor sit amet',
 	checked: true,
-}
+};
+
+export const Uncontrolled: React.FC = () => <Checkbox label="Label" />;
