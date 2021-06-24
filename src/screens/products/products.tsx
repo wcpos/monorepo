@@ -43,8 +43,9 @@ const Products = () => {
 	const { storeDB } = useAppState();
 	const ui = useObservableSuspense(useUIResource('products'));
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
+	// @ts-ignore
+	const totalRecords = useObservableState(storeDB?.collections.products.totalRecords$);
 	const [isSyncing, setIsSyncing] = React.useState<boolean>(false);
-	const [allRecords, setAllRecords] = React.useState<RecordsMap[]>([]);
 	const [recordsShowing, setRecordsShowing] = React.useState<number>(0);
 
 	const [query, setQuery] = React.useState<QueryState>({
@@ -95,77 +96,16 @@ const Products = () => {
 
 	// first render
 	React.useEffect(() => {
-		async function countRecordsTotal() {
-			if (storeDB) {
-				const result = await storeDB.collections.products.pouch
-					.find({
-						selector: {},
-						// @ts-ignore
-						fields: ['_id', 'id', 'dateCreatedGmt'],
-					})
-					.catch((err) => {
-						console.log(err);
-					});
-
-				if (result) {
-					setAllRecords(result.docs);
-
-					if (result.docs.length === 0) {
-						// @ts-ignore
-						const { data } = await storeDB.httpClient.get('products', {
-							params: { fields: ['id', 'name'], posts_per_page: -1 },
-						});
-						// @ts-ignore
-						await storeDB.collections.products.auditIdsFromServer(data);
-					}
-				}
-			}
-		}
-
-		countRecordsTotal();
-	}, []);
-
-	// listen to changes in collection
-	const updated = useObservableState(
-		storeDB.collections.products.$.pipe(
-			tap((results) => {
-				switch (results.operation) {
-					case 'INSERT':
-						setAllRecords((prev) => {
-							prev.push({
-								_id: results.documentData._id,
-								id: results.documentData.id,
-								dateModifiedGmt: results.documentData.dateModifiedGmt,
-							});
-							return prev;
-						});
-						break;
-					case 'DELETE':
-						setAllRecords((prev) => {
-							const removeIndex = _findIndex(prev, { _id: results.documentData._id });
-							if (removeIndex !== -1) {
-								_pullAt(prev, removeIndex);
-							}
-							return prev;
-						});
-						break;
-					case 'UPDATE':
-						setAllRecords((prev) => {
-							const updateIndex = _findIndex(prev, { _id: results.documentData._id });
-							prev.splice(updateIndex, 1, {
-								_id: results.documentData._id,
-								id: results.documentData.id,
-								dateModifiedGmt: results.documentData.dateModifiedGmt,
-							});
-							return prev;
-						});
-						break;
-					default:
-						break;
-				}
+		// @ts-ignore
+		storeDB.httpClient
+			.get('products', {
+				params: { fields: ['id', 'name'], posts_per_page: -1 },
 			})
-		)
-	);
+			.then((result: any) => {
+				// @ts-ignore
+				storeDB.collections.products.auditIdsFromServer(result.data);
+			});
+	}, []);
 
 	return (
 		<Styled.Container>
@@ -193,7 +133,7 @@ const Products = () => {
 				<Segment style={{ alignItems: 'flex-end' }}>
 					<>
 						<Text>
-							Showing {recordsShowing} of {allRecords.length}
+							Showing {recordsShowing} of {totalRecords}
 						</Text>
 					</>
 				</Segment>

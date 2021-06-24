@@ -1,3 +1,5 @@
+import { BehaviorSubject } from 'rxjs';
+import { map, debounceTime } from 'rxjs/operators';
 import forEach from 'lodash/forEach';
 import { syncRestApiCollection } from './sync-collection';
 import { syncRestApiDocument } from './sync-document';
@@ -44,6 +46,49 @@ const prototypes = {
  */
 const hooks = {
 	createRxCollection(collection: RxCollection) {
+		collection.totalRecords = new BehaviorSubject(0);
+		collection.totalRecords$ = collection.totalRecords.asObservable();
+
+		/**
+		 * count the total records
+		 * */
+		collection.pouch
+			.find({
+				selector: {},
+				// @ts-ignore
+				fields: ['_id', 'id', 'dateCreatedGmt'],
+			})
+			.then((result) => {
+				console.log(collection.name, result.docs.length);
+				collection.totalRecords.next(result.docs.length);
+			})
+			.catch((err) => {
+				console.log(err);
+			});
+
+		/**
+		 * count the total records
+		 * */
+		const watch = collection.$.pipe(
+			debounceTime(20),
+			map(() => {
+				collection.pouch
+					.find({
+						selector: {},
+						// @ts-ignore
+						fields: ['_id', 'id', 'dateCreatedGmt'],
+					})
+					.then((result) => {
+						console.log(collection.name, result.docs.length);
+						collection.totalRecords.next(result.docs.length);
+					})
+					.catch((err) => {
+						console.log(err);
+					});
+			})
+		);
+		watch.subscribe();
+
 		/**
 		 * Parse plaindata on insert and save
 		 */
