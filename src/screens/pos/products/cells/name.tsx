@@ -6,11 +6,13 @@ import Categories from './categories';
 import Tags from './tags';
 
 interface Props {
-	product: import('@wcpos/common/src/database').ProductDocument;
-	display: any;
+	item: import('@wcpos/common/src/database').ProductDocument;
+	column: any;
 }
 
-const Name = ({ product, display }: Props) => {
+const Name = ({ item: product, column }: Props) => {
+	const { display } = column;
+
 	/**
 	 *
 	 */
@@ -26,8 +28,8 @@ const Name = ({ product, display }: Props) => {
 		<>
 			<Text>{product.name}</Text>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
-			{show('categories') && <Categories product={product} />}
-			{show('tags') && <Tags product={product} />}
+			{show('categories') && <Categories item={product} />}
+			{show('tags') && <Tags item={product} />}
 			{product.type === 'variable' && (
 				<View>
 					{(product.attributes as [])

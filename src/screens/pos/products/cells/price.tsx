@@ -2,10 +2,10 @@ import * as React from 'react';
 import Text from '@wcpos/common/src/components/text';
 
 type PriceProps = {
-	product: import('@wcpos/common/src/database').ProductDocument;
+	item: import('@wcpos/common/src/database').ProductDocument;
 };
 
-const Price = ({ product }: PriceProps) => {
+const Price = ({ item: product }: PriceProps) => {
 	return product.isSynced() ? <Text>{product.price}</Text> : <Text.Skeleton length="short" />;
 };
 

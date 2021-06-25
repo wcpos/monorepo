@@ -125,7 +125,7 @@ const POS = () => {
 				>
 					<ErrorBoundary>
 						<React.Suspense fallback={<Text>Loading products...</Text>}>
-							<Products ui={productsUI} />
+							<Products ui={productsUI} storeDB={storeDB} />
 						</React.Suspense>
 					</ErrorBoundary>
 				</Styled.ProductsColumn>

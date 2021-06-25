@@ -1,25 +1,21 @@
 import * as React from 'react';
 import Tag from '@wcpos/common/src/components/tag';
-import { ProductQueryContext } from '../../../products';
 
 interface ProductCategoriesProps {
-	product: import('@wcpos/common/src/database').ProductDocument;
+	item: import('@wcpos/common/src/database').ProductDocument;
 }
 
-const ProductCategories = ({ product }: ProductCategoriesProps) => {
-	const { query, setQuery } = React.useContext(ProductQueryContext);
+const ProductCategories = ({ item: product }: ProductCategoriesProps) => {
+	// const { query, setQuery } = React.useContext(ProductQueryContext);
 	const { categories } = product;
 
 	/**
 	 *
 	 */
-	const handleSelectCategory = React.useCallback(
-		(category: any) => {
-			query.filter.categories = [category];
-			setQuery({ ...query });
-		},
-		[query, setQuery]
-	);
+	const handleSelectCategory = React.useCallback((category: any) => {
+		// query.filter.categories = [category];
+		// setQuery({ ...query });
+	}, []);
 
 	/**
 	 *
