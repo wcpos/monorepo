@@ -5,10 +5,10 @@ import Icon from '@wcpos/common/src/components/icon';
 import OrderModal from './modal';
 
 interface Props {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	item: import('@wcpos/common/src/database').OrderDocument;
 }
 
-const Actions = ({ order }: Props) => {
+const Actions = ({ item: order }: Props) => {
 	const [visible, setVisible] = React.useState(false);
 
 	const handleSync = () => {

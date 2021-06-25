@@ -3,10 +3,10 @@ import Icon from '@wcpos/common/src/components/icon';
 import Tooltip from '@wcpos/common/src/components/tooltip';
 
 type Props = {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	item: import('@wcpos/common/src/database').OrderDocument;
 };
 
-const Status = ({ order }: Props) => {
+const Status = ({ item: order }: Props) => {
 	return order.status ? (
 		<Tooltip content={order.status}>
 			<Icon name={order.status} />

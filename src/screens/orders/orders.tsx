@@ -1,92 +1,97 @@
 import * as React from 'react';
-import { View, Text } from 'react-native';
+import { Text } from 'react-native';
 import { useObservableState, useObservable, useObservableSuspense } from 'observable-hooks';
 import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from 'rxjs/operators';
+import { Observable } from 'rxjs';
 import Segment from '@wcpos/common/src/components/segment';
-import Input from '@wcpos/common/src/components/textinput';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import Button from '@wcpos/common/src/components/button';
-import Table from './table';
-import Actions from './actions';
+import Search from '@wcpos/common/src/components/search';
+import Table from '../common/table';
+import UiSettings from '../common/ui-settings';
+import cells from './cells';
 import * as Styled from './styles';
 
-type Sort = import('@wcpos/common/src/components/table/types').Sort;
+type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
+type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+interface QueryState {
+	search: string;
+	sortBy: string;
+	sortDirection: SortDirection;
+}
+
+const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
 const Orders = () => {
 	const { storeDB } = useAppState();
 	const ui = useObservableSuspense(useUIResource('orders'));
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
-	const onSort: Sort = ({ sortBy, sortDirection }) => {
-		console.log({ sortBy, sortDirection });
-		// ui.updateWithJson({ sortBy, sortDirection });
-	};
+	const [query, setQuery] = React.useState<QueryState>({
+		search: '',
+		sortBy: 'dateCreatedGmt',
+		sortDirection: 'desc',
+	});
 
-	// const [query, setQuery] = React.useState({
-	// 	search: '',
-	// 	sortBy: 'dateCreatedGmt',
-	// 	sortDirection: 'desc',
-	// });
+	const onSearch = React.useCallback(
+		(search: string) => {
+			setQuery({ ...query, search });
+		},
+		[query]
+	);
 
 	if (!storeDB) {
 		throw Error('something went wrong');
 	}
 
-	// const orders$ = useObservable(
-	// 	// A stream of React elements!
-	// 	(inputs$) =>
-	// 		inputs$.pipe(
-	// 			distinctUntilChanged((a, b) => a[0] === b[0]),
-	// 			debounceTime(150),
-	// 			switchMap(([q]) => {
-	// 				const regexp = new RegExp(escape(q.search), 'i');
-	// 				const RxQuery = storeDB.collections.orders
-	// 					.find()
-	// 					// .find({
-	// 					// 	selector: {
-	// 					// 		name: { $regex: regexp },
-	// 					// 	},
-	// 					// })
-	// 					// @ts-ignore
-	// 					.sort({ [q.sortBy]: q.sortDirection });
-	// 				return RxQuery.$;
-	// 			}),
-	// 			catchError((err) => {
-	// 				console.error(err);
-	// 				return err;
-	// 			})
-	// 		),
-	// 	[query]
-	// );
-
-	const onSearch = (value: string) => {
-		console.log(value);
-	};
-
-	const query = storeDB.collections.orders.find();
-	const orders = useObservableState(query.$, []);
+	const orders$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				distinctUntilChanged((a, b) => a[0] === b[0]),
+				debounceTime(150),
+				switchMap(([q]) => {
+					const regexp = new RegExp(escape(q.search), 'i');
+					const RxQuery = storeDB.collections.orders
+						.find({
+							selector: {
+								dateCreatedGmt: { $regex: regexp },
+							},
+						})
+						// @ts-ignore
+						.sort({ [q.sortBy]: q.sortDirection });
+					return RxQuery.$;
+				}),
+				catchError((err) => {
+					console.error(err);
+					return err;
+				})
+			),
+		[query]
+	) as Observable<OrderDocument[]>;
 
 	return (
 		<Styled.Container>
 			<React.Suspense fallback={<Text>loading orders...</Text>}>
 				<Segment.Group>
 					<Segment>
-						<Input
-							label="Search orders"
-							placeholder="Search orders"
-							onChange={onSearch}
-							hideLabel
+						<Search
+							label="Search Orders"
+							placeholder="Search Orders"
+							value={query.search}
+							onSearch={onSearch}
+							actions={[<UiSettings ui={ui} />]}
 						/>
-						<Actions ui={ui} columns={columns} />
 					</Segment>
 					<Segment grow>
 						<Table
-							orders={orders}
+							collectionName="orders"
 							columns={columns}
-							sort={onSort}
-							sortBy={ui.sortBy}
-							sortDirection={ui.sortDirection}
+							data$={orders$}
+							setQuery={setQuery}
+							sortBy={query.sortBy}
+							sortDirection={query.sortDirection}
+							cells={cells}
 						/>
 					</Segment>
 					<Segment>

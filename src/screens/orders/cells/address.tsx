@@ -3,12 +3,12 @@ import Format from '@wcpos/common/src/components/format';
 import Text from '@wcpos/common/src/components/text';
 
 type Props = {
-	order: import('@wcpos/common/src/database').OrderDocument;
-	type: 'shipping' | 'billing';
+	item: import('@wcpos/common/src/database').OrderDocument;
+	column: import('@wcpos/common/src/components/table/types').ColumnProps;
 };
 
-const Address = ({ order, type }: Props) => {
-	const address = order[type];
+const Address = ({ item: order, column }: Props) => {
+	const address = order[column.key];
 
 	return address ? <Format.Address address={address} showName={false} /> : <Text.Skeleton />;
 };

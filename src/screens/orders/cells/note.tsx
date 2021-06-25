@@ -3,10 +3,10 @@ import Icon from '@wcpos/common/src/components/icon';
 import Tooltip from '@wcpos/common/src/components/tooltip';
 
 type OrderNoteProps = {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	item: import('@wcpos/common/src/database').OrderDocument;
 };
 
-const Note = ({ order }: OrderNoteProps) => {
+const Note = ({ item: order }: OrderNoteProps) => {
 	if (!order.note) {
 		return null;
 	}
