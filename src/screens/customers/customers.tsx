@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { View, Text } from 'react-native';
+import { Observable } from 'rxjs';
 import { useObservableState, useObservable, useObservableSuspense } from 'observable-hooks';
 import { switchMap, tap, throttleTime, catchError, distinctUntilChanged } from 'rxjs/operators';
 import Segment from '@wcpos/common/src/components/segment';
@@ -8,12 +9,19 @@ import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import Button from '@wcpos/common/src/components/button';
 import Search from '@wcpos/common/src/components/search';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-import Table from './table';
+import Table from '../common/table';
 import UiSettings from '../common/ui-settings';
+import cells from './cells';
 import * as Styled from './styles';
 
-type Sort = import('@wcpos/common/src/components/table/types').Sort;
+type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
 type CustomersScreenProps = import('@wcpos/common/src/navigators/main').CustomersScreenProps;
+type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
+interface QueryState {
+	search: string;
+	sortBy: string;
+	sortDirection: SortDirection;
+}
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
@@ -22,13 +30,10 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 	const ui = useObservableSuspense(useUIResource('customers'));
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 
-	const [query, setQuery] = React.useState({
+	const [query, setQuery] = React.useState<QueryState>({
 		search: '',
 		sortBy: 'lastName',
 		sortDirection: 'asc',
-		filter: {
-			role: [],
-		},
 	});
 
 	const onSearch = React.useCallback(
@@ -76,7 +81,7 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 				})
 			),
 		[query]
-	);
+	) as Observable<CustomerDocument[]>;
 
 	// const customers = useObservableState(customers$, []);
 
@@ -105,12 +110,13 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 					</Segment>
 					<Segment grow>
 						<Table
-							customers$={customers$}
+							collectionName="customers"
 							columns={columns}
+							data$={customers$}
 							setQuery={setQuery}
 							sortBy={query.sortBy}
-							// @ts-ignore
 							sortDirection={query.sortDirection}
+							cells={cells}
 						/>
 					</Segment>
 					<Segment>

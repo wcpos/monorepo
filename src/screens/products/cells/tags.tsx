@@ -1,15 +1,13 @@
 import * as React from 'react';
 import useObservable from '@wcpos/common/src/hooks/use-observable';
 import Tag from '@wcpos/common/src/components/tag';
-// import { ProductQueryContext } from '../../../products';
 
-type ProductTagsProps = {
-	product: import('@wcpos/common/src/database').ProductDocument;
+type Props = {
+	item: import('@wcpos/common/src/database').ProductDocument;
 };
 
-const ProductTags = ({ product }: ProductTagsProps) => {
+const ProductTags = ({ item: product }: Props) => {
 	const tags = useObservable(product.tags$);
-	// const { query, setQuery } = React.useContext(ProductQueryContext);
 
 	const handleSelectTag = (tag: any) => {
 		// query.filter.tags = [tag];

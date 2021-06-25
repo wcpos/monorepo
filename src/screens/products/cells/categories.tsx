@@ -1,13 +1,12 @@
 import * as React from 'react';
 import useObservable from '@wcpos/common/src/hooks/use-observable';
 import Tag from '@wcpos/common/src/components/tag';
-// import { ProductQueryContext } from '../../../products';
 
-interface ProductCategoriesProps {
-	product: import('@wcpos/common/src/database').ProductDocument;
-}
+type Props = {
+	item: import('@wcpos/common/src/database').ProductDocument;
+};
 
-const ProductCategories = ({ product }: ProductCategoriesProps) => {
+const ProductCategories = ({ item: product }: Props) => {
 	const categories = useObservable(product.categories$);
 	// const { query, setQuery } = React.useContext(ProductQueryContext);
 

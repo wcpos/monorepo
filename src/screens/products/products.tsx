@@ -9,6 +9,7 @@ import {
 	share,
 	map,
 } from 'rxjs/operators';
+import { Observable } from 'rxjs';
 import _map from 'lodash/map';
 import _findIndex from 'lodash/findIndex';
 import _pullAt from 'lodash/pullAt';
@@ -22,19 +23,15 @@ import useAuthLogin from '@wcpos/common/src/hooks/use-auth-login';
 import Search from '@wcpos/common/src/components/search';
 import Table from '../common/table';
 import UiSettings from '../common/ui-settings';
-import Row from './table/rows/row';
+import cells from './cells';
 import * as Styled from './styles';
 
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
+type ProductDocument = import('@wcpos/common/src/database').ProductDocument;
 interface QueryState {
 	search: string;
 	sortBy: string;
 	sortDirection: SortDirection;
-}
-interface RecordsMap {
-	_id: string; // local ID
-	id: number; // remote ID
-	dateModifiedGmt: string; // updated_at
 }
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
@@ -71,6 +68,10 @@ const Products = () => {
 			inputs$.pipe(
 				// distinctUntilChanged((a, b) => a[0] === b[0]),
 				// debounceTime(150),
+				tap(([q]) => {
+					console.log(q);
+					// if collection is not fully synced, fetch query from server
+				}),
 				switchMap(([q]) => {
 					const regexp = new RegExp(escape(q.search), 'i');
 					const RxQuery = storeDB.collections.products
@@ -92,7 +93,7 @@ const Products = () => {
 				})
 			),
 		[query]
-	);
+	) as Observable<ProductDocument[]>;
 
 	// first render
 	React.useEffect(() => {
@@ -112,8 +113,8 @@ const Products = () => {
 			<Segment.Group>
 				<Segment>
 					<Search
-						label="Search Customers"
-						placeholder="Search Customers"
+						label="Search Products"
+						placeholder="Search Products"
 						value={query.search}
 						onSearch={onSearch}
 						actions={[<UiSettings ui={ui} />]}
@@ -127,7 +128,7 @@ const Products = () => {
 						setQuery={setQuery}
 						sortBy={query.sortBy}
 						sortDirection={query.sortDirection}
-						RowComponent={Row}
+						cells={cells}
 					/>
 				</Segment>
 				<Segment style={{ alignItems: 'flex-end' }}>

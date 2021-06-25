@@ -1,20 +1,22 @@
 import * as React from 'react';
+import { Observable } from 'rxjs';
 import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import Table from '@wcpos/common/src/components/table';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
+import Row, { CellsProp, ItemProp, ColumnProps } from './row';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
 
 interface CommonTableProps {
 	collectionName: 'products' | 'customers' | 'orders';
-	columns: any;
-	data$: any;
+	columns: ColumnProps[];
+	data$: Observable<ItemProp[]>;
 	setQuery: any;
 	sortBy: string;
 	sortDirection: SortDirection;
-	RowComponent: React.FunctionComponent<{ item: any; columns: any }>;
+	cells: CellsProp;
 }
 
 type GetHeaderCellPropsFunction =
@@ -30,7 +32,7 @@ const CommonTable = ({
 	setQuery,
 	sortBy: _sortBy,
 	sortDirection: _sortDirection,
-	RowComponent,
+	cells,
 }: CommonTableProps) => {
 	const { t } = useTranslation();
 	const data = useObservableState(data$, []);
@@ -68,7 +70,7 @@ const CommonTable = ({
 		setQuery,
 		_sortBy,
 		_sortDirection,
-		RowComponent,
+		cells,
 		// syncingCustomers,
 		t,
 	});
@@ -98,7 +100,7 @@ const CommonTable = ({
 				</Table.Header.Row>
 			</Table.Header>
 			<Table.Body>
-				{({ item }: { item: any }) => <RowComponent item={item} columns={columns} />}
+				{({ item }: { item: any }) => <Row item={item} columns={columns} cells={cells} />}
 			</Table.Body>
 		</Table>
 	);

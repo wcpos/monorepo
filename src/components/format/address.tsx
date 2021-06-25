@@ -3,43 +3,42 @@ import { View } from 'react-native';
 import Text from '../text';
 
 type Countries =
-	'default' |
-	'AU' |
-	'AT' |
-	'BE' |
-	'CA' |
-	'CH' |
-	'CL' |
-	'CN' |
-	'CZ' |
-	'DE' |
-	'EE' |
-	'FI' |
-	'DK' |
-	'FR' |
-	'HK' |
-	'HU' |
-	'IN' |
-	'IS' |
-	'IT' |
-	'JP' |
-	'TW' |
-	'LI' |
-	'NL' |
-	'NZ' |
-	'NO' |
-	'PL' |
-	'PT' |
-	'SK' |
-	'RS' |
-	'SI' |
-	'ES' |
-	'SE' |
-	'TR' |
-	'UG' |
-	'US' |
-	'VN';
-
+	| 'default'
+	| 'AU'
+	| 'AT'
+	| 'BE'
+	| 'CA'
+	| 'CH'
+	| 'CL'
+	| 'CN'
+	| 'CZ'
+	| 'DE'
+	| 'EE'
+	| 'FI'
+	| 'DK'
+	| 'FR'
+	| 'HK'
+	| 'HU'
+	| 'IN'
+	| 'IS'
+	| 'IT'
+	| 'JP'
+	| 'TW'
+	| 'LI'
+	| 'NL'
+	| 'NZ'
+	| 'NO'
+	| 'PL'
+	| 'PT'
+	| 'SK'
+	| 'RS'
+	| 'SI'
+	| 'ES'
+	| 'SE'
+	| 'TR'
+	| 'UG'
+	| 'US'
+	| 'VN';
 
 interface Address {
 	address_1?: string;
@@ -58,7 +57,7 @@ type Template = Address & {
 	state_code?: string;
 	state_upper?: string;
 	city_upper?: string;
-}
+};
 
 interface Props {
 	address: Address;
@@ -70,8 +69,7 @@ const addresses = {
 	AU: '{name}\n{company}\n{address_1}\n{address_2}\n{city} {state} {postcode}\n{country}',
 	AT: '{company}\n{name}\n{address_1}\n{address_2}\n{postcode} {city}\n{country}',
 	BE: '{company}\n{name}\n{address_1}\n{address_2}\n{postcode} {city}\n{country}',
-	CA:
-		'{company}\n{name}\n{address_1}\n{address_2}\n{city} {state_code}&nbsp;&nbsp;{postcode}\n{country}',
+	CA: '{company}\n{name}\n{address_1}\n{address_2}\n{city} {state_code}&nbsp;&nbsp;{postcode}\n{country}',
 	CH: '{company}\n{name}\n{address_1}\n{address_2}\n{postcode} {city}\n{country}',
 	CL: '{company}\n{name}\n{address_1}\n{address_2}\n{state}\n{postcode} {city}\n{country}',
 	CN: '{country} {postcode}\n{state}, {city}, {address_2}, {address_1}\n{company}\n{name}',
@@ -81,16 +79,13 @@ const addresses = {
 	FI: '{company}\n{name}\n{address_1}\n{address_2}\n{postcode} {city}\n{country}',
 	DK: '{company}\n{name}\n{address_1}\n{address_2}\n{postcode} {city}\n{country}',
 	FR: '{company}\n{name}\n{address_1}\n{address_2}\n{postcode} {city_upper}\n{country}',
-	HK:
-		'{company}\n{first_name} {last_name_upper}\n{address_1}\n{address_2}\n{city_upper}\n{state_upper}\n{country}',
+	HK: '{company}\n{first_name} {last_name_upper}\n{address_1}\n{address_2}\n{city_upper}\n{state_upper}\n{country}',
 	HU: '{name}\n{company}\n{city}\n{address_1}\n{address_2}\n{postcode}\n{country}',
 	IN: '{company}\n{name}\n{address_1}\n{address_2}\n{city} {postcode}\n{state}, {country}',
 	IS: '{company}\n{name}\n{address_1}\n{address_2}\n{postcode} {city}\n{country}',
 	IT: '{company}\n{name}\n{address_1}\n{address_2}\n{postcode}\n{city}\n{state_upper}\n{country}',
-	JP:
-		'{postcode}\n{state} {city} {address_1}\n{address_2}\n{company}\n{last_name} {first_name}\n{country}',
-	TW:
-		'{company}\n{last_name} {first_name}\n{address_1}\n{address_2}\n{state}, {city} {postcode}\n{country}',
+	JP: '{postcode}\n{state} {city} {address_1}\n{address_2}\n{company}\n{last_name} {first_name}\n{country}',
+	TW: '{company}\n{last_name} {first_name}\n{address_1}\n{address_2}\n{state}, {city} {postcode}\n{country}',
 	LI: '{company}\n{name}\n{address_1}\n{address_2}\n{postcode} {city}\n{country}',
 	NL: '{company}\n{name}\n{address_1}\n{address_2}\n{postcode} {city}\n{country}',
 	NZ: '{name}\n{company}\n{address_1}\n{address_2}\n{city} {postcode}\n{country}',
@@ -110,15 +105,18 @@ const addresses = {
 
 const Address = ({ address, showName }: Props) => {
 	const addr = { ...address } as Template; // clone address
-	let template = addr.country && addresses.hasOwnProperty(addr.country) ? addresses[addr.country] : addresses.default;
+	let template =
+		addr.country && addresses.hasOwnProperty(addr.country)
+			? addresses[addr.country]
+			: addresses.default;
 
 	Object.assign(addr, {
 		name: showName && `${addr.first_name} ${addr.last_name}`,
 		state_code: addr.state,
 		state_upper: addr.state?.toUpperCase(),
-		city_upper: addr.city?.toUpperCase()
+		city_upper: addr.city?.toUpperCase(),
 	});
-	
+
 	const matches = template.match(/\{[\w]+\}/g);
 	matches &&
 		matches.forEach((match) => {

@@ -1,16 +1,17 @@
 import * as React from 'react';
 import Dropdown from '@wcpos/common/src/components/dropdown';
 import Icon from '@wcpos/common/src/components/icon';
-import EditCustomer from '../../../add-customer-modal';
+import EditCustomer from '../add-customer-modal';
 
-interface Props {
-	customer: any;
-}
+type Props = {
+	item: import('@wcpos/common/src/database').CustomerDocument;
+};
 
-const Actions = ({ customer }: Props) => {
+const Actions = ({ item: customer }: Props) => {
 	const [showModal, setShowModal] = React.useState(false);
 
 	const handleSync = () => {
+		// @ts-ignore
 		const replicationState = customer.syncRestApi({
 			push: {},
 		});

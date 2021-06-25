@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import * as Format from '.';
+import Format from '.';
 
 export default {
 	title: 'Components/Format',

@@ -2,11 +2,11 @@ import * as React from 'react';
 import Button from '@wcpos/common/src/components/button';
 import ProductModal from './modal';
 
-interface Props {
-	product: any;
-}
+type Props = {
+	item: import('@wcpos/common/src/database').ProductDocument;
+};
 
-const Actions = ({ product }: Props) => {
+const Actions = ({ item: product }: Props) => {
 	const [visible, setVisible] = React.useState(false);
 
 	const handleSync = () => {
