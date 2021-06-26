@@ -27,7 +27,7 @@ export const Basic: React.FC = () => {
 				onClose={() => setVisible(false)}
 				primaryAction={{ label: 'Got it!', action: () => setVisible(false) }}
 				secondaryActions={[
-					{ label: 'I am dumb', action: () => setVisible(false) },
+					{ label: 'Cancel', action: () => setVisible(false) },
 					{ label: 'Share', action: () => setVisible(false) },
 				]}
 			>
