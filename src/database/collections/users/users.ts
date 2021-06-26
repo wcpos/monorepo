@@ -16,7 +16,7 @@ type SiteDocument = import('../sites').SiteDocument;
 interface UserMethods {
 	addSiteByUrl: (url: string) => Promise<void>;
 	removeSite: (site: SiteDocument) => Promise<void>;
-	getSites_$: () => Observable<SiteDocument[]>;
+	getSites$: () => Observable<SiteDocument[]>;
 }
 
 const methods: UserMethods = {
@@ -47,11 +47,13 @@ const methods: UserMethods = {
 	/**
 	 *
 	 */
-	getSites_$(this: UserDocument) {
+	getSites$(this: UserDocument) {
 		return this.sites$.pipe(
-			switchMap((ids: string[]) => this.populate('sites'))
-			// switchMap((ids: string[]) => this.collections().sites.findByIds(ids || [])),
-			// map((sitesMap: Map<string, SiteDocument>) => Array.from(sitesMap.values()))
+			switchMap(async (args: any) => {
+				console.log(args);
+				const sites = await this.populate('sites');
+				return sites;
+			})
 		);
 	},
 };

@@ -33,6 +33,8 @@ export const UserMenu = () => {
 					{
 						label: 'Logout',
 						action: async () => {
+							// @ts-ignore
+							navigation.navigate('Auth');
 							await unsetLastUser();
 						},
 						type: 'warning',

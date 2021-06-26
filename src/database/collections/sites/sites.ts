@@ -1,3 +1,4 @@
+import { switchMap } from 'rxjs/operators';
 import get from 'lodash/get';
 import schema from './schema.json';
 
@@ -7,12 +8,14 @@ export type SiteCollection = import('rxdb').RxCollection<SiteDocument, SiteMetho
 type SiteStatics = Record<string, never>;
 type WPCredentialsCollection = import('../wp-credentials').WPCredentialsCollection;
 type WPCredentialsDocument = import('../wp-credentials').WPCredentialsDocument;
+type WPCredentialsDocumentsObservable = import('rxjs').Observable<WPCredentialsDocument[]>;
 
 interface SiteMethods {
 	getUrlWithoutProtocol: () => string;
 	connect: () => Promise<any>;
 	addOrUpdateWpCredentials: (data: Record<string, unknown>) => Promise<WPCredentialsDocument>;
 	getWcApiUrl: () => string;
+	getWpCredentials$: () => WPCredentialsDocumentsObservable;
 }
 
 const methods: SiteMethods = {
@@ -81,6 +84,18 @@ const methods: SiteMethods = {
 	 */
 	getWcApiUrl(this: SiteDocument) {
 		return `${this.wpApiUrl}wc/v3`;
+	},
+
+	/**
+	 *
+	 */
+	getWpCredentials$(this: SiteDocument) {
+		return this.wpCredentials$.pipe(
+			switchMap(async () => {
+				const wpCredentials = await this.populate('wpCredentials');
+				return wpCredentials;
+			})
+		);
 	},
 };
 

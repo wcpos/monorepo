@@ -7,8 +7,8 @@ import Avatar from '@wcpos/common/src/components/avatar';
 import Text from '@wcpos/common/src/components/text';
 import Icon from '@wcpos/common/src/components/icon';
 import Button from '@wcpos/common/src/components/button';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Modal from './login-modal';
+import WpUser from './wp-user';
 import { SiteWrapper, SiteTextWrapper } from './styles';
 
 type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
@@ -32,43 +32,9 @@ const Site = ({ site, user }: ISiteProps) => {
 	const error = useObservableState(site.connection.error$) as string;
 	const name = useObservableState(site.name$) as string;
 	const [visible, setVisible] = React.useState(false);
-	const { setLastUser } = useAppState();
 
-	const [connectedWpUsers] = useObservableState(
-		() =>
-			site.wpCredentials$.pipe(
-				switchMap((ids) => {
-					const wpCredentialsCollection = get(
-						site,
-						'collection.database.collections.wp_credentials'
-					);
-					return wpCredentialsCollection.findByIds$(ids || []);
-				}),
-				// @ts-ignore
-				map((wpCredentialsMap) => Array.from(wpCredentialsMap.values())),
-				tap((res) => {
-					console.log('@TODO - fix these unnecessary re-renders');
-				})
-			),
-		[]
-	);
-
-	// const connectedWpUsers: [] = [];
-	// debugger;
-
-	const selectStore = async (wpUser: WPCredentialsDocument): Promise<void> => {
-		let store;
-		// hack: set a default store if none exits
-		if (isEmpty(wpUser.stores)) {
-			const storesCollection = get(wpUser, 'collection.database.collections.stores');
-			// @ts-ignore
-			store = await storesCollection.insert({ id: 0, name: 'Default Store' });
-			wpUser.atomicPatch({ stores: [store._id] });
-		} else {
-			[store] = await wpUser.populate('stores');
-		}
-		setLastUser(store._id, site, wpUser);
-	};
+	/**  */
+	const [wpUsers] = useObservableState(site.getWpCredentials$, []);
 
 	const handleRemove = async () => {
 		await user.removeSite(site);
@@ -94,21 +60,17 @@ const Site = ({ site, user }: ISiteProps) => {
 						setVisible(true);
 					}}
 				/>
-				{connectedWpUsers.map((connectedWpUser: WPCredentialsDocument) => {
-					return (
-						<Button
-							key={connectedWpUser._id}
-							title={connectedWpUser.displayName}
-							onPress={() => {
-								selectStore(connectedWpUser);
-							}}
-						/>
-					);
-				})}
+				{wpUsers.map((wpUser) => (
+					<WpUser key={wpUser._id} wpUser={wpUser} site={site} />
+				))}
 			</SiteTextWrapper>
-			<Button onPress={handleRemove}>
-				<Icon name="remove" />
-			</Button>
+			<Icon
+				name="remove"
+				size="large"
+				type="critical"
+				onPress={handleRemove}
+				backgroundStyle="none"
+			/>
 			{visible && <Modal site={site} user={user} visible={visible} setVisible={setVisible} />}
 		</SiteWrapper>
 	);

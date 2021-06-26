@@ -4,7 +4,7 @@ import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Segment from '@wcpos/common/src/components/segment';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Text from '@wcpos/common/src/components/text';
-import useOnline from '@wcpos/common/src/hooks/use-online';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Site from './site';
 import * as Styled from './styles';
 
@@ -15,27 +15,29 @@ type UserDocument = import('@wcpos/common/src/database').UserDocument;
  */
 const Auth = () => {
 	const { user } = useAppState() as { user: UserDocument };
-	const online = useOnline();
+	const [sites] = useObservableState(user.getSites$, []);
 
-	// @ts-ignore
-	const [sites] = useObservableState(user.getSites_$);
+	const onConnect = React.useCallback(
+		async (url: string): Promise<void> => {
+			const newSiteId = await user.addSiteByUrl(url);
+			// if (newSiteId) {
+			// 	user.connectSite(newSiteId);
+			// }
+			// const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
+			// if (trimUrl) {
+			// 	const newSite = await appUser.database.action(async () =>
+			// 		appUser.sites.collection.create((site) => {
+			// 			site.url = `https://${trimUrl}`;
+			// 			site.app_user.set(appUser);
+			// 		})
+			// 	);
+			// 	newSite?.connect();
+			// }
+		},
+		[user]
+	);
 
-	const onConnect = async (url: string): Promise<void> => {
-		const newSiteId = await user.addSiteByUrl(url);
-		// if (newSiteId) {
-		// 	user.connectSite(newSiteId);
-		// }
-		// const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
-		// if (trimUrl) {
-		// 	const newSite = await appUser.database.action(async () =>
-		// 		appUser.sites.collection.create((site) => {
-		// 			site.url = `https://${trimUrl}`;
-		// 			site.app_user.set(appUser);
-		// 		})
-		// 	);
-		// 	newSite?.connect();
-		// }
-	};
+	useWhyDidYouUpdate('Auth', { user, sites, onConnect });
 
 	return (
 		<Styled.Container>

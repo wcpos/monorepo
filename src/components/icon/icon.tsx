@@ -58,6 +58,10 @@ export interface IconProps {
 	 * Styling for Pressable icons
 	 */
 	backgroundStyle?: 'none' | ViewStyle;
+	/**
+	 * Icon colour
+	 */
+	type?: import('@wcpos/common/src/themes').ColorTypes;
 }
 
 /**
