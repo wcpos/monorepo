@@ -15,6 +15,10 @@ export interface TextAction {
 	 * Action to execute on click.
 	 */
 	action?: () => void;
+	/**
+	 * Color of menu item
+	 */
+	type?: import('@wcpos/common/src/themes').ColorTypes;
 }
 
 // export interface IconAction {

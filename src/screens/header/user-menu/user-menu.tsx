@@ -35,6 +35,7 @@ export const UserMenu = () => {
 						action: async () => {
 							await unsetLastUser();
 						},
+						type: 'warning',
 					},
 					{
 						label: 'Settings',

@@ -24,6 +24,8 @@ const colors = {
 	'darkest-grey': '#2B2B2B',
 };
 
+export type ColorTypes = Extract<keyof typeof colors, string>;
+
 const baseRadius = '3px';
 const basePadding = '5px';
 

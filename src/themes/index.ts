@@ -1,5 +1,6 @@
-import defaultTheme from './defaultTheme';
+import defaultTheme, { ColorTypes } from './defaultTheme';
 
+export type { ColorTypes };
 export { switcher as default } from './switcher';
 
 /**

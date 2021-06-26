@@ -18,15 +18,7 @@ export type Props = {
 	size?: 'normal' | 'large' | 'small';
 	style?: import('react-native').ViewStyle;
 	title?: string | React.ReactElement;
-	type?:
-		| 'attention'
-		| 'critical'
-		| 'info'
-		| 'primary'
-		| 'secondary'
-		| 'success'
-		| 'warning'
-		| 'inverse';
+	type?: import('@wcpos/common/src/themes').ColorTypes;
 };
 
 const Button = ({

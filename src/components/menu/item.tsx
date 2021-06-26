@@ -21,32 +21,56 @@ export interface ItemProps {
 	 */
 	action?: () => void;
 	/**
+	 * Color of menu item
+	 */
+	type?: import('@wcpos/common/src/themes').ColorTypes;
+	/**
 	 *
 	 */
 	style?: ViewStyle;
 }
 
-export const Item = ({ children, label = '', onPress, action, style }: ItemProps) => {
+export const Item = ({ children, label = '', onPress, action, type, style }: ItemProps) => {
 	const theme = useTheme();
 
-	const handlePress = () => {
+	/**
+	 *
+	 */
+	const handlePress = React.useCallback(() => {
 		if (typeof action === 'function') {
 			action();
 		}
 		if (typeof onPress === 'function') {
 			onPress(label);
 		}
-	};
+	}, [action, label, onPress]);
+
+	/**
+	 *
+	 */
+	const calculatedStyled = React.useCallback(
+		({ hovered }) => {
+			let hoverBackgroundColor = theme.MENU_ITEM_HOVER_BACKGROUND_COLOR;
+			if (type) {
+				const color = `color_${type}`.toUpperCase();
+				// @ts-ignore
+				hoverBackgroundColor = theme[color];
+			}
+			return [{ backgroundColor: hovered ? hoverBackgroundColor : 'transparent' }, style];
+		},
+		[style, theme, type]
+	);
 
 	return (
-		<Styled.Item
-			onPress={handlePress}
-			style={({ hovered }: { hovered: boolean }) => [
-				{ backgroundColor: hovered ? theme.MENU_ITEM_HOVER_BACKGROUND_COLOR : 'transparent' },
-				style,
-			]}
-		>
-			<Styled.Label>{children || label}</Styled.Label>
+		<Styled.Item onPress={handlePress} style={calculatedStyled}>
+			{
+				// @ts-ignore
+				({ hovered }) => (
+					<Styled.Label type={type} hovered={hovered}>
+						{children || label}
+					</Styled.Label>
+				)
+			}
 		</Styled.Item>
 	);
 };

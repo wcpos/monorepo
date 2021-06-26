@@ -31,15 +31,7 @@ export interface TextProps {
 	/**
 	 *
 	 */
-	type?:
-		| 'attention'
-		| 'critical'
-		| 'info'
-		| 'primary'
-		| 'secondary'
-		| 'success'
-		| 'warning'
-		| 'inverse';
+	type?: import('@wcpos/common/src/themes').ColorTypes;
 	/**
 	 *
 	 */

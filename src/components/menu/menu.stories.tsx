@@ -10,7 +10,7 @@ export default {
 
 export const BasicUsage = (props: MenuProps) => <Menu {...props} />;
 BasicUsage.args = {
-	items: ['Item 1', 'Item 2', 'Item 3', 'Item 4'],
+	items: ['Item 1', 'Item 2', 'Item 3', { label: 'Item 4', type: 'critical' }],
 	onSelect: action('Select'),
 };
 
@@ -20,6 +20,6 @@ WithActions.args = {
 		{ label: 'Item 1', action: action('Item 1 Action') },
 		{ label: 'Item 2', action: action('Item 2 Action') },
 		{ label: 'Item 3', action: action('Item 3 Action') },
-		{ label: 'Item 4', action: action('Item 4 Action') },
+		{ label: 'Item 4', action: action('Item 4 Action'), type: 'success' },
 	],
 };
