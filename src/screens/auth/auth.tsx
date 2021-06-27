@@ -51,6 +51,7 @@ const Auth = () => {
 					onAction={onConnect}
 					type="url"
 					clearable
+					hideLabel
 				/>
 			</Segment>
 			{sites && sites.length > 0 && (
