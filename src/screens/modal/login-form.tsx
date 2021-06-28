@@ -6,12 +6,13 @@ import useAppState from '@wcpos/common/src/hooks/use-app-state';
 
 interface LoginFormProps {
 	onClose: () => void;
+	site?: import('@wcpos/common/src/database').SiteDocument;
 }
 
-const LoginForm = ({ onClose }: LoginFormProps) => {
+const LoginForm = ({ onClose, site }: LoginFormProps) => {
 	const [username, setUsername] = React.useState('');
 	const [password, setPassword] = React.useState('');
-	const { site, wpUser } = useAppState();
+	// const { site, wpUser } = useAppState();
 
 	const handleLogin = async () => {
 		if (site && site.wpApiUrl) {
@@ -19,8 +20,8 @@ const LoginForm = ({ onClose }: LoginFormProps) => {
 				username,
 				password,
 			});
-			// set wp credientials
-			const success = await wpUser?.atomicPatch(result.data);
+			// add or update wpUser
+			const success = await site.addOrUpdateWpCredentials(result.data);
 			if (success) {
 				onClose();
 			}

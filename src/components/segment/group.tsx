@@ -23,7 +23,7 @@ export const SegmentGroup = ({
 	const count = React.Children.count(children);
 
 	if (count === 1) {
-		return children;
+		return <Styled.Group style={style}>{children}</Styled.Group>;
 	}
 
 	return (

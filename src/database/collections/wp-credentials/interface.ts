@@ -15,6 +15,7 @@ export interface WPCredentialsSchema {
   lastName?: string;
   email?: string;
   displayName?: string;
+  niceName?: string;
   lastAccess?: string;
   consumerKey?: string;
   consumerSecret?: string;

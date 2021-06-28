@@ -77,6 +77,7 @@ export const Icon = ({
 	onPress,
 	tooltip,
 	backgroundStyle,
+	type = 'primary',
 }: IconProps) => {
 	const theme = useTheme();
 
@@ -88,7 +89,8 @@ export const Icon = ({
 			width={width || sizeMap[size]}
 			// @ts-ignore
 			height={height || sizeMap[size]}
-			fill={color || theme.TEXT_COLOR}
+			// @ts-ignore
+			fill={color || theme[`COLOR_${type.toUpperCase()}`]}
 		/>
 	);
 

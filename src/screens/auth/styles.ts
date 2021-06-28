@@ -18,3 +18,9 @@ export const SiteTextWrapper = styled.View`
 	flex-direction: column;
 	padding: 5px;
 `;
+
+export const SiteStatusWrapper = styled.View`
+	flex-direction: row;
+`;
+
+export const WpUserWrapper = styled.View``;

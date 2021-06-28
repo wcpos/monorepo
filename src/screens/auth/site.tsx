@@ -1,15 +1,15 @@
 import * as React from 'react';
 import { tap, switchMap, map } from 'rxjs/operators';
 import { useObservableState } from 'observable-hooks';
-import get from 'lodash/get';
-import isEmpty from 'lodash/isEmpty';
+import { useNavigation } from '@react-navigation/native';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Text from '@wcpos/common/src/components/text';
-import Icon from '@wcpos/common/src/components/icon';
 import Button from '@wcpos/common/src/components/button';
+import Icon from '@wcpos/common/src/components/icon';
+import Dialog from '@wcpos/common/src/components/dialog';
 import Modal from './login-modal';
 import WpUser from './wp-user';
-import { SiteWrapper, SiteTextWrapper } from './styles';
+import * as Styled from './styles';
 
 type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
 type UserDocument = import('@wcpos/common/src/database').UserDocument;
@@ -28,51 +28,116 @@ interface ISiteProps {
  * - https://api.faviconkit.com/${url}/144
  */
 const Site = ({ site, user }: ISiteProps) => {
-	const status = useObservableState(site.connection.status$) as string;
-	const error = useObservableState(site.connection.error$) as string;
+	const status = useObservableState(site.connection.status$);
+	const active = useObservableState(site.connection.active$);
 	const name = useObservableState(site.name$) as string;
 	const [visible, setVisible] = React.useState(false);
+	const [openConfirmDialog, setOpenConfirmDialog] = React.useState(false);
+	const showConfirmDialog = React.useCallback(() => setOpenConfirmDialog(true), []);
+	const hideConfirmDialog = React.useCallback(() => setOpenConfirmDialog(false), []);
+	const navigation = useNavigation();
 
 	/**  */
 	const [wpUsers] = useObservableState(site.getWpCredentials$, []);
 
-	const handleRemove = async () => {
+	const handleRemoveSite = async () => {
 		await user.removeSite(site);
 	};
 
+	// React.useEffect(() => {
+	// 	site.connect();
+	// }, [site]);
+
+	/**
+	 *
+	 */
+	const renderStatus = React.useMemo(() => {
+		if (!status) {
+			return null;
+		}
+
+		// @ts-ignore
+		return <Text size="small">{status.message}</Text>;
+	}, [status]);
+
+	/**
+	 *
+	 */
+	const renderActiveIcon = React.useMemo(() => {
+		let type = 'secondary';
+		if (active) {
+			type = 'success';
+		}
+		if (status && status.type === 'error') {
+			type = 'critical';
+		}
+
+		// @ts-ignore
+		return <Icon name="circle" type={type} size="small" />;
+	}, [active, status]);
+
+	/**
+	 *
+	 */
+	const renderWpUsers = React.useMemo(() => {
+		if (!active) {
+			return null;
+		}
+
+		return (
+			<>
+				<Text>Logged in users</Text>
+				{wpUsers.map((wpUser) => (
+					<WpUser key={wpUser._id} wpUser={wpUser} site={site} />
+				))}
+				<Button
+					size="small"
+					title="Add new user"
+					onPress={() => {
+						// @ts-ignore
+						navigation.navigate('Modal', { login: { site } });
+					}}
+				/>
+			</>
+		);
+	}, [active, navigation, site, wpUsers]);
+
 	return (
-		<SiteWrapper>
+		<Styled.SiteWrapper>
 			<Avatar src={`https://api.faviconkit.com/${site.url}/144`} />
-			<SiteTextWrapper>
+			<Styled.SiteTextWrapper>
 				<Text weight="bold">{name || site.url}</Text>
 				<Text size="small" type="secondary">
 					{site.url}
 				</Text>
-				<Text size="small">{error}</Text>
-				<Text size="small">{!error && status}</Text>
-				{/* {error && <Text size="small">{error}</Text>}
-				{status && !error && <Text size="small">{status}</Text>} */}
-
-				<Button title="Connect" onPress={() => site.connect()} />
-				<Button
-					title="Login"
-					onPress={() => {
-						setVisible(true);
-					}}
-				/>
-				{wpUsers.map((wpUser) => (
-					<WpUser key={wpUser._id} wpUser={wpUser} site={site} />
-				))}
-			</SiteTextWrapper>
+				<Styled.SiteStatusWrapper>
+					{renderActiveIcon}
+					{renderStatus}
+				</Styled.SiteStatusWrapper>
+				{renderWpUsers}
+			</Styled.SiteTextWrapper>
 			<Icon
 				name="remove"
 				size="large"
 				type="critical"
-				onPress={handleRemove}
+				onPress={showConfirmDialog}
 				backgroundStyle="none"
 			/>
 			{visible && <Modal site={site} user={user} visible={visible} setVisible={setVisible} />}
-		</SiteWrapper>
+			{openConfirmDialog && (
+				<Dialog
+					open
+					title="Remove site"
+					onClose={hideConfirmDialog}
+					primaryAction={{ label: 'Delete', action: handleRemoveSite, type: 'critical' }}
+					secondaryActions={[{ label: 'Cancel', action: hideConfirmDialog }]}
+				>
+					<Dialog.Section>
+						<Text>Delete site</Text>
+					</Dialog.Section>
+				</Dialog>
+			)}
+		</Styled.SiteWrapper>
 	);
 };
 

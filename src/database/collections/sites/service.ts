@@ -4,6 +4,10 @@ import Url from '@wcpos/common/src/lib/url-parse';
 import Platform from '@wcpos/common/src/lib/platform';
 
 type SiteDocument = import('./sites').SiteDocument;
+interface Status {
+	type: 'pending' | 'error' | 'complete';
+	message: string;
+}
 
 const wcNamespace = 'wc/v3';
 const wcposNamespace = 'wcpos/v1';
@@ -20,20 +24,19 @@ export class ConnectionService {
 		this.client = httpClient;
 
 		this._prepare();
+		this.connect();
 	}
 
 	public client;
 	public _subjects = {
-		status: new Subject(), // connection status
-		error: new Subject(), // connection error
+		status: new BehaviorSubject<null | Status>(null), // connection status
 		active: new BehaviorSubject(false), // true when something is running, false when not
 	};
 
 	public _runningPromise: Promise<void> = Promise.resolve();
 	public _subs: Subscription[] = [];
 
-	public status$: Observable<boolean> = undefined as any;
-	public error$: Observable<boolean> = undefined as any;
+	public status$: Observable<null | Status> = undefined as any;
 	public active$: Observable<boolean> = undefined as any;
 
 	/**
@@ -48,20 +51,40 @@ export class ConnectionService {
 				},
 			});
 		});
-
-		this._subjects.status.next('hi');
 	}
 
+	/**
+	 * things that are more complex to not belong into the constructor
+	 */
 	async connect(): Promise<any> {
-		this._subjects.error.next('');
-		this._subjects.status.next('Connecting...');
+		this._subjects.status.next({ type: 'pending', message: 'Connecting...' });
+
+		if (this.site.wpApiUrl) {
+			return this._quickCheck()
+				.then((success) => {
+					if (success) {
+						this._subjects.status.next({ type: 'complete', message: 'Connected' });
+						this._subjects.active.next(true);
+					}
+				})
+				.catch((err) => {
+					this._subjects.status.next({ type: 'error', message: err.message });
+				});
+		}
+
 		return this._fetchHead()
 			.then((status) => {
 				return this._fetchWcApiUrl();
 			})
+			.then((success) => {
+				if (success) {
+					this._subjects.status.next({ type: 'complete', message: 'Connected' });
+					this._subjects.active.next(true);
+				}
+			})
 			.catch((err) => {
 				console.log(err);
-				this._subjects.error.next(err.message);
+				this._subjects.status.next({ type: 'error', message: err.message });
 			});
 	}
 
@@ -79,7 +102,7 @@ export class ConnectionService {
 			.then((response) => {
 				const wpApiUrl = parseApiUrlFromHeaders(response.headers);
 				if (wpApiUrl) {
-					this._subjects.status.next('WordPress website found');
+					this._subjects.status.next({ type: 'pending', message: 'WordPress website found' });
 					return this.site.atomicPatch({ wpApiUrl });
 				}
 				throw Error('Site does not seem to be a WordPress site');
@@ -108,15 +131,21 @@ export class ConnectionService {
 					gmtOffset: response.data.gmtOffset,
 					timezoneString: response.data.timezoneString,
 				});
-				// const baseAuthUrl = response?.data?.authentication?.wcpos?.authorize;
-				// if (baseAuthUrl) {
-				// 	return this.site.atomicPatch({
-				// 		...response.data,
-				// 		wcApiUrl: `${this.site.wpApiUrl + namespace}/`, // enforce trailing slash
-				// 		wcApiAuthUrl: baseAuthUrl,
-				// 	});
-				// }
 			})
 		);
+	}
+
+	/**
+	 * Fetch WooCommerce API URL
+	 * @param url WordPress API URL
+	 */
+	async _quickCheck(): Promise<any> {
+		return this.client.get(this.site.wpApiUrl + wcposNamespace).then((response) => {
+			if (response.status !== 200 || response.data.namespace !== wcposNamespace) {
+				throw Error('WooCommerce POS API not found');
+			} else {
+				return true;
+			}
+		});
 	}
 }

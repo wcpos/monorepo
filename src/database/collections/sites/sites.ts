@@ -1,11 +1,19 @@
 import { switchMap } from 'rxjs/operators';
 import get from 'lodash/get';
 import schema from './schema.json';
+import { ConnectionService } from './service';
 
 export type SiteSchema = import('./interface').SiteSchema;
-export type SiteDocument = import('rxdb').RxDocument<SiteSchema, SiteMethods>;
-export type SiteCollection = import('rxdb').RxCollection<SiteDocument, SiteMethods, SiteStatics>;
-type SiteStatics = Record<string, never>;
+export type SiteDocument = import('rxdb').RxDocument<
+	SiteSchema,
+	SiteMethods & { connection: ConnectionService }
+>;
+export type SiteCollection = import('rxdb').RxCollection<
+	SiteDocument,
+	SiteMethods & { connection: ConnectionService },
+	SiteStatics
+>;
+type SiteStatics = Record<string, unknown>;
 type WPCredentialsCollection = import('../wp-credentials').WPCredentialsCollection;
 type WPCredentialsDocument = import('../wp-credentials').WPCredentialsDocument;
 type WPCredentialsDocumentsObservable = import('rxjs').Observable<WPCredentialsDocument[]>;
@@ -43,14 +51,14 @@ const methods: SiteMethods = {
 		);
 
 		const parsedData = {
-			id: data.id,
+			id: data.user_id,
 			username: data.username,
 			displayName: data.display_name,
 			email: data.email,
 			firstName: data.firstname,
 			lastName: data.lastname,
 			jwt: data.jwt,
-			// nicename: data.nicename,
+			niceName: data.nicename,
 		};
 
 		try {
@@ -93,11 +101,21 @@ const methods: SiteMethods = {
 		return this.wpCredentials$.pipe(
 			switchMap(async () => {
 				const wpCredentials = await this.populate('wpCredentials');
-				return wpCredentials;
+				return wpCredentials || [];
 			})
 		);
 	},
 };
+
+/**
+ *
+ */
+function postCreate(this: SiteCollection, plainData: any, rxDocument: SiteDocument) {
+	const connectionServiceInstance = new ConnectionService(rxDocument);
+	Object.defineProperty(rxDocument, 'connection', {
+		get: () => connectionServiceInstance,
+	});
+}
 
 export const sites = {
 	schema,
@@ -105,7 +123,14 @@ export const sites = {
 	// statics: {},
 	methods,
 	// attachments: {},
-	// options: {},
+	options: {
+		middlewares: {
+			postCreate: {
+				handle: postCreate,
+				parallel: false,
+			},
+		},
+	},
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},

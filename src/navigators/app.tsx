@@ -14,7 +14,7 @@ const MainNavigator = React.lazy(() => import('./main'));
 export type AppStackParamList = {
 	Auth: undefined;
 	Main: undefined;
-	Modal: { foo: string };
+	Modal: { login?: { site?: import('@wcpos/common/src/database').SiteDocument } };
 };
 
 const Stack = createStackNavigator<AppStackParamList>();

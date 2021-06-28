@@ -7,14 +7,14 @@ const colors = {
 	background: palette['blue-grey-050'],
 	border: palette['blue-grey-600'],
 	primary: palette['blue-grey-700'],
-	secondary: palette['blue-grey-500'],
+	secondary: palette['blue-grey-400'],
 	attention: palette['cyan-800'],
 	critical: palette['red-vivid-600'],
 	info: palette['light-blue-vivid-800'],
 	success: palette['teal-800'],
 	warning: palette['yellow-vivid-800'],
 	inverse: 'rgba(256, 256, 256, 0.8)',
-	disabled: palette['blue-grey-400'],
+	disabled: '#AFAFAF',
 
 	// greys
 	'lightest-grey': '#E1E1E1',

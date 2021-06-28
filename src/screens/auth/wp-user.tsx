@@ -3,10 +3,13 @@ import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 import forEach from 'lodash/forEach';
 import Tag from '@wcpos/common/src/components/tag';
-import Dialog from '@wcpos/common/src/components/dialog';
 import Text from '@wcpos/common/src/components/text';
+import Button from '@wcpos/common/src/components/button';
+import Dialog from '@wcpos/common/src/components/dialog';
+
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import DatabaseService from '@wcpos/common/src/database';
+import * as Styled from './styles';
 
 interface Props {
 	site: import('@wcpos/common/src/database').SiteDocument;
@@ -20,6 +23,7 @@ function sanitizeStoreName(id: string) {
 const WpUser = ({ site, wpUser }: Props) => {
 	const { setLastUser } = useAppState();
 	const [showDialog, setShowDialog] = React.useState(false);
+
 	// const [stores, setStores] = React.useState([]);
 
 	// 	/**
@@ -31,17 +35,17 @@ const WpUser = ({ site, wpUser }: Props) => {
 	 *
 	 */
 	const handleStoreSelect = React.useCallback(async () => {
-		let store;
-		// hack: set a default store if none exits
-		if (isEmpty(wpUser.stores)) {
-			const storesCollection = get(wpUser, 'collection.database.collections.stores');
-			// @ts-ignore
-			store = await storesCollection.insert({ id: 0, name: 'Default Store' });
-			wpUser.atomicPatch({ stores: [store._id] });
-		} else {
-			[store] = await wpUser.populate('stores');
-		}
-		setLastUser(store._id, site, wpUser);
+		// let store;
+		// // hack: set a default store if none exits
+		// if (isEmpty(wpUser.stores)) {
+		// 	const storesCollection = get(wpUser, 'collection.database.collections.stores');
+		// 	// @ts-ignore
+		// 	store = await storesCollection.insert({ id: 0, name: 'Default Store' });
+		// 	wpUser.atomicPatch({ stores: [store._id] });
+		// } else {
+		// 	[store] = await wpUser.populate('stores');
+		// }
+		// setLastUser(store._id, site, wpUser);
 	}, [setLastUser, site, wpUser]);
 
 	/**
@@ -73,7 +77,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 
 	return (
 		<>
-			<Tag removable onPress={handleStoreSelect} onRemove={handleWpUserRemove}>
+			<Tag removable onPress={handleStoreSelect} onRemove={handleWpUserRemove} disabled>
 				{wpUser.displayName ? wpUser.displayName : 'No name?'}
 			</Tag>
 			{showDialog && (

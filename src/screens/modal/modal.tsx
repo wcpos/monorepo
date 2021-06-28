@@ -7,8 +7,10 @@ import LoginForm from './login-form';
 type ModalScreenProps = import('@wcpos/common/src/navigators/app').ModalScreenProps;
 
 export const ModalScreen = ({ route, navigation }: ModalScreenProps) => {
-	if (get(route, 'params.login')) {
-		return <LoginForm onClose={() => navigation.goBack()} />;
+	const { params } = route;
+
+	if (params.login) {
+		return <LoginForm onClose={() => navigation.goBack()} {...params.login} />;
 	}
 
 	return (
@@ -24,7 +26,7 @@ export const ModalScreen = ({ route, navigation }: ModalScreenProps) => {
 			]}
 		>
 			<Text>Text inside the Dialog!</Text>
-			<Text>Params from route: {route.params.foo}</Text>
+			<Text>Params from route: {route.params}</Text>
 		</Dialog>
 	);
 };

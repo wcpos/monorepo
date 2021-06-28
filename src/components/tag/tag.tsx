@@ -47,7 +47,7 @@ export const Tag = ({ children, removable, disabled, onRemove, onPress }: TagPro
 		</Styled.Tag>
 	);
 
-	return <Pressable onPress={onPress}>{tag}</Pressable>;
+	return <Pressable onPress={disabled ? undefined : onPress}>{tag}</Pressable>;
 };
 
 /**
