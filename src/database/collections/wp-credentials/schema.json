@@ -22,6 +22,9 @@
 		"displayName": {
 			"type": "string"
 		},
+		"niceName": {
+			"type": "string"
+		},
 		"lastAccess": {
 			"type": "string"
 		},

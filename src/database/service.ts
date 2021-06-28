@@ -26,7 +26,6 @@ import collectionsHelper from './plugins/utils/collections';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
 import { userCollections, storeCollections } from './collections';
 import { config } from './adapter';
-import { ConnectionService } from './collections/sites/service';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -94,39 +93,6 @@ export async function _createUsersDB() {
 	const db = await _createDB<UserDatabaseCollections>('wcposusers');
 	// @ts-ignore
 	const collections = await db.addCollections(userCollections);
-
-	// forEach(collections, (collection) => {
-	// collection.preInsert((plainData: Record<string, unknown>) => {
-	// 	const promises: Promise<any>[] = [];
-	// 	parsePlainData(plainData, collection);
-
-	// 	/**
-	// 	 * This allows each collection to manage plainData coming from the WC REST API
-	// 	 * It loops through each property and calls collection.preInsert{Property}
-	// 	 * if it exists
-	// 	 */
-	// 	forEach(plainData, (data, key) => {
-	// 		const preInsertKey = camelCase(`preInsert-${key}`);
-	// 		if (isFunction(collection[preInsertKey])) {
-	// 			promises.push(collection[preInsertKey](plainData, collection));
-	// 		}
-	// 	});
-
-	// 	return Promise.all(promises).then(() => plainData);
-	// }, false);
-
-	// collection.preSave((plainData: Record<string, unknown>) => {
-	// 	parsePlainData(plainData, collection);
-	// }, false);
-	// });
-
-	// add connection service to site documents
-	collections.sites.postCreate((plainData, rxDocument) => {
-		const connectionServiceInstance = new ConnectionService(rxDocument);
-		Object.defineProperty(rxDocument, 'connection', {
-			get: () => connectionServiceInstance,
-		});
-	});
 
 	return db;
 }

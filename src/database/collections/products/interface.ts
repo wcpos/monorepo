@@ -50,6 +50,7 @@ export interface WooCommerceProductSchema {
   backorders?: "no" | "notify" | "yes";
   backordersAllowed?: boolean;
   backordered?: boolean;
+  lowStockAmount?: number | null;
   soldIndividually?: boolean;
   weight?: string;
   dimensions?: {

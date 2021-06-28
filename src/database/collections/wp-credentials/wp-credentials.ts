@@ -14,7 +14,7 @@ export type WPCredentialsCollection = import('rxdb').RxCollection<
 type WPCredentialsMethods = Record<string, never>;
 
 interface WPCredentialsStatics {
-	preInsertUserId: (plainData: Record<string, unknown>) => Promise<void>;
+	// preInsertUserId: (plainData: Record<string, unknown>) => Promise<void>;
 }
 
 /**
@@ -24,16 +24,16 @@ export const statics: WPCredentialsStatics = {
 	/**
 	 *
 	 */
-	async preInsertUserId(
-		this: WPCredentialsCollection,
-		plainData: Record<string, unknown>
-		// db: any
-	) {
-		if (plainData.userId) {
-			plainData.id = plainData.userId;
-			unset(plainData, 'userId');
-		}
-	},
+	// async preInsertUserId(
+	// 	this: WPCredentialsCollection,
+	// 	plainData: Record<string, unknown>
+	// 	// db: any
+	// ) {
+	// 	if (plainData.userId) {
+	// 		plainData.id = plainData.userId;
+	// 		unset(plainData, 'userId');
+	// 	}
+	// },
 };
 
 export const wpCredentials = {
