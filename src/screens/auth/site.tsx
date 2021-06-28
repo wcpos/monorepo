@@ -44,10 +44,6 @@ const Site = ({ site, user }: ISiteProps) => {
 		await user.removeSite(site);
 	};
 
-	// React.useEffect(() => {
-	// 	site.connect();
-	// }, [site]);
-
 	/**
 	 *
 	 */
@@ -73,7 +69,7 @@ const Site = ({ site, user }: ISiteProps) => {
 		}
 
 		// @ts-ignore
-		return <Icon name="circle" type={type} size="small" />;
+		return <Icon name="circle" type={type} size="x-small" />;
 	}, [active, status]);
 
 	/**

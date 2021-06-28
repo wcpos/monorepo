@@ -50,9 +50,8 @@ const methods: UserMethods = {
 	getSites$(this: UserDocument) {
 		return this.sites$.pipe(
 			switchMap(async (args: any) => {
-				console.log(args);
 				const sites = await this.populate('sites');
-				return sites;
+				return sites || [];
 			})
 		);
 	},

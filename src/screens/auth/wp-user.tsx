@@ -1,4 +1,6 @@
 import * as React from 'react';
+import { useObservableState } from 'observable-hooks';
+import axios from 'axios';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 import forEach from 'lodash/forEach';
@@ -23,30 +25,29 @@ function sanitizeStoreName(id: string) {
 const WpUser = ({ site, wpUser }: Props) => {
 	const { setLastUser } = useAppState();
 	const [showDialog, setShowDialog] = React.useState(false);
-
-	// const [stores, setStores] = React.useState([]);
+	const [stores] = useObservableState(wpUser.getStores$, []);
 
 	// 	/**
 	//  * Populate stores on first render
 	//  */
-	// React.useEffect(() => {}, [])
+	React.useEffect(() => {
+		axios
+			.get(`${site.getWcposApiUrl()}/stores`, {
+				headers: { 'X-WCPOS': '1', Authorization: `Bearer ${wpUser.jwt}` },
+			})
+			.then((response) => {
+				wpUser.addOrUpdateStores(response.data);
+			});
+	}, []);
 
 	/**
 	 *
 	 */
 	const handleStoreSelect = React.useCallback(async () => {
-		// let store;
-		// // hack: set a default store if none exits
-		// if (isEmpty(wpUser.stores)) {
-		// 	const storesCollection = get(wpUser, 'collection.database.collections.stores');
-		// 	// @ts-ignore
-		// 	store = await storesCollection.insert({ id: 0, name: 'Default Store' });
-		// 	wpUser.atomicPatch({ stores: [store._id] });
-		// } else {
-		// 	[store] = await wpUser.populate('stores');
-		// }
-		// setLastUser(store._id, site, wpUser);
-	}, [setLastUser, site, wpUser]);
+		if (stores.length === 1) {
+			setLastUser(stores[0]._id, site, wpUser);
+		}
+	}, [setLastUser, site, stores, wpUser]);
 
 	/**
 	 *
@@ -77,7 +78,12 @@ const WpUser = ({ site, wpUser }: Props) => {
 
 	return (
 		<>
-			<Tag removable onPress={handleStoreSelect} onRemove={handleWpUserRemove} disabled>
+			<Tag
+				removable
+				onPress={handleStoreSelect}
+				onRemove={handleWpUserRemove}
+				disabled={stores.length === 0}
+			>
 				{wpUser.displayName ? wpUser.displayName : 'No name?'}
 			</Tag>
 			{showDialog && (
