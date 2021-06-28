@@ -11,5 +11,27 @@
 export interface WCPOSStoreSchema {
   id?: number;
   name?: string;
+  accounting?: {
+    currency?: {
+      decimal?: string;
+      format?: {
+        neg?: string;
+        pos?: string;
+        zero?: string;
+        [k: string]: any;
+      };
+      precision?: number;
+      symbol?: string;
+      thousand?: string;
+      [k: string]: any;
+    };
+    number?: {
+      decimal?: string;
+      precision?: number;
+      thousand?: string;
+      [k: string]: any;
+    };
+    [k: string]: any;
+  };
   [k: string]: any;
 }

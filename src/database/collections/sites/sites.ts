@@ -23,6 +23,7 @@ interface SiteMethods {
 	connect: () => Promise<any>;
 	addOrUpdateWpCredentials: (data: Record<string, unknown>) => Promise<WPCredentialsDocument>;
 	getWcApiUrl: () => string;
+	getWcposApiUrl: () => string;
 	getWpCredentials$: () => WPCredentialsDocumentsObservable;
 }
 
@@ -92,6 +93,13 @@ const methods: SiteMethods = {
 	 */
 	getWcApiUrl(this: SiteDocument) {
 		return `${this.wpApiUrl}wc/v3`;
+	},
+
+	/**
+	 *
+	 */
+	getWcposApiUrl(this: SiteDocument) {
+		return `${this.wpApiUrl}wcpos/v1`;
 	},
 
 	/**

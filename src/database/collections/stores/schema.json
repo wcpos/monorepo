@@ -9,6 +9,56 @@
 		},
 		"name": {
 			"type": "string"
+		},
+		"accounting": {
+			"type": "object",
+			"properties": {
+				"currency": {
+					"type": "object",
+					"properties": {
+						"decimal": {
+							"type": "string"
+						},
+						"format": {
+							"type": "object",
+							"properties": {
+								"neg": {
+									"type": "string"
+								},
+								"pos": {
+									"type": "string"
+								},
+								"zero": {
+									"type": "string"
+								}
+							}
+						},
+						"precision": {
+							"type": "number"
+						},
+						"symbol": {
+							"type": "string"
+						},
+						"thousand": {
+							"type": "string"
+						}
+					}
+				},
+				"number": {
+					"type": "object",
+					"properties": {
+						"decimal": {
+							"type": "string"
+						},
+						"precision": {
+							"type": "number"
+						},
+						"thousand": {
+							"type": "string"
+						}
+					}
+				}
+			}
 		}
 	}
 }
