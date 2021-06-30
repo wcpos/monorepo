@@ -100,7 +100,9 @@ const CommonTable = ({
 				</Table.Header.Row>
 			</Table.Header>
 			<Table.Body>
-				{({ item }: { item: any }) => <Row item={item} columns={columns} cells={cells} />}
+				{({ item }: { item: any }) => (
+					<Row item={item} columns={columns} cells={cells} setQuery={setQuery} />
+				)}
 			</Table.Body>
 		</Table>
 	);

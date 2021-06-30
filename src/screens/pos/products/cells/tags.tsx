@@ -3,19 +3,21 @@ import Tag from '@wcpos/common/src/components/tag';
 
 type ProductTagsProps = {
 	item: import('@wcpos/common/src/database').ProductDocument;
+	setQuery?: any;
 };
 
-const ProductTags = ({ item: product }: ProductTagsProps) => {
-	// const { query, setQuery } = React.useContext(ProductQueryContext);
+const ProductTags = ({ item: product, setQuery }: ProductTagsProps) => {
 	const { tags } = product;
 
 	/**
 	 *
 	 */
-	const handleSelectTag = React.useCallback((tag: any) => {
-		// query.filter.tags = [tag];
-		// setQuery({ ...query });
-	}, []);
+	const handleSelectTag = React.useCallback(
+		(tag: any) => {
+			setQuery((prev: any) => ({ ...prev, tag }));
+		},
+		[setQuery]
+	);
 
 	/**
 	 *

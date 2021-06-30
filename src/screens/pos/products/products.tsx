@@ -7,11 +7,13 @@ import {
 	catchError,
 	distinctUntilChanged,
 	share,
-	map,
 } from 'rxjs/operators';
 import { Observable } from 'rxjs';
 import { useTranslation } from 'react-i18next';
-import forEach from 'lodash/forEach';
+import get from 'lodash/get';
+import filter from 'lodash/filter';
+import sortBy from 'lodash/sortBy';
+import map from 'lodash/map';
 import Segment from '@wcpos/common/src/components/segment';
 import Search from '@wcpos/common/src/components/search';
 import Text from '@wcpos/common/src/components/text';
@@ -26,7 +28,8 @@ interface QueryState {
 	search: string;
 	sortBy: string;
 	sortDirection: SortDirection;
-	filter: any;
+	category: any;
+	tag: any;
 }
 interface POSProductsProps {
 	ui: any;
@@ -50,10 +53,8 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 		search: '',
 		sortBy: 'name',
 		sortDirection: 'asc',
-		filter: {
-			categories: [],
-			tags: [],
-		},
+		category: null,
+		tag: null,
 	});
 
 	const onSearch = React.useCallback(
@@ -76,12 +77,14 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 						name: { $regex: regexp },
 						// categories: { $elemMatch: { id: 20 } },
 					};
-					forEach(q.filter, (value, key) => {
-						if (value.length > 0) {
-							// @ts-ignore
-							selector[key] = { $elemMatch: { id: value[0].id } };
-						}
-					});
+					if (query.category) {
+						// @ts-ignore
+						selector.categories = { $elemMatch: { id: query.category.id } };
+					}
+					if (query.tag) {
+						// @ts-ignore
+						selector.tags = { $elemMatch: { id: query.tag.id } };
+					}
 					const RxQuery = storeDB.collections.products
 						.find({ selector })
 						.sort({ [q.sortBy]: q.sortDirection });
@@ -94,6 +97,45 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 			),
 		[query]
 	) as Observable<ProductDocument[]>;
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		storeDB.collections.products.pouch
+			.find({
+				selector: {},
+				// @ts-ignore
+				fields: ['_id', 'id', 'dateCreatedGmt'],
+			})
+			.then((result: any) => {
+				// get array of sorted records with dateCreatedGmt
+				const filtered = filter(result.docs, 'dateCreatedGmt');
+				const sorted = sortBy(filtered, 'dateCreatedGmt');
+				const exclude = map(sorted, 'id');
+
+				const replicationState = storeDB.collections.products.syncRestApi({
+					live: false,
+					autoStart: false,
+					pull: {
+						queryBuilder: (lastModified: any) => {
+							const orderby = query.sortBy === 'name' ? 'title' : query.sortBy;
+							return {
+								order: query.sortDirection,
+								orderby,
+								exclude,
+								category: get(query.category, 'id'),
+								tag: get(query.tag, 'id'),
+							};
+						},
+					},
+				});
+				replicationState.run(false);
+			})
+			.catch((err: any) => {
+				console.log(err);
+			});
+	}, [query]);
 
 	return (
 		<Segment.Group>
