@@ -68,7 +68,7 @@ export function syncRestApiCollection(
 
 		// trigger run once
 		replicationState.run();
-
+		debugger;
 		// start sync-interval
 		if (replicationState.live) {
 			if (pull) {

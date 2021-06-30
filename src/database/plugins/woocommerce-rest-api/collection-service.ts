@@ -153,13 +153,12 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 
 		// get last date_modified_gmt
 		const lastModified = await this.collection.findOne().sort({ dateModifiedGmt: 'desc' }).exec();
+		const params = await this.pull.queryBuilder(lastModified);
 
 		let result;
 		try {
 			result = await this.collection.database.httpClient.get(this.collection.name, {
-				params: {
-					date_modified_gmt_after: lastModified.dateModifiedGmt,
-				},
+				params,
 			});
 			// if (result.errors) {
 			// 	if (typeof result.errors === 'string') {

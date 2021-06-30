@@ -14,12 +14,14 @@ export type RxDBRestApiReplicationQueryBuilder = (
 export interface RestApiSyncPullOptions {
 	queryBuilder: RxDBRestApiReplicationQueryBuilder;
 	modifier?: (doc: any) => Promise<any> | any;
+	query?: any;
 }
 
 export interface RestApiSyncPushOptions {
 	queryBuilder: RxDBRestApiReplicationQueryBuilder;
 	modifier?: (doc: any) => Promise<any> | any;
 	batchSize?: number;
+	query?: any;
 }
 
 export type SyncOptionsRestApi = {
