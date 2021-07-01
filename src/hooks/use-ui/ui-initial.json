@@ -52,18 +52,27 @@
 		"sortBy": "name",
 		"sortDirection": "asc",
 		"columns": [
-			{ "key": "image", "width": "15%", "disableSort": true, "order": 1, "flexShrink": 0 },
-			{ "key": "id", "order": 2, "width": "50px", "flexShrink": 0 },
+			{
+				"key": "image",
+				"width": "15%",
+				"disableSort": true,
+				"order": 1,
+				"flexShrink": 0,
+				"hideLabel": true
+			},
+			{ "key": "id", "order": 2, "width": "50px", "flexShrink": 0, "hide": true },
 			{ "key": "name", "width": "30%", "order": 3 },
-			{ "key": "sku", "order": 4, "width": "80px", "flexShrink": 0 },
+			{ "key": "sku", "order": 4, "width": "80px", "flexShrink": 0, "hide": true },
 			{ "key": "categories", "width": "20%", "order": 5 },
-			{ "key": "tags", "width": "20%", "order": 6 },
+			{ "key": "tags", "width": "20%", "order": 6, "hide": true },
 			{ "key": "regularPrice", "width": "100px", "order": 7 },
 			{ "key": "salePrice", "width": "100px", "order": 8 },
+			{ "key": "dateCreated", "width": "100px", "order": 9, "hide": true },
+			{ "key": "dateModified", "width": "100px", "order": 10, "hide": true },
 			{
 				"key": "actions",
 				"disableSort": true,
-				"order": 9,
+				"order": 11,
 				"width": "38px",
 				"flexShrink": 0,
 				"hideLabel": true
