@@ -1,7 +1,7 @@
 import image from './image';
 import name from './name';
-import categories from './categories';
-import tags from './tags';
+import categories from '../../common/product-categories';
+import tags from '../../common/product-tags';
 import regularPrice from './regular-price';
 import actions from './actions';
 

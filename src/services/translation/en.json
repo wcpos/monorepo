@@ -82,6 +82,7 @@
 					"actions": "Actions",
 					"customer": "Customer",
 					"dateCreated": "Created",
+					"dateModified": "Modified",
 					"id": "ID",
 					"image": "Image",
 					"name": "Product",

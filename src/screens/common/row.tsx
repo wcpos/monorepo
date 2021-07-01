@@ -27,7 +27,10 @@ interface CommonRowProps {
 	setQuery: any;
 }
 
-const DefaultCell = () => <Text>No cell component</Text>;
+// @ts-ignore
+const DefaultCell = ({ item, column }) => {
+	return <Text>{String(item[column.key])}</Text>;
+};
 
 /**
  *

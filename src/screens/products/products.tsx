@@ -1,25 +1,15 @@
 import * as React from 'react';
 import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
-import {
-	switchMap,
-	tap,
-	debounceTime,
-	catchError,
-	distinctUntilChanged,
-	share,
-	map,
-} from 'rxjs/operators';
+import { switchMap, tap, catchError } from 'rxjs/operators';
 import { Observable } from 'rxjs';
-import _map from 'lodash/map';
-import _findIndex from 'lodash/findIndex';
-import _pullAt from 'lodash/pullAt';
+import get from 'lodash/get';
+import filter from 'lodash/filter';
+import sortBy from 'lodash/sortBy';
+import map from 'lodash/map';
 import Segment from '@wcpos/common/src/components/segment';
 import Text from '@wcpos/common/src/components/text';
-import Button from '@wcpos/common/src/components/button';
-import Dialog from '@wcpos/common/src/components/dialog';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
-import useAuthLogin from '@wcpos/common/src/hooks/use-auth-login';
 import Search from '@wcpos/common/src/components/search';
 import Table from '../common/table';
 import UiSettings from '../common/ui-settings';
@@ -32,6 +22,8 @@ interface QueryState {
 	search: string;
 	sortBy: string;
 	sortDirection: SortDirection;
+	category: any;
+	tag: any;
 }
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
@@ -45,10 +37,15 @@ const Products = () => {
 	const [isSyncing, setIsSyncing] = React.useState<boolean>(false);
 	const [recordsShowing, setRecordsShowing] = React.useState<number>(0);
 
+	/**
+	 *
+	 */
 	const [query, setQuery] = React.useState<QueryState>({
 		search: '',
 		sortBy: 'name',
 		sortDirection: 'asc',
+		category: null,
+		tag: null,
 	});
 
 	const onSearch = React.useCallback(
@@ -74,13 +71,21 @@ const Products = () => {
 				}),
 				switchMap(([q]) => {
 					const regexp = new RegExp(escape(q.search), 'i');
-					const RxQuery = storeDB.collections.products
-						.find({
-							selector: {
-								name: { $regex: regexp },
-							},
-						})
+					const selector = {
+						name: { $regex: regexp },
+						// categories: { $elemMatch: { id: 20 } },
+					};
+					if (q.category) {
 						// @ts-ignore
+						selector.categories = { $elemMatch: { id: q.category.id } };
+					}
+					if (q.tag) {
+						// @ts-ignore
+						selector.tags = { $elemMatch: { id: q.tag.id } };
+					}
+
+					const RxQuery = storeDB.collections.products
+						.find({ selector })
 						.sort({ [q.sortBy]: q.sortDirection });
 					return RxQuery.$;
 				}),
@@ -96,17 +101,89 @@ const Products = () => {
 	) as Observable<ProductDocument[]>;
 
 	// first render
+	// React.useEffect(() => {
+	// 	// @ts-ignore
+	// 	storeDB.httpClient
+	// 		.get('products', {
+	// 			params: { fields: ['id', 'name'], posts_per_page: -1 },
+	// 		})
+	// 		.then((result: any) => {
+	// 			// @ts-ignore
+	// 			storeDB.collections.products.auditIdsFromServer(result.data);
+	// 		});
+	// }, []);
+
+	/**
+	 *
+	 */
 	React.useEffect(() => {
-		// @ts-ignore
-		storeDB.httpClient
-			.get('products', {
-				params: { fields: ['id', 'name'], posts_per_page: -1 },
+		storeDB.collections.products.pouch
+			.find({
+				selector: {},
+				// @ts-ignore
+				fields: ['_id', 'id', 'dateCreatedGmt'],
 			})
 			.then((result: any) => {
+				// get array of sorted records with dateCreatedGmt
+				const filtered = filter(result.docs, 'dateCreatedGmt');
+				const sorted = sortBy(filtered, 'dateCreatedGmt');
+				const exclude = map(sorted, 'id').join(',');
+
 				// @ts-ignore
-				storeDB.collections.products.auditIdsFromServer(result.data);
+				const replicationState = storeDB.collections.products.syncRestApi({
+					live: false,
+					autoStart: false,
+					pull: {
+						queryBuilder: (lastModified: any) => {
+							const orderbyMap = {
+								name: 'title',
+								dateCreated: 'date',
+							};
+							// @ts-ignore
+							const orderby = orderbyMap[query.sortBy] ? orderbyMap[query.sortBy] : query.sortBy;
+							return {
+								search: escape(query.search),
+								order: query.sortDirection,
+								orderby,
+								exclude,
+								category: get(query.category, 'id'),
+								tag: get(query.tag, 'id'),
+							};
+						},
+					},
+				});
+				replicationState.run(false);
+			})
+			.catch((err: any) => {
+				console.log(err);
 			});
-	}, []);
+	}, [query]);
+
+	/**
+	 *
+	 */
+	const filters = React.useMemo(() => {
+		const f = [];
+		if (query.category) {
+			f.push({
+				label: query.category.name,
+				onRemove: () => {
+					const category = undefined;
+					setQuery({ ...query, category });
+				},
+			});
+		}
+		if (query.tag) {
+			f.push({
+				label: query.tag.name,
+				onRemove: () => {
+					const tag = undefined;
+					setQuery({ ...query, tag });
+				},
+			});
+		}
+		return f;
+	}, [query]);
 
 	return (
 		<Styled.Container>
@@ -118,6 +195,7 @@ const Products = () => {
 						value={query.search}
 						onSearch={onSearch}
 						actions={[<UiSettings ui={ui} />]}
+						filters={filters}
 					/>
 				</Segment>
 				<Segment grow>

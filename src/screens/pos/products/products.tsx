@@ -49,6 +49,9 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 	const [isSyncing, setIsSyncing] = React.useState<boolean>(false);
 	const [recordsShowing, setRecordsShowing] = React.useState<number>(0);
 
+	/**
+	 *
+	 */
 	const [query, setQuery] = React.useState<QueryState>({
 		search: '',
 		sortBy: 'name',
@@ -57,6 +60,9 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 		tag: null,
 	});
 
+	/**
+	 *
+	 */
 	const onSearch = React.useCallback(
 		(search: string) => {
 			setQuery({ ...query, search });
@@ -64,6 +70,9 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 		[query]
 	);
 
+	/**
+	 *
+	 */
 	const products$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
@@ -71,20 +80,20 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 				debounceTime(150),
 				// @ts-ignore
 				switchMap(([q]) => {
-					console.log(q);
 					const regexp = new RegExp(escape(q.search), 'i');
 					const selector = {
 						name: { $regex: regexp },
 						// categories: { $elemMatch: { id: 20 } },
 					};
-					if (query.category) {
+					if (q.category) {
 						// @ts-ignore
-						selector.categories = { $elemMatch: { id: query.category.id } };
+						selector.categories = { $elemMatch: { id: q.category.id } };
 					}
-					if (query.tag) {
+					if (q.tag) {
 						// @ts-ignore
-						selector.tags = { $elemMatch: { id: query.tag.id } };
+						selector.tags = { $elemMatch: { id: q.tag.id } };
 					}
+
 					const RxQuery = storeDB.collections.products
 						.find({ selector })
 						.sort({ [q.sortBy]: q.sortDirection });
@@ -101,6 +110,32 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 	/**
 	 *
 	 */
+	const filters = React.useMemo(() => {
+		const f = [];
+		if (query.category) {
+			f.push({
+				label: query.category.name,
+				onRemove: () => {
+					const category = undefined;
+					setQuery({ ...query, category });
+				},
+			});
+		}
+		if (query.tag) {
+			f.push({
+				label: query.tag.name,
+				onRemove: () => {
+					const tag = undefined;
+					setQuery({ ...query, tag });
+				},
+			});
+		}
+		return f;
+	}, [query]);
+
+	/**
+	 *
+	 */
 	React.useEffect(() => {
 		storeDB.collections.products.pouch
 			.find({
@@ -112,7 +147,7 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 				// get array of sorted records with dateCreatedGmt
 				const filtered = filter(result.docs, 'dateCreatedGmt');
 				const sorted = sortBy(filtered, 'dateCreatedGmt');
-				const exclude = map(sorted, 'id');
+				const exclude = map(sorted, 'id').join(',');
 
 				const replicationState = storeDB.collections.products.syncRestApi({
 					live: false,
@@ -146,6 +181,7 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 					value={query.search}
 					onSearch={onSearch}
 					actions={[<UiSettings ui={ui} />]}
+					filters={filters}
 				/>
 			</Segment>
 			<Segment grow>
