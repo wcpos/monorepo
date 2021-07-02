@@ -27,6 +27,7 @@ export interface IAppStateProps {
 	site?: SiteDocument;
 	wpUser?: WPCredentialsDocument;
 	storeDB?: StoreDatabase;
+	storeID?: string;
 	setLastUser: (id: string, site: SiteDocument, wpUser: WPCredentialsDocument) => Promise<void>;
 	unsetLastUser: () => Promise<void>;
 }
@@ -52,7 +53,7 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 	const online = useOnline();
 	const { user, setUser, userDB } = useUser();
 	const theme = getTheme('default', 'dark');
-	const { site, wpUser, storeDB, setLastUser, unsetLastUser, ready } = useLastUser();
+	const { site, wpUser, storeDB, storeID, setLastUser, unsetLastUser, ready } = useLastUser();
 
 	const value = {
 		info,
@@ -64,6 +65,7 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 		site,
 		wpUser,
 		storeDB,
+		storeID,
 		setLastUser,
 		unsetLastUser,
 	};
