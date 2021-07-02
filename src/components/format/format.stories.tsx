@@ -1,19 +1,38 @@
 import * as React from 'react';
 
-import Format from '.';
+import Format, {
+	FormatAddressProps,
+	FormatListProps,
+	FormatNameProps,
+	FormatNumberProps,
+	FormatDateProps,
+} from '.';
 
 export default {
 	title: 'Components/Format',
+	component: Format,
+	subcomponents: [Format.Name, Format.Number, Format.List, Format.Address, Format.Date],
 };
 
-export const name = () => <Format.Name firstName="Bob" lastName="Doe" />;
+export const _Name = (props: FormatNameProps) => <Format.Name {...props} />;
+_Name.args = {
+	firstName: 'Bob',
+	lastName: 'Doe',
+};
 
-export const number = () => <Format.Number prefix="$">3.99</Format.Number>;
+export const _Number = (props: FormatNumberProps) => <Format.Number {...props}>3.99</Format.Number>;
+_Number.args = {
+	prefix: '$',
+};
 
-export const list = () => <Format.List array={['one', 'two', 'three']} />;
+export const _List = (props: FormatListProps) => <Format.List {...props} />;
+_List.args = {
+	array: ['one', 'two', 'three'],
+};
 
-export const address_1 = () => {
-	const address = {
+export const _Address = (props: FormatAddressProps) => <Format.Address {...props} />;
+_Address.args = {
+	address: {
 		first_name: 'John',
 		last_name: 'Doe',
 		company: 'ACME Inc.',
@@ -23,6 +42,10 @@ export const address_1 = () => {
 		state: 'CA',
 		postcode: '94103',
 		country: 'US',
-	};
-	return <Format.Address address={address} />;
+	},
+};
+
+export const _Date = (props: FormatDateProps) => <Format.Date {...props} />;
+_Date.args = {
+	value: '2017-03-23T20:01:14',
 };

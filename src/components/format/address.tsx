@@ -59,7 +59,7 @@ type Template = Address & {
 	city_upper?: string;
 };
 
-interface Props {
+export interface FormatAddressProps {
 	address: Address;
 	showName: boolean;
 }
@@ -103,7 +103,7 @@ const addresses = {
 	VN: '{name}\n{company}\n{address_1}\n{city}\n{country}',
 };
 
-const Address = ({ address, showName }: Props) => {
+export const FormatAddress = ({ address, showName }: FormatAddressProps) => {
 	const addr = { ...address } as Template; // clone address
 	let template =
 		addr.country && addresses.hasOwnProperty(addr.country)
@@ -135,5 +135,3 @@ const Address = ({ address, showName }: Props) => {
 		</View>
 	);
 };
-
-export default Address;

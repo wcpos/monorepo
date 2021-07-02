@@ -1,16 +1,15 @@
-import React, { Fragment } from 'react';
+import * as React from 'react';
+import Text from '../text';
 
-interface Props {
+export interface FormatNameProps {
 	firstName?: string;
 	lastName?: string;
 }
 
-const Name = ({ firstName, lastName }: Props) => {
+export const FormatName = ({ firstName, lastName }: FormatNameProps) => {
 	return (
-		<Fragment>
+		<Text>
 			{firstName} {lastName}
-		</Fragment>
+		</Text>
 	);
 };
-
-export default Name;

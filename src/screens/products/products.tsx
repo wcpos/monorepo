@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
-import { switchMap, tap, catchError } from 'rxjs/operators';
+import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import { Observable } from 'rxjs';
-import get from 'lodash/get';
-import filter from 'lodash/filter';
-import sortBy from 'lodash/sortBy';
-import map from 'lodash/map';
+import _get from 'lodash/get';
+import _filter from 'lodash/filter';
+import _sortBy from 'lodash/sortBy';
+import _flatten from 'lodash/flatten';
+import _map from 'lodash/map';
 import Segment from '@wcpos/common/src/components/segment';
 import Text from '@wcpos/common/src/components/text';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
@@ -84,9 +85,12 @@ const Products = () => {
 						selector.tags = { $elemMatch: { id: q.tag.id } };
 					}
 
-					const RxQuery = storeDB.collections.products
-						.find({ selector })
-						.sort({ [q.sortBy]: q.sortDirection });
+					const RxQuery = storeDB.collections.products.find({ selector });
+					const indexes = _flatten(storeDB.collections.products.schema.indexes);
+					if (indexes.includes(q.sortBy)) {
+						const sortedRxQuery = RxQuery.sort({ [q.sortBy]: q.sortDirection });
+						return sortedRxQuery.$;
+					}
 					return RxQuery.$;
 				}),
 				tap((records) => {
@@ -125,9 +129,9 @@ const Products = () => {
 			})
 			.then((result: any) => {
 				// get array of sorted records with dateCreatedGmt
-				const filtered = filter(result.docs, 'dateCreatedGmt');
-				const sorted = sortBy(filtered, 'dateCreatedGmt');
-				const exclude = map(sorted, 'id').join(',');
+				const filtered = _filter(result.docs, 'dateCreatedGmt');
+				const sorted = _sortBy(filtered, 'dateCreatedGmt');
+				const exclude = _map(sorted, 'id').join(',');
 
 				// @ts-ignore
 				const replicationState = storeDB.collections.products.syncRestApi({
@@ -146,8 +150,8 @@ const Products = () => {
 								order: query.sortDirection,
 								orderby,
 								exclude,
-								category: get(query.category, 'id'),
-								tag: get(query.tag, 'id'),
+								category: _get(query.category, 'id'),
+								tag: _get(query.tag, 'id'),
 							};
 						},
 					},
@@ -200,6 +204,7 @@ const Products = () => {
 				</Segment>
 				<Segment grow>
 					<Table
+						collection={storeDB.collections.products}
 						collectionName="products"
 						columns={columns}
 						data$={products$}

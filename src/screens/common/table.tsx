@@ -2,6 +2,8 @@ import * as React from 'react';
 import { Observable } from 'rxjs';
 import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
+import _flatten from 'lodash/flatten';
+import _orderBy from 'lodash/orderBy';
 import Table from '@wcpos/common/src/components/table';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Row, { CellsProp, ItemProp, ColumnProps } from './row';
@@ -10,6 +12,7 @@ type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
 
 interface CommonTableProps {
+	collection?: any;
 	collectionName: 'products' | 'customers' | 'orders';
 	columns: ColumnProps[];
 	data$: Observable<ItemProp[]>;
@@ -26,6 +29,7 @@ type GetHeaderCellPropsFunction =
  *
  */
 const CommonTable = ({
+	collection,
 	collectionName,
 	columns,
 	data$,
@@ -46,27 +50,31 @@ const CommonTable = ({
 		[setQuery]
 	);
 
-	// const handleVieweableItemsChanged = React.useCallback(({ changed }) => {
-	// 	forEach(changed, ({ item, isViewable }) => {
-	// 		if (isViewable && !item.isSynced() && !syncingCustomers.current.includes(item.id)) {
-	// 			syncingCustomers.current.push(item.id);
-	// 			const replicationState = item.syncRestApi({
-	// 				pull: {},
-	// 			});
-	// 			replicationState.run(false);
-	// 		}
-	// 	});
-	// }, []);
+	/**
+	 * maybe in memory sort
+	 */
+	const maybeSortedData = React.useMemo(() => {
+		const indexes = _flatten(collection.schema.indexes);
+		if (!indexes.includes(_sortBy)) {
+			return _orderBy(data, [_sortBy], [_sortDirection]);
+		}
+		return data;
+	}, [_sortBy, _sortDirection, collection.schema.indexes, data]);
 
-	// const getItemLayout = React.useCallback(
-	// 	(data, index) => ({ length: 100, offset: 100 * index, index }),
-	// 	[]
-	// );
+	/**
+	 *
+	 */
+	const getItemLayout = React.useCallback(
+		(d, index) => ({ length: 100, offset: 100 * index, index }),
+		[]
+	);
 
 	useWhyDidYouUpdate('Common Table', {
+		collection,
 		collectionName,
 		columns,
 		data,
+		maybeSortedData,
 		setQuery,
 		_sortBy,
 		_sortDirection,
@@ -78,14 +86,14 @@ const CommonTable = ({
 	return (
 		<Table
 			columns={columns}
-			data={data}
+			data={maybeSortedData}
 			sort={handleSort}
 			sortBy={_sortBy}
 			sortDirection={_sortDirection}
 			// // @ts-ignore
 			// onViewableItemsChanged={handleVieweableItemsChanged}
-			// // @ts-ignore
-			// getItemLayout={getItemLayout}
+			// @ts-ignore
+			getItemLayout={getItemLayout}
 		>
 			<Table.Header>
 				<Table.Header.Row>

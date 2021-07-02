@@ -1,19 +1,17 @@
-import React, { Fragment, ReactNode } from 'react';
+import * as React from 'react';
 import Text from '../text';
 
-interface Props {
-	children: ReactNode;
+export interface FormatNumberProps {
+	children: React.ReactNode;
 	prefix?: string;
 	suffix?: string;
 	decimalSeparator?: string;
 }
 
-const Name = ({ children, prefix, suffix }: Props) => {
+export const FormatNumber = ({ children, prefix, suffix }: FormatNumberProps) => {
 	return (
 		<Text>
 			{prefix} {children} {suffix}
 		</Text>
 	);
 };
-
-export default Name;

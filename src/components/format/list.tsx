@@ -1,22 +1,19 @@
-import React, { Fragment } from 'react';
+import * as React from 'react';
 import Text from '../text';
 
-interface Props {
+export interface FormatListProps {
 	array?: [];
 }
 
-const List = ({ array }: Props) => {
+export const FormatList = ({ array }: FormatListProps) => {
 	return (
-		<Fragment>
+		<>
 			{array?.map((item, index) => {
 				if (typeof item === 'string') {
 					return <Text>{item}, </Text>;
-				} else {
-					return item;
 				}
+				return item;
 			})}
-		</Fragment>
+		</>
 	);
 };
-
-export default List;

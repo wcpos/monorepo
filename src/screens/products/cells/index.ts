@@ -4,6 +4,7 @@ import categories from '../../common/product-categories';
 import tags from '../../common/product-tags';
 import regularPrice from './regular-price';
 import actions from './actions';
+import dateCreated from '../../common/date';
 
 export default {
 	image,
@@ -12,4 +13,5 @@ export default {
 	tags,
 	regularPrice,
 	actions,
+	dateCreated,
 };

@@ -23,7 +23,7 @@ const linking = {
 	prefixes: [prefixes],
 	config: {
 		screens: {
-			Auth: 'connect',
+			Auth: 'login',
 			Main: {
 				path: '',
 				screens: {
