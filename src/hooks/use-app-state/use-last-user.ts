@@ -13,6 +13,7 @@ export interface LastUser {
 	site?: SiteDocument;
 	wpUser?: WPCredentialsDocument;
 	storeDB?: StoreDatabase;
+	storeID?: string;
 }
 
 /**
@@ -45,6 +46,7 @@ export function useLastUser() {
 						site,
 						wpUser,
 						storeDB,
+						storeID,
 					});
 				}
 			}
@@ -72,6 +74,7 @@ export function useLastUser() {
 			site,
 			wpUser,
 			storeDB,
+			storeID: id,
 		});
 	}
 
@@ -89,6 +92,7 @@ export function useLastUser() {
 		site: lastUser?.site,
 		wpUser: lastUser?.wpUser,
 		storeDB: lastUser?.storeDB,
+		storeID: lastUser?.storeID,
 		setLastUser,
 		unsetLastUser,
 		ready,

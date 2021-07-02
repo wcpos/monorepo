@@ -3,6 +3,7 @@ import { FormatNumber, FormatNumberProps } from './number';
 import { FormatList, FormatListProps } from './list';
 import { FormatAddress, FormatAddressProps } from './address';
 import FormatDate, { FormatDateProps } from './date';
+import FormatCurrency, { FormatCurrencyProps } from './currency';
 
 export type {
 	FormatNameProps,
@@ -10,6 +11,7 @@ export type {
 	FormatListProps,
 	FormatAddressProps,
 	FormatDateProps,
+	FormatCurrencyProps,
 };
 export default {
 	Name: FormatName,
@@ -17,4 +19,5 @@ export default {
 	List: FormatList,
 	Address: FormatAddress,
 	Date: FormatDate,
+	Currency: FormatCurrency,
 };
