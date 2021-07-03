@@ -152,8 +152,9 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 		}
 
 		// get last date_modified_gmt
-		const lastModified = await this.collection.findOne().sort({ dateModifiedGmt: 'desc' }).exec();
-		const params = await this.pull.queryBuilder(lastModified);
+		// note: getting last date_modified_gmt required an index using this method
+		// const lastModified = await this.collection.findOne().sort({ dateModifiedGmt: 'desc' }).exec();
+		const params = await this.pull.queryBuilder('');
 
 		let result;
 		try {
