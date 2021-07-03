@@ -1,8 +1,26 @@
 import * as React from 'react';
 import { View, Text } from 'react-native';
 import { Observable } from 'rxjs';
-import { useObservableState, useObservable, useObservableSuspense } from 'observable-hooks';
-import { switchMap, tap, throttleTime, catchError, distinctUntilChanged } from 'rxjs/operators';
+import {
+	useObservableState,
+	useObservable,
+	useObservableSuspense,
+	useSubscription,
+} from 'observable-hooks';
+import {
+	switchMap,
+	tap,
+	throttleTime,
+	catchError,
+	distinctUntilChanged,
+	shareReplay,
+	first,
+} from 'rxjs/operators';
+import _get from 'lodash/get';
+import _filter from 'lodash/filter';
+import _sortBy from 'lodash/sortBy';
+import _flatten from 'lodash/flatten';
+import _map from 'lodash/map';
 import Segment from '@wcpos/common/src/components/segment';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
@@ -67,7 +85,7 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 									{ firstName: { $regex: regexp } },
 									{ lastName: { $regex: regexp } },
 								],
-								$and: [{ [q.sortBy]: { $exists: false } }],
+								// $and: [{ [q.sortBy]: { $exists: false } }],
 							},
 						})
 						// @ts-ignore
@@ -83,7 +101,83 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 		[query]
 	) as Observable<CustomerDocument[]>;
 
-	// const customers = useObservableState(customers$, []);
+	const sharedCustomers$ = customers$.pipe(shareReplay(1));
+	const subscription = useSubscription(sharedCustomers$.pipe(first()), (result) => {
+		// if first and empty
+		if (result.length === 0) {
+			// @ts-ignore
+			storeDB.httpClient
+				.get('customers', {
+					params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: -1 },
+				})
+				.then(({ data }: any) => {
+					// @ts-ignore
+					return storeDB.collections.customers.auditIdsFromServer(data);
+				})
+				.catch((err: any) => {
+					if (err && err.response && err.response.status === 401) {
+						// @ts-ignore
+						navigation.navigate('Modal', { login: true });
+					}
+					console.warn(err);
+				});
+		}
+	});
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		storeDB.collections.customers.pouch
+			.find({
+				selector: {},
+				// @ts-ignore
+				fields: ['_id', 'id', 'dateCreatedGmt'],
+			})
+			.then((result: any) => {
+				// get array of sorted records with dateCreatedGmt
+				const filtered = _filter(result.docs, 'dateCreatedGmt');
+				const sorted = _sortBy(filtered, 'dateCreatedGmt');
+				const exclude = _map(sorted, 'id').join(',');
+
+				// @ts-ignore
+				const replicationState = storeDB.collections.customers.syncRestApi({
+					live: false,
+					autoStart: false,
+					pull: {
+						queryBuilder: (lastModified: any) => {
+							const orderbyMap = {
+								lastName: 'meta_value',
+								firstName: 'meta_value',
+							};
+
+							const metaKeyMap = {
+								lastName: 'last_name',
+								firstName: 'first_name',
+							};
+
+							// @ts-ignore
+							const orderby = orderbyMap[query.sortBy] ? orderbyMap[query.sortBy] : query.sortBy;
+							// @ts-ignore
+							const meta_key = metaKeyMap[query.sortBy] ? metaKeyMap[query.sortBy] : undefined;
+
+							return {
+								search: escape(query.search),
+								order: query.sortDirection,
+								orderby,
+								exclude,
+								meta_key,
+							};
+						},
+					},
+				});
+
+				replicationState.run(false);
+			})
+			.catch((err: any) => {
+				console.log(err);
+			});
+	}, [query]);
 
 	useWhyDidYouUpdate('Customer Page', { customers$, query, ui, columns, storeDB, navigation });
 
@@ -110,38 +204,16 @@ const Customers = ({ navigation }: CustomersScreenProps) => {
 					</Segment>
 					<Segment grow>
 						<Table
-							collectionName="customers"
+							collection={storeDB.collections.customers}
 							columns={columns}
-							data$={customers$}
+							data$={sharedCustomers$}
 							setQuery={setQuery}
 							sortBy={query.sortBy}
 							sortDirection={query.sortDirection}
 							cells={cells}
 						/>
 					</Segment>
-					<Segment>
-						<Button
-							title="Fetch all ids"
-							onPress={async () => {
-								// @ts-ignore
-								const result = await storeDB.httpClient
-									.get('customers', {
-										params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: -1 },
-									})
-									.then(({ data }: any) => {
-										// @ts-ignore
-										return storeDB.collections.customers.auditIdsFromServer(data);
-									})
-									.catch((err: any) => {
-										if (err && err.response && err.response.status === 401) {
-											// @ts-ignore
-											navigation.navigate('Modal', { login: true });
-										}
-										console.warn(err);
-									});
-							}}
-						/>
-					</Segment>
+					<Segment />
 				</Segment.Group>
 			</React.Suspense>
 		</Styled.Container>

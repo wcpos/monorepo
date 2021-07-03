@@ -85,7 +85,7 @@ const Orders = () => {
 					</Segment>
 					<Segment grow>
 						<Table
-							collectionName="orders"
+							collection={storeDB.collections.orders}
 							columns={columns}
 							data$={orders$}
 							setQuery={setQuery}

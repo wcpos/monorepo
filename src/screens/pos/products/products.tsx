@@ -186,7 +186,7 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 			</Segment>
 			<Segment grow>
 				<Table
-					collectionName="products"
+					collection={storeDB.collections.products}
 					columns={columns}
 					data$={products$}
 					setQuery={setQuery}

@@ -7,7 +7,7 @@ interface Props {
 }
 
 export const FormattedDate = ({ item, column }: Props) => {
-	return <Format.Date value={item[column.key]} />;
+	return item[column.key] ? <Format.Date value={item[column.key]} /> : null;
 };
 
 export default FormattedDate;

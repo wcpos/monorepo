@@ -205,7 +205,6 @@ const Products = () => {
 				<Segment grow>
 					<Table
 						collection={storeDB.collections.products}
-						collectionName="products"
 						columns={columns}
 						data$={products$}
 						setQuery={setQuery}

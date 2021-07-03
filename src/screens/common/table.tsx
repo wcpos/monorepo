@@ -12,8 +12,7 @@ type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
 
 interface CommonTableProps {
-	collection?: any;
-	collectionName: 'products' | 'customers' | 'orders';
+	collection: any;
 	columns: ColumnProps[];
 	data$: Observable<ItemProp[]>;
 	setQuery: any;
@@ -30,7 +29,6 @@ type GetHeaderCellPropsFunction =
  */
 const CommonTable = ({
 	collection,
-	collectionName,
 	columns,
 	data$,
 	setQuery,
@@ -71,7 +69,6 @@ const CommonTable = ({
 
 	useWhyDidYouUpdate('Common Table', {
 		collection,
-		collectionName,
 		columns,
 		data,
 		maybeSortedData,
@@ -101,7 +98,7 @@ const CommonTable = ({
 						const { column } = getHeaderCellProps();
 						return (
 							<Table.Header.Row.Cell {...getHeaderCellProps()}>
-								{t(`${collectionName}.column.label.${column.key}`)}
+								{t(`${collection.name}.column.label.${column.key}`)}
 							</Table.Header.Row.Cell>
 						);
 					}}
