@@ -6,6 +6,7 @@ import _sumBy from 'lodash/sumBy';
 import _map from 'lodash/map';
 
 type OrderDocument = import('./orders').OrderDocument;
+type OrderCollection = import('./orders').OrderCollection;
 type ProductDocument = import('../products/products').ProductDocument;
 type LineItemDocument = import('../line-items').LineItemDocument;
 type LineItemCollection = import('../line-items').LineItemCollection;

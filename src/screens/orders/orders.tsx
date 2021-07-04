@@ -5,6 +5,7 @@ import { switchMap, tap, debounceTime, catchError, distinctUntilChanged } from '
 import { Observable } from 'rxjs';
 import Segment from '@wcpos/common/src/components/segment';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useDataObservable from '@wcpos/common/src/hooks/use-data-observable';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import Button from '@wcpos/common/src/components/button';
 import Search from '@wcpos/common/src/components/search';
@@ -27,48 +28,53 @@ const Orders = () => {
 	const { storeDB } = useAppState();
 	const ui = useObservableSuspense(useUIResource('orders'));
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
-
-	const [query, setQuery] = React.useState<QueryState>({
+	const { data$, query, setQuery } = useDataObservable('orders', {
 		search: '',
 		sortBy: 'dateCreatedGmt',
 		sortDirection: 'desc',
 	});
 
+	// const [query, setQuery] = React.useState<QueryState>({
+	// 	search: '',
+	// 	sortBy: 'dateCreatedGmt',
+	// 	sortDirection: 'desc',
+	// });
+
 	const onSearch = React.useCallback(
 		(search: string) => {
-			setQuery({ ...query, search });
+			setQuery((prev) => ({ ...prev, search }));
 		},
-		[query]
+		[setQuery]
 	);
 
 	if (!storeDB) {
 		throw Error('something went wrong');
 	}
 
-	const orders$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				distinctUntilChanged((a, b) => a[0] === b[0]),
-				debounceTime(150),
-				switchMap(([q]) => {
-					const regexp = new RegExp(escape(q.search), 'i');
-					const RxQuery = storeDB.collections.orders
-						.find({
-							selector: {
-								dateCreatedGmt: { $regex: regexp },
-							},
-						})
-						// @ts-ignore
-						.sort({ [q.sortBy]: q.sortDirection });
-					return RxQuery.$;
-				}),
-				catchError((err) => {
-					console.error(err);
-					return err;
-				})
-			),
-		[query]
-	) as Observable<OrderDocument[]>;
+	// const orders$ = useObservable(
+	// 	(inputs$) =>
+	// 		inputs$.pipe(
+	// 			distinctUntilChanged((a, b) => a[0] === b[0]),
+	// 			debounceTime(150),
+	// 			switchMap(([q]) => {
+	// 				const regexp = new RegExp(escape(q.search), 'i');
+	// 				const RxQuery = storeDB.collections.orders
+	// 					.find({
+	// 						selector: {
+	// 							dateCreatedGmt: { $regex: regexp },
+	// 						},
+	// 					})
+	// 					// @ts-ignore
+	// 					.sort({ [q.sortBy]: q.sortDirection });
+	// 				return RxQuery.$;
+	// 			}),
+	// 			catchError((err) => {
+	// 				console.error(err);
+	// 				return err;
+	// 			})
+	// 		),
+	// 	[query]
+	// ) as Observable<OrderDocument[]>;
 
 	return (
 		<Styled.Container>
@@ -87,7 +93,8 @@ const Orders = () => {
 						<Table
 							collection={storeDB.collections.orders}
 							columns={columns}
-							data$={orders$}
+							// @ts-ignore
+							data$={data$}
 							setQuery={setQuery}
 							sortBy={query.sortBy}
 							sortDirection={query.sortDirection}
