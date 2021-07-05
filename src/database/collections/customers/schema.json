@@ -169,12 +169,5 @@
 				}
 			}
 		}
-	},
-	"indexes": [
-		"firstName",
-		"lastName",
-		["firstName", "lastName"],
-		"billing.company",
-		"billing.phone"
-	]
+	}
 }

@@ -82,11 +82,7 @@ const POS = () => {
 		}
 	};
 
-	const orderQuery = storeDB.collections.orders
-		.find()
-		.where('status')
-		.eq('pending')
-		.sort({ dateCreatedGmt: 'desc' });
+	const orderQuery = storeDB.collections.orders.find().where('status').eq('pending');
 
 	const orders: OrderDocument[] = useObservableState(
 		orderQuery.$.pipe(

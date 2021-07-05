@@ -97,6 +97,5 @@
 				}
 			}
 		}
-	},
-	"indexes": ["name", "quantity", "sku", "price", "total"]
+	}
 }

@@ -71,23 +71,23 @@ async function preSave(
 /**
  *
  */
-async function preRemove(this: OrderCollection, order: OrderDocument) {
-	// remove all lineItems
-	if (isArray(order.lineItems) && order.lineItems.length > 0) {
-		const result = await this.collections().line_items.bulkRemove(order.lineItems);
-		console.log(result);
-	}
-	// remove all feeLines
-	if (isArray(order.feeLines) && order.feeLines.length > 0) {
-		const result = await this.collections().fee_lines.bulkRemove(order.feeLines);
-		console.log(result);
-	}
-	// remove all shippingLines
-	if (isArray(order.shippingLines) && order.shippingLines.length > 0) {
-		const result = await this.collections().shipping_lines.bulkRemove(order.shippingLines);
-		console.log(result);
-	}
-}
+// async function preRemove(this: OrderCollection, order: OrderDocument) {
+// 	// remove all lineItems
+// 	if (isArray(order.lineItems) && order.lineItems.length > 0) {
+// 		const result = await this.collections().line_items.bulkRemove(order.lineItems);
+// 		console.log(result);
+// 	}
+// 	// remove all feeLines
+// 	if (isArray(order.feeLines) && order.feeLines.length > 0) {
+// 		const result = await this.collections().fee_lines.bulkRemove(order.feeLines);
+// 		console.log(result);
+// 	}
+// 	// remove all shippingLines
+// 	if (isArray(order.shippingLines) && order.shippingLines.length > 0) {
+// 		const result = await this.collections().shipping_lines.bulkRemove(order.shippingLines);
+// 		console.log(result);
+// 	}
+// }
 
 /**
  *
@@ -112,10 +112,10 @@ export const orders = {
 				handle: preSave,
 				parallel: false,
 			},
-			preRemove: {
-				handle: preRemove,
-				parallel: false,
-			},
+			// preRemove: {
+			// 	handle: preRemove,
+			// 	parallel: false,
+			// },
 		},
 	},
 	// migrationStrategies: {},

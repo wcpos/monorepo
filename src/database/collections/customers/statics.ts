@@ -26,7 +26,8 @@ export default {
 				],
 				// $and: [{ [q.sortBy]: { $exists: false } }],
 			},
-		}).sort({ [query.sortBy]: query.sortDirection });
+		});
+		// }).sort({ [query.sortBy]: query.sortDirection });
 	},
 
 	/**

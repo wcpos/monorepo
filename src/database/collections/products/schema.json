@@ -388,6 +388,5 @@
 		"thumbnail": {
 			"type": "string"
 		}
-	},
-	"indexes": ["id", "name", "sku", "price", "regularPrice", "salePrice", "dateModifiedGmt"]
+	}
 }

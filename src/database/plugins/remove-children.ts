@@ -36,13 +36,15 @@ export default {
 				// bulk remove all children
 				const promises = map(hasChildren, (object, key) => {
 					const childCollection = get(collection, `database.collections.${object.ref}`);
-					if (childCollection) {
+					if (Array.isArray(plainData[key]) && childCollection) {
 						return childCollection.bulkRemove(plainData[key]);
 					}
 					return Promise.resolve();
 				});
 
-				return Promise.all(promises);
+				return Promise.all(promises).catch((err) => {
+					console.warn(err);
+				});
 			}, false);
 		},
 	},
