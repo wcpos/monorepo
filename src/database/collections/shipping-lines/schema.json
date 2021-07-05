@@ -66,6 +66,5 @@
 			}
 		}
 	},
-	"required": ["methodId"],
-	"indexes": ["methodTitle"]
+	"required": ["methodId"]
 }
