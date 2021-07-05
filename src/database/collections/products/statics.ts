@@ -1,8 +1,10 @@
 import _filter from 'lodash/filter';
 import _sortBy from 'lodash/sortBy';
 import _map from 'lodash/map';
+import _get from 'lodash/get';
+import _flatten from 'lodash/flatten';
 
-type CustomerCollection = import('.').CustomerCollection;
+type ProductCollection = import('.').ProductCollection;
 type QueryState =
 	import('@wcpos/common/src/hooks/use-data-observable/use-data-observable').QueryState;
 
@@ -15,24 +17,33 @@ export default {
 	/**
 	 *
 	 */
-	query(this: CustomerCollection, query: QueryState) {
+	query(this: ProductCollection, query: QueryState) {
 		const regexp = new RegExp(escape(query.search), 'i');
-		return this.find({
-			selector: {
-				$or: [
-					{ username: { $regex: regexp } },
-					{ firstName: { $regex: regexp } },
-					{ lastName: { $regex: regexp } },
-				],
-				// $and: [{ [q.sortBy]: { $exists: false } }],
-			},
-		}).sort({ [query.sortBy]: query.sortDirection });
+		const selector = {
+			name: { $regex: regexp },
+		};
+		if (_get(query, 'filters.category')) {
+			// @ts-ignore
+			selector.categories = { $elemMatch: { id: _get(query, 'filters.category.id') } };
+		}
+		if (_get(query, 'filters.tag')) {
+			// @ts-ignore
+			selector.tags = { $elemMatch: { id: _get(query, 'filters.tag.id') } };
+		}
+
+		const RxQuery = this.find({ selector });
+		const indexes = _flatten(this.schema.indexes);
+		if (indexes.includes(query.sortBy)) {
+			const sortedRxQuery = RxQuery.sort({ [query.sortBy]: query.sortDirection });
+			return sortedRxQuery;
+		}
+		return RxQuery;
 	},
 
 	/**
 	 *
 	 */
-	restApiQuery(this: CustomerCollection, query: QueryState) {
+	restApiQuery(this: ProductCollection, query: QueryState) {
 		this.pouch
 			.find({
 				selector: {},
@@ -52,26 +63,18 @@ export default {
 					pull: {
 						queryBuilder: (lastModified: any) => {
 							const orderbyMap = {
-								lastName: 'meta_value',
-								firstName: 'meta_value',
+								name: 'title',
+								dateCreated: 'date',
 							};
-
-							const metaKeyMap = {
-								lastName: 'last_name',
-								firstName: 'first_name',
-							};
-
 							// @ts-ignore
 							const orderby = orderbyMap[query.sortBy] ? orderbyMap[query.sortBy] : query.sortBy;
-							// @ts-ignore
-							const meta_key = metaKeyMap[query.sortBy] ? metaKeyMap[query.sortBy] : undefined;
-
 							return {
 								search: escape(query.search),
 								order: query.sortDirection,
 								orderby,
 								exclude,
-								meta_key,
+								category: _get(query, 'filters.category.id'),
+								tag: _get(query, 'filters.tag.id'),
 							};
 						},
 					},
@@ -87,10 +90,10 @@ export default {
 	/**
 	 *
 	 */
-	audit(this: CustomerCollection) {
+	audit(this: ProductCollection) {
 		return this.database.httpClient
-			.get('customers', {
-				params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: -1 },
+			.get('products', {
+				params: { fields: ['id', 'name'], posts_per_page: -1 },
 			})
 			.then(({ data }: any) => {
 				// @ts-ignore
