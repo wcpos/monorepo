@@ -1,5 +1,6 @@
 import * as React from 'react';
 import Tag from '@wcpos/common/src/components/tag';
+import set from 'lodash/set';
 
 interface ProductCategoriesProps {
 	item: import('@wcpos/common/src/database').ProductDocument;
@@ -14,7 +15,7 @@ const ProductCategories = ({ item: product, setQuery }: ProductCategoriesProps) 
 	 */
 	const handleSelectCategory = React.useCallback(
 		(category: any) => {
-			setQuery((prev: any) => ({ ...prev, category }));
+			setQuery((prev: any) => set({ ...prev }, 'filters.category', category));
 		},
 		[setQuery]
 	);

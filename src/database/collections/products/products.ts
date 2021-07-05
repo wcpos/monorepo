@@ -1,4 +1,5 @@
 import schema from './schema.json';
+import statics from './statics';
 
 export type ProductSchema = import('./interface').WooCommerceProductSchema;
 export type ProductDocument = import('rxdb').RxDocument<ProductSchema, ProductMethods>;
@@ -66,7 +67,7 @@ async function preSave(
 export const products = {
 	schema,
 	// pouchSettings: {},
-	// statics: {},
+	statics,
 	methods,
 	// attachments: {},
 	options: {

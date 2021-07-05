@@ -2,8 +2,8 @@ import * as React from 'react';
 import { View } from 'react-native';
 import find from 'lodash/find';
 import Text from '@wcpos/common/src/components/text';
-import Categories from './categories';
-import Tags from './tags';
+import Categories from '../../../common/product-categories';
+import Tags from '../../../common/product-tags';
 
 interface Props {
 	item: import('@wcpos/common/src/database').ProductDocument;
