@@ -34,12 +34,6 @@ const Orders = () => {
 		sortDirection: 'desc',
 	});
 
-	// const [query, setQuery] = React.useState<QueryState>({
-	// 	search: '',
-	// 	sortBy: 'dateCreatedGmt',
-	// 	sortDirection: 'desc',
-	// });
-
 	const onSearch = React.useCallback(
 		(search: string) => {
 			setQuery((prev) => ({ ...prev, search }));
@@ -50,31 +44,6 @@ const Orders = () => {
 	if (!storeDB) {
 		throw Error('something went wrong');
 	}
-
-	// const orders$ = useObservable(
-	// 	(inputs$) =>
-	// 		inputs$.pipe(
-	// 			distinctUntilChanged((a, b) => a[0] === b[0]),
-	// 			debounceTime(150),
-	// 			switchMap(([q]) => {
-	// 				const regexp = new RegExp(escape(q.search), 'i');
-	// 				const RxQuery = storeDB.collections.orders
-	// 					.find({
-	// 						selector: {
-	// 							dateCreatedGmt: { $regex: regexp },
-	// 						},
-	// 					})
-	// 					// @ts-ignore
-	// 					.sort({ [q.sortBy]: q.sortDirection });
-	// 				return RxQuery.$;
-	// 			}),
-	// 			catchError((err) => {
-	// 				console.error(err);
-	// 				return err;
-	// 			})
-	// 		),
-	// 	[query]
-	// ) as Observable<OrderDocument[]>;
 
 	return (
 		<Styled.Container>
@@ -101,29 +70,7 @@ const Orders = () => {
 							cells={cells}
 						/>
 					</Segment>
-					<Segment>
-						<Button
-							title="Fetch all ids"
-							onPress={async () => {
-								// @ts-ignore
-								const result = await storeDB.httpClient
-									.get('orders', {
-										params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: -1 },
-									})
-									.then(({ data }: any) => {
-										// @ts-ignore
-										return storeDB.collections.orders.auditIdsFromServer(data);
-									})
-									.catch((err: any) => {
-										if (err && err.response && err.response.status === 401) {
-											// @ts-ignore
-											navigation.navigate('Modal', { login: true });
-										}
-										console.warn(err);
-									});
-							}}
-						/>
-					</Segment>
+					<Segment />
 				</Segment.Group>
 			</React.Suspense>
 		</Styled.Container>
