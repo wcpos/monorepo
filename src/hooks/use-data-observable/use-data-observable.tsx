@@ -9,6 +9,7 @@ export interface QueryState {
 	search: string;
 	sortBy: string;
 	sortDirection: SortDirection;
+	filters?: Record<string, unknown>;
 }
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
