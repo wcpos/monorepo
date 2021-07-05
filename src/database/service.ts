@@ -23,6 +23,7 @@ import Platform from '@wcpos/common/src/lib/platform';
 import axios from 'axios';
 import difference from 'lodash/difference';
 import collectionsHelper from './plugins/utils/collections';
+import removeChildren from './plugins/remove-children';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
 import { userCollections, storeCollections } from './collections';
 import { config } from './adapter';
@@ -44,6 +45,7 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 addRxPlugin(collectionsHelper);
+addRxPlugin(removeChildren);
 addRxPlugin(RxDBAdapterCheckPlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
 // addRxPlugin(RxDBNoValidatePlugin);
