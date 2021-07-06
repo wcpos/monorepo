@@ -1,11 +1,10 @@
 import * as React from 'react';
 import { View, LayoutRectangle, StyleProp, ViewStyle } from 'react-native';
 import usePositionInAppProvider from '@wcpos/common/src/hooks/use-position-in-app';
-// import { TextWithOptionalIconAction } from '../../actions/actions';
 import { Item, ItemProps } from './item';
 import { PopoverPlacement } from './placements';
 import { PopoverView } from './view';
-// import { PopoverContext } from './context';
+import { PopoverContext } from './context';
 import Portal from '../portal';
 import Backdrop from '../backdrop';
 
@@ -150,25 +149,25 @@ export const Popover: React.FC<PopoverProps> & { Item: typeof Item } = ({
 			{activator}
 			{open && (
 				<Portal keyPrefix="Popover">
-					{/* <PopoverContext.Provider value={{ requestClose: onRequestClose }}> */}
-					<Backdrop
-						open
-						invisible={hideBackdrop}
-						clickThrough={clickThrough}
-						onPress={onRequestClose}
-					/>
-					<PopoverView
-						style={popoverStyle}
-						open
-						placement={placement}
-						matchWidth={matchWidth}
-						activatorLayout={activatorLayout ?? LAYOUT_ZERO}
-						aboveActivator={aboveActivator}
-						clickThrough={clickThrough}
-					>
-						{content}
-					</PopoverView>
-					{/* </PopoverContext.Provider> */}
+					<PopoverContext.Provider value={{ requestClose: onRequestClose }}>
+						<Backdrop
+							open
+							invisible={hideBackdrop}
+							clickThrough={clickThrough}
+							onPress={onRequestClose}
+						/>
+						<PopoverView
+							style={popoverStyle}
+							open
+							placement={placement}
+							matchWidth={matchWidth}
+							activatorLayout={activatorLayout ?? LAYOUT_ZERO}
+							aboveActivator={aboveActivator}
+							clickThrough={clickThrough}
+						>
+							{content}
+						</PopoverView>
+					</PopoverContext.Provider>
 				</Portal>
 			)}
 		</View>

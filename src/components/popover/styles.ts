@@ -1,4 +1,5 @@
 import styled from 'styled-components/native';
+import Pressable from '../pressable';
 
 export const Container = styled.View`
 	position: absolute;
@@ -16,4 +17,10 @@ export const Popover = styled.View`
 	shadow-color: #000;
 	padding: 5px;
 	border-radius: 3px;
+`;
+
+export const PressableItem = styled(Pressable)`
+	padding: 5px;
+	flex-direction: row;
+	align-items: center;
 `;

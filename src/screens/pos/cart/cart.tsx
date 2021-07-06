@@ -11,7 +11,7 @@ import Text from '@wcpos/common/src/components/text';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
 import Table from './table';
-import CustomerSelect from './customer-select';
+import CustomerSelect from '../../common/customer-select';
 import Actions from './actions';
 import Totals from './totals';
 import Buttons from './buttons';

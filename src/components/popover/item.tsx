@@ -1,8 +1,9 @@
 import * as React from 'react';
+import { useTheme } from 'styled-components/native';
 import Text from '../text';
 import Icon from '../icon';
-import Pressable from '../pressable';
 import { PopoverContext } from './context';
+import * as Styled from './styles';
 
 export interface ItemProps {
 	/**
@@ -30,18 +31,14 @@ export interface ItemProps {
 /**
  * Action to display in a `Popover`.
  */
-export const Item: React.FC<ItemProps> = ({
+export const Item = ({
 	label,
 	icon,
 	iconColor,
 	onSelect: onSelectRaw = () => {},
 	disabled = false,
-}) => {
-	// const styles = useStyles((theme) => ({
-	// 	disabled: {
-	// 		opacity: theme.opacity.disabled,
-	// 	},
-	// }));
+}: ItemProps) => {
+	const theme = useTheme();
 
 	const { requestClose } = React.useContext(PopoverContext);
 
@@ -51,11 +48,19 @@ export const Item: React.FC<ItemProps> = ({
 		requestClose();
 	}, [requestClose, onSelectRaw]);
 
+	const styles = React.useCallback(
+		({ hovered, focused }) => {
+			return hovered || focused
+				? { backgroundColor: theme.MENU_ITEM_HOVER_BACKGROUND_COLOR }
+				: undefined;
+		},
+		[theme.MENU_ITEM_HOVER_BACKGROUND_COLOR]
+	);
+
 	return (
-		// <Touchable onClick={onSelect} disabled={disabled} viewStyle={disabled && styles.disabled}>
-		<Pressable onPress={onSelect} disabled={disabled} style={{ padding: 5, flexDirection: 'row' }}>
+		<Styled.PressableItem onPress={onSelect} disabled={disabled} style={styles}>
 			{icon ? <Icon name={icon} color={iconColor} /> : null}
 			<Text>{label}</Text>
-		</Pressable>
+		</Styled.PressableItem>
 	);
 };

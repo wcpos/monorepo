@@ -3,6 +3,7 @@ import { ScrollView } from 'react-native';
 import { useUncontrolledState } from '@wcpos/common/src/hooks/use-uncontrolled-state';
 import Popover from '../popover';
 import TextInput from '../textinput';
+import * as Styled from './styles';
 
 export interface ComboboxChoice {
 	/**
@@ -16,7 +17,7 @@ export interface ComboboxChoice {
 	/**
 	 * Value for the option.
 	 */
-	value: string;
+	value: any;
 	/**
 	 * Disable this option.
 	 */
@@ -111,7 +112,7 @@ export const Combobox = ({
 			hideBackdrop
 			matchWidth
 		>
-			<ScrollView>{choiceComponents}</ScrollView>
+			<Styled.ScrollView>{choiceComponents}</Styled.ScrollView>
 		</Popover>
 	);
 };

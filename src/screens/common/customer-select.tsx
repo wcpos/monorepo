@@ -8,9 +8,12 @@ import {
 	distinctUntilChanged,
 	map,
 } from 'rxjs/operators';
+import orderBy from 'lodash/orderBy';
 import { useTranslation } from 'react-i18next';
+import useDataObservable from '@wcpos/common/src/hooks/use-data-observable';
 import Combobox from '@wcpos/common/src/components/combobox';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 
 type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
@@ -21,61 +24,67 @@ interface CustomerSelectProps {
 }
 
 const CustomerSelect = ({ order }: CustomerSelectProps) => {
-	const [search, setSearch] = React.useState('');
 	const [selectedCustomer, setSelectedCustomer] = React.useState<CustomerDocument>();
 	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
 	const { t } = useTranslation();
+	const { data$, query, setQuery } = useDataObservable('customers', {
+		search: '',
+		sortBy: 'lastName',
+		sortDirection: 'asc',
+	});
 
-	const customers$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				distinctUntilChanged((a, b) => a[0] === b[0]),
-				debounceTime(150),
-				switchMap(([q]) => {
-					console.log(q);
-					const regexp = new RegExp(escape(q), 'i');
-					const selector = {
-						firstName: { $regex: regexp },
-						// categories: { $elemMatch: { id: 20 } },
-					};
-					const RxQuery = storeDB.collections.customers.find({ selector });
-					// .sort({ [q.sortBy]: q.sortDirection });
-					return RxQuery.$;
-				}),
-				catchError((err) => {
-					console.error(err);
-					return err;
-				})
-			),
-		[search]
+	const onSearch = React.useCallback(
+		(search: string) => {
+			setQuery((prev) => ({ ...prev, search }));
+		},
+		[setQuery]
 	);
 
-	const customers = useObservableState(customers$, []) as any[];
+	const handleSelectCustomer = React.useCallback(
+		(value: CustomerDocument) => {
+			if (order) {
+				order.addCustomer(value);
+			}
+			setSelectedCustomer(value);
+		},
+		[order]
+	);
 
-	const handleSelectCustomer = (value: CustomerDocument) => {
-		if (order) {
-			order.addCustomer(value);
-		}
-		setSelectedCustomer(value);
-	};
+	const customers = useObservableState(data$, []) as CustomerDocument[];
+
+	const choices = React.useMemo(() => {
+		const sortedCustomers = orderBy(customers, 'lastName');
+
+		return sortedCustomers.map((customer) => ({
+			label: `${customer.firstName} ${customer.lastName}`,
+			value: customer,
+			key: customer._id,
+		}));
+	}, [customers]);
+
+	useWhyDidYouUpdate('Customer Select', {
+		customers,
+		handleSelectCustomer,
+		onSearch,
+		order,
+		query,
+		setQuery,
+		data$,
+	});
 
 	return (
 		<Combobox
 			label="Search customers"
 			hideLabel
-			choices={customers.map((customer) => ({
-				label: `${customer.firstName} ${customer.lastName}`,
-				value: customer,
-				key: customer._id,
-			}))}
+			choices={choices}
 			placeholder={
 				selectedCustomer
 					? // @ts-ignore
 					  `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
 					: t('customers.search.placeholder')
 			}
-			onSearch={setSearch}
-			searchValue={search}
+			onSearch={onSearch}
+			searchValue={query.search}
 			onChange={handleSelectCustomer}
 		/>
 	);
