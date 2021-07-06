@@ -18,10 +18,12 @@ export default {
 	 *
 	 */
 	query(this: ProductCollection, query: QueryState) {
-		const regexp = new RegExp(escape(query.search), 'i');
-		const selector = {
-			name: { $regex: regexp },
-		};
+		const selector = {};
+		if (query.search) {
+			const regexp = new RegExp(escape(query.search), 'i');
+			// @ts-ignore
+			selector.name = { $regex: regexp };
+		}
 		if (_get(query, 'filters.category')) {
 			// @ts-ignore
 			selector.categories = { $elemMatch: { id: _get(query, 'filters.category.id') } };
