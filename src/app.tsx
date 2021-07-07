@@ -16,11 +16,9 @@ import { SnackbarProvider } from './components/snackbar/snackbar-provider';
 import { AuthLoginProvider } from './hooks/use-auth-login';
 
 const i18n = new TranslationService();
-const prefixes =
-	Platform.OS === 'android' || Platform.OS === 'ios' ? 'wcpos://' : (window as any).location.origin;
 
 const linking = {
-	prefixes: [prefixes],
+	prefixes: ['wcpos://'],
 	config: {
 		screens: {
 			Auth: 'login',
@@ -49,7 +47,15 @@ const linking = {
 	},
 };
 
-const App = () => {
+interface IntialProps {
+	homepage?: string;
+}
+
+const App = (props: IntialProps) => {
+	if (props.homepage) {
+		linking.prefixes.push(props.homepage);
+	}
+
 	return (
 		// <React.StrictMode>
 		<ErrorBoundary>
