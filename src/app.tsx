@@ -23,10 +23,10 @@ const linking = {
 		screens: {
 			Auth: 'login',
 			Main: {
-				path: '',
+				path: '.',
 				screens: {
 					POS: {
-						path: '',
+						path: '.',
 					},
 					Products: {
 						path: 'products',
