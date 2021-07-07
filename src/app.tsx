@@ -17,44 +17,50 @@ import { AuthLoginProvider } from './hooks/use-auth-login';
 
 const i18n = new TranslationService();
 
-const linking = {
-	prefixes: ['wcpos://'],
-	config: {
-		screens: {
-			Auth: 'login',
-			Main: {
-				path: '.',
-				screens: {
-					POS: {
-						path: '.',
-					},
-					Products: {
-						path: 'products',
-					},
-					Orders: {
-						path: 'orders',
-					},
-					Customers: {
-						path: 'customers',
-					},
-					Support: {
-						path: 'support',
-					},
-				},
-			},
-			Modal: '#',
-		},
-	},
-};
-
 interface IntialProps {
-	homepage?: string;
+	host?: string;
+	posPath?: string;
 }
 
-const App = (props: IntialProps) => {
-	if (props.homepage) {
-		linking.prefixes.push(props.homepage);
+const App = ({ host, posPath = ' ' }: IntialProps) => {
+	const prefixes = ['wcpos://'];
+	if (host) {
+		prefixes.push(host);
 	}
+
+	const linking = {
+		prefixes,
+		config: {
+			screens: {
+				Auth: `${posPath}/login`,
+				Main: {
+					path: posPath,
+					screens: {
+						POS: {
+							path: '',
+						},
+						Products: {
+							path: 'products',
+						},
+						Orders: {
+							path: 'orders',
+						},
+						Customers: {
+							path: 'customers',
+						},
+						Support: {
+							path: 'support',
+						},
+					},
+				},
+				Modal: '#',
+			},
+		},
+	};
+
+	// if (host) {
+	// 	linking.prefixes.push(host);
+	// }
 
 	return (
 		// <React.StrictMode>
