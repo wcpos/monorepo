@@ -16,16 +16,14 @@ import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 
 type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
 interface CustomerSelectProps {
-	order?: OrderDocument;
+	selectedCustomer?: CustomerDocument;
+	onSelectCustomer: (value: CustomerDocument) => void;
 }
 
-const CustomerSelect = ({ order }: CustomerSelectProps) => {
-	const [selectedCustomer, setSelectedCustomer] = React.useState<CustomerDocument>();
-	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
+const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectProps) => {
 	const { t } = useTranslation();
 	const { data$, query, setQuery } = useDataObservable('customers', {
 		search: '',
@@ -38,16 +36,6 @@ const CustomerSelect = ({ order }: CustomerSelectProps) => {
 			setQuery((prev) => ({ ...prev, search }));
 		},
 		[setQuery]
-	);
-
-	const handleSelectCustomer = React.useCallback(
-		(value: CustomerDocument) => {
-			if (order) {
-				order.addCustomer(value);
-			}
-			setSelectedCustomer(value);
-		},
-		[order]
 	);
 
 	const customers = useObservableState(data$, []) as CustomerDocument[];
@@ -63,10 +51,10 @@ const CustomerSelect = ({ order }: CustomerSelectProps) => {
 	}, [customers]);
 
 	useWhyDidYouUpdate('Customer Select', {
+		selectedCustomer,
+		onSelectCustomer,
 		customers,
-		handleSelectCustomer,
 		onSearch,
-		order,
 		query,
 		setQuery,
 		data$,
@@ -77,15 +65,16 @@ const CustomerSelect = ({ order }: CustomerSelectProps) => {
 			label="Search customers"
 			hideLabel
 			choices={choices}
-			placeholder={
+			placeholder={t('customers.search.placeholder')}
+			selected={
 				selectedCustomer
 					? // @ts-ignore
 					  `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
-					: t('customers.search.placeholder')
+					: ''
 			}
 			onSearch={onSearch}
 			searchValue={query.search}
-			onChange={handleSelectCustomer}
+			onChange={onSelectCustomer}
 		/>
 	);
 };

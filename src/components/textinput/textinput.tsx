@@ -28,7 +28,7 @@ export interface TextInputProps {
 	/**
 	 * Text value in the input.
 	 */
-	value?: string;
+	value?: string | null;
 	/**
 	 * Type of the TextField.
 	 *

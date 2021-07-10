@@ -19,17 +19,23 @@ import Products from './products';
 import * as Styled from './styles';
 
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
 interface POSContextProps {
 	currentOrder?: OrderDocument;
 	setCurrentOrder: React.Dispatch<React.SetStateAction<OrderDocument | undefined>>;
+	currentCustomer?: CustomerDocument;
+	setCurrentCustomer: React.Dispatch<React.SetStateAction<CustomerDocument | undefined>>;
 }
 
 export const POSContext = React.createContext<POSContextProps>({
 	currentOrder: undefined,
 	// @ts-ignore
 	setCurrentOrder: undefined,
+	currentCustomer: undefined,
+	// @ts-ignore
+	setCurrentCustomer: undefined,
 });
 
 /**
@@ -40,6 +46,7 @@ const POS = () => {
 	const productsUI = useObservableSuspense(useUIResource('posProducts'));
 	const cartUI = useObservableSuspense(useUIResource('cart'));
 	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
+	const [currentCustomer, setCurrentCustomer] = React.useState<CustomerDocument | undefined>();
 
 	/**
 	 * Resizing the POS columns
@@ -112,7 +119,9 @@ const POS = () => {
 	});
 
 	return (
-		<POSContext.Provider value={{ currentOrder, setCurrentOrder }}>
+		<POSContext.Provider
+			value={{ currentOrder, setCurrentOrder, currentCustomer, setCurrentCustomer }}
+		>
 			<Styled.Container onLayout={handleContainerLayout}>
 				<Styled.ProductsColumn
 					as={Animated.View}

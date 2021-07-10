@@ -3,22 +3,19 @@ import { useObservableState, useObservable } from 'observable-hooks';
 import { Observable } from 'rxjs';
 import { switchMap, filter } from 'rxjs/operators';
 import { isRxDocument } from 'rxdb/plugins/core';
-import sumBy from 'lodash/sumBy';
-import get from 'lodash/get';
 import Segment from '@wcpos/common/src/components/segment';
-import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
 import Table from './table';
 import CustomerSelect from '../../common/customer-select';
-import Actions from './actions';
+import AddCustomer from '../../common/add-edit-customer';
 import Totals from './totals';
 import Buttons from './buttons';
 import { POSContext } from '../pos';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
 
 interface ICartProps {
 	ui: any;
@@ -27,7 +24,8 @@ interface ICartProps {
 
 const Cart = ({ ui, orders = [] }: ICartProps) => {
 	useWhyDidYouUpdate('Cart', { ui, orders });
-	const { currentOrder, setCurrentOrder } = React.useContext(POSContext);
+	const { currentOrder, setCurrentOrder, currentCustomer, setCurrentCustomer } =
+		React.useContext(POSContext);
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const [query, setQuery] = React.useState({
 		sortBy: 'id',
@@ -55,39 +53,40 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 
 	const items = useObservableState(items$, []);
 
-	if (!currentOrder) {
-		return (
-			<Segment.Group>
-				<Segment>
-					<CustomerSelect />
-				</Segment>
-				<Segment>
-					{orders.map((order) => (
-						<Text
-							key={order._id}
-							onPress={() => setCurrentOrder(order)}
-						>{`${order.id}: ${order.total}`}</Text>
-					))}
-					<Text onPress={() => setCurrentOrder(undefined)}>New</Text>
-				</Segment>
-			</Segment.Group>
-		);
-	}
+	const handleSelectCustomer = React.useCallback(
+		(value: CustomerDocument) => {
+			if (currentOrder) {
+				currentOrder.addCustomer(value);
+			}
+			setCurrentCustomer(value);
+		},
+		[currentOrder, setCurrentCustomer]
+	);
 
 	return (
 		<Segment.Group>
-			<Segment>
-				<CustomerSelect order={currentOrder} />
+			<Segment style={{ flexDirection: 'row', alignItems: 'center' }}>
+				<CustomerSelect
+					selectedCustomer={currentCustomer}
+					onSelectCustomer={handleSelectCustomer}
+				/>
+				<AddCustomer />
 			</Segment>
-			<Segment grow>
-				<Table items={items} columns={columns} query={query} onSort={handleSort} ui={ui} />
-			</Segment>
-			<Segment>
-				<Totals order={currentOrder} />
-			</Segment>
-			<Segment>
-				<Buttons order={currentOrder} />
-			</Segment>
+			{currentOrder ? (
+				<Segment.Group>
+					<Segment grow>
+						<Table items={items} columns={columns} query={query} onSort={handleSort} ui={ui} />
+					</Segment>
+					<Segment>
+						<Totals order={currentOrder} />
+					</Segment>
+					<Segment>
+						<Buttons order={currentOrder} />
+					</Segment>
+				</Segment.Group>
+			) : (
+				<Segment content="Add item to cart" />
+			)}
 			<Segment>
 				{orders.map((order) => (
 					<Text

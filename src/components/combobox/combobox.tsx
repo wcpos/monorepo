@@ -48,7 +48,7 @@ export interface ComboboxProps {
 	/**
 	 * Search term
 	 */
-	searchValue?: string;
+	searchValue?: string | null;
 	/**
 	 * Text to display as a placeholder.
 	 */
@@ -103,7 +103,9 @@ export const Combobox = ({
 					onFocus={showPopover}
 					placeholder={placeholder}
 					onChange={onSearch}
-					value={searchValue}
+					value={searchValue || selected}
+					clearable
+					onClear={() => onChange(null)}
 				/>
 			}
 			onRequestClose={() => {
