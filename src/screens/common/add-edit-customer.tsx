@@ -58,7 +58,7 @@ const AddEditCustomer = ({ customer }: AddEditCustomerProps) => {
 
 	return (
 		<>
-			<Icon name="add" onPress={show} />
+			<Icon name="add" onPress={show} tooltip="Add new customer" />
 			{visible && (
 				<Dialog
 					title={title}

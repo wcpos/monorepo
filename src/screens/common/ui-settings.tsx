@@ -19,7 +19,7 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 	return (
 		<Popover
 			open={visible}
-			activator={<Icon name="cog" onPress={() => setVisible(true)} />}
+			activator={<Icon name="cog" onPress={() => setVisible(true)} tooltip="Table Settings" />}
 			onRequestClose={() => setVisible(false)}
 		>
 			<Text>Columns</Text>
