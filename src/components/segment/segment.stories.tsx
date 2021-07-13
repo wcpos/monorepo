@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
-import { Segment, ISegmentProps } from './segment';
-import { SegmentGroup, ISegmentGroupProps } from './group';
+import { Segment, SegmentProps } from './segment';
+import { SegmentGroup, SegmentGroupProps } from './group';
 
 export default {
 	title: 'Components/Segment',
@@ -12,7 +12,7 @@ export default {
 /**
  *
  */
-export const basicUsage = ({ disabled, loading, raised }: ISegmentProps) => (
+export const basicUsage = ({ disabled, loading, raised }: SegmentProps) => (
 	<Segment disabled={disabled} loading={loading} raised={raised}>
 		Te eum doming eirmod, nominati pertinacia argumentum ad his.
 	</Segment>
@@ -21,7 +21,7 @@ export const basicUsage = ({ disabled, loading, raised }: ISegmentProps) => (
 /**
  *
  */
-export const group = ({ raised }: ISegmentGroupProps) => (
+export const group = ({ raised }: SegmentGroupProps) => (
 	<View style={{ height: 400 }}>
 		<Segment.Group raised={raised}>
 			<Segment>Top</Segment>
@@ -36,7 +36,7 @@ export const group = ({ raised }: ISegmentGroupProps) => (
 /**
  *
  */
-export const groupWithOneSegment = ({ raised }: ISegmentGroupProps) => (
+export const groupWithOneSegment = ({ raised }: SegmentGroupProps) => (
 	<View style={{ height: 400 }}>
 		<Segment.Group raised={raised}>
 			<Segment>One</Segment>
@@ -47,7 +47,7 @@ export const groupWithOneSegment = ({ raised }: ISegmentGroupProps) => (
 /**
  *
  */
-export const nestedGroup = ({ raised }: ISegmentGroupProps) => (
+export const nestedGroup = ({ raised }: SegmentGroupProps) => (
 	<Segment.Group raised={raised}>
 		<Segment type="header">Top</Segment>
 		<Segment.Group>
@@ -55,7 +55,7 @@ export const nestedGroup = ({ raised }: ISegmentGroupProps) => (
 			<Segment>Nested Middle</Segment>
 			<Segment>Nested Bottom</Segment>
 		</Segment.Group>
-		<Segment.Group direction="horizontal">
+		<Segment.Group flexDirection="row">
 			<Segment>Left</Segment>
 			<Segment>Center</Segment>
 			<Segment>Right</Segment>

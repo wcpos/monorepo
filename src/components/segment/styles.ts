@@ -1,10 +1,10 @@
 import styled, { css } from 'styled-components/native';
 import Platform from '@wcpos/common/src/lib/platform';
 
-type ISegmentProps = import('./segment').ISegmentProps;
-type SegmentProps = Pick<ISegmentProps, 'raised' | 'group' | 'grow' | 'type'>;
+type SegmentProps = import('./segment').SegmentProps;
+type StyledSegmentProps = Pick<SegmentProps, 'raised' | 'group' | 'grow' | 'type'>;
 
-export const Segment = styled.View<SegmentProps>`
+export const Segment = styled.View<StyledSegmentProps>`
 	background: ${({ theme }) => theme.SEGMENT_BACKGROUND_COLOR};
 	border-width: ${({ theme }) => theme.SEGMENT_BORDER_WIDTH};
 	border-color: ${({ theme }) => theme.SEGMENT_BORDER_COLOR};
@@ -12,10 +12,7 @@ export const Segment = styled.View<SegmentProps>`
 	border-radius: ${({ group, theme }) => (group === 'middle' ? '0' : theme.SEGMENT_BORDER_RADIUS)};
 	padding: ${({ theme, grow }) => (grow ? 0 : theme.SEGMENT_PADDING)};
 	margin-bottom: ${({ group, theme }) => (group ? '0' : theme.SEGMENT_MARGIN_BOTTOM)};
-	flex-shrink: ${({ grow }) => (grow ? '1' : '0')};
-	flex-grow: 0;
-	flex-basis: auto;
-	width: 100%;
+	flex: ${({ grow }) => (grow ? '1' : '0 1 auto')};
 
 	${({ group }) =>
 		group === 'first' &&
@@ -50,17 +47,19 @@ export const Segment = styled.View<SegmentProps>`
 		})}
 `;
 
-type ISegmentGroupProps = import('./group').ISegmentGroupProps;
-type GroupProps = Pick<ISegmentGroupProps, 'raised' | 'flexDirection'>;
+type SegmentGroupProps = import('./group').SegmentGroupProps;
+type StyledGroupProps = Pick<SegmentGroupProps, 'raised' | 'flexDirection' | 'group' | 'grow'>;
 
 // height: inherit;
 /**
  * Note: height 'inherit' caused app to crash on mobile
  */
-export const Group = styled.View<GroupProps>`
+export const Group = styled.View<StyledGroupProps>`
 	flex-direction: ${({ flexDirection }) => flexDirection};
-	width: 100%;
+	flex: ${({ grow }) => (grow ? '1' : '0 1 auto')};
+	height: 100%;
 	max-height: 100%;
+	width: 100%;
 
 	${({ raised }) =>
 		raised &&

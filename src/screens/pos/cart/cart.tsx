@@ -91,7 +91,7 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				<UISettings ui={ui} />
 			</Segment>
 			{currentOrder ? (
-				<Segment.Group>
+				<Segment.Group grow>
 					<Segment grow>
 						<Table items={items} columns={columns} query={query} onSort={handleSort} ui={ui} />
 					</Segment>
@@ -103,7 +103,7 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 					</Segment>
 				</Segment.Group>
 			) : (
-				<Segment content="Add item to cart" />
+				<Segment content="Add item to cart" grow />
 			)}
 			<Segment>
 				{orders.map((order) => (

@@ -8,7 +8,7 @@ import { SegmentGroup } from './group';
 /**
  *
  */
-export interface ISegmentProps {
+export interface SegmentProps {
 	/**
 	 *
 	 */
@@ -34,7 +34,7 @@ export const Segment = ({
 	type,
 	raised = true,
 	style,
-}: ISegmentProps) => {
+}: SegmentProps) => {
 	let segment = content || children || '';
 	if (typeof segment === 'string' || typeof segment === 'number') {
 		segment = <Text>{segment}</Text>;

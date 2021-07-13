@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { tap, switchMap, map } from 'rxjs/operators';
 import { useObservableState } from 'observable-hooks';
 import { useNavigation } from '@react-navigation/native';
@@ -82,18 +83,22 @@ const Site = ({ site, user }: ISiteProps) => {
 
 		return (
 			<>
-				<Text>Logged in users</Text>
+				<View style={{ flexDirection: 'row', alignItems: 'center' }}>
+					<Text style={{ marginRight: 5 }}>Logged in users</Text>
+					<Button
+						size="small"
+						title="Add new user"
+						type="secondary"
+						background="outline"
+						onPress={() => {
+							// @ts-ignore
+							navigation.navigate('Modal', { login: { site } });
+						}}
+					/>
+				</View>
 				{wpUsers.map((wpUser) => (
 					<WpUser key={wpUser._id} wpUser={wpUser} site={site} />
 				))}
-				<Button
-					size="small"
-					title="Add new user"
-					onPress={() => {
-						// @ts-ignore
-						navigation.navigate('Modal', { login: { site } });
-					}}
-				/>
 			</>
 		);
 	}, [active, navigation, site, wpUsers]);
