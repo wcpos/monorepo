@@ -45,48 +45,48 @@ export default {
 	/**
 	 *
 	 */
-	restApiQuery(this: ProductCollection, query: QueryState) {
-		this.pouch
-			.find({
+	async restApiQuery(this: ProductCollection, query: QueryState) {
+		try {
+			const result = await this.pouch.find({
 				selector: {},
 				// @ts-ignore
 				fields: ['_id', 'id', 'dateCreatedGmt'],
-			})
-			.then((result: any) => {
-				// get array of sorted records with dateCreatedGmt
-				const filtered = _filter(result.docs, 'dateCreatedGmt');
-				const sorted = _sortBy(filtered, 'dateCreatedGmt');
-				const exclude = _map(sorted, 'id').join(',');
-
-				// @ts-ignore
-				const replicationState = this.syncRestApi({
-					live: false,
-					autoStart: false,
-					pull: {
-						queryBuilder: (lastModified: any) => {
-							const orderbyMap = {
-								name: 'title',
-								dateCreated: 'date',
-							};
-							// @ts-ignore
-							const orderby = orderbyMap[query.sortBy] ? orderbyMap[query.sortBy] : query.sortBy;
-							return {
-								search: escape(query.search),
-								order: query.sortDirection,
-								orderby,
-								exclude,
-								category: _get(query, 'filters.category.id'),
-								tag: _get(query, 'filters.tag.id'),
-							};
-						},
-					},
-				});
-
-				replicationState.run(false);
-			})
-			.catch((err: any) => {
-				console.log(err);
 			});
+			// get array of sorted records with dateCreatedGmt
+			const filtered = _filter(result.docs, 'dateCreatedGmt');
+			const sorted = _sortBy(filtered, 'dateCreatedGmt');
+			const exclude = _map(sorted, 'id').join(',');
+
+			// @ts-ignore
+			const replicationState = this.syncRestApi({
+				live: false,
+				autoStart: false,
+				pull: {
+					queryBuilder: (lastModified_1: any) => {
+						const orderbyMap = {
+							name: 'title',
+							dateCreated: 'date',
+						};
+						// @ts-ignore
+						const orderby = orderbyMap[query.sortBy] ? orderbyMap[query.sortBy] : query.sortBy;
+						return {
+							search: escape(query.search),
+							order: query.sortDirection,
+							orderby,
+							exclude,
+							category: _get(query, 'filters.category.id'),
+							tag: _get(query, 'filters.tag.id'),
+						};
+					},
+				},
+			});
+
+			replicationState.run(false);
+			return replicationState;
+		} catch (err) {
+			console.log(err);
+			return err;
+		}
 	},
 
 	/**
