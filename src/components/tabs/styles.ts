@@ -2,7 +2,9 @@ import styled from 'styled-components/native';
 import { Text } from '../text/styles';
 import Pressable from '../pressable';
 
-export const Container = styled.View``;
+export const Container = styled.View`
+	height: 100%;
+`;
 
 export const TabsContainer = styled.View`
 	flex-direction: row;

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Tab } from './tab';
 import * as Styled from './styles';
 
@@ -19,13 +19,17 @@ export interface TabsProps {
 	 * Content to display in tabs.
 	 */
 	children: React.ReactNode;
+	/**
+	 * Content to display in tabs.
+	 */
+	position?: 'top' | 'bottom';
 }
 
 /**
  * Use to alternate among related views sharing the same context.
  */
-export const Tabs: React.FC<TabsProps> = ({ tabs, selected, onSelect, children }) => {
-	const tabItems = useMemo(
+export const Tabs = ({ tabs, selected, onSelect, children, position = 'top' }: TabsProps) => {
+	const tabItems = React.useMemo(
 		() =>
 			tabs.map((tab, index) => (
 				<Tab
@@ -41,8 +45,9 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, selected, onSelect, children }
 
 	return (
 		<Styled.Container>
+			{position === 'bottom' && children}
 			<Styled.TabsContainer>{tabItems}</Styled.TabsContainer>
-			{children}
+			{position === 'top' && children}
 		</Styled.Container>
 	);
 };

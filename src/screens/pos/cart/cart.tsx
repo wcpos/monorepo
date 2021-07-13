@@ -7,6 +7,7 @@ import { isRxDocument } from 'rxdb/plugins/core';
 import Segment from '@wcpos/common/src/components/segment';
 import Text from '@wcpos/common/src/components/text';
 import Tag from '@wcpos/common/src/components/tag';
+import Tabs from '@wcpos/common/src/components/tabs';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Table from './table';
 import CustomerSelect from '../../common/customer-select';
@@ -66,63 +67,61 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 		[currentOrder, setCurrentCustomer]
 	);
 
+	const cartTabs = React.useMemo(() => {
+		return orders.map((order) => {
+			return order.total;
+		});
+	}, [orders]);
+
+	const onSelect = React.useCallback(
+		(index) => {
+			setCurrentOrder(orders[index]);
+		},
+		[orders, setCurrentOrder]
+	);
+
 	return (
-		<Segment.Group>
-			<Segment style={{ flexDirection: 'row', alignItems: 'center' }}>
-				<View style={{ flex: 1 }}>
-					{currentCustomer ? (
-						<View style={{ flexDirection: 'row', alignItems: 'center' }}>
-							<Text>Customer: </Text>
-							<Tag
-								removable
-								onPress={() => {
-									console.log('edit customer');
-								}}
-								onRemove={() => {
-									setCurrentCustomer(undefined);
-								}}
-							>{`${currentCustomer.firstName} ${currentCustomer.lastName}`}</Tag>
-						</View>
-					) : (
-						<CustomerSelect onSelectCustomer={handleSelectCustomer} />
-					)}
-				</View>
-				<AddCustomer />
-				<UISettings ui={ui} />
-			</Segment>
-			{currentOrder ? (
-				<Segment.Group grow>
-					<Segment grow>
-						<Table items={items} columns={columns} query={query} onSort={handleSort} ui={ui} />
-					</Segment>
-					<Segment>
-						<Totals order={currentOrder} />
-					</Segment>
-					<Segment>
-						<Buttons order={currentOrder} />
-					</Segment>
-				</Segment.Group>
-			) : (
-				<Segment content="Add item to cart" grow />
-			)}
-			<Segment>
-				{orders.map((order) => (
-					<Text
-						key={order._id}
-						onPress={() => {
-							setCurrentOrder(order);
-						}}
-					>{`${order.id}: ${order.total}`}</Text>
-				))}
-				<Text
-					onPress={() => {
-						setCurrentOrder(undefined);
-					}}
-				>
-					New
-				</Text>
-			</Segment>
-		</Segment.Group>
+		<Tabs tabs={cartTabs} selected={0} onSelect={onSelect} position="bottom">
+			<Segment.Group>
+				<Segment style={{ flexDirection: 'row', alignItems: 'center' }}>
+					<View style={{ flex: 1 }}>
+						{currentCustomer ? (
+							<View style={{ flexDirection: 'row', alignItems: 'center' }}>
+								<Text>Customer: </Text>
+								<Tag
+									removable
+									onPress={() => {
+										console.log('edit customer');
+									}}
+									onRemove={() => {
+										setCurrentCustomer(undefined);
+									}}
+								>{`${currentCustomer.firstName} ${currentCustomer.lastName}`}</Tag>
+							</View>
+						) : (
+							<CustomerSelect onSelectCustomer={handleSelectCustomer} />
+						)}
+					</View>
+					<AddCustomer />
+					<UISettings ui={ui} />
+				</Segment>
+				{currentOrder ? (
+					<Segment.Group grow>
+						<Segment grow>
+							<Table items={items} columns={columns} query={query} onSort={handleSort} ui={ui} />
+						</Segment>
+						<Segment>
+							<Totals order={currentOrder} />
+						</Segment>
+						<Segment>
+							<Buttons order={currentOrder} />
+						</Segment>
+					</Segment.Group>
+				) : (
+					<Segment content="Add item to cart" grow />
+				)}
+			</Segment.Group>
+		</Tabs>
 	);
 };
 
