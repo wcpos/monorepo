@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import TextInput from '@wcpos/common/src/components/textinput';
+import Button from '@wcpos/common/src/components/button';
 
 interface Props {
 	item:
@@ -15,7 +15,15 @@ const FeeAndShippingPrice = ({ item }: Props) => {
 		item.atomicPatch({ total: newValue });
 	};
 
-	return <TextInput label="Price" hideLabel autosize value={price} onChange={handleChange} />;
+	return (
+		<Button
+			title={price}
+			onPress={() => {
+				console.log('numpad');
+			}}
+			background="outline"
+		/>
+	);
 };
 
 export default FeeAndShippingPrice;

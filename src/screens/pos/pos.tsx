@@ -16,6 +16,7 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-na
 import clamp from 'lodash/clamp';
 import Cart from './cart';
 import Products from './products';
+import Checkout from './checkout';
 import * as Styled from './styles';
 
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
@@ -143,13 +144,21 @@ const POS = () => {
 						<Gutter />
 					</Animated.View>
 				</Draggable>
-				<Styled.CartColumn>
-					<ErrorBoundary>
-						<React.Suspense fallback={<Text>Loading cart...</Text>}>
-							<Cart ui={cartUI} orders={orders} />
-						</React.Suspense>
-					</ErrorBoundary>
-				</Styled.CartColumn>
+				{currentOrder &&
+				// @ts-ignore
+				currentOrder.status === 'checkout' ? (
+					<Styled.CheckoutColumn>
+						<Checkout />
+					</Styled.CheckoutColumn>
+				) : (
+					<Styled.CartColumn>
+						<ErrorBoundary>
+							<React.Suspense fallback={<Text>Loading cart...</Text>}>
+								<Cart ui={cartUI} orders={orders} />
+							</React.Suspense>
+						</ErrorBoundary>
+					</Styled.CartColumn>
+				)}
 			</Styled.Container>
 		</POSContext.Provider>
 	);

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Text from '@wcpos/common/src/components/text';
+import Format from '@wcpos/common/src/components/format';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 
 interface Props {
@@ -15,7 +15,7 @@ const Total = ({ item, type = 'total' }: Props) => {
 	const total = useObservableState(item[`${type}$`], item[type]);
 	useWhyDidYouUpdate('CartLineItemTotal', { item, total });
 
-	return <Text>{total}</Text>;
+	return <Format.Currency>{total}</Format.Currency>;
 };
 
 export default Total;

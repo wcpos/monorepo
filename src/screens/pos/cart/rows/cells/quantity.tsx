@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import TextInput from '@wcpos/common/src/components/textinput';
+import Button from '@wcpos/common/src/components/button';
 import Popover from '@wcpos/common/src/components/popover';
 import Numpad from '@wcpos/common/src/components/numpad';
 
@@ -21,14 +21,7 @@ const Quantity = ({ lineItem }: Props) => {
 			open={visible}
 			onRequestClose={() => setVisible(false)}
 			activator={
-				<TextInput
-					label="Quantity"
-					hideLabel
-					autosize
-					value={String(quantity)}
-					onChange={handleChangeText}
-					onFocus={() => setVisible(true)}
-				/>
+				<Button title={String(quantity)} onPress={() => setVisible(true)} background="outline" />
 			}
 		>
 			<Numpad placeholder={String(quantity)} />

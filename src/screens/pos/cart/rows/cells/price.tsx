@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import TextInput from '@wcpos/common/src/components/textinput';
+import Button from '@wcpos/common/src/components/button';
 
 interface Props {
 	lineItem: import('@wcpos/common/src/database').LineItemDocument;
@@ -14,7 +14,13 @@ const Price = ({ lineItem }: Props) => {
 	};
 
 	return (
-		<TextInput label="Price" hideLabel autosize value={String(price)} onChange={handleChange} />
+		<Button
+			title={String(price)}
+			onPress={() => {
+				console.log('numpad');
+			}}
+			background="outline"
+		/>
 	);
 };
 

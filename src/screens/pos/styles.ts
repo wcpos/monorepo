@@ -17,3 +17,8 @@ export const CartColumn = styled.View`
 	height: 100%;
 	flex: 1;
 `;
+
+export const CheckoutColumn = styled.View`
+	height: 100%;
+	flex: 1;
+`;

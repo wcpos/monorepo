@@ -66,7 +66,8 @@ const Buttons = ({ order }: ButtonsProps) => {
 					accessoryRight={<Text type="inverse">{order.total}</Text>}
 					type="success"
 					onPress={async () => {
-						console.log('checkout');
+						// @ts-ignore
+						order.atomicPatch({ status: 'checkout' });
 					}}
 				/>
 			</Button.Group>
