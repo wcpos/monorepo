@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { useObservable, useObservableState } from 'observable-hooks';
 import { from, of, combineLatest, zip, Observable } from 'rxjs';
 import { switchMap, tap, catchError, map } from 'rxjs/operators';
@@ -6,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
 import Table from '@wcpos/common/src/components/table';
 import Text from '@wcpos/common/src/components/text';
+import Icon from '@wcpos/common/src/components/icon';
+import Pressable from '@wcpos/common/src/components/pressable';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Button from '@wcpos/common/src/components/button';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
@@ -24,6 +27,7 @@ type FeeLineDocument = import('@wcpos/common/src/database').FeeLineDocument;
 type ShippingLineDocument = import('@wcpos/common/src/database').ShippingLineDocument;
 
 interface ICartTableProps {
+	order: OrderDocument;
 	columns: ColumnProps[];
 	items: any;
 	query: any;
@@ -31,7 +35,7 @@ interface ICartTableProps {
 	ui: any;
 }
 
-const CartTable = ({ columns, items, query, onSort, ui }: ICartTableProps) => {
+const CartTable = ({ order, columns, items, query, onSort, ui }: ICartTableProps) => {
 	const { t } = useTranslation();
 
 	// const items$ = useObservable(
@@ -44,6 +48,34 @@ const CartTable = ({ columns, items, query, onSort, ui }: ICartTableProps) => {
 	// ) as Observable<any[]>;
 
 	// const items = useObservableState(items$, []);
+	const footer = React.useMemo(() => {
+		return (
+			<View>
+				<Pressable
+					style={{ flexDirection: 'row', padding: 5, alignItems: 'center' }}
+					onPress={() => {
+						order.addFeeLine({ name: 'Fee', total: '10' });
+					}}
+				>
+					<Text style={{ flex: 1 }}>Add fee</Text>
+					<Icon name="addCircleOutline" />
+				</Pressable>
+				<Pressable
+					style={{ flexDirection: 'row', padding: 5, alignItems: 'center' }}
+					onPress={() => {
+						order.addShippingLine({
+							methodTitle: 'Shipping',
+							methodId: 'test',
+							total: '5',
+						});
+					}}
+				>
+					<Text style={{ flex: 1 }}>Add shipping</Text>
+					<Icon name="addCircleOutline" />
+				</Pressable>
+			</View>
+		);
+	}, [order]);
 
 	useWhyDidYouUpdate('CartTable', { columns, items, query, onSort, ui });
 
@@ -54,6 +86,7 @@ const CartTable = ({ columns, items, query, onSort, ui }: ICartTableProps) => {
 			sort={onSort}
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}
+			footer={footer}
 		>
 			<Table.Header>
 				<Table.Header.Row columns={columns}>

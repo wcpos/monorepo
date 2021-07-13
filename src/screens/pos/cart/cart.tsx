@@ -81,7 +81,13 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 	);
 
 	return (
-		<Tabs tabs={cartTabs} selected={0} onSelect={onSelect} position="bottom">
+		<Tabs
+			// @ts-ignore
+			tabs={cartTabs}
+			selected={0}
+			onSelect={onSelect}
+			position="bottom"
+		>
 			<Segment.Group>
 				<Segment style={{ flexDirection: 'row', alignItems: 'center' }}>
 					<View style={{ flex: 1 }}>
@@ -108,7 +114,14 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 				{currentOrder ? (
 					<Segment.Group grow>
 						<Segment grow>
-							<Table items={items} columns={columns} query={query} onSort={handleSort} ui={ui} />
+							<Table
+								order={currentOrder}
+								items={items}
+								columns={columns}
+								query={query}
+								onSort={handleSort}
+								ui={ui}
+							/>
 						</Segment>
 						<Segment>
 							<Totals order={currentOrder} />

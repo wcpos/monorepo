@@ -33,7 +33,13 @@ const Actions = ({ item }: ActionProps) => {
 	return (
 		<View style={{ flexDirection: 'row', alignItems: 'center' }}>
 			<Icon name="more-vert" size="large" onPress={() => setVisible(true)} backgroundStyle="none" />
-			<Icon name="remove" size="x-large" onPress={handleRemove} backgroundStyle="none" />
+			<Icon
+				name="remove"
+				size="x-large"
+				onPress={handleRemove}
+				backgroundStyle="none"
+				type="critical"
+			/>
 			{visible && <EditModal item={item} onClose={() => setVisible(false)} />}
 		</View>
 	);

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ViewStyle } from 'react-native';
 import * as Styled from './styles';
 
 export interface ButtonGroupProps {
@@ -14,12 +15,16 @@ export interface ButtonGroupProps {
 	 * - `end` will align the buttons at the end.
 	 */
 	alignment?: 'start' | 'end' | 'fill';
+	/**
+	 * Style for button group container
+	 */
+	style?: ViewStyle;
 }
 
 /**
  * Arrange `Button` components with consistent spacing.
  */
-export const Group = ({ children, alignment = 'fill' }: ButtonGroupProps) => {
+export const Group = ({ children, alignment = 'fill', style }: ButtonGroupProps) => {
 	const childrenLength = React.Children.count(children);
 	const items = React.Children.map(children, (child, index) => (
 		<Styled.GroupChild alignment={alignment} last={index === childrenLength - 1}>
@@ -27,5 +32,9 @@ export const Group = ({ children, alignment = 'fill' }: ButtonGroupProps) => {
 		</Styled.GroupChild>
 	));
 
-	return <Styled.Group alignment={alignment}>{items}</Styled.Group>;
+	return (
+		<Styled.Group alignment={alignment} style={style}>
+			{items}
+		</Styled.Group>
+	);
 };

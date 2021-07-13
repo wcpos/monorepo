@@ -5,6 +5,7 @@ import Dialog from '@wcpos/common/src/components/dialog';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Checkbox from '@wcpos/common/src/components/checkbox';
 import MetaData from '@wcpos/common/src/components/meta-data';
+import Text from '@wcpos/common/src/components/text';
 import useAuthLogin from '@wcpos/common/src/hooks/use-auth-login';
 import { POSContext } from '../pos';
 
@@ -19,37 +20,24 @@ const Buttons = ({ order }: ButtonsProps) => {
 
 	return (
 		<>
-			<Button.Group>
-				<Button
-					title="Add Fee"
-					onPress={() => {
-						order.addFeeLine({ name: 'Fee', total: '10' });
-					}}
-				/>
-				<Button
-					title="Add Shipping"
-					onPress={() => {
-						order.addShippingLine({
-							methodTitle: 'Shipping',
-							methodId: 'test',
-							total: '5',
-						});
-					}}
-				/>
+			<Button.Group style={{ marginBottom: 5 }}>
 				<Button
 					title="Add Note"
+					background="outline"
 					onPress={() => {
 						order.atomicPatch({ customerNote: 'This is a note!' });
 					}}
 				/>
 				<Button
-					title="Options"
+					title="Order Meta"
+					background="outline"
 					onPress={() => {
 						setVisible(true);
 					}}
 				/>
 				<Button
 					title="Save"
+					background="outline"
 					onPress={async () => {
 						const replicationState = order.syncRestApi({
 							push: {},
@@ -62,12 +50,23 @@ const Buttons = ({ order }: ButtonsProps) => {
 						replicationState.run(false);
 					}}
 				/>
+			</Button.Group>
+			<Button.Group>
 				<Button
 					title="Void"
 					type="critical"
 					onPress={async () => {
 						order.remove();
 						setCurrentOrder(undefined);
+					}}
+					style={{ width: '80px' }}
+				/>
+				<Button
+					title="Checkout"
+					accessoryRight={<Text type="inverse">{order.total}</Text>}
+					type="success"
+					onPress={async () => {
+						console.log('checkout');
 					}}
 				/>
 			</Button.Group>

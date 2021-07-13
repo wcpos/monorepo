@@ -86,6 +86,5 @@ export const Group = styled.View<ButtonGroupProps>`
 
 export const GroupChild = styled.View<ButtonGroupProps & { last: boolean }>`
 	margin-end: ${({ last, theme }) => (last ? '0' : theme.BUTTONGROUP_SPACING)};
-	flex: ${({ alignment }) => (alignment === 'fill' ? 1 : 0)};
-	flex-basis: auto;
+	flex: ${({ alignment }) => (alignment === 'fill' ? '1 1 auto' : 0)};
 `;
