@@ -2,7 +2,7 @@ import 'react-native-gesture-handler';
 import * as React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Text } from 'react-native';
-import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider } from 'styled-components/native';
 import { AppStateProvider } from './hooks/use-app-state';
 import TranslationService from './services/translation';
@@ -10,7 +10,7 @@ import AppNavigator from './navigators';
 import Portal from './components/portal';
 import ErrorBoundary from './components/error-boundary';
 import SplashScreen from './screens/splash';
-import Platform from './lib/platform';
+import Url from './lib/url-parse';
 import { AppProviderSizeProvider } from './hooks/use-position-in-app';
 import { SnackbarProvider } from './components/snackbar/snackbar-provider';
 import { AuthLoginProvider } from './hooks/use-auth-login';
@@ -18,23 +18,26 @@ import { AuthLoginProvider } from './hooks/use-auth-login';
 const i18n = new TranslationService();
 
 interface IntialProps {
-	host?: string;
-	posPath?: string;
+	homepage?: string;
 }
 
-const App = ({ host, posPath = '' }: IntialProps) => {
+const App = ({ homepage }: IntialProps) => {
 	const prefixes = ['wcpos://'];
-	if (host) {
-		prefixes.push(host);
+	let pathname = '';
+
+	if (homepage) {
+		const parsedUrl = new Url(homepage);
+		prefixes.push(parsedUrl.host);
+		pathname = parsedUrl.pathname;
 	}
 
 	const linking = {
 		prefixes,
 		config: {
 			screens: {
-				Auth: `${posPath}/login`,
+				Auth: `${pathname}/login`,
 				Main: {
-					path: posPath,
+					path: pathname,
 					screens: {
 						POS: {
 							path: '',
@@ -59,7 +62,6 @@ const App = ({ host, posPath = '' }: IntialProps) => {
 	};
 
 	return (
-		// <React.StrictMode>
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				{/* @TODO - suspend AppStateProvider until state is ready */}
@@ -89,7 +91,6 @@ const App = ({ host, posPath = '' }: IntialProps) => {
 				</AppStateProvider>
 			</React.Suspense>
 		</ErrorBoundary>
-		// </React.StrictMode>
 	);
 };
 

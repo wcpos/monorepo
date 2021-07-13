@@ -25,6 +25,8 @@ import completed from './completed.svg';
 import cancelled from './cancelled.svg';
 import refunded from './refunded.svg';
 import failed from './failed.svg';
+import addCustomer from './add-customer.svg';
+import addCircleOutline from './add-circle-outline.svg';
 
 export default {
 	add,
@@ -61,4 +63,6 @@ export default {
 	cancelled,
 	refunded,
 	failed,
+	addCustomer,
+	addCircleOutline,
 };

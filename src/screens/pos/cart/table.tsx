@@ -12,7 +12,6 @@ import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import LineItem from './rows/line-item';
 import FeeLine from './rows/fee-line';
 import ShippingLine from './rows/shipping-line';
-import TableSettings from './actions';
 
 type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
@@ -62,11 +61,7 @@ const CartTable = ({ columns, items, query, onSort, ui }: ICartTableProps) => {
 						const { column } = getHeaderCellProps();
 						return (
 							<Table.Header.Row.Cell {...getHeaderCellProps()}>
-								{column.key === 'actions' ? (
-									<TableSettings columns={columns} ui={ui} />
-								) : (
-									t(`cart.column.label.${column.key}`)
-								)}
+								{t(`cart.column.label.${column.key}`)}
 							</Table.Header.Row.Cell>
 						);
 					}}

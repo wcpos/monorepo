@@ -87,8 +87,8 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 						<CustomerSelect onSelectCustomer={handleSelectCustomer} />
 					)}
 				</View>
-				<UISettings ui={ui} />
 				<AddCustomer />
+				<UISettings ui={ui} />
 			</Segment>
 			{currentOrder ? (
 				<Segment.Group>
