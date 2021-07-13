@@ -22,7 +22,7 @@ interface IntialProps {
 	posPath?: string;
 }
 
-const App = ({ host, posPath = ' ' }: IntialProps) => {
+const App = ({ host, posPath = '' }: IntialProps) => {
 	const prefixes = ['wcpos://'];
 	if (host) {
 		prefixes.push(host);
@@ -57,10 +57,6 @@ const App = ({ host, posPath = ' ' }: IntialProps) => {
 			},
 		},
 	};
-
-	// if (host) {
-	// 	linking.prefixes.push(host);
-	// }
 
 	return (
 		// <React.StrictMode>

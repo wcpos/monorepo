@@ -12,16 +12,17 @@ interface LoginFormProps {
 const LoginForm = ({ onClose, site }: LoginFormProps) => {
 	const [username, setUsername] = React.useState('');
 	const [password, setPassword] = React.useState('');
-	// const { site, wpUser } = useAppState();
+	const { site: currentSite } = useAppState();
 
 	const handleLogin = async () => {
-		if (site && site.wpApiUrl) {
-			const result = await http.post(`${site.wpApiUrl}wcpos/v1/jwt/authorize`, {
+		const _site = site || currentSite;
+		if (_site && _site.wpApiUrl) {
+			const result = await http.post(`${_site.wpApiUrl}wcpos/v1/jwt/authorize`, {
 				username,
 				password,
 			});
 			// add or update wpUser
-			const success = await site.addOrUpdateWpCredentials(result.data);
+			const success = await _site.addOrUpdateWpCredentials(result.data);
 			if (success) {
 				onClose();
 			}

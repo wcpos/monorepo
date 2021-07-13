@@ -33,56 +33,56 @@ export default {
 	/**
 	 *
 	 */
-	restApiQuery(this: CustomerCollection, query: QueryState) {
-		this.pouch
-			.find({
+	async restApiQuery(this: CustomerCollection, query: QueryState) {
+		try {
+			const result = await this.pouch.find({
 				selector: {},
 				// @ts-ignore
 				fields: ['_id', 'id', 'dateCreatedGmt'],
-			})
-			.then((result: any) => {
-				// get array of sorted records with dateCreatedGmt
-				const filtered = _filter(result.docs, 'dateCreatedGmt');
-				const sorted = _sortBy(filtered, 'dateCreatedGmt');
-				const exclude = _map(sorted, 'id').join(',');
-
-				// @ts-ignore
-				const replicationState = this.syncRestApi({
-					live: false,
-					autoStart: false,
-					pull: {
-						queryBuilder: (lastModified: any) => {
-							const orderbyMap = {
-								lastName: 'meta_value',
-								firstName: 'meta_value',
-							};
-
-							const metaKeyMap = {
-								lastName: 'last_name',
-								firstName: 'first_name',
-							};
-
-							// @ts-ignore
-							const orderby = orderbyMap[query.sortBy] ? orderbyMap[query.sortBy] : query.sortBy;
-							// @ts-ignore
-							const meta_key = metaKeyMap[query.sortBy] ? metaKeyMap[query.sortBy] : undefined;
-
-							return {
-								search: escape(query.search),
-								order: query.sortDirection,
-								orderby,
-								exclude,
-								meta_key,
-							};
-						},
-					},
-				});
-
-				replicationState.run(false);
-			})
-			.catch((err: any) => {
-				console.log(err);
 			});
+			// get array of sorted records with dateCreatedGmt
+			const filtered = _filter(result.docs, 'dateCreatedGmt');
+			const sorted = _sortBy(filtered, 'dateCreatedGmt');
+			const exclude = _map(sorted, 'id').join(',');
+
+			// @ts-ignore
+			const replicationState = this.syncRestApi({
+				live: false,
+				autoStart: false,
+				pull: {
+					queryBuilder: (lastModified_1: any) => {
+						const orderbyMap = {
+							lastName: 'meta_value',
+							firstName: 'meta_value',
+						};
+
+						const metaKeyMap = {
+							lastName: 'last_name',
+							firstName: 'first_name',
+						};
+
+						// @ts-ignore
+						const orderby = orderbyMap[query.sortBy] ? orderbyMap[query.sortBy] : query.sortBy;
+						// @ts-ignore
+						const meta_key = metaKeyMap[query.sortBy] ? metaKeyMap[query.sortBy] : undefined;
+
+						return {
+							search: escape(query.search),
+							order: query.sortDirection,
+							orderby,
+							exclude,
+							meta_key,
+						};
+					},
+				},
+			});
+
+			replicationState.run(false);
+			return replicationState;
+		} catch (err) {
+			console.log(err);
+			return err;
+		}
 	},
 
 	/**

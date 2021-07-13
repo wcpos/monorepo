@@ -88,7 +88,14 @@ export const useDataObservable = (
 	 */
 	React.useEffect(() => {
 		// @ts-ignore
-		collection.restApiQuery(query);
+		collection.restApiQuery(query).then((replicationState: any) => {
+			replicationState.error$.subscribe((err: any) => {
+				if (err.code === 401) {
+					// @ts-ignore
+					navigation.navigate('Modal', { login: true });
+				}
+			});
+		});
 	}, [collection, query]);
 
 	/**
