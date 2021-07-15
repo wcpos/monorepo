@@ -21,7 +21,16 @@ export interface WooCommerceOrderSchema {
   /**
    * Order status.
    */
-  status?: "pending" | "processing" | "on-hold" | "completed" | "cancelled" | "refunded" | "failed";
+  status?:
+    | "pending"
+    | "processing"
+    | "on-hold"
+    | "completed"
+    | "cancelled"
+    | "refunded"
+    | "failed"
+    | "pos-open"
+    | "pos-checkout";
   /**
    * Currency the order was created with, in ISO format.
    */
