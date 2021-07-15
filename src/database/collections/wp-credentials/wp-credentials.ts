@@ -2,6 +2,7 @@ import { Observable } from 'rxjs';
 import { switchMap, map } from 'rxjs/operators';
 import get from 'lodash/get';
 import forEach from 'lodash/forEach';
+import remove from 'lodash/remove';
 import schema from './schema.json';
 
 type StoreCollection = import('../stores').StoreCollection;
@@ -33,29 +34,33 @@ export const methods: WPCredentialsMethods = {
 	 */
 	async addOrUpdateStores(this: WPCredentialsDocument, data: any[]) {
 		const storesCollection: StoreCollection = get(this, 'collection.database.collections.stores');
+		const stores = await this.populate('stores');
 
-		try {
-			forEach(data, async (rawStore) => {
-				const existingStore = await storesCollection
-					.findOne({
-						selector: { id: rawStore.id },
-					})
-					.exec();
+		forEach(data, async (rawStore) => {
+			const existingStore = remove(stores, { id: rawStore.id });
 
-				if (existingStore) {
-					return existingStore.atomicPatch(rawStore);
-				}
-
+			if (existingStore.length > 1) {
+				console.log('this should not happen');
+				debugger;
+			} else if (existingStore.length === 1) {
+				// update existing store
+				// @ts-ignore
+				await existingStore[0].atomicPatch(rawStore);
+			} else {
+				// create new store
 				const newStore = await storesCollection.insert(rawStore);
-				return this.atomicUpdate((old) => {
+				await this.atomicUpdate((old: any) => {
 					old.stores = old.stores || [];
 					old.stores?.push(newStore._id);
 					return old;
 				});
-			});
-		} catch (error) {
-			throw Error(error);
-		}
+			}
+
+			if (Array.isArray(stores) && stores.length > 0) {
+				console.log('these stores need to be removed');
+				debugger;
+			}
+		});
 	},
 
 	/**
