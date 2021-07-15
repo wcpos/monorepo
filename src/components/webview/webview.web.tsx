@@ -1,4 +1,5 @@
 import * as React from 'react';
+import Button from '../button';
 
 type Props = {
 	src: string;
@@ -9,6 +10,8 @@ type Props = {
 };
 
 const WebView: React.FC<Props> = ({ src, title, onError, onMessage, onLoad }) => {
+	const [reload, setReload] = React.useState<number>(1);
+
 	// eslint-disable-next-line consistent-return
 	React.useEffect(() => {
 		if (typeof onMessage === 'function') {
@@ -17,17 +20,25 @@ const WebView: React.FC<Props> = ({ src, title, onError, onMessage, onLoad }) =>
 				window.removeEventListener('message', onMessage);
 			};
 		}
-	});
+	}, []);
 
 	return (
-		<iframe
-			title={title}
-			src="https://dev.local/wp/latest/wp-admin/"
-			onLoad={onLoad}
-			onError={onError}
-			width="100%"
-			height="100%"
-		/>
+		<>
+			<Button
+				title="Reload"
+				onPress={() => {
+					setReload((prev) => prev + 1);
+				}}
+			/>
+			<iframe
+				title={title}
+				src={`${src}&reload=${reload}`}
+				onLoad={onLoad}
+				onError={onError}
+				width="100%"
+				height="100%"
+			/>
+		</>
 	);
 };
 
