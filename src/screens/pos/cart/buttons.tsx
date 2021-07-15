@@ -67,7 +67,7 @@ const Buttons = ({ order }: ButtonsProps) => {
 					type="success"
 					onPress={async () => {
 						// @ts-ignore
-						order.atomicPatch({ status: 'checkout' });
+						order.atomicPatch({ status: 'pos-checkout' });
 					}}
 				/>
 			</Button.Group>

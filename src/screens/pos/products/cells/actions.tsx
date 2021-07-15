@@ -15,15 +15,15 @@ const Actions = ({ item: product }: Props) => {
 	const { storeDB } = useAppState();
 	const [visible, setVisible] = React.useState(false);
 
-	const addToCart = async () => {
+	const addToCart = React.useCallback(async () => {
 		if (currentOrder) {
-			return currentOrder.addOrUpdateLineItem(product);
+			currentOrder.addOrUpdateLineItem(product);
+		} else {
+			// @ts-ignore
+			const newOrder = await storeDB?.collections.orders.createNewOrderWithProduct(product);
+			setCurrentOrder(newOrder);
 		}
-		// @ts-ignore
-		const newOrder = await storeDB?.collections.orders.createNewOrderWithProduct(product);
-		setCurrentOrder(newOrder);
-		return newOrder;
-	};
+	}, [currentOrder, product, setCurrentOrder, storeDB?.collections.orders]);
 
 	if (!product.isSynced()) {
 		return <Icon.Skeleton size="x-large" />;
@@ -41,16 +41,7 @@ const Actions = ({ item: product }: Props) => {
 		);
 	}
 
-	return (
-		<Icon
-			name="addCircle"
-			size="x-large"
-			backgroundStyle="none"
-			onPress={() => {
-				addToCart();
-			}}
-		/>
-	);
+	return <Icon name="addCircle" size="x-large" backgroundStyle="none" onPress={addToCart} />;
 };
 
 export default Actions;

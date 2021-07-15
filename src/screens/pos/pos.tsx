@@ -90,7 +90,7 @@ const POS = () => {
 		}
 	};
 
-	const orderQuery = storeDB.collections.orders.find().where('status').eq('pending');
+	const orderQuery = storeDB.collections.orders.find().where('status').eq('pos-open');
 
 	const orders: OrderDocument[] = useObservableState(
 		orderQuery.$.pipe(
@@ -144,9 +144,7 @@ const POS = () => {
 						<Gutter />
 					</Animated.View>
 				</Draggable>
-				{currentOrder &&
-				// @ts-ignore
-				currentOrder.status === 'checkout' ? (
+				{currentOrder && currentOrder.status === 'pos-checkout' ? (
 					<Styled.CheckoutColumn>
 						<Checkout />
 					</Styled.CheckoutColumn>

@@ -27,6 +27,9 @@ import refunded from './refunded.svg';
 import failed from './failed.svg';
 import addCustomer from './add-customer.svg';
 import addCircleOutline from './add-circle-outline.svg';
+import creditCard from './credit-card.svg';
+import receipt from './receipt.svg';
+import shoppingCart from './shopping-cart.svg';
 
 export default {
 	add,
@@ -65,4 +68,9 @@ export default {
 	failed,
 	addCustomer,
 	addCircleOutline,
+	creditCard,
+	receipt,
+	'pos-checkout': receipt,
+	shoppingCart,
+	'pos-open': shoppingCart,
 };

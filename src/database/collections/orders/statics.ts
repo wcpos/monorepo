@@ -103,7 +103,7 @@ export default {
 		const dateCreatedGmt = new Date(timestamp).toISOString().split('.')[0];
 
 		// @ts-ignore
-		const newOrder = await this.insert({ dateCreatedGmt });
+		const newOrder = await this.insert({ dateCreatedGmt, status: 'pos-open' });
 		return newOrder.addOrUpdateLineItem(product);
 	},
 };
