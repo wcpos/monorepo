@@ -10,8 +10,6 @@ type Props = {
 };
 
 const WebView: React.FC<Props> = ({ src, title, onError, onMessage, onLoad }) => {
-	const [reload, setReload] = React.useState<number>(1);
-
 	// eslint-disable-next-line consistent-return
 	React.useEffect(() => {
 		if (typeof onMessage === 'function') {
@@ -24,19 +22,15 @@ const WebView: React.FC<Props> = ({ src, title, onError, onMessage, onLoad }) =>
 
 	return (
 		<>
-			<Button
-				title="Reload"
-				onPress={() => {
-					setReload((prev) => prev + 1);
-				}}
-			/>
 			<iframe
 				title={title}
-				src={`${src}&reload=${reload}`}
+				src={src}
 				onLoad={onLoad}
 				onError={onError}
 				width="100%"
 				height="100%"
+				// @ts-ignore
+				allowpaymentrequest
 			/>
 		</>
 	);
