@@ -34,7 +34,7 @@ export type Document = RxDocument & {
 
 	// reverse camelCase for WC REST API
 	forEach(json, (data, key) => {
-		const privateProperties = ['_id', '_attachments', '_rev'];
+		const privateProperties = ['localId', '_attachments', '_rev'];
 		const snakeCaseKey = snakeCase(key);
 		if (!privateProperties.includes(key) && key !== snakeCaseKey) {
 			json[snakeCaseKey] = data;

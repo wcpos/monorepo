@@ -188,6 +188,7 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 		}
 
 		const { data } = result;
+		// @ts-ignore
 		await this.collection.bulkUpsertFromServer(data);
 
 		return true;

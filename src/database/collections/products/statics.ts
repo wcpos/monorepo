@@ -47,10 +47,10 @@ export default {
 	 */
 	async restApiQuery(this: ProductCollection, query: QueryState) {
 		try {
-			const result = await this.pouch.find({
+			const result = await this.storageInstance.internals.pouch.find({
 				selector: {},
 				// @ts-ignore
-				fields: ['_id', 'id', 'dateCreatedGmt'],
+				fields: ['localId', 'id', 'dateCreatedGmt'],
 			});
 			// get array of sorted records with dateCreatedGmt
 			const filtered = _filter(result.docs, 'dateCreatedGmt');

@@ -16,7 +16,7 @@ describe('Sites Collection', () => {
 		const siteDoc = await db.sites.insert({ url: 'example.com' });
 		expect(isRxDocument(siteDoc)).toBe(true);
 		expect(siteDoc).toMatchObject({
-			_id: expect.any(String),
+			localId: expect.any(String),
 			url: 'example.com',
 		});
 	});
@@ -34,7 +34,7 @@ describe('Sites Collection', () => {
 		expect(isRxDocument(siteDoc)).toBe(true);
 		await siteDoc.connect();
 		expect(siteDoc).toMatchObject({
-			_id: expect.any(String),
+			localId: expect.any(String),
 			url: 'example.com',
 			name: 'Test Site',
 		});
