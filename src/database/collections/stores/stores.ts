@@ -20,7 +20,7 @@ function sanitizeStoreName(id: string) {
  */
 async function preRemove(this: StoreCollection, plainData: any, store: StoreDocument) {
 	// @ts-ignore
-	const storeDB = DatabaseService.getStoreDB(sanitizeStoreName(plainData._id));
+	const storeDB = DatabaseService.getStoreDB(sanitizeStoreName(plainData.localId));
 	// @ts-ignore
 	return storeDB.remove();
 }

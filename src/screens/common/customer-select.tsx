@@ -46,7 +46,7 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 		return sortedCustomers.map((customer) => ({
 			label: `${customer.firstName} ${customer.lastName}`,
 			value: customer,
-			key: customer._id,
+			key: customer.localId,
 		}));
 	}, [customers]);
 

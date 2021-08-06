@@ -51,7 +51,7 @@ export const methods: WPCredentialsMethods = {
 				const newStore = await storesCollection.insert(rawStore);
 				await this.atomicUpdate((old: any) => {
 					old.stores = old.stores || [];
-					old.stores?.push(newStore._id);
+					old.stores?.push(newStore.localId);
 					return old;
 				});
 			}

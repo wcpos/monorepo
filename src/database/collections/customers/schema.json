@@ -3,9 +3,15 @@
 	"version": 0,
 	"description": "WooCommerce Customer schema",
 	"type": "object",
+	"primaryKey": "localId",
+	"required": ["localId"],
 	"properties": {
+		"localId": {
+			"description": "Unique local identifier for the resource.",
+			"type": "string"
+		},
 		"id": {
-			"description": "Unique identifier for the resource.",
+			"description": "Unique remote identifier for the resource.",
 			"type": "integer"
 		},
 		"dateCreated": {

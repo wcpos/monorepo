@@ -34,30 +34,32 @@ export const Checkout = () => {
 				<Text>Order Total: {currentOrder?.total}</Text>
 			</Segment>
 			<Segment grow>
-				<Accordion
-					items={[
-						{
-							label: 'Stripe',
-							content: <WebView src={`${paymentUrlMeta?.value}&wcpos=1&gateway=stripe`} />,
-						},
-						{
-							label: 'BACS',
-							content: <WebView src={`${paymentUrlMeta?.value}&wcpos=1&gateway=bacs`} />,
-						},
-						{
-							label: 'Cheque',
-							content: <WebView src={`${paymentUrlMeta?.value}&wcpos=1&gateway=cheque`} />,
-						},
-						{
-							label: 'COD',
-							content: <WebView src={`${paymentUrlMeta?.value}&wcpos=1&gateway=cod`} />,
-						},
-						{
-							label: 'PayPal',
-							content: <WebView src={`${paymentUrlMeta?.value}&wcpos=1&gateway=paypal`} />,
-						},
-					]}
-				/>
+				{paymentUrlMeta?.value ? (
+					<Accordion
+						items={[
+							{
+								label: 'Stripe',
+								content: <WebView src={`${paymentUrlMeta?.value}&wcpos=1&gateway=stripe`} />,
+							},
+							{
+								label: 'BACS',
+								content: <WebView src={`${paymentUrlMeta?.value}&wcpos=1&gateway=bacs`} />,
+							},
+							{
+								label: 'Cheque',
+								content: <WebView src={`${paymentUrlMeta?.value}&wcpos=1&gateway=cheque`} />,
+							},
+							{
+								label: 'COD',
+								content: <WebView src={`${paymentUrlMeta?.value}&wcpos=1&gateway=cod`} />,
+							},
+							{
+								label: 'PayPal',
+								content: <WebView src={`${paymentUrlMeta?.value}&wcpos=1&gateway=paypal`} />,
+							},
+						]}
+					/>
+				) : null}
 			</Segment>
 			<Segment>
 				<Button

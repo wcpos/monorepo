@@ -28,15 +28,15 @@ async function preInsert(this: OrderCollection, plainData: Record<string, unknow
 	console.log('Order pre-insert', plainData);
 	if (isArray(plainData.lineItems)) {
 		const result = await this.collections().line_items.bulkInsert(plainData.lineItems);
-		plainData.lineItems = map(result.success, '_id');
+		plainData.lineItems = map(result.success, 'localId');
 	}
 	if (isArray(plainData.feeLines)) {
 		const result = await this.collections().fee_lines.bulkInsert(plainData.feeLines);
-		plainData.feeLines = map(result.success, '_id');
+		plainData.feeLines = map(result.success, 'localId');
 	}
 	if (isArray(plainData.shippingLines)) {
 		const result = await this.collections().shipping_lines.bulkInsert(plainData.shippingLines);
-		plainData.shippingLines = map(result.success, '_id');
+		plainData.shippingLines = map(result.success, 'localId');
 	}
 	return plainData;
 }
@@ -54,16 +54,16 @@ async function preSave(
 	// @TODO - bulkInsert should match bulkInsert, eg: result.success
 	const { lineItems, feeLines, shippingLines } = plainData;
 	if (isArray(lineItems) && lineItems.length > 0 && !isString(lineItems[0])) {
-		const result = await this.collections().line_items.bulkUpsert(lineItems);
-		plainData.lineItems = map(result, '_id');
+		const result = await this.collections().line_items.bulkInsert(lineItems);
+		plainData.lineItems = map(result, 'localId');
 	}
 	if (isArray(feeLines) && feeLines.length > 0 && !isString(feeLines[0])) {
-		const result = await this.collections().fee_lines.bulkUpsert(feeLines);
-		plainData.feeLines = map(result, '_id');
+		const result = await this.collections().fee_lines.bulkInsert(feeLines);
+		plainData.feeLines = map(result, 'localId');
 	}
 	if (isArray(shippingLines) && shippingLines.length > 0 && !isString(shippingLines[0])) {
-		const result = await this.collections().shipping_lines.bulkUpsert(shippingLines);
-		plainData.shippingLines = map(result, '_id');
+		const result = await this.collections().shipping_lines.bulkInsert(shippingLines);
+		plainData.shippingLines = map(result, 'localId');
 	}
 	return plainData;
 }

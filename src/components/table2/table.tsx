@@ -32,7 +32,7 @@ const Table = ({
 	...rest
 }: TableProps) => {
 	const keyExtractor = React.useCallback(
-		(item: any, index: number) => get(item, '_id') || index,
+		(item: any, index: number) => get(item, 'localId') || index,
 		[]
 	);
 	// const childCount = React.Children.count(children);

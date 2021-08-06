@@ -15,7 +15,7 @@ export async function bulkUpsertFromServer(this: RxCollection, data: Record<stri
 			const firstExisting = existing.shift();
 			if (existing.length > 0) {
 				console.warn('This should not happen, remove extraneous records');
-				collection.bulkRemove(map(existing, '_id'));
+				collection.bulkRemove(map(existing, 'localId'));
 			}
 			if (firstExisting) {
 				// check local modified time

@@ -18,10 +18,10 @@ export default {
 		// @TODO - data is coming in straight from REST API, need to parse first?
 		forEach(items, (item) => {
 			// @ts-ignore
-			const _id = get(find(item.meta_data, { key: '_pos' }), 'value');
+			const localId = get(find(item.meta_data, { key: '_pos' }), 'value');
 			// @ts-ignore
 			const upsertedItem = this.collections().line_items.upsert({
-				_id,
+				localId,
 				...(item as Record<string, unknown>),
 			});
 

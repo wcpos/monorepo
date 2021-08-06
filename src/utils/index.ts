@@ -1,7 +1,7 @@
 import randomToken from 'random-token';
 
 /**
- * generate a new _id as db-primary-key
+ * generate a new localId as db-primary-key
  */
 // eslint-disable-next-line import/prefer-default-export
 export function generateId(): string {

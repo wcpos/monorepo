@@ -28,7 +28,7 @@ const methods: UserMethods = {
 		if (!cleanUrl) return;
 
 		const site = await this.collections().sites.insert({ url: cleanUrl });
-		await this.update({ $push: { sites: site._id } }).catch((err) => {
+		await this.update({ $push: { sites: site.localId } }).catch((err) => {
 			console.log(err);
 			return err;
 		});
@@ -40,7 +40,7 @@ const methods: UserMethods = {
 	async removeSite(this: UserDocument, site: SiteDocument) {
 		await site.remove();
 		await this.atomicPatch({
-			sites: pull(this.sites as any[], site._id),
+			sites: pull(this.sites as any[], site.localId),
 		});
 	},
 
