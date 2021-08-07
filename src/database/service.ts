@@ -28,6 +28,7 @@ import axios from 'axios';
 import difference from 'lodash/difference';
 import collectionsHelper from './plugins/utils/collections';
 import removeChildren from './plugins/remove-children';
+import { RxDBGenerateIdPlugin } from './plugins/utils/generate-id'
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
 import { userCollections, storeCollections } from './collections';
 // import { config } from './adapter';
@@ -54,6 +55,7 @@ if (process.env.NODE_ENV === 'development') {
 addRxPlugin(collectionsHelper);
 // @ts-ignore
 addRxPlugin(removeChildren);
+addRxPlugin(RxDBGenerateIdPlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
 // addRxPlugin(RxDBNoValidatePlugin);
 addRxPlugin(RxDBValidatePlugin);
