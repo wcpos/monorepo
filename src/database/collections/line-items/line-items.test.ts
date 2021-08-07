@@ -27,7 +27,7 @@ describe('Line Items Collection', () => {
 
 		// check default
 		expect(lineItem).toMatchObject({
-			_id: expect.any(String),
+			localId: expect.any(String),
 			name: 'Product',
 		});
 	});

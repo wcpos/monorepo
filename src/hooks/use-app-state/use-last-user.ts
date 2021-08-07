@@ -67,8 +67,8 @@ export function useLastUser() {
 		);
 		await userDB.users.upsertLocal('lastStore', {
 			storeID: id,
-			siteID: site._id,
-			wpUserID: wpUser._id,
+			siteID: site.localId,
+			wpUserID: wpUser.localId,
 		});
 		_setLastUser({
 			site,

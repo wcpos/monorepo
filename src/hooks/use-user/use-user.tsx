@@ -34,12 +34,12 @@ export function useUser() {
 				// create new user
 				// @ts-ignore
 				const newUserDoc = await userDB.users.insert({ displayName: 'Test' });
-				await userDB.users.upsertLocal('lastUser', { id: newUserDoc._id });
+				await userDB.users.upsertLocal('lastUser', { id: newUserDoc.localId });
 				return setUser(newUserDoc);
 			}
 
 			// else?? set the first found user
-			await userDB.users.upsertLocal('lastUser', { id: users[0]._id });
+			await userDB.users.upsertLocal('lastUser', { id: users[0].localId });
 			return setUser(users[0]);
 		})();
 	}, []);

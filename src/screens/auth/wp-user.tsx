@@ -45,7 +45,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 	 */
 	const handleStoreSelect = React.useCallback(async () => {
 		if (stores.length === 1) {
-			setLastUser(stores[0]._id, site, wpUser);
+			setLastUser(stores[0].localId, site, wpUser);
 		}
 	}, [setLastUser, site, stores, wpUser]);
 
@@ -61,7 +61,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 		// need to remove wpUser from site from site
 		await site.update({
 			$pullAll: {
-				wpCredentials: [wpUser._id],
+				wpCredentials: [wpUser.localId],
 			},
 		});
 		await wpUser.remove();

@@ -97,7 +97,7 @@ const Site = ({ site, user }: ISiteProps) => {
 					/>
 				</View>
 				{wpUsers.map((wpUser) => (
-					<WpUser key={wpUser._id} wpUser={wpUser} site={site} />
+					<WpUser key={wpUser.localId} wpUser={wpUser} site={site} />
 				))}
 			</>
 		);

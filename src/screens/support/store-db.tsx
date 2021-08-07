@@ -10,6 +10,7 @@ type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 type Collection = import('rxdb/plugins/core').RxCollection;
 
 const Row = ({ item, columns }: { item: Collection; columns: any[] }) => {
+	// @ts-ignore
 	const count = useObservableState(item.totalRecords$);
 
 	return (

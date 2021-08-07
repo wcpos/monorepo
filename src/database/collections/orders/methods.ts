@@ -160,7 +160,7 @@ export default {
 		 */
 		return this.atomicUpdate((order) => {
 			order.lineItems = order.lineItems ?? [];
-			order.lineItems.push(newLineItem._id);
+			order.lineItems.push(newLineItem.localId);
 			return order;
 		}).catch((err: any) => {
 			debugger;
@@ -173,7 +173,7 @@ export default {
 	async removeLineItem(this: OrderDocument, lineItem: LineItemDocument) {
 		await this.update({
 			$pullAll: {
-				lineItems: [lineItem._id],
+				lineItems: [lineItem.localId],
 			},
 		}).then(() => {
 			return lineItem.remove();
@@ -189,7 +189,7 @@ export default {
 			.then((newFee: FeeLineDocument) => {
 				return this.update({
 					$push: {
-						feeLines: newFee._id,
+						feeLines: newFee.localId,
 					},
 				});
 			});
@@ -201,7 +201,7 @@ export default {
 	async removeFeeLine(this: OrderDocument, feeLine: FeeLineDocument) {
 		await this.update({
 			$pullAll: {
-				feeLines: [feeLine._id],
+				feeLines: [feeLine.localId],
 			},
 		}).then(() => {
 			return feeLine.remove();
@@ -217,7 +217,7 @@ export default {
 			.then((newShipping: ShippingLineDocument) => {
 				return this.update({
 					$push: {
-						shippingLines: newShipping._id,
+						shippingLines: newShipping.localId,
 					},
 				});
 			})
@@ -232,7 +232,7 @@ export default {
 	async removeShippingLine(this: OrderDocument, shippingLine: ShippingLineDocument) {
 		await this.update({
 			$pullAll: {
-				shippingLines: [shippingLine._id],
+				shippingLines: [shippingLine.localId],
 			},
 		}).then(() => {
 			return shippingLine.remove();
