@@ -70,9 +70,10 @@ addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
 export async function _createDB<T>(name: string) {
 	const db = await createRxDatabase<T>({
 		name,
+		ignoreDuplicate: process.env.NODE_ENV === 'development',
 		// ...config,
 		// pouchSettings: { revs_limit: 1, auto_compaction: true },
-		storage: getRxStoragePouch('idb')
+		storage: getRxStoragePouch('idb', { revs_limit: 1, auto_compaction: true })
 	});
 
 	// add to window for debugging
