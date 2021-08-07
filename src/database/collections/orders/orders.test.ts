@@ -29,7 +29,7 @@ describe('Orders collection', () => {
 		});
 
 		expect(order).toMatchObject({
-			_id: expect.any(String),
+			localId: expect.any(String),
 			id: 12345,
 			currency: 'AUD', // default
 			customerId: 0, // default
@@ -49,7 +49,7 @@ describe('Orders collection', () => {
 		});
 
 		expect(order).toMatchObject({
-			_id: expect.any(String),
+			localId: expect.any(String),
 			id: 1234567890,
 			lineItems: [expect.any(String), expect.any(String)],
 		});

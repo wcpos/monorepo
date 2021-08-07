@@ -26,7 +26,7 @@ describe('Fee Lines Collection', () => {
 
 		// check defaults
 		expect(feeLine).toMatchObject({
-			_id: expect.any(String),
+			localId: expect.any(String),
 			name: 'Fee',
 		});
 	});

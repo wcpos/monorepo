@@ -22,6 +22,7 @@ export type Collection = RxCollection & { collections: () => Record<string, RxCo
  *
  */
 function isSynced(this: Collection) {
+	// @ts-ignore
 	return !!this.dateCreated;
 }
 
@@ -46,23 +47,26 @@ const prototypes = {
  */
 const hooks = {
 	createRxCollection(collection: RxCollection) {
+		// @ts-ignore
 		collection.totalRecords = new BehaviorSubject(0);
+		// @ts-ignore
 		collection.totalRecords$ = collection.totalRecords.asObservable();
 
 		/**
 		 * count the total records
 		 * */
-		collection.pouch
+		collection.storageInstance.internals.pouch
 			.find({
 				selector: {},
 				// @ts-ignore
-				fields: ['_id', 'id', 'dateCreatedGmt'],
+				fields: ['localId', 'id', 'dateCreatedGmt'],
 			})
-			.then((result) => {
+			.then((result: any) => {
 				console.log(collection.name, result.docs.length);
+				// @ts-ignore
 				collection.totalRecords.next(result.docs.length);
 			})
-			.catch((err) => {
+			.catch((err: any) => {
 				console.log(err);
 			});
 
@@ -72,17 +76,18 @@ const hooks = {
 		const watch = collection.$.pipe(
 			debounceTime(20),
 			map(() => {
-				collection.pouch
+				collection.storageInstance.internals.pouch
 					.find({
 						selector: {},
 						// @ts-ignore
-						fields: ['_id', 'id', 'dateCreatedGmt'],
+						fields: ['localId', 'id', 'dateCreatedGmt'],
 					})
-					.then((result) => {
+					.then((result: any) => {
 						console.log(collection.name, result.docs.length);
+						// @ts-ignore
 						collection.totalRecords.next(result.docs.length);
 					})
-					.catch((err) => {
+					.catch((err: any) => {
 						console.log(err);
 					});
 			})
@@ -108,7 +113,7 @@ const hooks = {
 				document.update({
 					$push: {
 						// @ts-ignore
-						metaData: { key: '_pos', value: document._id },
+						metaData: { key: '_pos', value: document.localId },
 					},
 				});
 			}
@@ -121,6 +126,7 @@ const hooks = {
 		 */
 		forEach(collection.options.middlewares, (middleware, hook) => {
 			const { handle, parallel } = middleware;
+			// @ts-ignore
 			collection[hook](handle, parallel);
 		});
 

@@ -52,7 +52,7 @@ const methods: SiteMethods = {
 		);
 
 		const parsedData = {
-			id: data.user_id,
+			id: data.userlocalId,
 			username: data.username,
 			displayName: data.display_name,
 			email: data.email,
@@ -65,7 +65,7 @@ const methods: SiteMethods = {
 		try {
 			const wpUser = await wpCredentialsCollection
 				.findOne({
-					selector: { id: data.user_id },
+					selector: { id: data.userlocalId },
 				})
 				.exec();
 
@@ -78,7 +78,7 @@ const methods: SiteMethods = {
 			await this.atomicUpdate((oldData) => {
 				oldData.wpCredentials = oldData.wpCredentials || [];
 				// @ts-ignore
-				oldData.wpCredentials.push(newWpUser._id);
+				oldData.wpCredentials.push(newWpUser.localId);
 				return oldData;
 			});
 

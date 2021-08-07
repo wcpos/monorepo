@@ -1,13 +1,17 @@
 import {
 	createRxDatabase,
 	addRxPlugin,
-	checkAdapter,
 	isRxDatabase,
-	PouchDB,
+	randomCouchString,
+	// PouchDB,
 } from 'rxdb/plugins/core';
+import {
+	checkAdapter,
+	addPouchPlugin,
+	getRxStoragePouch
+} from 'rxdb/plugins/pouchdb';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
-import { RxDBAdapterCheckPlugin } from 'rxdb/plugins/adapter-check';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 // import { RxDBNoValidatePlugin } from 'rxdb/plugins/no-validate';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
@@ -24,9 +28,12 @@ import axios from 'axios';
 import difference from 'lodash/difference';
 import collectionsHelper from './plugins/utils/collections';
 import removeChildren from './plugins/remove-children';
+import { RxDBGenerateIdPlugin } from './plugins/utils/generate-id'
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
 import { userCollections, storeCollections } from './collections';
-import { config } from './adapter';
+// import { config } from './adapter';
+
+addPouchPlugin(require('pouchdb-adapter-idb'));
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -38,15 +45,17 @@ if (process.env.NODE_ENV === 'development') {
 
 	// add debugging
 	// @ts-ignore
-	import('pouchdb-debug').then((pouchdbDebug) => {
-		PouchDB.plugin(pouchdbDebug.default);
-		PouchDB.debug.enable('*');
-	});
+	// import('pouchdb-debug').then((pouchdbDebug) => {
+	// 	PouchDB.plugin(pouchdbDebug.default);
+	// 	PouchDB.debug.enable('*');
+	// });
 }
 
+// @ts-ignore
 addRxPlugin(collectionsHelper);
+// @ts-ignore
 addRxPlugin(removeChildren);
-addRxPlugin(RxDBAdapterCheckPlugin);
+addRxPlugin(RxDBGenerateIdPlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
 // addRxPlugin(RxDBNoValidatePlugin);
 addRxPlugin(RxDBValidatePlugin);
@@ -61,8 +70,10 @@ addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
 export async function _createDB<T>(name: string) {
 	const db = await createRxDatabase<T>({
 		name,
-		...config,
-		pouchSettings: { revs_limit: 1, auto_compaction: true },
+		ignoreDuplicate: process.env.NODE_ENV === 'development',
+		// ...config,
+		// pouchSettings: { revs_limit: 1, auto_compaction: true },
+		storage: getRxStoragePouch('idb', { revs_limit: 1, auto_compaction: true })
 	});
 
 	// add to window for debugging

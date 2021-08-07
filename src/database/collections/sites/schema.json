@@ -3,7 +3,13 @@
 	"version": 0,
 	"description": "WordPress site",
 	"type": "object",
+	"primaryKey": "localId",
+	"required": ["localId"],
 	"properties": {
+		"localId": {
+			"description": "Unique local identifier for the resource.",
+			"type": "string"
+		},
 		"url": {
 			"type": "string"
 		},
