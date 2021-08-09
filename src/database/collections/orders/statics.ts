@@ -82,6 +82,7 @@ export default {
 	 */
 	audit(this: OrderCollection) {
 		return this.database.httpClient
+			// @ts-ignore
 			.get('orders', {
 				params: { fields: ['id'], posts_per_page: -1 },
 			})
