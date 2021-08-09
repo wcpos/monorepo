@@ -158,6 +158,7 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 
 		let result;
 		try {
+			// @ts-ignore
 			result = await this.collection.database.httpClient.get(this.collection.name, {
 				params,
 			});

@@ -94,6 +94,7 @@ export default {
 	 */
 	audit(this: ProductCollection) {
 		return this.database.httpClient
+			// @ts-ignore
 			.get('products', {
 				params: { fields: ['id', 'name'], posts_per_page: -1 },
 			})

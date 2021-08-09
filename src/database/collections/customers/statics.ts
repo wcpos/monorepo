@@ -90,6 +90,7 @@ export default {
 	 */
 	audit(this: CustomerCollection) {
 		return this.database.httpClient
+			// @ts-ignore
 			.get('customers', {
 				params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: -1 },
 			})
