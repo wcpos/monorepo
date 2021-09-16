@@ -139,7 +139,7 @@ export class RxDBWooCommerceRestApiSyncDocumentService {
 			// 		throw err;
 			// 	}
 			// }
-		} catch (err) {
+		} catch (err: any) {
 			if (err.response) {
 				// client received an error response (5xx, 4xx)
 				console.log(err.response);
@@ -191,7 +191,7 @@ export class RxDBWooCommerceRestApiSyncDocumentService {
 			// 		throw err;
 			// 	}
 			// }
-		} catch (err) {
+		} catch (err: any) {
 			if (err.response) {
 				// client received an error response (5xx, 4xx)
 				console.log(err.response);

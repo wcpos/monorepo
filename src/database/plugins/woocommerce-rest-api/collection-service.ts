@@ -171,11 +171,14 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 			// 		throw err;
 			// 	}
 			// }
-		} catch (err) {
+		} catch (err: any) {
 			if (err.response) {
 				// client received an error response (5xx, 4xx)
 				console.log(err.response);
-				this._subjects.error.next({ code: err.response.status, message: err.response.statusText });
+				this._subjects.error.next({
+					code: err.response.status,
+					message: err.response.statusText,
+				});
 			} else if (err.request) {
 				// client never received a response, or request never left
 				console.log(err.request);
@@ -185,6 +188,7 @@ export class RxDBWooCommerceRestApiSyncCollectionService {
 				console.log(err);
 				this._subjects.error.next({ message: 'Unknown Error' });
 			}
+
 			return false;
 		}
 
