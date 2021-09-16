@@ -84,7 +84,7 @@ const methods: SiteMethods = {
 
 			return newWpUser;
 		} catch (error) {
-			throw Error(error);
+			throw Error(String(error));
 		}
 	},
 
