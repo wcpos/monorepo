@@ -37,9 +37,9 @@ export function useLastUser() {
 
 			if (storeID && site && wpUser) {
 				const storeDB = await DatabaseService.getStoreDB(
-					sanitizeStoreName(storeID),
-					site.getWcApiUrl(),
-					wpUser.jwt as string
+					sanitizeStoreName(storeID)
+					// site.getWcApiUrl(),
+					// wpUser.jwt as string
 				);
 				if (storeDB) {
 					_setLastUser({
@@ -61,9 +61,9 @@ export function useLastUser() {
 	async function setLastUser(id: string, site: any, wpUser: any) {
 		const userDB = await DatabaseService.getUserDB();
 		const storeDB = await DatabaseService.getStoreDB(
-			sanitizeStoreName(id),
-			site.getWcApiUrl(),
-			wpUser.jwt
+			sanitizeStoreName(id)
+			// site.getWcApiUrl(),
+			// wpUser.jwt
 		);
 		await userDB.users.upsertLocal('lastStore', {
 			storeID: id,
