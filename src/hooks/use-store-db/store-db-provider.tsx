@@ -4,7 +4,12 @@ import DatabaseService from '@wcpos/common/src/database';
 
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
-export const StoreDBContext = React.createContext<any>(null);
+interface IStoreDBContextProps {
+	storeDB?: StoreDatabase;
+	setStoreDB: React.Dispatch<React.SetStateAction<StoreDatabase | undefined>>;
+}
+
+export const StoreDBContext = React.createContext<IStoreDBContextProps | null>(null);
 
 interface IStoreDBProviderProps {
 	children: React.ReactNode;
