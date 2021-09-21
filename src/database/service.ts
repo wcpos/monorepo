@@ -5,11 +5,7 @@ import {
 	randomCouchString,
 	// PouchDB,
 } from 'rxdb/plugins/core';
-import {
-	checkAdapter,
-	addPouchPlugin,
-	getRxStoragePouch
-} from 'rxdb/plugins/pouchdb';
+import { checkAdapter, addPouchPlugin, getRxStoragePouch } from 'rxdb/plugins/pouchdb';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
@@ -28,7 +24,7 @@ import axios from 'axios';
 import difference from 'lodash/difference';
 import collectionsHelper from './plugins/utils/collections';
 import removeChildren from './plugins/remove-children';
-import { RxDBGenerateIdPlugin } from './plugins/utils/generate-id'
+import { RxDBGenerateIdPlugin } from './plugins/utils/generate-id';
 import RxDBWooCommerceRestApiSyncPlugin from './plugins/woocommerce-rest-api';
 import { userCollections, storeCollections } from './collections';
 // import { config } from './adapter';
@@ -73,7 +69,7 @@ export async function _createDB<T>(name: string) {
 		ignoreDuplicate: process.env.NODE_ENV === 'development',
 		// ...config,
 		// pouchSettings: { revs_limit: 1, auto_compaction: true },
-		storage: getRxStoragePouch('idb', { revs_limit: 1, auto_compaction: true })
+		storage: getRxStoragePouch('idb', { revs_limit: 1, auto_compaction: true }),
 	});
 
 	// add to window for debugging
@@ -127,13 +123,13 @@ export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
 /**
  * creates the Store database
  */
-export async function _createStoresDB(name: string, baseURL: string, jwt: string) {
+export async function _createStoresDB(name: string) {
 	const db = await _createDB<StoreDatabaseCollections>(name);
-	const httpClient = axios.create({
-		baseURL,
-		headers: { 'X-WCPOS': '1', Authorization: `Bearer ${jwt}` },
-	});
-	Object.assign(db, { httpClient });
+	// const httpClient = axios.create({
+	// 	baseURL,
+	// 	headers: { 'X-WCPOS': '1', Authorization: `Bearer ${jwt}` },
+	// });
+	// Object.assign(db, { httpClient });
 
 	// @ts-ignore
 	const collections = await db.addCollections(storeCollections);
@@ -181,7 +177,7 @@ export interface IDatabaseService {
 	USER_DB_CREATE_PROMISE: Promise<UserDatabase>;
 	STORE_DB_CREATE_PROMISE: Promise<StoreDatabase | undefined>;
 	getUserDB: () => Promise<UserDatabase>;
-	getStoreDB: (name: string, baseURL: string, jwt: string) => Promise<StoreDatabase | undefined>;
+	getStoreDB: (name: string) => Promise<StoreDatabase | undefined>;
 }
 
 /**
@@ -195,13 +191,13 @@ const DatabaseService: IDatabaseService = {
 		return this.USER_DB_CREATE_PROMISE;
 	},
 
-	async getStoreDB(name, baseURL, jwt) {
+	async getStoreDB(name) {
 		const db = await this.STORE_DB_CREATE_PROMISE;
 		if (!db) {
-			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name, baseURL, jwt);
+			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name);
 		} else if (db?.name !== name) {
 			await db?.destroy();
-			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name, baseURL, jwt);
+			this.STORE_DB_CREATE_PROMISE = _createStoresDB(name);
 		}
 		return this.STORE_DB_CREATE_PROMISE;
 	},

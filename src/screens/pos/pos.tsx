@@ -6,7 +6,8 @@ import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
 // import { PanGestureHandler } from 'react-native-gesture-handler';
 // import { useAnimatedGestureHandler, useSharedValue } from 'react-native-reanimated';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+// import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useStoreDB from '@wcpos/common/src/hooks/use-store-db';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
 import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
 import Draggable from '@wcpos/common/src/components/draggable';
@@ -43,7 +44,7 @@ export const POSContext = React.createContext<POSContextProps>({
  *
  */
 const POS = () => {
-	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
+	const { storeDB } = useStoreDB();
 	const productsUI = useObservableSuspense(useUIResource('posProducts'));
 	const cartUI = useObservableSuspense(useUIResource('cart'));
 	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
@@ -94,7 +95,7 @@ const POS = () => {
 
 	const orders: OrderDocument[] = useObservableState(
 		orderQuery.$.pipe(
-			filter((o) => {
+			filter((o: []) => {
 				/** @TODO - remove this hack!
 				 * why is orderQuery emitting on changes to order.lineItems??
 				 */

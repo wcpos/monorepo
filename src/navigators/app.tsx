@@ -2,14 +2,17 @@ import * as React from 'react';
 import { RouteProp, CompositeNavigationProp } from '@react-navigation/native';
 import { createStackNavigator, StackNavigationProp } from '@react-navigation/stack';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+// import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useStoreDB from '@wcpos/common/src/hooks/use-store-db';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-import Auth from '@wcpos/common/src/screens/auth';
+// import Auth from '@wcpos/common/src/screens/auth';
 import Modal from '@wcpos/common/src/screens/modal';
+import Splash from '@wcpos/common/src/screens/splash';
+import MainNavigator from '@wcpos/common/src/screens/test';
 
 type DrawerParamList = import('./main').DrawerParamList;
 
-const MainNavigator = React.lazy(() => import('./main'));
+// const MainNavigator = React.lazy(() => import('./main'));
 
 export type AppStackParamList = {
 	Auth: undefined;
@@ -42,7 +45,7 @@ export interface ModalScreenProps {
  *
  */
 const AppNavigator = (props: Partial<StackNavigatorProps>) => {
-	const { storeDB } = useAppState();
+	const storeDB = useStoreDB();
 
 	useWhyDidYouUpdate('AppNavigator', { props, storeDB });
 
@@ -51,7 +54,7 @@ const AppNavigator = (props: Partial<StackNavigatorProps>) => {
 			{storeDB ? (
 				<Stack.Screen name="Main" component={MainNavigator} />
 			) : (
-				<Stack.Screen name="Auth" component={Auth} />
+				<Stack.Screen name="Auth" component={Splash} />
 			)}
 			<Stack.Screen name="Modal" component={Modal} options={{ presentation: 'transparentModal' }} />
 		</Stack.Navigator>
