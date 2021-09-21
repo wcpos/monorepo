@@ -1,7 +1,7 @@
 // import * as React from 'react';
 import { tap, filter } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
-import useAppState from '../use-app-state';
+import useStoreDB from '../use-store-db';
 import initialUI from './ui-initial.json';
 
 interface UiDisplay {
@@ -52,7 +52,7 @@ const uiResources: IUIResources = {
  * @param key
  */
 export const useUI = (key: Extract<keyof IUIResources, string>) => {
-	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
+	const { storeDB } = useStoreDB() as { storeDB: StoreDatabase };
 
 	if (uiResources[key]) {
 		return uiResources[key] as UIResource;

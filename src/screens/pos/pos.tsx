@@ -44,7 +44,7 @@ export const POSContext = React.createContext<POSContextProps>({
  *
  */
 const POS = () => {
-	const { storeDB } = useStoreDB();
+	const { storeDB } = useStoreDB() as { storeDB: StoreDatabase };
 	const productsUI = useObservableSuspense(useUIResource('posProducts'));
 	const cartUI = useObservableSuspense(useUIResource('cart'));
 	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
@@ -95,7 +95,7 @@ const POS = () => {
 
 	const orders: OrderDocument[] = useObservableState(
 		orderQuery.$.pipe(
-			filter((o: []) => {
+			filter((o) => {
 				/** @TODO - remove this hack!
 				 * why is orderQuery emitting on changes to order.lineItems??
 				 */
