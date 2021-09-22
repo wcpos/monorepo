@@ -5,6 +5,9 @@ import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider } from 'styled-components/native';
 import getTheme from '@wcpos/common/src/themes';
+import { UserProvider } from './hooks/use-user';
+import { SiteProvider } from './hooks/use-site';
+import { WpCredentialsProvider } from './hooks/use-wp-credentials';
 import { StoreDBProvider } from './hooks/use-store-db';
 import TranslationService from './services/translation';
 import AppNavigator from './navigators';
@@ -65,22 +68,28 @@ const App = ({ homepage }: IntialProps) => {
 	return (
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
-				<StoreDBProvider>
-					<ThemeProvider theme={getTheme('default', 'dark')}>
-						<SafeAreaProvider style={{ overflow: 'hidden' }}>
-							<AppProviderSizeProvider>
-								<SnackbarProvider>
-									<Portal.Provider>
-										<NavigationContainer linking={linking}>
-											<AppNavigator />
-										</NavigationContainer>
-										<Portal.Manager />
-									</Portal.Provider>
-								</SnackbarProvider>
-							</AppProviderSizeProvider>
-						</SafeAreaProvider>
-					</ThemeProvider>
-				</StoreDBProvider>
+				<UserProvider>
+					<SiteProvider>
+						<WpCredentialsProvider>
+							<StoreDBProvider>
+								<ThemeProvider theme={getTheme('default', 'dark')}>
+									<SafeAreaProvider style={{ overflow: 'hidden' }}>
+										<AppProviderSizeProvider>
+											<SnackbarProvider>
+												<Portal.Provider>
+													<NavigationContainer linking={linking}>
+														<AppNavigator />
+													</NavigationContainer>
+													<Portal.Manager />
+												</Portal.Provider>
+											</SnackbarProvider>
+										</AppProviderSizeProvider>
+									</SafeAreaProvider>
+								</ThemeProvider>
+							</StoreDBProvider>
+						</WpCredentialsProvider>
+					</SiteProvider>
+				</UserProvider>
 			</React.Suspense>
 		</ErrorBoundary>
 	);

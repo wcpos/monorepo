@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import set from 'lodash/set';
 import useDataObservable from '@wcpos/common/src/hooks/use-data-observable';
+import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
 import Segment from '@wcpos/common/src/components/segment';
 import Search from '@wcpos/common/src/components/search';
 import Text from '@wcpos/common/src/components/text';
@@ -38,6 +39,7 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 			tag: null,
 		},
 	});
+	useIdAudit('products');
 
 	/**
 	 *
