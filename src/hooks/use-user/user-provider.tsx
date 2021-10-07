@@ -1,59 +1,65 @@
 import * as React from 'react';
-import DatabaseService from '@wcpos/common/src/database';
+import { from, combineLatest } from 'rxjs';
+import { tap, switchMap, filter } from 'rxjs/operators';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { userDB$ } from '@wcpos/common/src/database/users-db';
 
 type UserDocument = import('@wcpos/common/src/database').UserDocument;
 type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
 
 interface UserContextProps {
-	user?: UserDocument;
-	setUser: React.Dispatch<React.SetStateAction<UserDocument | undefined>>;
-	userDB?: UserDatabase;
+	userResource: ObservableResource<UserDocument>;
+	// setUser: React.Dispatch<React.SetStateAction<UserDocument | undefined>>;
+	userDB: UserDatabase;
 }
 
-export const UserContext = React.createContext<UserContextProps | null>(null);
+// @ts-ignore
+export const UserContext = React.createContext<UserContextProps>();
 
 interface UserProviderProps {
 	children: React.ReactNode;
 }
 
-let userDB: UserDatabase;
+const userDBResource = new ObservableResource(userDB$, (value: any) => !!value);
+
+// const lastUser$ = userDB$.pipe(switchMap((userDB) => userDB.users.getLocal$('lastUser')));
+
+// const user$ = combineLatest([userDB$, lastUser$]).pipe(
+// 	// @ts-ignore
+// 	switchMap(([userDB, lastUser]) => {
+// 		if (lastUser) {
+// 			// @ts-ignore
+// 			return from(userDB.users.findOne(lastUser.get('id')).exec());
+// 		}
+// 		// create default entry
+// 		return false;
+// 	})
+// );
+
+// const userResource = new ObservableResource(user$, (value: any) => !!value);
 
 const UserProvider = ({ children }: UserProviderProps) => {
-	const [user, setUser] = React.useState<UserDocument | undefined>();
-
-	/**
-	 * run effect once to set the User ID
-	 */
-	React.useEffect(() => {
-		(async function init() {
-			userDB = await DatabaseService.getUserDB();
-			const lastUser = await userDB.users.getLocal('lastUser');
-
-			if (lastUser) {
-				// restore last user
-				const lastUserDoc = await userDB.users.findOne(lastUser.get('id')).exec();
-				if (lastUserDoc) {
-					return setUser(lastUserDoc);
-				}
-			}
-
-			const users = await userDB.users.find().exec();
-
-			if (users.length === 0) {
-				// create new user
+	const userDB = useObservableSuspense(userDBResource);
+	const user$ = userDB.users.getLocal$('lastUser').pipe(
+		tap(async (lastUser) => {
+			if (!lastUser) {
 				// @ts-ignore
-				const newUserDoc = await userDB.users.insert({ displayName: 'Test' });
-				await userDB.users.upsertLocal('lastUser', { id: newUserDoc.localId });
-				return setUser(newUserDoc);
+				const defaultUser = await userDB.users.insert({ firstName: 'Test', lastName: 'User' });
+				const localDoc = await userDB.users.upsertLocal('lastUser', { id: defaultUser.localId });
 			}
+		}),
+		filter((lastUser) => !!lastUser),
+		switchMap((lastUser) => {
+			const localId = lastUser?.get('id');
+			const query = userDB.users.findOne(localId);
+			return query.$;
+		})
+	);
 
-			// else?? set the first found user
-			await userDB.users.upsertLocal('lastUser', { id: users[0].localId });
-			return setUser(users[0]);
-		})();
-	}, []);
+	const userResource = new ObservableResource(user$, (value: any) => !!value);
 
-	return <UserContext.Provider value={{ user, setUser, userDB }}>{children}</UserContext.Provider>;
+	// @ts-ignore
+	return <UserContext.Provider value={{ userResource, userDB }}>{children}</UserContext.Provider>;
 };
 
 export default UserProvider;

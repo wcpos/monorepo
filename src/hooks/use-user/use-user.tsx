@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useObservableSuspense } from 'observable-hooks';
 import { UserContext } from './user-provider';
 
 const useUser = () => {
@@ -6,7 +7,11 @@ const useUser = () => {
 	if (context === undefined) {
 		throw new Error(`useUser must be called within UserProvider`);
 	}
-	return context;
+
+	const { userDB, userResource } = context;
+	const user = useObservableSuspense(userResource);
+
+	return { user, userDB, userResource };
 };
 
 export default useUser;
