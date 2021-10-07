@@ -23,8 +23,9 @@ const http = axios.create({
 
 http.interceptors.request.use(
 	function (config) {
+		config.headers = config.headers || {};
 		if (config.method !== 'head') {
-			config.headers['X-WCPOS'] = 1;
+			config.headers['X-WCPOS'] = '1';
 		}
 		if (config.auth) {
 			config.headers.Authorization = `Basic ${btoa(

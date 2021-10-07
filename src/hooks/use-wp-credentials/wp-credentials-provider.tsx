@@ -1,32 +1,62 @@
 import * as React from 'react';
-import DatabaseService from '@wcpos/common/src/database';
+import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { from } from 'rxjs';
+import { map, switchMap, filter, tap } from 'rxjs/operators';
+import useSite from '../use-site';
+import useUser from '../use-user';
 
 type WPCredentialsDocument = import('@wcpos/common/src/database').WPCredentialsDocument;
 
 interface WpCredentialsContextProps {
-	wpCredentials?: WPCredentialsDocument;
-	setWpCredentials: React.Dispatch<React.SetStateAction<WPCredentialsDocument | undefined>>;
+	wpCredentialsResource: ObservableResource<WPCredentialsDocument>;
 }
 
-export const WpCredentialsContext = React.createContext<WpCredentialsContextProps | null>(null);
+// @ts-ignore
+export const WpCredentialsContext = React.createContext<WpCredentialsContextProps>();
 
 interface IStoreDBProviderProps {
 	children: React.ReactNode;
+	wpCredentials?: import('../../types').InitialWpCredentialsProps;
 }
 
-const WpCredentialsProvider = ({ children }: IStoreDBProviderProps) => {
-	const [wpCredentials, setWpCredentials] = React.useState<WPCredentialsDocument | undefined>();
+const WpCredentialsProvider = ({
+	children,
+	wpCredentials: initWpCredentials,
+}: IStoreDBProviderProps) => {
+	const { site } = useSite();
+	const { userDB } = useUser();
+	let wpCredentials$;
 
-	// React.useEffect(() => {
-	// 	async function getLastUser() {
-	// 		const userDB = await DatabaseService.getUserDB();
-	// 	}
+	if (initWpCredentials) {
+		// find existing record by id
+		// note: this needs to be improved, could be many records with same id
+		const query = userDB.wp_credentials.findOne({ selector: { id: initWpCredentials.id } });
+		wpCredentials$ = query.$.pipe(
+			// @ts-ignore
+			tap((result) => {
+				if (!result) {
+					// @ts-ignore
+					userDB.wp_credentials.insert(initWpCredentials);
+					// } else {
+					// 	result.atomicPatch(initWpCredentials);
+				}
+			})
+		);
+	} else {
+		wpCredentials$ = userDB.wp_credentials.getLocal$('current').pipe(
+			switchMap((current) => {
+				const localId = current?.get('id');
+				const query = userDB.wp_credentials.findOne(localId);
+				return query.$;
+			})
+		);
+	}
 
-	// 	getLastUser();
-	// }, []);
+	const wpCredentialsResource = new ObservableResource(wpCredentials$);
 
 	return (
-		<WpCredentialsContext.Provider value={{ wpCredentials, setWpCredentials }}>
+		// @ts-ignore
+		<WpCredentialsContext.Provider value={{ wpCredentialsResource }}>
 			{children}
 		</WpCredentialsContext.Provider>
 	);

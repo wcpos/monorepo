@@ -21,11 +21,9 @@ import { SnackbarProvider } from './components/snackbar/snackbar-provider';
 
 const i18n = new TranslationService();
 
-interface IntialProps {
-	homepage?: string;
-}
+type InitialProps = import('./types').InitialProps;
 
-const App = ({ homepage }: IntialProps) => {
+const App = ({ homepage, site, wpCredentials, stores }: InitialProps) => {
 	const prefixes = ['wcpos://'];
 	let pathname = '';
 
@@ -69,9 +67,9 @@ const App = ({ homepage }: IntialProps) => {
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<UserProvider>
-					<SiteProvider>
-						<WpCredentialsProvider>
-							<StoreDBProvider>
+					<SiteProvider site={site}>
+						<WpCredentialsProvider wpCredentials={wpCredentials}>
+							<StoreDBProvider stores={stores}>
 								<ThemeProvider theme={getTheme('default', 'dark')}>
 									<SafeAreaProvider style={{ overflow: 'hidden' }}>
 										<AppProviderSizeProvider>

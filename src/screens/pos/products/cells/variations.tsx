@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 import Text from '@wcpos/common/src/components/text';
 import Button from '@wcpos/common/src/components/button';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+// import useAppState from '@wcpos/common/src/hooks/use-app-state';
 // import WcApiService from '@wcpos/common/src/services/wc-api';
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
 }
 
 const Variations = ({ product }: Props) => {
-	const { user, storeDB } = useAppState();
+	// const { user, storeDB } = useAppState();
 	const [variations, setVariations] = React.useState([]);
 
 	const addToCart = async (variation: any) => {

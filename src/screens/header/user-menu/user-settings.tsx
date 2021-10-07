@@ -55,6 +55,7 @@ const UserSettings = ({ onClose }: UserSettingsProps) => {
 						{ key: 'name', label: 'Name' },
 						{ key: 'rate', label: 'Rate' },
 					]}
+					// @ts-ignore
 					data={taxRates}
 				/>
 			</View>

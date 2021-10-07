@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useNavigation, CommonActions } from '@react-navigation/native';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+// import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Dropdown from '@wcpos/common/src/components/dropdown';
 import Text from '@wcpos/common/src/components/text';
@@ -12,7 +12,6 @@ import * as Styled from './styles';
 // }
 
 export const UserMenu = () => {
-	const { user, unsetLastUser } = useAppState();
 	const [showSettings, setShowSettings] = React.useState(false);
 	const navigation = useNavigation();
 
@@ -21,7 +20,7 @@ export const UserMenu = () => {
 			<Dropdown
 				activator={
 					<Styled.DropDown>
-						<Text type="inverse">{user?.displayName}</Text>
+						<Text type="inverse">Test</Text>
 						<Avatar
 							src="https://secure.gravatar.com/avatar/a2a53c07cdd4a8aa81c043baafd0915f"
 							// placeholder="PK"
@@ -35,7 +34,7 @@ export const UserMenu = () => {
 						action: async () => {
 							// @ts-ignore
 							navigation.navigate('Auth');
-							await unsetLastUser();
+							// await unsetLastUser();
 						},
 						type: 'warning',
 					},

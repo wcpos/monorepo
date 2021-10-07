@@ -21,7 +21,7 @@ import * as Styled from './styles';
 type CustomersScreenProps = import('@wcpos/common/src/navigators/main').CustomersScreenProps;
 
 const Customers = ({ navigation }: CustomersScreenProps) => {
-	const { user, storeDB } = useAppState();
+	const { storeDB } = useAppState();
 	const ui = useObservableSuspense(useUIResource('customers'));
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const { data$, query, setQuery } = useDataObservable('customers', {

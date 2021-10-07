@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { WpCredentialsContext } from './wp-credentials-provider';
 
 const useWpCredentials = () => {
@@ -6,7 +7,11 @@ const useWpCredentials = () => {
 	if (context === undefined) {
 		throw new Error(`useWpCredentials must be called within WpCredentialsProvider`);
 	}
-	return context;
+
+	const { wpCredentialsResource } = context;
+	const wpCredentials = useObservableSuspense(wpCredentialsResource);
+
+	return { wpCredentials, wpCredentialsResource };
 };
 
 export default useWpCredentials;

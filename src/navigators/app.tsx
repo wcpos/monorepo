@@ -4,9 +4,8 @@ import { createStackNavigator, StackNavigationProp } from '@react-navigation/sta
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import useStoreDB from '@wcpos/common/src/hooks/use-store-db';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-// import Auth from '@wcpos/common/src/screens/auth';
+import Auth from '@wcpos/common/src/screens/auth';
 import Modal from '@wcpos/common/src/screens/modal';
-import Splash from '@wcpos/common/src/screens/splash';
 
 type DrawerParamList = import('./main').DrawerParamList;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
@@ -44,7 +43,7 @@ export interface ModalScreenProps {
  *
  */
 const AppNavigator = (props: Partial<StackNavigatorProps>) => {
-	const { storeDB } = useStoreDB() as { storeDB: StoreDatabase };
+	const { storeDB } = useStoreDB();
 
 	useWhyDidYouUpdate('AppNavigator', { props, storeDB });
 
@@ -53,7 +52,7 @@ const AppNavigator = (props: Partial<StackNavigatorProps>) => {
 			{storeDB ? (
 				<Stack.Screen name="Main" component={MainNavigator} />
 			) : (
-				<Stack.Screen name="Auth" component={Splash} />
+				<Stack.Screen name="Auth" component={Auth} />
 			)}
 			<Stack.Screen name="Modal" component={Modal} options={{ presentation: 'transparentModal' }} />
 		</Stack.Navigator>

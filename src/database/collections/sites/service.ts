@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 import httpClient from '@wcpos/common/src/lib/http';
 import Url from '@wcpos/common/src/lib/url-parse';
@@ -100,6 +101,7 @@ export class ConnectionService {
 		return this.client
 			.head(`${protocol}://${this.site.getUrlWithoutProtocol()}`)
 			.then((response) => {
+				// @ts-ignore
 				const wpApiUrl = parseApiUrlFromHeaders(response.headers);
 				if (wpApiUrl) {
 					this._subjects.status.next({ type: 'pending', message: 'WordPress website found' });

@@ -1,31 +1,57 @@
 import * as React from 'react';
-import DatabaseService from '@wcpos/common/src/database';
+import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { from } from 'rxjs';
+import { map, switchMap, filter, tap } from 'rxjs/operators';
+import useUser from '../use-user';
 
 type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
 
 interface SiteContextProps {
-	site?: SiteDocument;
-	setSite: React.Dispatch<React.SetStateAction<SiteDocument | undefined>>;
+	siteResource: ObservableResource<SiteDocument>;
+	// sitesResource: ObservableResource<SiteDocument[]>;
 }
 
-export const SiteContext = React.createContext<SiteContextProps | null>(null);
+// @ts-ignore
+export const SiteContext = React.createContext<SiteContextProps>();
 
 interface UserProviderProps {
 	children: React.ReactNode;
+	site?: import('../../types').InitialSiteProps;
 }
 
-const SiteProvider = ({ children }: UserProviderProps) => {
-	const [site, setSite] = React.useState<SiteDocument | undefined>();
+const SiteProvider = ({ children, site: initSite }: UserProviderProps) => {
+	const { userDB } = useUser();
+	let site$;
 
-	// React.useEffect(() => {
-	// 	async function getLastUser() {
-	// 		const userDB = await DatabaseService.getUserDB();
-	// 	}
+	if (initSite) {
+		// find existing record by url
+		const query = userDB.sites.findOne({ selector: { home: initSite.home } });
+		site$ = query.$.pipe(
+			// @ts-ignore
+			tap((result) => {
+				if (!result) {
+					// @ts-ignore
+					from(userDB.sites.insert(initSite));
+					// } else {
+					// 	result.atomicPatch(initSite);
+				}
+			})
+		);
+	} else {
+		site$ = userDB.sites.getLocal$('lastSite').pipe(
+			switchMap((lastSite) => {
+				const localId = lastSite?.get('id');
+				const query = userDB.sites.findOne(localId);
+				return query.$;
+			})
+		);
+	}
 
-	// 	getLastUser();
-	// }, []);
+	// @ts-ignore
+	const siteResource = new ObservableResource(site$);
 
-	return <SiteContext.Provider value={{ site, setSite }}>{children}</SiteContext.Provider>;
+	// @ts-ignore
+	return <SiteContext.Provider value={{ siteResource }}>{children}</SiteContext.Provider>;
 };
 
 export default SiteProvider;

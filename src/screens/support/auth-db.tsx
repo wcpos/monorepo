@@ -1,33 +1,32 @@
 import * as React from 'react';
 import Table from '@wcpos/common/src/components/table';
 import Button from '@wcpos/common/src/components/button';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useUser from '@wcpos/common/src/hooks/use-user';
 import forEach from 'lodash/forEach';
 import map from 'lodash/map';
 
 type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
 
 const AuthDB = () => {
-	const { userDB } = useAppState() as { userDB: UserDatabase };
+	// const { userDB } = useUser();
 	const [counts, setCounts] = React.useState<any[]>([]);
 
 	// subscribe to all collection changes
-	forEach(userDB.collections, (collection, key) => {
-		collection.$.subscribe((changeEvent) => console.log(key, changeEvent));
-	});
+	// forEach(userDB.collections, (collection, key) => {
+	// 	collection.$.subscribe((changeEvent) => console.log(key, changeEvent));
+	// });
 
 	React.useEffect(() => {
 		(async function init() {
-			const promises = map(userDB.collections, async (collection, key) => {
-				const records = await collection.find().exec();
-				return {
-					name: key,
-					count: records.length,
-				};
-			});
-			const resolved = await Promise.all(promises);
-
-			setCounts(resolved);
+			// const promises = map(userDB.collections, async (collection, key) => {
+			// 	const records = await collection.find().exec();
+			// 	return {
+			// 		name: key,
+			// 		count: records.length,
+			// 	};
+			// });
+			// const resolved = await Promise.all(promises);
+			// setCounts(resolved);
 		})();
 	}, []);
 	const deleteAll = async (table: string) => {

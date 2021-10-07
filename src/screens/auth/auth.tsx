@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useObservable, useObservableState } from 'observable-hooks';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useUser from '@wcpos/common/src/hooks/use-user';
 import Segment from '@wcpos/common/src/components/segment';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Text from '@wcpos/common/src/components/text';
@@ -14,30 +14,28 @@ type UserDocument = import('@wcpos/common/src/database').UserDocument;
  *
  */
 const Auth = () => {
-	const { user } = useAppState() as { user: UserDocument };
-	const [sites] = useObservableState(user.getSites$, []);
+	const { user } = useUser();
+	// const [sites] = useObservableState(user.getSites$, []);
+	const sites: any[] = [];
 
-	const onConnect = React.useCallback(
-		async (url: string): Promise<void> => {
-			const newSiteId = await user.addSiteByUrl(url);
-			// if (newSiteId) {
-			// 	user.connectSite(newSiteId);
-			// }
-			// const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
-			// if (trimUrl) {
-			// 	const newSite = await appUser.database.action(async () =>
-			// 		appUser.sites.collection.create((site) => {
-			// 			site.url = `https://${trimUrl}`;
-			// 			site.app_user.set(appUser);
-			// 		})
-			// 	);
-			// 	newSite?.connect();
-			// }
-		},
-		[user]
-	);
+	const onConnect = React.useCallback(async (url: string): Promise<void> => {
+		// const newSiteId = await user.addSiteByUrl(url);
+		// if (newSiteId) {
+		// 	user.connectSite(newSiteId);
+		// }
+		// const trimUrl = url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
+		// if (trimUrl) {
+		// 	const newSite = await appUser.database.action(async () =>
+		// 		appUser.sites.collection.create((site) => {
+		// 			site.url = `https://${trimUrl}`;
+		// 			site.app_user.set(appUser);
+		// 		})
+		// 	);
+		// 	newSite?.connect();
+		// }
+	}, []);
 
-	useWhyDidYouUpdate('Auth', { user, sites, onConnect });
+	// useWhyDidYouUpdate('Auth', { user, sites, onConnect });
 
 	return (
 		<Styled.Container>
