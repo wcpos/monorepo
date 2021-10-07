@@ -41,3 +41,5 @@ export type { TaxRateCollection, TaxRateDocument, TaxRateSchema } from './collec
  * @TODO - move the types?
  */
 export { DatabaseService as default } from './service';
+
+export { userDB$ } from './users-db';
