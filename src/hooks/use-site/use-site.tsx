@@ -8,10 +8,11 @@ const useSite = () => {
 		throw new Error(`useSite must be called within SiteProvider`);
 	}
 
-	const { siteResource } = context;
+	const { siteResource, sitesResource } = context;
 	const site = useObservableSuspense(siteResource);
+	const sites = useObservableSuspense(sitesResource);
 
-	return { site, siteResource };
+	return { site, sites, siteResource };
 };
 
 export default useSite;
