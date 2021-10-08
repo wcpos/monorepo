@@ -8,7 +8,7 @@ type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
 
 interface SiteContextProps {
 	siteResource: ObservableResource<SiteDocument>;
-	// sitesResource: ObservableResource<SiteDocument[]>;
+	sitesResource: ObservableResource<SiteDocument[]>;
 }
 
 // @ts-ignore
@@ -20,7 +20,7 @@ interface UserProviderProps {
 }
 
 const SiteProvider = ({ children, site: initSite }: UserProviderProps) => {
-	const { userDB } = useUser();
+	const { userDB, user } = useUser();
 	let site$;
 
 	if (initSite) {
@@ -47,11 +47,27 @@ const SiteProvider = ({ children, site: initSite }: UserProviderProps) => {
 		);
 	}
 
+	// should I move this to useSites with state change?
 	// @ts-ignore
 	const siteResource = new ObservableResource(site$);
 
-	// @ts-ignore
-	return <SiteContext.Provider value={{ siteResource }}>{children}</SiteContext.Provider>;
+	// sites
+	const sites$ = user.sites$.pipe(
+		switchMap((siteIds: string[]) => {
+			return userDB.sites.findByIds$(siteIds || []);
+		}),
+		map((m) => {
+			// @ts-ignore
+			return Array.from(m.values());
+		})
+	);
+
+	const sitesResource = new ObservableResource(sites$);
+
+	return (
+		// @ts-ignore
+		<SiteContext.Provider value={{ siteResource, sitesResource }}>{children}</SiteContext.Provider>
+	);
 };
 
 export default SiteProvider;
