@@ -1,5 +1,5 @@
 import schema from './schema.json';
-import DatabaseService from '../../index';
+// import DatabaseService from '../../index';
 
 export type StoreSchema = import('./interface').WCPOSStoreSchema;
 export type StoreDocument = import('rxdb').RxDocument<StoreSchema, StoreMethods>;
