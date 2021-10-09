@@ -3,7 +3,7 @@ import { isRxDocument } from 'rxdb/plugins/core';
 import getTheme from '@wcpos/common/src/themes';
 import useScreenSize from '../use-screen-size';
 import useOnline from '../use-online';
-import useUser from '../use-user';
+// import useUser from '../use-user';
 import { getUniqueId, getReadableVersion } from './device-info';
 // import useStoreDB from '../use-store';
 import { useLastUser } from './use-last-user';
@@ -21,9 +21,9 @@ export interface IAppStateProps {
 	};
 	online: boolean;
 	screen: import('react-native').ScaledSize;
-	user?: UserDocument;
-	setUser: React.Dispatch<React.SetStateAction<UserDocument | undefined>>;
-	userDB?: UserDatabase;
+	// user?: UserDocument;
+	// setUser: React.Dispatch<React.SetStateAction<UserDocument | undefined>>;
+	// userDB?: UserDatabase;
 	site?: SiteDocument;
 	wpUser?: WPCredentialsDocument;
 	storeDB?: StoreDatabase;
@@ -51,7 +51,7 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 	// const [isReady, setIsReady] = React.useState(false);
 	const screen = useScreenSize();
 	const online = useOnline();
-	const { user, setUser, userDB } = useUser();
+	// const { user, setUser, userDB } = useUser();
 	const theme = getTheme('default', 'dark');
 	const { site, wpUser, storeDB, storeID, setLastUser, unsetLastUser, ready } = useLastUser();
 
@@ -59,9 +59,9 @@ const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
 		info,
 		online,
 		screen,
-		user,
-		setUser,
-		userDB,
+		// user,
+		// setUser,
+		// userDB,
 		site,
 		wpUser,
 		storeDB,

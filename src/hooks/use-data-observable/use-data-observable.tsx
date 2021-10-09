@@ -2,7 +2,9 @@ import * as React from 'react';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { switchMap, catchError, shareReplay, first } from 'rxjs/operators';
 import { useNavigation } from '@react-navigation/native';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useStoreDB from '@wcpos/common/src/hooks/use-store-db';
+
+type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
 export interface QueryState {
@@ -27,8 +29,8 @@ export const useDataObservable = (
 	initialQuery: QueryState,
 	options = {}
 ) => {
-	const { storeDB } = useAppState();
-	const collection = storeDB?.collections[collectionName];
+	const { storeDB } = useStoreDB() as { storeDB: StoreDatabase };
+	const collection = storeDB.collections[collectionName];
 	const [query, setQuery] = React.useState<QueryState>(initialQuery);
 	const navigation = useNavigation();
 
@@ -69,34 +71,34 @@ export const useDataObservable = (
 	/**
 	 *
 	 */
-	useSubscription(data$.pipe(first()), (result: any) => {
-		// if first and empty, do an id audit
-		if (result.length === 0) {
-			// @ts-ignore
-			collection.audit().catch((err: any) => {
-				if (err && err.response && err.response.status === 401) {
-					// @ts-ignore
-					navigation.navigate('Modal', { login: true });
-				}
-				console.warn(err);
-			});
-		}
-	});
+	// useSubscription(data$.pipe(first()), (result: any) => {
+	// 	// if first and empty, do an id audit
+	// 	if (result.length === 0) {
+	// 		// @ts-ignore
+	// 		collection.audit().catch((err: any) => {
+	// 			if (err && err.response && err.response.status === 401) {
+	// 				// @ts-ignore
+	// 				navigation.navigate('Modal', { login: true });
+	// 			}
+	// 			console.warn(err);
+	// 		});
+	// 	}
+	// });
 
 	/**
 	 *
 	 */
-	React.useEffect(() => {
-		// @ts-ignore
-		collection.restApiQuery(query).then((replicationState: any) => {
-			replicationState.error$.subscribe((err: any) => {
-				if (err.code === 401) {
-					// @ts-ignore
-					navigation.navigate('Modal', { login: true });
-				}
-			});
-		});
-	}, [collection, query]);
+	// React.useEffect(() => {
+	// 	// @ts-ignore
+	// 	collection.restApiQuery(query).then((replicationState: any) => {
+	// 		replicationState.error$.subscribe((err: any) => {
+	// 			if (err.code === 401) {
+	// 				// @ts-ignore
+	// 				navigation.navigate('Modal', { login: true });
+	// 			}
+	// 		});
+	// 	});
+	// }, [collection, query]);
 
 	/**
 	 *

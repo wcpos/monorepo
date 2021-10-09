@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Q } from '@nozbe/watermelondb';
 import useDatabase from '../use-database-context';
 import useObservable from '../use-observable';
-import useApi from '../use-api';
+import useApi from '../use-api-old';
 import sync from './sync';
 import syncIds from './sync-ids';
 
