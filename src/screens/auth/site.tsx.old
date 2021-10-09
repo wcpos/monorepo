@@ -1,12 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
+import { tap, switchMap, map } from 'rxjs/operators';
+import { useObservableState } from 'observable-hooks';
 import { useNavigation } from '@react-navigation/native';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Text from '@wcpos/common/src/components/text';
+import Button from '@wcpos/common/src/components/button';
 import Icon from '@wcpos/common/src/components/icon';
 import Dialog from '@wcpos/common/src/components/dialog';
-import useWpCredentials from '@wcpos/common/src/hooks/use-wp-credentials';
-import Button from '@wcpos/common/src/components/button';
 import Modal from './login-modal';
 import WpUser from './wp-user';
 import * as Styled from './styles';
@@ -15,18 +16,30 @@ type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
 type UserDocument = import('@wcpos/common/src/database').UserDocument;
 type WPCredentialsDocument = import('@wcpos/common/src/database').WPCredentialsDocument;
 
-interface SiteProps {
+interface ISiteProps {
 	site: SiteDocument;
 	user: UserDocument;
 }
-
-const Site = ({ site, user }: SiteProps) => {
+/**
+ * Options for fetching favicons
+ * - https://api.statvoo.com/favicon/?url=${url}
+ * - https://www.google.com/s2/favicons?domain=${url}
+ * - https://favicongrabber.com/api/grab/${url}
+    
+ * - https://api.faviconkit.com/${url}/144
+ */
+const Site = ({ site, user }: ISiteProps) => {
+	const status = useObservableState(site.connection.status$);
+	const active = useObservableState(site.connection.active$);
+	const name = useObservableState(site.name$) as string;
 	const [visible, setVisible] = React.useState(false);
 	const [openConfirmDialog, setOpenConfirmDialog] = React.useState(false);
 	const showConfirmDialog = React.useCallback(() => setOpenConfirmDialog(true), []);
 	const hideConfirmDialog = React.useCallback(() => setOpenConfirmDialog(false), []);
-	const { wpUsers } = useWpCredentials();
 	const navigation = useNavigation();
+
+	/**  */
+	const [wpUsers] = useObservableState(site.getWpCredentials$, []);
 
 	const handleRemoveSite = async () => {
 		await user.removeSite(site);
@@ -35,10 +48,38 @@ const Site = ({ site, user }: SiteProps) => {
 	/**
 	 *
 	 */
+	const renderStatus = React.useMemo(() => {
+		if (!status) {
+			return null;
+		}
+
+		// @ts-ignore
+		return <Text size="small">{status.message}</Text>;
+	}, [status]);
+
+	/**
+	 *
+	 */
+	const renderActiveIcon = React.useMemo(() => {
+		let type = 'secondary';
+		if (active) {
+			type = 'success';
+		}
+		if (status && status.type === 'error') {
+			type = 'critical';
+		}
+
+		// @ts-ignore
+		return <Icon name="circle" type={type} size="x-small" />;
+	}, [active, status]);
+
+	/**
+	 *
+	 */
 	const renderWpUsers = React.useMemo(() => {
-		// if (!active) {
-		// 	return null;
-		// }
+		if (!active) {
+			return null;
+		}
 
 		return (
 			<>
@@ -60,16 +101,20 @@ const Site = ({ site, user }: SiteProps) => {
 				))}
 			</>
 		);
-	}, [navigation, site, wpUsers]);
+	}, [active, navigation, site, wpUsers]);
 
 	return (
 		<Styled.SiteWrapper>
 			<Avatar src={`https://api.faviconkit.com/${site.url}/144`} />
 			<Styled.SiteTextWrapper>
-				<Text weight="bold">{site.name}</Text>
+				<Text weight="bold">{name || site.url}</Text>
 				<Text size="small" type="secondary">
 					{site.url}
 				</Text>
+				<Styled.SiteStatusWrapper>
+					{renderActiveIcon}
+					{renderStatus}
+				</Styled.SiteStatusWrapper>
 				{renderWpUsers}
 			</Styled.SiteTextWrapper>
 			<Icon
