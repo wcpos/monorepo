@@ -47,7 +47,6 @@ const SiteProvider = ({ children, site: initSite }: UserProviderProps) => {
 		);
 	}
 
-	// should I move this to useSites with state change?
 	// @ts-ignore
 	const siteResource = new ObservableResource(site$);
 

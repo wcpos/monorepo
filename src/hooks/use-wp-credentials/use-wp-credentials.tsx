@@ -8,10 +8,11 @@ const useWpCredentials = () => {
 		throw new Error(`useWpCredentials must be called within WpCredentialsProvider`);
 	}
 
-	const { wpCredentialsResource } = context;
+	const { wpCredentialsResource, wpUsersResource } = context;
 	const wpCredentials = useObservableSuspense(wpCredentialsResource);
+	const wpUsers = useObservableSuspense(wpUsersResource);
 
-	return { wpCredentials, wpCredentialsResource };
+	return { wpCredentials, wpUsers, wpCredentialsResource };
 };
 
 export default useWpCredentials;
