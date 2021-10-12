@@ -45,8 +45,9 @@ export const POSContext = React.createContext<POSContextProps>({
  */
 const POS = () => {
 	const { storeDB } = useStoreDB() as { storeDB: StoreDatabase };
-	const productsUI = useObservableSuspense(useUIResource('posProducts'));
-	const cartUI = useObservableSuspense(useUIResource('cart'));
+	const resources = useUIResource();
+	const productsUI = useObservableSuspense(resources.posProducts);
+	const cartUI = useObservableSuspense(resources.cart);
 	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
 	const [currentCustomer, setCurrentCustomer] = React.useState<CustomerDocument | undefined>();
 

@@ -7,7 +7,7 @@ import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
 
 interface UiSettingsProps {
-	ui: import('@wcpos/common/src/hooks/use-ui/use-ui').UIDocument;
+	ui: import('@wcpos/common/src/hooks/use-ui').UIDocument;
 }
 
 const UiSettings = ({ ui }: UiSettingsProps) => {
