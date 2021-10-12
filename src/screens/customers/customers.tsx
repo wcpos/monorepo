@@ -22,7 +22,8 @@ type CustomersScreenProps = import('@wcpos/common/src/navigators/main').Customer
 
 const Customers = ({ navigation }: CustomersScreenProps) => {
 	const { storeDB } = useAppState();
-	const ui = useObservableSuspense(useUIResource('customers'));
+	const resources = useUIResource();
+	const ui = useObservableSuspense(resources.customers);
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const { data$, query, setQuery } = useDataObservable('customers', {
 		search: '',

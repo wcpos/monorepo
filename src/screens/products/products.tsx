@@ -19,7 +19,8 @@ import * as Styled from './styles';
  */
 const Products = () => {
 	const { storeDB } = useAppState();
-	const ui = useObservableSuspense(useUIResource('products'));
+	const resources = useUIResource();
+	const ui = useObservableSuspense(resources.products);
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	// @ts-ignore
 	const totalRecords = useObservableState(storeDB?.collections.products.totalRecords$);

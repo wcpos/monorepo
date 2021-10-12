@@ -26,7 +26,8 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
 
 const Orders = () => {
 	const { storeDB } = useAppState();
-	const ui = useObservableSuspense(useUIResource('orders'));
+	const resources = useUIResource();
+	const ui = useObservableSuspense(resources.orders);
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	const { data$, query, setQuery } = useDataObservable('orders', {
 		search: '',

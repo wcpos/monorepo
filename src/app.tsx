@@ -9,6 +9,7 @@ import { UserProvider } from './hooks/use-user';
 import { SiteProvider } from './hooks/use-site';
 import { WpCredentialsProvider } from './hooks/use-wp-credentials';
 import { StoreDBProvider } from './hooks/use-store-db';
+import { UIResourceProvider } from './hooks/use-ui';
 import TranslationService from './services/translation';
 import AppNavigator from './navigators';
 import Portal from './components/portal';
@@ -70,20 +71,22 @@ const App = ({ homepage, site, wpCredentials, stores }: InitialProps) => {
 					<SiteProvider site={site}>
 						<WpCredentialsProvider wpCredentials={wpCredentials}>
 							<StoreDBProvider stores={stores}>
-								<ThemeProvider theme={getTheme('default', 'dark')}>
-									<SafeAreaProvider style={{ overflow: 'hidden' }}>
-										<AppProviderSizeProvider>
-											<SnackbarProvider>
-												<Portal.Provider>
-													<NavigationContainer linking={linking}>
-														<AppNavigator />
-													</NavigationContainer>
-													<Portal.Manager />
-												</Portal.Provider>
-											</SnackbarProvider>
-										</AppProviderSizeProvider>
-									</SafeAreaProvider>
-								</ThemeProvider>
+								<UIResourceProvider>
+									<ThemeProvider theme={getTheme('default', 'dark')}>
+										<SafeAreaProvider style={{ overflow: 'hidden' }}>
+											<AppProviderSizeProvider>
+												<SnackbarProvider>
+													<Portal.Provider>
+														<NavigationContainer linking={linking}>
+															<AppNavigator />
+														</NavigationContainer>
+														<Portal.Manager />
+													</Portal.Provider>
+												</SnackbarProvider>
+											</AppProviderSizeProvider>
+										</SafeAreaProvider>
+									</ThemeProvider>
+								</UIResourceProvider>
 							</StoreDBProvider>
 						</WpCredentialsProvider>
 					</SiteProvider>
