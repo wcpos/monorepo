@@ -93,14 +93,16 @@ export default {
 	 *
 	 */
 	audit(this: ProductCollection) {
-		return this.database.httpClient
-			// @ts-ignore
-			.get('products', {
-				params: { fields: ['id', 'name'], posts_per_page: -1 },
-			})
-			.then(({ data }: any) => {
+		return (
+			this.database.httpClient
 				// @ts-ignore
-				return this.auditIdsFromServer(data);
-			});
+				.get('products', {
+					params: { fields: ['id', 'name'], posts_per_page: -1 },
+				})
+				.then(({ data }: any) => {
+					// @ts-ignore
+					return this.auditIdsFromServer(data);
+				})
+		);
 	},
 };
