@@ -20,6 +20,7 @@ const LoginForm = ({ onClose }: LoginFormProps) => {
 				password,
 			});
 			// set wp credientials
+			// @ts-ignore
 			const success = await wpUser?.atomicPatch(result.data);
 			if (success) {
 				onClose();
