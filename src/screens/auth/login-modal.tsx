@@ -26,6 +26,7 @@ const LoginModal = ({ visible, setVisible, site, user }: ILoginModalProps) => {
 				password,
 			});
 			// set wp credientials
+			// @ts-ignore
 			const wpUser = await site.addOrUpdateWpCredentials(result.data);
 			if (wpUser.jwt) {
 				setVisible(false);

@@ -8,6 +8,6 @@ const useUI = () => {
 	}
 
 	return context;
-}
+};
 
 export default useUI;

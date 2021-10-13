@@ -36,6 +36,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 				headers: { 'X-WCPOS': '1', Authorization: `Bearer ${wpUser.jwt}` },
 			})
 			.then((response) => {
+				// @ts-ignore
 				wpUser.addOrUpdateStores(response.data);
 			});
 	}, []);

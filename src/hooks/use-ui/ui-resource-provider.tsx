@@ -1,7 +1,7 @@
-import * as React from 'react'
+import * as React from 'react';
 import { tap, filter } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
-import get from 'lodash/get'
+import get from 'lodash/get';
 import useStoreDB from '../use-store-db';
 import initialUI from './ui-initial.json';
 
@@ -74,18 +74,18 @@ const UIResourceProvider = ({ children }: UIResourceProviderProps) => {
 			})
 		);
 
-		return new ObservableResource(resource$, val => !!val);
-	}
+		return new ObservableResource(resource$, (val) => !!val);
+	};
 
 	const uiResources = {
 		posProducts: getResource('posProducts'),
 		cart: getResource('cart'),
 		products: getResource('products'),
 		orders: getResource('orders'),
-		customers: getResource('customers')
-	}
+		customers: getResource('customers'),
+	};
 
-	return <UIResourceContext.Provider value={uiResources}>{children}</UIResourceContext.Provider>
-}
+	return <UIResourceContext.Provider value={uiResources}>{children}</UIResourceContext.Provider>;
+};
 
 export default UIResourceProvider;
