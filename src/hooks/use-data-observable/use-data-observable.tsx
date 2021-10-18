@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useObservable, useSubscription } from 'observable-hooks';
 import { switchMap, catchError, shareReplay, first } from 'rxjs/operators';
 import { useNavigation } from '@react-navigation/native';
-import useStoreDB from '@wcpos/common/src/hooks/use-store-db';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
 
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
 
@@ -29,7 +29,7 @@ export const useDataObservable = (
 	initialQuery: QueryState,
 	options = {}
 ) => {
-	const { storeDB } = useStoreDB() as { storeDB: StoreDatabase };
+	const { storeDB } = useAppState();
 	const collection = storeDB.collections[collectionName];
 	const [query, setQuery] = React.useState<QueryState>(initialQuery);
 	const navigation = useNavigation();

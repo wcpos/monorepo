@@ -2,7 +2,7 @@ import * as React from 'react';
 import { tap, filter } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
 import get from 'lodash/get';
-import useStoreDB from '../use-store-db';
+import useAppState from '../use-app-state';
 import initialUI from './ui-initial.json';
 
 interface UIDisplay {
@@ -56,9 +56,13 @@ interface UIResourceProviderProps {
 }
 
 const UIResourceProvider = ({ children }: UIResourceProviderProps) => {
-	const { storeDB } = useStoreDB();
+	const { storeDB } = useAppState();
 
 	const getResource = (key: string) => {
+		if (!storeDB) {
+			return;
+		}
+
 		const resource$ = storeDB.getLocal$(`ui_${key}`).pipe(
 			filter((uiDoc) => {
 				const initial = get(initialUI, key);
@@ -85,6 +89,7 @@ const UIResourceProvider = ({ children }: UIResourceProviderProps) => {
 		customers: getResource('customers'),
 	};
 
+	// @ts-ignore
 	return <UIResourceContext.Provider value={uiResources}>{children}</UIResourceContext.Provider>;
 };
 
