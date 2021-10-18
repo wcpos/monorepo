@@ -2,7 +2,7 @@ import * as React from 'react';
 import { RouteProp, CompositeNavigationProp } from '@react-navigation/native';
 import { createStackNavigator, StackNavigationProp } from '@react-navigation/stack';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
-import useStoreDB from '@wcpos/common/src/hooks/use-store-db';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Auth from '@wcpos/common/src/screens/auth';
 import Modal from '@wcpos/common/src/screens/modal';
@@ -43,7 +43,7 @@ export interface ModalScreenProps {
  *
  */
 const AppNavigator = (props: Partial<StackNavigatorProps>) => {
-	const { storeDB } = useStoreDB();
+	const { storeDB } = useAppState();
 
 	useWhyDidYouUpdate('AppNavigator', { props, storeDB });
 

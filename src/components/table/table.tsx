@@ -57,6 +57,7 @@ const Table = ({
 		if (Array.isArray(children) && childCount > 0) {
 			const child = children.find(({ type }: any) => type === Body);
 			if (React.isValidElement(child)) {
+				// @ts-ignore
 				return ({ item, index }) => child.props.children({ item, columns, index });
 			}
 		}
@@ -75,6 +76,7 @@ const Table = ({
 		if (Array.isArray(children) && childCount > 0) {
 			const child = children.find(({ type }: any) => type === Header);
 			if (React.isValidElement(child)) {
+				// @ts-ignore
 				return React.cloneElement(child.props.children, {
 					columns,
 					sort,

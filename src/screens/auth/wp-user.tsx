@@ -23,7 +23,7 @@ function sanitizeStoreName(id: string) {
 }
 
 const WpUser = ({ site, wpUser }: Props) => {
-	const { setLastUser } = useAppState();
+	// const { setLastUser } = useAppState();
 	const [showDialog, setShowDialog] = React.useState(false);
 	const [stores] = useObservableState(wpUser.getStores$, []);
 
@@ -46,9 +46,10 @@ const WpUser = ({ site, wpUser }: Props) => {
 	 */
 	const handleStoreSelect = React.useCallback(async () => {
 		if (stores.length === 1) {
-			setLastUser(stores[0].localId, site, wpUser);
+			debugger;
+			// setLastUser(stores[0].localId, site, wpUser);
 		}
-	}, [setLastUser, site, stores, wpUser]);
+	}, [site, stores, wpUser]);
 
 	/**
 	 *

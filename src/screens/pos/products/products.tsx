@@ -7,13 +7,11 @@ import get from 'lodash/get';
 import set from 'lodash/set';
 // import useDataObservable from '@wcpos/common/src/hooks/use-data-observable';
 // import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
-import useStoreDB from '@wcpos/common/src/hooks/use-store-db';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Segment from '@wcpos/common/src/components/segment';
 import Search from '@wcpos/common/src/components/search';
 import Text from '@wcpos/common/src/components/text';
 import http from '@wcpos/common/src/lib/http';
-import useSite from '@wcpos/common/src/hooks/use-site';
-import useWpCredentials from '@wcpos/common/src/hooks/use-wp-credentials';
 import { useNavigation } from '@react-navigation/native';
 import Table from '../../common/table';
 import Footer from './footer';
@@ -26,7 +24,7 @@ interface POSProductsProps {
 }
 
 const useProductQuery = () => {
-	const { storeDB } = useStoreDB();
+	const { storeDB } = useAppState();
 	const [query, setQuery] = React.useState({
 		search: '',
 		sortBy: 'name',
@@ -68,9 +66,7 @@ const useProductQuery = () => {
 };
 
 const useAudit = () => {
-	const { storeDB } = useStoreDB();
-	const { site } = useSite();
-	const { wpCredentials } = useWpCredentials();
+	const { storeDB, site, wpCredentials } = useAppState();
 	const navigation = useNavigation();
 
 	React.useEffect(() => {
@@ -79,19 +75,27 @@ const useAudit = () => {
 			.get('products', {
 				baseURL: site.wcApiUrl,
 				params: { fields: ['id', 'name'], posts_per_page: -1 },
-				headers: { 'X-WCPOS': '1', Authorization: `Bearer ${wpCredentials.jwt}` },
+				headers: {
+					'X-WCPOS': '1',
+					'X-WP-Nonce': 'c7e0b25917',
+					Authorization: `Bearer ${wpCredentials.jwt}`,
+				},
 			})
 			.then(({ data }: any) => {
 				// @ts-ignore
 				return storeDB.products.auditIdsFromServer(data);
 			})
 			.catch(({ response }) => {
+				console.log(response);
 				if (response.status === 401) {
 					// @ts-ignore
 					navigation.navigate('Modal', { login: true });
 				}
+				if (response.status === 403) {
+					console.log('invalid nonce');
+				}
 			});
-	}, [storeDB.products]);
+	}, [navigation, site.wcApiUrl, storeDB.products, wpCredentials.jwt]);
 };
 
 /**

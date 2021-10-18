@@ -1,7 +1,7 @@
 import * as React from 'react';
 import Table from '@wcpos/common/src/components/table';
 import Button from '@wcpos/common/src/components/button';
-import useUser from '@wcpos/common/src/hooks/use-user';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import forEach from 'lodash/forEach';
 import map from 'lodash/map';
 

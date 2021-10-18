@@ -2,8 +2,7 @@ import * as React from 'react';
 import Dialog from '@wcpos/common/src/components/dialog';
 import TextInput from '@wcpos/common/src/components/textinput';
 import http from '@wcpos/common/src/lib/http';
-import useSite from '@wcpos/common/src/hooks/use-site';
-import useWpCredentials from '@wcpos/common/src/hooks/use-wp-credentials';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
 
 interface LoginFormProps {
 	onClose: () => void;
@@ -13,8 +12,7 @@ interface LoginFormProps {
 const LoginForm = ({ onClose }: LoginFormProps) => {
 	const [username, setUsername] = React.useState('');
 	const [password, setPassword] = React.useState('');
-	const { site } = useSite();
-	const { wpCredentials } = useWpCredentials();
+	const { site, wpCredentials } = useAppState();
 
 	const handleLogin = async () => {
 		const result = await http.post(`${site.wcApiAuthUrl}/authorize`, {

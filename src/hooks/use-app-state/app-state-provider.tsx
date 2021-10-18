@@ -1,79 +1,63 @@
 import * as React from 'react';
-import { isRxDocument } from 'rxdb/plugins/core';
-import getTheme from '@wcpos/common/src/themes';
-import useScreenSize from '../use-screen-size';
-import useOnline from '../use-online';
-// import useUser from '../use-user';
-import { getUniqueId, getReadableVersion } from './device-info';
-// import useStoreDB from '../use-store';
-import { useLastUser } from './use-last-user';
+import { userDB$ } from '@wcpos/common/src/database/users-db';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import get from 'lodash/get';
+import {
+	getUserResource,
+	getSiteResource,
+	getWpCredResource,
+	getStoreResource,
+	getStoreDBResource,
+} from './resources';
 
-type UserDocument = import('@wcpos/common/src/database').UserDocument;
-type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
-type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
+type InitialProps = import('@wcpos/common/src//types').InitialProps;
 type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
+type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
+type StoreDocument = import('@wcpos/common/src/database').StoreDocument;
+type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
+type UserDocument = import('@wcpos/common/src/database').UserDocument;
 type WPCredentialsDocument = import('@wcpos/common/src/database').WPCredentialsDocument;
 
-export interface IAppStateProps {
-	info: {
-		uniqueId: string;
-		version: string;
-	};
-	online: boolean;
-	screen: import('react-native').ScaledSize;
-	// user?: UserDocument;
-	// setUser: React.Dispatch<React.SetStateAction<UserDocument | undefined>>;
-	// userDB?: UserDatabase;
-	site?: SiteDocument;
-	wpUser?: WPCredentialsDocument;
-	storeDB?: StoreDatabase;
-	storeID?: string;
-	setLastUser: (id: string, site: SiteDocument, wpUser: WPCredentialsDocument) => Promise<void>;
-	unsetLastUser: () => Promise<void>;
+export interface AppStateProps {
+	userDB: UserDatabase;
+	userResource: ObservableResource<UserDocument>;
+	siteResource: ObservableResource<SiteDocument>;
+	wpCredResource: ObservableResource<WPCredentialsDocument>;
+	storeResource: ObservableResource<StoreDocument>;
+	storeDBResource: ObservableResource<StoreDatabase>;
 }
 
-export const AppStateContext = React.createContext<unknown>({}) as React.Context<IAppStateProps>;
+export const AppStateContext = React.createContext<unknown>({}) as React.Context<AppStateProps>;
 
-const info = {
-	uniqueId: getUniqueId(),
-	version: getReadableVersion(),
-};
-
-interface IAppStatePropviderProps {
-	children: any;
-	i18n: any;
+interface AppStatePropviderProps {
+	children: React.ReactNode;
+	initialProps: InitialProps;
 }
+
+const userDBResource = new ObservableResource(userDB$, (value: any) => !!value);
+
 /**
  * App State Provider
- * Hydrates static or non-frequent state for the app
  */
-const AppStateProvider = ({ children, i18n }: IAppStatePropviderProps) => {
-	// const [isReady, setIsReady] = React.useState(false);
-	const screen = useScreenSize();
-	const online = useOnline();
-	// const { user, setUser, userDB } = useUser();
-	const theme = getTheme('default', 'dark');
-	const { site, wpUser, storeDB, storeID, setLastUser, unsetLastUser, ready } = useLastUser();
+const AppStateProvider = ({ children, initialProps }: AppStatePropviderProps) => {
+	const userDB = useObservableSuspense(userDBResource);
+	const userResource = getUserResource(userDB);
+	const siteResource = getSiteResource(userDB, get(initialProps, 'site'));
+	const wpCredResource = getWpCredResource(userDB, get(initialProps, 'wpCredentials'));
+	const storeResource = getStoreResource(userDB, get(initialProps, 'stores'));
+	const storeDBResource = getStoreDBResource(userDB);
 
 	const value = {
-		info,
-		online,
-		screen,
-		// user,
-		// setUser,
-		// userDB,
-		site,
-		wpUser,
-		storeDB,
-		storeID,
-		setLastUser,
-		unsetLastUser,
+		userDB,
+		userResource,
+		siteResource,
+		wpCredResource,
+		storeResource,
+		storeDBResource,
 	};
-	console.log(value);
 
-	return (
-		<AppStateContext.Provider value={value}>{children(ready, theme)}</AppStateContext.Provider>
-	);
+	// @ts-ignore
+	return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 };
 
 export default AppStateProvider;

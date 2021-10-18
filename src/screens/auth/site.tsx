@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useObservable, useObservableState } from 'observable-hooks';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Text from '@wcpos/common/src/components/text';
 import Icon from '@wcpos/common/src/components/icon';
 import Dialog from '@wcpos/common/src/components/dialog';
-import useWpCredentials from '@wcpos/common/src/hooks/use-wp-credentials';
 import Button from '@wcpos/common/src/components/button';
 import Modal from './login-modal';
 import WpUser from './wp-user';
@@ -25,7 +25,7 @@ const Site = ({ site, user }: SiteProps) => {
 	const [openConfirmDialog, setOpenConfirmDialog] = React.useState(false);
 	const showConfirmDialog = React.useCallback(() => setOpenConfirmDialog(true), []);
 	const hideConfirmDialog = React.useCallback(() => setOpenConfirmDialog(false), []);
-	const { wpUsers } = useWpCredentials();
+	const wpCreds = useObservableState(site.getWpCredentials$(), []);
 	const navigation = useNavigation();
 
 	const handleRemoveSite = async () => {
@@ -55,12 +55,12 @@ const Site = ({ site, user }: SiteProps) => {
 						}}
 					/>
 				</View>
-				{wpUsers.map((wpUser) => (
-					<WpUser key={wpUser.localId} wpUser={wpUser} site={site} />
+				{wpCreds.map((wpCred) => (
+					<WpUser key={wpCred.localId} wpUser={wpCred} site={site} />
 				))}
 			</>
 		);
-	}, [navigation, site, wpUsers]);
+	}, [navigation, site, wpCreds]);
 
 	return (
 		<Styled.SiteWrapper>

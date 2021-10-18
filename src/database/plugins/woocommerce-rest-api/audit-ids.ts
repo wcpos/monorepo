@@ -10,7 +10,7 @@ export async function auditIdsFromServer(this: RxCollection, data: Record<string
 	const collection = this;
 
 	// @ts-ignore
-	const { docs } = await collection.pouch
+	const { docs } = await this.storageInstance.internals.pouch
 		.find({
 			selector: { id: { $exists: true } },
 			// @ts-ignore

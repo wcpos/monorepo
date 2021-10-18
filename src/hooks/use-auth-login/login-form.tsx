@@ -11,7 +11,7 @@ interface LoginFormProps {
 const LoginForm = ({ onClose }: LoginFormProps) => {
 	const [username, setUsername] = React.useState('');
 	const [password, setPassword] = React.useState('');
-	const { site, wpUser } = useAppState();
+	const { site, wpCredentials } = useAppState();
 
 	const handleLogin = async () => {
 		if (site && site.wpApiUrl) {
@@ -21,7 +21,7 @@ const LoginForm = ({ onClose }: LoginFormProps) => {
 			});
 			// set wp credientials
 			// @ts-ignore
-			const success = await wpUser?.atomicPatch(result.data);
+			const success = await wpCredentials?.atomicPatch(result.data);
 			if (success) {
 				onClose();
 			}

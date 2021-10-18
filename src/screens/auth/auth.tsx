@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { useObservable, useObservableState } from 'observable-hooks';
-import useUser from '@wcpos/common/src/hooks/use-user';
-import useSite from '@wcpos/common/src/hooks/use-site';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Segment from '@wcpos/common/src/components/segment';
 import TextInput from '@wcpos/common/src/components/textinput';
 import Text from '@wcpos/common/src/components/text';
@@ -28,8 +27,9 @@ const parseApiUrlFromHeaders = (headers: { link: string }) => {
  *
  */
 const Auth = () => {
-	const { user, userDB } = useUser();
-	const { sites } = useSite();
+	const { user, userDB } = useAppState();
+	// const sites = useObservableState(user.getSites$(), []);
+	const sites: SiteDocument[] = [];
 
 	const onConnect = React.useCallback(
 		async (url: string): Promise<void> => {

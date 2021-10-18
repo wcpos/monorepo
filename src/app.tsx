@@ -4,11 +4,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider } from 'styled-components/native';
+import get from 'lodash/get';
 import getTheme from '@wcpos/common/src/themes';
-import { UserProvider } from './hooks/use-user';
-import { SiteProvider } from './hooks/use-site';
-import { WpCredentialsProvider } from './hooks/use-wp-credentials';
-import { StoreDBProvider } from './hooks/use-store-db';
+import { AppStateProvider } from './hooks/use-app-state';
 import { UIResourceProvider } from './hooks/use-ui';
 import TranslationService from './services/translation';
 import AppNavigator from './navigators';
@@ -24,7 +22,8 @@ const i18n = new TranslationService();
 
 type InitialProps = import('./types').InitialProps;
 
-const App = ({ homepage, site, wpCredentials, stores }: InitialProps) => {
+const App = (initialProps: InitialProps) => {
+	const homepage = get(initialProps, 'homepage');
 	const prefixes = ['wcpos://'];
 	let pathname = '';
 
@@ -67,30 +66,24 @@ const App = ({ homepage, site, wpCredentials, stores }: InitialProps) => {
 	return (
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
-				<UserProvider>
-					<SiteProvider site={site}>
-						<WpCredentialsProvider wpCredentials={wpCredentials}>
-							<StoreDBProvider stores={stores}>
-								<UIResourceProvider>
-									<ThemeProvider theme={getTheme('default', 'dark')}>
-										<SafeAreaProvider style={{ overflow: 'hidden' }}>
-											<AppProviderSizeProvider>
-												<SnackbarProvider>
-													<Portal.Provider>
-														<NavigationContainer linking={linking}>
-															<AppNavigator />
-														</NavigationContainer>
-														<Portal.Manager />
-													</Portal.Provider>
-												</SnackbarProvider>
-											</AppProviderSizeProvider>
-										</SafeAreaProvider>
-									</ThemeProvider>
-								</UIResourceProvider>
-							</StoreDBProvider>
-						</WpCredentialsProvider>
-					</SiteProvider>
-				</UserProvider>
+				<AppStateProvider initialProps={initialProps}>
+					<UIResourceProvider>
+						<ThemeProvider theme={getTheme('default', 'dark')}>
+							<SafeAreaProvider style={{ overflow: 'hidden' }}>
+								<AppProviderSizeProvider>
+									<SnackbarProvider>
+										<Portal.Provider>
+											<NavigationContainer linking={linking}>
+												<AppNavigator />
+											</NavigationContainer>
+											<Portal.Manager />
+										</Portal.Provider>
+									</SnackbarProvider>
+								</AppProviderSizeProvider>
+							</SafeAreaProvider>
+						</ThemeProvider>
+					</UIResourceProvider>
+				</AppStateProvider>
 			</React.Suspense>
 		</ErrorBoundary>
 	);
