@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Segment from '@wcpos/common/src/components/segment';
 import TextInput from '@wcpos/common/src/components/textinput';
@@ -28,9 +28,8 @@ const parseApiUrlFromHeaders = (headers: { link: string }) => {
  */
 const Auth = () => {
 	const { user, userDB } = useAppState();
-	// const user = useObservableSuspense(userResource);
-	// const sites = useObservableState(user.getSites$(), []);
-	const sites: SiteDocument[] = [];
+	// @TODO - calling getSites$() resubscribes every render
+	const [sites] = useObservableState(user.getSites$, []);
 
 	const onConnect = React.useCallback(
 		async (url: string): Promise<void> => {
@@ -52,43 +51,49 @@ const Auth = () => {
 						const wcposNamespace = 'wcpos/v1';
 
 						return http.get(wpApiUrl).then((res) => {
-							const data = get(res, 'data');
+							const data = get(res, 'data') as Record<string, any>;
 							const namespaces: string[] = get(data, 'namespaces', []);
 							if (!namespaces.includes(wcNamespace)) {
 								throw Error('WooCommerce API not found');
 							} else if (!namespaces.includes(wcposNamespace)) {
 								throw Error('WooCommerce POS API not found');
 							}
-							return data;
+							return {
+								...data,
+								wpApiUrl,
+								wcApiUrl: `${wpApiUrl}wc/v3`,
+								wcApiAuthUrl: `${wpApiUrl}wcpos/v1/jwt`,
+							};
 						});
 					}
 					throw Error('Site does not seem to be a WordPress site');
 				})
 				.catch((err) => {
+					// useErrorModal?
 					console.error(err);
 				});
 
-			// check against database
-			// populate user sites
-			// @ts-ignore
-			const sites = await user.populate('sites').catch((err) => {
-				console.error(err);
-			});
-			// @ts-ignore
-			const existingSite = find(sites, { url: siteData?.url });
-
-			// if not existingSite, then insert site data
-			if (!existingSite) {
+			if (siteData) {
+				// check against database
+				// populate user sites
+				// const s = await user.populate('sites').catch((err) => {
+				// 	console.error(err);
+				// });
 				// @ts-ignore
-				const newSite = await userDB.sites.insert(siteData); // note: insertApiData
+				const existingSite = find(sites, { url: siteData?.url });
 
-				// @ts-ignore
-				user.update({ $push: { sites: newSite?.localID } }).catch((err) => {
-					console.log(err);
-					return err;
-				});
-			} else {
-				debugger;
+				// if not existingSite, then insert site data
+				if (!existingSite) {
+					// @ts-ignore
+					const newSite = await userDB.sites.insert(siteData); // note: insertApiData
+
+					user.update({ $push: { sites: newSite?.localID } }).catch((err) => {
+						console.log(err);
+						return err;
+					});
+				} else {
+					debugger;
+				}
 			}
 		},
 		[user, userDB]

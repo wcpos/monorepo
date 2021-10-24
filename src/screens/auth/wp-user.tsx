@@ -42,8 +42,9 @@ const WpUser = ({ site, wpUser }: Props) => {
 	 */
 	const handleStoreSelect = React.useCallback(async () => {
 		if (stores.length === 1) {
-			debugger;
-			// setLastUser(stores[0].localID, site, wpUser);
+			site.collection.upsertLocal('current', { id: site.localID });
+			wpUser.collection.upsertLocal('current', { id: wpUser.localID });
+			stores[0].collection.upsertLocal('current', { id: stores[0].localID });
 		}
 	}, [site, stores, wpUser]);
 

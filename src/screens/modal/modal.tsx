@@ -10,7 +10,7 @@ export const ModalScreen = ({ route, navigation }: ModalScreenProps) => {
 	const { params } = route;
 
 	if (params.login) {
-		return <LoginForm onClose={() => navigation.goBack()} {...params.login} />;
+		return <LoginForm onClose={() => navigation.goBack()} {...params} />;
 	}
 
 	return (

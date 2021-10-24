@@ -25,7 +25,7 @@ const Site = ({ site, user }: SiteProps) => {
 	const [openConfirmDialog, setOpenConfirmDialog] = React.useState(false);
 	const showConfirmDialog = React.useCallback(() => setOpenConfirmDialog(true), []);
 	const hideConfirmDialog = React.useCallback(() => setOpenConfirmDialog(false), []);
-	const wpCreds = useObservableState(site.getWpCredentials$(), []);
+	const [wpCreds] = useObservableState(site.getWpCredentials$, []);
 	const navigation = useNavigation();
 
 	const handleRemoveSite = async () => {
@@ -51,7 +51,7 @@ const Site = ({ site, user }: SiteProps) => {
 						background="outline"
 						onPress={() => {
 							// @ts-ignore
-							navigation.navigate('Modal', { login: { site } });
+							navigation.navigate('Modal', { login: true, siteID: site.localID });
 						}}
 					/>
 				</View>
