@@ -46,8 +46,8 @@ const WpCredentialsProvider = ({
 	} else {
 		wpCredentials$ = userDB.wp_credentials.getLocal$('current').pipe(
 			switchMap((current) => {
-				const localId = current?.get('id');
-				const query = userDB.wp_credentials.findOne(localId);
+				const localID = current?.get('id');
+				const query = userDB.wp_credentials.findOne(localID);
 				return query.$;
 			})
 		);

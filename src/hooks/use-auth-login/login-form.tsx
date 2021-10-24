@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useObservableSuspense } from 'observable-hooks';
 import Dialog from '@wcpos/common/src/components/dialog';
 import TextInput from '@wcpos/common/src/components/textinput';
 import http from '@wcpos/common/src/lib/http';

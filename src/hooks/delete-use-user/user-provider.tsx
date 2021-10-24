@@ -45,13 +45,13 @@ const UserProvider = ({ children }: UserProviderProps) => {
 			if (!lastUser) {
 				// @ts-ignore
 				const defaultUser = await userDB.users.insert({ firstName: 'Test', lastName: 'User' });
-				const localDoc = await userDB.users.upsertLocal('lastUser', { id: defaultUser.localId });
+				const localDoc = await userDB.users.upsertLocal('lastUser', { id: defaultUser.localID });
 			}
 		}),
 		filter((lastUser) => !!lastUser),
 		switchMap((lastUser) => {
-			const localId = lastUser?.get('id');
-			const query = userDB.users.findOne(localId);
+			const localID = lastUser?.get('id');
+			const query = userDB.users.findOne(localID);
 			return query.$;
 		})
 	);

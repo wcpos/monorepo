@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useObservableSuspense } from 'observable-hooks';
 import Dialog from '@wcpos/common/src/components/dialog';
 import TextInput from '@wcpos/common/src/components/textinput';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';

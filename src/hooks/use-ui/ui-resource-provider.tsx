@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { tap, filter } from 'rxjs/operators';
-import { ObservableResource } from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import get from 'lodash/get';
 import useAppState from '../use-app-state';
 import initialUI from './ui-initial.json';
@@ -78,6 +78,7 @@ const UIResourceProvider = ({ children }: UIResourceProviderProps) => {
 			})
 		);
 
+		// @ts-ignore
 		return new ObservableResource(resource$, (val) => !!val);
 	};
 

@@ -25,7 +25,7 @@ export function parsePlainData(this: RxCollection, plainData: Record<string, unk
 	 * convert all plainData properties to camelCase
 	 */
 	forEach(plainData, (data, key) => {
-		const privateProperties = ['localId', '_attachments', '_rev'];
+		const privateProperties = ['localID', '_attachments', '_rev'];
 		if (!privateProperties.includes(key) && key.includes('_')) {
 			plainData[camelCase(key)] = data;
 			unset(plainData, key);

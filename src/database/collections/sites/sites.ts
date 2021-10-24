@@ -22,6 +22,7 @@ interface SiteMethods {
 	getUrlWithoutProtocol: () => string;
 	connect: () => Promise<any>;
 	addOrUpdateWpCredentials: (data: Record<string, unknown>) => Promise<WPCredentialsDocument>;
+	addWpCredentials: (data: Record<string, unknown>) => Promise<WPCredentialsDocument>;
 	getWcApiUrl: () => string;
 	getWcposApiUrl: () => string;
 	getWpCredentials$: () => WPCredentialsDocumentsObservable;
@@ -52,7 +53,7 @@ const methods: SiteMethods = {
 		);
 
 		const parsedData = {
-			id: data.userlocalId,
+			id: data.userlocalID,
 			username: data.username,
 			displayName: data.display_name,
 			email: data.email,
@@ -65,7 +66,7 @@ const methods: SiteMethods = {
 		try {
 			const wpUser = await wpCredentialsCollection
 				.findOne({
-					selector: { id: data.userlocalId },
+					selector: { id: data.userlocalID },
 				})
 				.exec();
 
@@ -78,7 +79,7 @@ const methods: SiteMethods = {
 			await this.atomicUpdate((oldData) => {
 				oldData.wpCredentials = oldData.wpCredentials || [];
 				// @ts-ignore
-				oldData.wpCredentials.push(newWpUser.localId);
+				oldData.wpCredentials.push(newWpUser.localID);
 				return oldData;
 			});
 
@@ -86,6 +87,16 @@ const methods: SiteMethods = {
 		} catch (error) {
 			throw Error(String(error));
 		}
+	},
+
+	async addWpCredentials(this: SiteDocument, data) {
+		const wpCredentials = await this.collections().wp_credentials.insert(data);
+		await this.update({ $push: { wpCredentials: wpCredentials.localID } }).catch((err) => {
+			console.log(err);
+			return err;
+		});
+
+		return wpCredentials;
 	},
 
 	/**

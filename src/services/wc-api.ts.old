@@ -8,7 +8,7 @@ const { CancelToken } = http;
 const syncIds = async (collection, wpUser, site) => {
 	const source = CancelToken.source();
 	const local = await collection.query().fetch();
-	const localIds = map(local, 'remote_id');
+	const localIDs = map(local, 'remote_id');
 
 	const response = await http(`${site.wc_api_url}${collection.table}`, {
 		auth: {
@@ -23,8 +23,8 @@ const syncIds = async (collection, wpUser, site) => {
 
 	const { data } = response;
 	const remoteIds = map(data, 'id');
-	const add = difference(remoteIds, localIds);
-	const remove = difference(localIds, remoteIds);
+	const add = difference(remoteIds, localIDs);
+	const remove = difference(localIDs, remoteIds);
 
 	const batch = add.map((id: number) => {
 		return collection.prepareCreate((m: any) => {

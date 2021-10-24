@@ -3,10 +3,10 @@
 	"version": 0,
 	"description": "Logs events for debugging and user record",
 	"type": "object",
-	"primaryKey": "localId",
-	"required": ["localId"],
+	"primaryKey": "localID",
+	"required": ["localID"],
 	"properties": {
-		"localId": {
+		"localID": {
 			"description": "Unique local identifier for the resource.",
 			"type": "string"
 		},

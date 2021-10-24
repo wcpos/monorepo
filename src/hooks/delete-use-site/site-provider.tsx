@@ -40,8 +40,8 @@ const SiteProvider = ({ children, site: initSite }: UserProviderProps) => {
 	} else {
 		site$ = userDB.sites.getLocal$('lastSite').pipe(
 			switchMap((lastSite) => {
-				const localId = lastSite?.get('id');
-				const query = userDB.sites.findOne(localId);
+				const localID = lastSite?.get('id');
+				const query = userDB.sites.findOne(localID);
 				return query.$;
 			})
 		);

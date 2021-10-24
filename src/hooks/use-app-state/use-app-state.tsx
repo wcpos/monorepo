@@ -8,16 +8,18 @@ const useAppState = () => {
 		throw new Error(`useAppState must be called within AppStateProvider`);
 	}
 
-	const { userDB, userResource, siteResource, wpCredResource, storeResource, storeDBResource } =
-		context;
+	const { userDB, online, resources } = context;
 
-	const user = useObservableSuspense(userResource);
-	const site = useObservableSuspense(siteResource);
-	const wpCredentials = useObservableSuspense(wpCredResource);
-	const store = useObservableSuspense(storeResource);
-	const storeDB = useObservableSuspense(storeDBResource);
+	// /**
+	//  * TODO: move these to their own useUser hook?
+	//  */
+	const { user, site, wpCredentials, store, storeDB } = useObservableSuspense(resources);
+	// const site = useObservableSuspense(resources.site);
+	// const wpCredentials = useObservableSuspense(resources.wpCredentials);
+	// const store = useObservableSuspense(resources.store);
+	// const storeDB = useObservableSuspense(resources.storeDB);
 
-	return { userDB, user, site, wpCredentials, store, storeDB, online: true };
+	return { userDB, user, site, wpCredentials, store, storeDB, online };
 };
 
 export default useAppState;

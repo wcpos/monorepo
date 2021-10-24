@@ -14,7 +14,7 @@ export async function auditIdsFromServer(this: RxCollection, data: Record<string
 		.find({
 			selector: { id: { $exists: true } },
 			// @ts-ignore
-			fields: ['localId', 'id'],
+			fields: ['localID', 'id'],
 		})
 		.catch((err: any) => {
 			console.log(err);
@@ -28,12 +28,12 @@ export async function auditIdsFromServer(this: RxCollection, data: Record<string
 	}
 
 	//
-	const remove = map(docs, 'localId');
+	const remove = map(docs, 'localID');
 
 	forEach(docs, (doc) => {
 		const intersection = find(data, { id: doc.id });
 		if (intersection) {
-			pull(remove, doc.localId);
+			pull(remove, doc.localID);
 			pull(data, intersection);
 		}
 	});

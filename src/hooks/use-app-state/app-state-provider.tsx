@@ -1,13 +1,16 @@
 import * as React from 'react';
+import { of } from 'rxjs';
+import { tap, switchMap } from 'rxjs/operators';
 import { userDB$ } from '@wcpos/common/src/database/users-db';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { ObservableResource, useObservableSuspense, useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
 import {
-	getUserResource,
-	getSiteResource,
-	getWpCredResource,
-	getStoreResource,
-	getStoreDBResource,
+	getResource,
+	// 	getUserResource,
+	// 	getSiteResource,
+	// 	getWpCredResource,
+	// 	getStoreResource,
+	// 	getStoreDBResource,
 } from './resources';
 
 type InitialProps = import('@wcpos/common/src//types').InitialProps;
@@ -20,11 +23,14 @@ type WPCredentialsDocument = import('@wcpos/common/src/database').WPCredentialsD
 
 export interface AppStateProps {
 	userDB: UserDatabase;
-	userResource: ObservableResource<UserDocument>;
-	siteResource: ObservableResource<SiteDocument>;
-	wpCredResource: ObservableResource<WPCredentialsDocument>;
-	storeResource: ObservableResource<StoreDocument>;
-	storeDBResource: ObservableResource<StoreDatabase>;
+	resources: ObservableResource<{
+		user: UserDocument;
+		site: SiteDocument;
+		wpCredentials: WPCredentialsDocument;
+		store: StoreDocument;
+		storeDB: StoreDatabase;
+	}>;
+	online: boolean;
 }
 
 export const AppStateContext = React.createContext<unknown>({}) as React.Context<AppStateProps>;
@@ -41,19 +47,15 @@ const userDBResource = new ObservableResource(userDB$, (value: any) => !!value);
  */
 const AppStateProvider = ({ children, initialProps }: AppStatePropviderProps) => {
 	const userDB = useObservableSuspense(userDBResource);
-	const userResource = getUserResource(userDB);
-	const siteResource = getSiteResource(userDB, get(initialProps, 'site'));
-	const wpCredResource = getWpCredResource(userDB, get(initialProps, 'wpCredentials'));
-	const storeResource = getStoreResource(userDB, get(initialProps, 'stores'));
-	const storeDBResource = getStoreDBResource(userDB);
 
+	/**
+	 * These values values should be relatively static
+	 * Any change will cause the entire app to re-render
+	 */
 	const value = {
-		userDB,
-		userResource,
-		siteResource,
-		wpCredResource,
-		storeResource,
-		storeDBResource,
+		initialProps: Object.freeze(initialProps), // prevent accidental mutation
+		online: true,
+		resources: getResource(userDB, initialProps),
 	};
 
 	// @ts-ignore

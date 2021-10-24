@@ -1,10 +1,3 @@
-export type {
-	UserDatabase,
-	UserDatabaseCollections,
-	StoreDatabase,
-	StoreDatabaseCollections,
-} from './service';
-
 /**
  * User Collections
  */
@@ -17,6 +10,7 @@ export type {
 	WPCredentialsSchema,
 } from './collections/wp-credentials';
 export type { StoreCollection, StoreDocument, StoreSchema } from './collections/stores';
+
 /**
  * Store Collections
  */
@@ -36,10 +30,8 @@ export type {
 export type { CustomerCollection, CustomerDocument, CustomerSchema } from './collections/customers';
 export type { TaxRateCollection, TaxRateDocument, TaxRateSchema } from './collections/taxes';
 
-/**
- * This is the main export
- * @TODO - move the types?
- */
-export { DatabaseService as default } from './service';
+export type { UserDatabase, UserDatabaseCollections } from './users-db';
+export type { StoreDatabase, StoreDatabaseCollections } from './stores-db';
 
 export { userDB$ } from './users-db';
+export { getStoreDB$ } from './stores-db';

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import map from 'lodash/map';
 import forEach from 'lodash/forEach';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
@@ -41,7 +41,7 @@ const Row = ({ item, columns }: { item: Collection; columns: any[] }) => {
 };
 
 const StoreDB = () => {
-	const { storeDB } = useAppState() as { storeDB: StoreDatabase };
+	const { storeDB } = useAppState();
 
 	const columns = [
 		{ key: 'name', label: 'Name' },

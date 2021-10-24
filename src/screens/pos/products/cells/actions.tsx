@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useObservableSuspense } from 'observable-hooks';
 import Icon from '@wcpos/common/src/components/icon';
 import Button from '@wcpos/common/src/components/button';
 import Popover from '@wcpos/common/src/components/popover';

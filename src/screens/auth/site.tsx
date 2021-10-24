@@ -56,7 +56,7 @@ const Site = ({ site, user }: SiteProps) => {
 					/>
 				</View>
 				{wpCreds.map((wpCred) => (
-					<WpUser key={wpCred.localId} wpUser={wpCred} site={site} />
+					<WpUser key={wpCred.localID} wpUser={wpCred} site={site} />
 				))}
 			</>
 		);

@@ -8,9 +8,6 @@ import Tag from '@wcpos/common/src/components/tag';
 import Text from '@wcpos/common/src/components/text';
 import Button from '@wcpos/common/src/components/button';
 import Dialog from '@wcpos/common/src/components/dialog';
-
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import DatabaseService from '@wcpos/common/src/database';
 import * as Styled from './styles';
 
 interface Props {
@@ -23,7 +20,6 @@ function sanitizeStoreName(id: string) {
 }
 
 const WpUser = ({ site, wpUser }: Props) => {
-	// const { setLastUser } = useAppState();
 	const [showDialog, setShowDialog] = React.useState(false);
 	const [stores] = useObservableState(wpUser.getStores$, []);
 
@@ -47,7 +43,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 	const handleStoreSelect = React.useCallback(async () => {
 		if (stores.length === 1) {
 			debugger;
-			// setLastUser(stores[0].localId, site, wpUser);
+			// setLastUser(stores[0].localID, site, wpUser);
 		}
 	}, [site, stores, wpUser]);
 
@@ -56,14 +52,13 @@ const WpUser = ({ site, wpUser }: Props) => {
 	 */
 	const handleStoreRemove = React.useCallback(async () => {
 		forEach(wpUser.stores, async (id) => {
-			// @ts-ignore
-			const db = await DatabaseService.getStoreDB(sanitizeStoreName(id));
-			await db?.remove();
+			// const db = await DatabaseService.getStoreDB(sanitizeStoreName(id));
+			// await db?.remove();
 		});
 		// need to remove wpUser from site from site
 		await site.update({
 			$pullAll: {
-				wpCredentials: [wpUser.localId],
+				wpCredentials: [wpUser.localID],
 			},
 		});
 		await wpUser.remove();

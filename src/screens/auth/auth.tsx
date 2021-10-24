@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useObservable, useObservableState } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Segment from '@wcpos/common/src/components/segment';
 import TextInput from '@wcpos/common/src/components/textinput';
@@ -28,6 +28,7 @@ const parseApiUrlFromHeaders = (headers: { link: string }) => {
  */
 const Auth = () => {
 	const { user, userDB } = useAppState();
+	// const user = useObservableSuspense(userResource);
 	// const sites = useObservableState(user.getSites$(), []);
 	const sites: SiteDocument[] = [];
 
@@ -82,7 +83,7 @@ const Auth = () => {
 				const newSite = await userDB.sites.insert(siteData); // note: insertApiData
 
 				// @ts-ignore
-				user.update({ $push: { sites: newSite?.localId } }).catch((err) => {
+				user.update({ $push: { sites: newSite?.localID } }).catch((err) => {
 					console.log(err);
 					return err;
 				});
@@ -114,7 +115,7 @@ const Auth = () => {
 				<Segment.Group style={{ width: '90%', maxWidth: 460, height: 'auto' }}>
 					{/* <Segment content="Sites" /> */}
 					{sites.map((site) => (
-						<Segment key={site.localId}>
+						<Segment key={site.localID}>
 							<Site site={site} user={user} />
 						</Segment>
 					))}

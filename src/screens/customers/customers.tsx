@@ -1,11 +1,6 @@
 import * as React from 'react';
 import { Text } from 'react-native';
-import {
-	useObservableState,
-	useObservable,
-	useObservableSuspense,
-	useSubscription,
-} from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { tap } from 'rxjs/operators';
 import useDataObservable from '@wcpos/common/src/hooks/use-data-observable';
 import Segment from '@wcpos/common/src/components/segment';

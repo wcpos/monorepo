@@ -15,7 +15,7 @@ describe('Stores Collection', () => {
 		const storeDoc = await db.stores.insert({ name: 'Example Store' });
 		expect(isRxDocument(storeDoc)).toBe(true);
 		expect(storeDoc).toMatchObject({
-			localId: expect.any(String),
+			localID: expect.any(String),
 			name: 'Example Store',
 		});
 	});

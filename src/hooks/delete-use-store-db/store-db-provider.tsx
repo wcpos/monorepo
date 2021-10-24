@@ -45,8 +45,8 @@ const StoreDBProvider = ({ children, stores: initStores }: IStoreDBProviderProps
 	} else {
 		store$ = userDB.stores.getLocal$('current').pipe(
 			switchMap((current) => {
-				const localId = current?.get('id');
-				const query = userDB.stores.findOne(localId);
+				const localID = current?.get('id');
+				const query = userDB.stores.findOne(localID);
 				return query.$;
 			})
 		);
@@ -56,7 +56,7 @@ const StoreDBProvider = ({ children, stores: initStores }: IStoreDBProviderProps
 		// @ts-ignore
 		switchMap((store) => {
 			if (store) {
-				return getStoreDB$(store.localId);
+				return getStoreDB$(store.localID);
 			}
 			return of(null);
 		})

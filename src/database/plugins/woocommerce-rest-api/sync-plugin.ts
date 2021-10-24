@@ -59,7 +59,7 @@ const hooks = {
 			.find({
 				selector: {},
 				// @ts-ignore
-				fields: ['localId', 'id', 'dateCreatedGmt'],
+				fields: ['localID', 'id', 'dateCreatedGmt'],
 			})
 			.then((result: any) => {
 				console.log(collection.name, result.docs.length);
@@ -80,7 +80,7 @@ const hooks = {
 					.find({
 						selector: {},
 						// @ts-ignore
-						fields: ['localId', 'id', 'dateCreatedGmt'],
+						fields: ['localID', 'id', 'dateCreatedGmt'],
 					})
 					.then((result: any) => {
 						console.log(collection.name, result.docs.length);
@@ -101,7 +101,7 @@ const hooks = {
 		collection.preSave(parsePlainData, false);
 
 		/**
-		 * Add _posLocalId to meta if no id
+		 * Add _poslocalID to meta if no id
 		 */
 		collection.postInsert(function maybeAddMeta(
 			this: RxCollection,
@@ -113,7 +113,7 @@ const hooks = {
 				document.update({
 					$push: {
 						// @ts-ignore
-						metaData: { key: '_pos', value: document.localId },
+						metaData: { key: '_pos', value: document.localID },
 					},
 				});
 			}

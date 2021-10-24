@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useObservable, useSubscription } from 'observable-hooks';
+import { useObservable, useObservableSuspense } from 'observable-hooks';
 import { switchMap, catchError, shareReplay, first } from 'rxjs/operators';
 import { useNavigation } from '@react-navigation/native';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';

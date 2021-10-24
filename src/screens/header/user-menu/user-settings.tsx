@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useObservable, useObservableState } from 'observable-hooks';
+import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
 import { tap, switchMap } from 'rxjs/operators';
 import { View } from 'react-native';
 import Dialog from '@wcpos/common/src/components/dialog';

@@ -1,152 +1,165 @@
 import { ObservableResource } from 'observable-hooks';
-import { from, of } from 'rxjs';
-import { tap, switchMap, filter } from 'rxjs/operators';
+import { from, of, combineLatest, shareReplay, withLatestFrom } from 'rxjs';
+import { tap, switchMap, filter, map, catchError, delay } from 'rxjs/operators';
+import { isRxDocument } from 'rxdb/plugins/core';
+import { userDB$ } from '@wcpos/common/src/database/users-db';
 import { getStoreDB$ } from '@wcpos/common/src/database/stores-db';
 
 type InitialProps = import('@wcpos/common/src//types').InitialProps;
 type UserDocument = import('@wcpos/common/src/database').UserDocument;
 type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
 type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
+type StoreDocument = import('@wcpos/common/src/database').StoreDocument;
 type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
 type WPCredentialsDocument = import('@wcpos/common/src/database').WPCredentialsDocument;
 
 /**
- * User Resource
+ * hydrateResources
  */
-export const getUserResource = (userDB: UserDatabase) => {
-	const user$ = userDB.getLocal$('currentUser').pipe(
-		tap(async (lastUser) => {
-			if (!lastUser) {
+export const getResource = (userDB: UserDatabase, initialProps: any) => {
+	const user$ = userDB.users.getLocal$('current').pipe(
+		tap(async (current) => {
+			// no current object, eg: first load
+			if (!current) {
 				// @ts-ignore
 				const defaultUser = await userDB.users.insert({ firstName: 'Test', lastName: 'User' });
-				const localDoc = await userDB.upsertLocal('currentUser', { userID: defaultUser.localId });
+				const localDoc = await userDB.users.upsertLocal('current', { id: defaultUser.localID });
 			}
 		}),
-		filter((lastUser) => !!lastUser),
-		switchMap((lastUser: any) => {
-			const localId = lastUser.get('userID');
-			const query = userDB.users.findOne(localId);
-			return query.$;
-		})
+		filter((current) => !!current),
+		switchMap((current: any) => {
+			if (current && current.get('id')) {
+				return userDB.users.findOne(current.get('id')).exec();
+			}
+			return of(null);
+		}),
+		shareReplay(1)
 	);
 
-	return new ObservableResource(user$, (value: any) => !!value);
-};
-
-/**
- * Site Resource
- */
-export const getSiteResource = (userDB: UserDatabase, site: InitialProps['site']) => {
-	let site$;
-
-	if (site) {
-		// find existing record by url
-		const query = userDB.sites.findOne({ selector: { url: site.url } });
-		site$ = query.$.pipe(
-			// @ts-ignore
-			tap((result) => {
-				if (!result) {
-					// @ts-ignore
-					from(userDB.sites.insert(initSite));
-					// } else {
-					// 	result.atomicPatch(initSite);
-				}
-			})
-		);
-	} else {
-		site$ = userDB.getLocal$('currentUser').pipe(
-			switchMap((lastSite) => {
-				const localId = lastSite?.get('siteID');
-				const query = userDB.sites.findOne(localId);
-				return query.$;
-			})
-		);
-	}
-
-	return new ObservableResource(site$);
-};
-
-/**
- * WP Credentials Resource
- */
-export const getWpCredResource = (
-	userDB: UserDatabase,
-	wpCredentials: InitialProps['wpCredentials']
-) => {
-	let wpCredentials$;
-
-	if (wpCredentials) {
-		// find existing record by id
-		// note: this needs to be improved, could be many records with same id
-		const query = userDB.wp_credentials.findOne({ selector: { id: wpCredentials.id } });
-		wpCredentials$ = query.$.pipe(
-			// @ts-ignore
-			tap((result) => {
-				if (!result) {
-					// @ts-ignore
-					userDB.wp_credentials.insert(initWpCredentials);
-					// } else {
-					// 	result.atomicPatch(initWpCredentials);
-				}
-			})
-		);
-	} else {
-		wpCredentials$ = userDB.getLocal$('currentUser').pipe(
-			switchMap((current) => {
-				const localId = current?.get('wpCredentialsID');
-				const query = userDB.wp_credentials.findOne(localId);
-				return query.$;
-			})
-		);
-	}
-
-	return new ObservableResource(wpCredentials$);
-};
-
-/**
- * Store Resource
- */
-export const getStoreResource = (userDB: UserDatabase, stores: InitialProps['stores']) => {
-	let store$;
-
-	if (stores) {
-		// find existing record by id
-		// note: this needs to be improved, could be many records with same id
-		const query = userDB.stores.findOne({ selector: { id: stores.id } });
-		store$ = query.$.pipe(
-			// @ts-ignore
-			tap((result) => {
-				if (!result) {
-					// @ts-ignore
-					userDB.stores.insert(initStores);
-					// } else {
-					// 	result.atomicPatch(initWpCredentials);
-				}
-			})
-		);
-	} else {
-		store$ = userDB.stores.getLocal$('currentUser').pipe(
-			switchMap((current) => {
-				const localId = current?.get('storeID');
-				const query = userDB.stores.findOne(localId);
-				return query.$;
-			})
-		);
-	}
-
-	return new ObservableResource(store$);
-};
-
-/**
- * StoreDB Resource
- */
-export const getStoreDBResource = (userDB: UserDatabase) => {
-	const storeDB$ = userDB.stores.getLocal$('currentUser').pipe(
+	const currentSite$ = userDB.sites.getLocal$('current').pipe(
 		switchMap((current) => {
-			const id = current?.get('storeID');
-			return id ? getStoreDB$(id) : of(null);
-		})
+			if (current && current.get('id')) {
+				return userDB.sites.findOne(current.get('id')).exec();
+			}
+			return of(null);
+		}),
+		shareReplay(1)
 	);
 
-	return new ObservableResource(storeDB$);
+	// combine currentSite and user
+	const site$ = combineLatest([user$, currentSite$]).pipe(
+		switchMap(async ([user, currentSite]) => {
+			const sites = await user?.populate('sites');
+			const siteExists = Array.isArray(sites) && currentSite && sites.includes(currentSite);
+
+			if (initialProps.site) {
+				if (siteExists) {
+					// should I update the data just in case?
+					return currentSite;
+				}
+				await user?.addSite(initialProps.site).then((s) => {
+					return userDB.sites.upsertLocal('current', { id: s.localID });
+				});
+			} else {
+				return currentSite;
+			}
+			return null;
+		}),
+		shareReplay(1)
+	);
+
+	const currentWpCredentials$ = userDB.wp_credentials.getLocal$('current').pipe(
+		switchMap((current: any) => {
+			if (current && current.get('id')) {
+				return userDB.wp_credentials.findOne(current.get('id')).exec();
+			}
+			return of(null);
+		}),
+		shareReplay(1)
+	);
+
+	const wpCredentials$ = combineLatest([site$, currentWpCredentials$]).pipe(
+		switchMap(async ([site, currentWpCreds]) => {
+			const creds = await site?.populate('wpCredentials');
+			const exists = Array.isArray(creds) && currentWpCreds && creds.includes(currentWpCreds);
+
+			if (initialProps.wpCredentials) {
+				if (exists) {
+					// should I update the data just in case?
+					return currentWpCreds;
+				}
+				await site?.addWpCredentials(initialProps.wpCredentials).then((doc) => {
+					return userDB.wp_credentials.upsertLocal('current', { id: doc.localID });
+				});
+			} else {
+				return currentWpCreds;
+			}
+			return null;
+		}),
+		shareReplay(1)
+	);
+
+	const currentStore$ = userDB.stores.getLocal$('current').pipe(
+		switchMap((current: any) => {
+			if (current && current.get('id')) {
+				return userDB.stores.findOne(current.get('id')).exec();
+			}
+			return of(null);
+		}),
+		shareReplay(1)
+	);
+
+	const store$ = combineLatest([wpCredentials$, currentStore$]).pipe(
+		switchMap(async ([wpCredentials, currentStore]) => {
+			const stores = await wpCredentials?.populate('stores');
+			const exists = Array.isArray(stores) && currentStore && stores.includes(currentStore);
+
+			if (initialProps.store) {
+				if (exists) {
+					// should I update the data just in case?
+					return currentStore;
+				}
+				await wpCredentials?.addStore(initialProps.store).then((doc) => {
+					return userDB.stores.upsertLocal('current', { id: doc.localID });
+				});
+			} else {
+				return currentStore;
+			}
+			return null;
+		}),
+		shareReplay(1)
+	);
+
+	const storeDB$ = store$.pipe(
+		switchMap((store: any) => {
+			if (store) {
+				return getStoreDB$(store.localID);
+			}
+			return of(null);
+		}),
+		shareReplay(1)
+	);
+
+	const resource$ = combineLatest([
+		user$,
+		site$,
+		wpCredentials$,
+		store$,
+		storeDB$,
+		// of(null).pipe(delay(5000)),
+	]).pipe(
+		// convert array into object
+		map(([user, site, wpCredentials, store, storeDB]) => ({
+			user,
+			site,
+			wpCredentials,
+			store,
+			storeDB,
+		}))
+		// tap((res) => {
+		// 	debugger;
+		// })
+	);
+
+	return new ObservableResource(resource$, (value: any) => !!value);
 };
