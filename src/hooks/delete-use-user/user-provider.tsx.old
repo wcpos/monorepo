@@ -44,12 +44,12 @@ const UserProvider = ({ children }: UserProviderProps) => {
 				// create new user
 				// @ts-ignore
 				const newUserDoc = await userDB.users.insert({ displayName: 'Test' });
-				await userDB.users.upsertLocal('lastUser', { id: newUserDoc.localId });
+				await userDB.users.upsertLocal('lastUser', { id: newUserDoc.localID });
 				return setUser(newUserDoc);
 			}
 
 			// else?? set the first found user
-			await userDB.users.upsertLocal('lastUser', { id: users[0].localId });
+			await userDB.users.upsertLocal('lastUser', { id: users[0].localID });
 			return setUser(users[0]);
 		})();
 	}, []);

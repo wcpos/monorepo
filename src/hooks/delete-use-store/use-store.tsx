@@ -53,8 +53,8 @@ export function useStore() {
 		);
 		await userDB.users.upsertLocal('lastStore', {
 			storeID: id,
-			siteID: site.localId,
-			wpUserID: wpUser.localId,
+			siteID: site.localID,
+			wpUserID: wpUser.localID,
 		});
 		_setStoreDB(db);
 	}
