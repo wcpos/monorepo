@@ -13,7 +13,7 @@ export type Document = RxDocument & {
 /**
  *
  */
- export async function toRestApiJSON(this: Document) {
+export async function toRestApiJSON(this: Document) {
 	const json: Record<string, unknown> = this.toJSON();
 
 	if (this.collection.name === 'orders') {
@@ -34,7 +34,7 @@ export type Document = RxDocument & {
 
 	// reverse camelCase for WC REST API
 	forEach(json, (data, key) => {
-		const privateProperties = ['localId', '_attachments', '_rev'];
+		const privateProperties = ['localID', '_attachments', '_rev'];
 		const snakeCaseKey = snakeCase(key);
 		if (!privateProperties.includes(key) && key !== snakeCaseKey) {
 			json[snakeCaseKey] = data;

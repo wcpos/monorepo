@@ -15,7 +15,7 @@ describe('Logs Collection', () => {
 		const logDoc = await db.logs.insert({ message: 'Log message' });
 		expect(isRxDocument(logDoc)).toBe(true);
 		expect(logDoc).toMatchObject({
-			localId: expect.any(String),
+			localID: expect.any(String),
 			dateCreatedGmt: expect.any(Number),
 			message: 'Log message',
 		});

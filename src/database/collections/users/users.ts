@@ -15,6 +15,7 @@ type SiteDocument = import('../sites').SiteDocument;
 
 interface UserMethods {
 	addSiteByUrl: (url: string) => Promise<void>;
+	addSite: (data: any) => Promise<SiteDocument>;
 	removeSite: (site: SiteDocument) => Promise<void>;
 	getSites$: () => Observable<SiteDocument[]>;
 }
@@ -28,10 +29,25 @@ const methods: UserMethods = {
 		if (!cleanUrl) return;
 
 		const site = await this.collections().sites.insert({ url: cleanUrl });
-		await this.update({ $push: { sites: site.localId } }).catch((err) => {
+		await this.update({ $push: { sites: site.localID } }).catch((err) => {
 			console.log(err);
 			return err;
 		});
+	},
+
+	/**
+	 *
+	 * @param this
+	 * @param data
+	 */
+	async addSite(this: UserDocument, data: any) {
+		const site = await this.collections().sites.insert(data);
+		await this.update({ $push: { sites: site.localID } }).catch((err) => {
+			console.log(err);
+			return err;
+		});
+
+		return site;
 	},
 
 	/**
@@ -40,7 +56,7 @@ const methods: UserMethods = {
 	async removeSite(this: UserDocument, site: SiteDocument) {
 		await site.remove();
 		await this.atomicPatch({
-			sites: pull(this.sites as any[], site.localId),
+			sites: pull(this.sites as any[], site.localID),
 		});
 	},
 

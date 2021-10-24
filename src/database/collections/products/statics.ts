@@ -50,7 +50,7 @@ export default {
 			const result = await this.storageInstance.internals.pouch.find({
 				selector: {},
 				// @ts-ignore
-				fields: ['localId', 'id', 'dateCreatedGmt'],
+				fields: ['localID', 'id', 'dateCreatedGmt'],
 			});
 			// get array of sorted records with dateCreatedGmt
 			const filtered = _filter(result.docs, 'dateCreatedGmt');

@@ -27,7 +27,7 @@ export default {
 			const result = await this.storageInstance.internals.pouch.find({
 				selector: {},
 				// @ts-ignore
-				fields: ['localId', 'id', 'dateCreatedGmt'],
+				fields: ['localID', 'id', 'dateCreatedGmt'],
 			});
 			// get array of sorted records with dateCreatedGmt
 			const filtered = _filter(result.docs, 'dateCreatedGmt');
@@ -81,15 +81,17 @@ export default {
 	 *
 	 */
 	audit(this: OrderCollection) {
-		return this.database.httpClient
-			// @ts-ignore
-			.get('orders', {
-				params: { fields: ['id'], posts_per_page: -1 },
-			})
-			.then(({ data }: any) => {
+		return (
+			this.database.httpClient
 				// @ts-ignore
-				return this.auditIdsFromServer(data);
-			});
+				.get('orders', {
+					params: { fields: ['id'], posts_per_page: -1 },
+				})
+				.then(({ data }: any) => {
+					// @ts-ignore
+					return this.auditIdsFromServer(data);
+				})
+		);
 	},
 
 	/**

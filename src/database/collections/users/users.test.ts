@@ -17,7 +17,7 @@ describe('Users Collection', () => {
 		const userDoc = await db.users.insert({ displayName: 'John' });
 		expect(isRxDocument(userDoc)).toBe(true);
 		expect(userDoc).toMatchObject({
-			localId: expect.any(String), // generated local id
+			localID: expect.any(String), // generated local id
 			displayName: 'John',
 		});
 	});
@@ -27,7 +27,7 @@ describe('Users Collection', () => {
 		expect(isRxDocument(userDoc)).toBe(true);
 		const siteDoc = await userDoc.addSiteByUrl('example.com');
 		expect(isRxDocument(userDoc)).toBe(true);
-		expect(userDoc.sites).toContain(siteDoc.localId);
+		expect(userDoc.sites).toContain(siteDoc.localID);
 	});
 
 	it('should have an observable for the sites array', async (done) => {

@@ -22,6 +22,7 @@ type WPCredentialsStatics = Record<string, never>;
 
 interface WPCredentialsMethods {
 	addOrUpdateStores: (data: any[]) => Promise<void>;
+	addStore: (data: Record<string, any>) => Promise<StoreDocument>;
 	getStores$: () => Observable<StoreDocument[]>;
 }
 
@@ -51,7 +52,7 @@ export const methods: WPCredentialsMethods = {
 				const newStore = await storesCollection.insert(rawStore);
 				await this.atomicUpdate((old: any) => {
 					old.stores = old.stores || [];
-					old.stores?.push(newStore.localId);
+					old.stores?.push(newStore.localID);
 					return old;
 				});
 			}
@@ -61,6 +62,19 @@ export const methods: WPCredentialsMethods = {
 				debugger;
 			}
 		});
+	},
+
+	/**
+	 *
+	 */
+	async addStore(this: WPCredentialsDocument, data) {
+		const store: StoreDocument = await this.collections().stores.insert(data);
+		await this.update({ $push: { stores: store.localID } }).catch((err) => {
+			console.log(err);
+			return err;
+		});
+
+		return store;
 	},
 
 	/**
