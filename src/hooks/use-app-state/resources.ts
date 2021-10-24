@@ -26,13 +26,14 @@ export const getResource = (userDB: UserDatabase, initialProps: any) => {
 				const localDoc = await userDB.users.upsertLocal('current', { id: defaultUser.localID });
 			}
 		}),
-		filter((current) => !!current),
-		switchMap((current: any) => {
+		// filter((current) => !!current && current.get('id')),
+		switchMap(async (current: any) => {
 			if (current && current.get('id')) {
 				return userDB.users.findOne(current.get('id')).exec();
 			}
 			return of(null);
 		}),
+		filter((user) => !!user && isRxDocument(user)),
 		shareReplay(1)
 	);
 
@@ -49,6 +50,7 @@ export const getResource = (userDB: UserDatabase, initialProps: any) => {
 	// combine currentSite and user
 	const site$ = combineLatest([user$, currentSite$]).pipe(
 		switchMap(async ([user, currentSite]) => {
+			// @ts-ignore
 			const sites = await user?.populate('sites');
 			const siteExists = Array.isArray(sites) && currentSite && sites.includes(currentSite);
 
@@ -57,6 +59,7 @@ export const getResource = (userDB: UserDatabase, initialProps: any) => {
 					// should I update the data just in case?
 					return currentSite;
 				}
+				// @ts-ignore
 				await user?.addSite(initialProps.site).then((s) => {
 					return userDB.sites.upsertLocal('current', { id: s.localID });
 				});
@@ -155,10 +158,10 @@ export const getResource = (userDB: UserDatabase, initialProps: any) => {
 			wpCredentials,
 			store,
 			storeDB,
-		}))
-		// tap((res) => {
-		// 	debugger;
-		// })
+		})),
+		tap((res) => {
+			console.log(res);
+		})
 	);
 
 	return new ObservableResource(resource$, (value: any) => !!value);
