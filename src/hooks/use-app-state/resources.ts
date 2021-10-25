@@ -1,6 +1,6 @@
 import { ObservableResource } from 'observable-hooks';
 import { from, of, combineLatest, shareReplay, withLatestFrom } from 'rxjs';
-import { tap, switchMap, filter, map, catchError, delay } from 'rxjs/operators';
+import { tap, switchMap, filter, map, catchError, debounceTime } from 'rxjs/operators';
 import { isRxDocument } from 'rxdb/plugins/core';
 import { userDB$ } from '@wcpos/common/src/database/users-db';
 import { getStoreDB$ } from '@wcpos/common/src/database/stores-db';
@@ -159,6 +159,7 @@ export const getResource = (userDB: UserDatabase, initialProps: any) => {
 			store,
 			storeDB,
 		})),
+		debounceTime(200), // allow multiple updates to be emitted once
 		tap((res) => {
 			console.log(res);
 		})
