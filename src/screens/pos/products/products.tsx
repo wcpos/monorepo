@@ -95,7 +95,7 @@ const useAudit = () => {
 					console.log('invalid nonce');
 				}
 			});
-	}, [navigation, site.wcApiUrl, storeDB.products, wpCredentials.jwt]);
+	}, []);
 };
 
 /**

@@ -30,7 +30,7 @@ export const useDataObservable = (
 	options = {}
 ) => {
 	const { storeDB } = useAppState();
-	const collection = storeDB.collections[collectionName];
+	const collection = storeDB?.collections[collectionName];
 	const [query, setQuery] = React.useState<QueryState>(initialQuery);
 	const navigation = useNavigation();
 

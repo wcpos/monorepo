@@ -4,6 +4,7 @@ import { useNavigation, CommonActions } from '@react-navigation/native';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Dropdown from '@wcpos/common/src/components/dropdown';
 import Text from '@wcpos/common/src/components/text';
+import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import UserSettings from './user-settings';
 import * as Styled from './styles';
 
@@ -12,6 +13,7 @@ import * as Styled from './styles';
 // }
 
 export const UserMenu = () => {
+	const { site, wpCredentials, store } = useAppState();
 	const [showSettings, setShowSettings] = React.useState(false);
 	const navigation = useNavigation();
 
@@ -31,10 +33,11 @@ export const UserMenu = () => {
 				items={[
 					{
 						label: 'Logout',
-						action: async () => {
-							// @ts-ignore
-							navigation.navigate('Auth');
-							// await unsetLastUser();
+						action: () => {
+							site.collection.upsertLocal('current', { id: null });
+							wpCredentials.collection.upsertLocal('current', { id: null });
+							store.collection.upsertLocal('current', { id: null });
+							navigation.goBack();
 						},
 						type: 'warning',
 					},

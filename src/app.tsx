@@ -7,7 +7,6 @@ import { ThemeProvider } from 'styled-components/native';
 import get from 'lodash/get';
 import getTheme from '@wcpos/common/src/themes';
 import { AppStateProvider } from './hooks/use-app-state';
-import { UIResourceProvider } from './hooks/use-ui';
 import TranslationService from './services/translation';
 import AppNavigator from './navigators';
 import Portal from './components/portal';
@@ -67,22 +66,20 @@ const App = (initialProps: InitialProps) => {
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<AppStateProvider initialProps={initialProps}>
-					<UIResourceProvider>
-						<ThemeProvider theme={getTheme('default', 'dark')}>
-							<SafeAreaProvider style={{ overflow: 'hidden' }}>
-								<AppProviderSizeProvider>
-									<SnackbarProvider>
-										<Portal.Provider>
-											<NavigationContainer linking={linking}>
-												<AppNavigator />
-											</NavigationContainer>
-											<Portal.Manager />
-										</Portal.Provider>
-									</SnackbarProvider>
-								</AppProviderSizeProvider>
-							</SafeAreaProvider>
-						</ThemeProvider>
-					</UIResourceProvider>
+					<ThemeProvider theme={getTheme('default', 'dark')}>
+						<SafeAreaProvider style={{ overflow: 'hidden' }}>
+							<AppProviderSizeProvider>
+								<SnackbarProvider>
+									<Portal.Provider>
+										<NavigationContainer linking={linking}>
+											<AppNavigator />
+										</NavigationContainer>
+										<Portal.Manager />
+									</Portal.Provider>
+								</SnackbarProvider>
+							</AppProviderSizeProvider>
+						</SafeAreaProvider>
+					</ThemeProvider>
 				</AppStateProvider>
 			</React.Suspense>
 		</ErrorBoundary>

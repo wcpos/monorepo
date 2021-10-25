@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { of } from 'rxjs';
 import { tap, filter } from 'rxjs/operators';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import get from 'lodash/get';
@@ -60,7 +61,7 @@ const UIResourceProvider = ({ children }: UIResourceProviderProps) => {
 
 	const getResource = (key: string) => {
 		if (!storeDB) {
-			return;
+			return new ObservableResource(of(null));
 		}
 
 		const resource$ = storeDB.getLocal$(`ui_${key}`).pipe(
@@ -78,7 +79,6 @@ const UIResourceProvider = ({ children }: UIResourceProviderProps) => {
 			})
 		);
 
-		// @ts-ignore
 		return new ObservableResource(resource$, (val) => !!val);
 	};
 

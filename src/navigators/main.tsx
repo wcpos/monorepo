@@ -12,6 +12,7 @@ import Customers from '@wcpos/common/src/screens/customers';
 import Support from '@wcpos/common/src/screens/support';
 import Button from '@wcpos/common/src/components/button';
 import HeaderRight from '@wcpos/common/src/screens/header/right';
+import { UIResourceProvider } from '@wcpos/common/src/hooks/use-ui';
 
 type MainScreenProps = import('./app').MainScreenProps;
 
@@ -98,13 +99,15 @@ const MainNavigator = ({ navigation, route }: MainScreenProps) => {
 	);
 
 	return (
-		<Drawer.Navigator screenOptions={screenOptions}>
-			<Drawer.Screen name="POS" component={POS} />
-			<Drawer.Screen name="Products" component={Products} />
-			<Drawer.Screen name="Orders" component={Orders} />
-			<Drawer.Screen name="Customers" component={Customers} />
-			<Drawer.Screen name="Support" component={Support} />
-		</Drawer.Navigator>
+		<UIResourceProvider>
+			<Drawer.Navigator screenOptions={screenOptions}>
+				<Drawer.Screen name="POS" component={POS} />
+				<Drawer.Screen name="Products" component={Products} />
+				<Drawer.Screen name="Orders" component={Orders} />
+				<Drawer.Screen name="Customers" component={Customers} />
+				<Drawer.Screen name="Support" component={Support} />
+			</Drawer.Navigator>
+		</UIResourceProvider>
 	);
 };
 
