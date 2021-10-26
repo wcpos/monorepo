@@ -8,6 +8,7 @@ import set from 'lodash/set';
 // import useDataObservable from '@wcpos/common/src/hooks/use-data-observable';
 // import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
 import Segment from '@wcpos/common/src/components/segment';
 import Search from '@wcpos/common/src/components/search';
 import Text from '@wcpos/common/src/components/text';
@@ -65,39 +66,6 @@ const useProductQuery = () => {
 	return { data$, query, setQuery };
 };
 
-const useAudit = () => {
-	const { storeDB, site, wpCredentials } = useAppState();
-	const navigation = useNavigation();
-
-	React.useEffect(() => {
-		http
-			// @ts-ignore
-			.get('products', {
-				baseURL: site.wcApiUrl,
-				params: { fields: ['id', 'name'], posts_per_page: -1 },
-				headers: {
-					'X-WCPOS': '1',
-					'X-WP-Nonce': 'c7e0b25917',
-					Authorization: `Bearer ${wpCredentials.jwt}`,
-				},
-			})
-			.then(({ data }: any) => {
-				// @ts-ignore
-				return storeDB.products.auditIdsFromServer(data);
-			})
-			.catch(({ response }) => {
-				console.log(response);
-				if (response.status === 401) {
-					// @ts-ignore
-					navigation.navigate('Modal', { login: true });
-				}
-				if (response.status === 403) {
-					console.log('invalid nonce');
-				}
-			});
-	}, []);
-};
-
 /**
  *
  */
@@ -105,12 +73,12 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 	// const { t } = useTranslation();
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	// @ts-ignore
-	const totalRecords = useObservableState(storeDB?.collections.products.totalRecords$);
+	const totalRecords = useObservableState(storeDB?.products.totalRecords$);
 	const [isSyncing, setIsSyncing] = React.useState<boolean>(false);
 	const [recordsShowing, setRecordsShowing] = React.useState<number>(0);
 	const { data$, query, setQuery } = useProductQuery();
 	const products = useObservableState(data$, []);
-	useAudit();
+	useIdAudit('products');
 	console.log(products);
 	// const { data$, query, setQuery } = useDataObservable('products', {
 	// 	search: '',
