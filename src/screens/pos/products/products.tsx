@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
-import { tap, switchMap, catchError } from 'rxjs/operators';
+import { tap, switchMap, catchError, debounceTime, map } from 'rxjs/operators';
 import { Observable } from 'rxjs';
 import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import set from 'lodash/set';
-// import useDataObservable from '@wcpos/common/src/hooks/use-data-observable';
+import useCollectionQuery from '@wcpos/common/src/hooks/use-collection-query';
 // import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
@@ -14,6 +14,7 @@ import Search from '@wcpos/common/src/components/search';
 import Text from '@wcpos/common/src/components/text';
 import http from '@wcpos/common/src/lib/http';
 import { useNavigation } from '@react-navigation/native';
+import { FlatList } from 'react-native';
 import Table from '../../common/table';
 import Footer from './footer';
 import UiSettings from '../../common/ui-settings';
@@ -24,10 +25,16 @@ interface POSProductsProps {
 	storeDB: any;
 }
 
-const useProductQuery = () => {
-	const { storeDB } = useAppState();
-	const [query, setQuery] = React.useState({
-		search: '',
+/**
+ *
+ */
+const Products = ({ ui, storeDB }: POSProductsProps) => {
+	// const { t } = useTranslation();
+	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
+	const totalRecords = useObservableState(storeDB?.products.totalRecords$);
+	const [isSyncing, setIsSyncing] = React.useState<boolean>(false);
+	const { data, query, setQuery, count } = useCollectionQuery('products', {
+		search: null,
 		sortBy: 'name',
 		sortDirection: 'asc',
 		filters: {
@@ -35,68 +42,14 @@ const useProductQuery = () => {
 			tag: null,
 		},
 	});
-
-	const data$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				// distinctUntilChanged((a, b) => a[0] === b[0]),
-				// debounceTime(150),
-				switchMap(([q]) => {
-					// const regexp = new RegExp(escape(q.search), 'i');
-					// @ts-ignore
-					const RxQuery = storeDB.products.query(q);
-					// 	.find({
-					// 		selector: {
-					// 			dateCreatedGmt: { $regex: regexp },
-					// 		},
-					// 	})
-					// 	// @ts-ignore
-					// 	.sort({ [q.sortBy]: q.sortDirection });
-					return RxQuery.$;
-				}),
-				// shareReplay(1),
-				catchError((err) => {
-					console.error(err);
-					return err;
-				})
-			),
-		[query]
-	);
-
-	return { data$, query, setQuery };
-};
-
-/**
- *
- */
-const Products = ({ ui, storeDB }: POSProductsProps) => {
-	// const { t } = useTranslation();
-	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
-	// @ts-ignore
-	const totalRecords = useObservableState(storeDB?.products.totalRecords$);
-	const [isSyncing, setIsSyncing] = React.useState<boolean>(false);
-	const [recordsShowing, setRecordsShowing] = React.useState<number>(0);
-	const { data$, query, setQuery } = useProductQuery();
-	const products = useObservableState(data$, []);
 	useIdAudit('products');
-	console.log(products);
-	// const { data$, query, setQuery } = useDataObservable('products', {
-	// 	search: '',
-	// 	sortBy: 'name',
-	// 	sortDirection: 'asc',
-	// 	filters: {
-	// 		category: null,
-	// 		tag: null,
-	// 	},
-	// });
-	// useIdAudit('products');
 
 	/**
 	 *
 	 */
 	const onSearch = React.useCallback(
 		(search: string) => {
-			setQuery((prev) => ({ ...prev, search }));
+			setQuery('search', search);
 		},
 		[setQuery]
 	);
@@ -110,7 +63,7 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 			f.push({
 				label: get(query, 'filters.category.name'),
 				onRemove: () => {
-					setQuery((prev: any) => set({ ...prev }, 'filters.category', null));
+					// setQuery((prev: any) => set({ ...prev }, 'filters.category', null));
 				},
 			});
 		}
@@ -118,12 +71,23 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 			f.push({
 				label: get(query, 'filters.tag.name'),
 				onRemove: () => {
-					setQuery((prev: any) => set({ ...prev }, 'filters.tag', null));
+					// setQuery((prev: any) => set({ ...prev }, 'filters.tag', null));
 				},
 			});
 		}
 		return f;
 	}, [query, setQuery]);
+
+	const renderItem = React.useCallback(({ item }) => <Text>{item.name}</Text>, []);
+	const keyExtractor = React.useCallback((item) => item.localID, []);
+	const getItemLayout = React.useCallback(
+		(data, index) => ({
+			length: 16,
+			offset: 16 * index,
+			index,
+		}),
+		[]
+	);
 
 	return (
 		<Segment.Group>
@@ -135,6 +99,15 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 					onSearch={onSearch}
 					actions={[<UiSettings ui={ui} />]}
 					filters={filters}
+				/>
+			</Segment>
+			<Segment grow>
+				<FlatList
+					// @ts-ignore
+					data={data}
+					renderItem={renderItem}
+					keyExtractor={keyExtractor}
+					getItemLayout={getItemLayout}
 				/>
 			</Segment>
 			{/* <Segment grow>
@@ -152,7 +125,7 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 			<Segment style={{ alignItems: 'flex-end' }}>
 				<>
 					<Text>
-						Showing {recordsShowing} of {totalRecords}
+						Showing {count} of {totalRecords}
 					</Text>
 				</>
 			</Segment>
