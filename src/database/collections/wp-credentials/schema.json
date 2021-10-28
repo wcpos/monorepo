@@ -43,6 +43,9 @@
 		"jwt": {
 			"type": "string"
 		},
+		"wpNonce": {
+			"type": "string"
+		},
 		"keyId": {
 			"type": "number"
 		},
