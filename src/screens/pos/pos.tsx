@@ -9,6 +9,7 @@ import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 // import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
+import { QueryProvider } from '@wcpos/common/src/hooks/use-query';
 import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
 import Draggable from '@wcpos/common/src/components/draggable';
 import Gutter from '@wcpos/common/src/components/gutter';
@@ -132,9 +133,9 @@ const POS = () => {
 					style={productsColumnStyle}
 				>
 					<ErrorBoundary>
-						<React.Suspense fallback={<Text>Loading products...</Text>}>
+						<QueryProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }}>
 							<Products ui={productsUI} storeDB={storeDB} />
-						</React.Suspense>
+						</QueryProvider>
 					</ErrorBoundary>
 				</Styled.ProductsColumn>
 				<Draggable

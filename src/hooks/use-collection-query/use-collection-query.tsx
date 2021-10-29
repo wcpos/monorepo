@@ -1,8 +1,11 @@
 import * as React from 'react';
-import { useObservableState, useObservable } from 'observable-hooks';
-import { switchMap, map, throttleTime } from 'rxjs/operators';
+import { useObservableState } from 'observable-hooks';
+import { switchMap, map, debounceTime } from 'rxjs/operators';
 import set from 'lodash/set';
+import forEach from 'lodash/forEach';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useQuery from '@wcpos/common/src/hooks/use-query';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
 
@@ -19,29 +22,28 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
  *
  *
  * @param collectionName
- * @param initialQuery
  * @param options
  * @returns
  */
 export const useCollectionQuery = (
 	collectionName: 'products' | 'orders' | 'customers',
-	initialQuery: QueryState,
 	options = {}
 ) => {
 	const { storeDB } = useAppState();
 	const collection = storeDB.collections[collectionName];
-	const query = React.useRef(initialQuery);
+	const { query } = useQuery();
 
-	const [data, runQuery] = useObservableState<any[], QueryState>(
+	const [data, updateQuery] = useObservableState<any[], QueryState>(
 		(input$) =>
 			input$.pipe(
-				// throttleTime(100),
+				debounceTime(100),
 				switchMap((q) => {
 					const selector = {};
-					if (q.search) {
-						const regexp = new RegExp(escape(q.search), 'i');
-						set(selector, ['name', '$regex'], regexp);
-					}
+					forEach(q.search, function (value, key) {
+						if (value) {
+							set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
+						}
+					});
 					const RxQuery = collection.find({ selector });
 					return RxQuery.$;
 				}),
@@ -50,21 +52,21 @@ export const useCollectionQuery = (
 		[]
 	);
 
-	const setQuery = React.useCallback(
-		(path: string | string[], value: any) => {
-			set(query.current, path, value);
-			runQuery(query.current);
-		},
-		[runQuery]
-	);
+	/**
+	 * TODO: React 18 use Transition
+	 */
+	React.useEffect(() => {
+		// @ts-ignore
+		updateQuery(query);
+	}, [query, updateQuery]);
 
-	React.useEffect(
-		() => {
-			runQuery(query.current);
-		},
-		// trigger only on first render
-		[]
-	);
+	useWhyDidYouUpdate('Collection Query', {
+		storeDB,
+		collection,
+		query,
+		data,
+		updateQuery,
+	});
 
-	return { data, query: query.current, setQuery, count: data.length };
+	return { data };
 };
