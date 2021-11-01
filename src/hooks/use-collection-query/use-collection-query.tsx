@@ -3,6 +3,7 @@ import { useObservableState } from 'observable-hooks';
 import { switchMap, map, debounceTime } from 'rxjs/operators';
 import set from 'lodash/set';
 import forEach from 'lodash/forEach';
+import orderBy from 'lodash/orderBy';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useQuery from '@wcpos/common/src/hooks/use-query';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
@@ -33,24 +34,32 @@ export const useCollectionQuery = (
 	const collection = storeDB.collections[collectionName];
 	const { query } = useQuery();
 
-	const [data, updateQuery] = useObservableState<any[], QueryState>(
-		(input$) =>
-			input$.pipe(
-				debounceTime(100),
-				switchMap((q) => {
-					const selector = {};
-					forEach(q.search, function (value, key) {
-						if (value) {
-							set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
-						}
-					});
-					const RxQuery = collection.find({ selector });
-					return RxQuery.$;
-				}),
-				map((result) => (Array.isArray(result) ? result : []))
-			),
-		[]
-	);
+	const [data, updateQuery] = useObservableState<any[], QueryState>((query$) => {
+		return query$.pipe(
+			// debounce hits to the local db
+			debounceTime(100),
+			// switchMap to the collection query
+			switchMap((q) => {
+				const selector = {};
+				forEach(q.search, function (value, key) {
+					if (value) {
+						set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
+					}
+				});
+
+				const RxQuery = collection.find({ selector });
+
+				return RxQuery.$.pipe(
+					// sort the results
+					// @ts-ignore
+					map((result) => {
+						const array = Array.isArray(result) ? result : [];
+						return orderBy(array, [q.sortBy], [q.sortDirection]);
+					})
+				);
+			})
+		);
+	}, []);
 
 	/**
 	 * TODO: React 18 use Transition
@@ -68,5 +77,5 @@ export const useCollectionQuery = (
 		updateQuery,
 	});
 
-	return { data };
+	return { data, count: data.length };
 };
