@@ -83,7 +83,7 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 				/> */}
 			</Segment>
 			<Segment grow>
-				<Table />
+				<Table columns={columns} />
 			</Segment>
 			{/* <Segment grow>
 				<Table
