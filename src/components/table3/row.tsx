@@ -1,42 +1,55 @@
 import * as React from 'react';
-import { View, ViewStyle } from 'react-native';
+import { ViewStyle } from 'react-native';
+import Text from '../text';
 import * as Styled from './styles';
-import Cell, { TableCellProps } from './cell';
 
-export interface TableRowProps {
-	children?: (props: TableCellProps) => React.ReactNode;
-	item: any;
-	columns: any[];
-	style?: ViewStyle;
-	translateY: number;
-	measureRef: React.Ref<View>;
-}
-
-const Row = ({ children, item, columns, style, translateY, measureRef }: TableRowProps) => {
-	const renderCell = React.useCallback(
-		(column) => {
-			const cellProps = {
-				key: column.key,
-				item,
-				cellData: item[column.key],
-				column,
-			};
-
-			if (typeof children === 'function') {
-				return children(cellProps);
-			}
-
-			return <Cell {...cellProps} />;
-		},
-		[children, item]
-	);
-
-	return (
-		<Styled.Row ref={measureRef} style={[{ transform: [{ translateY }] }, style]}>
-			{columns.map(renderCell)}
-		</Styled.Row>
+/**
+ *
+ */
+export const renderCell: <T>(
+	item: T,
+	column: import('./table').ColumnProps<T>,
+	index: number
+) => React.ReactNode = (item, column, index) => {
+	return column.onRender ? (
+		column.onRender(item, column, index)
+	) : (
+		<Text>{String(item[column.key] ?? '')}</Text>
 	);
 };
 
-Row.Cell = Cell;
-export default Row;
+export interface TableRowProps<T> {
+	item: T;
+	columns: import('./table').ColumnProps<T>[];
+	rowStyle?: ViewStyle;
+	cellStyle?: ViewStyle;
+}
+
+/**
+ *
+ */
+export const TableRow = React.memo(function TableRow<T>({
+	item,
+	columns,
+	rowStyle,
+	cellStyle,
+}: TableRowProps<T>) {
+	return (
+		<Styled.Row style={rowStyle}>
+			{columns.map((column, index) => {
+				const cell = renderCell(item, column, index);
+				const { flexGrow = 1, flexShrink = 1, flexBasis = 'auto', width = '100%' } = column;
+				return (
+					<Styled.Cell
+						key={column.key}
+						style={[{ flexGrow, flexShrink, flexBasis, width }, cellStyle]}
+					>
+						{cell}
+					</Styled.Cell>
+				);
+			})}
+		</Styled.Row>
+	);
+});
+
+// export default React.memo(TableRow);

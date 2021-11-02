@@ -17,7 +17,6 @@ import { FlatList } from 'react-native';
 import Table from './table';
 import Footer from './footer';
 import UiSettings from '../../common/ui-settings';
-import cells from './cells';
 import SearchBar from './search-bar';
 
 interface POSProductsProps {
@@ -30,10 +29,11 @@ interface POSProductsProps {
  */
 const Products = ({ ui, storeDB }: POSProductsProps) => {
 	// const { t } = useTranslation();
-	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
+	const columns$ = ui.get$('columns');
+	const columns = useObservableState(columns$, ui.get('columns'));
 	// const totalRecords = useObservableState(storeDB?.products.totalRecords$);
 	// const [isSyncing, setIsSyncing] = React.useState<boolean>(false);
-	useIdAudit('products');
+	// useIdAudit('products');
 
 	/**
 	 *

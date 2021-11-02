@@ -6,28 +6,63 @@ import useData from '@wcpos/common/src/hooks/use-collection-query';
 import useQuery from '@wcpos/common/src/hooks/use-query';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Table from '@wcpos/common/src/components/table3';
-import cells from './cells';
+import Actions from './cells/actions';
+import Categories from '../../common/product-categories';
+import Image from './cells/image';
+import Name from './cells/name';
+import Price from './cells/price';
+import RegularPrice from './cells/regular-price';
+import Sku from './cells/sku';
+import Tag from '../../common/product-tags';
 
-type ColumnProps = import('@wcpos/common/src/components/table3/table').ColumnProps;
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
+type ProductDocument = import('@wcpos/common/src/database').ProductDocument;
+type ColumnProps = import('@wcpos/common/src/components/table3/table').ColumnProps<ProductDocument>;
 
 interface POSProductsTableProps {
 	columns: ColumnProps[];
 }
 
+const cells = {
+	actions: Actions,
+	categories: Categories,
+	image: Image,
+	name: Name,
+	price: Price,
+	regularPrice: RegularPrice,
+	sku: Sku,
+	tag: Tag,
+};
+
+/**
+ *
+ */
 const POSProductsTable = ({ columns }: POSProductsTableProps) => {
 	const { t } = useTranslation();
 	const { data } = useData('products');
 	const { query, setQuery } = useQuery();
 
-	/** translate columns labels */
-	const labelledColumns = React.useMemo(
+	/**
+	 * - filter visible columns
+	 * - translate column label
+	 * - asssign cell renderer
+	 */
+	const visibleColumns = React.useMemo(
 		() =>
-			columns.map((column) => {
-				// clone column and add label
-				return { ...column, label: t(`products.column.label.${column.key}`) };
-			}),
+			columns
+				.filter((column) => !column.hide)
+				.map((column) => {
+					// clone column and add label, onRender function
+					const Cell = get(cells, column.key);
+					return {
+						...column,
+						label: t(`products.column.label.${column.key}`),
+						onRender: (item: ProductDocument) => {
+							return Cell ? <Cell item={item} column={column} /> : null;
+						},
+					};
+				}),
 		[columns, t]
 	);
 
@@ -52,31 +87,13 @@ const POSProductsTable = ({ columns }: POSProductsTableProps) => {
 	useWhyDidYouUpdate('Table', { data });
 
 	return (
-		<Table
-			columns={labelledColumns}
+		<Table<ProductDocument>
+			columns={visibleColumns}
 			data={sortedData}
 			// sort={handleSort}
 			// sortBy={query.sortBy}
 			// sortDirection={query.sortDirection}
-		>
-			{(rowProps) => (
-				<Table.Row {...rowProps}>
-					{(cellProps) => {
-						const { item, column, ...rest } = cellProps;
-						const Cell = get(cells, column.key);
-						if (Cell) {
-							return (
-								<Table.Row.Cell column={column} {...rest}>
-									<Cell item={item} column={column} />
-								</Table.Row.Cell>
-							);
-						}
-
-						return <Table.Row.Cell {...cellProps} />;
-					}}
-				</Table.Row>
-			)}
-		</Table>
+		/>
 	);
 };
 

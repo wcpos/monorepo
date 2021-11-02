@@ -5,22 +5,7 @@ export const Table = styled.View`
 	height: 100%;
 `;
 
-export const Body = styled.View`
-	flex: 1;
-	overflow: auto;
-`;
-
-export const ListContainer = styled.View`
-	width: 100%;
-	position: relative;
-`;
-
 export const Row = styled.View`
-	position: absolute;
-	top: 0;
-	left: 0;
-	width: 100%;
-	display: flex;
 	flex-direction: row;
 	align-items: center;
 	border-bottom-width: 1px;

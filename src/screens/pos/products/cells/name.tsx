@@ -8,10 +8,9 @@ import Tags from '../../../common/product-tags';
 interface Props {
 	item: import('@wcpos/common/src/database').ProductDocument;
 	column: any;
-	setQuery?: any;
 }
 
-const Name = ({ item: product, column, setQuery }: Props) => {
+const Name = ({ item: product, column }: Props) => {
 	const { display } = column;
 
 	/**
@@ -29,8 +28,8 @@ const Name = ({ item: product, column, setQuery }: Props) => {
 		<>
 			<Text>{product.name}</Text>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
-			{show('categories') && <Categories item={product} setQuery={setQuery} />}
-			{show('tags') && <Tags item={product} setQuery={setQuery} />}
+			{show('categories') && <Categories item={product} />}
+			{show('tags') && <Tags item={product} />}
 			{product.type === 'variable' && (
 				<View>
 					{(product.attributes as [])

@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { View, ViewStyle, NativeSyntheticEvent, NativeTouchEvent } from 'react-native';
-import { useVirtual } from 'react-virtual';
-import get from 'lodash/get';
-import Text from '../text';
-import Row, { TableRowProps } from './row';
+import { ViewStyle, NativeSyntheticEvent, NativeTouchEvent } from 'react-native';
+import Header from './header';
+import { TableRow } from './row';
+import EmptyRow from './empty';
+import { VirtualList } from './virtual-list';
 import * as Styled from './styles';
 
 export type SortDirection = 'asc' | 'desc';
@@ -17,8 +17,9 @@ export interface SortProps {
 
 export type Sort = (props: SortProps) => void;
 
-export interface ColumnProps {
-	key: string;
+export interface ColumnProps<T = any> {
+	key: keyof T & string;
+	onRender?: (item: T, column: ColumnProps<T>, index: number) => React.ReactNode;
 	label: string;
 	hide?: boolean;
 	disableSort?: boolean;
@@ -30,76 +31,73 @@ export interface ColumnProps {
 	defaultSortDirection?: SortDirection;
 }
 
-export interface TableProps {
-	children?: (props: TableRowProps) => React.ReactNode;
-	data: any[];
-	columns: ColumnProps[];
+export interface TableProps<T = any> {
+	/**
+	 * The data source to render
+	 */
+	data: T[];
+	columns: ColumnProps<T>[];
 	style?: ViewStyle;
+	emptyRenderer?: () => React.ReactNode;
+	/**
+	 * additional context that will be passed verbatim to the itemRenderer, so that it can be easily memoized
+	 */
+	context?: any;
+	/**
+	 * Takes care of rendering an item
+	 * @param item The item as stored in the dataSource
+	 * @param index The index of the item being rendered. The index represents the offset in the _visible_ items of the dataSource
+	 * @param context The optional context passed into this DataSourceRenderer
+	 */
+	rowRenderer?: (item: T, index: number, context: any) => React.ReactNode;
+	enableColumnHeaders?: boolean;
 }
 
-const Table = ({ data, columns, children, style }: TableProps) => {
-	const parentRef = React.useRef() as React.MutableRefObject<View>;
+// const Table: <T>(props: TableProps<T>) => React.ReactElement = ({
+// 	data,
+// 	columns,
+// 	style,
+// 	enableColumnHeaders = true,
+// }) => {
+function Table<T extends object>({
+	data,
+	columns,
+	style,
+	enableColumnHeaders = true,
+}: TableProps<T>): React.ReactElement {
+	// const visibleColumns = React.useMemo(() => columns.filter((column) => !column.hide), [columns]);
 
-	const rowVirtualizer = useVirtual({
-		size: data.length,
-		parentRef,
-	});
-
-	const keyExtractor = React.useCallback(
-		(item: any, index: number) => get(item, 'localID') || index,
-		[]
-	);
-
-	const renderRow = React.useCallback(
-		(virtualRow) => {
-			const item = data[virtualRow.index];
-
-			if (typeof children === 'function') {
-				return children({
-					item,
-					columns,
-					translateY: virtualRow.start,
-					measureRef: virtualRow.measureRef,
-				});
-			}
-
+	/**
+	 *
+	 */
+	const rowRenderer = React.useCallback(
+		(
+			item,
+			index
+			// renderContext: TableRowRenderContext<T>,
+		) => {
 			return (
-				<Row
-					key={keyExtractor(item, virtualRow.index)}
+				<TableRow
+					// config={renderContext}
 					item={item}
+					// @ts-ignore
 					columns={columns}
-					measureRef={virtualRow.measureRef}
-					translateY={virtualRow.start}
+					// itemIndex={index}
 				/>
 			);
 		},
-		[children, columns, data, keyExtractor]
+		[columns]
 	);
+
+	const header = enableColumnHeaders && <Header columns={columns} />;
 
 	return (
 		<Styled.Table style={style}>
-			<Styled.HeaderRow>
-				{columns.map((column, index) => {
-					const style = {};
-					const { key, flexGrow = 1, flexShrink = 1, flexBasis = 'auto', width = '100%' } = column;
-					return (
-						<Styled.HeaderCell
-							key={key}
-							style={[{ flexGrow, flexShrink, flexBasis, width }, style]}
-						>
-							<Text>{column.label}</Text>
-						</Styled.HeaderCell>
-					);
-				})}
-			</Styled.HeaderRow>
-			<Styled.Body ref={parentRef}>
-				<Styled.ListContainer style={{ height: rowVirtualizer.totalSize }}>
-					{rowVirtualizer.virtualItems.map(renderRow)}
-				</Styled.ListContainer>
-			</Styled.Body>
+			{header}
+			<VirtualList<T> data={data} rowRenderer={rowRenderer} />
 		</Styled.Table>
 	);
-};
+}
 
-Table.Row = Row;
+// Table.Row = Row;
 export default Table;

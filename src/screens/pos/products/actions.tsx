@@ -7,7 +7,7 @@ import Popover from '@wcpos/common/src/components/popover';
 import Icon from '@wcpos/common/src/components/icon';
 import Tooltip from '@wcpos/common/src/components/tooltip';
 
-type ColumnProps = import('../../../components/table/types').ColumnProps;
+type ColumnProps = import('../../../components/table3/table').ColumnProps;
 
 interface IPOSProductActionsProps {
 	columns: ColumnProps[];

@@ -22,11 +22,18 @@ const price = () => Math.floor(Math.random() * 100);
 const quantity = () => Math.floor(Math.random() * 10);
 const height = () => 25 + Math.floor(Math.random() * 100);
 
+interface Data {
+	name: string;
+	price: number;
+	quantity: number;
+	height: number;
+}
+
 const data = new Array(1000)
 	.fill(true)
 	.map(() => ({ name: name(), price: price(), quantity: quantity(), height: height() }));
 
-export const BasicUsage = (props: TableProps) => <Table {...props} />;
+export const BasicUsage = (props: TableProps<Data>) => <Table<Data> {...props} />;
 BasicUsage.args = {
 	columns: [
 		{ key: 'quantity', label: 'Qty', flexGrow: 0, flexShrink: 1, width: '20%' },
@@ -40,7 +47,7 @@ BasicUsage.args = {
 	// sortDirection: 'asc',
 };
 
-export const Empty = (props: TableProps) => <Table {...props} />;
+export const Empty = (props: TableProps<Data>) => <Table<Data> {...props} />;
 Empty.args = {
 	columns: [
 		{ key: 'quantity', label: 'Qty', flexGrow: 0, flexShrink: 1, width: '20%' },
@@ -55,69 +62,51 @@ Empty.args = {
 	empty: 'Nothing Found',
 };
 
-export const CustomTableRow = (props: TableProps) => {
-	return (
-		<Table {...props}>
-			{(rowProps) => {
-				const { item, ...rest } = rowProps;
-				return (
-					<Table.Row
-						item={item}
-						{...rest}
-						columns={props.columns}
-						style={{ height: item.height }}
-					/>
-				);
-			}}
-		</Table>
-	);
-};
-CustomTableRow.args = {
-	columns: [
-		{ key: 'quantity', label: 'Qty', flexGrow: 0, flexShrink: 1, width: '20%' },
-		{ key: 'name', label: 'Name', flexGrow: 1, flexShrink: 0, width: '50%' },
-		{ key: 'price', label: 'Price', flexGrow: 0, flexShrink: 1, width: '30%' },
-	],
-	data,
-	style: { height: 300 },
-	// sort: action('Sort'),
-	// sortBy: 'name',
-	// sortDirection: 'asc',
-};
+// export const CustomTableRow = (props: TableProps<Data>) => {
+// 	return (
+// 		<Table {...props}>
+// 			{(rowProps) => {
+// 				const { item, ...rest } = rowProps;
+// 				return (
+// 					<Table.Row
+// 						item={item}
+// 						{...rest}
+// 						columns={props.columns}
+// 						style={{ height: item.height }}
+// 					/>
+// 				);
+// 			}}
+// 		</Table>
+// 	);
+// };
+// CustomTableRow.args = {
+// 	columns: [
+// 		{ key: 'quantity', label: 'Qty', flexGrow: 0, flexShrink: 1, width: '20%' },
+// 		{ key: 'name', label: 'Name', flexGrow: 1, flexShrink: 0, width: '50%' },
+// 		{ key: 'price', label: 'Price', flexGrow: 0, flexShrink: 1, width: '30%' },
+// 	],
+// 	data,
+// 	style: { height: 300 },
+// 	// sort: action('Sort'),
+// 	// sortBy: 'name',
+// 	// sortDirection: 'asc',
+// };
 
-export const CustomTableCell = (props: TableProps) => {
-	return (
-		<Table {...props}>
-			{(rowProps) => (
-				<Table.Row {...rowProps}>
-					{(cellProps) => {
-						const { cellData, column } = cellProps;
-
-						if (column.key === 'price') {
-							const fixedDecimal = cellData.toFixed(2);
-							return (
-								<Table.Row.Cell column={column} {...cellProps}>
-									<Text>{`$ ${fixedDecimal}`}</Text>
-								</Table.Row.Cell>
-							);
-						}
-
-						return (
-							<Table.Row.Cell column={column} {...cellProps}>
-								<Text>{cellData}</Text>
-							</Table.Row.Cell>
-						);
-					}}
-				</Table.Row>
-			)}
-		</Table>
-	);
+export const CustomTableCell = (props: TableProps<Data>) => {
+	return <Table<Data> {...props} />;
 };
 CustomTableCell.args = {
 	columns: [
 		{ key: 'quantity', label: 'Qty', flexGrow: 0, flexShrink: 1, width: '20%' },
 		{ key: 'name', label: 'Name', flexGrow: 1, flexShrink: 0, width: '50%' },
-		{ key: 'price', label: 'Price', flexGrow: 0, flexShrink: 1, width: '30%' },
+		{
+			key: 'price',
+			label: 'Price',
+			flexGrow: 0,
+			flexShrink: 1,
+			width: '30%',
+			onRender: (item: Data) => <Text>{`$ ${item.price.toFixed(2)}`}</Text>,
+		},
 	],
 	data,
 	style: { height: 300 },

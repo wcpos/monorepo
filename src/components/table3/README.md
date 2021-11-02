@@ -1,0 +1,1 @@
+## inspired by https://github.com/facebook/flipper/tree/main/desktop/flipper-plugin/src/data-source
