@@ -54,7 +54,10 @@ export const useCollectionQuery = (
 					// @ts-ignore
 					map((result) => {
 						const array = Array.isArray(result) ? result : [];
-						return orderBy(array, [q.sortBy], [q.sortDirection]);
+						const productSorter = (product: any) => {
+							return product[q.sortBy].toLowerCase();
+						};
+						return orderBy(array, [productSorter], [q.sortDirection]);
 					})
 				);
 			})

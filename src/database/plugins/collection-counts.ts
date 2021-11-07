@@ -61,6 +61,27 @@ const collectionCountsPlugin: RxPlugin = {
 				unsyncedDocuments$: collection.unsyncedDocuments.asObservable(),
 			});
 
+			collection.storageInstance.internals.pouch
+				.find({
+					selector: {},
+					fields: ['localID', 'id', 'dateCreatedGmt'],
+				})
+				.then((result: any) => {
+					// count total documents
+					console.log(collection.name, result.docs.length);
+					// @ts-ignore
+					collection.totalDocuments.next(result.docs.length);
+					// count unsynced documents
+					const unsynced = result.docs.filter((doc: any) => {
+						return !doc.isSynced();
+					});
+					// @ts-ignore
+					collection.unsyncedDocuments.next(unsynced.length);
+				})
+				.catch((err: any) => {
+					console.log(err);
+				});
+
 			// collection.$ will emit on insert, update and remove
 			// for each emit we are going to loop through all docs for counting
 			// debounce is used to group bulk operations
@@ -78,11 +99,13 @@ const collectionCountsPlugin: RxPlugin = {
 							// count total documents
 							console.log(collection.name, result.docs.length);
 							// @ts-ignore
-							collection.totalRecords.next(result.docs.length);
+							collection.totalDocuments.next(result.docs.length);
 							// count unsynced documents
 							const unsynced = result.docs.filter((doc: any) => {
 								return !doc.isSynced();
 							});
+							// @ts-ignore
+							collection.unsyncedDocuments.next(unsynced.length);
 						})
 						.catch((err: any) => {
 							console.log(err);

@@ -155,3 +155,20 @@ CustomTableCell.args = {
 // 	sortBy: 'name',
 // 	sortDirection: 'asc',
 // };
+
+export const TableFooter = (props: TableProps<Data>) => {
+	return <Table<Data> {...props} />;
+};
+TableFooter.args = {
+	columns: [
+		{ key: 'quantity', label: 'Qty', flexGrow: 0, flexShrink: 1, width: '20%' },
+		{ key: 'name', label: 'Name', flexGrow: 1, flexShrink: 0, width: '50%' },
+		{ key: 'price', label: 'Price', flexGrow: 0, flexShrink: 1, width: '30%' },
+	],
+	data,
+	style: { height: 300 },
+	sort: action('Sort'),
+	sortBy: 'name',
+	sortDirection: 'asc',
+	footer: <Text>hi</Text>,
+};

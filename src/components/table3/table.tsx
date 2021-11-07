@@ -51,6 +51,10 @@ export interface TableProps<T = any> {
 	 */
 	rowRenderer?: (item: T, index: number, context: any) => React.ReactNode;
 	enableColumnHeaders?: boolean;
+	footer?: React.ReactNode;
+	sort?: Sort;
+	sortBy?: keyof T & string;
+	sortDirection?: SortDirection;
 }
 
 // const Table: <T>(props: TableProps<T>) => React.ReactElement = ({
@@ -64,6 +68,10 @@ function Table<T extends object>({
 	columns,
 	style,
 	enableColumnHeaders = true,
+	footer,
+	sort,
+	sortBy,
+	sortDirection,
 }: TableProps<T>): React.ReactElement {
 	// const visibleColumns = React.useMemo(() => columns.filter((column) => !column.hide), [columns]);
 
@@ -89,12 +97,15 @@ function Table<T extends object>({
 		[columns]
 	);
 
-	const header = enableColumnHeaders && <Header columns={columns} />;
+	const header = enableColumnHeaders && (
+		<Header<T> columns={columns} sort={sort} sortBy={sortBy} sortDirection={sortDirection} />
+	);
 
 	return (
 		<Styled.Table style={style}>
 			{header}
 			<VirtualList<T> data={data} rowRenderer={rowRenderer} />
+			{footer}
 		</Styled.Table>
 	);
 }

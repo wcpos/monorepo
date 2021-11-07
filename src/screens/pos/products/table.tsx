@@ -14,6 +14,7 @@ import Price from './cells/price';
 import RegularPrice from './cells/regular-price';
 import Sku from './cells/sku';
 import Tag from '../../common/product-tags';
+import Footer from './footer';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
@@ -55,6 +56,7 @@ const POSProductsTable = ({ columns }: POSProductsTableProps) => {
 				.map((column) => {
 					// clone column and add label, onRender function
 					const Cell = get(cells, column.key);
+
 					return {
 						...column,
 						label: t(`products.column.label.${column.key}`),
@@ -90,9 +92,10 @@ const POSProductsTable = ({ columns }: POSProductsTableProps) => {
 		<Table<ProductDocument>
 			columns={visibleColumns}
 			data={sortedData}
-			// sort={handleSort}
-			// sortBy={query.sortBy}
-			// sortDirection={query.sortDirection}
+			sort={handleSort}
+			sortBy={query.sortBy}
+			sortDirection={query.sortDirection}
+			footer={<Footer count={data.length} />}
 		/>
 	);
 };

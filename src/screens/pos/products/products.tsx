@@ -85,25 +85,6 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 			<Segment grow>
 				<Table columns={columns} />
 			</Segment>
-			{/* <Segment grow>
-				<Table
-					collection={storeDB.collections.products}
-					columns={columns}
-					// @ts-ignore
-					data$={data$}
-					setQuery={setQuery}
-					sortBy={query.sortBy}
-					sortDirection={query.sortDirection}
-					cells={cells}
-				/>
-			</Segment> */}
-			<Segment style={{ alignItems: 'flex-end' }}>
-				{/* <>
-					<Text>
-						Showing {count} of {totalRecords}
-					</Text>
-				</> */}
-			</Segment>
 		</Segment.Group>
 	);
 };
