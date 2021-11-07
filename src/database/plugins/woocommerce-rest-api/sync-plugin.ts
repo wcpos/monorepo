@@ -47,53 +47,6 @@ const prototypes = {
  */
 const hooks = {
 	createRxCollection(collection: RxCollection) {
-		// @ts-ignore
-		collection.totalRecords = new BehaviorSubject(0);
-		// @ts-ignore
-		collection.totalRecords$ = collection.totalRecords.asObservable();
-
-		/**
-		 * count the total records
-		 * */
-		collection.storageInstance.internals.pouch
-			.find({
-				selector: {},
-				// @ts-ignore
-				fields: ['localID', 'id', 'dateCreatedGmt'],
-			})
-			.then((result: any) => {
-				console.log(collection.name, result.docs.length);
-				// @ts-ignore
-				collection.totalRecords.next(result.docs.length);
-			})
-			.catch((err: any) => {
-				console.log(err);
-			});
-
-		/**
-		 * count the total records
-		 * */
-		const watch = collection.$.pipe(
-			debounceTime(20),
-			map(() => {
-				collection.storageInstance.internals.pouch
-					.find({
-						selector: {},
-						// @ts-ignore
-						fields: ['localID', 'id', 'dateCreatedGmt'],
-					})
-					.then((result: any) => {
-						console.log(collection.name, result.docs.length);
-						// @ts-ignore
-						collection.totalRecords.next(result.docs.length);
-					})
-					.catch((err: any) => {
-						console.log(err);
-					});
-			})
-		);
-		watch.subscribe();
-
 		/**
 		 * Parse plaindata on insert and save
 		 */

@@ -52,7 +52,7 @@ export const VirtualList: <T extends object>(props: VirtualListProps<T>) => Reac
 		const rowVirtualizer = useVirtual({
 			size: data.length,
 			parentRef,
-			overscan: 5,
+			overscan: 10,
 		});
 		if (virtualizerRef) {
 			virtualizerRef.current = rowVirtualizer;

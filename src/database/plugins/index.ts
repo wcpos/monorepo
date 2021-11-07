@@ -9,6 +9,7 @@ import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import collectionsHelper from './utils/collections';
 import removeChildren from './remove-children';
+import collectionCounts from './collection-counts';
 import { RxDBGenerateIdPlugin } from './utils/generate-id';
 import RxDBWooCommerceRestApiSyncPlugin from './woocommerce-rest-api';
 
@@ -30,10 +31,10 @@ if (process.env.NODE_ENV === 'development') {
 	// });
 }
 
-// @ts-ignore
 addRxPlugin(collectionsHelper);
-// @ts-ignore
 addRxPlugin(removeChildren);
+addRxPlugin(collectionCounts);
+
 addRxPlugin(RxDBGenerateIdPlugin);
 addRxPlugin(RxDBLocalDocumentsPlugin);
 // addRxPlugin(RxDBNoValidatePlugin);
