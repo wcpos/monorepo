@@ -2,10 +2,12 @@ import pickBy from 'lodash/pickBy';
 import map from 'lodash/map';
 import get from 'lodash/get';
 
+type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb/plugins/core').RxCollection;
 type RxDocument = import('rxdb/plugins/core').RxDocument;
 
-export default {
+const removeChildrenPlugin: RxPlugin = {
+	name: 'remove-children',
 	rxdb: true,
 
 	/**
@@ -49,3 +51,5 @@ export default {
 		},
 	},
 };
+
+export default removeChildrenPlugin;
