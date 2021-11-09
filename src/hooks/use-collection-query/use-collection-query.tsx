@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { switchMap, map, debounceTime } from 'rxjs/operators';
 import set from 'lodash/set';
+import get from 'lodash/get';
 import forEach from 'lodash/forEach';
 import orderBy from 'lodash/orderBy';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
@@ -47,6 +48,13 @@ export const useCollectionQuery = (
 					}
 				});
 
+				if (get(q, 'filters.category.id')) {
+					set(selector, ['categories', '$elemMatch', 'id'], get(q, 'filters.category.id'));
+				}
+				if (get(q, 'filters.tag.id')) {
+					set(selector, ['tags', '$elemMatch', 'id'], get(q, 'filters.tag.id'));
+				}
+
 				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$.pipe(
@@ -55,7 +63,11 @@ export const useCollectionQuery = (
 					map((result) => {
 						const array = Array.isArray(result) ? result : [];
 						const productSorter = (product: any) => {
-							return product[q.sortBy].toLowerCase();
+							if (q.sortBy === 'name') {
+								// @TODO - this doens't work
+								return product[q.sortBy].toLowerCase();
+							}
+							return product[q.sortBy];
 						};
 						return orderBy(array, [productSorter], [q.sortDirection]);
 					})

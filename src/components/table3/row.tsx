@@ -1,5 +1,7 @@
 import * as React from 'react';
 import { ViewStyle } from 'react-native';
+import { isRxDocument } from 'rxdb/plugins/core';
+import { useObservableState } from 'observable-hooks';
 import Text from '../text';
 import * as Styled from './styles';
 
@@ -33,10 +35,17 @@ export const TableRow = React.memo(function TableRow<T>({
 	columns,
 	rowStyle,
 	cellStyle,
-}: TableRowProps<T>) {
+}: // ...props
+TableRowProps<T>) {
+	// subscribe to item, special case to trigger render for data changes
+	// @TODO: find a better way to do this
+	// @ts-ignore
+	const forceRender = useObservableState(item.$);
+
 	return (
 		<Styled.Row style={rowStyle}>
 			{columns.map((column, index) => {
+				// @ts-ignore
 				const cell = renderCell(item, column, index);
 				const { flexGrow = 1, flexShrink = 1, flexBasis = 'auto', width = '100%' } = column;
 				return (

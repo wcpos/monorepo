@@ -1,21 +1,22 @@
 import * as React from 'react';
-import Tag from '@wcpos/common/src/components/tag';
 import set from 'lodash/set';
+import Tag from '@wcpos/common/src/components/tag';
+import useQuery from '@wcpos/common/src/hooks/use-query';
 
 interface ProductCategoriesProps {
 	item: import('@wcpos/common/src/database').ProductDocument;
-	setQuery?: any;
 }
 
-const ProductCategories = ({ item: product, setQuery }: ProductCategoriesProps) => {
+const ProductCategories = ({ item: product }: ProductCategoriesProps) => {
 	const { categories } = product;
+	const { setQuery } = useQuery();
 
 	/**
 	 *
 	 */
 	const handleSelectCategory = React.useCallback(
 		(category: any) => {
-			setQuery((prev: any) => set({ ...prev }, 'filters.category', category));
+			setQuery('filters.category', category);
 		},
 		[setQuery]
 	);

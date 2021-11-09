@@ -1,9 +1,15 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import get from 'lodash/get';
 import Search from '@wcpos/common/src/components/search';
 import useQuery from '@wcpos/common/src/hooks/use-query';
+import UiSettings from '../../common/ui-settings';
 
-const SearchBar = () => {
+interface SearchBarProps {
+	ui: any;
+}
+
+const SearchBar = ({ ui }: SearchBarProps) => {
 	const { query, setQuery } = useQuery();
 
 	const onSearch = React.useCallback(
@@ -13,13 +19,41 @@ const SearchBar = () => {
 		[setQuery]
 	);
 
+	/**
+	 *
+	 */
+	const filters = React.useMemo(() => {
+		const f = [];
+		if (get(query, 'filters.category')) {
+			f.push({
+				label: get(query, 'filters.category.name'),
+				onRemove: () => {
+					setQuery('filters.category', null);
+				},
+			});
+		}
+		if (get(query, 'filters.tag')) {
+			f.push({
+				label: get(query, 'filters.tag.name'),
+				onRemove: () => {
+					setQuery('filters.tag', null);
+				},
+			});
+		}
+		return f;
+	}, [query, setQuery]);
+
 	return (
-		<Search
-			label="Search Products"
-			placeholder="Search Products"
-			value={get(query, ['search', 'name'], '')}
-			onSearch={onSearch}
-		/>
+		<View style={{ flexDirection: 'row' }}>
+			<Search
+				label="Search Products"
+				placeholder="Search Products"
+				value={get(query, ['search', 'name'], '')}
+				onSearch={onSearch}
+				filters={filters}
+			/>
+			<UiSettings ui={ui} />
+		</View>
 	);
 };
 

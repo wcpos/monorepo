@@ -71,7 +71,7 @@ export const Search = ({ actions, onSearch, filters, ...rest }: SearchProps) => 
 					{...rest}
 				/>
 			</Styled.Input>
-			{actions && (
+			{/* {actions && (
 				<Styled.Actions>
 					{actions.map((action) => {
 						if (React.isValidElement(action)) {
@@ -80,7 +80,7 @@ export const Search = ({ actions, onSearch, filters, ...rest }: SearchProps) => 
 						return <Icon name={action.name} onPress={action.action} />;
 					})}
 				</Styled.Actions>
-			)}
+			)} */}
 		</Styled.Container>
 	);
 };

@@ -134,7 +134,7 @@ const POS = () => {
 				>
 					<ErrorBoundary>
 						<QueryProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }}>
-							<Products ui={productsUI} storeDB={storeDB} />
+							<Products ui={productsUI} />
 						</QueryProvider>
 					</ErrorBoundary>
 				</Styled.ProductsColumn>

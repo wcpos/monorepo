@@ -1,80 +1,28 @@
 import * as React from 'react';
-import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
-import { tap, switchMap, catchError, debounceTime, map } from 'rxjs/operators';
-import { Observable } from 'rxjs';
-import { useTranslation } from 'react-i18next';
-import get from 'lodash/get';
-import set from 'lodash/set';
-// import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import { useObservableState } from 'observable-hooks';
 import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
 import useRestQuery from '@wcpos/common/src/hooks/use-rest-query';
 import Segment from '@wcpos/common/src/components/segment';
-import Search from '@wcpos/common/src/components/search';
-import Text from '@wcpos/common/src/components/text';
-import http from '@wcpos/common/src/lib/http';
-import { useNavigation } from '@react-navigation/native';
-import { FlatList } from 'react-native';
 import Table from './table';
-import Footer from './footer';
-import UiSettings from '../../common/ui-settings';
 import SearchBar from './search-bar';
 
 interface POSProductsProps {
 	ui: any;
-	storeDB: any;
 }
 
 /**
  *
  */
-const Products = ({ ui, storeDB }: POSProductsProps) => {
-	// const { t } = useTranslation();
+const Products = ({ ui }: POSProductsProps) => {
 	const columns$ = ui.get$('columns');
 	const columns = useObservableState(columns$, ui.get('columns'));
-	// const totalRecords = useObservableState(storeDB?.products.totalRecords$);
-	// const [isSyncing, setIsSyncing] = React.useState<boolean>(false);
 	useIdAudit('products');
 	useRestQuery('products');
-
-	/**
-	 *
-	 */
-	// const onSearch = React.useCallback(
-	// 	(search: string) => {
-	// 		setQuery('search', search);
-	// 	},
-	// 	[setQuery]
-	// );
-
-	/**
-	 *
-	 */
-	// const filters = React.useMemo(() => {
-	// 	const f = [];
-	// 	if (get(query, 'filters.category')) {
-	// 		f.push({
-	// 			label: get(query, 'filters.category.name'),
-	// 			onRemove: () => {
-	// 				// setQuery((prev: any) => set({ ...prev }, 'filters.category', null));
-	// 			},
-	// 		});
-	// 	}
-	// 	if (get(query, 'filters.tag')) {
-	// 		f.push({
-	// 			label: get(query, 'filters.tag.name'),
-	// 			onRemove: () => {
-	// 				// setQuery((prev: any) => set({ ...prev }, 'filters.tag', null));
-	// 			},
-	// 		});
-	// 	}
-	// 	return f;
-	// }, [query, setQuery]);
 
 	return (
 		<Segment.Group>
 			<Segment>
-				<SearchBar />
+				<SearchBar ui={ui} />
 				{/* <Search
 					label="Search Products"
 					placeholder="Search Products"
