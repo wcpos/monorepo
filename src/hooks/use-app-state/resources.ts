@@ -88,7 +88,8 @@ export const getResource = (userDB: UserDatabase, initialProps: any) => {
 
 			if (initialProps.wpCredentials) {
 				if (exists) {
-					// should I update the data just in case?
+					// need to update the data to get the correct nonce
+					await currentWpCreds.atomicPatch(initialProps.wpCredentials);
 					return currentWpCreds;
 				}
 				await site?.addWpCredentials(initialProps.wpCredentials).then((doc) => {

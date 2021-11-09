@@ -8,6 +8,7 @@ import set from 'lodash/set';
 // import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
+import useRestQuery from '@wcpos/common/src/hooks/use-rest-query';
 import Segment from '@wcpos/common/src/components/segment';
 import Search from '@wcpos/common/src/components/search';
 import Text from '@wcpos/common/src/components/text';
@@ -33,7 +34,8 @@ const Products = ({ ui, storeDB }: POSProductsProps) => {
 	const columns = useObservableState(columns$, ui.get('columns'));
 	// const totalRecords = useObservableState(storeDB?.products.totalRecords$);
 	// const [isSyncing, setIsSyncing] = React.useState<boolean>(false);
-	// useIdAudit('products');
+	useIdAudit('products');
+	useRestQuery('products');
 
 	/**
 	 *

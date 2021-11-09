@@ -73,10 +73,10 @@ const collectionCountsPlugin: RxPlugin = {
 					collection.totalDocuments.next(result.docs.length);
 					// count unsynced documents
 					const unsynced = result.docs.filter((doc: any) => {
-						return !doc.isSynced();
+						return !doc.dateCreated;
 					});
 					// @ts-ignore
-					collection.unsyncedDocuments.next(unsynced.length);
+					collection.unsyncedDocuments.next(unsynced);
 				})
 				.catch((err: any) => {
 					console.log(err);
@@ -102,10 +102,10 @@ const collectionCountsPlugin: RxPlugin = {
 							collection.totalDocuments.next(result.docs.length);
 							// count unsynced documents
 							const unsynced = result.docs.filter((doc: any) => {
-								return !doc.isSynced();
+								return !doc.dateCreated;
 							});
 							// @ts-ignore
-							collection.unsyncedDocuments.next(unsynced.length);
+							collection.unsyncedDocuments.next(unsynced);
 						})
 						.catch((err: any) => {
 							console.log(err);
