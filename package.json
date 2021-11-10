@@ -1,0 +1,19 @@
+{
+  "private": true,
+  "name": "@wcpos/monorepo",
+  "scripts": {
+    "build": "yarn workspaces run build",
+    "test": "yarn workspaces run test",
+    "managed": "yarn workspace @wcpos/app-managed",
+    "ejected": "yarn workspace @wcpos/app-ejected",
+    "with-sentry": "yarn workspace @wcpos/app-with-sentry",
+    "with-dev-client": "yarn workspace @wcpos/app-with-dev-client"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@tsconfig/recommended": "^1.0.1"
+  }
+}
