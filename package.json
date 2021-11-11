@@ -10,7 +10,8 @@
 		"with-dev-client": "yarn workspace @wcpos/app-with-dev-client",
 		"cra": "yarn workspace @wcpos/cra",
 		"craco": "yarn workspace @wcpos/craco",
-		"clean": "node scripts/clean-node-modules"
+		"clean": "node scripts/clean-node-modules",
+		"storybook": "yarn workspace @wcpos/storybook"
 	},
 	"workspaces": [
 		"apps/*",

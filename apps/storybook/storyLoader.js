@@ -1,0 +1,135 @@
+// Auto-generated file created by react-native-storybook-loader
+// Do not edit.
+//
+// https://github.com/elderfo/react-native-storybook-loader.git
+
+function loadStories() {
+	require('../../packages/common/src/components/accordion/accordion.stories');
+	require('../../packages/common/src/components/arrow/arrow.stories');
+	require('../../packages/common/src/components/avatar/avatar.stories');
+	require('../../packages/common/src/components/backdrop/backdrop.stories');
+	require('../../packages/common/src/components/base-input/base-input.stories');
+	require('../../packages/common/src/components/button/button.stories');
+	require('../../packages/common/src/components/calculator/calculator.stories');
+	require('../../packages/common/src/components/checkbox/checkbox.stories');
+	require('../../packages/common/src/components/collapsible/collapsible.stories');
+	require('../../packages/common/src/components/combobox/combobox.stories');
+	require('../../packages/common/src/components/dialog/dialog.stories');
+	require('../../packages/common/src/components/dimmer/dimmer.stories');
+	require('../../packages/common/src/components/drag-resize/drag.stories');
+	require('../../packages/common/src/components/draggable/draggable.stories');
+	require('../../packages/common/src/components/draggable2/draggable.stories');
+	require('../../packages/common/src/components/dropdown/dropdown.stories');
+	require('../../packages/common/src/components/error-boundary/error.stories');
+	require('../../packages/common/src/components/format/format.stories');
+	require('../../packages/common/src/components/frame/frame.stories');
+	require('../../packages/common/src/components/gutter/gutter.stories');
+	require('../../packages/common/src/components/icon/icon.stories');
+	require('../../packages/common/src/components/image/image.stories');
+	require('../../packages/common/src/components/image2/image.stories');
+	require('../../packages/common/src/components/image3/image.stories');
+	require('../../packages/common/src/components/inline-error/inline-error.stories');
+	require('../../packages/common/src/components/input/input.stories');
+	require('../../packages/common/src/components/interactive/interactive.stories');
+	require('../../packages/common/src/components/layout/layout.stories');
+	require('../../packages/common/src/components/list/list.stories');
+	require('../../packages/common/src/components/loader/loader.stories');
+	require('../../packages/common/src/components/logo/logo.stories');
+	require('../../packages/common/src/components/measure/measure.stories');
+	require('../../packages/common/src/components/menu/menu.stories');
+	require('../../packages/common/src/components/modal/modal.stories');
+	require('../../packages/common/src/components/modal2/modal.stories');
+	require('../../packages/common/src/components/numpad/numpad.stories');
+	require('../../packages/common/src/components/popover/popover.stories');
+	require('../../packages/common/src/components/portal/portal.stories');
+	require('../../packages/common/src/components/pressable/pressable.stories');
+	require('../../packages/common/src/components/search/search.stories');
+	require('../../packages/common/src/components/segment/segment.stories');
+	require('../../packages/common/src/components/select/select.stories');
+	require('../../packages/common/src/components/skeleton/skeleton.stories');
+	require('../../packages/common/src/components/snackbar/snackbar.stories');
+	require('../../packages/common/src/components/sort-icon/sort-icon.stories');
+	require('../../packages/common/src/components/switch/switch.stories');
+	require('../../packages/common/src/components/table/table.stories');
+	require('../../packages/common/src/components/table2/table.stories');
+	require('../../packages/common/src/components/table3/table.stories');
+	require('../../packages/common/src/components/tabs/tabs.stories');
+	require('../../packages/common/src/components/tag/tag.stories');
+	require('../../packages/common/src/components/text/text.stories');
+	require('../../packages/common/src/components/textinput/textinput.stories');
+	require('../../packages/common/src/components/tooltip/tooltip.stories');
+	require('../../packages/common/src/components/touchable/touchable.stories');
+	require('../../packages/common/src/components/tree/tree.stories');
+	require('../../packages/common/src/components/webview/webview.stories');
+	require('../../packages/common/src/hooks/use-key/use-key.stories');
+	require('../../packages/common/src/hooks/use-measure/use-measure.stories');
+	require('../../packages/common/src/modules/versions/versions.stories');
+}
+
+const stories = [
+	'../../packages/common/src/components/accordion/accordion.stories',
+	'../../packages/common/src/components/arrow/arrow.stories',
+	'../../packages/common/src/components/avatar/avatar.stories',
+	'../../packages/common/src/components/backdrop/backdrop.stories',
+	'../../packages/common/src/components/base-input/base-input.stories',
+	'../../packages/common/src/components/button/button.stories',
+	'../../packages/common/src/components/calculator/calculator.stories',
+	'../../packages/common/src/components/checkbox/checkbox.stories',
+	'../../packages/common/src/components/collapsible/collapsible.stories',
+	'../../packages/common/src/components/combobox/combobox.stories',
+	'../../packages/common/src/components/dialog/dialog.stories',
+	'../../packages/common/src/components/dimmer/dimmer.stories',
+	'../../packages/common/src/components/drag-resize/drag.stories',
+	'../../packages/common/src/components/draggable/draggable.stories',
+	'../../packages/common/src/components/draggable2/draggable.stories',
+	'../../packages/common/src/components/dropdown/dropdown.stories',
+	'../../packages/common/src/components/error-boundary/error.stories',
+	'../../packages/common/src/components/format/format.stories',
+	'../../packages/common/src/components/frame/frame.stories',
+	'../../packages/common/src/components/gutter/gutter.stories',
+	'../../packages/common/src/components/icon/icon.stories',
+	'../../packages/common/src/components/image/image.stories',
+	'../../packages/common/src/components/image2/image.stories',
+	'../../packages/common/src/components/image3/image.stories',
+	'../../packages/common/src/components/inline-error/inline-error.stories',
+	'../../packages/common/src/components/input/input.stories',
+	'../../packages/common/src/components/interactive/interactive.stories',
+	'../../packages/common/src/components/layout/layout.stories',
+	'../../packages/common/src/components/list/list.stories',
+	'../../packages/common/src/components/loader/loader.stories',
+	'../../packages/common/src/components/logo/logo.stories',
+	'../../packages/common/src/components/measure/measure.stories',
+	'../../packages/common/src/components/menu/menu.stories',
+	'../../packages/common/src/components/modal/modal.stories',
+	'../../packages/common/src/components/modal2/modal.stories',
+	'../../packages/common/src/components/numpad/numpad.stories',
+	'../../packages/common/src/components/popover/popover.stories',
+	'../../packages/common/src/components/portal/portal.stories',
+	'../../packages/common/src/components/pressable/pressable.stories',
+	'../../packages/common/src/components/search/search.stories',
+	'../../packages/common/src/components/segment/segment.stories',
+	'../../packages/common/src/components/select/select.stories',
+	'../../packages/common/src/components/skeleton/skeleton.stories',
+	'../../packages/common/src/components/snackbar/snackbar.stories',
+	'../../packages/common/src/components/sort-icon/sort-icon.stories',
+	'../../packages/common/src/components/switch/switch.stories',
+	'../../packages/common/src/components/table/table.stories',
+	'../../packages/common/src/components/table2/table.stories',
+	'../../packages/common/src/components/table3/table.stories',
+	'../../packages/common/src/components/tabs/tabs.stories',
+	'../../packages/common/src/components/tag/tag.stories',
+	'../../packages/common/src/components/text/text.stories',
+	'../../packages/common/src/components/textinput/textinput.stories',
+	'../../packages/common/src/components/tooltip/tooltip.stories',
+	'../../packages/common/src/components/touchable/touchable.stories',
+	'../../packages/common/src/components/tree/tree.stories',
+	'../../packages/common/src/components/webview/webview.stories',
+	'../../packages/common/src/hooks/use-key/use-key.stories',
+	'../../packages/common/src/hooks/use-measure/use-measure.stories',
+	'../../packages/common/src/modules/versions/versions.stories',
+];
+
+module.exports = {
+	loadStories,
+	stories,
+};
