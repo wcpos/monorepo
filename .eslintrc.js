@@ -1,3 +1,7 @@
+// module.exports = {
+//   extends: '@wcpos/eslint-config',
+// };
+
 module.exports = {
   root: true,
   env: {

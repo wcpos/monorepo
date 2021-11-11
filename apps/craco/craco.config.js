@@ -22,6 +22,12 @@ module.exports = {
           // resolvePackage("../another-components-package"),
         ],
       },
-    },
+    }
   ],
+  babel: {
+    plugins: [
+      "@babel/plugin-proposal-class-properties",
+      "react-native-reanimated/plugin"
+    ],
+  },
 };

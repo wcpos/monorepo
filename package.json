@@ -1,23 +1,28 @@
 {
-  "private": true,
-  "name": "@wcpos/monorepo",
-  "scripts": {
-    "build": "yarn workspaces run build",
-    "test": "yarn workspaces run test",
-    "managed": "yarn workspace @wcpos/app-managed",
-    "ejected": "yarn workspace @wcpos/app-ejected",
-    "with-sentry": "yarn workspace @wcpos/app-with-sentry",
-    "with-dev-client": "yarn workspace @wcpos/app-with-dev-client",
-    "craco": "yarn workspace @wcpos/craco"
-  },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "resolutions": {
-    "react-native": "0.64.3"
-  },
-  "devDependencies": {
-    "@tsconfig/recommended": "^1.0.1"
-  }
+	"private": true,
+	"name": "@wcpos/monorepo",
+	"scripts": {
+		"build": "yarn workspaces run build",
+		"test": "yarn workspaces run test",
+		"managed": "yarn workspace @wcpos/app-managed",
+		"ejected": "yarn workspace @wcpos/app-ejected",
+		"with-sentry": "yarn workspace @wcpos/app-with-sentry",
+		"with-dev-client": "yarn workspace @wcpos/app-with-dev-client",
+		"cra": "yarn workspace @wcpos/cra",
+		"craco": "yarn workspace @wcpos/craco",
+		"clean": "node scripts/clean-node-modules"
+	},
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"resolutions": {
+		"react-native": "0.64.3",
+		"eslint": "7.32.0"
+	},
+	"devDependencies": {},
+	"dependencies": {
+		"jest": "^27.3.1",
+		"prettier": "^2.4.1"
+	}
 }
