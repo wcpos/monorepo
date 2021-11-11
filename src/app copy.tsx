@@ -4,26 +4,26 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider } from 'styled-components/native';
+import get from 'lodash/get';
+import getTheme from '@wcpos/common/src/themes';
 import { AppStateProvider } from './hooks/use-app-state';
 import TranslationService from './services/translation';
 import AppNavigator from './navigators';
 import Portal from './components/portal';
 import ErrorBoundary from './components/error-boundary';
-import SplashScreen from './screens/splash';
+// import SplashScreen from './screens/splash';
 import Url from './lib/url-parse';
 import { AppProviderSizeProvider } from './hooks/use-position-in-app';
 import { SnackbarProvider } from './components/snackbar/snackbar-provider';
-import { AuthLoginProvider } from './hooks/use-auth-login';
-
+// import { AuthLoginProvider } from './hooks/use-auth-login';
 
 const i18n = new TranslationService();
 
-interface IntialProps {
-	homepage?: string;
-}
+type InitialProps = import('./types').InitialProps;
 
-const App = ({ homepage }: IntialProps) => {
-	const prefixes = ['wcpos://']; 
+const App = (initialProps: InitialProps) => {
+	const homepage = get(initialProps, 'homepage');
+	const prefixes = ['wcpos://'];
 	let pathname = '';
 
 	if (homepage) {
@@ -65,30 +65,21 @@ const App = ({ homepage }: IntialProps) => {
 	return (
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
-				{/* @TODO - suspend AppStateProvider until state is ready */}
-				<AppStateProvider i18n={i18n}>
-					{(isAppStateReady: boolean, theme: any) => (
-						<ThemeProvider theme={theme}>
-							<SafeAreaProvider style={{ overflow: 'hidden' }}>
-								<AppProviderSizeProvider>
-									<SnackbarProvider>
-										<Portal.Provider>
-											{isAppStateReady ? (
-												<NavigationContainer linking={linking}>
-													<AuthLoginProvider>
-														<AppNavigator />
-													</AuthLoginProvider>
-												</NavigationContainer>
-											) : (
-												<SplashScreen />
-											)}
-											<Portal.Manager />
-										</Portal.Provider>
-									</SnackbarProvider>
-								</AppProviderSizeProvider>
-							</SafeAreaProvider>
-						</ThemeProvider>
-					)}
+				<AppStateProvider initialProps={initialProps}>
+					<ThemeProvider theme={getTheme('default', 'dark')}>
+						<SafeAreaProvider style={{ overflow: 'hidden' }}>
+							<AppProviderSizeProvider>
+								<SnackbarProvider>
+									<Portal.Provider>
+										<NavigationContainer linking={linking}>
+											<AppNavigator />
+										</NavigationContainer>
+										<Portal.Manager />
+									</Portal.Provider>
+								</SnackbarProvider>
+							</AppProviderSizeProvider>
+						</SafeAreaProvider>
+					</ThemeProvider>
 				</AppStateProvider>
 			</React.Suspense>
 		</ErrorBoundary>
