@@ -6,7 +6,7 @@ import Animated, {
 	withTiming,
 	withSequence,
 } from 'react-native-reanimated';
-import { StyleSheet, ViewStyle } from 'react-native';
+import { ViewStyle } from 'react-native';
 import * as Styled from './styles';
 
 /**

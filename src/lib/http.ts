@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { encode as btoa } from 'base-64';
 
 export const noConfigAxios = axios;
 
@@ -26,12 +25,6 @@ http.interceptors.request.use(
 		config.headers = config.headers || {};
 		if (config.method !== 'head') {
 			config.headers['X-WCPOS'] = '1';
-		}
-		if (config.auth) {
-			config.headers.Authorization = `Basic ${btoa(
-				`${config.auth.username}:${config.auth.password}`
-			)}`;
-			config.auth = undefined;
 		}
 		return config;
 	},
