@@ -18,8 +18,7 @@
 		"packages/*"
 	],
 	"resolutions": {
-		"react-native": "0.64.3",
-		"eslint": "7.32.0"
+		"react-native": "0.64.3"
 	},
 	"devDependencies": {},
 	"dependencies": {

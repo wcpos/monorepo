@@ -14,7 +14,7 @@ PODS:
     - ExpoModulesCore
   - EXManifests (0.2.2):
     - EXJSONUtils
-  - Expo (43.0.2):
+  - Expo (43.0.3):
     - ExpoModulesCore
   - ExpoModulesCore (0.4.7):
     - React-Core
@@ -22,7 +22,7 @@ PODS:
     - ExpoModulesCore
     - React-Core
   - EXStructuredHeaders (2.0.0)
-  - EXUpdates (0.10.14):
+  - EXUpdates (0.10.15):
     - EXManifests
     - ExpoModulesCore
     - EXStructuredHeaders
@@ -501,11 +501,11 @@ SPEC CHECKSUMS:
   EXJSONUtils: f515cf71710855d7ba5bfc6752af3b9a6f6aad01
   EXKeepAwake: 8aa32396a5972d26e75e538603aad0f032396503
   EXManifests: 50e42e01335df4e54109dee7be5a91bfd37347db
-  Expo: b66c9661cf2514b4adf67b8367178e8ed3eb9801
+  Expo: 5316c3ecdc34eb0cad340d01dc8beec97c7e879e
   ExpoModulesCore: c353a3bed60c3b83dbe63f134aaa7bf4733ffa16
   EXSplashScreen: 57f329dbf25c5c12800feed79068a056453dc772
   EXStructuredHeaders: 873e7f329c2f6279c1b1e0229df59c9861560b53
-  EXUpdates: 1bf212661734aa6dcf24c3f29bb883ed8e0d0883
+  EXUpdates: 061b67c33f0e7f8fd335bbb48697c4a4fc8a5157
   EXUpdatesInterface: e1c01b4f5ec76bd1d6cc714938f9edf5ef6379b9
   FBLazyVector: de148e8310b8b878db304ceea2fec13f2c02e3a0
   FBReactNativeSpec: 6192956c9e346013d5f1809ba049af720b11c6a4

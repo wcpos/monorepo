@@ -1,16 +1,17 @@
 {
-  "private": true,
-  "name": "@wcpos/cra",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
+	"private": true,
+	"name": "@wcpos/cra",
+	"version": "1.0.0",
+	"main": "index.js",
+	"homepage": "./",
+	"scripts": {
 		"start": "react-app-rewired start",
 		"build": "react-app-rewired build",
 		"test": "react-app-rewired test",
 		"eject": "react-app-rewired eject",
-    "eas-build-post-install": "yarn workspaces run build"
-  },
-  "dependencies": {
+		"eas-build-post-install": "yarn workspaces run build"
+	},
+	"dependencies": {
 		"random-token": "0.0.8",
 		"react": "17.0.2",
 		"react-art": "17.0.2",
@@ -29,19 +30,10 @@
 		"typescript": "4.4.4",
 		"webpack-bundle-analyzer": "4.5.0"
 	},
-  "eslintConfig": {
-    "extends": "@wcpos/eslint-config"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  }
+	"browserslist": [
+		">0.2%",
+		"not dead",
+		"not ie <= 11",
+		"not op_mini all"
+	]
 }
