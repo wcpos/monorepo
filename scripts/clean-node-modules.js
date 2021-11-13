@@ -18,12 +18,13 @@ const clean = (dir) => {
 	rm(`${dir}/node_modules`);
 	rm(`${dir}/build`);
 	rm(`${dir}/dist`);
+	rm(`${dir}/.expo`);
 };
 
 const cleanRoot = () => clean(cwd);
 
 const cleanWorkSpaces = () => {
-	const workspaces = ['./packages'];
+	const workspaces = ['./apps', './packages'];
 
 	workspaces.forEach((workspace) => {
 		fs.readdir(workspace, (err, folders) => {
