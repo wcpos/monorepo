@@ -1,9 +1,11 @@
-import { addRxPlugin } from 'rxdb/plugins/core';
-import idbAdapter from 'pouchdb-adapter-idb';
+import { addPouchPlugin, getRxStoragePouch } from 'rxdb/plugins/pouchdb';
+import IDBAdapter from 'pouchdb-adapter-idb';
 
-addRxPlugin(idbAdapter);
+addPouchPlugin(IDBAdapter);
 
-export const config = {
-	adapter: 'idb',
+const config = {
+	storage: getRxStoragePouch('idb', { revs_limit: 1, auto_compaction: true }),
 	ignoreDuplicate: process.env.NODE_ENV === 'development',
 };
+
+export default config;
