@@ -59,7 +59,5 @@ module.exports = async function (env, argv) {
 		ignored: '**/node_modules',
 	};
 
-	console.log(config.devServer.watchOptions);
-
 	return config;
 };
