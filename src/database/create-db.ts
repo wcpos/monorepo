@@ -1,7 +1,7 @@
 import { createRxDatabase } from 'rxdb/plugins/core';
-import { getRxStoragePouch } from 'rxdb/plugins/pouchdb';
 import Platform from '@wcpos/common/src/lib/platform';
 import set from 'lodash/set';
+import config from './adapter';
 import './plugins';
 
 /**
@@ -10,10 +10,7 @@ import './plugins';
 export async function createDB<T>(name: string) {
 	const db = await createRxDatabase<T>({
 		name,
-		ignoreDuplicate: process.env.NODE_ENV === 'development',
-		// ...config,
-		// pouchSettings: { revs_limit: 1, auto_compaction: true },
-		storage: getRxStoragePouch('idb', { revs_limit: 1, auto_compaction: true }),
+		...config,
 	});
 
 	// add to window for debugging

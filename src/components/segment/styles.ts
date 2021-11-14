@@ -51,11 +51,11 @@ type SegmentGroupProps = import('./group').SegmentGroupProps;
 type StyledGroupProps = Pick<SegmentGroupProps, 'raised' | 'flexDirection' | 'group' | 'grow'>;
 
 // height: inherit;
+// flex-direction: ${({ flexDirection }) => flexDirection};
 /**
  * Note: height 'inherit' caused app to crash on mobile
  */
 export const Group = styled.View<StyledGroupProps>`
-	flex-direction: ${({ flexDirection }) => flexDirection};
 	flex: ${({ grow }) => (grow ? '1' : '0 1 auto')};
 	height: 100%;
 	max-height: 100%;
