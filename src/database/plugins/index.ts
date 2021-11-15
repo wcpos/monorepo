@@ -1,5 +1,4 @@
 import { addRxPlugin } from 'rxdb/plugins/core';
-import { addPouchPlugin } from 'rxdb/plugins/pouchdb';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
@@ -12,8 +11,6 @@ import removeChildren from './remove-children';
 import collectionCounts from './collection-counts';
 import { RxDBGenerateIdPlugin } from './utils/generate-id';
 import RxDBWooCommerceRestApiSyncPlugin from './woocommerce-rest-api';
-
-addPouchPlugin(require('pouchdb-adapter-idb'));
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
