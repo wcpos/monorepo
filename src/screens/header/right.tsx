@@ -6,11 +6,11 @@ import * as Styled from './styles';
 
 const HeaderRight = () => {
 	return (
-		<Styled.Right>
+		<Styled.RightContainer>
 			<Online />
 			<Notifications />
 			<UserMenu />
-		</Styled.Right>
+		</Styled.RightContainer>
 	);
 };
 

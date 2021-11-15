@@ -10,9 +10,9 @@ import Products from '@wcpos/common/src/screens/products';
 import Orders from '@wcpos/common/src/screens/orders';
 import Customers from '@wcpos/common/src/screens/customers';
 import Support from '@wcpos/common/src/screens/support';
-import Button from '@wcpos/common/src/components/button';
-import HeaderRight from '@wcpos/common/src/screens/header/right';
+import Header from '@wcpos/common/src/screens/header';
 import { UIResourceProvider } from '@wcpos/common/src/hooks/use-ui';
+import { useWindowDimensions } from 'react-native';
 
 type MainScreenProps = import('./app').MainScreenProps;
 
@@ -55,52 +55,18 @@ const Drawer = createDrawerNavigator<DrawerParamList>();
  *
  */
 const MainNavigator = ({ navigation, route }: MainScreenProps) => {
-	// const navigation = useNavigation();
+	const dimensions = useWindowDimensions();
 
-	const openDrawer = React.useCallback(() => {
-		navigation.dispatch(DrawerActions.openDrawer());
-	}, []);
-
-	const screenOptions = React.useMemo<DrawerNavigationOptions>(
-		() => ({
-			headerStyle: {
-				backgroundColor: '#f4511e',
-				height: '40px',
-			},
-			headerTintColor: '#fff',
-			headerTitleStyle: {
-				fontWeight: 'bold',
-				textAlign: 'center',
-				margin: 0,
-			},
-			headerBackgroundContainerStyle: {},
-			headerLeftContainerStyle: {
-				padding: '5px',
-				flexGrow: 1,
-				flexShrink: 1,
-				flexBasis: '20%',
-			},
-			headerRightContainerStyle: {
-				padding: '5px',
-				flexGrow: 1,
-				flexShrink: 1,
-				flexBasis: '20%',
-			},
-			headerTitleContainerStyle: {
-				padding: '5px',
-				flexGrow: 1,
-				flexShrink: 1,
-				flexBasis: '100%',
-			},
-			headerLeft: () => <Button onPress={openDrawer} title="Menu" />,
-			headerRight: HeaderRight,
-		}),
-		[openDrawer]
-	);
+	const header = React.useCallback((props) => <Header {...props} />, []);
 
 	return (
 		<UIResourceProvider>
-			<Drawer.Navigator screenOptions={screenOptions}>
+			<Drawer.Navigator
+				screenOptions={{
+					header,
+					drawerType: dimensions.width >= 1024 ? 'permanent' : 'front',
+				}}
+			>
 				<Drawer.Screen name="POS" component={POS} />
 				<Drawer.Screen name="Products" component={Products} />
 				<Drawer.Screen name="Orders" component={Orders} />

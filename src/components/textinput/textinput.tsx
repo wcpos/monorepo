@@ -44,7 +44,8 @@ export interface TextInputProps {
 		| 'first-name'
 		| 'last-name'
 		| 'integer'
-		| 'url'; // iOS only
+		| 'url' // iOS only
+		| 'username';
 	/**
 	 * Placeholder text when input is empty.
 	 */
@@ -327,6 +328,8 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 						autoCapitalize: 'none',
 						autoComplete: 'off',
 					};
+				case 'username':
+					return { textContentType: 'none', autoCapitalize: 'none' };
 				default:
 					return {};
 			}
