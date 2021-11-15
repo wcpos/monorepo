@@ -10,7 +10,7 @@ const HeaderLeft = () => {
 
 	const openDrawer = React.useCallback(() => {
 		navigation.dispatch(DrawerActions.openDrawer());
-	}, []);
+	}, [navigation]);
 
 	return (
 		<Styled.LeftContainer>
