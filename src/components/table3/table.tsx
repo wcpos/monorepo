@@ -4,6 +4,7 @@ import Header from './header';
 import { TableRow } from './row';
 import EmptyRow from './empty';
 import { VirtualList } from './virtual-list';
+import { StaticList } from './static-list';
 import * as Styled from './styles';
 
 export type SortDirection = 'asc' | 'desc';
@@ -55,6 +56,7 @@ export interface TableProps<T = any> {
 	sort?: Sort;
 	sortBy?: keyof T & string;
 	sortDirection?: SortDirection;
+	virtual?: boolean;
 }
 
 // const Table: <T>(props: TableProps<T>) => React.ReactElement = ({
@@ -72,8 +74,12 @@ function Table<T extends object>({
 	sort,
 	sortBy,
 	sortDirection,
+	virtual,
 }: TableProps<T>): React.ReactElement {
-	// const visibleColumns = React.useMemo(() => columns.filter((column) => !column.hide), [columns]);
+	const virtualize = React.useMemo(
+		() => (virtual === undefined ? data.length > 50 : virtual),
+		[virtual, data.length]
+	);
 
 	/**
 	 *
@@ -104,7 +110,11 @@ function Table<T extends object>({
 	return (
 		<Styled.Table style={style}>
 			{header}
-			<VirtualList<T> data={data} rowRenderer={rowRenderer} />
+			{virtualize ? (
+				<VirtualList<T> data={data} rowRenderer={rowRenderer} />
+			) : (
+				<StaticList<T> data={data} rowRenderer={rowRenderer} />
+			)}
 			{footer}
 		</Styled.Table>
 	);
