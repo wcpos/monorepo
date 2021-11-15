@@ -44,7 +44,8 @@ export interface TextInputProps {
 		| 'first-name'
 		| 'last-name'
 		| 'integer'
-		| 'url'; // iOS only
+		| 'url' // iOS only
+		| 'username';
 	/**
 	 * Placeholder text when input is empty.
 	 */
@@ -287,7 +288,10 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 		 *
 		 */
 		const inputType = React.useMemo<
-			Pick<RNTextInputProps, 'keyboardType' | 'textContentType' | 'autoCapitalize'>
+			Pick<
+				RNTextInputProps,
+				'keyboardType' | 'textContentType' | 'autoCapitalize' | 'autoCorrect' | 'autoComplete'
+			>
 		>(() => {
 			switch (type) {
 				case 'text':
@@ -296,19 +300,19 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 					return {
 						keyboardType: 'email-address',
 						textContentType: 'emailAddress',
-						autoCompleteType: 'email',
+						autoComplete: 'email',
 						autoCapitalize: 'none',
 					};
 				case 'password':
 					return {
 						textContentType: 'password',
-						autoCompleteType: 'password',
+						autoComplete: 'password',
 						autoCapitalize: 'none',
 					};
 				case 'new-password':
 					return {
 						textContentType: 'newPassword',
-						autoCompleteType: 'password',
+						autoComplete: 'password',
 						autoCapitalize: 'none',
 					};
 				case 'first-name':
@@ -318,7 +322,14 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 				case 'integer':
 					return { textContentType: 'none', keyboardType: 'number-pad' };
 				case 'url':
-					return { textContentType: 'none', keyboardType: 'url' };
+					return {
+						textContentType: 'URL',
+						keyboardType: 'url',
+						autoCapitalize: 'none',
+						autoComplete: 'off',
+					};
+				case 'username':
+					return { textContentType: 'none', autoCapitalize: 'none' };
 				default:
 					return {};
 			}

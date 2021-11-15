@@ -10,6 +10,8 @@ import Platform from '@wcpos/common/src/lib/platform';
 import Url from '@wcpos/common/src/lib/url-parse';
 import get from 'lodash/get';
 import find from 'lodash/find';
+import Logo from '@wcpos/common/src/components/logo';
+import Icon from '@wcpos/common/src/components/icon';
 import Site from './site';
 import * as Styled from './styles';
 
@@ -103,6 +105,8 @@ const Auth = () => {
 
 	return (
 		<Styled.Container>
+			<Logo />
+			<Icon name="cog" />
 			<Segment style={{ width: '90%', maxWidth: 460 }}>
 				<Text size="large">Connect!</Text>
 				<Text>Enter the URL of your WooCommerce store:</Text>

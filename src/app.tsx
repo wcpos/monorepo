@@ -1,9 +1,10 @@
 import 'react-native-gesture-handler';
 import * as React from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider } from 'styled-components/native';
+import { StatusBar } from 'expo-status-bar';
 import get from 'lodash/get';
 import getTheme from '@wcpos/common/src/themes';
 import { AppStateProvider } from './hooks/use-app-state';
@@ -68,20 +69,23 @@ const App = (initialProps: InitialProps) => {
 				<AppStateProvider initialProps={initialProps}>
 					<ThemeProvider theme={getTheme('default', 'dark')}>
 						<SafeAreaProvider style={{ overflow: 'hidden' }}>
-							<AppProviderSizeProvider>
-								<SnackbarProvider>
-									<Portal.Provider>
-										<NavigationContainer linking={linking}>
-											<AppNavigator />
-										</NavigationContainer>
-										<Portal.Manager />
-									</Portal.Provider>
-								</SnackbarProvider>
-							</AppProviderSizeProvider>
+							<SafeAreaView style={{ height: '100%', backgroundColor: 'black' }}>
+								<AppProviderSizeProvider>
+									<SnackbarProvider>
+										<Portal.Provider>
+											<NavigationContainer linking={linking}>
+												<AppNavigator />
+											</NavigationContainer>
+											<Portal.Manager />
+										</Portal.Provider>
+									</SnackbarProvider>
+								</AppProviderSizeProvider>
+							</SafeAreaView>
 						</SafeAreaProvider>
 					</ThemeProvider>
 				</AppStateProvider>
 			</React.Suspense>
+			<StatusBar style="light" />
 		</ErrorBoundary>
 	);
 };

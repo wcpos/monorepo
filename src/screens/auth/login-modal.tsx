@@ -42,12 +42,14 @@ const LoginModal = ({ visible, setVisible, site, user }: ILoginModalProps) => {
 					placeholder="username"
 					value={username}
 					onChange={setUsername}
+					type="username"
 				/>
 				<TextInput
 					label="Password"
 					placeholder="password"
 					value={password}
 					onChange={setPassword}
+					type="password"
 				/>
 				<Button title="Login" onPress={handleLogin} />
 			</Segment>
