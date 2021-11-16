@@ -10,8 +10,7 @@
 		"android": "expo run:android",
 		"ios": "expo run:ios",
 		"web": "expo start --web",
-		"eject": "expo eject",
-		"eas-build-post-install": "yarn workspaces run build"
+		"eject": "expo eject"
 	},
 	"dependencies": {
 		"@wcpos/ui": "*",
@@ -33,7 +32,7 @@
 	"devDependencies": {
 		"@babel/core": "^7.16.0",
 		"@expo/config-plugins": "^4.0.7",
-		"@types/react": "~17.0.34",
+		"@types/react": "~17.0.35",
 		"@types/react-dom": "~17.0.11",
 		"@types/react-native": "~0.66.4",
 		"@wcpos/babel-preset-expo": "*",

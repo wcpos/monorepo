@@ -18,10 +18,13 @@
 		"packages/*"
 	],
 	"resolutions": {
+		"@typescript-eslint/eslint-plugin": "5.3.1",
 		"react-native": "0.64.3",
-		"@typescript-eslint/eslint-plugin": "5.3.1"
+		"react-native-reanimated": "2.2.3"
 	},
-	"devDependencies": {},
+	"devDependencies": {
+		"@tsconfig/react-native": "^1.0.4"
+	},
 	"dependencies": {
 		"jest": "^27.3.1",
 		"prettier": "^2.4.1"

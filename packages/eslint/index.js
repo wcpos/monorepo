@@ -54,6 +54,7 @@ module.exports = {
 		'no-nested-ternary': 0,
 		// @TODO - fix this when updated https://github.com/benmosher/eslint-plugin-import/issues/1174
 		'import/no-extraneous-dependencies': 0,
+		'no-restricted-exports': 'warn',
 	},
 	settings: {
 		'import/extensions': ['.js', '.jsx', '.ts', '.tsx'],

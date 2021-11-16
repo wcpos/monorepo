@@ -1,5 +1,13 @@
-import { themes } from '@storybook/theming/create';
 import { addons } from '@storybook/addons';
+import { create } from '@storybook/theming';
+
+const theme = create({
+	base: 'light',
+	brandTitle: 'WCPOS',
+	brandUrl: 'https://wcpos.com',
+	// To control appearance:
+	// brandImage: 'http://url.of/some.svg',
+});
 
 addons.setConfig({
 	/**
@@ -47,7 +55,7 @@ addons.setConfig({
 	/**
 	 * theme storybook, see link below
 	 */
-	theme: undefined,
+	theme,
 
 	/**
 	 * id to select an addon panel

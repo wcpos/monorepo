@@ -8,8 +8,7 @@
 		"start": "react-app-rewired start",
 		"build": "react-app-rewired build",
 		"test": "react-app-rewired test",
-		"eject": "react-app-rewired eject",
-		"eas-build-post-install": "yarn workspaces run build"
+		"eject": "react-app-rewired eject"
 	},
 	"dependencies": {
 		"random-token": "0.0.8",
@@ -20,9 +19,9 @@
 		"worker-loader": "3.0.8"
 	},
 	"devDependencies": {
-		"@types/react": "17.0.34",
+		"@types/react": "17.0.35",
 		"@types/react-dom": "17.0.11",
-		"@welldone-software/why-did-you-render": "^6.2.0",
+		"@welldone-software/why-did-you-render": "^6.2.3",
 		"babel-plugin-react-native-web": "0.17.5",
 		"customize-cra": "1.0.0",
 		"react-app-rewired": "2.1.8",
