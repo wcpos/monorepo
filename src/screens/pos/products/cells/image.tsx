@@ -7,7 +7,7 @@ type Props = {
 
 const Image = ({ item: product }: Props) => {
 	const { thumbnail } = product;
-
+	return null;
 	return (
 		<Img
 			src={thumbnail}

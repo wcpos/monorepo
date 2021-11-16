@@ -37,11 +37,6 @@ export const TableRow = React.memo(function TableRow<T>({
 	cellStyle,
 }: // ...props
 TableRowProps<T>) {
-	// subscribe to item, special case to trigger render for data changes
-	// @TODO: find a better way to do this
-	// @ts-ignore
-	const forceRender = useObservableState(item.$);
-
 	return (
 		<Styled.Row style={rowStyle}>
 			{columns.map((column, index) => {

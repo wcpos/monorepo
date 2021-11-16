@@ -86,6 +86,33 @@ const POSProductsTable = ({ columns }: POSProductsTableProps) => {
 		[setQuery]
 	);
 
+	/**
+	 *
+	 */
+	const rowRenderer = React.useCallback(
+		(
+			item,
+			index
+			// renderContext: TableRowRenderContext<T>,
+		) => {
+			// subscribe to item, special case to trigger render for data changes
+			// @TODO: find a better way to do this
+			// @ts-ignore
+			// const forceRender = useObservableState(item.$);
+
+			return (
+				<Table.Row
+					// config={renderContext}
+					item={item}
+					// @ts-ignore
+					columns={visibleColumns}
+					// itemIndex={index}
+				/>
+			);
+		},
+		[visibleColumns]
+	);
+
 	useWhyDidYouUpdate('Table', { data });
 
 	return (
@@ -96,6 +123,7 @@ const POSProductsTable = ({ columns }: POSProductsTableProps) => {
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}
 			footer={<Footer count={data.length} />}
+			rowRenderer={rowRenderer}
 		/>
 	);
 };

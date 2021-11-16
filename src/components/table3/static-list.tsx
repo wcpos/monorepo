@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, ViewStyle } from 'react-native';
+import { View, ViewStyle, ScrollView } from 'react-native';
 import get from 'lodash/get';
 import { RedrawContext } from '.';
 import EmptyRow from './empty';
@@ -56,7 +56,7 @@ export const StaticList: <T extends object, C = any>(
 	return (
 		<RedrawContext.Provider value={redraw}>
 			{/* <View onKeyDown={onKeyDown} tabIndex={0}> */}
-			<View style={{ overflow: 'scroll', flexGrow: 1, flexShrink: 1, flexBasis: 0 }}>
+			<ScrollView>
 				{data.length === 0
 					? emptyRenderer?.()
 					: data.map((item, index) => {
@@ -64,7 +64,7 @@ export const StaticList: <T extends object, C = any>(
 								<View key={keyExtractor(item, index)}>{rowRenderer(item, index, context)}</View>
 							);
 					  })}
-			</View>
+			</ScrollView>
 		</RedrawContext.Provider>
 	);
 });

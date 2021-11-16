@@ -75,6 +75,7 @@ function Table<T extends object>({
 	sortBy,
 	sortDirection,
 	virtual,
+	rowRenderer,
 }: TableProps<T>): React.ReactElement {
 	const virtualize = React.useMemo(
 		() => (virtual === undefined ? data.length > 50 : virtual),
@@ -84,7 +85,7 @@ function Table<T extends object>({
 	/**
 	 *
 	 */
-	const rowRenderer = React.useCallback(
+	const defaultRowRenderer = React.useCallback(
 		(
 			item,
 			index
@@ -111,14 +112,14 @@ function Table<T extends object>({
 		<Styled.Table style={style}>
 			{header}
 			{virtualize ? (
-				<VirtualList<T> data={data} rowRenderer={rowRenderer} />
+				<VirtualList<T> data={data} rowRenderer={rowRenderer || defaultRowRenderer} />
 			) : (
-				<StaticList<T> data={data} rowRenderer={rowRenderer} />
+				<StaticList<T> data={data} rowRenderer={rowRenderer || defaultRowRenderer} />
 			)}
 			{footer}
 		</Styled.Table>
 	);
 }
 
-// Table.Row = Row;
+Table.Row = TableRow;
 export default Table;

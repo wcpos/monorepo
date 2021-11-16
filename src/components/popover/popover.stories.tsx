@@ -150,35 +150,9 @@ export const AutomaticPlacementCorrection: React.FC<PopoverProps> = () => {
 	);
 };
 
-AutomaticPlacementCorrection.story = {
-	parameters: {
-		docs: {
-			storyDescription:
-				'The Popover will automatically replace itself so it does not go outside the Window. In this example, the Popover should be displayed below button, but instead goes on top of it.',
-		},
+AutomaticPlacementCorrection.parameters = {
+	docs: {
+		storyDescription:
+			'The Popover will automatically replace itself so it does not go outside the Window. In this example, the Popover should be displayed below button, but instead goes on top of it.',
 	},
 };
-
-// export const CustomContent: React.FC<PopoverProps> = () => {
-// 	const [visible, setVisible] = React.useState(false);
-
-// 	return (
-// 		<Screen>
-// 			<Box fill distribution="center">
-// 				<Popover
-// 					open={visible}
-// 					onRequestClose={() => setVisible(false)}
-// 					activator={<Button onPress={() => setVisible(true)}>Show Popover</Button>}
-// 				>
-// 					<Box padding="medium" space="large">
-// 						<TextContainer>
-// 							<DisplayText>Custom content</DisplayText>
-// 							<BodyText>{LOREM_IPSUM}</BodyText>
-// 						</TextContainer>
-// 						<Button onClick={action('Button clicked')}>Click me!</Button>
-// 					</Box>
-// 				</Popover>
-// 			</Box>
-// 		</Screen>
-// 	);
-// };
