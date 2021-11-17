@@ -1,16 +1,13 @@
 import * as React from 'react';
-import { useNavigation, DrawerActions, RouteProp } from '@react-navigation/native';
-import {
-	createDrawerNavigator,
-	DrawerNavigationOptions,
-	DrawerNavigationProp,
-} from '@react-navigation/drawer';
+import { RouteProp } from '@react-navigation/native';
+import { createDrawerNavigator, DrawerNavigationProp } from '@react-navigation/drawer';
 import POS from '@wcpos/common/src/screens/pos';
 import Products from '@wcpos/common/src/screens/products';
 import Orders from '@wcpos/common/src/screens/orders';
 import Customers from '@wcpos/common/src/screens/customers';
 import Support from '@wcpos/common/src/screens/support';
-import Header from '@wcpos/common/src/screens/header';
+import CustomHeader from '@wcpos/common/src/screens/header';
+import CustomDrawer from '@wcpos/common/src/screens/drawer';
 import { UIResourceProvider } from '@wcpos/common/src/hooks/use-ui';
 import { useWindowDimensions } from 'react-native';
 
@@ -57,7 +54,8 @@ const Drawer = createDrawerNavigator<DrawerParamList>();
 const MainNavigator = ({ navigation, route }: MainScreenProps) => {
 	const dimensions = useWindowDimensions();
 
-	const header = React.useCallback((props) => <Header {...props} />, []);
+	const header = React.useCallback((props) => <CustomHeader {...props} />, []);
+	const drawer = React.useCallback((props) => <CustomDrawer {...props} />, []);
 
 	return (
 		<UIResourceProvider>
@@ -65,7 +63,12 @@ const MainNavigator = ({ navigation, route }: MainScreenProps) => {
 				screenOptions={{
 					header,
 					drawerType: dimensions.width >= 1024 ? 'permanent' : 'front',
+					drawerStyle: {
+						backgroundColor: '#2c3e50',
+						width: dimensions.width >= 1024 ? 80 : undefined,
+					},
 				}}
+				drawerContent={drawer}
 			>
 				<Drawer.Screen name="POS" component={POS} />
 				<Drawer.Screen name="Products" component={Products} />
