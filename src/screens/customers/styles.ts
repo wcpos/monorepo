@@ -6,3 +6,7 @@ export const Container = styled.View`
 	flex: 1;
 	padding: ${({ theme }) => `${theme.PAGE_MAIN_PADDING_Y} ${theme.PAGE_MAIN_PADDING_X}`};
 `;
+
+export const Footer = styled.View`
+	align-items: flex-end;
+`;

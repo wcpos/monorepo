@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import Popover from '@wcpos/common/src/components/popover';
 import Icon from '@wcpos/common/src/components/icon';
@@ -25,9 +26,8 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 			<Text>Columns</Text>
 			{columns.map((column: any, index: number) => {
 				return (
-					<>
+					<View key={column.key}>
 						<Checkbox
-							key={column.key}
 							label={t(`${key}.column.label.${column.key}`)}
 							checked={!column.hide}
 							onChange={(checked) => {
@@ -49,7 +49,7 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 									/>
 							  ))
 							: null}
-					</>
+					</View>
 				);
 			})}
 			<Button title="Restore Default Settings" onPress={ui.reset} />
