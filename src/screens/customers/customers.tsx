@@ -3,6 +3,7 @@ import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { QueryProvider } from '@wcpos/common/src/hooks/use-query';
 import Segment from '@wcpos/common/src/components/segment';
 import useUIResource from '@wcpos/common/src/hooks/use-ui';
+import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
 import Table from './table';
 import SearchBar from './search-bar';
 import * as Styled from './styles';
@@ -16,7 +17,7 @@ const Customers = () => {
 	const resources = useUIResource();
 	const ui = useObservableSuspense(resources.customers);
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
-	// useIdAudit('products');
+	useIdAudit('customers');
 	// useRestQuery('products');
 
 	return (

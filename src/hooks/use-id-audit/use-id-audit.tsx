@@ -4,10 +4,12 @@ import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
 
-type CollectionNames = 'products';
+type CollectionNames = 'products' | 'customers' | 'orders';
 
 const fields = {
 	products: ['id', 'name'],
+	customers: ['id', 'firstName', 'lastName'],
+	orders: ['id'],
 };
 
 /**
@@ -31,7 +33,7 @@ const useIdAudit = (collectionName: CollectionNames) => {
 
 		http
 			// @ts-ignore
-			.get('products', {
+			.get(collectionName, {
 				baseURL: site.wcApiUrl,
 				params: { fields: fields[collectionName], posts_per_page: -1 },
 				headers,

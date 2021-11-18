@@ -13,7 +13,7 @@ interface POSProductsProps {
 /**
  *
  */
-const Products = ({ ui }: POSProductsProps) => {
+const POSProducts = ({ ui }: POSProductsProps) => {
 	const columns$ = ui.get$('columns');
 	const columns = useObservableState(columns$, ui.get('columns'));
 	useIdAudit('products');
@@ -39,4 +39,4 @@ const Products = ({ ui }: POSProductsProps) => {
 	);
 };
 
-export default Products;
+export default POSProducts;

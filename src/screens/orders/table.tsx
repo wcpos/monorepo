@@ -7,38 +7,36 @@ import useQuery from '@wcpos/common/src/hooks/use-query';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Table from '@wcpos/common/src/components/table3';
 import Actions from './cells/actions';
-import Name from './cells/name';
-import Email from './cells/email';
 import Address from './cells/address';
-import Avatar from './cells/avatar';
+import Customer from './cells/customer';
+import CustomerNote from './cells/note';
+import Status from './cells/status';
 import Footer from './footer';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
-type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
-type ColumnProps =
-	import('@wcpos/common/src/components/table3/table').ColumnProps<CustomerDocument>;
+type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type ColumnProps = import('@wcpos/common/src/components/table3/table').ColumnProps<OrderDocument>;
 
-interface CustomersTableProps {
+interface OrdersTableProps {
 	columns: ColumnProps[];
 }
 
 const cells = {
-	avatarUrl: Avatar,
-	firstName: Name,
-	lastName: Name,
-	email: Email,
+	actions: Actions,
 	billing: Address,
 	shipping: Address,
-	actions: Actions,
+	customer: Customer,
+	customerNote: CustomerNote,
+	status: Status,
 };
 
 /**
  *
  */
-const CustomersTable = ({ columns }: CustomersTableProps) => {
+const OrdersTable = ({ columns }: OrdersTableProps) => {
 	const { t } = useTranslation();
-	const { data } = useData('customers');
+	const { data } = useData('orders');
 	const { query, setQuery } = useQuery();
 
 	/**
@@ -56,8 +54,8 @@ const CustomersTable = ({ columns }: CustomersTableProps) => {
 
 					return {
 						...column,
-						label: t(`customers.column.label.${column.key}`),
-						onRender: (item: CustomerDocument) => {
+						label: t(`orders.column.label.${column.key}`),
+						onRender: (item: OrderDocument) => {
 							return Cell ? <Cell item={item} column={column} /> : null;
 						},
 					};
@@ -113,7 +111,7 @@ const CustomersTable = ({ columns }: CustomersTableProps) => {
 	useWhyDidYouUpdate('Table', { data });
 
 	return (
-		<Table<CustomerDocument>
+		<Table<OrderDocument>
 			columns={visibleColumns}
 			data={sortedData}
 			sort={handleSort}
@@ -125,4 +123,4 @@ const CustomersTable = ({ columns }: CustomersTableProps) => {
 	);
 };
 
-export default CustomersTable;
+export default OrdersTable;

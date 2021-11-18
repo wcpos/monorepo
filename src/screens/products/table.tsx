@@ -7,38 +7,41 @@ import useQuery from '@wcpos/common/src/hooks/use-query';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Table from '@wcpos/common/src/components/table3';
 import Actions from './cells/actions';
+import Categories from '../common/product-categories';
+import Image from './cells/image';
 import Name from './cells/name';
-import Email from './cells/email';
-import Address from './cells/address';
-import Avatar from './cells/avatar';
+// import Price from './cells/price';
+import RegularPrice from './cells/regular-price';
+// import Sku from './cells/sku';
+import Tag from '../common/product-tags';
 import Footer from './footer';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
-type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
-type ColumnProps =
-	import('@wcpos/common/src/components/table3/table').ColumnProps<CustomerDocument>;
+type ProductDocument = import('@wcpos/common/src/database').ProductDocument;
+type ColumnProps = import('@wcpos/common/src/components/table3/table').ColumnProps<ProductDocument>;
 
-interface CustomersTableProps {
+interface ProductsTableProps {
 	columns: ColumnProps[];
 }
 
 const cells = {
-	avatarUrl: Avatar,
-	firstName: Name,
-	lastName: Name,
-	email: Email,
-	billing: Address,
-	shipping: Address,
 	actions: Actions,
+	categories: Categories,
+	image: Image,
+	name: Name,
+	// price: Price,
+	regularPrice: RegularPrice,
+	// sku: Sku,
+	tag: Tag,
 };
 
 /**
  *
  */
-const CustomersTable = ({ columns }: CustomersTableProps) => {
+const ProductsTable = ({ columns }: ProductsTableProps) => {
 	const { t } = useTranslation();
-	const { data } = useData('customers');
+	const { data } = useData('products');
 	const { query, setQuery } = useQuery();
 
 	/**
@@ -56,8 +59,8 @@ const CustomersTable = ({ columns }: CustomersTableProps) => {
 
 					return {
 						...column,
-						label: t(`customers.column.label.${column.key}`),
-						onRender: (item: CustomerDocument) => {
+						label: t(`products.column.label.${column.key}`),
+						onRender: (item: ProductDocument) => {
 							return Cell ? <Cell item={item} column={column} /> : null;
 						},
 					};
@@ -113,7 +116,7 @@ const CustomersTable = ({ columns }: CustomersTableProps) => {
 	useWhyDidYouUpdate('Table', { data });
 
 	return (
-		<Table<CustomerDocument>
+		<Table<ProductDocument>
 			columns={visibleColumns}
 			data={sortedData}
 			sort={handleSort}
@@ -125,4 +128,4 @@ const CustomersTable = ({ columns }: CustomersTableProps) => {
 	);
 };
 
-export default CustomersTable;
+export default ProductsTable;
