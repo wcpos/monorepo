@@ -20,7 +20,7 @@ interface QueryState {
  */
 const Orders = () => {
 	const resources = useUIResource();
-	const ui = useObservableSuspense(resources.customers);
+	const ui = useObservableSuspense(resources.orders);
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));
 	useIdAudit('orders');
 	// useRestQuery('products');
