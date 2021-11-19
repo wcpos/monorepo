@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ViewStyle } from 'react-native';
 import useUncontrolledState from '@wcpos/common/src/hooks/use-uncontrolled-state';
 import Label from './label';
 import Icon from './icon';
@@ -29,6 +30,7 @@ export interface CheckboxProps {
 	onChange?: (checked: boolean) => void;
 
 	// helpText?: React.ReactNode;
+	style?: ViewStyle;
 }
 
 /**
@@ -40,6 +42,7 @@ export const Checkbox = ({
 	helpText,
 	checked: checkedRaw = false,
 	onChange: onChangeRaw,
+	style,
 }: CheckboxProps) => {
 	const [checked, onChange] = useUncontrolledState(checkedRaw, onChangeRaw);
 	const onPress = React.useCallback(() => onChange?.(!checked), [checked, onChange]);
@@ -56,7 +59,7 @@ export const Checkbox = ({
 	// };
 
 	return (
-		<Styled.PressableContainer disabled={disabled} onPress={onPress}>
+		<Styled.PressableContainer disabled={disabled} onPress={onPress} style={style}>
 			<Icon checked={checked} disabled={disabled} />
 			<Label label={label} checked={checked} info={helpText} />
 		</Styled.PressableContainer>

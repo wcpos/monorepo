@@ -32,7 +32,7 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 							checked={!column.hide}
 							onChange={(checked) => {
 								columns[index] = { ...column, hide: !checked };
-								ui.atomicSet('columns', columns);
+								ui.atomicPatch('columns', columns);
 							}}
 						/>
 						{column.display
@@ -44,8 +44,9 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 										checked={!display.hide}
 										onChange={(checked) => {
 											column.display[i] = { ...display, hide: !checked };
-											ui.atomicSet('columns', columns);
+											ui.atomicPatch('columns', columns);
 										}}
+										style={{ marginLeft: 10 }}
 									/>
 							  ))
 							: null}
