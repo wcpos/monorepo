@@ -1,6 +1,6 @@
 import React from 'react';
 import Animated, { useAnimatedProps, useAnimatedStyle, withTiming } from 'react-native-reanimated';
-// import AnimateableText from 'react-native-animateable-text';
+import ReText from './ReText';
 import * as Styled from '../styles';
 
 export const clamp = (value: number, lowerBound: number, upperBound: number) => {
@@ -38,13 +38,13 @@ export const Tooltip: React.FC<IProps> = ({ translateX, value, showTooltip, slid
 	const tooltipTriangleLeft = useAnimatedStyle(() => ({
 		left: translateX.value + 3,
 	}));
-	const animatedProps = useAnimatedProps(() => ({
-		text: String(value.value),
-	}));
+	// const animatedProps = useAnimatedProps(() => ({
+	// 	text: String(value.value),
+	// }));
 	return (
 		<Styled.AbsoluteView style={tooltipOpacity} pointerEvents="none">
 			<Styled.TooltipCloud style={tooltipCloudLeft}>
-				{/* <StyledText animatedProps={animatedProps} /> */}
+				{/* <ReText text={value} /> */}
 			</Styled.TooltipCloud>
 			<Styled.TooltipTriangle style={tooltipTriangleLeft} />
 		</Styled.AbsoluteView>

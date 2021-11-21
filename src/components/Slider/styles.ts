@@ -1,6 +1,7 @@
 import styled, { css } from 'styled-components/native';
 import { StyleSheet } from 'react-native';
 import Animated from 'react-native-reanimated';
+// import AnimateableText from 'react-native-animateable-text';
 import { CURSOR_HALF_WIDTH, CURSOR_WIDTH } from './constants';
 import Text from '../text';
 
@@ -79,12 +80,12 @@ export const SliderLineComponent = styled.View({
 	backgroundColor: Colors.GREY2,
 });
 
-// const StyledText = styled(AnimateableText)({
-export const StyledText = styled(Text)({
-	textAlign: 'center',
-	color: Colors.WHITE,
-	marginTop: 8,
-});
+// export const StyledText = styled(AnimateableText)({
+// 	// export const StyledText = styled(Text)({
+// 	textAlign: 'center',
+// 	color: Colors.WHITE,
+// 	marginTop: 8,
+// });
 
 export const TooltipCloud = styled(Animated.View)({
 	top: -54,

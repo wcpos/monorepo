@@ -53,6 +53,7 @@ export const Slider: React.FC<SliderProps> = ({
 	const showTooltip = useDerivedValue(() => isActivePanGesture.value || isActiveTapGesture.value);
 	useSetInitialValue({ translateX, sliderWidth, min, max, initialValue });
 	useUpdateOuterSharedValue(value, sharedValue);
+
 	return (
 		<Styled.Container>
 			<View>

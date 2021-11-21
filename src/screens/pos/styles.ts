@@ -1,4 +1,5 @@
 import styled from 'styled-components/native';
+import Animated from 'react-native-reanimated';
 
 export const Container = styled.View`
 	height: 100%;
@@ -21,4 +22,19 @@ export const CartColumn = styled.View`
 export const CheckoutColumn = styled.View`
 	height: 100%;
 	flex: 1;
+`;
+
+export const ResizableColumn = styled(Animated.View)`
+	height: 100%;
+	flex-grow: 0;
+	flex-shrink: 0;
+`;
+
+export const Column = styled.View`
+	height: 100%;
+	flex: 1;
+`;
+
+export const Gutter = styled(Animated.View)`
+	position: absolute;
 `;

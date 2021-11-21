@@ -87,7 +87,7 @@ export const ColumnResize = (props: DraggableProps) => {
 				<Draggable
 					min={-100}
 					max={100}
-					initialValue={0}
+					initialValue={50}
 					onDrag={onDrag}
 					onDragStart={() => {
 						isDragging.current = true;

@@ -19,6 +19,7 @@ import clamp from 'lodash/clamp';
 import Cart from './cart';
 import Products from './products';
 import Checkout from './checkout';
+import ResizeableColumns from './resizable-columns';
 import * as Styled from './styles';
 
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
@@ -52,47 +53,6 @@ const POS = () => {
 	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
 	const [currentCustomer, setCurrentCustomer] = React.useState<CustomerDocument | undefined>();
 
-	/**
-	 * Resizing the POS columns
-	 */
-	const isDragging = React.useRef(false);
-	const productColumnWidth = useSharedValue(productsUI.get('width'));
-	const [containerLayout, setContainerLayout] = useOnLayout();
-	const [productColumnLayout, setProductColumnLayout] = useOnLayout();
-	const handleStartColumnResize = React.useCallback((event, context) => {
-		context.productColumnWidth = productColumnWidth.value;
-	}, []);
-	const handleColumnResize = React.useCallback(
-		(event, context) => {
-			if (productColumnLayout && containerLayout) {
-				isDragging.current = true;
-				productColumnWidth.value = withSpring(
-					clamp((productColumnLayout.width + event.translationX) / containerLayout.width, 0.2, 0.8)
-				);
-			} else {
-				console.log('@TODO - why null?', productColumnLayout);
-			}
-		},
-		[containerLayout, productColumnLayout]
-	);
-	const handleEndColumnResize = React.useCallback((event, context) => {
-		isDragging.current = false;
-		productsUI.atomicPatch({ width: productColumnWidth.value });
-	}, []);
-	const productsColumnStyle = useAnimatedStyle(() => ({
-		flexBasis: `${productColumnWidth.value * 100}%`,
-	}));
-	const handleContainerLayout = (event: LayoutChangeEvent) => {
-		if (!isDragging.current) {
-			setContainerLayout(event);
-		}
-	};
-	const handleProductColumnLayout = (event: LayoutChangeEvent) => {
-		if (!isDragging.current) {
-			setProductColumnLayout(event);
-		}
-	};
-
 	const orderQuery = storeDB.collections.orders.find().where('status').eq('pos-open');
 
 	const orders: OrderDocument[] = useObservableState(
@@ -107,60 +67,32 @@ const POS = () => {
 		[]
 	);
 
-	useWhyDidYouUpdate('POS', {
-		storeDB,
-		productsUI,
-		cartUI,
-		currentOrder,
-		orderQuery,
-		orders,
-		handleColumnResize,
-		handleStartColumnResize,
-		handleEndColumnResize,
-		productsColumnStyle,
-		handleContainerLayout,
-		handleProductColumnLayout,
-	});
+	const context = React.useMemo(
+		() => ({ currentOrder, setCurrentOrder, currentCustomer, setCurrentCustomer }),
+		[currentCustomer, currentOrder]
+	);
 
 	return (
-		<POSContext.Provider
-			value={{ currentOrder, setCurrentOrder, currentCustomer, setCurrentCustomer }}
-		>
-			<Styled.Container onLayout={handleContainerLayout}>
-				<Styled.ProductsColumn
-					as={Animated.View}
-					onLayout={handleProductColumnLayout}
-					style={productsColumnStyle}
-				>
+		<POSContext.Provider value={context}>
+			<ResizeableColumns
+				ui={productsUI}
+				leftComponent={
 					<ErrorBoundary>
 						<QueryProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }}>
 							<Products ui={productsUI} />
 						</QueryProvider>
 					</ErrorBoundary>
-				</Styled.ProductsColumn>
-				<Draggable
-					onStart={handleStartColumnResize}
-					onActive={handleColumnResize}
-					onEnd={handleEndColumnResize}
-				>
-					<Animated.View>
-						<Gutter />
-					</Animated.View>
-				</Draggable>
-				{currentOrder && currentOrder.status === 'pos-checkout' ? (
-					<Styled.CheckoutColumn>
+				}
+				rightComponent={
+					currentOrder && currentOrder.status === 'pos-checkout' ? (
 						<Checkout />
-					</Styled.CheckoutColumn>
-				) : (
-					<Styled.CartColumn>
+					) : (
 						<ErrorBoundary>
-							<React.Suspense fallback={<Text>Loading cart...</Text>}>
-								<Cart ui={cartUI} orders={orders} />
-							</React.Suspense>
+							<Cart ui={cartUI} orders={orders} />
 						</ErrorBoundary>
-					</Styled.CartColumn>
-				)}
-			</Styled.Container>
+					)
+				}
+			/>
 		</POSContext.Provider>
 	);
 };
