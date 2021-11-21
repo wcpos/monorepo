@@ -2,7 +2,7 @@
 	"posProducts": {
 		"sortBy": "name",
 		"sortDirection": "asc",
-		"width": 0.6,
+		"width": 60,
 		"columns": [
 			{
 				"key": "image",
