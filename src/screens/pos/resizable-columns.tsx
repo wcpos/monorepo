@@ -1,10 +1,9 @@
 import * as React from 'react';
-import { View, LayoutChangeEvent } from 'react-native';
+import { LayoutChangeEvent } from 'react-native';
 import { useSubscription } from 'observable-hooks';
 import Animated, {
 	useAnimatedGestureHandler,
 	useSharedValue,
-	useDerivedValue,
 	useAnimatedStyle,
 	runOnJS,
 } from 'react-native-reanimated';

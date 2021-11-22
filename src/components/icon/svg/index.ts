@@ -30,6 +30,7 @@ import addCircleOutline from './add-circle-outline.svg';
 import creditCard from './credit-card.svg';
 import receipt from './receipt.svg';
 import shoppingCart from './shopping-cart.svg';
+import circleChevronRight from './circle-chevron-right.svg';
 
 export default {
 	add,
@@ -73,4 +74,5 @@ export default {
 	'pos-checkout': receipt,
 	shoppingCart,
 	'pos-open': shoppingCart,
+	circleChevronRight,
 };

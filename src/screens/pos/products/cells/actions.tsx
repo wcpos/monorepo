@@ -35,7 +35,14 @@ const Actions = ({ item: product }: Props) => {
 			<Popover
 				open={visible}
 				onRequestClose={() => setVisible(false)}
-				activator={<Button title="->" onPress={() => setVisible(true)} />}
+				activator={
+					<Icon
+						name="circleChevronRight"
+						size="x-large"
+						backgroundStyle="none"
+						onPress={() => setVisible(true)}
+					/>
+				}
 			>
 				<Variations product={product} />
 			</Popover>
