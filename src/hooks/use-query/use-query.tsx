@@ -3,7 +3,7 @@ import { QueryContext } from './query-provider';
 
 export const useQuery = () => {
 	const context = React.useContext(QueryContext);
-	if (context === undefined) {
+	if (!context) {
 		throw new Error(`useQuery must be called within QueryProvider`);
 	}
 

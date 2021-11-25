@@ -2,7 +2,8 @@ import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 import Icon from '@wcpos/common/src/components/icon';
 import Button from '@wcpos/common/src/components/button';
-import Popover from '@wcpos/common/src/components/popover';
+// import Popover from '@wcpos/common/src/components/popover';
+import Popover from '@wcpos/common/src/components/popover4';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Variations from './variations';
 import { POSContext } from '../../pos';
@@ -14,7 +15,7 @@ interface Props {
 const Actions = ({ item: product }: Props) => {
 	const { currentOrder, setCurrentOrder } = React.useContext(POSContext);
 	const { storeDB } = useAppState();
-	const [visible, setVisible] = React.useState(false);
+	// const [visible, setVisible] = React.useState(false);
 
 	const addToCart = React.useCallback(async () => {
 		if (currentOrder) {
@@ -32,19 +33,8 @@ const Actions = ({ item: product }: Props) => {
 
 	if (product.isVariable()) {
 		return (
-			<Popover
-				open={visible}
-				onRequestClose={() => setVisible(false)}
-				activator={
-					<Icon
-						name="circleChevronRight"
-						size="x-large"
-						backgroundStyle="none"
-						onPress={() => setVisible(true)}
-					/>
-				}
-			>
-				<Variations product={product} />
+			<Popover placement="right" content={<Variations product={product} />}>
+				<Icon name="circleChevronRight" size="x-large" backgroundStyle="none" />
 			</Popover>
 		);
 	}

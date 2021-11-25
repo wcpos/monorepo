@@ -27,7 +27,7 @@ interface ICartProps {
 }
 
 const Cart = ({ ui, orders = [] }: ICartProps) => {
-	useWhyDidYouUpdate('Cart', { ui, orders });
+	// useWhyDidYouUpdate('Cart', { ui, orders });
 	const { currentOrder, setCurrentOrder, currentCustomer, setCurrentCustomer } =
 		React.useContext(POSContext);
 	const [columns] = useObservableState(() => ui.get$('columns'), ui.get('columns'));

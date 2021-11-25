@@ -1,0 +1,1 @@
+inspiration from https://github.com/jeremy-deutsch/react-native-scrollables

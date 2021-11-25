@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { View, ViewStyle, ScrollView } from 'react-native';
+import { View, ViewStyle } from 'react-native';
 import get from 'lodash/get';
 import { RedrawContext } from '.';
 import EmptyRow from './empty';
+import ScrollView from '../scrollview';
 
 export interface StaticListProps<T extends object, C> {
 	/**

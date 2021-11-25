@@ -113,7 +113,7 @@ const POSProductsTable = ({ columns }: POSProductsTableProps) => {
 		[visibleColumns]
 	);
 
-	useWhyDidYouUpdate('Table', { data });
+	// useWhyDidYouUpdate('Table', { data });
 
 	return (
 		<Table<ProductDocument>

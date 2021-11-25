@@ -84,13 +84,13 @@ export const useCollectionQuery = (
 		updateQuery(query);
 	}, [query, updateQuery]);
 
-	useWhyDidYouUpdate('Collection Query', {
-		storeDB,
-		collection,
-		query,
-		data,
-		updateQuery,
-	});
+	// useWhyDidYouUpdate('Collection Query', {
+	// 	storeDB,
+	// 	collection,
+	// 	query,
+	// 	data,
+	// 	updateQuery,
+	// });
 
 	return { data, count: data.length };
 };

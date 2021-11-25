@@ -45,7 +45,7 @@ export interface ModalScreenProps {
 const AppNavigator = (props: Partial<StackNavigatorProps>) => {
 	const { storeDB } = useAppState();
 
-	useWhyDidYouUpdate('AppNavigator', { props, storeDB });
+	// useWhyDidYouUpdate('AppNavigator', { props, storeDB });
 
 	return (
 		<Stack.Navigator screenOptions={{ headerShown: false }}>

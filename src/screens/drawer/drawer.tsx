@@ -8,7 +8,7 @@ import {
 } from '@react-navigation/drawer';
 
 const Drawer = (props: DrawerContentComponentProps) => {
-	console.log(props);
+	// console.log(props);
 	return (
 		<DrawerContentScrollView {...props}>
 			<DrawerItemList {...props} />

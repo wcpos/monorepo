@@ -1,24 +1,22 @@
 import * as React from 'react';
+import { ViewStyle, StyleProp } from 'react-native';
+import captalize from 'lodash/capitalize';
+import get from 'lodash/get';
 import * as Styled from './styles';
 
 export interface ArrowProps {
 	direction?: 'left' | 'right' | 'up' | 'down';
 	size?: 'small' | 'large' | 'default';
+	color?: string;
+	style?: StyleProp<ViewStyle>;
 }
 
-export const Arrow = ({ direction = 'down', size = 'default' }: ArrowProps) => {
-	const renderArrow = () => {
-		switch (direction) {
-			case 'left':
-				return <Styled.Left />;
-			case 'right':
-				return <Styled.Right />;
-			case 'up':
-				return <Styled.Up />;
-			default:
-				return <Styled.Down />;
-		}
-	};
+export const Arrow = ({ direction = 'down', size = 'default', color, style }: ArrowProps) => {
+	const StyledArrow = get(Styled, captalize(direction));
 
-	return <Styled.Container>{renderArrow()}</Styled.Container>;
+	return (
+		<Styled.Container direction={direction} size={size} style={style}>
+			<StyledArrow size={size} color={color} />
+		</Styled.Container>
+	);
 };

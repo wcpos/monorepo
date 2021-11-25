@@ -50,15 +50,15 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 		}));
 	}, [customers]);
 
-	useWhyDidYouUpdate('Customer Select', {
-		selectedCustomer,
-		onSelectCustomer,
-		customers,
-		onSearch,
-		query,
-		setQuery,
-		data$,
-	});
+	// useWhyDidYouUpdate('Customer Select', {
+	// 	selectedCustomer,
+	// 	onSelectCustomer,
+	// 	customers,
+	// 	onSearch,
+	// 	query,
+	// 	setQuery,
+	// 	data$,
+	// });
 
 	return (
 		<Combobox

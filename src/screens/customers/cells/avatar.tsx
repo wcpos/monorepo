@@ -1,12 +1,33 @@
 import * as React from 'react';
-import Img from '@wcpos/common/src/components/image';
+import { Image as RNImage, View } from 'react-native';
+// import Img from '@wcpos/common/src/components/image';
+import Skeleton from '@wcpos/common/src/components/skeleton';
 
-type Props = {
+type AvatarProps = {
 	item: import('@wcpos/common/src/database').CustomerDocument;
 };
 
-const Avatar = ({ item: customer }: Props) => {
-	return <Img src={customer.avatarUrl} style={{ width: 100, height: 100 }} />;
+const Avatar = ({ item: customer }: AvatarProps) => {
+	const [size, setSize] = React.useState({ width: undefined, height: undefined });
+
+	const onLayout = React.useCallback((event) => {
+		const { width, height } = event.nativeEvent.layout;
+		setSize({ width, height });
+	}, []);
+
+	return (
+		<View onLayout={onLayout} style={{ width: '100%' }}>
+			{customer.avatarUrl ? (
+				<RNImage
+					source={{ uri: customer.avatarUrl }}
+					style={{ width: size.width, height: size.width, aspectRatio: 1 }}
+					// placeholder={<Img source={require('@wcpos/common/src/assets/placeholder.png')} />}
+				/>
+			) : (
+				<Skeleton style={{ width: size.width, height: size.width }} />
+			)}
+		</View>
+	);
 };
 
 export default Avatar;

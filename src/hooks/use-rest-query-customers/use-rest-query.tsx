@@ -29,7 +29,7 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 					const replicationState = await replicateRxCollection({
 						// @ts-ignore
 						collection,
-						replicationIdentifier: 'product-replication',
+						replicationIdentifier: 'customer-replication',
 						/**
 						 * By default it will do a one-time replication.
 						 * By settings live: true the replication will continuously
@@ -60,8 +60,8 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 							 */
 							// @ts-ignore
 							async handler(latestPullDocument) {
-								// console.log(latestPullDocument);
-								// console.log(q);
+								console.log(latestPullDocument);
+								console.log(q);
 
 								const headers = {
 									'X-WCPOS': '1',
@@ -76,20 +76,21 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 								const params = {
 									per_page: 10,
 									page: 1,
-									order: q.sortDirection,
-									orderby: q.sortBy === 'name' ? 'title' : q.sortBy,
+									role: 'all',
+									// order: q.sortDirection,
+									// orderby: 'name',
 								};
 
-								if (get(q, 'filters.category.id')) {
-									set(params, 'category', get(q, 'filters.category.id'));
-								}
-								if (get(q, 'filters.tag.id')) {
-									set(params, 'tag', get(q, 'filters.tag.id'));
-								}
+								// if (get(q, 'filters.category.id')) {
+								// 	set(params, 'category', get(q, 'filters.category.id'));
+								// }
+								// if (get(q, 'filters.tag.id')) {
+								// 	set(params, 'tag', get(q, 'filters.tag.id'));
+								// }
 
 								const result = await http
 									// @ts-ignore
-									.get('products', {
+									.get('customers', {
 										baseURL: site.wcApiUrl,
 										params,
 										headers,
@@ -109,7 +110,7 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 										}
 									});
 
-								// console.log(result);
+								console.log(result);
 								// need to add localId to each product
 								const data = result?.data || [];
 								const promises = data.map(async (product: any) => {

@@ -49,7 +49,8 @@ export interface SupportScreenProps {
 const Drawer = createDrawerNavigator<DrawerParamList>();
 
 /**
- *
+ * @TODO - use chidlren to render the screens to apply layout and errorboundary?
+ * https://reactnavigation.org/docs/screen/#children
  */
 const MainNavigator = ({ navigation, route }: MainScreenProps) => {
 	const dimensions = useWindowDimensions();

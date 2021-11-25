@@ -1,14 +1,20 @@
 import * as React from 'react';
 import { TouchableWithoutFeedback, NativeSyntheticEvent, NativeTouchEvent } from 'react-native';
 import isFunction from 'lodash/isFunction';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+	FadeIn,
+	FadeOut,
+} from 'react-native-reanimated';
 import * as Styled from './styles';
 
 export interface BackdropProps {
 	/**
 	 * Determines if Backdrop is visible or not.
 	 */
-	open: boolean;
+	// open: boolean;
 	/**
 	 * Determines if Popover is transparent or not.
 	 */
@@ -34,30 +40,22 @@ export interface BackdropProps {
  *
  */
 export const Backdrop = ({
-	open,
+	// open,
 	invisible = false,
 	clickThrough = false,
 	onPress,
 	children,
 }: BackdropProps) => {
-	// Fade in and out
-	const opacity = useSharedValue(0);
-	const animatedStyle = useAnimatedStyle(() => ({
-		opacity: withTiming(opacity.value, { duration: 150 }),
-	}));
-	React.useEffect(() => {
-		opacity.value = open ? 1 : 0;
-	}, [open]);
-
 	const handlePress = (event: NativeSyntheticEvent<NativeTouchEvent>) => {
 		if (isFunction(onPress)) onPress(event);
 	};
 
 	const contentView = (
 		<Styled.Backdrop
-			as={Animated.View}
-			style={[!invisible && animatedStyle]}
-			pointerEvents={open && !clickThrough ? 'auto' : 'none'}
+			entering={FadeIn}
+			exiting={FadeOut}
+			style={[invisible && { backgroundColor: 'transparent' }]}
+			pointerEvents={!clickThrough ? 'auto' : 'none'}
 		>
 			{children}
 		</Styled.Backdrop>

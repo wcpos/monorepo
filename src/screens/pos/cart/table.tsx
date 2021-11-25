@@ -77,7 +77,7 @@ const CartTable = ({ order, columns, items, query, onSort, ui }: ICartTableProps
 		);
 	}, [order]);
 
-	useWhyDidYouUpdate('CartTable', { columns, items, query, onSort, ui });
+	// useWhyDidYouUpdate('CartTable', { columns, items, query, onSort, ui });
 
 	return (
 		<Table
