@@ -1,6 +1,11 @@
 import * as React from 'react';
 import { View, Dimensions, ViewStyle } from 'react-native';
-import { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+	SlideInDown,
+} from 'react-native-reanimated';
 import { useScrollEvents } from '../scrollview';
 import Portal from '../portal';
 import Pressable from '../pressable';
@@ -40,9 +45,28 @@ export interface PopoverProps {
 	 */
 	placement?: PopoverPlacement;
 	/**
+	 * Method for activating the Popover.
+	 */
+	trigger?: 'press' | 'longpress' | 'hover';
+	/**
 	 * Show arrow pointing to the target.
 	 */
 	withArrow?: boolean;
+	/**
+	 * Show backdrop behind the Popover.
+	 */
+	showBackdrop?: boolean;
+	/**
+	 * If true, the popover and its backdrop won't be clickable and won't receive mouse events.
+	 *
+	 * For example, this is used by the `Tooltip` component. Prefer using the `Tooltip` component instead
+	 * of this property.
+	 */
+	clickThrough?: boolean;
+	/**
+	 *
+	 */
+	style?: ViewStyle;
 }
 
 const initialLayout = {
@@ -61,7 +85,11 @@ export const Popover = ({
 	children,
 	content,
 	placement = 'bottom',
+	trigger = 'press',
 	withArrow = true,
+	showBackdrop = false,
+	clickThrough = false,
+	style,
 }: PopoverProps) => {
 	const layout = useSharedValue(initialLayout);
 	const ref = React.useRef<View>(null);
@@ -99,18 +127,21 @@ export const Popover = ({
 	 *
 	 */
 	const animatedStyle = useAnimatedStyle(() => {
-		const { width, height, pageX, pageY } = layout.value;
-		return {
-			width,
-			height,
-			transform: [{ translateX: pageX }, { translateY: pageY }],
-			// opacity: withTiming(opacity.value, { duration: 150 }),
-		};
+		if (layout.value && layout.value.width) {
+			const { width, height, pageX, pageY } = layout.value;
+			return {
+				width,
+				height,
+				transform: [{ translateX: pageX }, { translateY: pageY }],
+				// opacity: withTiming(opacity.value, { duration: 150 }),
+			};
+		}
+		return {};
 	});
 
 	const arrow = (
 		<Arrow
-			color="white"
+			color={style?.backgroundColor || '#fff'}
 			direction={getArrowDirection(placement)}
 			style={[getArrowAlign(placement), { zIndex: 10 }]}
 		/>
@@ -120,22 +151,42 @@ export const Popover = ({
 		setVisible((prev) => !prev);
 	}, []);
 
+	const handleHoverIn = React.useCallback(() => {
+		if (trigger === 'hover') setVisible(true);
+	}, [trigger]);
+
+	const handleHoverOut = React.useCallback(() => {
+		if (trigger === 'hover') setVisible(false);
+	}, [trigger]);
+
 	return (
 		<View ref={ref} onLayout={measureTarget}>
-			<Pressable onPress={handlePress}>{children}</Pressable>
+			<Pressable onPress={handlePress} onHoverIn={handleHoverIn} onHoverOut={handleHoverOut}>
+				{children}
+			</Pressable>
 			{visible && (
 				<Portal keyPrefix="Popover">
-					<Backdrop clickThrough invisible />
-					<Styled.TriggerArea
-						pointerEvents="none"
+					<Backdrop invisible={!showBackdrop} clickThrough={clickThrough} onPress={handlePress} />
+					<Styled.AnimatedTriggerDuplicate
+						as={Animated.View}
+						// pointerEvents="none"
 						style={[animatedStyle, getContainerAlign(placement)]}
 					>
-						<Styled.Container style={[getPopoverPosition(placement)]}>
+						<Styled.Container
+							// as={Animated.View}
+							// entering={SlideInDown}
+							style={[getPopoverPosition(placement)]}
+						>
 							{withArrow && (isBottom(placement) || isRight(placement)) && arrow}
-							<Styled.Popover>{content}</Styled.Popover>
+							<Styled.Popover
+								style={style}
+								// pointerEvents="auto"
+							>
+								{content}
+							</Styled.Popover>
 							{withArrow && (isTop(placement) || isLeft(placement)) && arrow}
 						</Styled.Container>
-					</Styled.TriggerArea>
+					</Styled.AnimatedTriggerDuplicate>
 				</Portal>
 			)}
 		</View>

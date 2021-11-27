@@ -1,7 +1,10 @@
 import * as React from 'react';
 import * as Styled from './styles';
 
-export type PressableProps = import('react-native').PressableProps;
+export type PressableProps = import('react-native').PressableProps & {
+	onHoverIn?: () => void;
+	onHoverOut?: () => void;
+};
 
 /**
  *

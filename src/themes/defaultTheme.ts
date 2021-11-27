@@ -41,11 +41,19 @@ const fonts = Platform.select({
 	},
 });
 
+const zIndex = {
+	backdrop: 100,
+	dialog: 200,
+	popover: 300,
+	toast: 400,
+	tooltip: 500,
+};
+
 const theme = {
 	APP_BACKGROUND_COLOR: colors.background,
 
 	BACKDROP_COLOR: 'rgba(0, 0, 0, 0.3)',
-	BACKDROP_Z_INDEX: 1000,
+	BACKDROP_Z_INDEX: zIndex.backdrop,
 
 	BUTTON_BORDER_RADIUS: baseRadius,
 	BUTTON_COLOR: colors.primary,
@@ -90,6 +98,7 @@ const theme = {
 	DIALOG_WIDTH: '600px',
 	DIALOG_MIN_WIDTH: '300px',
 	DIALOG_BORDER_RADIUS: baseRadius,
+	DIALOG_Z_INDEX: zIndex.dialog,
 
 	FONT_FAMILY: fonts.regular,
 
@@ -133,7 +142,7 @@ const theme = {
 	PAGE_MAIN_PADDING_Y: basePadding,
 
 	POPOVER_BACKGROUND_COLOR: '#FFFFFF',
-	POPOVER_Z_INDEX: 99999,
+	POPOVER_Z_INDEX: zIndex.popover,
 
 	SEGMENT_BACKGROUND_COLOR: '#FFFFFF',
 	SEGMENT_BORDER_COLOR: colors.primary,
@@ -170,7 +179,7 @@ const theme = {
 	TEXT_COLOR_INVERSE: colors.inverse,
 
 	TOAST_BACKGROUND_COLOR: '#000000',
-	TOAST_Z_INDEX: 1001,
+	TOAST_Z_INDEX: zIndex.toast,
 	TOAST_BORDER_RADIUS: baseRadius,
 	TOAST_PADDING_X: '10px',
 	TOAST_PADDING_Y: '5px',

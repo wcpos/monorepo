@@ -46,7 +46,8 @@ const Variations = ({ product }: Props) => {
 			<Button
 				title="Fetch variations"
 				onPress={() => {
-					fetchData(`products/${product.id}/variations`);
+					console.log('hi');
+					// fetchData(`products/${product.id}/variations`);
 				}}
 			/>
 		);

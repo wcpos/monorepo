@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { action } from '@storybook/addon-actions';
-import { AppProviderSizeProvider } from '@wcpos/common/src/hooks/use-position-in-app';
 import { Icon, IconProps, IconSkeletonProps } from './icon';
 import svgs from './svg';
 import Portal from '../portal';
@@ -27,20 +25,14 @@ export default {
 
 /**
  * Tooltips require
- * - SafeAreaProvider
  * - Portals
- * - AppProviderSizeProvider
  */
 const AppProvider: React.FC = ({ children }) => {
 	return (
-		<SafeAreaProvider>
-			<AppProviderSizeProvider>
-				<Portal.Provider>
-					{children}
-					<Portal.Manager />
-				</Portal.Provider>
-			</AppProviderSizeProvider>
-		</SafeAreaProvider>
+		<Portal.Provider>
+			{children}
+			<Portal.Manager />
+		</Portal.Provider>
 	);
 };
 

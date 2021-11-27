@@ -1,39 +1,34 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { useObservableState } from 'observable-hooks';
 import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
 import useRestQuery from '@wcpos/common/src/hooks/use-rest-query';
 import Segment from '@wcpos/common/src/components/segment';
+import UiSettings from '../../common/ui-settings';
 import Table from './table';
 import SearchBar from './search-bar';
 
 interface POSProductsProps {
-	ui: any;
+	ui: import('@wcpos/common/src/hooks/use-ui').UIDocument;
 }
 
 /**
  *
  */
 const POSProducts = ({ ui }: POSProductsProps) => {
-	const columns$ = ui.get$('columns');
-	const columns = useObservableState(columns$, ui.get('columns'));
 	useIdAudit('products');
 	useRestQuery('products');
 
 	return (
 		<Segment.Group>
 			<Segment>
-				<SearchBar ui={ui} />
-				{/* <Search
-					label="Search Products"
-					placeholder="Search Products"
-					value={query.search}
-					onSearch={onSearch}
-					actions={[<UiSettings ui={ui} />]}
-					filters={filters}
-				/> */}
+				<View style={{ flexDirection: 'row' }}>
+					<SearchBar />
+					<UiSettings ui={ui} />
+				</View>
 			</Segment>
 			<Segment grow>
-				<Table columns={columns} />
+				<Table ui={ui} />
 			</Segment>
 		</Segment.Group>
 	);

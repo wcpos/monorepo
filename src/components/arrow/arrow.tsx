@@ -7,7 +7,7 @@ import * as Styled from './styles';
 export interface ArrowProps {
 	direction?: 'left' | 'right' | 'up' | 'down';
 	size?: 'small' | 'large' | 'default';
-	color?: string;
+	color?: ViewStyle['backgroundColor'];
 	style?: StyleProp<ViewStyle>;
 }
 

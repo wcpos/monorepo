@@ -3,7 +3,9 @@ import statics from './statics';
 // import methods from './methods';
 import { postCreate } from './postCreate';
 
-export type LineItemSchema = import('./interface').WooCommerceOrderLineItemSchema;
+export type LineItemSchema = import('rxdb').RxJsonSchema<
+	import('./interface').WooCommerceOrderLineItemSchema
+>;
 export type LineItemDocument = import('rxdb').RxDocument<LineItemSchema, LineItemMethods>;
 export type LineItemCollection = import('rxdb').RxCollection<
 	LineItemDocument,

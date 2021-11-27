@@ -3,7 +3,7 @@ import { ViewStyle } from 'react-native';
 import get from 'lodash/get';
 import { useTheme } from 'styled-components/native';
 import Svgs from './svg';
-import Tooltip from '../tooltip';
+import Tooltip from '../tooltip2';
 import Skeleton from '../skeleton';
 import * as Styled from './styles';
 

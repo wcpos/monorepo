@@ -1,7 +1,10 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import Popover from '@wcpos/common/src/components/popover';
+import { useObservableState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
+import set from 'lodash/set';
+import Popover from '@wcpos/common/src/components/popover4';
 import Icon from '@wcpos/common/src/components/icon';
 import Checkbox from '@wcpos/common/src/components/checkbox';
 import Button from '@wcpos/common/src/components/button';
@@ -14,15 +17,11 @@ interface UiSettingsProps {
 const UiSettings = ({ ui }: UiSettingsProps) => {
 	const { t } = useTranslation();
 	const key = ui.id.split('_')[1];
-	const columns = ui.get('columns');
-	const [visible, setVisible] = React.useState(false);
+	// const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
+	const { columns } = useObservableState(ui.$, ui.toJSON());
 
-	return (
-		<Popover
-			open={visible}
-			activator={<Icon name="cog" onPress={() => setVisible(true)} tooltip="Table Settings" />}
-			onRequestClose={() => setVisible(false)}
-		>
+	const settings = (
+		<>
 			<Text>Columns</Text>
 			{columns.map((column: any, index: number) => {
 				return (
@@ -31,8 +30,8 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 							label={t(`${key}.column.label.${column.key}`)}
 							checked={!column.hide}
 							onChange={(checked) => {
-								columns[index] = { ...column, hide: !checked };
-								ui.atomicPatch('columns', columns);
+								set(columns, `${index}.hide`, !checked);
+								ui.atomicPatch({ columns });
 							}}
 						/>
 						{column.display
@@ -44,7 +43,7 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 										checked={!display.hide}
 										onChange={(checked) => {
 											column.display[i] = { ...display, hide: !checked };
-											ui.atomicPatch('columns', columns);
+											ui.atomicPatch({ columns });
 										}}
 										style={{ marginLeft: 10 }}
 									/>
@@ -54,6 +53,12 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 				);
 			})}
 			<Button title="Restore Default Settings" onPress={ui.reset} />
+		</>
+	);
+
+	return (
+		<Popover content={settings}>
+			<Icon name="cog" />
 		</Popover>
 	);
 };

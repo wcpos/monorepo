@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
 import get from 'lodash/get';
@@ -22,7 +23,7 @@ type ProductDocument = import('@wcpos/common/src/database').ProductDocument;
 type ColumnProps = import('@wcpos/common/src/components/table3/table').ColumnProps<ProductDocument>;
 
 interface POSProductsTableProps {
-	columns: ColumnProps[];
+	ui: import('@wcpos/common/src/hooks/use-ui').UIDocument;
 }
 
 const cells = {
@@ -39,34 +40,34 @@ const cells = {
 /**
  *
  */
-const POSProductsTable = ({ columns }: POSProductsTableProps) => {
+const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	const { t } = useTranslation();
 	const { data } = useData('products');
 	const { query, setQuery } = useQuery();
+	// const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
+	const { columns } = useObservableState(ui.$, ui.toJSON());
 
 	/**
 	 * - filter visible columns
 	 * - translate column label
 	 * - asssign cell renderer
 	 */
-	const visibleColumns = React.useMemo(
-		() =>
-			columns
-				.filter((column) => !column.hide)
-				.map((column) => {
-					// clone column and add label, onRender function
-					const Cell = get(cells, column.key);
-
-					return {
-						...column,
-						label: t(`products.column.label.${column.key}`),
-						onRender: (item: ProductDocument) => {
-							return Cell ? <Cell item={item} column={column} /> : null;
-						},
-					};
-				}),
-		[columns, t]
-	);
+	const visibleColumns = React.useMemo(() => {
+		console.log('hi');
+		return columns
+			.filter((column) => !column.hide)
+			.map((column) => {
+				// clone column and add label, onRender function
+				const Cell = get(cells, column.key);
+				return {
+					...column,
+					label: t(`products.column.label.${column.key}`),
+					onRender: (item: ProductDocument) => {
+						return Cell ? <Cell item={item} column={column} /> : null;
+					},
+				};
+			});
+	}, [columns, t]);
 
 	/**
 	 * in memory sort

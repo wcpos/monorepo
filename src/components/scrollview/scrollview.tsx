@@ -24,9 +24,7 @@ const defaultScrollEventHandler: ScrollEventHandler = {
 	},
 	subscribe() {
 		if (__DEV__) {
-			console.warn(
-				'Warning: tried to add a scroll event listener from outside a scrollable context'
-			);
+			console.log('Info: tried to add a scroll event listener from outside a scrollable context');
 		}
 		return () => {};
 	},
