@@ -55,6 +55,8 @@ module.exports = {
 		// @TODO - fix this when updated https://github.com/benmosher/eslint-plugin-import/issues/1174
 		'import/no-extraneous-dependencies': 0,
 		'no-restricted-exports': 'warn',
+		// @TODO - fix this when updated - eslint has a bug with this rule
+		'@typescript-eslint/no-explicit-any': 'off',
 	},
 	settings: {
 		'import/extensions': ['.js', '.jsx', '.ts', '.tsx'],

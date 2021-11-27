@@ -5,28 +5,30 @@
 		"build": "yarn workspaces run build",
 		"test": "yarn workspaces run test",
 		"managed": "yarn workspace @wcpos/app-managed",
-		"ejected": "yarn workspace @wcpos/app-ejected",
 		"with-sentry": "yarn workspace @wcpos/app-with-sentry",
 		"with-dev-client": "yarn workspace @wcpos/app-with-dev-client",
 		"cra": "yarn workspace @wcpos/cra",
-		"craco": "yarn workspace @wcpos/craco",
 		"clean": "node scripts/clean-node-modules",
-		"storybook": "yarn workspace @wcpos/storybook"
+		"storybook": "yarn workspace @wcpos/storybook",
+		"postinstall": "patch-package",
+		"flipper": "METRO_SERVER_PORT=19000 open -a Flipper.app"
 	},
 	"workspaces": [
 		"apps/*",
 		"packages/*"
 	],
 	"resolutions": {
-		"@typescript-eslint/eslint-plugin": "5.3.1",
 		"react-native": "0.64.3",
-		"react-native-reanimated": "2.2.3"
+		"react-native-pager-view": "5.4.6",
+		"react-native-screens": "3.8.0"
 	},
 	"devDependencies": {
-		"@tsconfig/react-native": "^1.0.4"
+		"@tsconfig/react-native": "^1.0.4",
+		"patch-package": "^6.4.7",
+		"postinstall-postinstall": "^2.1.0"
 	},
 	"dependencies": {
 		"jest": "^27.3.1",
-		"prettier": "^2.4.1"
+		"prettier": "^2.5.0"
 	}
 }
