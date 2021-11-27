@@ -5,7 +5,7 @@ import get from 'lodash/get';
 import pull from 'lodash/pull';
 import schema from './schema.json';
 
-export type UserSchema = import('./interface').UserSchema;
+export type UserSchema = import('rxdb').RxJsonSchema<import('./interface').UserSchema>;
 export type UserDocument = import('rxdb').RxDocument<UserSchema, UserMethods>;
 export type UserCollection = import('rxdb').RxCollection<UserDocument, UserMethods, UserStatics>;
 type UserStatics = Record<string, never>;

@@ -3,7 +3,7 @@ import get from 'lodash/get';
 import schema from './schema.json';
 import { ConnectionService } from './service';
 
-export type SiteSchema = import('./interface').SiteSchema;
+export type SiteSchema = import('rxdb').RxJsonSchema<import('./interface').SiteSchema>;
 export type SiteDocument = import('rxdb').RxDocument<
 	SiteSchema,
 	SiteMethods & { connection: ConnectionService }

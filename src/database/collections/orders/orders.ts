@@ -9,11 +9,9 @@ import methods from './methods';
 import statics from './statics';
 import postCreate from './postCreate';
 
-type BaseColection = import('rxdb').RxCollection;
-
 type OrderMethods = typeof import('./methods');
 type OrderStatics = typeof import('./statics');
-export type OrderSchema = import('./interface').WooCommerceOrderSchema;
+export type OrderSchema = import('rxdb').RxJsonSchema<import('./interface').WooCommerceOrderSchema>;
 export type OrderDocument = import('rxdb').RxDocument<OrderSchema, OrderMethods>;
 export type OrderCollection = import('rxdb').RxCollection<
 	OrderDocument,

@@ -1,7 +1,7 @@
 import schema from './schema.json';
 // import DatabaseService from '../../index';
 
-export type StoreSchema = import('./interface').WCPOSStoreSchema;
+export type StoreSchema = import('rxdb').RxJsonSchema<import('./interface').WCPOSStoreSchema>;
 export type StoreDocument = import('rxdb').RxDocument<StoreSchema, StoreMethods>;
 export type StoreCollection = import('rxdb').RxCollection<
 	StoreDocument,

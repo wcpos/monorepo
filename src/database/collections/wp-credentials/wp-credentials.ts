@@ -8,7 +8,7 @@ import schema from './schema.json';
 type StoreCollection = import('../stores').StoreCollection;
 type StoreDocument = import('../stores').StoreDocument;
 
-export type WPCredentialsSchema = import('./interface').WPCredentialsSchema;
+export type WPCredentialsSchema = import('rxdb').RxJsonSchema<import('./interface').WPCredentialsSchema>;
 export type WPCredentialsDocument = import('rxdb').RxDocument<
 	WPCredentialsSchema,
 	WPCredentialsMethods
