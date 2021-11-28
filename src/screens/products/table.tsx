@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
 import get from 'lodash/get';
@@ -19,10 +20,10 @@ import Footer from './footer';
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
 type ProductDocument = import('@wcpos/common/src/database').ProductDocument;
-type ColumnProps = import('@wcpos/common/src/components/table3/table').ColumnProps<ProductDocument>;
+type UIColumn = import('@wcpos/common/src/hooks/use-ui-resource').UIColumn;
 
 interface ProductsTableProps {
-	columns: ColumnProps[];
+	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
 }
 
 const cells = {
@@ -39,10 +40,11 @@ const cells = {
 /**
  *
  */
-const ProductsTable = ({ columns }: ProductsTableProps) => {
+const ProductsTable = ({ ui }: ProductsTableProps) => {
 	const { t } = useTranslation();
 	const { data } = useData('products');
 	const { query, setQuery } = useQuery();
+	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
 	 * - filter visible columns

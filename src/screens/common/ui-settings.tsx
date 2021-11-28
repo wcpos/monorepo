@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useSubscription } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 import set from 'lodash/set';
 import Popover from '@wcpos/common/src/components/popover4';
@@ -11,39 +11,37 @@ import Button from '@wcpos/common/src/components/button';
 import Text from '@wcpos/common/src/components/text';
 
 interface UiSettingsProps {
-	ui: import('@wcpos/common/src/hooks/use-ui').UIDocument;
+	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
 }
 
 const UiSettings = ({ ui }: UiSettingsProps) => {
 	const { t } = useTranslation();
-	const key = ui.id.split('_')[1];
-	// const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
-	const { columns } = useObservableState(ui.$, ui.toJSON());
+	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
 
 	const settings = (
 		<>
 			<Text>Columns</Text>
-			{columns.map((column: any, index: number) => {
+			{columns.map((column: any, columnIndex: number) => {
 				return (
 					<View key={column.key}>
 						<Checkbox
-							label={t(`${key}.column.label.${column.key}`)}
+							label={t(`${ui.getID()}.column.label.${column.key}`)}
 							checked={!column.hide}
 							onChange={(checked) => {
-								set(columns, `${index}.hide`, !checked);
-								ui.atomicPatch({ columns });
+								set(columns, `${columnIndex}.hide`, !checked);
+								ui.atomicPatch({ columns: [...columns] });
 							}}
 						/>
 						{column.display
-							? column.display.map((display: any, i: number) => (
+							? column.display.map((display: any, displayIndex: number) => (
 									// eslint-disable-next-line react/jsx-indent
 									<Checkbox
 										key={display.key}
-										label={t(`${key}.column.label.${display.key}`)}
+										label={t(`${ui.getID()}.column.label.${display.key}`)}
 										checked={!display.hide}
 										onChange={(checked) => {
-											column.display[i] = { ...display, hide: !checked };
-											ui.atomicPatch({ columns });
+											set(column, `display.${displayIndex}.hide`, !checked);
+											ui.atomicPatch({ columns: [...columns] });
 										}}
 										style={{ marginLeft: 10 }}
 									/>

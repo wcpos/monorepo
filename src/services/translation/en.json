@@ -41,7 +41,7 @@
 				}
 			}
 		},
-		"cart": {
+		"posCart": {
 			"column": {
 				"label": {
 					"quantity": "Qty",

@@ -3,19 +3,11 @@ import { View, Text, PanResponderGestureState, LayoutChangeEvent } from 'react-n
 import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
 import { from, of } from 'rxjs';
 import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
-// import { PanGestureHandler } from 'react-native-gesture-handler';
-// import { useAnimatedGestureHandler, useSharedValue } from 'react-native-reanimated';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-// import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import useUIResource from '@wcpos/common/src/hooks/use-ui';
+import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
 import { QueryProvider } from '@wcpos/common/src/hooks/use-query';
 import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
-import Draggable from '@wcpos/common/src/components/draggable';
-import Gutter from '@wcpos/common/src/components/gutter';
-import useOnLayout from '@wcpos/common/src/hooks/use-on-layout';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
-import clamp from 'lodash/clamp';
 import Cart from './cart';
 import Products from './products';
 import Checkout from './checkout';
@@ -47,9 +39,8 @@ export const POSContext = React.createContext<POSContextProps>({
  */
 const POS = () => {
 	const { storeDB } = useAppState();
-	const resources = useUIResource();
-	const productsUI = useObservableSuspense(resources.posProducts);
-	const cartUI = useObservableSuspense(resources.cart);
+	const productsUI = useObservableSuspense(useUIResource('posProducts'));
+	const cartUI = useObservableSuspense(useUIResource('posCart'));
 	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
 	const [currentCustomer, setCurrentCustomer] = React.useState<CustomerDocument | undefined>();
 

@@ -33,7 +33,7 @@
 			}
 		]
 	},
-	"cart": {
+	"posCart": {
 		"sortBy": "id",
 		"sortDirection": "asc",
 		"columns": [

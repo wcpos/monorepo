@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
 import get from 'lodash/get';
@@ -18,9 +19,10 @@ type SortDirection = import('@wcpos/common/src/components/table/types').SortDire
 type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
 type ColumnProps =
 	import('@wcpos/common/src/components/table3/table').ColumnProps<CustomerDocument>;
+type UIColumn = import('@wcpos/common/src/hooks/use-ui-resource').UIColumn;
 
 interface CustomersTableProps {
-	columns: ColumnProps[];
+	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
 }
 
 const cells = {
@@ -36,10 +38,11 @@ const cells = {
 /**
  *
  */
-const CustomersTable = ({ columns }: CustomersTableProps) => {
+const CustomersTable = ({ ui }: CustomersTableProps) => {
 	const { t } = useTranslation();
 	const { data } = useData('customers');
 	const { query, setQuery } = useQuery();
+	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
 	 * - filter visible columns

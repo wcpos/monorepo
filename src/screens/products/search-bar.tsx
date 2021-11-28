@@ -3,13 +3,8 @@ import { View } from 'react-native';
 import get from 'lodash/get';
 import Search from '@wcpos/common/src/components/search';
 import useQuery from '@wcpos/common/src/hooks/use-query';
-import UiSettings from '../common/ui-settings';
 
-interface SearchBarProps {
-	ui: any;
-}
-
-const SearchBar = ({ ui }: SearchBarProps) => {
+const SearchBar = () => {
 	const { query, setQuery } = useQuery();
 
 	const onSearch = React.useCallback(
@@ -44,16 +39,13 @@ const SearchBar = ({ ui }: SearchBarProps) => {
 	}, [query, setQuery]);
 
 	return (
-		<View style={{ flexDirection: 'row' }}>
-			<Search
-				label="Search Products"
-				placeholder="Search Products"
-				value={get(query, ['search', 'name'], '')}
-				onSearch={onSearch}
-				filters={filters}
-			/>
-			<UiSettings ui={ui} />
-		</View>
+		<Search
+			label="Search Products"
+			placeholder="Search Products"
+			value={get(query, ['search', 'name'], '')}
+			onSearch={onSearch}
+			filters={filters}
+		/>
 	);
 };
 

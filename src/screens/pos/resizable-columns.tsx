@@ -14,7 +14,7 @@ import * as Styled from './styles';
 interface ResizableColumnsProps {
 	leftComponent: React.ReactNode;
 	rightComponent: React.ReactNode;
-	ui: any;
+	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
 }
 
 const clamp = (value: number, lowerBound: number, upperBound: number) => {
@@ -46,6 +46,15 @@ const ResizableColumns = ({ leftComponent, rightComponent, ui }: ResizableColumn
 	const saveColumnWidth = React.useCallback(
 		(width: number) => {
 			ui.atomicPatch({ width });
+			// ui.atomicUpdate((oldData) => {
+			// 	oldData.width = width;
+			// 	return oldData;
+			// });
+			// ui.update({
+			// 	$set: {
+			// 		width,
+			// 	},
+			// });
 		},
 		[ui]
 	);
