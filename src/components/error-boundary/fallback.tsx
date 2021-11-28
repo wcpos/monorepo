@@ -1,18 +1,13 @@
 import * as React from 'react';
+import { FallbackProps } from 'react-error-boundary';
 import { View, Text } from 'react-native';
 import Icon from '../icon';
 import Button from '../button';
 
-interface Props {
-	componentStack: string;
-	error: Error;
-	resetErrorBoundary: () => void;
-}
-
 /**
  *
  */
-const Fallback: React.FC<Props> = ({ componentStack, error, resetErrorBoundary }) => (
+const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => (
 	<View>
 		<Icon name="error" />
 		<Text>Error Boundary Fallback</Text>

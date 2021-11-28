@@ -22,7 +22,7 @@ type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
 
 interface ICartProps {
-	ui: any;
+	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
 	orders: OrderDocument[];
 }
 
