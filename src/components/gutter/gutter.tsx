@@ -14,7 +14,17 @@ export const Gutter = ({ children, style }: GutterProps) => {
 			{({
 				// @ts-ignore
 				hovered,
-			}) => <Styled.View hovered={hovered}>{children || <Icon name="more-vert" />}</Styled.View>}
+			}) => (
+				<Styled.View hovered={hovered}>
+					{children || (
+						<Icon
+							name="gripLinesVertical"
+							size="x-small"
+							type={hovered ? 'primary' : 'secondary'}
+						/>
+					)}
+				</Styled.View>
+			)}
 		</Pressable>
 	);
 };

@@ -56,7 +56,7 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 
 	return (
 		<Popover content={settings}>
-			<Icon name="cog" />
+			<Icon name="sliders" />
 		</Popover>
 	);
 };

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 import { action } from '@storybook/addon-actions';
 import { Icon, IconProps, IconSkeletonProps } from './icon';
-import svgs from './svg';
+import svgs from './svg/fontawesome/solid';
 import Portal from '../portal';
 
 const iconNames = Object.keys(svgs);

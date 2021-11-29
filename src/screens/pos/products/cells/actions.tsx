@@ -39,7 +39,7 @@ const Actions = ({ item: product }: Props) => {
 		);
 	}
 
-	return <Icon name="addCircle" size="x-large" backgroundStyle="none" onPress={addToCart} />;
+	return <Icon name="circlePlus" size="x-large" backgroundStyle="none" onPress={addToCart} />;
 };
 
 export default Actions;

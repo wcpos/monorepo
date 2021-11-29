@@ -31,7 +31,7 @@ const Actions = ({ item: order }: Props) => {
 					{ label: 'Sync', action: handleSync },
 					{ label: 'Delete', action: order.remove },
 				]}
-				activator={<Icon name="more" />}
+				activator={<Icon name="ellipsisVertical" />}
 			/>
 			{visible && <OrderModal order={order} onClose={() => setVisible(false)} />}
 		</>

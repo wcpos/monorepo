@@ -7,42 +7,20 @@ import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Auth from '@wcpos/common/src/screens/auth';
 import Modal from '@wcpos/common/src/screens/modal';
 
-type DrawerParamList = import('./main').DrawerParamList;
-type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
-
 const MainNavigator = React.lazy(() => import('./main'));
 
 export type AppStackParamList = {
 	Auth: undefined;
 	Main: undefined;
-	Modal: { login?: { site?: import('@wcpos/common/src/database').SiteDocument } };
+	Modal: undefined;
 };
 
 const Stack = createStackNavigator<AppStackParamList>();
-type StackNavigatorProps = React.ComponentProps<typeof Stack.Navigator>;
-
-export interface MainScreenProps {
-	navigation: CompositeNavigationProp<
-		DrawerNavigationProp<DrawerParamList>,
-		StackNavigationProp<AppStackParamList, 'Main'>
-	>;
-	route: RouteProp<AppStackParamList, 'Main'>;
-}
-
-export interface AuthScreenProps {
-	navigation: StackNavigationProp<AppStackParamList, 'Auth'>;
-	route: RouteProp<AppStackParamList, 'Auth'>;
-}
-
-export interface ModalScreenProps {
-	navigation: StackNavigationProp<AppStackParamList, 'Modal'>;
-	route: RouteProp<AppStackParamList, 'Modal'>;
-}
 
 /**
  *
  */
-const AppNavigator = (props: Partial<StackNavigatorProps>) => {
+const AppNavigator = () => {
 	const { storeDB } = useAppState();
 
 	// useWhyDidYouUpdate('AppNavigator', { props, storeDB });
