@@ -2,7 +2,7 @@ import * as React from 'react';
 import { ViewStyle } from 'react-native';
 import get from 'lodash/get';
 import { useTheme } from 'styled-components/native';
-import Svgs from './svg/fontawesome/solid';
+import * as Svgs from './svg/fontawesome/solid';
 import Tooltip from '../tooltip2';
 import Skeleton from '../skeleton';
 import * as Styled from './styles';
