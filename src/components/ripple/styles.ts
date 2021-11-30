@@ -1,12 +1,13 @@
 import styled from 'styled-components/native';
-import Animated from 'react-native-reanimated';
 
-export const RippleEffect = styled(Animated.View)({
-	top: -25,
-	left: -5,
-	width: 50,
-	height: 50,
-	borderRadius: 25,
-	opacity: 0.2,
-	backgroundColor: 'black',
-});
+export const RippleEffect = styled.View`
+	z-index: -1;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	border-radius: 25;
+	opacity: 0.1;
+	background-color: black;
+`;

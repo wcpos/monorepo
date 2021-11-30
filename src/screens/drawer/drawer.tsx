@@ -2,13 +2,14 @@ import * as React from 'react';
 import { Linking } from 'react-native';
 import {
 	DrawerContentScrollView,
-	DrawerItemList,
 	DrawerItem,
 	DrawerContentComponentProps,
 } from '@react-navigation/drawer';
+import Icon from '@wcpos/common/src/components/icon';
+import DrawerItemList from './drawer-item-list';
 
 const Drawer = (props: DrawerContentComponentProps) => {
-	// console.log(props);
+	console.log(props);
 	return (
 		<DrawerContentScrollView {...props}>
 			<DrawerItemList {...props} />

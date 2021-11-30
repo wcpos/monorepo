@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import * as Styled from './styles';
 
 export interface RippleProps {
@@ -8,8 +8,15 @@ export interface RippleProps {
 
 export const Ripple = ({ showRipple }: RippleProps) => {
 	const rippleScale = useAnimatedStyle(() => ({
-		transform: [{ scale: withTiming(showRipple.value ? 1 : 0) }],
+		transform: [
+			{
+				scale: withTiming(showRipple.value ? 1.5 : 0, {
+					duration: 200,
+					easing: Easing.out(Easing.quad),
+				}),
+			},
+		],
 	}));
 
-	return <Styled.RippleEffect style={rippleScale} pointerEvents="none" />;
+	return <Styled.RippleEffect as={Animated.View} style={rippleScale} pointerEvents="none" />;
 };

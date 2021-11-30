@@ -13,6 +13,7 @@ import CustomHeader from '@wcpos/common/src/screens/header';
 import CustomDrawer from '@wcpos/common/src/screens/drawer';
 import { useWindowDimensions, Text } from 'react-native';
 import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
+import Icon from '@wcpos/common/src/components/icon';
 
 export type DrawerParamList = {
 	POS: undefined;
@@ -24,6 +25,10 @@ export type DrawerParamList = {
 
 const Drawer = createDrawerNavigator<DrawerParamList>();
 
+/**
+ * Use memoized Screen Component to apply layout and errorboundary
+ * https://reactnavigation.org/docs/screen/#children
+ */
 const Screen = (props: DrawerScreenProps<DrawerParamList>) => {
 	const screen = React.useMemo(() => {
 		switch (props.route.name) {
@@ -51,9 +56,17 @@ const Screen = (props: DrawerScreenProps<DrawerParamList>) => {
 
 const ScreenMemoized = React.memo(Screen);
 
+// Map icons to screens
+const iconMap = {
+	POS: 'cashRegister',
+	Products: 'gifts',
+	Orders: 'receipt',
+	Customers: 'users',
+	Support: 'lifeRing',
+};
+
 /**
- * @TODO - use children to render the screens to apply layout and errorboundary?
- * https://reactnavigation.org/docs/screen/#children
+ *
  */
 const MainNavigator = () => {
 	const dimensions = useWindowDimensions();
@@ -68,16 +81,36 @@ const MainNavigator = () => {
 				drawerType: dimensions.width >= 1024 ? 'permanent' : 'front',
 				drawerStyle: {
 					backgroundColor: '#2c3e50',
-					width: dimensions.width >= 1024 ? 80 : undefined,
+					width: dimensions.width >= 1024 ? 'auto' : undefined,
 				},
 			}}
 			drawerContent={drawer}
 		>
-			<Drawer.Screen name="POS" component={ScreenMemoized} />
-			<Drawer.Screen name="Products" component={ScreenMemoized} />
-			<Drawer.Screen name="Orders" component={ScreenMemoized} />
-			<Drawer.Screen name="Customers" component={ScreenMemoized} />
-			<Drawer.Screen name="Support" component={ScreenMemoized} />
+			<Drawer.Screen
+				name="POS"
+				component={ScreenMemoized}
+				options={{ drawerIcon: () => <Icon name={iconMap.POS} /> }}
+			/>
+			<Drawer.Screen
+				name="Products"
+				component={ScreenMemoized}
+				options={{ drawerIcon: () => <Icon name={iconMap.Products} /> }}
+			/>
+			<Drawer.Screen
+				name="Orders"
+				component={ScreenMemoized}
+				options={{ drawerIcon: () => <Icon name={iconMap.Orders} /> }}
+			/>
+			<Drawer.Screen
+				name="Customers"
+				component={ScreenMemoized}
+				options={{ drawerIcon: () => <Icon name={iconMap.Customers} /> }}
+			/>
+			<Drawer.Screen
+				name="Support"
+				component={ScreenMemoized}
+				options={{ drawerIcon: () => <Icon name={iconMap.Support} /> }}
+			/>
 		</Drawer.Navigator>
 	);
 };

@@ -34,12 +34,12 @@ const Actions = ({ item: product }: Props) => {
 	if (product.isVariable()) {
 		return (
 			<Popover placement="right" content={<Variations product={product} />}>
-				<Icon name="circleChevronRight" size="x-large" backgroundStyle="none" />
+				<Icon name="circleChevronRight" size="x-large" />
 			</Popover>
 		);
 	}
 
-	return <Icon name="circlePlus" size="x-large" backgroundStyle="none" onPress={addToCart} />;
+	return <Icon name="circlePlus" size="x-large" onPress={addToCart} />;
 };
 
 export default Actions;

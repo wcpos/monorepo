@@ -22,7 +22,7 @@ const POSProducts = ({ ui }: POSProductsProps) => {
 	return (
 		<Segment.Group>
 			<Segment>
-				<View style={{ flexDirection: 'row' }}>
+				<View style={{ flexDirection: 'row', alignItems: 'center' }}>
 					<SearchBar />
 					<UiSettings ui={ui} />
 				</View>

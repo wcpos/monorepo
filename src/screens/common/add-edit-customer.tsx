@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { useObservableSuspense } from 'observable-hooks';
 import Dialog from '@wcpos/common/src/components/dialog';
 import TextInput from '@wcpos/common/src/components/textinput';
@@ -58,7 +59,7 @@ const AddEditCustomer = ({ customer }: AddEditCustomerProps) => {
 		);
 
 	return (
-		<>
+		<View style={{ marginHorizontal: 10 }}>
 			<Icon name="userPlus" onPress={show} tooltip="Add new customer" />
 			{visible && (
 				<Dialog
@@ -72,7 +73,7 @@ const AddEditCustomer = ({ customer }: AddEditCustomerProps) => {
 					</Tabs>
 				</Dialog>
 			)}
-		</>
+		</View>
 	);
 };
 

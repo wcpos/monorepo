@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { ViewStyle } from 'react-native';
 import TextInput from '../textinput';
 import Icon from '../icon';
 import Tag from '../tag';
@@ -40,6 +41,7 @@ export type SearchProps = {
 	 * Tags displayed in the search field
 	 */
 	filters?: SearchFiltersProps[];
+	style?: ViewStyle;
 } & Pick<
 	import('../textinput/textinput').TextInputProps,
 	'label' | 'value' | 'onClear' | 'placeholder'
@@ -48,7 +50,7 @@ export type SearchProps = {
 /**
  *
  */
-export const Search = ({ actions, onSearch, filters, ...rest }: SearchProps) => {
+export const Search = ({ actions, onSearch, filters, style, ...rest }: SearchProps) => {
 	const renderFilters = React.useMemo(() => {
 		if (filters) {
 			return filters.map(({ label: filterLabel, onRemove }) => (
@@ -61,7 +63,7 @@ export const Search = ({ actions, onSearch, filters, ...rest }: SearchProps) => 
 	}, [filters]);
 
 	return (
-		<Styled.Container>
+		<Styled.Container style={style}>
 			<Styled.Input>
 				<TextInput
 					hideLabel

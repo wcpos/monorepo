@@ -12,7 +12,7 @@
 	},
 	"dependencies": {
 		"@react-native-community/masked-view": "0.1.11",
-		"@react-native-community/netinfo": "7.1.2",
+		"@react-native-community/netinfo": "7.1.3",
 		"@react-navigation/drawer": "6.1.8",
 		"@react-navigation/elements": "^1.2.1",
 		"@react-navigation/native": "6.0.6",
@@ -65,7 +65,7 @@
 		"react-native-web-linear-gradient": "1.1.2",
 		"react-native-webview": "11.14.4",
 		"react-test-renderer": "17.0.2",
-		"react-virtual": "2.8.2",
+		"react-virtual": "2.9.0",
 		"rxdb": "10.5.3",
 		"rxdb-utils": "2.0.0-beta.2",
 		"rxjs": "7.4.0",

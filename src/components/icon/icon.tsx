@@ -1,10 +1,13 @@
 import * as React from 'react';
 import { ViewStyle } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 import get from 'lodash/get';
 import { useTheme } from 'styled-components/native';
 import * as Svgs from './svg/fontawesome/solid';
 import Tooltip from '../tooltip2';
 import Skeleton from '../skeleton';
+import Pressable from '../pressable';
+import Ripple from '../ripple';
 import * as Styled from './styles';
 
 /**
@@ -57,7 +60,7 @@ export interface IconProps {
 	/**
 	 * Styling for Pressable icons
 	 */
-	backgroundStyle?: 'none' | ViewStyle;
+	backgroundStyle?: 'ripple' | 'none' | ViewStyle;
 	/**
 	 * Icon colour
 	 */
@@ -76,45 +79,57 @@ export const Icon = ({
 	height,
 	onPress,
 	tooltip,
-	backgroundStyle,
+	backgroundStyle = 'ripple',
 	type = 'primary',
 }: IconProps) => {
 	const theme = useTheme();
-
+	const iconColor = color || get(theme, `COLOR_${type.toUpperCase()}`);
 	const SvgIcon = get(Svgs, name, Svgs.circleExclamation);
-	let IconComponent = (
-		<SvgIcon
-			// @TODO - clean up this component
-			// @ts-ignore
-			width={width || sizeMap[size]}
-			// @ts-ignore
-			height={height || sizeMap[size]}
-			// @ts-ignore
-			fill={color || theme[`COLOR_${type.toUpperCase()}`]}
-		/>
+	const showRipple = useSharedValue(false);
+
+	const IconComponent = (
+		<SvgIcon width={width || sizeMap[size]} height={height || sizeMap[size]} fill={iconColor} />
 	);
 
-	const pressableStyle = React.useCallback(
-		({ hovered }) =>
-			backgroundStyle !== 'none'
-				? [
-						{ backgroundColor: hovered ? theme.ICON_BACKGROUND_COLOR : 'transparent' },
-						backgroundStyle,
-				  ]
-				: { padding: 0 },
-		[backgroundStyle, theme.ICON_BACKGROUND_COLOR]
-	);
+	// const pressableStyle = React.useCallback(
+	// 	({ hovered }) =>
+	// 		backgroundStyle !== 'none'
+	// 			? [
+	// 					{ backgroundColor: hovered ? theme.ICON_BACKGROUND_COLOR : 'transparent' },
+	// 					backgroundStyle,
+	// 			  ]
+	// 			: { padding: 0 },
+	// 	[backgroundStyle, theme.ICON_BACKGROUND_COLOR]
+	// );
+
+	// if (onPress) {
+	// 	return (
+	// 		<Styled.PressableIcon onPress={onPress} style={pressableStyle}>
+	// 			{IconComponent}
+	// 		</Styled.PressableIcon>
+	// 	);
+	// }
 
 	if (onPress) {
-		IconComponent = (
-			<Styled.PressableIcon onPress={onPress} style={pressableStyle}>
+		return (
+			<Pressable
+				onPress={onPress}
+				onHoverIn={() => {
+					showRipple.value = true;
+				}}
+				onHoverOut={() => {
+					showRipple.value = false;
+				}}
+				style={[backgroundStyle !== 'none' && backgroundStyle !== 'ripple' && backgroundStyle]}
+			>
+				{backgroundStyle === 'ripple' && <Ripple showRipple={showRipple} />}
 				{IconComponent}
-			</Styled.PressableIcon>
+			</Pressable>
 		);
 	}
 
 	if (tooltip) {
-		IconComponent = <Tooltip content={tooltip}>{IconComponent}</Tooltip>;
+		return <Tooltip content={tooltip}>{IconComponent}</Tooltip>;
 	}
 
 	return IconComponent;
