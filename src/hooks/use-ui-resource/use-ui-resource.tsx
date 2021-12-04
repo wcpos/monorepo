@@ -38,9 +38,9 @@ export type UIDocument = import('rxdb').RxLocalDocument<StoreDatabase, UISchema>
 export type UIResource = import('observable-hooks').ObservableResource<UIDocument>;
 
 export type UIResourceID =
-	| 'posProducts'
-	| 'posCart'
-	| 'posCheckout'
+	| 'pos.products'
+	| 'pos.cart'
+	| 'pos.checkout'
 	| 'products'
 	| 'orders'
 	| 'customers'
