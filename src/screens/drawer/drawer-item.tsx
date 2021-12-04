@@ -80,7 +80,7 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, ...rest }: Props)
 				type={focused ? 'primary' : 'inverse'}
 				size="large"
 				weight="bold"
-				style={{ marginLeft: 10 }}
+				style={{ marginLeft: 20 }}
 			>
 				{label}
 			</Text>
@@ -97,7 +97,7 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, ...rest }: Props)
 						return {
 							flexDirection: 'row',
 							alignItems: 'center',
-							paddingHorizontal: 20,
+							paddingHorizontal: drawerType === 'permanent' ? 10 : 20,
 							paddingVertical: 10,
 							backgroundColor: focused
 								? '#fff'
@@ -108,8 +108,7 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, ...rest }: Props)
 						};
 					}}
 				>
-					{/* {icon && { iconNode }} */}
-					<Icon name="addressCard" />
+					{iconNode}
 					{drawerType !== 'permanent' && labelNode}
 				</Pressable>
 			</Tooltip>

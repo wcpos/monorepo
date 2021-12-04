@@ -4,9 +4,10 @@ import Animated, {
 	useAnimatedStyle,
 	useSharedValue,
 	withTiming,
-	SlideInDown,
+	// SlideInDown,
 } from 'react-native-reanimated';
 import get from 'lodash/get';
+import useMeasure from '@wcpos/common/src/hooks/use-measure';
 import { useScrollEvents } from '../scrollview';
 import Portal from '../portal';
 import Pressable from '../pressable';
@@ -70,15 +71,6 @@ export interface PopoverProps {
 	style?: ViewStyle;
 }
 
-const initialLayout = {
-	x: 0,
-	y: 0,
-	width: 0,
-	height: 0,
-	pageX: -1000,
-	pageY: -1000,
-};
-
 /**
  *
  */
@@ -92,52 +84,37 @@ export const Popover = ({
 	clickThrough = false,
 	style,
 }: PopoverProps) => {
-	const layout = useSharedValue(initialLayout);
-	const ref = React.useRef<View>(null);
-	const scrollEvents = useScrollEvents();
+	const triggerRef = React.useRef<View>(null);
+	const containerRef = React.useRef<View>(null);
 	const [visible, setVisible] = React.useState(false);
-
-	/**
-	 *
-	 */
-	const measureTarget = React.useCallback(() => {
-		ref.current?.measure((x, y, width, height, pageX, pageY) => {
-			layout.value = { x, y, width, height, pageX, pageY };
-		});
-	}, [layout]);
-
-	/**
-	 * Re-measure the popover when the window size changes
-	 */
-	React.useEffect(() => {
-		Dimensions.addEventListener('change', measureTarget);
-
-		return () => {
-			Dimensions.removeEventListener('change', measureTarget);
-		};
-	}, [measureTarget]);
+	const {
+		measurements: triggerMeasurements,
+		onLayout: onTriggerLayout,
+		onMeasure: onTriggerMeasure,
+	} = useMeasure({ ref: triggerRef });
+	const {
+		measurements: containerRect,
+		onLayout: onContainerLayout,
+		onMeasure: onContainerMeasure,
+	} = useMeasure({ ref: containerRef });
 
 	/**
 	 * Re-measure the popover when onScroll called
 	 */
-	scrollEvents.subscribe(() => {
-		measureTarget();
-	});
+	// const scrollEvents = useScrollEvents();
+	// scrollEvents.subscribe(() => {
+	// 	triggerMeasure();
+	// });
 
 	/**
 	 *
 	 */
-	const animatedStyle = useAnimatedStyle(() => {
-		if (layout.value && layout.value.width) {
-			const { width, height, pageX, pageY } = layout.value;
-			return {
-				width,
-				height,
-				transform: [{ translateX: pageX }, { translateY: pageY }],
-				// opacity: withTiming(opacity.value, { duration: 150 }),
-			};
+	const containerStyle = useAnimatedStyle(() => {
+		if (!triggerMeasurements.value || !containerRect.value) {
+			return {}; // @TODO why is measurements.value undefined in react-native.
 		}
-		return {};
+
+		return getPopoverPosition(placement, triggerMeasurements.value, containerRect.value);
 	});
 
 	const arrow = (
@@ -188,33 +165,36 @@ export const Popover = ({
 	}, [children, handleHoverIn, handleHoverOut, handlePress]);
 
 	return (
-		<View ref={ref} onLayout={measureTarget}>
-			{triggerElement}
+		<>
+			<View ref={triggerRef} onLayout={onTriggerLayout}>
+				{triggerElement}
+			</View>
 			{visible && (
 				<Portal keyPrefix="Popover">
-					<Backdrop invisible={!showBackdrop} clickThrough={clickThrough} onPress={handlePress} />
-					<Styled.AnimatedTriggerDuplicate
+					<Backdrop
+						invisible={!showBackdrop}
+						clickThrough={clickThrough || trigger === 'hover'}
+						onPress={handlePress}
+					/>
+					<Styled.Container
 						as={Animated.View}
-						pointerEvents="none"
-						style={[animatedStyle, getContainerAlign(placement)]}
+						style={[containerStyle]}
+						ref={containerRef as any}
+						onLayout={onContainerLayout}
+						// entering={SlideInDown}
+						// style={[getPopoverPosition(placement)]}
 					>
-						<Styled.Container
-							// as={Animated.View}
-							// entering={SlideInDown}
-							style={[getPopoverPosition(placement)]}
+						{withArrow && (isBottom(placement) || isRight(placement)) && arrow}
+						<Styled.Popover
+							style={style}
+							// pointerEvents="auto"
 						>
-							{withArrow && (isBottom(placement) || isRight(placement)) && arrow}
-							<Styled.Popover
-								style={style}
-								// pointerEvents="auto"
-							>
-								{content}
-							</Styled.Popover>
-							{withArrow && (isTop(placement) || isLeft(placement)) && arrow}
-						</Styled.Container>
-					</Styled.AnimatedTriggerDuplicate>
+							{content}
+						</Styled.Popover>
+						{withArrow && (isTop(placement) || isLeft(placement)) && arrow}
+					</Styled.Container>
 				</Portal>
 			)}
-		</View>
+		</>
 	);
 };

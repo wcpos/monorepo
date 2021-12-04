@@ -63,18 +63,103 @@ export const getContainerAlign = (
  * Map popover to `PopoverPlacement`, top, bottom, left or right of the target
  */
 export const getPopoverPosition = (
-	placement: PopoverPlacement
+	placement: PopoverPlacement,
+	triggerRect: { width: number; height: number; pageX: number; pageY: number },
+	popoverRect: { width: number; height: number; pageX: number; pageY: number }
 ): {
-	flexDirection: ViewStyle['flexDirection'];
+	flexDirection?: ViewStyle['flexDirection'];
 	top?: ViewStyle['top'];
 	left?: ViewStyle['left'];
 	right?: ViewStyle['right'];
 	bottom?: ViewStyle['bottom'];
 } => {
-	if (isTop(placement)) return { bottom: '100%', flexDirection: 'column' };
-	if (isLeft(placement)) return { right: '100%', flexDirection: 'row' };
-	if (isRight(placement)) return { left: '100%', flexDirection: 'row' };
-	return { top: '100%', flexDirection: 'column' };
+	// right
+	if (isRight(placement) && isStart(placement)) {
+		return {
+			flexDirection: 'row',
+			top: triggerRect.pageY,
+			left: triggerRect.pageX + triggerRect.width,
+		};
+	}
+
+	if (isRight(placement) && isEnd(placement)) {
+		return {
+			flexDirection: 'row',
+			top: triggerRect.pageY + triggerRect.height - popoverRect.height,
+			left: triggerRect.pageX + triggerRect.width,
+		};
+	}
+
+	if (isRight(placement)) {
+		return {
+			flexDirection: 'row',
+			top: triggerRect.pageY + triggerRect.height / 2 - popoverRect.height / 2,
+			left: triggerRect.pageX + triggerRect.width,
+		};
+	}
+
+	// left
+	if (isLeft(placement) && isStart(placement)) {
+		return {
+			flexDirection: 'row',
+			top: triggerRect.pageY,
+			left: triggerRect.pageX - popoverRect.width,
+		};
+	}
+
+	if (isLeft(placement) && isEnd(placement)) {
+		return {
+			flexDirection: 'row',
+			top: triggerRect.pageY + triggerRect.height - popoverRect.height,
+			left: triggerRect.pageX - popoverRect.width,
+		};
+	}
+
+	if (isLeft(placement)) {
+		return {
+			flexDirection: 'row',
+			top: triggerRect.pageY + triggerRect.height / 2 - popoverRect.height / 2,
+			left: triggerRect.pageX - popoverRect.width,
+		};
+	}
+
+	// top
+	if (isTop(placement) && isStart(placement)) {
+		return {
+			top: triggerRect.pageY - popoverRect.height,
+			left: triggerRect.pageX,
+		};
+	}
+	if (isTop(placement) && isEnd(placement)) {
+		return {
+			top: triggerRect.pageY - popoverRect.height,
+			left: triggerRect.pageX + triggerRect.width - popoverRect.width,
+		};
+	}
+	if (isTop(placement)) {
+		return {
+			top: triggerRect.pageY - popoverRect.height,
+			left: triggerRect.pageX + triggerRect.width / 2 - popoverRect.width / 2,
+		};
+	}
+
+	// bottom is deafult
+	if (isEnd(placement)) {
+		return {
+			top: triggerRect.pageY + triggerRect.height,
+			left: triggerRect.pageX + triggerRect.width - popoverRect.width,
+		};
+	}
+	if (isStart(placement)) {
+		return {
+			top: triggerRect.pageY + triggerRect.height,
+			left: triggerRect.pageX,
+		};
+	}
+	return {
+		top: triggerRect.pageY + triggerRect.height,
+		left: triggerRect.pageX + triggerRect.width / 2 - popoverRect.width / 2,
+	};
 };
 
 /**

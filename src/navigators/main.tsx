@@ -17,7 +17,7 @@ import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
 import Icon, { IconName } from '@wcpos/common/src/components/icon';
 import Text from '@wcpos/common/src/components/text';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import curry from 'lodash/curry';
+// import curry from 'lodash/curry';
 
 export type DrawerParamList = {
 	POS: undefined;
@@ -69,23 +69,23 @@ const iconMap = {
 	support: 'lifeRing',
 };
 
-const drawerIcon = curry(
-	(
-		key: Extract<keyof typeof iconMap, string>,
-		props: {
-			focused: boolean;
-		}
-	) => {
-		return (
-			<Icon
-				name={iconMap[key] as IconName}
-				type={props.focused ? 'primary' : 'inverse'}
-				size="large"
-				{...props}
-			/>
-		);
-	}
-);
+// const drawerIcon = curry(
+// 	(
+// 		key: Extract<keyof typeof iconMap, string>,
+// 		props: {
+// 			focused: boolean;
+// 		}
+// 	) => {
+// 		return (
+// 			<Icon
+// 				name={iconMap[key] as IconName}
+// 				type={props.focused ? 'primary' : 'inverse'}
+// 				size="large"
+// 				{...props}
+// 			/>
+// 		);
+// 	}
+// );
 
 /**
  *
@@ -99,11 +99,17 @@ const MainNavigator = () => {
 	const drawer = React.useCallback((props) => <CustomDrawer {...props} />, []);
 
 	const getOptions = React.useCallback(
-		(key) => ({
-			title: `${t(`${key}.title`)} - ${store.name}`,
-			drawerLabel: t(`${key}.title`),
-			drawerIcon: drawerIcon(key),
-		}),
+		(key: Extract<keyof typeof iconMap, string>) => {
+			const renderIcon = ({ focused }: { focused: boolean }) => (
+				<Icon name={iconMap[key] as IconName} type={focused ? 'primary' : 'inverse'} size="large" />
+			);
+
+			return {
+				title: `${t(`${key}.title`)} - ${store.name}`,
+				drawerLabel: t(`${key}.title`),
+				drawerIcon: renderIcon,
+			};
+		},
 		[store.name, t]
 	);
 

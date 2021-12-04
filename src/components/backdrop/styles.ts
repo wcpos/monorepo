@@ -1,8 +1,7 @@
 import styled from 'styled-components/native';
 import { StyleSheet } from 'react-native';
-import Animated from 'react-native-reanimated';
 
-export const Backdrop = styled(Animated.View)`
+export const Backdrop = styled.View`
 	background-color: ${({ theme }) => theme.BACKDROP_COLOR};
 	${{ ...StyleSheet.absoluteFillObject }}
 	flex-direction: column;

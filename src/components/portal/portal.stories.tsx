@@ -23,7 +23,7 @@ const AppProvider = ({ children }) => {
 /**
  *
  */
-export const basicUsage = () => {
+export const BasicUsage = () => {
 	return (
 		<AppProvider>
 			<Text>In document flow</Text>

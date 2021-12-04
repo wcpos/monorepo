@@ -1,19 +1,13 @@
 import styled from 'styled-components/native';
-import Animated, {
-	useAnimatedStyle,
-	useSharedValue,
-	withTiming,
-	SlideInDown,
-} from 'react-native-reanimated';
 
-export const AnimatedTriggerDuplicate = styled.View`
-	position: absolute;
-	z-index: ${({ theme }) => theme.POPOVER_Z_INDEX};
-`;
+// export const AnimatedTriggerDuplicate = styled.View`
+// 	position: absolute;
+// 	z-index: ${({ theme }) => theme.POPOVER_Z_INDEX};
+// `;
 
 export const Container = styled.View`
+	z-index: ${({ theme }) => theme.POPOVER_Z_INDEX};
 	position: absolute;
-	min-width: 100px;
 `;
 
 export const Popover = styled.View`
