@@ -1,4 +1,4 @@
-import * as React from 'react';
+import React from 'react';
 import {
 	Dimensions,
 	findNodeHandle,
@@ -7,6 +7,7 @@ import {
 	Platform,
 	UIManager,
 } from 'react-native';
+import { useSharedValue } from 'react-native-reanimated';
 
 export interface Measurements {
 	height: number;
@@ -16,7 +17,6 @@ export interface Measurements {
 	x: number;
 	y: number;
 }
-
 export interface UseMeasureProps {
 	onMeasure?: (props: Measurements) => void;
 	ref: React.MutableRefObject<any>;
@@ -24,8 +24,8 @@ export interface UseMeasureProps {
 
 export const initialMeasurements = {
 	height: 0,
-	pageX: 0,
-	pageY: 0,
+	pageX: -1000,
+	pageY: -1000,
 	width: 0,
 	x: 0,
 	y: 0,
@@ -38,32 +38,27 @@ const adjustPageY = (pageY: number) => {
 };
 
 /**
- * A render prop to measure given node by passing `onLayout` and `ref` handlers.
- * This differs from `ViewMeasure` in that it does not create any node in the tree
+ * A render prop to measure given node by passing `onLayout` and `ref` handlers. This differs from `ViewMeasure` in that it does not create any node in the tree
  */
-export const useMeasure = (props: UseMeasureProps) => {
-	const { onMeasure, ref } = props;
-	const [measurements, setMeasurements] = React.useState(initialMeasurements);
+export const useMeasure = ({ onMeasure, ref }: UseMeasureProps) => {
+	const measurements = useSharedValue(initialMeasurements);
 
 	const handleMeasure = React.useCallback(
 		(layout?: LayoutRectangle) => {
-			const handle = findNodeHandle(ref.current);
-			const prevMeasurements = measurements;
+			const prevMeasurements = measurements.value;
 
-			if (handle) {
-				UIManager.measure(handle, (x, y, width, height, pageX, pageY) => {
-					const newMeasurements = {
-						...prevMeasurements,
-						...layout,
-						pageX,
-						pageY: adjustPageY(pageY),
-					};
+			ref.current?.measure((x, y, width, height, pageX, pageY) => {
+				const newMeasurements = {
+					...prevMeasurements,
+					...layout,
+					pageX,
+					pageY: adjustPageY(pageY),
+				};
 
-					setMeasurements(newMeasurements);
+				measurements.value = newMeasurements;
 
-					if (onMeasure) onMeasure(newMeasurements);
-				});
-			}
+				if (onMeasure) onMeasure(newMeasurements);
+			});
 		},
 		[measurements, onMeasure, ref]
 	);
