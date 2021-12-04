@@ -10,6 +10,8 @@ import Pressable from '../pressable';
 import Ripple from '../ripple';
 import * as Styled from './styles';
 
+export type IconName = Extract<keyof typeof Svgs, string>;
+
 /**
  *
  */
@@ -40,7 +42,7 @@ export interface IconProps {
 	/**
 	 * Icon key.
 	 */
-	name: Extract<keyof typeof Svgs, string>;
+	name: IconName;
 	/**
 	 * Set icon size.
 	 */

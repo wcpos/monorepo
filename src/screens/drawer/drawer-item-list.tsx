@@ -36,7 +36,7 @@ export default function DrawerItemList({ state, navigation, descriptors }: Props
 
 	return state.routes.map((route, i) => {
 		const focused = i === state.index;
-		const { title, drawerLabel, drawerIcon, drawerLabelStyle, drawerItemStyle } =
+		const { title, drawerLabel, drawerIcon, drawerLabelStyle, drawerItemStyle, drawerType } =
 			descriptors[route.key].options;
 
 		return (
@@ -60,6 +60,7 @@ export default function DrawerItemList({ state, navigation, descriptors }: Props
 						target: state.key,
 					});
 				}}
+				drawerType={drawerType}
 			/>
 		);
 	}) as React.ReactNode as React.ReactElement;

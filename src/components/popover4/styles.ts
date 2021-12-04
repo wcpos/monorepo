@@ -1,4 +1,10 @@
 import styled from 'styled-components/native';
+import Animated, {
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+	SlideInDown,
+} from 'react-native-reanimated';
 
 export const AnimatedTriggerDuplicate = styled.View`
 	position: absolute;

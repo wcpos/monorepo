@@ -1,8 +1,11 @@
 import * as React from 'react';
 import { View, Text } from 'react-native';
 import { StoryWrapper } from '@storybook/addons';
+import { action } from '@storybook/addon-actions';
 import { Popover, PopoverProps } from './popover';
 import Portal from '../portal';
+import Pressable from '../pressable';
+import { usePopover } from './use-popover';
 
 /**
  * Popovers require
@@ -41,3 +44,13 @@ export const BasicUsage = (props: PopoverProps) => {
 		</View>
 	);
 };
+
+// export const UsePopover = () => {
+// 	const { ref } = usePopover();
+
+// 	return (
+// 		<Pressable ref={ref} onPress={() => action('Trigger press')}>
+// 			<Text>Trigger</Text>
+// 		</Pressable>
+// 	);
+// };

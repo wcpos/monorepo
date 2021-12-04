@@ -60,7 +60,7 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 				const Cell = get(cells, column.key);
 				return {
 					...column,
-					label: t(`products.column.label.${column.key}`),
+					label: t(`pos.products.column.label.${column.key}`),
 					onRender: (item: ProductDocument) => {
 						return Cell ? <Cell item={item} column={column} /> : null;
 					},

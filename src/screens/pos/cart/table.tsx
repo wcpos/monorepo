@@ -94,7 +94,7 @@ const CartTable = ({ order, columns, items, query, onSort, ui }: ICartTableProps
 						const { column } = getHeaderCellProps();
 						return (
 							<Table.Header.Row.Cell {...getHeaderCellProps()}>
-								{t(`cart.column.label.${column.key}`)}
+								{t(`pos.cart.column.label.${column.key}`)}
 							</Table.Header.Row.Cell>
 						);
 					}}

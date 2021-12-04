@@ -1,19 +1,21 @@
 import * as React from 'react';
 import { View, StyleProp, ViewStyle, TextStyle } from 'react-native';
+import { DrawerProps } from '@react-navigation/drawer/src/types';
+import { Link } from '@react-navigation/native';
 import Text from '@wcpos/common/src/components/text';
 import Icon from '@wcpos/common/src/components/icon';
 import Pressable from '@wcpos/common/src/components/pressable';
-import Tooltip from '@wcpos/common/src/components/tooltip';
+import Tooltip from '@wcpos/common/src/components/tooltip2';
 
 type Props = {
 	/**
 	 * The label text of the item.
 	 */
-	label: string | ((props: { focused: boolean; color: string }) => React.ReactNode);
+	label: string | ((props: { focused?: boolean; color?: string }) => React.ReactNode);
 	/**
 	 * Icon to display for the `DrawerItem`.
 	 */
-	icon?: (props: { focused: boolean; size: number; color: string }) => React.ReactNode;
+	icon?: (props: { focused?: boolean; size?: number; color?: string }) => React.ReactNode;
 	/**
 	 * URL to use for the link to the tab.
 	 */
@@ -64,21 +66,54 @@ type Props = {
 	 * Style object for the wrapper element.
 	 */
 	style?: StyleProp<ViewStyle>;
+	drawerType?: DrawerProps['drawerType'];
 };
 
 /**
  *
  */
-const DrawItem = ({ label, icon, ...rest }: Props) => {
+const DrawItem = ({ label, icon, focused, onPress, drawerType, ...rest }: Props) => {
+	const iconNode = icon ? icon({ focused }) : null;
+	const labelNode =
+		typeof label === 'string' ? (
+			<Text
+				type={focused ? 'primary' : 'inverse'}
+				size="large"
+				weight="bold"
+				style={{ marginLeft: 10 }}
+			>
+				{label}
+			</Text>
+		) : (
+			label({ focused })
+		);
+
 	return (
-		<Pressable style={{ flexDirection: 'row', alignItems: 'center' }}>
-			{icon && (
-				<Tooltip content={label} preferredPlacement="below">
-					{icon()}
-				</Tooltip>
-			)}
-			<Text>{label}</Text>
-		</Pressable>
+		<View style={{ paddingHorizontal: 10, paddingVertical: 5 }}>
+			<Tooltip content={label} placement="right">
+				<Pressable
+					onPress={onPress}
+					style={({ hovered }) => {
+						return {
+							flexDirection: 'row',
+							alignItems: 'center',
+							paddingHorizontal: 20,
+							paddingVertical: 10,
+							backgroundColor: focused
+								? '#fff'
+								: hovered
+								? 'rgba(255, 255, 255, 0.1)'
+								: 'transparent',
+							borderRadius: 5,
+						};
+					}}
+				>
+					{/* {icon && { iconNode }} */}
+					<Icon name="addressCard" />
+					{drawerType !== 'permanent' && labelNode}
+				</Pressable>
+			</Tooltip>
+		</View>
 	);
 };
 

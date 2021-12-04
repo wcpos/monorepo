@@ -8,7 +8,7 @@ import Platform from '@wcpos/common/src/lib/platform';
 import Left from './left';
 import Right from './right';
 
-const Header = ({ route, layout }: DrawerHeaderProps) => {
+const Header = ({ route, layout, options }: DrawerHeaderProps) => {
 	const insets = useSafeAreaInsets();
 	const left = React.useCallback(() => <Left />, []);
 	const right = React.useCallback(() => <Right />, []);

@@ -1,11 +1,12 @@
 import * as React from 'react';
-import { View, Dimensions, ViewStyle } from 'react-native';
+import { View, Dimensions, ViewStyle, Text } from 'react-native';
 import Animated, {
 	useAnimatedStyle,
 	useSharedValue,
 	withTiming,
 	SlideInDown,
 } from 'react-native-reanimated';
+import get from 'lodash/get';
 import { useScrollEvents } from '../scrollview';
 import Portal from '../portal';
 import Pressable from '../pressable';
@@ -159,17 +160,42 @@ export const Popover = ({
 		if (trigger === 'hover') setVisible(false);
 	}, [trigger]);
 
-	return (
-		<View ref={ref} onLayout={measureTarget}>
+	const triggerElement = React.useMemo(() => {
+		if (React.Children.count(children) === 1 && get(children, ['type', 'name']) === 'Pressable') {
+			const child = React.Children.only(children) as React.ReactElement;
+			const { onPress, onHoverIn, onHoverOut } = child.props;
+			return React.cloneElement(child, {
+				onPress: (event: any) => {
+					handlePress();
+					onPress?.(event);
+				},
+				onHoverIn: (event: any) => {
+					handleHoverIn();
+					onHoverIn?.(event);
+				},
+				onHoverOut: (event: any) => {
+					handleHoverOut();
+					onHoverOut?.(event);
+				},
+			});
+		}
+
+		return (
 			<Pressable onPress={handlePress} onHoverIn={handleHoverIn} onHoverOut={handleHoverOut}>
 				{children}
 			</Pressable>
+		);
+	}, [children, handleHoverIn, handleHoverOut, handlePress]);
+
+	return (
+		<View ref={ref} onLayout={measureTarget}>
+			{triggerElement}
 			{visible && (
 				<Portal keyPrefix="Popover">
 					<Backdrop invisible={!showBackdrop} clickThrough={clickThrough} onPress={handlePress} />
 					<Styled.AnimatedTriggerDuplicate
 						as={Animated.View}
-						// pointerEvents="none"
+						pointerEvents="none"
 						style={[animatedStyle, getContainerAlign(placement)]}
 					>
 						<Styled.Container
