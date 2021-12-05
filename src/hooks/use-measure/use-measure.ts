@@ -1,12 +1,5 @@
 import React from 'react';
-import {
-	Dimensions,
-	findNodeHandle,
-	LayoutChangeEvent,
-	LayoutRectangle,
-	Platform,
-	UIManager,
-} from 'react-native';
+import { Dimensions, LayoutChangeEvent, LayoutRectangle, Platform } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 
 export interface Measurements {
@@ -17,9 +10,11 @@ export interface Measurements {
 	x: number;
 	y: number;
 }
+
 export interface UseMeasureProps {
 	onMeasure?: (props: Measurements) => void;
 	ref: React.MutableRefObject<any>;
+	initial?: Measurements;
 }
 
 export const initialMeasurements = {
@@ -40,13 +35,12 @@ const adjustPageY = (pageY: number) => {
 /**
  * A render prop to measure given node by passing `onLayout` and `ref` handlers. This differs from `ViewMeasure` in that it does not create any node in the tree
  */
-export const useMeasure = ({ onMeasure, ref }: UseMeasureProps) => {
-	const measurements = useSharedValue(initialMeasurements);
+export const useMeasure = ({ onMeasure, ref, initial = initialMeasurements }: UseMeasureProps) => {
+	const measurements = useSharedValue(initial);
 
 	const handleMeasure = React.useCallback(
 		(layout?: LayoutRectangle) => {
 			const prevMeasurements = measurements.value;
-
 			ref.current?.measure((x, y, width, height, pageX, pageY) => {
 				const newMeasurements = {
 					...prevMeasurements,
@@ -86,6 +80,6 @@ export const useMeasure = ({ onMeasure, ref }: UseMeasureProps) => {
 	return {
 		measurements,
 		onLayout: handleLayout,
-		onMeasure: handleMeasure,
+		forceMeasure: handleMeasure,
 	};
 };
