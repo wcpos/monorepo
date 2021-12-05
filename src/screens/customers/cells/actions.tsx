@@ -25,13 +25,14 @@ const Actions = ({ item: customer }: Props) => {
 	return (
 		<>
 			<Dropdown
-				activator={<Icon name="more" />}
 				items={[
 					{ label: 'Edit', action: () => setShowModal(true) },
 					{ label: 'Sync', action: handleSync },
 					{ label: 'Delete', action: handleDelete },
 				]}
-			/>
+			>
+				<Icon name="ellipsisVertical" />
+			</Dropdown>
 			{showModal && <EditCustomer onClose={() => setShowModal(false)} customer={customer} />}
 		</>
 	);

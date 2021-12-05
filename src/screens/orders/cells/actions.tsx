@@ -31,8 +31,9 @@ const Actions = ({ item: order }: Props) => {
 					{ label: 'Sync', action: handleSync },
 					{ label: 'Delete', action: order.remove },
 				]}
-				activator={<Icon name="ellipsisVertical" />}
-			/>
+			>
+				<Icon name="ellipsisVertical" />
+			</Dropdown>
 			{visible && <OrderModal order={order} onClose={() => setVisible(false)} />}
 		</>
 	);

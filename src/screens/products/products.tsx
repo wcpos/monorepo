@@ -19,7 +19,7 @@ const Products = () => {
 	return (
 		<QueryProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }}>
 			<Segment.Group>
-				<Segment style={{ flexDirection: 'row' }}>
+				<Segment style={{ flexDirection: 'row', alignItems: 'center' }}>
 					<SearchBar />
 					<UiSettings ui={ui} />
 				</Segment>

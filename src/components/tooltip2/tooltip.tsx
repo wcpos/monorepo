@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Popover, { PopoverPlacement } from '../popover4';
+import Popover, { PopoverPlacement } from '../popover';
 import Text from '../text';
 
 export interface TooltipProps {

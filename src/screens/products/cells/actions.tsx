@@ -31,8 +31,9 @@ const Actions = ({ item: product }: Props) => {
 					{ label: 'Sync', action: handleSync },
 					{ label: 'Delete', action: () => setShowDialog(true), type: 'critical' },
 				]}
-				activator={<Icon name="ellipsisVertical" />}
-			/>
+			>
+				<Icon name="ellipsisVertical" />
+			</Dropdown>
 			{showDialog && <DeleteDialog product={product} onClose={() => setShowDialog(false)} />}
 			{visible && <ProductModal product={product} onClose={() => setVisible(false)} />}
 		</>

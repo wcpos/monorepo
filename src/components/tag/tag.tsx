@@ -36,12 +36,12 @@ export const Tag = ({ children, removable, disabled, onRemove, onPress }: TagPro
 			<Styled.Label size="small">{children}</Styled.Label>
 			{removable && (
 				<Icon
-					name="clear"
-					size="small"
+					name="xmark"
+					size="x-small"
 					disabled={disabled}
 					onPress={onRemove}
 					backgroundStyle={{ marginLeft: 2, padding: 0, backgroundColor: 'transparent' }}
-					color="rgba(255, 255, 255, 0.5)"
+					type="inverse"
 				/>
 			)}
 		</Styled.Tag>

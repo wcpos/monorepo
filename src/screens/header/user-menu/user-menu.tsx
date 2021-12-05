@@ -20,16 +20,6 @@ export const UserMenu = () => {
 	return (
 		<>
 			<Dropdown
-				activator={
-					<Styled.DropDown>
-						<Text type="inverse">Test</Text>
-						<Avatar
-							src="https://secure.gravatar.com/avatar/a2a53c07cdd4a8aa81c043baafd0915f"
-							// placeholder="PK"
-							size="small"
-						/>
-					</Styled.DropDown>
-				}
 				items={[
 					{
 						label: 'Logout',
@@ -53,7 +43,16 @@ export const UserMenu = () => {
 							),
 					},
 				]}
-			/>
+			>
+				<Styled.DropDown>
+					<Text type="inverse">Test</Text>
+					<Avatar
+						src="https://secure.gravatar.com/avatar/a2a53c07cdd4a8aa81c043baafd0915f"
+						// placeholder="PK"
+						size="small"
+					/>
+				</Styled.DropDown>
+			</Dropdown>
 
 			{showSettings && <UserSettings onClose={() => setShowSettings(false)} />}
 		</>

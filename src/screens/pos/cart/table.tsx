@@ -58,7 +58,7 @@ const CartTable = ({ order, columns, items, query, onSort, ui }: ICartTableProps
 					}}
 				>
 					<Text style={{ flex: 1 }}>Add fee</Text>
-					<Icon name="addCircleOutline" />
+					<Icon name="circlePlus" type="secondary" />
 				</Pressable>
 				<Pressable
 					style={{ flexDirection: 'row', padding: 5, alignItems: 'center' }}
@@ -71,7 +71,7 @@ const CartTable = ({ order, columns, items, query, onSort, ui }: ICartTableProps
 					}}
 				>
 					<Text style={{ flex: 1 }}>Add shipping</Text>
-					<Icon name="addCircleOutline" />
+					<Icon name="circlePlus" type="secondary" />
 				</Pressable>
 			</View>
 		);

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ScrollView } from 'react-native';
 import { useUncontrolledState } from '@wcpos/common/src/hooks/use-uncontrolled-state';
-import Popover from '../popover';
+import Dropdown from '../dropdown';
 import Arrow from '../arrow';
 import BaseInput, { BaseInputContainer } from '../base-input';
 
@@ -96,19 +96,19 @@ export const Select = ({
 		setOpen(false);
 	};
 
-	const choiceComponents = React.useMemo(
-		() =>
-			choices.map((choice) => (
-				<Popover.Item
-					key={choice.value}
-					label={choice.label}
-					disabled={choice.disabled}
-					// eslint-disable-next-line react/jsx-no-bind
-					onSelect={() => handleSelect(choice.value)}
-				/>
-			)),
-		[choices, onChange]
-	);
+	// const choiceComponents = React.useMemo(
+	// 	() =>
+	// 		choices.map((choice) => (
+	// 			<Popover.Item
+	// 				key={choice.value}
+	// 				label={choice.label}
+	// 				disabled={choice.disabled}
+	// 				// eslint-disable-next-line react/jsx-no-bind
+	// 				onSelect={() => handleSelect(choice.value)}
+	// 			/>
+	// 		)),
+	// 	[choices, onChange]
+	// );
 
 	return (
 		<BaseInputContainer
@@ -118,27 +118,23 @@ export const Select = ({
 			error={error}
 			onLabelClick={showPopover}
 		>
-			<Popover
-				open={open}
-				activator={
-					<BaseInput
-						value={selectedChoice?.label ?? ''}
-						placeholder={placeholder}
-						disabled={disabled}
-						focused={open}
-						onPress={showPopover}
-						rightAccessory={<Arrow direction={open ? 'up' : 'down'} />}
-						style={{ minWidth: '100px' }}
-					/>
-				}
-				onRequestClose={hidePopover}
-				popoverStyle={{ maxHeight }}
-				placement="bottom"
-				hideBackdrop
+			<Dropdown
+				items={choices}
+				// popoverStyle={{ maxHeight }}
+				// placement="bottom"
 				matchWidth
+				withArrow={false}
 			>
-				<ScrollView>{choiceComponents}</ScrollView>
-			</Popover>
+				<BaseInput
+					value={selectedChoice?.label ?? ''}
+					placeholder={placeholder}
+					disabled={disabled}
+					focused={open}
+					onPress={showPopover}
+					rightAccessory={<Arrow direction={open ? 'up' : 'down'} />}
+					style={{ minWidth: '100px' }}
+				/>
+			</Dropdown>
 		</BaseInputContainer>
 	);
 };

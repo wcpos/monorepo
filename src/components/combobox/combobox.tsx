@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ScrollView } from 'react-native';
 import { useUncontrolledState } from '@wcpos/common/src/hooks/use-uncontrolled-state';
-import Popover from '../popover';
+import Dropdown from '../dropdown';
 import TextInput from '../textinput';
 import * as Styled from './styles';
 
@@ -72,49 +72,37 @@ export const Combobox = ({
 	onSearch,
 	hideLabel,
 }: ComboboxProps) => {
-	const [open, setOpen] = React.useState(false);
-	const showPopover = React.useCallback(() => setOpen(true), []);
 	const [selected, onChange] = useUncontrolledState(
 		selectedRaw,
 		onChangeRaw as ((value: string | null) => string) | undefined // This will never be called with a null parameter
 	);
 
-	const choiceComponents = React.useMemo(
-		() =>
-			choices.map((choice) => (
-				<Popover.Item
-					key={choice.key}
-					label={choice.label}
-					disabled={choice.disabled}
-					// eslint-disable-next-line react/jsx-no-bind
-					onSelect={() => onChange(choice.value)}
-				/>
-			)),
-		[choices, onChange]
-	);
+	// const choiceComponents = React.useMemo(
+	// 	() =>
+	// 		choices.map((choice) => (
+	// 			<Popover.Item
+	// 				key={choice.key}
+	// 				label={choice.label}
+	// 				disabled={choice.disabled}
+	// 				// eslint-disable-next-line react/jsx-no-bind
+	// 				onSelect={() => onChange(choice.value)}
+	// 			/>
+	// 		)),
+	// 	[choices, onChange]
+	// );
 
 	return (
-		<Popover
-			open={open}
-			activator={
-				<TextInput
-					label={label}
-					hideLabel={hideLabel}
-					onFocus={showPopover}
-					placeholder={placeholder}
-					onChange={onSearch}
-					value={searchValue || selected}
-					clearable
-					onClear={() => onChange(null)}
-				/>
-			}
-			onRequestClose={() => {
-				setOpen(false);
-			}}
-			hideBackdrop
-			matchWidth
-		>
-			<Styled.ScrollView>{choiceComponents}</Styled.ScrollView>
-		</Popover>
+		<Dropdown withArrow={false} matchWidth items={choices}>
+			<TextInput
+				label={label}
+				hideLabel={hideLabel}
+				// onFocus={showPopover}
+				placeholder={placeholder}
+				onChange={onSearch}
+				value={searchValue || selected}
+				clearable
+				onClear={() => onChange(null)}
+			/>
+		</Dropdown>
 	);
 };

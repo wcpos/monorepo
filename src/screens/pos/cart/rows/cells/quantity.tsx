@@ -9,7 +9,6 @@ interface Props {
 }
 
 const Quantity = ({ lineItem }: Props) => {
-	const [visible, setVisible] = React.useState(false);
 	const quantity = useObservableState(lineItem.quantity$, lineItem.quantity);
 
 	const handleChangeText = async (newValue: string): Promise<void> => {
@@ -17,14 +16,8 @@ const Quantity = ({ lineItem }: Props) => {
 	};
 
 	return (
-		<Popover
-			open={visible}
-			onRequestClose={() => setVisible(false)}
-			activator={
-				<Button title={String(quantity)} onPress={() => setVisible(true)} background="outline" />
-			}
-		>
-			<Numpad placeholder={String(quantity)} />
+		<Popover content={<Numpad placeholder={String(quantity)} />}>
+			<Button title={String(quantity)} background="outline" />
 		</Popover>
 	);
 };

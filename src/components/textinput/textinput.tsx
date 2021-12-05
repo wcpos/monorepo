@@ -376,7 +376,7 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 					/>
 					{clearable && value !== '' && (
 						<Icon
-							name="clear"
+							name="xmark"
 							size="small"
 							// type="secondary"
 							onPress={handleClear}

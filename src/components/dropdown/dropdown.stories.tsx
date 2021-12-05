@@ -1,12 +1,11 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import { action } from '@storybook/addon-actions';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StoryWrapper } from '@storybook/addons';
-import { AppProviderSizeProvider } from '@wcpos/common/src/hooks/use-position-in-app';
 import { Dropdown, DropdownProps } from './dropdown';
 import Icon from '../icon';
 import Portal from '../portal';
+import Text from '../text';
 
 /**
  * Dropdowns require (same as popover)
@@ -16,14 +15,10 @@ import Portal from '../portal';
  */
 const AppProvider: StoryWrapper = (Story, context) => {
 	return (
-		<SafeAreaProvider>
-			<AppProviderSizeProvider>
-				<Portal.Provider>
-					<Story {...context} />
-					<Portal.Manager />
-				</Portal.Provider>
-			</AppProviderSizeProvider>
-		</SafeAreaProvider>
+		<Portal.Provider>
+			<Story {...context} />
+			<Portal.Manager />
+		</Portal.Provider>
 	);
 };
 
@@ -36,18 +31,21 @@ export default {
 
 export const BasicUsage = (props: DropdownProps) => (
 	<View style={{ padding: '100px' }}>
-		<Dropdown {...props} />
+		<Dropdown {...props}>
+			<Text>Click me</Text>
+		</Dropdown>
 	</View>
 );
 BasicUsage.args = {
-	activator: 'Click me',
 	items: ['Item 1', 'Item 2', 'Item 3', 'Item 4'],
 	onSelect: action('Select'),
 };
 
 export const IconActivator = (props: DropdownProps) => (
 	<View style={{ padding: '100px' }}>
-		<Dropdown {...props} activator={<Icon name="more" />} />
+		<Dropdown {...props}>
+			<Icon name="ellipsisVertical" />
+		</Dropdown>
 	</View>
 );
 IconActivator.args = {

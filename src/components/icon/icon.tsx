@@ -93,25 +93,6 @@ export const Icon = ({
 		<SvgIcon width={width || sizeMap[size]} height={height || sizeMap[size]} fill={iconColor} />
 	);
 
-	// const pressableStyle = React.useCallback(
-	// 	({ hovered }) =>
-	// 		backgroundStyle !== 'none'
-	// 			? [
-	// 					{ backgroundColor: hovered ? theme.ICON_BACKGROUND_COLOR : 'transparent' },
-	// 					backgroundStyle,
-	// 			  ]
-	// 			: { padding: 0 },
-	// 	[backgroundStyle, theme.ICON_BACKGROUND_COLOR]
-	// );
-
-	// if (onPress) {
-	// 	return (
-	// 		<Styled.PressableIcon onPress={onPress} style={pressableStyle}>
-	// 			{IconComponent}
-	// 		</Styled.PressableIcon>
-	// 	);
-	// }
-
 	if (onPress) {
 		return (
 			<Pressable

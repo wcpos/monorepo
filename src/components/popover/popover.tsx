@@ -1,42 +1,42 @@
 import * as React from 'react';
-import { View, LayoutRectangle, StyleProp, ViewStyle } from 'react-native';
-import usePositionInAppProvider from '@wcpos/common/src/hooks/use-position-in-app';
-import { Item, ItemProps } from './item';
-import { PopoverPlacement } from './placements';
-import { PopoverView } from './view';
-import { PopoverContext } from './context';
+import { View, Dimensions, ViewStyle, StyleProp } from 'react-native';
+import Animated, {
+	useAnimatedStyle,
+	useSharedValue,
+	withTiming,
+	// FadeInDown,
+} from 'react-native-reanimated';
+import get from 'lodash/get';
+import useMeasure from '@wcpos/common/src/hooks/use-measure';
+import { useScrollEvents } from '../scrollview';
 import Portal from '../portal';
+import Pressable from '../pressable';
 import Backdrop from '../backdrop';
+import {
+	PopoverPlacement,
+	isBottom,
+	isEnd,
+	isLeft,
+	isRight,
+	isStart,
+	isTop,
+	getArrowAlign,
+	getArrowDirection,
+	getContainerAlign,
+	getPopoverPosition,
+} from './placements';
+import Arrow from '../arrow';
+import * as Styled from './styles';
 
-// const PopoverPortals = portals.create('Popover');
-
-type TextWithOptionalIconAction = any;
-
-export interface PopoverWithActions {
-	/**
-	 * Actions to display in the Popover.
-	 */
-	actions: TextWithOptionalIconAction[];
-	children?: never;
-}
-
-export interface PopoverWithChildren {
-	/**
-	 * The content to display inside the Popover.
-	 */
-	children: React.ReactNode;
-	actions?: never;
-}
-
-export type PopoverProps = {
-	/**
-	 * Determines if Popover is visible or not.
-	 */
-	open: boolean;
+export interface PopoverProps {
 	/**
 	 * The content which will trigger the Popover. The Popover will be anchored to this component.
 	 */
-	activator: React.ReactNode;
+	children: React.ReactNode;
+	/**
+	 * The content to display inside the Popover.
+	 */
+	content: React.ReactNode;
 	/**
 	 * Preferred placement of the Popover. The Popover will try to place itself according to this
 	 * property. However, if there is not enough space left there to show up, it will show itself
@@ -47,23 +47,17 @@ export type PopoverProps = {
 	 */
 	placement?: PopoverPlacement;
 	/**
-	 * If true, backdrop will be hidden.
+	 * Method for activating the Popover.
 	 */
-	hideBackdrop?: boolean;
+	trigger?: 'press' | 'longpress' | 'hover';
 	/**
-	 * If true, the popover width will match the width of the activator View.
-	 *
-	 * **IMPORTANT:** Must only be used with `top` or `bottom` placements.
+	 * Show arrow pointing to the target.
 	 */
-	matchWidth?: boolean;
+	withArrow?: boolean;
 	/**
-	 * If true, the popover will appear above the activator view instead of next to it.
+	 * Show backdrop behind the Popover.
 	 */
-	aboveActivator?: boolean;
-	/**
-	 * Called when the Popover needs to be discarded. This should update `open` property accordingly.
-	 */
-	onRequestClose: () => void;
+	showBackdrop?: boolean;
 	/**
 	 * If true, the popover and its backdrop won't be clickable and won't receive mouse events.
 	 *
@@ -72,107 +66,145 @@ export type PopoverProps = {
 	 */
 	clickThrough?: boolean;
 	/**
-	 * Optional custom style for the Popover View (overlay view).
+	 * Force popover to match the width of the triggering view.
+	 *
+	 * For example, this is used by the `Select` and `Combobox` components. Prefer using the `Select` and
+	 * `Combobox` components instead of this property.
 	 */
-	popoverStyle?: StyleProp<ViewStyle>;
-} & (PopoverWithActions | PopoverWithChildren);
-
-const LAYOUT_ZERO: LayoutRectangle = { x: 0, y: 0, width: 0, height: 0 };
-
-/**
- * Get the Popover content (either through `children` or `actions`).
- */
-const useContent = (
-	actions: TextWithOptionalIconAction[] | undefined,
-	children: React.ReactNode | undefined
-): React.ReactNode =>
-	React.useMemo(() => {
-		if (actions && children) {
-			console.warn(
-				'Both actions and children are both supplied to Popover. Only actions will be used.'
-			);
-		}
-
-		let content: React.ReactNode = children;
-
-		if (actions) {
-			content = actions.map(({ label, icon, color, action }, i) => (
-				// @ts-ignore
-				<Item key={i} label={label} icon={icon} iconColor={color} onSelect={action} />
-			));
-		}
-		return content;
-	}, [actions, children]);
+	matchWidth?: boolean;
+	/**
+	 *
+	 */
+	style?: StyleProp<ViewStyle>;
+}
 
 /**
- * Popover Implementation Details (for developers usage)
- * ---
- * The Popover is actually rendered near the AppProvider using `PopoverPortal`.
  *
- * Popover view tree can be summarized like this:
- * - AppProvider
- *   - PopoverPortal
- *     - Popover Backdrop View, which shows the backdrop + provides dismissal of Popover on touch.
- *     - PopoverView
- *       - Absolutely positioned container, where height = AppProvider.height and width = AppProvider.width.
- *         Position origin is equal to position of Activator View.
- *         - Actual Popover View displayed to the user. Positioned relatively to its parent.
- *           - Popover children
- *   - ...Views, that can be nested X times
- *     - Popover
- *       - Activator
  */
-
-/**
- * Popovers are small overlays that open on demand. They are meant to access additional content without cluttering the screen.
- */
-export const Popover: React.FC<PopoverProps> & { Item: typeof Item } = ({
-	open,
-	activator,
-	actions,
+export const Popover = ({
 	children,
+	content,
 	placement = 'bottom',
-	onRequestClose,
-	hideBackdrop = false,
-	matchWidth = false,
-	aboveActivator = false,
+	trigger = 'press',
+	withArrow = true,
+	showBackdrop = false,
 	clickThrough = false,
-	popoverStyle,
-}) => {
-	const content = useContent(actions, children);
+	matchWidth = false,
+	style,
+}: PopoverProps) => {
+	const triggerRef = React.useRef<View>(null);
+	const containerRef = React.useRef<View>(null);
+	const [visible, setVisible] = React.useState(false);
+	const {
+		measurements: triggerRect,
+		onLayout: onTriggerLayout,
+		forceMeasure: forceTriggerMeasure,
+	} = useMeasure({ ref: triggerRef });
+	const {
+		measurements: containerRect,
+		onLayout: onContainerLayout,
+		forceMeasure: forceContainerMeasure,
+	} = useMeasure({ ref: containerRef });
 
-	const ref = React.useRef<View>(null);
-	const activatorLayout = usePositionInAppProvider(ref.current); // Get position relative to AppProvider
+	/**
+	 * Re-measure the popover when onScroll called
+	 */
+	const scrollEvents = useScrollEvents();
+	scrollEvents.subscribe(() => {
+		forceTriggerMeasure();
+	});
+
+	/**
+	 *
+	 */
+	const containerStyle = useAnimatedStyle(() => {
+		if (!triggerRect.value || !containerRect.value) {
+			return {}; // @TODO why is measurements.value undefined in react-native.
+		}
+
+		return getPopoverPosition(placement, triggerRect.value, containerRect.value);
+	});
+
+	const arrow = (
+		<Arrow
+			color={style?.backgroundColor || '#fff'}
+			direction={getArrowDirection(placement)}
+			style={[getArrowAlign(placement), { zIndex: 10 }]}
+		/>
+	);
+
+	const handlePress = React.useCallback(() => {
+		setVisible((prev) => !prev);
+	}, []);
+
+	const handleHoverIn = React.useCallback(() => {
+		if (trigger === 'hover') setVisible(true);
+	}, [trigger]);
+
+	const handleHoverOut = React.useCallback(() => {
+		if (trigger === 'hover') setVisible(false);
+	}, [trigger]);
+
+	/**
+	 * Special case for Pressables and Icons
+	 * - clone and wrap touch events
+	 */
+	const triggerElement = React.useMemo(() => {
+		if (React.Children.count(children) === 1) {
+			const type = get(children, ['type', 'name']);
+			if (type === 'Pressable' || type === 'Icon') {
+				const child = React.Children.only(children) as React.ReactElement;
+				const { onPress, onHoverIn, onHoverOut } = child.props;
+				return React.cloneElement(child, {
+					onPress: (event: any) => {
+						handlePress();
+						onPress?.(event);
+					},
+					onHoverIn: (event: any) => {
+						handleHoverIn();
+						onHoverIn?.(event);
+					},
+					onHoverOut: (event: any) => {
+						handleHoverOut();
+						onHoverOut?.(event);
+					},
+				});
+			}
+		}
+
+		return (
+			<Pressable onPress={handlePress} onHoverIn={handleHoverIn} onHoverOut={handleHoverOut}>
+				{children}
+			</Pressable>
+		);
+	}, [children, handleHoverIn, handleHoverOut, handlePress]);
 
 	return (
-		<View ref={ref}>
-			{activator}
-			{open && (
+		<>
+			<View ref={triggerRef} onLayout={onTriggerLayout}>
+				{triggerElement}
+			</View>
+			{visible && (
 				<Portal keyPrefix="Popover">
-					<PopoverContext.Provider value={{ requestClose: onRequestClose }}>
-						<Backdrop
-							open
-							invisible={hideBackdrop}
-							clickThrough={clickThrough}
-							onPress={onRequestClose}
-						/>
-						<PopoverView
-							style={popoverStyle}
-							open
-							placement={placement}
-							matchWidth={matchWidth}
-							activatorLayout={activatorLayout ?? LAYOUT_ZERO}
-							aboveActivator={aboveActivator}
-							clickThrough={clickThrough}
+					<Backdrop
+						invisible={!showBackdrop}
+						clickThrough={clickThrough || trigger === 'hover'}
+						onPress={handlePress}
+					>
+						<Styled.Container
+							as={Animated.View}
+							style={[containerStyle, { width: matchWidth ? triggerRect.value.width : undefined }]}
+							ref={containerRef as any}
+							onLayout={onContainerLayout}
+							// entering={FadeInDown}
 						>
-							{content}
-						</PopoverView>
-					</PopoverContext.Provider>
+							{withArrow && (isBottom(placement) || isRight(placement)) && arrow}
+							<Styled.Popover style={style}>{content}</Styled.Popover>
+							{withArrow && (isTop(placement) || isLeft(placement)) && arrow}
+						</Styled.Container>
+					</Backdrop>
 				</Portal>
 			)}
-		</View>
+		</>
 	);
 };
-
-export type PopoverItemProps = ItemProps;
-Popover.Item = Item;

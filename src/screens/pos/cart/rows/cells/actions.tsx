@@ -32,9 +32,14 @@ const Actions = ({ item }: ActionProps) => {
 
 	return (
 		<View style={{ flexDirection: 'row', alignItems: 'center' }}>
-			<Icon name="more-vert" size="large" onPress={() => setVisible(true)} backgroundStyle="none" />
 			<Icon
-				name="remove"
+				name="ellipsisVertical"
+				size="large"
+				onPress={() => setVisible(true)}
+				backgroundStyle="none"
+			/>
+			<Icon
+				name="circleXmark"
 				size="x-large"
 				onPress={handleRemove}
 				backgroundStyle="none"

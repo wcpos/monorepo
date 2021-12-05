@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useObservableState, useSubscription } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 import set from 'lodash/set';
-import Popover from '@wcpos/common/src/components/popover4';
+import Popover from '@wcpos/common/src/components/popover';
 import Icon from '@wcpos/common/src/components/icon';
 import Checkbox from '@wcpos/common/src/components/checkbox';
 import Button from '@wcpos/common/src/components/button';

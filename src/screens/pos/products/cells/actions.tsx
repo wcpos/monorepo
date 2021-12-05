@@ -3,7 +3,7 @@ import { useObservableSuspense } from 'observable-hooks';
 import Icon from '@wcpos/common/src/components/icon';
 import Button from '@wcpos/common/src/components/button';
 // import Popover from '@wcpos/common/src/components/popover';
-import Popover from '@wcpos/common/src/components/popover4';
+import Popover from '@wcpos/common/src/components/popover';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Variations from './variations';
 import { POSContext } from '../../pos';
@@ -34,12 +34,12 @@ const Actions = ({ item: product }: Props) => {
 	if (product.isVariable()) {
 		return (
 			<Popover placement="right" content={<Variations product={product} />}>
-				<Icon name="circleChevronRight" size="x-large" />
+				<Icon name="circleChevronRight" size="x-large" type="success" />
 			</Popover>
 		);
 	}
 
-	return <Icon name="circlePlus" size="x-large" onPress={addToCart} />;
+	return <Icon name="circlePlus" size="x-large" onPress={addToCart} type="success" />;
 };
 
 export default Actions;
