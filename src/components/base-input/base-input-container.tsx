@@ -66,6 +66,7 @@ export const BaseInputContainer = ({
 				<InlineError message={typeof error === 'string' ? error : ''} />
 			</Styled.MessageContainer>
 		) : null}
+
 		{helpText ? (
 			<Styled.MessageContainer>
 				<Text type="secondary" size="small">

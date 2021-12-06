@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ScrollView } from 'react-native';
 import { useUncontrolledState } from '@wcpos/common/src/hooks/use-uncontrolled-state';
-import Dropdown from '../dropdown';
+import Dropdown, { useDropdown } from '../dropdown';
 import Arrow from '../arrow';
 import BaseInput, { BaseInputContainer } from '../base-input';
 
@@ -70,9 +70,7 @@ export const Select = ({
 	error = false,
 	disabled = false,
 }: SelectProps) => {
-	const [open, setOpen] = React.useState(false);
-	const showPopover = React.useCallback(() => setOpen(true), []);
-	const hidePopover = React.useCallback(() => setOpen(false), []);
+	const { ref, open, close } = useDropdown();
 	const [selected, onChange] = useUncontrolledState(
 		selectedRaw,
 		onChangeRaw as ((value: string | null) => string) | undefined // This will never be called with a null parameter
@@ -93,7 +91,7 @@ export const Select = ({
 
 	const handleSelect = (value: string) => {
 		onChange(value);
-		setOpen(false);
+		close();
 	};
 
 	// const choiceComponents = React.useMemo(
@@ -116,9 +114,10 @@ export const Select = ({
 			disabled={disabled}
 			helpText={helpText}
 			error={error}
-			onLabelClick={showPopover}
+			onLabelClick={open}
 		>
 			<Dropdown
+				ref={ref}
 				items={choices}
 				// popoverStyle={{ maxHeight }}
 				// placement="bottom"
@@ -129,9 +128,9 @@ export const Select = ({
 					value={selectedChoice?.label ?? ''}
 					placeholder={placeholder}
 					disabled={disabled}
-					focused={open}
-					onPress={showPopover}
-					rightAccessory={<Arrow direction={open ? 'up' : 'down'} />}
+					// focused={open}
+					onPress={open}
+					// rightAccessory={<Arrow direction={open ? 'up' : 'down'} />}
 					style={{ minWidth: '100px' }}
 				/>
 			</Dropdown>

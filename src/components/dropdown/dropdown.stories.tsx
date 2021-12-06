@@ -3,9 +3,11 @@ import { View } from 'react-native';
 import { action } from '@storybook/addon-actions';
 import { StoryWrapper } from '@storybook/addons';
 import { Dropdown, DropdownProps } from './dropdown';
+import { useDropdown } from '.';
 import Icon from '../icon';
 import Portal from '../portal';
 import Text from '../text';
+import Button from '../button';
 
 /**
  * Dropdowns require (same as popover)
@@ -29,6 +31,9 @@ export default {
 	decorators: [AppProvider],
 };
 
+/**
+ *
+ */
 export const BasicUsage = (props: DropdownProps) => (
 	<View style={{ padding: '100px' }}>
 		<Dropdown {...props}>
@@ -41,6 +46,9 @@ BasicUsage.args = {
 	onSelect: action('Select'),
 };
 
+/**
+ *
+ */
 export const IconActivator = (props: DropdownProps) => (
 	<View style={{ padding: '100px' }}>
 		<Dropdown {...props}>
@@ -55,5 +63,27 @@ IconActivator.args = {
 		{ label: 'Item 3', action: action('Item 3') },
 		{ label: 'Item 4', action: action('Item 4') },
 	],
+	onSelect: action('Select'),
+};
+
+/**
+ *
+ */
+export const UseDropdown = (props: DropdownProps) => {
+	const { ref, open, close } = useDropdown();
+
+	return (
+		<>
+			<Button onPress={open} title="Open" />
+			<View style={{ padding: '100px' }}>
+				<Dropdown ref={ref} onSelect={close} {...props}>
+					<Text>Anchor</Text>
+				</Dropdown>
+			</View>
+		</>
+	);
+};
+UseDropdown.args = {
+	items: ['Item 1', 'Item 2', 'Item 3', 'Item 4'],
 	onSelect: action('Select'),
 };

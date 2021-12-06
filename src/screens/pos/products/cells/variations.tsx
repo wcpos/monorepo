@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 import Text from '@wcpos/common/src/components/text';
 import Button from '@wcpos/common/src/components/button';
+import Select from '@wcpos/common/src/components/select';
 // import useAppState from '@wcpos/common/src/hooks/use-app-state';
 // import WcApiService from '@wcpos/common/src/services/wc-api';
 
@@ -43,13 +44,16 @@ const Variations = ({ product }: Props) => {
 
 	if (variations.length === 0) {
 		return (
-			<Button
-				title="Fetch variations"
-				onPress={() => {
-					console.log('hi');
-					// fetchData(`products/${product.id}/variations`);
-				}}
-			/>
+			<>
+				<Select label="Test" choices={['One', 'Two']} placeholder="Select" />
+				<Button
+					title="Fetch variations"
+					onPress={() => {
+						console.log('hi');
+						// fetchData(`products/${product.id}/variations`);
+					}}
+				/>
+			</>
 		);
 	}
 

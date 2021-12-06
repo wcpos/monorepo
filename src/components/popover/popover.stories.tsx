@@ -4,8 +4,9 @@ import { StoryWrapper } from '@storybook/addons';
 import { action } from '@storybook/addon-actions';
 import { Popover, PopoverProps } from './popover';
 import Portal from '../portal';
-import Pressable from '../pressable';
 import { usePopover } from './use-popover';
+import Button from '../button';
+import Menu from '../menu';
 
 /**
  * Popovers require
@@ -28,7 +29,7 @@ export default {
 
 export const BasicUsage = (props: PopoverProps) => {
 	return (
-		<View style={{ height: 600, width: '100%', alignItems: 'center', justifyContent: 'center' }}>
+		<View>
 			<Popover
 				{...props}
 				content={
@@ -45,12 +46,19 @@ export const BasicUsage = (props: PopoverProps) => {
 	);
 };
 
-// export const UsePopover = () => {
-// 	const { ref } = usePopover();
+export const UsePopover = () => {
+	const { ref, open, close } = usePopover();
 
-// 	return (
-// 		<Pressable ref={ref} onPress={() => action('Trigger press')}>
-// 			<Text>Trigger</Text>
-// 		</Pressable>
-// 	);
-// };
+	return (
+		<>
+			<Button title="Open Menu" onPress={open} />
+
+			<Popover
+				ref={ref}
+				content={<Menu onSelect={close} items={['One', 'Two', 'Three', 'Four']} />}
+			>
+				<Text>Menu</Text>
+			</Popover>
+		</>
+	);
+};

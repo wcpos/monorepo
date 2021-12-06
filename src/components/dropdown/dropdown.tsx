@@ -22,15 +22,21 @@ export type DropdownProps = Omit<PopoverProps, 'content'> & {
 /**
  *
  */
-export const Dropdown = ({ children, items, onSelect, style, ...props }: DropdownProps) => {
+const DropdownBase = (
+	{ children, items, onSelect, style, ...rest }: DropdownProps,
+	ref: React.Ref<React.ReactNode>
+) => {
 	return (
 		<Popover
-			{...props}
+			ref={ref}
 			content={<Menu items={items} onSelect={onSelect} />}
 			placement="bottom-end"
 			style={[{ paddingLeft: 0, paddingRight: 0 }, style]}
+			{...rest}
 		>
 			{children}
 		</Popover>
 	);
 };
+
+export const Dropdown = React.forwardRef(DropdownBase);

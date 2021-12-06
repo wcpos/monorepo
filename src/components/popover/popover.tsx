@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View, Dimensions, ViewStyle, StyleProp } from 'react-native';
+import { View, Dimensions, ViewStyle, StyleProp, StyleSheet } from 'react-native';
 import Animated, {
 	useAnimatedStyle,
 	useSharedValue,
@@ -81,17 +81,20 @@ export interface PopoverProps {
 /**
  *
  */
-export const Popover = ({
-	children,
-	content,
-	placement = 'bottom',
-	trigger = 'press',
-	withArrow = true,
-	showBackdrop = false,
-	clickThrough = false,
-	matchWidth = false,
-	style,
-}: PopoverProps) => {
+const PopoverBase = (
+	{
+		children,
+		content,
+		placement = 'bottom',
+		trigger = 'press',
+		withArrow = true,
+		showBackdrop = false,
+		clickThrough = false,
+		matchWidth = false,
+		style,
+	}: PopoverProps,
+	ref: React.Ref<React.ReactNode>
+) => {
 	const triggerRef = React.useRef<View>(null);
 	const containerRef = React.useRef<View>(null);
 	const [visible, setVisible] = React.useState(false);
@@ -127,7 +130,7 @@ export const Popover = ({
 
 	const arrow = (
 		<Arrow
-			color={style?.backgroundColor || '#fff'}
+			color={(style && StyleSheet.flatten(style).backgroundColor) || '#fff'}
 			direction={getArrowDirection(placement)}
 			style={[getArrowAlign(placement), { zIndex: 10 }]}
 		/>
@@ -172,13 +175,31 @@ export const Popover = ({
 			}
 		}
 
-		return (
+		return ref ? (
+			children
+		) : (
 			<Pressable onPress={handlePress} onHoverIn={handleHoverIn} onHoverOut={handleHoverOut}>
 				{children}
 			</Pressable>
 		);
-	}, [children, handleHoverIn, handleHoverOut, handlePress]);
+	}, [children, handleHoverIn, handleHoverOut, handlePress, ref]);
 
+	/**
+	 *
+	 */
+	React.useImperativeHandle(ref, () => ({
+		open(): void {
+			setVisible(true);
+		},
+
+		close(): void {
+			setVisible(false);
+		},
+	}));
+
+	/**
+	 *
+	 */
 	return (
 		<>
 			<View ref={triggerRef} onLayout={onTriggerLayout}>
@@ -208,3 +229,5 @@ export const Popover = ({
 		</>
 	);
 };
+
+export const Popover = React.forwardRef(PopoverBase);
