@@ -118,6 +118,16 @@ const PopoverBase = (
 	});
 
 	/**
+	 * Hack to make sure the position is always re-measured on open
+	 */
+	React.useEffect(() => {
+		if (visible) {
+			forceTriggerMeasure();
+			forceContainerMeasure();
+		}
+	}, [forceContainerMeasure, forceTriggerMeasure, visible]);
+
+	/**
 	 *
 	 */
 	const containerStyle = useAnimatedStyle(() => {
@@ -125,7 +135,10 @@ const PopoverBase = (
 			return {}; // @TODO why is measurements.value undefined in react-native.
 		}
 
-		return getPopoverPosition(placement, triggerRect.value, containerRect.value);
+		// @TODO - use `entering` when reanimated is stable
+		const opacity = withTiming(visible ? 1 : 0, { duration: 200 });
+		const position = getPopoverPosition(placement, triggerRect.value, containerRect.value);
+		return { opacity, ...position };
 	});
 
 	const arrow = (
