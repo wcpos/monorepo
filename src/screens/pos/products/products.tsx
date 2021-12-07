@@ -20,14 +20,14 @@ const POSProducts = ({ ui }: POSProductsProps) => {
 	useRestQuery('products');
 
 	return (
-		<Segment.Group>
+		<Segment.Group style={{ width: '100%', height: '100%' }}>
 			<Segment>
 				<View style={{ flexDirection: 'row', alignItems: 'center' }}>
 					<SearchBar />
 					<UiSettings ui={ui} />
 				</View>
 			</Segment>
-			<Segment grow>
+			<Segment grow style={{ padding: 0 }}>
 				<Table ui={ui} />
 			</Segment>
 		</Segment.Group>

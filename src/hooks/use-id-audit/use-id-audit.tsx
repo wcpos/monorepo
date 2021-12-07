@@ -50,7 +50,7 @@ const useIdAudit = (collectionName: CollectionNames) => {
 				}
 				if (response.status === 401) {
 					// @ts-ignore
-					navigation.navigate('Modal', { login: true });
+					navigation.navigate('Login');
 				}
 				if (response.status === 403) {
 					console.error('invalid nonce');

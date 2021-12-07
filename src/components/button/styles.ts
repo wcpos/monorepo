@@ -3,22 +3,20 @@ import { StyleSheet } from 'react-native';
 import { math } from 'polished';
 
 type ButtonProps = import('./button').Props;
-type BackgroundProps = Pick<ButtonProps, 'background' | 'type' | 'disabled' | 'size'> & {
-	pressed: boolean;
-};
+type BackgroundProps = Pick<ButtonProps, 'background' | 'type' | 'disabled' | 'size'>;
 
 export const Background = styled.View<BackgroundProps>`
-	background-color: ${({ background, type, theme, pressed }) => {
+	background-color: ${({ background, type, theme }) => {
 		if (background === 'clear' || background === 'outline') {
 			return 'transparent';
 		}
 		switch (type) {
-			// case 'secondary':
-			// 	return hovered ? 'black' : theme.BUTTON_COLOR_SECONDARY;
-			// case 'attention':
-			// 	return focused ? 'black' : theme.BUTTON_COLOR_ATTENTION;
+			case 'secondary':
+				return theme.BUTTON_COLOR_SECONDARY;
+			case 'attention':
+				return theme.BUTTON_COLOR_ATTENTION;
 			case 'critical':
-				return pressed ? 'black' : theme.BUTTON_COLOR_CRITICAL;
+				return theme.BUTTON_COLOR_CRITICAL;
 			case 'info':
 				return theme.BUTTON_COLOR_INFO;
 			case 'success':
@@ -54,7 +52,7 @@ export const Background = styled.View<BackgroundProps>`
 	}};
 
 	opacity: ${({ disabled }) => (disabled ? 0.5 : 1)}
-	border-radius: ${({ theme }) => theme.BUTTON_BORDER_RADIUS};
+	border-radius: ${({ theme, size }) => (size === 'fill' ? 'inherit' : theme.BUTTON_BORDER_RADIUS)};
 	border-width: ${({ background }) => (background === 'outline' ? StyleSheet.hairlineWidth : 0)};
 	padding: ${({ theme, size }) => {
 		switch (size) {
@@ -66,6 +64,8 @@ export const Background = styled.View<BackgroundProps>`
 	}}
 	flex-direction: row;
 	align-items: center;
+	justify-content: center;
+	height: ${({ size }) => (size === 'fill' ? '100%' : 'auto')};
 `;
 
 type ButtonGroupProps = import('./group').ButtonGroupProps;

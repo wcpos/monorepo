@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ViewStyle } from 'react-native';
+import { StyleProp, ViewStyle } from 'react-native';
 import Text from '../text';
 import ErrorBoundary from '../error-boundary';
 import * as Styled from './styles';
@@ -13,13 +13,37 @@ export interface SegmentProps {
 	 *
 	 */
 	children?: React.ReactNode;
-	content?: React.ReactNode;
-	type?: 'body' | 'footer' | 'header';
+	/**
+	 *
+	 */
 	disabled?: boolean;
+	/**
+	 *
+	 */
 	loading?: boolean;
+	/**
+	 *
+	 */
 	raised?: boolean;
+	/**
+	 *
+	 */
 	group?: 'first' | 'middle' | 'last';
-	style?: ViewStyle;
+	/**
+	 *
+	 */
+	direction?: 'horizontal' | 'vertical';
+	/**
+	 *
+	 */
+	style?: StyleProp<ViewStyle>;
+	/**
+	 *
+	 */
+	actions?: [];
+	/**
+	 *
+	 */
 	grow?: boolean;
 }
 
@@ -28,21 +52,17 @@ export interface SegmentProps {
  */
 export const Segment = ({
 	children,
-	content,
 	group,
 	grow,
-	type,
 	raised = true,
 	style,
+	direction,
 }: SegmentProps) => {
-	let segment = content || children || '';
-	if (typeof segment === 'string' || typeof segment === 'number') {
-		segment = <Text>{segment}</Text>;
-	}
+	const renderSegement = children;
 
 	return (
-		<Styled.Segment style={[style]} group={group} type={type} raised={raised} grow={grow}>
-			<ErrorBoundary>{segment}</ErrorBoundary>
+		<Styled.Segment style={style} group={group} raised={raised} grow={grow} direction={direction}>
+			<ErrorBoundary>{renderSegement}</ErrorBoundary>
 		</Styled.Segment>
 	);
 };

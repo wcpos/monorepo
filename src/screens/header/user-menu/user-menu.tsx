@@ -4,6 +4,7 @@ import { useNavigation, CommonActions } from '@react-navigation/native';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Dropdown from '@wcpos/common/src/components/dropdown';
 import Text from '@wcpos/common/src/components/text';
+import Modal, { useModal } from '@wcpos/common/src/components/modal4';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import UserSettings from './user-settings';
 import * as Styled from './styles';
@@ -14,7 +15,7 @@ import * as Styled from './styles';
 
 export const UserMenu = () => {
 	const { site, wpCredentials, store } = useAppState();
-	const [showSettings, setShowSettings] = React.useState(false);
+	const { ref: refSettingsModal, open: openSettingsModal, close: closeSettingsModal } = useModal();
 	const navigation = useNavigation();
 
 	return (
@@ -33,7 +34,7 @@ export const UserMenu = () => {
 					},
 					{
 						label: 'Settings',
-						action: () => setShowSettings(true),
+						action: openSettingsModal,
 					},
 					{
 						label: 'Modal',
@@ -54,7 +55,9 @@ export const UserMenu = () => {
 				</Styled.DropDown>
 			</Dropdown>
 
-			{showSettings && <UserSettings onClose={() => setShowSettings(false)} />}
+			<Modal ref={refSettingsModal}>
+				<UserSettings onClose={closeSettingsModal} />
+			</Modal>
 		</>
 	);
 };

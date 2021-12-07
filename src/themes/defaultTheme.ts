@@ -44,6 +44,7 @@ const fonts = Platform.select({
 const zIndex = {
 	backdrop: 100,
 	dialog: 200,
+	modal: 200,
 	popover: 300,
 	toast: 400,
 	tooltip: 500,
@@ -128,6 +129,8 @@ const theme = {
 	MASTERBAR_TITLE_SIZE: '18px',
 
 	MENU_ITEM_HOVER_BACKGROUND_COLOR: colors['lightest-grey'],
+
+	MODAL_Z_INDEX: zIndex.modal,
 
 	LIST_ITEM_PADDING: '10px',
 

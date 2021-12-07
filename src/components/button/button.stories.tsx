@@ -11,7 +11,7 @@ export default {
 	subcomponents: { Group },
 };
 
-export const basicUsage = () => (
+export const BasicUsage = () => (
 	<>
 		<View style={{ padding: 10 }}>
 			<Button onPress={action('pressed')} onLongPress={action('long press')} title="Primary" />
@@ -49,7 +49,7 @@ export const basicUsage = () => (
 	</>
 );
 
-export const clearBackground = () => (
+export const ClearBackground = () => (
 	<>
 		<View style={{ padding: 10 }}>
 			<Button onPress={action('pressed')} title="Primary" background="clear" />
@@ -81,7 +81,7 @@ export const clearBackground = () => (
 	</>
 );
 
-export const borderOutline = () => (
+export const BorderOutline = () => (
 	<>
 		<View style={{ padding: 10 }}>
 			<Button onPress={action('pressed')} title="Primary" background="outline" />
@@ -113,7 +113,7 @@ export const borderOutline = () => (
 	</>
 );
 
-export const buttonGroup = () => (
+export const ButtonGroup = () => (
 	<Button.Group
 		onPress={action('pressed')}
 		// selectedIndex={select('selectedIndex', [0, 1, 2], 0)}
@@ -125,7 +125,7 @@ export const buttonGroup = () => (
 	</Button.Group>
 );
 
-export const buttonWithIcon = ({ title }) => (
+export const ButtonWithIcon = ({ title }) => (
 	<>
 		<View style={{ padding: 10 }}>
 			<Button onPress={action('pressed')} title={title} accessoryLeft={<Icon name="remove" />} />
@@ -140,6 +140,23 @@ export const buttonWithIcon = ({ title }) => (
 		</View>
 	</>
 );
-buttonWithIcon.args = {
+ButtonWithIcon.args = {
 	title: 'Remove',
 };
+
+export const FilledButton = () => (
+	<View style={{ flexDirection: 'row' }}>
+		<View style={{ width: 100, height: 50 }}>
+			<Button size="fill" title="Primary" type="primary" />
+		</View>
+		<View style={{ width: 40, height: 20 }}>
+			<Button size="fill" title="Secondary" type="secondary" />
+		</View>
+		<View style={{ width: 80, height: 40 }}>
+			<Button size="fill" title="Success" type="success" />
+		</View>
+		<View style={{ width: 120, height: 100, borderRadius: 10 }}>
+			<Button size="fill" title="Critical" type="critical" />
+		</View>
+	</View>
+);

@@ -2,38 +2,60 @@ import styled, { css } from 'styled-components/native';
 import Platform from '@wcpos/common/src/lib/platform';
 
 type SegmentProps = import('./segment').SegmentProps;
-type StyledSegmentProps = Pick<SegmentProps, 'raised' | 'group' | 'grow' | 'type'>;
+type StyledSegmentProps = Pick<SegmentProps, 'raised' | 'group' | 'grow' | 'direction'>;
 
 export const Segment = styled.View<StyledSegmentProps>`
 	background: ${({ theme }) => theme.SEGMENT_BACKGROUND_COLOR};
-	border-width: ${({ theme }) => theme.SEGMENT_BORDER_WIDTH};
+	padding: ${({ theme }) => theme.SEGMENT_PADDING};
+	flex-grow: ${({ grow }) => (grow ? 1 : 0)};
+	flex-shrink: 1;
+	flex-basis: auto;
+
+	border-width: ${({ theme, group }) => (group ? 0 : theme.SEGMENT_BORDER_WIDTH)};
 	border-color: ${({ theme }) => theme.SEGMENT_BORDER_COLOR};
 	border-style: solid;
 	border-radius: ${({ group, theme }) => (group === 'middle' ? '0' : theme.SEGMENT_BORDER_RADIUS)};
-	padding: ${({ theme, grow }) => (grow ? 0 : theme.SEGMENT_PADDING)};
-	margin-bottom: ${({ group, theme }) => (group ? '0' : theme.SEGMENT_MARGIN_BOTTOM)};
-	flex: ${({ grow }) => (grow ? '1' : '0 1 auto')};
 
-	${({ group }) =>
-		group === 'first' &&
-		css`
-			border-bottom-left-radius: 0;
-			border-bottom-right-radius: 0;
-		`}
+	${({ group, direction, theme }) => {
+		if (group === 'first' && direction === 'vertical') {
+			return css`
+				border-bottom-left-radius: 0;
+				border-bottom-right-radius: 0;
+				border-bottom-width: ${theme.SEGMENT_BORDER_WIDTH};
+			`;
+		}
+		if (group !== 'last' && direction === 'vertical') {
+			return css`
+				border-bottom-width: ${theme.SEGMENT_BORDER_WIDTH};
+			`;
+		}
+		if (group === 'last' && direction === 'vertical') {
+			return css`
+				border-top-left-radius: 0;
+				border-top-right-radius: 0;
+			`;
+		}
+		if (group === 'first' && direction === 'horizontal') {
+			return css`
+				border-top-right-radius: 0;
+				border-bottom-right-radius: 0;
+				border-right-width: ${theme.SEGMENT_BORDER_WIDTH};
+			`;
+		}
+		if (group !== 'last' && direction === 'horizontal') {
+			return css`
+				border-right-width: ${theme.SEGMENT_BORDER_WIDTH};
+			`;
+		}
+		if (group === 'last' && direction === 'horizontal') {
+			return css`
+				border-top-left-radius: 0;
+				border-bottom-left-radius: 0;
+			`;
+		}
 
-	${({ group }) =>
-		group === 'last' &&
-		css`
-			border-top-left-radius: 0;
-			border-top-right-radius: 0;
-			border-top-width: 0;
-		`}
-    
-  ${({ group }) =>
-		group === 'middle' &&
-		css`
-			border-top-width: 0;
-		`}
+		return css``;
+	}}
 
 	${({ raised }) =>
 		raised &&
@@ -48,18 +70,25 @@ export const Segment = styled.View<StyledSegmentProps>`
 `;
 
 type SegmentGroupProps = import('./group').SegmentGroupProps;
-type StyledGroupProps = Pick<SegmentGroupProps, 'raised' | 'flexDirection' | 'group' | 'grow'>;
+type StyledGroupProps = Pick<
+	SegmentGroupProps,
+	'raised' | 'direction' | 'group' | 'grow' | 'isNested'
+>;
 
-// height: inherit;
-// flex-direction: ${({ flexDirection }) => flexDirection};
 /**
  * Note: height 'inherit' caused app to crash on mobile
  */
 export const Group = styled.View<StyledGroupProps>`
-	flex: ${({ grow }) => (grow ? '1' : '0 1 auto')};
-	height: 100%;
-	max-height: 100%;
-	width: 100%;
+	flex-direction: ${({ direction }) => (direction === 'horizontal' ? 'row' : 'column')};
+	flex-grow: ${({ grow }) => (grow ? 1 : 0)};
+	flex-shrink: 1;
+	flex-basis: auto;
+
+	border-width: ${({ theme, isNested }) => (isNested ? 0 : theme.SEGMENT_BORDER_WIDTH)};
+	border-color: ${({ theme }) => theme.SEGMENT_BORDER_COLOR};
+	border-style: solid;
+	border-radius: ${({ group, theme, isNested }) =>
+		group === 'middle' || isNested ? '0' : theme.SEGMENT_BORDER_RADIUS};
 
 	${({ raised }) =>
 		raised &&
