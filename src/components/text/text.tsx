@@ -23,7 +23,7 @@ export interface TextProps {
 	/**
 	 *
 	 */
-	size?: 'normal' | 'large' | 'small';
+	size?: 'medium' | 'large' | 'small';
 	/**
 	 *
 	 */
@@ -47,7 +47,7 @@ export const Text = ({
 	children,
 	italic,
 	onPress,
-	size = 'normal',
+	size = 'medium',
 	style = {},
 	type = 'primary',
 	uppercase,

@@ -1,9 +1,7 @@
 import * as React from 'react';
 import { StyleProp, ViewStyle } from 'react-native';
-import Text from '../text';
 import ErrorBoundary from '../error-boundary';
 import * as Styled from './styles';
-import { SegmentGroup } from './group';
 
 /**
  *
@@ -58,13 +56,9 @@ export const Segment = ({
 	style,
 	direction,
 }: SegmentProps) => {
-	const renderSegement = children;
-
 	return (
 		<Styled.Segment style={style} group={group} raised={raised} grow={grow} direction={direction}>
-			<ErrorBoundary>{renderSegement}</ErrorBoundary>
+			<ErrorBoundary>{children}</ErrorBoundary>
 		</Styled.Segment>
 	);
 };
-
-Segment.Group = SegmentGroup;

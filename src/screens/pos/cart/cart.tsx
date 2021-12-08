@@ -88,26 +88,24 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 			onSelect={onSelect}
 			position="bottom"
 		>
-			<Segment.Group>
+			<Segment.Group style={{ width: '100%', height: '100%' }}>
 				<Segment style={{ flexDirection: 'row', alignItems: 'center' }}>
-					<View style={{ flex: 1 }}>
-						{currentCustomer ? (
-							<View style={{ flexDirection: 'row', alignItems: 'center' }}>
-								<Text>Customer: </Text>
-								<Tag
-									removable
-									onPress={() => {
-										console.log('edit customer');
-									}}
-									onRemove={() => {
-										setCurrentCustomer(undefined);
-									}}
-								>{`${currentCustomer.firstName} ${currentCustomer.lastName}`}</Tag>
-							</View>
-						) : (
-							<CustomerSelect onSelectCustomer={handleSelectCustomer} />
-						)}
-					</View>
+					{currentCustomer ? (
+						<View style={{ flexDirection: 'row', alignItems: 'center' }}>
+							<Text>Customer: </Text>
+							<Tag
+								removable
+								onPress={() => {
+									console.log('edit customer');
+								}}
+								onRemove={() => {
+									setCurrentCustomer(undefined);
+								}}
+							>{`${currentCustomer.firstName} ${currentCustomer.lastName}`}</Tag>
+						</View>
+					) : (
+						<CustomerSelect onSelectCustomer={handleSelectCustomer} />
+					)}
 					<AddCustomer />
 					<UISettings ui={ui} />
 				</Segment>
@@ -131,7 +129,9 @@ const Cart = ({ ui, orders = [] }: ICartProps) => {
 						</Segment>
 					</Segment.Group>
 				) : (
-					<Segment content="Add item to cart" grow />
+					<Segment grow>
+						<Text>Add something</Text>
+					</Segment>
 				)}
 			</Segment.Group>
 		</Tabs>

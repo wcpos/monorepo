@@ -4,12 +4,13 @@ import get from 'lodash/get';
 import * as Styled from './styles';
 
 type Segment = typeof import('./segment').Segment;
+// type SubSegments = React.ReactElement<Segment | typeof SegmentGroup>[] | null;
 
 export interface SegmentGroupProps {
 	/**
 	 *
 	 */
-	children: React.ReactElement<Segment>[] | React.ReactElement<Segment>;
+	children: React.ReactNode;
 	/**
 	 *
 	 */
@@ -37,22 +38,20 @@ export interface SegmentGroupProps {
 }
 
 export const SegmentGroup = ({
-	children,
 	direction = 'vertical',
 	style,
 	raised = true,
 	group,
 	grow,
 	isNested,
+	...props
 }: SegmentGroupProps) => {
-	const count = React.Children.count(children);
+	// filter out any null children
+	const children = React.Children.toArray(props.children).filter(React.isValidElement);
 
-	const renderSegement = (
-		child: React.ReactElement<Segment | typeof SegmentGroup>,
-		index: number
-	) => {
+	const renderSegement = (child: React.ReactElement, index: number) => {
 		const isFirst = index === 0 && group !== 'middle';
-		const isLast = index === count - 1 && group !== 'middle';
+		const isLast = index === children.length - 1 && group !== 'middle';
 		const _isNested = get(child, ['type', 'name']) === 'SegmentGroup';
 
 		const segmentProps = {
@@ -74,7 +73,7 @@ export const SegmentGroup = ({
 			grow={grow}
 			isNested={isNested}
 		>
-			{React.Children.map(children, renderSegement)}
+			{children.map(renderSegement)}
 		</Styled.Group>
 	);
 };

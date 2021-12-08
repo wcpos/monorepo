@@ -52,7 +52,7 @@ export type Props = {
 	/**
 	 *
 	 */
-	size?: 'normal' | 'large' | 'small' | 'fill';
+	size?: 'medium' | 'large' | 'small' | 'full';
 	/**
 	 *
 	 */
@@ -79,7 +79,7 @@ const Button = ({
 	onPressOut,
 	onLongPress,
 	raised,
-	size = 'normal',
+	size = 'medium',
 	style,
 	type = 'primary',
 	...props

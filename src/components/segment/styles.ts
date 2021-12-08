@@ -9,7 +9,7 @@ export const Segment = styled.View<StyledSegmentProps>`
 	padding: ${({ theme }) => theme.SEGMENT_PADDING};
 	flex-grow: ${({ grow }) => (grow ? 1 : 0)};
 	flex-shrink: 1;
-	flex-basis: auto;
+	flex-basis: ${({ grow }) => (grow ? '100%' : 'auto')};
 
 	border-width: ${({ theme, group }) => (group ? 0 : theme.SEGMENT_BORDER_WIDTH)};
 	border-color: ${({ theme }) => theme.SEGMENT_BORDER_COLOR};

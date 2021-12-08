@@ -224,19 +224,18 @@ const PopoverBase = (
 						invisible={!showBackdrop}
 						clickThrough={clickThrough || trigger === 'hover'}
 						onPress={handlePress}
+					/>
+					<Styled.Container
+						as={Animated.View}
+						style={[containerStyle, { width: matchWidth ? triggerRect.value.width : undefined }]}
+						ref={containerRef as any}
+						onLayout={onContainerLayout}
+						// entering={FadeInDown}
 					>
-						<Styled.Container
-							as={Animated.View}
-							style={[containerStyle, { width: matchWidth ? triggerRect.value.width : undefined }]}
-							ref={containerRef as any}
-							onLayout={onContainerLayout}
-							// entering={FadeInDown}
-						>
-							{withArrow && (isBottom(placement) || isRight(placement)) && arrow}
-							<Styled.Popover style={style}>{content}</Styled.Popover>
-							{withArrow && (isTop(placement) || isLeft(placement)) && arrow}
-						</Styled.Container>
-					</Backdrop>
+						{withArrow && (isBottom(placement) || isRight(placement)) && arrow}
+						<Styled.Popover style={style}>{content}</Styled.Popover>
+						{withArrow && (isTop(placement) || isLeft(placement)) && arrow}
+					</Styled.Container>
 				</Portal>
 			)}
 		</>

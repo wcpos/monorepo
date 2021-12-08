@@ -1,31 +1,28 @@
 import * as React from 'react';
 import { FallbackProps } from 'react-error-boundary';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import Icon from '../icon';
-import Button from '../button';
+import Text from '../text';
+import * as Styled from './styles';
 
 /**
- *
+ * @TODO - convert this to a general removable message component
  */
 const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => (
-	<View>
-		<Icon name="error" />
-		<Text>Error Boundary Fallback</Text>
-		{/* <p>We're sorry — something's gone wrong.</p>
-		<p>Our team has been notified, but click here fill out a report.</p> */}
-		{/* {error && (
-			<pre>
-				{error.toString()}
-				<br />
-				<br />
-				This is located at: {componentStack}
-			</pre>
-		)} */}
-		<Text>Something went wrong:</Text>
-		<Text>{error.message}</Text>
-		{/* <Text>{componentStack}</Text> */}
-		<Button onPress={resetErrorBoundary} title="Try again" />
-	</View>
+	<Styled.Container>
+		<Styled.IconContainer>
+			<Icon name="triangleExclamation" size="x-large" type="inverse" />
+		</Styled.IconContainer>
+		<Styled.TextContainer>
+			<Text type="inverse" weight="bold">
+				Something went wrong:
+			</Text>
+			<Text type="inverse">{error.message}</Text>
+		</Styled.TextContainer>
+		<Styled.RemoveContainer>
+			<Icon onPress={resetErrorBoundary} name="xmark" type="inverse" />
+		</Styled.RemoveContainer>
+	</Styled.Container>
 );
 
 export default Fallback;

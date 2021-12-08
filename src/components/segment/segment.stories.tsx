@@ -1,14 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
-import { Segment, SegmentProps } from './segment';
-import { SegmentGroup, SegmentGroupProps } from './group';
+import Segment from '.';
+import { SegmentProps } from './segment';
 import Text from '../text';
-import Button from '../button';
 
 export default {
 	title: 'Components/Segment',
 	component: Segment,
-	subcomponents: [SegmentGroup],
+	subcomponents: [Segment.Group, Segment.Buttons],
 };
 
 /**
@@ -23,9 +22,9 @@ export const BasicUsage = (props: SegmentProps) => (
 /**
  *
  */
-export const Group = (props: SegmentGroupProps) => (
+export const Group = () => (
 	<View style={{ height: 400, width: 400 }}>
-		<Segment.Group {...props} style={{ height: '100%' }}>
+		<Segment.Group style={{ height: '100%' }}>
 			<Segment>
 				<Text>Top</Text>
 			</Segment>
@@ -73,9 +72,9 @@ export const HorizontalGroup = () => (
 /**
  *
  */
-export const GroupWithOneSegment = (props: SegmentGroupProps) => (
+export const GroupWithOneSegment = () => (
 	<View style={{ height: 400 }}>
-		<Segment.Group {...props}>
+		<Segment.Group>
 			<Segment>
 				<Text>One</Text>
 			</Segment>
@@ -86,9 +85,9 @@ export const GroupWithOneSegment = (props: SegmentGroupProps) => (
 /**
  *
  */
-export const NestedGroup = (props: SegmentGroupProps) => (
+export const NestedGroup = () => (
 	<View style={{ height: 400, width: 400 }}>
-		<Segment.Group {...props} style={{ height: '100%', width: '100%' }}>
+		<Segment.Group style={{ height: '100%', width: '100%' }}>
 			<Segment.Group direction="horizontal">
 				<Segment>
 					<Text>Left</Text>
@@ -129,20 +128,13 @@ export const NestedGroup = (props: SegmentGroupProps) => (
 /**
  *
  */
-export const SegmentWidthButtons = () => (
+export const SegmentWithButtons = () => (
 	<View style={{ height: 200, width: 400 }}>
 		<Segment.Group style={{ height: '100%', width: '100%' }}>
 			<Segment grow>
 				<Text>Dialog</Text>
 			</Segment>
-			<Segment.Group direction="horizontal" style={{ height: 50 }}>
-				<Segment style={{ padding: 0 }}>
-					<Button title="Cancel" type="critical" size="fill" />
-				</Segment>
-				<Segment grow style={{ padding: 0 }}>
-					<Button title="OK" type="success" size="fill" />
-				</Segment>
-			</Segment.Group>
+			<Segment.Buttons primaryAction={{ label: 'Primary', action: () => {}, type: 'success' }} />
 		</Segment.Group>
 	</View>
 );

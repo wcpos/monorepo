@@ -52,7 +52,7 @@ export const Background = styled.View<BackgroundProps>`
 	}};
 
 	opacity: ${({ disabled }) => (disabled ? 0.5 : 1)}
-	border-radius: ${({ theme, size }) => (size === 'fill' ? 'inherit' : theme.BUTTON_BORDER_RADIUS)};
+	border-radius: ${({ theme, size }) => (size === 'full' ? 'inherit' : theme.BUTTON_BORDER_RADIUS)};
 	border-width: ${({ background }) => (background === 'outline' ? StyleSheet.hairlineWidth : 0)};
 	padding: ${({ theme, size }) => {
 		switch (size) {
@@ -65,7 +65,7 @@ export const Background = styled.View<BackgroundProps>`
 	flex-direction: row;
 	align-items: center;
 	justify-content: center;
-	height: ${({ size }) => (size === 'fill' ? '100%' : 'auto')};
+	height: ${({ size }) => (size === 'full' ? '100%' : 'auto')};
 `;
 
 type ButtonGroupProps = import('./group').ButtonGroupProps;
@@ -86,5 +86,5 @@ export const Group = styled.View<ButtonGroupProps>`
 
 export const GroupChild = styled.View<ButtonGroupProps & { last: boolean }>`
 	margin-end: ${({ last, theme }) => (last ? '0' : theme.BUTTONGROUP_SPACING)};
-	flex: ${({ alignment }) => (alignment === 'fill' ? '1 1 auto' : 0)};
+	flex: ${({ alignment }) => (alignment === 'full' ? '1 1 auto' : 0)};
 `;
