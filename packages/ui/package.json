@@ -20,7 +20,7 @@
   "devDependencies": {
     "@wcpos/eslint-config": "*",
     "react-native-builder-bob": "^0.18.2",
-    "typescript": "^4.5.2"
+    "typescript": "^4.5.3"
   },
   "eslintConfig": {
     "extends": "@wcpos/eslint-config"
