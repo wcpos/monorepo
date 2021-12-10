@@ -1,245 +1,176 @@
-import PropTypes from 'prop-types';
 import * as React from 'react';
-import {
-	Dimensions,
-	LayoutChangeEvent,
-	StyleProp,
-	StyleSheet,
-	Text,
-	TextStyle,
-	TouchableHighlight,
-	TouchableWithoutFeedback,
-	View,
-	ViewStyle,
-} from 'react-native';
-// import alert from './alert';
-import ModalView from './view';
-// import operation from './operation';
-// import prompt from './prompt';
-import { ModalContainer } from './styles';
+import { Modal as RNModal, View } from 'react-native';
+import Portal from '../portal';
+import Backdrop from '../backdrop';
+import Text from '../text';
+import Button from '../button';
+import Segment, { SegmentButtonProps } from '../segment';
+import * as Styled from './styles';
 
-interface Action<T = TextStyle> {
-	text: string;
-	onPress?: () => void | Promise<any>;
-	style?: T | string;
-}
+export type Open = 'default' | 'top';
+export type Close = 'default' | 'alwaysOpen';
+export type Position = 'initial' | 'top';
 
-interface ModalPropsType<T> {
-	title?: React.ReactNode;
-	visible: boolean;
-	maskClosable?: boolean;
-	closable?: boolean;
-	footer?: Action<T>[];
-	onClose?: () => void;
-	transparent?: boolean;
-	popup?: boolean;
-	animated?: boolean;
-	locale?: object;
-	animationType?: any;
-	onAnimationEnd?: (visible: boolean) => void;
-	animateAppear?: boolean;
-	operation?: boolean;
-}
+export type ModalProps = {
+	/**
+	 * Using this props will show the modal all the time, and the number represents how expanded the modal has to be.
+	 */
+	alwaysOpen?: boolean | number;
+	/**
+	 * A React node that will define the content of the modal.
+	 */
+	children?: React.ReactNode;
+	/**
+	 *
+	 */
+	size?: 'small' | 'medium' | 'large' | 'full';
+	/**
+	 * Callback function when the `open` method is triggered.
+	 */
+	onOpen?(): void;
 
-const { maxHeight } = StyleSheet.create({
-	maxHeight: {
-		maxHeight: Dimensions.get('window').height,
-	},
-});
+	/**
+	 * Callback function when the modal is opened.
+	 */
+	onOpened?(): void;
 
-export interface ModalProps extends ModalPropsType<TextStyle> {
-	style?: StyleProp<ViewStyle>;
-	bodyStyle?: StyleProp<ViewStyle>;
-}
+	/**
+	 * Callback function when the `close` method is triggered.
+	 */
+	onClose?(): void;
 
-class Modal extends React.Component<ModalProps, any> {
-	static defaultProps = {
-		visible: false,
-		closable: false,
-		maskClosable: false,
-		style: {},
-		bodyStyle: {},
-		animationType: 'fade',
-		onClose() {},
-		footer: [],
-		transparent: false,
-		popup: false,
-		animateAppear: true,
-		operation: false,
+	/**
+	 * Callback function when the modal is closed.
+	 */
+	onClosed?(): void;
+	/**
+	 * Define if Modalize has to be wrap with the Modal component from react-native.
+	 * @default false
+	 */
+	withReactModal?: boolean;
+} & {
+	primaryAction?: SegmentButtonProps['primaryAction'];
+	secondaryActions?: SegmentButtonProps['secondaryActions'];
+};
+
+const modalSizes = {
+	small: 300,
+	medium: 500,
+	large: 700,
+	full: undefined,
+};
+
+/**
+ *
+ */
+export const ModalBase = (
+	{
+		children,
+		onOpen,
+		onClose,
+		withReactModal = false,
+		alwaysOpen = false,
+		size = 'medium',
+		primaryAction,
+	}: ModalProps,
+	ref
+) => {
+	const [isVisible, setIsVisible] = React.useState(false);
+
+	const handleAnimateOpen = (dest: Open = 'default'): void => {
+		setIsVisible(true);
+		// setShowContent(true);
 	};
-	// static alert: typeof alert;
-	// static operation: typeof operation;
-	// static prompt: typeof prompt;
 
-	root: View | null = null;
-
-	onFooterLayout = (e: LayoutChangeEvent) => {
-		if (this.root) {
-			this.root.setNativeProps({
-				style: [{ paddingBottom: e.nativeEvent.layout.height }, maxHeight],
-			});
+	// eslint-disable-next-line default-param-last
+	const handleAnimateClose = (dest: Close = 'default', callback?: () => void): void => {
+		if (callback) {
+			callback();
 		}
+
+		setIsVisible(false);
 	};
 
-	saveRoot = (root: any) => {
-		this.root = root;
+	const handleClose = (dest?: Close, callback?: () => void): void => {
+		if (onClose) {
+			onClose();
+		}
+
+		handleAnimateClose(dest, callback);
 	};
 
-	render() {
-		const {
-			title,
-			closable,
-			footer,
-			children,
-			style,
-			animateAppear,
-			maskClosable,
-			popup,
-			transparent,
-			visible,
-			onClose,
-			bodyStyle,
-			onAnimationEnd,
-		} = this.props;
+	const handleBackdropPress = (): void => {
+		handleClose();
+	};
 
-		return (
-			// <WithTheme styles={this.props.styles} themeStyles={modalStyles}>
-			// 	{styles => {
-			// 		let btnGroupStyle = styles.buttonGroupV;
-			// 		let horizontalFlex = {};
-			// 		if (footer && footer.length === 2 && !this.props.operation) {
-			// 			btnGroupStyle = styles.buttonGroupH;
-			// 			horizontalFlex = { flex: 1 };
-			// 		}
-			// 		const buttonWrapStyle =
-			// 			footer && footer.length === 2 ? styles.buttonWrapH : styles.buttonWrapV;
-			// 		let footerDom;
-			// 		if (footer && footer.length) {
-			// 			const footerButtons = footer.map((button, i) => {
-			// 				let buttonStyle = {};
-			// 				if (this.props.operation) {
-			// 					buttonStyle = styles.buttonTextOperation;
-			// 				}
-			// 				if (button.style) {
-			// 					buttonStyle = button.style;
-			// 					if (typeof buttonStyle === 'string') {
-			// 						const styleMap: {
-			// 							[key: string]: object;
-			// 						} = {
-			// 							cancel: {},
-			// 							default: {},
-			// 							destructive: { color: 'red' },
-			// 						};
-			// 						buttonStyle = styleMap[buttonStyle] || {};
-			// 					}
-			// 				}
-			// 				const noneBorder =
-			// 					footer && footer.length === 2 && i === 1 ? { borderRightWidth: 0 } : {};
-			// 				const onPressFn = () => {
-			// 					if (button.onPress) {
-			// 						button.onPress();
-			// 					}
-			// 					if (onClose) {
-			// 						onClose();
-			// 					}
-			// 				};
-			// 				return (
-			// 					<TouchableHighlight
-			// 						key={i}
-			// 						style={horizontalFlex}
-			// 						underlayColor="#ddd"
-			// 						onPress={onPressFn}
-			// 					>
-			// 						<View style={[buttonWrapStyle, noneBorder]}>
-			// 							<Text style={[styles.buttonText, buttonStyle]}>{button.text}</Text>
-			// 						</View>
-			// 					</TouchableHighlight>
-			// 				);
-			// 			});
-			// 			footerDom = (
-			// 				<View style={[btnGroupStyle, styles.footer]} onLayout={this.onFooterLayout}>
-			// 					{footerButtons}
-			// 				</View>
-			// 			);
-			// 		}
+	React.useImperativeHandle(ref, () => ({
+		open(dest?: Open): void {
+			if (onOpen) {
+				onOpen();
+			}
 
-			// 		let animType = this.props.animationType;
-			// 		if (transparent) {
-			// 			if (animType === 'slide') {
-			// 				animType = 'slide-up';
-			// 			}
-			// 			const closableDom = closable ? (
-			// 				<View style={[styles.closeWrap]}>
-			// 					<TouchableWithoutFeedback onPress={onClose}>
-			// 						<View>
-			// 							<Text style={[styles.close]}>×</Text>
-			// 						</View>
-			// 					</TouchableWithoutFeedback>
-			// 				</View>
-			// 			) : null;
-			// 			return (
-			// 				<View style={styles.container}>
-			// 					<ModalView
-			// 						onClose={onClose}
-			// 						animationType={animType}
-			// 						wrapStyle={transparent ? styles.wrap : undefined}
-			// 						style={[styles.innerContainer, style]}
-			// 						visible={visible}
-			// 						onAnimationEnd={onAnimationEnd}
-			// 						animateAppear={animateAppear}
-			// 						maskClosable={maskClosable}
-			// 					>
-			// 						<View style={maxHeight} ref={this.saveRoot}>
-			// 							{title ? <Text style={[styles.header]}>{title}</Text> : null}
-			// 							<View style={[styles.body, bodyStyle]}>{children}</View>
-			// 							{footerDom}
-			// 							{closableDom}
-			// 						</View>
-			// 					</ModalView>
-			// 				</View>
-			// 			);
-			// 		}
-			// 		if (popup) {
-			// 			let aType = 'SlideDown';
-			// 			if (animType === 'slide-up') {
-			// 				animType = 'slide-up';
-			// 				aType = 'SlideUp';
-			// 			} else {
-			// 				animType = 'slide-down';
-			// 			}
-			// 			return (
-			// 				<View style={styles.container}>
-			// 					<ModalView
-			// 						onClose={onClose}
-			// 						animationType={animType}
-			// 						// tslint:disable-next-line:jsx-no-multiline-js
-			// 						style={[styles.popupContainer, (styles as any)[`popup${aType}`], style]}
-			// 						visible={visible}
-			// 						onAnimationEnd={onAnimationEnd}
-			// 						animateAppear={animateAppear}
-			// 						maskClosable={maskClosable}
-			// 					>
-			// 						<View ref={this.saveRoot} style={bodyStyle}>
-			// 							{children}
-			// 						</View>
-			// 					</ModalView>
-			// 				</View>
-			// 			);
-			// 		}
-			// 		if (animType === 'slide') {
-			// 			animType = undefined;
-			// 		}
-			// 		return (
-			<ModalContainer>
-				<ModalView visible={visible} onClose={onClose}>
-					<View style={{ height: '100%' }}>{children}</View>
-				</ModalView>
-			</ModalContainer>
-			// 		);
-			// 	}}
-			// </WithTheme>
-		);
+			handleAnimateOpen(dest);
+		},
+
+		close(dest?: Close, callback?: () => void): void {
+			handleClose(dest, callback);
+		},
+	}));
+
+	React.useEffect(() => {
+		if (alwaysOpen) {
+			handleAnimateOpen();
+		}
+	}, [alwaysOpen]);
+
+	const renderElement = (Element: React.ReactNode): JSX.Element =>
+		typeof Element === 'function' ? Element() : Element;
+
+	const renderChildren = (): React.ReactNode => {
+		return children;
+	};
+
+	const renderFooter = () => {
+		if (primaryAction) return <Segment.Buttons primaryAction={primaryAction} />;
+		return null;
+	};
+
+	const renderModal = (
+		<>
+			<Backdrop onPress={handleBackdropPress} />
+			<Styled.Container>
+				<Segment.Group style={{ width: modalSizes[size], maxWidth: '80%' }}>
+					<Segment>
+						<Text>header</Text>
+					</Segment>
+					<Segment>{renderChildren()}</Segment>
+					{renderFooter()}
+				</Segment.Group>
+			</Styled.Container>
+		</>
+	);
+
+	const renderReactModal = (child: JSX.Element): JSX.Element => (
+		<RNModal
+			supportedOrientations={['landscape', 'portrait', 'portrait-upside-down']}
+			// onRequestClose={handleBackPress}
+			hardwareAccelerated
+			visible={isVisible}
+			transparent
+		>
+			{child}
+		</RNModal>
+	);
+
+	if (!isVisible) {
+		return null;
 	}
-}
 
-export default Modal;
+	if (withReactModal) {
+		return renderReactModal(renderModal);
+	}
+
+	return <Portal keyPrefix="Modal">{renderModal}</Portal>;
+};
+
+export const Modal = React.forwardRef(ModalBase);

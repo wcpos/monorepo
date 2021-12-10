@@ -8,7 +8,7 @@ import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
 import { QueryProvider } from '@wcpos/common/src/hooks/use-query';
 import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
-import Cart from './cart';
+import CartTabs from './cart/tabs';
 import Products from './products';
 import Checkout from './checkout';
 import ResizeableColumns from './resizable-columns';
@@ -38,25 +38,9 @@ export const POSContext = React.createContext<POSContextProps>({
  *
  */
 const POS = () => {
-	const { storeDB } = useAppState();
 	const productsUI = useObservableSuspense(useUIResource('pos.products'));
-	const cartUI = useObservableSuspense(useUIResource('pos.cart'));
 	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
 	const [currentCustomer, setCurrentCustomer] = React.useState<CustomerDocument | undefined>();
-
-	const orderQuery = storeDB.collections.orders.find().where('status').eq('pos-open');
-
-	const orders: OrderDocument[] = useObservableState(
-		orderQuery.$.pipe(
-			filter((o) => {
-				/** @TODO - remove this hack!
-				 * why is orderQuery emitting on changes to order.lineItems??
-				 */
-				return orders?.length !== o.length;
-			})
-		),
-		[]
-	);
 
 	const context = React.useMemo(
 		() => ({ currentOrder, setCurrentOrder, currentCustomer, setCurrentCustomer }),
@@ -79,7 +63,7 @@ const POS = () => {
 						<Checkout />
 					) : (
 						<ErrorBoundary>
-							<Cart ui={cartUI} orders={orders} />
+							<CartTabs />
 						</ErrorBoundary>
 					)
 				}

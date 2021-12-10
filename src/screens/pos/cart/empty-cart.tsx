@@ -13,30 +13,15 @@ import CustomerSelect from '../../common/customer-select';
 import AddCustomer from '../../common/add-edit-customer';
 import UISettings from '../../common/ui-settings';
 import Totals from './totals';
-import Buttons from './buttons';
-import Table from './table';
 
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
-
-interface CartProps {
-	order: OrderDocument;
-}
-
-const Cart = ({ order }: CartProps) => {
+const Cart = () => {
 	const ui = useObservableSuspense(useUIResource('pos.cart'));
 
 	return (
-		<Segment.Group style={{ width: '100%', height: '100%' }}>
-			<Segment style={{ flexDirection: 'row', alignItems: 'center' }}>
+		<Segment.Group>
+			<Segment>
 				<UISettings ui={ui} />
 			</Segment>
-			<Segment grow style={{ padding: 0 }}>
-				<Table order={order} ui={ui} />
-			</Segment>
-			<Segment.Buttons
-				primaryAction={{ label: order.total, action: () => {}, type: 'success' }}
-				secondaryActions={[{ label: 'Void', action: () => {}, type: 'critical' }]}
-			/>
 		</Segment.Group>
 	);
 };

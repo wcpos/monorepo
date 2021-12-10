@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
-import Modal from '@wcpos/common/src/components/modal4';
+import Modal from '@wcpos/common/src/components/modal';
 import TextInput from '@wcpos/common/src/components/textinput';
 import http from '@wcpos/common/src/lib/http';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';

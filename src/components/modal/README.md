@@ -1,0 +1,1 @@
+Inspired by https://github.com/jeremybarbet/react-native-modalize

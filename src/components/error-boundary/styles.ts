@@ -14,7 +14,7 @@ export const IconContainer = styled.View`
  * flexShrink: 1 is required to make text wrap, not sure why?
  */
 export const TextContainer = styled.View`
-	flex-shrink: 1;
+	flex: 1;
 	padding: ${({ theme }) => theme.PAGE_MAIN_PADDING_X};
 `;
 

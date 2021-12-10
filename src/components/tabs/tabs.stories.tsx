@@ -1,30 +1,41 @@
 import * as React from 'react';
-import { action } from '@storybook/addon-actions';
+import { View } from 'react-native';
 import { Tabs, TabsProps } from './tabs';
-import { Tab } from './tab';
-import Text from '../text';
 
 export default {
 	title: 'Components/Tabs',
 	component: Tabs,
-	subcomponents: [Tab],
 };
 
-export const BasicUsage = (props: TabsProps) => {
-	const [selected, setSelected] = React.useState(props.selected ?? 0);
+const FirstRoute = () => <View style={{ backgroundColor: '#ff4081', width: 100, height: 100 }} />;
 
-	const tabContent = selected === 0 ? <Text>Foo</Text> : <Text>Bar</Text>;
+const SecondRoute = () => <View style={{ backgroundColor: '#673ab7', width: 100, height: 100 }} />;
+
+const renderScene = ({ route }) => {
+	switch (route.key) {
+		case 'first':
+			return <FirstRoute />;
+		case 'second':
+			return <SecondRoute />;
+		default:
+			return null;
+	}
+};
+
+const routes = [
+	{ key: 'first', title: 'First' },
+	{ key: 'second', title: 'Second' },
+];
+
+export const BasicUsage = (props: TabsProps<typeof routes[number]>) => {
+	const [index, setIndex] = React.useState(0);
 
 	return (
-		<Tabs {...props} selected={selected} onSelect={setSelected}>
-			{tabContent}
-		</Tabs>
+		<Tabs<typeof routes[number]>
+			navigationState={{ index, routes }}
+			renderScene={renderScene}
+			onIndexChange={setIndex}
+			{...props}
+		/>
 	);
-};
-BasicUsage.args = {
-	tabs: ['Developers', 'Designers'],
-	selected: 0,
-};
-BasicUsage.argTypes = {
-	children: { control: null },
 };

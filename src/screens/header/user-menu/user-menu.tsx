@@ -4,7 +4,7 @@ import { useNavigation, CommonActions } from '@react-navigation/native';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Dropdown from '@wcpos/common/src/components/dropdown';
 import Text from '@wcpos/common/src/components/text';
-import Modal, { useModal } from '@wcpos/common/src/components/modal4';
+import Modal, { useModal } from '@wcpos/common/src/components/modal';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import UserSettings from './user-settings';
 import * as Styled from './styles';
