@@ -4,7 +4,7 @@ import schema from './schema.json';
 import { calcTaxes, sumTaxes, sumItemizedTaxes } from '../utils';
 import statics from './statics';
 
-export type FeeLineSchema = import('rxdb').RxJsonSchema<import('./interface').WooCommerceOrderFeeLineSchema>;
+export type FeeLineSchema = import('./interface').WooCommerceOrderFeeLineSchema;
 export type FeeLineDocument = import('rxdb').RxDocument<FeeLineSchema, FeeLineMethods>;
 export type FeeLineCollection = import('rxdb').RxCollection<
 	FeeLineDocument,

@@ -5,7 +5,7 @@ import get from 'lodash/get';
 import pull from 'lodash/pull';
 import schema from './schema.json';
 
-export type UserSchema = import('rxdb').RxJsonSchema<import('./interface').UserSchema>;
+export type UserSchema = import('./interface').UserSchema;
 export type UserDocument = import('rxdb').RxDocument<UserSchema, UserMethods>;
 export type UserCollection = import('rxdb').RxCollection<UserDocument, UserMethods, UserStatics>;
 type UserStatics = Record<string, never>;
@@ -51,13 +51,15 @@ const methods: UserMethods = {
 	},
 
 	/**
-	 *
+	 * @TODO - $pull is not implemented yet, PR to RxDB?
 	 */
 	async removeSite(this: UserDocument, site: SiteDocument) {
-		await site.remove();
-		await this.atomicPatch({
-			sites: pull(this.sites as any[], site.localID),
+		// await this.update({ $pull: { sites: site.localID } });
+		await this.atomicUpdate((oldData) => {
+			oldData.sites = pull(oldData.sites || [], site.localID);
+			return oldData;
 		});
+		await site.remove();
 	},
 
 	/**
