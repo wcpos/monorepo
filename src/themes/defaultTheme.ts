@@ -2,6 +2,7 @@ import Platform from '@wcpos/common/src/lib/platform';
 import { math } from 'polished';
 import palette from './palettes/blue-grey.json';
 import normalizeText from './normalize-text';
+import { spacing } from './spacing';
 
 const colors = {
 	background: palette['blue-grey-050'],
@@ -49,6 +50,8 @@ const zIndex = {
 	toast: 400,
 	tooltip: 500,
 };
+
+export type Spacing = keyof typeof spacing;
 
 const theme = {
 	APP_BACKGROUND_COLOR: colors.background,
@@ -187,6 +190,8 @@ const theme = {
 	TOAST_PADDING_X: '10px',
 	TOAST_PADDING_Y: '5px',
 	TOAST_TEXT_COLOR: '#FFFFFF',
+
+	spacing,
 };
 
 export default theme;

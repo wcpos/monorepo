@@ -1,8 +1,6 @@
 import schema from './schema.json';
 
-export type ProductVariationSchema = import('rxdb').RxJsonSchema<
-	import('./interface').WooCommerceProductVariationSchema
->;
+export type ProductVariationSchema = import('./interface').WooCommerceProductVariationSchema;
 export type ProductVariationDocument = import('rxdb').RxDocument<
 	ProductVariationSchema,
 	ProductVariationMethods

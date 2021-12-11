@@ -1,6 +1,6 @@
-import defaultTheme, { ColorTypes } from './defaultTheme';
+import defaultTheme from './defaultTheme';
 
-export type { ColorTypes };
+export type { ColorTypes, Spacing } from './defaultTheme';
 export { switcher as default } from './switcher';
 
 /**

@@ -19,7 +19,7 @@ export interface Action {
 	type?: import('@wcpos/common/src/themes').ColorTypes;
 }
 
-export type SegmentButtonProps = {
+export type SegmentButtonsProps = {
 	/**
 	 * Primary action to perform in the Dialog. Will be displayed as a Primary Button.
 	 */
@@ -39,10 +39,10 @@ export const SegmentButtons = ({
 	secondaryActions,
 	style,
 	...rest
-}: SegmentButtonProps) => {
+}: SegmentButtonsProps) => {
 	return (
 		<SegmentGroup direction="horizontal" style={{ height: 50 }}>
-			<Segment {...rest} style={[{ padding: 0 }, StyleSheet.flatten(style)]}>
+			<Segment {...rest} grow style={[{ padding: 0 }, StyleSheet.flatten(style)]}>
 				<Button
 					title={primaryAction.label}
 					type={primaryAction.type}

@@ -84,20 +84,20 @@ export const Group = styled.View<StyledGroupProps>`
 	flex-shrink: 1;
 	flex-basis: auto;
 
-	border-width: ${({ theme, isNested }) => (isNested ? 0 : theme.SEGMENT_BORDER_WIDTH)};
-	border-color: ${({ theme }) => theme.SEGMENT_BORDER_COLOR};
-	border-style: solid;
 	border-radius: ${({ group, theme, isNested }) =>
 		group === 'middle' || isNested ? '0' : theme.SEGMENT_BORDER_RADIUS};
 
 	${({ raised }) =>
 		raised &&
-		Platform.select({
-			android: css`
-				elevation: 2;
-			`,
-			default: css`
-				box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
-			`,
-		})};
+		css`
+			shadow-offset: { width: 0, height: 1 };
+			shadow-opacity: 0.22;
+			shadow-radius: 7.5px;
+			shadow-color: ${({ theme }) => theme.PAGE_BACKGROUND_COLOR};
+			elevation: 5;
+			`};
 `;
+
+// border-width: ${({ theme, isNested }) => (isNested ? 0 : theme.SEGMENT_BORDER_WIDTH)};
+// border-color: ${({ theme }) => theme.SEGMENT_BORDER_COLOR};
+// border-style: solid;

@@ -4,7 +4,6 @@ export const Container = styled.View`
 	align-items: center;
 	justify-content: center;
 	flex: 1;
-	padding: ${({ theme }) => `${theme.PAGE_MAIN_PADDING_Y} ${theme.PAGE_MAIN_PADDING_X}`};
 `;
 
 export const SiteWrapper = styled.View`

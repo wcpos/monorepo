@@ -1,7 +1,7 @@
 import schema from './schema.json';
 import statics from './statics';
 
-export type ProductSchema = import('rxdb').RxJsonSchema<import('./interface').WooCommerceProductSchema>;
+export type ProductSchema = import('./interface').WooCommerceProductSchema;
 export type ProductDocument = import('rxdb').RxDocument<ProductSchema, ProductMethods>;
 export type ProductCollection = import('rxdb').RxCollection<
 	ProductDocument,

@@ -1,18 +1,10 @@
 import { switchMap } from 'rxjs/operators';
 import get from 'lodash/get';
 import schema from './schema.json';
-import { ConnectionService } from './service';
 
-export type SiteSchema = import('rxdb').RxJsonSchema<import('./interface').SiteSchema>;
-export type SiteDocument = import('rxdb').RxDocument<
-	SiteSchema,
-	SiteMethods & { connection: ConnectionService }
->;
-export type SiteCollection = import('rxdb').RxCollection<
-	SiteDocument,
-	SiteMethods & { connection: ConnectionService },
-	SiteStatics
->;
+export type SiteSchema = import('./interface').SiteSchema;
+export type SiteDocument = import('rxdb').RxDocument<SiteSchema, SiteMethods>;
+export type SiteCollection = import('rxdb').RxCollection<SiteDocument, SiteMethods, SiteStatics>;
 type SiteStatics = Record<string, unknown>;
 type WPCredentialsCollection = import('../wp-credentials').WPCredentialsCollection;
 type WPCredentialsDocument = import('../wp-credentials').WPCredentialsDocument;
@@ -129,12 +121,12 @@ const methods: SiteMethods = {
 /**
  *
  */
-function postCreate(this: SiteCollection, plainData: any, rxDocument: SiteDocument) {
-	const connectionServiceInstance = new ConnectionService(rxDocument);
-	Object.defineProperty(rxDocument, 'connection', {
-		get: () => connectionServiceInstance,
-	});
-}
+// function postCreate(this: SiteCollection, plainData: any, rxDocument: SiteDocument) {
+// 	const connectionServiceInstance = new ConnectionService(rxDocument);
+// 	Object.defineProperty(rxDocument, 'connection', {
+// 		get: () => connectionServiceInstance,
+// 	});
+// }
 
 export const sites = {
 	schema,
@@ -144,10 +136,10 @@ export const sites = {
 	// attachments: {},
 	options: {
 		middlewares: {
-			postCreate: {
-				handle: postCreate,
-				parallel: false,
-			},
+			// postCreate: {
+			// 	handle: postCreate,
+			// 	parallel: false,
+			// },
 		},
 	},
 	// migrationStrategies: {},

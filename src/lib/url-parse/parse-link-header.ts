@@ -39,8 +39,10 @@ function parseLink(link: string) {
 	return info;
 }
 
-export default function (linkHeader = '') {
+const parseLinkHeader = (linkHeader: string): Record<string, unknown> => {
 	const p = linkHeader.split(/,\s*</).map(parseLink).filter(hasRel);
 
 	return p.reduce(intoRels, {});
-}
+};
+
+export default parseLinkHeader;

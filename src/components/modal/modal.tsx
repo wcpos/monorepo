@@ -1,10 +1,11 @@
 import * as React from 'react';
-import { Modal as RNModal, View } from 'react-native';
+import { Modal as RNModal, KeyboardAvoidingView } from 'react-native';
 import Portal from '../portal';
 import Backdrop from '../backdrop';
 import Text from '../text';
 import Button from '../button';
 import Segment, { SegmentButtonProps } from '../segment';
+import Header from './header';
 import * as Styled from './styles';
 
 export type Open = 'default' | 'top';
@@ -48,6 +49,15 @@ export type ModalProps = {
 	 * @default false
 	 */
 	withReactModal?: boolean;
+	/**
+	 * A header component outside of the ScrollView, on top of the modal.
+	 */
+	HeaderComponent?: React.ReactNode;
+
+	/**
+	 * A footer component outside of the ScrollView, on top of the modal.
+	 */
+	FooterComponent?: React.ReactNode;
 } & {
 	primaryAction?: SegmentButtonProps['primaryAction'];
 	secondaryActions?: SegmentButtonProps['secondaryActions'];
@@ -72,6 +82,7 @@ export const ModalBase = (
 		alwaysOpen = false,
 		size = 'medium',
 		primaryAction,
+		HeaderComponent = Header,
 	}: ModalProps,
 	ref
 ) => {
@@ -140,9 +151,9 @@ export const ModalBase = (
 			<Backdrop onPress={handleBackdropPress} />
 			<Styled.Container>
 				<Segment.Group style={{ width: modalSizes[size], maxWidth: '80%' }}>
-					<Segment>
-						<Text>header</Text>
-					</Segment>
+					<Segment.Group direction="horizontal">
+						<Header title="Header" handleClose={handleClose} />
+					</Segment.Group>
 					<Segment>{renderChildren()}</Segment>
 					{renderFooter()}
 				</Segment.Group>

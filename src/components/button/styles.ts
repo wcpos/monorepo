@@ -52,8 +52,9 @@ export const Background = styled.View<BackgroundProps>`
 	}};
 
 	opacity: ${({ disabled }) => (disabled ? 0.5 : 1)}
-	border-radius: ${({ theme, size }) => (size === 'full' ? 'inherit' : theme.BUTTON_BORDER_RADIUS)};
-	border-width: ${({ background }) => (background === 'outline' ? StyleSheet.hairlineWidth : 0)};
+	border-radius: ${({ theme }) => theme.BUTTON_BORDER_RADIUS};
+	border-width: ${({ background }) =>
+		background === 'outline' ? `${StyleSheet.hairlineWidth}px` : 0};
 	padding: ${({ theme, size }) => {
 		switch (size) {
 			case 'small':
@@ -62,10 +63,11 @@ export const Background = styled.View<BackgroundProps>`
 				return `${theme.BUTTON_PADDING_Y} ${theme.BUTTON_PADDING_X}`;
 		}
 	}}
-	flex-direction: row;
 	align-items: center;
 	justify-content: center;
 	height: ${({ size }) => (size === 'full' ? '100%' : 'auto')};
+	
+	flex-direction: row;
 `;
 
 type ButtonGroupProps = import('./group').ButtonGroupProps;

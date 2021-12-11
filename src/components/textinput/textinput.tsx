@@ -20,6 +20,21 @@ import Icon from '../icon';
 import Portal from '../portal';
 import { BaseInputContainer } from '../base-input';
 
+export interface Action {
+	/**
+	 * Label to display.
+	 */
+	label: string;
+	/**
+	 * Action to execute on click.
+	 */
+	action?: (value: string) => void;
+	/**
+	 *
+	 */
+	type?: import('@wcpos/common/src/themes').ColorTypes;
+}
+
 export interface TextInputProps {
 	/**
 	 * Label to display above the input.
@@ -58,6 +73,10 @@ export interface TextInputProps {
 	 * Set to `true` to disable.
 	 */
 	disabled?: boolean;
+	/**
+	 * Set to `true` for loading state.
+	 */
+	loading?: boolean;
 	/**
 	 * Set to `true` to expand width to fit text.
 	 */
@@ -138,13 +157,9 @@ export interface TextInputProps {
 	 */
 	onKeyPress?: RNTextInputProps['onKeyPress'];
 	/**
-	 * Common action button (WIP)
+	 * Primary action to perform in the TextInput.
 	 */
-	action?: string;
-	/**
-	 * Called when action is pressed
-	 */
-	onAction?: (value: string) => void;
+	action?: Action;
 	/**
 	 * Styles for the textinput container
 	 */
@@ -205,10 +220,10 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 			onFocus: onFocusProp,
 			onBlur: onBlurProp,
 			action,
-			onAction,
 			autosize = false,
 			clearable = false,
 			style,
+			loading,
 		},
 		ref
 	) => {
@@ -263,8 +278,10 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 		/**
 		 * action
 		 */
-		const handleOnAction = () => {
-			if (isFunction(onAction)) onAction(value);
+		const handleSubmitText = () => {
+			if (typeof action?.action === 'function') {
+				action?.action(value);
+			}
 		};
 
 		/**
@@ -385,9 +402,10 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 					)}
 					{action && (
 						<Button
-							title={action}
-							onPress={handleOnAction}
+							title={action.label}
+							onPress={handleSubmitText}
 							style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+							loading={loading}
 						/>
 					)}
 					{autosize && <MeasureText value={value} onMeasure={handleMeasure} />}

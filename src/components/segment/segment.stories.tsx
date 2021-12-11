@@ -128,6 +128,33 @@ export const NestedGroup = () => (
 /**
  *
  */
+export const NestedGroup2 = () => (
+	<View style={{ height: 400, width: 400 }}>
+		<Segment.Group direction="horizontal" style={{ height: '100%', width: '100%' }}>
+			<Segment>
+				<Text>Left</Text>
+			</Segment>
+			<Segment.Group grow>
+				<Segment>
+					<Text>Nested Top</Text>
+				</Segment>
+				<Segment grow>
+					<Text>Nested Middle</Text>
+				</Segment>
+				<Segment>
+					<Text>Nested Bottom</Text>
+				</Segment>
+			</Segment.Group>
+			<Segment>
+				<Text>Right</Text>
+			</Segment>
+		</Segment.Group>
+	</View>
+);
+
+/**
+ *
+ */
 export const SegmentWithButtons = () => (
 	<View style={{ height: 200, width: 400 }}>
 		<Segment.Group style={{ height: '100%', width: '100%' }}>

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { StyleProp, ViewStyle, GestureResponderEvent } from 'react-native';
 import Text from '../text';
 import Pressable from '../pressable';
+import Icon from '../icon';
 import * as Styled from './styles';
 
 export type Props = {
@@ -91,6 +92,10 @@ const Button = ({
 	}
 
 	const renderTitle = () => {
+		if (loading) {
+			return <Icon name="spinner" />;
+		}
+
 		if (typeof title === 'string') {
 			return (
 				<Text type={textType} size={size}>

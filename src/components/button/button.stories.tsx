@@ -160,3 +160,35 @@ export const FilledButton = () => (
 		</View>
 	</View>
 );
+
+export const LoadingState = () => (
+	<>
+		<View style={{ padding: 10 }}>
+			<Button onPress={action('pressed')} title="Primary" loading />
+		</View>
+		<View style={{ padding: 10 }}>
+			<Button onPress={action('pressed')} title="Secondary" type="secondary" loading />
+		</View>
+		<View style={{ padding: 10 }}>
+			<Button onPress={action('pressed')} title="Attention" type="attention" loading />
+		</View>
+		<View style={{ padding: 10 }}>
+			<Button onPress={action('pressed')} title="Critical" type="critical" loading />
+		</View>
+		<View style={{ padding: 10 }}>
+			<Button onPress={action('pressed')} title="Info" type="info" loading />
+		</View>
+		<View style={{ padding: 10 }}>
+			<Button onPress={action('pressed')} title="Success" type="success" loading />
+		</View>
+		<View style={{ padding: 10 }}>
+			<Button onPress={action('pressed')} title="Warning" type="warning" loading />
+		</View>
+		<View style={{ padding: 10 }}>
+			<Button onPress={action('pressed')} title="Inverse" type="inverse" loading />
+		</View>
+		<View style={{ padding: 10 }}>
+			<Button onPress={action('pressed')} title="Disabled" disabled loading />
+		</View>
+	</>
+);

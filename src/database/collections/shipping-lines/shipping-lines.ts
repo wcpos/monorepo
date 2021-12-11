@@ -5,7 +5,7 @@ import schema from './schema.json';
 import { calcTaxes, sumTaxes, sumItemizedTaxes } from '../utils';
 import statics from './statics';
 
-export type ShippingLineSchema = import('rxdb').RxJsonSchema<import('./interface').WooCommerceOrderShippingLineSchema>;
+export type ShippingLineSchema = import('./interface').WooCommerceOrderShippingLineSchema;
 export type ShippingLineDocument = import('rxdb').RxDocument<
 	ShippingLineSchema,
 	ShippingLineMethods

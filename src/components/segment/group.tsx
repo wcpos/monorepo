@@ -55,7 +55,6 @@ export const SegmentGroup = ({
 		const _isNested = get(child, ['type', 'name']) === 'SegmentGroup';
 
 		const segmentProps = {
-			direction, // direction may be overwritten by child
 			group: isFirst ? 'first' : isLast ? 'last' : 'middle',
 			...child.props,
 			raised: false, // should always be false for grouped segments
