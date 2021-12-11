@@ -19,8 +19,10 @@ export interface UseMeasureProps {
 
 export const initialMeasurements = {
 	height: 0,
-	pageX: -1000,
-	pageY: -1000,
+	// pageX: -1000,
+	// pageY: -1000,
+	pageX: 100,
+	pageY: 100,
 	width: 0,
 	x: 0,
 	y: 0,
