@@ -44,7 +44,6 @@ export const BasicUsage = (props: ModalProps) => {
 
 			<Modal ref={modalRef}>
 				<Text>Modal Content</Text>
-				<Icon name="xmark" onPress={onClose} />
 			</Modal>
 		</>
 	);
@@ -59,7 +58,6 @@ export const UseModal = (props: ModalProps) => {
 
 			<Modal ref={ref}>
 				<Text>Modal Content</Text>
-				<Icon name="xmark" onPress={close} />
 			</Modal>
 		</>
 	);

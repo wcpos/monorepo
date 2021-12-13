@@ -7,7 +7,7 @@ import forEach from 'lodash/forEach';
 import Tag from '@wcpos/common/src/components/tag';
 import Text from '@wcpos/common/src/components/text';
 import Button from '@wcpos/common/src/components/button';
-import Dialog from '@wcpos/common/src/components/dialog';
+import Dialog, { useDialog } from '@wcpos/common/src/components/dialog';
 import * as Styled from './styles';
 
 interface Props {
@@ -20,8 +20,8 @@ function sanitizeStoreName(id: string) {
 }
 
 const WpUser = ({ site, wpUser }: Props) => {
-	const [showDialog, setShowDialog] = React.useState(false);
 	const [stores] = useObservableState(wpUser.getStores$, []);
+	const { ref: dialogRef, open: openConfirmDialog } = useDialog();
 
 	// 	/**
 	//  * Populate stores on first render
@@ -51,61 +51,38 @@ const WpUser = ({ site, wpUser }: Props) => {
 	/**
 	 *
 	 */
-	const handleStoreRemove = React.useCallback(async () => {
-		forEach(wpUser.stores, async (id) => {
-			// const db = await DatabaseService.getStoreDB(sanitizeStoreName(id));
-			// await db?.remove();
-		});
-		// need to remove wpUser from site from site
-		await site.update({
-			$pullAll: {
-				wpCredentials: [wpUser.localID],
-			},
-		});
-		await wpUser.remove();
-
-		setShowDialog(false);
-	}, [site, wpUser]);
-
-	/**
-	 *
-	 */
-	const handleWpUserRemove = React.useCallback(() => {
-		setShowDialog(true);
-	}, [setShowDialog]);
+	const handleUserRemove = React.useCallback(
+		async (confirm) => {
+			if (!confirm) return;
+			forEach(wpUser.stores, async (id) => {
+				// const db = await DatabaseService.getStoreDB(sanitizeStoreName(id));
+				// await db?.remove();
+			});
+			// need to remove wpUser from site from site
+			await site.update({
+				$pullAll: {
+					wpCredentials: [wpUser.localID],
+				},
+			});
+			await wpUser.remove();
+		},
+		[site, wpUser]
+	);
 
 	return (
 		<>
 			<Tag
 				removable
 				onPress={handleStoreSelect}
-				onRemove={handleWpUserRemove}
+				onRemove={openConfirmDialog}
 				disabled={stores.length === 0}
 			>
 				{wpUser.displayName ? wpUser.displayName : 'No name?'}
 			</Tag>
-			{showDialog && (
-				<Dialog
-					title="Delete User"
-					open
-					onClose={() => {
-						setShowDialog(false);
-					}}
-					primaryAction={{ label: 'Confirm', action: handleStoreRemove, type: 'critical' }}
-					secondaryActions={[
-						{
-							label: 'Cancel',
-							action: () => {
-								setShowDialog(false);
-							},
-						},
-					]}
-				>
-					<Dialog.Section>
-						<Text>You are about to remove all stores associated with this user</Text>
-					</Dialog.Section>
-				</Dialog>
-			)}
+
+			<Dialog ref={dialogRef} onClose={handleUserRemove}>
+				Remove logged in user?
+			</Dialog>
 		</>
 	);
 };

@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 import { math } from 'polished';
 
 type ButtonProps = import('./button').Props;
-type BackgroundProps = Pick<ButtonProps, 'background' | 'type' | 'disabled' | 'size'>;
+type BackgroundProps = Pick<ButtonProps, 'background' | 'type' | 'disabled' | 'size' | 'fill'>;
 
 export const Background = styled.View<BackgroundProps>`
 	background-color: ${({ background, type, theme }) => {
@@ -63,11 +63,12 @@ export const Background = styled.View<BackgroundProps>`
 				return `${theme.BUTTON_PADDING_Y} ${theme.BUTTON_PADDING_X}`;
 		}
 	}}
-	align-items: center;
-	justify-content: center;
-	height: ${({ size }) => (size === 'full' ? '100%' : 'auto')};
 	
 	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	flex-grow: ${({ fill }) => (fill ? 1 : 0)};
+	height: ${({ fill }) => (fill ? '100%' : 'auto')};
 `;
 
 type ButtonGroupProps = import('./group').ButtonGroupProps;

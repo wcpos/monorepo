@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, TouchableWithoutFeedback } from 'react-native';
+import { TouchableWithoutFeedback } from 'react-native';
 import InlineError from '../inline-error';
 import Text from '../text';
-import * as Styled from './styles';
+import Box from '../box';
 
 export interface BaseInputContainerProps {
 	/**
@@ -47,14 +47,12 @@ export const BaseInputContainer = ({
 	onLabelClick,
 	hideLabel = false,
 }: BaseInputContainerProps) => (
-	<Styled.Container>
+	<Box space="xSmall">
 		{!hideLabel && (
 			<TouchableWithoutFeedback onPress={onLabelClick} disabled={disabled}>
-				<View>
-					<Styled.LabelContainer>
-						<Text>{label}</Text>
-					</Styled.LabelContainer>
-				</View>
+				<Box>
+					<Text>{label}</Text>
+				</Box>
 			</TouchableWithoutFeedback>
 		)}
 
@@ -62,17 +60,17 @@ export const BaseInputContainer = ({
 		{children}
 
 		{error ? (
-			<Styled.MessageContainer>
+			<Box>
 				<InlineError message={typeof error === 'string' ? error : ''} />
-			</Styled.MessageContainer>
+			</Box>
 		) : null}
 
 		{helpText ? (
-			<Styled.MessageContainer>
+			<Box>
 				<Text type="secondary" size="small">
 					{helpText}
 				</Text>
-			</Styled.MessageContainer>
+			</Box>
 		) : null}
-	</Styled.Container>
+	</Box>
 );

@@ -53,7 +53,11 @@ export type Props = {
 	/**
 	 *
 	 */
-	size?: 'medium' | 'large' | 'small' | 'full';
+	size?: 'medium' | 'large' | 'small';
+	/**
+	 *
+	 */
+	fill?: boolean;
 	/**
 	 *
 	 */
@@ -122,6 +126,7 @@ const Button = ({
 			onPressIn={onPressIn}
 			onPressOut={onPressOut}
 			onLongPress={onLongPress}
+			{...props}
 		>
 			{/* {accessoryLeft && React.cloneElement(accessoryLeft, { color: '#FFF' })} */}
 			{accessoryLeft && React.cloneElement(accessoryLeft)}

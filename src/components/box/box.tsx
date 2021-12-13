@@ -4,6 +4,7 @@ import Space from '../space';
 import * as Styled from './styles';
 
 type Spacing = import('@wcpos/common/src/themes').Spacing;
+type Rounding = import('@wcpos/common/src/themes').Rounding;
 
 export interface BoxProps {
 	/**
@@ -38,6 +39,30 @@ export interface BoxProps {
 	 * Padding applied to right side.
 	 */
 	paddingRight?: Spacing;
+	/**
+	 * Padding applied to right side.
+	 */
+	rounding?: Rounding;
+	/**
+	 * Padding applied to top side.
+	 */
+	roundingTopLeft?: Rounding;
+	/**
+	 * Padding applied to bottom side.
+	 */
+	roundingTopRight?: Rounding;
+	/**
+	 * Padding applied to left side.
+	 */
+	roundingBottomRight?: Rounding;
+	/**
+	 * Padding applied to right side.
+	 */
+	roundingBottomLeft?: Rounding;
+	/**
+	 * Set to `true` to place 1px solid border on all sides.
+	 */
+	border?: boolean;
 	/**
 	 * Set to `true` to set underlying view `flex` property to `1` to fill parent view.
 	 */
@@ -76,7 +101,7 @@ export interface BoxProps {
  * >
  * >For example, if you apply `padding="small"` and `paddingTop="large"`, the `Box` will have a `small` padding on all sides, except top where the padding will be `large`.
  */
-export const Box: React.FC<BoxProps> = ({
+export const Box = ({
 	children,
 	padding = 'none',
 	fill = false,
@@ -85,8 +110,9 @@ export const Box: React.FC<BoxProps> = ({
 	align = 'fill',
 	distribution = 'start',
 	reverse = false,
+	border = false,
 	...rest
-}) => {
+}: BoxProps) => {
 	// Filter only children that are JSX elements
 	const items = useMemo(() => {
 		const filtered = React.Children.toArray(children).filter((x) => x);
@@ -108,6 +134,7 @@ export const Box: React.FC<BoxProps> = ({
 			align={align}
 			distribution={distribution}
 			reverse={reverse}
+			border={border}
 			{...rest}
 		>
 			{items}

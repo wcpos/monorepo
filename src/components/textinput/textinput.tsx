@@ -9,11 +9,11 @@ import {
 	StyleProp,
 	ViewStyle,
 } from 'react-native';
-import isFunction from 'lodash/isFunction';
 import useUncontrolledState from '@wcpos/common/src/hooks/use-uncontrolled-state';
 import get from 'lodash/get';
 import useMeasure from '@wcpos/common/src/hooks/use-measure';
 import * as Styled from './styles';
+import Box from '../box';
 import Button from '../button';
 import Text from '../text';
 import Icon from '../icon';
@@ -43,7 +43,7 @@ export interface TextInputProps {
 	/**
 	 * Text value in the input.
 	 */
-	value?: string | null;
+	value?: string;
 	/**
 	 * Type of the TextField.
 	 *
@@ -196,184 +196,185 @@ const MeasureText = ({
 /**
  * Input field that users can type into.
  */
-export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
-	(
-		{
-			label,
-			value: valueRaw = '',
-			onChange: onChangeRaw,
-			type = 'text',
-			placeholder,
-			helpText,
-			disabled = false,
-			error = false,
-			returnKeyType = 'next',
-			focused = false,
-			onSubmit,
-			onClear,
-			hideLabel = false,
-			selectTextOnFocus = false,
-			autoCapitalize,
-			prefix,
-			leftAccessory,
-			onKeyPress,
-			onFocus: onFocusProp,
-			onBlur: onBlurProp,
-			action,
-			autosize = false,
-			clearable = false,
-			style,
-			loading,
-		},
-		ref
-	) => {
-		// @ts-ignore
-		const [value, onChange] = useUncontrolledState(valueRaw, onChangeRaw);
+export const TextInputBase = (
+	{
+		label,
+		value: valueRaw = '',
+		onChange: onChangeRaw,
+		type = 'text',
+		placeholder,
+		helpText,
+		disabled = false,
+		error = false,
+		returnKeyType = 'next',
+		focused = false,
+		onSubmit,
+		onClear,
+		hideLabel = false,
+		selectTextOnFocus = false,
+		autoCapitalize,
+		prefix,
+		leftAccessory,
+		onKeyPress,
+		onFocus: onFocusProp,
+		onBlur: onBlurProp,
+		action,
+		autosize = false,
+		clearable = false,
+		style,
+		loading,
+	}: TextInputProps,
+	ref
+) => {
+	const [value, onChange] = useUncontrolledState(valueRaw, onChangeRaw);
 
-		// Register the form field in the Form
-		const inputRef = React.useRef<RNTextInput>(null);
-		React.useImperativeHandle(ref, () => inputRef.current as RNTextInput);
+	// Register the form field in the Form
+	const inputRef = React.useRef<RNTextInput>(null);
+	React.useImperativeHandle(ref, () => inputRef.current as RNTextInput);
 
-		const [hasFocus, setHasFocus] = React.useState(focused);
-		const onFocus = React.useCallback(() => {
-			onFocusProp?.();
-			setHasFocus(true);
-		}, [onFocusProp]);
-		const onBlur = React.useCallback(() => {
-			onBlurProp?.();
-			setHasFocus(false);
-		}, [onBlurProp]);
-		const onLabelClick = React.useCallback(() => {
-			const input = inputRef.current;
+	const [hasFocus, setHasFocus] = React.useState(focused);
+	const onFocus = React.useCallback(() => {
+		onFocusProp?.();
+		setHasFocus(true);
+	}, [onFocusProp]);
+	const onBlur = React.useCallback(() => {
+		onBlurProp?.();
+		setHasFocus(false);
+	}, [onBlurProp]);
+	const onLabelClick = React.useCallback(() => {
+		const input = inputRef.current;
 
-			if (input) {
-				input.focus();
-			}
-		}, []);
+		if (input) {
+			input.focus();
+		}
+	}, []);
 
-		/**
-		 * clearable
-		 */
-		const handleClear = React.useCallback(() => {
-			return typeof onClear === 'function' ? onClear() : onChange('');
-		}, [onChange, onClear]);
+	/**
+	 * clearable
+	 */
+	const handleClear = React.useCallback(() => {
+		return typeof onClear === 'function' ? onClear() : onChange('');
+	}, [onChange, onClear]);
 
-		/**
-		 * autosize
-		 */
-		const [measuredWidth, setMeasuredWidth] = React.useState(0);
-		// const [measuredHeight, setMeasureHeight] = React.useState(0);
-		// const handleContentSizeChange = (
-		// 	event: NativeSyntheticEvent<TextInputContentSizeChangeEventData>
-		// ) => {
-		// 	const contentSize = get(event, 'nativeEvent.contentSize');
-		// 	console.log(contentSize.width);
-		// 	// setWidth(contentSize.width);
-		// 	setMeasureHeight(contentSize.height);
-		// };
-		const handleMeasure = ({ width }: { width: number }) => {
-			setMeasuredWidth(width + 3);
-		};
+	/**
+	 * autosize
+	 */
+	const [measuredWidth, setMeasuredWidth] = React.useState(0);
+	// const [measuredHeight, setMeasureHeight] = React.useState(0);
+	// const handleContentSizeChange = (
+	// 	event: NativeSyntheticEvent<TextInputContentSizeChangeEventData>
+	// ) => {
+	// 	const contentSize = get(event, 'nativeEvent.contentSize');
+	// 	console.log(contentSize.width);
+	// 	// setWidth(contentSize.width);
+	// 	setMeasureHeight(contentSize.height);
+	// };
+	const handleMeasure = ({ width }: { width: number }) => {
+		setMeasuredWidth(width + 3);
+	};
 
-		/**
-		 * action
-		 */
-		const handleSubmitText = () => {
-			if (typeof action?.action === 'function') {
-				action?.action(value);
-			}
-		};
+	/**
+	 * action
+	 */
+	const handleSubmitText = () => {
+		if (typeof action?.action === 'function') {
+			action?.action(value);
+		}
+	};
 
-		/**
-		 * Handle focus changes
-		 */
-		React.useEffect(() => {
-			const input = inputRef.current;
+	/**
+	 * Handle focus changes
+	 */
+	React.useEffect(() => {
+		const input = inputRef.current;
 
-			if (!input) {
-				return;
-			}
+		if (!input) {
+			return;
+		}
 
-			if (focused) {
-				input.focus();
-			} else {
-				input.blur();
-			}
-		}, [focused]);
+		if (focused) {
+			input.focus();
+		} else {
+			input.blur();
+		}
+	}, [focused]);
 
-		/**
-		 *
-		 */
-		const inputType = React.useMemo<
-			Pick<
-				RNTextInputProps,
-				'keyboardType' | 'textContentType' | 'autoCapitalize' | 'autoCorrect' | 'autoComplete'
+	/**
+	 *
+	 */
+	const inputType = React.useMemo<
+		Pick<
+			RNTextInputProps,
+			'keyboardType' | 'textContentType' | 'autoCapitalize' | 'autoCorrect' | 'autoComplete'
+		>
+	>(() => {
+		switch (type) {
+			case 'text':
+				return { textContentType: 'none', autoCapitalize };
+			case 'email':
+				return {
+					keyboardType: 'email-address',
+					textContentType: 'emailAddress',
+					autoComplete: 'email',
+					autoCapitalize: 'none',
+				};
+			case 'password':
+				return {
+					textContentType: 'password',
+					autoComplete: 'password',
+					autoCapitalize: 'none',
+				};
+			case 'new-password':
+				return {
+					textContentType: 'newPassword',
+					autoComplete: 'password',
+					autoCapitalize: 'none',
+				};
+			case 'first-name':
+				return { textContentType: 'name', autoCapitalize: 'words' };
+			case 'last-name':
+				return { textContentType: 'familyName', autoCapitalize: 'words' };
+			case 'integer':
+				return { textContentType: 'none', keyboardType: 'number-pad' };
+			case 'url':
+				return {
+					textContentType: 'URL',
+					keyboardType: 'url',
+					autoCapitalize: 'none',
+					autoComplete: 'off',
+				};
+			case 'username':
+				return { textContentType: 'none', autoCapitalize: 'none' };
+			default:
+				return {};
+		}
+	}, [type, autoCapitalize]);
+
+	return (
+		<BaseInputContainer
+			label={label}
+			hideLabel={hideLabel}
+			error={error}
+			helpText={helpText}
+			onLabelClick={onLabelClick}
+			disabled={disabled}
+		>
+			<Box
+				horizontal
+				border
+				rounding="small"
+				align="center"
+				// focused={hasFocus}
+				style={style}
 			>
-		>(() => {
-			switch (type) {
-				case 'text':
-					return { textContentType: 'none', autoCapitalize };
-				case 'email':
-					return {
-						keyboardType: 'email-address',
-						textContentType: 'emailAddress',
-						autoComplete: 'email',
-						autoCapitalize: 'none',
-					};
-				case 'password':
-					return {
-						textContentType: 'password',
-						autoComplete: 'password',
-						autoCapitalize: 'none',
-					};
-				case 'new-password':
-					return {
-						textContentType: 'newPassword',
-						autoComplete: 'password',
-						autoCapitalize: 'none',
-					};
-				case 'first-name':
-					return { textContentType: 'name', autoCapitalize: 'words' };
-				case 'last-name':
-					return { textContentType: 'familyName', autoCapitalize: 'words' };
-				case 'integer':
-					return { textContentType: 'none', keyboardType: 'number-pad' };
-				case 'url':
-					return {
-						textContentType: 'URL',
-						keyboardType: 'url',
-						autoCapitalize: 'none',
-						autoComplete: 'off',
-					};
-				case 'username':
-					return { textContentType: 'none', autoCapitalize: 'none' };
-				default:
-					return {};
-			}
-		}, [type, autoCapitalize]);
-
-		return (
-			<BaseInputContainer
-				label={label}
-				hideLabel={hideLabel}
-				error={error}
-				helpText={helpText}
-				onLabelClick={onLabelClick}
-				disabled={disabled}
-			>
-				<Styled.Box
-					focused={hasFocus}
-					// @ts-ignore
-					style={style}
-				>
-					{leftAccessory || null}
-					{prefix ? (
-						<View>
-							<Text>{prefix}</Text>
-						</View>
-					) : null}
+				{leftAccessory || null}
+				{prefix ? (
+					<Box padding="small" paddingRight="none">
+						<Text>{prefix}</Text>
+					</Box>
+				) : null}
+				<Box fill padding="small">
 					<Styled.TextInput
-						// @ts-ignore
 						ref={inputRef}
 						{...inputType}
 						placeholder={placeholder}
@@ -391,26 +392,31 @@ export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
 						// onContentSizeChange={handleContentSizeChange}
 						style={{ width: autosize ? measuredWidth : '100%' }}
 					/>
-					{clearable && value !== '' && (
+				</Box>
+				{clearable && value !== '' && (
+					<Box padding="small">
 						<Icon
 							name="xmark"
 							size="small"
 							// type="secondary"
 							onPress={handleClear}
-							backgroundStyle="none"
+							// backgroundStyle="none"
 						/>
-					)}
-					{action && (
-						<Button
-							title={action.label}
-							onPress={handleSubmitText}
-							style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
-							loading={loading}
-						/>
-					)}
-					{autosize && <MeasureText value={value} onMeasure={handleMeasure} />}
-				</Styled.Box>
-			</BaseInputContainer>
-		);
-	}
-);
+					</Box>
+				)}
+				{action && (
+					<Button
+						fill
+						title={action.label}
+						onPress={handleSubmitText}
+						style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+						loading={loading}
+					/>
+				)}
+				{autosize && <MeasureText value={value} onMeasure={handleMeasure} />}
+			</Box>
+		</BaseInputContainer>
+	);
+};
+
+export const TextInput = React.forwardRef(TextInputBase);

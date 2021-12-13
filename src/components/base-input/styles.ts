@@ -22,11 +22,3 @@ export const Box = styled(Pressable)`
 export const InputText = styled(Text)`
 	flex: 1;
 `;
-
-export const Container = styled.View`
-	align-items: flex-start;
-`;
-
-export const MessageContainer = styled.View``;
-
-export const LabelContainer = styled.View``;

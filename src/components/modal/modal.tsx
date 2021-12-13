@@ -5,12 +5,28 @@ import Backdrop from '../backdrop';
 import Text from '../text';
 import Button from '../button';
 import Segment, { SegmentButtonProps } from '../segment';
+import Box from '../box';
 import Header from './header';
 import * as Styled from './styles';
 
 export type Open = 'default' | 'top';
 export type Close = 'default' | 'alwaysOpen';
 export type Position = 'initial' | 'top';
+
+export interface Action {
+	/**
+	 * Label to display.
+	 */
+	label: string;
+	/**
+	 * Action to execute on click.
+	 */
+	action?: () => void;
+	/**
+	 *
+	 */
+	type?: import('@wcpos/common/src/themes').ColorTypes;
+}
 
 export type ModalProps = {
 	/**
@@ -50,6 +66,10 @@ export type ModalProps = {
 	 */
 	withReactModal?: boolean;
 	/**
+	 *
+	 */
+	title?: string;
+	/**
 	 * A header component outside of the ScrollView, on top of the modal.
 	 */
 	HeaderComponent?: React.ReactNode;
@@ -59,8 +79,8 @@ export type ModalProps = {
 	 */
 	FooterComponent?: React.ReactNode;
 } & {
-	primaryAction?: SegmentButtonProps['primaryAction'];
-	secondaryActions?: SegmentButtonProps['secondaryActions'];
+	primaryAction?: Action;
+	secondaryActions?: Action[];
 };
 
 const modalSizes = {
@@ -82,7 +102,9 @@ export const ModalBase = (
 		alwaysOpen = false,
 		size = 'medium',
 		primaryAction,
-		HeaderComponent = Header,
+		secondaryActions = [],
+		HeaderComponent,
+		title,
 	}: ModalProps,
 	ref
 ) => {
@@ -141,8 +163,37 @@ export const ModalBase = (
 		return children;
 	};
 
+	const renderHeader = () => {
+		if (HeaderComponent) {
+			return renderElement(HeaderComponent);
+		}
+		if (title) {
+			return <Header title={title} handleClose={handleClose} />;
+		}
+		return null;
+	};
+
 	const renderFooter = () => {
-		if (primaryAction) return <Segment.Buttons primaryAction={primaryAction} />;
+		if (primaryAction)
+			return (
+				<Box horizontal>
+					{secondaryActions.map((secondaryAction, index) => (
+						<Button
+							fill
+							key={secondaryAction.label}
+							title={secondaryAction.label}
+							onPress={secondaryAction.action}
+							type={secondaryAction.type || 'secondary'}
+						/>
+					))}
+					<Button
+						fill
+						title={primaryAction.label}
+						onPress={primaryAction.action}
+						type={primaryAction.type || 'primary'}
+					/>
+				</Box>
+			);
 		return null;
 	};
 
@@ -150,13 +201,15 @@ export const ModalBase = (
 		<>
 			<Backdrop onPress={handleBackdropPress} />
 			<Styled.Container>
-				<Segment.Group style={{ width: modalSizes[size], maxWidth: '80%' }}>
-					<Segment.Group direction="horizontal">
-						<Header title="Header" handleClose={handleClose} />
-					</Segment.Group>
-					<Segment>{renderChildren()}</Segment>
+				<Box
+					raised
+					rounding="medium"
+					style={{ width: modalSizes[size], maxWidth: '80%', backgroundColor: 'white' }}
+				>
+					{renderHeader()}
+					<Box padding="medium">{renderChildren()}</Box>
 					{renderFooter()}
-				</Segment.Group>
+				</Box>
 			</Styled.Container>
 		</>
 	);

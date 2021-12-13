@@ -3,27 +3,12 @@ import { math } from 'polished';
 import palette from './palettes/blue-grey.json';
 import normalizeText from './normalize-text';
 import { spacing } from './spacing';
+import { rounding } from './borders';
+import { colors } from './colors';
 
-const colors = {
-	background: palette['blue-grey-050'],
-	border: palette['blue-grey-600'],
-	primary: palette['blue-grey-700'],
-	secondary: palette['blue-grey-400'],
-	attention: palette['cyan-800'],
-	critical: palette['red-vivid-600'],
-	info: palette['light-blue-vivid-800'],
-	success: palette['teal-800'],
-	warning: palette['yellow-vivid-800'],
-	inverse: 'rgba(256, 256, 256, 0.8)',
-	disabled: '#AFAFAF',
-
-	// greys
-	'lightest-grey': '#E1E1E1',
-	'light-grey': '#AFAFAF',
-	grey: '#808080',
-	'dark-grey': '#545454',
-	'darkest-grey': '#2B2B2B',
-};
+export type Spacing = keyof typeof spacing;
+export type Rounding = keyof typeof rounding;
+export type Colors = keyof typeof colors;
 
 export type ColorTypes = Extract<keyof typeof colors, string>;
 
@@ -50,8 +35,6 @@ const zIndex = {
 	toast: 400,
 	tooltip: 500,
 };
-
-export type Spacing = keyof typeof spacing;
 
 const theme = {
 	APP_BACKGROUND_COLOR: colors.background,
@@ -114,7 +97,7 @@ const theme = {
 	FONT_WEIGHT_BOLD: 700,
 	FONT_WEIGHT_LIGHT: 300,
 
-	ICON_BACKGROUND_COLOR: colors['lightest-grey'],
+	ICON_BACKGROUND_COLOR: colors.lightestGrey,
 
 	IMAGE_BORDER_RADIUS: baseRadius,
 
@@ -131,7 +114,7 @@ const theme = {
 	MASTERBAR_TITLE_COLOR: '#FFFFFF',
 	MASTERBAR_TITLE_SIZE: '18px',
 
-	MENU_ITEM_HOVER_BACKGROUND_COLOR: colors['lightest-grey'],
+	MENU_ITEM_HOVER_BACKGROUND_COLOR: colors.lightestGrey,
 
 	MODAL_Z_INDEX: zIndex.modal,
 
@@ -192,6 +175,8 @@ const theme = {
 	TOAST_TEXT_COLOR: '#FFFFFF',
 
 	spacing,
+	rounding,
+	colors,
 };
 
 export default theme;

@@ -1,7 +1,7 @@
 import React from 'react';
 import Text from '../text';
 import Icon from '../icon';
-import * as Styled from './styles';
+import Box from '../box';
 
 export interface InlineErrorProps {
 	/**
@@ -19,10 +19,10 @@ export interface InlineErrorProps {
  * > Used in `TextField` component to display error message.
  */
 export const InlineError = ({ message }: InlineErrorProps) => (
-	<Styled.Container>
-		<Icon name="error" color="critical" size="small" />
+	<Box horizontal space="xSmall" align="center">
+		<Icon name="triangleExclamation" type="critical" size="small" />
 		<Text type="critical" size="small">
 			{message}
 		</Text>
-	</Styled.Container>
+	</Box>
 );

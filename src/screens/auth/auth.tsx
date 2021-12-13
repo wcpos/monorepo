@@ -2,11 +2,11 @@ import * as React from 'react';
 import { KeyboardAvoidingView } from 'react-native';
 import { useObservableState, useObservable } from 'observable-hooks';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import useSiteConnect from '@wcpos/common/src/hooks/use-site-connect';
 import Logo from '@wcpos/common/src/components/logo';
 import Box from '@wcpos/common/src/components/box';
 import Button from '@wcpos/common/src/components/button';
 import TextInput from '@wcpos/common/src/components/textinput';
+import useSiteConnect from './use-site-connect';
 import Site from './site';
 
 type UserDocument = import('@wcpos/common/src/database').UserDocument;
@@ -18,7 +18,7 @@ type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
 const Auth = () => {
 	const { user } = useAppState();
 	const { onConnect, loading, error } = useSiteConnect();
-	const [sites] = useObservableState(() => user.getSites$(), []);
+	const [sites] = useObservableState(user.getSites$, []);
 
 	// useWhyDidYouUpdate('Auth', { user, sites, onConnect });
 
@@ -32,7 +32,12 @@ const Auth = () => {
 		>
 			<Box space="medium" align="center" style={{ width: '90%', maxWidth: 460 }}>
 				<Logo />
-				<Box raised padding="medium" style={{ width: '100%', backgroundColor: 'white' }}>
+				<Box
+					raised
+					rounding="medium"
+					padding="medium"
+					style={{ width: '100%', backgroundColor: 'white' }}
+				>
 					<Box>
 						<TextInput
 							label="Enter the URL of your WooCommerce store:"
@@ -44,12 +49,14 @@ const Auth = () => {
 							loading={loading}
 						/>
 					</Box>
-					<Box>
-						<Button onPress={() => {}}>Connect</Button>
-					</Box>
 				</Box>
 				{sites.length > 0 && (
-					<Box raised padding="medium" style={{ width: '100%', backgroundColor: 'white' }}>
+					<Box
+						raised
+						rounding="medium"
+						padding="medium"
+						style={{ width: '100%', backgroundColor: 'white' }}
+					>
 						{sites.map((site) => (
 							<Site key={site.localID} site={site} user={user} />
 						))}
