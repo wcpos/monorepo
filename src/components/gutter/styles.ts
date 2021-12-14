@@ -5,7 +5,7 @@ export const View = styled.View<{ hovered: boolean }>`
 	height: 100%;
 	align-items: center;
 	justify-content: center;
-	background-color: ${({ hovered }) => (hovered ? '#f5f5f5' : 'transparent')};
+	background-color: ${({ hovered }) => (hovered ? 'rgba(0,0,0,0.05)' : 'transparent')};
 	width: 10px;
 
 	${

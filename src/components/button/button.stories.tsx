@@ -128,14 +128,22 @@ export const ButtonGroup = () => (
 export const ButtonWithIcon = ({ title }) => (
 	<>
 		<View style={{ padding: 10 }}>
-			<Button onPress={action('pressed')} title={title} accessoryLeft={<Icon name="remove" />} />
+			<Button
+				onPress={action('pressed')}
+				title={title}
+				accessoryLeft={<Icon name="circleXmark" type="inverse" />}
+			/>
 		</View>
 		<View style={{ padding: 10 }}>
-			<Button onPress={action('pressed')} title={title} accessoryRight={<Icon name="remove" />} />
+			<Button
+				onPress={action('pressed')}
+				title={title}
+				accessoryRight={<Icon name="circleXmark" type="inverse" />}
+			/>
 		</View>
 		<View style={{ padding: 10 }}>
 			<Button onPress={action('pressed')}>
-				<Icon name="remove" />
+				<Icon name="circleXmark" />
 			</Button>
 		</View>
 	</>

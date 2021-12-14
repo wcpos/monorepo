@@ -3,6 +3,7 @@ import { StyleProp, ViewStyle, GestureResponderEvent } from 'react-native';
 import Text from '../text';
 import Pressable from '../pressable';
 import Icon from '../icon';
+import Box from '../box';
 import * as Styled from './styles';
 
 export type Props = {
@@ -72,6 +73,9 @@ export type Props = {
 	type?: import('@wcpos/common/src/themes').ColorTypes;
 };
 
+/**
+ * @TODO - button size, should there be a PressableBox component?
+ */
 const Button = ({
 	accessoryLeft,
 	accessoryRight,
@@ -128,10 +132,11 @@ const Button = ({
 			onLongPress={onLongPress}
 			{...props}
 		>
-			{/* {accessoryLeft && React.cloneElement(accessoryLeft, { color: '#FFF' })} */}
-			{accessoryLeft && React.cloneElement(accessoryLeft)}
-			{renderTitle()}
-			{accessoryRight && React.cloneElement(accessoryRight, { color: '#FFF' })}
+			<Box horizontal space="small" align="center" paddingX="small" paddingY="xSmall">
+				{accessoryLeft}
+				{renderTitle()}
+				{accessoryRight}
+			</Box>
 		</Styled.Background>
 	);
 };

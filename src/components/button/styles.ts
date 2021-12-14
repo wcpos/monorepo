@@ -55,14 +55,6 @@ export const Background = styled.View<BackgroundProps>`
 	border-radius: ${({ theme }) => theme.BUTTON_BORDER_RADIUS};
 	border-width: ${({ background }) =>
 		background === 'outline' ? `${StyleSheet.hairlineWidth}px` : 0};
-	padding: ${({ theme, size }) => {
-		switch (size) {
-			case 'small':
-				return `${math(`${theme.BUTTON_PADDING_Y} / 2`)} ${math(`${theme.BUTTON_PADDING_X} /2`)}`;
-			default:
-				return `${theme.BUTTON_PADDING_Y} ${theme.BUTTON_PADDING_X}`;
-		}
-	}}
 	
 	flex-direction: row;
 	align-items: center;

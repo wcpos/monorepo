@@ -28,18 +28,18 @@ const Actions = ({ item: product }: Props) => {
 	}, [currentOrder, product, setCurrentOrder, storeDB?.collections.orders]);
 
 	if (!product.isSynced()) {
-		return <Icon.Skeleton size="x-large" />;
+		return <Icon.Skeleton size="xLarge" />;
 	}
 
 	if (product.isVariable()) {
 		return (
 			<Popover placement="right" content={<Variations product={product} />}>
-				<Icon name="circleChevronRight" size="x-large" type="success" />
+				<Icon name="circleChevronRight" size="xLarge" type="success" />
 			</Popover>
 		);
 	}
 
-	return <Icon name="circlePlus" size="x-large" onPress={addToCart} type="success" />;
+	return <Icon name="circlePlus" size="xLarge" onPress={addToCart} type="success" />;
 };
 
 export default Actions;

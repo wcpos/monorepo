@@ -5,10 +5,14 @@ import normalizeText from './normalize-text';
 import { spacing } from './spacing';
 import { rounding } from './borders';
 import { colors } from './colors';
+import { screens } from './screens';
+import { iconSizes } from './icons';
 
 export type Spacing = keyof typeof spacing;
 export type Rounding = keyof typeof rounding;
 export type Colors = keyof typeof colors;
+export type Screens = keyof typeof screens;
+export type IconSizes = keyof typeof iconSizes;
 
 export type ColorTypes = Extract<keyof typeof colors, string>;
 
@@ -177,6 +181,8 @@ const theme = {
 	spacing,
 	rounding,
 	colors,
+	screens,
+	iconSizes,
 };
 
 export default theme;

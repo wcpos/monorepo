@@ -37,7 +37,7 @@ export const Tag = ({ children, removable, disabled, onRemove, onPress }: TagPro
 			{removable && (
 				<Icon
 					name="xmark"
-					size="x-small"
+					size="xSmall"
 					disabled={disabled}
 					onPress={onRemove}
 					backgroundStyle={{ marginLeft: 2, padding: 0, backgroundColor: 'transparent' }}

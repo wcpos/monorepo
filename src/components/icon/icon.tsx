@@ -4,24 +4,14 @@ import { useSharedValue } from 'react-native-reanimated';
 import get from 'lodash/get';
 import { useTheme } from 'styled-components/native';
 import * as Svgs from './svg/fontawesome/solid';
-import Tooltip from '../tooltip2';
+import Tooltip from '../tooltip';
 import Skeleton from '../skeleton';
 import Pressable from '../pressable';
 import Ripple from '../ripple';
 import * as Styled from './styles';
 
 export type IconName = Extract<keyof typeof Svgs, string>;
-
-/**
- *
- */
-const sizeMap = {
-	default: 20,
-	small: 16,
-	'x-small': 12,
-	large: 24,
-	'x-large': 30,
-};
+type IconSizes = import('@wcpos/common/src/themes').IconSizes;
 
 /**
  *
@@ -46,7 +36,7 @@ export interface IconProps {
 	/**
 	 * Set icon size.
 	 */
-	size?: Extract<keyof typeof sizeMap, string>;
+	size?: IconSizes;
 	/**
 	 * Set icon width.
 	 */
@@ -59,6 +49,10 @@ export interface IconProps {
 	 * Wraps the icon in a Tooltip component
 	 */
 	tooltip?: string;
+	/**
+	 *
+	 */
+	tooltipPlacement?: import('../tooltip').TooltipProps['placement'];
 	/**
 	 * Styling for Pressable icons
 	 */
@@ -76,11 +70,12 @@ export const Icon = ({
 	color,
 	disabled,
 	name,
-	size = 'default',
+	size = 'medium',
 	width,
 	height,
 	onPress,
 	tooltip,
+	tooltipPlacement = 'top',
 	backgroundStyle = 'ripple',
 	type = 'primary',
 }: IconProps) => {
@@ -90,7 +85,11 @@ export const Icon = ({
 	const showRipple = useSharedValue(false);
 
 	const IconComponent = (
-		<SvgIcon width={width || sizeMap[size]} height={height || sizeMap[size]} fill={iconColor} />
+		<SvgIcon
+			width={width || theme.iconSizes[size]}
+			height={height || theme.iconSizes[size]}
+			fill={iconColor}
+		/>
 	);
 
 	if (onPress) {
@@ -112,7 +111,11 @@ export const Icon = ({
 	}
 
 	if (tooltip) {
-		return <Tooltip content={tooltip}>{IconComponent}</Tooltip>;
+		return (
+			<Tooltip content={tooltip} placement={tooltipPlacement}>
+				{IconComponent}
+			</Tooltip>
+		);
 	}
 
 	return IconComponent;
@@ -125,14 +128,17 @@ export interface IconSkeletonProps {
 	/**
 	 *
 	 */
-	size?: Extract<keyof typeof sizeMap, string>;
+	size?: IconSizes;
 }
 
 /**
  *
  */
-export const IconSkeleton = ({ size = 'default' }: IconSkeletonProps) => {
-	return <Skeleton border="circular" width={sizeMap[size]} height={sizeMap[size]} />;
+export const IconSkeleton = ({ size = 'medium' }: IconSkeletonProps) => {
+	const theme = useTheme();
+	return (
+		<Skeleton border="circular" width={theme.iconSizes[size]} height={theme.iconSizes[size]} />
+	);
 };
 
 Icon.Skeleton = IconSkeleton;

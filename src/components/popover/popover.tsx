@@ -6,8 +6,10 @@ import Animated, {
 	withTiming,
 	// FadeInDown,
 } from 'react-native-reanimated';
+import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
 import get from 'lodash/get';
 import useMeasure from '@wcpos/common/src/hooks/use-measure';
+import Platform from '@wcpos/common/src/lib/platform';
 import { useScrollEvents } from '../scrollview';
 import Portal from '../portal';
 import Pressable from '../pressable';
@@ -128,30 +130,28 @@ const PopoverBase = (
 	}, [forceContainerMeasure, forceTriggerMeasure, visible]);
 
 	/**
+	 * Add haptic feedback when the popover is opened
+	 */
+	const handleOpen = React.useCallback(() => {
+		setVisible(true);
+		if (Platform.isNative) {
+			impactAsync(ImpactFeedbackStyle.Light).catch((err) => {
+				console.log(err);
+			});
+		}
+	}, []);
+
+	/**
 	 *
 	 */
-	const containerStyle = useAnimatedStyle(() => {
-		if (!triggerRect.value || !containerRect.value) {
-			return {}; // @TODO why is measurements.value undefined in react-native.
-		}
-
-		// @TODO - use `entering` when reanimated is stable
-		const opacity = withTiming(visible ? 1 : 0, { duration: 200 });
-		const position = getPopoverPosition(placement, triggerRect.value, containerRect.value);
-		return { opacity, ...position };
-	});
-
-	const arrow = (
-		<Arrow
-			color={(style && StyleSheet.flatten(style).backgroundColor) || '#fff'}
-			direction={getArrowDirection(placement)}
-			style={[getArrowAlign(placement), { zIndex: 10 }]}
-		/>
-	);
-
 	const handlePress = React.useCallback(() => {
-		setVisible((prev) => !prev);
-	}, []);
+		// setVisible((prev) => !prev);
+		if (!visible) {
+			handleOpen();
+		} else {
+			setVisible(false);
+		}
+	}, [handleOpen, visible]);
 
 	const handleHoverIn = React.useCallback(() => {
 		if (trigger === 'hover') setVisible(true);
@@ -160,6 +160,19 @@ const PopoverBase = (
 	const handleHoverOut = React.useCallback(() => {
 		if (trigger === 'hover') setVisible(false);
 	}, [trigger]);
+
+	/**
+	 * Allow external access to the popover's visibility state.
+	 */
+	React.useImperativeHandle(ref, () => ({
+		open(): void {
+			setVisible(true);
+		},
+
+		close(): void {
+			setVisible(false);
+		},
+	}));
 
 	/**
 	 * Special case for Pressables and Icons
@@ -200,15 +213,25 @@ const PopoverBase = (
 	/**
 	 *
 	 */
-	React.useImperativeHandle(ref, () => ({
-		open(): void {
-			setVisible(true);
-		},
+	const containerStyle = useAnimatedStyle(() => {
+		if (!triggerRect.value || !containerRect.value) {
+			return {}; // @TODO why is measurements.value undefined in react-native.
+		}
 
-		close(): void {
-			setVisible(false);
-		},
-	}));
+		// @TODO - use `entering` when reanimated is stable
+		const opacity = withTiming(visible ? 1 : 0, { duration: 200 });
+		const position = getPopoverPosition(placement, triggerRect.value, containerRect.value);
+		return { opacity, ...position };
+	});
+
+	const arrow = (
+		<Arrow
+			color={(style && StyleSheet.flatten(style).backgroundColor) || '#fff'}
+			direction={getArrowDirection(placement)}
+			style={[getArrowAlign(placement), { zIndex: 10 }]}
+			size="small"
+		/>
+	);
 
 	/**
 	 *

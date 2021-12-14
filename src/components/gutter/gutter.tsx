@@ -17,11 +17,7 @@ export const Gutter = ({ children, style }: GutterProps) => {
 			}) => (
 				<Styled.View hovered={hovered}>
 					{children || (
-						<Icon
-							name="gripLinesVertical"
-							size="x-small"
-							type={hovered ? 'primary' : 'secondary'}
-						/>
+						<Icon name="gripLinesVertical" size="small" type={hovered ? 'primary' : 'secondary'} />
 					)}
 				</Styled.View>
 			)}

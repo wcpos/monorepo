@@ -1,173 +1,53 @@
 import * as React from 'react';
-import {
-	View,
-	TouchableWithoutFeedback,
-	TouchableHighlight,
-	TouchableNativeFeedback,
-	TouchableOpacity,
-	TouchableWithoutFeedbackProps,
-	NativeSyntheticEvent,
-	NativeTouchEvent,
-	Platform,
-} from 'react-native';
-import _ from 'lodash';
-import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
-import Popover from '../popover';
+import Platform from '@wcpos/common/src/lib/platform';
+import Popover, { PopoverPlacement } from '../popover';
 import Text from '../text';
-// import { useStyles } from '../../../theme';
-// import { IconButton, IconButtonProps } from '../../actions/IconButton/IconButton';
-// import { Button, ButtonProps } from '../../actions/Button/Button';
-// import { Touchable, TouchableProps } from '../../base/Touchable/Touchable';
-// import { shameStyles } from '../../../theme/shame-styles';
-import * as Styled from './styles';
 
 export interface TooltipProps {
 	/**
-	 * Toggle tooltip visibility. Should be used mainly for debugging purpose, as visibility should be automatically handled.
-	 */
-	active?: boolean;
-	/**
-	 * Content displayed in the Tooltip.
-	 */
-	content: string;
-	/**
-	 * The element that will activate the tooltip and to which the Tooltip will be anchored to.
+	 * The content which will trigger the Popover. The Popover will be anchored to this component.
 	 */
 	children: React.ReactNode;
 	/**
-	 * Preferred placement of the tooltip.
+	 * The content to display inside the Popover.
 	 */
-	preferredPlacement?: 'above' | 'below';
+	content: React.ReactNode;
+	/**
+	 * Preferred placement of the Popover. The Popover will try to place itself according to this
+	 * property. However, if there is not enough space left there to show up, it will show itself
+	 * in opposite direction.
+	 *
+	 * For example, if we set `preferredPlacement="top"`, and there is not enough space for the Popover
+	 * to show itself above the triggering view, it will show at the bottom of it.
+	 */
+	placement?: PopoverPlacement;
 }
 
-const hideAfterDelay = 2500;
-
-const isNative = Platform.OS === 'android' || Platform.OS === 'ios';
-
 /**
- * Floating label that briefly explain the function of a user interface element. If wrapping a "Touchable" element,
- * clicking the "Touchable" element will display the Toast.
- *
- * Behavior is slightly different on one platform to another:
- * - On Web, when using a Mouse, it will open when mouse hovers the `children` and will dismiss when
- * the mouse leaves the `children`.
- * - On Web, when using touches, it will open on click and dismiss itself when clicking somewhere else on screen.
- * - On Android and iOS, it will open on long click of Touchable elements and will appear on click of non-Touchable
- * elements. It will dismiss itself after a short delay.
+ * Tooltip is a special type of Popover
+ * @TODO - set timeout for native tooltips, need onOpen or similar
  */
-export const Tooltip: React.FC<TooltipProps> = ({
-	active = false,
-	content,
-	children: childrenRaw,
-	preferredPlacement = 'above',
-}) => {
-	// const styles = useStyles((theme) => ({
-	// 	tooltip: {
-	// 		backgroundColor: theme.colors.fill.background.inverse,
-	// 		borderRadius: theme.radius.medium,
-	// 		paddingVertical: theme.spacing.small,
-	// 		paddingHorizontal: theme.spacing.medium,
-	// 	},
-	// }));
+export const Tooltip = ({ children, placement = 'top', ...props }: TooltipProps) => {
+	// const ref = React.useRef<typeof Popover>(null);
+	// useTimeout(() => {
+	// 	if (Platform.isNative) {
+	// 		ref.current?.close();
+	// 	}
+	// }, 2500);
 
-	const [open, setOpen] = React.useState(active);
-
-	const show = React.useCallback((hapticFeedback = false) => {
-		if (hapticFeedback) {
-			impactAsync(ImpactFeedbackStyle.Light).catch(() => {}); // Ignore errors
-		}
-		setOpen(true);
-	}, []);
-	const hide = React.useCallback(() => setOpen(false), []);
-
-	// Forward `active` property changes to open state
-	React.useEffect(() => setOpen(active), [active]);
-
-	useHideAfterDelayOnNative(open, hide);
-
-	const children = React.useMemo(
-		() =>
-			React.Children.map(childrenRaw, (child) => {
-				if (React.isValidElement(child)) {
-					// if (child.type === IconButton || child.type === Button || child.type === Touchable) {
-					// 	const { props } = child;
-					// 	const clickProp: keyof typeof props = isNative ? 'onLongClick' : 'onClick';
-
-					// 	return React.cloneElement(child, {
-					// 		[clickProp]: _.wrap(
-					// 			props[clickProp],
-					// 			(origOnClick, event: NativeSyntheticEvent<NativeTouchEvent>) => {
-					// 				event.persist();
-					// 				origOnClick?.(event);
-					// 				show(isNative);
-					// 			}
-					// 		),
-					// 	});
-					// }
-					if (
-						child.type === TouchableWithoutFeedback ||
-						child.type === TouchableNativeFeedback ||
-						child.type === TouchableOpacity ||
-						child.type === TouchableHighlight
-					) {
-						const { props } = child;
-						const clickProp: keyof typeof props = isNative ? 'onLongPress' : 'onPress';
-
-						return React.cloneElement(child, {
-							[clickProp]: _.wrap(
-								props[clickProp],
-								(origOnPress, event: NativeSyntheticEvent<NativeTouchEvent>) => {
-									event.persist();
-									origOnPress?.(event);
-									show(isNative);
-								}
-							),
-						});
-					}
-				}
-
-				// Touchable present for Native Apps and Touch Screens without any mouse pointer on Web
-				return (
-					<TouchableWithoutFeedback onPress={show}>
-						<View>{child}</View>
-					</TouchableWithoutFeedback>
-				);
-			}),
-		[show, childrenRaw]
-	);
+	const content =
+		typeof props.content === 'string' ? <Text type="inverse">{props.content}</Text> : props.content;
 
 	return (
 		<Popover
-			open={open}
-			activator={
-				// View needed for handling tooltip visibility on mouse hover
-				// @ts-ignore
-				<View onMouseEnter={show} onMouseLeave={hide}>
-					{children}
-				</View>
-			}
-			onRequestClose={hide}
-			placement={preferredPlacement === 'above' ? 'top' : 'bottom'}
-			hideBackdrop
+			// ref={ref}
+			placement={placement}
+			content={content}
+			trigger="hover"
 			clickThrough
-			popoverStyle={{ backgroundColor: 'black' }}
+			style={{ backgroundColor: 'black' }}
 		>
-			<Styled.Text type="inverse">{content}</Styled.Text>
+			{children}
 		</Popover>
 	);
-};
-
-/**
- * Hide the tooltip after a certain delay on Native (Android and iOS).
- */
-const useHideAfterDelayOnNative = (open: boolean, hide: () => void): void => {
-	React.useEffect(() => {
-		if (open && isNative) {
-			const timeoutRef = setTimeout(hide, hideAfterDelay);
-
-			return () => clearTimeout(timeoutRef);
-		}
-
-		// Return necessary for ESLint
-	}, [open]);
 };

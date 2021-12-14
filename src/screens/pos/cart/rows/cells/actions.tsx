@@ -40,7 +40,7 @@ const Actions = ({ item }: ActionProps) => {
 			/>
 			<Icon
 				name="circleXmark"
-				size="x-large"
+				size="xLarge"
 				onPress={handleRemove}
 				backgroundStyle="none"
 				type="critical"

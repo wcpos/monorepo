@@ -24,7 +24,7 @@ export type DropdownProps = Omit<PopoverProps, 'content'> & {
  */
 const DropdownBase = (
 	{ children, items, onSelect, style, ...rest }: DropdownProps,
-	ref: React.Ref<React.ReactNode>
+	ref: React.Ref<typeof Popover>
 ) => {
 	return (
 		<Popover

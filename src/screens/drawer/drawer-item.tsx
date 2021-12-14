@@ -5,7 +5,7 @@ import { Link } from '@react-navigation/native';
 import Text from '@wcpos/common/src/components/text';
 import Icon from '@wcpos/common/src/components/icon';
 import Pressable from '@wcpos/common/src/components/pressable';
-import Tooltip from '@wcpos/common/src/components/tooltip2';
+import Tooltip from '@wcpos/common/src/components/tooltip';
 
 type Props = {
 	/**

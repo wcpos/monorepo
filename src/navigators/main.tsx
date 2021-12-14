@@ -17,6 +17,7 @@ import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
 import Icon, { IconName } from '@wcpos/common/src/components/icon';
 import Text from '@wcpos/common/src/components/text';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import { useTheme } from 'styled-components/native';
 // import curry from 'lodash/curry';
 
 export type DrawerParamList = {
@@ -69,24 +70,6 @@ const iconMap = {
 	support: 'lifeRing',
 };
 
-// const drawerIcon = curry(
-// 	(
-// 		key: Extract<keyof typeof iconMap, string>,
-// 		props: {
-// 			focused: boolean;
-// 		}
-// 	) => {
-// 		return (
-// 			<Icon
-// 				name={iconMap[key] as IconName}
-// 				type={props.focused ? 'primary' : 'inverse'}
-// 				size="large"
-// 				{...props}
-// 			/>
-// 		);
-// 	}
-// );
-
 /**
  *
  */
@@ -94,6 +77,7 @@ const MainNavigator = () => {
 	const { store } = useAppState();
 	const { t } = useTranslation();
 	const dimensions = useWindowDimensions();
+	const theme = useTheme();
 
 	const header = React.useCallback((props) => <CustomHeader {...props} />, []);
 	const drawer = React.useCallback((props) => <CustomDrawer {...props} />, []);
@@ -117,10 +101,10 @@ const MainNavigator = () => {
 		<Drawer.Navigator
 			screenOptions={{
 				header,
-				drawerType: dimensions.width >= 1024 ? 'permanent' : 'front',
+				drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
 				drawerStyle: {
 					backgroundColor: '#2c3e50',
-					width: dimensions.width >= 1024 ? 'auto' : undefined,
+					width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
 				},
 			}}
 			drawerContent={drawer}
