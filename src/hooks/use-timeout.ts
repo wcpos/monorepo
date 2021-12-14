@@ -9,7 +9,7 @@ export const useTimeout = (callback: () => void, delay: number): void => {
 		const timeoutRef = setTimeout(callback, delay);
 
 		return () => clearTimeout(timeoutRef);
-	}, [delay]);
+	}, [callback, delay]);
 };
 
 export default useTimeout;
