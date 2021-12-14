@@ -31,5 +31,6 @@
 	"dependencies": {
 		"jest": "27.4.5",
 		"prettier": "2.5.1"
-	}
+	},
+	"packageManager": "yarn@3.1.1"
 }
