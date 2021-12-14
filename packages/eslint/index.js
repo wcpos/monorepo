@@ -8,14 +8,20 @@ module.exports = {
 		'airbnb',
 		'plugin:@typescript-eslint/recommended',
 		'plugin:prettier/recommended',
-		'prettier',
+		// 'prettier',
 	],
 	parser: '@typescript-eslint/parser',
 	parserOptions: {
 		project: './tsconfig.json',
 		sourceType: 'module',
 	},
-	plugins: ['@typescript-eslint', 'jest', 'react-native', 'react-hooks', 'prettier'],
+	plugins: [
+		'@typescript-eslint',
+		'jest',
+		'react-native',
+		'react-hooks',
+		// 'prettier'
+	],
 	rules: {
 		'react/jsx-filename-extension': [1, { extensions: ['.jsx', '.tsx'] }],
 		'react/function-component-definition': 0,
@@ -42,7 +48,7 @@ module.exports = {
 		],
 		'react-hooks/rules-of-hooks': 'warn',
 		'react-hooks/exhaustive-deps': 'warn',
-		'prettier/prettier': 'error',
+		// 'prettier/prettier': 'error',
 		camelcase: 'off',
 		'@typescript-eslint/explicit-module-boundary-types': 'off',
 		'no-use-before-define': 'off',
