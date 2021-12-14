@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { LayoutChangeEvent } from 'react-native';
+import { LayoutChangeEvent, View } from 'react-native';
 import { useSubscription } from 'observable-hooks';
 import Animated, {
 	useAnimatedGestureHandler,
@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
 import Gutter from '@wcpos/common/src/components/gutter';
+import Box from '@wcpos/common/src/components/box';
 import * as Styled from './styles';
 
 interface ResizableColumnsProps {
@@ -81,15 +82,15 @@ const ResizableColumns = ({ leftComponent, rightComponent, ui }: ResizableColumn
 	});
 
 	return (
-		<Styled.Container onLayout={onContainerLayout}>
-			<Styled.ResizableColumn style={columnStyle}>{leftComponent}</Styled.ResizableColumn>
+		<Box horizontal onLayout={onContainerLayout} style={{height: '100%'}}>
+			<Animated.View style={columnStyle}>{leftComponent}</Animated.View>
 			<PanGestureHandler onGestureEvent={panGestureHandler}>
 				<Animated.View style={{ width: 10 }}>
 					<Gutter />
 				</Animated.View>
 			</PanGestureHandler>
-			<Styled.Column>{rightComponent}</Styled.Column>
-		</Styled.Container>
+			<View style={{ flex: 1 }}>{rightComponent}</View>
+		</Box>
 	);
 };
 

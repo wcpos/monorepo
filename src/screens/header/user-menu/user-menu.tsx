@@ -2,7 +2,6 @@ import * as React from 'react';
 import { useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from 'styled-components/native';
-// import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Avatar from '@wcpos/common/src/components/avatar';
 import Dropdown from '@wcpos/common/src/components/dropdown';
 import Text from '@wcpos/common/src/components/text';
@@ -11,11 +10,6 @@ import Icon from '@wcpos/common/src/components/icon';
 import Modal, { useModal } from '@wcpos/common/src/components/modal';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import UserSettings from './user-settings';
-import * as Styled from './styles';
-
-// interface Props {
-// user: import('@wcpos/common/src/database').UserDocument;
-// }
 
 export const UserMenu = () => {
 	const { site, wpCredentials, store } = useAppState();

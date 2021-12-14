@@ -1,18 +1,15 @@
 import * as React from 'react';
-import { View, Text, PanResponderGestureState, LayoutChangeEvent } from 'react-native';
-import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
-import { from, of } from 'rxjs';
-import { switchMap, tap, catchError, map, filter } from 'rxjs/operators';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import { useWindowDimensions } from 'react-native';
+import { useTheme } from 'styled-components/native';
+import { useObservableSuspense } from 'observable-hooks';
 import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
 import { QueryProvider } from '@wcpos/common/src/hooks/use-query';
 import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
+import Box from '@wcpos/common/src/components/box';
 import CartTabs from './cart/tabs';
 import Products from './products';
-import Checkout from './checkout';
 import ResizeableColumns from './resizable-columns';
-import * as Styled from './styles';
+import POSTabs from './tabs';
 
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
@@ -41,33 +38,39 @@ const POS = () => {
 	const productsUI = useObservableSuspense(useUIResource('pos.products'));
 	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
 	const [currentCustomer, setCurrentCustomer] = React.useState<CustomerDocument | undefined>();
+	const theme = useTheme();
+	const dimensions = useWindowDimensions();
 
 	const context = React.useMemo(
 		() => ({ currentOrder, setCurrentOrder, currentCustomer, setCurrentCustomer }),
 		[currentCustomer, currentOrder]
 	);
 
+	const leftComponent = (
+		<ErrorBoundary>
+			<QueryProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }}>
+				<Products ui={productsUI} />
+			</QueryProvider>
+		</ErrorBoundary>
+	);
+
+	const rightComponent = (
+		<ErrorBoundary>
+			<CartTabs />
+		</ErrorBoundary>
+	);
+
 	return (
 		<POSContext.Provider value={context}>
-			<ResizeableColumns
-				ui={productsUI}
-				leftComponent={
-					<ErrorBoundary>
-						<QueryProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }}>
-							<Products ui={productsUI} />
-						</QueryProvider>
-					</ErrorBoundary>
-				}
-				rightComponent={
-					currentOrder && currentOrder.status === 'pos-checkout' ? (
-						<Checkout />
-					) : (
-						<ErrorBoundary>
-							<CartTabs />
-						</ErrorBoundary>
-					)
-				}
-			/>
+			{dimensions.width >= theme.screens.small ? (
+				<ResizeableColumns
+					ui={productsUI}
+					leftComponent={leftComponent}
+					rightComponent={rightComponent}
+				/>
+			) : (
+				<POSTabs leftComponent={leftComponent} rightComponent={rightComponent} />
+			)}
 		</POSContext.Provider>
 	);
 };

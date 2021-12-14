@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
-import { View, ViewStyle, StyleProp } from 'react-native';
+import { View, ViewStyle, StyleProp, ViewProps } from 'react-native';
 import Space from '../space';
 import * as Styled from './styles';
 
 type Spacing = import('@wcpos/common/src/themes').Spacing;
 type Rounding = import('@wcpos/common/src/themes').Rounding;
 
-export interface BoxProps {
+export interface BoxProps extends ViewProps {
 	/**
 	 * Children Views.
 	 */
