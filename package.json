@@ -19,17 +19,16 @@
 		"packages/*"
 	],
 	"resolutions": {
-		"react-native": "0.64.3",
-		"react-native-screens": "3.8.0"
+		"react-native": "0.64.3"
 	},
 	"devDependencies": {
 		"@tsconfig/react-native": "1.0.4",
-		"expo-cli": "4.13.0",
+		"expo-cli": "5.0.0",
 		"patch-package": "6.4.7",
 		"postinstall-postinstall": "2.1.0"
 	},
 	"dependencies": {
-		"jest": "27.4.4",
+		"jest": "27.4.5",
 		"prettier": "2.5.1"
 	}
 }
