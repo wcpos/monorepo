@@ -3,7 +3,7 @@ import { ViewStyle } from 'react-native';
 import { isRxDocument } from 'rxdb/plugins/core';
 import { useObservableState } from 'observable-hooks';
 import Text from '../text';
-import * as Styled from './styles';
+import Box from '../box';
 
 /**
  *
@@ -25,6 +25,11 @@ export interface TableRowProps<T> {
 	columns: import('./table').ColumnProps<T>[];
 	rowStyle?: ViewStyle;
 	cellStyle?: ViewStyle;
+	cellRenderer?: (
+		item: T,
+		column: import('./table').ColumnProps<T>,
+		index: number
+	) => React.ReactNode;
 }
 
 /**
@@ -35,25 +40,29 @@ export const TableRow = React.memo(function TableRow<T>({
 	columns,
 	rowStyle,
 	cellStyle,
-}: // ...props
-TableRowProps<T>) {
+	cellRenderer,
+}: TableRowProps<T>) {
 	return (
-		<Styled.Row style={rowStyle}>
+		<Box horizontal align="center" style={rowStyle}>
 			{columns.map((column, index) => {
-				// @ts-ignore
-				const cell = renderCell(item, column, index);
 				const { flexGrow = 1, flexShrink = 1, flexBasis = 'auto', width = '100%' } = column;
 				return (
-					<Styled.Cell
+					<Box
 						key={column.key}
+						padding="small"
 						style={[{ flexGrow, flexShrink, flexBasis, width }, cellStyle]}
 					>
-						{cell}
-					</Styled.Cell>
+						{typeof cellRenderer === 'function' ? (
+							cellRenderer(item, column, index)
+						) : (
+							<Text>{String(item[column.key] ?? '')}</Text>
+						)}
+					</Box>
 				);
 			})}
-		</Styled.Row>
+		</Box>
 	);
 });
 
+// @TODO - can't add generic type to React.memo?
 // export default React.memo(TableRow);

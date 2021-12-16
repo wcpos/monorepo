@@ -59,12 +59,6 @@ export interface TableProps<T = any> {
 	virtual?: boolean;
 }
 
-// const Table: <T>(props: TableProps<T>) => React.ReactElement = ({
-// 	data,
-// 	columns,
-// 	style,
-// 	enableColumnHeaders = true,
-// }) => {
 function Table<T extends object>({
 	data,
 	columns,
@@ -92,7 +86,7 @@ function Table<T extends object>({
 			// renderContext: TableRowRenderContext<T>,
 		) => {
 			return (
-				<TableRow
+				<TableRow<T>
 					// config={renderContext}
 					item={item}
 					// @ts-ignore

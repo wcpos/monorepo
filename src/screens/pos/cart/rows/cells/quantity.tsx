@@ -5,14 +5,14 @@ import Popover from '@wcpos/common/src/components/popover';
 import Numpad from '@wcpos/common/src/components/numpad';
 
 interface Props {
-	lineItem: import('@wcpos/common/src/database').LineItemDocument;
+	item: import('@wcpos/common/src/database').LineItemDocument;
 }
 
-const Quantity = ({ lineItem }: Props) => {
-	const quantity = useObservableState(lineItem.quantity$, lineItem.quantity);
+const Quantity = ({ item }: Props) => {
+	const quantity = useObservableState(item.quantity$, item.quantity);
 
 	const handleChangeText = async (newValue: string): Promise<void> => {
-		lineItem.atomicPatch({ quantity: Number(newValue) });
+		item.atomicPatch({ quantity: Number(newValue) });
 	};
 
 	return (

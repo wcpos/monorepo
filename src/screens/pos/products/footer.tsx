@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import Text from '@wcpos/common/src/components/text';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import Box from '@wcpos/common/src/components/box';
 import * as Styled from './styles';
 
 interface ProductFooterProps {
@@ -13,11 +14,11 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const total = useObservableState(storeDB.products.totalDocuments$, 0);
 
 	return (
-		<Styled.Footer>
+		<Box padding="small" align="end">
 			<Text>
 				{count} of {total}
 			</Text>
-		</Styled.Footer>
+		</Box>
 	);
 };
 

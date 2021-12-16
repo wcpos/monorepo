@@ -5,5 +5,6 @@ export const spacing = {
 	medium: 16,
 	small: 8,
 	xSmall: 4,
+	xxSmall: 2,
 	none: 0,
 };

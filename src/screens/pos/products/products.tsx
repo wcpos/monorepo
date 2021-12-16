@@ -1,9 +1,7 @@
 import * as React from 'react';
-import { View } from 'react-native';
-import { useObservableState } from 'observable-hooks';
 import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
 import useRestQuery from '@wcpos/common/src/hooks/use-rest-query';
-import Segment from '@wcpos/common/src/components/segment';
+import Box from '@wcpos/common/src/components/box';
 import UiSettings from '../../common/ui-settings';
 import Table from './table';
 import SearchBar from './search-bar';
@@ -20,17 +18,19 @@ const POSProducts = ({ ui }: POSProductsProps) => {
 	useRestQuery('products');
 
 	return (
-		<Segment.Group style={{ width: '100%', height: '100%' }}>
-			<Segment>
-				<View style={{ flexDirection: 'row', alignItems: 'center' }}>
-					<SearchBar />
-					<UiSettings ui={ui} />
-				</View>
-			</Segment>
-			<Segment grow style={{ padding: 0 }}>
+		<Box
+			raised
+			rounding="medium"
+			style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
+		>
+			<Box horizontal space="small" padding="small" align="center">
+				<SearchBar />
+				<UiSettings ui={ui} />
+			</Box>
+			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<Table ui={ui} />
-			</Segment>
-		</Segment.Group>
+			</Box>
+		</Box>
 	);
 };
 

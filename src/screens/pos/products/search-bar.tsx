@@ -45,7 +45,6 @@ const SearchBar = () => {
 			value={get(query, ['search', 'name'], '')}
 			onSearch={onSearch}
 			filters={filters}
-			style={{ marginRight: 10 }}
 		/>
 	);
 };

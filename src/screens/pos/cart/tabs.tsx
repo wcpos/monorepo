@@ -18,7 +18,7 @@ const CartTabs = () => {
 	};
 
 	const routes = orders.map((order) => ({
-		key: order.id,
+		key: order.localID,
 		title: ({ focused }) => renderTabTitle(order, focused),
 	}));
 

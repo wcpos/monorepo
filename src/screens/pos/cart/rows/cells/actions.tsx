@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { View } from 'react-native';
 import Icon from '@wcpos/common/src/components/icon';
+import Box from '@wcpos/common/src/components/box';
+import Modal, { useModal } from '@wcpos/common/src/components/modal';
 import { useSnackbar } from '@wcpos/common/src/components/snackbar/use-snackbar';
 import { POSContext } from '../../../pos';
 import EditModal from './edit-modal';
@@ -13,8 +14,9 @@ interface ActionProps {
 }
 
 const Actions = ({ item }: ActionProps) => {
-	const [visible, setVisible] = React.useState(false);
 	const { currentOrder } = React.useContext(POSContext);
+	const { ref: modalRef, open, close } = useModal();
+
 	const undoFeeRemove = () => {
 		console.log('Undo remove', item);
 	};
@@ -31,22 +33,16 @@ const Actions = ({ item }: ActionProps) => {
 	};
 
 	return (
-		<View style={{ flexDirection: 'row', alignItems: 'center' }}>
-			<Icon
-				name="ellipsisVertical"
-				size="large"
-				onPress={() => setVisible(true)}
-				backgroundStyle="none"
-			/>
-			<Icon
-				name="circleXmark"
-				size="xLarge"
-				onPress={handleRemove}
-				backgroundStyle="none"
-				type="critical"
-			/>
-			{visible && <EditModal item={item} onClose={() => setVisible(false)} />}
-		</View>
+		<>
+			<Box horizontal space="small" align="center">
+				<Icon name="ellipsisVertical" size="large" onPress={open} />
+				<Icon name="circleXmark" size="xLarge" onPress={handleRemove} type="critical" />
+			</Box>
+
+			<Modal ref={modalRef} title={`Edit ${item.name}`}>
+				<EditModal item={item} />
+			</Modal>
+		</>
 	);
 };
 

@@ -47,6 +47,11 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	const { query, setQuery } = useQuery();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
+	const cellRenderer = React.useCallback((item: ProductDocument, column: ColumnProps) => {
+		const Cell = get(cells, column.key);
+		return Cell ? <Cell item={item} column={column} /> : null;
+	}, []);
+
 	/**
 	 * - filter visible columns
 	 * - translate column label
@@ -57,13 +62,10 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 			.filter((column) => !column.hide)
 			.map((column) => {
 				// clone column and add label, onRender function
-				const Cell = get(cells, column.key);
 				return {
 					...column,
 					label: t(`pos.products.column.label.${column.key}`),
-					onRender: (item: ProductDocument) => {
-						return Cell ? <Cell item={item} column={column} /> : null;
-					},
+					// onRender: renderCell,
 				};
 			});
 	}, [columns, t]);
@@ -104,9 +106,9 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 				<Table.Row
 					// config={renderContext}
 					item={item}
-					// @ts-ignore
 					columns={visibleColumns}
 					// itemIndex={index}
+					cellRenderer={cellRenderer}
 				/>
 			);
 		},

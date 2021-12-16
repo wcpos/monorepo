@@ -1,53 +1,43 @@
 import * as React from 'react';
-import Table from '@wcpos/common/src/components/table';
+import get from 'lodash/get';
+import Table from '@wcpos/common/src/components/table3';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Quantity from './cells/quantity';
 import Price from './cells/price';
 import Total from './cells/total';
 import Tax from './cells/tax';
 import Actions from './cells/actions';
+import Name from './cells/product-name';
 
-type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
+type LineItemDocument = import('@wcpos/common/src/database').LineItemDocument;
+type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
 
-interface Props {
-	// order: import('@wcpos/common/src/database').OrderDocument;
-	item: import('@wcpos/common/src/database').LineItemDocument;
-	columns: any;
+interface LineItemProps {
+	lineItem: LineItemDocument;
+	columns: ColumnProps[];
 }
 
-const LineItem = ({ item, columns }: Props) => {
-	useWhyDidYouUpdate('CartLineItem', { item, columns });
+const cells = {
+	actions: Actions,
+	price: Price,
+	quantity: Quantity,
+	subtotal: Total,
+	subtotalTax: Tax,
+	total: Total,
+	totalTax: Tax,
+	name: Name,
+};
+
+const LineItem = ({ lineItem, columns }: LineItemProps) => {
+	// useWhyDidYouUpdate('CartLineItem', { item, columns });
+
+	const cellRenderer = React.useCallback((item: LineItemDocument, column: ColumnProps) => {
+		const Cell = get(cells, column.key);
+		return Cell ? <Cell item={item} column={column} /> : null;
+	}, []);
 
 	return (
-		<Table.Body.Row rowData={item} columns={columns}>
-			{({ getCellProps }: { getCellProps: GetCellPropsFunction }) => {
-				const { cellData, column } = getCellProps();
-				return (
-					<Table.Body.Row.Cell {...getCellProps()}>
-						{((): React.ReactElement | null => {
-							switch (column.key) {
-								case 'quantity':
-									return <Quantity lineItem={item} />;
-								case 'price':
-									return <Price lineItem={item} />;
-								case 'subtotalTax':
-									return <Tax item={item} type="subtotalTax" />;
-								case 'subtotal':
-									return <Total item={item} type="subtotal" />;
-								case 'totalTax':
-									return <Tax item={item} />;
-								case 'total':
-									return <Total item={item} />;
-								case 'actions':
-									return <Actions item={item} />;
-								default:
-									return null;
-							}
-						})()}
-					</Table.Body.Row.Cell>
-				);
-			}}
-		</Table.Body.Row>
+		<Table.Row<LineItemDocument> item={lineItem} columns={columns} cellRenderer={cellRenderer} />
 	);
 };
 

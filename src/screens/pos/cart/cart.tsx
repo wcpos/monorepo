@@ -1,12 +1,7 @@
 import * as React from 'react';
-import { View } from 'react-native';
-import { useObservableState, useObservable, useObservableSuspense } from 'observable-hooks';
-import { Observable } from 'rxjs';
-import { switchMap, filter } from 'rxjs/operators';
-import { isRxDocument } from 'rxdb/plugins/core';
+import { useObservableSuspense } from 'observable-hooks';
 import Segment from '@wcpos/common/src/components/segment';
-import Text from '@wcpos/common/src/components/text';
-import Tag from '@wcpos/common/src/components/tag';
+import Box from '@wcpos/common/src/components/box';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
 import CustomerSelect from '../../common/customer-select';
@@ -26,18 +21,26 @@ const Cart = ({ order }: CartProps) => {
 	const ui = useObservableSuspense(useUIResource('pos.cart'));
 
 	return (
-		<Segment.Group style={{ width: '100%', height: '100%' }}>
-			<Segment style={{ flexDirection: 'row', alignItems: 'center' }}>
+		<Box raised rounding="medium" style={{ height: '100%', backgroundColor: 'white' }}>
+			<Box horizontal space="small" padding="small" align="center">
+				<CustomerSelect
+					onSelectCustomer={(val) => {
+						console.log(val);
+					}}
+				/>
 				<UISettings ui={ui} />
-			</Segment>
-			<Segment grow style={{ padding: 0 }}>
+			</Box>
+			<Box>
 				<Table order={order} ui={ui} />
-			</Segment>
-			<Segment.Buttons
+			</Box>
+			<Box>
+				<Totals order={order} ui={ui} />
+			</Box>
+			{/* <Box
 				primaryAction={{ label: order.total, action: () => {}, type: 'success' }}
 				secondaryActions={[{ label: 'Void', action: () => {}, type: 'critical' }]}
-			/>
-		</Segment.Group>
+			/> */}
+		</Box>
 	);
 };
 

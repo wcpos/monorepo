@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 import find from 'lodash/find';
 import Text from '@wcpos/common/src/components/text';
+import Box from '@wcpos/common/src/components/box';
 import Categories from '../../../common/product-categories';
 import Tags from '../../../common/product-tags';
 
@@ -25,7 +26,7 @@ const Name = ({ item: product, column }: Props) => {
 	);
 
 	return (
-		<>
+		<Box space="xSmall">
 			<Text>{product.name}</Text>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{show('categories') && <Categories item={product} />}
@@ -44,7 +45,7 @@ const Name = ({ item: product, column }: Props) => {
 						))}
 				</View>
 			)}
-		</>
+		</Box>
 	);
 };
 

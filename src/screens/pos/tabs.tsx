@@ -27,14 +27,12 @@ const POSTabs = ({ leftComponent, rightComponent }: POSTabsProps) => {
 	];
 
 	return (
-		<View style={{ height: '100%' }}>
-			<Tabs<typeof routes[number]>
-				navigationState={{ index, routes }}
-				renderScene={renderScene}
-				onIndexChange={setIndex}
-				tabBarPosition="bottom"
-				/>
-		</View>
+		<Tabs<typeof routes[number]>
+			navigationState={{ index, routes }}
+			renderScene={renderScene}
+			onIndexChange={setIndex}
+			tabBarPosition="bottom"
+		/>
 	);
 };
 

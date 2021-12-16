@@ -3,14 +3,14 @@ import { useObservableState } from 'observable-hooks';
 import Button from '@wcpos/common/src/components/button';
 
 interface Props {
-	lineItem: import('@wcpos/common/src/database').LineItemDocument;
+	item: import('@wcpos/common/src/database').LineItemDocument;
 }
 
-const Price = ({ lineItem }: Props) => {
-	const price = useObservableState(lineItem.price$, lineItem.price);
+const Price = ({ item }: Props) => {
+	const price = useObservableState(item.price$, item.price);
 
 	const handleChange = async (newValue: string): Promise<void> => {
-		lineItem.atomicPatch({ price: Number(newValue) });
+		item.atomicPatch({ price: Number(newValue) });
 	};
 
 	return (

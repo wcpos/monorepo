@@ -1,5 +1,5 @@
-import 'react-native-gesture-handler';
 import * as React from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { SafeAreaProviderCompat } from '@react-navigation/elements';
 import { Text } from 'react-native';
@@ -65,20 +65,22 @@ const App = (initialProps: InitialProps) => {
 	return (
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
-				<AppStateProvider initialProps={initialProps}>
-					<ThemeProvider theme={getTheme('default', 'dark')}>
-						<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-							<SnackbarProvider>
-								<Portal.Provider>
-									<NavigationContainer linking={linking}>
-										<AppNavigator />
-									</NavigationContainer>
-									<Portal.Manager />
-								</Portal.Provider>
-							</SnackbarProvider>
-						</SafeAreaProviderCompat>
-					</ThemeProvider>
-				</AppStateProvider>
+				<GestureHandlerRootView style={{ flex: 1 }}>
+					<AppStateProvider initialProps={initialProps}>
+						<ThemeProvider theme={getTheme('default', 'dark')}>
+							<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
+								<SnackbarProvider>
+									<Portal.Provider>
+										<NavigationContainer linking={linking}>
+											<AppNavigator />
+										</NavigationContainer>
+										<Portal.Manager />
+									</Portal.Provider>
+								</SnackbarProvider>
+							</SafeAreaProviderCompat>
+						</ThemeProvider>
+					</AppStateProvider>
+				</GestureHandlerRootView>
 			</React.Suspense>
 		</ErrorBoundary>
 	);

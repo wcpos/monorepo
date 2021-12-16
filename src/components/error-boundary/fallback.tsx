@@ -21,7 +21,7 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 			<Box>
 				<Icon name="triangleExclamation" size="xLarge" type="inverse" />
 			</Box>
-			<Box fill>
+			<Box fill style={{ flexShrink: 1 }}>
 				<Text type="inverse" weight="bold">
 					Something went wrong:
 				</Text>

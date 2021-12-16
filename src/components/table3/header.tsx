@@ -3,6 +3,7 @@ import { GestureResponderEvent, ViewStyle } from 'react-native';
 import * as Styled from './styles';
 import Text from '../text';
 import Pressable from '../pressable';
+import Box from '../box';
 import SortIcon from '../sort-icon';
 
 export interface TableHeaderProps<T> {
@@ -21,7 +22,7 @@ const TableHeader: <T>(props: TableHeaderProps<T>) => React.ReactElement = ({
 	sortDirection,
 }) => {
 	return (
-		<Styled.HeaderRow>
+		<Box horizontal align="center">
 			{columns.map((column) => {
 				const {
 					key,
@@ -51,26 +52,30 @@ const TableHeader: <T>(props: TableHeaderProps<T>) => React.ReactElement = ({
 				};
 
 				return (
-					<Styled.HeaderCell key={key} style={[{ flexGrow, flexShrink, flexBasis, width }, style]}>
+					<Box
+						key={key}
+						padding="small"
+						style={[{ flexGrow, flexShrink, flexBasis, width }, style]}
+					>
 						{sortable ? (
 							<Pressable onPress={handlePress}>
 								{({ hovered }: any) => (
-									<Styled.HeaderTextWrapper>
+									<Box horizontal space="xxSmall" align="center">
 										<Text>{label}</Text>
 										<SortIcon
 											visible={hovered || showSortIndicator}
 											direction={showSortIndicator ? sortDirection : undefined}
 										/>
-									</Styled.HeaderTextWrapper>
+									</Box>
 								)}
 							</Pressable>
 						) : (
 							!hideLabel && <Text>{label}</Text>
 						)}
-					</Styled.HeaderCell>
+					</Box>
 				);
 			})}
-		</Styled.HeaderRow>
+		</Box>
 	);
 };
 

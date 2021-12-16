@@ -1,45 +1,44 @@
 import * as React from 'react';
-import Table from '@wcpos/common/src/components/table';
+import get from 'lodash/get';
+import Table from '@wcpos/common/src/components/table3';
 import Text from '@wcpos/common/src/components/text';
 import Price from './cells/fee-and-shipping-price';
+import Quantity from './cells/quantity';
+import Total from './cells/total';
 import Tax from './cells/tax';
 import Actions from './cells/actions';
 
-type GetCellPropsFunction = import('@wcpos/common/src/components/table/row').GetCellPropsFunction;
+type ShippingLineDocument = import('@wcpos/common/src/database').ShippingLineDocument;
+type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
 
 interface Props {
 	// order: import('@wcpos/common/src/database').OrderDocument;
-	shipping: import('@wcpos/common/src/database').ShippingLineDocument;
+	shipping: ShippingLineDocument;
 	columns: any;
 }
 
+const cells = {
+	actions: Actions,
+	price: Price,
+	quantity: Quantity,
+	subtotal: Total,
+	subtotalTax: Tax,
+	total: Total,
+	totalTax: Tax,
+};
+
 const ShippingLine = ({ shipping, columns }: Props) => {
+	const cellRenderer = React.useCallback((item: ShippingLineDocument, column: ColumnProps) => {
+		const Cell = get(cells, column.key);
+		return Cell ? <Cell item={item} column={column} /> : null;
+	}, []);
+
 	return (
-		<Table.Body.Row rowData={shipping} columns={columns}>
-			{({ getCellProps }: { getCellProps: GetCellPropsFunction }) => {
-				const { cellData, column } = getCellProps();
-				return (
-					<Table.Body.Row.Cell {...getCellProps()}>
-						{((): React.ReactElement | null => {
-							switch (column.key) {
-								case 'quantity':
-									return <></>;
-								case 'price':
-									return <Price item={shipping} />;
-								case 'name':
-									return <Text>{shipping.methodTitle}</Text>;
-								case 'totalTax':
-									return <Tax item={shipping} />;
-								case 'actions':
-									return <Actions item={shipping} />;
-								default:
-									return null;
-							}
-						})()}
-					</Table.Body.Row.Cell>
-				);
-			}}
-		</Table.Body.Row>
+		<Table.Row<ShippingLineDocument>
+			item={shipping}
+			columns={columns}
+			cellRenderer={cellRenderer}
+		/>
 	);
 };
 

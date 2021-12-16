@@ -51,10 +51,21 @@ export function Tabs<T extends Route>({
 		<View
 			style={{
 				flexDirection: tabBarPosition === 'left' || tabBarPosition === 'right' ? 'row' : 'column',
+				flexGrow: 1,
+				flexShrink: 1,
+				flexBasis: '0%',
 			}}
 		>
 			{(tabBarPosition === 'top' || tabBarPosition === 'left') && tabBar}
-			<View>{renderScene({ route: navigationState.routes[navigationState.index] })}</View>
+			<View
+				style={{
+					flexGrow: 1,
+					flexShrink: 1,
+					flexBasis: '0%',
+				}}
+			>
+				{renderScene({ route: navigationState.routes[navigationState.index] })}
+			</View>
 			{(tabBarPosition === 'bottom' || tabBarPosition === 'right') && tabBar}
 		</View>
 	);

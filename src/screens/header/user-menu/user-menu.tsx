@@ -49,7 +49,7 @@ export const UserMenu = () => {
 				</Box>
 			</Dropdown>
 
-			<Modal ref={refSettingsModal}>
+			<Modal ref={refSettingsModal} title="Settings">
 				<UserSettings onClose={closeSettingsModal} />
 			</Modal>
 		</>
