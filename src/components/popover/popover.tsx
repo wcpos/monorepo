@@ -4,7 +4,7 @@ import Animated, {
 	useAnimatedStyle,
 	useSharedValue,
 	withTiming,
-	// FadeInDown,
+	FadeInDown,
 } from 'react-native-reanimated';
 import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
 import get from 'lodash/get';
@@ -253,7 +253,7 @@ const PopoverBase = (
 						style={[containerStyle, { width: matchWidth ? triggerRect.value.width : undefined }]}
 						ref={containerRef as any}
 						onLayout={onContainerLayout}
-						// entering={FadeInDown}
+						entering={FadeInDown}
 					>
 						{withArrow && (isBottom(placement) || isRight(placement)) && arrow}
 						<Styled.Popover style={style}>{content}</Styled.Popover>

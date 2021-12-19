@@ -5,8 +5,8 @@ import Animated, {
 	useAnimatedStyle,
 	useSharedValue,
 	withTiming,
-	// FadeIn,
-	// FadeOut,
+	FadeIn,
+	FadeOut,
 } from 'react-native-reanimated';
 import * as Styled from './styles';
 
@@ -53,8 +53,8 @@ export const Backdrop = ({
 	const contentView = (
 		<Styled.Backdrop
 			as={Animated.View}
-			// entering={FadeIn}
-			// exiting={FadeOut}
+			entering={FadeIn}
+			exiting={FadeOut}
 			style={[invisible && { backgroundColor: 'transparent' }]}
 			pointerEvents={!clickThrough ? 'auto' : 'none'}
 		>

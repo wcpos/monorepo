@@ -10,6 +10,7 @@ import UISettings from '../../common/ui-settings';
 import Totals from './totals';
 import Buttons from './buttons';
 import Table from './table';
+import FeeAndShipping from './fee-and-shipping';
 
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 
@@ -28,10 +29,14 @@ const Cart = ({ order }: CartProps) => {
 						console.log(val);
 					}}
 				/>
+				<AddCustomer />
 				<UISettings ui={ui} />
 			</Box>
 			<Box>
 				<Table order={order} ui={ui} />
+			</Box>
+			<Box>
+				<FeeAndShipping order={order} />
 			</Box>
 			<Box>
 				<Totals order={order} ui={ui} />

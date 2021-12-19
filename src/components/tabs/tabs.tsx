@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { StyleProp, ViewStyle, View, Text, Pressable } from 'react-native';
+import Box from '@wcpos/common/src/components/box';
 import TabBar from './tab-bar';
 
 export type Route = {
@@ -36,37 +37,21 @@ export function Tabs<T extends Route>({
 	renderScene,
 	tabBarPosition = 'top',
 }: TabsProps<T>) {
-	const tabBar = (
-		<TabBar
-			routes={navigationState.routes}
-			onIndexChange={onIndexChange}
-			direction={
-				tabBarPosition === 'left' || tabBarPosition === 'right' ? 'vertical' : 'horizontal'
-			}
-			focusedIndex={navigationState.index}
-		/>
-	);
-
 	return (
-		<View
-			style={{
-				flexDirection: tabBarPosition === 'left' || tabBarPosition === 'right' ? 'row' : 'column',
-				flexGrow: 1,
-				flexShrink: 1,
-				flexBasis: '0%',
-			}}
+		<Box
+			fill
+			horizontal={tabBarPosition === 'left' || tabBarPosition === 'right'}
+			reverse={tabBarPosition === 'bottom' || tabBarPosition === 'right'}
 		>
-			{(tabBarPosition === 'top' || tabBarPosition === 'left') && tabBar}
-			<View
-				style={{
-					flexGrow: 1,
-					flexShrink: 1,
-					flexBasis: '0%',
-				}}
-			>
-				{renderScene({ route: navigationState.routes[navigationState.index] })}
-			</View>
-			{(tabBarPosition === 'bottom' || tabBarPosition === 'right') && tabBar}
-		</View>
+			<TabBar
+				routes={navigationState.routes}
+				onIndexChange={onIndexChange}
+				direction={
+					tabBarPosition === 'left' || tabBarPosition === 'right' ? 'vertical' : 'horizontal'
+				}
+				focusedIndex={navigationState.index}
+			/>
+			<Box fill>{renderScene({ route: navigationState.routes[navigationState.index] })}</Box>
+		</Box>
 	);
 }

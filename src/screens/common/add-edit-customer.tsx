@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import { useObservableSuspense } from 'observable-hooks';
-import Dialog from '@wcpos/common/src/components/dialog';
+import Modal, { useModal } from '@wcpos/common/src/components/modal';
 import TextInput from '@wcpos/common/src/components/textinput';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Tabs from '@wcpos/common/src/components/tabs';
@@ -14,12 +14,10 @@ export interface AddEditCustomerProps {
 
 const AddEditCustomer = ({ customer }: AddEditCustomerProps) => {
 	const { storeDB } = useAppState();
-	const [visible, setVisible] = React.useState(false);
-	const [firstName, setFirstName] = React.useState(customer?.firstName);
-	const [email, setEmail] = React.useState(customer?.email);
-	const [selected, setSelected] = React.useState(0);
-	const show = React.useCallback(() => setVisible(true), []);
-	const hide = React.useCallback(() => setVisible(false), []);
+	const { ref, open, close } = useModal();
+	const [index, setIndex] = React.useState(0);
+	const [firstName, setFirstName] = React.useState(customer?.firstName || '');
+	const [email, setEmail] = React.useState(customer?.email || '');
 
 	const title = customer ? 'Edit Customer' : 'Add Customer';
 
@@ -48,32 +46,43 @@ const AddEditCustomer = ({ customer }: AddEditCustomerProps) => {
 		}
 	};
 
-	const content =
-		selected === 0 ? (
-			<Dialog.Section>
-				<TextInput label="First Name" value={firstName} onChange={setFirstName} />
-				<TextInput label="Email" value={email} onChange={setEmail} />
-			</Dialog.Section>
-		) : (
-			<Dialog.Section>{customer ? <Tree data={customer.toJSON()} /> : null}</Dialog.Section>
-		);
+	const renderScene = ({ route }) => {
+		switch (route.key) {
+			case 'form':
+				return (
+					<>
+						<TextInput label="First Name" value={firstName} onChange={setFirstName} />
+						<TextInput label="Email" value={email} onChange={setEmail} />
+					</>
+				);
+			case 'json':
+				return customer ? <Tree data={customer.toJSON()} /> : null;
+			default:
+				return null;
+		}
+	};
+
+	const routes = [
+		{ key: 'form', title: 'Form' },
+		{ key: 'json', title: 'JSON' },
+	];
 
 	return (
-		<View style={{ marginHorizontal: 10 }}>
-			<Icon name="userPlus" onPress={show} tooltip="Add new customer" />
-			{visible && (
-				<Dialog
-					title={title}
-					open
-					onClose={hide}
-					primaryAction={{ label: 'Save', action: handleSave }}
-				>
-					<Tabs tabs={['Form', 'JSON']} selected={selected} onSelect={setSelected}>
-						{content}
-					</Tabs>
-				</Dialog>
-			)}
-		</View>
+		<>
+			<Icon name="userPlus" onPress={open} tooltip="Add new customer" />
+			<Modal
+				ref={ref}
+				title={title}
+				primaryAction={{ label: 'Add Customer', action: handleSave }}
+				secondaryActions={[{ label: 'Cancel', action: close }]}
+			>
+				<Tabs<typeof routes[number]>
+					navigationState={{ index, routes }}
+					renderScene={renderScene}
+					onIndexChange={setIndex}
+				/>
+			</Modal>
+		</>
 	);
 };
 

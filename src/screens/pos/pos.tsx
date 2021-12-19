@@ -10,41 +10,15 @@ import CartTabs from './cart/tabs';
 import Products from './products';
 import ResizeableColumns from './resizable-columns';
 import POSTabs from './tabs';
-
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
-type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
-type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
-
-interface POSContextProps {
-	currentOrder?: OrderDocument;
-	setCurrentOrder: React.Dispatch<React.SetStateAction<OrderDocument | undefined>>;
-	currentCustomer?: CustomerDocument;
-	setCurrentCustomer: React.Dispatch<React.SetStateAction<CustomerDocument | undefined>>;
-}
-
-export const POSContext = React.createContext<POSContextProps>({
-	currentOrder: undefined,
-	// @ts-ignore
-	setCurrentOrder: undefined,
-	currentCustomer: undefined,
-	// @ts-ignore
-	setCurrentCustomer: undefined,
-});
+import POSContentProvider from './context';
 
 /**
  *
  */
 const POS = () => {
 	const productsUI = useObservableSuspense(useUIResource('pos.products'));
-	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
-	const [currentCustomer, setCurrentCustomer] = React.useState<CustomerDocument | undefined>();
 	const theme = useTheme();
 	const dimensions = useWindowDimensions();
-
-	const context = React.useMemo(
-		() => ({ currentOrder, setCurrentOrder, currentCustomer, setCurrentCustomer }),
-		[currentCustomer, currentOrder]
-	);
 
 	const leftComponent = (
 		<ErrorBoundary>
@@ -61,7 +35,7 @@ const POS = () => {
 	);
 
 	return (
-		<POSContext.Provider value={context}>
+		<POSContentProvider>
 			{dimensions.width >= theme.screens.small ? (
 				<ResizeableColumns
 					ui={productsUI}
@@ -71,7 +45,7 @@ const POS = () => {
 			) : (
 				<POSTabs leftComponent={leftComponent} rightComponent={rightComponent} />
 			)}
-		</POSContext.Provider>
+		</POSContentProvider>
 	);
 };
 

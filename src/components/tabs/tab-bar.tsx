@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { StyleProp, ViewStyle, View, Text, Pressable } from 'react-native';
+import Box from '@wcpos/common/src/components/box';
 import TabItem from './tab-item';
 
 export interface TabBarProps {
@@ -11,7 +11,7 @@ export interface TabBarProps {
 
 const TabBar = ({ routes, onIndexChange, direction = 'horizontal', focusedIndex }: TabBarProps) => {
 	return (
-		<View style={{ flexDirection: direction === 'vertical' ? 'column' : 'row' }}>
+		<Box horizontal={direction === 'horizontal'}>
 			{routes.map((route, i) => {
 				const focused = i === focusedIndex;
 				return (
@@ -23,7 +23,7 @@ const TabBar = ({ routes, onIndexChange, direction = 'horizontal', focusedIndex 
 					/>
 				);
 			})}
-		</View>
+		</Box>
 	);
 };
 

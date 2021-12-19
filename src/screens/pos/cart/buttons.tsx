@@ -7,14 +7,14 @@ import Checkbox from '@wcpos/common/src/components/checkbox';
 import MetaData from '@wcpos/common/src/components/meta-data';
 import Text from '@wcpos/common/src/components/text';
 import useAuthLogin from '@wcpos/common/src/hooks/use-auth-login';
-import { POSContext } from '../pos';
+import { usePOSContext } from '../context';
 
 export interface ButtonsProps {
 	order: import('@wcpos/common/src/database').OrderDocument;
 }
 
 const Buttons = ({ order }: ButtonsProps) => {
-	const { setCurrentOrder } = React.useContext(POSContext);
+	const { setCurrentOrder } = usePOSContext();
 	const [visible, setVisible] = React.useState(false);
 	const showAuthLogin = useAuthLogin();
 

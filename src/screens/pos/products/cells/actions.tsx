@@ -6,14 +6,14 @@ import Button from '@wcpos/common/src/components/button';
 import Popover from '@wcpos/common/src/components/popover';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Variations from './variations';
-import { POSContext } from '../../pos';
+import { usePOSContext } from '../../context';
 
 interface Props {
 	item: import('@wcpos/common/src/database').ProductDocument;
 }
 
 const Actions = ({ item: product }: Props) => {
-	const { currentOrder, setCurrentOrder } = React.useContext(POSContext);
+	const { currentOrder, setCurrentOrder } = usePOSContext();
 	const { storeDB } = useAppState();
 	// const [visible, setVisible] = React.useState(false);
 
@@ -21,7 +21,6 @@ const Actions = ({ item: product }: Props) => {
 		if (currentOrder) {
 			currentOrder.addOrUpdateLineItem(product);
 		} else {
-			// @ts-ignore
 			const newOrder = await storeDB?.collections.orders.createNewOrderWithProduct(product);
 			setCurrentOrder(newOrder);
 		}

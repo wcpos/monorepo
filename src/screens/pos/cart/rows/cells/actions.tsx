@@ -3,7 +3,7 @@ import Icon from '@wcpos/common/src/components/icon';
 import Box from '@wcpos/common/src/components/box';
 import Modal, { useModal } from '@wcpos/common/src/components/modal';
 import { useSnackbar } from '@wcpos/common/src/components/snackbar/use-snackbar';
-import { POSContext } from '../../../pos';
+import { usePOSContext } from '../../../context';
 import EditModal from './edit-modal';
 
 interface ActionProps {
@@ -14,7 +14,7 @@ interface ActionProps {
 }
 
 const Actions = ({ item }: ActionProps) => {
-	const { currentOrder } = React.useContext(POSContext);
+	const { currentOrder } = usePOSContext();
 	const { ref: modalRef, open, close } = useModal();
 
 	const undoFeeRemove = () => {
