@@ -12,14 +12,15 @@ export interface AddEditCustomerProps {
 	customer?: import('@wcpos/common/src/database').CustomerDocument;
 }
 
-const AddEditCustomer = ({ customer }: AddEditCustomerProps) => {
+const AddEditCustomer = (props: AddEditCustomerProps) => {
 	const { storeDB } = useAppState();
+	const customer = props.customer || storeDB.collections.customers.newDocument();
 	const { ref, open, close } = useModal();
 	const [index, setIndex] = React.useState(0);
 	const [firstName, setFirstName] = React.useState(customer?.firstName || '');
 	const [email, setEmail] = React.useState(customer?.email || '');
 
-	const title = customer ? 'Edit Customer' : 'Add Customer';
+	const title = customer.localID ? 'Edit Customer' : 'Add Customer';
 
 	const handleSave = async () => {
 		const currentCustomer = customer;

@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { useObservableSuspense, useObservableState, useObservable } from 'observable-hooks';
-import { View } from 'react-native';
+import { useObservableState } from 'observable-hooks';
 import Text from '@wcpos/common/src/components/text';
+import Box from '@wcpos/common/src/components/box';
 
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 
@@ -15,22 +15,22 @@ const Totals = ({ order }: Props) => {
 
 	return (
 		<>
-			<View style={{ flexDirection: 'row' }}>
-				<View style={{ flex: 1 }}>
+			<Box horizontal>
+				<Box fill padding="small">
 					<Text>Total Tax:</Text>
-				</View>
-				<View>
+				</Box>
+				<Box padding="small">
 					<Text>{totalTax}</Text>
-				</View>
-			</View>
-			<View style={{ flexDirection: 'row' }}>
-				<View style={{ flex: 1 }}>
+				</Box>
+			</Box>
+			<Box horizontal>
+				<Box fill padding="small">
 					<Text>Order Total:</Text>
-				</View>
-				<View>
+				</Box>
+				<Box padding="small">
 					<Text>{total}</Text>
-				</View>
-			</View>
+				</Box>
+			</Box>
 		</>
 	);
 };

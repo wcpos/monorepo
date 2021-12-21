@@ -13,36 +13,12 @@ export interface EditModalProps {
 		| import('@wcpos/common/src/database').ShippingLineDocument;
 }
 
+
+
 const EditModal = ({ item }: EditModalProps) => {
-	useObservableState(item.$); // re-render
+	console.log(item.collection.schema.topLevelFields);
 
-	const handleChangeTaxClass = async (newValue: string): Promise<void> => {
-		item.atomicPatch({ taxClass: newValue });
-	};
-
-	const hasProperty = (property: string) => {
-		return item.collection.schema.topLevelFields.includes(property);
-	};
-
-	return (
-		<>
-			{hasProperty('name') && <TextInput label="Name" value={item.name} />}
-			{hasProperty('taxStatus') && (
-				<Checkbox
-					label="Taxable"
-					checked={item.taxStatus === 'taxable'}
-					onChange={(value) => item.atomicPatch({ taxStatus: value ? 'taxable' : 'none' })}
-				/>
-			)}
-			{hasProperty('taxClass') && (
-				<TextInput label="Tax Class" value={item.taxClass} onChange={handleChangeTaxClass} />
-			)}
-			<MetaData
-				// @ts-ignore
-				data={item.metaData}
-			/>
-		</>
-	);
+	return null;
 };
 
 export default EditModal;

@@ -6,6 +6,7 @@ import Price from './cells/fee-and-shipping-price';
 import Total from './cells/total';
 import Tax from './cells/tax';
 import Actions from './cells/actions';
+import ShippingTitle from './cells/shipping-title';
 
 type ShippingLineDocument = import('@wcpos/common/src/database').ShippingLineDocument;
 type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
@@ -23,6 +24,7 @@ const cells = {
 	subtotalTax: Tax,
 	total: Total,
 	totalTax: Tax,
+	name: ShippingTitle,
 };
 
 const ShippingLine = ({ shipping, columns }: Props) => {

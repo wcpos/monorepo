@@ -5,6 +5,7 @@ import Price from './cells/fee-and-shipping-price';
 import Total from './cells/total';
 import Tax from './cells/tax';
 import Actions from './cells/actions';
+import FeeName from './cells/fee-name';
 
 type FeeLineDocument = import('@wcpos/common/src/database').FeeLineDocument;
 type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
@@ -21,6 +22,7 @@ const cells = {
 	subtotalTax: Tax,
 	total: Total,
 	totalTax: Tax,
+	name: FeeName,
 };
 
 const FeeLine = ({ fee, columns }: Props) => {

@@ -181,7 +181,7 @@ const PopoverBase = (
 	const triggerElement = React.useMemo(() => {
 		if (React.Children.count(children) === 1) {
 			const type = get(children, ['type', 'name']);
-			if (type === 'Pressable' || type === 'Icon') {
+			if (type === 'Pressable' || type === 'Icon' || type === 'Button') {
 				const child = React.Children.only(children) as React.ReactElement;
 				const { onPress, onHoverIn, onHoverOut } = child.props;
 				return React.cloneElement(child, {
