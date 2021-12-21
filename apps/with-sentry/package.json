@@ -13,7 +13,7 @@
 		"eject": "expo eject"
 	},
 	"dependencies": {
-		"@sentry/react-native": "^3.2.8",
+		"@sentry/react-native": "^3.2.10",
 		"@wcpos/ui": "*",
 		"expo": "^44.0.0",
 		"expo-application": "~4.0.1",
