@@ -37,6 +37,8 @@ export { default as clock } from './clock.svg';
 export { default as commentsQuestion } from './comments-question.svg';
 export { default as creditCard } from './credit-card.svg';
 export { default as ellipsisVertical } from './ellipsis-vertical.svg';
+export { default as eye } from './eye.svg';
+export { default as eyeSlash } from './eye-slash.svg';
 export { default as fileInvoiceDollar } from './file-invoice-dollar.svg';
 export { default as folders } from './folders.svg';
 export { default as gear } from './gear.svg';
