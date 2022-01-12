@@ -1,7 +1,12 @@
 import * as React from 'react';
-import Text from '../../text';
+import Box from '../../box';
+import { ArrayField } from './array-field';
+import { BooleanField } from './boolean-field';
+import { IntegerField } from './integer-field';
+import { NumberField } from './number-field';
 import { ObjectField } from './object-field';
 import { StringField } from './string-field';
+import { NullField } from './null-field';
 import {
 	getSchemaType,
 	orderProperties,
@@ -12,13 +17,13 @@ import {
 } from '../utils';
 
 const COMPONENT_TYPES = {
-	array: StringField,
-	boolean: StringField,
-	integer: StringField,
-	number: StringField,
+	array: ArrayField,
+	boolean: BooleanField,
+	integer: IntegerField,
+	number: NumberField,
 	object: ObjectField,
 	string: StringField,
-	null: StringField,
+	null: NullField,
 };
 
 interface SchemaFieldProps {
@@ -46,12 +51,14 @@ export const SchemaField = ({
 	const FieldComponent = COMPONENT_TYPES[getSchemaType(schema)];
 
 	return (
-		<FieldComponent
-			schema={schema}
-			uiSchema={uiSchema}
-			idSchema={idSchema}
-			formData={formData}
-			name={name}
-		/>
+		<Box paddingBottom="small">
+			<FieldComponent
+				schema={schema}
+				uiSchema={uiSchema}
+				idSchema={idSchema}
+				formData={formData}
+				name={name}
+			/>
+		</Box>
 	);
 };

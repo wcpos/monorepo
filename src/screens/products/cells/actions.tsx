@@ -1,6 +1,7 @@
 import * as React from 'react';
 import Dropdown from '@wcpos/common/src/components/dropdown';
 import Icon from '@wcpos/common/src/components/icon';
+import Modal, { useModal } from '@wcpos/common/src/components/modal';
 import ProductModal from './modal';
 import DeleteDialog from './delete-dialog';
 
@@ -9,8 +10,8 @@ type Props = {
 };
 
 const Actions = ({ item: product }: Props) => {
-	const [visible, setVisible] = React.useState(false);
 	const [showDialog, setShowDialog] = React.useState(false);
+	const { ref: modalRef, open, close } = useModal();
 
 	const handleSync = () => {
 		const replicationState = product.syncRestApi({
@@ -27,7 +28,9 @@ const Actions = ({ item: product }: Props) => {
 		<>
 			<Dropdown
 				items={[
-					{ label: 'Show', action: () => setVisible(true) },
+					{ label: 'Space' },
+					{ label: 'Space' },
+					{ label: 'Show', action: open },
 					{ label: 'Sync', action: handleSync },
 					{ label: 'Delete', action: () => setShowDialog(true), type: 'critical' },
 				]}
@@ -35,7 +38,10 @@ const Actions = ({ item: product }: Props) => {
 				<Icon name="ellipsisVertical" />
 			</Dropdown>
 			{showDialog && <DeleteDialog product={product} onClose={() => setShowDialog(false)} />}
-			{visible && <ProductModal product={product} onClose={() => setVisible(false)} />}
+
+			<Modal ref={modalRef} title={`Edit ${product.name}`}>
+				<ProductModal product={product} />
+			</Modal>
 		</>
 	);
 };

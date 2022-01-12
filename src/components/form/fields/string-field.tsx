@@ -3,9 +3,10 @@ import TextInput from '../../textinput';
 import Text from '../../text';
 
 interface StringFieldProps {
-	name: any;
+	name: string;
+	formData: string;
 }
 
-export const StringField = ({ name }: StringFieldProps) => {
-	return <TextInput label={name} />;
+export const StringField = ({ name, formData }: StringFieldProps) => {
+	return <TextInput label={name} value={formData} />;
 };

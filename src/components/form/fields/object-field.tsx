@@ -9,17 +9,6 @@ import {
 	ADDITIONAL_PROPERTY_FLAG,
 } from '../utils';
 
-const DefaultObjectFieldTemplate = (props) => {
-	const { TitleField, DescriptionField, title, description } = props;
-	return (
-		<>
-			<Text>{title}</Text>
-			<Text>{description}</Text>
-			{props.properties.map((prop) => prop.content)}
-		</>
-	);
-};
-
 interface ObjectFieldProps {
 	schema: any;
 	uiSchema: any;
@@ -36,8 +25,8 @@ export const ObjectField = ({
 }: ObjectFieldProps) => {
 	const { rootSchema, fields, formContext } = getDefaultRegistry();
 	const schema = retrieveSchema(props.schema, rootSchema, formData);
-	const title = schema.title === undefined ? props.name : schema.title;
-	const description = uiSchema['ui:description'] || schema.description;
+	// const title = schema.title === undefined ? props.name : schema.title;
+	// const description = uiSchema['ui:description'] || schema.description;
 	const orderedProperties = orderProperties(
 		Object.keys(schema.properties || {}),
 		uiSchema['ui:order']
