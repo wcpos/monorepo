@@ -69,7 +69,7 @@ export const JsonObject = ({
 		<Styled.ObjectNode>
 			<View style={{ flexDirection: 'row' }}>
 				<Pressable onPress={handleCollapse} style={{ flexDirection: 'row', alignItems: 'center' }}>
-					<Arrow direction={collapsed ? 'right' : 'down'} />
+					<Arrow size="small" direction={collapsed ? 'right' : 'down'} />
 					<Text type="info">{name} :</Text>
 				</Pressable>
 				{collapsed ? renderCollapsed() : <Text>{' {'}</Text>}

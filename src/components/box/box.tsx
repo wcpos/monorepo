@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, ViewStyle, StyleProp, ViewProps } from 'react-native';
+import { View, ViewStyle, StyleProp, ViewProps, ScrollView } from 'react-native';
 import Space from '../space';
 import * as Styled from './styles';
 
@@ -91,6 +91,10 @@ export interface BoxProps extends ViewProps {
 	 * If true, a box shadow will be applied
 	 */
 	raised?: boolean;
+	/**
+	 * If true, children will be wraped in ScrollView.
+	 */
+	scrollable?: boolean;
 	style?: StyleProp<ViewStyle>;
 }
 

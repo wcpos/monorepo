@@ -62,13 +62,18 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 					return {
 						...column,
 						label: t(`products.column.label.${column.key}`),
-						onRender: (item: ProductDocument) => {
-							return Cell ? <Cell item={item} column={column} /> : null;
-						},
+						// onRender: (item: ProductDocument) => {
+						// 	return Cell ? <Cell item={item} column={column} /> : null;
+						// },
 					};
 				}),
 		[columns, t]
 	);
+
+	const cellRenderer = React.useCallback((item: ProductDocument, column: ColumnProps) => {
+		const Cell = get(cells, column.key);
+		return Cell ? <Cell item={item} column={column} /> : null;
+	}, []);
 
 	/**
 	 * in memory sort
@@ -109,6 +114,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 					// @ts-ignore
 					columns={visibleColumns}
 					// itemIndex={index}
+					cellRenderer={cellRenderer}
 				/>
 			);
 		},

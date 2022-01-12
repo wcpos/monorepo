@@ -7,6 +7,7 @@ import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Tabs from '@wcpos/common/src/components/tabs';
 import Tree from '@wcpos/common/src/components/tree';
 import Icon from '@wcpos/common/src/components/icon';
+import Form from '@wcpos/common/src/components/form';
 
 export interface AddEditCustomerProps {
 	customer?: import('@wcpos/common/src/database').CustomerDocument;
@@ -50,12 +51,7 @@ const AddEditCustomer = (props: AddEditCustomerProps) => {
 	const renderScene = ({ route }) => {
 		switch (route.key) {
 			case 'form':
-				return (
-					<>
-						<TextInput label="First Name" value={firstName} onChange={setFirstName} />
-						<TextInput label="Email" value={email} onChange={setEmail} />
-					</>
-				);
+				return <Form schema={customer.collection.schema.jsonSchema} formData={customer.toJSON()} />;
 			case 'json':
 				return customer ? <Tree data={customer.toJSON()} /> : null;
 			default:

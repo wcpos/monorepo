@@ -43,11 +43,7 @@ export const Tree = ({
 					size="small"
 					onPress={() => setRaw(!raw)}
 					accessoryLeft={
-						raw ? (
-							<Icon size="small" name="visibility-off" />
-						) : (
-							<Icon size="small" name="visibility" />
-						)
+						raw ? <Icon size="small" name="eyeSlash" /> : <Icon size="small" name="eye" />
 					}
 				/>
 			</Styled.RawButtonContainer>

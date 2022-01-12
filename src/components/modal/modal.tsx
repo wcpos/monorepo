@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Modal as RNModal, KeyboardAvoidingView } from 'react-native';
+import { Modal as RNModal, KeyboardAvoidingView, ScrollView } from 'react-native';
 import Portal from '../portal';
 import Backdrop from '../backdrop';
 import Text from '../text';
@@ -204,10 +204,17 @@ export const ModalBase = (
 				<Box
 					raised
 					rounding="medium"
-					style={{ width: modalSizes[size], maxWidth: '80%', backgroundColor: 'white' }}
+					style={{
+						width: modalSizes[size],
+						maxWidth: '80%',
+						backgroundColor: 'white',
+						maxHeight: '80%',
+					}}
 				>
 					{renderHeader()}
-					<Box padding="medium">{renderChildren()}</Box>
+					<Box padding="medium">
+						<ScrollView>{renderChildren()}</ScrollView>
+					</Box>
 					{renderFooter()}
 				</Box>
 			</Styled.Container>
