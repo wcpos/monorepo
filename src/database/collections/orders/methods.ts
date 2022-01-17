@@ -155,6 +155,15 @@ export default {
 			});
 
 		/**
+		 * Special case if the order is not yet saved, eg: new order
+		 */
+		if (!this.id) {
+			await this.save().catch((err: any) => {
+				debugger;
+			});
+		}
+
+		/**
 		 * Add new line item id to the lineItems
 		 * - use atomicUpdate just in case lineItems is undefined
 		 */

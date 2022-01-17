@@ -2,14 +2,15 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import Dropdown from '@wcpos/common/src/components/dropdown';
 import Icon from '@wcpos/common/src/components/icon';
-import OrderModal from './modal';
+import Modal, { useModal } from '@wcpos/common/src/components/modal';
+import EditModal from '../../common/edit-modal';
 
 interface Props {
 	item: import('@wcpos/common/src/database').OrderDocument;
 }
 
 const Actions = ({ item: order }: Props) => {
-	const [visible, setVisible] = React.useState(false);
+	const { ref, open, close } = useModal();
 	const navigation = useNavigation();
 
 	const handleSync = () => {
@@ -26,7 +27,7 @@ const Actions = ({ item: order }: Props) => {
 		<>
 			<Dropdown
 				items={[
-					{ label: 'Show', action: () => setVisible(true) },
+					{ label: 'Show', action: open },
 					{ label: 'Open in Cart', action: handleOpen },
 					{ label: 'Sync', action: handleSync },
 					{ label: 'Delete', action: order.remove },
@@ -34,7 +35,9 @@ const Actions = ({ item: order }: Props) => {
 			>
 				<Icon name="ellipsisVertical" />
 			</Dropdown>
-			{visible && <OrderModal order={order} onClose={() => setVisible(false)} />}
+			<Modal ref={ref} title="Edit Order">
+				<EditModal item={order} />
+			</Modal>
 		</>
 	);
 };

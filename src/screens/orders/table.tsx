@@ -87,6 +87,14 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 	/**
 	 *
 	 */
+	const cellRenderer = React.useCallback((item: OrderDocument, column: ColumnProps) => {
+		const Cell = get(cells, column.key);
+		return Cell ? <Cell item={item} column={column} /> : null;
+	}, []);
+
+	/**
+	 *
+	 */
 	const rowRenderer = React.useCallback(
 		(
 			item,
@@ -105,6 +113,7 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 					// @ts-ignore
 					columns={visibleColumns}
 					// itemIndex={index}
+					cellRenderer={cellRenderer}
 				/>
 			);
 		},

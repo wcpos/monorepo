@@ -89,6 +89,14 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 	/**
 	 *
 	 */
+	const cellRenderer = React.useCallback((item: CustomerDocument, column: ColumnProps) => {
+		const Cell = get(cells, column.key);
+		return Cell ? <Cell item={item} column={column} /> : null;
+	}, []);
+
+	/**
+	 *
+	 */
 	const rowRenderer = React.useCallback(
 		(
 			item,
@@ -107,6 +115,7 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 					// @ts-ignore
 					columns={visibleColumns}
 					// itemIndex={index}
+					cellRenderer={cellRenderer}
 				/>
 			);
 		},
