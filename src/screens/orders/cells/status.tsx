@@ -6,10 +6,15 @@ type Props = {
 	item: import('@wcpos/common/src/database').OrderDocument;
 };
 
+const iconMap = {
+	pending: 'clock',
+	'pos-open': 'cartShopping',
+};
+
 const Status = ({ item: order }: Props) => {
 	return order.status ? (
 		<Tooltip content={order.status}>
-			<Icon name={order.status} />
+			<Icon name={iconMap[order.status]} />
 		</Tooltip>
 	) : (
 		<Icon.Skeleton />

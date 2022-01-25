@@ -36,6 +36,7 @@ export { default as circleXmark } from './circle-xmark.svg';
 export { default as clock } from './clock.svg';
 export { default as commentsQuestion } from './comments-question.svg';
 export { default as creditCard } from './credit-card.svg';
+export { default as deleteLeft } from './delete-left.svg';
 export { default as ellipsisVertical } from './ellipsis-vertical.svg';
 export { default as eye } from './eye.svg';
 export { default as eyeSlash } from './eye-slash.svg';

@@ -12,6 +12,7 @@ import Address from './cells/address';
 import Customer from './cells/customer';
 import CustomerNote from './cells/note';
 import Status from './cells/status';
+import Total from './cells/total';
 import Footer from './footer';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
@@ -31,6 +32,7 @@ const cells = {
 	customer: Customer,
 	customerNote: CustomerNote,
 	status: Status,
+	total: Total,
 };
 
 /**

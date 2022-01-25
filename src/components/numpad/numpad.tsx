@@ -1,38 +1,65 @@
 import * as React from 'react';
 import Icon from '../icon';
-import * as Styled from './styles';
+import Box from '../box';
+import Text from '../text';
+import { reducer, formatOperand } from './reducer';
+import DigitButton from './digit-button';
+import OperationButton from './operation-button';
 
 export interface NumpadProps {
-	display?: 'below' | 'center' | 'bottom' | 'inline';
-	placeholder?: string;
+	initialValue?: string;
+	calculator?: boolean;
 }
 
-const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '-', '0', '.'];
-
-export const Numpad = ({ display = 'below', placeholder = '0' }: NumpadProps) => {
-	const [displayText, setDisplayText] = React.useState(placeholder);
-
-	const handleKeyPress = (key: string) => {
-		setDisplayText(displayText + key);
-	};
-
-	const handleBackspace = () => {
-		setDisplayText(displayText);
-	};
+export const Numpad = ({ initialValue = '0', calculator = false }: NumpadProps) => {
+	const [{ currentOperand, previousOperand, operation }, dispatch] = React.useReducer(reducer, {
+		currentOperand: initialValue,
+	});
 
 	return (
-		<Styled.Container>
-			<Styled.Display>
-				<Styled.DisplayText>{displayText}</Styled.DisplayText>
-				<Icon name="backspace" onPress={handleBackspace} />
-			</Styled.Display>
-			<Styled.Keys>
-				{keys.map((key) => (
-					<Styled.Key key={`button-${key}`} onPress={() => handleKeyPress(key)}>
-						<Styled.KeyText>{key}</Styled.KeyText>
-					</Styled.Key>
-				))}
-			</Styled.Keys>
-		</Styled.Container>
+		<Box>
+			{calculator && (
+				<Box>
+					<Text>
+						{formatOperand(previousOperand)} {operation}
+					</Text>
+				</Box>
+			)}
+			<Box>
+				<Text>{formatOperand(currentOperand)}</Text>
+			</Box>
+			<Box horizontal>
+				<Box>
+					<Box horizontal padding="xxSmall" space="xxSmall">
+						<DigitButton digit="1" dispatch={dispatch} />
+						<DigitButton digit="2" dispatch={dispatch} />
+						<DigitButton digit="3" dispatch={dispatch} />
+					</Box>
+					<Box horizontal padding="xxSmall" space="xxSmall">
+						<DigitButton digit="4" dispatch={dispatch} />
+						<DigitButton digit="5" dispatch={dispatch} />
+						<DigitButton digit="6" dispatch={dispatch} />
+					</Box>
+					<Box horizontal padding="xxSmall" space="xxSmall">
+						<DigitButton digit="7" dispatch={dispatch} />
+						<DigitButton digit="8" dispatch={dispatch} />
+						<DigitButton digit="9" dispatch={dispatch} />
+					</Box>
+					<Box horizontal padding="xxSmall" space="xxSmall">
+						<OperationButton operation="+/-" dispatch={dispatch} />
+						<DigitButton digit="0" dispatch={dispatch} />
+						<DigitButton digit="." dispatch={dispatch} />
+					</Box>
+				</Box>
+				{calculator && (
+					<Box padding="xxSmall" space="xSmall">
+						<OperationButton operation="÷" dispatch={dispatch} />
+						<OperationButton operation="*" dispatch={dispatch} />
+						<OperationButton operation="+" dispatch={dispatch} />
+						<OperationButton operation="-" dispatch={dispatch} />
+					</Box>
+				)}
+			</Box>
+		</Box>
 	);
 };
