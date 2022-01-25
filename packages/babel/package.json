@@ -14,7 +14,8 @@
 		"test": "echo 'Nothing to test'"
 	},
 	"dependencies": {
-		"@babel/core": "7.16.5",
+		"@babel/core": "7.16.12",
+		"@babel/preset-typescript": "^7.16.7",
 		"babel-preset-expo": "9.0.2"
 	}
 }
