@@ -7,11 +7,11 @@
 		"managed": "yarn workspace @wcpos/app-managed",
 		"with-sentry": "yarn workspace @wcpos/app-with-sentry",
 		"with-dev-client": "yarn workspace @wcpos/app-with-dev-client",
+		"with-flipper": "yarn workspace @wcpos/app-with-flipper",
 		"cra": "yarn workspace @wcpos/cra",
 		"clean": "node scripts/clean-node-modules",
 		"storybook": "yarn workspace @wcpos/storybook",
 		"postinstall": "patch-package",
-		"flipper": "METRO_SERVER_PORT=19000 open -a Flipper.app",
 		"expo": "expo"
 	},
 	"workspaces": [

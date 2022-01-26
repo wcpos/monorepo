@@ -1,12 +1,12 @@
 {
 	"private": true,
-	"name": "@wcpos/with-flipper",
+	"name": "@wcpos/app-with-flipper",
 	"version": "1.0.0",
 	"main": "index.js",
 	"scripts": {
 		"build": "echo 'Nothing to build'",
 		"test": "eslint --ext js,ts,tsx .",
-		"start": "expo start --clear",
+		"start": "expo start --dev-client",
 		"android": "expo start --android",
 		"ios": "expo start --ios",
 		"web": "expo start --web",
