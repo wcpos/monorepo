@@ -1,7 +1,7 @@
 {
 	"expo": {
-		"name": "wcpos-monorepo-app-managed",
-		"slug": "wcpos-monorepo-app-managed",
+		"name": "wcpos-monorepo-app-with-flipper",
+		"slug": "wcpos-monorepo-app-with-flipper",
 		"owner": "kilbot",
 		"version": "1.0.0",
 		"jsEngine": "hermes",
@@ -17,12 +17,12 @@
 		},
 		"assetBundlePatterns": ["**/*"],
 		"ios": {
-			"bundleIdentifier": "com.wcpos.client.managed",
+			"bundleIdentifier": "com.wcpos.client.flipper",
 			"buildNumber": "1.0.0",
 			"supportsTablet": true
 		},
 		"android": {
-			"package": "com.wcpos.client.managed",
+			"package": "com.wcpos.client.flipper",
 			"versionCode": 400010000,
 			"adaptiveIcon": {
 				"foregroundImage": "./assets/adaptive-icon.png",
