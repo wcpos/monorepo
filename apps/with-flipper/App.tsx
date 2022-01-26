@@ -1,27 +1,10 @@
-// import Text from "@wcpos/common/src/components/text";
-// import { Paragraph, Strong } from "@wcpos/ui";
-// import { StatusBar } from "expo-status-bar";
-// import { StyleSheet, View } from "react-native";
+import { connectToDevTools } from 'react-devtools-core';
 
-// export default function App() {
-//   return (
-//     <View style={styles.container}>
-//       <Paragraph>
-//         Hello from an <Strong>EAS</Strong> monorepo (managed)
-//       </Paragraph>
-//       <Text>Hello from @wcpos/common</Text>
-//       <StatusBar style="auto" />
-//     </View>
-//   );
-// }
+if (__DEV__) {
+	connectToDevTools({
+		host: 'localhost',
+		port: 8097,
+	});
+}
 
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     backgroundColor: "#fff",
-//     alignItems: "center",
-//     justifyContent: "center",
-//   },
-// });
-
-export { default } from "@wcpos/common/src/app";
+export { default } from '@wcpos/common/src/app';

@@ -2065,7 +2065,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@expo/config-plugins@npm:4.0.16, @expo/config-plugins@npm:^4.0.16":
+"@expo/config-plugins@npm:4.0.16, @expo/config-plugins@npm:^4.0.15, @expo/config-plugins@npm:^4.0.16":
   version: 4.0.16
   resolution: "@expo/config-plugins@npm:4.0.16"
   dependencies:
@@ -7508,11 +7508,14 @@ __metadata:
     "@wcpos/ui": "*"
     base-64: 1.0.0
     expo: 44.0.5
+    expo-community-flipper: ^44.0.1
     expo-sqlite: 10.1.0
     expo-status-bar: 1.2.0
     react: 17.0.2
+    react-devtools-core: ^4.23.0
     react-dom: 17.0.2
     react-native: 0.66.4
+    react-native-flipper: ^0.130.0
     react-native-get-random-values: 1.7.2
     react-native-pager-view: 5.4.9
     react-native-reanimated: 2.3.1
@@ -13998,6 +14001,16 @@ __metadata:
     expo: bin/expo.js
     expo-cli: bin/expo.js
   checksum: 696dba0dcd87e9b69762f52edd4058b2a50d035636ff5d903eb94c18dd4500c23e8cb549d91072274b7c9f55dcd4200ea7443f81b88abdd2857c43d426b7fd3d
+  languageName: node
+  linkType: hard
+
+"expo-community-flipper@npm:^44.0.1":
+  version: 44.0.1
+  resolution: "expo-community-flipper@npm:44.0.1"
+  dependencies:
+    "@expo/config-plugins": ^4.0.15
+    resolve-from: ^5.0.0
+  checksum: b501e74d90e0ac7b41bd6ecd325a11bc714e61268ef09658540eaf25307ce1f217906035a68309d0f72d21848cc65da8269620bb2a593ded8b4be52f151fe4b6
   languageName: node
   linkType: hard
 
@@ -24812,6 +24825,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-devtools-core@npm:^4.23.0":
+  version: 4.23.0
+  resolution: "react-devtools-core@npm:4.23.0"
+  dependencies:
+    shell-quote: ^1.6.1
+    ws: ^7
+  checksum: 16c020149171c18039f366f43e305fdf5ec5991a40841e0ef83d5360b41c9a52cb072f22915b35732dd767954adbd65b6baf4f7f1bbcc785d9ffeb7f42bc1bb4
+  languageName: node
+  linkType: hard
+
 "react-devtools-core@npm:^4.6.0":
   version: 4.22.1
   resolution: "react-devtools-core@npm:4.22.1"
@@ -25092,6 +25115,16 @@ __metadata:
   peerDependencies:
     react-native: "*"
   checksum: 79c2da7403d387e5893110b4cca40004f18c8e1a988da135832d32b6961d3e399d6811fb4c301257c2cd713325ca00cd3a4f2b42f69890ea43600d0924ae0ba4
+  languageName: node
+  linkType: hard
+
+"react-native-flipper@npm:^0.130.0":
+  version: 0.130.0
+  resolution: "react-native-flipper@npm:0.130.0"
+  peerDependencies:
+    react: ^16.8.0 || ^17.0.0
+    react-native: ">0.62.0"
+  checksum: 0009242aa224bb86ce1ce59c1051b0894f7b48ff5b7168ea8c233a9898c947ea1dbfd13170f982bcb9e06f9f78dfef91c3d909de1231c1651befbdd2ffbf6ebc
   languageName: node
   linkType: hard
 
