@@ -1,27 +1,31 @@
 {
-	"build": {
-		"base": {
-			"env": {}
-		},
-		"preview": {
-			"extends": "base",
-			"releaseChannel": "default",
-			"distribution": "internal",
-			"android": {
-				"buildType": "apk"
-			}
-		},
-		"devclient": {
-			"extends": "base",
-			"releaseChannel": "default",
-			"distribution": "internal",
-			"developmentClient": true,
-			"android": {
-				"buildType": "apk"
-			},
-			"ios": {
-				"simulator": true
-			}
-		}
-	}
+  "build": {
+    "base": {
+      "env": {}
+    },
+    "preview": {
+      "extends": "base",
+      "releaseChannel": "default",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "devclient": {
+      "extends": "base",
+      "releaseChannel": "default",
+      "distribution": "internal",
+      "developmentClient": true,
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
+      }
+    }
+  },
+  "cli": {
+    "version": ">= 0.39.0",
+    "requireCommit": true
+  }
 }
