@@ -1,4 +1,6 @@
 import * as React from 'react';
+// import useKey from '@wcpos/common/src/hooks/use-key';
+import useAllKeysPress from '@wcpos/common/src/hooks/useAllKeysPress';
 import Icon from '../icon';
 import Box from '../box';
 import Text from '../text';
@@ -35,6 +37,14 @@ export const Numpad = ({ initialValue = '0', calculator = false, onChange }: Num
 			onChange(currentOperand);
 		}
 	}, [currentOperand, onChange]);
+
+	// detect keyboard for web
+	const digitPress = useAllKeysPress({ userKeys: '1' });
+	React.useEffect(() => {
+		if (digitPress) {
+			dispatch({ type: ACTIONS.ADD_DIGIT, payload: { digit: '1' } });
+		}
+	}, [digitPress]);
 
 	return (
 		<Box>
