@@ -10,3 +10,10 @@ export default {
 export const basicUsage = (props: NumpadProps) => {
 	return <Numpad {...props} />;
 };
+
+export const calculator = (props: NumpadProps) => {
+	return <Numpad {...props} />;
+};
+calculator.args = {
+	calculator: true,
+};

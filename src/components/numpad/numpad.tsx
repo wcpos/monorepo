@@ -2,31 +2,56 @@ import * as React from 'react';
 import Icon from '../icon';
 import Box from '../box';
 import Text from '../text';
-import { reducer, formatOperand } from './reducer';
+import Button from '../button';
+import { reducer, formatOperand, ACTIONS } from './reducer';
 import DigitButton from './digit-button';
 import OperationButton from './operation-button';
 
 export interface NumpadProps {
 	initialValue?: string;
 	calculator?: boolean;
+	onChange?: (value: string) => void;
 }
 
-export const Numpad = ({ initialValue = '0', calculator = false }: NumpadProps) => {
+export const Numpad = ({ initialValue = '0', calculator = false, onChange }: NumpadProps) => {
 	const [{ currentOperand, previousOperand, operation }, dispatch] = React.useReducer(reducer, {
 		currentOperand: initialValue,
 	});
 
+	const handleBackspace = React.useCallback(() => {
+		dispatch({ type: ACTIONS.DELETE_DIGIT, payload: undefined });
+	}, [dispatch]);
+
+	const handleClear = React.useCallback(() => {
+		dispatch({ type: ACTIONS.CLEAR, payload: undefined });
+	}, [dispatch]);
+
+	const handleEvaluate = React.useCallback(() => {
+		dispatch({ type: ACTIONS.EVALUATE, payload: undefined });
+	}, [dispatch]);
+
+	React.useEffect(() => {
+		if (onChange) {
+			onChange(currentOperand);
+		}
+	}, [currentOperand, onChange]);
+
 	return (
 		<Box>
-			{calculator && (
-				<Box>
-					<Text>
-						{formatOperand(previousOperand)} {operation}
-					</Text>
+			<Box horizontal>
+				<Box fill>
+					{calculator && previousOperand && (
+						<Box>
+							<Text>
+								{formatOperand(previousOperand)} {operation}
+							</Text>
+						</Box>
+					)}
+					<Box>
+						<Text>{formatOperand(currentOperand)}</Text>
+					</Box>
 				</Box>
-			)}
-			<Box>
-				<Text>{formatOperand(currentOperand)}</Text>
+				<Icon name="deleteLeft" onPress={handleBackspace} />
 			</Box>
 			<Box horizontal>
 				<Box>
@@ -60,6 +85,14 @@ export const Numpad = ({ initialValue = '0', calculator = false }: NumpadProps) 
 					</Box>
 				)}
 			</Box>
+			{calculator && (
+				<Box horizontal padding="xxSmall" space="xSmall">
+					<Button title="Clear" onPress={handleClear} />
+					<Button onPress={handleEvaluate}>
+						<Icon name="equals" size="xSmall" />
+					</Button>
+				</Box>
+			)}
 		</Box>
 	);
 };

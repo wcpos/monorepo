@@ -11,12 +11,12 @@ interface Props {
 const Quantity = ({ item }: Props) => {
 	const quantity = useObservableState(item.quantity$, item.quantity);
 
-	const handleChangeText = async (newValue: string): Promise<void> => {
+	const handleQuantityChange = async (newValue: string): Promise<void> => {
 		item.atomicPatch({ quantity: Number(newValue) });
 	};
 
 	return (
-		<Popover content={<Numpad placeholder={String(quantity)} />}>
+		<Popover content={<Numpad initialValue={String(quantity)} onChange={handleQuantityChange} />}>
 			<Button title={String(quantity)} background="outline" />
 		</Popover>
 	);
