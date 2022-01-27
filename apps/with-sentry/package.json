@@ -19,7 +19,7 @@
 		"expo-application": "~4.0.1",
 		"expo-constants": "~13.0.1",
 		"expo-device": "~4.1.0",
-		"expo-file-system": "~13.2.1",
+		"expo-file-system": "~13.1.2",
 		"expo-status-bar": "~1.2.0",
 		"expo-updates": "~0.11.5",
 		"react": "17.0.2",

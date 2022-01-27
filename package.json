@@ -24,7 +24,7 @@
 	},
 	"devDependencies": {
 		"@tsconfig/react-native": "1.0.4",
-		"expo-cli": "5.0.5",
+		"expo-cli": "5.0.3",
 		"patch-package": "6.4.7",
 		"postinstall-postinstall": "2.1.0"
 	},
