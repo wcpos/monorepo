@@ -12,7 +12,7 @@
 	},
 	"dependencies": {
 		"@react-native-community/masked-view": "0.1.11",
-		"@react-native-community/netinfo": "7.1.8",
+		"@react-native-community/netinfo": "7.1.9",
 		"@react-navigation/drawer": "6.1.8",
 		"@react-navigation/elements": "1.2.1",
 		"@react-navigation/native": "6.0.6",
