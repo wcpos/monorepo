@@ -19,7 +19,7 @@ import * as Styled from './styles';
 const Customers = () => {
 	const ui = useObservableSuspense(useUIResource('customers'));
 	useIdAudit('customers');
-	// useRestQuery('customers');
+	useRestQuery('customers');
 
 	return (
 		<QueryProvider initialQuery={{ sortBy: 'lastName', sortDirection: 'asc' }}>

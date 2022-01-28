@@ -3,7 +3,7 @@ import { ScrollView } from 'react-native';
 import { useUncontrolledState } from '@wcpos/common/src/hooks/use-uncontrolled-state';
 import Dropdown from '../dropdown';
 import TextInput from '../textinput';
-import * as Styled from './styles';
+// import Search from '../search';
 
 export interface ComboboxChoice {
 	/**
