@@ -1,8 +1,10 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import { action } from '@storybook/addon-actions';
+import random from 'lodash/random';
 import { Icon, IconProps, IconSkeletonProps } from './icon';
 import Portal from '../portal';
+import * as Svgs from './svg/fontawesome/solid';
 
 export default {
 	title: 'Components/Icon',
@@ -20,6 +22,11 @@ export default {
 	},
 };
 
+const getRandomIconName = () => {
+	const iconNames = Object.keys(Svgs);
+	return iconNames[random(0, iconNames.length - 1)];
+};
+
 /**
  * Tooltips require
  * - Portals
@@ -34,9 +41,13 @@ const AppProvider: React.FC = ({ children }) => {
 };
 
 export const BasicUsage = (props: IconProps) => <Icon {...props} />;
+BasicUsage.args = {
+	name: getRandomIconName(),
+};
 
 export const PressableIcon = (props: IconProps) => <Icon {...props} />;
 PressableIcon.args = {
+	name: getRandomIconName(),
 	onPress: action('Pressed'),
 };
 
@@ -48,6 +59,7 @@ export const IconWithTooltip = (props: IconProps) => (
 	</AppProvider>
 );
 IconWithTooltip.args = {
+	name: getRandomIconName(),
 	tooltip: 'Icon label',
 };
 

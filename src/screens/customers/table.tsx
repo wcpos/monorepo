@@ -7,6 +7,7 @@ import useData from '@wcpos/common/src/hooks/use-collection-query';
 import useQuery from '@wcpos/common/src/hooks/use-query';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Table from '@wcpos/common/src/components/table3';
+import useRestQuery from '@wcpos/common/src/hooks/use-rest-query-customers';
 import Actions from './cells/actions';
 import Name from './cells/name';
 import Email from './cells/email';
@@ -43,6 +44,7 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 	const { data } = useData('customers');
 	const { query, setQuery } = useQuery();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
+	useRestQuery('customers');
 
 	/**
 	 * - filter visible columns

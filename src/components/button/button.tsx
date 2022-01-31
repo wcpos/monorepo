@@ -4,6 +4,7 @@ import Text from '../text';
 import Pressable from '../pressable';
 import Icon from '../icon';
 import Box from '../box';
+import Loader from '../loader';
 import * as Styled from './styles';
 
 export type Props = {
@@ -101,7 +102,7 @@ const Button = ({
 
 	const renderTitle = () => {
 		if (loading) {
-			return <Icon name="spinner" />;
+			return <Loader type={type === 'inverse' ? 'primary' : 'inverse'} />;
 		}
 
 		if (typeof title === 'string') {

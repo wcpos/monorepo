@@ -1,6 +1,5 @@
 import * as React from 'react';
 import Icon from '@wcpos/common/src/components/icon';
-import Tooltip from '@wcpos/common/src/components/tooltip';
 
 type Props = {
 	item: import('@wcpos/common/src/database').OrderDocument;
@@ -13,9 +12,7 @@ const iconMap = {
 
 const Status = ({ item: order }: Props) => {
 	return order.status ? (
-		<Tooltip content={order.status}>
-			<Icon name={iconMap[order.status]} />
-		</Tooltip>
+		<Icon name={iconMap[order.status]} tooltip={order.status} />
 	) : (
 		<Icon.Skeleton />
 	);
