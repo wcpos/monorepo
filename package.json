@@ -2,8 +2,8 @@
 	"private": true,
 	"name": "@wcpos/monorepo",
 	"scripts": {
-		"build": "yarn workspaces run build",
-		"test": "yarn workspaces run test",
+		"build": "yarn workspaces foreach run build",
+		"test": "yarn workspaces foreach run test",
 		"managed": "yarn workspace @wcpos/app-managed",
 		"with-sentry": "yarn workspace @wcpos/app-with-sentry",
 		"with-dev-client": "yarn workspace @wcpos/app-with-dev-client",
@@ -25,11 +25,9 @@
 	"devDependencies": {
 		"@tsconfig/react-native": "1.0.4",
 		"expo-cli": "5.0.3",
-		"patch-package": "6.4.7",
-		"postinstall-postinstall": "2.1.0"
-	},
-	"dependencies": {
 		"jest": "27.4.7",
+		"patch-package": "6.4.7",
+		"postinstall-postinstall": "2.1.0",
 		"prettier": "2.5.1"
 	},
 	"packageManager": "yarn@3.1.1"

@@ -16,6 +16,7 @@
 	"dependencies": {
 		"@babel/core": "7.16.12",
 		"@babel/preset-typescript": "^7.16.7",
+		"babel-jest": "^27.4.6",
 		"babel-preset-expo": "9.0.2"
 	}
 }
