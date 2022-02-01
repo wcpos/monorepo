@@ -17,11 +17,11 @@
 			"description": "Fee name.",
 			"type": "string"
 		},
-		"taxClass": {
+		"tax_class": {
 			"description": "Tax class of fee.",
 			"type": "string"
 		},
-		"taxStatus": {
+		"tax_status": {
 			"description": "Tax status of fee.",
 			"type": "string",
 			"enum": ["taxable", "none"]
@@ -30,7 +30,7 @@
 			"description": "Line total (after discounts).",
 			"type": "string"
 		},
-		"totalTax": {
+		"total_tax": {
 			"description": "Line total tax (after discounts).",
 			"type": "string"
 		},
@@ -55,7 +55,7 @@
 				}
 			}
 		},
-		"metaData": {
+		"meta_data": {
 			"description": "Meta data.",
 			"type": "array",
 			"items": {

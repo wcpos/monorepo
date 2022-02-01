@@ -10,7 +10,7 @@
 			"description": "Unique local identifier for the resource.",
 			"type": "string"
 		},
-		"dateCreatedGmt": {
+		"date_created_gmt": {
 			"type": "string"
 		},
 		"user": {

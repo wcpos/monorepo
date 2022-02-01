@@ -16,7 +16,7 @@ describe('Logs Collection', () => {
 		expect(isRxDocument(logDoc)).toBe(true);
 		expect(logDoc).toMatchObject({
 			localID: expect.any(String),
-			dateCreatedGmt: expect.any(Number),
+			date_created_gmt: expect.any(Number),
 			message: 'Log message',
 		});
 	});

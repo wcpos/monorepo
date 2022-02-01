@@ -10,6 +10,10 @@
  */
 export interface WooCommerceOrderLineItemSchema {
   /**
+   * Unique local identifier for the resource.
+   */
+  localID: string;
+  /**
    * Item ID.
    */
   id?: number;
@@ -20,12 +24,12 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Product ID.
    */
-  productId?: number;
+  product_id?: number;
   /**
    * Variation ID, if applicable.
    */
-  variationId?: number;
-  parentName?: string;
+  variation_id?: number;
+  parent_name?: string;
   /**
    * Product SKU.
    */
@@ -41,7 +45,7 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Tax class of product.
    */
-  taxClass?: string;
+  tax_class?: string;
   /**
    * Line subtotal (before discounts).
    */
@@ -49,7 +53,7 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Line subtotal tax (before discounts).
    */
-  subtotalTax?: string;
+  subtotal_tax?: string;
   /**
    * Line total (after discounts).
    */
@@ -57,7 +61,7 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Line total tax (after discounts).
    */
-  totalTax?: string;
+  total_tax?: string;
   /**
    * Line taxes.
    */
@@ -79,7 +83,7 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Meta data.
    */
-  metaData?: {
+  meta_data?: {
     /**
      * Meta ID.
      */

@@ -9,6 +9,10 @@
  * WordPress credentials
  */
 export interface WPCredentialsSchema {
+  /**
+   * Unique local identifier for the resource.
+   */
+  localID: string;
   id?: number;
   username?: string;
   firstName?: string;
@@ -20,6 +24,7 @@ export interface WPCredentialsSchema {
   consumerKey?: string;
   consumerSecret?: string;
   jwt?: string;
+  wpNonce?: string;
   keyId?: number;
   keyPermissions?: string;
   stores?: string[];

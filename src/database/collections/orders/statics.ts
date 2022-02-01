@@ -27,11 +27,11 @@ export default {
 			const result = await this.storageInstance.internals.pouch.find({
 				selector: {},
 				// @ts-ignore
-				fields: ['localID', 'id', 'dateCreatedGmt'],
+				fields: ['localID', 'id', 'date_created_gmt'],
 			});
-			// get array of sorted records with dateCreatedGmt
-			const filtered = _filter(result.docs, 'dateCreatedGmt');
-			const sorted = _sortBy(filtered, 'dateCreatedGmt');
+			// get array of sorted records with date_created_gmt
+			const filtered = _filter(result.docs, 'date_created_gmt');
+			const sorted = _sortBy(filtered, 'date_created_gmt');
 			const exclude = _map(sorted, 'id').join(',');
 
 			// @ts-ignore
@@ -103,10 +103,10 @@ export default {
 	) {
 		// get timestamp and turn it into date_created_gmt, eg: 2020-07-07T14:40:00
 		const timestamp = Date.now();
-		const dateCreatedGmt = new Date(timestamp).toISOString().split('.')[0];
+		const date_created_gmt = new Date(timestamp).toISOString().split('.')[0];
 
 		// @ts-ignore
-		const newOrder = await this.insert({ dateCreatedGmt, status: 'pos-open' });
+		const newOrder = await this.insert({ date_created_gmt, status: 'pos-open' });
 		return newOrder.addOrUpdateLineItem(product);
 	},
 };

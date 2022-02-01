@@ -23,16 +23,16 @@
 			"type": "string",
 			"format": "uri"
 		},
-		"dateCreated": {
+		"date_created": {
 			"type": "string"
 		},
-		"dateCreatedGmt": {
+		"date_created_gmt": {
 			"type": "string"
 		},
-		"dateModified": {
+		"date_modified": {
 			"type": "string"
 		},
-		"dateModifiedGmt": {
+		"date_modified_gmt": {
 			"type": "string"
 		},
 		"type": {
@@ -48,13 +48,13 @@
 		"featured": {
 			"type": "boolean"
 		},
-		"catalogVisibility": {
+		"catalog_visibility": {
 			"type": "string"
 		},
 		"description": {
 			"type": "string"
 		},
-		"shortDescription": {
+		"short_description": {
 			"type": "string"
 		},
 		"sku": {
@@ -63,28 +63,28 @@
 		"price": {
 			"type": "string"
 		},
-		"regularPrice": {
+		"regular_price": {
 			"type": "string"
 		},
-		"salePrice": {
+		"sale_price": {
 			"type": "string"
 		},
-		"dateOnSaleFrom": {
+		"date_on_sale_from": {
 			"type": ["string", "null"]
 		},
-		"dateOnSaleFromGmt": {
+		"date_on_sale_from_gmt": {
 			"type": ["string", "null"]
 		},
-		"dateOnSaleTo": {
+		"date_on_sale_to": {
 			"type": ["string", "null"]
 		},
-		"dateOnSaleToGmt": {
+		"date_on_sale_to_gmt": {
 			"type": ["string", "null"]
 		},
-		"priceHtml": {
+		"price_html": {
 			"type": "string"
 		},
-		"onSale": {
+		"on_sale": {
 			"type": "boolean"
 		},
 		"purchasable": {
@@ -104,36 +104,36 @@
 		"downloads": {
 			"type": "array"
 		},
-		"downloadLimit": {
+		"download_limit": {
 			"default": -1,
 			"type": "integer"
 		},
-		"downloadExpiry": {
+		"download_expiry": {
 			"default": -1,
 			"type": "integer"
 		},
-		"externalUrl": {
+		"external_url": {
 			"type": "string"
 		},
-		"buttonText": {
+		"button_text": {
 			"type": "string"
 		},
-		"taxStatus": {
+		"tax_status": {
 			"default": "taxable",
 			"enum": ["taxable", "shipping", "none"],
 			"type": "string"
 		},
-		"taxClass": {
+		"tax_class": {
 			"type": "string"
 		},
-		"manageStock": {
+		"manage_stock": {
 			"default": false,
 			"type": "boolean"
 		},
-		"stockQuantity": {
+		"stock_quantity": {
 			"type": ["number", "null"]
 		},
-		"stockStatus": {
+		"stock_status": {
 			"default": "instock",
 			"enum": ["instock", "outofstock", "onbackorder"],
 			"type": "string"
@@ -143,16 +143,16 @@
 			"enum": ["no", "notify", "yes"],
 			"type": "string"
 		},
-		"backordersAllowed": {
+		"backorders_allowed": {
 			"type": "boolean"
 		},
 		"backordered": {
 			"type": "boolean"
 		},
-		"lowStockAmount": {
+		"low_stock_amount": {
 			"type": ["integer", "null"]
 		},
-		"soldIndividually": {
+		"sold_individually": {
 			"type": "boolean"
 		},
 		"weight": {
@@ -172,49 +172,49 @@
 				}
 			}
 		},
-		"shippingRequired": {
+		"shipping_required": {
 			"type": "boolean"
 		},
-		"shippingTaxable": {
+		"shipping_taxable": {
 			"type": "boolean"
 		},
-		"shippingClass": {
+		"shipping_class": {
 			"type": "string"
 		},
-		"shippingClassId": {
+		"shipping_class_id": {
 			"type": "integer"
 		},
-		"reviewsAllowed": {
+		"reviews_allowed": {
 			"type": "boolean"
 		},
-		"averageRating": {
+		"average_rating": {
 			"type": "string"
 		},
-		"ratingCount": {
+		"rating_count": {
 			"type": "number"
 		},
-		"relatedIds": {
+		"related_ids": {
 			"type": "array",
 			"items": {
 				"type": "integer"
 			}
 		},
-		"upsellIds": {
+		"upsell_ids": {
 			"type": "array",
 			"items": {
 				"type": "integer"
 			}
 		},
-		"crossSellIds": {
+		"cross_sell_ids": {
 			"type": "array",
 			"items": {
 				"type": "integer"
 			}
 		},
-		"parentId": {
+		"parent_id": {
 			"type": "integer"
 		},
-		"purchaseNote": {
+		"purchase_note": {
 			"type": "string"
 		},
 		"categories": {
@@ -259,16 +259,16 @@
 					"id": {
 						"type": "integer"
 					},
-					"dateCreated": {
+					"date_created": {
 						"type": "string"
 					},
-					"dateCreatedGmt": {
+					"date_created_gmt": {
 						"type": "string"
 					},
-					"dateModified": {
+					"date_modified": {
 						"type": "string"
 					},
-					"dateModifiedGmt": {
+					"date_modified_gmt": {
 						"type": "string"
 					},
 					"src": {
@@ -315,7 +315,7 @@
 				}
 			}
 		},
-		"defaultAttributes": {
+		"default_attributes": {
 			"type": "array",
 			"items": {
 				"type": "object",
@@ -338,16 +338,16 @@
 				"type": "integer"
 			}
 		},
-		"groupedProducts": {
+		"grouped_products": {
 			"type": "array",
 			"items": {
 				"type": "integer"
 			}
 		},
-		"menuOrder": {
+		"menu_order": {
 			"type": "integer"
 		},
-		"metaData": {
+		"meta_data": {
 			"type": "array",
 			"items": {
 				"type": "object",

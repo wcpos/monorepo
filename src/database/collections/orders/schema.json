@@ -13,17 +13,17 @@
 		"id": {
 			"type": "integer"
 		},
-		"parentId": {
+		"parent_id": {
 			"description": "Parent order ID.",
 			"type": "integer"
 		},
 		"number": {
 			"type": "string"
 		},
-		"orderKey": {
+		"order_key": {
 			"type": "string"
 		},
-		"createdVia": {
+		"created_via": {
 			"type": "string"
 		},
 		"version": {
@@ -215,54 +215,54 @@
 			"description": "Currency the order was created with, in ISO format.",
 			"type": "string"
 		},
-		"dateCreated": {
+		"date_created": {
 			"type": "string"
 		},
-		"dateCreatedGmt": {
+		"date_created_gmt": {
 			"type": "string"
 		},
-		"dateModified": {
+		"date_modified": {
 			"type": "string"
 		},
-		"dateModifiedGmt": {
+		"date_modified_gmt": {
 			"type": "string"
 		},
-		"discountTotal": {
+		"discount_total": {
 			"type": "string"
 		},
-		"discountTax": {
+		"discount_tax": {
 			"type": "string"
 		},
-		"shippingTotal": {
+		"shipping_total": {
 			"type": "string"
 		},
-		"shippingTax": {
+		"shipping_tax": {
 			"type": "string"
 		},
-		"cartTax": {
+		"cart_tax": {
 			"type": "string"
 		},
 		"total": {
 			"type": "string"
 		},
-		"totalTax": {
+		"total_tax": {
 			"type": "string"
 		},
-		"pricesIncludeTax": {
+		"prices_include_tax": {
 			"type": "boolean"
 		},
-		"customerId": {
+		"customer_id": {
 			"default": 0,
 			"description": "User ID who owns the order. 0 for guests.",
 			"type": "integer"
 		},
-		"customerIpAddress": {
+		"customer_ip_address": {
 			"type": "string"
 		},
-		"customerUserAgent": {
+		"customer_user_agent": {
 			"type": "string"
 		},
-		"customerNote": {
+		"customer_note": {
 			"description": "Note left by customer during checkout.",
 			"type": "string"
 		},
@@ -274,34 +274,34 @@
 			"description": "Shipping address.",
 			"type": "object"
 		},
-		"paymentMethod": {
+		"payment_method": {
 			"description": "Payment method ID.",
 			"type": "string"
 		},
-		"paymentMethodTitle": {
+		"payment_method_title": {
 			"description": "Payment method title.",
 			"type": "string"
 		},
-		"transactionId": {
+		"transaction_id": {
 			"description": "Unique transaction ID.",
 			"type": "string"
 		},
-		"datePaid": {
+		"date_paid": {
 			"type": ["string", "null"]
 		},
-		"datePaidGmt": {
+		"date_paid_gmt": {
 			"type": ["string", "null"]
 		},
-		"dateCompleted": {
+		"date_completed": {
 			"type": ["string", "null"]
 		},
-		"dateCompletedGmt": {
+		"date_completed_gmt": {
 			"type": ["string", "null"]
 		},
-		"cartHash": {
+		"cart_hash": {
 			"type": "string"
 		},
-		"metaData": {
+		"meta_data": {
 			"description": "Meta data.",
 			"type": "array",
 			"items": {
@@ -322,7 +322,7 @@
 				}
 			}
 		},
-		"lineItems": {
+		"line_items": {
 			"description": "Line items data.",
 			"type": "array",
 			"ref": "line_items",
@@ -330,7 +330,7 @@
 				"type": "string"
 			}
 		},
-		"taxLines": {
+		"tax_lines": {
 			"type": "array",
 			"items": {
 				"type": "object",
@@ -338,10 +338,10 @@
 					"id": {
 						"type": "integer"
 					},
-					"rateCode": {
+					"rate_code": {
 						"type": "string"
 					},
-					"rateId": {
+					"rate_id": {
 						"type": "integer"
 					},
 					"label": {
@@ -350,16 +350,16 @@
 					"compound": {
 						"type": "boolean"
 					},
-					"taxTotal": {
+					"tax_total": {
 						"type": "string"
 					},
-					"shippingTaxTotal": {
+					"shipping_tax_total": {
 						"type": "string"
 					},
-					"ratePercent": {
+					"rate_percent": {
 						"type": "number"
 					},
-					"metaData": {
+					"meta_data": {
 						"description": "Meta data.",
 						"type": "array",
 						"items": {
@@ -383,7 +383,7 @@
 				}
 			}
 		},
-		"shippingLines": {
+		"shipping_lines": {
 			"description": "Shipping lines data.",
 			"type": "array",
 			"ref": "shipping_lines",
@@ -391,7 +391,7 @@
 				"type": "string"
 			}
 		},
-		"feeLines": {
+		"fee_lines": {
 			"description": "Fee lines data.",
 			"type": "array",
 			"ref": "fee_lines",
@@ -399,7 +399,7 @@
 				"type": "string"
 			}
 		},
-		"couponLines": {
+		"coupon_lines": {
 			"description": "Coupons line data.",
 			"type": "array",
 			"items": {
@@ -417,11 +417,11 @@
 						"description": "Discount total.",
 						"type": "string"
 					},
-					"discountTax": {
+					"discount_tax": {
 						"description": "Discount total tax.",
 						"type": "string"
 					},
-					"metaData": {
+					"meta_data": {
 						"description": "Meta data.",
 						"type": "array",
 
@@ -463,7 +463,7 @@
 				}
 			}
 		},
-		"currencySymbol": {
+		"currency_symbol": {
 			"type": "string"
 		},
 		"links": {

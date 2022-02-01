@@ -30,7 +30,7 @@ export const methods: ProductMethods = {
 	 *
 	 */
 	// isSynced(this) {
-	// 	return !!this.dateModifiedGmt;
+	// 	return !!this.date_modified_gmt;
 	// },
 };
 

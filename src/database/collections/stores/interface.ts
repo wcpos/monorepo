@@ -9,6 +9,10 @@
  * WooCommerce POS Store
  */
 export interface WCPOSStoreSchema {
+  /**
+   * Unique local identifier for the resource.
+   */
+  localID: string;
   id?: number;
   name?: string;
   accounting?: {
