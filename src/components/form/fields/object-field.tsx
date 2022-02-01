@@ -15,12 +15,14 @@ interface ObjectFieldProps {
 	formData: any;
 	idSchema: any;
 	name?: any;
+	onChange: any;
 }
 
 export const ObjectField = ({
 	uiSchema = {},
 	formData = {},
 	idSchema = {},
+	onChange,
 	...props
 }: ObjectFieldProps) => {
 	const { rootSchema, fields, formContext } = getDefaultRegistry();
@@ -46,6 +48,7 @@ export const ObjectField = ({
 						idSchema={idSchema[name]}
 						// idPrefix={idPrefix}
 						formData={(formData || {})[name]}
+						onChange={onChange}
 					/>
 				);
 			})}

@@ -1,21 +1,23 @@
 import * as React from 'react';
 import Dropdown from '@wcpos/common/src/components/dropdown';
 import Icon from '@wcpos/common/src/components/icon';
-import EditCustomer from '../add-customer-modal';
+import Modal, { useModal } from '@wcpos/common/src/components/modal';
+import useRestHttpClient from '@wcpos/common/src/hooks/use-rest-http-client';
+import EditCustomer from '../../common/edit-modal';
 
 type Props = {
 	item: import('@wcpos/common/src/database').CustomerDocument;
 };
 
 const Actions = ({ item: customer }: Props) => {
-	const [showModal, setShowModal] = React.useState(false);
+	const { ref: modalRef, open, close } = useModal();
+	const http = useRestHttpClient();
 
-	const handleSync = () => {
-		// @ts-ignore
-		const replicationState = customer.syncRestApi({
-			push: {},
-		});
-		replicationState.run(false);
+	const handleSync = async () => {
+		// push
+		const result = await http.post(`customers/${customer.id}`, customer.toJSON());
+
+		debugger;
 	};
 
 	const handleDelete = () => {
@@ -26,14 +28,21 @@ const Actions = ({ item: customer }: Props) => {
 		<>
 			<Dropdown
 				items={[
-					{ label: 'Edit', action: () => setShowModal(true) },
+					{ label: 'Edit', action: open },
 					{ label: 'Sync', action: handleSync },
 					{ label: 'Delete', action: handleDelete },
 				]}
 			>
 				<Icon name="ellipsisVertical" />
 			</Dropdown>
-			{showModal && <EditCustomer onClose={() => setShowModal(false)} customer={customer} />}
+			<Modal
+				ref={modalRef}
+				title="Edit Customer"
+				primaryAction={{ label: 'Sync Customer', action: handleSync }}
+				secondaryActions={[{ label: 'Cancel', action: close }]}
+			>
+				<EditCustomer item={customer} />
+			</Modal>
 		</>
 	);
 };

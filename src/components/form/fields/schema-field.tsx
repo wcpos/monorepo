@@ -35,6 +35,7 @@ interface SchemaFieldProps {
 	formData: any;
 	registry: any;
 	name: any;
+	onChange: any;
 }
 
 export const SchemaField = ({
@@ -46,6 +47,7 @@ export const SchemaField = ({
 	formData,
 	registry,
 	name,
+	onChange,
 }: SchemaFieldProps) => {
 	const { rootSchema, fields } = registry || getDefaultRegistry();
 	const FieldComponent = COMPONENT_TYPES[getSchemaType(schema)];
@@ -58,6 +60,7 @@ export const SchemaField = ({
 				idSchema={idSchema}
 				formData={formData}
 				name={name}
+				onChange={onChange}
 			/>
 		</Box>
 	);

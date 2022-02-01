@@ -31,6 +31,11 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 		sortDirection: 'asc',
 	});
 
+	const displayCustomerNameOrUsername = React.useCallback((customer: CustomerDocument) => {
+		if (!customer.firstName && !customer.lastName) return customer.username;
+		return `${customer.firstName} ${customer.lastName}`;
+	}, []);
+
 	const onSearch = React.useCallback(
 		(search: string) => {
 			setQuery((prev) => ({ ...prev, search }));
@@ -44,11 +49,11 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 		const sortedCustomers = orderBy(customers, 'lastName');
 
 		return sortedCustomers.map((customer) => ({
-			label: `${customer.firstName} ${customer.lastName}`,
+			label: displayCustomerNameOrUsername(customer),
 			value: customer,
 			key: customer.localID,
 		}));
-	}, [customers]);
+	}, [customers, displayCustomerNameOrUsername]);
 
 	// useWhyDidYouUpdate('Customer Select', {
 	// 	selectedCustomer,
@@ -66,12 +71,7 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 			hideLabel
 			choices={choices}
 			placeholder={t('customers.search.placeholder')}
-			selected={
-				selectedCustomer
-					? // @ts-ignore
-					  `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
-					: ''
-			}
+			selected={selectedCustomer ? displayCustomerNameOrUsername(selectedCustomer) : ''}
 			onSearch={onSearch}
 			searchValue={query.search}
 			onChange={onSelectCustomer}

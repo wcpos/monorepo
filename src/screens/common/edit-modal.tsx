@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useObservableState } from 'observable-hooks';
 import Tabs from '@wcpos/common/src/components/tabs';
 import Tree from '@wcpos/common/src/components/tree';
 import Form from '@wcpos/common/src/components/form';
@@ -15,11 +16,26 @@ export interface EditModalProps {
 
 const EditModal = ({ item }: EditModalProps) => {
 	const [index, setIndex] = React.useState(0);
+	const trigger = useObservableState(item.$);
+
+	const handleChange = React.useCallback(
+		(changes: Record<string, unknown>) => {
+			console.log(changes);
+			item.atomicPatch(changes);
+		},
+		[item]
+	);
 
 	const renderScene = ({ route }) => {
 		switch (route.key) {
 			case 'form':
-				return <Form schema={item.collection.schema.jsonSchema} formData={item.toJSON()} />;
+				return (
+					<Form
+						schema={item.collection.schema.jsonSchema}
+						formData={item.toJSON()}
+						onChange={handleChange}
+					/>
+				);
 			case 'json':
 				return <Tree data={item.toJSON()} />;
 			default:

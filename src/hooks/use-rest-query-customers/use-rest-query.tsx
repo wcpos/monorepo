@@ -166,12 +166,14 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 						// 	batchSize: 5,
 						// },
 					});
+					return replicationState;
 				})
 			),
 		[query]
 	);
 
-	const subscription = useSubscription(restQuery$);
+	const replicationState = useSubscription(restQuery$);
+	return replicationState;
 };
 
 /**

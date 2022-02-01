@@ -7,9 +7,10 @@ interface FormProps {
 	schema: any;
 	uiSchema: any;
 	formData: any;
+	onChange: any;
 }
 
-export const Form = ({ schema, uiSchema = {}, formData: inputFormData }: FormProps) => {
+export const Form = ({ schema, uiSchema = {}, formData: inputFormData, onChange }: FormProps) => {
 	const rootSchema = schema;
 	const formData = getDefaultFormState(schema, inputFormData, rootSchema);
 	const retrievedSchema = retrieveSchema(schema, rootSchema, formData);
@@ -33,6 +34,7 @@ export const Form = ({ schema, uiSchema = {}, formData: inputFormData }: FormPro
 				// formContext={formContext}
 				formData={formData}
 				registry={getRegistry()}
+				onChange={onChange}
 			/>
 		</ScrollView>
 	);
