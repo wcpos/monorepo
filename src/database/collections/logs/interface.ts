@@ -9,10 +9,14 @@
  * Logs events for debugging and user record
  */
 export interface LogSchema {
-  dateCreatedGmt?: string;
+  /**
+   * Unique local identifier for the resource.
+   */
+  localID: string;
+  date_created_gmt?: string;
   user?: string;
-  level: string;
-  message: string;
+  level?: string;
+  message?: string;
   meta?: {
     [k: string]: any;
   };

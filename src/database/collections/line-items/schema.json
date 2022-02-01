@@ -18,15 +18,15 @@
 			"description": "Product name.",
 			"type": "string"
 		},
-		"productId": {
+		"product_id": {
 			"description": "Product ID.",
 			"type": "integer"
 		},
-		"variationId": {
+		"variation_id": {
 			"description": "Variation ID, if applicable.",
 			"type": "integer"
 		},
-		"parentName": {
+		"parent_name": {
 			"type": "string"
 		},
 		"sku": {
@@ -41,7 +41,7 @@
 			"description": "Quantity ordered.",
 			"type": "number"
 		},
-		"taxClass": {
+		"tax_class": {
 			"description": "Tax class of product.",
 			"type": "string"
 		},
@@ -49,7 +49,7 @@
 			"description": "Line subtotal (before discounts).",
 			"type": "string"
 		},
-		"subtotalTax": {
+		"subtotal_tax": {
 			"description": "Line subtotal tax (before discounts).",
 			"type": "string"
 		},
@@ -57,7 +57,7 @@
 			"description": "Line total (after discounts).",
 			"type": "string"
 		},
-		"totalTax": {
+		"total_tax": {
 			"description": "Line total tax (after discounts).",
 			"type": "string"
 		},
@@ -82,7 +82,7 @@
 				}
 			}
 		},
-		"metaData": {
+		"meta_data": {
 			"description": "Meta data.",
 			"type": "array",
 			"items": {

@@ -50,11 +50,11 @@ export default {
 			const result = await this.storageInstance.internals.pouch.find({
 				selector: {},
 				// @ts-ignore
-				fields: ['localID', 'id', 'dateCreatedGmt'],
+				fields: ['localID', 'id', 'date_created_gmt'],
 			});
-			// get array of sorted records with dateCreatedGmt
-			const filtered = _filter(result.docs, 'dateCreatedGmt');
-			const sorted = _sortBy(filtered, 'dateCreatedGmt');
+			// get array of sorted records with date_created_gmt
+			const filtered = _filter(result.docs, 'date_created_gmt');
+			const sorted = _sortBy(filtered, 'date_created_gmt');
 			const exclude = _map(sorted, 'id').join(',');
 
 			// @ts-ignore
@@ -65,7 +65,7 @@ export default {
 					queryBuilder: (lastModified_1: any) => {
 						const orderbyMap = {
 							name: 'title',
-							dateCreated: 'date',
+							date_created: 'date',
 						};
 						// @ts-ignore
 						const orderby = orderbyMap[query.sortBy] ? orderbyMap[query.sortBy] : query.sortBy;
