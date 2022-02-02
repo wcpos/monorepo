@@ -64,11 +64,11 @@ const CartTabs = () => {
 	 *
 	 */
 	const renderScene = ({ route }: { route: typeof routes[number] }) => {
-		if (!route) {
+		if (!route || !currentOrder) {
 			return null;
 		}
-
-		return <Cart order={currentOrder} />;
+		return null;
+		// return <Cart order={currentOrder} />;
 	};
 
 	/**

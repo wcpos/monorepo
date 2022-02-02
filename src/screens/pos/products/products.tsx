@@ -14,8 +14,8 @@ interface POSProductsProps {
  *
  */
 const POSProducts = ({ ui }: POSProductsProps) => {
-	useIdAudit('products');
-	useRestQuery('products');
+	// useIdAudit('products');
+	// useRestQuery('products');
 
 	return (
 		<Box

@@ -9,8 +9,8 @@ import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import collectionsHelper from './utils/collections';
 import removeChildren from './remove-children';
 import collectionCounts from './collection-counts';
-import { RxDBGenerateIdPlugin } from './utils/generate-id';
-import RxDBWooCommerceRestApiSyncPlugin from './woocommerce-rest-api';
+import RxDBGenerateIdPlugin from './generate-id';
+// import RxDBWooCommerceRestApiSyncPlugin from './woocommerce-rest-api';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -39,4 +39,4 @@ addRxPlugin(RxDBValidatePlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBLeaderElectionPlugin);
-addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
+// addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);

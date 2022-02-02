@@ -18,6 +18,7 @@ import Icon, { IconName } from '@wcpos/common/src/components/icon';
 import Text from '@wcpos/common/src/components/text';
 import Box from '@wcpos/common/src/components/box';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useStoreSync from '@wcpos/common/src/hooks/use-store-sync';
 import { useTheme } from 'styled-components/native';
 // import curry from 'lodash/curry';
 
@@ -56,7 +57,7 @@ const Screen = (props: DrawerScreenProps<DrawerParamList>) => {
 	return (
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>Loading {props.route.name}</Text>}>
-				<Box padding="small" style={{height: '100%'}}>
+				<Box padding="small" style={{ height: '100%' }}>
 					{screen}
 				</Box>
 			</React.Suspense>
@@ -83,6 +84,7 @@ const MainNavigator = () => {
 	const { t } = useTranslation();
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
+	useStoreSync();
 
 	const header = React.useCallback((props) => <CustomHeader {...props} />, []);
 	const drawer = React.useCallback((props) => <CustomDrawer {...props} />, []);
@@ -111,7 +113,7 @@ const MainNavigator = () => {
 					backgroundColor: '#2c3e50',
 					width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
 				},
-				sceneContainerStyle: { height: '100%' } // important to set height to 100% to avoid scrolling
+				sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
 			}}
 			drawerContent={drawer}
 		>
