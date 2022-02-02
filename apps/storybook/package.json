@@ -12,34 +12,34 @@
 		"storybook-watcher": "sb-rn-watcher"
 	},
 	"dependencies": {
-		"@react-native-async-storage/async-storage": "^1.15.17",
-		"@react-native-community/datetimepicker": "^5.1.0",
-		"@react-native-community/slider": "^4.2.0",
-		"@storybook/addon-actions": "^6.4.18",
-		"@storybook/addon-controls": "^6.4.18",
+		"@react-native-async-storage/async-storage": "1.15.17",
+		"@react-native-community/datetimepicker": "5.1.0",
+		"@react-native-community/slider": "4.2.0",
+		"@storybook/addon-actions": "6.4.18",
+		"@storybook/addon-controls": "6.4.18",
 		"@storybook/addon-essentials": "6.4.18",
-		"@storybook/addon-knobs": "^6.4.0",
-		"@storybook/addon-ondevice-actions": "^6.0.1-alpha.7",
-		"@storybook/addon-ondevice-backgrounds": "^6.0.1-alpha.7",
-		"@storybook/addon-ondevice-controls": "^6.0.1-alpha.7",
+		"@storybook/addon-knobs": "6.4.0",
+		"@storybook/addon-ondevice-actions": "6.0.1-alpha.7",
+		"@storybook/addon-ondevice-backgrounds": "6.0.1-alpha.7",
+		"@storybook/addon-ondevice-controls": "6.0.1-alpha.7",
 		"@storybook/addon-ondevice-knobs": "5.3.25",
-		"@storybook/addon-ondevice-notes": "^6.0.1-alpha.7",
+		"@storybook/addon-ondevice-notes": "6.0.1-alpha.7",
 		"@storybook/preset-create-react-app": "3.2.0",
 		"@storybook/react": "6.4.18",
-		"@storybook/react-native": "^6.0.1-alpha.7",
-		"react": "17.0.2",
-		"react-dom": "17.0.2",
-		"react-native": "0.67.2"
+		"@storybook/react-native": "6.0.1-alpha.7",
+		"react": "17.0.1",
+		"react-dom": "17.0.1",
+		"react-native": "0.64.3"
 	},
 	"devDependencies": {
 		"@babel/core": "7.16.12",
-		"add": "^2.0.6",
+		"add": "2.0.6",
 		"babel-loader": "8.2.3",
 		"metro-react-native-babel-preset": "0.67.0",
-		"react-native-storybook-loader": "^2.0.5",
+		"react-native-storybook-loader": "2.0.5",
 		"react-scripts": "5.0.0",
 		"typescript": "4.5.5",
-		"yarn": "^1.22.17"
+		"yarn": "1.22.17"
 	},
 	"config": {
 		"react-native-storybook-loader": {
