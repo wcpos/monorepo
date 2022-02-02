@@ -1,8 +1,8 @@
-import { RxPlugin, RxCollection } from 'rxdb/plugins/core'
+import { RxPlugin, RxCollection } from 'rxdb/plugins/core';
 import randomToken from 'random-token';
 
 export function generateId(): string {
-	return randomToken(10) + ':' + Date.now();
+	return `${randomToken(10)}:${Date.now()}`;
 }
 
 export const RxDBGenerateIdPlugin: RxPlugin = {
