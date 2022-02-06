@@ -14,9 +14,9 @@
 		"test": "echo 'Nothing to test'"
 	},
 	"dependencies": {
-		"@babel/core": "7.16.12",
+		"@babel/core": "7.17.0",
 		"@babel/preset-typescript": "^7.16.7",
-		"babel-jest": "^27.4.6",
+		"babel-jest": "^27.5.0",
 		"babel-preset-expo": "9.0.2"
 	}
 }
