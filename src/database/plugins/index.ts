@@ -1,16 +1,16 @@
-import { addRxPlugin } from 'rxdb/plugins/core';
-import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
-import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
-import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
+import { addRxPlugin } from 'rxdb';
+// import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
+// import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
+// import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 // import { RxDBNoValidatePlugin } from 'rxdb/plugins/no-validate';
-import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
-import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
+// import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
+// import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import collectionsHelper from './utils/collections';
 import removeChildren from './remove-children';
 import collectionCounts from './collection-counts';
 import RxDBGenerateIdPlugin from './generate-id';
-// import RxDBWooCommerceRestApiSyncPlugin from './woocommerce-rest-api';
+import RxDBWooCommercePlugin from './woocommerce';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -33,10 +33,10 @@ addRxPlugin(removeChildren);
 addRxPlugin(collectionCounts);
 
 addRxPlugin(RxDBGenerateIdPlugin);
-addRxPlugin(RxDBLocalDocumentsPlugin);
+// addRxPlugin(RxDBLocalDocumentsPlugin);
 // addRxPlugin(RxDBNoValidatePlugin);
-addRxPlugin(RxDBValidatePlugin);
-addRxPlugin(RxDBQueryBuilderPlugin);
-addRxPlugin(RxDBUpdatePlugin);
+// addRxPlugin(RxDBValidatePlugin);
+// addRxPlugin(RxDBQueryBuilderPlugin);
+// addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBLeaderElectionPlugin);
-// addRxPlugin(RxDBWooCommerceRestApiSyncPlugin);
+addRxPlugin(RxDBWooCommercePlugin);

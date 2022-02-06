@@ -1,4 +1,4 @@
-import { createRxDatabase } from 'rxdb/plugins/core';
+import { createRxDatabase } from 'rxdb';
 import Platform from '@wcpos/common/src/lib/platform';
 import set from 'lodash/set';
 import config from './adapter';
@@ -14,12 +14,12 @@ export async function createDB<T>(name: string) {
 	});
 
 	// add to window for debugging
-	if (Platform.OS === 'web') {
-		if (!(window as any).dbs) {
-			set(window, 'dbs', {});
-		}
-		(window as any).dbs[name] = db;
-	}
+	// if (Platform.OS === 'web') {
+	// 	if (!(window as any).dbs) {
+	// 		set(window, 'dbs', {});
+	// 	}
+	// 	(window as any).dbs[name] = db;
+	// }
 
 	return db;
 }

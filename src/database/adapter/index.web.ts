@@ -1,4 +1,4 @@
-import { addPouchPlugin, getRxStoragePouch } from 'rxdb/plugins/pouchdb';
+import { addPouchPlugin, getRxStoragePouch } from 'rxdb';
 import IDBAdapter from 'pouchdb-adapter-idb';
 
 addPouchPlugin(IDBAdapter);
