@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
+import map from 'lodash/map';
 import useRestHttpClient from '../use-rest-http-client';
 import useAppState from '../use-app-state';
 
@@ -12,13 +13,15 @@ const getReplicationState = async (http, collection) => {
 		replicationIdentifier: 'product-replication',
 		live: true,
 		liveInterval: 600000,
+		retryTime: 600000,
 		pull: {
 			async handler(latestPullDocument) {
 				console.log('latestPullDocument', latestPullDocument);
-
+				debugger;
 				const result = await http
 					.get('products', {
-						params: { foo: 'bar' },
+						// date_modified_gmt_after after now, change to updatedAt
+						params: { date_modified_gmt_after: Math.floor(new Date().getTime() / 1000) },
 					})
 					.catch(({ response }) => {
 						console.log(response);
@@ -35,10 +38,9 @@ const getReplicationState = async (http, collection) => {
 						// }
 					});
 
-				const documents = result?.data || [];
-				console.log('documents', documents);
+				// @TODO - handle mapping in parseRestResponse?
+				const documents = map(result?.data, (item) => collection.parseRestResponse(item));
 
-				debugger;
 				return {
 					documents,
 					hasMoreDocuments: false,
