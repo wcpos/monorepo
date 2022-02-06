@@ -18,7 +18,7 @@ import * as Styled from './styles';
  */
 const Customers = () => {
 	const ui = useObservableSuspense(useUIResource('customers'));
-	useIdAudit('customers');
+	// useIdAudit('customers');
 	// useRestQuery('customers');
 
 	return (

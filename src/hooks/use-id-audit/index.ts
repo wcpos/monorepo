@@ -1,1 +1,1 @@
-export { default } from './use-id-audit';
+export { useIdAudit as default } from './use-id-audit';

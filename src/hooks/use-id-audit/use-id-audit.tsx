@@ -1,8 +1,8 @@
 import * as React from 'react';
-import http from 'axios';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import { useNavigation } from '@react-navigation/native';
-import get from 'lodash/get';
+import { replicateRxCollection } from 'rxdb/plugins/replication';
+import map from 'lodash/map';
+import useRestHttpClient from '../use-rest-http-client';
+import useAppState from '../use-app-state';
 
 type CollectionNames = 'products' | 'customers' | 'orders';
 
@@ -13,62 +13,66 @@ const fields = {
 };
 
 /**
- * Fetch a full list of IDs available on the server and compare to the local records
+ *
  */
-const useIdAudit = (collectionName: CollectionNames) => {
-	const { storeDB, site, wpCredentials } = useAppState();
-	const navigation = useNavigation();
+const getReplicationState = async (http, collection) => {
+	const replicationState = await replicateRxCollection({
+		collection,
+		replicationIdentifier: 'product-replication',
+		live: true,
+		liveInterval: 600000,
+		retryTime: 600000,
+		pull: {
+			async handler() {
+				const result = await http
+					.get('products', {
+						params: { fields: fields.products, posts_per_page: -1 },
+					})
+					.catch(({ response }) => {
+						console.log(response);
+						// if (!response) {
+						// 	console.error('CORS error');
+						// 	return;
+						// }
+						// if (response.status === 401) {
+						// 	// @ts-ignore
+						// 	navigation.navigate('Login');
+						// }
+						// if (response.status === 403) {
+						// 	console.error('invalid nonce');
+						// }
+					});
 
-	React.useEffect(() => {
-		const request = http.CancelToken.source();
-		const headers = {
-			'X-WCPOS': '1',
-		};
-		if (wpCredentials.wpNonce) {
-			Object.assign(headers, { 'X-WP-Nonce': wpCredentials.wpNonce });
-		}
-		if (wpCredentials.jwt) {
-			Object.assign(headers, { Authorization: `Bearer ${wpCredentials.jwt}` });
-		}
+				const data = await collection.auditRestApiIds(result?.data);
+				const documents = map(data, (item) => collection.parseRestResponse(item));
+				// @TODO - handle mapping in parseRestResponse?
 
-		http
-			// @ts-ignore
-			.get(collectionName, {
-				baseURL: site.wcApiUrl,
-				params: { fields: fields[collectionName], posts_per_page: -1 },
-				headers,
-			})
-			.then(({ data }: any) => {
-				// @ts-ignore
-				return storeDB.collections[collectionName].auditIdsFromServer(data);
-			})
-			.catch(({ response }) => {
-				console.log(response);
-				if (!response) {
-					console.error('CORS error');
-					return;
-				}
-				if (response.status === 401) {
-					// @ts-ignore
-					navigation.navigate('Login');
-				}
-				if (response.status === 403) {
-					console.error('invalid nonce');
-				}
-			});
+				return {
+					documents,
+					hasMoreDocuments: false,
+				};
+			},
+		},
+	});
 
-		// cancel server request on unmount
-		return () => {
-			request.cancel();
-		};
-	}, [
-		collectionName,
-		navigation,
-		site.wcApiUrl,
-		storeDB.collections,
-		wpCredentials.jwt,
-		wpCredentials.wpNonce,
-	]);
+	return replicationState;
 };
 
-export default useIdAudit;
+/**
+ *
+ */
+export const useIdAudit = () => {
+	const http = useRestHttpClient();
+	const { storeDB } = useAppState();
+
+	React.useEffect(() => {
+		const replicationState = getReplicationState(http, storeDB.collections.products);
+
+		return function cleanUp() {
+			replicationState.then((result) => {
+				result.cancel();
+			});
+		};
+		// only run once
+	}, []);
+};

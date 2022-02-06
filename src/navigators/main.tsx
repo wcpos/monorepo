@@ -19,6 +19,7 @@ import Text from '@wcpos/common/src/components/text';
 import Box from '@wcpos/common/src/components/box';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useStoreSync from '@wcpos/common/src/hooks/use-store-sync';
+import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
 import { useTheme } from 'styled-components/native';
 // import curry from 'lodash/curry';
 
@@ -84,6 +85,7 @@ const MainNavigator = () => {
 	const { t } = useTranslation();
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
+	useIdAudit();
 	useStoreSync();
 
 	const header = React.useCallback((props) => <CustomHeader {...props} />, []);

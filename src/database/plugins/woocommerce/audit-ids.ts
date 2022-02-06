@@ -14,32 +14,19 @@ export async function auditRestApiIds(this: RxCollection, data: Record<string, a
 	const { docs } = await this.storageInstance.internals.pouch
 		.find({
 			selector: { id: { $exists: true } },
-			// @ts-ignore
-			fields: ['localID', 'id'],
+			fields: ['id'],
 		})
 		.catch((err: any) => {
 			console.log(err);
 		});
 
-	//
-	if (docs.length > 0) {
-		//
-		const remove = map(docs, 'localID');
+	// compare local and server ids
+	const add = data.filter((d) => !find(docs, { id: d.id })).map((d) => ({ ...d, _deleted: false }));
 
-		forEach(docs, (doc) => {
-			const intersection = find(data, { id: doc.id });
-			if (intersection) {
-				pull(remove, doc.localID);
-				pull(data, intersection);
-			}
-		});
+	const remove = docs
+		.filter((d) => !find(data, { id: d.id }))
+		.map((d) => ({ ...d, _deleted: true }));
 
-		await this.bulkRemove(remove).catch((err) => {
-			console.log(err);
-		});
-	}
-
-	return this.bulkInsert(data).catch((err) => {
-		console.log(err);
-	});
+	// return changes to replication plugin
+	return add.concat(remove);
 }

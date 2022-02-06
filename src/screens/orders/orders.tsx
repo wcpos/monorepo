@@ -21,7 +21,7 @@ interface QueryState {
  */
 const Orders = () => {
 	const ui = useObservableSuspense(useUIResource('orders'));
-	useIdAudit('orders');
+	// useIdAudit('orders');
 	// useRestQuery('products');
 
 	return (
