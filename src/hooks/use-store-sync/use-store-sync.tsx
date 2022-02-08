@@ -17,11 +17,10 @@ const getReplicationState = async (http, collection) => {
 		pull: {
 			async handler(latestPullDocument) {
 				console.log('latestPullDocument', latestPullDocument);
-				debugger;
 				const result = await http
 					.get('products', {
 						// date_modified_gmt_after after now, change to updatedAt
-						params: { date_modified_gmt_after: Math.floor(new Date().getTime() / 1000) },
+						params: { after: new Date().toISOString() },
 					})
 					.catch(({ response }) => {
 						console.log(response);

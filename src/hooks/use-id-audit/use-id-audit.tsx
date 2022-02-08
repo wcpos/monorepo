@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 import map from 'lodash/map';
+import forEach from 'lodash/forEach';
 import useRestHttpClient from '../use-rest-http-client';
 import useAppState from '../use-app-state';
 
@@ -18,15 +19,15 @@ const fields = {
 const getReplicationState = async (http, collection) => {
 	const replicationState = await replicateRxCollection({
 		collection,
-		replicationIdentifier: 'product-replication',
+		replicationIdentifier: `${collection.name}-replication`,
 		live: true,
 		liveInterval: 600000,
-		retryTime: 600000,
+		// retryTime: 600000,
 		pull: {
 			async handler() {
 				const result = await http
-					.get('products', {
-						params: { fields: fields.products, posts_per_page: -1 },
+					.get(collection.name, {
+						params: { fields: fields[collection.name], posts_per_page: -1 },
 					})
 					.catch(({ response }) => {
 						console.log(response);
@@ -66,13 +67,20 @@ export const useIdAudit = () => {
 	const { storeDB } = useAppState();
 
 	React.useEffect(() => {
-		const replicationState = getReplicationState(http, storeDB.collections.products);
+		const replicationStates = {
+			products: getReplicationState(http, storeDB.collections.products),
+			orders: getReplicationState(http, storeDB.collections.orders),
+			customers: getReplicationState(http, storeDB.collections.customers),
+		};
 
 		return function cleanUp() {
-			replicationState.then((result) => {
-				result.cancel();
+			forEach(replicationStates, (replicationState) => {
+				replicationState.then((result) => {
+					result.cancel();
+				});
 			});
 		};
 		// only run once
+		// @TODO - why does this want to run twice?
 	}, []);
 };
