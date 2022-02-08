@@ -44,7 +44,7 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 	const { data } = useData('customers');
 	const { query, setQuery } = useQuery();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
-	useRestQuery('customers');
+	// useRestQuery('customers');
 
 	/**
 	 * - filter visible columns

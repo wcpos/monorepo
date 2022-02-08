@@ -56,21 +56,16 @@ const methods: SiteMethods = {
 		};
 
 		try {
-			const wpUser = await wpCredentialsCollection
-				.findOne({
-					selector: { id: data.userlocalID },
-				})
-				.exec();
+			const wpCredentials = (await this.populate('wpCredentials')) || [];
+			const wpCredentialsDoc = wpCredentials.find((d) => d.id === parsedData.id);
 
-			if (wpUser) {
-				// @ts-ignore
-				return wpUser.atomicPatch(parsedData);
+			if (wpCredentialsDoc) {
+				return wpCredentialsDoc.atomicPatch(parsedData);
 			}
-			// @ts-ignore
+
 			const newWpUser = await wpCredentialsCollection.insert(parsedData);
 			await this.atomicUpdate((oldData) => {
 				oldData.wpCredentials = oldData.wpCredentials || [];
-				// @ts-ignore
 				oldData.wpCredentials.push(newWpUser.localID);
 				return oldData;
 			});

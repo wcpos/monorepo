@@ -7,6 +7,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { ThemeProvider } from 'styled-components/native';
 import get from 'lodash/get';
 import getTheme from '@wcpos/common/src/themes';
+import { enableFreeze } from 'react-native-screens';
 import { AppStateProvider } from './hooks/use-app-state';
 import TranslationService from './services/translation';
 import AppNavigator from './navigators';
@@ -16,6 +17,9 @@ import ErrorBoundary from './components/error-boundary';
 import Url from './lib/url-parse';
 import { SnackbarProvider } from './components/snackbar/snackbar-provider';
 // import { AuthLoginProvider } from './hooks/use-auth-login';
+
+// enable freeze
+enableFreeze(true);
 
 const i18n = new TranslationService();
 

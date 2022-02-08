@@ -86,7 +86,7 @@ const MainNavigator = () => {
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
 	useIdAudit();
-	useStoreSync();
+	// useStoreSync();
 
 	const header = React.useCallback((props) => <CustomHeader {...props} />, []);
 	const drawer = React.useCallback((props) => <CustomDrawer {...props} />, []);

@@ -36,7 +36,7 @@ export interface SkeletonProps {
 	style?: ViewStyle;
 }
 
-const timingConfig: Animated.WithTimingConfig = {
+const timingConfig = {
 	duration: 1600,
 };
 
@@ -49,12 +49,13 @@ export const Skeleton = ({ width, height, border = 'rounded', style }: SkeletonP
 		backgroundColor: pulseColor.value,
 	}));
 
-	React.useEffect(() => {
-		pulseColor.value = withRepeat(
-			withSequence(withTiming('#edf2f5', timingConfig), withTiming('#e1e9ee', timingConfig)),
-			-1
-		) as unknown as string; // typings are wrong for withTiming
-	}, []);
+	// @TODO - need to optimize this
+	// React.useEffect(() => {
+	// 	pulseColor.value = withRepeat(
+	// 		withSequence(withTiming('#edf2f5', timingConfig), withTiming('#e1e9ee', timingConfig)),
+	// 		-1
+	// 	) as unknown as string; // typings are wrong for withTiming
+	// }, []);
 
 	return (
 		<Styled.Container

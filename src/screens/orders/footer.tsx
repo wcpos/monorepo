@@ -9,9 +9,9 @@ interface ProductFooterProps {
 	count: number;
 }
 
-const ProductsFooter = ({ count }: ProductFooterProps) => {
+const OrdersFooter = ({ count }: ProductFooterProps) => {
 	const { storeDB } = useAppState();
-	const total = useObservableState(storeDB.products.totalDocuments$, 0);
+	const total = useObservableState(storeDB.orders.totalDocuments$, 0);
 
 	return (
 		<Styled.Footer>
@@ -22,4 +22,4 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	);
 };
 
-export default ProductsFooter;
+export default OrdersFooter;
