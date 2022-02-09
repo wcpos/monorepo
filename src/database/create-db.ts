@@ -1,4 +1,4 @@
-import { createRxDatabase } from 'rxdb';
+import { createRxDatabase } from 'rxdb/plugins/core';
 import Platform from '@wcpos/common/src/lib/platform';
 import set from 'lodash/set';
 import config from './adapter';

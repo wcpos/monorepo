@@ -12,7 +12,7 @@ export interface WooCommerceProductSchema {
   /**
    * Unique local identifier for the resource.
    */
-  localID: string;
+  _id?: string;
   id?: number;
   name?: string;
   slug?: string;
@@ -38,7 +38,7 @@ export interface WooCommerceProductSchema {
   price_html?: string;
   on_sale?: boolean;
   purchasable?: boolean;
-  totalSales?: number;
+  total_sales?: number;
   virtual?: boolean;
   downloadable?: boolean;
   downloads?: any[];

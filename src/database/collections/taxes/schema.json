@@ -3,10 +3,9 @@
 	"version": 0,
 	"description": "WooCommerce Tax Rate schema",
 	"type": "object",
-	"primaryKey": "localID",
-	"required": ["localID"],
+	"primaryKey": "_id",
 	"properties": {
-		"localID": {
+		"_id": {
 			"description": "Unique local identifier for the resource.",
 			"type": "string"
 		},

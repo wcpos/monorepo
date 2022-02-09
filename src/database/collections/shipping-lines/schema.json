@@ -3,10 +3,10 @@
 	"version": 0,
 	"description": "WooCommerce Order Shipping Line schema",
 	"type": "object",
-	"primaryKey": "localID",
-	"required": ["localID", "method_id"],
+	"primaryKey": "_id",
+	"required": ["method_id"],
 	"properties": {
-		"localID": {
+		"_id": {
 			"description": "Unique local identifier for the resource.",
 			"type": "string"
 		},

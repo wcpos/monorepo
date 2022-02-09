@@ -52,6 +52,7 @@ const collectionCountsPlugin: RxPlugin = {
 			Object.assign(collection, {
 				totalDocuments: new BehaviorSubject(0),
 				unsyncedDocuments: new BehaviorSubject([]),
+				syncedDocuments: new BehaviorSubject([]),
 			});
 
 			Object.assign(collection, {
@@ -59,12 +60,14 @@ const collectionCountsPlugin: RxPlugin = {
 				totalDocuments$: collection.totalDocuments.asObservable(),
 				// @ts-ignore
 				unsyncedDocuments$: collection.unsyncedDocuments.asObservable(),
+				// @ts-ignore
+				syncedDocuments$: collection.syncedDocuments.asObservable(),
 			});
 
 			collection.storageInstance.internals.pouch
 				.find({
 					selector: {},
-					fields: ['localID', 'id', 'dateCreatedGmt'],
+					fields: ['id', 'dateCreatedGmt'],
 				})
 				.then((result: any) => {
 					// count total documents
@@ -73,10 +76,15 @@ const collectionCountsPlugin: RxPlugin = {
 					collection.totalDocuments.next(result.docs.length);
 					// count unsynced documents
 					const unsynced = result.docs.filter((doc: any) => {
-						return !doc.dateCreated;
+						return !doc.date_created;
+					});
+					const synced = result.docs.filter((doc: any) => {
+						return doc.date_created;
 					});
 					// @ts-ignore
 					collection.unsyncedDocuments.next(unsynced);
+					// @ts-ignore
+					collection.syncedDocuments.next(synced);
 				})
 				.catch((err: any) => {
 					console.log(err);
@@ -93,7 +101,7 @@ const collectionCountsPlugin: RxPlugin = {
 					collection.storageInstance.internals.pouch
 						.find({
 							selector: {},
-							fields: ['localID', 'id', 'dateCreatedGmt'],
+							fields: ['id', 'dateCreatedGmt'],
 						})
 						.then((result: any) => {
 							// count total documents
@@ -102,10 +110,15 @@ const collectionCountsPlugin: RxPlugin = {
 							collection.totalDocuments.next(result.docs.length);
 							// count unsynced documents
 							const unsynced = result.docs.filter((doc: any) => {
-								return !doc.dateCreated;
+								return !doc.date_created;
+							});
+							const synced = result.docs.filter((doc: any) => {
+								return doc.date_created;
 							});
 							// @ts-ignore
 							collection.unsyncedDocuments.next(unsynced);
+							// @ts-ignore
+							collection.syncedDocuments.next(synced);
 						})
 						.catch((err: any) => {
 							console.log(err);
