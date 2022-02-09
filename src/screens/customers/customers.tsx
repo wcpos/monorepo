@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { QueryProvider } from '@wcpos/common/src/hooks/use-query';
-import Segment from '@wcpos/common/src/components/segment';
+import Box from '@wcpos/common/src/components/box';
 import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
 import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
 import useRestQuery from '@wcpos/common/src/hooks/use-rest-query-customers';
@@ -23,15 +23,19 @@ const Customers = () => {
 
 	return (
 		<QueryProvider initialQuery={{ sortBy: 'lastName', sortDirection: 'asc' }}>
-			<Segment.Group>
-				<Segment style={{ flexDirection: 'row' }}>
+			<Box
+				raised
+				rounding="medium"
+				style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
+			>
+				<Box horizontal space="small" padding="small" align="center">
 					<SearchBar />
 					<UiSettings ui={ui} />
-				</Segment>
-				<Segment grow>
+				</Box>
+				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 					<Table ui={ui} />
-				</Segment>
-			</Segment.Group>
+				</Box>
+			</Box>
 		</QueryProvider>
 	);
 };
