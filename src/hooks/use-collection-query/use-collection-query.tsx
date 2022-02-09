@@ -8,6 +8,9 @@ import orderBy from 'lodash/orderBy';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useQuery from '@wcpos/common/src/hooks/use-query';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
+import { replicateRxCollection } from 'rxdb/plugins/replication';
+import _map from 'lodash/map';
+import useRestHttpClient from '../use-rest-http-client';
 
 type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
 
@@ -34,6 +37,7 @@ export const useCollectionQuery = (
 	const { storeDB } = useAppState();
 	const collection = storeDB.collections[collectionName];
 	const { query } = useQuery();
+	const http = useRestHttpClient();
 
 	const [data, updateQuery] = useObservableState<any[], QueryState>((query$) => {
 		return query$.pipe(
@@ -80,8 +84,49 @@ export const useCollectionQuery = (
 	 * TODO: React 18 use Transition
 	 */
 	React.useEffect(() => {
-		// @ts-ignore
 		updateQuery(query);
+		let replicationState;
+
+		// first check if there is any unsynced items
+		collection.unsyncedDocuments$.subscribe(async (unsyncedDocuments) => {
+			if (unsyncedDocuments.length > 0) {
+				const include = unsyncedDocuments.map((doc) => doc.id).slice(0, 1000);
+
+				replicationState = await replicateRxCollection({
+					collection,
+					replicationIdentifier: 'product-replication',
+					pull: {
+						async handler(latestPullDocument) {
+							const result = await http
+								.get('products', {
+									params: { order: 'asc', orderby: 'title', include: include.join(',') },
+								})
+								.catch(({ response }) => {
+									console.log(response);
+								});
+							const documents = _map(result?.data, (item) => collection.parseRestResponse(item));
+
+							return {
+								documents,
+								hasMoreDocuments: false,
+							};
+						},
+					},
+				});
+
+				replicationState.error$.subscribe((error) => {
+					console.log('something was wrong');
+					console.dir(error);
+				});
+			}
+		});
+
+		return () => {
+			// cancel any replications
+			if (replicationState) {
+				replicationState.cancel();
+			}
+		};
 	}, [query, updateQuery]);
 
 	// useWhyDidYouUpdate('Collection Query', {

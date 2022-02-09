@@ -56,6 +56,11 @@ const getReplicationState = async (http, collection) => {
 		},
 	});
 
+	replicationState.error$.subscribe((error) => {
+		console.log('something was wrong');
+		console.dir(error);
+	});
+
 	return replicationState;
 };
 
