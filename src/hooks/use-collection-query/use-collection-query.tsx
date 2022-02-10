@@ -85,40 +85,65 @@ export const useCollectionQuery = (
 	 */
 	React.useEffect(() => {
 		updateQuery(query);
-		let replicationState;
+		console.log('TRIGGERED');
 
-		// first check if there is any unsynced items
-		collection.unsyncedDocuments$.subscribe(async (unsyncedDocuments) => {
-			if (unsyncedDocuments.length > 0) {
-				const include = unsyncedDocuments.map((doc) => doc.id).slice(0, 1000);
+		// replicate unsynced items
+		const replicationState = replicateRxCollection({
+			collection,
+			replicationIdentifier: 'product-replication',
+			live: false,
+			// liveInterval: 10000,
+			retryTime: 10000000,
+			pull: {
+				async handler(latestPullDocument) {
+					debugger;
+					const syncedDocs = collection.syncedIds$.getValue();
+					const unsyncedDocs = collection.unsyncedIds$.getValue();
 
-				replicationState = await replicateRxCollection({
-					collection,
-					replicationIdentifier: 'product-replication',
-					pull: {
-						async handler(latestPullDocument) {
-							const result = await http
-								.get('products', {
-									params: { order: 'asc', orderby: 'title', include: include.join(',') },
-								})
-								.catch(({ response }) => {
-									console.log(response);
-								});
-							const documents = _map(result?.data, (item) => collection.parseRestResponse(item));
+					if (unsyncedDocs.length === 0) {
+						return {
+							documents: [],
+							hasMoreDocuments: false,
+						};
+					}
 
-							return {
-								documents,
-								hasMoreDocuments: false,
-							};
-						},
-					},
-				});
+					console.log('unsyncedDocs', unsyncedDocs);
 
-				replicationState.error$.subscribe((error) => {
-					console.log('something was wrong');
-					console.dir(error);
-				});
-			}
+					// if there are unsynced docs, then we need to sync them
+					const params = {
+						order: 'asc',
+						orderby: 'title',
+					};
+
+					// choose the smallest array, max of 1000
+					if (syncedDocs.length > unsyncedDocs.length) {
+						params.include = unsyncedDocs.slice(0, 1000).join(',');
+					} else {
+						params.exclude = syncedDocs.slice(0, 1000).join(',');
+					}
+
+					const result = await http
+						.get('products', {
+							params,
+						})
+						.catch(({ response }) => {
+							console.log(response);
+						});
+
+					const documents = _map(result?.data, (item) => collection.parseRestResponse(item));
+					debugger;
+
+					return {
+						documents,
+						hasMoreDocuments: true,
+					};
+				},
+			},
+		});
+
+		replicationState.error$.subscribe((error) => {
+			console.log('something was wrong');
+			console.dir(error);
 		});
 
 		return () => {
@@ -127,6 +152,7 @@ export const useCollectionQuery = (
 				replicationState.cancel();
 			}
 		};
+		// NOTE: if I include http here it will get triggered constantly
 	}, [query, updateQuery]);
 
 	// useWhyDidYouUpdate('Collection Query', {
