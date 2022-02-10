@@ -543,7 +543,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/plugin-proposal-async-generator-functions@npm:^7.16.8":
+"@babel/plugin-proposal-async-generator-functions@npm:^7.0.0, @babel/plugin-proposal-async-generator-functions@npm:^7.16.8":
   version: 7.16.8
   resolution: "@babel/plugin-proposal-async-generator-functions@npm:7.16.8"
   dependencies:
@@ -3407,14 +3407,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-async-storage/async-storage@npm:1.15.17":
-  version: 1.15.17
-  resolution: "@react-native-async-storage/async-storage@npm:1.15.17"
+"@react-native-async-storage/async-storage@npm:1.16.1":
+  version: 1.16.1
+  resolution: "@react-native-async-storage/async-storage@npm:1.16.1"
   dependencies:
     merge-options: ^3.0.4
   peerDependencies:
     react-native: ^0.0.0-0 || 0.60 - 0.67 || 1000.0.0
-  checksum: 4c3dd30f6969bdcb2a5cafd82a8751e69f1c2c48f226c95f389b61246f19645229c178da35147310eee8b17f0f55d64ce3820101fc6f494cd6720cd69b9ad87f
+  checksum: a863b3e2da398fdfaa48d836f247a77e289f894573a19cc880d73198aaefcf25e27cdd74c3e4a35856fd064e39946be915896653b3741432bceff6782fe70f0d
   languageName: node
   linkType: hard
 
@@ -3581,12 +3581,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-community/netinfo@npm:7.1.11":
-  version: 7.1.11
-  resolution: "@react-native-community/netinfo@npm:7.1.11"
+"@react-native-community/netinfo@npm:7.1.12":
+  version: 7.1.12
+  resolution: "@react-native-community/netinfo@npm:7.1.12"
   peerDependencies:
     react-native: ">=0.59"
-  checksum: 2f284022bf887cb856f127ebc670b38c474a10f1b19b0f9db0f5434fa3eaa1712b6598118e58ded8f84d3c8be1b4a1feab6a44d864e2bdc44ed2221d4cc3afce
+  checksum: ea5b532da54b5e0976f8b330eb0d1324c30bc77d4b89232ed8325c5a032570de8a9e9cc015c516efd573fdddc613fccc59c8082c9977c1d8a986b6de61457360
   languageName: node
   linkType: hard
 
@@ -7662,7 +7662,7 @@ __metadata:
   resolution: "@wcpos/common@workspace:packages/common"
   dependencies:
     "@react-native-community/masked-view": 0.1.11
-    "@react-native-community/netinfo": 7.1.11
+    "@react-native-community/netinfo": 7.1.12
     "@react-navigation/drawer": 6.3.1
     "@react-navigation/elements": 1.3.1
     "@react-navigation/native": 6.0.8
@@ -7724,12 +7724,12 @@ __metadata:
     react-native-svg: 12.2.0
     react-native-tab-view: 3.1.1
     react-native-web-linear-gradient: 1.1.2
-    react-native-webview: 11.17.1
+    react-native-webview: 11.17.2
     react-test-renderer: 17.0.2
     react-virtual: 2.10.4
     rxdb: 11.6.0
     rxdb-utils: 2.0.0-beta.2
-    rxjs: 7.5.3
+    rxjs: 7.5.4
     styled-components: 5.3.3
     ts-jest: 27.1.3
     typescript: 4.5.5
@@ -7798,7 +7798,7 @@ __metadata:
   resolution: "@wcpos/storybook@workspace:apps/storybook"
   dependencies:
     "@babel/core": 7.17.2
-    "@react-native-async-storage/async-storage": 1.15.17
+    "@react-native-async-storage/async-storage": 1.16.1
     "@react-native-community/datetimepicker": 5.1.0
     "@react-native-community/slider": 4.2.0
     "@storybook/addon-actions": 6.4.18
@@ -7815,7 +7815,7 @@ __metadata:
     "@storybook/react-native": 6.0.1-alpha.7
     add: 2.0.6
     babel-loader: 8.2.3
-    metro-react-native-babel-preset: 0.67.0
+    metro-react-native-babel-preset: 0.68.0
     react: 17.0.2
     react-dom: 17.0.2
     react-native: 0.64.3
@@ -20645,11 +20645,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"metro-react-native-babel-preset@npm:0.67.0":
-  version: 0.67.0
-  resolution: "metro-react-native-babel-preset@npm:0.67.0"
+"metro-react-native-babel-preset@npm:0.68.0":
+  version: 0.68.0
+  resolution: "metro-react-native-babel-preset@npm:0.68.0"
   dependencies:
     "@babel/core": ^7.14.0
+    "@babel/plugin-proposal-async-generator-functions": ^7.0.0
     "@babel/plugin-proposal-class-properties": ^7.0.0
     "@babel/plugin-proposal-export-default-from": ^7.0.0
     "@babel/plugin-proposal-nullish-coalescing-operator": ^7.0.0
@@ -20691,7 +20692,7 @@ __metadata:
     react-refresh: ^0.4.0
   peerDependencies:
     "@babel/core": "*"
-  checksum: 931105e7c76e1e69663bcf75ed8979161c6d486767ccc48c9c6ca80276adbeae7c2aaec0b5c9829f0a44fbf456e97908f81486bdb04cfe68fde375413acc654f
+  checksum: 9f8efce79e95d1a889697cc283e8c17a64caf1a8186593c45705203a9b176929dabb9737586148cc035b22fc5adce1eb302921a8554d390470e27215410751f0
   languageName: node
   linkType: hard
 
@@ -25511,16 +25512,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-webview@npm:11.17.1":
-  version: 11.17.1
-  resolution: "react-native-webview@npm:11.17.1"
+"react-native-webview@npm:11.17.2":
+  version: 11.17.2
+  resolution: "react-native-webview@npm:11.17.2"
   dependencies:
     escape-string-regexp: 2.0.0
     invariant: 2.2.4
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: 5c11da0730051817c66bf7307a95ef6263429f873a81fa7ee47864ecf809ebf51b7011904534cb7e8fd5af1bf5aa4fdc3eae8d712e9bb672628b418452006d33
+  checksum: d49fc0ed3aca00455dbc32efa5d6d4f1c170b82db4134c4a26a2bc508ec2d8c6561cb64eb993ab4a87977c4f51182700344efb45d053819dbb89b6d0fcc2d883
   languageName: node
   linkType: hard
 
@@ -26828,12 +26829,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rxjs@npm:7.5.3":
-  version: 7.5.3
-  resolution: "rxjs@npm:7.5.3"
+"rxjs@npm:7.5.4":
+  version: 7.5.4
+  resolution: "rxjs@npm:7.5.4"
   dependencies:
     tslib: ^2.1.0
-  checksum: 0e1f45ef20e45aee940dddb8158a489616b0574eff493f790092f8021dc215c65440b8332498edd42a59e37d10c900493d6a598a260a491eb9faefdd0d876f7b
+  checksum: 6f55f835f2543bc8214900f9e28b6320e6adc95875011fbca63e80a66eb18c9ff7cfdccb23b2180cbb6412762b98ed158c89fd51cb020799d127c66ea38c3c0e
   languageName: node
   linkType: hard
 
