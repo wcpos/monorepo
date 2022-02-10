@@ -20,9 +20,10 @@ const collectionCountsPlugin: RxPlugin = {
 		 * @param {object} prototype of RxCollection
 		 */
 		// RxCollection: (proto: any) => {
-		// 	proto.hello = function () {
-		// 		return 'world';
-		// 	};
+		// DON'T DO THIS:
+		// proto.totalDocCount$ = new BehaviorSubject(0);
+		// proto.unsyncedIds$ = new BehaviorSubject([]);
+		// proto.syncedIds$ = new BehaviorSubject([]);
 		// },
 	},
 
@@ -50,83 +51,46 @@ const collectionCountsPlugin: RxPlugin = {
 		 */
 		createRxCollection(collection: RxCollection) {
 			Object.assign(collection, {
-				totalDocuments: new BehaviorSubject(0),
-				unsyncedDocuments: new BehaviorSubject([]),
-				syncedDocuments: new BehaviorSubject([]),
+				totalDocCount$: new BehaviorSubject(0),
+				unsyncedIds$: new BehaviorSubject([]),
+				syncedIds$: new BehaviorSubject([]),
 			});
 
-			Object.assign(collection, {
-				// @ts-ignore
-				totalDocuments$: collection.totalDocuments.asObservable(),
-				// @ts-ignore
-				unsyncedDocuments$: collection.unsyncedDocuments.asObservable(),
-				// @ts-ignore
-				syncedDocuments$: collection.syncedDocuments.asObservable(),
-			});
+			function updateCounts() {
+				collection.storageInstance.internals.pouch
+					.find({
+						selector: {},
+						fields: ['id', 'date_created'],
+					})
+					.then((res: any) => {
+						const totalDocCount = res.docs.length;
+						console.log(collection.name, totalDocCount);
 
-			collection.storageInstance.internals.pouch
-				.find({
-					selector: {},
-					fields: ['id', 'dateCreatedGmt'],
-				})
-				.then((result: any) => {
-					// count total documents
-					console.log(collection.name, result.docs.length);
-					// @ts-ignore
-					collection.totalDocuments.next(result.docs.length);
-					// count unsynced documents
-					const unsynced = result.docs.filter((doc: any) => {
-						return !doc.date_created;
+						const unsyncedIds = res.docs
+							.filter((doc: any) => !doc.date_created)
+							.map((doc: any) => doc.id);
+						const syncedIds = res.docs
+							.filter((doc: any) => doc.date_created)
+							.map((doc: any) => doc.id);
+
+						collection.totalDocCount$.next(totalDocCount);
+						collection.unsyncedIds$.next(unsyncedIds);
+						collection.syncedIds$.next(syncedIds);
+					})
+					.catch((err: any) => {
+						console.log(err);
 					});
-					const synced = result.docs.filter((doc: any) => {
-						return doc.date_created;
-					});
-					// @ts-ignore
-					collection.unsyncedDocuments.next(unsynced);
-					// @ts-ignore
-					collection.syncedDocuments.next(synced);
-				})
-				.catch((err: any) => {
-					console.log(err);
-				});
+			}
 
 			// collection.$ will emit on insert, update and remove
 			// for each emit we are going to loop through all docs for counting
 			// debounce is used to group bulk operations
-			// @TODO - optimise counts for specific insert, update and delete
-			const count$ = collection.$.pipe(
-				debounceTime(20),
-				tap(() => {
-					// get all docs
-					collection.storageInstance.internals.pouch
-						.find({
-							selector: {},
-							fields: ['id', 'dateCreatedGmt'],
-						})
-						.then((result: any) => {
-							// count total documents
-							console.log(collection.name, result.docs.length);
-							// @ts-ignore
-							collection.totalDocuments.next(result.docs.length);
-							// count unsynced documents
-							const unsynced = result.docs.filter((doc: any) => {
-								return !doc.date_created;
-							});
-							const synced = result.docs.filter((doc: any) => {
-								return doc.date_created;
-							});
-							// @ts-ignore
-							collection.unsyncedDocuments.next(unsynced);
-							// @ts-ignore
-							collection.syncedDocuments.next(synced);
-						})
-						.catch((err: any) => {
-							console.log(err);
-						});
-				})
-			);
+			collection.$.pipe(debounceTime(20)).subscribe(() => {
+				updateCounts();
+			});
 
-			count$.subscribe();
+			// update counts on init
+			updateCounts();
 		},
 	},
 };

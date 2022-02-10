@@ -14,7 +14,7 @@ import { RxSchema } from 'rxdb';
  * do nothing if not
  * @link https://developer.mozilla.org/de/docs/Web/API/Window/requestIdleCallback
  */
-export function requestIdleCallbackIfAvailable(fun: Function): void {
+export function requestIdleCallbackIfAvailable(fun: (arg: IdleDeadline) => void): void {
 	if (typeof window === 'object' && (window as any).requestIdleCallback)
 		(window as any).requestIdleCallback(fun);
 }
@@ -27,6 +27,7 @@ const VALIDATOR_CACHE: Map<string, any> = new Map();
 
 const ajv = new Ajv({ strict: 'log', coerceTypes: true });
 addFormats(ajv);
+ajv.addVocabulary(['version', 'primaryKey', 'indexes', 'encrypted', 'ref']);
 
 /**
  * returns the parsed validator from ajv
@@ -49,11 +50,7 @@ function validate(this: RxSchema, obj: any) {
 
 	if (isValid) return obj;
 
-	throw new Error('VD2', {
-		errors: useValidator.errors,
-		obj,
-		schema: this.jsonSchema,
-	});
+	throw new Error(useValidator.errors);
 }
 
 const runAfterSchemaCreated = (rxSchema: RxSchema) => {
