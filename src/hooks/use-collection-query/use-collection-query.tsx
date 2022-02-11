@@ -96,7 +96,6 @@ export const useCollectionQuery = (
 			retryTime: 10000000,
 			pull: {
 				async handler(latestPullDocument) {
-					debugger;
 					const syncedDocs = collection.syncedIds$.getValue();
 					const unsyncedDocs = collection.unsyncedIds$.getValue();
 
@@ -131,7 +130,6 @@ export const useCollectionQuery = (
 						});
 
 					const documents = _map(result?.data, (item) => collection.parseRestResponse(item));
-					debugger;
 
 					return {
 						documents,

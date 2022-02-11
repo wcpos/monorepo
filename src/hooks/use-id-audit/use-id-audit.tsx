@@ -44,6 +44,13 @@ const getReplicationState = async (http, collection) => {
 						// }
 					});
 
+				if (!result?.data) {
+					return {
+						documents: [],
+						hasMoreDocuments: false,
+					};
+				}
+
 				const data = await collection.auditRestApiIds(result?.data);
 				const documents = map(data, (item) => collection.parseRestResponse(item));
 				// @TODO - handle mapping in parseRestResponse?

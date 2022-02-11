@@ -20,6 +20,7 @@ import Box from '@wcpos/common/src/components/box';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useStoreSync from '@wcpos/common/src/hooks/use-store-sync';
 import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
+import { OnlineStatusProvider } from '@wcpos/common/src/hooks/use-online-status';
 import { useTheme } from 'styled-components/native';
 // import curry from 'lodash/curry';
 
@@ -107,28 +108,34 @@ const MainNavigator = () => {
 	);
 
 	return (
-		<Drawer.Navigator
-			screenOptions={{
-				header,
-				drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
-				drawerStyle: {
-					backgroundColor: '#2c3e50',
-					width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
-				},
-				sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
-			}}
-			drawerContent={drawer}
-		>
-			<Drawer.Screen name="POS" component={ScreenMemoized} options={getOptions('pos')} />
-			<Drawer.Screen name="Products" component={ScreenMemoized} options={getOptions('products')} />
-			<Drawer.Screen name="Orders" component={ScreenMemoized} options={getOptions('orders')} />
-			<Drawer.Screen
-				name="Customers"
-				component={ScreenMemoized}
-				options={getOptions('customers')}
-			/>
-			<Drawer.Screen name="Support" component={ScreenMemoized} options={getOptions('support')} />
-		</Drawer.Navigator>
+		<OnlineStatusProvider>
+			<Drawer.Navigator
+				screenOptions={{
+					header,
+					drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
+					drawerStyle: {
+						backgroundColor: '#2c3e50',
+						width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
+					},
+					sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
+				}}
+				drawerContent={drawer}
+			>
+				<Drawer.Screen name="POS" component={ScreenMemoized} options={getOptions('pos')} />
+				<Drawer.Screen
+					name="Products"
+					component={ScreenMemoized}
+					options={getOptions('products')}
+				/>
+				<Drawer.Screen name="Orders" component={ScreenMemoized} options={getOptions('orders')} />
+				<Drawer.Screen
+					name="Customers"
+					component={ScreenMemoized}
+					options={getOptions('customers')}
+				/>
+				<Drawer.Screen name="Support" component={ScreenMemoized} options={getOptions('support')} />
+			</Drawer.Navigator>
+		</OnlineStatusProvider>
 	);
 };
 

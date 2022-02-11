@@ -54,7 +54,6 @@ const AppStateProvider = ({ children, initialProps }: AppStatePropviderProps) =>
 	 */
 	const value = {
 		initialProps: Object.freeze(initialProps), // prevent accidental mutation
-		online: true,
 		resources: getResource(userDB, initialProps),
 		userDB,
 	};
