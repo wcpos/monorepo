@@ -15,7 +15,6 @@ import Portal from './components/portal';
 import ErrorBoundary from './components/error-boundary';
 // import SplashScreen from './screens/splash';
 import Url from './lib/url-parse';
-import { SnackbarProvider } from './components/snackbar/snackbar-provider';
 // import { AuthLoginProvider } from './hooks/use-auth-login';
 
 // enable freeze
@@ -73,14 +72,12 @@ const App = (initialProps: InitialProps) => {
 					<AppStateProvider initialProps={initialProps}>
 						<ThemeProvider theme={getTheme('default', 'dark')}>
 							<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-								<SnackbarProvider>
-									<Portal.Provider>
-										<NavigationContainer linking={linking}>
-											<AppNavigator />
-										</NavigationContainer>
-										<Portal.Manager />
-									</Portal.Provider>
-								</SnackbarProvider>
+								<Portal.Provider>
+									<NavigationContainer linking={linking}>
+										<AppNavigator />
+									</NavigationContainer>
+									<Portal.Manager />
+								</Portal.Provider>
 							</SafeAreaProviderCompat>
 						</ThemeProvider>
 					</AppStateProvider>

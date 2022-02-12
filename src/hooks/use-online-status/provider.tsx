@@ -1,50 +1,68 @@
-// {
-// 	type: Types.NetInfoStateType.unknown,
-// 	isConnected: null,
-// 	isInternetReachable: null,
-// 	details: null,
-// }
-
 import * as React from 'react';
-import { useNetInfo, NetInfoState, NetInfoStateType } from '@react-native-community/netinfo';
+import NetInfo, {
+	// useNetInfo,
+	NetInfoState,
+	NetInfoStateType,
+} from '@react-native-community/netinfo';
 import useAppState from '../use-app-state';
-import { useSnackbar } from '../../components/snackbar/use-snackbar';
+import Snackbar, { useSnackbar } from '../../components/snackbar';
 
-export const OnlineStatusContext = React.createContext<NetInfoState>({
+const initialState: NetInfoState = {
 	type: NetInfoStateType.unknown,
 	isConnected: null,
 	isInternetReachable: null,
 	details: null,
-});
+};
 
-interface ICurrentUserProps {
+export const OnlineStatusContext = React.createContext<NetInfoState>(initialState);
+
+interface Props {
 	children: React.ReactNode;
 }
 
-const CurrentUserProvider = ({ children }: ICurrentUserProps) => {
+const CurrentUserProvider = ({ children }: Props) => {
 	const { site } = useAppState();
-	const showSnackbar = useSnackbar({ message: 'No internet connection' });
+	const { ref, open, close } = useSnackbar();
+	const [status, setStatus] = React.useState<NetInfoState>(initialState);
 
-	const netInfo = useNetInfo({
-		reachabilityUrl: site.wpApiUrl,
-		reachabilityTest: async (response) => {
-			return response.status === 200;
-		},
-		// reachabilityLongTimeout: 60 * 1000, // 60s
-		// reachabilityShortTimeout: 5 * 1000, // 5s
-		// reachabilityRequestTimeout: 15 * 1000, // 15s
-		// reachabilityShouldRun: () => true,
-		// shouldFetchWiFiSSID: true // met iOS requirements to get SSID
-	});
-
-	// Show a warning if the user is offline
+	/**
+	 * Listen to internet connection
+	 * note: there is no removeEventListener, it returns the unsubscribe function
+	 */
 	React.useEffect(() => {
-		if (!netInfo.isInternetReachable) {
-			showSnackbar();
-		}
-	}, [netInfo.isInternetReachable]);
+		NetInfo.configure({
+			reachabilityUrl: site.wpApiUrl,
+			reachabilityTest: async (response) => response.status === 200,
+			// reachabilityLongTimeout: 60 * 1000, // 60s
+			// reachabilityShortTimeout: 5 * 1000, // 5s
+			// increase timeout for slow servers
+			reachabilityRequestTimeout: 60 * 1000, // 60s
+			// reachabilityShouldRun: () => true,
+			// shouldFetchWiFiSSID: true,
+		});
 
-	return <OnlineStatusContext.Provider value={netInfo}>{children}</OnlineStatusContext.Provider>;
+		// Subscribe
+		const unsubscribe = NetInfo.addEventListener((netInfo) => {
+			setStatus(netInfo);
+		});
+
+		// Unsubscribe
+		return unsubscribe;
+	}, [site.wpApiUrl]);
+
+	// // Show a warning if the user is offline
+	React.useEffect(() => {
+		if (status.isInternetReachable === false) {
+			open();
+		}
+	}, [status]);
+
+	return (
+		<OnlineStatusContext.Provider value={status}>
+			{children}
+			<Snackbar ref={ref} message="No internet connection" />
+		</OnlineStatusContext.Provider>
+	);
 };
 
 export default CurrentUserProvider;

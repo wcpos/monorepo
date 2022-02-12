@@ -1,9 +1,12 @@
-import React, { useCallback } from 'react';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import useTimeout from '@wcpos/common/src/hooks/use-timeout';
+import * as React from 'react';
+import { View, StyleSheet } from 'react-native';
+import { useTheme } from 'styled-components/native';
+import Box from '../box';
+import Text from '../text';
 import Button from '../button';
 import Icon from '../icon';
-import * as Styled from './styles';
+import Portal from '../portal';
+// import Backdrop from '../backdrop';
 
 export interface SnackbarProps {
 	/**
@@ -33,51 +36,74 @@ const durationValues = {
 	longer: 4000,
 };
 
-/**
- * Confirm a User's action by displaying a small text at the bottom of the screen.
- * Can also provide the user a quick action.
- */
-export const Snackbar = ({
-	message,
-	action,
-	duration = 'default',
-	onDismiss = () => {},
-	dismissable,
-}: SnackbarProps) => {
-	const showDuration = 150;
+export const SnackbarBase = (
+	{ message, action, duration, onDismiss, dismissable = true }: SnackbarProps,
+	ref
+) => {
+	const theme = useTheme();
+	const [isVisible, setIsVisible] = React.useState(false);
 
-	// Fade in
-	const opacity = useSharedValue(0);
-	const animatedStyle = useAnimatedStyle(() => ({
-		opacity: withTiming(opacity.value, { duration: showDuration }),
-	}));
-	React.useEffect(() => {
-		opacity.value = 1;
-	}, []);
-
-	const durationValue = durationValues[duration];
-
-	const dismiss = useCallback(() => {
+	const dismiss = React.useCallback(() => {
 		// fade out
-		onDismiss();
-	}, [onDismiss, showDuration]);
+		if (onDismiss) {
+			onDismiss();
+		}
+	}, [onDismiss, duration]);
 
-	const onActionClick = useCallback(() => {
+	const onActionClick = React.useCallback(() => {
 		if (action && action.action) {
 			action.action();
 		}
 		dismiss(); // Dismiss when user clicks action
 	}, [action?.action, dismiss]);
 
-	useTimeout(dismiss, durationValue + showDuration);
+	/**
+	 * Allow external access to the snackbar's visibility state.
+	 */
+	React.useImperativeHandle(ref, () => ({
+		open(): void {
+			setIsVisible(true);
+		},
+
+		close(): void {
+			setIsVisible(false);
+		},
+	}));
+
+	if (!isVisible) {
+		return null;
+	}
 
 	return (
-		<Styled.Container>
-			<Styled.Snackbar as={Animated.View} style={animatedStyle}>
-				<Styled.Text>{message}</Styled.Text>
-				{action ? <Button onPress={onActionClick}>{action.label}</Button> : null}
-				{dismissable ? <Icon name="remove" onPress={dismiss} /> : null}
-			</Styled.Snackbar>
-		</Styled.Container>
+		<Portal keyPrefix="Snackbar">
+			<View
+				style={[
+					StyleSheet.absoluteFill,
+					{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-start' },
+					{ padding: '30px' },
+				]}
+				pointerEvents="none"
+			>
+				<Box
+					paddingX="medium"
+					paddingY="small"
+					space="medium"
+					rounding="large"
+					style={{ backgroundColor: theme.colors.primary }}
+					horizontal
+					align="center"
+				>
+					<Text type="inverse">{message}</Text>
+					{action ? (
+						<Button type="inverse" onPress={onActionClick}>
+							{action.label}
+						</Button>
+					) : null}
+					{dismissable ? <Icon type="inverse" name="xmark" onPress={dismiss} /> : null}
+				</Box>
+			</View>
+		</Portal>
 	);
 };
+
+export const Snackbar = React.forwardRef(SnackbarBase);

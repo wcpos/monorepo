@@ -1,26 +1,22 @@
 import * as React from 'react';
 import { View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StoryWrapper } from '@storybook/addons';
 import { action } from '@storybook/addon-actions';
 import { Snackbar, SnackbarProps } from './snackbar';
-import { SnackbarProvider } from './snackbar-provider';
 import { useSnackbar } from './use-snackbar';
 import Button from '../button';
+import Portal from '../portal';
 
 /**
  * Snackbar require
- * - SafeAreaProvider
- * - SnackbarProvider
- * - AppProviderSizeProvider
+ * - Portals
  */
 const AppProvider: StoryWrapper = (Story, context) => {
 	return (
-		<SafeAreaProvider>
-			<SnackbarProvider>
-				<Story {...context} />
-			</SnackbarProvider>
-		</SafeAreaProvider>
+		<Portal.Provider>
+			<Story {...context} />
+			<Portal.Manager />
+		</Portal.Provider>
 	);
 };
 
@@ -34,17 +30,12 @@ export default {
  *
  */
 export const BasicUsage: React.FC<SnackbarProps> = (props) => {
-	const showSnackbar = useSnackbar(props);
+	const { ref, open, close } = useSnackbar();
 
 	return (
-		<View style={{ height: '300px', alignItems: 'flex-start', backgroundColor: 'grey' }}>
-			<Button
-				onPress={() => {
-					showSnackbar();
-				}}
-			>
-				Show Snackbar
-			</Button>
+		<View style={{ height: '300px', width: '100%' }}>
+			<Button onPress={open}>Open</Button>
+			<Snackbar ref={ref} {...props} />
 		</View>
 	);
 };
@@ -56,16 +47,21 @@ BasicUsage.args = {
 /**
  *
  */
-export const WithAction = () => {
-	const showSnackbar = useSnackbar({
-		message: 'Blog post saved.',
-		duration: 'longer',
-		action: { label: 'Undo', action: action('Undo Clicked') },
-	});
+export const WithAction: React.FC<SnackbarProps> = (props) => {
+	const { ref, open, close } = useSnackbar();
 
 	return (
-		<View style={{ height: '300px', alignItems: 'flex-start' }}>
-			<Button onPress={showSnackbar}>Show Snackbar</Button>
+		<View style={{ height: '300px', width: '100%' }}>
+			<Button onPress={open}>Open</Button>
+			<Snackbar ref={ref} {...props} />
 		</View>
 	);
+};
+WithAction.args = {
+	message: 'This is a Snackbar!',
+	onDismiss: action('Dismissed'),
+	action: {
+		label: 'Undo',
+		action: action('Undo'),
+	},
 };
