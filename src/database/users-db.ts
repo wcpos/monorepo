@@ -1,5 +1,5 @@
-import { from } from 'rxjs';
-import { shareReplay } from 'rxjs/operators';
+// import { from } from 'rxjs';
+// import { shareReplay } from 'rxjs/operators';
 import { userCollections } from './collections';
 import { createDB } from './create-db';
 
@@ -15,7 +15,7 @@ export type UserDatabase = import('rxdb').RxDatabase<UserDatabaseCollections>;
 /**
  *
  */
-async function userDBPromise() {
+export async function userDBPromise() {
 	const db = await createDB<UserDatabaseCollections>('wcposusers');
 	// @ts-ignore
 	const collections = await db.addCollections(userCollections);
@@ -26,4 +26,4 @@ async function userDBPromise() {
 /**
  *
  */
-export const userDB$ = from(userDBPromise()).pipe(shareReplay(1));
+// export const userDB$ = from(userDBPromise()).pipe(shareReplay(1));

@@ -4,7 +4,6 @@
 	"description": "WordPress site",
 	"type": "object",
 	"primaryKey": "localID",
-	"required": ["localID"],
 	"properties": {
 		"localID": {
 			"description": "Unique local identifier for the resource.",
@@ -22,22 +21,22 @@
 		"home": {
 			"type": "string"
 		},
-		"gmtOffset": {
+		"gmt_offset": {
 			"type": "string"
 		},
-		"timezoneString": {
+		"timezone_string": {
 			"type": "string"
 		},
-		"wpApiUrl": {
+		"wp_api_url": {
 			"type": "string"
 		},
-		"wcApiUrl": {
+		"wc_api_url": {
 			"type": "string"
 		},
-		"wcApiAuthUrl": {
+		"wc_api_auth_url": {
 			"type": "string"
 		},
-		"wpCredentials": {
+		"wp_credentials": {
 			"type": "array",
 			"ref": "wp_credentials",
 			"items": {

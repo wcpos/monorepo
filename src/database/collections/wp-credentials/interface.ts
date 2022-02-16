@@ -12,21 +12,21 @@ export interface WPCredentialsSchema {
   /**
    * Unique local identifier for the resource.
    */
-  localID: string;
+  _id?: string;
   id?: number;
   username?: string;
-  firstName?: string;
-  lastName?: string;
+  first_name?: string;
+  last_name?: string;
   email?: string;
-  displayName?: string;
-  niceName?: string;
-  lastAccess?: string;
-  consumerKey?: string;
-  consumerSecret?: string;
+  display_name?: string;
+  nice_name?: string;
+  last_access?: string;
+  consumer_key?: string;
+  consumer_secret?: string;
   jwt?: string;
-  wpNonce?: string;
-  keyId?: number;
-  keyPermissions?: string;
+  wp_nonce?: string;
+  key_id?: number;
+  key_permissions?: string;
   stores?: string[];
   [k: string]: any;
 }

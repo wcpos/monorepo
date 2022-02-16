@@ -2,8 +2,8 @@ import { ObservableResource } from 'observable-hooks';
 import { from, of, combineLatest, shareReplay, withLatestFrom } from 'rxjs';
 import { tap, switchMap, filter, map, catchError, debounceTime } from 'rxjs/operators';
 import { isRxDocument } from 'rxdb/plugins/core';
-import { userDB$ } from '@wcpos/common/src/database/users-db';
-import { getStoreDB$ } from '@wcpos/common/src/database/stores-db';
+import { userDBPromise } from '@wcpos/common/src/database/users-db';
+import { storeDBPromise } from '@wcpos/common/src/database/stores-db';
 
 type InitialProps = import('@wcpos/common/src//types').InitialProps;
 type UserDocument = import('@wcpos/common/src/database').UserDocument;
@@ -13,158 +13,95 @@ type StoreDocument = import('@wcpos/common/src/database').StoreDocument;
 type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
 type WPCredentialsDocument = import('@wcpos/common/src/database').WPCredentialsDocument;
 
+const userDB$ = from(userDBPromise()).pipe(shareReplay(1));
+export const userDBResource = new ObservableResource(userDB$, (value: any) => !!value);
+
 /**
- * hydrateResources
+ * User
  */
-export const getResource = (userDB: UserDatabase, initialProps: any) => {
-	const user$ = userDB.users.getLocal$('current').pipe(
-		tap(async (current) => {
-			// no current object, eg: first load
-			if (!current) {
-				// @ts-ignore
-				const defaultUser = await userDB.users.insert({ firstName: 'Test', lastName: 'User' });
-				const localDoc = await userDB.users.upsertLocal('current', { id: defaultUser.localID });
-			}
-		}),
-		// filter((current) => !!current && current.get('id')),
-		switchMap(async (current: any) => {
-			if (current && current.get('id')) {
-				return userDB.users.findOne(current.get('id')).exec();
-			}
-			return of(null);
-		}),
-		filter((user) => !!user && isRxDocument(user)),
-		shareReplay(1)
-	);
-
-	const currentSite$ = userDB.sites.getLocal$('current').pipe(
-		switchMap((current) => {
-			if (current && current.get('id')) {
-				return userDB.sites.findOne(current.get('id')).exec();
-			}
-			return of(null);
-		}),
-		shareReplay(1)
-	);
-
-	// combine currentSite and user
-	const site$ = combineLatest([user$, currentSite$]).pipe(
-		switchMap(async ([user, currentSite]) => {
-			// @ts-ignore
-			const sites = await user?.populate('sites');
-			const siteExists = Array.isArray(sites) && currentSite && sites.includes(currentSite);
-
-			if (initialProps.site) {
-				if (siteExists) {
-					// should I update the data just in case?
-					return currentSite;
+const user$ = userDB$.pipe(
+	switchMap((userDB) =>
+		userDB.users.getLocal$('current').pipe(
+			switchMap((current) => {
+				return current && current?.get('id')
+					? userDB.users.findOne(current.get('id')).exec()
+					: of(null);
+			}),
+			tap(async (user) => {
+				if (!user) {
+					const defaultUser = await userDB.users.insert({
+						first_name: 'Test',
+						last_name: 'User',
+					});
+					await userDB.users.upsertLocal('current', { id: defaultUser.localID });
 				}
-				// @ts-ignore
-				await user?.addSite(initialProps.site).then((s) => {
-					return userDB.sites.upsertLocal('current', { id: s.localID });
-				});
-			} else {
-				return currentSite;
-			}
-			return null;
-		}),
-		shareReplay(1)
-	);
+			}),
+			filter((user) => !!user)
+		)
+	)
+) as unknown as UserDocument;
 
-	const currentWpCredentials$ = userDB.wp_credentials.getLocal$('current').pipe(
-		switchMap((current: any) => {
-			if (current && current.get('id')) {
-				return userDB.wp_credentials.findOne(current.get('id')).exec();
-			}
+/**
+ * Site
+ */
+const site$ = userDB$.pipe(
+	switchMap((userDB) =>
+		userDB.sites.getLocal$('current').pipe(
+			switchMap((current) => {
+				return current && current?.get('id')
+					? userDB.sites.findOne(current.get('id')).exec()
+					: of(null);
+			})
+		)
+	)
+);
+
+/**
+ * WP Credentials
+ */
+const wpCredentials$ = userDB$.pipe(
+	switchMap((userDB) =>
+		userDB.wp_credentials.getLocal$('current').pipe(
+			switchMap((current) => {
+				return current && current?.get('id')
+					? userDB.wp_credentials.findOne(current.get('id')).exec()
+					: of(null);
+			})
+		)
+	)
+);
+
+/**
+ * Store
+ */
+const store$ = userDB$.pipe(
+	switchMap((userDB) =>
+		userDB.stores.getLocal$('current').pipe(
+			switchMap((current) => {
+				return current && current?.get('id')
+					? userDB.stores.findOne(current.get('id')).exec()
+					: of(null);
+			})
+		)
+	)
+);
+
+/**
+ * Store DB
+ */
+const storeDB$ = combineLatest([user$, site$, wpCredentials$, store$]).pipe(
+	switchMap(([user, site, wpCredentials, store]) => {
+		if (!user || !site || !wpCredentials || !store) {
 			return of(null);
-		}),
-		shareReplay(1)
-	);
+		}
 
-	const wpCredentials$ = combineLatest([site$, currentWpCredentials$]).pipe(
-		switchMap(async ([site, currentWpCreds]) => {
-			const creds = await site?.populate('wpCredentials');
-			const exists = Array.isArray(creds) && currentWpCreds && creds.includes(currentWpCreds);
+		return storeDBPromise(store?.localID);
+	})
+);
 
-			if (initialProps.wpCredentials) {
-				if (exists) {
-					// need to update the data to get the correct nonce
-					await currentWpCreds.atomicPatch(initialProps.wpCredentials);
-					return currentWpCreds;
-				}
-				await site?.addWpCredentials(initialProps.wpCredentials).then((doc) => {
-					return userDB.wp_credentials.upsertLocal('current', { id: doc.localID });
-				});
-			} else {
-				return currentWpCreds;
-			}
-			return null;
-		}),
-		shareReplay(1)
-	);
-
-	const currentStore$ = userDB.stores.getLocal$('current').pipe(
-		switchMap((current: any) => {
-			if (current && current.get('id')) {
-				return userDB.stores.findOne(current.get('id')).exec();
-			}
-			return of(null);
-		}),
-		shareReplay(1)
-	);
-
-	const store$ = combineLatest([wpCredentials$, currentStore$]).pipe(
-		switchMap(async ([wpCredentials, currentStore]) => {
-			const stores = await wpCredentials?.populate('stores');
-			const exists = Array.isArray(stores) && currentStore && stores.includes(currentStore);
-
-			if (initialProps.store) {
-				if (exists) {
-					// should I update the data just in case?
-					return currentStore;
-				}
-				await wpCredentials?.addStore(initialProps.store).then((doc) => {
-					return userDB.stores.upsertLocal('current', { id: doc.localID });
-				});
-			} else {
-				return currentStore;
-			}
-			return null;
-		}),
-		shareReplay(1)
-	);
-
-	const storeDB$ = store$.pipe(
-		switchMap((store: any) => {
-			if (store) {
-				return getStoreDB$(store.localID);
-			}
-			return of(null);
-		}),
-		shareReplay(1)
-	);
-
-	const resource$ = combineLatest([
-		user$,
-		site$,
-		wpCredentials$,
-		store$,
-		storeDB$,
-		// of(null).pipe(delay(5000)),
-	]).pipe(
-		// convert array into object
-		map(([user, site, wpCredentials, store, storeDB]) => ({
-			user,
-			site,
-			wpCredentials,
-			store,
-			storeDB,
-		})),
-		debounceTime(200), // allow multiple updates to be emitted once
-		tap((res) => {
-			console.log(res);
-		})
-	);
-
-	return new ObservableResource(resource$, (value: any) => !!value);
-};
+/**
+ * App State Resource
+ */
+export const appStateResource = new ObservableResource(
+	combineLatest([user$, site$, wpCredentials$, store$, storeDB$]).pipe(debounceTime(100))
+);

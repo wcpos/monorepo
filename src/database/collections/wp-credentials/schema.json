@@ -4,10 +4,9 @@
 	"description": "WordPress credentials",
 	"type": "object",
 	"primaryKey": "localID",
-	"required": ["localID"],
 	"properties": {
 		"localID": {
-			"description": "Unique local identifier for the resource.",
+			"description": "Unique local identifier for the resource. Note: id is not unique for WP User IDs",
 			"type": "string"
 		},
 		"id": {
@@ -16,40 +15,40 @@
 		"username": {
 			"type": "string"
 		},
-		"firstName": {
+		"first_name": {
 			"type": "string"
 		},
-		"lastName": {
+		"last_name": {
 			"type": "string"
 		},
 		"email": {
 			"type": "string"
 		},
-		"displayName": {
+		"display_name": {
 			"type": "string"
 		},
-		"niceName": {
+		"nice_name": {
 			"type": "string"
 		},
-		"lastAccess": {
+		"last_access": {
 			"type": "string"
 		},
-		"consumerKey": {
+		"consumer_key": {
 			"type": "string"
 		},
-		"consumerSecret": {
+		"consumer_secret": {
 			"type": "string"
 		},
 		"jwt": {
 			"type": "string"
 		},
-		"wpNonce": {
+		"wp_nonce": {
 			"type": "string"
 		},
-		"keyId": {
+		"key_id": {
 			"type": "number"
 		},
-		"keyPermissions": {
+		"key_permissions": {
 			"type": "string"
 		},
 		"stores": {

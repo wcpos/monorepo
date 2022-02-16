@@ -15,10 +15,11 @@ const LoginBase = ({ site }: LoginProps, ref) => {
 	const [username, setUsername] = React.useState('');
 	const [password, setPassword] = React.useState('');
 	const { ref: modalRef, open, close } = useModal();
+	console.log(site);
 
 	const handleLogin = async () => {
-		if (site && site.wpApiUrl) {
-			const result = await http.post(`${site.wpApiUrl}wcpos/v1/jwt/authorize`, {
+		if (site && site.wp_api_url) {
+			const result = await http.post(`${site.wp_api_url}wcpos/v1/jwt/authorize`, {
 				username,
 				password,
 			});

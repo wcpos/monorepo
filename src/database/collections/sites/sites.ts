@@ -56,7 +56,7 @@ const methods: SiteMethods = {
 		};
 
 		try {
-			const wpCredentials = (await this.populate('wpCredentials')) || [];
+			const wpCredentials = (await this.populate('wp_credentials')) || [];
 			const wpCredentialsDoc = wpCredentials.find((d) => d.id === parsedData.id);
 
 			if (wpCredentialsDoc) {
@@ -65,8 +65,8 @@ const methods: SiteMethods = {
 
 			const newWpUser = await wpCredentialsCollection.insert(parsedData);
 			await this.atomicUpdate((oldData) => {
-				oldData.wpCredentials = oldData.wpCredentials || [];
-				oldData.wpCredentials.push(newWpUser.localID);
+				oldData.wp_credentials = oldData.wpCredentials || [];
+				oldData.wp_credentials.push(newWpUser._id);
 				return oldData;
 			});
 
@@ -78,7 +78,7 @@ const methods: SiteMethods = {
 
 	async addWpCredentials(this: SiteDocument, data) {
 		const wpCredentials = await this.collections().wp_credentials.insert(data);
-		await this.update({ $push: { wpCredentials: wpCredentials.localID } }).catch((err) => {
+		await this.update({ $push: { wp_credentials: wpCredentials._id } }).catch((err) => {
 			console.log(err);
 			return err;
 		});
@@ -90,23 +90,23 @@ const methods: SiteMethods = {
 	 *
 	 */
 	getWcApiUrl(this: SiteDocument) {
-		return `${this.wpApiUrl}wc/v3`;
+		return `${this.wp_api_url}wc/v3`;
 	},
 
 	/**
 	 *
 	 */
 	getWcposApiUrl(this: SiteDocument) {
-		return `${this.wpApiUrl}wcpos/v1`;
+		return `${this.wp_api_url}wcpos/v1`;
 	},
 
 	/**
 	 *
 	 */
 	getWpCredentials$(this: SiteDocument) {
-		return this.wpCredentials$.pipe(
+		return this.wp_credentials$.pipe(
 			switchMap(async () => {
-				const wpCredentials = await this.populate('wpCredentials');
+				const wpCredentials = await this.populate('wp_credentials');
 				return wpCredentials || [];
 			})
 		);

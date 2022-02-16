@@ -66,9 +66,9 @@ const useSiteConnect = () => {
 							}
 							return {
 								...data,
-								wpApiUrl,
-								wcApiUrl: `${wpApiUrl}wc/v3`,
-								wcApiAuthUrl: `${wpApiUrl}wcpos/v1/jwt`,
+								wp_api_url: wpApiUrl,
+								wc_api_url: `${wpApiUrl}wc/v3`,
+								wc_api_auth_url: `${wpApiUrl}wcpos/v1/jwt`,
 							};
 						});
 					}

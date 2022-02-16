@@ -4,10 +4,9 @@
 	"description": "WooCommerce POS Store",
 	"type": "object",
 	"primaryKey": "localID",
-	"required": ["localID"],
 	"properties": {
 		"localID": {
-			"description": "Unique local identifier for the resource.",
+			"description": "Unique local identifier for the resource. Note: id is not unique for stores",
 			"type": "string"
 		},
 		"id": {

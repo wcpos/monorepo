@@ -77,7 +77,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 				onRemove={openConfirmDialog}
 				disabled={stores.length === 0}
 			>
-				{wpUser.displayName ? wpUser.displayName : 'No name?'}
+				{wpUser.display_name ? wpUser.display_name : 'No name?'}
 			</Tag>
 
 			<Dialog ref={dialogRef} onClose={handleUserRemove}>

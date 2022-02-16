@@ -32,7 +32,6 @@ export const UserMenu = () => {
 							site.collection.upsertLocal('current', { id: null });
 							wpCredentials.collection.upsertLocal('current', { id: null });
 							store.collection.upsertLocal('current', { id: null });
-							navigation.goBack();
 						},
 						type: 'warning',
 					},
