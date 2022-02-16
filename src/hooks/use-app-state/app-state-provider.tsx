@@ -1,17 +1,8 @@
 import * as React from 'react';
-import { of } from 'rxjs';
-import { tap, switchMap } from 'rxjs/operators';
-import { userDB$ } from '@wcpos/common/src/database/users-db';
+import { combineLatest, of } from 'rxjs';
+import { tap, switchMap, map, filter, debounceTime } from 'rxjs/operators';
 import { ObservableResource, useObservableSuspense, useObservableState } from 'observable-hooks';
-import get from 'lodash/get';
-import {
-	getResource,
-	// 	getUserResource,
-	// 	getSiteResource,
-	// 	getWpCredResource,
-	// 	getStoreResource,
-	// 	getStoreDBResource,
-} from './resources';
+import { appStateResource, userDBResource } from './resources';
 
 type InitialProps = import('@wcpos/common/src//types').InitialProps;
 type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
@@ -22,15 +13,13 @@ type UserDocument = import('@wcpos/common/src/database').UserDocument;
 type WPCredentialsDocument = import('@wcpos/common/src/database').WPCredentialsDocument;
 
 export interface AppStateProps {
+	initialProps: InitialProps;
 	userDB: UserDatabase;
-	resources: ObservableResource<{
-		user: UserDocument;
-		site: SiteDocument;
-		wpCredentials: WPCredentialsDocument;
-		store: StoreDocument;
-		storeDB: StoreDatabase;
-	}>;
-	online: boolean;
+	user: UserDocument;
+	site?: SiteDocument;
+	wpCredentials?: WPCredentialsDocument;
+	store?: StoreDocument;
+	storeDB?: StoreDatabase;
 }
 
 export const AppStateContext = React.createContext<unknown>({}) as React.Context<AppStateProps>;
@@ -40,25 +29,35 @@ interface AppStatePropviderProps {
 	initialProps: InitialProps;
 }
 
-const userDBResource = new ObservableResource(userDB$, (value: any) => !!value);
-
 /**
  * App State Provider
  */
 const AppStateProvider = ({ children, initialProps }: AppStatePropviderProps) => {
 	const userDB = useObservableSuspense(userDBResource);
+	const [user, site, wpCredentials, store, storeDB] = useObservableSuspense(appStateResource);
+
+	// web app
+	// React.useEffect(() => {
+
+	// }, [])
 
 	/**
 	 * These values values should be relatively static
 	 * Any change will cause the entire app to re-render
 	 */
-	const value = {
-		initialProps: Object.freeze(initialProps), // prevent accidental mutation
-		resources: getResource(userDB, initialProps),
-		userDB,
-	};
+	const value = React.useMemo(
+		() => ({
+			initialProps: Object.freeze(initialProps), // prevent accidental mutation
+			userDB,
+			user,
+			site,
+			wpCredentials,
+			store,
+			storeDB,
+		}),
+		[initialProps, site, store, storeDB, user, userDB, wpCredentials]
+	);
 
-	// @ts-ignore
 	return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 };
 
