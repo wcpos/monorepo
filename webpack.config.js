@@ -59,5 +59,8 @@ module.exports = async function (env, argv) {
 		ignored: '**/node_modules',
 	};
 
+	config.devServer.headers = config.devServer.headers || {};
+	config.devServer.headers['Access-Control-Allow-Origin'] = '*';
+
 	return config;
 };
