@@ -4,19 +4,18 @@
 	"description": "Global app user - different to WordPress user",
 	"type": "object",
 	"primaryKey": "localID",
-	"required": ["localID"],
 	"properties": {
 		"localID": {
 			"description": "Unique local identifier for the resource.",
 			"type": "string"
 		},
-		"firstName": {
+		"first_name": {
 			"type": "string"
 		},
-		"lastName": {
+		"last_name": {
 			"type": "string"
 		},
-		"displayName": {
+		"display_name": {
 			"type": "string"
 		},
 		"sites": {

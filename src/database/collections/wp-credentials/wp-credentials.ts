@@ -52,7 +52,7 @@ export const methods: WPCredentialsMethods = {
 				const newStore = await storesCollection.insert(rawStore);
 				await this.atomicUpdate((old: any) => {
 					old.stores = old.stores || [];
-					old.stores?.push(newStore.localID);
+					old.stores?.push(newStore._id);
 					return old;
 				});
 			}
@@ -69,7 +69,7 @@ export const methods: WPCredentialsMethods = {
 	 */
 	async addStore(this: WPCredentialsDocument, data) {
 		const store: StoreDocument = await this.collections().stores.insert(data);
-		await this.update({ $push: { stores: store.localID } }).catch((err) => {
+		await this.update({ $push: { stores: store._id } }).catch((err) => {
 			console.log(err);
 			return err;
 		});

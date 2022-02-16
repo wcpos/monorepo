@@ -12,7 +12,7 @@ export interface LogSchema {
   /**
    * Unique local identifier for the resource.
    */
-  localID: string;
+  _id?: string;
   dateCreatedGmt?: string;
   user?: string;
   level?: string;

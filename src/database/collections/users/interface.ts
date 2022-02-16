@@ -12,10 +12,10 @@ export interface UserSchema {
   /**
    * Unique local identifier for the resource.
    */
-  localID: string;
-  firstName?: string;
-  lastName?: string;
-  displayName?: string;
+  _id?: string;
+  first_name?: string;
+  last_name?: string;
+  display_name?: string;
   sites?: string[];
   [k: string]: any;
 }

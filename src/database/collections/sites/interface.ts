@@ -12,16 +12,16 @@ export interface SiteSchema {
   /**
    * Unique local identifier for the resource.
    */
-  localID: string;
+  _id?: string;
   url?: string;
   name?: string;
   description?: string;
   home?: string;
-  gmtOffset?: string;
-  timezoneString?: string;
-  wpApiUrl?: string;
-  wcApiUrl?: string;
-  wcApiAuthUrl?: string;
-  wpCredentials?: string[];
+  gmt_offset?: string;
+  timezone_string?: string;
+  wp_api_url?: string;
+  wc_api_url?: string;
+  wc_api_auth_url?: string;
+  wp_credentials?: string[];
   [k: string]: any;
 }
