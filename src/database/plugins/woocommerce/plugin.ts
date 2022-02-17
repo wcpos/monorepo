@@ -15,7 +15,7 @@ function isSynced(this: RxCollection) {
  * Helper functions to parse WooCommerce data
  */
 export const WoocommercePlugin: RxPlugin = {
-	name: 'audit-ids',
+	name: 'woocommerce-plugin',
 	rxdb: true, // this must be true so rxdb knows that this is a rxdb-plugin and not a pouchdb-plugin
 
 	/**

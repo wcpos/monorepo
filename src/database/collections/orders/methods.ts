@@ -37,9 +37,9 @@ export default {
 		this: OrderDocument,
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<LineItemDocument[]> {
-		return this.lineItems$.pipe(
+		return this.line_items$.pipe(
 			switchMap(async () => {
-				const lineItems = await this.populate('lineItems');
+				const lineItems = await this.populate('line_items');
 				if (!lineItems) {
 					return [];
 				}
@@ -55,9 +55,9 @@ export default {
 		this: OrderDocument,
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<FeeLineDocument[]> {
-		return this.feeLines$.pipe(
+		return this.fee_lines$.pipe(
 			switchMap(async () => {
-				const feeLines = await this.populate('feeLines');
+				const feeLines = await this.populate('fee_lines');
 				if (!feeLines) {
 					return [];
 				}
@@ -76,9 +76,9 @@ export default {
 		this: OrderDocument,
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
 	): Observable<ShippingLineDocument[]> {
-		return this.shippingLines$.pipe(
+		return this.shipping_lines$.pipe(
 			switchMap(async () => {
-				const shippingLines = await this.populate('shippingLines');
+				const shippingLines = await this.populate('shipping_lines');
 				if (!shippingLines) {
 					return [];
 				}
@@ -142,9 +142,9 @@ export default {
 		// else, create new lineItem
 		const newLineItem: LineItemDocument = await this.collections()
 			.line_items.insert({
-				productId,
+				product_id: productId,
 				name: product.name || parent.name,
-				variationId: parent && product.id,
+				variation_id: parent && product.id,
 				quantity: 1,
 				price: parseFloat(product.price || ''),
 				sku: product.sku,
@@ -157,7 +157,7 @@ export default {
 		/**
 		 * Special case if the order is not yet saved, eg: new order
 		 */
-		if (!this.id) {
+		if (this._isTemporary) {
 			await this.save().catch((err: any) => {
 				debugger;
 			});
@@ -168,8 +168,8 @@ export default {
 		 * - use atomicUpdate just in case lineItems is undefined
 		 */
 		return this.atomicUpdate((order) => {
-			order.lineItems = order.lineItems ?? [];
-			order.lineItems.push(newLineItem.localID);
+			order.line_items = order.line_items ?? [];
+			order.line_items.push(newLineItem._id);
 			return order;
 		}).catch((err: any) => {
 			debugger;
@@ -182,7 +182,7 @@ export default {
 	async removeLineItem(this: OrderDocument, lineItem: LineItemDocument) {
 		await this.update({
 			$pullAll: {
-				lineItems: [lineItem.localID],
+				line_items: [lineItem._id],
 			},
 		}).then(() => {
 			return lineItem.remove();
@@ -198,7 +198,7 @@ export default {
 			.then((newFee: FeeLineDocument) => {
 				return this.update({
 					$push: {
-						feeLines: newFee.localID,
+						fee_lines: newFee._id,
 					},
 				});
 			});
@@ -210,7 +210,7 @@ export default {
 	async removeFeeLine(this: OrderDocument, feeLine: FeeLineDocument) {
 		await this.update({
 			$pullAll: {
-				feeLines: [feeLine.localID],
+				fee_lines: [feeLine._id],
 			},
 		}).then(() => {
 			return feeLine.remove();
@@ -226,7 +226,7 @@ export default {
 			.then((newShipping: ShippingLineDocument) => {
 				return this.update({
 					$push: {
-						shippingLines: newShipping.localID,
+						shipping_lines: newShipping._id,
 					},
 				});
 			})
@@ -241,7 +241,7 @@ export default {
 	async removeShippingLine(this: OrderDocument, shippingLine: ShippingLineDocument) {
 		await this.update({
 			$pullAll: {
-				shippingLines: [shippingLine.localID],
+				shipping_lines: [shippingLine._id],
 			},
 		}).then(() => {
 			return shippingLine.remove();
@@ -270,7 +270,7 @@ export default {
 	 */
 	async addCustomer(this: OrderDocument, customer: CustomerDocument) {
 		await this.atomicPatch({
-			customerId: customer.id,
+			customer_id: customer.id,
 			billing: {
 				email: customer.email,
 			},
@@ -319,7 +319,7 @@ export default {
 			}),
 			map((totals: string[]) => String(_sumBy(totals, (total) => Number(total ?? 0)))),
 			tap((totalTax: string) => {
-				if (totalTax !== this.totalTax) this.atomicPatch({ totalTax });
+				if (totalTax !== this.totalTax) this.atomicPatch({ total_tax: totalTax });
 			})
 		);
 	},
