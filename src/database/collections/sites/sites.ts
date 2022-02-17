@@ -66,7 +66,7 @@ const methods: SiteMethods = {
 			const newWpUser = await wpCredentialsCollection.insert(parsedData);
 			await this.atomicUpdate((oldData) => {
 				oldData.wp_credentials = oldData.wpCredentials || [];
-				oldData.wp_credentials.push(newWpUser._id);
+				oldData.wp_credentials.push(newWpUser.localID);
 				return oldData;
 			});
 
@@ -78,7 +78,7 @@ const methods: SiteMethods = {
 
 	async addWpCredentials(this: SiteDocument, data) {
 		const wpCredentials = await this.collections().wp_credentials.insert(data);
-		await this.update({ $push: { wp_credentials: wpCredentials._id } }).catch((err) => {
+		await this.update({ $push: { wp_credentials: wpCredentials.localID } }).catch((err) => {
 			console.log(err);
 			return err;
 		});

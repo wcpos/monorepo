@@ -2,7 +2,7 @@ import * as React from 'react';
 import { combineLatest, of } from 'rxjs';
 import { tap, switchMap, map, filter, debounceTime } from 'rxjs/operators';
 import { ObservableResource, useObservableSuspense, useObservableState } from 'observable-hooks';
-import { appStateResource, userDBResource } from './resources';
+import { userDBResource, authResources, storeDBResource } from './resources';
 
 type InitialProps = import('@wcpos/common/src//types').InitialProps;
 type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
@@ -34,7 +34,8 @@ interface AppStatePropviderProps {
  */
 const AppStateProvider = ({ children, initialProps }: AppStatePropviderProps) => {
 	const userDB = useObservableSuspense(userDBResource);
-	const [user, site, wpCredentials, store, storeDB] = useObservableSuspense(appStateResource);
+	const storeDB = useObservableSuspense(storeDBResource);
+	const [user, site, wpCredentials, store] = useObservableSuspense(authResources);
 
 	// web app
 	// React.useEffect(() => {

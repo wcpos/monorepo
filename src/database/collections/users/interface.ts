@@ -12,7 +12,7 @@ export interface UserSchema {
   /**
    * Unique local identifier for the resource.
    */
-  _id?: string;
+  localID?: string;
   first_name?: string;
   last_name?: string;
   display_name?: string;

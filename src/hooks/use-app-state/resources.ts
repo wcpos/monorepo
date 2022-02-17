@@ -87,6 +87,14 @@ const store$ = userDB$.pipe(
 );
 
 /**
+ * App State Resource
+ */
+export const authResources = new ObservableResource(
+	combineLatest([user$, site$, wpCredentials$, store$]).pipe(debounceTime(50))
+	// combineLatest([user$, site$, wpCredentials$, store$])
+);
+
+/**
  * Store DB
  */
 const storeDB$ = combineLatest([user$, site$, wpCredentials$, store$]).pipe(
@@ -102,6 +110,4 @@ const storeDB$ = combineLatest([user$, site$, wpCredentials$, store$]).pipe(
 /**
  * App State Resource
  */
-export const appStateResource = new ObservableResource(
-	combineLatest([user$, site$, wpCredentials$, store$, storeDB$]).pipe(debounceTime(100))
-);
+export const storeDBResource = new ObservableResource(storeDB$);

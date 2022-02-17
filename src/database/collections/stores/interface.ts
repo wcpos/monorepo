@@ -10,9 +10,9 @@
  */
 export interface WCPOSStoreSchema {
   /**
-   * Unique local identifier for the resource.
+   * Unique local identifier for the resource. Note: id is not unique for stores
    */
-  _id?: string;
+  localID?: string;
   id?: number;
   name?: string;
   accounting?: {
