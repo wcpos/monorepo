@@ -96,9 +96,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/core@npm:7.17.4":
-  version: 7.17.4
-  resolution: "@babel/core@npm:7.17.4"
+"@babel/core@npm:7.17.5, @babel/core@npm:^7.13.16":
+  version: 7.17.5
+  resolution: "@babel/core@npm:7.17.5"
   dependencies:
     "@ampproject/remapping": ^2.1.0
     "@babel/code-frame": ^7.16.7
@@ -115,7 +115,7 @@ __metadata:
     gensync: ^1.0.0-beta.2
     json5: ^2.1.2
     semver: ^6.3.0
-  checksum: d367259b188fde69493fea407a1c134d6bb7a0d859cbe2c0f0d1f2464143bdee0fdfd3c8d45a2cdabdf321b95dd392cbc4f55e2d0c41a842a581d37fee4cef64
+  checksum: c5e7dddb4feaacb91175d22a6edc8e93804242328a82b80732c6e84a0647bc0a9c9d5b05f3ce13138b8e59bf7aba4ff9f7b7446302f141f243ba51df02c318a5
   languageName: node
   linkType: hard
 
@@ -520,21 +520,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@babel/parser@npm:^7.13.16, @babel/parser@npm:^7.14.0, @babel/parser@npm:^7.17.3":
+  version: 7.17.3
+  resolution: "@babel/parser@npm:7.17.3"
+  bin:
+    parser: ./bin/babel-parser.js
+  checksum: 311869baef97c7630ac3b3c4600da18229b95aa2785b2daab2044384745fe0653070916ade28749fb003f7369a081111ada53e37284ba48d6b5858cbb9e411d1
+  languageName: node
+  linkType: hard
+
 "@babel/parser@npm:^7.17.0":
   version: 7.17.0
   resolution: "@babel/parser@npm:7.17.0"
   bin:
     parser: ./bin/babel-parser.js
   checksum: d0ac5ffba0b234dde516f867edf5da5d92d6f841592b370ae3244cd7c8f27a7f5e3e3d4e90ca9c15ea58bc46823f1643f3f75b6eb9a9f676ae16e8b2365e922a
-  languageName: node
-  linkType: hard
-
-"@babel/parser@npm:^7.17.3":
-  version: 7.17.3
-  resolution: "@babel/parser@npm:7.17.3"
-  bin:
-    parser: ./bin/babel-parser.js
-  checksum: 311869baef97c7630ac3b3c4600da18229b95aa2785b2daab2044384745fe0653070916ade28749fb003f7369a081111ada53e37284ba48d6b5858cbb9e411d1
   languageName: node
   linkType: hard
 
@@ -575,7 +575,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/plugin-proposal-class-properties@npm:^7.0.0, @babel/plugin-proposal-class-properties@npm:^7.1.0, @babel/plugin-proposal-class-properties@npm:^7.12.1, @babel/plugin-proposal-class-properties@npm:^7.16.0, @babel/plugin-proposal-class-properties@npm:^7.16.7":
+"@babel/plugin-proposal-class-properties@npm:^7.0.0, @babel/plugin-proposal-class-properties@npm:^7.1.0, @babel/plugin-proposal-class-properties@npm:^7.12.1, @babel/plugin-proposal-class-properties@npm:^7.13.0, @babel/plugin-proposal-class-properties@npm:^7.16.0, @babel/plugin-proposal-class-properties@npm:^7.16.7":
   version: 7.16.7
   resolution: "@babel/plugin-proposal-class-properties@npm:7.16.7"
   dependencies:
@@ -673,7 +673,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/plugin-proposal-nullish-coalescing-operator@npm:^7.0.0, @babel/plugin-proposal-nullish-coalescing-operator@npm:^7.1.0, @babel/plugin-proposal-nullish-coalescing-operator@npm:^7.12.1, @babel/plugin-proposal-nullish-coalescing-operator@npm:^7.16.0, @babel/plugin-proposal-nullish-coalescing-operator@npm:^7.16.7":
+"@babel/plugin-proposal-nullish-coalescing-operator@npm:^7.0.0, @babel/plugin-proposal-nullish-coalescing-operator@npm:^7.1.0, @babel/plugin-proposal-nullish-coalescing-operator@npm:^7.12.1, @babel/plugin-proposal-nullish-coalescing-operator@npm:^7.13.8, @babel/plugin-proposal-nullish-coalescing-operator@npm:^7.16.0, @babel/plugin-proposal-nullish-coalescing-operator@npm:^7.16.7":
   version: 7.16.7
   resolution: "@babel/plugin-proposal-nullish-coalescing-operator@npm:7.16.7"
   dependencies:
@@ -737,7 +737,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/plugin-proposal-optional-chaining@npm:^7.0.0, @babel/plugin-proposal-optional-chaining@npm:^7.1.0, @babel/plugin-proposal-optional-chaining@npm:^7.12.7, @babel/plugin-proposal-optional-chaining@npm:^7.16.0, @babel/plugin-proposal-optional-chaining@npm:^7.16.7":
+"@babel/plugin-proposal-optional-chaining@npm:^7.0.0, @babel/plugin-proposal-optional-chaining@npm:^7.1.0, @babel/plugin-proposal-optional-chaining@npm:^7.12.7, @babel/plugin-proposal-optional-chaining@npm:^7.13.12, @babel/plugin-proposal-optional-chaining@npm:^7.16.0, @babel/plugin-proposal-optional-chaining@npm:^7.16.7":
   version: 7.16.7
   resolution: "@babel/plugin-proposal-optional-chaining@npm:7.16.7"
   dependencies:
@@ -1222,7 +1222,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/plugin-transform-modules-commonjs@npm:^7.0.0, @babel/plugin-transform-modules-commonjs@npm:^7.1.0, @babel/plugin-transform-modules-commonjs@npm:^7.16.8":
+"@babel/plugin-transform-modules-commonjs@npm:^7.0.0, @babel/plugin-transform-modules-commonjs@npm:^7.1.0, @babel/plugin-transform-modules-commonjs@npm:^7.13.8, @babel/plugin-transform-modules-commonjs@npm:^7.16.8":
   version: 7.16.8
   resolution: "@babel/plugin-transform-modules-commonjs@npm:7.16.8"
   dependencies:
@@ -1626,7 +1626,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/preset-flow@npm:^7.0.0, @babel/preset-flow@npm:^7.12.1":
+"@babel/preset-flow@npm:^7.0.0, @babel/preset-flow@npm:^7.12.1, @babel/preset-flow@npm:^7.13.13":
   version: 7.16.7
   resolution: "@babel/preset-flow@npm:7.16.7"
   dependencies:
@@ -1670,7 +1670,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/preset-typescript@npm:^7.1.0, @babel/preset-typescript@npm:^7.12.7, @babel/preset-typescript@npm:^7.16.0, @babel/preset-typescript@npm:^7.16.7":
+"@babel/preset-typescript@npm:^7.1.0, @babel/preset-typescript@npm:^7.12.7, @babel/preset-typescript@npm:^7.13.0, @babel/preset-typescript@npm:^7.16.0, @babel/preset-typescript@npm:^7.16.7":
   version: 7.16.7
   resolution: "@babel/preset-typescript@npm:7.16.7"
   dependencies:
@@ -1695,6 +1695,21 @@ __metadata:
   peerDependencies:
     "@babel/core": ^7.0.0-0
   checksum: bbe9552c9e5816aec2bf7d899b43f95fd649714f38d14de48f42c895cc9ef65708f1359f393c235d5f02224c115544aeeb174495682a07734cdf9484ed2e6175
+  languageName: node
+  linkType: hard
+
+"@babel/register@npm:^7.13.16":
+  version: 7.17.0
+  resolution: "@babel/register@npm:7.17.0"
+  dependencies:
+    clone-deep: ^4.0.1
+    find-cache-dir: ^2.0.0
+    make-dir: ^2.1.0
+    pirates: ^4.0.5
+    source-map-support: ^0.5.16
+  peerDependencies:
+    "@babel/core": ^7.0.0-0
+  checksum: 1d8e888c104022c2924803fc9e217c99f8a9b87dc5bf8ea1ddd9921765102c8267d2bd92d4f42aaa1b5ca3713ea400580b29702bb89829a59d63baf0321eb284
   languageName: node
   linkType: hard
 
@@ -7576,7 +7591,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/app-managed@workspace:apps/managed"
   dependencies:
-    "@babel/core": 7.17.4
+    "@babel/core": 7.17.5
     "@expo/webpack-config": 0.16.18
     "@svgr/webpack": 5.5.0
     "@types/react": 17.0.39
@@ -7596,7 +7611,7 @@ __metadata:
     react-native-pager-view: 5.4.11
     react-native-reanimated: 2.4.1
     react-native-safe-area-context: 3.4.0
-    react-native-screens: 3.11.1
+    react-native-screens: 3.12.0
     react-native-svg: 12.2.0
     react-native-svg-transformer: 1.0.0
     react-native-web: 0.17.5
@@ -7608,7 +7623,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/app-with-dev-client@workspace:apps/with-dev-client"
   dependencies:
-    "@babel/core": 7.17.4
+    "@babel/core": 7.17.5
     "@expo/config-plugins": 4.0.18
     "@types/react": 17.0.39
     "@types/react-dom": 17.0.11
@@ -7628,7 +7643,7 @@ __metadata:
     react-native-mmkv: 2.1.0
     react-native-reanimated: 2.4.1
     react-native-safe-area-context: 3.4.0
-    react-native-screens: 3.11.1
+    react-native-screens: 3.12.0
     react-native-web: 0.17.5
     typescript: 4.5.5
   languageName: unknown
@@ -7638,7 +7653,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/app-with-flipper@workspace:apps/with-flipper"
   dependencies:
-    "@babel/core": 7.17.4
+    "@babel/core": 7.17.5
     "@expo/webpack-config": 0.16.18
     "@svgr/webpack": 5.5.0
     "@types/react": 17.0.39
@@ -7650,6 +7665,7 @@ __metadata:
     base-64: 1.0.0
     expo: 44.0.6
     expo-community-flipper: 44.0.1
+    expo-dev-client: 0.8.4
     expo-sqlite: 10.1.1
     expo-status-bar: 1.2.0
     react: 17.0.2
@@ -7661,7 +7677,7 @@ __metadata:
     react-native-pager-view: 5.4.11
     react-native-reanimated: 2.4.1
     react-native-safe-area-context: 3.4.0
-    react-native-screens: 3.11.1
+    react-native-screens: 3.12.0
     react-native-svg: 12.2.0
     react-native-svg-transformer: 1.0.0
     react-native-web: 0.17.5
@@ -7673,7 +7689,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/app-with-sentry@workspace:apps/with-sentry"
   dependencies:
-    "@babel/core": 7.17.4
+    "@babel/core": 7.17.5
     "@sentry/cli": 1.72.2
     "@sentry/react-native": 3.2.13
     "@types/react": 17.0.39
@@ -7702,7 +7718,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/babel-preset-expo@workspace:packages/babel"
   dependencies:
-    "@babel/core": 7.17.4
+    "@babel/core": 7.17.5
     "@babel/preset-typescript": ^7.16.7
     babel-jest: ^27.5.1
     babel-preset-expo: 9.0.2
@@ -7771,7 +7787,7 @@ __metadata:
     react-native-linear-gradient: 2.5.6
     react-native-reanimated: 2.4.1
     react-native-safe-area-context: 3.4.0
-    react-native-screens: 3.11.1
+    react-native-screens: 3.12.0
     react-native-sqlite-2: 3.5.2
     react-native-svg: 12.2.0
     react-native-tab-view: 3.1.1
@@ -7849,7 +7865,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/storybook@workspace:apps/storybook"
   dependencies:
-    "@babel/core": 7.17.4
+    "@babel/core": 7.17.5
     "@react-native-async-storage/async-storage": 1.16.1
     "@react-native-community/datetimepicker": 5.1.0
     "@react-native-community/slider": 4.2.0
@@ -19217,6 +19233,37 @@ __metadata:
   languageName: node
   linkType: hard
 
+"jscodeshift@npm:^0.13.1":
+  version: 0.13.1
+  resolution: "jscodeshift@npm:0.13.1"
+  dependencies:
+    "@babel/core": ^7.13.16
+    "@babel/parser": ^7.13.16
+    "@babel/plugin-proposal-class-properties": ^7.13.0
+    "@babel/plugin-proposal-nullish-coalescing-operator": ^7.13.8
+    "@babel/plugin-proposal-optional-chaining": ^7.13.12
+    "@babel/plugin-transform-modules-commonjs": ^7.13.8
+    "@babel/preset-flow": ^7.13.13
+    "@babel/preset-typescript": ^7.13.0
+    "@babel/register": ^7.13.16
+    babel-core: ^7.0.0-bridge.0
+    chalk: ^4.1.2
+    flow-parser: 0.*
+    graceful-fs: ^4.2.4
+    micromatch: ^3.1.10
+    neo-async: ^2.5.0
+    node-dir: ^0.1.17
+    recast: ^0.20.4
+    temp: ^0.8.4
+    write-file-atomic: ^2.3.0
+  peerDependencies:
+    "@babel/preset-env": ^7.1.6
+  bin:
+    jscodeshift: bin/jscodeshift.js
+  checksum: 1c35938de5fc29cafec80e2c37d5c3411f85cd5d40e0243b52f2da0c1ab4b659daddfd62de558eca5d562303616f7838097727b651f4ad8e32b1e96f169cdd76
+  languageName: node
+  linkType: hard
+
 "jsdom@npm:^16.4.0, jsdom@npm:^16.6.0":
   version: 16.7.0
   resolution: "jsdom@npm:16.7.0"
@@ -23032,7 +23079,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pirates@npm:^4.0.0, pirates@npm:^4.0.1, pirates@npm:^4.0.4":
+"pirates@npm:^4.0.0, pirates@npm:^4.0.1, pirates@npm:^4.0.4, pirates@npm:^4.0.5":
   version: 4.0.5
   resolution: "pirates@npm:4.0.5"
   checksum: c9994e61b85260bec6c4fc0307016340d9b0c4f4b6550a957afaaff0c9b1ad58fbbea5cfcf083860a25cb27a375442e2b0edf52e2e1e40e69934e08dcc52d227
@@ -25308,6 +25355,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-native-codegen@npm:*":
+  version: 0.0.13
+  resolution: "react-native-codegen@npm:0.0.13"
+  dependencies:
+    "@babel/parser": ^7.14.0
+    flow-parser: ^0.121.0
+    jscodeshift: ^0.13.1
+    nullthrows: ^1.1.1
+  checksum: bfe645fea6de985922d6d060b2ad0c9194f25b436b5b31c11fcc76358fa527f541c044d0818f32cba853bec3debfa12d2a48b4c9282f19d575ee2a7d3599571f
+  languageName: node
+  linkType: hard
+
 "react-native-codegen@npm:^0.0.6":
   version: 0.0.6
   resolution: "react-native-codegen@npm:0.0.6"
@@ -25359,6 +25418,15 @@ __metadata:
   peerDependencies:
     react-native: ">=0.56"
   checksum: 45782003973b2ceca90b1f73462021e1aa2fc7e00c830ccafbb6f8a6ef7de34989cfc05d49b0f670b399ba1ead5de117a9c69d250fdc0390ca54e38b9f828385
+  languageName: node
+  linkType: hard
+
+"react-native-gradle-plugin@npm:^0.0.3":
+  version: 0.0.3
+  resolution: "react-native-gradle-plugin@npm:0.0.3"
+  dependencies:
+    react-native-codegen: "*"
+  checksum: 558b0937f4b661bd69ac6dc7d8a69e4ad5d6897aac85c390fc3acd8a7bfe8cfec8b2ba49dda15be522f13a5f30148217cc69676fff444fd813ebbaa1fc6446a8
   languageName: node
   linkType: hard
 
@@ -25463,16 +25531,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-screens@npm:3.11.1":
-  version: 3.11.1
-  resolution: "react-native-screens@npm:3.11.1"
+"react-native-screens@npm:3.12.0":
+  version: 3.12.0
+  resolution: "react-native-screens@npm:3.12.0"
   dependencies:
     react-freeze: ^1.0.0
+    react-native-gradle-plugin: ^0.0.3
     warn-once: ^0.1.0
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: 8792203c2a1f9ab80b33814f78e7bd10be8c09dcc105f44fa22ca70f4417bc028613f49831c8972fbb49531ef45433e8971f07d6e0365d3da3042dc40f30f7a3
+  checksum: bc5de3ac095e89f35f758f010081540b9f7514447f89c0be5421a73f8ad017c711ce0fd20d13df46fa7aabcc85cc84933921f0f04f289b9a361ad5f611180b0a
   languageName: node
   linkType: hard
 
@@ -26037,7 +26106,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"recast@npm:^0.20.3":
+"recast@npm:^0.20.3, recast@npm:^0.20.4":
   version: 0.20.5
   resolution: "recast@npm:0.20.5"
   dependencies:
@@ -28785,7 +28854,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"temp@npm:^0.8.1":
+"temp@npm:^0.8.1, temp@npm:^0.8.4":
   version: 0.8.4
   resolution: "temp@npm:0.8.4"
   dependencies:
