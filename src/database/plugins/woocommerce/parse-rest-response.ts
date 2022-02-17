@@ -19,7 +19,7 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 	// need to convert localID to string
 	plainData._id = String(plainData.id);
 	plainData._deleted = false;
-	plainData.links = plainData.links || {};
+	plainData.links = plainData._links || {};
 	unset(plainData, '_links');
 	// TODO convert _link to link propert??
 
