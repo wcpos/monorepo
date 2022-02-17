@@ -66,8 +66,8 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 								const headers = {
 									'X-WCPOS': '1',
 								};
-								if (wpCredentials.wpNonce) {
-									Object.assign(headers, { 'X-WP-Nonce': wpCredentials.wpNonce });
+								if (wpCredentials.wp_nonce) {
+									Object.assign(headers, { 'X-WP-Nonce': wpCredentials.wp_nonce });
 								}
 								if (wpCredentials.jwt) {
 									Object.assign(headers, { Authorization: `Bearer ${wpCredentials.jwt}` });
@@ -90,7 +90,7 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 								const result = await http
 									// @ts-ignore
 									.get('products', {
-										baseURL: site.wcApiUrl,
+										baseURL: site.wc_api_url,
 										params,
 										headers,
 									})
@@ -115,7 +115,7 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 								const promises = data.map(async (product: any) => {
 									const existing = await collection.findOne().where('id').eq(product.id).exec();
 									if (existing) {
-										Object.assign(product, { localID: existing.localID });
+										Object.assign(product, { _id: existing._id });
 									}
 									// delete product._links;
 									// TODO - this should be called by middleware

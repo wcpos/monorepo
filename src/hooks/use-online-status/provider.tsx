@@ -31,7 +31,7 @@ const CurrentUserProvider = ({ children }: Props) => {
 	 */
 	React.useEffect(() => {
 		NetInfo.configure({
-			reachabilityUrl: site.wpApiUrl,
+			reachabilityUrl: site.wp_api_url,
 			reachabilityTest: async (response) => response.status === 200,
 			// reachabilityLongTimeout: 60 * 1000, // 60s
 			// reachabilityShortTimeout: 5 * 1000, // 5s
@@ -48,7 +48,7 @@ const CurrentUserProvider = ({ children }: Props) => {
 
 		// Unsubscribe
 		return unsubscribe;
-	}, [site.wpApiUrl]);
+	}, [site.wp_api_url]);
 
 	// // Show a warning if the user is offline
 	React.useEffect(() => {
