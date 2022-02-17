@@ -22,7 +22,7 @@ interface CartProps {
 
 const Cart = ({ order }: CartProps) => {
 	const ui = useObservableSuspense(useUIResource('pos.cart'));
-	const items = useObservableState(order.cart$, []);
+	const [items] = useObservableState(order.getCart$, []);
 
 	return (
 		<Box raised rounding="medium" style={{ height: '100%', backgroundColor: 'white' }}>
@@ -53,7 +53,7 @@ const Cart = ({ order }: CartProps) => {
 							title="Add Note"
 							background="outline"
 							onPress={() => {
-								order.atomicPatch({ customerNote: 'This is a note!' });
+								order.atomicPatch({ customer_note: 'This is a note!' });
 							}}
 						/>
 						<OrderMetaButton order={order} />

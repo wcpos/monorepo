@@ -20,10 +20,11 @@ const Actions = ({ item: product }: Props) => {
 	const addToCart = React.useCallback(async () => {
 		if (currentOrder) {
 			currentOrder.addOrUpdateLineItem(product);
-		} else {
-			const newOrder = await storeDB?.collections.orders.createNewOrderWithProduct(product);
-			setCurrentOrder(newOrder);
 		}
+		// } else {
+		// 	const newOrder = await storeDB?.collections.orders.createNewOrderWithProduct(product);
+		// 	setCurrentOrder(newOrder);
+		// }
 	}, [currentOrder, product, setCurrentOrder, storeDB?.collections.orders]);
 
 	if (!product.isSynced()) {

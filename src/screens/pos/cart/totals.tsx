@@ -11,7 +11,7 @@ interface Props {
 
 const Totals = ({ order }: Props) => {
 	const total = useObservableState(order.total$, order.total);
-	const totalTax = useObservableState(order.totalTax$, order.totalTax);
+	const totalTax = useObservableState(order.total_tax$, order.total_tax);
 
 	return (
 		<>

@@ -15,7 +15,7 @@ const FeeAndShipping = ({ order }: Props) => {
 	};
 
 	const handleAddShipping = () => {
-		order.addShippingLine({ methodTitle: 'Shipping', methodId: '0', total: '10' });
+		order.addShippingLine({ method_title: 'Shipping', method_id: '0', total: '10' });
 	};
 
 	return (

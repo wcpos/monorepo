@@ -11,7 +11,7 @@ interface ProductFooterProps {
 
 const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { storeDB } = useAppState();
-	const total = useObservableState(storeDB.products.totalDocuments$, 0);
+	const total = useObservableState(storeDB.products.totalDocCount$, 0);
 
 	return (
 		<Styled.Footer>

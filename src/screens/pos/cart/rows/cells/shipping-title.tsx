@@ -7,7 +7,7 @@ interface Props {
 }
 
 const ShippingTitle = ({ item }: Props) => {
-	const methodTitle = useObservableState(item.methodTitle$, item.methodTitle);
+	const methodTitle = useObservableState(item.method_title$, item.method_title);
 	return <Text>{methodTitle}</Text>;
 };
 

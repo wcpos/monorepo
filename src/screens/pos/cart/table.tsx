@@ -60,7 +60,7 @@ const CartTable = ({ order, ui }: ICartTableProps) => {
 		[query]
 	);
 
-	const items = useObservableState(order.cart$, []);
+	const [items] = useObservableState(order.getCart$, []);
 
 	/**
 	 *

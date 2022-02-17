@@ -122,7 +122,7 @@ export const useCollectionQuery = (
 					}
 
 					const result = await http
-						.get('products', {
+						.get(collection.name, {
 							params,
 						})
 						.catch(({ response }) => {
@@ -130,6 +130,7 @@ export const useCollectionQuery = (
 						});
 
 					const documents = _map(result?.data, (item) => collection.parseRestResponse(item));
+					console.log(documents);
 
 					return {
 						documents,

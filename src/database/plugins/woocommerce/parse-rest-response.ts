@@ -17,7 +17,9 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 	const topLevelFields = get(this, 'schema.topLevelFields');
 
 	// need to convert localID to string
-	plainData._id = String(plainData.id);
+	if (plainData.id && typeof plainData.id === 'number') {
+		plainData._id = String(plainData.id);
+	}
 	plainData._deleted = false;
 	plainData.links = plainData._links || {};
 	unset(plainData, '_links');

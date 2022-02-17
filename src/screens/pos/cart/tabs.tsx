@@ -25,7 +25,8 @@ const CartTabs = () => {
 		() =>
 			orderQuery.$.pipe(
 				map((o) => {
-					o.push(storeDB.collections.orders.newDocument({ status: 'pos-open' }));
+					const newOrder = storeDB.collections.orders.newDocument({ status: 'pos-open' });
+					o.push(newOrder);
 					return o;
 				})
 			),
@@ -46,7 +47,7 @@ const CartTabs = () => {
 	 *
 	 */
 	const renderTabTitle: RenderTabTitle = (focused, order) => {
-		if (!order?.localID) {
+		if (!order?._id) {
 			return <Icon name="plus" type={focused ? 'inverse' : 'primary'} />;
 		}
 		return <Text type={focused ? 'inverse' : 'primary'}>Cart: {order.total}</Text>;
@@ -56,7 +57,7 @@ const CartTabs = () => {
 	 *
 	 */
 	const routes = orders.map((order) => ({
-		key: order?.localID || 0,
+		key: order?._id || 0,
 		title: ({ focused }: { focused: boolean }) => renderTabTitle(focused, order),
 	}));
 
@@ -67,8 +68,7 @@ const CartTabs = () => {
 		if (!route || !currentOrder) {
 			return null;
 		}
-		return null;
-		// return <Cart order={currentOrder} />;
+		return <Cart order={currentOrder} />;
 	};
 
 	/**
