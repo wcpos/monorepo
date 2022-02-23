@@ -16,12 +16,12 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 
 // custom plugins
-import { RxDBAjvValidatePlugin } from './validate';
 import collectionsHelper from './utils/collections';
-import removeChildren from './remove-children';
 import collectionCounts from './collection-counts';
 import RxDBGenerateIdPlugin from './generate-id';
 import RxDBWooCommercePlugin from './woocommerce';
+import removeChildren from './remove-children';
+import { RxDBAjvValidatePlugin } from './validate';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -52,9 +52,9 @@ addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBKeyCompressionPlugin);
 
 // custom plugins
-addRxPlugin(RxDBAjvValidatePlugin);
 addRxPlugin(collectionsHelper);
-addRxPlugin(removeChildren);
 addRxPlugin(collectionCounts);
 addRxPlugin(RxDBGenerateIdPlugin);
 addRxPlugin(RxDBWooCommercePlugin);
+addRxPlugin(removeChildren);
+addRxPlugin(RxDBAjvValidatePlugin);

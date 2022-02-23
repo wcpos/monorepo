@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import Dropdown from '@wcpos/common/src/components/dropdown';
 import Icon from '@wcpos/common/src/components/icon';
 import Modal, { useModal } from '@wcpos/common/src/components/modal';
+import useRestHttpClient from '@wcpos/common/src/hooks/use-rest-http-client';
 import EditModal from '../../common/edit-modal';
 
 interface Props {
@@ -12,9 +13,18 @@ interface Props {
 const Actions = ({ item: order }: Props) => {
 	const { ref, open, close } = useModal();
 	const navigation = useNavigation();
+	const http = useRestHttpClient();
 
 	const handleSync = () => {
-		console.log('sync');
+		// could use the link url?
+		http
+			.get(`/orders/${order._id}`)
+			.then(({ data }) => {
+				order.atomicPatch(data);
+			})
+			.catch(() => {
+				debugger;
+			});
 	};
 
 	const handleOpen = React.useCallback(() => {
