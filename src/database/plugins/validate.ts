@@ -34,7 +34,6 @@ ajv.addKeyword('ref', {
 	schema: false, // keyword value is not used, can be true
 	valid: true, // always validates as true
 	validate(data, { parentData, parentDataProperty }) {
-		parentData[parentDataProperty] = data.map((item) => String(item.id));
 		return true;
 		// if (typeof data !== 'string' && parentData)
 		// 	// or some other condition
