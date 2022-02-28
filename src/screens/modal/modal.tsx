@@ -1,18 +1,10 @@
 import * as React from 'react';
-import get from 'lodash/get';
 import Text from '@wcpos/common/src/components/text';
 import Dialog from '@wcpos/common/src/components/dialog';
-import LoginForm from './login-form';
 
 type ModalScreenProps = import('@wcpos/common/src/navigators/app').ModalScreenProps;
 
-export const ModalScreen = ({ route, navigation }: ModalScreenProps) => {
-	const { params } = route;
-
-	if (params.login) {
-		return <LoginForm onClose={() => navigation.goBack()} {...params} />;
-	}
-
+const ModalScreen = ({ route, navigation }: ModalScreenProps) => {
 	return (
 		<Dialog
 			sectioned
@@ -30,3 +22,5 @@ export const ModalScreen = ({ route, navigation }: ModalScreenProps) => {
 		</Dialog>
 	);
 };
+
+export default ModalScreen;

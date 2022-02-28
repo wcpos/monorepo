@@ -5,14 +5,14 @@ import { DrawerNavigationProp } from '@react-navigation/drawer';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Auth from '@wcpos/common/src/screens/auth';
-// import Modal from '@wcpos/common/src/screens/modal';
-import Login from '@wcpos/common/src/screens/modal/login';
+import { Login, Modal } from '@wcpos/common/src/screens/modal';
 
 const MainNavigator = React.lazy(() => import('./main'));
 
 export type AppStackParamList = {
 	Auth: undefined;
 	Main: undefined;
+	Modal: undefined;
 	Login: undefined;
 };
 
@@ -34,6 +34,7 @@ const AppNavigator = () => {
 				<Stack.Screen name="Auth" component={Auth} />
 			)}
 			<Stack.Screen name="Login" component={Login} options={{ presentation: 'transparentModal' }} />
+			<Stack.Screen name="Modal" component={Modal} options={{ presentation: 'transparentModal' }} />
 		</Stack.Navigator>
 	);
 };

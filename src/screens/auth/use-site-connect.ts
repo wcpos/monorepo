@@ -91,6 +91,7 @@ const useSiteConnect = () => {
 				if (!existingSite) {
 					const newSite = await userDB.sites.insert(siteData); // note: insertApiData
 
+					debugger;
 					user.update({ $push: { sites: newSite?.localID } }).catch((err) => {
 						console.log(err);
 						return err;

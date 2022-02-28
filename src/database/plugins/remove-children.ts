@@ -2,21 +2,17 @@ import pickBy from 'lodash/pickBy';
 import map from 'lodash/map';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
+import isPlainObject from 'lodash/isPlainObject';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb/plugins/core').RxCollection;
 type RxDocument = import('rxdb/plugins/core').RxDocument;
 
 /**
- * returns ids of children
+ *
  */
-const upsertChildData = async (childCollection: RxCollection, data: any[]) => {
-	const promises = data.map(async (item) => {
-		/** @TODO - why doesn't upsert trigger the preInsert or preSave */
-		return childCollection.upsert(childCollection.parseRestResponse(item)).then((doc) => doc._id);
-	});
-
-	return Promise.all(promises);
+const isJSONArray = (data: any) => {
+	return Array.isArray(data) && data.every((item) => isPlainObject(item));
 };
 
 /**
@@ -30,8 +26,19 @@ async function preInsertOrSave(this: RxCollection, data: any) {
 	map(hasChildren, async (object, key) => {
 		const childCollection = get(this, `database.collections.${object?.ref}`);
 
-		if (childCollection && Array.isArray(data[key]) && data[key].length > 0) {
-			await upsertChildData(childCollection, data[key]);
+		if (childCollection && isJSONArray(data[key])) {
+			const promises = data[key].map(async (item) => {
+				// only upsert if it's a plain object
+				if (item && isPlainObject(item)) {
+					/** @TODO - why doesn't upsert trigger the preInsert or preSave */
+					return childCollection
+						.upsert(childCollection.parseRestResponse(item))
+						.then((doc) => doc._id);
+				}
+			});
+
+			const ids = await Promise.all(promises);
+			data[key] = ids;
 		}
 	});
 }

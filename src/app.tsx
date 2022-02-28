@@ -39,7 +39,7 @@ const App = (initialProps: InitialProps) => {
 		prefixes,
 		config: {
 			screens: {
-				Auth: `${pathname}/login`,
+				Auth: `${pathname}/auth`,
 				Main: {
 					path: pathname,
 					screens: {
@@ -60,7 +60,8 @@ const App = (initialProps: InitialProps) => {
 						},
 					},
 				},
-				Modal: '#',
+				Modal: `${pathname}/#`,
+				Login: `${pathname}/login`,
 			},
 		},
 	};

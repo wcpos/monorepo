@@ -9,12 +9,13 @@ const Login = () => {
 	const navigation = useNavigation();
 	const [username, setUsername] = React.useState('');
 	const [password, setPassword] = React.useState('');
-	const { userDB, site, wpCredentials } = useAppState();
+	const { site, wpCredentials } = useAppState();
 
 	const handleLogin = async () => {
 		let success = false;
 
-		const { data } = (await http.post(`${site.wcApiAuthUrl}/authorize`, {
+		/** @TODO - use generic http with error handling */
+		const { data } = (await http.post(`${site?.wc_api_auth_url}/authorize`, {
 			username,
 			password,
 		})) as Record<string, any>;
@@ -22,7 +23,7 @@ const Login = () => {
 		if (wpCredentials) {
 			success = await wpCredentials.atomicPatch(data);
 		} else {
-			success = await site.addWpCredentials(data);
+			success = await site?.addWpCredentials(data);
 		}
 
 		if (success) {

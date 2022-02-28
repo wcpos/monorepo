@@ -19,10 +19,12 @@ const LoginBase = ({ site }: LoginProps, ref) => {
 
 	const handleLogin = async () => {
 		if (site && site.wp_api_url) {
+			/** @TODO - use generic http with error handling */
 			const result = await http.post(`${site.wp_api_url}wcpos/v1/jwt/authorize`, {
 				username,
 				password,
 			});
+
 			// set wp credientials
 			// @ts-ignore
 			const wpUser = await site.addOrUpdateWpCredentials(result.data);
