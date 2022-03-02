@@ -29,22 +29,22 @@
 		"react-native-get-random-values": "1.7.2",
 		"react-native-pager-view": "5.4.11",
 		"react-native-reanimated": "2.4.1",
-		"react-native-safe-area-context": "4.0.1",
-		"react-native-screens": "3.12.0",
-		"react-native-svg": "12.2.0",
-		"react-native-web": "0.17.6"
+		"react-native-safe-area-context": "4.1.2",
+		"react-native-screens": "3.13.0",
+		"react-native-svg": "12.3.0",
+		"react-native-web": "0.17.7"
 	},
 	"devDependencies": {
 		"@babel/core": "7.17.5",
 		"@expo/webpack-config": "0.16.18",
 		"@svgr/webpack": "5.5.0",
 		"@types/react": "17.0.39",
-		"@types/react-dom": "17.0.11",
-		"@types/react-native": "0.67.0",
+		"@types/react-dom": "17.0.12",
+		"@types/react-native": "0.67.1",
 		"@wcpos/babel-preset-expo": "*",
 		"@wcpos/eslint-config": "*",
 		"react-native-svg-transformer": "1.0.0",
-		"typescript": "4.5.5"
+		"typescript": "4.6.2"
 	},
 	"eslintConfig": {
 		"extends": "@wcpos/eslint-config"
