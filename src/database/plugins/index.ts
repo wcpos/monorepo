@@ -20,7 +20,7 @@ import collectionsHelper from './utils/collections';
 import collectionCounts from './collection-counts';
 import RxDBGenerateIdPlugin from './generate-id';
 import RxDBWooCommercePlugin from './woocommerce';
-import removeChildren from './remove-children';
+import childrenPlugin from './children';
 import { RxDBAjvValidatePlugin } from './validate';
 
 if (process.env.NODE_ENV === 'development') {
@@ -56,5 +56,5 @@ addRxPlugin(collectionsHelper);
 addRxPlugin(collectionCounts);
 addRxPlugin(RxDBGenerateIdPlugin);
 addRxPlugin(RxDBWooCommercePlugin);
-addRxPlugin(removeChildren);
+addRxPlugin(childrenPlugin);
 addRxPlugin(RxDBAjvValidatePlugin);

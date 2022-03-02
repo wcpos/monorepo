@@ -21,6 +21,7 @@ export const useRestHttpClient = () => {
 	 * memoize the axios instance
 	 */
 	const client = React.useMemo(() => {
+		// @TODO - move this to useEffect below?
 		const headers = {
 			'X-WCPOS': '1',
 		};
@@ -37,29 +38,8 @@ export const useRestHttpClient = () => {
 			signal: controller.signal,
 		});
 
-		// Add a request interceptor
-		instance.interceptors.response.use(
-			function (config) {
-				// Do something before request is sent
-				// config.headers.Authorization = `Bearer ${your_token}`;
-				// // OR config.headers.common['Authorization'] = `Bearer ${your_token}`;
-				// config.baseURL = 'https://example.io/api/';
-				return config;
-			},
-			function (error) {
-				errorResponseHandler(error.response);
-				return Promise.reject(error);
-			}
-		);
-
 		return instance;
-	}, [
-		controller.signal,
-		errorResponseHandler,
-		site?.wc_api_url,
-		wpCredentials?.jwt,
-		wpCredentials?.wp_nonce,
-	]);
+	}, [controller.signal, site?.wc_api_url, wpCredentials?.jwt, wpCredentials?.wp_nonce]);
 
 	/**
 	 * register and unregister interceptors

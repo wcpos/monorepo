@@ -21,30 +21,35 @@ const isJSONArray = (data: any) => {
 async function preInsertOrSave(this: RxCollection, data: any) {
 	const hasChildren = pickBy(this.schema.jsonSchema.properties, (property) => !!property?.ref);
 
-	if (isEmpty(hasChildren)) return;
+	if (isEmpty(hasChildren)) return Promise.resolve();
 
-	map(hasChildren, async (object, key) => {
+	const waitForAllProps = map(hasChildren, async (object, key) => {
 		const childCollection = get(this, `database.collections.${object?.ref}`);
 
 		if (childCollection && isJSONArray(data[key])) {
-			const promises = data[key].map(async (item) => {
+			const waitForUpsertChildren = data[key].map(async (item) => {
 				// only upsert if it's a plain object
 				if (item && isPlainObject(item)) {
-					/** @TODO - why doesn't upsert trigger the preInsert or preSave */
-					return childCollection
-						.upsert(childCollection.parseRestResponse(item))
-						.then((doc) => doc._id);
+					return childCollection.upsert(childCollection.parseRestResponse(item));
 				}
+				return Promise.resolve();
 			});
 
-			const ids = await Promise.all(promises);
-			data[key] = ids;
+			return Promise.all(waitForUpsertChildren).then((docs) => {
+				data[key] = docs.map((doc) => doc._id);
+			});
 		}
+
+		return Promise.resolve().catch((err) => {
+			console.warn(err);
+		});
 	});
+
+	return Promise.all(waitForAllProps);
 }
 
-const removeChildrenPlugin: RxPlugin = {
-	name: 'remove-children',
+const childrenPlugin: RxPlugin = {
+	name: 'children',
 	rxdb: true,
 
 	/**
@@ -95,4 +100,4 @@ const removeChildrenPlugin: RxPlugin = {
 	},
 };
 
-export default removeChildrenPlugin;
+export default childrenPlugin;
