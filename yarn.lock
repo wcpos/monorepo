@@ -3632,12 +3632,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-community/netinfo@npm:8.0.0":
-  version: 8.0.0
-  resolution: "@react-native-community/netinfo@npm:8.0.0"
+"@react-native-community/netinfo@npm:8.1.0":
+  version: 8.1.0
+  resolution: "@react-native-community/netinfo@npm:8.1.0"
   peerDependencies:
     react-native: ">=0.59"
-  checksum: 2f87dd1e546936854d5634bb36cde34a9801bf533ba206eee30f54f6444948c8ef1f2d11f004497ab06ab4466e1196e91d93ec788c519c15b92ee209eb45f89c
+  checksum: bce3f0bf9b42cd6fadae9d2e6461d7b3ff4a8c4fe476347df393b72d51ef911414cefcace22dd96acc32f8987f898ca1ff0825cb1a1791f3a29bfb27884f5688
   languageName: node
   linkType: hard
 
@@ -3865,9 +3865,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@sentry/cli@npm:1.73.0":
-  version: 1.73.0
-  resolution: "@sentry/cli@npm:1.73.0"
+"@sentry/cli@npm:1.73.1":
+  version: 1.73.1
+  resolution: "@sentry/cli@npm:1.73.1"
   dependencies:
     https-proxy-agent: ^5.0.0
     mkdirp: ^0.5.5
@@ -3875,9 +3875,10 @@ __metadata:
     npmlog: ^4.1.2
     progress: ^2.0.3
     proxy-from-env: ^1.1.0
+    which: ^2.0.2
   bin:
     sentry-cli: bin/sentry-cli
-  checksum: a7e320c3235171e0891ec0069e14c4f21fc0e83e0d9726331dfbda96b37236d1dc73bd204d16de97c17cac408c9964d492e8d568e8a568147b04718501158570
+  checksum: 521409e149585a8674afa76c14e2422bcf4b7b3c5b172065daf2dfdc4062364015be8d1902c867446ba41d3873a9a3bf0ff36110d843e95c21f3b00aab35bb6d
   languageName: node
   linkType: hard
 
@@ -7001,12 +7002,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-dom@npm:17.0.12":
-  version: 17.0.12
-  resolution: "@types/react-dom@npm:17.0.12"
+"@types/react-dom@npm:17.0.13":
+  version: 17.0.13
+  resolution: "@types/react-dom@npm:17.0.13"
   dependencies:
     "@types/react": "*"
-  checksum: 9754e1d0c0107310eab35a2eb1dad45f6ef0a41e562c23a29d6bf723a29c8a2036c4acd6a1a1422bf7cf956d431e41b154608dd917f6e69c7ab0d87720c5e27e
+  checksum: 62c42a54ac8961c23a0e74b9cdd8b0a78563757e462b1ab665b2aa365bfd8b86a73d3f6eafc09a4a80fb08659321db168f012aa597c41c0df36f645a94e9266b
   languageName: node
   linkType: hard
 
@@ -7606,7 +7607,7 @@ __metadata:
     "@expo/webpack-config": 0.16.18
     "@svgr/webpack": 5.5.0
     "@types/react": 17.0.39
-    "@types/react-dom": 17.0.12
+    "@types/react-dom": 17.0.13
     "@types/react-native": 0.67.1
     "@wcpos/babel-preset-expo": "*"
     "@wcpos/eslint-config": "*"
@@ -7622,7 +7623,7 @@ __metadata:
     react-native-pager-view: 5.4.11
     react-native-reanimated: 2.4.1
     react-native-safe-area-context: 4.1.2
-    react-native-screens: 3.13.0
+    react-native-screens: 3.13.1
     react-native-svg: 12.3.0
     react-native-svg-transformer: 1.0.0
     react-native-web: 0.17.7
@@ -7637,7 +7638,7 @@ __metadata:
     "@babel/core": 7.17.5
     "@expo/config-plugins": 4.0.18
     "@types/react": 17.0.39
-    "@types/react-dom": 17.0.12
+    "@types/react-dom": 17.0.13
     "@types/react-native": 0.67.1
     "@wcpos/babel-preset-expo": "*"
     "@wcpos/eslint-config": "*"
@@ -7654,7 +7655,7 @@ __metadata:
     react-native-mmkv: 2.1.0
     react-native-reanimated: 2.4.1
     react-native-safe-area-context: 4.1.2
-    react-native-screens: 3.13.0
+    react-native-screens: 3.13.1
     react-native-web: 0.17.7
     typescript: 4.6.2
   languageName: unknown
@@ -7668,7 +7669,7 @@ __metadata:
     "@expo/webpack-config": 0.16.18
     "@svgr/webpack": 5.5.0
     "@types/react": 17.0.39
-    "@types/react-dom": 17.0.12
+    "@types/react-dom": 17.0.13
     "@types/react-native": 0.67.1
     "@wcpos/babel-preset-expo": "*"
     "@wcpos/eslint-config": "*"
@@ -7683,12 +7684,12 @@ __metadata:
     react-devtools-core: 4.23.0
     react-dom: 17.0.2
     react-native: 0.64.3
-    react-native-flipper: 0.136.0
+    react-native-flipper: 0.137.0
     react-native-get-random-values: 1.7.2
     react-native-pager-view: 5.4.11
     react-native-reanimated: 2.4.1
     react-native-safe-area-context: 4.1.2
-    react-native-screens: 3.13.0
+    react-native-screens: 3.13.1
     react-native-svg: 12.3.0
     react-native-svg-transformer: 1.0.0
     react-native-web: 0.17.7
@@ -7701,10 +7702,10 @@ __metadata:
   resolution: "@wcpos/app-with-sentry@workspace:apps/with-sentry"
   dependencies:
     "@babel/core": 7.17.5
-    "@sentry/cli": 1.73.0
+    "@sentry/cli": 1.73.1
     "@sentry/react-native": 3.2.13
     "@types/react": 17.0.39
-    "@types/react-dom": 17.0.12
+    "@types/react-dom": 17.0.13
     "@types/react-native": 0.67.1
     "@wcpos/babel-preset-expo": "*"
     "@wcpos/eslint-config": "*"
@@ -7741,7 +7742,7 @@ __metadata:
   resolution: "@wcpos/common@workspace:packages/common"
   dependencies:
     "@react-native-community/masked-view": 0.1.11
-    "@react-native-community/netinfo": 8.0.0
+    "@react-native-community/netinfo": 8.1.0
     "@react-navigation/drawer": 6.3.1
     "@react-navigation/elements": 1.3.1
     "@react-navigation/native": 6.0.8
@@ -7774,7 +7775,7 @@ __metadata:
     expo-sqlite: 10.1.1
     expo-status-bar: 1.2.0
     html-entities: 2.3.2
-    i18next: 21.6.12
+    i18next: 21.6.13
     jest: 27.5.1
     json-schema-merge-allof: 0.8.1
     jsonpointer: 5.0.0
@@ -7798,7 +7799,7 @@ __metadata:
     react-native-linear-gradient: 2.5.6
     react-native-reanimated: 2.4.1
     react-native-safe-area-context: 4.1.2
-    react-native-screens: 3.13.0
+    react-native-screens: 3.13.1
     react-native-sqlite-2: 3.5.2
     react-native-svg: 12.3.0
     react-native-tab-view: 3.1.1
@@ -7821,7 +7822,7 @@ __metadata:
   resolution: "@wcpos/cra@workspace:apps/cra"
   dependencies:
     "@types/react": 17.0.39
-    "@types/react-dom": 17.0.12
+    "@types/react-dom": 17.0.13
     "@welldone-software/why-did-you-render": 6.2.3
     babel-plugin-react-native-web: 0.17.7
     customize-cra: 1.0.0
@@ -7846,7 +7847,7 @@ __metadata:
     "@typescript-eslint/parser": 5.13.0
     eslint: 8.10.0
     eslint-config-airbnb: 19.0.4
-    eslint-config-prettier: 8.4.0
+    eslint-config-prettier: 8.5.0
     eslint-plugin-import: 2.25.4
     eslint-plugin-jest: 26.1.1
     eslint-plugin-jsx-a11y: 6.5.1
@@ -13397,14 +13398,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-config-prettier@npm:8.4.0":
-  version: 8.4.0
-  resolution: "eslint-config-prettier@npm:8.4.0"
+"eslint-config-prettier@npm:8.5.0":
+  version: 8.5.0
+  resolution: "eslint-config-prettier@npm:8.5.0"
   peerDependencies:
     eslint: ">=7.0.0"
   bin:
     eslint-config-prettier: bin/cli.js
-  checksum: ee8dc343f1fed15dc0658e190a966cc23644477f2331a7f56ae2bb79dd74892e3cde8ea5c142e7a3329a8291a1de041e13ca96e54d0c85ff4a2aba13390c5f10
+  checksum: 0d0f5c32e7a0ad91249467ce71ca92394ccd343178277d318baf32063b79ea90216f4c81d1065d60f96366fdc60f151d4d68ae7811a58bd37228b84c2083f893
   languageName: node
   linkType: hard
 
@@ -16803,12 +16804,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"i18next@npm:21.6.12":
-  version: 21.6.12
-  resolution: "i18next@npm:21.6.12"
+"i18next@npm:21.6.13":
+  version: 21.6.13
+  resolution: "i18next@npm:21.6.13"
   dependencies:
     "@babel/runtime": ^7.12.0
-  checksum: 577ab7e5c5ec5d9f8c24aef3d85c1134fc78aa370a254a0412b1207f98a994dd70bac4b11b979658cd2f2c7a764b78ad08ec3824d5ed900b51ca00d5c596c7df
+  checksum: ede7280351e4bb63cf746b6772996258771c6ea36921fd700ae8d79b6868f85411031fc3c4169f129dad8e21e52b925447fdb19709b205cbbcffcaf23b86cc0b
   languageName: node
   linkType: hard
 
@@ -25394,13 +25395,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-flipper@npm:0.136.0":
-  version: 0.136.0
-  resolution: "react-native-flipper@npm:0.136.0"
+"react-native-flipper@npm:0.137.0":
+  version: 0.137.0
+  resolution: "react-native-flipper@npm:0.137.0"
   peerDependencies:
     react: ^16.8.0 || ^17.0.0
     react-native: ">0.62.0"
-  checksum: 96079962e3949c9f681187d9ad52c79f49f47825fa7dfa34edf03d97209740f813eb75e1bdfbaaf75f7c0a73a040379f8d102cec5493a01d1db74d4243732beb
+  checksum: 3365602a6ccb56e9d966e2d588eec3974cbd292bb7d4ecbb9f924aea63690cf758d1899c0569ab9888cc80fd1d226c19ee5346b1ab16f767badc9f62d973969f
   languageName: node
   linkType: hard
 
@@ -25533,16 +25534,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-screens@npm:3.13.0":
-  version: 3.13.0
-  resolution: "react-native-screens@npm:3.13.0"
+"react-native-screens@npm:3.13.1":
+  version: 3.13.1
+  resolution: "react-native-screens@npm:3.13.1"
   dependencies:
     react-freeze: ^1.0.0
     warn-once: ^0.1.0
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: 59d35a61287c0cc206a710a7cc527ebc7a35f1915a3ffbd25538c27d01888b2615424477778a70ee34558804097082a2b54714bd437bec6f6ef8dd15df15cf31
+  checksum: aaab7071f65ea7b3be197417e073d0cad06c80fcb2a956faaeb020322c8002963f4d14ba96550484e96d156a48a29989c1485f47ec4bcd98c9701fe8de5c7cc1
   languageName: node
   linkType: hard
 
