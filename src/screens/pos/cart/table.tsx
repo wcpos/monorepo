@@ -27,7 +27,7 @@ interface ICartTableProps {
 	ui: any;
 }
 
-const CartTable = ({ order, ui }: ICartTableProps) => {
+const CartTable = ({ items, ui }: ICartTableProps) => {
 	const { t } = useTranslation();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
@@ -59,8 +59,6 @@ const CartTable = ({ order, ui }: ICartTableProps) => {
 		},
 		[query]
 	);
-
-	const [items] = useObservableState(order.getCart$, []);
 
 	/**
 	 *

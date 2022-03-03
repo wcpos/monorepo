@@ -1,2 +1,2 @@
-export { Snackbar as default } from './snackbar';
-export { useSnackbar } from './use-snackbar';
+export { SnackbarProvider } from './provider';
+export { useSnackbar as default } from './use-snackbar';

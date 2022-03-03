@@ -1,16 +1,27 @@
 import * as React from 'react';
-import { Snackbar } from './snackbar';
+import { SnackbarOptions, SnackbarContext } from './provider';
 
-export const useSnackbar = () => {
-	const ref = React.useRef<typeof Snackbar>(null);
+/**
+ * Get a function for showing a Snackbar with the specified options.
+ *
+ * Simply call the function to show the Snackbar, which will be automatically
+ * dismissed.
+ *
+ * @example
+ * const showSnackbar = useSnackbar({ message: 'This is a Snackbar!' })
+ * <Button onClick={showSnackbar}>Show Snackbar!</Button>
+ */
+export const useSnackbar = (
+	defaultOptions?: SnackbarOptions
+): ((options: SnackbarOptions) => void) => {
+	const context = React.useContext(SnackbarContext);
 
-	const close = React.useCallback(() => {
-		ref.current?.close();
-	}, []);
+	if (!context) {
+		throw new Error(`useSnackbar must be called within SnackbarProvider`);
+	}
 
-	const open = React.useCallback(() => {
-		ref.current?.open();
-	}, []);
-
-	return { ref, open, close };
+	return React.useCallback(
+		(options: SnackbarOptions) => context.add({ ...defaultOptions, ...options }),
+		[context, defaultOptions]
+	);
 };

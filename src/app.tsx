@@ -13,6 +13,7 @@ import TranslationService from './services/translation';
 import AppNavigator from './navigators';
 import Portal from './components/portal';
 import ErrorBoundary from './components/error-boundary';
+import { SnackbarProvider } from './components/snackbar';
 // import SplashScreen from './screens/splash';
 import Url from './lib/url-parse';
 // import { AuthLoginProvider } from './hooks/use-auth-login';
@@ -73,12 +74,14 @@ const App = (initialProps: InitialProps) => {
 					<AppStateProvider initialProps={initialProps}>
 						<ThemeProvider theme={getTheme('default', 'dark')}>
 							<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-								<Portal.Provider>
-									<NavigationContainer linking={linking}>
-										<AppNavigator />
-									</NavigationContainer>
-									<Portal.Manager />
-								</Portal.Provider>
+								<SnackbarProvider>
+									<Portal.Provider>
+										<NavigationContainer linking={linking}>
+											<AppNavigator />
+										</NavigationContainer>
+										<Portal.Manager />
+									</Portal.Provider>
+								</SnackbarProvider>
 							</SafeAreaProviderCompat>
 						</ThemeProvider>
 					</AppStateProvider>

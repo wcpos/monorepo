@@ -5,7 +5,7 @@ import NetInfo, {
 	NetInfoStateType,
 } from '@react-native-community/netinfo';
 import useAppState from '../use-app-state';
-import Snackbar, { useSnackbar } from '../../components/snackbar';
+import useSnackbar from '../../components/snackbar';
 
 const initialState: NetInfoState = {
 	type: NetInfoStateType.unknown,
@@ -22,7 +22,7 @@ interface Props {
 
 const CurrentUserProvider = ({ children }: Props) => {
 	const { site } = useAppState();
-	const { ref, open, close } = useSnackbar();
+	const addSnackbar = useSnackbar();
 	const [status, setStatus] = React.useState<NetInfoState>(initialState);
 
 	/**
@@ -53,16 +53,11 @@ const CurrentUserProvider = ({ children }: Props) => {
 	// // Show a warning if the user is offline
 	React.useEffect(() => {
 		if (status.isInternetReachable === false) {
-			open();
+			addSnackbar({ message: 'You are offline' });
 		}
 	}, [status]);
 
-	return (
-		<OnlineStatusContext.Provider value={status}>
-			{children}
-			<Snackbar ref={ref} message="No internet connection" />
-		</OnlineStatusContext.Provider>
-	);
+	return <OnlineStatusContext.Provider value={status}>{children}</OnlineStatusContext.Provider>;
 };
 
 export default CurrentUserProvider;

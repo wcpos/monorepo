@@ -1,14 +1,16 @@
 import * as React from 'react';
-import { View, StyleSheet } from 'react-native';
 import { useTheme } from 'styled-components/native';
+import useTimeout from '@wcpos/common/src/hooks/use-timeout';
 import Box from '../box';
 import Text from '../text';
 import Button from '../button';
 import Icon from '../icon';
-import Portal from '../portal';
-// import Backdrop from '../backdrop';
 
 export interface SnackbarProps {
+	/**
+	 * Unique identifier for the snackbar.
+	 */
+	id: string;
 	/**
 	 * Message to display on the Snackbar.
 	 */
@@ -24,7 +26,7 @@ export interface SnackbarProps {
 	/**
 	 * Function to call when the Snackbar is dismissed.
 	 */
-	onDismiss?: () => void;
+	onDismiss: (id: string) => void;
 	/**
 	 * Function to call when the Snackbar is dismissed.
 	 */
@@ -36,74 +38,59 @@ const durationValues = {
 	longer: 4000,
 };
 
-export const SnackbarBase = (
-	{ message, action, duration, onDismiss, dismissable = true }: SnackbarProps,
-	ref
-) => {
+export const Snackbar = ({
+	id,
+	message,
+	action,
+	duration,
+	onDismiss,
+	dismissable = true,
+}: SnackbarProps) => {
 	const theme = useTheme();
-	const [isVisible, setIsVisible] = React.useState(false);
 
+	/**
+	 *
+	 */
 	const dismiss = React.useCallback(() => {
-		// fade out
-		if (onDismiss) {
-			onDismiss();
-		}
-	}, [onDismiss, duration]);
+		onDismiss(id);
+	}, [id, onDismiss]);
 
+	/**
+	 * Auto dismiss the Snackbar after a certain amount of time.
+	 */
+	useTimeout(dismiss, durationValues[duration] || durationValues.default);
+
+	/**
+	 *
+	 */
 	const onActionClick = React.useCallback(() => {
 		if (action && action.action) {
 			action.action();
 		}
 		dismiss(); // Dismiss when user clicks action
-	}, [action?.action, dismiss]);
+	}, [action, dismiss]);
 
 	/**
-	 * Allow external access to the snackbar's visibility state.
+	 *
 	 */
-	React.useImperativeHandle(ref, () => ({
-		open(): void {
-			setIsVisible(true);
-		},
-
-		close(): void {
-			setIsVisible(false);
-		},
-	}));
-
-	if (!isVisible) {
-		return null;
-	}
-
 	return (
-		<Portal keyPrefix="Snackbar">
-			<View
-				style={[
-					StyleSheet.absoluteFill,
-					{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-start' },
-					{ padding: '30px' },
-				]}
-				pointerEvents="none"
-			>
-				<Box
-					paddingX="medium"
-					paddingY="small"
-					space="medium"
-					rounding="large"
-					style={{ backgroundColor: theme.colors.primary }}
-					horizontal
-					align="center"
-				>
-					<Text type="inverse">{message}</Text>
-					{action ? (
-						<Button type="inverse" onPress={onActionClick}>
-							{action.label}
-						</Button>
-					) : null}
-					{dismissable ? <Icon type="inverse" name="xmark" onPress={dismiss} /> : null}
-				</Box>
-			</View>
-		</Portal>
+		<Box
+			paddingX="medium"
+			paddingY="small"
+			space="medium"
+			rounding="large"
+			style={{ backgroundColor: theme.colors.primary }}
+			horizontal
+			align="center"
+			pointerEvents="auto"
+		>
+			<Text type="inverse">{message}</Text>
+			{action ? (
+				<Button type="inverse" onPress={onActionClick}>
+					{action.label}
+				</Button>
+			) : null}
+			{dismissable ? <Icon type="inverse" name="xmark" onPress={dismiss} /> : null}
+		</Box>
 	);
 };
-
-export const Snackbar = React.forwardRef(SnackbarBase);

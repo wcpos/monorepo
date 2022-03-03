@@ -4,6 +4,7 @@ import Box from '@wcpos/common/src/components/box';
 import Button from '@wcpos/common/src/components/button';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
+import useSnackbar from '@wcpos/common/src/components/snackbar';
 import CustomerSelect from '../../common/customer-select';
 import AddCustomer from '../../common/add-edit-customer';
 import UISettings from '../../common/ui-settings';
@@ -22,7 +23,10 @@ interface CartProps {
 
 const Cart = ({ order }: CartProps) => {
 	const ui = useObservableSuspense(useUIResource('pos.cart'));
-	const [items] = useObservableState(order.getCart$, []);
+	const [items] = useObservableState(() => {
+		return order.getCart$();
+	}, []);
+	const addSnackbar = useSnackbar();
 
 	return (
 		<Box raised rounding="medium" style={{ height: '100%', backgroundColor: 'white' }}>
@@ -37,7 +41,7 @@ const Cart = ({ order }: CartProps) => {
 			</Box>
 			{items.length > 0 && (
 				<Box fill>
-					<Table order={order} ui={ui} />
+					<Table items={items} ui={ui} />
 				</Box>
 			)}
 			<Box>
@@ -58,6 +62,13 @@ const Cart = ({ order }: CartProps) => {
 						/>
 						<OrderMetaButton order={order} />
 						<SaveButton order={order} />
+						<Button
+							title="Snackbar"
+							background="outline"
+							onPress={() => {
+								addSnackbar({ message: 'This is a snackbar!' });
+							}}
+						/>
 					</Box>
 					<Box horizontal>
 						<Button

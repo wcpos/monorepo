@@ -50,6 +50,13 @@ const Buttons = ({ order }: ButtonsProps) => {
 						replicationState.run(false);
 					}}
 				/>
+				<Button
+					title="Snackbar"
+					background="outline"
+					onPress={() => {
+						addSnackbar({ message: 'This is a snackbar!' });
+					}}
+				/>
 			</Button.Group>
 			<Button.Group>
 				<Button
@@ -60,15 +67,6 @@ const Buttons = ({ order }: ButtonsProps) => {
 						setCurrentOrder(undefined);
 					}}
 					style={{ width: '80px' }}
-				/>
-				<Button
-					title="Checkout"
-					accessoryRight={<Text type="inverse">{order.total}</Text>}
-					type="success"
-					onPress={async () => {
-						// @ts-ignore
-						order.atomicPatch({ status: 'pos-checkout' });
-					}}
 				/>
 			</Button.Group>
 			{visible && (

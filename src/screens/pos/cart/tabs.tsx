@@ -64,19 +64,25 @@ const CartTabs = () => {
 	/**
 	 *
 	 */
-	const renderScene = ({ route }: { route: typeof routes[number] }) => {
-		if (!route || !currentOrder) {
-			return null;
-		}
-		return <Cart order={currentOrder} />;
-	};
+	const renderScene = React.useCallback(
+		({ route }: { route: typeof routes[number] }) => {
+			if (!route || !currentOrder) {
+				return null;
+			}
+			return <Cart order={currentOrder} />;
+		},
+		[currentOrder]
+	);
 
 	/**
 	 *
 	 */
-	const handleTabChange = (idx: number) => {
-		setCurrentOrder(orders[idx]);
-	};
+	const handleTabChange = React.useCallback(
+		(idx: number) => {
+			setCurrentOrder(orders[idx]);
+		},
+		[orders, setCurrentOrder]
+	);
 
 	/**
 	 *

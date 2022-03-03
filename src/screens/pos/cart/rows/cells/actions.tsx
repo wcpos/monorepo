@@ -2,7 +2,7 @@ import * as React from 'react';
 import Icon from '@wcpos/common/src/components/icon';
 import Box from '@wcpos/common/src/components/box';
 import Modal, { useModal } from '@wcpos/common/src/components/modal';
-import { useSnackbar } from '@wcpos/common/src/components/snackbar/use-snackbar';
+import useSnackbar from '@wcpos/common/src/components/snackbar';
 import { usePOSContext } from '../../../context';
 import EditModal from './edit-modal';
 
@@ -16,20 +16,19 @@ interface ActionProps {
 const Actions = ({ item }: ActionProps) => {
 	const { currentOrder } = usePOSContext();
 	const { ref: modalRef, open, close } = useModal();
+	const addSnackbar = useSnackbar();
 
-	const undoFeeRemove = () => {
+	const undoRemove = () => {
 		console.log('Undo remove', item);
 	};
 
-	const showSnackbar = useSnackbar({
-		message: 'Item removed',
-		dismissable: true,
-		action: { label: 'Undo', action: undoFeeRemove },
-	});
-
 	const handleRemove = () => {
 		currentOrder?.removeCartLine(item);
-		showSnackbar();
+		addSnackbar({
+			message: `${item.name} removed from cart`,
+			dismissable: true,
+			action: { label: 'Undo', action: undoRemove },
+		});
 	};
 
 	return (
