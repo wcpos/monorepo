@@ -33,6 +33,17 @@ export default {
 	/**
 	 *
 	 */
+	isCartEmpty(this: OrderDocument) {
+		return (
+			(!this.line_items || this.line_items.length === 0) &&
+			(!this.fee_lines || this.fee_lines.length === 0) &&
+			(!this.shipping_lines || this.shipping_lines.length === 0)
+		);
+	},
+
+	/**
+	 *
+	 */
 	getLineItems$(
 		this: OrderDocument,
 		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
