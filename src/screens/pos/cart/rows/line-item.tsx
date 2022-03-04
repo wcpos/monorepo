@@ -8,6 +8,7 @@ import Total from './cells/total';
 import Tax from './cells/tax';
 import Actions from './cells/actions';
 import Name from './cells/product-name';
+import useCalcTotals from './use-calc-line-item-totals';
 
 type LineItemDocument = import('@wcpos/common/src/database').LineItemDocument;
 type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
@@ -30,6 +31,7 @@ const cells = {
 
 const LineItem = ({ lineItem, columns }: LineItemProps) => {
 	// useWhyDidYouUpdate('CartLineItem', { item, columns });
+	useCalcTotals(lineItem);
 
 	const cellRenderer = React.useCallback((item: LineItemDocument, column: ColumnProps) => {
 		const Cell = get(cells, column.key);

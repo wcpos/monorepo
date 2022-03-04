@@ -15,6 +15,7 @@ import SaveButton from './buttons/save-order';
 import AddNoteButton from './buttons/add-note';
 import VoidButton from './buttons/void';
 import PayButton from './buttons/pay';
+import useCalcOrderTotals from './use-calc-order-totals';
 
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 
@@ -24,6 +25,8 @@ interface CartProps {
 
 const Cart = ({ order }: CartProps) => {
 	const ui = useObservableSuspense(useUIResource('pos.cart'));
+	useCalcOrderTotals(order);
+	useWhyDidYouUpdate('Cart', { order, ui });
 
 	if (order.isCartEmpty()) {
 		return <EmptyCart order={order} ui={ui} />;

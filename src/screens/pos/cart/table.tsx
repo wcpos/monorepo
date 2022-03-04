@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Observable } from 'rxjs';
 import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
@@ -17,9 +18,10 @@ type FeeLineDocument = import('@wcpos/common/src/database').FeeLineDocument;
 type ShippingLineDocument = import('@wcpos/common/src/database').ShippingLineDocument;
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
 type UIColumn = import('@wcpos/common/src/hooks/use-ui-resource').UIColumn;
+type Cart = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
 
 interface ICartTableProps {
-	cart$: any;
+	cart$: Observable<Cart>;
 	ui: any;
 }
 

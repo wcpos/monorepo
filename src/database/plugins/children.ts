@@ -9,10 +9,11 @@ type RxCollection = import('rxdb/plugins/core').RxCollection;
 type RxDocument = import('rxdb/plugins/core').RxDocument;
 
 /**
- *
+ * Check if the given value is a JSON array
+ * Note: empty arrays should return false
  */
 const isJSONArray = (data: any) => {
-	return Array.isArray(data) && data.every((item) => isPlainObject(item));
+	return Array.isArray(data) && data.length > 0 && data.every((item) => isPlainObject(item));
 };
 
 /**
