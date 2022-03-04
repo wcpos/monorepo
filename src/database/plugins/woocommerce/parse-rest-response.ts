@@ -23,10 +23,10 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 	plainData._deleted = false;
 	plainData.links = plainData._links || {};
 	unset(plainData, '_links');
-	// TODO convert _link to link propert??
+	// TODO convert _links to links property??
 
 	/**
-	 * @TODO - change this to a validator 
+	 * @TODO - change this to a validator?
 	 * special fix for metaData values to make sure they are strings
 	 * fixes bug where WC REST API customer endpoint for returns:
 	 * {
@@ -37,8 +37,8 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 			}
 		}
 		*/
-	if (Array.isArray(plainData.metaData)) {
-		forEach(plainData.metaData, (meta) => {
+	if (Array.isArray(plainData.meta_data)) {
+		forEach(plainData.meta_data, (meta) => {
 			if (typeof meta.value === 'object' && meta.value !== null) {
 				meta.value = JSON.stringify(meta.value);
 			}
