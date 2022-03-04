@@ -19,17 +19,14 @@ type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
 type UIColumn = import('@wcpos/common/src/hooks/use-ui-resource').UIColumn;
 
 interface ICartTableProps {
-	order: OrderDocument;
-	// columns: ColumnProps[];
-	// items: any;
-	// query: any;
-	// onSort: Sort;
+	cart$: any;
 	ui: any;
 }
 
-const CartTable = ({ items, ui }: ICartTableProps) => {
+const CartTable = ({ cart$, ui }: ICartTableProps) => {
 	const { t } = useTranslation();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
+	const items = useObservableState(cart$, []);
 
 	/**
 	 * - filter visible columns

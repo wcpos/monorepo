@@ -1,19 +1,20 @@
 import * as React from 'react';
-import { useObservableSuspense, useObservableState } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import Box from '@wcpos/common/src/components/box';
 import Button from '@wcpos/common/src/components/button';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
-import useSnackbar from '@wcpos/common/src/components/snackbar';
-import CustomerSelect from '../../common/customer-select';
-import AddCustomer from '../../common/add-edit-customer';
-import UISettings from '../../common/ui-settings';
 import Totals from './totals';
-import PayButton from './pay-button';
 import Table from './table';
-import FeeAndShipping from './fee-and-shipping';
-import OrderMetaButton from './order-meta-button';
-import SaveButton from './save-button';
+import EmptyCart from './empty-cart';
+import CartHeader from './cart-header';
+import AddFee from './add-fee';
+import AddShipping from './add-shipping';
+import OrderMetaButton from './buttons/order-meta';
+import SaveButton from './buttons/save-order';
+import AddNoteButton from './buttons/add-note';
+import VoidButton from './buttons/void';
+import PayButton from './buttons/pay';
 
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 
@@ -23,68 +24,35 @@ interface CartProps {
 
 const Cart = ({ order }: CartProps) => {
 	const ui = useObservableSuspense(useUIResource('pos.cart'));
-	const [items] = useObservableState(() => {
-		return order.getCart$();
-	}, []);
-	const addSnackbar = useSnackbar();
+
+	if (order.isCartEmpty()) {
+		return <EmptyCart order={order} ui={ui} />;
+	}
 
 	return (
 		<Box raised rounding="medium" style={{ height: '100%', backgroundColor: 'white' }}>
-			<Box horizontal space="small" padding="small" align="center">
-				<CustomerSelect
-					onSelectCustomer={(val) => {
-						console.log(val);
-					}}
-				/>
-				<AddCustomer />
-				<UISettings ui={ui} />
+			<CartHeader order={order} ui={ui} />
+			<Box fill>
+				<Table cart$={order.getCart$()} ui={ui} />
 			</Box>
-			{items.length > 0 && (
-				<Box fill>
-					<Table items={items} ui={ui} />
-				</Box>
-			)}
 			<Box>
-				<FeeAndShipping order={order} />
+				<AddFee order={order} />
 			</Box>
-			{items.length > 0 && (
-				<>
-					<Box>
-						<Totals order={order} ui={ui} />
-					</Box>
-					<Box horizontal space="small" padding="small" align="center">
-						<Button
-							title="Add Note"
-							background="outline"
-							onPress={() => {
-								order.atomicPatch({ customer_note: 'This is a note!' });
-							}}
-						/>
-						<OrderMetaButton order={order} />
-						<SaveButton order={order} />
-						<Button
-							title="Snackbar"
-							background="outline"
-							onPress={() => {
-								addSnackbar({ message: 'This is a snackbar!' });
-							}}
-						/>
-					</Box>
-					<Box horizontal>
-						<Button
-							fill
-							size="large"
-							title="Void"
-							onPress={() => {
-								order.remove();
-							}}
-							type="critical"
-							// style={{ width: '33%' }}
-						/>
-						<PayButton order={order} />
-					</Box>
-				</>
-			)}
+			<Box>
+				<AddShipping order={order} />
+			</Box>
+			<Box>
+				<Totals order={order} />
+			</Box>
+			<Box horizontal space="small" padding="small" align="center">
+				<AddNoteButton order={order} />
+				<OrderMetaButton order={order} />
+				<SaveButton order={order} />
+			</Box>
+			<Box horizontal>
+				<VoidButton order={order} />
+				<PayButton order={order} />
+			</Box>
 		</Box>
 	);
 };

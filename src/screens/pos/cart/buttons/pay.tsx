@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import Button from '@wcpos/common/src/components/button';
 import Modal, { useModal } from '@wcpos/common/src/components/modal';
-import Checkout from '../checkout';
+import Checkout from '../../checkout';
 
 interface PayModalProps {
 	order: import('@wcpos/common/src/database').OrderDocument;
