@@ -66,12 +66,12 @@ export const shippingLines = {
 	// methods: {},
 	// attachments: {},
 	options: {
-		middlewares: {
-			postCreate: {
-				handle: postCreate,
-				parallel: false,
-			},
-		},
+		// middlewares: {
+		// 	postCreate: {
+		// 		handle: postCreate,
+		// 		parallel: false,
+		// 	},
+		// },
 	},
 	// migrationStrategies: {},
 	// autoMigrate: true,

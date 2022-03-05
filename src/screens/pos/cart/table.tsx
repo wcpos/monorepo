@@ -3,6 +3,7 @@ import { Observable } from 'rxjs';
 import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
+import flatten from 'lodash/flatten';
 import Table from '@wcpos/common/src/components/table3';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import LineItem from './rows/line-item';
@@ -21,14 +22,17 @@ type UIColumn = import('@wcpos/common/src/hooks/use-ui-resource').UIColumn;
 type Cart = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
 
 interface ICartTableProps {
-	cart$: Observable<Cart>;
+	order: OrderDocument;
 	ui: any;
 }
 
-const CartTable = ({ cart$, ui }: ICartTableProps) => {
+const CartTable = ({ order, ui }: ICartTableProps) => {
 	const { t } = useTranslation();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
-	const items = useObservableState(cart$, []);
+	const cart = useObservableState(order.cart$, []);
+	const items = flatten(Object.values(cart)); // @TODO - add sorting
+
+	useWhyDidYouUpdate('CartTable', { order, ui, columns, items, cart });
 
 	/**
 	 * - filter visible columns

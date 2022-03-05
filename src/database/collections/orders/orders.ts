@@ -30,10 +30,10 @@ export const orders = {
 	// attachments: {},
 	options: {
 		middlewares: {
-			// postCreate: {
-			// 	handle: postCreate,
-			// 	parallel: false,
-			// },
+			postCreate: {
+				handle: postCreate,
+				parallel: false,
+			},
 			// preInsert: {
 			// 	handle: preInsert,
 			// 	parallel: false,

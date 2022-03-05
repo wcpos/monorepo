@@ -26,6 +26,7 @@ interface CartProps {
 const Cart = ({ order }: CartProps) => {
 	const ui = useObservableSuspense(useUIResource('pos.cart'));
 	useCalcOrderTotals(order);
+
 	useWhyDidYouUpdate('Cart', { order, ui });
 
 	if (order.isCartEmpty()) {
@@ -36,7 +37,7 @@ const Cart = ({ order }: CartProps) => {
 		<Box raised rounding="medium" style={{ height: '100%', backgroundColor: 'white' }}>
 			<CartHeader order={order} ui={ui} />
 			<Box fill>
-				<Table cart$={order.getCart$()} ui={ui} />
+				<Table order={order} ui={ui} />
 			</Box>
 			<Box>
 				<AddFee order={order} />

@@ -1,5 +1,7 @@
-import { from, of, combineLatest } from 'rxjs';
+import { from, of, combineLatest, distinctUntilChanged } from 'rxjs';
 import { switchMap, tap, catchError, map, debounceTime } from 'rxjs/operators';
+import flatten from 'lodash/flatten';
+import isEqual from 'lodash/isEqual';
 import sumBy from 'lodash/sumBy';
 import { sumItemizedTaxes } from '../utils';
 
@@ -15,92 +17,44 @@ function postCreate(
 	plainData: Record<string, unknown>,
 	order: OrderDocument
 ) {
-	/**
-	 *
-	 */
-	const populatedLineItems$ = order.lineItems$.pipe(
-		switchMap(async () => {
-			const lineItems = await order.populate('lineItems');
-			if (!lineItems) {
-				return [];
-			}
-			// return q ? _orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
-			return lineItems;
-		})
+	const lineItems$ = order.line_items$.pipe(
+		distinctUntilChanged(isEqual),
+		switchMap(() => order.populate('line_items'))
+		// tap(() => {
+		// 	debugger;
+		// })
+	);
+	const feeLines$ = order.fee_lines$.pipe(
+		distinctUntilChanged(isEqual),
+		switchMap(() => order.populate('fee_lines'))
+	);
+	const shippingLines$ = order.shipping_lines$.pipe(
+		distinctUntilChanged(isEqual),
+		switchMap(() => order.populate('shipping_lines'))
 	);
 
 	/**
-	 *
+	 * Outputs { line_items: [], fee_lines: [], shipping_lines: [] }
 	 */
-	const populatedFeeLines$ = order.feeLines$.pipe(
-		switchMap(async () => {
-			const feeLines = await order.populate('feeLines');
-			if (!feeLines) {
-				return [];
-			}
-			// return q ? _orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
-			return feeLines;
-		})
-	);
-
-	/**
-	 *
-	 */
-	const populatedshippingLines$ = order.shippingLines$.pipe(
-		switchMap(async () => {
-			const shippingLines = await order.populate('shippingLines');
-			if (!shippingLines) {
-				return [];
-			}
-			// return q ? _orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
-			return shippingLines;
-		})
-	);
-
-	/**
-	 *
-	 */
-	const cart$ = combineLatest([
-		populatedLineItems$,
-		populatedFeeLines$,
-		populatedshippingLines$,
-	]).pipe(
+	const cart$ = combineLatest([lineItems$, feeLines$, shippingLines$]).pipe(
 		/**
 		 * the population promises return at different times
 		 * debounce emissions to prevent unneccesary re-renders
 		 * @TODO - is there a better way?
 		 */
-		// debounceTime(100),
-		map((lines) => {
-			const [lineItems = [], feeLines = [], shippingLines = []] = lines;
-			return lineItems.concat(feeLines, shippingLines);
-		})
+		map(([line_items, fee_lines, shipping_lines]) => ({
+			line_items,
+			fee_lines,
+			shipping_lines,
+		}))
 	);
 
 	/**
-	 *
+	 * Outputs [line, line, line, ...]
 	 */
-	cart$
-		.pipe(switchMap((lines: LineItemDocument[]) => combineLatest(lines.map((line) => line.$))))
-		.subscribe((lines) => {
-			const total = sumBy(lines, (item) => +(item.total ?? 0));
-			const totalTax = sumBy(lines, (item) => +(item.totalTax ?? 0));
-			const totalWithTax = total + totalTax;
-			const totalTaxString = String(totalTax);
-			const totalWithTaxString = String(totalWithTax);
-			const itemizedTaxes = sumItemizedTaxes(lines.map((line) => line.taxes ?? []));
-			const taxLines = itemizedTaxes.map((tax) => ({
-				id: tax.id,
-				taxTotal: String(tax.total),
-			}));
+	const flattenedCart$ = cart$.pipe(map((lines) => flatten(Object.values(lines))));
 
-			if (totalWithTaxString !== order.total || totalTaxString !== order.totalTax) {
-				// @ts-ignore
-				order.atomicPatch({ total: totalWithTaxString, totalTax: totalTaxString, taxLines });
-			}
-		});
-
-	Object.assign(order, { populatedLineItems$, cart$ });
+	Object.assign(order, { cart$, flattenedCart$ });
 }
 
 export default postCreate;

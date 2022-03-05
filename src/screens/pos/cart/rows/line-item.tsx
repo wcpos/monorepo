@@ -30,8 +30,8 @@ const cells = {
 };
 
 const LineItem = ({ lineItem, columns }: LineItemProps) => {
-	// useWhyDidYouUpdate('CartLineItem', { item, columns });
-	useCalcTotals(lineItem);
+	useWhyDidYouUpdate('CartLineItem', { lineItem, columns });
+	// useCalcTotals(lineItem);
 
 	const cellRenderer = React.useCallback((item: LineItemDocument, column: ColumnProps) => {
 		const Cell = get(cells, column.key);

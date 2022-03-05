@@ -19,38 +19,40 @@ const rates: any[] = [
 ];
 
 const useCalcTotals = (lineItem) => {
-	useSubscription(
-		combineLatest([lineItem.quantity$, lineItem.price$]).pipe(
-			tap(([qty = 0, price = 0]) => {
-				const discounts = 0;
-				const subtotal = qty * price;
-				const subtotalTaxes = calcTaxes(subtotal, rates);
-				const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes);
-				const total = subtotal - discounts;
-				const totalTaxes = calcTaxes(subtotal, rates);
-				const itemizedTotalTaxes = sumItemizedTaxes(totalTaxes);
-				// itemizedSubTotalTaxes & itemizedTotalTaxes should be same size
-				// is there a case where they are not?
-				const taxes = map(itemizedSubTotalTaxes, (obj) => {
-					const index = itemizedTotalTaxes.findIndex((el) => el.id === obj.id);
-					const totalTax = index !== -1 ? itemizedTotalTaxes[index] : { total: 0 };
-					return {
-						id: obj.id,
-						subtotal: String(obj.total ?? 0),
-						total: String(totalTax.total ?? 0),
-					};
-				});
+	console.log('line item calc');
 
-				lineItem.atomicPatch({
-					subtotal: String(subtotal),
-					subtotal_tax: String(sumTaxes(subtotalTaxes)),
-					total: String(total),
-					total_tax: String(sumTaxes(totalTaxes)),
-					taxes,
-				});
-			})
-		)
+	const calc$ = combineLatest([lineItem.quantity$, lineItem.price$]).pipe(
+		tap(([qty = 0, price = 0]) => {
+			const discounts = 0;
+			const subtotal = qty * price;
+			const subtotalTaxes = calcTaxes(subtotal, rates);
+			const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes);
+			const total = subtotal - discounts;
+			const totalTaxes = calcTaxes(subtotal, rates);
+			const itemizedTotalTaxes = sumItemizedTaxes(totalTaxes);
+			// itemizedSubTotalTaxes & itemizedTotalTaxes should be same size
+			// is there a case where they are not?
+			const taxes = map(itemizedSubTotalTaxes, (obj) => {
+				const index = itemizedTotalTaxes.findIndex((el) => el.id === obj.id);
+				const totalTax = index !== -1 ? itemizedTotalTaxes[index] : { total: 0 };
+				return {
+					id: obj.id,
+					subtotal: String(obj.total ?? 0),
+					total: String(totalTax.total ?? 0),
+				};
+			});
+
+			lineItem.atomicPatch({
+				subtotal: String(subtotal),
+				subtotal_tax: String(sumTaxes(subtotalTaxes)),
+				total: String(total),
+				total_tax: String(sumTaxes(totalTaxes)),
+				taxes,
+			});
+		})
 	);
+
+	useSubscription(calc$);
 };
 
 export default useCalcTotals;

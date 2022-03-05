@@ -1,12 +1,14 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import { map, tap } from 'rxjs/operators';
+import { distinctUntilChanged } from 'rxjs';
+import { map, filter } from 'rxjs/operators';
+import isEqual from 'lodash/isEqual';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Text from '@wcpos/common/src/components/text';
 import Tabs from '@wcpos/common/src/components/tabs';
 import Icon from '@wcpos/common/src/components/icon';
+import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Cart from './cart';
-import EmptyCart from './empty-cart';
 import { usePOSContext } from '../context';
 
 type RenderTabTitle = (
@@ -28,6 +30,17 @@ const CartTabs = () => {
 					const newOrder = storeDB.collections.orders.newDocument({ status: 'pos-open' });
 					o.push(newOrder);
 					return o;
+				}),
+				/**
+				 * the orderQuery will emit on every change, eg: order total
+				 * this causes many unnecessary re-renders
+				 * so we compare the previous query with the current query result
+				 */
+				distinctUntilChanged((prev, curr) => {
+					return isEqual(
+						prev.map((doc) => doc._id),
+						curr.map((doc) => doc._id)
+					);
 				})
 			),
 		[]
@@ -46,20 +59,24 @@ const CartTabs = () => {
 	/**
 	 *
 	 */
-	const renderTabTitle: RenderTabTitle = (focused, order) => {
+	const renderTabTitle: RenderTabTitle = React.useCallback((focused, order) => {
 		if (!order?._id) {
 			return <Icon name="plus" type={focused ? 'inverse' : 'primary'} />;
 		}
 		return <Text type={focused ? 'inverse' : 'primary'}>Cart: {order.total}</Text>;
-	};
+	}, []);
 
 	/**
 	 *
 	 */
-	const routes = orders.map((order) => ({
-		key: order?._id || 0,
-		title: ({ focused }: { focused: boolean }) => renderTabTitle(focused, order),
-	}));
+	const routes = React.useMemo(
+		() =>
+			orders.map((order) => ({
+				key: order?._id || 0,
+				title: ({ focused }: { focused: boolean }) => renderTabTitle(focused, order),
+			})),
+		[orders, renderTabTitle]
+	);
 
 	/**
 	 *
@@ -83,6 +100,8 @@ const CartTabs = () => {
 		},
 		[orders, setCurrentOrder]
 	);
+
+	useWhyDidYouUpdate('CartTabs', { orders, currentOrder, routes, orderQuery, index });
 
 	/**
 	 *
