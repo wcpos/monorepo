@@ -34,7 +34,7 @@
 		"@expo/config-plugins": "4.0.18",
 		"@types/react": "17.0.39",
 		"@types/react-dom": "17.0.13",
-		"@types/react-native": "0.67.1",
+		"@types/react-native": "0.67.2",
 		"@wcpos/babel-preset-expo": "*",
 		"@wcpos/eslint-config": "*",
 		"typescript": "4.6.2"
