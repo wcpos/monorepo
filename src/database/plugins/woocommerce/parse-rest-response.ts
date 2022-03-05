@@ -15,6 +15,7 @@ type RxCollection = import('rxdb/dist/types').RxCollection;
  */
 export function parseRestResponse(this: RxCollection, plainData: Record<string, unknown>) {
 	const topLevelFields = get(this, 'schema.topLevelFields');
+	console.log('parseRestResponse', plainData);
 
 	// need to convert localID to string
 	if (plainData.id && typeof plainData.id === 'number') {

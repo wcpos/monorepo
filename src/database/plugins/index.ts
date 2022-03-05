@@ -22,6 +22,7 @@ import RxDBGenerateIdPlugin from './generate-id';
 import RxDBWooCommercePlugin from './woocommerce';
 import childrenPlugin from './children';
 import { RxDBAjvValidatePlugin } from './validate';
+import middlewaresPlugin from './middlewares';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -58,3 +59,4 @@ addRxPlugin(RxDBGenerateIdPlugin);
 addRxPlugin(RxDBWooCommercePlugin);
 addRxPlugin(childrenPlugin);
 addRxPlugin(RxDBAjvValidatePlugin);
+addRxPlugin(middlewaresPlugin);

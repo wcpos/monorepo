@@ -32,12 +32,12 @@ export const stores = {
 	// methods: {},
 	// attachments: {},
 	options: {
-		middlewares: {
-			preRemove: {
-				handle: preRemove,
-				parallel: false,
-			},
-		},
+		// middlewares: {
+		// 	preRemove: {
+		// 		handle: preRemove,
+		// 		parallel: false,
+		// 	},
+		// },
 	},
 	// migrationStrategies: {},
 	// autoMigrate: true,

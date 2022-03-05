@@ -71,16 +71,16 @@ export const products = {
 	methods,
 	// attachments: {},
 	options: {
-		middlewares: {
-			preInsert: {
-				handle: preInsert,
-				parallel: false,
-			},
-			preSave: {
-				handle: preSave,
-				parallel: false,
-			},
-		},
+		// middlewares: {
+		// 	preInsert: {
+		// 		handle: preInsert,
+		// 		parallel: false,
+		// 	},
+		// 	preSave: {
+		// 		handle: preSave,
+		// 		parallel: false,
+		// 	},
+		// },
 	},
 	// migrationStrategies: {},
 	// autoMigrate: true,
