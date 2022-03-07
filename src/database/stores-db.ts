@@ -1,6 +1,6 @@
 import { from } from 'rxjs';
 import { storeCollections } from './collections';
-import { createDB } from './create-db';
+import { createDB, removeDB } from './create-db';
 
 export type StoreDatabaseCollections = {
 	products: import('./collections/products').ProductCollection;
@@ -21,7 +21,8 @@ function sanitizeStoreName(id: string) {
  * creates the Store database
  */
 export async function storeDBPromise(id: string) {
-	const db = await createDB<StoreDatabaseCollections>(sanitizeStoreName(id));
+	const name = sanitizeStoreName(id);
+	const db = await createDB<StoreDatabaseCollections>(name);
 	// const httpClient = axios.create({
 	// 	baseURL,
 	// 	headers: { 'X-WCPOS': '1', Authorization: `Bearer ${jwt}` },
@@ -29,7 +30,9 @@ export async function storeDBPromise(id: string) {
 	// Object.assign(db, { httpClient });
 
 	// @ts-ignore
-	const collections = await db.addCollections(storeCollections);
+	const collections = await db.addCollections(storeCollections).catch((error) => {
+		return removeDB(name).then(() => storeDBPromise(name));
+	});
 
 	/**
 	 * Attach hooks for each collection

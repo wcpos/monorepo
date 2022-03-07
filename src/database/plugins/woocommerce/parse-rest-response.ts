@@ -21,10 +21,11 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 	if (plainData.id && typeof plainData.id === 'number') {
 		plainData._id = String(plainData.id);
 	}
+	if (plainData._links) {
+		plainData.links = plainData._links;
+		unset(plainData, '_links');
+	}
 	plainData._deleted = false;
-	plainData.links = plainData._links || {};
-	unset(plainData, '_links');
-	// TODO convert _links to links property??
 
 	/**
 	 * @TODO - change this to a validator?

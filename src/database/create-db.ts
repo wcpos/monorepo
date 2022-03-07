@@ -1,4 +1,4 @@
-import { createRxDatabase } from 'rxdb/plugins/core';
+import { createRxDatabase, removeRxDatabase } from 'rxdb/plugins/core';
 import Platform from '@wcpos/common/src/lib/platform';
 import set from 'lodash/set';
 import config from './adapter';
@@ -22,4 +22,11 @@ export async function createDB<T>(name: string) {
 	// }
 
 	return db;
+}
+
+/**
+ * deletes the generic database
+ */
+export async function removeDB(name: string) {
+	return removeRxDatabase(name, config.storage);
 }
