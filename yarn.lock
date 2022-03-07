@@ -3632,12 +3632,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-community/netinfo@npm:8.1.0":
-  version: 8.1.0
-  resolution: "@react-native-community/netinfo@npm:8.1.0"
+"@react-native-community/netinfo@npm:7.1.3":
+  version: 7.1.3
+  resolution: "@react-native-community/netinfo@npm:7.1.3"
   peerDependencies:
     react-native: ">=0.59"
-  checksum: bce3f0bf9b42cd6fadae9d2e6461d7b3ff4a8c4fe476347df393b72d51ef911414cefcace22dd96acc32f8987f898ca1ff0825cb1a1791f3a29bfb27884f5688
+  checksum: 53219753880379b8764504097c51e19f666f42deaeaf171b45eae214a11e0dc5f695c608e73a11c4e54961e28d5816a98d7bbfba1260b0980b048222e56ad23c
   languageName: node
   linkType: hard
 
@@ -7731,6 +7731,7 @@ __metadata:
   dependencies:
     "@babel/core": 7.17.5
     "@expo/webpack-config": 0.16.18
+    "@react-native-community/netinfo": 8.1.0
     "@svgr/webpack": 5.5.0
     "@types/react": 17.0.39
     "@types/react-dom": 17.0.13
