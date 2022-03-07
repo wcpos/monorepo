@@ -20,7 +20,7 @@ interface Props {
 	children: React.ReactNode;
 }
 
-const CurrentUserProvider = ({ children }: Props) => {
+const OnlineStatusProvider = ({ children }: Props) => {
 	const { site } = useAppState();
 	const addSnackbar = useSnackbar();
 	const [status, setStatus] = React.useState<NetInfoState>(initialState);
@@ -60,4 +60,4 @@ const CurrentUserProvider = ({ children }: Props) => {
 	return <OnlineStatusContext.Provider value={status}>{children}</OnlineStatusContext.Provider>;
 };
 
-export default CurrentUserProvider;
+export default OnlineStatusProvider;
