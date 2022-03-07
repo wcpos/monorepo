@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { KeyboardAvoidingView } from 'react-native';
+import { KeyboardAvoidingView, StyleSheet } from 'react-native';
+import Platform from '@wcpos/common/src/utils/platform';
 import { useObservableState, useObservable } from 'observable-hooks';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Logo from '@wcpos/common/src/components/logo';
@@ -23,47 +24,52 @@ const Auth = () => {
 	// useWhyDidYouUpdate('Auth', { user, sites, onConnect });
 
 	return (
-		<Box
-			// as={KeyboardAvoidingView}
-			// behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-			distribution="center"
-			align="center"
-			fill
+		<KeyboardAvoidingView
+			behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+			style={[{ flex: 1 }, StyleSheet.absoluteFill]}
 		>
-			<Box space="medium" align="center" style={{ width: '90%', maxWidth: 460 }}>
-				<Logo />
-				<Box
-					raised
-					rounding="medium"
-					padding="medium"
-					style={{ width: '100%', backgroundColor: 'white' }}
-				>
-					<Box>
-						<TextInput
-							label="Enter the URL of your WooCommerce store:"
-							prefix="https://"
-							action={{ label: 'Connect', action: onConnect }}
-							type="url"
-							clearable
-							error={error}
-							loading={loading}
-						/>
-					</Box>
-				</Box>
-				{sites.length > 0 && (
+			<Box
+				// as={KeyboardAvoidingView}
+				// behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+				distribution="center"
+				align="center"
+				fill
+			>
+				<Box space="medium" align="center" style={{ width: '90%', maxWidth: 460 }}>
+					<Logo />
 					<Box
 						raised
 						rounding="medium"
 						padding="medium"
 						style={{ width: '100%', backgroundColor: 'white' }}
 					>
-						{sites.map((site) => (
-							<Site key={site.localID} site={site} user={user} />
-						))}
+						<Box>
+							<TextInput
+								label="Enter the URL of your WooCommerce store:"
+								prefix="https://"
+								action={{ label: 'Connect', action: onConnect }}
+								type="url"
+								clearable
+								error={error}
+								loading={loading}
+							/>
+						</Box>
 					</Box>
-				)}
+					{sites.length > 0 && (
+						<Box
+							raised
+							rounding="medium"
+							padding="medium"
+							style={{ width: '100%', backgroundColor: 'white' }}
+						>
+							{sites.map((site) => (
+								<Site key={site.localID} site={site} user={user} />
+							))}
+						</Box>
+					)}
+				</Box>
 			</Box>
-		</Box>
+		</KeyboardAvoidingView>
 	);
 };
 

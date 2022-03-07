@@ -1,7 +1,5 @@
-// import { from } from 'rxjs';
-// import { shareReplay } from 'rxjs/operators';
 import { userCollections } from './collections';
-import { createDB } from './create-db';
+import { createDB, removeDB } from './create-db';
 
 export type UserDatabaseCollections = {
 	logs: import('./collections/logs').LogCollection;
@@ -18,7 +16,9 @@ export type UserDatabase = import('rxdb').RxDatabase<UserDatabaseCollections>;
 export async function userDBPromise() {
 	const db = await createDB<UserDatabaseCollections>('wcposusers');
 	// @ts-ignore
-	const collections = await db.addCollections(userCollections);
+	const collections = await db.addCollections(userCollections).catch((error) => {
+		return removeDB('wcposusers').then(() => userDBPromise());
+	});
 
 	return db;
 }

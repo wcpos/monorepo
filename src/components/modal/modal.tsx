@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { Modal as RNModal, KeyboardAvoidingView, ScrollView } from 'react-native';
+import { Modal as RNModal, KeyboardAvoidingView, ScrollView, StyleSheet } from 'react-native';
+import Platform from '@wcpos/common/src/utils/platform';
 import Portal from '../portal';
 import Backdrop from '../backdrop';
 import Text from '../text';
@@ -198,8 +199,12 @@ export const ModalBase = (
 	};
 
 	const renderModal = (
-		<>
+		<KeyboardAvoidingView
+			behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+			style={[{ flex: 1 }, StyleSheet.absoluteFill]}
+		>
 			<Backdrop onPress={handleBackdropPress} />
+
 			<Styled.Container>
 				<Box
 					raised
@@ -218,7 +223,7 @@ export const ModalBase = (
 					{renderFooter()}
 				</Box>
 			</Styled.Container>
-		</>
+		</KeyboardAvoidingView>
 	);
 
 	const renderReactModal = (child: JSX.Element): JSX.Element => (

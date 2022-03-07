@@ -9,6 +9,7 @@ import Tabs from '@wcpos/common/src/components/tabs';
 import Icon from '@wcpos/common/src/components/icon';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Cart from './cart';
+import CartTabTitle from './tab-title';
 import { usePOSContext } from '../context';
 
 type RenderTabTitle = (
@@ -59,12 +60,10 @@ const CartTabs = () => {
 	/**
 	 *
 	 */
-	const renderTabTitle: RenderTabTitle = React.useCallback((focused, order) => {
-		if (!order?._id) {
-			return <Icon name="plus" type={focused ? 'inverse' : 'primary'} />;
-		}
-		return <Text type={focused ? 'inverse' : 'primary'}>Cart: {order.total}</Text>;
-	}, []);
+	const renderTabTitle: RenderTabTitle = React.useCallback(
+		(focused, order) => <CartTabTitle focused={focused} order={order} />,
+		[]
+	);
 
 	/**
 	 *

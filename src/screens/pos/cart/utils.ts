@@ -7,6 +7,12 @@ import map from 'lodash/map';
 import flatten from 'lodash/flatten';
 import groupBy from 'lodash/groupBy';
 
+type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type LineItemDocument = import('@wcpos/common/src/database').LineItemDocument;
+type FeeLineDocument = import('@wcpos/common/src/database').FeeLineDocument;
+type ShippingLineDocument = import('@wcpos/common/src/database').ShippingLineDocument;
+type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
+type Cart = CartItem[];
 type TaxRateSchema = import('@wcpos/common/src/database').TaxRateSchema;
 interface Taxes {
 	id: number;
@@ -149,3 +155,57 @@ export function sumItemizedTaxes(taxes: Taxes[]) {
 		total: String(sumTaxes(itemized)),
 	}));
 }
+
+/**
+ * Calc order totals
+ */
+export const calcOrderTotals = (lines: Cart) => {
+	const total = sumBy(lines, (item) => +(item.total ?? 0));
+	const totalTax = sumBy(lines, (item) => +(item.total_tax ?? 0));
+	const totalWithTax = total + totalTax;
+	const totalTaxString = String(totalTax);
+	const totalWithTaxString = String(totalWithTax);
+	const itemizedTaxes = sumItemizedTaxes(lines.map((line) => line.taxes ?? []));
+	const taxLines = itemizedTaxes.map((tax) => ({
+		id: tax.id,
+		tax_total: String(tax.total),
+	}));
+
+	return {
+		total: totalWithTaxString,
+		total_tax: totalTaxString,
+		tax_lines: taxLines,
+	};
+};
+
+/**
+ * Calculate line item totals
+ */
+export const calcLineItemTotals = (qty = 1, price = 0, rates = []) => {
+	const discounts = 0;
+	const subtotal = qty * price;
+	const subtotalTaxes = calcTaxes(subtotal, rates);
+	const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes);
+	const total = subtotal - discounts;
+	const totalTaxes = calcTaxes(subtotal, rates);
+	const itemizedTotalTaxes = sumItemizedTaxes(totalTaxes);
+	// itemizedSubTotalTaxes & itemizedTotalTaxes should be same size
+	// is there a case where they are not?
+	const taxes = map(itemizedSubTotalTaxes, (obj) => {
+		const index = itemizedTotalTaxes.findIndex((el) => el.id === obj.id);
+		const totalTax = index !== -1 ? itemizedTotalTaxes[index] : { total: 0 };
+		return {
+			id: obj.id,
+			subtotal: String(obj.total ?? 0),
+			total: String(totalTax.total ?? 0),
+		};
+	});
+
+	return {
+		subtotal: String(subtotal),
+		subtotal_tax: String(sumTaxes(subtotalTaxes)),
+		total: String(total),
+		total_tax: String(sumTaxes(totalTaxes)),
+		taxes,
+	};
+};
