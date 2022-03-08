@@ -133,8 +133,10 @@ export default {
 	): Promise<OrderDocument | void> {
 		// check lineItems for same product id
 		const productId = parent ? parent.id : product.id;
-		const populatedLineItems = await this.populate('lineItems');
-		const existingProducts = _filter(populatedLineItems, { productId }) as LineItemDocument[];
+		const populatedLineItems = await this.populate('line_items');
+		const existingProducts = _filter(populatedLineItems, {
+			product_id: productId,
+		}) as LineItemDocument[];
 
 		// if product exists, increase quantity by 1
 		if (existingProducts.length === 1) {

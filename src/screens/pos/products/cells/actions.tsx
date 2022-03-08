@@ -4,7 +4,6 @@ import Icon from '@wcpos/common/src/components/icon';
 import Button from '@wcpos/common/src/components/button';
 // import Popover from '@wcpos/common/src/components/popover';
 import Popover from '@wcpos/common/src/components/popover';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Variations from './variations';
 import { usePOSContext } from '../../context';
 
@@ -13,19 +12,14 @@ interface Props {
 }
 
 const Actions = ({ item: product }: Props) => {
-	const { currentOrder, setCurrentOrder } = usePOSContext();
-	const { storeDB } = useAppState();
+	const { currentOrder } = usePOSContext();
 	// const [visible, setVisible] = React.useState(false);
 
 	const addToCart = React.useCallback(async () => {
 		if (currentOrder) {
 			currentOrder.addOrUpdateLineItem(product);
 		}
-		// } else {
-		// 	const newOrder = await storeDB?.collections.orders.createNewOrderWithProduct(product);
-		// 	setCurrentOrder(newOrder);
-		// }
-	}, [currentOrder, product, setCurrentOrder, storeDB?.collections.orders]);
+	}, [currentOrder, product]);
 
 	if (!product.isSynced()) {
 		return <Icon.Skeleton size="xLarge" />;
