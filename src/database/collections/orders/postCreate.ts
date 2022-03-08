@@ -18,30 +18,40 @@ function postCreate(
 	order: OrderDocument
 ) {
 	const lineItems$ = order.line_items$.pipe(
-		distinctUntilChanged(isEqual),
-		switchMap(() => order.populate('line_items'))
-		// tap(() => {
-		// 	debugger;
-		// })
+		switchMap(() => order.populate('line_items')),
+		map((line_items) => line_items || []),
+		distinctUntilChanged((prev, curr) => {
+			return isEqual(
+				prev.map((doc) => doc._id),
+				curr.map((doc) => doc._id)
+			);
+		})
 	);
 	const feeLines$ = order.fee_lines$.pipe(
-		distinctUntilChanged(isEqual),
-		switchMap(() => order.populate('fee_lines'))
+		switchMap(() => order.populate('fee_lines')),
+		map((fee_lines) => fee_lines || []),
+		distinctUntilChanged((prev, curr) => {
+			return isEqual(
+				prev.map((doc) => doc._id),
+				curr.map((doc) => doc._id)
+			);
+		})
 	);
 	const shippingLines$ = order.shipping_lines$.pipe(
-		distinctUntilChanged(isEqual),
-		switchMap(() => order.populate('shipping_lines'))
+		switchMap(() => order.populate('shipping_lines')),
+		map((shipping_lines) => shipping_lines || []),
+		distinctUntilChanged((prev, curr) => {
+			return isEqual(
+				prev.map((doc) => doc._id),
+				curr.map((doc) => doc._id)
+			);
+		})
 	);
 
 	/**
 	 * Outputs { line_items: [], fee_lines: [], shipping_lines: [] }
 	 */
 	const cart$ = combineLatest([lineItems$, feeLines$, shippingLines$]).pipe(
-		/**
-		 * the population promises return at different times
-		 * debounce emissions to prevent unneccesary re-renders
-		 * @TODO - is there a better way?
-		 */
 		map(([line_items, fee_lines, shipping_lines]) => ({
 			line_items,
 			fee_lines,
