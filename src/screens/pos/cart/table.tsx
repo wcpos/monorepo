@@ -29,10 +29,14 @@ interface ICartTableProps {
 const CartTable = ({ order, ui }: ICartTableProps) => {
 	const { t } = useTranslation();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
-	const cart = useObservableState(order.cart$, []);
-	const items = flatten(Object.values(cart)); // @TODO - add sorting
+	const cart = useObservableState(order.cart$, {
+		line_items: [],
+		fee_lines: [],
+		shipping_lines: [],
+	});
+	const items = React.useMemo(() => flatten(Object.values(cart)), [cart]); // @TODO - add sorting
 
-	useWhyDidYouUpdate('CartTable', { order, ui, columns, items, cart });
+	useWhyDidYouUpdate('CartTable', { order, ui, columns, items, cart, t });
 
 	/**
 	 * - filter visible columns
