@@ -3,12 +3,26 @@ import { parseRestResponse } from './parse-rest-response';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb/dist/types').RxCollection;
+type RxDocument = import('rxdb/dist/types').RxDocument;
 
 /**
  *
  */
 function isSynced(this: RxCollection) {
 	return !!this.date_created;
+}
+
+/**
+ *
+ */
+function maybeAddMeta(this: RxCollection, plainData, doc: RxDocument) {
+	if (doc._id && doc._id.includes(':')) {
+		doc.atomicUpdate((oldData) => {
+			oldData.meta_data = oldData.meta_data || [];
+			oldData.meta_data.push({ _pos: doc._id });
+			return oldData;
+		});
+	}
 }
 
 /**
@@ -51,6 +65,7 @@ export const WoocommercePlugin: RxPlugin = {
 			// Object.assign(collection, { auditRestApiIds });
 			collection.preInsert(parseRestResponse, false);
 			collection.preSave(parseRestResponse, false);
+			collection.postInsert(maybeAddMeta, false);
 		},
 	},
 };

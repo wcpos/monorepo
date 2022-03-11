@@ -20,7 +20,7 @@ async function toRestApiJSON(this: RxDocument) {
 		map(hasChildren, async (object, key) =>
 			this.populate(key)
 				.then((children) => {
-					return Promise.all(children.map((child) => child.toRestApiJSON()));
+					return Promise.all((children || []).map((child) => child.toRestApiJSON()));
 				})
 				.then((childrenJSON) => {
 					json[key] = childrenJSON;

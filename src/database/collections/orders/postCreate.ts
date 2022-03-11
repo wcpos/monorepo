@@ -1,5 +1,6 @@
 import { from, of, combineLatest, distinctUntilChanged } from 'rxjs';
-import { switchMap, tap, catchError, map, debounceTime } from 'rxjs/operators';
+import { switchMap, tap, catchError, map, debounceTime, shareReplay } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
 import flatten from 'lodash/flatten';
 import isEqual from 'lodash/isEqual';
 import sumBy from 'lodash/sumBy';
@@ -56,7 +57,12 @@ function postCreate(
 			line_items,
 			fee_lines,
 			shipping_lines,
-		}))
+		})),
+		tap((args) => {
+			console.log('postCreate', args);
+			// debugger;
+		}),
+		shareReplay(1) // cart$ is subscribed to in multiple places
 	);
 
 	/**
