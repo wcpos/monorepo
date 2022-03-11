@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Observable } from 'rxjs';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
 import flatten from 'lodash/flatten';
@@ -9,6 +9,7 @@ import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import LineItem from './rows/line-item';
 import FeeLine from './rows/fee-line';
 import ShippingLine from './rows/shipping-line';
+import { usePOSContext } from '../context';
 
 type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
@@ -22,21 +23,33 @@ type UIColumn = import('@wcpos/common/src/hooks/use-ui-resource').UIColumn;
 type Cart = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
 
 interface ICartTableProps {
-	order: OrderDocument;
+	cartResource: ObservableResource<{
+		line_items: LineItemDocument[];
+		fee_lines: FeeLineDocument[];
+		shipping_lines: ShippingLineDocument[];
+	}>;
 	ui: any;
 }
 
-const CartTable = ({ order, ui }: ICartTableProps) => {
+const CartTable = ({ cartResource, ui }: ICartTableProps) => {
 	const { t } = useTranslation();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
-	const cart = useObservableState(order.cart$, {
-		line_items: [],
-		fee_lines: [],
-		shipping_lines: [],
-	});
+	const cart = useObservableSuspense(cartResource);
 	const items = React.useMemo(() => flatten(Object.values(cart)), [cart]); // @TODO - add sorting
+	const { setCurrentOrder } = usePOSContext();
 
-	useWhyDidYouUpdate('CartTable', { order, ui, columns, items, cart, t });
+	useWhyDidYouUpdate('CartTable', { cartResource, ui, columns, items, cart, t });
+
+	/**
+	 * If Cart Table is emptied, delete the order
+	 */
+	// React.useEffect(() => {
+	// 	if (items.length === 0) {
+	// 		order.remove().then(() => {
+	// 			setCurrentOrder(null);
+	// 		});
+	// 	}
+	// }, [items, order]);
 
 	/**
 	 * - filter visible columns

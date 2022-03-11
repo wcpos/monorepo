@@ -129,12 +129,13 @@ export const useCollectionQuery = (
 							console.log(response);
 						});
 
-					const documents = _map(result?.data, (item) => collection.parseRestResponse(item));
-					console.log(documents);
+					// const documents = _map(result?.data, (item) => collection.parseRestResponse(item));
+					// console.log(documents);
+					const documents = result?.data;
 
 					return {
 						documents,
-						hasMoreDocuments: true,
+						hasMoreDocuments: false,
 					};
 				},
 			},

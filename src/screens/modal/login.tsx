@@ -15,10 +15,14 @@ const Login = () => {
 		let success = false;
 
 		/** @TODO - use generic http with error handling */
-		const { data } = (await http.post(`${site?.wc_api_auth_url}/authorize`, {
-			username,
-			password,
-		})) as Record<string, any>;
+		const { data } = await http
+			.post(`${site?.wc_api_auth_url}/authorize`, {
+				username,
+				password,
+			})
+			.catch((err) => {
+				debugger;
+			});
 
 		if (wpCredentials) {
 			success = await wpCredentials.atomicPatch(data);

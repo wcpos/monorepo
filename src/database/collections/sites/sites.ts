@@ -44,26 +44,15 @@ const methods: SiteMethods = {
 			'collection.database.collections.wp_credentials'
 		);
 
-		const parsedData = {
-			id: data.userlocalID,
-			username: data.username,
-			displayName: data.display_name,
-			email: data.email,
-			firstName: data.firstname,
-			lastName: data.lastname,
-			jwt: data.jwt,
-			niceName: data.nicename,
-		};
-
 		try {
 			const wpCredentials = (await this.populate('wp_credentials')) || [];
-			const wpCredentialsDoc = wpCredentials.find((d) => d.id === parsedData.id);
+			const wpCredentialsDoc = wpCredentials.find((d) => d.id === data.id);
 
 			if (wpCredentialsDoc) {
-				return wpCredentialsDoc.atomicPatch(parsedData);
+				return wpCredentialsDoc.atomicPatch(data);
 			}
 
-			const newWpUser = await wpCredentialsCollection.insert(parsedData);
+			const newWpUser = await wpCredentialsCollection.insert(data);
 			await this.atomicUpdate((oldData) => {
 				oldData.wp_credentials = oldData.wpCredentials || [];
 				oldData.wp_credentials.push(newWpUser.localID);

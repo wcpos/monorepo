@@ -171,9 +171,14 @@ export default {
 		 * Special case if the order is not yet saved, eg: new order
 		 */
 		if (this._isTemporary) {
-			await this.save().catch((err: any) => {
-				debugger;
-			});
+			const lineItems = this.line_items || [];
+			lineItems.push(newLineItem._id);
+			this.set('line_items', lineItems);
+			return this.save()
+				.then(() => this)
+				.catch((err: any) => {
+					debugger;
+				});
 		}
 
 		/**

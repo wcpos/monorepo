@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import Box from '@wcpos/common/src/components/box';
-import Button from '@wcpos/common/src/components/button';
+import Text from '@wcpos/common/src/components/text';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
 import Totals from './totals';
@@ -25,10 +25,16 @@ interface CartProps {
 
 const Cart = ({ order }: CartProps) => {
 	const ui = useObservableSuspense(useUIResource('pos.cart'));
+	const cartResource = new ObservableResource(order.cart$);
 	useCalcOrderTotals(order);
 
 	useWhyDidYouUpdate('Cart', { order, ui });
 
+	/**
+	 * Note: This is fragile
+	 * It relies on the fact that parent component will render for new order
+	 * It may be better to use a subscription to the order.cart$
+	 */
 	if (order.isCartEmpty()) {
 		return <EmptyCart order={order} ui={ui} />;
 	}
@@ -37,7 +43,9 @@ const Cart = ({ order }: CartProps) => {
 		<Box raised rounding="medium" style={{ height: '100%', backgroundColor: 'white' }}>
 			<CartHeader order={order} ui={ui} />
 			<Box fill>
-				<Table order={order} ui={ui} />
+				<React.Suspense fallback={<Text>loading cart...</Text>}>
+					<Table cartResource={cartResource} ui={ui} />
+				</React.Suspense>
 			</Box>
 			<Box>
 				<AddFee order={order} />

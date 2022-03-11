@@ -3,19 +3,13 @@ import { useObservable, useSubscription } from 'observable-hooks';
 import { withLatestFrom } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
-import http from 'axios';
+import http from '@wcpos/common/src/lib/http';
 import { useNavigation } from '@react-navigation/native';
-import camelCase from 'lodash/camelCase';
-import forEach from 'lodash/forEach';
-import get from 'lodash/get';
-import set from 'lodash/set';
-import unset from 'lodash/unset';
-import difference from 'lodash/difference';
 import useQuery from '../use-query';
 import useAppState from '../use-app-state';
 
 export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers', options = {}) => {
-	const { storeDB, site, wpCredentials } = useAppState();
+	const { storeDB } = useAppState();
 	const collection = storeDB.collections[collectionName];
 	const { query } = useQuery();
 	const navigation = useNavigation();
@@ -63,16 +57,6 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 								console.log(latestPullDocument);
 								console.log(q);
 
-								const headers = {
-									'X-WCPOS': '1',
-								};
-								if (wpCredentials.wpNonce) {
-									Object.assign(headers, { 'X-WP-Nonce': wpCredentials.wpNonce });
-								}
-								if (wpCredentials.jwt) {
-									Object.assign(headers, { Authorization: `Bearer ${wpCredentials.jwt}` });
-								}
-
 								const params = {
 									per_page: 10,
 									page: 1,
@@ -91,9 +75,7 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 								const result = await http
 									// @ts-ignore
 									.get('customers', {
-										baseURL: site.wcApiUrl,
 										params,
-										headers,
 									})
 									.catch(({ response }) => {
 										console.log(response);
@@ -112,18 +94,8 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 
 								console.log(result);
 								// need to add localId to each product
-								const data = result?.data || [];
-								const promises = data.map(async (product: any) => {
-									const existing = await collection.findOne().where('id').eq(product.id).exec();
-									if (existing) {
-										Object.assign(product, { localID: existing.localID });
-									}
-									// delete product._links;
-									// TODO - this should be called by middleware
-									return parsePlainData(collection, product);
-								});
+								const documents = result?.data || [];
 
-								const documents = await Promise.all(promises);
 								// const limitPerPull = 10;
 								// const minTimestamp = latestPullDocument ? latestPullDocument.updatedAt : 0;
 								// /**
@@ -175,58 +147,3 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 	const replicationState = useSubscription(restQuery$);
 	return replicationState;
 };
-
-/**
- * Parse plain data helper
- * Converts properties to camelCase and strips out any properties not in the schema
- *
- * @param plainData
- * @param collection
- */
-function parsePlainData(collection: any, plainData: Record<string, unknown>) {
-	const topLevelFields = get(collection, 'schema.topLevelFields');
-
-	/**
-	 * convert all plainData properties to camelCase
-	 */
-	forEach(plainData, (data, key) => {
-		const privateProperties = ['localID', '_attachments', '_rev'];
-		if (!privateProperties.includes(key) && key.includes('_')) {
-			plainData[camelCase(key)] = data;
-			unset(plainData, key);
-		}
-	});
-
-	/**
-	 * @TODO - change this to a validator 
-	 * special fix for metaData values to make sure they are strings
-	 * fixes bug where WC REST API customer endpoint for returns:
-	 * {
-			"id": 18,
-			"key": "community-events-location",
-			"value": {
-				"ip": "XXX.XXX.XXX.XXX"
-			}
-		}
-		*/
-	if (Array.isArray(plainData.metaData)) {
-		forEach(plainData.metaData, (meta) => {
-			if (typeof meta.value === 'object' && meta.value !== null) {
-				meta.value = JSON.stringify(meta.value);
-			}
-		});
-	}
-
-	/**
-	 * remove any properties not in the schema
-	 */
-	const omitProperties = difference(Object.keys(plainData), topLevelFields);
-	if (omitProperties.length > 0) {
-		console.log('the following properties are being omitted', omitProperties);
-		omitProperties.forEach((prop: string) => {
-			unset(plainData, prop);
-		});
-	}
-
-	return plainData;
-}

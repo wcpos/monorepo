@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { combineLatest, debounceTime, distinctUntilChanged } from 'rxjs';
-import { switchMap, tap, map } from 'rxjs/operators';
+import { switchMap, tap, map, filter } from 'rxjs/operators';
 import { useSubscription } from 'observable-hooks';
 import forEach from 'lodash/forEach';
 import { calcOrderTotals, calcLineItemTotals } from './utils';
@@ -46,6 +46,12 @@ const useCalcTotals = (order) => {
 			lineItemRegistry.forEach((sub) => {
 				sub.unsubscribe();
 			});
+			feeLineRegistry.forEach((sub) => {
+				sub.unsubscribe();
+			});
+			shippingLineRegistry.forEach((sub) => {
+				sub.unsubscribe();
+			});
 		};
 	}, [lineItemRegistry, order]);
 
@@ -55,6 +61,9 @@ const useCalcTotals = (order) => {
 	 */
 	const lineCalc$ = order.cart$.pipe(
 		tap(({ line_items = [], fee_lines = [], shipping_lines = [] }) => {
+			/**
+			 * Line Items
+			 */
 			forEach(line_items, (lineItem) => {
 				if (lineItemRegistry.has(lineItem._id)) {
 					return;
@@ -80,6 +89,44 @@ const useCalcTotals = (order) => {
 
 				lineItemRegistry.set(lineItem._id, subscription);
 			});
+
+			/**
+			 * Fee Lines
+			 */
+			forEach(fee_lines, (feeLine) => {
+				if (feeLineRegistry.has(feeLine._id)) {
+					return;
+				}
+
+				const subscription = combineLatest([feeLine.total$])
+					.pipe(
+						tap(() => {
+							debugger;
+						})
+					)
+					.subscribe();
+
+				feeLineRegistry.set(feeLine._id, subscription);
+			});
+
+			/**
+			 * Shipping Lines
+			 */
+			forEach(shipping_lines, (shippingLine) => {
+				if (shippingLineRegistry.has(shippingLine._id)) {
+					return;
+				}
+
+				const subscription = combineLatest([shippingLine.total$])
+					.pipe(
+						tap(() => {
+							debugger;
+						})
+					)
+					.subscribe();
+
+				shippingLineRegistry.set(shippingLine._id, subscription);
+			});
 		})
 	);
 
@@ -87,6 +134,8 @@ const useCalcTotals = (order) => {
 	 * Update order totals on any add/remove to cart
 	 */
 	const orderCalc$ = order.flattenedCart$.pipe(
+		// filter(() => !!order._id), // don't calculate totals if order is new
+		filter((cart) => cart.length > 0), // don't calculate totals if cart is empty
 		map(calcOrderTotals),
 		tap((totals) => {
 			order.atomicPatch(totals);

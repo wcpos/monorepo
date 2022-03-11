@@ -8,7 +8,6 @@ type RxCollection = import('rxdb/dist/types').RxCollection;
 
 /**
  * Parse plain data helper
- * Converts properties to camelCase and strips out any properties not in the schema
  *
  * @param plainData
  * @param collection
@@ -17,8 +16,11 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 	const topLevelFields = get(this, 'schema.topLevelFields');
 	console.log('parseRestResponse', plainData);
 
-	// need to convert localID to string
-	if (plainData.id && typeof plainData.id === 'number') {
+	// if (!plainData._id && plainData.id && plainData.meta_data) {
+	// 	debugger;
+	// }
+
+	if (!plainData._id && plainData.id && typeof plainData.id === 'number') {
 		plainData._id = String(plainData.id);
 	}
 	if (plainData._links) {
@@ -26,6 +28,15 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 		unset(plainData, '_links');
 	}
 	plainData._deleted = false;
+
+	/**
+	 * @TODO - should I update created and modified dates??
+	 */
+	if (topLevelFields.includes('date_created_gmt') && !plainData.date_created_gmt) {
+		const timestamp = Date.now();
+		const date_created_gmt = new Date(timestamp).toISOString().split('.')[0];
+		plainData.date_created_gmt = date_created_gmt;
+	}
 
 	/**
 	 * @TODO - change this to a validator?
