@@ -81,8 +81,8 @@ export const useIdAudit = () => {
 	React.useEffect(() => {
 		const replicationStates = {
 			products: getReplicationState(http, storeDB.collections.products),
-			orders: getReplicationState(http, storeDB.collections.orders),
-			customers: getReplicationState(http, storeDB.collections.customers),
+			// orders: getReplicationState(http, storeDB.collections.orders),
+			// customers: getReplicationState(http, storeDB.collections.customers),
 		};
 
 		return function cleanUp() {
