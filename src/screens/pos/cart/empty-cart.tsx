@@ -15,7 +15,7 @@ interface EmptyCartProps {
 }
 
 const EmptyCart = ({ order }: EmptyCartProps) => {
-	const ui = useObservableSuspense(useUIResource('pos.cart'));
+	const ui = useObservableSuspense(useUIResource('pos.cart')); // @TODO - remove ui settings from empty cart?
 
 	return (
 		<Box raised rounding="medium" style={{ height: '100%', backgroundColor: 'white' }}>

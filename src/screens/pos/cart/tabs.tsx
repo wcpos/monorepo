@@ -3,6 +3,7 @@ import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import Tabs from '@wcpos/common/src/components/tabs';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Cart from './cart';
+import EmptyCart from './empty-cart';
 import CartTabTitle from './tab-title';
 import { usePOSContext } from '../context';
 
@@ -52,6 +53,9 @@ const CartTabs = ({ ordersResource }: CartTabsProps) => {
 		({ route }: { route: typeof routes[number] }) => {
 			if (!route || !currentOrder) {
 				return null;
+			}
+			if (currentOrder.isCartEmpty()) {
+				return <EmptyCart order={currentOrder} />;
 			}
 			return <Cart order={currentOrder} />;
 		},

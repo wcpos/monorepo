@@ -6,7 +6,6 @@ import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
 import Totals from './totals';
 import Table from './table';
-import EmptyCart from './empty-cart';
 import CartHeader from './cart-header';
 import AddFee from './add-fee';
 import AddShipping from './add-shipping';
@@ -15,7 +14,7 @@ import SaveButton from './buttons/save-order';
 import AddNoteButton from './buttons/add-note';
 import VoidButton from './buttons/void';
 import PayButton from './buttons/pay';
-import useCalcOrderTotals from './use-calc-order-totals';
+import { useCalcTotals } from './calc';
 
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 
@@ -26,18 +25,9 @@ interface CartProps {
 const Cart = ({ order }: CartProps) => {
 	const ui = useObservableSuspense(useUIResource('pos.cart'));
 	const cartResource = new ObservableResource(order.cart$);
-	useCalcOrderTotals(order);
+	useCalcTotals(order);
 
 	useWhyDidYouUpdate('Cart', { order, ui });
-
-	/**
-	 * Note: This is fragile
-	 * It relies on the fact that parent component will render for new order
-	 * It may be better to use a subscription to the order.cart$
-	 */
-	if (order.isCartEmpty()) {
-		return <EmptyCart order={order} ui={ui} />;
-	}
 
 	return (
 		<Box raised rounding="medium" style={{ height: '100%', backgroundColor: 'white' }}>
