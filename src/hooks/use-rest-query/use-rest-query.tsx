@@ -4,7 +4,6 @@ import { withLatestFrom } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 import http from '@wcpos/common/src/lib/http';
-import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
 import set from 'lodash/set';
 import useQuery from '../use-query';
@@ -14,13 +13,11 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 	const { storeDB } = useAppState();
 	const collection = storeDB.collections[collectionName];
 	const { query } = useQuery();
-	const navigation = useNavigation();
 
 	const restQuery$ = useObservable(
 		(query$) =>
 			query$.pipe(
-				// @ts-ignore
-				withLatestFrom(collection.unsyncedDocuments$),
+				withLatestFrom(collection.unsyncedIds$),
 				tap(async ([[q], unsyncedDocuments]) => {
 					const replicationState = await replicateRxCollection({
 						// @ts-ignore
@@ -73,29 +70,16 @@ export const useRestQuery = (collectionName: 'products' | 'orders' | 'customers'
 									set(params, 'tag', get(q, 'filters.tag.id'));
 								}
 
-								const result = await http
-									// @ts-ignore
-									.get('products', {
-										params,
-									})
-									.catch(({ response }) => {
-										console.log(response);
-										if (!response) {
-											console.error('CORS error');
-											return;
-										}
-										if (response.status === 401) {
-											// @ts-ignore
-											navigation.navigate('Login');
-										}
-										if (response.status === 403) {
-											console.error('invalid nonce');
-										}
-									});
+								debugger;
+								const result = await http.get('products', {
+									params,
+								});
 
 								// console.log(result);
-								// need to add localId to each product
 								const documents = result?.data || [];
+								// why is data not being put through parseRestResponse?
+								// const documents = data.map((item) => collection.parseRestResponse(item));
+								// debugger;
 
 								// const limitPerPull = 10;
 								// const minTimestamp = latestPullDocument ? latestPullDocument.updatedAt : 0;

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import Tabs from '@wcpos/common/src/components/tabs';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
+import debounce from 'lodash/debounce';
 import Cart from './cart';
 import EmptyCart from './empty-cart';
 import CartTabTitle from './tab-title';
@@ -22,9 +23,15 @@ const CartTabs = ({ ordersResource }: CartTabsProps) => {
 	const { currentOrder, setCurrentOrder } = usePOSContext();
 	const orders = useObservableSuspense(ordersResource);
 	const index = orders.findIndex((order) => order === currentOrder);
-	if (index === -1) {
-		setCurrentOrder(orders[0]);
-	}
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		if (index === -1) {
+			setCurrentOrder(orders[0]);
+		}
+	}, [index, orders, setCurrentOrder]);
 
 	/**
 	 *

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import Button from '@wcpos/common/src/components/button';
 import useRestHttpClient from '@wcpos/common/src/hooks/use-rest-http-client';
+import { usePOSContext } from '../../context';
 
 interface SaveButtonProps {
 	order: import('@wcpos/common/src/database').OrderDocument;
@@ -8,6 +9,7 @@ interface SaveButtonProps {
 
 const SaveButton = ({ order }: SaveButtonProps) => {
 	const http = useRestHttpClient();
+	const { setCurrentOrder } = usePOSContext();
 
 	const saveOrder = React.useCallback(async () => {
 		const data = await order.toRestApiJSON();
@@ -19,14 +21,19 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 		const result = await http(endpoint, {
 			method: 'post',
 			data,
-		}).catch(({ response }) => {
-			debugger;
 		});
 
 		if (result.status === 201 || result.status === 200) {
-			order.atomicPatch(result.data);
+			if (order.id) {
+				order.atomicPatch(result.data);
+			} else {
+				// switcharoo
+				const newOrder = await order.collection.insert(result.data);
+				await order.remove();
+				setCurrentOrder(newOrder);
+			}
 		}
-	}, [http, order]);
+	}, [http, order, setCurrentOrder]);
 
 	return <Button title="Save" background="outline" onPress={saveOrder} />;
 };

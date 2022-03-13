@@ -129,9 +129,9 @@ export const useCollectionQuery = (
 							console.log(response);
 						});
 
-					// const documents = _map(result?.data, (item) => collection.parseRestResponse(item));
-					// console.log(documents);
-					const documents = result?.data;
+					// const documents = result?.data;
+					// @TODO - why aren't documents being parsed on insert
+					const documents = _map(result?.data, (item) => collection.parseRestResponse(item));
 
 					return {
 						documents,

@@ -3,7 +3,7 @@ import { useWindowDimensions } from 'react-native';
 import { useTheme } from 'styled-components/native';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { distinctUntilChanged } from 'rxjs';
-import { map, filter } from 'rxjs/operators';
+import { map, debounceTime } from 'rxjs/operators';
 import isEqual from 'lodash/isEqual';
 import orderBy from 'lodash/orderBy';
 import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
@@ -27,30 +27,39 @@ const POS = () => {
 	const dimensions = useWindowDimensions();
 	const { storeDB } = useAppState();
 
-	const openOrdersResource = new ObservableResource(
-		storeDB.collections.orders
-			.find()
-			.where('status')
-			.eq('pos-open')
-			.$.pipe(
-				map((orders) => {
-					const sortedOrders = orderBy(orders, ['date_created_gmt'], ['asc']);
-					const newOrder = storeDB.collections.orders.newDocument({ status: 'pos-open' });
-					sortedOrders.push(newOrder);
-					return sortedOrders;
-				}),
-				/**
-				 * the orderQuery will emit on every change, eg: order total
-				 * this causes many unnecessary re-renders
-				 * so we compare the previous query with the current query result
-				 */
-				distinctUntilChanged((prev, curr) => {
-					return isEqual(
-						prev.map((doc) => doc._id),
-						curr.map((doc) => doc._id)
-					);
-				})
-			)
+	/**
+	 * Order query resource is wrapped in memo to stop new query being created
+	 * - caused a bug where currentOrder was being changed to index 0 on window resize
+	 */
+	const openOrdersResource = React.useMemo(
+		() =>
+			new ObservableResource(
+				storeDB.collections.orders
+					.find()
+					.where('status')
+					.eq('pos-open')
+					.$.pipe(
+						// debounceTime(100),
+						map((orders) => {
+							const sortedOrders = orderBy(orders, ['date_created_gmt'], ['asc']);
+							const newOrder = storeDB.collections.orders.newDocument({ status: 'pos-open' });
+							sortedOrders.push(newOrder);
+							return sortedOrders;
+						}),
+						/**
+						 * the orderQuery will emit on every change, eg: order total
+						 * this causes many unnecessary re-renders
+						 * so we compare the previous query with the current query result
+						 */
+						distinctUntilChanged((prev, curr) => {
+							return isEqual(
+								prev.map((doc) => doc._id),
+								curr.map((doc) => doc._id)
+							);
+						})
+					)
+			),
+		[storeDB.collections.orders]
 	);
 
 	const leftComponent = (

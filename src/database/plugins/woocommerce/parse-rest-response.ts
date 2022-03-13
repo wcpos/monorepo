@@ -20,6 +20,7 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 	// 	debugger;
 	// }
 
+	// @TODO - should I move this to the generate id plugin?
 	if (!plainData._id && plainData.id && typeof plainData.id === 'number') {
 		plainData._id = String(plainData.id);
 	}

@@ -1,10 +1,10 @@
 import { AxiosResponse } from 'axios';
 import { useNavigation } from '@react-navigation/native';
-// import Snackbar, { useSnackbar } from '@wcpos/common/src/components/snackbar/';
+import useSnackbar from '@wcpos/common/src/components/snackbar/';
 
 export const useErrorResponseHandler = () => {
 	const navigation = useNavigation();
-	// const addSnackbar = useSnackbar();
+	const addSnackbar = useSnackbar();
 
 	return (res: AxiosResponse) => {
 		if (!res) {
@@ -14,7 +14,7 @@ export const useErrorResponseHandler = () => {
 
 		switch (res.status) {
 			case 400:
-				console.log(res.data.msg, res);
+				addSnackbar({ message: res.data.message });
 				break;
 			case 401:
 			case 403:
