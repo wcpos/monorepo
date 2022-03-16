@@ -2,7 +2,7 @@ import type {
 	ProductVariationSchema,
 	ProductVariationDocument,
 	ProductVariationCollection,
-} from './product-variations';
+} from './variations';
 
 export type { ProductVariationSchema, ProductVariationDocument, ProductVariationCollection };
-export { productVariations as default } from './product-variations';
+export { productVariations as default } from './variations';

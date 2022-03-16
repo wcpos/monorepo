@@ -3,6 +3,7 @@ import { createDB, removeDB } from './create-db';
 
 export type StoreDatabaseCollections = {
 	products: import('./collections/products').ProductCollection;
+	variations: import('./collections/variations').ProductVariationCollection;
 	orders: import('./collections/orders').OrderCollection;
 	line_items: import('./collections/line-items').LineItemCollection;
 	fee_lines: import('./collections/fee-lines').FeeLineCollection;
@@ -25,7 +26,8 @@ export async function storeDBPromise(id: string) {
 
 	// @ts-ignore
 	const collections = await db.addCollections(storeCollections).catch((error) => {
-		return removeDB(name).then(() => storeDBPromise(name));
+		console.error(error);
+		return removeDB(name);
 	});
 
 	return db;

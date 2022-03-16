@@ -17,7 +17,7 @@ export async function userDBPromise() {
 	const db = await createDB<UserDatabaseCollections>('wcposusers');
 	// @ts-ignore
 	const collections = await db.addCollections(userCollections).catch((error) => {
-		return removeDB('wcposusers').then(() => userDBPromise());
+		return removeDB('wcposusers');
 	});
 
 	return db;

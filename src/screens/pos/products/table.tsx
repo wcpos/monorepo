@@ -2,19 +2,12 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
-import get from 'lodash/get';
 import useData from '@wcpos/common/src/hooks/use-collection-query';
 import useQuery from '@wcpos/common/src/hooks/use-query';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Table from '@wcpos/common/src/components/table3';
-import Actions from './cells/actions';
-import Categories from '../../common/product-categories';
-import Image from './cells/image';
-import Name from './cells/name';
-import Price from './cells/price';
-import RegularPrice from './cells/regular-price';
-import Sku from './cells/sku';
-import Tag from '../../common/product-tags';
+import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
+import { SimpleProductRow, VariableProductRow } from './rows';
 import Footer from './footer';
 
 type Sort = import('@wcpos/common/src/components/table/types').Sort;
@@ -27,17 +20,6 @@ interface POSProductsTableProps {
 	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
 }
 
-const cells = {
-	actions: Actions,
-	categories: Categories,
-	image: Image,
-	name: Name,
-	price: Price,
-	regularPrice: RegularPrice,
-	sku: Sku,
-	tag: Tag,
-};
-
 /**
  *
  */
@@ -46,11 +28,6 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	const { data } = useData('products');
 	const { query, setQuery } = useQuery();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
-
-	const cellRenderer = React.useCallback((item: ProductDocument, column: ColumnProps) => {
-		const Cell = get(cells, column.key);
-		return Cell ? <Cell item={item} column={column} /> : null;
-	}, []);
 
 	/**
 	 * - filter visible columns
@@ -61,11 +38,10 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 		return columns
 			.filter((column) => !column.hide)
 			.map((column) => {
-				// clone column and add label, onRender function
+				// clone column and add label
 				return {
 					...column,
 					label: t(`pos.products.column.label.${column.key}`),
-					// onRender: renderCell,
 				};
 			});
 	}, [columns, t]);
@@ -97,25 +73,32 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 			index
 			// renderContext: TableRowRenderContext<T>,
 		) => {
-			// subscribe to item, special case to trigger render for data changes
-			// @TODO: find a better way to do this
-			// @ts-ignore
-			// const forceRender = useObservableState(item.$);
-
-			return (
-				<Table.Row
-					// config={renderContext}
-					item={item}
-					columns={visibleColumns}
-					// itemIndex={index}
-					cellRenderer={cellRenderer}
-				/>
-			);
+			switch (item.type) {
+				case 'variable':
+					return (
+						<ErrorBoundary>
+							<VariableProductRow product={item} columns={visibleColumns} />
+						</ErrorBoundary>
+					);
+				default:
+					return (
+						<ErrorBoundary>
+							<SimpleProductRow product={item} columns={visibleColumns} />
+						</ErrorBoundary>
+					);
+			}
 		},
 		[visibleColumns]
 	);
 
-	// useWhyDidYouUpdate('Table', { data });
+	useWhyDidYouUpdate('ProductsTable', {
+		data,
+		columns,
+		query,
+		sortedData,
+		visibleColumns,
+		rowRenderer,
+	});
 
 	return (
 		<Table<ProductDocument>

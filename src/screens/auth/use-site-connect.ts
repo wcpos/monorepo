@@ -20,13 +20,6 @@ interface WpJsonResponse {
 	_links: Record<string, unknown>;
 }
 
-const parseApiUrlFromHeaders = (
-	headers: import('axios').AxiosResponseHeaders
-): string | undefined => {
-	const parsed = Url.parseLinkHeader(get(headers, 'link'));
-	return get(parsed, ['https://api.w.org/', 'url']);
-};
-
 const useSiteConnect = () => {
 	const { user, userDB } = useAppState();
 	const [loading, setLoading] = React.useState(false);
@@ -47,7 +40,20 @@ const useSiteConnect = () => {
 			const siteData = await http
 				.head(`${protocol}://${urlWithoutProtocol}`)
 				.then((response) => {
-					const wpApiUrl = parseApiUrlFromHeaders(response.headers);
+					const link = get(response, ['headers', 'link']);
+					if (!link) {
+						/**
+						 * @TODO
+						 *
+						 * For CORS requests only a few headers are allowed by default.
+						 *  Access-Control-Expose-Headers: Link is needed on the server side to get the link header
+						 */
+						throw Error('Link is not exposed');
+					}
+
+					const parsed = Url.parseLinkHeader(link);
+					const wpApiUrl = get(parsed, ['https://api.w.org/', 'url']);
+
 					if (wpApiUrl) {
 						const wcNamespace = 'wc/v3';
 						const wcposNamespace = 'wcpos/v1';

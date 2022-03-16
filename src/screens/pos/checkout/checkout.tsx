@@ -1,4 +1,5 @@
 import * as React from 'react';
+import get from 'lodash/get';
 import Box from '@wcpos/common/src/components/box';
 import Text from '@wcpos/common/src/components/text';
 import WebView from '@wcpos/common/src/components/webview';
@@ -12,7 +13,7 @@ interface CheckoutProps {
 }
 
 const gateways = [
-	{ key: 'cash', title: 'Cash' },
+	{ key: 'pos_cash', title: 'Cash' },
 	{ key: 'card', title: 'Card' },
 	{ key: 'paypal', title: 'PayPal' },
 	{ key: 'stripe', title: 'Stripe' },
@@ -20,7 +21,7 @@ const gateways = [
 
 export const Checkout = ({ order }: CheckoutProps) => {
 	const [index, setIndex] = React.useState(0);
-
+	const paymentUrl = get(order, ['links', 'payment', 0, 'href'], '');
 	/**
 	 *
 	 */
@@ -30,7 +31,7 @@ export const Checkout = ({ order }: CheckoutProps) => {
 	 *
 	 */
 	const renderScene = ({ route }: { route: typeof routes[number] }) => {
-		return <WebView src={`&wcpos=1&gateway=${route.key}`} />;
+		return <WebView src={`${paymentUrl}&wcpos=1&gateway=${route.key}`} />;
 	};
 
 	/**
