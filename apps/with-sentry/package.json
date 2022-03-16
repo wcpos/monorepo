@@ -29,11 +29,11 @@
 		"sentry-expo": "4.1.0"
 	},
 	"devDependencies": {
-		"@babel/core": "7.17.5",
+		"@babel/core": "7.17.7",
 		"@sentry/cli": "1.73.2",
 		"@types/react": "17.0.40",
 		"@types/react-dom": "17.0.13",
-		"@types/react-native": "0.67.2",
+		"@types/react-native": "0.67.3",
 		"@wcpos/babel-preset-expo": "*",
 		"@wcpos/eslint-config": "*",
 		"typescript": "4.6.2"
