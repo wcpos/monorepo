@@ -29,9 +29,14 @@ export type {
 } from './collections/shipping-lines';
 export type { CustomerCollection, CustomerDocument, CustomerSchema } from './collections/customers';
 export type { TaxRateCollection, TaxRateDocument, TaxRateSchema } from './collections/taxes';
+export type {
+	ProductVariationCollection,
+	ProductVariationDocument,
+	ProductVariationSchema,
+} from './collections/variations';
 
 export type { UserDatabase, UserDatabaseCollections } from './users-db';
 export type { StoreDatabase, StoreDatabaseCollections } from './stores-db';
 
-export { userDB$ } from './users-db';
-export { getStoreDB$ } from './stores-db';
+export { userDBPromise } from './users-db';
+export { storeDBPromise } from './stores-db';

@@ -333,8 +333,9 @@
 		},
 		"variations": {
 			"type": "array",
+			"ref": "variations",
 			"items": {
-				"type": "integer"
+				"type": "string"
 			}
 		},
 		"grouped_products": {
