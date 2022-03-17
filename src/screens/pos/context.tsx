@@ -10,12 +10,7 @@ interface POSContextProps {
 	setCurrentCustomer: React.Dispatch<React.SetStateAction<CustomerDocument | undefined>>;
 }
 
-const POSContext = React.createContext<POSContextProps>({
-	currentOrder: undefined,
-	setCurrentOrder: () => {},
-	currentCustomer: undefined,
-	setCurrentCustomer: () => {},
-});
+const POSContext = React.createContext<POSContextProps>(null);
 
 interface POSContextProviderProps {
 	children: React.ReactNode;
@@ -34,6 +29,9 @@ const POSContextProvider = ({ children }: POSContextProviderProps) => {
 };
 
 export const usePOSContext = () => {
+	if (POSContext === undefined) {
+		throw new Error(`usePOSContext must be called within POSContextProvider`);
+	}
 	return React.useContext(POSContext);
 };
 

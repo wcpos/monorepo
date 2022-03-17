@@ -10,6 +10,7 @@ import Icon from '@wcpos/common/src/components/icon';
 import Popover from '@wcpos/common/src/components/popover';
 import Text from '@wcpos/common/src/components/text';
 import Variations from './variations';
+import { usePOSContext } from '../../../context';
 
 type ProductDocument = import('@wcpos/common/src/database').ProductDocument;
 
@@ -41,7 +42,7 @@ interface Props {
 // };
 
 const Actions = ({ item: product }: Props) => {
-	// const { storeDB } = useAppState();
+	const { currentOrder } = usePOSContext();
 	const http = useRestHttpClient();
 
 	const variationsResource = React.useMemo(
@@ -57,6 +58,7 @@ const Actions = ({ item: product }: Props) => {
 					tap(async (variations) => {
 						if (variations.length === 0) {
 							// fetch variations
+							// @TODO - there can be more than 10 variations so this should be replication sync
 							const result = await http.get(`products/${product.id}/variations`);
 							await product.atomicPatch({ variations: result?.data || [] });
 						}
@@ -76,7 +78,12 @@ const Actions = ({ item: product }: Props) => {
 			placement="right"
 			content={
 				<React.Suspense fallback={<Text>loading variations...</Text>}>
-					<Variations variationsResource={variationsResource} />
+					<Variations
+						variationsResource={variationsResource}
+						attributes={product.attributes}
+						currentOrder={currentOrder}
+						parent={product}
+					/>
 				</React.Suspense>
 			}
 		>
