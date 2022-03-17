@@ -7962,7 +7962,7 @@ __metadata:
     react: 17.0.2
     react-cache: 2.0.0-alpha.1
     react-error-boundary: 3.1.4
-    react-i18next: 11.15.7
+    react-i18next: 11.16.1
     react-is: 17.0.2
     react-native: 0.64.3
     react-native-device-info: 8.5.0
@@ -25458,9 +25458,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-i18next@npm:11.15.7":
-  version: 11.15.7
-  resolution: "react-i18next@npm:11.15.7"
+"react-i18next@npm:11.16.1":
+  version: 11.16.1
+  resolution: "react-i18next@npm:11.16.1"
   dependencies:
     "@babel/runtime": ^7.14.5
     html-escaper: ^2.0.2
@@ -25473,7 +25473,7 @@ __metadata:
       optional: true
     react-native:
       optional: true
-  checksum: 9898fc0dd6bc68b93402556d50b5e8ac3a027e36f5f5575e706dc7c7f42c2704dc6ab12e07802497473454f735560a2ed1e4a4d4cd6f4eec544b5b47961907e1
+  checksum: 2c7b7f0a3dfbd89c841d7e5e5f7d679a75930cbb1c15f10ee82accef2e5f8721fdc4bc3545846b320c66cca68c89d216f4cada76feab059f03fe21b7eddf8097
   languageName: node
   linkType: hard
 
