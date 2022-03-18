@@ -55,18 +55,10 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 		() =>
 			columns
 				.filter((column) => !column.hide)
-				.map((column) => {
-					// clone column and add label, onRender function
-					const Cell = get(cells, column.key);
-
-					return {
-						...column,
-						label: t(`products.column.label.${column.key}`),
-						// onRender: (item: ProductDocument) => {
-						// 	return Cell ? <Cell item={item} column={column} /> : null;
-						// },
-					};
-				}),
+				.map((column) => ({
+					...column,
+					label: t(`products.column.label.${column.key}`),
+				})),
 		[columns, t]
 	);
 

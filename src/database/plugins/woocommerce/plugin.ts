@@ -17,11 +17,15 @@ function isSynced(this: RxCollection) {
  */
 function maybeAddMeta(this: RxCollection, plainData, doc: RxDocument) {
 	if (doc._id && doc._id.includes(':')) {
-		doc.atomicUpdate((oldData) => {
-			oldData.meta_data = oldData.meta_data || [];
-			oldData.meta_data.push({ _pos: doc._id });
-			return oldData;
-		});
+		doc
+			.atomicUpdate((oldData) => {
+				oldData.meta_data = oldData.meta_data || [];
+				oldData.meta_data.push({ key: '_pos', value: doc._id });
+				return oldData;
+			})
+			.catch((err) => {
+				console.log(err);
+			});
 	}
 }
 

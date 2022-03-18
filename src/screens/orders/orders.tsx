@@ -25,7 +25,7 @@ const Orders = () => {
 	// useRestQuery('products');
 
 	return (
-		<QueryProvider initialQuery={{ sortBy: 'dateCreatedGmt', sortDirection: 'asc' }}>
+		<QueryProvider initialQuery={{ sortBy: 'date_created_gmt', sortDirection: 'asc' }}>
 			<Box
 				raised
 				rounding="medium"

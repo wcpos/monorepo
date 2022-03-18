@@ -27,7 +27,20 @@ const VALIDATOR_CACHE: Map<string, any> = new Map();
 
 const ajv = new Ajv({ strict: 'log', coerceTypes: true });
 addFormats(ajv);
-ajv.addVocabulary(['version', 'primaryKey', 'indexes', 'encrypted', 'ref']);
+ajv.addVocabulary(['version', 'primaryKey', 'indexes', 'encrypted']);
+
+/**
+ * Duck punch the WC REST schema for children
+ * - rxdb won't allow this type of schema (at the moment)
+ */
+ajv.addKeyword({
+	keyword: 'ref',
+	code(cxt) {
+		cxt.parentSchema.items = {
+			oneOf: [{ type: 'string' }, { type: 'object' }],
+		};
+	},
+});
 
 /**
  * returns the parsed validator from ajv

@@ -90,7 +90,7 @@ export const useCollectionQuery = (
 		// replicate unsynced items
 		const replicationState = replicateRxCollection({
 			collection,
-			replicationIdentifier: 'product-replication',
+			replicationIdentifier: `${collectionName}-replication`,
 			live: false,
 			// liveInterval: 10000,
 			retryTime: 10000000,
@@ -132,9 +132,10 @@ export const useCollectionQuery = (
 					// const documents = result?.data;
 					// @TODO - why aren't documents being parsed on insert
 					const documents = _map(result?.data, (item) => collection.parseRestResponse(item));
+					await Promise.all(_map(documents, (doc) => collection.upsert(doc)));
 
 					return {
-						documents,
+						documents: [],
 						hasMoreDocuments: false,
 					};
 				},

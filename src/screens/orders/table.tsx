@@ -7,6 +7,7 @@ import useData from '@wcpos/common/src/hooks/use-collection-query';
 import useQuery from '@wcpos/common/src/hooks/use-query';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import Table from '@wcpos/common/src/components/table3';
+import Text from '@wcpos/common/src/components/text';
 import Actions from './cells/actions';
 import Address from './cells/address';
 import Customer from './cells/customer';
@@ -30,7 +31,7 @@ const cells = {
 	billing: Address,
 	shipping: Address,
 	customer: Customer,
-	customerNote: CustomerNote,
+	customer_note: CustomerNote,
 	status: Status,
 	total: Total,
 };
@@ -53,18 +54,10 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 		() =>
 			columns
 				.filter((column) => !column.hide)
-				.map((column) => {
-					// clone column and add label, onRender function
-					const Cell = get(cells, column.key);
-
-					return {
-						...column,
-						label: t(`orders.column.label.${column.key}`),
-						onRender: (item: OrderDocument) => {
-							return Cell ? <Cell item={item} column={column} /> : null;
-						},
-					};
-				}),
+				.map((column) => ({
+					...column,
+					label: t(`orders.column.label.${column.key}`),
+				})),
 		[columns, t]
 	);
 
@@ -91,7 +84,7 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 	 */
 	const cellRenderer = React.useCallback((item: OrderDocument, column: ColumnProps) => {
 		const Cell = get(cells, column.key);
-		return Cell ? <Cell item={item} column={column} /> : null;
+		return Cell ? <Cell item={item} column={column} /> : <Text>{item[column.key]}</Text>;
 	}, []);
 
 	/**
@@ -112,7 +105,6 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 				<Table.Row
 					// config={renderContext}
 					item={item}
-					// @ts-ignore
 					columns={visibleColumns}
 					// itemIndex={index}
 					cellRenderer={cellRenderer}
