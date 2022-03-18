@@ -57,8 +57,8 @@ addRxPlugin(RxDBKeyCompressionPlugin);
 addRxPlugin(collectionsHelper);
 addRxPlugin(collectionCounts);
 addRxPlugin(RxDBWooCommercePlugin);
-addRxPlugin(childrenPlugin);
 addRxPlugin(RxDBAjvValidatePlugin);
+addRxPlugin(childrenPlugin);
 addRxPlugin(middlewaresPlugin);
 addRxPlugin(toJSONPlugin);
 addRxPlugin(RxDBGenerateIdPlugin); // must be after parse-rest-response

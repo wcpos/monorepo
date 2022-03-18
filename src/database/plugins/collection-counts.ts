@@ -59,8 +59,7 @@ const collectionCountsPlugin: RxPlugin = {
 			function updateCounts() {
 				collection.storageInstance.internals.pouch
 					.find({
-						// selector: { id: { $exists: true } },
-						selector: {},
+						selector: { id: { $exists: true } },
 						fields: ['id', 'date_created'],
 					})
 					.then((res: any) => {

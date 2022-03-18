@@ -38,8 +38,7 @@
 				"cancelled",
 				"refunded",
 				"failed",
-				"pos-open",
-				"pos-checkout"
+				"pos-open"
 			],
 			"description": "Order status.",
 			"type": "string"
