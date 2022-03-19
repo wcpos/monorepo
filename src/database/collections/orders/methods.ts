@@ -14,7 +14,7 @@ type FeeLineDocument = import('../fee-lines').FeeLineDocument;
 type FeeLineCollection = import('../fee-lines').FeeLineCollection;
 type ShippingLineDocument = import('../shipping-lines').ShippingLineDocument;
 type ShippingLineCollection = import('../shipping-lines').ShippingLineCollection;
-type ProductVariationDocument = import('../product-variations').ProductVariationDocument;
+type ProductVariationDocument = import('../variations').ProductVariationDocument;
 type CustomerDocument = import('../customers').CustomerDocument;
 type CartLine = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
 type CartLines = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
@@ -27,7 +27,7 @@ export default {
 	 *
 	 */
 	isOpen(this: OrderDocument) {
-		return this.status === 'pending';
+		return this.status === 'pos-open';
 	},
 
 	/**
@@ -126,16 +126,14 @@ export default {
 	/**
 	 *
 	 */
-	async addOrUpdateLineItem(
+	async addOrUpdateProduct(
 		this: OrderDocument,
-		product: ProductDocument | ProductVariationDocument,
-		parent: ProductDocument
+		product: ProductDocument
 	): Promise<OrderDocument | void> {
 		// check lineItems for same product id
-		const productId = parent ? parent.id : product.id;
 		const populatedLineItems = await this.populate('line_items');
 		const existingProducts = _filter(populatedLineItems, {
-			product_id: productId,
+			product_id: product.id,
 		}) as LineItemDocument[];
 
 		// if product exists, increase quantity by 1
@@ -155,13 +153,90 @@ export default {
 		// else, create new lineItem
 		const newLineItem: LineItemDocument = await this.collections()
 			.line_items.insert({
-				product_id: productId,
-				name: product.name || parent.name,
-				variation_id: parent && product.id,
+				product_id: product.id,
+				name: product.name,
 				quantity: 1,
 				price: parseFloat(product.price || ''),
 				sku: product.sku,
 				tax_class: product.tax_class,
+			})
+			.catch((err: any) => {
+				debugger;
+			});
+
+		/**
+		 * Special case if the order is not yet saved, eg: new order
+		 */
+		if (this._isTemporary) {
+			const lineItems = this.line_items || [];
+			lineItems.push(newLineItem._id);
+			this.set('line_items', lineItems);
+			return this.save()
+				.then(() => this)
+				.catch((err: any) => {
+					debugger;
+				});
+		}
+
+		/**
+		 * Add new line item id to the lineItems
+		 * - use atomicUpdate just in case lineItems is undefined
+		 */
+		return this.atomicUpdate((order) => {
+			order.line_items = order.line_items ?? [];
+			order.line_items.push(newLineItem._id);
+			return order;
+		}).catch((err: any) => {
+			debugger;
+		});
+	},
+
+	/**
+	 *
+	 */
+	async addOrUpdateVariation(
+		this: OrderDocument,
+		product: ProductVariationDocument,
+		parent: ProductDocument
+	): Promise<OrderDocument | void> {
+		// check lineItems for same product id
+		const populatedLineItems = await this.populate('line_items');
+		const existingVariations = _filter(populatedLineItems, {
+			variation_id: product.id,
+		}) as LineItemDocument[];
+
+		// if product exists, increase quantity by 1
+		if (existingVariations.length === 1) {
+			await existingVariations[0]
+				.update({
+					$inc: {
+						quantity: 1,
+					},
+				})
+				.catch((err: any) => {
+					debugger;
+				});
+			return this;
+		}
+
+		// {id: 250, key: "pa_color", value: "blue", display_key: "Color", display_value: "Blue"}
+		// @TODO - get meta_data info from database
+		const meta_data = product.attributes.map((attribute) => ({
+			display_key: attribute.name,
+			display_value: attribute.option,
+		}));
+
+		// else, create new lineItem
+		const newLineItem: LineItemDocument = await this.collections()
+			.line_items.insert({
+				product_id: parent.id,
+				name: parent.name,
+				variation_id: product.id,
+				quantity: 1,
+				price: parseFloat(product.price || ''),
+				sku: product.sku,
+				tax_class: product.tax_class,
+				meta_data,
 			})
 			.catch((err: any) => {
 				debugger;
