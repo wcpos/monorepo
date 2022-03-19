@@ -19,7 +19,7 @@ type ProductAttribute = {
 interface Props {
 	variationsResource: ObservableResource<ProductVariationDocument[]>;
 	attributes: ProductAttribute[];
-	addToCart: (variation: ProductVariationDocument) => void;
+	addToCart: (variation: ProductVariationDocument, metaData: any) => void;
 }
 
 const init = (initialAttributes, variations) => {
@@ -122,9 +122,18 @@ const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 	 */
 	const handleAddToCart = React.useCallback(async () => {
 		if (state.selectedVariation) {
-			addToCart(state.selectedVariation);
+			const metaData = state.attributes.map((attribute) => {
+				const { id, options } = attribute;
+				const selected = find(options, { selected: true });
+				return {
+					id,
+					display_key: attribute.name,
+					display_value: selected.value,
+				};
+			});
+			addToCart(state.selectedVariation, metaData);
 		}
-	}, [addToCart, state.selectedVariation]);
+	}, [addToCart, state.attributes, state.selectedVariation]);
 
 	return (
 		<Box space="xSmall">

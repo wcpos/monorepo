@@ -13,7 +13,10 @@ const ProductName = ({ item }: Props) => {
 
 	// filter out the meta data that is not a product attribute
 	const attributes = metaData.filter((meta) => {
-		return meta.key && !meta.key.startsWith('_');
+		if (meta.key) {
+			return !meta.key.startsWith('_');
+		}
+		return true;
 	});
 
 	return (

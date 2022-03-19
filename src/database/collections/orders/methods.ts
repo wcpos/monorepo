@@ -159,6 +159,7 @@ export default {
 				price: parseFloat(product.price || ''),
 				sku: product.sku,
 				tax_class: product.tax_class,
+				meta_data: product.meta_data,
 			})
 			.catch((err: any) => {
 				debugger;
@@ -197,7 +198,8 @@ export default {
 	async addOrUpdateVariation(
 		this: OrderDocument,
 		product: ProductVariationDocument,
-		parent: ProductDocument
+		parent: ProductDocument,
+		metaData: any
 	): Promise<OrderDocument | void> {
 		// check lineItems for same product id
 		const populatedLineItems = await this.populate('line_items');
@@ -219,12 +221,7 @@ export default {
 			return this;
 		}
 
-		// {id: 250, key: "pa_color", value: "blue", display_key: "Color", display_value: "Blue"}
-		// @TODO - get meta_data info from database
-		const meta_data = product.attributes.map((attribute) => ({
-			display_key: attribute.name,
-			display_value: attribute.option,
-		}));
+		const meta_data = product.meta_data || [];
 
 		// else, create new lineItem
 		const newLineItem: LineItemDocument = await this.collections()
@@ -236,7 +233,7 @@ export default {
 				price: parseFloat(product.price || ''),
 				sku: product.sku,
 				tax_class: product.tax_class,
-				meta_data,
+				meta_data: meta_data.concat(metaData),
 			})
 			.catch((err: any) => {
 				debugger;

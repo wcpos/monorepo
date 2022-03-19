@@ -73,9 +73,9 @@ const Actions = ({ item: product }: Props) => {
 	 * add selected variation to cart
 	 */
 	const addToCart = React.useCallback(
-		async (variation) => {
+		async (variation, metaData) => {
 			if (currentOrder) {
-				currentOrder.addOrUpdateVariation(variation, product);
+				currentOrder.addOrUpdateVariation(variation, product, metaData);
 			}
 		},
 		[currentOrder, product]
