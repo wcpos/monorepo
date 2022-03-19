@@ -103,17 +103,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/core@npm:7.17.7":
-  version: 7.17.7
-  resolution: "@babel/core@npm:7.17.7"
+"@babel/core@npm:7.17.8":
+  version: 7.17.8
+  resolution: "@babel/core@npm:7.17.8"
   dependencies:
     "@ampproject/remapping": ^2.1.0
     "@babel/code-frame": ^7.16.7
     "@babel/generator": ^7.17.7
     "@babel/helper-compilation-targets": ^7.17.7
     "@babel/helper-module-transforms": ^7.17.7
-    "@babel/helpers": ^7.17.7
-    "@babel/parser": ^7.17.7
+    "@babel/helpers": ^7.17.8
+    "@babel/parser": ^7.17.8
     "@babel/template": ^7.16.7
     "@babel/traverse": ^7.17.3
     "@babel/types": ^7.17.0
@@ -122,7 +122,7 @@ __metadata:
     gensync: ^1.0.0-beta.2
     json5: ^2.1.2
     semver: ^6.3.0
-  checksum: 467838313f8c84037d08d051238005c48f6b3da6fbaed38cd2dac5fcbe3706df2857365b8a9291402b3b888c24edb9707dc6c93f0127fecc7fe49b700c35c057
+  checksum: 0e686b1be444d25494424065238931f2b3df908bf072b72bab973acfd6d27a481fc280c9cd8a3c6fe2c46beee50e0d2307468d8b15b64dc4036f025e75f6609d
   languageName: node
   linkType: hard
 
@@ -535,14 +535,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/helpers@npm:^7.17.7":
-  version: 7.17.7
-  resolution: "@babel/helpers@npm:7.17.7"
+"@babel/helpers@npm:^7.17.8":
+  version: 7.17.8
+  resolution: "@babel/helpers@npm:7.17.8"
   dependencies:
     "@babel/template": ^7.16.7
     "@babel/traverse": ^7.17.3
     "@babel/types": ^7.17.0
-  checksum: fdc93714b3eb3b7a179a5133c3d7008f36785af469bb091a2f056f1a893aeedc8654e87c5e04a5cdecb6587e6177839a4b887b832be289689ffe277d08dfd4a7
+  checksum: 463dad58119fefebf2d0201bfa53ec9607aa00356908895640fc07589747fb3c2e0dfee4019f3e8c9781e57c9aa5dff4c72ec8d1b031c4ed8349f90b6aefe99d
   languageName: node
   linkType: hard
 
@@ -575,12 +575,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/parser@npm:^7.17.7":
-  version: 7.17.7
-  resolution: "@babel/parser@npm:7.17.7"
+"@babel/parser@npm:^7.17.8":
+  version: 7.17.8
+  resolution: "@babel/parser@npm:7.17.8"
   bin:
     parser: ./bin/babel-parser.js
-  checksum: d2612c2597838a605bcbe921fd2c7381b3ab75603c7907020df037c22a3d27f0507285da74553cd75f403300ca76642323ca2e72ba55cc4222d4a20b87505b0c
+  checksum: 1771808491982cc47baa888a997aef6b58308e3844c8c00f730f8fd97defe57d32cdbf46075cd49aaee310fa31f3d2c80a0d41b41a4ee0ff336ee09e2ff6c222
   languageName: node
   linkType: hard
 
@@ -3495,14 +3495,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-async-storage/async-storage@npm:1.16.3":
-  version: 1.16.3
-  resolution: "@react-native-async-storage/async-storage@npm:1.16.3"
+"@react-native-async-storage/async-storage@npm:1.17.0":
+  version: 1.17.0
+  resolution: "@react-native-async-storage/async-storage@npm:1.17.0"
   dependencies:
     merge-options: ^3.0.4
   peerDependencies:
     react-native: ^0.0.0-0 || 0.60 - 0.67 || 1000.0.0
-  checksum: d67137750f66149201f0315ae5590bbaed216ec8ff77b0e8e373035572d6e755d18a96a34cd87c4c735835015fdfec696afa9c3616a772bb75c0c2a7915f46ea
+  checksum: b36bdb44f489e5d7945061e042338d43f1a07cb3939a3bdd71732773042beaa0f86e03d985674d4ab7f9d3eca0463047f08b4ad2f70381415594973062620c85
   languageName: node
   linkType: hard
 
@@ -3650,12 +3650,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-community/datetimepicker@npm:6.0.1":
-  version: 6.0.1
-  resolution: "@react-native-community/datetimepicker@npm:6.0.1"
+"@react-native-community/datetimepicker@npm:6.0.2":
+  version: 6.0.2
+  resolution: "@react-native-community/datetimepicker@npm:6.0.2"
   dependencies:
     invariant: ^2.2.4
-  checksum: ce246969e6a64d18288ec3cdc6708da871a3baa370722756235167d0f814e80286a9d4d6f62d75fc083898b8243fa1e00a658d79c54634a109bb8d2ae0566c9f
+  checksum: 0b99760917d5e51a55af8d911e681ee9226df95fba14d6f2d0c8e821e2f8e1c2e91bd2b0bf5dd7e3fd3a190cbc73647dc17f926b0addca07f09b4799d1cf4f8f
   languageName: node
   linkType: hard
 
@@ -3914,9 +3914,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@sentry/cli@npm:1.73.2":
-  version: 1.73.2
-  resolution: "@sentry/cli@npm:1.73.2"
+"@sentry/cli@npm:1.74.2":
+  version: 1.74.2
+  resolution: "@sentry/cli@npm:1.74.2"
   dependencies:
     https-proxy-agent: ^5.0.0
     mkdirp: ^0.5.5
@@ -3927,7 +3927,7 @@ __metadata:
     which: ^2.0.2
   bin:
     sentry-cli: bin/sentry-cli
-  checksum: b4dcd1391dcfb3aa400bd16788a5fc9266b7c1f237eabdc419d032f290d02983b1fe3932b40f7f30b23baffe7cbf310f897f42b51948fffd087f6e4df48a63d6
+  checksum: b24d6cdca90bc5ced4b87b0b84590236fdf996543533330b165e83229b31864a751b3ea9aefc6c8388b09dcd92116033ef83f60ab25c337cfb1780ad70f05539
   languageName: node
   linkType: hard
 
@@ -4190,9 +4190,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@sentry/react-native@npm:3.3.2":
-  version: 3.3.2
-  resolution: "@sentry/react-native@npm:3.3.2"
+"@sentry/react-native@npm:3.3.3":
+  version: 3.3.3
+  resolution: "@sentry/react-native@npm:3.3.3"
   dependencies:
     "@sentry/browser": 6.17.9
     "@sentry/cli": ^1.72.0
@@ -4207,7 +4207,7 @@ __metadata:
   peerDependencies:
     react: ">=16.4.1"
     react-native: ">=0.56.0"
-  checksum: 9a1b44c448e400a86878d938779e73b59b982d665474e8c44d61b160d7b746b17332b21e350c375c53a55cf3de44ccdf5fa5501247fdbc932a3cb907d0c88655
+  checksum: cd9d972d6740edebe191e7b6e6fe534d5e205b547759353562c573d8724a253ef6c6797cca3725711e9b6a2fa337ba4fa76fe9988c4199ad43e441552c846f78
   languageName: node
   linkType: hard
 
@@ -7172,12 +7172,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-dom@npm:17.0.13":
-  version: 17.0.13
-  resolution: "@types/react-dom@npm:17.0.13"
+"@types/react-dom@npm:17.0.14":
+  version: 17.0.14
+  resolution: "@types/react-dom@npm:17.0.14"
   dependencies:
     "@types/react": "*"
-  checksum: 62c42a54ac8961c23a0e74b9cdd8b0a78563757e462b1ab665b2aa365bfd8b86a73d3f6eafc09a4a80fb08659321db168f012aa597c41c0df36f645a94e9266b
+  checksum: b54cd0ef573236b3d87fe7493e6d1c36d8b4ca37a3b46364272a5c91ac178e3296b68ea1aeb299ce68f12ad663c5720ee890d0539b14881c6754bdcbdb0befa0
   languageName: node
   linkType: hard
 
@@ -7238,14 +7238,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react@npm:17.0.40":
-  version: 17.0.40
-  resolution: "@types/react@npm:17.0.40"
+"@types/react@npm:17.0.41":
+  version: 17.0.41
+  resolution: "@types/react@npm:17.0.41"
   dependencies:
     "@types/prop-types": "*"
     "@types/scheduler": "*"
     csstype: ^3.0.2
-  checksum: 24d1b210b5bf3c7d49f9a7fe5490db02e005a1d989045a2d67528347557dd0bcb0d7bcf96088152697e97521ac4c9506d1357ee48a2b7d4e701c70d838dc7284
+  checksum: 1b086ec0ea5d666f05e19e0724e41278d27a2ca29a2cd71b9d9ab3fe27dba233806eb728d744e092c9fe9637ac738d8c5a05983cde84d215342949b47ecba2ef
   languageName: node
   linkType: hard
 
@@ -7773,12 +7773,12 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/app-managed@workspace:apps/managed"
   dependencies:
-    "@babel/core": 7.17.7
+    "@babel/core": 7.17.8
     "@expo/webpack-config": 0.16.19
-    "@react-native-community/netinfo": 8.1.0
+    "@react-native-community/netinfo": 8.2.0
     "@svgr/webpack": 5.5.0
-    "@types/react": 17.0.40
-    "@types/react-dom": 17.0.13
+    "@types/react": 17.0.41
+    "@types/react-dom": 17.0.14
     "@types/react-native": 0.67.3
     "@wcpos/babel-preset-expo": "*"
     "@wcpos/eslint-config": "*"
@@ -7806,10 +7806,10 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/app-with-dev-client@workspace:apps/with-dev-client"
   dependencies:
-    "@babel/core": 7.17.7
+    "@babel/core": 7.17.8
     "@expo/config-plugins": 4.1.0
-    "@types/react": 17.0.40
-    "@types/react-dom": 17.0.13
+    "@types/react": 17.0.41
+    "@types/react-dom": 17.0.14
     "@types/react-native": 0.67.3
     "@wcpos/babel-preset-expo": "*"
     "@wcpos/eslint-config": "*"
@@ -7836,11 +7836,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/app-with-flipper@workspace:apps/with-flipper"
   dependencies:
-    "@babel/core": 7.17.7
+    "@babel/core": 7.17.8
     "@expo/webpack-config": 0.16.19
     "@svgr/webpack": 5.5.0
-    "@types/react": 17.0.40
-    "@types/react-dom": 17.0.13
+    "@types/react": 17.0.41
+    "@types/react-dom": 17.0.14
     "@types/react-native": 0.67.3
     "@wcpos/babel-preset-expo": "*"
     "@wcpos/eslint-config": "*"
@@ -7872,11 +7872,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/app-with-sentry@workspace:apps/with-sentry"
   dependencies:
-    "@babel/core": 7.17.7
-    "@sentry/cli": 1.73.2
-    "@sentry/react-native": 3.3.2
-    "@types/react": 17.0.40
-    "@types/react-dom": 17.0.13
+    "@babel/core": 7.17.8
+    "@sentry/cli": 1.74.2
+    "@sentry/react-native": 3.3.3
+    "@types/react": 17.0.41
+    "@types/react-dom": 17.0.14
     "@types/react-native": 0.67.3
     "@wcpos/babel-preset-expo": "*"
     "@wcpos/eslint-config": "*"
@@ -7901,7 +7901,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/babel-preset-expo@workspace:packages/babel"
   dependencies:
-    "@babel/core": 7.17.7
+    "@babel/core": 7.17.8
     "@babel/preset-typescript": ^7.16.7
     babel-jest: ^27.5.1
     babel-preset-expo: 9.0.2
@@ -7913,14 +7913,14 @@ __metadata:
   resolution: "@wcpos/common@workspace:packages/common"
   dependencies:
     "@react-native-community/masked-view": 0.1.11
-    "@react-native-community/netinfo": 8.1.0
+    "@react-native-community/netinfo": 8.2.0
     "@react-navigation/drawer": 6.3.1
     "@react-navigation/elements": 1.3.1
     "@react-navigation/native": 6.0.8
     "@react-navigation/stack": 6.1.1
     "@sentry/browser": 6.18.2
     "@sentry/electron": 3.0.4
-    "@sentry/react-native": 3.3.2
+    "@sentry/react-native": 3.3.3
     "@testing-library/jest-dom": 5.16.2
     "@testing-library/react": 12.1.4
     "@testing-library/react-hooks": 7.0.2
@@ -7931,7 +7931,7 @@ __metadata:
     "@types/pouchdb-adapter-http": 6.1.3
     "@types/pouchdb-adapter-idb": 6.1.4
     "@types/pouchdb-adapter-memory": 6.1.3
-    "@types/react": 17.0.40
+    "@types/react": 17.0.41
     "@types/react-jsonschema-form": 1.7.8
     "@types/react-native": 0.67.3
     "@types/styled-components": 5.1.24
@@ -7992,8 +7992,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/cra@workspace:apps/cra"
   dependencies:
-    "@types/react": 17.0.40
-    "@types/react-dom": 17.0.13
+    "@types/react": 17.0.41
+    "@types/react-dom": 17.0.14
     "@welldone-software/why-did-you-render": 6.2.3
     babel-plugin-react-native-web: 0.17.7
     customize-cra: 1.0.0
@@ -8048,9 +8048,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/storybook@workspace:apps/storybook"
   dependencies:
-    "@babel/core": 7.17.7
-    "@react-native-async-storage/async-storage": 1.16.3
-    "@react-native-community/datetimepicker": 6.0.1
+    "@babel/core": 7.17.8
+    "@react-native-async-storage/async-storage": 1.17.0
+    "@react-native-community/datetimepicker": 6.0.2
     "@react-native-community/slider": 4.2.1
     "@storybook/addon-actions": 6.4.19
     "@storybook/addon-controls": 6.4.19
@@ -8073,7 +8073,7 @@ __metadata:
     react-native-storybook-loader: 2.0.5
     react-scripts: 5.0.0
     typescript: 4.6.2
-    yarn: 1.22.17
+    yarn: 1.22.18
   languageName: unknown
   linkType: soft
 
@@ -31825,13 +31825,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"yarn@npm:1.22.17":
-  version: 1.22.17
-  resolution: "yarn@npm:1.22.17"
+"yarn@npm:1.22.18":
+  version: 1.22.18
+  resolution: "yarn@npm:1.22.18"
   bin:
-    yarn: ./bin/yarn.js
-    yarnpkg: ./bin/yarn.js
-  checksum: 9d5211477d439a4d7b5632d7c290a3be36d2edc13599b64964bff520d3a3a480db85010f3262293981abb4e618ac92aaafa4c4c54bae50a7713c7b8ec431adac
+    yarn: bin/yarn.js
+    yarnpkg: bin/yarn.js
+  checksum: ffd9a4872caa5fce83e914592dd6a40bb978bf992d3dca839bc3853b9e6de951d7596f7e8c4a88bec3af3a049e46097f9139a51740d9074582fd923af8762f7a
   languageName: node
   linkType: hard
 

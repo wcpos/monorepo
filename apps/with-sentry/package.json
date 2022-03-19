@@ -13,7 +13,7 @@
 		"eject": "expo eject"
 	},
 	"dependencies": {
-		"@sentry/react-native": "3.3.2",
+		"@sentry/react-native": "3.3.3",
 		"@wcpos/ui": "*",
 		"expo": "44.0.6",
 		"expo-application": "4.0.2",
@@ -29,10 +29,10 @@
 		"sentry-expo": "4.1.0"
 	},
 	"devDependencies": {
-		"@babel/core": "7.17.7",
-		"@sentry/cli": "1.73.2",
-		"@types/react": "17.0.40",
-		"@types/react-dom": "17.0.13",
+		"@babel/core": "7.17.8",
+		"@sentry/cli": "1.74.2",
+		"@types/react": "17.0.41",
+		"@types/react-dom": "17.0.14",
 		"@types/react-native": "0.67.3",
 		"@wcpos/babel-preset-expo": "*",
 		"@wcpos/eslint-config": "*",
