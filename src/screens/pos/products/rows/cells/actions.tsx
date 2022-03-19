@@ -11,7 +11,7 @@ const Actions = ({ item: product }: Props) => {
 
 	const addToCart = React.useCallback(async () => {
 		if (currentOrder) {
-			currentOrder.addOrUpdateLineItem(product);
+			currentOrder.addOrUpdateProduct(product);
 		}
 	}, [currentOrder, product]);
 

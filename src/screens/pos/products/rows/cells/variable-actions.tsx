@@ -69,6 +69,18 @@ const Actions = ({ item: product }: Props) => {
 		[http, product]
 	);
 
+	/**
+	 * add selected variation to cart
+	 */
+	const addToCart = React.useCallback(
+		async (variation) => {
+			if (currentOrder) {
+				currentOrder.addOrUpdateVariation(variation, product);
+			}
+		},
+		[currentOrder, product]
+	);
+
 	if (!product.isSynced()) {
 		return <Icon.Skeleton size="xLarge" />;
 	}
@@ -81,8 +93,7 @@ const Actions = ({ item: product }: Props) => {
 					<Variations
 						variationsResource={variationsResource}
 						attributes={product.attributes}
-						currentOrder={currentOrder}
-						parent={product}
+						addToCart={addToCart}
 					/>
 				</React.Suspense>
 			}

@@ -8,7 +8,6 @@ import Text from '@wcpos/common/src/components/text';
 import Button from '@wcpos/common/src/components/button';
 import Select from '@wcpos/common/src/components/select';
 import Box from '@wcpos/common/src/components/box';
-// import { usePOSContext } from '../../../context';
 
 type ProductVariationDocument = import('@wcpos/common/src/database').ProductVariationDocument;
 type ProductAttribute = {
@@ -20,42 +19,26 @@ type ProductAttribute = {
 interface Props {
 	variationsResource: ObservableResource<ProductVariationDocument[]>;
 	attributes: ProductAttribute[];
+	addToCart: (variation: ProductVariationDocument) => void;
 }
-
-// const attributes = [
-// 	{
-// 		id: 1,
-// 		name: 'Color',
-// 		position: 0,
-// 		visible: true,
-// 		variation: true,
-// 		options: [
-// 			{ label: 'Blue', value: 'Blue', selected: false, disabled: false, products: [31, 36] },
-// 			{ label: 'Green', value: 'Green', selected: false, disabled: false, products: [30] },
-// 			{ label: 'Red', value: 'Red', selected: true, disabled: false, products: [29] },
-// 		],
-// 	},
-// 	{
-// 		id: 0,
-// 		name: 'Logo',
-// 		position: 1,
-// 		visible: true,
-// 		variation: true,
-// 		options: [
-// 			{ label: 'Yes', value: 'Yes', selected: false, disabled: true, products: [36] },
-// 			{ label: 'No', value: 'No', selected: true, disabled: false, products: [29, 30, 31] },
-// 		],
-// 	},
-// ];
 
 const init = (initialAttributes, variations) => {
 	const attributes = reduce(
 		initialAttributes,
 		(result, attribute) => {
 			if (attribute.variation) {
+				let any = false;
+
 				const options = attribute.options.map((option) => {
 					const products = variations
-						.filter((variation) => find(variation.attributes, { id: attribute.id, option }))
+						.filter((variation) => {
+							if (!find(variation.attributes, { id: attribute.id })) {
+								// special case for 'any' option
+								any = true;
+								return true;
+							}
+							return find(variation.attributes, { id: attribute.id, option });
+						})
 						.map((variation) => variation.id);
 
 					return {
@@ -66,7 +49,8 @@ const init = (initialAttributes, variations) => {
 						products,
 					};
 				});
-				result.push({ ...attribute, options });
+
+				result.push({ ...attribute, options, any });
 			}
 			return result;
 		},
@@ -79,65 +63,68 @@ const init = (initialAttributes, variations) => {
 	};
 };
 
-const Variations = ({ variationsResource, attributes, currentOrder, parent }: Props) => {
-	// const { currentOrder } = usePOSContext();
+const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 	const variations = useObservableSuspense(variationsResource);
 	const [state, setState] = React.useState(() => init(attributes, variations));
 
 	/**
 	 *
 	 */
-	const handleSelect = React.useCallback((id, option) => {
-		setState((prev) => {
-			const newState = { ...prev };
-			const { options } = find(newState.attributes, { id });
-			let allowedProducts = [];
-			let selectedProducts = [];
+	const handleSelect = React.useCallback(
+		(id, option) => {
+			setState((prev) => {
+				const newState = { ...prev };
+				const { options } = find(newState.attributes, { id });
+				let allowedProducts = [];
+				let selectedProducts = [];
 
-			// find the selected option
-			forEach(options, (opt) => {
-				opt.selected = opt.value === option.value;
-				if (opt.selected) {
-					allowedProducts = opt.products;
-					selectedProducts = opt.products;
+				// find the selected option
+				forEach(options, (opt) => {
+					opt.selected = opt.value === option.value;
+					if (opt.selected) {
+						allowedProducts = opt.products;
+						selectedProducts = opt.products;
+					}
+				});
+
+				// check other options and disable if not allowed
+				forEach(newState.attributes, (attribute) => {
+					if (attribute.id !== id) {
+						forEach(attribute.options, (opt) => {
+							opt.disabled = intersection(allowedProducts, opt.products).length === 0;
+							if (opt.selected && !opt.disabled) {
+								selectedProducts = intersection(selectedProducts, opt.products);
+							}
+
+							opt.selected =
+								!attribute.any &&
+								selectedProducts.length === 1 &&
+								opt.products.includes(selectedProducts[0]);
+						});
+					}
+				});
+
+				// find the selected variation
+				if (selectedProducts.length === 1) {
+					newState.selectedVariation = find(variations, { id: selectedProducts[0] });
+				} else {
+					newState.selectedVariation = undefined;
 				}
+
+				return newState;
 			});
-
-			// check other options and disable if not allowed
-			forEach(newState.attributes, (attribute) => {
-				if (attribute.id !== id) {
-					const { options } = attribute;
-					forEach(options, (opt) => {
-						opt.disabled = intersection(allowedProducts, opt.products).length === 0;
-						if (opt.selected && !opt.disabled) {
-							selectedProducts = intersection(selectedProducts, opt.products);
-						}
-
-						opt.selected =
-							selectedProducts.length === 1 && opt.products.includes(selectedProducts[0]);
-					});
-				}
-			});
-
-			// find the selected variation
-			if (selectedProducts.length === 1) {
-				newState.selectedVariation = find(variations, { id: selectedProducts[0] });
-			} else {
-				newState.selectedVariation = undefined;
-			}
-
-			return newState;
-		});
-	}, []);
+		},
+		[variations]
+	);
 
 	/**
 	 * add selected variation to cart
 	 */
-	const addToCart = React.useCallback(async () => {
-		if (currentOrder && state.selectedVariation) {
-			currentOrder.addOrUpdateLineItem(state.selectedVariation, parent);
+	const handleAddToCart = React.useCallback(async () => {
+		if (state.selectedVariation) {
+			addToCart(state.selectedVariation);
 		}
-	}, [currentOrder, parent, state.selectedVariation]);
+	}, [addToCart, state.selectedVariation]);
 
 	return (
 		<Box space="xSmall">
@@ -161,7 +148,7 @@ const Variations = ({ variationsResource, attributes, currentOrder, parent }: Pr
 				</Box>
 			))}
 			{state.selectedVariation && (
-				<Button title={`Add to Cart: ${state.selectedVariation.price}`} onPress={addToCart} />
+				<Button title={`Add to Cart: ${state.selectedVariation.price}`} onPress={handleAddToCart} />
 			)}
 		</Box>
 	);
