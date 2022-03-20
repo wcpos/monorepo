@@ -31,17 +31,16 @@ const Name = ({ item: product, column }: Props) => {
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{show('categories') && <Categories item={product} />}
 			{show('tags') && <Tags item={product} />}
+
 			{product.type === 'variable' && (
 				<View>
-					{(product.attributes as [])
+					{product.attributes
 						.filter((attr: any) => attr.variation)
 						.map((attr: any) => (
-							<Text key={attr.id} size="small">
-								<Text size="small" type="secondary">
-									{attr.name}:
-								</Text>
-								{attr.options.join(', ')}
-							</Text>
+							<Box space="xxSmall" key={`${attr.name}-${attr.id}`} horizontal>
+								<Text size="small" type="secondary">{`${attr.name}:`}</Text>
+								<Text size="small">{attr.options.join(', ')}</Text>
+							</Box>
 						))}
 				</View>
 			)}

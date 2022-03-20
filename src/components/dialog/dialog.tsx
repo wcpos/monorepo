@@ -1,7 +1,6 @@
 import React from 'react';
 import Modal from '../modal';
 import Text from '../text';
-import * as Styled from './styles';
 
 export type DialogProps = {
 	/**

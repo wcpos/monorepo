@@ -11,7 +11,7 @@ const ProductName = ({ item }: Props) => {
 	const name = useObservableState(item.name$, item.name);
 	const metaData = useObservableState(item.meta_data$, item.meta_data) || [];
 
-	// filter out the meta data that is not a product attribute
+	// filter out the private meta data
 	const attributes = metaData.filter((meta) => {
 		if (meta.key) {
 			return !meta.key.startsWith('_');

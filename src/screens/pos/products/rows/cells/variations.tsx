@@ -32,12 +32,12 @@ const init = (initialAttributes, variations) => {
 				const options = attribute.options.map((option) => {
 					const products = variations
 						.filter((variation) => {
-							if (!find(variation.attributes, { id: attribute.id })) {
+							if (!find(variation.attributes, { name: attribute.name })) {
 								// special case for 'any' option
 								any = true;
 								return true;
 							}
-							return find(variation.attributes, { id: attribute.id, option });
+							return find(variation.attributes, { name: attribute.name });
 						})
 						.map((variation) => variation.id);
 
@@ -71,10 +71,10 @@ const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 	 *
 	 */
 	const handleSelect = React.useCallback(
-		(id, option) => {
+		(name, option) => {
 			setState((prev) => {
 				const newState = { ...prev };
-				const { options } = find(newState.attributes, { id });
+				const { options } = find(newState.attributes, { name });
 				let allowedProducts = [];
 				let selectedProducts = [];
 
@@ -89,7 +89,7 @@ const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 
 				// check other options and disable if not allowed
 				forEach(newState.attributes, (attribute) => {
-					if (attribute.id !== id) {
+					if (attribute.name !== name) {
 						forEach(attribute.options, (opt) => {
 							opt.disabled = intersection(allowedProducts, opt.products).length === 0;
 							if (opt.selected && !opt.disabled) {
@@ -125,8 +125,9 @@ const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 			const metaData = state.attributes.map((attribute) => {
 				const { id, options } = attribute;
 				const selected = find(options, { selected: true });
+
 				return {
-					id,
+					attr_id: id,
 					display_key: attribute.name,
 					display_value: selected.value,
 				};
@@ -138,7 +139,7 @@ const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 	return (
 		<Box space="xSmall">
 			{state.attributes.map((attribute) => (
-				<Box key={attribute.id} space="xSmall">
+				<Box key={attribute.name} space="xSmall">
 					<Text>{attribute.name}</Text>
 					<Button.Group>
 						{attribute.options.map((option) => (
@@ -147,7 +148,7 @@ const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 								type={option.selected ? 'success' : 'primary'}
 								disabled={option.disabled}
 								onPress={() => {
-									handleSelect(attribute.id, option);
+									handleSelect(attribute.name, option);
 								}}
 							>
 								{option.label}
