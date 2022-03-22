@@ -31,7 +31,7 @@ const OnlineStatusProvider = ({ children }: Props) => {
 	 */
 	React.useEffect(() => {
 		NetInfo.configure({
-			reachabilityUrl: site.wp_api_url,
+			reachabilityUrl: site?.wp_api_url,
 			reachabilityTest: async (response) => response.status === 200,
 			// reachabilityLongTimeout: 60 * 1000, // 60s
 			// reachabilityShortTimeout: 5 * 1000, // 5s
@@ -43,19 +43,28 @@ const OnlineStatusProvider = ({ children }: Props) => {
 
 		// Subscribe
 		const unsubscribe = NetInfo.addEventListener((netInfo) => {
-			setStatus(netInfo);
+			setStatus((prev) => {
+				if (prev.isInternetReachable === true && netInfo.isInternetReachable === false) {
+					if (netInfo.isConnected === false) {
+						addSnackbar({ message: 'No internet connection' });
+					} else {
+						addSnackbar({ message: 'Your website is down' });
+					}
+				}
+				if (prev.isInternetReachable === false && netInfo.isInternetReachable === true) {
+					if (prev.isConnected === false && netInfo.isConnected === true) {
+						addSnackbar({ message: 'Internet reconnected' });
+					} else {
+						addSnackbar({ message: 'Your website is up' });
+					}
+				}
+				return netInfo;
+			});
 		});
 
 		// Unsubscribe
 		return unsubscribe;
-	}, [site.wp_api_url]);
-
-	// // Show a warning if the user is offline
-	React.useEffect(() => {
-		if (status.isInternetReachable === false) {
-			addSnackbar({ message: 'You are offline' });
-		}
-	}, [status]);
+	}, [addSnackbar, site?.wp_api_url]);
 
 	return <OnlineStatusContext.Provider value={status}>{children}</OnlineStatusContext.Provider>;
 };
