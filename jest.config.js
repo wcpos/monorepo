@@ -1,5 +1,14 @@
-/** @type {import('ts-jest/dist/types').InitialOptionsTsJest} */
+// /** @type {import('ts-jest/dist/types').InitialOptionsTsJest} */
+// module.exports = {
+// 	preset: 'ts-jest',
+// 	testEnvironment: 'node',
+// };
+
+const base = require('../../jest.config.base.js');
+
 module.exports = {
-	preset: 'ts-jest',
-	testEnvironment: 'node',
+	...base,
+	roots: ['<rootDir>/src'],
+	name: '@wcpos/common',
+	displayName: '@wcpos/common',
 };
