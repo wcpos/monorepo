@@ -24,6 +24,15 @@ export const useRestHttpClient = () => {
 	);
 
 	/**
+	 * Abort the current request on unmount
+	 */
+	React.useEffect(() => {
+		return () => {
+			controller.abort();
+		};
+	}, [controller]);
+
+	/**
 	 * register and unregister interceptors
 	 */
 	React.useEffect(() => {
@@ -37,7 +46,7 @@ export const useRestHttpClient = () => {
 				config.headers.Authorization = `Bearer ${wpCredentials?.jwt}`;
 			}
 
-			if (!isInternetReachable) {
+			if (isInternetReachable === false) {
 				// prevent requests when there is no internet connection
 				return false;
 			}
@@ -56,10 +65,14 @@ export const useRestHttpClient = () => {
 		return () => {
 			client.interceptors.request.eject(reqId);
 			client.interceptors.response.eject(resId);
-			// Abort the current request on unmount
-			controller.abort();
 		};
-	}, [client, controller, errorResponseHandler, wpCredentials?.jwt, wpCredentials?.wp_nonce]);
+	}, [
+		client,
+		errorResponseHandler,
+		isInternetReachable,
+		wpCredentials?.jwt,
+		wpCredentials?.wp_nonce,
+	]);
 
 	useWhyDidYouUpdate('HTTP Client', [
 		client,
