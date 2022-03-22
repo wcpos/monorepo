@@ -3,11 +3,13 @@ import axios from 'axios';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import useAppState from '../use-app-state';
 import { useErrorResponseHandler } from './use-error-handler';
+import useOnlineStatus from '../use-online-status';
 
 export const useRestHttpClient = () => {
 	const { site, wpCredentials } = useAppState();
 	const errorResponseHandler = useErrorResponseHandler();
 	const controller = React.useMemo(() => new AbortController(), []);
+	const { isInternetReachable } = useOnlineStatus();
 
 	/**
 	 * memoize the axios instance
@@ -34,6 +36,12 @@ export const useRestHttpClient = () => {
 			if (wpCredentials?.jwt) {
 				config.headers.Authorization = `Bearer ${wpCredentials?.jwt}`;
 			}
+
+			if (!isInternetReachable) {
+				// prevent requests when there is no internet connection
+				return false;
+			}
+
 			return config;
 		});
 
