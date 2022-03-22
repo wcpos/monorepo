@@ -74,20 +74,30 @@ const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 			{state.attributes?.map((attribute) => (
 				<Box key={attribute.name} space="xSmall">
 					<Text>{attribute.name}</Text>
-					<Button.Group>
-						{attribute.options?.map((option) => (
-							<Button
-								key={option.value}
-								type={option.selected ? 'success' : 'primary'}
-								disabled={option.disabled}
-								onPress={() => {
-									handleSelect(attribute, option);
-								}}
-							>
-								{option.label}
-							</Button>
-						))}
-					</Button.Group>
+					{attribute.characterCount < 15 ? (
+						<Button.Group>
+							{attribute.options?.map((option) => (
+								<Button
+									key={option.value}
+									type={option.selected ? 'success' : 'primary'}
+									disabled={option.disabled}
+									onPress={() => {
+										handleSelect(attribute, option);
+									}}
+								>
+									{option.label}
+								</Button>
+							))}
+						</Button.Group>
+					) : (
+						<Select
+							choices={attribute.options}
+							onChange={(option) => {
+								debugger;
+							}}
+							placeholder="Select an option"
+						/>
+					)}
 				</Box>
 			))}
 			{selectedVariation && (

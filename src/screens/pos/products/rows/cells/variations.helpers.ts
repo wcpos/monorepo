@@ -24,8 +24,6 @@ type StateAttributesOptions = {
 type StateAttributes = Omit<ProductAttribute, 'options'> & {
 	options: StateAttributesOptions[];
 	characterCount: number;
-	// products: number[];
-	// any: boolean;
 };
 
 type State = {
@@ -41,10 +39,7 @@ type PossibleVariation = {
 /**
  *
  */
-export const init = (
-	initialAttributes: ProductAttribute[]
-	// variations: ProductVariationDocument[]
-): State => {
+export const init = (initialAttributes: ProductAttribute[]): State => {
 	const attributes =
 		initialAttributes &&
 		initialAttributes.map((attribute) => {
@@ -89,7 +84,7 @@ export const expandPossibleVariations = (
 		);
 
 		if (anyOptions.length > 0) {
-			// we need to 'explode' the any variations
+			// we need to expand the 'any' variations
 			forEach(anyOptions, (any) => {
 				forEach(any.options, (option) => {
 					const attrs = variation.attributes.concat({
