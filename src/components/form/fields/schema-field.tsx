@@ -1,12 +1,6 @@
 import * as React from 'react';
+import get from 'lodash/get';
 import Box from '../../box';
-import { ArrayField } from './array-field';
-import { BooleanField } from './boolean-field';
-import { IntegerField } from './integer-field';
-import { NumberField } from './number-field';
-import { ObjectField } from './object-field';
-import { StringField } from './string-field';
-import { NullField } from './null-field';
 import {
 	getSchemaType,
 	orderProperties,
@@ -14,31 +8,60 @@ import {
 	getDefaultRegistry,
 	canExpand,
 	ADDITIONAL_PROPERTY_FLAG,
-} from '../utils';
+} from '../form.helpers';
 
+type Schema = import('json-schema').JSONSchema7;
+type UiSchema = import('../types').UiSchema;
+type IdSchema = import('../types').IdSchema;
+type Fields = import('../types').Registry['fields'];
+
+const REQUIRED_FIELD_SYMBOL = '*';
 const COMPONENT_TYPES = {
-	array: ArrayField,
-	boolean: BooleanField,
-	integer: IntegerField,
-	number: NumberField,
-	object: ObjectField,
-	string: StringField,
-	null: NullField,
+	array: 'ArrayField',
+	boolean: 'BooleanField',
+	integer: 'NumberField',
+	number: 'NumberField',
+	object: 'ObjectField',
+	string: 'StringField',
+	null: 'NullField',
 };
 
-interface SchemaFieldProps {
-	schema: any;
-	uiSchema: any;
-	idSchema: any;
-	idPrefix?: any;
-	formContext?: any;
-	formData: any;
-	registry: any;
-	name: any;
-	onChange: any;
+function getFieldComponent(schema: Schema, uiSchema: UiSchema, idSchema: IdSchema, fields: Fields) {
+	const field = get(uiSchema, 'ui:field');
+	if (typeof field === 'function') {
+		return field;
+	}
+	if (typeof field === 'string' && field in fields) {
+		return fields[field];
+	}
+
+	const componentName = get(COMPONENT_TYPES, getSchemaType(schema));
+
+	// If the type is not defined and the schema uses 'anyOf' or 'oneOf', don't
+	// render a field and let the MultiSchemaField component handle the form display
+	if (!componentName && (schema.anyOf || schema.oneOf)) {
+		return () => null;
+	}
+
+	return componentName in fields
+		? fields[componentName]
+		: () => {
+				const { UnsupportedField } = fields;
+
+				return (
+					<UnsupportedField
+						schema={schema}
+						idSchema={idSchema}
+						reason={`Unknown field type ${schema.type}`}
+					/>
+				);
+		  };
 }
 
-export const SchemaField = ({
+/**
+ *
+ */
+export function SchemaField<T extends object>({
 	schema,
 	uiSchema,
 	idSchema,
@@ -48,9 +71,9 @@ export const SchemaField = ({
 	registry,
 	name,
 	onChange,
-}: SchemaFieldProps) => {
-	const { rootSchema, fields } = registry || getDefaultRegistry();
-	const FieldComponent = COMPONENT_TYPES[getSchemaType(schema)];
+}: import('../types').FieldProps<T>): React.ReactElement {
+	const { rootSchema, fields } = registry;
+	const FieldComponent = getFieldComponent(schema, uiSchema, idSchema, fields);
 
 	return (
 		<Box paddingBottom="small">
@@ -61,7 +84,8 @@ export const SchemaField = ({
 				formData={formData}
 				name={name}
 				onChange={onChange}
+				registry={registry}
 			/>
 		</Box>
 	);
-};
+}

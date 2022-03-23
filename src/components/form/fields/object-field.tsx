@@ -1,44 +1,44 @@
 import * as React from 'react';
+import get from 'lodash/get';
 import Text from '../../text';
-import { SchemaField } from './schema-field';
 import {
 	orderProperties,
 	retrieveSchema,
 	getDefaultRegistry,
 	canExpand,
 	ADDITIONAL_PROPERTY_FLAG,
-} from '../utils';
+} from '../form.helpers';
 
-interface ObjectFieldProps {
-	schema: any;
-	uiSchema: any;
-	formData: any;
-	idSchema: any;
-	name?: any;
-	onChange: any;
-}
-
-export const ObjectField = ({
-	uiSchema = {},
-	formData = {},
-	idSchema = {},
+/**
+ *
+ */
+export function ObjectField<T extends object>({
+	uiSchema,
+	idSchema,
+	idPrefix,
+	formData,
+	registry,
+	name,
 	onChange,
 	...props
-}: ObjectFieldProps) => {
-	const { rootSchema, fields, formContext } = getDefaultRegistry();
+}: import('../types').FieldProps<T>): React.ReactElement {
+	const { rootSchema, fields, formContext } = registry;
 	const schema = retrieveSchema(props.schema, rootSchema, formData);
 	// const title = schema.title === undefined ? props.name : schema.title;
 	// const description = uiSchema['ui:description'] || schema.description;
+
+	const { SchemaField } = fields;
+
 	const orderedProperties = orderProperties(
 		Object.keys(schema.properties || {}),
-		uiSchema['ui:order']
+		get(uiSchema, 'ui:order')
 	);
 
 	return (
 		<>
 			<Text>{props.name}</Text>
 			{orderedProperties.map((name) => {
-				const fieldUiSchema = uiSchema[name];
+				const fieldUiSchema = get(uiSchema, name);
 				return (
 					<SchemaField
 						key={name}
@@ -46,6 +46,7 @@ export const ObjectField = ({
 						schema={schema.properties[name]}
 						uiSchema={fieldUiSchema}
 						idSchema={idSchema[name]}
+						registry={registry}
 						// idPrefix={idPrefix}
 						formData={(formData || {})[name]}
 						onChange={onChange}
@@ -54,4 +55,4 @@ export const ObjectField = ({
 			})}
 		</>
 	);
-};
+}

@@ -1,41 +1,63 @@
 import * as React from 'react';
 import { ScrollView } from 'react-native';
-import { toIdSchema, retrieveSchema, getDefaultFormState, getDefaultRegistry } from './utils';
-import { SchemaField } from './fields/schema-field';
+import {
+	toIdSchema,
+	retrieveSchema,
+	getDefaultFormState,
+	getDefaultRegistry,
+} from './form.helpers';
 
-interface FormProps {
-	schema: any;
-	uiSchema: any;
-	formData: any;
-	onChange: any;
-}
-
-export const Form = ({ schema, uiSchema = {}, formData: inputFormData, onChange }: FormProps) => {
+/**
+ *
+ */
+export function Form<T extends object>({
+	schema,
+	uiSchema = {},
+	formData: inputFormData,
+	onChange,
+	...props
+}: import('./types').FormProps<T>): React.ReactElement {
 	const rootSchema = schema;
 	const formData = getDefaultFormState(schema, inputFormData, rootSchema);
 	const retrievedSchema = retrieveSchema(schema, rootSchema, formData);
 
-	const idSchema = toIdSchema(retrievedSchema, 'root', schema, formData);
+	const idSchema = toIdSchema(
+		retrievedSchema,
+		uiSchema['ui:rootFieldId'],
+		rootSchema,
+		formData,
+		props.idPrefix,
+		props.idSeparator
+	);
 
-	const getRegistry = () => {
+	const registry = React.useMemo(() => {
 		const { fields, widgets } = getDefaultRegistry();
-		return { fields, widgets, rootSchema };
-	};
+		return {
+			fields: { ...fields, ...props.fields },
+			widgets: { ...widgets, ...props.widgets },
+			// ArrayFieldTemplate: props.ArrayFieldTemplate,
+			// ObjectFieldTemplate: props.ObjectFieldTemplate,
+			// FieldTemplate: props.FieldTemplate,
+			definitions: schema.definitions || {},
+			rootSchema: schema,
+			formContext: props.formContext || {},
+		};
+	}, [rootSchema]);
 
-	console.log(rootSchema);
+	const { SchemaField } = registry.fields;
 
 	return (
-		<ScrollView style={{ height: 300 }}>
-			<SchemaField
-				schema={schema}
-				uiSchema={uiSchema}
-				idSchema={idSchema}
-				// idPrefix={idPrefix}
-				// formContext={formContext}
-				formData={formData}
-				registry={getRegistry()}
-				onChange={onChange}
-			/>
-		</ScrollView>
+		// <ScrollView style={{ height: 300 }}>
+		<SchemaField
+			schema={schema}
+			uiSchema={uiSchema}
+			idSchema={idSchema}
+			// idPrefix={idPrefix}
+			// formContext={formContext}
+			formData={formData}
+			registry={registry}
+			onChange={onChange}
+		/>
+		// </ScrollView>
 	);
-};
+}

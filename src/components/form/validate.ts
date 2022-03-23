@@ -1,6 +1,6 @@
 import toPath from 'lodash/toPath';
 import Ajv from 'ajv';
-import { deepEquals, getDefaultFormState, isObject, mergeObjects } from './utils';
+import { deepEquals, getDefaultFormState, isObject, mergeObjects } from './form.helpers';
 
 let ajv = createAjvInstance();
 

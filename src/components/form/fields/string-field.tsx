@@ -2,13 +2,20 @@ import * as React from 'react';
 import TextInput from '../../textinput';
 import Text from '../../text';
 
-interface StringFieldProps {
-	name: string;
-	formData: string;
-	onChange: any;
-}
-
-export const StringField = ({ name, formData, onChange }: StringFieldProps) => {
+/**
+ *
+ */
+export function StringField<T extends object>({
+	schema,
+	uiSchema,
+	idSchema,
+	idPrefix,
+	formContext,
+	formData,
+	registry,
+	name,
+	onChange,
+}: import('../types').FieldProps<T>): React.ReactElement {
 	const handleTextChange = React.useCallback(
 		(value: string) => {
 			if (onChange) {
@@ -19,4 +26,4 @@ export const StringField = ({ name, formData, onChange }: StringFieldProps) => {
 	);
 
 	return <TextInput label={name} value={formData} onChange={handleTextChange} />;
-};
+}
