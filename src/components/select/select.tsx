@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { ScrollView } from 'react-native';
+import get from 'lodash/get';
 import { useUncontrolledState } from '@wcpos/common/src/hooks/use-uncontrolled-state';
 import Dropdown, { useDropdown } from '../dropdown';
 import Arrow from '../arrow';
 import BaseInput, { BaseInputContainer } from '../base-input';
 
-export interface SelectChoice {
+export interface SelectOption {
 	/**
 	 * Label for the Option.
 	 */
@@ -26,9 +27,9 @@ export interface SelectProps {
 	 */
 	label: string;
 	/**
-	 * Choices available in the Select.
+	 * Options available in the Select.
 	 */
-	choices: SelectChoice[] | string[];
+	options: SelectOption[] | string[];
 	/**
 	 * Currently selected value. If null, no value is selected.
 	 */
@@ -62,10 +63,10 @@ const maxHeight = 300;
  */
 export const Select = ({
 	label,
-	choices: choicesRaw,
+	options: optionsRaw,
 	selected: selectedRaw = null,
 	onChange: onChangeRaw,
-	placeholder,
+	placeholder = 'Select',
 	helpText,
 	error = false,
 	disabled = false,
@@ -75,18 +76,22 @@ export const Select = ({
 		selectedRaw,
 		onChangeRaw as ((value: string | null) => string) | undefined // This will never be called with a null parameter
 	);
+	const options = React.useMemo(() => {
+		const enumOptions = get(optionsRaw, 'enumOptions');
+		if (enumOptions) {
+			return enumOptions; // special case for enum options
+		}
 
-	const choices = React.useMemo(
-		() =>
-			choicesRaw.map((choice) =>
+		if (Array.isArray(optionsRaw)) {
+			return optionsRaw.map((choice) =>
 				typeof choice === 'string' ? { label: choice, value: choice } : choice
-			),
-		[choicesRaw]
-	);
+			);
+		}
+	}, [optionsRaw]);
 
 	const selectedChoice = React.useMemo(
-		() => choices.find((x) => x.value === selected),
-		[choices, selected]
+		() => options.find((x) => x.value === selected),
+		[options, selected]
 	);
 
 	const handleSelect = (value: string) => {
@@ -118,7 +123,7 @@ export const Select = ({
 		>
 			<Dropdown
 				ref={ref}
-				items={choices}
+				items={options}
 				// popoverStyle={{ maxHeight }}
 				// placement="bottom"
 				matchWidth

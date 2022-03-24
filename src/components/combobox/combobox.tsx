@@ -5,7 +5,7 @@ import Dropdown from '../dropdown';
 import TextInput from '../textinput';
 // import Search from '../search';
 
-export interface ComboboxChoice {
+export interface ComboboxOptions {
 	/**
 	 * Label for the Option.
 	 */
@@ -30,9 +30,9 @@ export interface ComboboxProps {
 	 */
 	label: string;
 	/**
-	 * Choices available in the Select.
+	 * Options available in the Select.
 	 */
-	choices: ComboboxChoice[];
+	options: ComboboxOptions[];
 	/**
 	 * Currently selected value. If null, no value is selected.
 	 */
@@ -64,7 +64,7 @@ export interface ComboboxProps {
  */
 export const Combobox = ({
 	label,
-	choices,
+	options,
 	selected: selectedRaw = null,
 	onChange: onChangeRaw,
 	placeholder,
@@ -92,7 +92,7 @@ export const Combobox = ({
 	// );
 
 	return (
-		<Dropdown withArrow={false} matchWidth items={choices}>
+		<Dropdown withArrow={false} matchWidth items={options}>
 			<TextInput
 				label={label}
 				hideLabel={hideLabel}

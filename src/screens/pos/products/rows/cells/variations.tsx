@@ -91,7 +91,7 @@ const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 						</Button.Group>
 					) : (
 						<Select
-							choices={attribute.options}
+							options={attribute.options}
 							onChange={(option) => {
 								debugger;
 							}}

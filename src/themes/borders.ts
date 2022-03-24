@@ -1,4 +1,11 @@
+export const border = {
+	thinner: 1,
+	small: 2,
+	none: 0,
+};
+
 export const rounding = {
+	circle: 9999,
 	xxLarge: 50,
 	xLarge: 32,
 	large: 9,

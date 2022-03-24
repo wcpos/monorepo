@@ -43,7 +43,7 @@ BasicUsage.args = {
 	selected: null,
 	// placeholder: 'Should be a color',
 	// helpText: 'Colors are displayed in neutral color, in case you are color blind.',
-	choices: [
+	options: [
 		{ label: 'Blue', value: 'blue' },
 		{ label: 'Red', value: 'red' },
 		{ label: 'Green', value: 'green' },

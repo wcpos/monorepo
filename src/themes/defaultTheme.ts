@@ -3,7 +3,7 @@ import { math } from 'polished';
 import palette from './palettes/blue-grey.json';
 import normalizeText from './normalize-text';
 import { spacing } from './spacing';
-import { rounding } from './borders';
+import { border, rounding } from './borders';
 import { colors } from './colors';
 import { screens } from './screens';
 import { iconSizes } from './icons';
@@ -183,6 +183,7 @@ const theme = {
 	colors,
 	screens,
 	iconSizes,
+	border,
 };
 
 export default theme;

@@ -17,17 +17,17 @@ export const ADDITIONAL_PROPERTY_FLAG = '__additional_property';
 const widgetMap = {
 	boolean: {
 		checkbox: 'Checkbox',
-		radio: 'RadioWidget',
-		select: 'SelectWidget',
+		radio: 'Radio',
+		select: 'Select',
 		hidden: 'HiddenWidget',
 	},
 	string: {
-		text: 'TextWidget',
+		text: 'TextInput',
 		password: 'PasswordWidget',
 		email: 'EmailWidget',
-		hostname: 'TextWidget',
-		ipv4: 'TextWidget',
-		ipv6: 'TextWidget',
+		hostname: 'TextInput',
+		ipv4: 'TextInput',
+		ipv6: 'TextInput',
 		uri: 'URLWidget',
 		'data-url': 'FileWidget',
 		radio: 'RadioWidget',
@@ -43,23 +43,23 @@ const widgetMap = {
 		file: 'FileWidget',
 	},
 	number: {
-		text: 'TextWidget',
-		select: 'SelectWidget',
+		text: 'TextInput',
+		select: 'Select',
 		updown: 'UpDownWidget',
-		range: 'RangeWidget',
-		radio: 'RadioWidget',
+		range: 'Slider',
+		radio: 'Radio',
 		hidden: 'HiddenWidget',
 	},
 	integer: {
-		text: 'TextWidget',
-		select: 'SelectWidget',
+		text: 'TextInput',
+		select: 'Select',
 		updown: 'UpDownWidget',
-		range: 'RangeWidget',
-		radio: 'RadioWidget',
+		range: 'Slider',
+		radio: 'Radio',
 		hidden: 'HiddenWidget',
 	},
 	array: {
-		select: 'SelectWidget',
+		select: 'Select',
 		checkboxes: 'CheckboxesWidget',
 		files: 'FileWidget',
 		hidden: 'HiddenWidget',
@@ -120,18 +120,18 @@ export function getSchemaType(schema: Schema) {
 	return type;
 }
 
-export function getWidget(schema: Schema, widget: Widget, registeredWidgets = {}) {
+export function getWidget(schema: Schema, widget?: string, registeredWidgets = {}) {
 	const type = getSchemaType(schema);
 
-	function mergeOptions(Widget) {
+	function mergeOptions(Component: Widget) {
 		// cache return value as property of widget for proper react reconciliation
-		if (!Widget.MergedWidget) {
-			const defaultOptions = (Widget.defaultProps && Widget.defaultProps.options) || {};
-			Widget.MergedWidget = ({ options = {}, ...props }) => (
-				<Widget options={{ ...defaultOptions, ...options }} {...props} />
+		if (!Component.MergedWidget) {
+			const defaultOptions = (Component.defaultProps && Component.defaultProps.options) || {};
+			Component.MergedWidget = ({ options = {}, ...props }) => (
+				<Component options={{ ...defaultOptions, ...options }} {...props} />
 			);
 		}
-		return Widget.MergedWidget;
+		return Component.MergedWidget;
 	}
 
 	if (
@@ -163,7 +163,7 @@ export function getWidget(schema: Schema, widget: Widget, registeredWidgets = {}
 	throw new Error(`No widget "${widget}" for type "${type}"`);
 }
 
-export function hasWidget(schema: Schema, widget: Widget, registeredWidgets = {}) {
+export function hasWidget(schema: Schema, widget?: string, registeredWidgets = {}) {
 	try {
 		getWidget(schema, widget, registeredWidgets);
 		return true;
@@ -347,7 +347,13 @@ export function mergeDefaultsWithFormData(defaults: any, formData: any) {
 	return formData;
 }
 
-export function getUiOptions(uiSchema: UiSchema) {
+export function getUiOptions(uiSchema: UiSchema): {
+	widget?: string;
+	options?: {
+		[key: string]: any;
+	};
+	[key: string]: any;
+} {
 	// get all passed options from ui:widget, ui:options, and ui:<optionName>
 	return Object.keys(uiSchema)
 		.filter((key) => key.indexOf('ui:') === 0)
@@ -545,7 +551,10 @@ export function allowAdditionalItems(schema: Schema) {
 export function optionsList(schema: Schema) {
 	if (schema.enum) {
 		return schema.enum.map((value, i) => {
-			const label = (schema.enumNames && schema.enumNames[i]) || String(value);
+			let label = String(value);
+			if (schema.enumNames && schema.enumNames[i]) {
+				label = schema.enumNames[i];
+			}
 			return { label, value };
 		});
 	}

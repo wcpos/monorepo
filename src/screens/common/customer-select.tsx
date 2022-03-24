@@ -45,7 +45,7 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 
 	const customers = useObservableState(data$, []) as CustomerDocument[];
 
-	const choices = React.useMemo(() => {
+	const options = React.useMemo(() => {
 		const sortedCustomers = orderBy(customers, 'lastName');
 
 		return sortedCustomers.map((customer) => ({
@@ -69,7 +69,7 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 		<Combobox
 			label="Search customers"
 			hideLabel
-			choices={choices}
+			options={options}
 			placeholder={t('customers.search.placeholder')}
 			selected={selectedCustomer ? displayCustomerNameOrUsername(selectedCustomer) : ''}
 			onSearch={onSearch}

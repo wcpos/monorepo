@@ -1,9 +1,38 @@
 import * as React from 'react';
 import { action } from '@storybook/addon-actions';
-import { Form, FormProps } from './form';
+import { View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StoryWrapper } from '@storybook/addons';
+import { AppProviderSizeProvider } from '@wcpos/common/src/hooks/use-position-in-app';
+import Portal from '../portal';
+import { Form } from './form';
+import { FormProps } from './types';
+
+/**
+ * Select require (uses Popover)
+ * - SafeAreaProvider
+ * - Portals
+ * - AppProviderSizeProvider
+ */
+const AppProvider: StoryWrapper = (Story, context) => {
+	return (
+		<SafeAreaProvider>
+			<AppProviderSizeProvider>
+				<Portal.Provider>
+					<View style={{ height: '600px' }}>
+						<Story {...context} />
+					</View>
+					<Portal.Manager />
+				</Portal.Provider>
+			</AppProviderSizeProvider>
+		</SafeAreaProvider>
+	);
+};
 
 export default {
 	title: 'Components/Form',
+	component: Form,
+	decorators: [AppProvider],
 };
 
 export const BasicUsage = (props: FormProps) => {
@@ -118,9 +147,9 @@ Numbers.args = {
 		},
 	},
 	uiSchema: {
-		integer: {
-			'ui:widget': 'updown',
-		},
+		// integer: {
+		// 	'ui:widget': 'updown',
+		// },
 		numberEnumRadio: {
 			'ui:widget': 'radio',
 			'ui:options': {

@@ -36,7 +36,7 @@ const UserSettings = ({ onClose }: UserSettingsProps) => {
 			<Select
 				label="Country"
 				placeholder="GB"
-				choices={[
+				options={[
 					{ label: 'GB', value: 'GB' },
 					{ label: 'US', value: 'US' },
 				]}

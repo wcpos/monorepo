@@ -43,7 +43,7 @@ BasicUsage.args = {
 	selected: null,
 	placeholder: 'Should be a color',
 	helpText: 'Colors are displayed in neutral color, in case you are color blind.',
-	choices: [
+	options: [
 		{ label: 'Blue', value: 'blue' },
 		{ label: 'Red', value: 'red' },
 		{ label: 'Green', value: 'green' },
@@ -51,12 +51,12 @@ BasicUsage.args = {
 	],
 };
 
-export const WithManyChoices: React.FC = () => {
+export const WithManyOptions: React.FC = () => {
 	const [selected, setSelected] = React.useState<string | null>(null);
-	const choices: number[] = [];
+	const options: number[] = [];
 
 	for (let i = 0; i < 100; i++) {
-		choices.push(i);
+		options.push(i);
 	}
 
 	return (
@@ -64,7 +64,7 @@ export const WithManyChoices: React.FC = () => {
 			label="Choose a number"
 			placeholder="choose"
 			selected={selected}
-			choices={choices.map((x) => ({
+			options={options.map((x) => ({
 				label: x.toString(),
 				value: x.toString(),
 				disabled: x < 10,
@@ -82,7 +82,7 @@ export const Disabled: React.FC = () => {
 		<Select
 			label="Choose a color"
 			selected={selected}
-			choices={[
+			options={[
 				{ label: 'Blue', value: 'blue' },
 				{ label: 'Red', value: 'red' },
 				{ label: 'Green', value: 'green' },
@@ -101,7 +101,7 @@ export const WithError: React.FC = () => {
 		<Select
 			label="Choose a color"
 			selected={selected}
-			choices={[
+			options={[
 				{ label: 'Blue', value: 'blue' },
 				{ label: 'Red', value: 'red' },
 				{ label: 'Green', value: 'green' },

@@ -38,7 +38,8 @@ export function ObjectField<T extends object>({
 		<>
 			<Text>{props.name}</Text>
 			{orderedProperties.map((name) => {
-				const fieldUiSchema = get(uiSchema, name);
+				const fieldUiSchema = get(uiSchema, name, {});
+
 				return (
 					<SchemaField
 						key={name}

@@ -42,7 +42,7 @@ export function Form<T extends object>({
 			rootSchema: schema,
 			formContext: props.formContext || {},
 		};
-	}, [rootSchema]);
+	}, [props.fields, props.formContext, props.widgets, schema]);
 
 	const { SchemaField } = registry.fields;
 
