@@ -7,7 +7,7 @@
 	},
 	"dependencies": {
 		"@react-native-community/netinfo": "8.2.0",
-		"electron": "17.1.2",
+		"electron": "17.2.0",
 		"expo": "44.0.6",
 		"expo-status-bar": "1.2.0",
 		"react": "17.0.2",

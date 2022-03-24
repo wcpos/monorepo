@@ -4201,7 +4201,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@sentry/browser@npm:6.19.1, @sentry/browser@npm:^6.12.0":
+"@sentry/browser@npm:6.19.2":
+  version: 6.19.2
+  resolution: "@sentry/browser@npm:6.19.2"
+  dependencies:
+    "@sentry/core": 6.19.2
+    "@sentry/types": 6.19.2
+    "@sentry/utils": 6.19.2
+    tslib: ^1.9.3
+  checksum: d84ed8bed929f8c5628d68f13e688b266b1dbabbc89e316ef13e5b595bf0707cade996911e1665b052245f2bc9b86145946f364edbe05fbb84c917333e8904c8
+  languageName: node
+  linkType: hard
+
+"@sentry/browser@npm:^6.12.0":
   version: 6.19.1
   resolution: "@sentry/browser@npm:6.19.1"
   dependencies:
@@ -4269,9 +4281,22 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@sentry/electron@npm:3.0.4":
-  version: 3.0.4
-  resolution: "@sentry/electron@npm:3.0.4"
+"@sentry/core@npm:6.19.2":
+  version: 6.19.2
+  resolution: "@sentry/core@npm:6.19.2"
+  dependencies:
+    "@sentry/hub": 6.19.2
+    "@sentry/minimal": 6.19.2
+    "@sentry/types": 6.19.2
+    "@sentry/utils": 6.19.2
+    tslib: ^1.9.3
+  checksum: 0b683287973d14b98a6a7b09bb8a30e1fbad5cbd144b34bb999fe9b9ffb15bfbfe3fc7eccdb8b308ab707c9a243b561feb3ccea196b10e01e27bc85385b87b13
+  languageName: node
+  linkType: hard
+
+"@sentry/electron@npm:3.0.5":
+  version: 3.0.5
+  resolution: "@sentry/electron@npm:3.0.5"
   dependencies:
     "@sentry/browser": 6.17.2
     "@sentry/core": 6.17.2
@@ -4280,7 +4305,7 @@ __metadata:
     "@sentry/utils": 6.17.2
     deepmerge: ^4.2.2
     tslib: ^2.3.1
-  checksum: 293a97536a7a6309d8f8a72ecb8b430f07fc151c47b34ee3ffb8378610a26bc1399e75820ea97b23e2471a9abea4e83a70a78024993adcbc5e1a0684ecadfd3a
+  checksum: efb196369ab91b1693237e23a8dff82f79b18486193d5d04d1f0d8a606850b9eb2d4786e1ac1ef679ef0d75027be45455e728086df4024b3260252a2bd685d2f
   languageName: node
   linkType: hard
 
@@ -4314,6 +4339,17 @@ __metadata:
     "@sentry/utils": 6.19.1
     tslib: ^1.9.3
   checksum: c47b6dcb3daeedb4c755fea1507e19566bcb50e44ad7233c16cfb1d846d3f6b1c14b9375d88b1d45019c81b76af9f13e812b0c132cb8e2bd75d145f7b41e9a5e
+  languageName: node
+  linkType: hard
+
+"@sentry/hub@npm:6.19.2":
+  version: 6.19.2
+  resolution: "@sentry/hub@npm:6.19.2"
+  dependencies:
+    "@sentry/types": 6.19.2
+    "@sentry/utils": 6.19.2
+    tslib: ^1.9.3
+  checksum: 22ff7103d0313395e47cb667ee7dc0efec239329c4bd513c6cc1dce2a03ccbd6f821d40b2dd3b944300aa857bf8c4e4e6591d40f0f5ddee983d717e28ea1419f
   languageName: node
   linkType: hard
 
@@ -4371,6 +4407,17 @@ __metadata:
     "@sentry/types": 6.19.1
     tslib: ^1.9.3
   checksum: ac47c43883924a3abbf508148bc350f71bfd26828a3fd886e1075dffd3331f9e455478a54293fce606604cabdc6b32452b98c87e69bb9d71854b493c41510863
+  languageName: node
+  linkType: hard
+
+"@sentry/minimal@npm:6.19.2":
+  version: 6.19.2
+  resolution: "@sentry/minimal@npm:6.19.2"
+  dependencies:
+    "@sentry/hub": 6.19.2
+    "@sentry/types": 6.19.2
+    tslib: ^1.9.3
+  checksum: a81344497cf86a7f94a79571a05da3915d9c2a05e15c7ea5fc3dddfec19390b49b18fcfcf71530cec0b18ce5b76bf2c1600346ec5545244d8b2a2c56a7d15c86
   languageName: node
   linkType: hard
 
@@ -4475,6 +4522,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@sentry/types@npm:6.19.2":
+  version: 6.19.2
+  resolution: "@sentry/types@npm:6.19.2"
+  checksum: 4a22891c1549ad345abbe873b093898e4b9310ec0a53a0aa68055dc21e52bd2d4014e7b5c9da4106bccded29ae1a3f0ac04ba119eaf3371fe469de4f87e56e39
+  languageName: node
+  linkType: hard
+
 "@sentry/utils@npm:6.17.2":
   version: 6.17.2
   resolution: "@sentry/utils@npm:6.17.2"
@@ -4502,6 +4556,16 @@ __metadata:
     "@sentry/types": 6.19.1
     tslib: ^1.9.3
   checksum: 5e76bd73a584f215d06be5554db076dbc3eeab6b2326bc917550f98d6558b40849491748fa037efc489cd20c32fbffac1f1ea2b4f6b7055b3d39093596ecc8c0
+  languageName: node
+  linkType: hard
+
+"@sentry/utils@npm:6.19.2":
+  version: 6.19.2
+  resolution: "@sentry/utils@npm:6.19.2"
+  dependencies:
+    "@sentry/types": 6.19.2
+    tslib: ^1.9.3
+  checksum: 9e1c95bb50e874f4d2e1b650dd1d8e3a19ba25789158756e7d296da41ddf44619adcfe027b7af0e7354bdf60953bffa157a69765c15c63345f0a2841646b5205
   languageName: node
   linkType: hard
 
@@ -7748,7 +7812,7 @@ __metadata:
     "@types/react-native": 0.67.3
     "@wcpos/babel-preset-expo": "*"
     "@wcpos/eslint-config": "*"
-    electron: 17.1.2
+    electron: 17.2.0
     expo: 44.0.6
     expo-status-bar: 1.2.0
     react: 17.0.2
@@ -7851,7 +7915,7 @@ __metadata:
     react-devtools-core: 4.24.1
     react-dom: 17.0.2
     react-native: 0.64.3
-    react-native-flipper: 0.138.0
+    react-native-flipper: 0.140.0
     react-native-get-random-values: 1.7.2
     react-native-pager-view: 5.4.15
     react-native-reanimated: 2.5.0
@@ -7914,8 +7978,8 @@ __metadata:
     "@react-navigation/elements": 1.3.1
     "@react-navigation/native": 6.0.8
     "@react-navigation/stack": 6.1.1
-    "@sentry/browser": 6.19.1
-    "@sentry/electron": 3.0.4
+    "@sentry/browser": 6.19.2
+    "@sentry/electron": 3.0.5
     "@sentry/react-native": 3.3.5
     "@testing-library/jest-dom": 5.16.2
     "@testing-library/react": 12.1.4
@@ -8016,7 +8080,7 @@ __metadata:
     eslint-config-airbnb: 19.0.4
     eslint-config-prettier: 8.5.0
     eslint-plugin-import: 2.25.4
-    eslint-plugin-jest: 26.1.2
+    eslint-plugin-jest: 26.1.3
     eslint-plugin-jsx-a11y: 6.5.1
     eslint-plugin-prettier: 4.0.0
     eslint-plugin-react: 7.29.4
@@ -13077,16 +13141,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron@npm:17.1.2":
-  version: 17.1.2
-  resolution: "electron@npm:17.1.2"
+"electron@npm:17.2.0":
+  version: 17.2.0
+  resolution: "electron@npm:17.2.0"
   dependencies:
     "@electron/get": ^1.13.0
     "@types/node": ^14.6.2
     extract-zip: ^1.0.3
   bin:
     electron: cli.js
-  checksum: 0cc6ffe2ffadd209a6064499389d4aba73e48826e5dd4d3fd52c623874ebc6b008f3325786db779362b14101e4bf94f8c5752aa1e65cad4e3517782ea06e13cd
+  checksum: f345311f9c79f0852c3116ede2b83a439e8c1c3b2a40c85e5b5912962571fe1d1c19af8231e0215f47da735ebe6064cbc812ae1bdf4f9638de538912b1f6ab7e
   languageName: node
   linkType: hard
 
@@ -13625,9 +13689,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-plugin-jest@npm:26.1.2":
-  version: 26.1.2
-  resolution: "eslint-plugin-jest@npm:26.1.2"
+"eslint-plugin-jest@npm:26.1.3":
+  version: 26.1.3
+  resolution: "eslint-plugin-jest@npm:26.1.3"
   dependencies:
     "@typescript-eslint/utils": ^5.10.0
   peerDependencies:
@@ -13638,7 +13702,7 @@ __metadata:
       optional: true
     jest:
       optional: true
-  checksum: 1d74e143a78681906d9ab3c3bd7c213f869fe6385f75c325ff2fe3da3b4181a25545c30d42850cf4904f89a43aad9d41b5fd4c06daffdb3f0ec383d8d4d7bac0
+  checksum: f340d25bf1b0a0cc5df43d2d7b0e547eef430994c5bc1514be62a26e3fe0263d795110d9a399bc176e18c18167872f3717f83bca67d273e092fd43498e6ab80e
   languageName: node
   linkType: hard
 
@@ -25089,13 +25153,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-flipper@npm:0.138.0":
-  version: 0.138.0
-  resolution: "react-native-flipper@npm:0.138.0"
+"react-native-flipper@npm:0.140.0":
+  version: 0.140.0
+  resolution: "react-native-flipper@npm:0.140.0"
   peerDependencies:
     react: ^16.8.0 || ^17.0.0
     react-native: ">0.62.0"
-  checksum: 805bb9f9c6806a84b8504f6e0351e660d6a51a7146bdb03a2fb26ba432c8761bba1a05ebf7846e81fb848dd35b3dec29f2a0443ee3d6812c3e1ae9d1962d131a
+  checksum: b1de8aa4b489323cbd8344bb203fa970668ffe9ac97d32777d6ecad4d630f25bf6dbf38be8ddc8108bfdd7ee69db8f6849efa1437bbcbbe462e7e5604e0a0ef3
   languageName: node
   linkType: hard
 
