@@ -217,7 +217,7 @@ export const ModalBase = (
 					}}
 				>
 					{renderHeader()}
-					<Box padding="medium">
+					<Box padding="medium" style={{ flex: 1 }}>
 						<ScrollView>{renderChildren()}</ScrollView>
 					</Box>
 					{renderFooter()}

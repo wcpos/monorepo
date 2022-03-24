@@ -266,11 +266,75 @@
 		},
 		"billing": {
 			"description": "Billing address.",
-			"type": "object"
+			"type": "object",
+			"properties": {
+				"first_name": {
+					"type": "string"
+				},
+				"last_name": {
+					"type": "string"
+				},
+				"company": {
+					"type": "string"
+				},
+				"address_1": {
+					"type": "string"
+				},
+				"address_2": {
+					"type": "string"
+				},
+				"city": {
+					"type": "string"
+				},
+				"postcode": {
+					"type": "string"
+				},
+				"country": {
+					"type": "string"
+				},
+				"state": {
+					"type": "string"
+				},
+				"email": {
+					"type": "string"
+				},
+				"phone": {
+					"type": "string"
+				}
+			}
 		},
 		"shipping": {
 			"description": "Shipping address.",
-			"type": "object"
+			"type": "object",
+			"properties": {
+				"first_name": {
+					"type": "string"
+				},
+				"last_name": {
+					"type": "string"
+				},
+				"company": {
+					"type": "string"
+				},
+				"address_1": {
+					"type": "string"
+				},
+				"address_2": {
+					"type": "string"
+				},
+				"city": {
+					"type": "string"
+				},
+				"postcode": {
+					"type": "string"
+				},
+				"country": {
+					"type": "string"
+				},
+				"state": {
+					"type": "string"
+				}
+			}
 		},
 		"payment_method": {
 			"description": "Payment method ID.",
@@ -285,16 +349,16 @@
 			"type": "string"
 		},
 		"date_paid": {
-			"type": ["string", "null"]
+			"type": "string"
 		},
 		"date_paid_gmt": {
-			"type": ["string", "null"]
+			"type": "string"
 		},
 		"date_completed": {
-			"type": ["string", "null"]
+			"type": "string"
 		},
 		"date_completed_gmt": {
-			"type": ["string", "null"]
+			"type": "string"
 		},
 		"cart_hash": {
 			"type": "string"

@@ -36,12 +36,13 @@ export function Tabs<T extends Route>({
 	navigationState,
 	renderScene,
 	tabBarPosition = 'top',
+	style,
 }: TabsProps<T>) {
 	return (
 		<Box
-			fill
 			horizontal={tabBarPosition === 'left' || tabBarPosition === 'right'}
 			reverse={tabBarPosition === 'bottom' || tabBarPosition === 'right'}
+			style={style}
 		>
 			<TabBar
 				routes={navigationState.routes}
@@ -51,7 +52,9 @@ export function Tabs<T extends Route>({
 				}
 				focusedIndex={navigationState.index}
 			/>
-			<Box fill>{renderScene({ route: navigationState.routes[navigationState.index] })}</Box>
+			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+				{renderScene({ route: navigationState.routes[navigationState.index] })}
+			</Box>
 		</Box>
 	);
 }

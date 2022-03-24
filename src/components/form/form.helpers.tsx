@@ -31,7 +31,7 @@ const widgetMap = {
 		uri: 'URLWidget',
 		'data-url': 'FileWidget',
 		radio: 'RadioWidget',
-		select: 'SelectWidget',
+		select: 'Select',
 		textarea: 'TextareaWidget',
 		hidden: 'HiddenWidget',
 		date: 'DateWidget',
@@ -143,6 +143,7 @@ export function getWidget(schema: Schema, widget?: string, registeredWidgets = {
 	}
 
 	if (typeof widget !== 'string') {
+		debugger;
 		throw new Error(`Unsupported widget definition: ${typeof widget}`);
 	}
 

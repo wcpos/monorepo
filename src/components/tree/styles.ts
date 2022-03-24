@@ -4,7 +4,7 @@ import Pressable from '../pressable';
 import Button from '../button';
 
 export const Raw = styled.TextInput`
-	max-height: 300px;
+	height: 100%;
 `;
 
 export const Container = styled.View`

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { Raw } from './raw';
 import { JsonNode } from './json/node';
 import Button from '../button';

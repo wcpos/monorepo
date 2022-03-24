@@ -44,16 +44,16 @@
 			"type": "string"
 		},
 		"date_on_sale_from": {
-			"type": ["string", "null"]
+			"type": "string"
 		},
 		"date_on_sale_from_gmt": {
-			"type": ["string", "null"]
+			"type": "string"
 		},
 		"date_on_sale_to": {
-			"type": ["string", "null"]
+			"type": "string"
 		},
 		"date_on_sale_to_gmt": {
-			"type": ["string", "null"]
+			"type": "string"
 		},
 		"on_sale": {
 			"type": "boolean"

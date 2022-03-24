@@ -32,6 +32,7 @@ const POSTabs = ({ leftComponent, rightComponent }: POSTabsProps) => {
 			renderScene={renderScene}
 			onIndexChange={setIndex}
 			tabBarPosition="bottom"
+			style={{ height: '100%' }}
 		/>
 	);
 };

@@ -30,9 +30,17 @@ const Cart = ({ order }: CartProps) => {
 	useWhyDidYouUpdate('Cart', { order, ui });
 
 	return (
-		<Box raised rounding="medium" style={{ height: '100%', backgroundColor: 'white' }}>
+		<Box
+			raised
+			rounding="medium"
+			// style={{ backgroundColor: 'white' }}
+			style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
+		>
 			<CartHeader order={order} ui={ui} />
-			<Box fill>
+			<Box
+				// fill
+				style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
+			>
 				<React.Suspense fallback={<Text>loading cart...</Text>}>
 					<Table cartResource={cartResource} ui={ui} />
 				</React.Suspense>

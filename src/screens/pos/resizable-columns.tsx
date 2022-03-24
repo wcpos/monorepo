@@ -82,8 +82,8 @@ const ResizableColumns = ({ leftComponent, rightComponent, ui }: ResizableColumn
 	});
 
 	return (
-		<Box horizontal onLayout={onContainerLayout} style={{height: '100%'}}>
-			<Animated.View style={columnStyle}>{leftComponent}</Animated.View>
+		<Box horizontal onLayout={onContainerLayout} style={{ height: '100%' }}>
+			<Animated.View style={[columnStyle]}>{leftComponent}</Animated.View>
 			<PanGestureHandler onGestureEvent={panGestureHandler}>
 				<Animated.View style={{ width: 10 }}>
 					<Gutter />

@@ -90,6 +90,7 @@ const CartTabs = ({ ordersResource }: CartTabsProps) => {
 			navigationState={{ index, routes }}
 			renderScene={renderScene}
 			tabBarPosition="bottom"
+			style={{ height: '100%' }}
 		/>
 	);
 };
