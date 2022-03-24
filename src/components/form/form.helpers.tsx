@@ -143,7 +143,6 @@ export function getWidget(schema: Schema, widget?: string, registeredWidgets = {
 	}
 
 	if (typeof widget !== 'string') {
-		debugger;
 		throw new Error(`Unsupported widget definition: ${typeof widget}`);
 	}
 

@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { View } from 'react-native';
 import { Raw } from './raw';
 import { JsonNode } from './json/node';
 import Button from '../button';
 import Icon from '../icon';
+import Box from '../box';
 import * as Styled from './styles';
 
 export interface TreeProps {
@@ -24,7 +24,7 @@ export const Tree = ({
 	const [raw, setRaw] = React.useState(false);
 
 	return (
-		<Styled.Container>
+		<Box paddingY="small">
 			{raw ? (
 				<Raw data={data} />
 			) : (
@@ -48,6 +48,6 @@ export const Tree = ({
 					}
 				/>
 			</Styled.RawButtonContainer>
-		</Styled.Container>
+		</Box>
 	);
 };

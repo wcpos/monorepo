@@ -82,7 +82,10 @@
 		"url-parse": "1.5.10"
 	},
 	"devDependencies": {
+		"@types/core-js": "^2.5.5",
 		"@types/jest": "27.4.1",
+		"@types/json-schema-merge-allof": "^0.6.1",
+		"@types/react-is": "^17.0.3",
 		"@types/react-jsonschema-form": "1.7.8",
 		"jest": "27.5.1",
 		"ts-jest": "27.1.3",

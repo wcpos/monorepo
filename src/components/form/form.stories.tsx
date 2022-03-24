@@ -35,6 +35,9 @@ export default {
 	decorators: [AppProvider],
 };
 
+/**
+ *
+ */
 export const BasicUsage = (props: FormProps) => {
 	const [data, setData] = React.useState({
 		firstName: 'Chuck',
@@ -92,6 +95,470 @@ BasicUsage.args = {
 	},
 };
 
+/**
+ *
+ */
+export const Nested = (props: FormProps) => {
+	const [data, setData] = React.useState({
+		title: 'My current tasks',
+		tasks: [
+			{
+				title: 'My first task',
+				details:
+					'Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
+				done: true,
+			},
+			{
+				title: 'My second task',
+				details:
+					'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur',
+				done: false,
+			},
+		],
+	});
+
+	const handleChange = React.useCallback((change) => {
+		action('onChange')(change);
+		setData((prev) => ({ ...prev, ...change }));
+	}, []);
+
+	return <Form {...props} formData={data} onChange={handleChange} />;
+};
+Nested.args = {
+	schema: {
+		title: 'A list of tasks',
+		type: 'object',
+		required: ['title'],
+		properties: {
+			title: {
+				type: 'string',
+				title: 'Task list title',
+			},
+			tasks: {
+				type: 'array',
+				title: 'Tasks',
+				items: {
+					type: 'object',
+					required: ['title'],
+					properties: {
+						title: {
+							type: 'string',
+							title: 'Title',
+							description: 'A sample title',
+						},
+						details: {
+							type: 'string',
+							title: 'Task details',
+							description: 'Enter the task details',
+						},
+						done: {
+							type: 'boolean',
+							title: 'Done?',
+							default: false,
+						},
+					},
+				},
+			},
+		},
+	},
+	uiSchema: {
+		tasks: {
+			items: {
+				details: {
+					'ui:widget': 'textarea',
+				},
+			},
+		},
+	},
+};
+
+/**
+ *
+ */
+export const Arrays = (props: FormProps) => {
+	const [data, setData] = React.useState({
+		listOfStrings: ['foo', 'bar'],
+		multipleChoicesList: ['foo', 'bar'],
+		fixedItemsList: ['Some text', true, 123],
+		minItemsList: [
+			{
+				name: 'Default name',
+			},
+			{
+				name: 'Default name',
+			},
+			{
+				name: 'Default name',
+			},
+		],
+		defaultsAndMinItems: ['carp', 'trout', 'bream', 'unidentified', 'unidentified'],
+		nestedList: [['lorem', 'ipsum'], ['dolor']],
+		unorderable: ['one', 'two'],
+		unremovable: ['one', 'two'],
+		noToolbar: ['one', 'two'],
+		fixedNoToolbar: [42, true, 'additional item one', 'additional item two'],
+	});
+
+	const handleChange = React.useCallback((change) => {
+		action('onChange')(change);
+		setData((prev) => ({ ...prev, ...change }));
+	}, []);
+
+	return <Form {...props} formData={data} onChange={handleChange} />;
+};
+Arrays.args = {
+	schema: {
+		definitions: {
+			Thing: {
+				type: 'object',
+				properties: {
+					name: {
+						type: 'string',
+						default: 'Default name',
+					},
+				},
+			},
+		},
+		type: 'object',
+		properties: {
+			listOfStrings: {
+				type: 'array',
+				title: 'A list of strings',
+				items: {
+					type: 'string',
+					default: 'bazinga',
+				},
+			},
+			multipleChoicesList: {
+				type: 'array',
+				title: 'A multiple choices list',
+				items: {
+					type: 'string',
+					enum: ['foo', 'bar', 'fuzz', 'qux'],
+				},
+				uniqueItems: true,
+			},
+			fixedItemsList: {
+				type: 'array',
+				title: 'A list of fixed items',
+				items: [
+					{
+						title: 'A string value',
+						type: 'string',
+						default: 'lorem ipsum',
+					},
+					{
+						title: 'a boolean value',
+						type: 'boolean',
+					},
+				],
+				additionalItems: {
+					title: 'Additional item',
+					type: 'number',
+				},
+			},
+			minItemsList: {
+				type: 'array',
+				title: 'A list with a minimal number of items',
+				minItems: 3,
+				items: {
+					$ref: '#/definitions/Thing',
+				},
+			},
+			defaultsAndMinItems: {
+				type: 'array',
+				title: 'List and item level defaults',
+				minItems: 5,
+				default: ['carp', 'trout', 'bream'],
+				items: {
+					type: 'string',
+					default: 'unidentified',
+				},
+			},
+			nestedList: {
+				type: 'array',
+				title: 'Nested list',
+				items: {
+					type: 'array',
+					title: 'Inner list',
+					items: {
+						type: 'string',
+						default: 'lorem ipsum',
+					},
+				},
+			},
+			unorderable: {
+				title: 'Unorderable items',
+				type: 'array',
+				items: {
+					type: 'string',
+					default: 'lorem ipsum',
+				},
+			},
+			unremovable: {
+				title: 'Unremovable items',
+				type: 'array',
+				items: {
+					type: 'string',
+					default: 'lorem ipsum',
+				},
+			},
+			noToolbar: {
+				title: 'No add, remove and order buttons',
+				type: 'array',
+				items: {
+					type: 'string',
+					default: 'lorem ipsum',
+				},
+			},
+			fixedNoToolbar: {
+				title: 'Fixed array without buttons',
+				type: 'array',
+				items: [
+					{
+						title: 'A number',
+						type: 'number',
+						default: 42,
+					},
+					{
+						title: 'A boolean',
+						type: 'boolean',
+						default: false,
+					},
+				],
+				additionalItems: {
+					title: 'A string',
+					type: 'string',
+					default: 'lorem ipsum',
+				},
+			},
+		},
+	},
+	uiSchema: {
+		listOfStrings: {
+			items: {
+				'ui:emptyValue': '',
+			},
+		},
+		multipleChoicesList: {
+			'ui:widget': 'checkboxes',
+		},
+		fixedItemsList: {
+			items: [
+				{
+					'ui:widget': 'textarea',
+				},
+				{
+					'ui:widget': 'select',
+				},
+			],
+			additionalItems: {
+				'ui:widget': 'updown',
+			},
+		},
+		unorderable: {
+			'ui:options': {
+				orderable: false,
+			},
+		},
+		unremovable: {
+			'ui:options': {
+				removable: false,
+			},
+		},
+		noToolbar: {
+			'ui:options': {
+				addable: false,
+				orderable: false,
+				removable: false,
+			},
+		},
+		fixedNoToolbar: {
+			'ui:options': {
+				addable: false,
+				orderable: false,
+				removable: false,
+			},
+		},
+	},
+};
+
+/**
+ *
+ */
+export const Widgets = (props: FormProps) => {
+	const [data, setData] = React.useState({
+		stringFormats: {
+			email: 'chuck@norris.net',
+			uri: 'http://chucknorris.com/',
+		},
+		boolean: {
+			default: true,
+			radio: true,
+			select: true,
+		},
+		string: {
+			color: '#151ce6',
+			default: 'Hello...',
+			textarea: '... World',
+		},
+		secret: "I'm a hidden string.",
+		disabled: 'I am disabled.',
+		readonly: 'I am read-only.',
+		readonly2: 'I am also read-only.',
+		widgetOptions: 'I am yellow',
+	});
+
+	const handleChange = React.useCallback((change) => {
+		action('onChange')(change);
+		setData((prev) => ({ ...prev, ...change }));
+	}, []);
+
+	return <Form {...props} formData={data} onChange={handleChange} />;
+};
+Widgets.args = {
+	schema: {
+		title: 'Widgets',
+		type: 'object',
+		properties: {
+			stringFormats: {
+				type: 'object',
+				title: 'String formats',
+				properties: {
+					email: {
+						type: 'string',
+						format: 'email',
+					},
+					uri: {
+						type: 'string',
+						format: 'uri',
+					},
+				},
+			},
+			boolean: {
+				type: 'object',
+				title: 'Boolean field',
+				properties: {
+					default: {
+						type: 'boolean',
+						title: 'checkbox (default)',
+						description: 'This is the checkbox-description',
+					},
+					radio: {
+						type: 'boolean',
+						title: 'radio buttons',
+						description: 'This is the radio-description',
+					},
+					select: {
+						type: 'boolean',
+						title: 'select box',
+						description: 'This is the select-description',
+					},
+				},
+			},
+			string: {
+				type: 'object',
+				title: 'String field',
+				properties: {
+					default: {
+						type: 'string',
+						title: 'text input (default)',
+					},
+					textarea: {
+						type: 'string',
+						title: 'textarea',
+					},
+					placeholder: {
+						type: 'string',
+					},
+					color: {
+						type: 'string',
+						title: 'color picker',
+						default: '#151ce6',
+					},
+				},
+			},
+			secret: {
+				type: 'string',
+				default: "I'm a hidden string.",
+			},
+			disabled: {
+				type: 'string',
+				title: 'A disabled field',
+				default: 'I am disabled.',
+			},
+			readonly: {
+				type: 'string',
+				title: 'A readonly field',
+				default: 'I am read-only.',
+			},
+			readonly2: {
+				type: 'string',
+				title: 'Another readonly field',
+				default: 'I am also read-only.',
+				readOnly: true,
+			},
+			widgetOptions: {
+				title: 'Custom widget with options',
+				type: 'string',
+				default: 'I am yellow',
+			},
+			selectWidgetOptions: {
+				title: 'Custom select widget with options',
+				type: 'string',
+				enum: ['foo', 'bar'],
+				enumNames: ['Foo', 'Bar'],
+			},
+		},
+	},
+	uiSchema: {
+		boolean: {
+			radio: {
+				'ui:widget': 'radio',
+			},
+			select: {
+				'ui:widget': 'select',
+			},
+		},
+		string: {
+			textarea: {
+				'ui:widget': 'textarea',
+				'ui:options': {
+					rows: 5,
+				},
+			},
+			placeholder: {
+				'ui:placeholder': 'This is a placeholder',
+			},
+			color: {
+				'ui:widget': 'color',
+			},
+		},
+		secret: {
+			'ui:widget': 'hidden',
+		},
+		disabled: {
+			'ui:disabled': true,
+		},
+		readonly: {
+			'ui:readonly': true,
+		},
+		widgetOptions: {
+			'ui:options': {
+				backgroundColor: 'yellow',
+			},
+		},
+		selectWidgetOptions: {
+			'ui:options': {
+				backgroundColor: 'pink',
+			},
+		},
+	},
+};
+
+/**
+ *
+ */
 export const Numbers = (props: FormProps) => {
 	const [data, setData] = React.useState({
 		number: 3.14,
