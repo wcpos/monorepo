@@ -35,9 +35,9 @@ export function Form<T extends object>({
 		return {
 			fields: { ...fields, ...props.fields },
 			widgets: { ...widgets, ...props.widgets },
-			// ArrayFieldTemplate: props.ArrayFieldTemplate,
-			// ObjectFieldTemplate: props.ObjectFieldTemplate,
-			// FieldTemplate: props.FieldTemplate,
+			ArrayFieldTemplate: props.ArrayFieldTemplate,
+			ObjectFieldTemplate: props.ObjectFieldTemplate,
+			FieldTemplate: props.FieldTemplate,
 			definitions: schema.definitions || {},
 			rootSchema: schema,
 			formContext: props.formContext || {},

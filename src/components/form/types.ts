@@ -137,7 +137,7 @@ export interface FieldProps<T = any>
 	onBlur: (id: string, value: any) => void;
 	onFocus: (id: string, value: any) => void;
 	registry: Registry;
-	formContext: any;
+	formContext?: any;
 	autofocus: boolean;
 	disabled: boolean;
 	readonly: boolean;
@@ -175,31 +175,33 @@ export type FieldTemplateProps<T = any> = {
 	registry: Registry;
 };
 
+export type ArrayFieldItemProps = {
+	children: React.ReactElement;
+	className: string;
+	disabled: boolean;
+	hasMoveDown: boolean;
+	hasMoveUp: boolean;
+	hasRemove: boolean;
+	hasToolbar: boolean;
+	index: number;
+	onAddIndexClick: (index: number) => (event?: any) => void;
+	onDropIndexClick: (index: number) => (event?: any) => void;
+	onReorderClick: (index: number, newIndex: number) => (event?: any) => void;
+	readonly: boolean;
+	key: string;
+};
+
 export type ArrayFieldTemplateProps<T = any> = {
-	DescriptionField: React.StatelessComponent<{
+	DescriptionField: React.FunctionComponent<{
 		id: string;
 		description: string | React.ReactElement;
 	}>;
-	TitleField: React.StatelessComponent<{ id: string; title: string; required: boolean }>;
+	TitleField: React.FunctionComponent<{ id: string; title: string; required: boolean }>;
 	canAdd: boolean;
 	className: string;
 	disabled: boolean;
 	idSchema: IdSchema;
-	items: {
-		children: React.ReactElement;
-		className: string;
-		disabled: boolean;
-		hasMoveDown: boolean;
-		hasMoveUp: boolean;
-		hasRemove: boolean;
-		hasToolbar: boolean;
-		index: number;
-		onAddIndexClick: (index: number) => (event?: any) => void;
-		onDropIndexClick: (index: number) => (event?: any) => void;
-		onReorderClick: (index: number, newIndex: number) => (event?: any) => void;
-		readonly: boolean;
-		key: string;
-	}[];
+	items: ArrayFieldItemProps[];
 	onAddClick: (event?: any) => void;
 	readonly: boolean;
 	required: boolean;
@@ -212,11 +214,11 @@ export type ArrayFieldTemplateProps<T = any> = {
 };
 
 export type ObjectFieldTemplateProps<T = any> = {
-	DescriptionField: React.StatelessComponent<{
+	DescriptionField: React.FunctionComponent<{
 		id: string;
 		description: string | React.ReactElement;
 	}>;
-	TitleField: React.StatelessComponent<{ id: string; title: string; required: boolean }>;
+	TitleField: React.FunctionComponent<{ id: string; title: string; required: boolean }>;
 	title: string;
 	description: string;
 	disabled: boolean;

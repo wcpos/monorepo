@@ -340,9 +340,9 @@ Arrays.args = {
 				'ui:emptyValue': '',
 			},
 		},
-		multipleChoicesList: {
-			'ui:widget': 'checkboxes',
-		},
+		// multipleChoicesList: {
+		// 	'ui:widget': 'checkboxes',
+		// },
 		fixedItemsList: {
 			items: [
 				{
@@ -352,9 +352,9 @@ Arrays.args = {
 					'ui:widget': 'select',
 				},
 			],
-			additionalItems: {
-				'ui:widget': 'updown',
-			},
+			// additionalItems: {
+			// 	'ui:widget': 'updown',
+			// },
 		},
 		unorderable: {
 			'ui:options': {
@@ -521,22 +521,22 @@ Widgets.args = {
 			},
 		},
 		string: {
-			textarea: {
-				'ui:widget': 'textarea',
-				'ui:options': {
-					rows: 5,
-				},
-			},
+			// textarea: {
+			// 	'ui:widget': 'textarea',
+			// 	'ui:options': {
+			// 		rows: 5,
+			// 	},
+			// },
 			placeholder: {
 				'ui:placeholder': 'This is a placeholder',
 			},
-			color: {
-				'ui:widget': 'color',
-			},
+			// color: {
+			// 	'ui:widget': 'color',
+			// },
 		},
-		secret: {
-			'ui:widget': 'hidden',
-		},
+		// secret: {
+		// 	'ui:widget': 'hidden',
+		// },
 		disabled: {
 			'ui:disabled': true,
 		},
