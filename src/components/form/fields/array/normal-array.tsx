@@ -5,6 +5,7 @@ import {
 	getDefaultFormState,
 	isFixedItems,
 	allowAdditionalItems,
+	getDefaultRegistry,
 } from '../../form.helpers';
 import { ArrayItemField } from './array-item-field';
 import { DefaultArrayFieldTemplate } from './default-array-field-template';
@@ -29,7 +30,7 @@ export function NormalArray<T extends object>({
 	readonly,
 	hideError,
 	autofocus,
-	registry,
+	registry = getDefaultRegistry(),
 	onBlur,
 	onFocus,
 	idPrefix,

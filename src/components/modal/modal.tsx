@@ -3,9 +3,8 @@ import { Modal as RNModal, KeyboardAvoidingView, ScrollView, StyleSheet } from '
 import Platform from '@wcpos/common/src/utils/platform';
 import Portal from '../portal';
 import Backdrop from '../backdrop';
-import Text from '../text';
+import ErrorBoundary from '../error-boundary';
 import Button from '../button';
-import Segment, { SegmentButtonProps } from '../segment';
 import Box from '../box';
 import Header from './header';
 import * as Styled from './styles';
@@ -216,11 +215,15 @@ export const ModalBase = (
 						maxHeight: '80%',
 					}}
 				>
-					{renderHeader()}
-					<Box padding="medium" style={{ flex: 1 }}>
-						<ScrollView>{renderChildren()}</ScrollView>
-					</Box>
-					{renderFooter()}
+					<ErrorBoundary>
+						{renderHeader()}
+						<Box padding="medium" style={{ flex: 1 }}>
+							<ScrollView>
+								<ErrorBoundary>{renderChildren()}</ErrorBoundary>
+							</ScrollView>
+						</Box>
+						{renderFooter()}
+					</ErrorBoundary>
 				</Box>
 			</Styled.Container>
 		</KeyboardAvoidingView>

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { getUiOptions, getWidget } from '../../form.helpers';
+import { getUiOptions, getWidget, getDefaultRegistry } from '../../form.helpers';
 
 /**
  *
@@ -14,7 +14,7 @@ export function FilesArray<T extends object>({
 	autofocus,
 	onBlur,
 	onFocus,
-	registry,
+	registry = getDefaultRegistry(),
 	rawErrors,
 	...props
 }: import('../../types').FieldProps<T>): React.ReactElement {

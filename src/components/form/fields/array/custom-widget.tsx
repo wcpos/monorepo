@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { getUiOptions, getWidget } from '../../form.helpers';
+import { getUiOptions, getWidget, getDefaultRegistry } from '../../form.helpers';
 
 /**
  *
@@ -17,7 +17,7 @@ export function CustomWidget<T extends object>({
 	onBlur,
 	onFocus,
 	formData: items,
-	registry,
+	registry = getDefaultRegistry(),
 	rawErrors,
 	name,
 	...props

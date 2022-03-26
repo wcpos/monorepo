@@ -1,5 +1,10 @@
 import * as React from 'react';
-import { retrieveSchema, toIdSchema, allowAdditionalItems } from '../../form.helpers';
+import {
+	retrieveSchema,
+	toIdSchema,
+	allowAdditionalItems,
+	getDefaultRegistry,
+} from '../../form.helpers';
 import { ArrayItemField } from './array-item-field';
 import { DefaultArrayFieldTemplate } from './default-array-field-template';
 import { canAddItem, generateKeyedFormData } from './array.helpers';
@@ -16,7 +21,7 @@ export function FixedArray<T extends object>({
 	idSeparator,
 	idSchema,
 	name,
-	required,
+	required = getDefaultRegistry(),
 	disabled,
 	readonly,
 	autofocus,
@@ -28,6 +33,7 @@ export function FixedArray<T extends object>({
 }: import('../../types').FieldProps<T>): React.ReactElement {
 	const title = schema.title || name;
 	let items = props.formData;
+
 	const { ArrayFieldTemplate, rootSchema, fields, formContext } = registry;
 	const { TitleField } = fields;
 	const [keyedFormData, setKeyFormData] = React.useState(generateKeyedFormData(props.formData));

@@ -1,5 +1,11 @@
 import * as React from 'react';
-import { getUiOptions, getWidget, optionsList, retrieveSchema } from '../../form.helpers';
+import {
+	getUiOptions,
+	getWidget,
+	optionsList,
+	retrieveSchema,
+	getDefaultRegistry,
+} from '../../form.helpers';
 
 /**
  *
@@ -16,7 +22,7 @@ export function MultiSelect<T extends object>({
 	autofocus,
 	onBlur,
 	onFocus,
-	registry,
+	registry = getDefaultRegistry(),
 	rawErrors,
 	name,
 	...props

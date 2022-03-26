@@ -1,5 +1,6 @@
 import * as React from 'react';
 import includes from 'core-js-pure/es/array/includes';
+import { getDefaultRegistry } from '../../form.helpers';
 
 type Schema = import('json-schema').JSONSchema7;
 type FieldProps = import('../../types').FieldProps;
@@ -33,7 +34,7 @@ export function ArrayItemField<T = any>({
 	onBlur,
 	onFocus,
 	rawErrors,
-	registry,
+	registry = getDefaultRegistry(),
 	uiSchema,
 	formData,
 	onChange,

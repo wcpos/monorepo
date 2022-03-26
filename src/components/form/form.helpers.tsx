@@ -33,7 +33,7 @@ const widgetMap = {
 		'data-url': 'FileWidget',
 		radio: 'RadioWidget',
 		select: 'Select',
-		textarea: 'TextareaWidget',
+		textarea: 'TextArea',
 		hidden: 'HiddenWidget',
 		date: 'DateWidget',
 		datetime: 'DateTimeWidget',

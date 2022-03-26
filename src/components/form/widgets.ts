@@ -3,6 +3,7 @@ import Select from '../select';
 import TextInput from '../textinput';
 import Slider from '../slider';
 import Radio from '../radio';
+import TextArea from '../textarea';
 
 export default {
 	Checkbox,
@@ -10,4 +11,5 @@ export default {
 	TextInput,
 	Slider,
 	Radio,
+	TextArea,
 };

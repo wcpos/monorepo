@@ -25,7 +25,7 @@ export function StringField<T extends object>({
 	onChange,
 	onBlur,
 	onFocus,
-	registry,
+	registry = getDefaultRegistry(),
 	rawErrors,
 }: import('../types').FieldProps<T>): React.ReactElement {
 	const { title, format } = schema;
@@ -49,7 +49,6 @@ export function StringField<T extends object>({
 		[name, onChange]
 	);
 
-	// return <TextInput label={name} value={formData} onChange={handleTextChange} />;
 	return (
 		<Widget
 			options={{ ...options, enumOptions }}

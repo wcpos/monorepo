@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { getWidget, getUiOptions, optionsList } from '../form.helpers';
+import { getWidget, getUiOptions, optionsList, getDefaultRegistry } from '../form.helpers';
 
 /**
  *
@@ -10,7 +10,7 @@ export function BooleanField<T extends object>({
 	uiSchema,
 	idSchema,
 	formData,
-	registry,
+	registry = getDefaultRegistry(),
 	required,
 	disabled,
 	readonly,

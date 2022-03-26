@@ -52,7 +52,7 @@ export const BasicUsage = (props: FormProps) => {
 		setData((prev) => ({ ...prev, ...change }));
 	}, []);
 
-	return <Form {...props} formData={data} onChange={handleChange} />;
+	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
 };
 BasicUsage.args = {
 	schema: {
@@ -122,7 +122,7 @@ export const Nested = (props: FormProps) => {
 		setData((prev) => ({ ...prev, ...change }));
 	}, []);
 
-	return <Form {...props} formData={data} onChange={handleChange} />;
+	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
 };
 Nested.args = {
 	schema: {
@@ -204,7 +204,7 @@ export const Arrays = (props: FormProps) => {
 		setData((prev) => ({ ...prev, ...change }));
 	}, []);
 
-	return <Form {...props} formData={data} onChange={handleChange} />;
+	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
 };
 Arrays.args = {
 	schema: {
@@ -414,7 +414,7 @@ export const Widgets = (props: FormProps) => {
 		setData((prev) => ({ ...prev, ...change }));
 	}, []);
 
-	return <Form {...props} formData={data} onChange={handleChange} />;
+	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
 };
 Widgets.args = {
 	schema: {
@@ -573,7 +573,7 @@ export const Numbers = (props: FormProps) => {
 		setData((prev) => ({ ...prev, ...change }));
 	}, []);
 
-	return <Form {...props} formData={data} onChange={handleChange} />;
+	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
 };
 Numbers.args = {
 	schema: {

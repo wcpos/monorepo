@@ -1,5 +1,11 @@
 import * as React from 'react';
-import { isMultiSelect, isCustomWidget, isFixedItems, isFilesArray } from '../form.helpers';
+import {
+	isMultiSelect,
+	isCustomWidget,
+	isFixedItems,
+	isFilesArray,
+	getDefaultRegistry,
+} from '../form.helpers';
 import { MultiSelect } from './array/multi-select';
 import { CustomWidget } from './array/custom-widget';
 import { FixedArray } from './array/fixed-array';
@@ -9,12 +15,14 @@ import { NormalArray } from './array/normal-array';
 /**
  *
  */
-export function ArrayField<T extends object>(
-	props: import('../types').FieldProps<T>
-): React.ReactElement {
-	const { rootSchema } = props.registry;
+export function ArrayField<T extends object>({
+	registry = getDefaultRegistry(),
+	...props
+}: import('../types').FieldProps<T>): React.ReactElement {
+	const { rootSchema } = registry;
+
 	if (!props.schema.hasOwnProperty('items')) {
-		const { fields } = props.registry;
+		const { fields } = registry;
 		const { UnsupportedField } = fields;
 
 		return (
@@ -27,16 +35,16 @@ export function ArrayField<T extends object>(
 	}
 	if (isMultiSelect(props.schema, rootSchema)) {
 		// If array has enum or uniqueItems set to true, call renderMultiSelect() to render the default multiselect widget or a custom widget, if specified.
-		return <MultiSelect {...props} />;
+		return <MultiSelect {...props} registry={registry} />;
 	}
 	if (isCustomWidget(props.uiSchema)) {
-		return <CustomWidget {...props} />;
+		return <CustomWidget {...props} registry={registry} />;
 	}
 	if (isFixedItems(props.schema)) {
-		return <FixedArray {...props} />;
+		return <FixedArray {...props} registry={registry} />;
 	}
 	if (isFilesArray(props.schema, props.uiSchema, rootSchema)) {
-		return <FilesArray {...props} />;
+		return <FilesArray {...props} registry={registry} />;
 	}
-	return <NormalArray {...props} />;
+	return <NormalArray {...props} registry={registry} />;
 }

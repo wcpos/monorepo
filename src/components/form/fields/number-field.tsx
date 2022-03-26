@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { asNumber } from '../form.helpers';
+import { asNumber, getDefaultRegistry } from '../form.helpers';
 
 // Matches a string that ends in a . character, optionally followed by a sequence of
 // digits followed by any number of 0 characters up until the end of the line.
@@ -18,9 +18,10 @@ const trailingCharMatcher = /[0.]0*$/;
  */
 export function NumberField<T extends object>({
 	formData,
+	registry = getDefaultRegistry(),
 	...props
 }: import('../types').FieldProps<T>): React.ReactElement {
-	const { StringField } = props.registry.fields;
+	const { StringField } = registry.fields;
 	const [lastValue, setLastValue] = React.useState(props.value);
 
 	const value = React.useMemo(() => {
