@@ -4080,9 +4080,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-navigation/drawer@npm:6.3.2":
-  version: 6.3.2
-  resolution: "@react-navigation/drawer@npm:6.3.2"
+"@react-navigation/drawer@npm:6.3.3":
+  version: 6.3.3
+  resolution: "@react-navigation/drawer@npm:6.3.3"
   dependencies:
     "@react-navigation/elements": ^1.3.1
     color: ^3.1.3
@@ -4095,7 +4095,7 @@ __metadata:
     react-native-reanimated: ">= 1.0.0"
     react-native-safe-area-context: ">= 3.0.0"
     react-native-screens: ">= 3.0.0"
-  checksum: 8e61b61a73460cb37a2d59f5a4b37f546cca6c61a5ae4896cc23fb5dca984db71c24ce98bae1c0ee53af6f335ee63d6eaffa114683a462a1c8b3dc9ffbd4351f
+  checksum: 5465a2da168f7fcefa7ba6b1d091bd41265d3f3d8a7301b953dd3b47b1e8129b21bbc26adbb43b0091e51ef9693c0137c87c2f8ce24922afb52c2aa7cb3a374d
   languageName: node
   linkType: hard
 
@@ -7880,7 +7880,7 @@ __metadata:
     react-native-get-random-values: 1.7.2
     react-native-pager-view: 5.4.15
     react-native-reanimated: 2.5.0
-    react-native-safe-area-context: 4.2.2
+    react-native-safe-area-context: 4.2.4
     react-native-screens: 3.13.1
     react-native-svg: 12.3.0
     react-native-svg-transformer: 1.0.0
@@ -7912,7 +7912,7 @@ __metadata:
     react-native-get-random-values: 1.7.2
     react-native-pager-view: 5.4.15
     react-native-reanimated: 2.5.0
-    react-native-safe-area-context: 4.2.2
+    react-native-safe-area-context: 4.2.4
     react-native-screens: 3.13.1
     react-native-svg: 12.3.0
     react-native-svg-transformer: 1.0.0
@@ -7944,7 +7944,7 @@ __metadata:
     react-native-gesture-handler: 2.3.2
     react-native-mmkv: 2.2.0
     react-native-reanimated: 2.5.0
-    react-native-safe-area-context: 4.2.2
+    react-native-safe-area-context: 4.2.4
     react-native-screens: 3.13.1
     react-native-web: 0.17.7
     typescript: 4.6.3
@@ -7978,7 +7978,7 @@ __metadata:
     react-native-get-random-values: 1.7.2
     react-native-pager-view: 5.4.15
     react-native-reanimated: 2.5.0
-    react-native-safe-area-context: 4.2.2
+    react-native-safe-area-context: 4.2.4
     react-native-screens: 3.13.1
     react-native-svg: 12.3.0
     react-native-svg-transformer: 1.0.0
@@ -8033,7 +8033,7 @@ __metadata:
   dependencies:
     "@react-native-community/masked-view": 0.1.11
     "@react-native-community/netinfo": 8.2.0
-    "@react-navigation/drawer": 6.3.2
+    "@react-navigation/drawer": 6.3.3
     "@react-navigation/elements": 1.3.1
     "@react-navigation/native": 6.0.8
     "@react-navigation/stack": 6.1.1
@@ -8067,7 +8067,7 @@ __metadata:
     expo-haptics: 11.1.1
     expo-sqlite: 10.1.1
     expo-status-bar: 1.2.0
-    html-entities: 2.3.2
+    html-entities: 2.3.3
     i18next: 21.6.14
     jest: 27.5.1
     json-schema-merge-allof: 0.8.1
@@ -8091,7 +8091,7 @@ __metadata:
     react-native-gesture-handler: 2.3.2
     react-native-linear-gradient: 2.5.6
     react-native-reanimated: 2.5.0
-    react-native-safe-area-context: 4.2.2
+    react-native-safe-area-context: 4.2.4
     react-native-screens: 3.13.1
     react-native-sqlite-2: 3.5.2
     react-native-svg: 12.3.0
@@ -16604,10 +16604,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"html-entities@npm:2.3.2, html-entities@npm:^2.1.0":
-  version: 2.3.2
-  resolution: "html-entities@npm:2.3.2"
-  checksum: 522d8d202df301ff51b517a379e642023ed5c81ea9fb5674ffad88cff386165733d00b6089d5c2fcc644e44777d6072017b6216d8fa40f271d3610420d00a886
+"html-entities@npm:2.3.3":
+  version: 2.3.3
+  resolution: "html-entities@npm:2.3.3"
+  checksum: 92521501da8aa5f66fee27f0f022d6e9ceae62667dae93aa6a2f636afa71ad530b7fb24a18d4d6c124c9885970cac5f8a52dbf1731741161002816ae43f98196
   languageName: node
   linkType: hard
 
@@ -16615,6 +16615,13 @@ __metadata:
   version: 1.4.0
   resolution: "html-entities@npm:1.4.0"
   checksum: 4b73ffb9eead200f99146e4fbe70acb0af2fea136901a131fc3a782e9ef876a7cbb07dec303ca1f8804232b812249dbf3643a270c9c524852065d9224a8dcdd0
+  languageName: node
+  linkType: hard
+
+"html-entities@npm:^2.1.0":
+  version: 2.3.2
+  resolution: "html-entities@npm:2.3.2"
+  checksum: 522d8d202df301ff51b517a379e642023ed5c81ea9fb5674ffad88cff386165733d00b6089d5c2fcc644e44777d6072017b6216d8fa40f271d3610420d00a886
   languageName: node
   linkType: hard
 
@@ -25363,13 +25370,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-safe-area-context@npm:4.2.2":
-  version: 4.2.2
-  resolution: "react-native-safe-area-context@npm:4.2.2"
+"react-native-safe-area-context@npm:4.2.4":
+  version: 4.2.4
+  resolution: "react-native-safe-area-context@npm:4.2.4"
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: aabe4078bc95ab972cb4aaad1043a949f3edb28f0dfa1a226e726651bf0f2501f65696f1c12e7319c737bcb8ee49aed3fb1c3b8fe03be5bd64012f4b2921a1e5
+  checksum: 492a78b7728448dc802b528c7a0c526a7a00e7079e00925426dcdfcaff057d6fc460ca7838ec1737622609ad92a17640d676c96dcc0d0e0bcc13dc4800533d5e
   languageName: node
   linkType: hard
 
