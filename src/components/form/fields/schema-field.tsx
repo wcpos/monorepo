@@ -128,6 +128,7 @@ export function SchemaField<T extends object>({
 			errorSchema={fieldErrorSchema}
 			formContext={formContext}
 			rawErrors={__errors}
+			onChange={onChange}
 		/>
 	);
 
@@ -235,20 +236,3 @@ export function SchemaField<T extends object>({
 		</FieldTemplate>
 	);
 }
-// 	const { rootSchema, fields } = registry;
-// 	const FieldComponent = getFieldComponent(schema, uiSchema, idSchema, fields);
-
-// 	return (
-// 		<Box paddingBottom="small">
-// 			<FieldComponent
-// 				schema={schema}
-// 				uiSchema={uiSchema}
-// 				idSchema={idSchema}
-// 				formData={formData}
-// 				name={name}
-// 				onChange={onChange}
-// 				registry={registry}
-// 			/>
-// 		</Box>
-// 	);
-// }

@@ -1,6 +1,8 @@
 export { default as addressCard } from './address-card.svg';
+export { default as arrowDown } from './arrow-down.svg';
 export { default as arrowRotateLeft } from './arrow-rotate-left.svg';
 export { default as arrowRotateRight } from './arrow-rotate-right.svg';
+export { default as arrowUp } from './arrow-up.svg';
 export { default as badgeDollar } from './badge-dollar.svg';
 export { default as badgePercent } from './badge-percent.svg';
 export { default as ban } from './ban.svg';

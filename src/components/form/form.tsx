@@ -5,7 +5,10 @@ import {
 	retrieveSchema,
 	getDefaultFormState,
 	getDefaultRegistry,
+	mergeObjects,
 } from './form.helpers';
+import { toErrorList } from './validate';
+import { ErrorList } from './error-list';
 
 /**
  *
@@ -15,6 +18,7 @@ export function Form<T extends object>({
 	uiSchema = {},
 	formData: inputFormData,
 	onChange,
+	extraErrors = {},
 	...props
 }: import('./types').FormProps<T>): React.ReactElement {
 	const rootSchema = schema;
@@ -54,18 +58,25 @@ export function Form<T extends object>({
 
 	const { SchemaField } = registry.fields;
 
+	const errors = React.useMemo(() => {
+		const errorSchema = mergeObjects(props.errorSchema, extraErrors, !!'concat arrays');
+		return toErrorList(errorSchema);
+	}, [props.errorSchema, extraErrors]);
+
 	return (
-		// <ScrollView style={{ height: 300 }}>
-		<SchemaField
-			schema={schema}
-			uiSchema={uiSchema}
-			idSchema={idSchema}
-			// idPrefix={idPrefix}
-			// formContext={formContext}
-			formData={formData}
-			registry={registry}
-			onChange={onChange}
-		/>
-		// </ScrollView>
+		<>
+			{errors.length > 0 && <ErrorList errors={errors} />}
+			<SchemaField
+				schema={schema}
+				uiSchema={uiSchema}
+				idSchema={idSchema}
+				// idPrefix={idPrefix}
+				// formContext={formContext}
+				formData={formData}
+				registry={registry}
+				onChange={onChange}
+				{...props}
+			/>
+		</>
 	);
 }

@@ -51,14 +51,16 @@ export function ObjectField<T extends object>({
 				value = '';
 			}
 			const newFormData = { ...props.formData, [name]: value };
-			props.onChange(
-				newFormData,
-				errorSchema &&
-					props.errorSchema && {
-						...props.errorSchema,
-						[name]: errorSchema,
-					}
-			);
+			console.log('onChange', newFormData);
+			props.onChange(newFormData);
+			// props.onChange(
+			// 	newFormData,
+			// 	errorSchema &&
+			// 		props.errorSchema && {
+			// 			...props.errorSchema,
+			// 			[name]: errorSchema,
+			// 		}
+			// );
 		};
 	};
 
@@ -67,7 +69,8 @@ export function ObjectField<T extends object>({
 			const { onChange } = props;
 			const copiedFormData = { ...formData };
 			delete copiedFormData[key];
-			onChange(copiedFormData);
+			console.log('onChange', copiedFormData);
+			// onChange(copiedFormData);
 		};
 	};
 
@@ -95,16 +98,18 @@ export function ObjectField<T extends object>({
 			});
 			const renamedObj = Object.assign({}, ...keyValues);
 
-			setWasPropertyKeyModified(true);
+			// setWasPropertyKeyModified(true);
 
-			props.onChange(
-				renamedObj,
-				errorSchema &&
-					props.errorSchema && {
-						...props.errorSchema,
-						[value]: errorSchema,
-					}
-			);
+			console.log('onChange', renamedObj);
+
+			// props.onChange(
+			// 	renamedObj,
+			// 	errorSchema &&
+			// 		props.errorSchema && {
+			// 			...props.errorSchema,
+			// 			[value]: errorSchema,
+			// 		}
+			// );
 		};
 	};
 
@@ -144,7 +149,8 @@ export function ObjectField<T extends object>({
 
 		newFormData[getAvailableKey('newKey', newFormData)] = getDefaultValue(type);
 
-		props.onChange(newFormData);
+		console.log('onChange', newFormData);
+		// props.onChange(newFormData);
 	};
 
 	const { rootSchema, fields, formContext } = registry;

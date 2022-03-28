@@ -47,7 +47,7 @@ export const BasicUsage = (props: FormProps) => {
 		password: 'noneed',
 	});
 
-	const handleChange = React.useCallback((change) => {
+	const handleChange = React.useCallback((change, name) => {
 		action('onChange')(change);
 		setData((prev) => ({ ...prev, ...change }));
 	}, []);
@@ -386,6 +386,82 @@ Arrays.args = {
 /**
  *
  */
+export const Numbers = (props: FormProps) => {
+	const [data, setData] = React.useState({
+		number: 3.14,
+		integer: 42,
+		numberEnum: 2,
+		integerRange: 42,
+		integerRangeSteps: 80,
+	});
+
+	const handleChange = React.useCallback((change) => {
+		action('onChange')(change);
+		setData((prev) => ({ ...prev, ...change }));
+	}, []);
+
+	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
+};
+Numbers.args = {
+	schema: {
+		type: 'object',
+		title: 'Number fields & widgets',
+		properties: {
+			number: {
+				title: 'Number',
+				type: 'number',
+			},
+			integer: {
+				title: 'Integer',
+				type: 'integer',
+			},
+			numberEnum: {
+				type: 'number',
+				title: 'Number enum',
+				enum: [1, 2, 3],
+			},
+			numberEnumRadio: {
+				type: 'number',
+				title: 'Number enum',
+				enum: [1, 2, 3],
+			},
+			integerRange: {
+				title: 'Integer range',
+				type: 'integer',
+				minimum: 42,
+				maximum: 100,
+			},
+			integerRangeSteps: {
+				title: 'Integer range (by 10)',
+				type: 'integer',
+				minimum: 50,
+				maximum: 100,
+				multipleOf: 10,
+			},
+		},
+	},
+	uiSchema: {
+		// integer: {
+		// 	'ui:widget': 'updown',
+		// },
+		numberEnumRadio: {
+			'ui:widget': 'radio',
+			'ui:options': {
+				inline: true,
+			},
+		},
+		integerRange: {
+			'ui:widget': 'range',
+		},
+		integerRangeSteps: {
+			'ui:widget': 'range',
+		},
+	},
+};
+
+/**
+ *
+ */
 export const Widgets = (props: FormProps) => {
 	const [data, setData] = React.useState({
 		stringFormats: {
@@ -559,13 +635,13 @@ Widgets.args = {
 /**
  *
  */
-export const Numbers = (props: FormProps) => {
+export const Ordering = (props: FormProps) => {
 	const [data, setData] = React.useState({
-		number: 3.14,
-		integer: 42,
-		numberEnum: 2,
-		integerRange: 42,
-		integerRangeSteps: 80,
+		firstName: 'Chuck',
+		lastName: 'Norris',
+		age: 75,
+		bio: 'Roundhouse kicking asses since 1940',
+		password: 'noneed',
 	});
 
 	const handleChange = React.useCallback((change) => {
@@ -575,59 +651,187 @@ export const Numbers = (props: FormProps) => {
 
 	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
 };
-Numbers.args = {
+Ordering.args = {
 	schema: {
+		title: 'A registration form',
 		type: 'object',
-		title: 'Number fields & widgets',
+		required: ['firstName', 'lastName'],
 		properties: {
-			number: {
-				title: 'Number',
-				type: 'number',
+			password: {
+				type: 'string',
+				title: 'Password',
 			},
-			integer: {
-				title: 'Integer',
+			lastName: {
+				type: 'string',
+				title: 'Last name',
+			},
+			bio: {
+				type: 'string',
+				title: 'Bio',
+			},
+			firstName: {
+				type: 'string',
+				title: 'First name',
+			},
+			age: {
 				type: 'integer',
-			},
-			numberEnum: {
-				type: 'number',
-				title: 'Number enum',
-				enum: [1, 2, 3],
-			},
-			numberEnumRadio: {
-				type: 'number',
-				title: 'Number enum',
-				enum: [1, 2, 3],
-			},
-			integerRange: {
-				title: 'Integer range',
-				type: 'integer',
-				minimum: 42,
-				maximum: 100,
-			},
-			integerRangeSteps: {
-				title: 'Integer range (by 10)',
-				type: 'integer',
-				minimum: 50,
-				maximum: 100,
-				multipleOf: 10,
+				title: 'Age',
 			},
 		},
 	},
 	uiSchema: {
-		// integer: {
-		// 	'ui:widget': 'updown',
-		// },
-		numberEnumRadio: {
-			'ui:widget': 'radio',
-			'ui:options': {
-				inline: true,
+		'ui:order': ['firstName', 'lastName', '*', 'password'],
+		age: {
+			// 'ui:widget': 'updown',
+		},
+		bio: {
+			'ui:widget': 'textarea',
+		},
+		password: {
+			// 'ui:widget': 'password',
+		},
+	},
+};
+
+/**
+ *
+ */
+export const Errors = (props: FormProps) => {
+	const [data, setData] = React.useState({
+		firstName: 'Chuck',
+		active: 'wrong',
+		skills: ['karate', 'budo', 'aikido'],
+		multipleChoicesList: ['foo', 'bar', 'fuzz'],
+	});
+
+	const handleChange = React.useCallback((change) => {
+		action('onChange')(change);
+		setData((prev) => ({ ...prev, ...change }));
+	}, []);
+
+	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
+};
+Errors.args = {
+	schema: {
+		title: 'Contextualized errors',
+		type: 'object',
+		properties: {
+			firstName: {
+				type: 'string',
+				title: 'First name',
+				minLength: 8,
+				pattern: '\\d+',
+			},
+			active: {
+				type: 'boolean',
+				title: 'Active',
+			},
+			skills: {
+				type: 'array',
+				items: {
+					type: 'string',
+					minLength: 5,
+				},
+			},
+			multipleChoicesList: {
+				type: 'array',
+				title: 'Pick max two items',
+				uniqueItems: true,
+				maxItems: 2,
+				items: {
+					type: 'string',
+					enum: ['foo', 'bar', 'fuzz'],
+				},
 			},
 		},
-		integerRange: {
-			'ui:widget': 'range',
+	},
+	uiSchema: {},
+};
+
+/**
+ *
+ */
+export const ErrorSchema = (props: FormProps) => {
+	const [data, setData] = React.useState({
+		firstName: 'Chuck',
+		lastName: 'Norris',
+		age: 75,
+		bio: 'Roundhouse kicking asses since 1940',
+		password: 'noneed',
+	});
+
+	const handleChange = React.useCallback((change) => {
+		action('onChange')(change);
+		setData((prev) => ({ ...prev, ...change }));
+	}, []);
+
+	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
+};
+ErrorSchema.args = {
+	schema: {
+		title: 'A registration form',
+		description: 'A simple form example.',
+		type: 'object',
+		required: ['firstName', 'lastName'],
+		properties: {
+			firstName: {
+				type: 'string',
+				title: 'First name',
+				default: 'Chuck',
+			},
+			lastName: {
+				type: 'string',
+				title: 'Last name',
+			},
+			age: {
+				type: 'integer',
+				title: 'Age',
+			},
+			bio: {
+				type: 'string',
+				title: 'Bio',
+			},
+			password: {
+				type: 'string',
+				title: 'Password',
+				minLength: 3,
+			},
+			telephone: {
+				type: 'string',
+				title: 'Telephone',
+				minLength: 10,
+			},
 		},
-		integerRangeSteps: {
-			'ui:widget': 'range',
+	},
+	uiSchema: {
+		firstName: {
+			'ui:autofocus': true,
+			'ui:emptyValue': '',
+		},
+		age: {
+			// 'ui:widget': 'updown',
+			'ui:title': 'Age of person',
+			'ui:description': '(earthian year)',
+		},
+		bio: {
+			'ui:widget': 'textarea',
+		},
+		password: {
+			// 'ui:widget': 'password',
+			'ui:help': 'Hint: Make it strong!',
+		},
+		date: {
+			// 'ui:widget': 'alt-datetime',
+		},
+		telephone: {
+			'ui:options': {
+				inputType: 'tel',
+			},
+		},
+	},
+	extraErrors: {
+		firstName: {
+			__errors: ['some error that got added as a prop'],
 		},
 	},
 };

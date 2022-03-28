@@ -6,7 +6,7 @@ import { canExpand } from '../form.helpers';
 export const DefaultObjectFieldTemplate = (props) => {
 	const { TitleField, DescriptionField } = props;
 	return (
-		<Box>
+		<Box space="xSmall">
 			{(props.uiSchema['ui:title'] || props.title) && (
 				<TitleField
 					id={`${props.idSchema.$id}__title`}
@@ -25,6 +25,7 @@ export const DefaultObjectFieldTemplate = (props) => {
 			{props.properties.map((prop) => prop.content)}
 			{canExpand(props.schema, props.uiSchema, props.formData) && (
 				<Button
+					title="expand"
 					onPress={props.onAddClick(props.schema)}
 					disabled={props.disabled || props.readonly}
 				/>
