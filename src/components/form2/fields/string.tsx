@@ -7,9 +7,10 @@ import { widgetMap } from '../widgets';
 interface StringFieldProps {
 	schema: import('../types').Schema;
 	formData: any;
+	name: string;
 }
 
-export const StringField = ({ schema, formData }: StringFieldProps) => {
+export const StringField = ({ schema, formData, name }: StringFieldProps) => {
 	const [value, setValue] = React.useState(formData);
 	const { registry, onChange } = useFormContext();
 	const enumOptions = isSelect(schema) && optionsList(schema);
@@ -25,9 +26,9 @@ export const StringField = ({ schema, formData }: StringFieldProps) => {
 	 */
 	const handleOnBlur = React.useCallback(() => {
 		if (onChange) {
-			onChange(value);
+			onChange({ [name]: value });
 		}
-	}, [onChange, value]);
+	}, [name, onChange, value]);
 
 	/**
 	 *

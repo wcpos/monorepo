@@ -39,7 +39,7 @@ export const Form = <T extends object | string>({
 	return (
 		<FormContextProvider schema={schema} onChange={onChange}>
 			{errors.length > 0 && <ErrorList errors={errors} />}
-			<NodeTemplate schema={schema} formData={formData} />
+			<NodeTemplate schema={schema} formData={formData} name="root" />
 		</FormContextProvider>
 	);
 };

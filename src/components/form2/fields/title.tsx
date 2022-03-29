@@ -12,7 +12,7 @@ interface TitleFieldProps {
 export const TitleField = ({ title, required }: TitleFieldProps) => {
 	return (
 		<Box horizontal>
-			<Text>{title}</Text> {required && <Text>{REQUIRED_FIELD_SYMBOL}</Text>}
+			<Text size="large">{title}</Text> {required && <Text>{REQUIRED_FIELD_SYMBOL}</Text>}
 		</Box>
 	);
 };

@@ -24,6 +24,8 @@ export const ObjectField = ({ schema, formData, uiSchema }: ObjectFieldProps) =>
 			return {
 				content: (
 					<NodeTemplate
+						key={name}
+						name={name}
 						schema={nodeSchema}
 						formData={(formData || {})[name]}
 						uiSchema={uiSchema[name]}

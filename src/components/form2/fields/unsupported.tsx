@@ -3,15 +3,16 @@ import Text from '../../text';
 
 interface UnsupportedFieldProps {
 	schema: import('../types').Schema;
+	reason: string;
 }
 
 /**
  *
  */
-export const UnsupportedField = ({ schema }: UnsupportedFieldProps) => {
+export const UnsupportedField = ({ schema, reason }: UnsupportedFieldProps) => {
 	console.log(schema);
 	// console.log(idSchema);
 	// console.log(idSchema.$id);
 
-	return <Text>{`Unknown field type ${schema?.type}`}</Text>;
+	return <Text>{`${reason} ${schema?.type}`}</Text>;
 };
