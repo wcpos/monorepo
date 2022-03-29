@@ -20,6 +20,7 @@ const widgetMap = {
 		checkbox: 'Checkbox',
 		radio: 'Radio',
 		select: 'Select',
+		switch: 'Switch',
 		hidden: 'HiddenWidget',
 	},
 	string: {

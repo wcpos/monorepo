@@ -1,15 +1,17 @@
 import Checkbox from '../checkbox';
-import Select from '../select';
-import TextInput from '../textinput';
-import Slider from '../slider';
 import Radio from '../radio';
+import Select from '../select';
+import Slider from '../slider';
+import Switch from '../switch';
 import TextArea from '../textarea';
+import TextInput from '../textinput';
 
 export default {
 	Checkbox,
-	Select,
-	TextInput,
-	Slider,
 	Radio,
+	Select,
+	Slider,
+	Switch,
 	TextArea,
+	TextInput,
 };

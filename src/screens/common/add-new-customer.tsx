@@ -1,5 +1,6 @@
 import * as React from 'react';
 import Modal, { useModal } from '@wcpos/common/src/components/modal';
+import pick from 'lodash/pick';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Tabs from '@wcpos/common/src/components/tabs';
 import Tree from '@wcpos/common/src/components/tree';
@@ -56,15 +57,35 @@ const AddEditCustomer = ({}: AddEditCustomerProps) => {
 		setCustomerData((prev) => ({ ...prev, ...changes }));
 	}, []);
 
+	const schema = React.useMemo(() => {
+		return {
+			...customerCollection.schema.jsonSchema,
+			properties: pick(customerCollection.schema.jsonSchema.properties, [
+				'id',
+				'email',
+				'first_name',
+				'last_name',
+				'role',
+				'username',
+				'password',
+				'billing',
+				'shipping',
+				'billing',
+				'meta_data',
+			]),
+		};
+	}, [customerCollection.schema.jsonSchema]);
+
 	const renderScene = ({ route }) => {
 		switch (route.key) {
 			case 'form':
 				return (
 					<Form
-						schema={customerCollection.schema.jsonSchema}
+						schema={schema}
 						formData={customerData}
 						onChange={handleChange}
 						extraErrors={extraErrors}
+						uiSchema={{ id: { 'ui:readonly': true } }}
 					/>
 				);
 			case 'json':

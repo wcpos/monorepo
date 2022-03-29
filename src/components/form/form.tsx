@@ -22,9 +22,11 @@ export function Form<T extends object>({
 	...props
 }: import('./types').FormProps<T>): React.ReactElement {
 	const rootSchema = schema;
-	const formData = getDefaultFormState(schema, inputFormData, rootSchema);
-	const retrievedSchema = retrieveSchema(schema, rootSchema, formData);
+	const formData = getDefaultFormState(schema, inputFormData, rootSchema); // populates defaults
+	const retrievedSchema = retrieveSchema(schema, rootSchema, formData); // don't know why this is needed
 
+	// creates recursive ids
+	// don't know why it needs formData?
 	const idSchema = toIdSchema(
 		retrievedSchema,
 		uiSchema['ui:rootFieldId'],

@@ -8,3 +8,6 @@ export default {
 };
 
 export const BasicUsage = (props: SwitchProps) => <Switch {...props} />;
+BasicUsage.args = {
+	onChecked: action('onChecked'),
+};
