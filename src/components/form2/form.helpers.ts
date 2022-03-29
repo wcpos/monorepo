@@ -100,6 +100,19 @@ export function isConstant(schema: Schema) {
 /**
  *
  */
+export function toConstant(schema: Schema) {
+	if (Array.isArray(schema.enum) && schema.enum.length === 1) {
+		return schema.enum[0];
+	}
+	if (Object.prototype.hasOwnProperty.call(schema, 'const')) {
+		return schema.const;
+	}
+	throw new Error('schema cannot be inferred as a constant');
+}
+
+/**
+ *
+ */
 export function isSelect(schema: Schema, rootSchema?: Schema) {
 	// const schema = retrieveSchema(_schema, rootSchema);
 	const altSchemas = schema.oneOf || schema.anyOf;
@@ -136,3 +149,67 @@ export function optionsList(schema: Schema) {
 		};
 	});
 }
+
+/**
+ *
+ */
+export function orderProperties(properties: string[], order: []) {
+	if (!Array.isArray(order)) {
+		return properties;
+	}
+
+	const arrayToHash = (arr) =>
+		arr.reduce((prev, curr) => {
+			prev[curr] = true;
+			return prev;
+		}, {});
+	const errorPropList = (arr) =>
+		arr.length > 1 ? `properties '${arr.join("', '")}'` : `property '${arr[0]}'`;
+	const propertyHash = arrayToHash(properties);
+	const orderFiltered = order.filter((prop) => prop === '*' || propertyHash[prop]);
+	const orderHash = arrayToHash(orderFiltered);
+
+	const rest = properties.filter((prop) => !orderHash[prop]);
+	const restIndex = orderFiltered.indexOf('*');
+	if (restIndex === -1) {
+		if (rest.length) {
+			throw new Error(`uiSchema order list does not contain ${errorPropList(rest)}`);
+		}
+		return orderFiltered;
+	}
+	if (restIndex !== orderFiltered.lastIndexOf('*')) {
+		throw new Error('uiSchema order list contains more than one wildcard item');
+	}
+
+	const complete = [...orderFiltered];
+	complete.splice(restIndex, 1, ...rest);
+	return complete;
+}
+
+/**
+ *
+ */
+// export function getDefaultFormState<T = any>(schema: Schema, formData: T) {
+// 	// if (!isObject(schema)) {
+// 	// 	throw new Error(`Invalid schema: ${schema}`);
+// 	// }
+// 	// const schema = retrieveSchema(_schema, rootSchema, formData);
+// 	const defaults = computeDefaults(
+// 		schema,
+// 		_schema.default,
+// 		rootSchema,
+// 		formData,
+// 		includeUndefinedValues
+// 	);
+// 	if (typeof formData === 'undefined') {
+// 		// No form data? Use schema defaults.
+// 		return defaults;
+// 	}
+// 	if (isObject(formData) || Array.isArray(formData)) {
+// 		return mergeDefaultsWithFormData(defaults, formData);
+// 	}
+// 	if (formData === 0 || formData === false || formData === '') {
+// 		return formData;
+// 	}
+// 	return formData || defaults;
+// }

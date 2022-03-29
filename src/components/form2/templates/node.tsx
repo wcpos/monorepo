@@ -51,12 +51,14 @@ function getFieldComponent(schema: Schema, uiSchema, fields) {
  */
 interface NodeTemplateProps {
 	schema: Schema;
+	uiSchema: any;
+	formData: any;
 }
 
 /**
  *
  */
-export const NodeTemplate = ({ schema = {}, uiSchema }: NodeTemplateProps) => {
+export const NodeTemplate = ({ schema = {}, uiSchema = {}, formData }: NodeTemplateProps) => {
 	const { registry } = useFormContext();
 	const FieldComponent = React.useMemo(
 		() => getFieldComponent(schema, uiSchema, registry.fields),
@@ -65,7 +67,7 @@ export const NodeTemplate = ({ schema = {}, uiSchema }: NodeTemplateProps) => {
 
 	return (
 		<Box>
-			<FieldComponent schema={schema} />
+			<FieldComponent schema={schema} formData={formData} uiSchema={uiSchema} />
 		</Box>
 	);
 };

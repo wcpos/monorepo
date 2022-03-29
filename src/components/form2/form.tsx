@@ -16,13 +16,16 @@ export interface FormProps<T> {
 /**
  *
  */
-export const Form = <T extends object>({
+export const Form = <T extends object | string>({
 	schema,
 	uiSchema = {},
 	formData: inputFormData,
 	extraErrors = {},
+	onChange,
 	...props
 }: FormProps<T>) => {
+	// const formData = getDefaultFormState(schema, inputFormData);
+	const formData = inputFormData;
 	/**
 	 *
 	 */
@@ -34,9 +37,9 @@ export const Form = <T extends object>({
 	 *
 	 */
 	return (
-		<FormContextProvider schema={schema}>
+		<FormContextProvider schema={schema} onChange={onChange}>
 			{errors.length > 0 && <ErrorList errors={errors} />}
-			<NodeTemplate schema={schema} />
+			<NodeTemplate schema={schema} formData={formData} />
 		</FormContextProvider>
 	);
 };

@@ -10,6 +10,7 @@ interface FormContextProps {
 		widgets: typeof widgets;
 	};
 	rootSchema: Schema;
+	onChange: (change: any) => void;
 }
 
 const FormContext = React.createContext<FormContextProps>(null);
@@ -17,9 +18,10 @@ const FormContext = React.createContext<FormContextProps>(null);
 interface FormContextProviderProps {
 	children: React.ReactNode;
 	schema: Schema;
+	onChange: (change: any) => void;
 }
 
-export const FormContextProvider = ({ children, schema }: FormContextProviderProps) => {
+export const FormContextProvider = ({ children, schema, onChange }: FormContextProviderProps) => {
 	const value = React.useMemo(() => {
 		return {
 			registry: {
@@ -27,8 +29,9 @@ export const FormContextProvider = ({ children, schema }: FormContextProviderPro
 				widgets,
 			},
 			rootSchema: Object.freeze(schema),
+			onChange,
 		};
-	}, [schema]);
+	}, [onChange, schema]);
 
 	return <FormContext.Provider value={value}>{children}</FormContext.Provider>;
 };
