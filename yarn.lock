@@ -3844,14 +3844,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-async-storage/async-storage@npm:1.17.0":
-  version: 1.17.0
-  resolution: "@react-native-async-storage/async-storage@npm:1.17.0"
+"@react-native-async-storage/async-storage@npm:1.17.1":
+  version: 1.17.1
+  resolution: "@react-native-async-storage/async-storage@npm:1.17.1"
   dependencies:
     merge-options: ^3.0.4
   peerDependencies:
     react-native: ^0.0.0-0 || 0.60 - 0.67 || 1000.0.0
-  checksum: b36bdb44f489e5d7945061e042338d43f1a07cb3939a3bdd71732773042beaa0f86e03d985674d4ab7f9d3eca0463047f08b4ad2f70381415594973062620c85
+  checksum: b006ff93648d75257a710c4d6ee4db1d2579a7725515c8cf597d8ef438138e7e92ae53554ccd9dbf9d602bd47df548d1e812ec8116c0b55c53f98a391f6f2548
   languageName: node
   linkType: hard
 
@@ -3999,12 +3999,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-community/datetimepicker@npm:6.1.0":
-  version: 6.1.0
-  resolution: "@react-native-community/datetimepicker@npm:6.1.0"
+"@react-native-community/datetimepicker@npm:6.1.1":
+  version: 6.1.1
+  resolution: "@react-native-community/datetimepicker@npm:6.1.1"
   dependencies:
     invariant: ^2.2.4
-  checksum: 41a8f94c4cf5baaa180b680d4004ac5257b64303ef6082c1a0576ad15c6248067785ea77ae07df97672f881910509c15c9895d46f250dea2ae7943040869b87e
+  checksum: 9c203e0c65e2618de1d271e7b23815b122c77c12cdd4b06d7406174c526d87f5eb28aaf4cd00ddf6697c7629e0d41762e068813076436bd1b02fc84397ba25f4
   languageName: node
   linkType: hard
 
@@ -4241,7 +4241,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@sentry/cli@npm:1.74.2, @sentry/cli@npm:^1.52.4, @sentry/cli@npm:^1.72.0":
+"@sentry/cli@npm:1.74.2, @sentry/cli@npm:^1.52.4, @sentry/cli@npm:^1.72.0, @sentry/cli@npm:^1.74.2":
   version: 1.74.2
   resolution: "@sentry/cli@npm:1.74.2"
   dependencies:
@@ -4381,6 +4381,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@sentry/integrations@npm:6.19.2":
+  version: 6.19.2
+  resolution: "@sentry/integrations@npm:6.19.2"
+  dependencies:
+    "@sentry/types": 6.19.2
+    "@sentry/utils": 6.19.2
+    localforage: ^1.8.1
+    tslib: ^1.9.3
+  checksum: 298cff982882a619d6c9c7d43431dff4898323eaa79095c6028acea4c98b90f15ffcd03583bc2e5a7ddab1c567fe8ecc438f73c7910fc60f6f1fc95a48806197
+  languageName: node
+  linkType: hard
+
 "@sentry/integrations@npm:^6.12.0":
   version: 6.19.1
   resolution: "@sentry/integrations@npm:6.19.1"
@@ -4454,7 +4466,28 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@sentry/react-native@npm:3.3.5, @sentry/react-native@npm:^3.1.1":
+"@sentry/react-native@npm:3.4.0":
+  version: 3.4.0
+  resolution: "@sentry/react-native@npm:3.4.0"
+  dependencies:
+    "@sentry/browser": 6.19.2
+    "@sentry/cli": ^1.74.2
+    "@sentry/core": 6.19.2
+    "@sentry/hub": 6.19.2
+    "@sentry/integrations": 6.19.2
+    "@sentry/react": 6.19.2
+    "@sentry/tracing": 6.19.2
+    "@sentry/types": 6.19.2
+    "@sentry/utils": 6.19.2
+    "@sentry/wizard": ^1.2.17
+  peerDependencies:
+    react: ">=16.4.1"
+    react-native: ">=0.56.0"
+  checksum: 0efff9728544ea4b9cb33b92905bec660b195197ef8a12828d9d0b120f7d21ec81bde28901343d6937edb0d96a3a764635c216a014edc042a4a9f55eacb48021
+  languageName: node
+  linkType: hard
+
+"@sentry/react-native@npm:^3.1.1":
   version: 3.3.5
   resolution: "@sentry/react-native@npm:3.3.5"
   dependencies:
@@ -4491,6 +4524,22 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@sentry/react@npm:6.19.2":
+  version: 6.19.2
+  resolution: "@sentry/react@npm:6.19.2"
+  dependencies:
+    "@sentry/browser": 6.19.2
+    "@sentry/minimal": 6.19.2
+    "@sentry/types": 6.19.2
+    "@sentry/utils": 6.19.2
+    hoist-non-react-statics: ^3.3.2
+    tslib: ^1.9.3
+  peerDependencies:
+    react: 15.x || 16.x || 17.x
+  checksum: 6acf67623908084409011e0297d9738ab45f97b34e32097ec9f831cc98768a579f9c951b0a4625316d9eabd678f9fb093b6dcb9ec1c388dd009438465cfe604c
+  languageName: node
+  linkType: hard
+
 "@sentry/tracing@npm:6.17.2":
   version: 6.17.2
   resolution: "@sentry/tracing@npm:6.17.2"
@@ -4514,6 +4563,19 @@ __metadata:
     "@sentry/utils": 6.17.9
     tslib: ^1.9.3
   checksum: 241037c2ab362b093a370018c9a8912ced1d7d22e65523eca8f6edb548153f2c65bda6c3fff2bbf910ff2fc11aec6af6953d35a13991e403112b7be62c8f9108
+  languageName: node
+  linkType: hard
+
+"@sentry/tracing@npm:6.19.2":
+  version: 6.19.2
+  resolution: "@sentry/tracing@npm:6.19.2"
+  dependencies:
+    "@sentry/hub": 6.19.2
+    "@sentry/minimal": 6.19.2
+    "@sentry/types": 6.19.2
+    "@sentry/utils": 6.19.2
+    tslib: ^1.9.3
+  checksum: 07bdc2658118d5ad8b0c921d6b15362731cac6383f82396784ba8fdecfabc9a9712456d5c5c90a24dc57fa6ecb8cb366cc5dc426482f2a2a243ee04c1c61c2ba
   languageName: node
   linkType: hard
 
@@ -7178,10 +7240,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^14.0.10, @types/node@npm:^14.6.2":
+"@types/node@npm:^14.0.10":
   version: 14.18.12
   resolution: "@types/node@npm:14.18.12"
   checksum: 8a0273caa0584020adb8802784fc7d4f18f05e6c205335b7f3818a91d6b0c22736b9f51da3428d5bc54076ad47f1a4d6d57990a3ce8489a520ac66b2b3ff24bc
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^16.11.26":
+  version: 16.11.26
+  resolution: "@types/node@npm:16.11.26"
+  checksum: 57757caaba3f0d95de82198cb276a1002c49b710108c932a1d02d7c91ff2fa57cfe2dd19fde60853b6dd90b0964b3cf35557981d2628e20aed6a909057aedfe6
   languageName: node
   linkType: hard
 
@@ -7591,13 +7660,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@typescript-eslint/eslint-plugin@npm:5.16.0":
-  version: 5.16.0
-  resolution: "@typescript-eslint/eslint-plugin@npm:5.16.0"
+"@typescript-eslint/eslint-plugin@npm:5.17.0":
+  version: 5.17.0
+  resolution: "@typescript-eslint/eslint-plugin@npm:5.17.0"
   dependencies:
-    "@typescript-eslint/scope-manager": 5.16.0
-    "@typescript-eslint/type-utils": 5.16.0
-    "@typescript-eslint/utils": 5.16.0
+    "@typescript-eslint/scope-manager": 5.17.0
+    "@typescript-eslint/type-utils": 5.17.0
+    "@typescript-eslint/utils": 5.17.0
     debug: ^4.3.2
     functional-red-black-tree: ^1.0.1
     ignore: ^5.1.8
@@ -7610,7 +7679,7 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 4007cc1599503424037300e7401fb969ca441b122ef8a8f2fc8d70f84d656fdf7ab7b0d00e506a3aaf702871616c3756da17eb1508ff315dfb25170f2d28a904
+  checksum: 62ec611fb384f27fc5b101fc8a0642ae94b2975618d37d3157c2f887cf89b389624e9d476bff303073d038076c05e6c00f3b205af3b2302967e720e99cd18d38
   languageName: node
   linkType: hard
 
@@ -7667,20 +7736,20 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@typescript-eslint/parser@npm:5.16.0":
-  version: 5.16.0
-  resolution: "@typescript-eslint/parser@npm:5.16.0"
+"@typescript-eslint/parser@npm:5.17.0":
+  version: 5.17.0
+  resolution: "@typescript-eslint/parser@npm:5.17.0"
   dependencies:
-    "@typescript-eslint/scope-manager": 5.16.0
-    "@typescript-eslint/types": 5.16.0
-    "@typescript-eslint/typescript-estree": 5.16.0
+    "@typescript-eslint/scope-manager": 5.17.0
+    "@typescript-eslint/types": 5.17.0
+    "@typescript-eslint/typescript-estree": 5.17.0
     debug: ^4.3.2
   peerDependencies:
     eslint: ^6.0.0 || ^7.0.0 || ^8.0.0
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 40006578e9ac451c80dc4b4b7e29af97b53fb9e9ea660d6ca17fb98b5c9858c648f9b17523c9de9b9b9e4155af17b65435e6163f02c4a2dfacf48274f45cba21
+  checksum: 15b855ea84e44371366d44b5add87ed0dc34b856ca8a6949ecc4066faaf3ea3d7e016ea92db06ab97a637530148c472c38c19cc5eff68b691701ff89dc5c1abc
   languageName: node
   linkType: hard
 
@@ -7721,11 +7790,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@typescript-eslint/type-utils@npm:5.16.0":
-  version: 5.16.0
-  resolution: "@typescript-eslint/type-utils@npm:5.16.0"
+"@typescript-eslint/scope-manager@npm:5.17.0":
+  version: 5.17.0
+  resolution: "@typescript-eslint/scope-manager@npm:5.17.0"
   dependencies:
-    "@typescript-eslint/utils": 5.16.0
+    "@typescript-eslint/types": 5.17.0
+    "@typescript-eslint/visitor-keys": 5.17.0
+  checksum: 8fc28d5742f36994ce05f09b0000f696a600d6f757f39ccae7875c08398b266f21d48ed1dfb027549d9c6692255a1fb3e8482ef94d765bb134371824da7d5ba7
+  languageName: node
+  linkType: hard
+
+"@typescript-eslint/type-utils@npm:5.17.0":
+  version: 5.17.0
+  resolution: "@typescript-eslint/type-utils@npm:5.17.0"
+  dependencies:
+    "@typescript-eslint/utils": 5.17.0
     debug: ^4.3.2
     tsutils: ^3.21.0
   peerDependencies:
@@ -7733,7 +7812,7 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 86d9f1dff6a096c8465453b8c7d0cc667b87a769f19073bfa9bbd36f8baa772c0384ec396b1132052383846bbbcf0d051345ed7d373260c1b506ed27100b383d
+  checksum: 9aad46ea7a757ec4584b9d9c995e94543bf40af7d85b2f502d66db08d7f03468c858320fccb4942238b0bb9e2d432df3d9861cf21624b0c57660c88b1d91a7d4
   languageName: node
   linkType: hard
 
@@ -7755,6 +7834,13 @@ __metadata:
   version: 5.16.0
   resolution: "@typescript-eslint/types@npm:5.16.0"
   checksum: 0450125741c3eef9581da0b75b4a987a633d77009cfb03507c3db29885b790ee80e3c0efc4f9a0dd3376ba758b49c7829722676153472616a57bb04bce5cc4fa
+  languageName: node
+  linkType: hard
+
+"@typescript-eslint/types@npm:5.17.0":
+  version: 5.17.0
+  resolution: "@typescript-eslint/types@npm:5.17.0"
+  checksum: 06ed4c3c3f0a05bee9c23b6cb5eb679336c0f4769beb28848e8ce674f726fec88adba059f20e0b0f7271685d7f5480931b3bcafcf6b60044b93da162e29f3f68
   languageName: node
   linkType: hard
 
@@ -7813,7 +7899,41 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@typescript-eslint/utils@npm:5.16.0, @typescript-eslint/utils@npm:^5.10.0":
+"@typescript-eslint/typescript-estree@npm:5.17.0":
+  version: 5.17.0
+  resolution: "@typescript-eslint/typescript-estree@npm:5.17.0"
+  dependencies:
+    "@typescript-eslint/types": 5.17.0
+    "@typescript-eslint/visitor-keys": 5.17.0
+    debug: ^4.3.2
+    globby: ^11.0.4
+    is-glob: ^4.0.3
+    semver: ^7.3.5
+    tsutils: ^3.21.0
+  peerDependenciesMeta:
+    typescript:
+      optional: true
+  checksum: 589829b1bb1d7e704de6a35dd9a39c70a3ca54b0885b68aad54a864bc5e5a11ce43f917c3f15f0afe9bc734a250288efdf03dfbed70b8fe0cc12f759e2e1f8ef
+  languageName: node
+  linkType: hard
+
+"@typescript-eslint/utils@npm:5.17.0":
+  version: 5.17.0
+  resolution: "@typescript-eslint/utils@npm:5.17.0"
+  dependencies:
+    "@types/json-schema": ^7.0.9
+    "@typescript-eslint/scope-manager": 5.17.0
+    "@typescript-eslint/types": 5.17.0
+    "@typescript-eslint/typescript-estree": 5.17.0
+    eslint-scope: ^5.1.1
+    eslint-utils: ^3.0.0
+  peerDependencies:
+    eslint: ^6.0.0 || ^7.0.0 || ^8.0.0
+  checksum: 88de02eafb7d39950c520c53aa07ffe63c95ca7ef2262c39d2afd3c6aabcd5d717ba61f74314f5bc9c27588b721ff016b45af6fc1de88801c6ac4bf5ebaf8775
+  languageName: node
+  linkType: hard
+
+"@typescript-eslint/utils@npm:^5.10.0":
   version: 5.16.0
   resolution: "@typescript-eslint/utils@npm:5.16.0"
   dependencies:
@@ -7858,6 +7978,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@typescript-eslint/visitor-keys@npm:5.17.0":
+  version: 5.17.0
+  resolution: "@typescript-eslint/visitor-keys@npm:5.17.0"
+  dependencies:
+    "@typescript-eslint/types": 5.17.0
+    eslint-visitor-keys: ^3.0.0
+  checksum: 333468277b50e2fc381ba1b99ccb410046c422e0329c791c51bea62e705edd16ba97f75b668c6945a3ea3dc43b89a1739693ea60bfa241c67ce42e8b474e5048
+  languageName: node
+  linkType: hard
+
 "@wcpos/app-electron@workspace:apps/electron":
   version: 0.0.0-use.local
   resolution: "@wcpos/app-electron@workspace:apps/electron"
@@ -7871,7 +8001,7 @@ __metadata:
     "@types/react-native": 0.67.3
     "@wcpos/babel-preset-expo": "*"
     "@wcpos/eslint-config": "*"
-    electron: 17.2.0
+    electron: 18.0.0
     expo: 44.0.6
     expo-status-bar: 1.2.0
     react: 17.0.2
@@ -7993,7 +8123,7 @@ __metadata:
   dependencies:
     "@babel/core": 7.17.8
     "@sentry/cli": 1.74.2
-    "@sentry/react-native": 3.3.5
+    "@sentry/react-native": 3.4.0
     "@types/react": 17.0.43
     "@types/react-dom": 17.0.14
     "@types/react-native": 0.67.3
@@ -8039,7 +8169,7 @@ __metadata:
     "@react-navigation/stack": 6.1.1
     "@sentry/browser": 6.19.2
     "@sentry/electron": 3.0.5
-    "@sentry/react-native": 3.3.5
+    "@sentry/react-native": 3.4.0
     "@testing-library/jest-dom": 5.16.3
     "@testing-library/react": 12.1.4
     "@testing-library/react-hooks": 7.0.2
@@ -8087,7 +8217,7 @@ __metadata:
     react-i18next: 11.16.2
     react-is: 17.0.2
     react-native: 0.64.3
-    react-native-device-info: 8.5.1
+    react-native-device-info: 8.7.0
     react-native-gesture-handler: 2.3.2
     react-native-linear-gradient: 2.5.6
     react-native-reanimated: 2.5.0
@@ -8097,7 +8227,7 @@ __metadata:
     react-native-svg: 12.3.0
     react-native-tab-view: 3.1.1
     react-native-web-linear-gradient: 1.1.2
-    react-native-webview: 11.17.2
+    react-native-webview: 11.18.0
     react-test-renderer: 17.0.2
     react-virtual: 2.10.4
     rxdb: 11.6.0
@@ -8136,8 +8266,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@wcpos/eslint-config@workspace:packages/eslint"
   dependencies:
-    "@typescript-eslint/eslint-plugin": 5.16.0
-    "@typescript-eslint/parser": 5.16.0
+    "@typescript-eslint/eslint-plugin": 5.17.0
+    "@typescript-eslint/parser": 5.17.0
     eslint: 8.12.0
     eslint-config-airbnb: 19.0.4
     eslint-config-prettier: 8.5.0
@@ -8173,8 +8303,8 @@ __metadata:
   resolution: "@wcpos/storybook@workspace:apps/storybook"
   dependencies:
     "@babel/core": 7.17.8
-    "@react-native-async-storage/async-storage": 1.17.0
-    "@react-native-community/datetimepicker": 6.1.0
+    "@react-native-async-storage/async-storage": 1.17.1
+    "@react-native-community/datetimepicker": 6.1.1
     "@react-native-community/slider": 4.2.1
     "@storybook/addon-actions": 6.4.19
     "@storybook/addon-controls": 6.4.19
@@ -13203,16 +13333,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron@npm:17.2.0":
-  version: 17.2.0
-  resolution: "electron@npm:17.2.0"
+"electron@npm:18.0.0":
+  version: 18.0.0
+  resolution: "electron@npm:18.0.0"
   dependencies:
     "@electron/get": ^1.13.0
-    "@types/node": ^14.6.2
+    "@types/node": ^16.11.26
     extract-zip: ^1.0.3
   bin:
     electron: cli.js
-  checksum: f345311f9c79f0852c3116ede2b83a439e8c1c3b2a40c85e5b5912962571fe1d1c19af8231e0215f47da735ebe6064cbc812ae1bdf4f9638de538912b1f6ab7e
+  checksum: 22a871e0ec6d192607576cbee8ccf089a2c6f6a51278360e4051a413ae8f9d50671c9cadae8465196576ee020da9efd55be52faf48b85cd700b57099f5360fcc
   languageName: node
   linkType: hard
 
@@ -25232,12 +25362,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-device-info@npm:8.5.1":
-  version: 8.5.1
-  resolution: "react-native-device-info@npm:8.5.1"
+"react-native-device-info@npm:8.7.0":
+  version: 8.7.0
+  resolution: "react-native-device-info@npm:8.7.0"
   peerDependencies:
     react-native: "*"
-  checksum: ed657f906b8fa909c0892c9130cd84623669a8d9ee7dbcd7b995db70323c0e09bcc7f98a69a4654dacbfb873b9a43e6a091620a08191b233089374b231c82f2b
+  checksum: 8c358815d59790343903f095e67224bfe5800c5eaba3f98bb4e058c678babbe0abde00e297325038e694674f761f3e0f56bf3e6ae50bb8ad71baac99266b5875
   languageName: node
   linkType: hard
 
@@ -25492,16 +25622,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-webview@npm:11.17.2":
-  version: 11.17.2
-  resolution: "react-native-webview@npm:11.17.2"
+"react-native-webview@npm:11.18.0":
+  version: 11.18.0
+  resolution: "react-native-webview@npm:11.18.0"
   dependencies:
     escape-string-regexp: 2.0.0
     invariant: 2.2.4
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: d49fc0ed3aca00455dbc32efa5d6d4f1c170b82db4134c4a26a2bc508ec2d8c6561cb64eb993ab4a87977c4f51182700344efb45d053819dbb89b6d0fcc2d883
+  checksum: 995e3b5114dbab8ef2c05aac6ac648063716859e0395f65b73be627c1a65bbac27eec6bc3f023499e6abae3a47fa09adfe7db1b7a4e7a51bf66226b0dc2a1d92
   languageName: node
   linkType: hard
 
