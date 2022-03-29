@@ -29,18 +29,15 @@ export interface StaticListProps<T extends object, C> {
  * This component is UI agnostic, and just takes care of rendering all items in the DataSource.
  * This component does not apply virtualization, so don't use it for large datasets!
  */
-// @ts-ignore
-export const StaticList: <T extends object, C = any>(
-	props: StaticListProps<T, C>
-) => React.ReactElement = React.memo(function StaticList({
+const StaticList = <T extends object, C = any>({
 	data,
 	style,
 	context,
 	emptyRenderer = () => <EmptyRow />,
 	rowRenderer,
-}) {
+}: StaticListProps<T, C>) => {
 	// render scheduling
-	const [, setForceUpdate] = React.useState(0);
+	const [_, setForceUpdate] = React.useState(0);
 
 	const redraw = React.useCallback(() => {
 		setForceUpdate((x) => x + 1);
@@ -68,4 +65,6 @@ export const StaticList: <T extends object, C = any>(
 			</ScrollView>
 		</RedrawContext.Provider>
 	);
-});
+};
+
+export default React.memo(StaticList);

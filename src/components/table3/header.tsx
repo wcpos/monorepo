@@ -14,13 +14,13 @@ export interface TableHeaderProps<T> {
 	sortDirection?: import('./table').SortDirection;
 }
 
-const TableHeader: <T>(props: TableHeaderProps<T>) => React.ReactElement = ({
+const TableHeader = <T extends object>({
 	columns,
 	style,
 	sort,
 	sortBy,
 	sortDirection,
-}) => {
+}: TableHeaderProps<T>) => {
 	return (
 		<Box horizontal align="center">
 			{columns.map((column) => {
@@ -79,4 +79,4 @@ const TableHeader: <T>(props: TableHeaderProps<T>) => React.ReactElement = ({
 	);
 };
 
-export default React.memo(TableHeader) as typeof TableHeader;
+export default React.memo(TableHeader);

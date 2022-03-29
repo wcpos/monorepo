@@ -33,17 +33,14 @@ export interface VirtualListProps<T extends object, C> {
  * This component is UI agnostic, and just takes care of virtualizing the provided dataSource, and render it as efficiently a possibible,
  * de priorizing off screen updates etc.
  */
-// @ts-ignore
-export const VirtualList: <T extends object, C = any>(
-	props: VirtualListProps<T, C>
-) => React.ReactElement = React.memo(function VirtualList({
+const VirtualList = <T extends object, C = any>({
 	data,
 	style,
 	context,
 	emptyRenderer = () => <EmptyRow />,
 	rowRenderer,
 	virtualizerRef,
-}) {
+}: VirtualListProps<T, C>) => {
 	const parentRef = React.useRef() as React.MutableRefObject<View>;
 	const [, setForceUpdate] = React.useState(0);
 	const forceHeightRecalculation = React.useRef(0);
@@ -107,4 +104,6 @@ export const VirtualList: <T extends object, C = any>(
 			</View>
 		</RedrawContext.Provider>
 	);
-});
+};
+
+export default React.memo(VirtualList);

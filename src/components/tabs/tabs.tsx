@@ -31,13 +31,13 @@ export type TabsProps<T extends Route> = {
 /**
  *
  */
-export function Tabs<T extends Route>({
+export const Tabs = <T extends Route>({
 	onIndexChange,
 	navigationState,
 	renderScene,
 	tabBarPosition = 'top',
 	style,
-}: TabsProps<T>) {
+}: TabsProps<T>) => {
 	return (
 		<Box
 			horizontal={tabBarPosition === 'left' || tabBarPosition === 'right'}
@@ -57,4 +57,4 @@ export function Tabs<T extends Route>({
 			</Box>
 		</Box>
 	);
-}
+};

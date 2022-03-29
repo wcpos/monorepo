@@ -35,13 +35,13 @@ export interface TableRowProps<T> {
 /**
  *
  */
-export const TableRow = React.memo(function TableRow<T>({
+const TableRow = <T extends object>({
 	item,
 	columns,
 	rowStyle,
 	cellStyle,
 	cellRenderer,
-}: TableRowProps<T>) {
+}: TableRowProps<T>) => {
 	return (
 		<Box horizontal align="center" style={rowStyle}>
 			{columns.map((column, index) => {
@@ -62,7 +62,6 @@ export const TableRow = React.memo(function TableRow<T>({
 			})}
 		</Box>
 	);
-});
+};
 
-// @TODO - can't add generic type to React.memo?
-// export default React.memo(TableRow);
+export default React.memo(TableRow);

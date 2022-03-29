@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { ViewStyle, NativeSyntheticEvent, NativeTouchEvent } from 'react-native';
 import Header from './header';
-import { TableRow } from './row';
+import TableRow from './row';
 import EmptyRow from './empty';
-import { VirtualList } from './virtual-list';
-import { StaticList } from './static-list';
+import VirtualList from './virtual-list';
+import StaticList from './static-list';
 import * as Styled from './styles';
 
 export type SortDirection = 'asc' | 'desc';
@@ -32,7 +32,7 @@ export interface ColumnProps<T = any> {
 	defaultSortDirection?: SortDirection;
 }
 
-export interface TableProps<T = any> {
+export interface TableProps<T> {
 	/**
 	 * The data source to render
 	 */
@@ -59,7 +59,7 @@ export interface TableProps<T = any> {
 	virtual?: boolean;
 }
 
-function Table<T extends object>({
+const Table = <T extends object>({
 	data,
 	columns,
 	style,
@@ -70,7 +70,7 @@ function Table<T extends object>({
 	sortDirection,
 	virtual,
 	rowRenderer,
-}: TableProps<T>): React.ReactElement {
+}: TableProps<T>) => {
 	const virtualize = React.useMemo(
 		() => (virtual === undefined ? data.length > 50 : virtual),
 		[virtual, data.length]
@@ -113,7 +113,7 @@ function Table<T extends object>({
 			{footer}
 		</Styled.Table>
 	);
-}
+};
 
 Table.Row = TableRow;
 export default Table;
