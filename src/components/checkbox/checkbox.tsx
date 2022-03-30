@@ -9,7 +9,7 @@ export interface CheckboxProps {
 	/**
 	 * True if selected.
 	 */
-	checked?: boolean;
+	value?: boolean;
 	/**
 	 * Label to display next to the Checkbox.
 	 */
@@ -40,7 +40,7 @@ export const Checkbox = ({
 	label,
 	disabled,
 	helpText,
-	checked: checkedRaw = false,
+	value: checkedRaw = false,
 	onChange: onChangeRaw,
 	style,
 }: CheckboxProps) => {

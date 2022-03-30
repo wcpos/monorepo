@@ -10,7 +10,7 @@ interface StringFieldProps {
 	name: string;
 }
 
-export const StringField = ({ schema, formData, name }: StringFieldProps) => {
+export const StringField = ({ schema, formData, name, idSchema }: StringFieldProps) => {
 	const [value, setValue] = React.useState(formData);
 	const { registry, onChange } = useFormContext();
 	const enumOptions = isSelect(schema) && optionsList(schema);
@@ -26,9 +26,9 @@ export const StringField = ({ schema, formData, name }: StringFieldProps) => {
 	 */
 	const handleOnBlur = React.useCallback(() => {
 		if (onChange) {
-			onChange({ [name]: value });
+			onChange({ [idSchema.$id]: value });
 		}
-	}, [name, onChange, value]);
+	}, [idSchema, onChange, value]);
 
 	/**
 	 *

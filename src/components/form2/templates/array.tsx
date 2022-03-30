@@ -11,7 +11,7 @@ export const ArrayTemplate = ({
 	title,
 	items,
 	canAdd,
-	onAddClick,
+	onAdd,
 	disabled,
 	readonly,
 }) => {
@@ -23,11 +23,16 @@ export const ArrayTemplate = ({
 					<Text>{uiSchema['ui:description'] || schema.description}</Text>
 				)}
 			</Box>
-			<Box>{items && items.map(ArrayItemTemplate)}</Box>
+			<Box>
+				{items &&
+					items.map((arrayItemProps) => {
+						return <ArrayItemTemplate {...arrayItemProps} />;
+					})}
+			</Box>
 
 			{canAdd && (
 				<Box horizontal>
-					<Button onPress={onAddClick} disabled={disabled || readonly}>
+					<Button onPress={onAdd} disabled={disabled || readonly}>
 						<Icon name="plus" />
 					</Button>
 				</Box>

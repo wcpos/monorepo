@@ -8,9 +8,10 @@ interface ObjectFieldProps {
 	schema: import('../types').Schema;
 	formData: any;
 	uiSchema: any;
+	idSchema: any;
 }
 
-export const ObjectField = ({ schema, formData, uiSchema }: ObjectFieldProps) => {
+export const ObjectField = ({ schema, formData, uiSchema, idSchema }: ObjectFieldProps) => {
 	/**
 	 *
 	 */
@@ -19,21 +20,20 @@ export const ObjectField = ({ schema, formData, uiSchema }: ObjectFieldProps) =>
 		const orderedProperties = orderProperties(Object.keys(props), uiSchema['ui:order']);
 
 		return orderedProperties.map((name) => {
-			const nodeSchema = get(props, name, {});
-
 			return {
 				content: (
 					<NodeTemplate
 						key={name}
 						name={name}
-						schema={nodeSchema}
-						formData={(formData || {})[name]}
-						uiSchema={uiSchema[name]}
+						schema={get(props, name, {})}
+						formData={get(formData, name, undefined)}
+						uiSchema={get(uiSchema, name, {})}
+						idSchema={get(idSchema, name, {})}
 					/>
 				),
 			};
 		});
-	}, [formData, schema, uiSchema]);
+	}, [formData, idSchema, schema, uiSchema]);
 
 	/**
 	 *

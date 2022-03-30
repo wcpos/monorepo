@@ -42,7 +42,7 @@ function getFieldComponent(schema: Schema, uiSchema, fields) {
 		: () => {
 				const { UnsupportedField } = fields;
 
-				return <UnsupportedField schema={schema} />;
+				return <UnsupportedField schema={schema} reason="Unknown field type" />;
 		  };
 }
 
@@ -54,12 +54,19 @@ interface NodeTemplateProps {
 	uiSchema: any;
 	formData: any;
 	name: string;
+	idSchema: any;
 }
 
 /**
  *
  */
-export const NodeTemplate = ({ schema = {}, uiSchema = {}, formData, name }: NodeTemplateProps) => {
+export const NodeTemplate = ({
+	schema = {},
+	uiSchema = {},
+	formData,
+	name,
+	idSchema,
+}: NodeTemplateProps) => {
 	const { registry } = useFormContext();
 	const FieldComponent = React.useMemo(
 		() => getFieldComponent(schema, uiSchema, registry.fields),
@@ -68,7 +75,13 @@ export const NodeTemplate = ({ schema = {}, uiSchema = {}, formData, name }: Nod
 
 	return (
 		<Box>
-			<FieldComponent schema={schema} formData={formData} uiSchema={uiSchema} name={name} />
+			<FieldComponent
+				schema={schema}
+				formData={formData}
+				uiSchema={uiSchema}
+				name={name}
+				idSchema={idSchema}
+			/>
 		</Box>
 	);
 };

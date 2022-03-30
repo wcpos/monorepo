@@ -88,6 +88,7 @@ export function NormalArray<T extends object>({
 				idPrefix,
 				idSeparator
 			);
+			debugger;
 			return ArrayItemField({
 				key,
 				index,

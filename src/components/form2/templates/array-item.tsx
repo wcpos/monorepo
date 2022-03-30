@@ -5,51 +5,62 @@ import Icon from '../../icon';
 
 export const ArrayItemTemplate = ({
 	children,
-	hasToolbar,
-	hasMoveUp,
-	hasMoveDown,
-	hasRemove,
-	index,
-	onReorderClick,
-	onDropIndexClick,
 	disabled,
+	hasMoveDown,
+	hasMoveUp,
+	hasRemove,
+	hasToolbar,
+	index,
+	onRemoveIndex = (idx: number) => {},
+	onReorder = (curr: number, next: number) => {},
 	readonly,
 }) => {
+	/**
+	 *
+	 */
+	const handleMoveUpPress = React.useCallback(() => {
+		onReorder(index, index - 1);
+	}, [index, onReorder]);
+
+	/**
+	 *
+	 */
+	const handleMoveDownPress = React.useCallback(() => {
+		onReorder(index, index + 1);
+	}, [index, onReorder]);
+
+	/**
+	 *
+	 */
+	const handleRemovePress = React.useCallback(() => {
+		onRemoveIndex(index);
+	}, [index, onRemoveIndex]);
+
 	return (
 		<Box horizontal space="medium">
 			<Box fill>{children}</Box>
-			<Box>
-				{hasToolbar && (
+			{hasToolbar && (
+				<Box>
 					<Button.Group>
 						{(hasMoveUp || hasMoveDown) && (
-							<Button
-								disabled={disabled || readonly || !hasMoveUp}
-								onPress={onReorderClick(index, index - 1)}
-							>
+							<Button disabled={disabled || readonly || !hasMoveUp} onPress={handleMoveUpPress}>
 								<Icon name="arrowUp" />
 							</Button>
 						)}
 
 						{(hasMoveUp || hasMoveDown) && (
-							<Button
-								disabled={disabled || readonly || !hasMoveDown}
-								onPress={onReorderClick(index, index + 1)}
-							>
+							<Button disabled={disabled || readonly || !hasMoveDown} onPress={handleMoveDownPress}>
 								<Icon name="arrowDown" />
 							</Button>
 						)}
 						{hasRemove && (
-							<Button
-								type="warning"
-								disabled={disabled || readonly}
-								onPress={onDropIndexClick(index)}
-							>
+							<Button type="warning" disabled={disabled || readonly} onPress={handleRemovePress}>
 								<Icon name="xmark" />
 							</Button>
 						)}
 					</Button.Group>
-				)}
-			</Box>
+				</Box>
+			)}
 		</Box>
 	);
 };
