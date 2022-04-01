@@ -1,11 +1,7 @@
-import React from 'react';
-import * as ReactIs from 'react-is';
 import mergeAllOf from 'json-schema-merge-allof';
 import fill from 'core-js-pure/features/array/fill';
 import union from 'lodash/union';
 import jsonpointer from 'jsonpointer';
-import fields from './fields';
-import widgets from './widgets';
 import validateFormData, { isValid } from './validate';
 
 type Schema = import('json-schema').JSONSchema7;
@@ -15,58 +11,6 @@ type Registry = import('./types').Registry;
 
 export const ADDITIONAL_PROPERTY_FLAG = '__additional_property';
 
-// const widgetMap = {
-// 	boolean: {
-// 		checkbox: 'Checkbox',
-// 		radio: 'Radio',
-// 		select: 'Select',
-// 		switch: 'Switch',
-// 		hidden: 'HiddenWidget',
-// 	},
-// 	string: {
-// 		text: 'TextInput',
-// 		password: 'PasswordWidget',
-// 		email: 'EmailWidget',
-// 		hostname: 'TextInput',
-// 		ipv4: 'TextInput',
-// 		ipv6: 'TextInput',
-// 		uri: 'URLWidget',
-// 		'data-url': 'FileWidget',
-// 		radio: 'RadioWidget',
-// 		select: 'Select',
-// 		textarea: 'TextArea',
-// 		hidden: 'HiddenWidget',
-// 		date: 'DateWidget',
-// 		datetime: 'DateTimeWidget',
-// 		'date-time': 'DateTimeWidget',
-// 		'alt-date': 'AltDateWidget',
-// 		'alt-datetime': 'AltDateTimeWidget',
-// 		color: 'ColorWidget',
-// 		file: 'FileWidget',
-// 	},
-// 	number: {
-// 		text: 'TextInput',
-// 		select: 'Select',
-// 		updown: 'UpDownWidget',
-// 		range: 'Slider',
-// 		radio: 'Radio',
-// 		hidden: 'HiddenWidget',
-// 	},
-// 	integer: {
-// 		text: 'TextInput',
-// 		select: 'Select',
-// 		updown: 'UpDownWidget',
-// 		range: 'Slider',
-// 		radio: 'Radio',
-// 		hidden: 'HiddenWidget',
-// 	},
-// 	array: {
-// 		select: 'Select',
-// 		checkboxes: 'CheckboxesWidget',
-// 		files: 'FileWidget',
-// 		hidden: 'HiddenWidget',
-// 	},
-// };
 
 export function canExpand(schema: Schema, uiSchema: UiSchema, formData: any) {
 	if (!schema.additionalProperties) {
@@ -83,19 +27,6 @@ export function canExpand(schema: Schema, uiSchema: UiSchema, formData: any) {
 	}
 	return true;
 }
-
-// /**
-//  *
-//  */
-// export function getDefaultRegistry(): Registry {
-// 	return {
-// 		fields,
-// 		widgets,
-// 		definitions: {},
-// 		rootSchema: {},
-// 		formContext: {},
-// 	};
-// }
 
 /**
  * Gets the type of a given schema.
@@ -120,78 +51,6 @@ export function getSchemaType(schema: Schema) {
 	}
 
 	return type;
-}
-
-/**
- *
- */
-export function getWidget(
-	schema: Schema,
-	widget: Widget | string,
-	registeredWidgets?: { [name: string]: Widget } = {}
-) {
-	const type = getSchemaType(schema);
-
-	function mergeOptions(Component: Widget) {
-		// cache return value as property of widget for proper react reconciliation
-		if (!Component.MergedWidget) {
-			const defaultOptions = (Component.defaultProps && Component.defaultProps.options) || {};
-			Component.MergedWidget = ({ options = {}, ...props }) => (
-				<Component options={{ ...defaultOptions, ...options }} {...props} />
-			);
-		}
-		return Component.MergedWidget;
-	}
-
-	if (
-		typeof widget === 'function' ||
-		ReactIs.isForwardRef(React.createElement(widget)) ||
-		ReactIs.isMemo(widget)
-	) {
-		return mergeOptions(widget);
-	}
-
-	if (typeof widget !== 'string') {
-		throw new Error(`Unsupported widget definition: ${typeof widget}`);
-	}
-
-	if (registeredWidgets.hasOwnProperty(widget)) {
-		const registeredWidget = registeredWidgets[widget];
-		return getWidget(schema, registeredWidget, registeredWidgets);
-	}
-
-	if (!widgetMap.hasOwnProperty(type)) {
-		throw new Error(`No widget for type "${type}"`);
-	}
-
-	if (widgetMap[type].hasOwnProperty(widget)) {
-		const registeredWidget = registeredWidgets[widgetMap[type][widget]];
-		return getWidget(schema, registeredWidget, registeredWidgets);
-	}
-
-	throw new Error(`No widget "${widget}" for type "${type}"`);
-}
-
-/**
- *
- */
-export function hasWidget(
-	schema: Schema,
-	widget: Widget | string,
-	registeredWidgets?: { [name: string]: Widget } = {}
-) {
-	try {
-		getWidget(schema, widget, registeredWidgets);
-		return true;
-	} catch (e) {
-		if (
-			e.message &&
-			(e.message.startsWith('No widget') || e.message.startsWith('Unsupported widget'))
-		) {
-			return false;
-		}
-		throw e;
-	}
 }
 
 /**

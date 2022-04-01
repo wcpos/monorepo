@@ -2,6 +2,8 @@ import * as React from 'react';
 import { action } from '@storybook/addon-actions';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import set from 'lodash/set';
+import forEach from 'lodash/forEach';
 import { StoryWrapper } from '@storybook/addons';
 import { AppProviderSizeProvider } from '@wcpos/common/src/hooks/use-position-in-app';
 import Portal from '../portal';
@@ -49,7 +51,7 @@ export const BasicUsage = (props: FormProps) => {
 
 	const handleChange = React.useCallback((change, name) => {
 		action('onChange')(change);
-		setData((prev) => ({ ...prev, ...change }));
+		setData(change);
 	}, []);
 
 	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
@@ -119,7 +121,7 @@ export const Nested = (props: FormProps) => {
 
 	const handleChange = React.useCallback((change) => {
 		action('onChange')(change);
-		setData((prev) => ({ ...prev, ...change }));
+		setData(change);
 	}, []);
 
 	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
@@ -201,7 +203,7 @@ export const Arrays = (props: FormProps) => {
 
 	const handleChange = React.useCallback((change) => {
 		action('onChange')(change);
-		setData((prev) => ({ ...prev, ...change }));
+		setData(change);
 	}, []);
 
 	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
@@ -397,7 +399,7 @@ export const Numbers = (props: FormProps) => {
 
 	const handleChange = React.useCallback((change) => {
 		action('onChange')(change);
-		setData((prev) => ({ ...prev, ...change }));
+		setData(change);
 	}, []);
 
 	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
@@ -487,7 +489,7 @@ export const Widgets = (props: FormProps) => {
 
 	const handleChange = React.useCallback((change) => {
 		action('onChange')(change);
-		setData((prev) => ({ ...prev, ...change }));
+		setData(change);
 	}, []);
 
 	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
@@ -646,7 +648,7 @@ export const Ordering = (props: FormProps) => {
 
 	const handleChange = React.useCallback((change) => {
 		action('onChange')(change);
-		setData((prev) => ({ ...prev, ...change }));
+		setData(change);
 	}, []);
 
 	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
@@ -762,7 +764,7 @@ export const ErrorSchema = (props: FormProps) => {
 
 	const handleChange = React.useCallback((change) => {
 		action('onChange')(change);
-		setData((prev) => ({ ...prev, ...change }));
+		setData(change);
 	}, []);
 
 	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
@@ -833,5 +835,25 @@ ErrorSchema.args = {
 		firstName: {
 			__errors: ['some error that got added as a prop'],
 		},
+	},
+};
+
+/**
+ *
+ */
+export const Single = (props: FormProps) => {
+	const [data, setData] = React.useState('initial value');
+
+	const handleChange = React.useCallback((change) => {
+		action('onChange')(change);
+		setData(change);
+	}, []);
+
+	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
+};
+Single.args = {
+	schema: {
+		title: 'A single-field form',
+		type: 'string',
 	},
 };

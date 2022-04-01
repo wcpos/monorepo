@@ -8,6 +8,7 @@ import {
 	isFixedItems,
 	allowAdditionalItems,
 	getDefaultFormState,
+	getUiOptions,
 } from '../form.helpers';
 
 /**
@@ -93,9 +94,7 @@ export const NormalArray = ({ schema, uiSchema, formData, name, idSchema }) => {
 	 *
 	 */
 	const canAddItem = React.useMemo(() => {
-		// const { schema, uiSchema } = this.props;
-		// let { addable } = getUiOptions(uiSchema);
-		let addable = true;
+		let { addable } = getUiOptions(uiSchema);
 		if (addable !== false) {
 			// if ui:options.addable was not explicitly set to false, we can add
 			// another item if we have not exceeded maxItems yet
@@ -106,7 +105,7 @@ export const NormalArray = ({ schema, uiSchema, formData, name, idSchema }) => {
 			}
 		}
 		return addable;
-	}, [formData.length, schema.maxItems]);
+	}, [formData.length, schema.maxItems, uiSchema]);
 
 	/**
 	 *

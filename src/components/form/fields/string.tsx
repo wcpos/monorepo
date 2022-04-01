@@ -1,8 +1,7 @@
 import * as React from 'react';
-import get from 'lodash/get';
 import { useFormContext } from '../context';
-import { isSelect, optionsList } from '../form.helpers';
-import { widgetMap } from '../widgets';
+import { isSelect, optionsList, getUiOptions } from '../form.helpers';
+import { hasWidget, getWidget } from '../widgets';
 
 interface StringFieldProps {
 	schema: import('../types').Schema;
@@ -10,14 +9,18 @@ interface StringFieldProps {
 	name: string;
 }
 
-export const StringField = ({ schema, formData, name, idSchema }: StringFieldProps) => {
+export const StringField = ({ schema, formData, name, idSchema, uiSchema }: StringFieldProps) => {
 	const [value, setValue] = React.useState(formData);
 	const { registry, onChange } = useFormContext();
 	const enumOptions = isSelect(schema) && optionsList(schema);
-	const defaultWidget = enumOptions ? 'select' : 'text';
+	let defaultWidget = enumOptions ? 'select' : 'text';
 
-	const widget = get(widgetMap, ['string', defaultWidget]);
-	const Widget = get(registry, ['widgets', widget]);
+	if (schema.format && hasWidget(schema, schema.format, registry.widgets)) {
+		defaultWidget = schema.format;
+	}
+
+	const { widget = defaultWidget, placeholder = '', ...options } = getUiOptions(uiSchema);
+	const Widget = getWidget(schema, widget, registry.widgets);
 
 	/**
 	 * How best to handle changes?
@@ -38,6 +41,14 @@ export const StringField = ({ schema, formData, name, idSchema }: StringFieldPro
 	}, []);
 
 	return (
-		<Widget label={schema.title} onBlur={handleOnBlur} value={value} onChange={handleOnChange} />
+		<Widget
+			label={schema.title || name}
+			onBlur={handleOnBlur}
+			value={value}
+			onChange={handleOnChange}
+			options={enumOptions}
+			placeholder={placeholder}
+			{...options}
+		/>
 	);
 };

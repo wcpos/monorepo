@@ -21,7 +21,7 @@ export const ObjectTemplate = ({
 	const { TitleField, DescriptionField } = registry.fields;
 
 	return (
-		<Box space="xSmall">
+		<Box space="small">
 			{(uiSchema['ui:title'] || title) && (
 				<TitleField title={title || uiSchema['ui:title']} required={required} />
 			)}

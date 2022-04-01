@@ -74,6 +74,10 @@ export interface TextInputProps {
 	 */
 	disabled?: boolean;
 	/**
+	 * Set to `true` to disable.
+	 */
+	readonly?: boolean;
+	/**
 	 * Set to `true` for loading state.
 	 */
 	loading?: boolean;
@@ -205,6 +209,7 @@ export const TextInputBase = (
 		placeholder,
 		helpText,
 		disabled = false,
+		readonly = false,
 		error = false,
 		returnKeyType = 'next',
 		focused = false,
@@ -378,7 +383,7 @@ export const TextInputBase = (
 						ref={inputRef}
 						{...inputType}
 						placeholder={placeholder}
-						editable={!disabled}
+						editable={!disabled && !readonly}
 						value={value}
 						onChangeText={onChange}
 						returnKeyType={returnKeyType}

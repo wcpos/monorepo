@@ -5,20 +5,11 @@ import Text from '../../text';
 import Icon from '../../icon';
 import { ArrayItemTemplate } from './array-item';
 
-export const ArrayTemplate = ({
-	uiSchema,
-	schema,
-	title,
-	items,
-	canAdd,
-	onAdd,
-	disabled,
-	readonly,
-}) => {
+export const ArrayTemplate = ({ uiSchema, schema, items, canAdd, onAdd, disabled, readonly }) => {
 	return (
 		<Box space="xSmall">
 			<Box>
-				<Text>{uiSchema['ui:title'] || title}</Text>
+				<Text size="large">{uiSchema['ui:title'] || schema.title}</Text>
 				{(uiSchema['ui:description'] || schema.description) && (
 					<Text>{uiSchema['ui:description'] || schema.description}</Text>
 				)}

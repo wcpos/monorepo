@@ -1,84 +1,97 @@
 import * as React from 'react';
-import { ScrollView } from 'react-native';
-import {
-	toIdSchema,
-	retrieveSchema,
-	getDefaultFormState,
-	getDefaultRegistry,
-	mergeObjects,
-} from './form.helpers';
-import { toErrorList } from './validate';
+import forEach from 'lodash/forEach';
+import cloneDeep from 'lodash/cloneDeep';
+import set from 'lodash/set';
+import { FormContextProvider } from './context';
 import { ErrorList } from './error-list';
+import { toErrorList } from './validate';
+import { NodeTemplate } from './templates/node';
+import { toIdSchema, getDefaultFormState, retrieveSchema } from './form.helpers';
+
+import type { Schema, UiSchema, ErrorSchema } from './types';
+
+export interface FormProps<T> {
+	formData: T;
+	schema: Schema;
+	uiSchema?: UiSchema;
+	extraErrors?: ErrorSchema;
+	onChange: (formData: T) => void;
+	rootId?: string;
+}
 
 /**
  *
  */
-export function Form<T extends object>({
+export const Form = <T extends object | string>({
 	schema,
 	uiSchema = {},
 	formData: inputFormData,
-	onChange,
 	extraErrors = {},
+	onChange,
+	rootId = 'root',
 	...props
-}: import('./types').FormProps<T>): React.ReactElement {
+}: FormProps<T>) => {
 	const rootSchema = schema;
-	const formData = getDefaultFormState(schema, inputFormData, rootSchema); // populates defaults
+	const formData = Object.freeze(getDefaultFormState(schema, inputFormData, rootSchema));
 	const retrievedSchema = retrieveSchema(schema, rootSchema, formData); // don't know why this is needed
 
-	// creates recursive ids
-	// don't know why it needs formData?
-	const idSchema = toIdSchema(
-		retrievedSchema,
-		uiSchema['ui:rootFieldId'],
-		rootSchema,
-		formData,
-		props.idPrefix,
-		props.idSeparator
+	/**
+	 *
+	 */
+	const idSchema = React.useMemo(
+		() =>
+			toIdSchema(
+				retrievedSchema,
+				uiSchema['ui:rootFieldId'],
+				rootSchema,
+				formData,
+				props.idPrefix,
+				props.idSeparator
+			),
+		[formData, props.idPrefix, props.idSeparator, retrievedSchema, rootSchema, uiSchema]
 	);
 
-	const registry = React.useMemo(() => {
-		const { fields, widgets } = getDefaultRegistry();
-		return {
-			fields: { ...fields, ...props.fields },
-			widgets: { ...widgets, ...props.widgets },
-			ArrayFieldTemplate: props.ArrayFieldTemplate,
-			ObjectFieldTemplate: props.ObjectFieldTemplate,
-			FieldTemplate: props.FieldTemplate,
-			definitions: schema.definitions || {},
-			rootSchema: schema,
-			formContext: props.formContext || {},
-		};
-	}, [
-		props.ArrayFieldTemplate,
-		props.FieldTemplate,
-		props.ObjectFieldTemplate,
-		props.fields,
-		props.formContext,
-		props.widgets,
-		schema,
-	]);
+	/**
+	 *
+	 */
+	const errors = React.useMemo(() => toErrorList(extraErrors), [extraErrors]);
 
-	const { SchemaField } = registry.fields;
+	/**
+	 *
+	 */
+	const handleOnChange = React.useCallback(
+		(changes) => {
+			let newData = cloneDeep(formData);
+			forEach(changes, (value, id) => {
+				const path = id.split('.');
+				const root = path.shift();
+				if (path.length === 0 && root === rootId) {
+					// single-field form
+					newData = value;
+				} else {
+					set(newData, path, value);
+				}
+			});
+			if (onChange) {
+				onChange(newData);
+			}
+		},
+		[formData, onChange, rootId]
+	);
 
-	const errors = React.useMemo(() => {
-		const errorSchema = mergeObjects(props.errorSchema, extraErrors, !!'concat arrays');
-		return toErrorList(errorSchema);
-	}, [props.errorSchema, extraErrors]);
-
+	/**
+	 *
+	 */
 	return (
-		<>
+		<FormContextProvider schema={schema} onChange={handleOnChange}>
 			{errors.length > 0 && <ErrorList errors={errors} />}
-			<SchemaField
+			<NodeTemplate
 				schema={schema}
-				uiSchema={uiSchema}
-				idSchema={idSchema}
-				// idPrefix={idPrefix}
-				// formContext={formContext}
 				formData={formData}
-				registry={registry}
-				onChange={onChange}
-				{...props}
+				name={rootId}
+				idSchema={idSchema}
+				uiSchema={uiSchema}
 			/>
-		</>
+		</FormContextProvider>
 	);
-}
+};
