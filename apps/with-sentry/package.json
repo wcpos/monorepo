@@ -30,7 +30,7 @@
 	},
 	"devDependencies": {
 		"@babel/core": "7.17.8",
-		"@sentry/cli": "1.74.2",
+		"@sentry/cli": "1.74.3",
 		"@types/react": "17.0.43",
 		"@types/react-dom": "17.0.14",
 		"@types/react-native": "0.67.3",
