@@ -83,11 +83,7 @@ export const NormalArray = ({ schema, uiSchema, formData, name, idSchema }) => {
 	 *
 	 */
 	const getNewFormDataRow = React.useCallback(() => {
-		let itemSchema = schema.items;
-		if (isFixedItems(schema) && allowAdditionalItems(schema)) {
-			itemSchema = schema.additionalItems;
-		}
-		return getDefaultFormState(itemSchema, undefined, rootSchema);
+		return getDefaultFormState(schema.items, undefined, rootSchema);
 	}, [rootSchema, schema]);
 
 	/**
@@ -105,14 +101,15 @@ export const NormalArray = ({ schema, uiSchema, formData, name, idSchema }) => {
 			}
 		}
 		return addable;
-	}, [formData.length, schema.maxItems, uiSchema]);
+	}, [formData, schema.maxItems, uiSchema]);
 
 	/**
 	 *
 	 */
 	const handleOnAdd = React.useCallback(() => {
 		const newRow = getNewFormDataRow();
-		onChange({ [idSchema.$id]: [...formData, newRow] });
+		const newArray = Array.isArray(formData) ? [...formData, newRow] : [newRow];
+		onChange({ [idSchema.$id]: newArray });
 	}, [formData, getNewFormDataRow, idSchema.$id, onChange]);
 
 	/**

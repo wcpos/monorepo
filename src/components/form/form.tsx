@@ -45,10 +45,10 @@ export const Form = <T extends object | string>({
 				uiSchema['ui:rootFieldId'],
 				rootSchema,
 				formData,
-				props.idPrefix,
+				rootId,
 				props.idSeparator
 			),
-		[formData, props.idPrefix, props.idSeparator, retrievedSchema, rootSchema, uiSchema]
+		[formData, props.idSeparator, retrievedSchema, rootId, rootSchema, uiSchema]
 	);
 
 	/**

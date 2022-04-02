@@ -13,6 +13,9 @@ export interface AddEditCustomerProps {
 	// customer: import('@wcpos/common/src/database').CustomerDocument;
 }
 
+/**
+ *
+ */
 const AddEditCustomer = ({}: AddEditCustomerProps) => {
 	const { ref, open, close } = useModal();
 	const [index, setIndex] = React.useState(0);
@@ -53,10 +56,16 @@ const AddEditCustomer = ({}: AddEditCustomerProps) => {
 		}
 	};
 
-	const handleChange = React.useCallback((changes, name) => {
-		setCustomerData((prev) => ({ ...prev, ...changes }));
+	/**
+	 *
+	 */
+	const handleChange = React.useCallback((changes) => {
+		setCustomerData(changes);
 	}, []);
 
+	/**
+	 *
+	 */
 	const schema = React.useMemo(() => {
 		return {
 			...customerCollection.schema.jsonSchema,
@@ -85,7 +94,12 @@ const AddEditCustomer = ({}: AddEditCustomerProps) => {
 						formData={customerData}
 						onChange={handleChange}
 						extraErrors={extraErrors}
-						uiSchema={{ id: { 'ui:readonly': true } }}
+						uiSchema={{
+							id: { 'ui:readonly': true },
+							billing: { 'ui:collapsible': 'closed' },
+							shipping: { 'ui:collapsible': 'closed' },
+							meta_data: { 'ui:collapsible': 'closed' },
+						}}
 					/>
 				);
 			case 'json':

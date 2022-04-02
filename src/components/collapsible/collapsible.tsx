@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { View, ViewStyle } from 'react-native';
 import Animated, {
 	useAnimatedRef,
 	// measure,
@@ -11,17 +11,27 @@ import Animated, {
 	runOnUI,
 } from 'react-native-reanimated';
 import useOnLayout from '@wcpos/common/src/hooks/use-on-layout';
-import * as Styled from './styles';
+import Pressable from '../pressable';
+import Box from '../box';
+import { CollapsibleHeader } from './header';
 
 export interface CollapsibleProps {
-	/**
-	 * Toggle the expanded state of the Collapsible.
-	 */
-	open: boolean;
 	/**
 	 * Content that should be collapsible.
 	 */
 	children: React.ReactNode;
+	/**
+	 * Content that should be collapsible.
+	 */
+	title: string | React.ReactNode;
+	/**
+	 * Start with expanded content.
+	 */
+	initExpand?: boolean;
+	/**
+	 * Start with expanded content.
+	 */
+	onChangeState?: (open: boolean) => void;
 }
 
 /**
@@ -29,30 +39,49 @@ export interface CollapsibleProps {
  *
  * Should not wrap views with shadows, as shadow will be clipped.
  */
-export const Collapsible = ({ open, children }: CollapsibleProps) => {
-	const aref = useAnimatedRef<View>();
+export const Collapsible = ({
+	children,
+	title,
+	initExpand = false,
+	onChangeState,
+}: CollapsibleProps) => {
+	const [layout, onLayout] = useOnLayout();
+	const [open, setOpen] = React.useState(initExpand);
 	const progress = useDerivedValue(() => (open ? withTiming(1) : withTiming(0)));
-	const height = useSharedValue(0);
 
-	const style = useAnimatedStyle(() => ({
-		height: height.value * progress.value,
-		opacity: progress.value,
+	/**
+	 *
+	 */
+	const style = useAnimatedStyle<Animated.AnimateStyle<ViewStyle>>(() => ({
+		height: layout.height * progress.value + 1,
+		opacity: progress.value === 0 ? 0 : 1,
 	}));
 
+	/**
+	 *
+	 */
+	const toggleAccordion = React.useCallback(() => {
+		setOpen(!open);
+		if (onChangeState) {
+			onChangeState(!open);
+		}
+	}, [onChangeState, open]);
+
+	/**
+	 *
+	 */
+	// useImperativeHandle(ref, () => ({
+	//   openAccordion,
+	// }));
+
 	return (
-		<Styled.Container as={Animated.View} style={style}>
-			<View
-				ref={aref}
-				onLayout={({
-					nativeEvent: {
-						layout: { height: h },
-					},
-				}) => {
-					height.value = h;
-				}}
-			>
-				{children}
-			</View>
-		</Styled.Container>
+		<Box>
+			<Pressable onPress={toggleAccordion}>
+				<CollapsibleHeader title={title} open={open} />
+			</Pressable>
+			<Animated.View style={[style, { overflow: 'hidden' }]}>
+				<View onLayout={onLayout}>{children}</View>
+			</Animated.View>
+		</Box>
 	);
 };

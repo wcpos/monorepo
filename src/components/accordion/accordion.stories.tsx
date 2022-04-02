@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Accordion, AccordionProps } from './accordion';
+import Text from '../text';
 
 export default {
 	title: 'Components/Accordion',
@@ -13,16 +14,16 @@ export const BasicUsage = (props: AccordionProps) => <Accordion {...props} />;
 BasicUsage.args = {
 	items: [
 		{
-			label: 'Label 1',
-			content: LOREM_IPSUM,
+			title: 'Label 1',
+			content: <Text>{LOREM_IPSUM}</Text>,
 		},
 		{
-			label: 'Label 2',
-			content: LOREM_IPSUM,
+			title: 'Label 2',
+			content: <Text>{LOREM_IPSUM}</Text>,
 		},
 		{
-			label: 'Label 3',
-			content: LOREM_IPSUM,
+			title: 'Label 3',
+			content: <Text>{LOREM_IPSUM}</Text>,
 		},
 	],
 };

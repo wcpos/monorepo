@@ -151,7 +151,8 @@ export const FixedArray = ({ schema, formData, uiSchema, idSchema, errorSchema, 
 	 */
 	const handleOnAdd = React.useCallback(() => {
 		const newRow = getNewFormDataRow();
-		onChange({ [idSchema.$id]: [...formData, newRow] });
+		const newArray = Array.isArray(formData) ? [...formData, newRow] : [newRow];
+		onChange({ [idSchema.$id]: newArray });
 	}, [formData, getNewFormDataRow, idSchema.$id, onChange]);
 
 	/**

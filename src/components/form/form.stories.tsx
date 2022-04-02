@@ -857,3 +857,74 @@ Single.args = {
 		type: 'string',
 	},
 };
+
+/**
+ *
+ */
+export const Collapsible = (props: FormProps) => {
+	const [data, setData] = React.useState({
+		firstName: 'Chuck',
+		lastName: 'Norris',
+	});
+
+	const handleChange = React.useCallback((change) => {
+		action('onChange')(change);
+		setData(change);
+	}, []);
+
+	return <Form<typeof data> {...props} formData={data} onChange={handleChange} />;
+};
+Collapsible.args = {
+	schema: {
+		title: 'A registration form',
+		type: 'object',
+		required: ['firstName', 'lastName'],
+		properties: {
+			firstName: {
+				type: 'string',
+				title: 'First name',
+			},
+			lastName: {
+				type: 'string',
+				title: 'Last name',
+			},
+			shipping: {
+				type: 'object',
+				title: 'Shipping Address',
+				properties: {
+					firstName: {
+						type: 'string',
+						title: 'First name',
+					},
+					lastName: {
+						type: 'string',
+						title: 'Last name',
+					},
+					address_1: {
+						type: 'string',
+					},
+					address_2: {
+						type: 'string',
+					},
+					city: {
+						type: 'string',
+					},
+					state: {
+						type: 'string',
+					},
+					postcode: {
+						type: 'string',
+					},
+					country: {
+						type: 'string',
+					},
+				},
+			},
+		},
+	},
+	uiSchema: {
+		shipping: {
+			'ui:collapsible': 'closed',
+		},
+	},
+};
