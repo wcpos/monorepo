@@ -10,26 +10,54 @@
 				"order": 1,
 				"width": "15%",
 				"flexShrink": 0,
-				"hideLabel": true
+				"hideLabel": true,
+				"show": true
 			},
 			{
 				"key": "name",
 				"order": 2,
+				"show": true,
 				"display": [
-					{ "key": "sku", "hide": true, "order": 1 },
-					{ "key": "categories", "order": 2 },
-					{ "key": "tags", "hide": true, "order": 3 }
+					{
+						"key": "sku",
+						"show": false,
+						"order": 1
+					},
+					{
+						"key": "categories",
+						"order": 2,
+						"show": true
+					},
+					{
+						"key": "tags",
+						"hide": false,
+						"order": 3
+					}
 				]
 			},
-			{ "key": "sku", "hide": true, "order": 3, "width": "20%", "flexShrink": 0 },
-			{ "key": "price", "order": 4, "width": "90px", "flexShrink": 0, "align": "right" },
+			{
+				"key": "sku",
+				"show": false,
+				"order": 3,
+				"width": "20%",
+				"flexShrink": 0
+			},
+			{
+				"key": "price",
+				"order": 4,
+				"width": "90px",
+				"flexShrink": 0,
+				"align": "right",
+				"show": true
+			},
 			{
 				"key": "actions",
 				"disableSort": true,
 				"order": 5,
 				"width": "38px",
 				"flexShrink": 0,
-				"hideLabel": true
+				"hideLabel": true,
+				"show": true
 			}
 		]
 	},
@@ -37,15 +65,70 @@
 		"sortBy": "id",
 		"sortDirection": "asc",
 		"columns": [
-			{ "key": "quantity", "order": 0, "width": "15%", "flexShrink": 0 },
-			{ "key": "name", "order": 1, "width": "50%" },
-			{ "key": "sku", "hide": true, "order": 2, "width": "20%", "flexShrink": 0 },
-			{ "key": "price", "order": 3, "width": "20%", "flexShrink": 0 },
-			{ "key": "subtotal", "hide": true, "order": 4, "width": "20%", "flexShrink": 0 },
-			{ "key": "subtotalTax", "hide": true, "order": 5, "width": "20%", "flexShrink": 0 },
-			{ "key": "totalTax", "hide": true, "order": 6, "width": "20%", "flexShrink": 0 },
-			{ "key": "total", "order": 7, "width": "20%", "flexShrink": 0, "align": "right" },
-			{ "key": "actions", "order": 8, "width": "60px", "flexShrink": 0, "hideLabel": true }
+			{
+				"key": "quantity",
+				"order": 0,
+				"width": "15%",
+				"flexShrink": 0,
+				"show": true
+			},
+			{
+				"key": "name",
+				"order": 1,
+				"width": "50%",
+				"show": true
+			},
+			{
+				"key": "sku",
+				"order": 2,
+				"width": "20%",
+				"flexShrink": 0,
+				"show": false
+			},
+			{
+				"key": "price",
+				"order": 3,
+				"width": "20%",
+				"flexShrink": 0,
+				"show": true
+			},
+			{
+				"key": "subtotal",
+				"order": 4,
+				"width": "20%",
+				"flexShrink": 0,
+				"show": false
+			},
+			{
+				"key": "subtotalTax",
+				"order": 5,
+				"width": "20%",
+				"flexShrink": 0,
+				"show": false
+			},
+			{
+				"key": "totalTax",
+				"order": 6,
+				"width": "20%",
+				"flexShrink": 0,
+				"show": false
+			},
+			{
+				"key": "total",
+				"order": 7,
+				"width": "20%",
+				"flexShrink": 0,
+				"align": "right",
+				"show": true
+			},
+			{
+				"key": "actions",
+				"order": 8,
+				"width": "60px",
+				"flexShrink": 0,
+				"hideLabel": true,
+				"show": true
+			}
 		]
 	},
 	"products": {
@@ -58,24 +141,75 @@
 				"disableSort": true,
 				"order": 1,
 				"flexShrink": 0,
-				"hideLabel": true
+				"hideLabel": true,
+				"show": true
 			},
-			{ "key": "id", "order": 2, "width": "50px", "flexShrink": 0, "hide": true },
-			{ "key": "name", "width": "30%", "order": 3 },
-			{ "key": "sku", "order": 4, "width": "80px", "flexShrink": 0, "hide": true },
-			{ "key": "categories", "width": "20%", "order": 5, "disableSort": true },
-			{ "key": "tags", "width": "20%", "order": 6, "hide": true, "disableSort": true },
-			{ "key": "regularPrice", "width": "100px", "order": 7 },
-			{ "key": "salePrice", "width": "100px", "order": 8 },
-			{ "key": "dateCreated", "width": "100px", "order": 9, "hide": true },
-			{ "key": "dateModified", "width": "100px", "order": 10, "hide": true },
+			{
+				"key": "id",
+				"order": 2,
+				"width": "50px",
+				"flexShrink": 0,
+				"show": false
+			},
+			{
+				"key": "name",
+				"width": "30%",
+				"order": 3,
+				"show": true
+			},
+			{
+				"key": "sku",
+				"order": 4,
+				"width": "80px",
+				"flexShrink": 0,
+				"show": false
+			},
+			{
+				"key": "categories",
+				"width": "20%",
+				"order": 5,
+				"disableSort": true,
+				"show": true
+			},
+			{
+				"key": "tags",
+				"width": "20%",
+				"order": 6,
+				"disableSort": true,
+				"show": false
+			},
+			{
+				"key": "regularPrice",
+				"width": "100px",
+				"order": 7,
+				"show": true
+			},
+			{
+				"key": "salePrice",
+				"width": "100px",
+				"order": 8,
+				"show": true
+			},
+			{
+				"key": "dateCreated",
+				"width": "100px",
+				"order": 9,
+				"show": false
+			},
+			{
+				"key": "dateModified",
+				"width": "100px",
+				"order": 10,
+				"show": false
+			},
 			{
 				"key": "actions",
 				"disableSort": true,
 				"order": 11,
 				"width": "38px",
 				"flexShrink": 0,
-				"hideLabel": true
+				"hideLabel": true,
+				"show": true
 			}
 		]
 	},
@@ -83,32 +217,140 @@
 		"sortBy": "number",
 		"sortDirection": "desc",
 		"columns": [
-			{ "key": "status", "width": "38px", "order": 1, "hideLabel": true },
-			{ "key": "number", "width": "38px", "order": 2, "hideLabel": true },
-			{ "key": "customer", "width": "20%", "order": 3 },
-			{ "key": "billing", "width": "20%", "order": 4 },
-			{ "key": "shipping", "width": "20%", "order": 5 },
-			{ "key": "customerNote", "width": "38px", "order": 6 },
-			{ "key": "dateCreated", "width": "100px", "order": 7 },
-			{ "key": "dateModified", "hide": true, "width": "100px", "order": 8 },
-			{ "key": "dateCompleted", "hide": true, "width": "100px", "order": 9 },
-			{ "key": "total", "width": "90px", "order": 10 },
-			{ "key": "actions", "disableSort": true, "width": "38px", "order": 11, "hideLabel": true }
+			{
+				"key": "status",
+				"width": "38px",
+				"order": 1,
+				"hideLabel": true,
+				"show": true
+			},
+			{
+				"key": "number",
+				"width": "38px",
+				"order": 2,
+				"hideLabel": true,
+				"show": true
+			},
+			{
+				"key": "customer",
+				"width": "20%",
+				"order": 3,
+				"show": true
+			},
+			{
+				"key": "billing",
+				"width": "20%",
+				"order": 4,
+				"show": true
+			},
+			{
+				"key": "shipping",
+				"width": "20%",
+				"order": 5,
+				"show": true
+			},
+			{
+				"key": "customerNote",
+				"width": "38px",
+				"order": 6,
+				"show": true
+			},
+			{
+				"key": "dateCreated",
+				"width": "100px",
+				"order": 7,
+				"show": true
+			},
+			{
+				"key": "dateModified",
+				"width": "100px",
+				"order": 8,
+				"show": false
+			},
+			{
+				"key": "dateCompleted",
+				"width": "100px",
+				"order": 9,
+				"show": false
+			},
+			{
+				"key": "total",
+				"width": "90px",
+				"order": 10,
+				"show": true
+			},
+			{
+				"key": "actions",
+				"disableSort": true,
+				"width": "38px",
+				"order": 11,
+				"hideLabel": true,
+				"show": true
+			}
 		]
 	},
 	"customers": {
 		"sortBy": "lastName",
 		"sortDirection": "asc",
 		"columns": [
-			{ "key": "avatarUrl", "disableSort": true, "width": "15%", "order": 1, "hideLabel": true },
-			{ "key": "firstName", "width": "20%", "order": 2 },
-			{ "key": "lastName", "width": "20%", "order": 3 },
-			{ "key": "email", "width": "20%", "order": 4 },
-			{ "key": "role", "width": "20%", "hide": true, "order": 5 },
-			{ "key": "username", "width": "20%", "hide": true, "order": 6 },
-			{ "key": "billing", "width": "20%", "order": 7 },
-			{ "key": "shipping", "width": "20%", "order": 8 },
-			{ "key": "actions", "disableSort": true, "width": "38px", "order": 9, "hideLabel": true }
+			{
+				"key": "avatarUrl",
+				"disableSort": true,
+				"width": "15%",
+				"order": 1,
+				"hideLabel": true,
+				"show": true
+			},
+			{
+				"key": "firstName",
+				"width": "20%",
+				"order": 2,
+				"show": true
+			},
+			{
+				"key": "lastName",
+				"width": "20%",
+				"order": 3,
+				"show": true
+			},
+			{
+				"key": "email",
+				"width": "20%",
+				"order": 4,
+				"show": true
+			},
+			{
+				"key": "role",
+				"width": "20%",
+				"order": 5,
+				"show": false
+			},
+			{
+				"key": "username",
+				"width": "20%",
+				"order": 6,
+				"show": false
+			},
+			{
+				"key": "billing",
+				"width": "20%",
+				"order": 7,
+				"show": true
+			},
+			{
+				"key": "shipping",
+				"width": "20%",
+				"order": 8,
+				"show": true
+			},
+			{
+				"key": "actions",
+				"disableSort": true,
+				"width": "38px",
+				"order": 9,
+				"hideLabel": true,
+				"show": true
+			}
 		]
 	}
 }
