@@ -19,9 +19,15 @@ interface FormContextProviderProps {
 	children: React.ReactNode;
 	schema: Schema;
 	onChange: (change: any) => void;
+	formContext: any;
 }
 
-export const FormContextProvider = ({ children, schema, onChange }: FormContextProviderProps) => {
+export const FormContextProvider = ({
+	children,
+	schema,
+	onChange,
+	formContext,
+}: FormContextProviderProps) => {
 	const value = React.useMemo(() => {
 		return {
 			registry: {
@@ -30,8 +36,9 @@ export const FormContextProvider = ({ children, schema, onChange }: FormContextP
 			},
 			rootSchema: Object.freeze(schema),
 			onChange,
+			formContext,
 		};
-	}, [onChange, schema]);
+	}, [formContext, onChange, schema]);
 
 	return <FormContext.Provider value={value}>{children}</FormContext.Provider>;
 };

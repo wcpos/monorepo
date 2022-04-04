@@ -37,10 +37,10 @@ const Name = ({ item: product, column }: Props) => {
 					{product.attributes
 						.filter((attr: any) => attr.variation)
 						.map((attr: any) => (
-							<Box space="xxSmall" key={`${attr.name}-${attr.id}`} horizontal>
-								<Text size="small" type="secondary">{`${attr.name}:`}</Text>
+							<Text key={`${attr.name}-${attr.id}`}>
+								<Text size="small" type="secondary">{`${attr.name}: `}</Text>
 								<Text size="small">{attr.options.join(', ')}</Text>
-							</Box>
+							</Text>
 						))}
 				</View>
 			)}

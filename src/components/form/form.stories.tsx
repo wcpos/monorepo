@@ -928,3 +928,110 @@ Collapsible.args = {
 		},
 	},
 };
+
+/**
+ *
+ */
+export const FormContext = (props: FormProps) => {
+	const [data, setData] = React.useState({
+		stringFormats: {
+			email: 'chuck@norris.net',
+			uri: 'http://chucknorris.com/',
+		},
+		boolean: {
+			default: true,
+			radio: true,
+			select: true,
+		},
+		string: {
+			color: '#151ce6',
+			default: 'Hello...',
+			textarea: '... World',
+		},
+	});
+
+	const handleChange = React.useCallback((change) => {
+		action('onChange')(change);
+		setData(change);
+	}, []);
+
+	return (
+		<Form<typeof data>
+			{...props}
+			formData={data}
+			onChange={handleChange}
+			formContext={{
+				label: (id, label, data) => {
+					action('label')({ id, label, data });
+					return id;
+				},
+			}}
+		/>
+	);
+};
+FormContext.args = {
+	schema: {
+		title: 'Label and Title context',
+		type: 'object',
+		properties: {
+			stringFormats: {
+				type: 'object',
+				title: 'String formats',
+				properties: {
+					email: {
+						type: 'string',
+						format: 'email',
+					},
+					uri: {
+						type: 'string',
+						format: 'uri',
+					},
+				},
+			},
+			boolean: {
+				type: 'object',
+				title: 'Boolean field',
+				properties: {
+					default: {
+						type: 'boolean',
+						title: 'checkbox (default)',
+						description: 'This is the checkbox-description',
+					},
+					radio: {
+						type: 'boolean',
+						title: 'radio buttons',
+						description: 'This is the radio-description',
+					},
+					select: {
+						type: 'boolean',
+						title: 'select box',
+						description: 'This is the select-description',
+					},
+				},
+			},
+			string: {
+				type: 'object',
+				title: 'String field',
+				properties: {
+					default: {
+						type: 'string',
+						title: 'text input (default)',
+					},
+					textarea: {
+						type: 'string',
+						title: 'textarea',
+					},
+					placeholder: {
+						type: 'string',
+					},
+					color: {
+						type: 'string',
+						title: 'color picker',
+						default: '#151ce6',
+					},
+				},
+			},
+		},
+	},
+	uiSchema: {},
+};

@@ -55,29 +55,34 @@ export const NormalArray = ({ schema, uiSchema, formData, name, idSchema }) => {
 			 *  @TODO - toIdSchema function sucks, need to refactor
 			 */
 			const nodeIdSchema = toIdSchema(schema.items, `${idSchema.$id}.${index}`, rootSchema, item);
-			const orderable = true;
-			const has = {
-				moveUp: orderable && index > 0,
-				moveDown: orderable && index < formData.length - 1,
-				// remove: removable && canRemove,
-				remove: true,
-				toolbar: false,
-			};
-			has.toolbar = Object.keys(has).some((key) => has[key]);
 
 			return {
 				key,
 				index,
-				hasToolbar: has.toolbar,
-				hasMoveUp: has.moveUp,
-				hasMoveDown: has.moveDown,
-				hasRemove: has.remove,
+				canMoveUp: index > 0,
+				canMoveDown: index < formData.length - 1,
+				canRemove: true,
 				onReorder: handleReorder,
 				onRemoveIndex: handleRemoveIndex,
-				children: <NodeTemplate schema={schema.items} formData={item} idSchema={nodeIdSchema} />,
+				children: (
+					<NodeTemplate
+						schema={schema.items}
+						formData={item}
+						idSchema={nodeIdSchema}
+						uiSchema={uiSchema.items}
+					/>
+				),
 			};
 		});
-	}, [formData, handleRemoveIndex, handleReorder, idSchema.$id, rootSchema, schema.items]);
+	}, [
+		formData,
+		handleRemoveIndex,
+		handleReorder,
+		idSchema.$id,
+		rootSchema,
+		schema.items,
+		uiSchema.items,
+	]);
 
 	/**
 	 *

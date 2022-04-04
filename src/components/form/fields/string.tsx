@@ -11,7 +11,7 @@ interface StringFieldProps {
 
 export const StringField = ({ schema, formData, name, idSchema, uiSchema }: StringFieldProps) => {
 	const [value, setValue] = React.useState(formData);
-	const { registry, onChange } = useFormContext();
+	const { registry, onChange, formContext } = useFormContext();
 	const enumOptions = isSelect(schema) && optionsList(schema);
 	let defaultWidget = enumOptions ? 'select' : 'text';
 
@@ -40,9 +40,20 @@ export const StringField = ({ schema, formData, name, idSchema, uiSchema }: Stri
 		setValue(text);
 	}, []);
 
+	/**
+	 *
+	 */
+	const label = React.useMemo(() => {
+		const _label = schema.title || name;
+		if (formContext && formContext.label && typeof formContext.label === 'function') {
+			return formContext.label(idSchema.$id, _label);
+		}
+		return _label;
+	}, [formContext, idSchema.$id, name, schema.title]);
+
 	return (
 		<Widget
-			label={schema.title || name}
+			label={label}
 			onBlur={handleOnBlur}
 			value={value}
 			onChange={handleOnChange}

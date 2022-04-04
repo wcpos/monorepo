@@ -38,12 +38,5 @@ export const ObjectField = ({ schema, formData, uiSchema, idSchema }: ObjectFiel
 	/**
 	 *
 	 */
-	return (
-		<ObjectTemplate
-			title={schema.title}
-			description={uiSchema['ui:description'] || schema.description}
-			uiSchema={uiSchema}
-			properties={properties}
-		/>
-	);
+	return <ObjectTemplate schema={schema} uiSchema={uiSchema} properties={properties} />;
 };

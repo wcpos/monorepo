@@ -53,7 +53,7 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 	const visibleColumns = React.useMemo(
 		() =>
 			columns
-				.filter((column) => !column.hide)
+				.filter((column) => column.show)
 				.map((column) => ({
 					...column,
 					label: t(`orders.column.label.${column.key}`),
@@ -111,7 +111,7 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 				/>
 			);
 		},
-		[visibleColumns]
+		[cellRenderer, visibleColumns]
 	);
 
 	useWhyDidYouUpdate('Table', { data });

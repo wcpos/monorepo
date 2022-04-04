@@ -20,19 +20,17 @@ interface Props {
 const cells = {
 	actions: Actions,
 	price: Price,
-	subtotal: Total,
-	subtotalTax: Tax,
 	total: Total,
-	totalTax: Tax,
+	total_tax: Tax,
 	name: ShippingTitle,
 };
 
 const ShippingLine = ({ shipping, columns }: Props) => {
 	const cellRenderer = React.useCallback((item: ShippingLineDocument, column: ColumnProps) => {
 		const Cell = get(cells, column.key);
-		if (column.key === 'quantity') {
-			return null;
-		}
+		// if (column.key === 'quantity') {
+		// 	return null;
+		// }
 		return Cell ? <Cell item={item} column={column} /> : null;
 	}, []);
 

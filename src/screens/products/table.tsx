@@ -32,7 +32,7 @@ const cells = {
 	image: Image,
 	name: Name,
 	// price: Price,
-	regularPrice: RegularPrice,
+	regular_price: RegularPrice,
 	// sku: Sku,
 	tag: Tag,
 };
@@ -54,7 +54,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	const visibleColumns = React.useMemo(
 		() =>
 			columns
-				.filter((column) => !column.hide)
+				.filter((column) => column.show)
 				.map((column) => ({
 					...column,
 					label: t(`products.column.label.${column.key}`),
@@ -110,7 +110,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 				/>
 			);
 		},
-		[visibleColumns]
+		[cellRenderer, visibleColumns]
 	);
 
 	useWhyDidYouUpdate('Table', { data });

@@ -6,15 +6,16 @@ import Icon from '../../icon';
 export const ArrayItemTemplate = ({
 	children,
 	disabled,
-	hasMoveDown,
-	hasMoveUp,
-	hasRemove,
-	hasToolbar,
+	canMoveDown,
+	canMoveUp,
+	canRemove,
 	index,
 	onRemoveIndex = (idx: number) => {},
 	onReorder = (curr: number, next: number) => {},
 	readonly,
 }) => {
+	const hasToolbar = canMoveDown || canMoveUp || canRemove;
+
 	/**
 	 *
 	 */
@@ -42,20 +43,20 @@ export const ArrayItemTemplate = ({
 			{hasToolbar && (
 				<Box>
 					<Button.Group>
-						{(hasMoveUp || hasMoveDown) && (
-							<Button disabled={disabled || readonly || !hasMoveUp} onPress={handleMoveUpPress}>
-								<Icon name="arrowUp" />
+						{(canMoveUp || canMoveDown) && (
+							<Button disabled={disabled || readonly || !canMoveUp} onPress={handleMoveUpPress}>
+								<Icon size="small" name="arrowUp" />
 							</Button>
 						)}
 
-						{(hasMoveUp || hasMoveDown) && (
-							<Button disabled={disabled || readonly || !hasMoveDown} onPress={handleMoveDownPress}>
-								<Icon name="arrowDown" />
+						{(canMoveUp || canMoveDown) && (
+							<Button disabled={disabled || readonly || !canMoveDown} onPress={handleMoveDownPress}>
+								<Icon size="small" name="arrowDown" />
 							</Button>
 						)}
-						{hasRemove && (
+						{canRemove && (
 							<Button type="warning" disabled={disabled || readonly} onPress={handleRemovePress}>
-								<Icon name="xmark" />
+								<Icon size="small" name="xmark" />
 							</Button>
 						)}
 					</Button.Group>

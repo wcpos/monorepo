@@ -2,27 +2,47 @@ import * as React from 'react';
 import get from 'lodash/get';
 import Button from '../../button';
 import Box from '../../box';
-import Text from '../../text';
 import Icon from '../../icon';
 import Collapsible from '../../collapsible';
 import { ArrayItemTemplate } from './array-item';
+import { useFormContext } from '../context';
 
 export const ArrayTemplate = ({ uiSchema, schema, items, canAdd, onAdd, disabled, readonly }) => {
+	const { registry } = useFormContext();
+	const { TitleField, DescriptionField } = registry.fields;
 	const collapsible = get(uiSchema, 'ui:collapsible', false);
+	const title = get(uiSchema, 'ui:title', schema.title);
+	const description = get(uiSchema, 'ui:description', schema.description);
+
+	const { orderable, removable } = {
+		orderable: true,
+		removable: true,
+		...uiSchema['ui:options'],
+	};
+
+	/**
+	 * Don't show template for empty array
+	 */
+	if (!canAdd && items.length === 0) {
+		return null;
+	}
+
 	if (collapsible) {
 		return (
 			<Box space="small" paddingBottom="small">
-				<Collapsible
-					title={<Text size="large">{uiSchema['ui:title'] || schema.title}</Text>}
-					initExpand={collapsible === 'open'}
-				>
-					{(uiSchema['ui:description'] || schema.description) && (
-						<Text>{uiSchema['ui:description'] || schema.description}</Text>
-					)}
+				<Collapsible title={<TitleField title={title} />} initExpand={collapsible === 'open'}>
+					{description && <DescriptionField description={description} />}
 					<Box>
 						{items &&
 							items.map((arrayItemProps) => {
-								return <ArrayItemTemplate {...arrayItemProps} />;
+								return (
+									<ArrayItemTemplate
+										{...arrayItemProps}
+										canMoveDown={orderable && arrayItemProps.canMoveDown}
+										canMoveUp={orderable && arrayItemProps.canMoveUp}
+										canRemove={removable && arrayItemProps.canRemove}
+									/>
+								);
 							})}
 					</Box>
 
@@ -41,15 +61,20 @@ export const ArrayTemplate = ({ uiSchema, schema, items, canAdd, onAdd, disabled
 	return (
 		<Box space="small" paddingBottom="small">
 			<Box>
-				<Text size="large">{uiSchema['ui:title'] || schema.title}</Text>
-				{(uiSchema['ui:description'] || schema.description) && (
-					<Text>{uiSchema['ui:description'] || schema.description}</Text>
-				)}
+				{title && <TitleField title={title} />}
+				{description && <DescriptionField description={description} />}
 			</Box>
 			<Box>
 				{items &&
 					items.map((arrayItemProps) => {
-						return <ArrayItemTemplate {...arrayItemProps} />;
+						return (
+							<ArrayItemTemplate
+								{...arrayItemProps}
+								canMoveDown={orderable && arrayItemProps.canMoveDown}
+								canMoveUp={orderable && arrayItemProps.canMoveUp}
+								canRemove={removable && arrayItemProps.canRemove}
+							/>
+						);
 					})}
 			</Box>
 

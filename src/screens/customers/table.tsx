@@ -54,7 +54,7 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 	const visibleColumns = React.useMemo(
 		() =>
 			columns
-				.filter((column) => !column.hide)
+				.filter((column) => column.show)
 				.map((column) => {
 					// clone column and add label, onRender function
 					const Cell = get(cells, column.key);
@@ -62,9 +62,6 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 					return {
 						...column,
 						label: t(`customers.column.label.${column.key}`),
-						onRender: (item: CustomerDocument) => {
-							return Cell ? <Cell item={item} column={column} /> : null;
-						},
 					};
 				}),
 		[columns, t]
@@ -121,7 +118,7 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 				/>
 			);
 		},
-		[visibleColumns]
+		[cellRenderer, visibleColumns]
 	);
 
 	useWhyDidYouUpdate('Table', { data });

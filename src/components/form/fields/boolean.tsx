@@ -11,7 +11,7 @@ interface BooleanFieldProps {
 }
 
 export const BooleanField = ({ schema, formData, name, idSchema, uiSchema }: BooleanFieldProps) => {
-	const { registry, onChange } = useFormContext();
+	const { registry, onChange, formContext } = useFormContext();
 	const { widget = 'checkbox', ...options } = getUiOptions(uiSchema);
 	const Widget = getWidget(schema, widget, registry.widgets);
 
@@ -45,9 +45,23 @@ export const BooleanField = ({ schema, formData, name, idSchema, uiSchema }: Boo
 		[idSchema.$id, onChange]
 	);
 
+	/**
+	 *
+	 */
+	const label = React.useMemo(() => {
+		const _label = schema.title || name;
+		if (formContext && formContext.label && typeof formContext.label === 'function') {
+			return formContext.label(idSchema.$id, _label);
+		}
+		return _label;
+	}, [formContext, idSchema.$id, name, schema.title]);
+
+	/**
+	 *
+	 */
 	return (
 		<Widget
-			label={schema.title}
+			label={label}
 			value={formData}
 			onChange={handleOnChange}
 			options={{ ...options, enumOptions }}

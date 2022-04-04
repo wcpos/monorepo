@@ -29,6 +29,7 @@ export const Form = <T extends object | string>({
 	extraErrors = {},
 	onChange,
 	rootId = 'root',
+	formContext,
 	...props
 }: FormProps<T>) => {
 	const rootSchema = schema;
@@ -83,7 +84,7 @@ export const Form = <T extends object | string>({
 	 *
 	 */
 	return (
-		<FormContextProvider schema={schema} onChange={handleOnChange}>
+		<FormContextProvider schema={schema} onChange={handleOnChange} formContext={formContext}>
 			{errors.length > 0 && <ErrorList errors={errors} />}
 			<NodeTemplate
 				schema={schema}

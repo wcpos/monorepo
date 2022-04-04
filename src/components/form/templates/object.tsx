@@ -6,30 +6,22 @@ import { useFormContext } from '../context';
 
 interface ObjectTemplateProps {
 	uiSchema: any;
-	title?: string;
-	description?: string;
 	required?: boolean;
 	properties: any[];
+	schema: any;
 }
 
-export const ObjectTemplate = ({
-	uiSchema,
-	title,
-	description,
-	required,
-	properties,
-}: ObjectTemplateProps) => {
+export const ObjectTemplate = ({ uiSchema, required, properties, schema }: ObjectTemplateProps) => {
 	const { registry } = useFormContext();
 	const { TitleField, DescriptionField } = registry.fields;
+	const title = get(uiSchema, 'ui:title', schema.title);
+	const description = get(uiSchema, 'ui:description', schema.description);
 
 	const collapsible = get(uiSchema, 'ui:collapsible', false);
 	if (collapsible) {
 		return (
 			<Box space="small" paddingBottom="small">
-				<Collapsible
-					title={<TitleField title={title || uiSchema['ui:title']} />}
-					initExpand={collapsible === 'open'}
-				>
+				<Collapsible title={<TitleField title={title} />} initExpand={collapsible === 'open'}>
 					{description && <DescriptionField description={description} />}
 					{properties.map(({ content }) => content)}
 				</Collapsible>
@@ -39,9 +31,7 @@ export const ObjectTemplate = ({
 
 	return (
 		<Box space="small" paddingBottom="small">
-			{(uiSchema['ui:title'] || title) && (
-				<TitleField title={title || uiSchema['ui:title']} required={required} />
-			)}
+			{title && <TitleField title={title} required={required} />}
 			{description && <DescriptionField description={description} />}
 			{properties.map(({ content }) => content)}
 		</Box>

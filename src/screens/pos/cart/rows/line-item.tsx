@@ -22,9 +22,9 @@ const cells = {
 	price: Price,
 	quantity: Quantity,
 	subtotal: Total,
-	subtotalTax: Tax,
+	subtotal_tax: Tax,
 	total: Total,
-	totalTax: Tax,
+	total_tax: Tax,
 	name: Name,
 };
 

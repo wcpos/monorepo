@@ -70,13 +70,6 @@ export const FixedArray = ({ schema, formData, uiSchema, idSchema, errorSchema, 
 				? retrieveSchema(schema.additionalItems, rootSchema, item)
 				: itemSchemas[index];
 			const nodeIdSchema = toIdSchema(itemSchema, `${idSchema.$id}.${index}`, rootSchema, item);
-			const has = {
-				moveUp: index >= itemSchemas.length + 1,
-				moveDown: additional && index < _formData.length - 1,
-				remove: additional,
-				toolbar: false,
-			};
-			has.toolbar = Object.keys(has).some((key) => has[key]);
 			const nodeUiSchema = additional
 				? uiSchema.additionalItems || {}
 				: Array.isArray(uiSchema.items)
@@ -87,10 +80,9 @@ export const FixedArray = ({ schema, formData, uiSchema, idSchema, errorSchema, 
 			return {
 				key,
 				index,
-				hasToolbar: has.toolbar,
-				hasMoveUp: has.moveUp,
-				hasMoveDown: has.moveDown,
-				hasRemove: has.remove,
+				canMoveUp: index >= itemSchemas.length + 1,
+				canMoveDown: additional && index < _formData.length - 1,
+				canRemove: additional,
 				onReorder: handleReorder,
 				onRemoveIndex: handleRemoveIndex,
 				children: (

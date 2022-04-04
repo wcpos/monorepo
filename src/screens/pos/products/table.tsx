@@ -36,7 +36,7 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	 */
 	const visibleColumns = React.useMemo(() => {
 		return columns
-			.filter((column) => !column.hide)
+			.filter((column) => column.show)
 			.map((column) => {
 				// clone column and add label
 				return {

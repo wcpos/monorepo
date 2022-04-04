@@ -1,55 +1,87 @@
 import * as React from 'react';
-import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useObservableState, useSubscription } from 'observable-hooks';
-import { map } from 'rxjs/operators';
-import set from 'lodash/set';
+import { useObservableState } from 'observable-hooks';
+import get from 'lodash/get';
 import Popover from '@wcpos/common/src/components/popover';
 import Icon from '@wcpos/common/src/components/icon';
-import Checkbox from '@wcpos/common/src/components/checkbox';
 import Button from '@wcpos/common/src/components/button';
-import Text from '@wcpos/common/src/components/text';
+import Form from '@wcpos/common/src/components/form';
 
 interface UiSettingsProps {
 	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
 }
 
+const schema = {
+	title: 'Table Columns',
+	type: 'array',
+	items: {
+		type: 'object',
+		properties: {
+			show: {
+				type: 'boolean',
+			},
+			display: {
+				type: 'array',
+				items: {
+					type: 'object',
+					properties: {
+						show: {
+							type: 'boolean',
+						},
+					},
+				},
+			},
+		},
+	},
+};
+
+const uiSchema = {
+	'ui:options': {
+		removable: false,
+		addable: false,
+	},
+	items: {
+		display: {
+			'ui:hideEmpty': true,
+			'ui:options': {
+				removable: false,
+				addable: false,
+			},
+		},
+	},
+};
+
 const UiSettings = ({ ui }: UiSettingsProps) => {
 	const { t } = useTranslation();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
 
+	/**
+	 * Translate column key into label
+	 */
+	const label = React.useCallback(
+		(id) => {
+			// remove rootId and 'show'
+			const path = id.split('.').slice(1, -1).concat('key');
+			const key = get(columns, path, null);
+			if (key) {
+				return t(`${ui.getID()}.column.label.${key}`);
+			}
+			return 'No label found';
+		},
+		[columns, t, ui]
+	);
+
 	const settings = (
 		<>
-			<Text>Columns</Text>
-			{columns.map((column: any, columnIndex: number) => {
-				return (
-					<View key={column.key}>
-						<Checkbox
-							label={t(`${ui.getID()}.column.label.${column.key}`)}
-							checked={!column.hide}
-							onChange={(checked) => {
-								set(columns, `${columnIndex}.hide`, !checked);
-								ui.atomicPatch({ columns: [...columns] });
-							}}
-						/>
-						{column.display
-							? column.display.map((display: any, displayIndex: number) => (
-									// eslint-disable-next-line react/jsx-indent
-									<Checkbox
-										key={display.key}
-										label={t(`${ui.getID()}.column.label.${display.key}`)}
-										checked={!display.hide}
-										onChange={(checked) => {
-											set(column, `display.${displayIndex}.hide`, !checked);
-											ui.atomicPatch({ columns: [...columns] });
-										}}
-										style={{ marginLeft: 10 }}
-									/>
-							  ))
-							: null}
-					</View>
-				);
-			})}
+			<Form
+				schema={schema}
+				uiSchema={uiSchema}
+				formData={columns}
+				onChange={(value) => {
+					ui.atomicPatch({ columns: value });
+				}}
+				formContext={{ label }}
+			/>
 			<Button title="Restore Default Settings" onPress={ui.reset} />
 		</>
 	);

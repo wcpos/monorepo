@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { ObservableResource } from 'observable-hooks';
-import { from } from 'rxjs';
-import { tap, filter } from 'rxjs/operators';
-import has from 'lodash/has';
+import { filter } from 'rxjs/operators';
 import get from 'lodash/get';
 import useAppState from '../use-app-state';
 import initialUI from './ui-initial.json';
@@ -18,7 +16,7 @@ export interface UIColumn {
 	disableSort: boolean;
 	order: number;
 	width: string;
-	hide: boolean;
+	show: boolean;
 	hideLabel: boolean;
 	display: UIDisplay[];
 }
@@ -46,7 +44,7 @@ export type UIResourceID =
 	| 'customers'
 	| 'coupons';
 
-const resourceRegistry: Record<string, UIResource> = {};
+const resourceRegistry = new Map();
 
 export const useUIResource = (id: UIResourceID) => {
 	const { storeDB } = useAppState();
@@ -54,8 +52,8 @@ export const useUIResource = (id: UIResourceID) => {
 	const registryKey = `${storeDB.name}_${databaseKey}`;
 
 	// check registry first to avoid creating a new resource on every render
-	if (has(resourceRegistry, registryKey)) {
-		return resourceRegistry[registryKey];
+	if (resourceRegistry.has(registryKey)) {
+		return resourceRegistry.get(registryKey);
 	}
 
 	/**
@@ -88,6 +86,7 @@ export const useUIResource = (id: UIResourceID) => {
 		})
 	);
 
-	resourceRegistry[registryKey] = new ObservableResource<UIDocument>(resource$, (val) => !!val);
-	return resourceRegistry[registryKey];
+	const resource = new ObservableResource<UIDocument>(resource$, (val) => !!val);
+	resourceRegistry.set(registryKey, resource);
+	return resource;
 };
