@@ -1774,7 +1774,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/runtime@npm:^7.0.0, @babel/runtime@npm:^7.10.2, @babel/runtime@npm:^7.12.5, @babel/runtime@npm:^7.14.0, @babel/runtime@npm:^7.14.5, @babel/runtime@npm:^7.14.8, @babel/runtime@npm:^7.16.0, @babel/runtime@npm:^7.16.3, @babel/runtime@npm:^7.16.7, @babel/runtime@npm:^7.17.2, @babel/runtime@npm:^7.3.1, @babel/runtime@npm:^7.4.4, @babel/runtime@npm:^7.5.0, @babel/runtime@npm:^7.5.5, @babel/runtime@npm:^7.6.2, @babel/runtime@npm:^7.7.2, @babel/runtime@npm:^7.7.6, @babel/runtime@npm:^7.8.4, @babel/runtime@npm:^7.8.7, @babel/runtime@npm:^7.9.2":
+"@babel/runtime@npm:^7.0.0, @babel/runtime@npm:^7.10.2, @babel/runtime@npm:^7.12.5, @babel/runtime@npm:^7.14.0, @babel/runtime@npm:^7.14.5, @babel/runtime@npm:^7.14.8, @babel/runtime@npm:^7.16.0, @babel/runtime@npm:^7.16.3, @babel/runtime@npm:^7.16.7, @babel/runtime@npm:^7.17.2, @babel/runtime@npm:^7.17.8, @babel/runtime@npm:^7.3.1, @babel/runtime@npm:^7.4.4, @babel/runtime@npm:^7.5.0, @babel/runtime@npm:^7.5.5, @babel/runtime@npm:^7.6.2, @babel/runtime@npm:^7.7.2, @babel/runtime@npm:^7.7.6, @babel/runtime@npm:^7.8.4, @babel/runtime@npm:^7.8.7, @babel/runtime@npm:^7.9.2":
   version: 7.17.8
   resolution: "@babel/runtime@npm:7.17.8"
   dependencies:
@@ -8215,7 +8215,7 @@ __metadata:
     jsonschema-to-interface: 1.0.5
     lodash: 4.17.21
     observable-hooks: 4.2.0
-    polished: 4.1.4
+    polished: 4.2.1
     pouchdb-adapter-http: 7.2.2
     pouchdb-adapter-idb: 7.2.2
     pouchdb-adapter-memory: 7.2.2
@@ -8237,7 +8237,7 @@ __metadata:
     react-native-svg: 12.3.0
     react-native-tab-view: 3.1.1
     react-native-web-linear-gradient: 1.1.2
-    react-native-webview: 11.18.0
+    react-native-webview: 11.18.1
     react-test-renderer: 17.0.2
     react-virtual: 2.10.4
     rxdb: 11.6.0
@@ -8256,7 +8256,7 @@ __metadata:
   dependencies:
     "@types/react": 17.0.43
     "@types/react-dom": 17.0.14
-    "@welldone-software/why-did-you-render": 6.2.3
+    "@welldone-software/why-did-you-render": 7.0.1
     babel-plugin-react-native-web: 0.17.7
     customize-cra: 1.0.0
     random-token: 0.0.8
@@ -8288,7 +8288,7 @@ __metadata:
     eslint-plugin-react: 7.29.4
     eslint-plugin-react-hooks: 4.4.0
     eslint-plugin-react-native: 4.0.0
-    prettier: 2.6.1
+    prettier: 2.6.2
     typescript: 4.6.3
   languageName: unknown
   linkType: soft
@@ -8302,7 +8302,7 @@ __metadata:
     jest: 27.5.1
     patch-package: 6.4.7
     postinstall-postinstall: 2.1.0
-    prettier: 2.6.1
+    prettier: 2.6.2
     ts-jest: 27.1.4
     typescript: 4.6.3
   languageName: unknown
@@ -8532,14 +8532,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@welldone-software/why-did-you-render@npm:6.2.3":
-  version: 6.2.3
-  resolution: "@welldone-software/why-did-you-render@npm:6.2.3"
+"@welldone-software/why-did-you-render@npm:7.0.1":
+  version: 7.0.1
+  resolution: "@welldone-software/why-did-you-render@npm:7.0.1"
   dependencies:
     lodash: ^4
   peerDependencies:
-    react: ^16 || ^17
-  checksum: 6c012f0a67c94c19cd2e8221438d547990a26b0593b0d1e8fd57084253d7cd305f4904e5bda984fd38416390b35b95fb0c3631fa485bd41b0b317568f080376c
+    react: ^16 || ^17 || ^18
+  checksum: 0bfc59f1f8613e7dc5fbf189305e88b01c50ee278df2c9b69082ed6abcf8d71758eb468d027235916c6126934a755d6547e9704883007236544763fffad6f48c
   languageName: node
   linkType: hard
 
@@ -23222,12 +23222,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"polished@npm:4.1.4, polished@npm:^4.0.5":
-  version: 4.1.4
-  resolution: "polished@npm:4.1.4"
+"polished@npm:4.2.1":
+  version: 4.2.1
+  resolution: "polished@npm:4.2.1"
   dependencies:
-    "@babel/runtime": ^7.16.7
-  checksum: 8faa41958df921e1441afc78c31dbe05b09b5b234b2a64ebfae56350c4580105f06e1ef4b3dcb69e86c28b354059e876ced36ba4deb3fb16e67485e1f59753f4
+    "@babel/runtime": ^7.17.8
+  checksum: a5dd8393894a394fef4c1350fa85ded92fe6dc918f9401948bb7e949bb6372a4fa72db3e1f03f65b0aee564dd106c000f3400483acff400a531d177682ca54c8
   languageName: node
   linkType: hard
 
@@ -23237,6 +23237,15 @@ __metadata:
   dependencies:
     "@babel/runtime": ^7.12.5
   checksum: 2f6172fef712e716e20563ca9505162c57e2713579a90806738068b3de0b2622ed2e2d62c578ebd752fcab4c527ddde2036ece5d6f4cdefee09c92eb410a288f
+  languageName: node
+  linkType: hard
+
+"polished@npm:^4.0.5":
+  version: 4.1.4
+  resolution: "polished@npm:4.1.4"
+  dependencies:
+    "@babel/runtime": ^7.16.7
+  checksum: 8faa41958df921e1441afc78c31dbe05b09b5b234b2a64ebfae56350c4580105f06e1ef4b3dcb69e86c28b354059e876ced36ba4deb3fb16e67485e1f59753f4
   languageName: node
   linkType: hard
 
@@ -24467,12 +24476,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"prettier@npm:2.6.1":
-  version: 2.6.1
-  resolution: "prettier@npm:2.6.1"
+"prettier@npm:2.6.2":
+  version: 2.6.2
+  resolution: "prettier@npm:2.6.2"
   bin:
     prettier: bin-prettier.js
-  checksum: 78be1f8a3ddfad7c3d8a854b6c8941a3bb1ddfca4225c38d778e0fe1029a55368f71b3bbefff82c689015fbb4d391ec44add957f01308ad2725e01a7c1f37cb6
+  checksum: 48d08dde8e9fb1f5bccdd205baa7f192e9fc8bc98f86e1b97d919de804e28c806b0e6cc685e4a88211aa7987fa9668f30baae19580d87ced3ed0f2ec6572106f
   languageName: node
   linkType: hard
 
@@ -25639,16 +25648,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-webview@npm:11.18.0":
-  version: 11.18.0
-  resolution: "react-native-webview@npm:11.18.0"
+"react-native-webview@npm:11.18.1":
+  version: 11.18.1
+  resolution: "react-native-webview@npm:11.18.1"
   dependencies:
     escape-string-regexp: 2.0.0
     invariant: 2.2.4
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: 995e3b5114dbab8ef2c05aac6ac648063716859e0395f65b73be627c1a65bbac27eec6bc3f023499e6abae3a47fa09adfe7db1b7a4e7a51bf66226b0dc2a1d92
+  checksum: a0dbdfa8d46efdf9f207f286aef00a843d5bf6f51503be44fe26df9c10536580fb877c090843b84622e540e57beae459d640db27cbc4021537a5233f0c8da200
   languageName: node
   linkType: hard
 
