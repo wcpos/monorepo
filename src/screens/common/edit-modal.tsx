@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
 import Tabs from '@wcpos/common/src/components/tabs';
 import Tree from '@wcpos/common/src/components/tree';
 import Form from '@wcpos/common/src/components/form';
@@ -12,16 +11,16 @@ export interface EditModalProps {
 		| import('@wcpos/common/src/database').LineItemDocument
 		| import('@wcpos/common/src/database').FeeLineDocument
 		| import('@wcpos/common/src/database').ShippingLineDocument;
+	schema: import('json-schema').JSONSchema7;
+	uiSchema: Record<string, any>;
 }
 
-const EditModal = ({ item }: EditModalProps) => {
+const EditModal = ({ schema, uiSchema, item }: EditModalProps) => {
 	const [index, setIndex] = React.useState(0);
-	const trigger = useObservableState(item.$);
 
 	const handleChange = React.useCallback(
-		(changes: Record<string, unknown>) => {
-			console.log(changes);
-			item.atomicPatch(changes);
+		(newData) => {
+			item.atomicPatch(newData);
 		},
 		[item]
 	);
@@ -31,8 +30,9 @@ const EditModal = ({ item }: EditModalProps) => {
 			case 'form':
 				return (
 					<Form
-						schema={item.collection.schema.jsonSchema}
+						schema={schema}
 						formData={item.toJSON()}
+						uiSchema={uiSchema}
 						onChange={handleChange}
 					/>
 				);

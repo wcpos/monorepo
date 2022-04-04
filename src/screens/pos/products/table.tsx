@@ -73,20 +73,16 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 			index
 			// renderContext: TableRowRenderContext<T>,
 		) => {
+			let row;
 			switch (item.type) {
 				case 'variable':
-					return (
-						<ErrorBoundary>
-							<VariableProductRow product={item} columns={visibleColumns} />
-						</ErrorBoundary>
-					);
+					row = <VariableProductRow product={item} columns={visibleColumns} />;
+					break;
 				default:
-					return (
-						<ErrorBoundary>
-							<SimpleProductRow product={item} columns={visibleColumns} />
-						</ErrorBoundary>
-					);
+					row = <SimpleProductRow product={item} columns={visibleColumns} />;
 			}
+
+			return row ? <ErrorBoundary>{row}</ErrorBoundary> : null;
 		},
 		[visibleColumns]
 	);

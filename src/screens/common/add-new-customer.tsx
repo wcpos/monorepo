@@ -70,7 +70,7 @@ const AddEditCustomer = ({}: AddEditCustomerProps) => {
 		return {
 			...customerCollection.schema.jsonSchema,
 			properties: pick(customerCollection.schema.jsonSchema.properties, [
-				'id',
+				// 'id',
 				'email',
 				'first_name',
 				'last_name',
@@ -96,9 +96,9 @@ const AddEditCustomer = ({}: AddEditCustomerProps) => {
 						extraErrors={extraErrors}
 						uiSchema={{
 							id: { 'ui:readonly': true },
-							billing: { 'ui:collapsible': 'closed' },
-							shipping: { 'ui:collapsible': 'closed' },
-							meta_data: { 'ui:collapsible': 'closed' },
+							billing: { 'ui:collapsible': 'closed', 'ui:title': 'Billing Address' },
+							shipping: { 'ui:collapsible': 'closed', 'ui:title': 'Shipping Address' },
+							meta_data: { 'ui:collapsible': 'closed', 'ui:title': 'Meta Data' },
 						}}
 					/>
 				);

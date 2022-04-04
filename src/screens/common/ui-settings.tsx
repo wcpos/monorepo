@@ -42,7 +42,6 @@ const uiSchema = {
 	},
 	items: {
 		display: {
-			'ui:hideEmpty': true,
 			'ui:options': {
 				removable: false,
 				addable: false,

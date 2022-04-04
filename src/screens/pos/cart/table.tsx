@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
 import flatten from 'lodash/flatten';
 import Table from '@wcpos/common/src/components/table3';
+import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import LineItem from './rows/line-item';
 import FeeLine from './rows/fee-line';
@@ -89,16 +90,21 @@ const CartTable = ({ cartResource, ui }: ICartTableProps) => {
 			index
 			// renderContext: TableRowRenderContext<T>,
 		) => {
+			let row;
 			switch (item.collection.name) {
 				case 'line_items':
-					return <LineItem lineItem={item} columns={visibleColumns} />;
+					row = <LineItem lineItem={item} columns={visibleColumns} />;
+					break;
 				case 'fee_lines':
-					return <FeeLine fee={item} columns={visibleColumns} />;
+					row = <FeeLine fee={item} columns={visibleColumns} />;
+					break;
 				case 'shipping_lines':
-					return <ShippingLine shipping={item} columns={visibleColumns} />;
+					row = <ShippingLine shipping={item} columns={visibleColumns} />;
+					break;
 				default:
-					return null;
+					row = null;
 			}
+			return row ? <ErrorBoundary>{row}</ErrorBoundary> : null;
 		},
 		[visibleColumns]
 	);
