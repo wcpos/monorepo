@@ -29,7 +29,8 @@
 		"@storybook/react-native": "6.0.1-beta.5",
 		"react": "17.0.2",
 		"react-dom": "17.0.2",
-		"react-native": "0.64.3"
+		"react-native": "0.64.3",
+		"storybook-addon-mock": "^2.3.1"
 	},
 	"devDependencies": {
 		"@babel/core": "7.17.8",
