@@ -36,9 +36,16 @@ export const StringField = ({ schema, formData, name, idSchema, uiSchema }: Stri
 	/**
 	 *
 	 */
-	const handleOnChange = React.useCallback((text: string) => {
-		setValue(text);
-	}, []);
+	const handleOnChange = React.useCallback(
+		(val: any) => {
+			if (widget === 'select') {
+				onChange({ [idSchema.$id]: val.value });
+			} else {
+				setValue(val);
+			}
+		},
+		[idSchema.$id, onChange, widget]
+	);
 
 	/**
 	 *

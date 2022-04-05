@@ -2,13 +2,17 @@ import * as React from 'react';
 import { action } from '@storybook/addon-actions';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import map from 'lodash/map';
 import set from 'lodash/set';
-import forEach from 'lodash/forEach';
+import delay from 'lodash/delay';
+import cloneDeep from 'lodash/cloneDeep';
+import find from 'lodash/find';
 import { StoryWrapper } from '@storybook/addons';
 import { AppProviderSizeProvider } from '@wcpos/common/src/hooks/use-position-in-app';
 import Portal from '../portal';
 import { Form } from './form';
 import { FormProps } from './types';
+import countriesResponse from './countries.json';
 
 /**
  * Select require (uses Popover)
@@ -1034,4 +1038,60 @@ FormContext.args = {
 		},
 	},
 	uiSchema: {},
+};
+
+/**
+ *
+ */
+export const CountriesWithStates = (props: FormProps) => {
+	const [data, setData] = React.useState({});
+	const [countries, setCountries] = React.useState({});
+
+	/**
+	 * fetch countries
+	 */
+	React.useEffect(() => {
+		delay(() => {
+			setCountries(countriesResponse);
+		}, 1000);
+	}, []);
+
+	const schema = React.useMemo(() => {
+		const newSchema = cloneDeep(props.schema);
+		set(newSchema, 'properties.country.enum', map(countries, 'code'));
+		set(newSchema, 'properties.country.enumNames', map(countries, 'name'));
+
+		if (data.country) {
+			const { states } = find(countries, { code: data.country });
+			if (states && states.length > 0) {
+				set(newSchema, 'properties.state.enum', map(states, 'code'));
+				set(newSchema, 'properties.state.enumNames', map(states, 'name'));
+			}
+		}
+		return newSchema;
+	}, [props.schema, countries, data.country]);
+
+	const handleChange = React.useCallback((change) => {
+		action('onChange')(change);
+		setData(change);
+	}, []);
+
+	return <Form<typeof data> {...props} schema={schema} formData={data} onChange={handleChange} />;
+};
+CountriesWithStates.args = {
+	schema: {
+		title: 'Demo for countries',
+		type: 'object',
+		properties: {
+			country: {
+				type: 'string',
+				title: 'Country',
+				enum: ['loading'],
+			},
+			state: {
+				type: 'string',
+				title: 'State',
+			},
+		},
+	},
 };

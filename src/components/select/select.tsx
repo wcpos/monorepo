@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ScrollView } from 'react-native';
 import get from 'lodash/get';
+import isPlainObject from 'lodash/isPlainObject';
 import { useUncontrolledState } from '@wcpos/common/src/hooks/use-uncontrolled-state';
 import Dropdown, { useDropdown } from '../dropdown';
 import Arrow from '../arrow';
@@ -33,7 +34,7 @@ export interface SelectProps {
 	/**
 	 * Currently selected value. If null, no value is selected.
 	 */
-	selected?: string | null;
+	value?: SelectOption | string | null;
 	/**
 	 * Callback called when selection is changed.
 	 */
@@ -64,7 +65,7 @@ const maxHeight = 300;
 export const Select = ({
 	label,
 	options: optionsRaw,
-	selected: selectedRaw = null,
+	value: selectedRaw = null,
 	onChange: onChangeRaw,
 	placeholder = 'Select',
 	helpText,
@@ -78,42 +79,31 @@ export const Select = ({
 	);
 
 	const options = React.useMemo(() => {
-		const enumOptions = get(optionsRaw, 'enumOptions');
-		if (enumOptions) {
-			return enumOptions; // special case for enum options
+		let _options = optionsRaw;
+
+		// special case for { 0: '', 1: '', ... } or { '0': { label: '', value: ''}, ... }
+		if (isPlainObject(optionsRaw)) {
+			_options = Object.values(optionsRaw);
 		}
 
-		if (Array.isArray(optionsRaw)) {
-			return optionsRaw.map((choice) =>
+		// turn strings into [{ label: '', value: '' }, ...]
+		if (Array.isArray(_options)) {
+			return _options.map((choice) =>
 				typeof choice === 'string' ? { label: choice, value: choice } : choice
 			);
 		}
 
-		return [];
+		return _options;
 	}, [optionsRaw]);
 
 	const selectedChoice = React.useMemo(() => {
 		return options.find((x) => x.value === selected);
 	}, [options, selected]);
 
-	const handleSelect = (value: string) => {
-		onChange(value);
+	const handleSelect = (selected: any) => {
+		onChange(selected);
 		close();
 	};
-
-	// const choiceComponents = React.useMemo(
-	// 	() =>
-	// 		choices.map((choice) => (
-	// 			<Popover.Item
-	// 				key={choice.value}
-	// 				label={choice.label}
-	// 				disabled={choice.disabled}
-	// 				// eslint-disable-next-line react/jsx-no-bind
-	// 				onSelect={() => handleSelect(choice.value)}
-	// 			/>
-	// 		)),
-	// 	[choices, onChange]
-	// );
 
 	return (
 		<BaseInputContainer
@@ -123,16 +113,9 @@ export const Select = ({
 			error={error}
 			onLabelClick={open}
 		>
-			<Dropdown
-				ref={ref}
-				items={options}
-				// popoverStyle={{ maxHeight }}
-				// placement="bottom"
-				matchWidth
-				withArrow={false}
-			>
+			<Dropdown ref={ref} items={options} onSelect={handleSelect} matchWidth withArrow={false}>
 				<BaseInput
-					value={selectedChoice?.label ?? ''}
+					value={selected?.label ?? ''}
 					placeholder={placeholder}
 					disabled={disabled}
 					// focused={open}

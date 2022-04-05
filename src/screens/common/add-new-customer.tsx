@@ -1,6 +1,11 @@
 import * as React from 'react';
+import { useObservableSuspense } from 'observable-hooks';
 import Modal, { useModal } from '@wcpos/common/src/components/modal';
 import pick from 'lodash/pick';
+import set from 'lodash/set';
+import get from 'lodash/get';
+import map from 'lodash/map';
+import find from 'lodash/find';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Tabs from '@wcpos/common/src/components/tabs';
 import Tree from '@wcpos/common/src/components/tree';
@@ -8,15 +13,12 @@ import Icon from '@wcpos/common/src/components/icon';
 import Form from '@wcpos/common/src/components/form';
 import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
 import useRestHttpClient from '@wcpos/common/src/hooks/use-rest-http-client';
-
-export interface AddEditCustomerProps {
-	// customer: import('@wcpos/common/src/database').CustomerDocument;
-}
+import useResource from '@wcpos/common/src/hooks/use-resource';
 
 /**
  *
  */
-const AddEditCustomer = ({}: AddEditCustomerProps) => {
+const AddNewCustomer = () => {
 	const { ref, open, close } = useModal();
 	const [index, setIndex] = React.useState(0);
 	const [customerData, setCustomerData] = React.useState({});
@@ -24,6 +26,8 @@ const AddEditCustomer = ({}: AddEditCustomerProps) => {
 	const customerCollection = storeDB.collections.customers;
 	const http = useRestHttpClient();
 	const [extraErrors, setExtraErrors] = React.useState();
+	const { countriesResource } = useResource();
+	const countries = useObservableSuspense(countriesResource);
 
 	const handleSave = async () => {
 		const result = await http('customers', {
@@ -67,7 +71,7 @@ const AddEditCustomer = ({}: AddEditCustomerProps) => {
 	 *
 	 */
 	const schema = React.useMemo(() => {
-		return {
+		const _schema = {
 			...customerCollection.schema.jsonSchema,
 			properties: pick(customerCollection.schema.jsonSchema.properties, [
 				// 'id',
@@ -83,7 +87,33 @@ const AddEditCustomer = ({}: AddEditCustomerProps) => {
 				'meta_data',
 			]),
 		};
-	}, [customerCollection.schema.jsonSchema]);
+
+		// billing
+		set(_schema, 'properties.billing.properties.country.enum', map(countries, 'code'));
+		set(_schema, 'properties.billing.properties.country.enumNames', map(countries, 'name'));
+
+		if (get(customerData, 'billing.country')) {
+			const { states } = find(countries, { code: customerData.billing.country });
+			if (states && states.length > 0) {
+				set(_schema, 'properties.billing.properties.state.enum', map(states, 'code'));
+				set(_schema, 'properties.billing.properties.state.enumNames', map(states, 'name'));
+			}
+		}
+
+		// shipping
+		set(_schema, 'properties.shipping.properties.country.enum', map(countries, 'code'));
+		set(_schema, 'properties.shipping.properties.country.enumNames', map(countries, 'name'));
+
+		if (get(customerData, 'shipping.country')) {
+			const { states } = find(countries, { code: customerData.shipping.country });
+			if (states && states.length > 0) {
+				set(_schema, 'properties.shipping.properties.state.enum', map(states, 'code'));
+				set(_schema, 'properties.shipping.properties.state.enumNames', map(states, 'name'));
+			}
+		}
+
+		return _schema;
+	}, [countries, customerCollection.schema.jsonSchema, customerData]);
 
 	const renderScene = ({ route }) => {
 		switch (route.key) {
@@ -146,4 +176,4 @@ const AddEditCustomer = ({}: AddEditCustomerProps) => {
 	);
 };
 
-export default AddEditCustomer;
+export default AddNewCustomer;
