@@ -27,7 +27,7 @@ const VALIDATOR_CACHE: Map<string, any> = new Map();
 
 const ajv = new Ajv({ strict: 'log', coerceTypes: true });
 addFormats(ajv);
-ajv.addVocabulary(['version', 'primaryKey', 'indexes', 'encrypted']);
+ajv.addVocabulary(['version', 'primaryKey', 'indexes', 'encrypted', 'enumNames', 'keyCompression']);
 
 /**
  * Duck punch the WC REST schema for children
