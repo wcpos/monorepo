@@ -33,12 +33,6 @@
 		"last_access": {
 			"type": "string"
 		},
-		"consumer_key": {
-			"type": "string"
-		},
-		"consumer_secret": {
-			"type": "string"
-		},
 		"jwt": {
 			"type": "string"
 		},
@@ -59,5 +53,5 @@
 			}
 		}
 	},
-	"enrypted": ["consumerSecret", "jwt"]
+	"encrypted": ["jwt"]
 }

@@ -108,8 +108,8 @@ const MainNavigator = () => {
 	);
 
 	return (
-		<ResourceProvider>
-			<OnlineStatusProvider>
+		<OnlineStatusProvider>
+			<ResourceProvider>
 				<Drawer.Navigator
 					screenOptions={{
 						header,
@@ -140,8 +140,8 @@ const MainNavigator = () => {
 						options={getOptions('support')}
 					/>
 				</Drawer.Navigator>
-			</OnlineStatusProvider>
-		</ResourceProvider>
+			</ResourceProvider>
+		</OnlineStatusProvider>
 	);
 };
 

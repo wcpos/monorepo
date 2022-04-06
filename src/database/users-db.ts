@@ -15,9 +15,11 @@ export type UserDatabase = import('rxdb').RxDatabase<UserDatabaseCollections>;
  */
 export async function userDBPromise() {
 	const db = await createDB<UserDatabaseCollections>('wcposusers');
-	// @ts-ignore
+
 	const collections = await db.addCollections(userCollections).catch((error) => {
-		return removeDB('wcposusers');
+		if (process.env.NODE_ENV === 'development') {
+			return removeDB('wcposusers');
+		}
 	});
 
 	return db;

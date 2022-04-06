@@ -26,8 +26,9 @@ export async function storeDBPromise(id: string) {
 
 	// @ts-ignore
 	const collections = await db.addCollections(storeCollections).catch((error) => {
-		console.error(error);
-		return removeDB(name);
+		if (process.env.NODE_ENV === 'development') {
+			return removeDB(name);
+		}
 	});
 
 	return db;

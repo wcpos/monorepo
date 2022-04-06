@@ -9,7 +9,7 @@ import Box from '@wcpos/common/src/components/box';
 import Icon from '@wcpos/common/src/components/icon';
 import Modal, { useModal } from '@wcpos/common/src/components/modal';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import UserSettings from './user-settings';
+import Settings from '../../settings';
 
 export const UserMenu = () => {
 	const { site, wpCredentials, store } = useAppState();
@@ -49,8 +49,8 @@ export const UserMenu = () => {
 				</Box>
 			</Dropdown>
 
-			<Modal ref={refSettingsModal} title="Settings">
-				<UserSettings onClose={closeSettingsModal} />
+			<Modal ref={refSettingsModal} title="Settings" size="large">
+				<Settings />
 			</Modal>
 		</>
 	);

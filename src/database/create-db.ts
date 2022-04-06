@@ -11,6 +11,7 @@ export async function createDB<T>(name: string) {
 	const db = await createRxDatabase<T>({
 		name,
 		...config,
+		password: 'posInstanceId',
 	});
 
 	// add to window for debugging
