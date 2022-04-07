@@ -6,7 +6,7 @@ type Props = {
 };
 
 const RegularPrice = ({ item: product }: Props) => {
-	return <Text>{product.regularPrice}</Text>;
+	return <Text>{product.regular_price}</Text>;
 };
 
 export default RegularPrice;

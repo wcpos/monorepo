@@ -20,15 +20,22 @@ const Name = ({ item: product, column }: Props) => {
 	const show = React.useCallback(
 		(key: string): boolean => {
 			const d = find(display, { key });
-			return !(d && d.hide);
+			return d.show;
 		},
 		[display]
 	);
+
+	/**
+	 *
+	 */
 
 	return (
 		<Box space="xSmall">
 			<Text>{product.name}</Text>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
+			{show('stock_quantity') && product.manage_stock && product.stock_quantity && (
+				<Text size="small">{product.stock_quantity} in stock</Text>
+			)}
 			{show('categories') && <Categories item={product} />}
 			{show('tags') && <Tags item={product} />}
 

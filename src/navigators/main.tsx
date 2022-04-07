@@ -5,6 +5,7 @@ import {
 	DrawerScreenProps,
 } from '@react-navigation/drawer';
 import { useTranslation } from 'react-i18next';
+import { useObservableState } from 'observable-hooks';
 import POS from '@wcpos/common/src/screens/pos';
 import Products from '@wcpos/common/src/screens/products';
 import Orders from '@wcpos/common/src/screens/orders';
@@ -86,6 +87,7 @@ const MainNavigator = () => {
 	const { t } = useTranslation();
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
+	const storeName = useObservableState(store.name$, store.name);
 	useIdAudit();
 	// useStoreSync();
 
@@ -99,12 +101,12 @@ const MainNavigator = () => {
 			);
 
 			return {
-				title: `${t(`${key}.title`)} - ${store.name}`,
+				title: `${t(`${key}.title`)} - ${storeName}`,
 				drawerLabel: t(`${key}.title`),
 				drawerIcon: renderIcon,
 			};
 		},
-		[store.name, t]
+		[storeName, t]
 	);
 
 	return (

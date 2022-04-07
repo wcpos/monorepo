@@ -13,6 +13,7 @@ import Image from './cells/image';
 import Name from './cells/name';
 // import Price from './cells/price';
 import RegularPrice from './cells/regular-price';
+import StockQuanity from './cells/stock-quantity';
 // import Sku from './cells/sku';
 import Tag from '../common/product-tags';
 import Footer from './footer';
@@ -34,6 +35,7 @@ const cells = {
 	// price: Price,
 	regular_price: RegularPrice,
 	// sku: Sku,
+	stock_quantity: StockQuanity,
 	tag: Tag,
 };
 

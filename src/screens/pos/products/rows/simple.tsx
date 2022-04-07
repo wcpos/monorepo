@@ -8,6 +8,7 @@ import Name from './cells/name';
 import Price from './cells/price';
 import RegularPrice from './cells/regular-price';
 import Sku from './cells/sku';
+import StockQuantity from './cells/stock-quantity';
 import Categories from '../../../common/product-categories';
 import Tag from '../../../common/product-tags';
 
@@ -26,8 +27,9 @@ const cells = {
 	image: Image,
 	name: Name,
 	price: Price,
-	regularPrice: RegularPrice,
+	regular_price: RegularPrice,
 	sku: Sku,
+	stock_quantity: StockQuantity,
 	tag: Tag,
 };
 

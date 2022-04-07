@@ -15,9 +15,16 @@ export interface EditModalProps {
 	uiSchema: Record<string, any>;
 }
 
+/**
+ *
+ */
 const EditModal = ({ schema, uiSchema, item }: EditModalProps) => {
 	const [index, setIndex] = React.useState(0);
+	
 
+	/**
+	 *
+	 */
 	const handleChange = React.useCallback(
 		(newData) => {
 			item.atomicPatch(newData);
@@ -25,6 +32,9 @@ const EditModal = ({ schema, uiSchema, item }: EditModalProps) => {
 		[item]
 	);
 
+	/**
+	 *
+	 */
 	const renderScene = ({ route }) => {
 		switch (route.key) {
 			case 'form':
@@ -43,11 +53,17 @@ const EditModal = ({ schema, uiSchema, item }: EditModalProps) => {
 		}
 	};
 
+	/**
+	 *
+	 */
 	const routes = [
 		{ key: 'form', title: 'Form' },
 		{ key: 'json', title: 'JSON' },
 	];
 
+	/**
+	 *
+	 */
 	return (
 		<Tabs<typeof routes[number]>
 			navigationState={{ index, routes }}

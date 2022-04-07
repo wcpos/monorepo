@@ -3,6 +3,7 @@ import { DrawerHeaderProps } from '@react-navigation/drawer';
 import { Header as ReactNavigationHeader } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useObservableState } from 'observable-hooks';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 import Platform from '@wcpos/common/src/lib/platform';
 import Left from './left';
@@ -13,6 +14,7 @@ const Header = ({ route, layout, options }: DrawerHeaderProps) => {
 	const left = React.useCallback(() => <Left />, []);
 	const right = React.useCallback(() => <Right />, []);
 	const { store } = useAppState();
+	const storeName = useObservableState(store.name$, store.name);
 
 	// const title = React.useMemo(() => {
 	// 	return `${route.name} - ${store.name}`;
@@ -21,7 +23,7 @@ const Header = ({ route, layout, options }: DrawerHeaderProps) => {
 	return (
 		<>
 			<ReactNavigationHeader
-				title={`${route.name} - ${store.name}`}
+				title={`${route.name} - ${storeName}`}
 				headerTitleAlign="center"
 				headerTintColor="white"
 				headerStyle={{ backgroundColor: '#2c3e50', height: 40 + insets.top }}

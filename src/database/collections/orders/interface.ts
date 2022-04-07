@@ -25,16 +25,7 @@ export interface WooCommerceOrderSchema {
   /**
    * Order status.
    */
-  status?:
-    | "pending"
-    | "processing"
-    | "on-hold"
-    | "completed"
-    | "cancelled"
-    | "refunded"
-    | "failed"
-    | "pos-open"
-    | "pos-checkout";
+  status?: "pending" | "processing" | "on-hold" | "completed" | "cancelled" | "refunded" | "failed" | "pos-open";
   /**
    * Currency the order was created with, in ISO format.
    */
@@ -228,12 +219,32 @@ export interface WooCommerceOrderSchema {
    * Billing address.
    */
   billing?: {
+    first_name?: string;
+    last_name?: string;
+    company?: string;
+    address_1?: string;
+    address_2?: string;
+    city?: string;
+    postcode?: string;
+    country?: string;
+    state?: string;
+    email?: string;
+    phone?: string;
     [k: string]: any;
   };
   /**
    * Shipping address.
    */
   shipping?: {
+    first_name?: string;
+    last_name?: string;
+    company?: string;
+    address_1?: string;
+    address_2?: string;
+    city?: string;
+    postcode?: string;
+    country?: string;
+    state?: string;
     [k: string]: any;
   };
   /**
@@ -248,10 +259,10 @@ export interface WooCommerceOrderSchema {
    * Unique transaction ID.
    */
   transaction_id?: string;
-  date_paid?: string | null;
-  date_paid_gmt?: string | null;
-  date_completed?: string | null;
-  date_completed_gmt?: string | null;
+  date_paid?: string;
+  date_paid_gmt?: string;
+  date_completed?: string;
+  date_completed_gmt?: string;
   cart_hash?: string;
   /**
    * Meta data.

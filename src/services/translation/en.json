@@ -10,11 +10,11 @@
 			"column": {
 				"label": {
 					"actions": "Actions",
-					"avatarUrl": "Image",
+					"avatar_url": "Image",
 					"billing": "Billing Address",
 					"email": "Email",
-					"firstName": "First Name",
-					"lastName": "Last Name",
+					"first_name": "First Name",
+					"last_name": "Last Name",
 					"role": "Role",
 					"shipping": "Shipping Address",
 					"username": "Username"
@@ -33,10 +33,10 @@
 					"customer": "Customer",
 					"billing": "Billing",
 					"shipping": "Shipping",
-					"dateCompleted": "Date Completed",
-					"dateCreated": "Date Created",
-					"dateModified": "Date Modified",
-					"customerNote": "Note",
+					"date_completed": "Date Completed",
+					"date_created": "Date Created",
+					"date_modified": "Date Modified",
+					"customer_note": "Note",
 					"number": "Order Number",
 					"status": "Status",
 					"total": "Total"
@@ -53,10 +53,10 @@
 						"image": "Image",
 						"name": "Product",
 						"price": "Price",
-						"regularPrice": "Regular Price",
-						"salePrice": "Sale Price",
+						"regular_price": "Regular Price",
+						"sale_price": "Sale Price",
 						"sku": "SKU",
-						"stock": "Stock",
+						"stock_quantity": "Stock",
 						"categories": "Categories",
 						"tags": "Tags"
 					}
@@ -71,8 +71,8 @@
 						"total": "Total",
 						"sku": "SKU",
 						"subtotal": "Subtotal",
-						"subtotalTax": "Subtotal Tax",
-						"totalTax": "Total Tax",
+						"subtotal_tax": "Subtotal Tax",
+						"total_tax": "Total Tax",
 						"actions": "Actions"
 					}
 				}
@@ -87,18 +87,18 @@
 				"label": {
 					"actions": "Actions",
 					"customer": "Customer",
-					"dateCreated": "Created",
-					"dateModified": "Modified",
+					"date_created": "Created",
+					"date_modified": "Modified",
 					"id": "ID",
 					"image": "Image",
 					"name": "Product",
 					"price": "Price",
 					"qty": "Qty",
-					"regularPrice": "Regular Price",
-					"salePrice": "Sale Price",
+					"regular_price": "Regular Price",
+					"sale_price": "Sale Price",
 					"sku": "SKU",
 					"status": "Status",
-					"stock": "Stock",
+					"stock_quantity": "Stock",
 					"total": "Total",
 					"categories": "Categories",
 					"tags": "Tags"
@@ -114,7 +114,7 @@
 				"loading": "Loading"
 			},
 			"showing": "Showing {{showing}} of {{total}}",
-			"inStock": "{{quantity}} in stock"
+			"in_stock": "{{quantity}} in stock"
 		},
 		"support": {
 			"title": "Support"

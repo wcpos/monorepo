@@ -1,10 +1,11 @@
 import * as React from 'react';
+import pick from 'lodash/pick';
 import Dropdown from '@wcpos/common/src/components/dropdown';
 import Icon from '@wcpos/common/src/components/icon';
 import Text from '@wcpos/common/src/components/text';
 import Modal, { useModal } from '@wcpos/common/src/components/modal';
 import Dialog, { useDialog } from '@wcpos/common/src/components/dialog';
-import ProductModal from './modal';
+import EditModal from '../../common/edit-modal';
 
 type Props = {
 	item: import('@wcpos/common/src/database').ProductDocument;
@@ -14,6 +15,9 @@ const Actions = ({ item: product }: Props) => {
 	const { ref: modalRef, open, close } = useModal();
 	const { ref: dialogRef, open: dialogOpen } = useDialog();
 
+	/**
+	 *
+	 */
 	const handleSync = () => {
 		const replicationState = product.syncRestApi({
 			push: {},
@@ -21,6 +25,9 @@ const Actions = ({ item: product }: Props) => {
 		replicationState.run(false);
 	};
 
+	/**
+	 *
+	 */
 	const handleDelete = React.useCallback(
 		(confirm) => {
 			if (confirm) {
@@ -30,6 +37,24 @@ const Actions = ({ item: product }: Props) => {
 		[product]
 	);
 
+	/**
+	 *
+	 */
+	const schema = React.useMemo(() => {
+		return {
+			...product.collection.schema.jsonSchema,
+			properties: pick(product.collection.schema.jsonSchema.properties, [
+				'name',
+				'sku',
+				'stock_quantity',
+				'manage_stock',
+			]),
+		};
+	}, [product.collection.schema.jsonSchema]);
+
+	/**
+	 *
+	 */
 	return (
 		<>
 			<Dropdown
@@ -47,7 +72,7 @@ const Actions = ({ item: product }: Props) => {
 			</Dialog>
 
 			<Modal ref={modalRef} title={`Edit ${product.name}`}>
-				<ProductModal product={product} />
+				<EditModal item={product} schema={schema} uiSchema={{}} />
 			</Modal>
 		</>
 	);
