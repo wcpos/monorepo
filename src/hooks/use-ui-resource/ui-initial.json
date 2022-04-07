@@ -15,36 +15,38 @@
 			},
 			{
 				"key": "name",
-				"order": 2,
 				"show": true,
 				"display": [
 					{
+						"key": "stock_quantity",
+						"show": true
+					},
+					{
 						"key": "sku",
-						"show": false,
-						"order": 1
+						"show": false
 					},
 					{
 						"key": "categories",
-						"order": 2,
 						"show": true
 					},
 					{
 						"key": "tags",
-						"hide": false,
-						"order": 3
+						"hide": false
 					}
 				]
 			},
 			{
 				"key": "sku",
 				"show": false,
-				"order": 3,
 				"width": "20%",
 				"flexShrink": 0
 			},
 			{
+				"key": "stock_quantity",
+				"show": false
+			},
+			{
 				"key": "price",
-				"order": 4,
 				"width": "90px",
 				"flexShrink": 0,
 				"align": "right",
@@ -53,7 +55,6 @@
 			{
 				"key": "actions",
 				"disableSort": true,
-				"order": 5,
 				"width": "38px",
 				"flexShrink": 0,
 				"hideLabel": true,
@@ -100,14 +101,14 @@
 				"show": false
 			},
 			{
-				"key": "subtotalTax",
+				"key": "subtotal_tax",
 				"order": 5,
 				"width": "20%",
 				"flexShrink": 0,
 				"show": false
 			},
 			{
-				"key": "totalTax",
+				"key": "total_tax",
 				"order": 6,
 				"width": "20%",
 				"flexShrink": 0,
@@ -139,14 +140,12 @@
 				"key": "image",
 				"width": "15%",
 				"disableSort": true,
-				"order": 1,
 				"flexShrink": 0,
 				"hideLabel": true,
 				"show": true
 			},
 			{
 				"key": "id",
-				"order": 2,
 				"width": "50px",
 				"flexShrink": 0,
 				"show": false
@@ -154,58 +153,55 @@
 			{
 				"key": "name",
 				"width": "30%",
-				"order": 3,
 				"show": true
 			},
 			{
 				"key": "sku",
-				"order": 4,
 				"width": "80px",
 				"flexShrink": 0,
 				"show": false
 			},
 			{
+				"key": "stock_quantity",
+				"width": "100px",
+				"show": true
+			},
+			{
 				"key": "categories",
 				"width": "20%",
-				"order": 5,
 				"disableSort": true,
 				"show": true
 			},
 			{
 				"key": "tags",
 				"width": "20%",
-				"order": 6,
 				"disableSort": true,
 				"show": false
 			},
 			{
-				"key": "regularPrice",
+				"key": "regular_price",
 				"width": "100px",
-				"order": 7,
 				"show": true
 			},
 			{
-				"key": "salePrice",
+				"key": "sale_price",
 				"width": "100px",
 				"order": 8,
 				"show": true
 			},
 			{
-				"key": "dateCreated",
+				"key": "date_created",
 				"width": "100px",
-				"order": 9,
 				"show": false
 			},
 			{
-				"key": "dateModified",
+				"key": "date_modified",
 				"width": "100px",
-				"order": 10,
 				"show": false
 			},
 			{
 				"key": "actions",
 				"disableSort": true,
-				"order": 11,
 				"width": "38px",
 				"flexShrink": 0,
 				"hideLabel": true,
@@ -250,25 +246,25 @@
 				"show": true
 			},
 			{
-				"key": "customerNote",
+				"key": "customer_note",
 				"width": "38px",
 				"order": 6,
 				"show": true
 			},
 			{
-				"key": "dateCreated",
+				"key": "date_created",
 				"width": "100px",
 				"order": 7,
 				"show": true
 			},
 			{
-				"key": "dateModified",
+				"key": "date_modified",
 				"width": "100px",
 				"order": 8,
 				"show": false
 			},
 			{
-				"key": "dateCompleted",
+				"key": "date_completed",
 				"width": "100px",
 				"order": 9,
 				"show": false
@@ -290,11 +286,11 @@
 		]
 	},
 	"customers": {
-		"sortBy": "lastName",
+		"sortBy": "last_name",
 		"sortDirection": "asc",
 		"columns": [
 			{
-				"key": "avatarUrl",
+				"key": "avatar_url",
 				"disableSort": true,
 				"width": "15%",
 				"order": 1,
@@ -302,13 +298,13 @@
 				"show": true
 			},
 			{
-				"key": "firstName",
+				"key": "first_name",
 				"width": "20%",
 				"order": 2,
 				"show": true
 			},
 			{
-				"key": "lastName",
+				"key": "last_name",
 				"width": "20%",
 				"order": 3,
 				"show": true
