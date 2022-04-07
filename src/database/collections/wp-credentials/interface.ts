@@ -21,8 +21,6 @@ export interface WPCredentialsSchema {
   display_name?: string;
   nice_name?: string;
   last_access?: string;
-  consumer_key?: string;
-  consumer_secret?: string;
   jwt?: string;
   wp_nonce?: string;
   key_id?: number;

@@ -19,8 +19,8 @@ export interface WooCommerceCustomerSchema {
   id?: number;
   date_created?: string;
   date_created_gmt?: string;
-  date_modified?: string | null;
-  date_modified_gmt?: string | null;
+  date_modified?: string;
+  date_modified_gmt?: string;
   /**
    * The email address for the customer.
    */

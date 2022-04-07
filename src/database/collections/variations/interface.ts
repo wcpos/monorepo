@@ -24,10 +24,10 @@ export interface WooCommerceProductVariationSchema {
   price?: string;
   regular_price?: string;
   sale_price?: string;
-  date_on_sale_from?: string | null;
-  date_on_sale_from_gmt?: string | null;
-  date_on_sale_to?: string | null;
-  date_on_sale_to_gmt?: string | null;
+  date_on_sale_from?: string;
+  date_on_sale_from_gmt?: string;
+  date_on_sale_to?: string;
+  date_on_sale_to_gmt?: string;
   on_sale?: boolean;
   status?: "draft" | "pending" | "private" | "publish";
   purchasable?: boolean;

@@ -31,10 +31,10 @@ export interface WooCommerceProductSchema {
   price?: string;
   regular_price?: string;
   sale_price?: string;
-  date_on_sale_from?: string | null;
-  date_on_sale_from_gmt?: string | null;
-  date_on_sale_to?: string | null;
-  date_on_sale_to_gmt?: string | null;
+  date_on_sale_from?: string;
+  date_on_sale_from_gmt?: string;
+  date_on_sale_to?: string;
+  date_on_sale_to_gmt?: string;
   price_html?: string;
   on_sale?: boolean;
   purchasable?: boolean;
@@ -113,7 +113,7 @@ export interface WooCommerceProductSchema {
     option?: string;
     [k: string]: any;
   }[];
-  variations?: number[];
+  variations?: string[];
   grouped_products?: number[];
   menu_order?: number;
   meta_data?: {
