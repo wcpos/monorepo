@@ -7,7 +7,7 @@
 	},
 	"dependencies": {
 		"@react-native-community/netinfo": "8.2.0",
-		"electron": "18.0.2",
+		"electron": "18.0.3",
 		"expo": "44.0.6",
 		"expo-status-bar": "1.2.0",
 		"react": "17.0.2",
@@ -22,7 +22,7 @@
 		"react-native-web": "0.17.7"
 	},
 	"devDependencies": {
-		"@babel/core": "7.17.8",
+		"@babel/core": "7.17.9",
 		"@expo/electron-adapter": "0.0.55",
 		"@expo/webpack-config": "0.16.19",
 		"@svgr/webpack": "5.5.0",
