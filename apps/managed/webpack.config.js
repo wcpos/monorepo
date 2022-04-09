@@ -1,5 +1,6 @@
 const createExpoWebpackConfigAsync = require('@expo/webpack-config');
-const path = require('path');
+const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+// const path = require('path');
 
 module.exports = async function (env, argv) {
 	const config = await createExpoWebpackConfigAsync(
@@ -55,12 +56,24 @@ module.exports = async function (env, argv) {
 		return rule;
 	});
 
-	config.devServer.watchOptions = {
-		ignored: '**/node_modules',
-	};
+	if (config.devServer) {
+		config.devServer.watchOptions = {
+			ignored: '**/node_modules',
+		};
 
-	config.devServer.headers = config.devServer.headers || {};
-	config.devServer.headers['Access-Control-Allow-Origin'] = '*';
+		config.devServer.headers = config.devServer.headers || {};
+		config.devServer.headers['Access-Control-Allow-Origin'] = '*';
+	}
+
+	// Optionally you can enable the bundle size report.
+	// It's best to do this only with production builds because it will add noticeably more time to your builds and reloads.
+	if (env.mode === 'production') {
+		config.plugins.push(
+			new BundleAnalyzerPlugin({
+				path: 'web-report',
+			})
+		);
+	}
 
 	return config;
 };

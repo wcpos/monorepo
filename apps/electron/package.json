@@ -26,7 +26,7 @@
 		"@expo/electron-adapter": "0.0.55",
 		"@expo/webpack-config": "0.16.19",
 		"@svgr/webpack": "5.5.0",
-		"@types/react": "17.0.43",
+		"@types/react": "17.0.44",
 		"@types/react-native": "0.67.3",
 		"@wcpos/babel-preset-expo": "*",
 		"@wcpos/eslint-config": "*",

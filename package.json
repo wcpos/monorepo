@@ -12,6 +12,7 @@
 		"electron": "yarn workspace @wcpos/app-electron",
 		"clean": "node scripts/clean-node-modules",
 		"storybook": "yarn workspace @wcpos/storybook",
+		"common": "yarn workspace @wcpos/common",
 		"postinstall": "patch-package",
 		"expo": "expo"
 	},
