@@ -1,6 +1,6 @@
 import * as React from 'react';
 import Text from '@wcpos/common/src/components/text';
-import Format from '@wcpos/common/src/components/format';
+import FormatNumber from '@wcpos/common/src/components/format-number';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 
 type PriceProps = {
@@ -11,7 +11,15 @@ const Price = ({ item: product }: PriceProps) => {
 	const { store } = useAppState();
 
 	return product.isSynced() ? (
-		<Format.Number prefix={store.price_decimal_sep}>{product.price}</Format.Number>
+		<FormatNumber
+			value={product.price || 0}
+			currency="$"
+			currencyPosition={store?.currency_pos}
+			decimalSeparator={store?.price_decimal_sep}
+			decimalPrecision={store?.price_num_decimals}
+			fixedDecimalPrecision
+			isNumericString
+		/>
 	) : (
 		<Text.Skeleton length="short" />
 	);
