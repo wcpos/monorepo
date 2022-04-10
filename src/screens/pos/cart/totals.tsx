@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import Text from '@wcpos/common/src/components/text';
 import Box from '@wcpos/common/src/components/box';
+import useCurrencyFormat from '@wcpos/common/src/hooks/use-currency-format';
 
 type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
 
@@ -12,6 +13,7 @@ interface Props {
 const Totals = ({ order }: Props) => {
 	const total = useObservableState(order.total$, order.total);
 	const totalTax = useObservableState(order.total_tax$, order.total_tax);
+	const { format } = useCurrencyFormat();
 
 	return (
 		<>
@@ -20,7 +22,7 @@ const Totals = ({ order }: Props) => {
 					<Text>Total Tax:</Text>
 				</Box>
 				<Box padding="small">
-					<Text>{totalTax}</Text>
+					<Text>{format(totalTax || 0)}</Text>
 				</Box>
 			</Box>
 			<Box horizontal>
@@ -28,7 +30,7 @@ const Totals = ({ order }: Props) => {
 					<Text>Order Total:</Text>
 				</Box>
 				<Box padding="small">
-					<Text>{total}</Text>
+					<Text>{format(total || 0)}</Text>
 				</Box>
 			</Box>
 		</>

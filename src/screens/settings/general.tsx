@@ -1,5 +1,6 @@
 import * as React from 'react';
 import pick from 'lodash/pick';
+import { decode } from 'html-entities';
 import Form from '@wcpos/common/src/components/form';
 import useAppState from '@wcpos/common/src/hooks/use-app-state';
 
@@ -30,6 +31,9 @@ export const GeneralSettings = () => {
 				'price_num_decimals',
 			]),
 		};
+
+		// fix html entities for currency
+		_schema.properties.currency.enumNames = _schema.properties.currency.enumNames.map(decode);
 
 		return _schema;
 	}, [store?.collection.schema.jsonSchema]);

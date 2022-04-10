@@ -1,5 +1,6 @@
 import * as React from 'react';
 import isNil from 'lodash/isNil';
+import get from 'lodash/get';
 import Text from '../text';
 import {
 	toNumericString,
@@ -8,6 +9,9 @@ import {
 	limitToScale,
 	applyThousandSeparator,
 } from './format-number.helpers';
+import symbols from './symbols.json';
+
+type Currency = Extract<keyof typeof symbols, string>;
 
 export interface FormatNumberProps {
 	value: number | string;
@@ -17,7 +21,7 @@ export interface FormatNumberProps {
 	thousandsGroupStyle?: 'thousand' | 'lakh' | 'wan';
 	decimalPrecision?: number;
 	fixedDecimalPrecision?: boolean;
-	currency?: string;
+	currency?: Currency;
 	currencyPosition?: 'left' | 'right' | 'left_space' | 'right_space';
 	format?: string | ((value: number) => string);
 	allowEmptyFormatting?: boolean;
@@ -59,7 +63,8 @@ export const FormatNumber = ({
 	const prefix = React.useMemo(() => {
 		let pre = props.prefix || '';
 		if (currency && (currencyPosition === 'left' || currencyPosition === 'left_space')) {
-			pre += currencyPosition === 'left_space' ? `${currency} ` : currency;
+			const symbol = get(symbols, currency);
+			pre += currencyPosition === 'left_space' ? `${symbol} ` : symbol;
 		}
 		return pre;
 	}, [currency, currencyPosition, props.prefix]);
@@ -70,7 +75,8 @@ export const FormatNumber = ({
 	const suffix = React.useMemo(() => {
 		let end = props.suffix || '';
 		if (currency && (currencyPosition === 'right' || currencyPosition === 'right_space')) {
-			end = currencyPosition === 'right_space' ? ` ${currency}${end}` : currency + end;
+			const symbol = get(symbols, currency);
+			end = currencyPosition === 'right_space' ? ` ${symbol}${end}` : symbol + end;
 		}
 		return end;
 	}, [currency, currencyPosition, props.suffix]);

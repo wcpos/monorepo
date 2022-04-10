@@ -11,7 +11,7 @@ import Actions from './cells/actions';
 import Categories from '../common/product-categories';
 import Image from './cells/image';
 import Name from './cells/name';
-// import Price from './cells/price';
+import Price from './cells/price';
 import RegularPrice from './cells/regular-price';
 import StockQuanity from './cells/stock-quantity';
 // import Sku from './cells/sku';
@@ -32,7 +32,7 @@ const cells = {
 	categories: Categories,
 	image: Image,
 	name: Name,
-	// price: Price,
+	price: Price,
 	regular_price: RegularPrice,
 	// sku: Sku,
 	stock_quantity: StockQuanity,

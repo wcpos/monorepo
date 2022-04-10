@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import find from 'lodash/find';
+import useCurrencyFormat from '@wcpos/common/src/hooks/use-currency-format';
 import Text from '@wcpos/common/src/components/text';
 import Button from '@wcpos/common/src/components/button';
 import Select from '@wcpos/common/src/components/select';
@@ -25,6 +26,7 @@ interface Props {
 const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 	const variations = useObservableSuspense(variationsResource);
 	const [state, setState] = React.useState(() => init(attributes));
+	const { format } = useCurrencyFormat();
 
 	/**
 	 * Find the variation that matches the current state
@@ -101,7 +103,10 @@ const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 				</Box>
 			))}
 			{selectedVariation && (
-				<Button title={`Add to Cart: ${selectedVariation.price}`} onPress={handleAddToCart} />
+				<Button
+					title={`Add to Cart: ${format(selectedVariation.price || 0)}`}
+					onPress={handleAddToCart}
+				/>
 			)}
 		</Box>
 	);

@@ -3,15 +3,15 @@ import { useObservableState } from 'observable-hooks';
 import Text from '@wcpos/common/src/components/text';
 import useCurrencyFormat from '@wcpos/common/src/hooks/use-currency-format';
 
-type PriceProps = {
-	item: import('@wcpos/common/src/database').ProductDocument;
+type Props = {
+	item: import('@wcpos/common/src/database').CustomerDocument;
 };
 
-const Price = ({ item: product }: PriceProps) => {
-	const { format } = useCurrencyFormat();
+const Price = ({ item: product }: Props) => {
 	const price = useObservableState(product.price$, product.price);
+	const { format } = useCurrencyFormat();
 
-	return product.isSynced() ? <Text>{format(price || 0)}</Text> : <Text.Skeleton length="short" />;
+	return <Text>{format(price || 0)}</Text>;
 };
 
 export default Price;

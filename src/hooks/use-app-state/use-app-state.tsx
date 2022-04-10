@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 import { AppStateContext } from './app-state-provider';
 
-const useAppState = () => {
+export const useAppState = () => {
 	const context = React.useContext(AppStateContext);
 	if (context === undefined) {
 		throw new Error(`useAppState must be called within AppStateProvider`);
@@ -28,5 +28,3 @@ const useAppState = () => {
 	// 	storeDB: null,
 	// };
 };
-
-export default useAppState;
