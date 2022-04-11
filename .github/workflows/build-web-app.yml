@@ -1,0 +1,60 @@
+name: Web App
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+    
+    - name: Install Node.js
+      uses: actions/setup-node@v2.4.1
+      with:
+        node-version: 14.x
+    
+    - name: Install NPM packages
+      run: yarn --frozen-lockfile
+    
+    - name: Build project
+      run: PUBLIC_URL="https://wcpos.github.io/monorepo/" yarn managed build
+    
+    # - name: Run tests
+    #   run: npm run test
+
+    - name: Upload production-ready build files
+      uses: actions/upload-artifact@v2
+      with:
+        name: production-files
+        path: ./apps/managed/web-build
+  
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: production-files
+        path: ./build
+
+    - name: Deploy to gh-pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_branch: web-build
+        publish_dir: ./build
