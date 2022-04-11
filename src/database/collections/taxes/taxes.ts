@@ -8,10 +8,7 @@ export type TaxRateCollection = import('rxdb').RxCollection<
 	TaxRateStatics
 >;
 
-// @ts-ignore
-interface TaxRateMethods {}
-
-type TaxRateStatics = Record<string, never>;
+// interface TaxRateMethods {}
 
 /**
  *
@@ -22,7 +19,7 @@ export const taxes = {
 	schema,
 	// pouchSettings: {},
 	// statics: {},
-	methods,
+	// methods,
 	// attachments: {},
 	// options: {},
 	// migrationStrategies: {},
