@@ -1,5 +1,5 @@
 const createExpoWebpackConfigAsync = require('@expo/webpack-config');
-const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+// const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
 // const path = require('path');
 
 module.exports = async function (env, argv) {
@@ -67,13 +67,13 @@ module.exports = async function (env, argv) {
 
 	// Optionally you can enable the bundle size report.
 	// It's best to do this only with production builds because it will add noticeably more time to your builds and reloads.
-	if (env.mode === 'production' && !env.CI) {
-		config.plugins.push(
-			new BundleAnalyzerPlugin({
-				path: 'web-report',
-			})
-		);
-	}
+	// if (env.mode === 'production') {
+	// 	config.plugins.push(
+	// 		new BundleAnalyzerPlugin({
+	// 			path: 'web-report',
+	// 		})
+	// 	);
+	// }
 
 	return config;
 };
