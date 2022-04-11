@@ -22,10 +22,17 @@ jobs:
     - name: Install Node.js
       uses: actions/setup-node@v2.4.1
       with:
-        node-version: 14.x
+        node-version: 16.x
+        cache: yarn
+
+    - name: Setup Expo
+      uses: expo/expo-github-action@v7
+      with:
+        expo-version: latest
+        token: ${{ secrets.EXPO_TOKEN }}
     
     - name: Install NPM packages
-      run: yarn --frozen-lockfile
+      run: yarn install
     
     - name: Build project
       run: PUBLIC_URL="https://wcpos.github.io/monorepo/" yarn managed build
