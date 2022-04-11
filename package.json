@@ -3,6 +3,7 @@
 	"name": "@wcpos/app-managed",
 	"version": "1.0.0",
 	"main": "index.js",
+	"homepage": "https://wcpos.github.io/monorepo",
 	"scripts": {
 		"build": "expo build:web",
 		"test": "eslint --ext js,ts,tsx .",
