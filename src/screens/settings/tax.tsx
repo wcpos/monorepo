@@ -27,5 +27,17 @@ export const TaxSettings = () => {
 		return _schema;
 	}, [store?.collection.schema.jsonSchema]);
 
-	return <Form schema={schema} uiSchema={uiSchema} formData={store.toJSON()} />;
+	/**
+	 *
+	 */
+	const handleOnChange = React.useCallback(
+		(data) => {
+			store?.atomicPatch(data);
+		},
+		[store]
+	);
+
+	return (
+		<Form schema={schema} uiSchema={uiSchema} formData={store.toJSON()} onChange={handleOnChange} />
+	);
 };
