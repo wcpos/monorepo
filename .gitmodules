@@ -1,3 +1,9 @@
+[submodule "apps/electron"]
+	path = apps/electron
+	url = https://github.com/wcpos/electron
 [submodule "packages/common"]
 	path = packages/common
 	url = https://github.com/wcpos/common
+[submodule "packages/hello-world"]
+	path = packages/hello-world
+	url = https://github.com/wcpos/hello-world
