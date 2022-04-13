@@ -15,6 +15,7 @@ module.exports = async function (env, argv) {
 		},
 		argv
 	);
+	console.log(config);
 
 	config.module.rules[1].oneOf[2].use.options.plugins = ['react-native-reanimated/plugin'];
 

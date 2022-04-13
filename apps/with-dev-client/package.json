@@ -24,14 +24,14 @@
 		"react-native": "0.64.3",
 		"react-native-gesture-handler": "2.3.2",
 		"react-native-mmkv": "2.3.1",
-		"react-native-reanimated": "2.6.0",
+		"react-native-reanimated": "2.7.0",
 		"react-native-safe-area-context": "4.2.4",
 		"react-native-screens": "3.13.1",
 		"react-native-web": "0.17.7"
 	},
 	"devDependencies": {
 		"@babel/core": "7.17.9",
-		"@expo/config-plugins": "4.1.0",
+		"@expo/config-plugins": "4.1.1",
 		"@types/react": "17.0.44",
 		"@types/react-dom": "17.0.15",
 		"@types/react-native": "0.67.4",
