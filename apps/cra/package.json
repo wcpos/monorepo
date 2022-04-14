@@ -21,6 +21,9 @@
 	"devDependencies": {
 		"@types/react": "17.0.44",
 		"@types/react-dom": "17.0.15",
+		"@wcpos/babel": "*",
+		"@wcpos/eslint": "*",
+		"@wcpos/tsconfig": "*",
 		"@welldone-software/why-did-you-render": "7.0.1",
 		"babel-plugin-react-native-web": "0.17.7",
 		"customize-cra": "1.0.0",

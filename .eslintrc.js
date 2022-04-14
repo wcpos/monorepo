@@ -1,5 +1,5 @@
 module.exports = {
-  extends: '@wcpos/eslint-config',
+  extends: '@wcpos/eslint',
 };
 
 // module.exports = {

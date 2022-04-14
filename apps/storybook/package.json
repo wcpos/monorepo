@@ -34,6 +34,9 @@
 	},
 	"devDependencies": {
 		"@babel/core": "7.17.9",
+		"@wcpos/babel": "*",
+		"@wcpos/eslint": "*",
+		"@wcpos/tsconfig": "*",
 		"add": "2.0.6",
 		"babel-loader": "8.2.4",
 		"metro-react-native-babel-preset": "0.70.1",
