@@ -107,8 +107,8 @@
 		"@types/json-schema-merge-allof": "^0.6.1",
 		"@types/react-is": "^17.0.3",
 		"@types/react-jsonschema-form": "1.7.8",
-		"@wcpos/babel": "*",
-		"@wcpos/eslint": "*",
+		"wcpos/babel-preset-expo": "*",
+		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
 		"jest": "27.5.1",
 		"react-native-builder-bob": "0.18.2",
@@ -116,6 +116,6 @@
 		"typescript": "4.6.3"
 	},
 	"eslintConfig": {
-		"extends": "@wcpos/eslint"
+		"extends": "@wcpos/eslint-config"
 	}
 }

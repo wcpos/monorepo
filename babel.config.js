@@ -1,6 +1,6 @@
 module.exports = function (api) {
 	api.cache(true);
 	return {
-		presets: ['@wcpos/babel'],
+		presets: ['wcpos/babel-preset-expo'],
 	};
 };
