@@ -71,9 +71,9 @@
 		"lodash": "4.17.21",
 		"observable-hooks": "4.2.0",
 		"polished": "4.2.2",
-		"pouchdb-adapter-http": "7.2.2",
-		"pouchdb-adapter-idb": "7.2.2",
-		"pouchdb-adapter-memory": "7.2.2",
+		"pouchdb-adapter-http": "7.3.0",
+		"pouchdb-adapter-idb": "7.3.0",
+		"pouchdb-adapter-memory": "7.3.0",
 		"pouchdb-adapter-react-native-sqlite": "3.0.1",
 		"pouchdb-debug": "7.2.1",
 		"react": "17.0.2",
@@ -83,7 +83,7 @@
 		"react-is": "17.0.2",
 		"react-native": "0.64.3",
 		"react-native-device-info": "8.7.0",
-		"react-native-gesture-handler": "2.3.2",
+		"react-native-gesture-handler": "2.4.0",
 		"react-native-linear-gradient": "2.5.6",
 		"react-native-reanimated": "2.7.0",
 		"react-native-safe-area-context": "4.2.4",
@@ -107,9 +107,15 @@
 		"@types/json-schema-merge-allof": "^0.6.1",
 		"@types/react-is": "^17.0.3",
 		"@types/react-jsonschema-form": "1.7.8",
+		"@wcpos/babel": "*",
+		"@wcpos/eslint": "*",
+		"@wcpos/tsconfig": "*",
 		"jest": "27.5.1",
 		"react-native-builder-bob": "0.18.2",
 		"ts-jest": "27.1.4",
 		"typescript": "4.6.3"
+	},
+	"eslintConfig": {
+		"extends": "@wcpos/eslint"
 	}
 }
