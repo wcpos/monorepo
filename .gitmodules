@@ -7,3 +7,12 @@
 [submodule "packages/hello-world"]
 	path = packages/hello-world
 	url = https://github.com/wcpos/hello-world
+[submodule "packages/tsconfig"]
+	path = packages/tsconfig
+	url = https://github.com/wcpos/tsconfig
+[submodule "packages/babel"]
+	path = packages/babel
+	url = https://github.com/wcpos/babel
+[submodule "packages/eslint"]
+	path = packages/eslint
+	url = https://github.com/wcpos/eslint
