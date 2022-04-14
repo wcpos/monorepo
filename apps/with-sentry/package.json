@@ -34,12 +34,12 @@
 		"@types/react": "17.0.44",
 		"@types/react-dom": "17.0.15",
 		"@types/react-native": "0.67.4",
-		"@wcpos/babel": "*",
-		"@wcpos/eslint": "*",
+		"@wcpos/babel-preset-expo": "*",
+		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
 		"typescript": "4.6.3"
 	},
 	"eslintConfig": {
-		"extends": "@wcpos/eslint"
+		"extends": "@wcpos/eslint-config"
 	}
 }

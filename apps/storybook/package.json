@@ -34,8 +34,8 @@
 	},
 	"devDependencies": {
 		"@babel/core": "7.17.9",
-		"@wcpos/babel": "*",
-		"@wcpos/eslint": "*",
+		"@wcpos/babel-preset-expo": "*",
+		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
 		"add": "2.0.6",
 		"babel-loader": "8.2.4",
@@ -44,6 +44,9 @@
 		"react-scripts": "5.0.1",
 		"typescript": "4.6.3",
 		"yarn": "1.22.18"
+	},
+	"eslintConfig": {
+		"extends": "@wcpos/eslint-config"
 	},
 	"config": {
 		"react-native-storybook-loader": {
