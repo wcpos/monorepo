@@ -16,3 +16,18 @@
 [submodule "packages/eslint"]
 	path = packages/eslint
 	url = https://github.com/wcpos/eslint
+[submodule "packages/components"]
+	path = packages/components
+	url = https://github.com/wcpos/components
+[submodule "packages/database"]
+	path = packages/database
+	url = https://github.com/wcpos/database
+[submodule "packages/hooks"]
+	path = packages/hooks
+	url = https://github.com/wcpos/hooks
+[submodule "packages/themes"]
+	path = packages/themes
+	url = https://github.com/wcpos/themes
+[submodule "packages/form"]
+	path = packages/form
+	url = https://github.com/wcpos/react-native-jsonschema-form

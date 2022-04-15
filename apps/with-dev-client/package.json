@@ -1,46 +1,45 @@
 {
-	"private": true,
-	"name": "@wcpos/app-with-dev-client",
-	"version": "1.0.0",
-	"main": "index.js",
-	"scripts": {
-		"build": "echo 'Nothing to build'",
-		"test": "eslint --ext js,ts,tsx .",
-		"start": "expo start --dev-client",
-		"android": "expo run:android",
-		"ios": "expo run:ios",
-		"web": "expo start --web",
-		"eject": "expo eject"
-	},
-	"dependencies": {
-		"@wcpos/ui": "*",
-		"expo": "44.0.6",
-		"expo-dev-client": "0.8.4",
-		"expo-splash-screen": "0.14.2",
-		"expo-status-bar": "1.2.0",
-		"expo-updates": "0.11.7",
-		"react": "17.0.2",
-		"react-dom": "17.0.2",
-		"react-native": "0.64.3",
-		"react-native-gesture-handler": "2.4.0",
-		"react-native-mmkv": "2.3.1",
-		"react-native-reanimated": "2.7.0",
-		"react-native-safe-area-context": "4.2.4",
-		"react-native-screens": "3.13.1",
-		"react-native-web": "0.17.7"
-	},
-	"devDependencies": {
-		"@babel/core": "7.17.9",
-		"@expo/config-plugins": "4.1.1",
-		"@types/react": "17.0.44",
-		"@types/react-dom": "17.0.15",
-		"@types/react-native": "0.67.4",
-		"@wcpos/babel-preset-expo": "*",
-		"@wcpos/eslint-config": "*",
-		"@wcpos/tsconfig": "*",
-		"typescript": "4.6.3"
-	},
-	"eslintConfig": {
-		"extends": "@wcpos/eslint-config"
-	}
+  "private": true,
+  "name": "@wcpos/app-with-dev-client",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo 'Nothing to build'",
+    "test": "eslint --ext js,ts,tsx .",
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "eject": "expo eject"
+  },
+  "dependencies": {
+    "expo": "44.0.6",
+    "expo-dev-client": "0.8.4",
+    "expo-splash-screen": "0.14.2",
+    "expo-status-bar": "1.2.0",
+    "expo-updates": "0.11.7",
+    "react": "17.0.2",
+    "react-dom": "17.0.2",
+    "react-native": "0.64.3",
+    "react-native-gesture-handler": "2.4.0",
+    "react-native-mmkv": "2.3.1",
+    "react-native-reanimated": "2.7.0",
+    "react-native-safe-area-context": "4.2.4",
+    "react-native-screens": "3.13.1",
+    "react-native-web": "0.17.7"
+  },
+  "devDependencies": {
+    "@babel/core": "7.17.9",
+    "@expo/config-plugins": "4.1.1",
+    "@types/react": "17.0.44",
+    "@types/react-dom": "17.0.15",
+    "@types/react-native": "0.67.4",
+    "@wcpos/babel-preset-expo": "*",
+    "@wcpos/eslint-config": "*",
+    "@wcpos/tsconfig": "*",
+    "typescript": "4.6.3"
+  },
+  "eslintConfig": {
+    "extends": "@wcpos/eslint-config"
+  }
 }

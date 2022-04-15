@@ -1,53 +1,52 @@
 {
-	"private": true,
-	"name": "@wcpos/app-with-flipper",
-	"version": "1.0.0",
-	"main": "index.js",
-	"scripts": {
-		"build": "echo 'Nothing to build'",
-		"test": "eslint --ext js,ts,tsx .",
-		"start": "expo start --dev-client",
-		"android": "expo start --android",
-		"ios": "expo start --ios",
-		"web": "expo start --web",
-		"eject": "expo eject",
-		"eas-build-post-install": "echo 'Post install build?'"
-	},
-	"dependencies": {
-		"@wcpos/ui": "*",
-		"base-64": "1.0.0",
-		"expo": "44.0.6",
-		"expo-community-flipper": "44.0.3",
-		"expo-dev-client": "0.8.4",
-		"expo-sqlite": "10.1.1",
-		"expo-status-bar": "1.2.0",
-		"react": "17.0.2",
-		"react-devtools-core": "4.24.4",
-		"react-dom": "17.0.2",
-		"react-native": "0.64.3",
-		"react-native-flipper": "0.142.0",
-		"react-native-get-random-values": "1.7.2",
-		"react-native-pager-view": "5.4.15",
-		"react-native-reanimated": "2.7.0",
-		"react-native-safe-area-context": "4.2.4",
-		"react-native-screens": "3.13.1",
-		"react-native-svg": "12.3.0",
-		"react-native-web": "0.17.7"
-	},
-	"devDependencies": {
-		"@babel/core": "7.17.9",
-		"@expo/webpack-config": "0.16.20",
-		"@svgr/webpack": "5.5.0",
-		"@types/react": "17.0.44",
-		"@types/react-dom": "17.0.15",
-		"@types/react-native": "0.67.4",
-		"@wcpos/babel-preset-expo": "*",
-		"@wcpos/eslint-config": "*",
-		"@wcpos/tsconfig": "*",
-		"react-native-svg-transformer": "1.0.0",
-		"typescript": "4.6.3"
-	},
-	"eslintConfig": {
-		"extends": "@wcpos/eslint-config"
-	}
+  "private": true,
+  "name": "@wcpos/app-with-flipper",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo 'Nothing to build'",
+    "test": "eslint --ext js,ts,tsx .",
+    "start": "expo start --dev-client",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "eject": "expo eject",
+    "eas-build-post-install": "echo 'Post install build?'"
+  },
+  "dependencies": {
+    "base-64": "1.0.0",
+    "expo": "44.0.6",
+    "expo-community-flipper": "44.0.3",
+    "expo-dev-client": "0.8.4",
+    "expo-sqlite": "10.1.1",
+    "expo-status-bar": "1.2.0",
+    "react": "17.0.2",
+    "react-devtools-core": "4.24.4",
+    "react-dom": "17.0.2",
+    "react-native": "0.64.3",
+    "react-native-flipper": "0.142.0",
+    "react-native-get-random-values": "1.7.2",
+    "react-native-pager-view": "5.4.15",
+    "react-native-reanimated": "2.7.0",
+    "react-native-safe-area-context": "4.2.4",
+    "react-native-screens": "3.13.1",
+    "react-native-svg": "12.3.0",
+    "react-native-web": "0.17.7"
+  },
+  "devDependencies": {
+    "@babel/core": "7.17.9",
+    "@expo/webpack-config": "0.16.20",
+    "@svgr/webpack": "5.5.0",
+    "@types/react": "17.0.44",
+    "@types/react-dom": "17.0.15",
+    "@types/react-native": "0.67.4",
+    "@wcpos/babel-preset-expo": "*",
+    "@wcpos/eslint-config": "*",
+    "@wcpos/tsconfig": "*",
+    "react-native-svg-transformer": "1.0.0",
+    "typescript": "4.6.3"
+  },
+  "eslintConfig": {
+    "extends": "@wcpos/eslint-config"
+  }
 }
