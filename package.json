@@ -3,10 +3,10 @@
 	"version": "1.0.0",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
-	"homepage": "https://github.com/wcpos/react-native-jsonschema-form#readme",
+	"homepage": "https://github.com/wcpos/database#readme",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/wcpos/react-native-jsonschema-form.git"
+		"url": "https://github.com/wcpos/database.git"
 	},
 	"license": "MIT",
 	"main": "./dist/index.js",
