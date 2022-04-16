@@ -1,8 +1,8 @@
 // @ts-nocheck
 import { BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
-import httpClient from '@wcpos/common/src/lib/http';
-import Url from '@wcpos/common/src/lib/url-parse';
-import Platform from '@wcpos/common/src/lib/platform';
+import httpClient from '@wcpos/core/src/lib/http';
+import Url from '@wcpos/core/src/lib/url-parse';
+import Platform from '@wcpos/core/src/lib/platform';
 
 type SiteDocument = import('./sites').SiteDocument;
 interface Status {

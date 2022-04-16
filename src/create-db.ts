@@ -1,5 +1,5 @@
 import { createRxDatabase, removeRxDatabase } from 'rxdb/plugins/core';
-import Platform from '@wcpos/common/src/lib/platform';
+import Platform from '@wcpos/core/src/lib/platform';
 import set from 'lodash/set';
 import config from './adapter';
 import './plugins';
