@@ -4,8 +4,8 @@ import NetInfo, {
 	NetInfoState,
 	NetInfoStateType,
 } from '@react-native-community/netinfo';
+import useSnackbar from '@wcpos/components/src/snackbar';
 import useAppState from '../use-app-state';
-import useSnackbar from '../../components/snackbar';
 
 const initialState: NetInfoState = {
 	type: NetInfoStateType.unknown,

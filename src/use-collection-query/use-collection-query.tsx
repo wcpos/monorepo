@@ -5,14 +5,14 @@ import set from 'lodash/set';
 import get from 'lodash/get';
 import forEach from 'lodash/forEach';
 import orderBy from 'lodash/orderBy';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import useQuery from '@wcpos/common/src/hooks/use-query';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
+import useAppState from '@wcpos/hooks/src/use-app-state';
+import useQuery from '@wcpos/hooks/src/use-query';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 import _map from 'lodash/map';
 import useRestHttpClient from '../use-rest-http-client';
 
-type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
+type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
 
 export interface QueryState {
 	search: any;

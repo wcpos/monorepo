@@ -23,7 +23,7 @@ export interface UIColumn {
 
 export interface UISchema {
 	sortBy: string;
-	sortDirection: import('@wcpos/common/src/components/table/types').SortDirection;
+	sortDirection: import('@wcpos/components/src/table/types').SortDirection;
 	width: number;
 	columns: UIColumn[];
 }

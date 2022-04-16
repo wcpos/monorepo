@@ -2,11 +2,11 @@ import * as React from 'react';
 import { useObservable, useObservableSuspense } from 'observable-hooks';
 import { switchMap, catchError, shareReplay, first } from 'rxjs/operators';
 import { useNavigation } from '@react-navigation/native';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useAppState from '@wcpos/hooks/src/use-app-state';
 
-type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
+type StoreDatabase = import('@wcpos/database').StoreDatabase;
 
-type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
+type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
 export interface QueryState {
 	search: string;
 	sortBy: string;

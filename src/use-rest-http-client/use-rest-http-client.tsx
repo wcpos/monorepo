@@ -1,6 +1,6 @@
 import * as React from 'react';
 import axios from 'axios';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import useAppState from '../use-app-state';
 import { useErrorResponseHandler } from './use-error-handler';
 import useOnlineStatus from '../use-online-status';

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import set from 'lodash/set';
 
-type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
+type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
 
 export interface QueryState {
 	search?: Record<string, unknown>;

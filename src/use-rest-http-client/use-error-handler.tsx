@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { AxiosResponse } from 'axios';
 import { useNavigation } from '@react-navigation/native';
-import useSnackbar from '@wcpos/common/src/components/snackbar/';
+import useSnackbar from '@wcpos/components/src/snackbar/';
 
 export const useErrorResponseHandler = () => {
 	const navigation = useNavigation();
