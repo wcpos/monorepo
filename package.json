@@ -1,11 +1,10 @@
 {
-	"private": true,
 	"name": "@wcpos/core",
 	"version": "1.0.0",
 	"description": "The core WooCommerce POS app",
 	"author": "kilbot <paul@kilbot.com>",
 	"license": "MIT",
-	"main": "src/app.tsx",
+	"main": "src/index.tsx",
 	"files": [
 		"src/*"
 	],
