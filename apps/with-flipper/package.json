@@ -14,6 +14,7 @@
     "eas-build-post-install": "echo 'Post install build?'"
   },
   "dependencies": {
+    "@wcpos/core": "*",
     "base-64": "1.0.0",
     "expo": "44.0.6",
     "expo-community-flipper": "44.0.3",

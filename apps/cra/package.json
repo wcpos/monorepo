@@ -11,6 +11,7 @@
 		"eject": "react-app-rewired eject"
 	},
 	"dependencies": {
+		"@wcpos/core": "*",
 		"random-token": "0.0.8",
 		"react": "17.0.2",
 		"react-art": "17.0.2",
