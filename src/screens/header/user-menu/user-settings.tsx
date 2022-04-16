@@ -2,10 +2,10 @@ import * as React from 'react';
 import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
 import { tap, switchMap } from 'rxjs/operators';
 import { View } from 'react-native';
-import Text from '@wcpos/common/src/components/text';
-import Select from '@wcpos/common/src/components/select';
-import Table from '@wcpos/common/src/components/table';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import Text from '@wcpos/components/src/text';
+import Select from '@wcpos/components/src/select';
+import Table from '@wcpos/components/src/table';
+import useAppState from '@wcpos/hooks/src/use-app-state';
 
 interface UserSettingsProps {
 	onClose: () => void;

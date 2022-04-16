@@ -1,14 +1,14 @@
 import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
-import Dialog from '@wcpos/common/src/components/dialog';
-import TextInput from '@wcpos/common/src/components/textinput';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import Tabs from '@wcpos/common/src/components/tabs';
-import Tree from '@wcpos/common/src/components/tree';
+import Dialog from '@wcpos/components/src/dialog';
+import TextInput from '@wcpos/components/src/textinput';
+import useAppState from '@wcpos/hooks/src/use-app-state';
+import Tabs from '@wcpos/components/src/tabs';
+import Tree from '@wcpos/components/src/tree';
 
 export interface AddCustomerProps {
 	onClose: () => void;
-	customer?: import('@wcpos/common/src/database').CustomerDocument;
+	customer?: import('@wcpos/database').CustomerDocument;
 }
 
 const AddCustomer = ({ onClose, customer }: AddCustomerProps) => {

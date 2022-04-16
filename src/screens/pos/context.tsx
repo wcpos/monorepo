@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
-type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
+type OrderDocument = import('@wcpos/database').OrderDocument;
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
 interface POSContextProps {
 	currentOrder?: OrderDocument;

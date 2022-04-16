@@ -2,9 +2,9 @@ import * as React from 'react';
 import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { useWindowDimensions } from 'react-native';
 import { useTheme } from 'styled-components/native';
-import Button from '@wcpos/common/src/components/button';
-import Icon from '@wcpos/common/src/components/icon';
-import Box from '@wcpos/common/src/components/box';
+import Button from '@wcpos/components/src/button';
+import Icon from '@wcpos/components/src/icon';
+import Box from '@wcpos/components/src/box';
 import * as Styled from './styles';
 
 const HeaderLeft = () => {

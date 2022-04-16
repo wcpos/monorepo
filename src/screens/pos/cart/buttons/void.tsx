@@ -1,10 +1,10 @@
 import * as React from 'react';
-import Button from '@wcpos/common/src/components/button';
-import useSnackbar from '@wcpos/common/src/components/snackbar';
+import Button from '@wcpos/components/src/button';
+import useSnackbar from '@wcpos/components/src/snackbar';
 import { usePOSContext } from '../../context';
 
 interface VoidButtonProps {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	order: import('@wcpos/database').OrderDocument;
 }
 
 const VoidButton = ({ order }: VoidButtonProps) => {

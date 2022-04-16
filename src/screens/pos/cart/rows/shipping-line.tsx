@@ -1,18 +1,18 @@
 import * as React from 'react';
 import get from 'lodash/get';
-import Table from '@wcpos/common/src/components/table3';
-import Text from '@wcpos/common/src/components/text';
+import Table from '@wcpos/components/src/table';
+import Text from '@wcpos/components/src/text';
 import Price from './cells/fee-and-shipping-price';
 import Total from './cells/total';
 import Tax from './cells/tax';
 import Actions from './cells/actions';
 import ShippingTitle from './cells/shipping-title';
 
-type ShippingLineDocument = import('@wcpos/common/src/database').ShippingLineDocument;
-type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
+type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
+type ColumnProps = import('@wcpos/components/src/table/types').ColumnProps;
 
 interface Props {
-	// order: import('@wcpos/common/src/database').OrderDocument;
+	// order: import('@wcpos/database').OrderDocument;
 	shipping: ShippingLineDocument;
 	columns: any;
 }

@@ -1,14 +1,14 @@
 import * as React from 'react';
 import pick from 'lodash/pick';
-import Dropdown from '@wcpos/common/src/components/dropdown';
-import Icon from '@wcpos/common/src/components/icon';
-import Text from '@wcpos/common/src/components/text';
-import Modal, { useModal } from '@wcpos/common/src/components/modal';
-import Dialog, { useDialog } from '@wcpos/common/src/components/dialog';
+import Dropdown from '@wcpos/components/src/dropdown';
+import Icon from '@wcpos/components/src/icon';
+import Text from '@wcpos/components/src/text';
+import Modal, { useModal } from '@wcpos/components/src/modal';
+import Dialog, { useDialog } from '@wcpos/components/src/dialog';
 import EditModal from '../../common/edit-modal';
 
 type Props = {
-	item: import('@wcpos/common/src/database').ProductDocument;
+	item: import('@wcpos/database').ProductDocument;
 };
 
 const Actions = ({ item: product }: Props) => {

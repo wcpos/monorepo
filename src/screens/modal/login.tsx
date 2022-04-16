@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
-import Modal from '@wcpos/common/src/components/modal';
-import TextInput from '@wcpos/common/src/components/textinput';
+import Modal from '@wcpos/components/src/modal';
+import TextInput from '@wcpos/components/src/textinput';
 import http from '@wcpos/common/src/lib/http';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useAppState from '@wcpos/hooks/src/use-app-state';
 
 const Login = () => {
 	const navigation = useNavigation();

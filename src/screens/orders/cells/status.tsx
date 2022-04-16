@@ -1,8 +1,8 @@
 import * as React from 'react';
-import Icon from '@wcpos/common/src/components/icon';
+import Icon from '@wcpos/components/src/icon';
 
 type Props = {
-	item: import('@wcpos/common/src/database').OrderDocument;
+	item: import('@wcpos/database').OrderDocument;
 };
 
 const iconMap = {

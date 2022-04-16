@@ -3,7 +3,7 @@ import get from 'lodash/get';
 import find from 'lodash/find';
 import http from '@wcpos/common/src/lib/http';
 import Platform from '@wcpos/common/src/lib/platform';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import useAppState from '@wcpos/hooks/src/use-app-state';
 import Url from '@wcpos/common/src/lib/url-parse';
 
 interface WpJsonResponse {

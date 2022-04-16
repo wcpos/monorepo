@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Text from '@wcpos/common/src/components/text';
-import Icon from '@wcpos/common/src/components/icon';
-import useCurrencyFormat from '@wcpos/common/src/hooks/use-currency-format';
+import Text from '@wcpos/components/src/text';
+import Icon from '@wcpos/components/src/icon';
+import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
 
 const CartTabTitle = ({ focused, order }: { focused: boolean; order: any }) => {
 	const total = useObservableState(order.total$, order.total);

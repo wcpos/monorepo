@@ -8,14 +8,14 @@ import Animated, {
 	runOnJS,
 } from 'react-native-reanimated';
 import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
-import Gutter from '@wcpos/common/src/components/gutter';
-import Box from '@wcpos/common/src/components/box';
+import Gutter from '@wcpos/components/src/gutter';
+import Box from '@wcpos/components/src/box';
 import * as Styled from './styles';
 
 interface ResizableColumnsProps {
 	leftComponent: React.ReactNode;
 	rightComponent: React.ReactNode;
-	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
 }
 
 const clamp = (value: number, lowerBound: number, upperBound: number) => {

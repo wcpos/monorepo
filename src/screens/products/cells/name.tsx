@@ -1,8 +1,8 @@
 import * as React from 'react';
-import TextInput from '@wcpos/common/src/components/textinput';
+import TextInput from '@wcpos/components/src/textinput';
 
 type Props = {
-	item: import('@wcpos/common/src/database').ProductDocument;
+	item: import('@wcpos/database').ProductDocument;
 };
 
 const Name = ({ item: product }: Props) => {

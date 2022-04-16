@@ -6,10 +6,10 @@ import forEach from 'lodash/forEach';
 import isEqual from 'lodash/isEqual';
 import { calcOrderTotals, calcLineItemTotals } from './utils';
 
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
-type LineItemDocument = import('@wcpos/common/src/database').LineItemDocument;
-type FeeLineDocument = import('@wcpos/common/src/database').FeeLineDocument;
-type ShippingLineDocument = import('@wcpos/common/src/database').ShippingLineDocument;
+type OrderDocument = import('@wcpos/database').OrderDocument;
+type LineItemDocument = import('@wcpos/database').LineItemDocument;
+type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
+type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
 
 const rates: any[] = [

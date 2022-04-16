@@ -4,18 +4,18 @@ import { tap, filter, switchMap } from 'rxjs/operators';
 import difference from 'lodash/difference';
 import map from 'lodash/map';
 // import { replicateRxCollection } from 'rxdb/plugins/replication';
-// import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import useRestHttpClient from '@wcpos/common/src/hooks/use-rest-http-client';
-import Icon from '@wcpos/common/src/components/icon';
-import Popover from '@wcpos/common/src/components/popover';
-import Text from '@wcpos/common/src/components/text';
+// import useAppState from '@wcpos/hooks/src/use-app-state';
+import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
+import Icon from '@wcpos/components/src/icon';
+import Popover from '@wcpos/components/src/popover';
+import Text from '@wcpos/components/src/text';
 import Variations from './variations';
 import { usePOSContext } from '../../../context';
 
-type ProductDocument = import('@wcpos/common/src/database').ProductDocument;
+type ProductDocument = import('@wcpos/database').ProductDocument;
 
 interface Props {
-	item: import('@wcpos/common/src/database').ProductDocument;
+	item: import('@wcpos/database').ProductDocument;
 }
 
 // const fetchVariations = async (product: ProductDocument, collection) => {

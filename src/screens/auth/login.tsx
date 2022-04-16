@@ -1,12 +1,12 @@
 import * as React from 'react';
-import Button from '@wcpos/common/src/components/button';
-import Box from '@wcpos/common/src/components/box';
-import TextInput from '@wcpos/common/src/components/textinput';
+import Button from '@wcpos/components/src/button';
+import Box from '@wcpos/components/src/box';
+import TextInput from '@wcpos/components/src/textinput';
 import http from '@wcpos/common/src/lib/http';
-import Modal, { useModal } from '@wcpos/common/src/components/modal';
-import useSnackbar from '@wcpos/common/src/components/snackbar';
+import Modal, { useModal } from '@wcpos/components/src/modal';
+import useSnackbar from '@wcpos/components/src/snackbar';
 
-type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
+type SiteDocument = import('@wcpos/database').SiteDocument;
 
 interface LoginProps {
 	site: SiteDocument;

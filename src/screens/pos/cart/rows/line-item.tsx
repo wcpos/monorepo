@@ -1,7 +1,7 @@
 import * as React from 'react';
 import get from 'lodash/get';
-import Table from '@wcpos/common/src/components/table3';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
+import Table from '@wcpos/components/src/table';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Quantity from './cells/quantity';
 import Price from './cells/price';
 import Total from './cells/total';
@@ -9,8 +9,8 @@ import Tax from './cells/tax';
 import Actions from './cells/actions';
 import Name from './cells/product-name';
 
-type LineItemDocument = import('@wcpos/common/src/database').LineItemDocument;
-type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
+type LineItemDocument = import('@wcpos/database').LineItemDocument;
+type ColumnProps = import('@wcpos/components/src/table/types').ColumnProps;
 
 interface LineItemProps {
 	lineItem: LineItemDocument;

@@ -1,10 +1,10 @@
 import * as React from 'react';
-import Button from '@wcpos/common/src/components/button';
-import useRestHttpClient from '@wcpos/common/src/hooks/use-rest-http-client';
+import Button from '@wcpos/components/src/button';
+import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
 import { usePOSContext } from '../../context';
 
 interface SaveButtonProps {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	order: import('@wcpos/database').OrderDocument;
 }
 
 const SaveButton = ({ order }: SaveButtonProps) => {

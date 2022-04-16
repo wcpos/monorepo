@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Text from '@wcpos/common/src/components/text';
-import Box from '@wcpos/common/src/components/box';
-import useCurrencyFormat from '@wcpos/common/src/hooks/use-currency-format';
+import Text from '@wcpos/components/src/text';
+import Box from '@wcpos/components/src/box';
+import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
 
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface Props {
 	order: OrderDocument;

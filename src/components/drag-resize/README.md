@@ -1,1 +1,0 @@
-Based on https://github.com/fateh999/reanimated-drag-resize

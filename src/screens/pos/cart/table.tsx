@@ -4,23 +4,23 @@ import { useObservableState, useObservableSuspense, ObservableResource } from 'o
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
 import flatten from 'lodash/flatten';
-import Table from '@wcpos/common/src/components/table3';
-import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
+import Table from '@wcpos/components/src/table';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import LineItem from './rows/line-item';
 import FeeLine from './rows/fee-line';
 import ShippingLine from './rows/shipping-line';
 import { usePOSContext } from '../context';
 
-type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
-type Sort = import('@wcpos/common/src/components/table/types').Sort;
-type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
-type LineItemDocument = import('@wcpos/common/src/database').LineItemDocument;
-type FeeLineDocument = import('@wcpos/common/src/database').FeeLineDocument;
-type ShippingLineDocument = import('@wcpos/common/src/database').ShippingLineDocument;
+type ColumnProps = import('@wcpos/components/src/table/types').ColumnProps;
+type Sort = import('@wcpos/components/src/table/types').Sort;
+type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
+type OrderDocument = import('@wcpos/database').OrderDocument;
+type LineItemDocument = import('@wcpos/database').LineItemDocument;
+type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
+type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
-type UIColumn = import('@wcpos/common/src/hooks/use-ui-resource').UIColumn;
+type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 type Cart = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
 
 interface ICartTableProps {

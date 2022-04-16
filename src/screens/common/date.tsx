@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Format from '@wcpos/common/src/components/format';
+import Format from '@wcpos/react-native-jsonschema-format';
 
 interface Props {
 	item: any;

@@ -1,10 +1,10 @@
 import * as React from 'react';
-import Button from '@wcpos/common/src/components/button';
-import Modal, { useModal } from '@wcpos/common/src/components/modal';
-import TextInput from '@wcpos/common/src/components/textinput';
+import Button from '@wcpos/components/src/button';
+import Modal, { useModal } from '@wcpos/components/src/modal';
+import TextInput from '@wcpos/components/src/textinput';
 
 interface AddNoteButtonProps {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	order: import('@wcpos/database').OrderDocument;
 }
 
 const AddNoteButton = ({ order }: AddNoteButtonProps) => {

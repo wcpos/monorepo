@@ -2,10 +2,10 @@ import * as React from 'react';
 import { View, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { DrawerProps } from '@react-navigation/drawer/src/types';
 import { Link } from '@react-navigation/native';
-import Text from '@wcpos/common/src/components/text';
-import Icon from '@wcpos/common/src/components/icon';
-import Pressable from '@wcpos/common/src/components/pressable';
-import Tooltip from '@wcpos/common/src/components/tooltip';
+import Text from '@wcpos/components/src/text';
+import Icon from '@wcpos/components/src/icon';
+import Pressable from '@wcpos/components/src/pressable';
+import Tooltip from '@wcpos/components/src/tooltip';
 
 type Props = {
 	/**

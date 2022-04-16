@@ -1,15 +1,15 @@
 import * as React from 'react';
 import get from 'lodash/get';
-import Box from '@wcpos/common/src/components/box';
-import Text from '@wcpos/common/src/components/text';
-import WebView from '@wcpos/common/src/components/webview';
-import Button from '@wcpos/common/src/components/button';
-import Accordion from '@wcpos/common/src/components/accordion';
-import Tabs from '@wcpos/common/src/components/tabs';
+import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
+import WebView from '@wcpos/components/src/webview';
+import Button from '@wcpos/components/src/button';
+import Accordion from '@wcpos/components/src/accordion';
+import Tabs from '@wcpos/components/src/tabs';
 // import { POSContext } from '../pos';
 
 interface CheckoutProps {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	order: import('@wcpos/database').OrderDocument;
 }
 
 const gateways = [

@@ -14,16 +14,16 @@ import Support from '@wcpos/common/src/screens/support';
 import CustomHeader from '@wcpos/common/src/screens/header';
 import CustomDrawer from '@wcpos/common/src/screens/drawer';
 import { useWindowDimensions } from 'react-native';
-import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
-import Icon, { IconName } from '@wcpos/common/src/components/icon';
-import Text from '@wcpos/common/src/components/text';
-import Box from '@wcpos/common/src/components/box';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import useStoreSync from '@wcpos/common/src/hooks/use-store-sync';
-import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
-import { OnlineStatusProvider } from '@wcpos/common/src/hooks/use-online-status';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Icon, { IconName } from '@wcpos/components/src/icon';
+import Text from '@wcpos/components/src/text';
+import Box from '@wcpos/components/src/box';
+import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStoreSync from '@wcpos/hooks/src/use-store-sync';
+import useIdAudit from '@wcpos/hooks/src/use-id-audit';
+import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import { useTheme } from 'styled-components/native';
-import { ResourceProvider } from '@wcpos/common/src/hooks/use-resource';
+import { ResourceProvider } from '@wcpos/hooks/src/use-resource';
 
 export type DrawerParamList = {
 	POS: undefined;

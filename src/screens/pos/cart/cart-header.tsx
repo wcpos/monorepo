@@ -1,11 +1,11 @@
 import * as React from 'react';
-import Box from '@wcpos/common/src/components/box';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import Box from '@wcpos/components/src/box';
+import useAppState from '@wcpos/hooks/src/use-app-state';
 import CustomerSelect from '../../common/customer-select';
 import AddCustomer from '../../common/add-new-customer';
 import UISettings from '../../common/ui-settings';
 
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CartHeaderProps {
 	order: OrderDocument;

@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Button from '@wcpos/common/src/components/button';
-import Modal, { useModal } from '@wcpos/common/src/components/modal';
-import useCurrencyFormat from '@wcpos/common/src/hooks/use-currency-format';
+import Button from '@wcpos/components/src/button';
+import Modal, { useModal } from '@wcpos/components/src/modal';
+import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
 import Checkout from '../../checkout';
 
 interface PayModalProps {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	order: import('@wcpos/database').OrderDocument;
 }
 
 const PayButton = ({ order }: PayModalProps) => {

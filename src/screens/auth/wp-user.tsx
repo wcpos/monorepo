@@ -4,15 +4,15 @@ import axios from 'axios';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 import forEach from 'lodash/forEach';
-import Tag from '@wcpos/common/src/components/tag';
-import Text from '@wcpos/common/src/components/text';
-import Button from '@wcpos/common/src/components/button';
-import Dialog, { useDialog } from '@wcpos/common/src/components/dialog';
+import Tag from '@wcpos/components/src/tag';
+import Text from '@wcpos/components/src/text';
+import Button from '@wcpos/components/src/button';
+import Dialog, { useDialog } from '@wcpos/components/src/dialog';
 import * as Styled from './styles';
 
 interface Props {
-	site: import('@wcpos/common/src/database').SiteDocument;
-	wpUser: import('@wcpos/common/src/database').WPCredentialsDocument;
+	site: import('@wcpos/database').SiteDocument;
+	wpUser: import('@wcpos/database').WPCredentialsDocument;
 }
 
 function sanitizeStoreName(id: string) {

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Text from '@wcpos/common/src/components/text';
+import Text from '@wcpos/components/src/text';
 
 const Test = () => {
 	// here I want to use data

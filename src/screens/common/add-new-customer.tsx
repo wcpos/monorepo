@@ -1,19 +1,19 @@
 import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
-import Modal, { useModal } from '@wcpos/common/src/components/modal';
+import Modal, { useModal } from '@wcpos/components/src/modal';
 import pick from 'lodash/pick';
 import set from 'lodash/set';
 import get from 'lodash/get';
 import map from 'lodash/map';
 import find from 'lodash/find';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import Tabs from '@wcpos/common/src/components/tabs';
-import Tree from '@wcpos/common/src/components/tree';
-import Icon from '@wcpos/common/src/components/icon';
-import Form from '@wcpos/common/src/components/form';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-import useRestHttpClient from '@wcpos/common/src/hooks/use-rest-http-client';
-import useResource from '@wcpos/common/src/hooks/use-resource';
+import useAppState from '@wcpos/hooks/src/use-app-state';
+import Tabs from '@wcpos/components/src/tabs';
+import Tree from '@wcpos/components/src/tree';
+import Icon from '@wcpos/components/src/icon';
+import Form from '@wcpos/react-native-jsonschema-form';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
+import useResource from '@wcpos/hooks/src/use-resource';
 
 /**
  *

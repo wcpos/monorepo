@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import find from 'lodash/find';
-import Text from '@wcpos/common/src/components/text';
-import Box from '@wcpos/common/src/components/box';
+import Text from '@wcpos/components/src/text';
+import Box from '@wcpos/components/src/box';
 import Categories from '../../../../common/product-categories';
 import Tags from '../../../../common/product-tags';
 
 interface Props {
-	item: import('@wcpos/common/src/database').ProductDocument;
+	item: import('@wcpos/database').ProductDocument;
 	column: any;
 }
 

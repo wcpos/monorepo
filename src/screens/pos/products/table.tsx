@@ -2,22 +2,22 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
-import useData from '@wcpos/common/src/hooks/use-collection-query';
-import useQuery from '@wcpos/common/src/hooks/use-query';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-import Table from '@wcpos/common/src/components/table3';
-import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
+import useData from '@wcpos/hooks/src/use-collection-query';
+import useQuery from '@wcpos/hooks/src/use-query';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import Table from '@wcpos/components/src/table';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import { SimpleProductRow, VariableProductRow } from './rows';
 import Footer from './footer';
 
-type Sort = import('@wcpos/common/src/components/table/types').Sort;
-type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
-type ProductDocument = import('@wcpos/common/src/database').ProductDocument;
-type ColumnProps = import('@wcpos/common/src/components/table3/table').ColumnProps<ProductDocument>;
-type UIColumn = import('@wcpos/common/src/hooks/use-ui-resource').UIColumn;
+type Sort = import('@wcpos/components/src/table/types').Sort;
+type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
+type ProductDocument = import('@wcpos/database').ProductDocument;
+type ColumnProps = import('@wcpos/components/src/table/table').ColumnProps<ProductDocument>;
+type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 
 interface POSProductsTableProps {
-	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
 }
 
 /**

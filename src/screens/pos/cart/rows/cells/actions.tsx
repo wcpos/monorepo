@@ -1,13 +1,13 @@
 import * as React from 'react';
-import Icon from '@wcpos/common/src/components/icon';
-import useSnackbar from '@wcpos/common/src/components/snackbar';
+import Icon from '@wcpos/components/src/icon';
+import useSnackbar from '@wcpos/components/src/snackbar';
 import { usePOSContext } from '../../../context';
 
 interface ActionProps {
 	item:
-		| import('@wcpos/common/src/database').LineItemDocument
-		| import('@wcpos/common/src/database').FeeLineDocument
-		| import('@wcpos/common/src/database').ShippingLineDocument;
+		| import('@wcpos/database').LineItemDocument
+		| import('@wcpos/database').FeeLineDocument
+		| import('@wcpos/database').ShippingLineDocument;
 }
 
 const Actions = ({ item }: ActionProps) => {

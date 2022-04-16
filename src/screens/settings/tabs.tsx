@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Tabs from '@wcpos/common/src/components/tabs';
+import Tabs from '@wcpos/components/src/tabs';
 import { GeneralSettings } from './general';
 import { TaxSettings } from './tax';
 

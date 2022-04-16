@@ -1,9 +1,9 @@
 import * as React from 'react';
-import Text from '@wcpos/common/src/components/text';
+import Text from '@wcpos/components/src/text';
 
 type Props = {
-	item: import('@wcpos/common/src/database').CustomerDocument;
-	column: import('@wcpos/common/src/components/table/types').ColumnProps;
+	item: import('@wcpos/database').CustomerDocument;
+	column: import('@wcpos/components/src/table/types').ColumnProps;
 };
 
 const Name = ({ item: customer, column }: Props) => {

@@ -6,14 +6,14 @@ import {
 } from 'observable-hooks';
 import filter from 'lodash/filter';
 import parseInt from 'lodash/parseInt';
-import Text from '@wcpos/common/src/components/text';
-import useCurrencyFormat from '@wcpos/common/src/hooks/use-currency-format';
-import useResource from '@wcpos/common/src/hooks/use-resource';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import Text from '@wcpos/components/src/text';
+import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
+import useResource from '@wcpos/hooks/src/use-resource';
+import useAppState from '@wcpos/hooks/src/use-app-state';
 import { calcTaxes, sumTaxes } from './utils';
 
 type PriceProps = {
-	item: import('@wcpos/common/src/database').ProductDocument;
+	item: import('@wcpos/database').ProductDocument;
 };
 
 const Price = ({ item: product }: PriceProps) => {

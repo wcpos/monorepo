@@ -2,16 +2,16 @@ import * as React from 'react';
 import { KeyboardAvoidingView, StyleSheet } from 'react-native';
 import Platform from '@wcpos/common/src/utils/platform';
 import { useObservableState, useObservable } from 'observable-hooks';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import Logo from '@wcpos/common/src/components/logo';
-import Box from '@wcpos/common/src/components/box';
-import Button from '@wcpos/common/src/components/button';
-import TextInput from '@wcpos/common/src/components/textinput';
+import useAppState from '@wcpos/hooks/src/use-app-state';
+import Logo from '@wcpos/components/src/logo';
+import Box from '@wcpos/components/src/box';
+import Button from '@wcpos/components/src/button';
+import TextInput from '@wcpos/components/src/textinput';
 import useSiteConnect from './use-site-connect';
 import Site from './site';
 
-type UserDocument = import('@wcpos/common/src/database').UserDocument;
-type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
+type UserDocument = import('@wcpos/database').UserDocument;
+type SiteDocument = import('@wcpos/database').SiteDocument;
 
 /**
  *

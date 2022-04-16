@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
-import Tabs from '@wcpos/common/src/components/tabs';
+import Tabs from '@wcpos/components/src/tabs';
 
 export interface POSTabsProps {
 	leftComponent: React.ReactNode;

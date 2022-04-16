@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Button from '@wcpos/common/src/components/button';
-import Text from '@wcpos/common/src/components/text';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import Button from '@wcpos/components/src/button';
+import Text from '@wcpos/components/src/text';
+import useAppState from '@wcpos/hooks/src/use-app-state';
 import * as Styled from './styles';
 
 interface CustomersFooterProps {

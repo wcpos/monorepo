@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import find from 'lodash/find';
-import useCurrencyFormat from '@wcpos/common/src/hooks/use-currency-format';
-import Text from '@wcpos/common/src/components/text';
-import Button from '@wcpos/common/src/components/button';
-import Select from '@wcpos/common/src/components/select';
-import Box from '@wcpos/common/src/components/box';
+import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
+import Text from '@wcpos/components/src/text';
+import Button from '@wcpos/components/src/button';
+import Select from '@wcpos/components/src/select';
+import Box from '@wcpos/components/src/box';
 import {
 	init,
 	updateState,
@@ -14,8 +14,8 @@ import {
 	ProductAttribute,
 } from './variations.helpers';
 
-type ProductVariationDocument = import('@wcpos/common/src/database').ProductVariationDocument;
-// type ProductAttributes = import('@wcpos/common/src/database').ProductDocument['attributes'];
+type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
+// type ProductAttributes = import('@wcpos/database').ProductDocument['attributes'];
 
 interface Props {
 	variationsResource: ObservableResource<ProductVariationDocument[]>;

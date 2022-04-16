@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Button from '@wcpos/common/src/components/button';
-import Popover from '@wcpos/common/src/components/popover';
-import Numpad from '@wcpos/common/src/components/numpad';
+import Button from '@wcpos/components/src/button';
+import Popover from '@wcpos/components/src/popover';
+import Numpad from '@wcpos/components/src/numpad';
 
 interface Props {
-	item: import('@wcpos/common/src/database').LineItemDocument;
+	item: import('@wcpos/database').LineItemDocument;
 }
 
 const Quantity = ({ item }: Props) => {

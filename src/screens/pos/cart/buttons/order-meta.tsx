@@ -1,11 +1,11 @@
 import * as React from 'react';
 import pick from 'lodash/pick';
-import Button from '@wcpos/common/src/components/button';
-import Modal, { useModal } from '@wcpos/common/src/components/modal';
+import Button from '@wcpos/components/src/button';
+import Modal, { useModal } from '@wcpos/components/src/modal';
 import EditModal from '../../../common/edit-modal';
 
 interface OrderMetaButtonProps {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	order: import('@wcpos/database').OrderDocument;
 }
 
 const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {

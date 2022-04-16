@@ -1,8 +1,8 @@
 import * as React from 'react';
-import Text from '@wcpos/common/src/components/text';
+import Text from '@wcpos/components/src/text';
 
 type Props = {
-	item: import('@wcpos/common/src/database').ProductDocument;
+	item: import('@wcpos/database').ProductDocument;
 };
 
 const RegularPrice = ({ item: product }: Props) => {

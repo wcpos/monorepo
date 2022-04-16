@@ -1,9 +1,9 @@
 import * as React from 'react';
-import Icon from '@wcpos/common/src/components/icon';
+import Icon from '@wcpos/components/src/icon';
 import { usePOSContext } from '../../../context';
 
 interface Props {
-	item: import('@wcpos/common/src/database').ProductDocument;
+	item: import('@wcpos/database').ProductDocument;
 }
 
 const Actions = ({ item: product }: Props) => {

@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Text from '@wcpos/common/src/components/text';
-import useCurrencyFormat from '@wcpos/common/src/hooks/use-currency-format';
+import Text from '@wcpos/components/src/text';
+import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
 
 type Props = {
-	item: import('@wcpos/common/src/database').CustomerDocument;
+	item: import('@wcpos/database').CustomerDocument;
 };
 
 const Price = ({ item: product }: Props) => {

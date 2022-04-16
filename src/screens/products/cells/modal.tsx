@@ -1,10 +1,10 @@
 import * as React from 'react';
-import Tabs from '@wcpos/common/src/components/tabs';
-import Tree from '@wcpos/common/src/components/tree';
-import Form from '@wcpos/common/src/components/form';
+import Tabs from '@wcpos/components/src/tabs';
+import Tree from '@wcpos/components/src/tree';
+import Form from '@wcpos/react-native-jsonschema-form';
 
 type ProductModalProps = {
-	product: import('@wcpos/common/src/database').ProductDocument;
+	product: import('@wcpos/database').ProductDocument;
 };
 
 const Modal = ({ product }: ProductModalProps) => {

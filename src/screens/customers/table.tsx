@@ -3,11 +3,11 @@ import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
 import get from 'lodash/get';
-import useData from '@wcpos/common/src/hooks/use-collection-query';
-import useQuery from '@wcpos/common/src/hooks/use-query';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-import Table from '@wcpos/common/src/components/table3';
-import useRestQuery from '@wcpos/common/src/hooks/use-rest-query-customers';
+import useData from '@wcpos/hooks/src/use-collection-query';
+import useQuery from '@wcpos/hooks/src/use-query';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import Table from '@wcpos/components/src/table';
+import useRestQuery from '@wcpos/hooks/src/use-rest-query-customers';
 import Actions from './cells/actions';
 import Name from './cells/name';
 import Email from './cells/email';
@@ -15,15 +15,15 @@ import Address from './cells/address';
 import Avatar from './cells/avatar';
 import Footer from './footer';
 
-type Sort = import('@wcpos/common/src/components/table/types').Sort;
-type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
-type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
+type Sort = import('@wcpos/components/src/table/types').Sort;
+type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type ColumnProps =
-	import('@wcpos/common/src/components/table3/table').ColumnProps<CustomerDocument>;
-type UIColumn = import('@wcpos/common/src/hooks/use-ui-resource').UIColumn;
+	import('@wcpos/components/src/table/table').ColumnProps<CustomerDocument>;
+type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 
 interface CustomersTableProps {
-	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
 }
 
 const cells = {

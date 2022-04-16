@@ -1,7 +1,7 @@
 import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
-import Table from '@wcpos/common/src/components/table3';
+import Table from '@wcpos/components/src/table';
 import Actions from './cells/variable-actions';
 import Image from './cells/image';
 import Name from './cells/name';
@@ -12,11 +12,11 @@ import StockQuantity from './cells/stock-quantity';
 import Categories from '../../../common/product-categories';
 import Tag from '../../../common/product-tags';
 
-type ProductDocument = import('@wcpos/common/src/database').ProductDocument;
-type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
+type ProductDocument = import('@wcpos/database').ProductDocument;
+type ColumnProps = import('@wcpos/components/src/table/types').ColumnProps;
 
 interface Props {
-	// order: import('@wcpos/common/src/database').OrderDocument;
+	// order: import('@wcpos/database').OrderDocument;
 	product: ProductDocument;
 	columns: any;
 }

@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 import get from 'lodash/get';
-import Search from '@wcpos/common/src/components/search';
-import useQuery from '@wcpos/common/src/hooks/use-query';
+import Search from '@wcpos/components/src/search';
+import useQuery from '@wcpos/hooks/src/use-query';
 
 const SearchBar = () => {
 	const { query, setQuery } = useQuery();

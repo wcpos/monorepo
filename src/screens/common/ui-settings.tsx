@@ -2,13 +2,13 @@ import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
-import Popover from '@wcpos/common/src/components/popover';
-import Icon from '@wcpos/common/src/components/icon';
-import Button from '@wcpos/common/src/components/button';
-import Form from '@wcpos/common/src/components/form';
+import Popover from '@wcpos/components/src/popover';
+import Icon from '@wcpos/components/src/icon';
+import Button from '@wcpos/components/src/button';
+import Form from '@wcpos/react-native-jsonschema-form';
 
 interface UiSettingsProps {
-	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
 }
 
 const schema = {

@@ -3,10 +3,10 @@ import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
 import get from 'lodash/get';
-import useData from '@wcpos/common/src/hooks/use-collection-query';
-import useQuery from '@wcpos/common/src/hooks/use-query';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-import Table from '@wcpos/common/src/components/table3';
+import useData from '@wcpos/hooks/src/use-collection-query';
+import useQuery from '@wcpos/hooks/src/use-query';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import Table from '@wcpos/components/src/table';
 import Actions from './cells/actions';
 import Categories from '../common/product-categories';
 import Image from './cells/image';
@@ -18,13 +18,13 @@ import StockQuanity from './cells/stock-quantity';
 import Tag from '../common/product-tags';
 import Footer from './footer';
 
-type Sort = import('@wcpos/common/src/components/table/types').Sort;
-type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
-type ProductDocument = import('@wcpos/common/src/database').ProductDocument;
-type UIColumn = import('@wcpos/common/src/hooks/use-ui-resource').UIColumn;
+type Sort = import('@wcpos/components/src/table/types').Sort;
+type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
+type ProductDocument = import('@wcpos/database').ProductDocument;
+type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 
 interface ProductsTableProps {
-	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
 }
 
 const cells = {

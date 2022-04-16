@@ -1,13 +1,13 @@
 import * as React from 'react';
-import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
-import useRestQuery from '@wcpos/common/src/hooks/use-rest-query';
-import Box from '@wcpos/common/src/components/box';
+import useIdAudit from '@wcpos/hooks/src/use-id-audit';
+import useRestQuery from '@wcpos/hooks/src/use-rest-query';
+import Box from '@wcpos/components/src/box';
 import UiSettings from '../../common/ui-settings';
 import Table from './table';
 import SearchBar from './search-bar';
 
 interface POSProductsProps {
-	ui: import('@wcpos/common/src/hooks/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
 }
 
 /**

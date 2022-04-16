@@ -1,9 +1,9 @@
 import * as React from 'react';
 import isFinite from 'lodash/isFinite';
-import Text from '@wcpos/common/src/components/text';
+import Text from '@wcpos/components/src/text';
 
 type Props = {
-	item: import('@wcpos/common/src/database').ProductDocument;
+	item: import('@wcpos/database').ProductDocument;
 };
 
 const StockQuantity = ({ item: product }: Props) => {

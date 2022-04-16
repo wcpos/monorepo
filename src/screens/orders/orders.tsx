@@ -1,15 +1,15 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import { QueryProvider } from '@wcpos/common/src/hooks/use-query';
-import Box from '@wcpos/common/src/components/box';
-import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
-import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
+import { QueryProvider } from '@wcpos/hooks/src/use-query';
+import Box from '@wcpos/components/src/box';
+import useIdAudit from '@wcpos/hooks/src/use-id-audit';
+import useUIResource from '@wcpos/hooks/src/use-ui-resource';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';
 
-type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
+type OrderDocument = import('@wcpos/database').OrderDocument;
 interface QueryState {
 	search: string;
 	sortBy: string;

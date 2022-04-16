@@ -1,9 +1,9 @@
 import * as React from 'react';
-import Box from '@wcpos/common/src/components/box';
-import Icon from '@wcpos/common/src/components/icon';
-import Text from '@wcpos/common/src/components/text';
+import Box from '@wcpos/components/src/box';
+import Icon from '@wcpos/components/src/icon';
+import Text from '@wcpos/components/src/text';
 
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface AddFeeProps {
 	order: OrderDocument;

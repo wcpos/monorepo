@@ -2,13 +2,13 @@ import * as React from 'react';
 import { useWindowDimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from 'styled-components/native';
-import Avatar from '@wcpos/common/src/components/avatar';
-import Dropdown from '@wcpos/common/src/components/dropdown';
-import Text from '@wcpos/common/src/components/text';
-import Box from '@wcpos/common/src/components/box';
-import Icon from '@wcpos/common/src/components/icon';
-import Modal, { useModal } from '@wcpos/common/src/components/modal';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import Avatar from '@wcpos/components/src/avatar';
+import Dropdown from '@wcpos/components/src/dropdown';
+import Text from '@wcpos/components/src/text';
+import Box from '@wcpos/components/src/box';
+import Icon from '@wcpos/components/src/icon';
+import Modal, { useModal } from '@wcpos/components/src/modal';
+import useAppState from '@wcpos/hooks/src/use-app-state';
 import Settings from '../../settings';
 
 export const UserMenu = () => {

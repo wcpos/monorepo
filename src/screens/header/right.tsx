@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Box from '@wcpos/common/src/components/box';
+import Box from '@wcpos/components/src/box';
 import UserMenu from './user-menu';
 import Online from './online';
 import Notifications from './notifications';

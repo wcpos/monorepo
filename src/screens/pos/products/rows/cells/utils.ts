@@ -7,7 +7,7 @@ import map from 'lodash/map';
 import flatten from 'lodash/flatten';
 import groupBy from 'lodash/groupBy';
 
-type TaxRateSchema = import('@wcpos/common/src/database').TaxRateSchema;
+type TaxRateSchema = import('@wcpos/database').TaxRateSchema;
 interface Taxes {
 	id: number;
 	total: string;

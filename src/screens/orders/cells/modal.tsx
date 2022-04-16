@@ -1,11 +1,11 @@
 import * as React from 'react';
-import Dialog from '@wcpos/common/src/components/dialog';
-import Tabs from '@wcpos/common/src/components/tabs';
-import TextInput from '@wcpos/common/src/components/textinput';
-import Tree from '@wcpos/common/src/components/tree';
+import Dialog from '@wcpos/components/src/dialog';
+import Tabs from '@wcpos/components/src/tabs';
+import TextInput from '@wcpos/components/src/textinput';
+import Tree from '@wcpos/components/src/tree';
 
 type OrderModalProps = {
-	order: import('@wcpos/common/src/database').OrderDocument;
+	order: import('@wcpos/database').OrderDocument;
 	onClose: () => void;
 };
 

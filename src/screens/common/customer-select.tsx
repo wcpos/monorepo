@@ -10,13 +10,13 @@ import {
 } from 'rxjs/operators';
 import orderBy from 'lodash/orderBy';
 import { useTranslation } from 'react-i18next';
-import useDataObservable from '@wcpos/common/src/hooks/use-data-observable';
-import Combobox from '@wcpos/common/src/components/combobox';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
+import useDataObservable from '@wcpos/hooks/src/use-data-observable';
+import Combobox from '@wcpos/components/src/combobox';
+import useAppState from '@wcpos/hooks/src/use-app-state';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
-type CustomerDocument = import('@wcpos/common/src/database').CustomerDocument;
-type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
+type StoreDatabase = import('@wcpos/database').StoreDatabase;
 
 interface CustomerSelectProps {
 	selectedCustomer?: CustomerDocument;

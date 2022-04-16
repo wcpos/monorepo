@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import { QueryProvider } from '@wcpos/common/src/hooks/use-query';
-import Box from '@wcpos/common/src/components/box';
-import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
-import useIdAudit from '@wcpos/common/src/hooks/use-id-audit';
-import useRestQuery from '@wcpos/common/src/hooks/use-rest-query-customers';
-import ErrorBoundary from '@wcpos/common/src/components/error-boundary';
+import { QueryProvider } from '@wcpos/hooks/src/use-query';
+import Box from '@wcpos/components/src/box';
+import useUIResource from '@wcpos/hooks/src/use-ui-resource';
+import useIdAudit from '@wcpos/hooks/src/use-id-audit';
+import useRestQuery from '@wcpos/hooks/src/use-rest-query-customers';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';

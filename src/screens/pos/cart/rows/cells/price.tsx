@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Button from '@wcpos/common/src/components/button';
+import Button from '@wcpos/components/src/button';
 
 interface Props {
-	item: import('@wcpos/common/src/database').LineItemDocument;
+	item: import('@wcpos/database').LineItemDocument;
 }
 
 const Price = ({ item }: Props) => {

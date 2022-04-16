@@ -1,16 +1,16 @@
 import * as React from 'react';
-import Tabs from '@wcpos/common/src/components/tabs';
-import Tree from '@wcpos/common/src/components/tree';
-import Form from '@wcpos/common/src/components/form';
+import Tabs from '@wcpos/components/src/tabs';
+import Tree from '@wcpos/components/src/tree';
+import Form from '@wcpos/react-native-jsonschema-form';
 
 export interface EditModalProps {
 	item:
-		| import('@wcpos/common/src/database').ProductDocument
-		| import('@wcpos/common/src/database').OrderDocument
-		| import('@wcpos/common/src/database').CustomerDocument
-		| import('@wcpos/common/src/database').LineItemDocument
-		| import('@wcpos/common/src/database').FeeLineDocument
-		| import('@wcpos/common/src/database').ShippingLineDocument;
+		| import('@wcpos/database').ProductDocument
+		| import('@wcpos/database').OrderDocument
+		| import('@wcpos/database').CustomerDocument
+		| import('@wcpos/database').LineItemDocument
+		| import('@wcpos/database').FeeLineDocument
+		| import('@wcpos/database').ShippingLineDocument;
 	schema: import('json-schema').JSONSchema7;
 	uiSchema: Record<string, any>;
 }
@@ -20,7 +20,6 @@ export interface EditModalProps {
  */
 const EditModal = ({ schema, uiSchema, item }: EditModalProps) => {
 	const [index, setIndex] = React.useState(0);
-	
 
 	/**
 	 *

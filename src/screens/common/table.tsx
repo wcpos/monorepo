@@ -4,12 +4,12 @@ import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import _flatten from 'lodash/flatten';
 import _orderBy from 'lodash/orderBy';
-import Table from '@wcpos/common/src/components/table';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
+import Table from '@wcpos/components/src/table';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Row, { CellsProp, ItemProp, ColumnProps } from './row';
 
-type Sort = import('@wcpos/common/src/components/table/types').Sort;
-type SortDirection = import('@wcpos/common/src/components/table/types').SortDirection;
+type Sort = import('@wcpos/components/src/table/types').Sort;
+type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
 
 interface CommonTableProps {
 	collection: any;
@@ -22,7 +22,7 @@ interface CommonTableProps {
 }
 
 type GetHeaderCellPropsFunction =
-	import('@wcpos/common/src/components/table/header-row').GetHeaderCellPropsFunction;
+	import('@wcpos/components/src/table/header-row').GetHeaderCellPropsFunction;
 
 /**
  *

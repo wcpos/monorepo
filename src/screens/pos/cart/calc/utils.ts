@@ -7,13 +7,13 @@ import map from 'lodash/map';
 import flatten from 'lodash/flatten';
 import groupBy from 'lodash/groupBy';
 
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
-type LineItemDocument = import('@wcpos/common/src/database').LineItemDocument;
-type FeeLineDocument = import('@wcpos/common/src/database').FeeLineDocument;
-type ShippingLineDocument = import('@wcpos/common/src/database').ShippingLineDocument;
+type OrderDocument = import('@wcpos/database').OrderDocument;
+type LineItemDocument = import('@wcpos/database').LineItemDocument;
+type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
+type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
 type Cart = CartItem[];
-type TaxRateSchema = import('@wcpos/common/src/database').TaxRateSchema;
+type TaxRateSchema = import('@wcpos/database').TaxRateSchema;
 interface Taxes {
 	id: number;
 	total: string;

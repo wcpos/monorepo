@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
-import Dropdown from '@wcpos/common/src/components/dropdown';
-import Icon from '@wcpos/common/src/components/icon';
-import Modal, { useModal } from '@wcpos/common/src/components/modal';
-import useRestHttpClient from '@wcpos/common/src/hooks/use-rest-http-client';
+import Dropdown from '@wcpos/components/src/dropdown';
+import Icon from '@wcpos/components/src/icon';
+import Modal, { useModal } from '@wcpos/components/src/modal';
+import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
 import EditModal from '../../common/edit-modal';
 
 interface Props {
-	item: import('@wcpos/common/src/database').OrderDocument;
+	item: import('@wcpos/database').OrderDocument;
 }
 
 const Actions = ({ item: order }: Props) => {

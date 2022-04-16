@@ -1,5 +1,5 @@
 import * as React from 'react';
-import Logo from '@wcpos/common/src/components/logo';
+import Logo from '@wcpos/components/src/logo';
 import * as Styled from './styles';
 
 /**

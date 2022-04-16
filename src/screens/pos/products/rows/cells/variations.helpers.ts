@@ -4,7 +4,7 @@ import cloneDeep from 'lodash/cloneDeep';
 import map from 'lodash/map';
 import differenceWith from 'lodash/differenceWith';
 
-type ProductVariationDocument = import('@wcpos/common/src/database').ProductVariationDocument;
+type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 export type ProductAttribute = {
 	id: number;
 	name: string;

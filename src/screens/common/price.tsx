@@ -1,6 +1,6 @@
 import * as React from 'react';
-import Format from '@wcpos/common/src/components/format';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
+import Format from '@wcpos/react-native-jsonschema-format';
+import useAppState from '@wcpos/hooks/src/use-app-state';
 
 interface Props {
 	item: any;

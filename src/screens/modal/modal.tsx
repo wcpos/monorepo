@@ -1,6 +1,6 @@
 import * as React from 'react';
-import Text from '@wcpos/common/src/components/text';
-import Dialog from '@wcpos/common/src/components/dialog';
+import Text from '@wcpos/components/src/text';
+import Dialog from '@wcpos/components/src/dialog';
 
 type ModalScreenProps = import('@wcpos/common/src/navigators/app').ModalScreenProps;
 

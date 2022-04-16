@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import { QueryProvider } from '@wcpos/common/src/hooks/use-query';
-import Box from '@wcpos/common/src/components/box';
-import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
+import { QueryProvider } from '@wcpos/hooks/src/use-query';
+import Box from '@wcpos/components/src/box';
+import useUIResource from '@wcpos/hooks/src/use-ui-resource';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';

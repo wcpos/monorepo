@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Box from '@wcpos/common/src/components/box';
-import Text from '@wcpos/common/src/components/text';
-import Button from '@wcpos/common/src/components/button';
+import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
+import Button from '@wcpos/components/src/button';
 import WpUser from './wp-user';
 import Login from './login';
 
 interface WpUserProps {
-	site: import('@wcpos/common/src/database').SiteDocument;
+	site: import('@wcpos/database').SiteDocument;
 }
 
 const WpUsers = ({ site }: WpUserProps) => {

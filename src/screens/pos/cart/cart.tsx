@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
-import Box from '@wcpos/common/src/components/box';
-import Text from '@wcpos/common/src/components/text';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
-import useUIResource from '@wcpos/common/src/hooks/use-ui-resource';
+import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import useUIResource from '@wcpos/hooks/src/use-ui-resource';
 import Totals from './totals';
 import Table from './table';
 import CartHeader from './cart-header';
@@ -16,7 +16,7 @@ import VoidButton from './buttons/void';
 import PayButton from './buttons/pay';
 import { useCalcTotals } from './calc';
 
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CartProps {
 	order: OrderDocument;

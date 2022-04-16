@@ -1,14 +1,14 @@
 import * as React from 'react';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
-import Tabs from '@wcpos/common/src/components/tabs';
-import useWhyDidYouUpdate from '@wcpos/common/src/hooks/use-why-did-you-update';
+import Tabs from '@wcpos/components/src/tabs';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import debounce from 'lodash/debounce';
 import Cart from './cart';
 import EmptyCart from './empty-cart';
 import CartTabTitle from './tab-title';
 import { usePOSContext } from '../context';
 
-type OrderDocument = import('@wcpos/common/src/database').OrderDocument;
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 type RenderTabTitle = (focused: boolean, order?: OrderDocument) => React.ReactElement;
 

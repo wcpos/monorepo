@@ -1,1 +1,0 @@
-based on https://github.com/mbrevda/react-image

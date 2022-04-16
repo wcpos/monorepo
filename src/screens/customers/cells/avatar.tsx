@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { Image as RNImage, View } from 'react-native';
-// import Img from '@wcpos/common/src/components/image';
-import Skeleton from '@wcpos/common/src/components/skeleton';
+// import Img from '@wcpos/components/src/image';
+import Skeleton from '@wcpos/components/src/skeleton';
 
 type AvatarProps = {
-	item: import('@wcpos/common/src/database').CustomerDocument;
+	item: import('@wcpos/database').CustomerDocument;
 };
 
 const Avatar = ({ item: customer }: AvatarProps) => {

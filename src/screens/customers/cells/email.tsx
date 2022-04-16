@@ -1,8 +1,8 @@
 import * as React from 'react';
-import Text from '@wcpos/common/src/components/text';
+import Text from '@wcpos/components/src/text';
 
 type Props = {
-	item: import('@wcpos/common/src/database').CustomerDocument;
+	item: import('@wcpos/database').CustomerDocument;
 };
 
 const Email = ({ item: customer }: Props) => {

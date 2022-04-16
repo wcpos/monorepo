@@ -1,14 +1,14 @@
 import * as React from 'react';
 import get from 'lodash/get';
-import Table from '@wcpos/common/src/components/table3';
+import Table from '@wcpos/components/src/table';
 import Price from './cells/fee-and-shipping-price';
 import Total from './cells/total';
 import Tax from './cells/tax';
 import Actions from './cells/actions';
 import FeeName from './cells/fee-name';
 
-type FeeLineDocument = import('@wcpos/common/src/database').FeeLineDocument;
-type ColumnProps = import('@wcpos/common/src/components/table/types').ColumnProps;
+type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
+type ColumnProps = import('@wcpos/components/src/table/types').ColumnProps;
 
 interface Props {
 	fee: FeeLineDocument;

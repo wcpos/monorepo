@@ -1,14 +1,14 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import pick from 'lodash/pick';
-import Text from '@wcpos/common/src/components/text';
-import Box from '@wcpos/common/src/components/box';
-import Icon from '@wcpos/common/src/components/icon';
-import Modal, { useModal } from '@wcpos/common/src/components/modal';
+import Text from '@wcpos/components/src/text';
+import Box from '@wcpos/components/src/box';
+import Icon from '@wcpos/components/src/icon';
+import Modal, { useModal } from '@wcpos/components/src/modal';
 import EditModal from '../../../../common/edit-modal';
 
 interface Props {
-	item: import('@wcpos/common/src/database').FeeLineDocument;
+	item: import('@wcpos/database').FeeLineDocument;
 }
 
 const FeeName = ({ item }: Props) => {

@@ -1,1 +1,0 @@
-https://github.com/tongyy/react-native-draggable

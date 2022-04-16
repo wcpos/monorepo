@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Text from '@wcpos/common/src/components/text';
-import useAppState from '@wcpos/common/src/hooks/use-app-state';
-import Box from '@wcpos/common/src/components/box';
+import Text from '@wcpos/components/src/text';
+import useAppState from '@wcpos/hooks/src/use-app-state';
+import Box from '@wcpos/components/src/box';
 
 interface ProductFooterProps {
 	count: number;
