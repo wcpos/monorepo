@@ -1,9 +1,6 @@
 [submodule "apps/electron"]
 	path = apps/electron
 	url = https://github.com/wcpos/electron
-[submodule "packages/common"]
-	path = packages/common
-	url = https://github.com/wcpos/common
 [submodule "packages/hello-world"]
 	path = packages/hello-world
 	url = https://github.com/wcpos/hello-world
@@ -31,3 +28,6 @@
 [submodule "packages/form"]
 	path = packages/form
 	url = https://github.com/wcpos/react-native-jsonschema-form
+[submodule "packages/core"]
+	path = packages/core
+	url = https://github.com/wcpos/core
