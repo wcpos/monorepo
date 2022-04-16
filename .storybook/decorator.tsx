@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { ThemeProvider } from 'styled-components/native';
-import getTheme from '@wcpos/common/src/themes';
+import getTheme from '@wcpos/themes';
 
 export default function (renderStory) {
 	return (

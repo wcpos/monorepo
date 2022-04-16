@@ -28,7 +28,7 @@ export interface UISchema {
 	columns: UIColumn[];
 }
 
-type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
+type StoreDatabase = import('@wcpos/database').StoreDatabase;
 export type UIDocument = import('rxdb').RxLocalDocument<StoreDatabase, UISchema> & {
 	reset: () => void;
 	getID: () => string;

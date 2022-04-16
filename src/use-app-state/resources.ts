@@ -5,7 +5,7 @@ import { isRxDocument } from 'rxdb/plugins/core';
 import { userDBPromise } from '@wcpos/database/src/users-db';
 import { storeDBPromise } from '@wcpos/database/src/stores-db';
 
-// type InitialProps = import('@wcpos/common/src//types').InitialProps;
+// type InitialProps = import('@wcpos/core/src//types').InitialProps;
 type UserDocument = import('@wcpos/database').UserDocument;
 type UserDatabase = import('@wcpos/database').UserDatabase;
 type StoreDatabase = import('@wcpos/database').StoreDatabase;

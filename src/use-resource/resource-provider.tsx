@@ -3,7 +3,7 @@ import { ObservableResource } from 'observable-hooks';
 import useCountryResource, { Country } from '../use-country-resource';
 import useTaxRatesResource from '../use-tax-rates-resource';
 
-type TaxRate = import('@wcpos/common/src/database').TaxRateDocument;
+type TaxRate = import('@wcpos/database').TaxRateDocument;
 
 interface ResourceContextProps {
 	countriesResource: ObservableResource<Country[]>;

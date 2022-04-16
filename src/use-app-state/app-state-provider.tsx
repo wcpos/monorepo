@@ -4,13 +4,13 @@ import { tap, switchMap, map, filter, debounceTime } from 'rxjs/operators';
 import { ObservableResource, useObservableSuspense, useObservableState } from 'observable-hooks';
 import { userDBResource, authResources, storeDBResource } from './resources';
 
-type InitialProps = import('@wcpos/common/src//types').InitialProps;
-type SiteDocument = import('@wcpos/common/src/database').SiteDocument;
-type StoreDatabase = import('@wcpos/common/src/database').StoreDatabase;
-type StoreDocument = import('@wcpos/common/src/database').StoreDocument;
-type UserDatabase = import('@wcpos/common/src/database').UserDatabase;
-type UserDocument = import('@wcpos/common/src/database').UserDocument;
-type WPCredentialsDocument = import('@wcpos/common/src/database').WPCredentialsDocument;
+type InitialProps = import('@wcpos/core/src/types').InitialProps;
+type SiteDocument = import('@wcpos/database').SiteDocument;
+type StoreDatabase = import('@wcpos/database').StoreDatabase;
+type StoreDocument = import('@wcpos/database').StoreDocument;
+type UserDatabase = import('@wcpos/database').UserDatabase;
+type UserDocument = import('@wcpos/database').UserDocument;
+type WPCredentialsDocument = import('@wcpos/database').WPCredentialsDocument;
 
 export interface AppStateProps {
 	initialProps: InitialProps;

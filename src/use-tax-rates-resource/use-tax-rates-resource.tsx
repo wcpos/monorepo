@@ -4,7 +4,7 @@ import { map } from 'rxjs/operators';
 import useAppState from '../use-app-state';
 import { useTaxRatesReplication } from './use-tax-rates-replication';
 
-type TaxRate = import('@wcpos/common/src/database').TaxRateDocument;
+type TaxRate = import('@wcpos/database').TaxRateDocument;
 
 /**
  *

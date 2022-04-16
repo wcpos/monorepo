@@ -3,7 +3,7 @@ import { useObservable, useSubscription } from 'observable-hooks';
 import { withLatestFrom } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
-import http from '@wcpos/common/src/lib/http';
+import http from '@wcpos/core/src/lib/http';
 import get from 'lodash/get';
 import set from 'lodash/set';
 import useQuery from '../use-query';
