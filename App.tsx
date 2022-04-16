@@ -9,7 +9,7 @@
 //       <Paragraph>
 //         Hello from an <Strong>EAS</Strong> monorepo (managed)
 //       </Paragraph>
-//       <Text>Hello from @wcpos/common</Text>
+//       <Text>Hello from @wcpos/core</Text>
 //       <StatusBar style="auto" />
 //     </View>
 //   );
@@ -24,4 +24,4 @@
 //   },
 // });
 
-export { default } from '@wcpos/common/src/app';
+export { default } from '@wcpos/core';
