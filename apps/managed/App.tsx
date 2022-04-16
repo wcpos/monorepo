@@ -1,4 +1,4 @@
-// import Text from "@wcpos/common/src/components/text";
+// import Text from "@wcpos/components/src/text";
 // import { Paragraph, Strong } from "@wcpos/ui";
 // import { StatusBar } from "expo-status-bar";
 // import { StyleSheet, View } from "react-native";
@@ -24,4 +24,4 @@
 //   },
 // });
 
-export { default } from "@wcpos/common/src/app";
+export { default } from '@wcpos/common/src/app';

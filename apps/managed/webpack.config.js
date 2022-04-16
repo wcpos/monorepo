@@ -8,7 +8,9 @@ module.exports = async function (env, argv) {
 			...env,
 			babel: {
 				dangerouslyAddModulePathsToTranspile: [
-					'@wcpos/common',
+					'@wcpos',
+					// '@wcpos/themes',
+					// '@wcpos/components',
 					// path.resolve("../../packages/common/src"),
 				],
 			},
