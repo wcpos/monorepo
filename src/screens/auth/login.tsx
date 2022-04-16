@@ -2,7 +2,7 @@ import * as React from 'react';
 import Button from '@wcpos/components/src/button';
 import Box from '@wcpos/components/src/box';
 import TextInput from '@wcpos/components/src/textinput';
-import http from '@wcpos/common/src/lib/http';
+import http from '@wcpos/core/src/lib/http';
 import Modal, { useModal } from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 

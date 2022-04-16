@@ -1,10 +1,10 @@
 import * as React from 'react';
 import get from 'lodash/get';
 import find from 'lodash/find';
-import http from '@wcpos/common/src/lib/http';
-import Platform from '@wcpos/common/src/lib/platform';
+import http from '@wcpos/core/src/lib/http';
+import Platform from '@wcpos/core/src/lib/platform';
 import useAppState from '@wcpos/hooks/src/use-app-state';
-import Url from '@wcpos/common/src/lib/url-parse';
+import Url from '@wcpos/core/src/lib/url-parse';
 
 interface WpJsonResponse {
 	authentication: Record<string, unknown>;

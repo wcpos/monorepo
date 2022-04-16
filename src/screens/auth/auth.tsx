@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { KeyboardAvoidingView, StyleSheet } from 'react-native';
-import Platform from '@wcpos/common/src/utils/platform';
+import Platform from '@wcpos/core/src/utils/platform';
 import { useObservableState, useObservable } from 'observable-hooks';
 import useAppState from '@wcpos/hooks/src/use-app-state';
 import Logo from '@wcpos/components/src/logo';

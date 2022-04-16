@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import Modal from '@wcpos/components/src/modal';
 import TextInput from '@wcpos/components/src/textinput';
-import http from '@wcpos/common/src/lib/http';
+import http from '@wcpos/core/src/lib/http';
 import useAppState from '@wcpos/hooks/src/use-app-state';
 
 const Login = () => {

@@ -1,27 +1,14 @@
 {
 	"private": true,
-	"name": "@wcpos/common",
-	"version": "1.0.0-beta",
-	"description": "Shared components and utilities for the WooCommerce POS",
+	"name": "@wcpos/core",
+	"version": "1.0.0",
+	"description": "The core WooCommerce POS app",
 	"author": "kilbot <paul@kilbot.com>",
 	"license": "MIT",
 	"main": "src/app.tsx",
-	"module": "build/module/app.js",
-	"types": "build/typescript/index.d.ts",
-	"react-native": "src/app.tsx",
 	"files": [
-		"build",
-		"src"
+		"src/*"
 	],
-	"react-native-builder-bob": {
-		"source": "src",
-		"output": "build",
-		"targets": [
-			"commonjs",
-			"module",
-			"typescript"
-		]
-	},
 	"scripts": {
 		"clean": "shx rm -rf dist && rm -rf node_modules",
 		"test": "jest",

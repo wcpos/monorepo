@@ -11,7 +11,7 @@ import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';
 import * as Styled from './styles';
 
-// type CustomersScreenProps = import('@wcpos/common/src/navigators/main').CustomersScreenProps;
+// type CustomersScreenProps = import('@wcpos/core/src/navigators/main').CustomersScreenProps;
 
 /**
  *

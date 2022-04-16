@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useObservableState } from 'observable-hooks';
 import useAppState from '@wcpos/hooks/src/use-app-state';
-import Platform from '@wcpos/common/src/lib/platform';
+import Platform from '@wcpos/core/src/lib/platform';
 import Left from './left';
 import Right from './right';
 

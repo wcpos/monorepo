@@ -4,8 +4,8 @@ import { createStackNavigator, StackNavigationProp } from '@react-navigation/sta
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import useAppState from '@wcpos/hooks/src/use-app-state';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Auth from '@wcpos/common/src/screens/auth';
-import { Login, Modal } from '@wcpos/common/src/screens/modal';
+import Auth from '@wcpos/core/src/screens/auth';
+import { Login, Modal } from '@wcpos/core/src/screens/modal';
 
 const MainNavigator = React.lazy(() => import('./main'));
 

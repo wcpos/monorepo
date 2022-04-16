@@ -2,7 +2,7 @@ import * as React from 'react';
 import Text from '@wcpos/components/src/text';
 import Dialog from '@wcpos/components/src/dialog';
 
-type ModalScreenProps = import('@wcpos/common/src/navigators/app').ModalScreenProps;
+type ModalScreenProps = import('@wcpos/core/src/navigators/app').ModalScreenProps;
 
 const ModalScreen = ({ route, navigation }: ModalScreenProps) => {
 	return (

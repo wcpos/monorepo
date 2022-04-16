@@ -9,6 +9,6 @@ const base = require('../../jest.config.base.js');
 module.exports = {
 	...base,
 	roots: ['<rootDir>/src'],
-	name: '@wcpos/common',
-	displayName: '@wcpos/common',
+	name: '@wcpos/core',
+	displayName: '@wcpos/core',
 };
