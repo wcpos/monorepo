@@ -1,7 +1,7 @@
 // @ts-nocheck
 // import './wdyr'; // Why Did You Render
 import { AppRegistry } from 'react-native-web';
-import App from '@wcpos/common/src/app';
+import App from '@wcpos/core';
 
 import './index.css';
 

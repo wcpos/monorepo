@@ -7,4 +7,4 @@ if (__DEV__) {
 	});
 }
 
-export { default } from '@wcpos/common/src/app';
+export { default } from '@wcpos/core';

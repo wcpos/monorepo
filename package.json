@@ -1,45 +1,45 @@
 {
-	"private": true,
-	"name": "@wcpos/monorepo",
-	"scripts": {
-		"build": "yarn workspaces foreach run build",
-		"test": "yarn workspaces foreach run test",
-		"managed": "yarn workspace @wcpos/app-managed",
-		"with-sentry": "yarn workspace @wcpos/app-with-sentry",
-		"with-dev-client": "yarn workspace @wcpos/app-with-dev-client",
-		"with-flipper": "yarn workspace @wcpos/app-with-flipper",
-		"cra": "yarn workspace @wcpos/cra",
-		"electron": "yarn workspace @wcpos/app-electron",
-		"clean": "node scripts/clean-node-modules",
-		"storybook": "yarn workspace @wcpos/storybook",
-		"common": "yarn workspace @wcpos/common",
-		"postinstall": "patch-package",
-		"expo": "expo"
-	},
-	"workspaces": [
-		"apps/*",
-		"packages/*"
-	],
-	"resolutions": {
-		"react": "17.0.2",
-		"react-dom": "17.0.2",
-		"react-native": "0.64.3",
-		"react-scripts": "4.0.3",
-		"react-native-reanimated": "2.3.1",
-		"@react-native-community/netinfo": "7.1.3"
-	},
-	"devDependencies": {
-		"@types/jest": "27.4.1",
-		"@wcpos/eslint-config": "*",
-		"jest": "27.5.1",
-		"patch-package": "6.4.7",
-		"postinstall-postinstall": "2.1.0",
-		"prettier": "2.6.2",
-		"ts-jest": "27.1.4",
-		"typescript": "4.6.3"
-	},
-	"packageManager": "yarn@3.2.0",
-	"eslintConfig": {
-		"extends": "@wcpos/eslint-config"
-	}
+  "private": true,
+  "name": "@wcpos/monorepo",
+  "scripts": {
+    "build": "yarn workspaces foreach run build",
+    "test": "yarn workspaces foreach run test",
+    "managed": "yarn workspace @wcpos/app-managed",
+    "with-sentry": "yarn workspace @wcpos/app-with-sentry",
+    "with-dev-client": "yarn workspace @wcpos/app-with-dev-client",
+    "with-flipper": "yarn workspace @wcpos/app-with-flipper",
+    "cra": "yarn workspace @wcpos/cra",
+    "electron": "yarn workspace @wcpos/app-electron",
+    "clean": "node scripts/clean-node-modules",
+    "storybook": "yarn workspace @wcpos/storybook",
+    "common": "yarn workspace @wcpos/core",
+    "postinstall": "patch-package",
+    "expo": "expo"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "resolutions": {
+    "react": "17.0.2",
+    "react-dom": "17.0.2",
+    "react-native": "0.64.3",
+    "react-scripts": "4.0.3",
+    "react-native-reanimated": "2.3.1",
+    "@react-native-community/netinfo": "7.1.3"
+  },
+  "devDependencies": {
+    "@types/jest": "27.4.1",
+    "@wcpos/eslint-config": "*",
+    "jest": "27.5.1",
+    "patch-package": "6.4.7",
+    "postinstall-postinstall": "2.1.0",
+    "prettier": "2.6.2",
+    "ts-jest": "27.1.4",
+    "typescript": "4.6.3"
+  },
+  "packageManager": "yarn@3.2.0",
+  "eslintConfig": {
+    "extends": "@wcpos/eslint-config"
+  }
 }
