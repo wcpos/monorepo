@@ -5,8 +5,7 @@ import _get from 'lodash/get';
 import _flatten from 'lodash/flatten';
 
 type ProductCollection = import('.').ProductCollection;
-type QueryState =
-	import('@wcpos/common/src/hooks/use-data-observable/use-data-observable').QueryState;
+type QueryState = import('@wcpos/hooks/src/use-data-observable/use-data-observable').QueryState;
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 

@@ -6,7 +6,7 @@ type OrderCollection = import('.').OrderCollection;
 type ProductDocument = import('../products').ProductDocument;
 type ProductVariationDocument = import('../product-variations').ProductVariationDocument;
 type QueryState =
-	import('@wcpos/common/src/hooks/use-data-observable/use-data-observable').QueryState;
+	import('@wcpos/hooks/src/use-data-observable/use-data-observable').QueryState;
 
 /**
  * WooCommerce Order Collection statics

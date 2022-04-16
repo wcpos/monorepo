@@ -9,16 +9,11 @@
 		"url": "https://github.com/wcpos/database.git"
 	},
 	"license": "MIT",
-	"main": "./dist/index.js",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.ts",
-	"react-native": "src/index.ts",
+	"main": "./src/index.ts",
 	"files": [
-		"dist/**"
+		"src/**"
 	],
 	"scripts": {
-		"build": "tsup",
-		"dev": "tsup --watch",
 		"test": "eslint --ext ts,tsx ./src"
 	},
 	"dependencies": {
@@ -43,7 +38,6 @@
 		"@wcpos/tsconfig": "latest",
 		"jest": "27.5.1",
 		"ts-jest": "27.1.4",
-		"tsup": "5.12.5",
 		"typescript": "4.6.3"
 	},
 	"eslintConfig": {
