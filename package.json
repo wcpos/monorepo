@@ -16,6 +16,7 @@
 	},
 	"dependencies": {
 		"@react-native-community/netinfo": "8.2.0",
+		"@wcpos/core": "*",
 		"base-64": "1.0.0",
 		"expo": "44.0.6",
 		"expo-sqlite": "10.1.1",
