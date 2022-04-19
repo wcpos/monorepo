@@ -29,7 +29,7 @@
 	},
 	"devDependencies": {
 		"@types/jest": "27.4.1",
-		"@types/lodash": "4.14.181",
+		"@types/lodash": "4.14.182",
 		"@types/pouchdb-adapter-http": "6.1.3",
 		"@types/pouchdb-adapter-idb": "6.1.4",
 		"@types/pouchdb-adapter-memory": "6.1.3",
