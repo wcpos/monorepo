@@ -43,15 +43,33 @@ module.exports = async function (env, argv) {
 
 			// Add new rule to use svgr
 			// Place at the beginning so that the default loader doesn't catch it
+			// https://github.com/facebook/create-react-app/blob/main/packages/react-scripts/config/webpack.config.js#L389
 			if (hasModified)
 				newRule.oneOf.unshift({
 					test: /\.svg$/,
-					// exclude: /node_modules/,
 					use: [
 						{
-							loader: '@svgr/webpack',
+							loader: require.resolve('@svgr/webpack'),
+							options: {
+								prettier: false,
+								svgo: false,
+								svgoConfig: {
+									plugins: [{ removeViewBox: false }],
+								},
+								titleProp: true,
+								ref: true,
+							},
+						},
+						{
+							loader: require.resolve('file-loader'),
+							options: {
+								name: 'static/media/[name].[hash].[ext]',
+							},
 						},
 					],
+					issuer: {
+						and: [/\.(ts|tsx|js|jsx|md|mdx)$/],
+					},
 				});
 
 			return newRule;
