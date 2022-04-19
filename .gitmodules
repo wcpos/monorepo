@@ -31,3 +31,6 @@
 [submodule "packages/core"]
 	path = packages/core
 	url = https://github.com/wcpos/core
+[submodule "packages/utils"]
+	path = packages/utils
+	url = https://github.com/wcpos/utils
