@@ -1,0 +1,27 @@
+{
+  "name": "@wcpos/hello-world",
+  "version": "1.0.0",
+  "description": "Simple React Native app for testing",
+  "author": "kilbot <paul@kilbot.com>",
+  "license": "MIT",
+  "main": "./src/index.ts",
+  "files": [
+    "src/**"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "eslint --ext ts,tsx ./src"
+  },
+  "devDependencies": {
+    "@wcpos/babel-preset-expo": "*",
+    "@wcpos/eslint-config": "*",
+    "@wcpos/tsconfig": "*",
+    "react-native-builder-bob": "0.18.2",
+    "tsup": "5.12.5",
+    "typescript": "4.6.3"
+  },
+  "eslintConfig": {
+    "extends": "@wcpos/eslint-config"
+  }
+}

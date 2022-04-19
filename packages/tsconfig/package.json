@@ -1,0 +1,11 @@
+{
+  "name": "@wcpos/tsconfig",
+  "version": "1.0.3",
+  "description": "TS configuration for the WooCommerce POS React Native app",
+  "author": "kilbot <paul@kilbot.com>",
+  "license": "MIT",
+  "scripts": {
+    "build": "echo 'Nothing to build'",
+    "test": "echo 'Nothing to test'"
+  }
+}
