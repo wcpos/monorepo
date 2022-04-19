@@ -21,7 +21,7 @@
 	},
 	"devDependencies": {
 		"@types/jest": "27.4.1",
-		"@types/lodash": "4.14.181",
+		"@types/lodash": "4.14.182",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
 		"jest": "27.5.1",
