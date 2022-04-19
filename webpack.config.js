@@ -13,13 +13,13 @@ module.exports = async function (env, argv) {
 					// '@wcpos/components',
 					// path.resolve("../../packages/common/src"),
 				],
+				plugins: ['react-native-reanimated/plugin'],
 			},
 		},
 		argv
 	);
-	console.log(config);
 
-	config.module.rules[1].oneOf[2].use.options.plugins = ['react-native-reanimated/plugin'];
+	// console.log(config.module.rules[1]);
 
 	// Remove existing rules about SVG and inject our own
 	// (Inspired by https://github.com/storybookjs/storybook/issues/6758#issuecomment-495598635)
