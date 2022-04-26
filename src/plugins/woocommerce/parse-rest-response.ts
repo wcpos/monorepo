@@ -13,7 +13,7 @@ type RxCollection = import('rxdb/dist/types').RxCollection;
  * @param collection
  */
 export function parseRestResponse(this: RxCollection, plainData: Record<string, unknown>) {
-	const topLevelFields = get(this, 'schema.topLevelFields');
+	const topLevelFields = Object.keys(get(this, ['schema', 'jsonSchema', 'properties'], {}));
 	console.log('parseRestResponse', plainData);
 
 	// if (!plainData._id && plainData.id && plainData.meta_data) {

@@ -1,4 +1,4 @@
-import { createRxDatabase, removeRxDatabase } from 'rxdb/plugins/core';
+import { createRxDatabase, removeRxDatabase } from 'rxdb';
 import Platform from '@wcpos/core/src/lib/platform';
 import set from 'lodash/set';
 import config from './adapter';
@@ -12,6 +12,7 @@ export async function createDB<T>(name: string) {
 		name,
 		...config,
 		password: 'posInstanceId',
+		localDocuments: true,
 	});
 
 	// add to window for debugging

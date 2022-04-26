@@ -1,6 +1,6 @@
 import { isObservable } from 'rxjs';
 import { take } from 'rxjs/operators';
-import { isRxDocument } from 'rxdb/plugins/core';
+import { isRxDocument } from 'rxdb';
 import { DatabaseService } from '../../service';
 
 describe('Users Collection', () => {

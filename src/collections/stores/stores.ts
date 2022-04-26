@@ -42,4 +42,5 @@ export const stores = {
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},
+	localDocuments: true,
 };

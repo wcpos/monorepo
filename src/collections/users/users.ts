@@ -85,4 +85,5 @@ export const users = {
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},
+	localDocuments: true,
 };

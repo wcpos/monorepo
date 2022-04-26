@@ -6,6 +6,7 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import type { RxPlugin } from 'rxdb';
+
 import { RxSchema } from 'rxdb';
 
 /**
@@ -59,41 +60,38 @@ export function getValidator(rxSchema: RxSchema): any {
 
 /**
  * validates the given object against the schema
- * @param  schemaPath if given, the sub-schema will be validated
- * @throws {RxError} if not valid
  */
-function validateFullDocumentData(this: RxSchema, obj: any): any {
+function validate(this: RxSchema, obj: any) {
 	const validator = getValidator(this);
 	const isValid = validator(obj);
 
 	if (isValid) return obj;
+	debugger;
 
 	throw new Error(validator.errors);
 }
 
 const runAfterSchemaCreated = (rxSchema: RxSchema) => {
-	// pre-generate the isMyJsonValid-validator from the schema
-	requestIdleCallbackIfAvailable(() => {
-		getValidator(rxSchema);
-	});
+	// pre-generate validator-function from the schema
+	requestIdleCallbackIfAvailable(() => getValidator(rxSchema));
+};
+
+export const rxdb = true;
+export const prototypes = {
+	/**
+	 * set validate-function for the RxSchema.prototype
+	 */
+	RxSchema: (proto: any) => {
+		proto.validate = validate;
+	},
+};
+export const hooks = {
+	createRxSchema: runAfterSchemaCreated,
 };
 
 export const RxDBAjvValidatePlugin: RxPlugin = {
-	name: 'validate',
-	rxdb: true,
-	prototypes: {
-		/**
-		 * set validate-function for the RxSchema.prototype
-		 * @param prototype of RxSchema
-		 */
-		RxSchema: (proto: any) => {
-			proto._getValidator = getValidator;
-			proto.validateFullDocumentData = validateFullDocumentData;
-		},
-	},
-	hooks: {
-		createRxSchema: {
-			after: runAfterSchemaCreated,
-		},
-	},
+	name: 'ajv-validate',
+	rxdb,
+	prototypes,
+	hooks,
 };

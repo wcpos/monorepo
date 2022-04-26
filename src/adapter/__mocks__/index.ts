@@ -1,4 +1,4 @@
-import { addRxPlugin } from 'rxdb/plugins/core';
+import { addRxPlugin } from 'rxdb';
 import memoryAdapter from 'pouchdb-adapter-memory';
 
 addRxPlugin(memoryAdapter);

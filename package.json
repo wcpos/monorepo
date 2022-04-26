@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -25,7 +25,7 @@
 		"pouchdb-adapter-react-native-sqlite": "3.0.1",
 		"pouchdb-debug": "7.2.1",
 		"random-token": "^0.0.8",
-		"rxdb": "11.6.0",
+		"rxdb": "12.0.0",
 		"rxjs": "7.5.5"
 	},
 	"devDependencies": {

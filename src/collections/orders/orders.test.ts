@@ -1,5 +1,5 @@
 import { skip } from 'rxjs/operators';
-import { isRxCollection } from 'rxdb/plugins/core';
+import { isRxCollection } from 'rxdb';
 import { DatabaseService } from '../../service';
 
 describe('Orders collection', () => {

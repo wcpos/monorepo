@@ -38,17 +38,19 @@ const middlewaresPlugin: RxPlugin = {
 		/**
 		 *
 		 */
-		createRxCollection(collection: RxCollection) {
-			/**
-			 * Allow colections to set middleware-hooks via config options
-			 * needs to allow for promises
-			 */
-			forEach(collection.options.middlewares, (middleware, hook) => {
-				const { handle, parallel } = middleware;
-				collection[hook](handle, parallel);
-			});
+		createRxCollection: {
+			after({ collection }) {
+				/**
+				 * Allow colections to set middleware-hooks via config options
+				 * needs to allow for promises
+				 */
+				forEach(collection.options.middlewares, (middleware, hook) => {
+					const { handle, parallel } = middleware;
+					collection[hook](handle, parallel);
+				});
 
-			return collection;
+				return collection;
+			},
 		},
 	},
 };

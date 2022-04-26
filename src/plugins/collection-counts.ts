@@ -49,48 +49,50 @@ const collectionCountsPlugin: RxPlugin = {
 		 *
 		 * @param {RxCollection} collection
 		 */
-		createRxCollection(collection: RxCollection) {
-			Object.assign(collection, {
-				totalDocCount$: new BehaviorSubject(0),
-				unsyncedIds$: new BehaviorSubject([]),
-				syncedIds$: new BehaviorSubject([]),
-			});
+		createRxCollection: {
+			after({ collection }) {
+				Object.assign(collection, {
+					totalDocCount$: new BehaviorSubject(0),
+					unsyncedIds$: new BehaviorSubject([]),
+					syncedIds$: new BehaviorSubject([]),
+				});
 
-			function updateCounts() {
-				collection.storageInstance.internals.pouch
-					.find({
-						selector: { id: { $exists: true } },
-						fields: ['id', 'date_created'],
-					})
-					.then((res: any) => {
-						const totalDocCount = res.docs.length;
-						console.log(collection.name, totalDocCount);
+				function updateCounts() {
+					collection.storageInstance.internals.pouch
+						.find({
+							selector: { id: { $exists: true } },
+							fields: ['id', 'date_created'],
+						})
+						.then((res: any) => {
+							const totalDocCount = res.docs.length;
+							console.log(collection.name, totalDocCount);
 
-						const unsyncedIds = res.docs
-							.filter((doc: any) => !doc.date_created)
-							.map((doc: any) => doc.id);
-						const syncedIds = res.docs
-							.filter((doc: any) => doc.date_created)
-							.map((doc: any) => doc.id);
+							const unsyncedIds = res.docs
+								.filter((doc: any) => !doc.date_created)
+								.map((doc: any) => doc.id);
+							const syncedIds = res.docs
+								.filter((doc: any) => doc.date_created)
+								.map((doc: any) => doc.id);
 
-						collection.totalDocCount$.next(totalDocCount);
-						collection.unsyncedIds$.next(unsyncedIds);
-						collection.syncedIds$.next(syncedIds);
-					})
-					.catch((err: any) => {
-						console.log(err);
-					});
-			}
+							collection.totalDocCount$.next(totalDocCount);
+							collection.unsyncedIds$.next(unsyncedIds);
+							collection.syncedIds$.next(syncedIds);
+						})
+						.catch((err: any) => {
+							console.log(err);
+						});
+				}
 
-			// collection.$ will emit on insert, update and remove
-			// for each emit we are going to loop through all docs for counting
-			// debounce is used to group bulk operations
-			collection.$.pipe(debounceTime(20)).subscribe(() => {
+				// collection.$ will emit on insert, update and remove
+				// for each emit we are going to loop through all docs for counting
+				// debounce is used to group bulk operations
+				collection.$.pipe(debounceTime(20)).subscribe(() => {
+					updateCounts();
+				});
+
+				// update counts on init
 				updateCounts();
-			});
-
-			// update counts on init
-			updateCounts();
+			},
 		},
 	},
 };

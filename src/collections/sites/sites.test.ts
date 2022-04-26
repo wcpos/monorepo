@@ -1,4 +1,4 @@
-import { isRxDocument } from 'rxdb/plugins/core';
+import { isRxDocument } from 'rxdb';
 import { DatabaseService } from '../../service';
 import { ConnectionService } from './service';
 

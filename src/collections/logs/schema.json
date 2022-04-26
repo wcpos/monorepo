@@ -3,11 +3,12 @@
 	"version": 0,
 	"description": "Logs events for debugging and user record",
 	"type": "object",
-	"primaryKey": "_id",
+	"primaryKey": "localID",
 	"properties": {
-		"_id": {
+		"localID": {
 			"description": "Unique local identifier for the resource.",
-			"type": "string"
+			"type": "string",
+			"maxLength": 100
 		},
 		"dateCreatedGmt": {
 			"type": "string"

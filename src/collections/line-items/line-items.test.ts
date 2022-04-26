@@ -1,6 +1,6 @@
 // import { TestScheduler } from 'rxjs/testing';
 import { skip } from 'rxjs/operators';
-import { isRxDocument, isRxCollection } from 'rxdb/plugins/core';
+import { isRxDocument, isRxCollection } from 'rxdb';
 import { DatabaseService } from '../../service';
 
 describe('Line Items Collection', () => {

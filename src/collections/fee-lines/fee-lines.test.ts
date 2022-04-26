@@ -1,4 +1,4 @@
-import { isRxDocument, isRxCollection } from 'rxdb/plugins/core';
+import { isRxDocument, isRxCollection } from 'rxdb';
 import { DatabaseService } from '../../service';
 
 describe('Fee Lines Collection', () => {

@@ -1,4 +1,4 @@
-import { isRxDatabase, isRxCollection } from 'rxdb/plugins/core';
+import { isRxDatabase, isRxCollection } from 'rxdb';
 import map from 'lodash/map';
 import { storeDBPromise } from '../../stores-db';
 

@@ -58,7 +58,7 @@ export function postCreate(
 export const feeLines = {
 	schema,
 	// pouchSettings: {},
-	statics,
+	// statics,
 	// methods: {},
 	// attachments: {},
 	options: {

@@ -100,4 +100,5 @@ export const wpCredentials = {
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},
+	localDocuments: true,
 };

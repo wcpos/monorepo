@@ -7,7 +7,8 @@
 	"properties": {
 		"localID": {
 			"description": "Unique local identifier for the resource. Note: id is not unique for stores",
-			"type": "string"
+			"type": "string",
+			"maxLength": 100
 		},
 		"id": {
 			"type": "number"
@@ -450,7 +451,11 @@
 			"default": "base",
 			"type": "string",
 			"enum": ["shipping", "billing", "base"],
-			"enumNames": ["Customer shipping address", "Customer billing address", "Shop base address"]
+			"enumNames": [
+				"Customer shipping address",
+				"Customer billing address",
+				"Shop base address"
+			]
 		},
 		"shipping_tax_class": {
 			"title": "Shipping tax class",

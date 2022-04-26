@@ -5,8 +5,8 @@ import isEmpty from 'lodash/isEmpty';
 import isPlainObject from 'lodash/isPlainObject';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
-type RxCollection = import('rxdb/plugins/core').RxCollection;
-type RxDocument = import('rxdb/plugins/core').RxDocument;
+type RxCollection = import('rxdb').RxCollection;
+type RxDocument = import('rxdb').RxDocument;
 
 /**
  * Check if the given value is a JSON array
@@ -70,33 +70,35 @@ const childrenPlugin: RxPlugin = {
 	 * https://github.com/pubkey/rxdb/blob/master/src/hooks.ts
 	 */
 	hooks: {
-		createRxCollection(collection: RxCollection) {
-			collection.preInsert(preInsertOrSave, false);
-			collection.preSave(preInsertOrSave, false);
+		createRxCollection: {
+			after({ collection }) {
+				collection.preInsert(preInsertOrSave, false);
+				collection.preSave(preInsertOrSave, false);
 
-			collection.preRemove(async function (plainData: any, rxDocument: RxDocument) {
-				// check schema to see which props have children
-				const hasChildren = pickBy(
-					collection.schema.jsonSchema.properties,
-					(property) => !!property.ref
-				);
+				collection.preRemove(async function (plainData: any, rxDocument: RxDocument) {
+					// check schema to see which props have children
+					const hasChildren = pickBy(
+						collection.schema.jsonSchema.properties,
+						(property) => !!property.ref
+					);
 
-				// if there are no children, return
-				if (!hasChildren) return;
+					// if there are no children, return
+					if (!hasChildren) return;
 
-				// bulk remove all children
-				const promises = map(hasChildren, (object, key) => {
-					const childCollection = get(collection, `database.collections.${object.ref}`);
-					if (Array.isArray(plainData[key]) && childCollection) {
-						return childCollection.bulkRemove(plainData[key]);
-					}
-					return Promise.resolve();
-				});
+					// bulk remove all children
+					const promises = map(hasChildren, (object, key) => {
+						const childCollection = get(collection, `database.collections.${object.ref}`);
+						if (Array.isArray(plainData[key]) && childCollection) {
+							return childCollection.bulkRemove(plainData[key]);
+						}
+						return Promise.resolve();
+					});
 
-				return Promise.all(promises).catch((err) => {
-					console.warn(err);
-				});
-			}, false);
+					return Promise.all(promises).catch((err) => {
+						console.warn(err);
+					});
+				}, false);
+			},
 		},
 	},
 };

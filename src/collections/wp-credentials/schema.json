@@ -7,7 +7,8 @@
 	"properties": {
 		"localID": {
 			"description": "Unique local identifier for the resource. Note: id is not unique for WP User IDs",
-			"type": "string"
+			"type": "string",
+			"maxLength": 100
 		},
 		"id": {
 			"type": "number"

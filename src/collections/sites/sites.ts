@@ -129,4 +129,5 @@ export const sites = {
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},
+	localDocuments: true,
 };

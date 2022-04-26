@@ -1,4 +1,4 @@
-import { RxPlugin, RxCollection } from 'rxdb/plugins/core';
+import { RxPlugin, RxCollection } from 'rxdb';
 import randomToken from 'random-token';
 
 export function generateId(): string {
@@ -11,12 +11,14 @@ export const RxDBGenerateIdPlugin: RxPlugin = {
 	prototypes: {},
 	overwritable: {},
 	hooks: {
-		createRxCollection(collection: RxCollection) {
-			collection.preInsert(function (data) {
-				if (!data[collection.schema.primaryPath]) {
-					data[collection.schema.primaryPath] = generateId();
-				}
-			}, false);
+		createRxCollection: {
+			after({ collection }) {
+				collection.preInsert(function (data) {
+					if (!data[collection.schema.primaryPath]) {
+						data[collection.schema.primaryPath] = generateId();
+					}
+				}, false);
+			},
 		},
 	},
 };

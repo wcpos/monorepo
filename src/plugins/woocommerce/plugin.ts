@@ -65,11 +65,13 @@ export const WoocommercePlugin: RxPlugin = {
 	 * https://github.com/pubkey/rxdb/blob/master/src/hooks.ts
 	 */
 	hooks: {
-		createRxCollection(collection: RxCollection) {
-			// Object.assign(collection, { auditRestApiIds });
-			collection.preInsert(parseRestResponse, false);
-			collection.preSave(parseRestResponse, false);
-			collection.postInsert(maybeAddMeta, false);
+		createRxCollection: {
+			after({ collection }) {
+				// Object.assign(collection, { auditRestApiIds });
+				collection.preInsert(parseRestResponse, false);
+				collection.preSave(parseRestResponse, false);
+				collection.postInsert(maybeAddMeta, false);
+			},
 		},
 	},
 };

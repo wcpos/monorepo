@@ -1,4 +1,4 @@
-import { addRxPlugin } from 'rxdb/plugins/core';
+import { addRxPlugin } from 'rxdb';
 
 // default plugins
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';

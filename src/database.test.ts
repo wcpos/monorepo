@@ -1,4 +1,4 @@
-import { isRxDatabase, isRxCollection } from 'rxdb/plugins/core';
+import { isRxDatabase, isRxCollection } from 'rxdb';
 import { DatabaseService, checkAdapter, _createUsersDB } from './service';
 
 describe('Database Service', () => {

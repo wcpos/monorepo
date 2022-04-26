@@ -22,7 +22,7 @@ type LineItemStatics = typeof import('./statics');
 export const lineItems = {
 	schema,
 	// pouchSettings: {},
-	statics,
+	// statics,
 	// methods,
 	// attachments: {},
 	options: {
