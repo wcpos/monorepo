@@ -15,7 +15,7 @@
 		"eas-build-post-install": "echo 'Post install build?'"
 	},
 	"dependencies": {
-		"@react-native-community/netinfo": "8.2.0",
+		"@react-native-community/netinfo": "8.3.0",
 		"@wcpos/core": "*",
 		"base-64": "1.0.0",
 		"expo": "44.0.6",
@@ -26,19 +26,19 @@
 		"react-native": "0.64.3",
 		"react-native-get-random-values": "1.7.2",
 		"react-native-pager-view": "5.4.15",
-		"react-native-reanimated": "2.7.0",
-		"react-native-safe-area-context": "4.2.4",
+		"react-native-reanimated": "2.8.0",
+		"react-native-safe-area-context": "4.2.5",
 		"react-native-screens": "3.13.1",
 		"react-native-svg": "12.3.0",
 		"react-native-web": "0.17.7"
 	},
 	"devDependencies": {
 		"@babel/core": "7.17.9",
-		"@expo/webpack-config": "0.16.20",
+		"@expo/webpack-config": "0.16.21",
 		"@svgr/webpack": "5.5.0",
 		"@types/react": "17.0.44",
-		"@types/react-dom": "17.0.15",
-		"@types/react-native": "0.67.4",
+		"@types/react-dom": "17.0.16",
+		"@types/react-native": "0.67.6",
 		"@wcpos/babel-preset-expo": "*",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",

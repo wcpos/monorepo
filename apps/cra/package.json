@@ -21,7 +21,7 @@
 	},
 	"devDependencies": {
 		"@types/react": "17.0.44",
-		"@types/react-dom": "17.0.15",
+		"@types/react-dom": "17.0.16",
 		"@wcpos/babel-preset-expo": "*",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
