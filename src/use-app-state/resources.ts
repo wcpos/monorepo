@@ -1,7 +1,7 @@
 import { ObservableResource } from 'observable-hooks';
 import { from, of, combineLatest, shareReplay, withLatestFrom } from 'rxjs';
 import { tap, switchMap, filter, map, catchError, debounceTime } from 'rxjs/operators';
-import { isRxDocument } from 'rxdb/plugins/core';
+import { isRxDocument } from 'rxdb';
 import { userDBPromise } from '@wcpos/database/src/users-db';
 import { storeDBPromise } from '@wcpos/database/src/stores-db';
 
