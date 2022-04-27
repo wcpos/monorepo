@@ -1,4 +1,4 @@
-import { createRxDatabase, addRxPlugin } from 'rxdb/plugins/core';
+import { createRxDatabase, addRxPlugin } from 'rxdb';
 import dbAdapter from 'pouchdb-adapter-memory';
 import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';

@@ -12,6 +12,7 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import { AppStateProvider } from '@wcpos/hooks/src/use-app-state';
 import Portal from '@wcpos/components/src/portal';
 import { SnackbarProvider } from '@wcpos/components/src/snackbar';
+import * as Linking from 'expo-linking';
 import TranslationService from './services/translation';
 import AppNavigator from './navigators';
 // import SplashScreen from './screens/splash';
@@ -25,9 +26,13 @@ const i18n = new TranslationService();
 
 type InitialProps = import('./types').InitialProps;
 
+const prefix = Linking.createURL('/');
+
 const App = (initialProps: InitialProps) => {
 	const homepage = get(initialProps, 'homepage');
-	const prefixes = ['wcpos://'];
+	const prefixes = ['wcpos://', prefix];
+	console.log(prefixes);
+
 	let pathname = '';
 
 	if (homepage) {

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { KeyboardAvoidingView, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, StyleSheet, View } from 'react-native';
 import Platform from '@wcpos/core/src/utils/platform';
 import { useObservableState, useObservable } from 'observable-hooks';
 import useAppState from '@wcpos/hooks/src/use-app-state';
@@ -28,6 +28,7 @@ const Auth = () => {
 			behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
 			style={[{ flex: 1 }, StyleSheet.absoluteFill]}
 		>
+			<View nativeID="titlebar" style={{ height: 30 }} />
 			<Box
 				// as={KeyboardAvoidingView}
 				// behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

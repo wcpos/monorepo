@@ -1,11 +1,12 @@
 import * as React from 'react';
+import { View } from 'react-native';
 import { DrawerHeaderProps } from '@react-navigation/drawer';
 import { Header as ReactNavigationHeader } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useObservableState } from 'observable-hooks';
 import useAppState from '@wcpos/hooks/src/use-app-state';
-import Platform from '@wcpos/core/src/lib/platform';
+import Platform from '@wcpos/utils/src/platform';
 import Left from './left';
 import Right from './right';
 
@@ -16,22 +17,35 @@ const Header = ({ route, layout, options }: DrawerHeaderProps) => {
 	const { store } = useAppState();
 	const storeName = useObservableState(store.name$, store.name);
 
+	const headerStyle = React.useMemo(() => {
+		if (Platform.isElectron) {
+			return {
+				backgroundColor: '#2c3e50',
+				height: 40 + insets.top,
+				WebkitAppRegion: 'drag',
+			};
+		}
+		return {
+			backgroundColor: '#2c3e50',
+			height: 40 + insets.top,
+		};
+	}, [insets.top]);
+
 	// const title = React.useMemo(() => {
 	// 	return `${route.name} - ${store.name}`;
 	// }, [route.name, store.name]);
-
 	return (
-		<>
+		<View nativeID="titlebar">
 			<ReactNavigationHeader
 				title={`${route.name} - ${storeName}`}
 				headerTitleAlign="center"
 				headerTintColor="white"
-				headerStyle={{ backgroundColor: '#2c3e50', height: 40 + insets.top }}
+				headerStyle={headerStyle}
 				headerLeft={left}
 				headerRight={right}
 			/>
 			<StatusBar style="light" />
-		</>
+		</View>
 	);
 };
 
