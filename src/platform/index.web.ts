@@ -1,15 +1,15 @@
 import { Platform as RNPlatform } from 'react-native';
 
-type PlatformType = typeof RNPlatform & { isElectron: boolean; isStandalone: boolean };
-
-function isElectron() {
-	// https://github.com/cheton/is-electron
-	return false;
-}
+type PlatformType = typeof RNPlatform & {
+	isElectron: boolean;
+	isNative: boolean;
+	isStandalone: boolean;
+};
 
 const Platform: PlatformType = {
 	...RNPlatform,
-	isElectron: isElectron(),
+	isElectron: false,
+	isNative: false,
 	isStandalone: (window.navigator as any).standalone,
 };
 
