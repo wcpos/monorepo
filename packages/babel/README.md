@@ -1,2 +1,1 @@
-# babel
-Babel configuration for WooCommerce POS React Native app
+# Shared Babel configuration for [WooCommerce POS](https://wcpos.com) React Native app

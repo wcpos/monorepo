@@ -2175,9 +2175,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@expo/cli@npm:0.1.2":
-  version: 0.1.2
-  resolution: "@expo/cli@npm:0.1.2"
+"@expo/cli@npm:0.1.3":
+  version: 0.1.3
+  resolution: "@expo/cli@npm:0.1.3"
   dependencies:
     "@babel/runtime": ^7.14.0
     "@expo/code-signing-certificates": ^0.0.2
@@ -2218,6 +2218,7 @@ __metadata:
     node-forge: ^1.3.1
     npm-package-arg: ^7.0.0
     ora: 3.4.0
+    pretty-bytes: 5.6.0
     progress: 2.0.3
     prompts: ^2.3.2
     qrcode-terminal: 0.11.0
@@ -2235,7 +2236,7 @@ __metadata:
     wrap-ansi: ^7.0.0
   bin:
     expo: build/bin/cli
-  checksum: 68a1c854ba779ceeab3f60e8eea172e7eb40730194d17de6d943dc08e087ac45e5dd6cf88bb27cb9af751f6618a3f9a07920f79ad0bec348739b5e2983d0cab4
+  checksum: 2c3677bb2c0627f5f6fb40e7a521c917567f2821c1bc4b79c45e8778f8e3879d23edebbdbed5200f120f8037ccbf2295c637b7a3e06f626d76b8bc377b282747
   languageName: node
   linkType: hard
 
@@ -8433,13 +8434,13 @@ __metadata:
     "@wcpos/babel-preset-expo": "*"
     "@wcpos/core": "*"
     "@wcpos/eslint-config": "*"
-    electron: 18.1.0
+    electron: 18.2.0
     electron-builder: ^23.0.8
     electron-devtools-installer: ^3.2.0
     electron-log: ^4.4.6
     electron-webpack: ^2.8.2
     expo: 44.0.6
-    typescript: 4.6.3
+    typescript: 4.6.4
     update-electron-app: ^2.0.1
     url-loader: ^4.1.1
     webpack: 4.46.0
@@ -8462,7 +8463,7 @@ __metadata:
     "@wcpos/eslint-config": "*"
     "@wcpos/tsconfig": "*"
     base-64: 1.0.0
-    expo: 45.0.0-beta.8
+    expo: 45.0.0-beta.9
     expo-sqlite: 10.2.0
     expo-status-bar: 1.3.0
     file-loader: ^6.2.0
@@ -8477,7 +8478,7 @@ __metadata:
     react-native-svg: 12.3.0
     react-native-svg-transformer: 1.0.0
     react-native-web: 0.17.7
-    typescript: 4.6.3
+    typescript: 4.6.4
     webpack-bundle-analyzer: ^4.5.0
   languageName: unknown
   linkType: soft
@@ -8508,7 +8509,7 @@ __metadata:
     react-native-safe-area-context: 4.2.5
     react-native-screens: 3.13.1
     react-native-web: 0.17.7
-    typescript: 4.6.3
+    typescript: 4.6.4
   languageName: unknown
   linkType: soft
 
@@ -8545,7 +8546,7 @@ __metadata:
     react-native-svg: 12.3.0
     react-native-svg-transformer: 1.0.0
     react-native-web: 0.17.7
-    typescript: 4.6.3
+    typescript: 4.6.4
   languageName: unknown
   linkType: soft
 
@@ -8575,7 +8576,7 @@ __metadata:
     react-native: 0.68.1
     react-native-web: 0.17.7
     sentry-expo: 4.1.1
-    typescript: 4.6.3
+    typescript: 4.6.4
   languageName: unknown
   linkType: soft
 
@@ -8647,7 +8648,7 @@ __metadata:
     react-virtual: 2.10.4
     styled-components: 5.3.5
     ts-jest: 27.1.4
-    typescript: 4.6.3
+    typescript: 4.6.4
     webpack: 5.72.0
   languageName: unknown
   linkType: soft
@@ -8740,7 +8741,7 @@ __metadata:
     rxjs: 7.5.5
     styled-components: 5.3.5
     ts-jest: 27.1.4
-    typescript: 4.6.3
+    typescript: 4.6.4
     url-parse: 1.5.10
   languageName: unknown
   linkType: soft
@@ -8765,7 +8766,7 @@ __metadata:
     react-dom: 17.0.2
     react-native-web: 0.17.7
     react-scripts: 5.0.1
-    typescript: 4.6.3
+    typescript: 4.6.4
     webpack-bundle-analyzer: 4.5.0
     worker-loader: 3.0.8
   languageName: unknown
@@ -8795,7 +8796,7 @@ __metadata:
     rxdb: 12.0.1
     rxjs: 7.5.5
     ts-jest: 27.1.4
-    typescript: 4.6.3
+    typescript: 4.6.4
   languageName: unknown
   linkType: soft
 
@@ -8818,7 +8819,7 @@ __metadata:
     eslint-plugin-react-hooks: 4.5.0
     eslint-plugin-react-native: 4.0.0
     prettier: 2.6.2
-    typescript: 4.6.3
+    typescript: 4.6.4
   languageName: unknown
   linkType: soft
 
@@ -8831,7 +8832,7 @@ __metadata:
     "@wcpos/tsconfig": "*"
     react-native-builder-bob: 0.18.2
     tsup: 5.12.6
-    typescript: 4.6.3
+    typescript: 4.6.4
   languageName: unknown
   linkType: soft
 
@@ -8870,7 +8871,7 @@ __metadata:
     react-scripts: 5.0.1
     react-test-renderer: 17.0.2
     ts-jest: 27.1.4
-    typescript: 4.6.3
+    typescript: 4.6.4
   languageName: unknown
   linkType: soft
 
@@ -8885,7 +8886,7 @@ __metadata:
     postinstall-postinstall: 2.1.0
     prettier: 2.6.2
     ts-jest: 27.1.4
-    typescript: 4.6.3
+    typescript: 4.6.4
   languageName: unknown
   linkType: soft
 
@@ -8932,7 +8933,7 @@ __metadata:
     react-scripts: 5.0.1
     react-test-renderer: 17.0.2
     ts-jest: 27.1.4
-    typescript: 4.6.3
+    typescript: 4.6.4
     webpack: 5.72.0
   languageName: unknown
   linkType: soft
@@ -8968,7 +8969,7 @@ __metadata:
     react-native-storybook-loader: 2.0.5
     react-scripts: 5.0.1
     storybook-addon-mock: ^2.3.2
-    typescript: 4.6.3
+    typescript: 4.6.4
     yarn: 1.22.18
   languageName: unknown
   linkType: soft
@@ -9008,7 +9009,7 @@ __metadata:
     react-scripts: 5.0.1
     react-test-renderer: 17.0.2
     ts-jest: 27.1.4
-    typescript: 4.6.3
+    typescript: 4.6.4
   languageName: unknown
   linkType: soft
 
@@ -9029,7 +9030,7 @@ __metadata:
     jest: 28.0.2
     lodash: 4.17.21
     ts-jest: 27.1.4
-    typescript: 4.6.3
+    typescript: 4.6.4
   languageName: unknown
   linkType: soft
 
@@ -14657,16 +14658,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron@npm:18.1.0":
-  version: 18.1.0
-  resolution: "electron@npm:18.1.0"
+"electron@npm:18.2.0":
+  version: 18.2.0
+  resolution: "electron@npm:18.2.0"
   dependencies:
     "@electron/get": ^1.13.0
     "@types/node": ^16.11.26
     extract-zip: ^1.0.3
   bin:
     electron: cli.js
-  checksum: 06ca8ddbda1815e3adf8ff37d34f2f13334d0605a045344a6efe850120394674a2c192b1573706fb4111be6ce192d7bfda81a40aeccee28e975a995a0743fa18
+  checksum: 242169d6e22854248e427326a03910b96311333d5dd57aa0e4cd9cef733aa8c2e893b16269c32514ad325468cdc08c41736d6f1f6791770cad236652fe06662c
   languageName: node
   linkType: hard
 
@@ -16541,12 +16542,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"expo@npm:45.0.0-beta.8":
-  version: 45.0.0-beta.8
-  resolution: "expo@npm:45.0.0-beta.8"
+"expo@npm:45.0.0-beta.9":
+  version: 45.0.0-beta.9
+  resolution: "expo@npm:45.0.0-beta.9"
   dependencies:
     "@babel/runtime": ^7.14.0
-    "@expo/cli": 0.1.2
+    "@expo/cli": 0.1.3
     "@expo/vector-icons": ^13.0.0
     babel-preset-expo: ~9.1.0
     cross-spawn: ^6.0.5
@@ -16565,12 +16566,13 @@ __metadata:
     md5-file: ^3.2.3
     node-fetch: ^2.6.7
     pretty-format: ^26.5.2
+    uuid: ^3.4.0
   dependenciesMeta:
     expo-error-recovery:
       optional: true
   bin:
     expo: bin/cli.js
-  checksum: 80095eba581f6e41207799639bc30f39055ba0cb5582a2db22aaf582171ebbacb0079fb5c4e2068eb524beafb621782ed11b6170d4cce757dd1b1eb77e6449aa
+  checksum: dbd5af9df9fbbede05e007d956e284a41971681921b03d0d2b981f5c4fce542f486bc842e2e08d6c1670ace14d8db3c815e23eaf21ddd98b1ad247acb69a3edc
   languageName: node
   linkType: hard
 
@@ -26946,7 +26948,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pretty-bytes@npm:^5.3.0":
+"pretty-bytes@npm:5.6.0, pretty-bytes@npm:^5.3.0":
   version: 5.6.0
   resolution: "pretty-bytes@npm:5.6.0"
   checksum: 9c082500d1e93434b5b291bd651662936b8bd6204ec9fa17d563116a192d6d86b98f6d328526b4e8d783c07d5499e2614a807520249692da9ec81564b2f439cd
@@ -32248,23 +32250,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:4.6.3":
-  version: 4.6.3
-  resolution: "typescript@npm:4.6.3"
+"typescript@npm:4.6.4":
+  version: 4.6.4
+  resolution: "typescript@npm:4.6.4"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 255bb26c8cb846ca689dd1c3a56587af4f69055907aa2c154796ea28ee0dea871535b1c78f85a6212c77f2657843a269c3a742d09d81495b97b914bf7920415b
+  checksum: e7bfcc39cd4571a63a54e5ea21f16b8445268b9900bf55aee0e02ad981be576acc140eba24f1af5e3c1457767c96cea6d12861768fb386cf3ffb34013718631a
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@4.6.3#~builtin<compat/typescript>":
-  version: 4.6.3
-  resolution: "typescript@patch:typescript@npm%3A4.6.3#~builtin<compat/typescript>::version=4.6.3&hash=bda367"
+"typescript@patch:typescript@4.6.4#~builtin<compat/typescript>":
+  version: 4.6.4
+  resolution: "typescript@patch:typescript@npm%3A4.6.4#~builtin<compat/typescript>::version=4.6.4&hash=bda367"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 6bf45caf847062420592e711bc9c28bf5f9a9a7fa8245343b81493e4ededae33f1774009d1234d911422d1646a2c839f44e1a23ecb111b40a60ac2ea4c1482a8
+  checksum: 1cb434fbc637d347be90e3a0c6cd05e33c38f941713c8786d3031faf1842c2c148ba91d2fac01e7276b0ae3249b8633f1660e32686cc7a8c6a8fd5361dc52c66
   languageName: node
   linkType: hard
 

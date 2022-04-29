@@ -1,2 +1,1 @@
-# eslint
-Eslint configuration for WooCommerce POS React Native app
+# Shared Eslint configuration for [WooCommerce POS](https://wcpos.com) React Native app
