@@ -1,9 +1,10 @@
 {
   "private": true,
-  "name": "@wcpos/app-managed",
+  "name": "@wcpos/managed-expo",
   "version": "1.0.0",
   "main": "index.js",
-  "homepage": "https://wcpos.github.io/monorepo",
+  "author": "kilbot <paul@kilbot.com>",
+  "homepage": "https://wcpos.github.io/managed-expo",
   "scripts": {
     "build": "expo build:web",
     "test": "eslint --ext js,ts,tsx .",
@@ -18,7 +19,7 @@
     "@react-native-community/netinfo": "8.3.0",
     "@wcpos/core": "*",
     "base-64": "1.0.0",
-    "expo": "45.0.0-beta.8",
+    "expo": "45.0.0-beta.9",
     "expo-sqlite": "10.2.0",
     "expo-status-bar": "1.3.0",
     "react": "17.0.2",
@@ -44,7 +45,7 @@
     "@wcpos/tsconfig": "*",
     "file-loader": "^6.2.0",
     "react-native-svg-transformer": "1.0.0",
-    "typescript": "4.6.3",
+    "typescript": "4.6.4",
     "webpack-bundle-analyzer": "^4.5.0"
   },
   "eslintConfig": {
