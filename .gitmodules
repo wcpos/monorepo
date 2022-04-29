@@ -22,3 +22,6 @@
 [submodule "packages/utils"]
 	path = packages/utils
 	url = https://github.com/wcpos/utils
+[submodule "apps/managed"]
+	path = apps/managed
+	url = https://github.com/wcpos/managed-expo
