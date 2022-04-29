@@ -35,7 +35,7 @@ jobs:
       run: yarn install
     
     - name: Build project
-      run: PUBLIC_URL="https://wcpos.github.io/managed-expo/" yarn managed build
+      run: PUBLIC_URL="https://wcpos.github.io/managed-expo/" yarn build
     
     # - name: Run tests
     #   run: npm run test
