@@ -38,18 +38,18 @@ This monorepo contains all the code necessary to build the client applications. 
 
 ### Apps
 
-- [`apps/managed`](./apps/managed) - Expo managed app builds for Web, iOS and Android.
-- [`apps/electron`](./apps/managed) - Builds app for Windows, MacOS and Linux.
+- [`apps/managed`](https://github.com/wcpos/managed-expo) - Expo managed app builds for Web, iOS and Android.
+- [`apps/electron`](https://github.com/wcpos/electron) - Builds app for Windows, MacOS and Linux.
 
 ### Packages
 
-- [`packages/core`](./packages/core) - Core screens and navigation.
-- [`packages/components`](./packages/components) - Shared UI components, see [playground](https://wcpos.github.io/components/).
-- [`packages/form`](./packages/form) - React Native JSONSchema Form, see [playground](https://wcpos.github.io/react-native-jsonschema-form/).
-- [`packages/database`](./packages/database) - Local database (IndexedDB for Web and Desktop, SQLite for Native).
-- [`packages/theme`](./packages/theme) - Theme library.
-- [`packages/hooks`](./packages/hooks) - Shared hooks.
-- [`packages/utils`](./packages/utils) - Shared utils.
+- [`packages/core`](https://github.com/wcpos/core) - Core screens and navigation.
+- [`packages/components`](https://github.com/wcpos/components) - Shared UI components, see [playground](https://wcpos.github.io/components/).
+- [`packages/form`](https://github.com/wcpos/react-native-jsonschema-form) - React Native JSONSchema Form, see [playground](https://wcpos.github.io/react-native-jsonschema-form/).
+- [`packages/database`](https://github.com/wcpos/database) - Local database (IndexedDB for Web and Desktop, SQLite for Native).
+- [`packages/themes`](https://github.com/wcpos/themes) - Theme library.
+- [`packages/hooks`](https://github.com/wcpos/hooks) - Shared hooks.
+- [`packages/utils`](https://github.com/wcpos/utils) - Shared utils.
 - [`packages/babel`](./packages/babel) - Babel configuration for Expo.
 - [`packages/eslint`](./packages/eslint) - ESLint configuration for Expo.
 - [`packages/tsconfig`](./packages/tsconfig) - TypeScript configuration.
