@@ -26,7 +26,7 @@
 		"react-native-web": "0.17.7"
 	},
 	"devDependencies": {
-		"@babel/core": "7.17.9",
+		"@babel/core": "7.17.10",
 		"@storybook/addon-actions": "6.4.22",
 		"@storybook/addon-controls": "6.4.22",
 		"@storybook/addon-essentials": "6.4.22",
@@ -47,7 +47,7 @@
 		"@wcpos/tsconfig": "*",
 		"babel-loader": "8.2.5",
 		"babel-plugin-react-native-web": "0.17.7",
-		"jest": "28.0.2",
+		"jest": "28.0.3",
 		"react-native-storybook-loader": "2.0.5",
 		"react-scripts": "5.0.1",
 		"react-test-renderer": "17.0.2",
