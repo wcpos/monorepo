@@ -16,7 +16,7 @@ module.exports = (async () => {
 	} = config;
 
 	config.watchFolders = [workspaceRoot];
-	config.resolver.nodeModulesPath = [
+	config.resolver.nodeModulesPaths = [
 		path.resolve(projectRoot, 'node_modules'),
 		path.resolve(workspaceRoot, 'node_modules'),
 	];

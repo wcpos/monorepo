@@ -23,7 +23,6 @@ jobs:
       uses: actions/setup-node@v2.4.1
       with:
         node-version: 16.x
-        cache: yarn
 
     - name: Setup Expo
       uses: expo/expo-github-action@v7
@@ -35,7 +34,7 @@ jobs:
       run: yarn install
     
     - name: Build project
-      run: PUBLIC_URL="https://wcpos.github.io/managed-expo/" yarn build
+      run: PUBLIC_URL="https://wcpos.github.io/managed-expo/" yarn build:web
     
     # - name: Run tests
     #   run: npm run test

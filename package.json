@@ -6,7 +6,8 @@
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://wcpos.github.io/managed-expo",
 	"scripts": {
-		"build": "expo build:web",
+		"build": "echo 'Nothing to build'",
+		"build:web": "expo build:web",
 		"test": "eslint --ext js,ts,tsx .",
 		"start": "expo start --clear",
 		"android": "expo start --android",
