@@ -71,7 +71,8 @@ jobs:
         with:
           script: |
             // Load manifest to fetch project info
-            const tag = ${{ needs.tag-new-versions.outputs.tag }};
+            // const tag = ${{ needs.tag-new-versions.outputs.tag }};
+            const tag = 'v1.0.0-alpha.4';
             const manifest = require(`./app.json`);
 
             // Get the app information and build links
