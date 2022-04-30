@@ -12,7 +12,7 @@
     "expo": "expo",
     "form": "yarn workspace @wcpos/react-native-jsonschema-form",
     "hooks": "yarn workspace @wcpos/hooks",
-    "managed": "yarn workspace @wcpos/app-managed",
+    "managed": "yarn workspace @wcpos/managed-expo",
     "postinstall": "patch-package",
     "storybook": "yarn workspace @wcpos/storybook",
     "test": "yarn workspaces foreach run test",
@@ -34,7 +34,7 @@
   "devDependencies": {
     "@types/jest": "27.4.1",
     "@wcpos/eslint-config": "*",
-    "jest": "28.0.2",
+    "jest": "28.0.3",
     "patch-package": "6.4.7",
     "postinstall-postinstall": "2.1.0",
     "prettier": "2.6.2",
