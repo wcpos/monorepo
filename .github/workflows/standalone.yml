@@ -1,4 +1,4 @@
-name: standalone
+name: iOS/Android
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ on:
       profile:
         description: EAS build profile (development/production)
         required: true
-        default: development
+        default: production
 
 jobs:
   build:
