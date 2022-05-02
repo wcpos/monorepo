@@ -40,7 +40,7 @@ jobs:
     #   run: npm run test
 
     - name: Upload production-ready build files
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: production-files
         path: ./web-build
