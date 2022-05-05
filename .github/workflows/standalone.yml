@@ -22,7 +22,7 @@ jobs:
       - name: 🚀 Setup repo
         uses: actions/checkout@v1
       - name: 🚀 Setup Node
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v3.1.1
         with:
           node-version: 16.x
       - name: 🚀 Setup EAS
@@ -35,7 +35,7 @@ jobs:
         id: yarn-cache-dir-path
         run: echo "::set-output name=dir::$(yarn cache dir)"
       - name: ♻️ Restore cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
