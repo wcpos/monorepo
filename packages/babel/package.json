@@ -10,9 +10,9 @@
     "test": "echo 'Nothing to test'"
   },
   "dependencies": {
-    "@babel/core": "7.17.10",
-    "@babel/preset-typescript": "^7.16.7",
-    "babel-jest": "^28.0.3",
+    "@babel/core": "7.17.12",
+    "@babel/preset-typescript": "^7.17.12",
+    "babel-jest": "^28.1.0",
     "babel-preset-expo": "9.1.0"
   }
 }

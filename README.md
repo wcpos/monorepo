@@ -11,6 +11,9 @@
     <a href="https://github.com/wcpos/managed-expo">
       <img src="https://github.com/wcpos/managed-expo/actions/workflows/standalone.yml/badge.svg" alt="Native Apps" />
     </a>
+    <a href="https://wcpos.com/discord">
+      <img src="https://img.shields.io/discord/711884517081612298?color=%237289DA&label=WCPOS&logo=discord&logoColor=white" alt="Discord Chat" />
+    </a>
   </p>
   <p>
     <a href="https://github.com/wcpos/monorepo#-structure"><b>About</b></a>
