@@ -20,12 +20,12 @@
 		"lodash": "4.17.21"
 	},
 	"devDependencies": {
-		"@types/jest": "27.4.1",
+		"@types/jest": "27.5.1",
 		"@types/lodash": "4.14.182",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
-		"jest": "28.0.3",
-		"ts-jest": "27.1.4",
+		"jest": "28.1.0",
+		"ts-jest": "28.0.2",
 		"typescript": "4.6.4"
 	},
 	"eslintConfig": {
