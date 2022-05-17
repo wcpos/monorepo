@@ -1,5 +1,5 @@
 import * as React from 'react';
-import TextInput from '@wcpos/components/src/textinput';
+import EdittableText from '@wcpos/components/src/edittable-text';
 
 type Props = {
 	item: import('@wcpos/database').ProductDocument;
@@ -10,7 +10,7 @@ const Name = ({ item: product }: Props) => {
 		await product.atomicPatch({ name: newValue });
 	};
 
-	return <TextInput label="Name" value={product.name} onChange={handleChangeText} hideLabel />;
+	return <EdittableText label="Name" value={product.name} onChange={handleChangeText} hideLabel />;
 };
 
 export default Name;
