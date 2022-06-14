@@ -76,10 +76,10 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 			let row;
 			switch (item.type) {
 				case 'variable':
-					row = <VariableProductRow product={item} columns={visibleColumns} />;
+					row = <VariableProductRow product={item} columns={visibleColumns} itemIndex={index} />;
 					break;
 				default:
-					row = <SimpleProductRow product={item} columns={visibleColumns} />;
+					row = <SimpleProductRow product={item} columns={visibleColumns} itemIndex={index} />;
 			}
 
 			return row ? <ErrorBoundary>{row}</ErrorBoundary> : null;

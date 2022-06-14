@@ -15,6 +15,7 @@ interface Props {
 	// order: import('@wcpos/database').OrderDocument;
 	shipping: ShippingLineDocument;
 	columns: any;
+	itemIndex: number;
 }
 
 const cells = {
@@ -25,7 +26,7 @@ const cells = {
 	name: ShippingTitle,
 };
 
-const ShippingLine = ({ shipping, columns }: Props) => {
+const ShippingLine = ({ shipping, columns, itemIndex }: Props) => {
 	const cellRenderer = React.useCallback((item: ShippingLineDocument, column: ColumnProps) => {
 		const Cell = get(cells, column.key);
 		// if (column.key === 'quantity') {
@@ -39,6 +40,7 @@ const ShippingLine = ({ shipping, columns }: Props) => {
 			item={shipping}
 			columns={columns}
 			cellRenderer={cellRenderer}
+			itemIndex={itemIndex}
 		/>
 	);
 };

@@ -19,6 +19,7 @@ interface Props {
 	// order: import('@wcpos/database').OrderDocument;
 	product: ProductDocument;
 	columns: any;
+	itemIndex: number;
 }
 
 const cells = {
@@ -33,15 +34,17 @@ const cells = {
 	tag: Tag,
 };
 
-const VariableProduct = ({ product, columns }: Props) => {
-	const rerender = useObservableState(product.$);
+const VariableProduct = ({ product, columns, itemIndex }: Props) => {
+	// const rerender = useObservableState(product.$);
 
 	const cellRenderer = React.useCallback((item: ProductDocument, column: ColumnProps) => {
 		const Cell = get(cells, column.key);
 		return Cell ? <Cell item={item} column={column} /> : null;
 	}, []);
 
-	return <Table.Row item={product} columns={columns} cellRenderer={cellRenderer} />;
+	return (
+		<Table.Row item={product} columns={columns} cellRenderer={cellRenderer} itemIndex={itemIndex} />
+	);
 };
 
 export default VariableProduct;

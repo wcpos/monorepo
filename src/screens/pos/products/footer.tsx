@@ -14,7 +14,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 
 	return (
 		<Box padding="small" align="end">
-			<Text>
+			<Text size="small">
 				{count} of {total}
 			</Text>
 		</Box>

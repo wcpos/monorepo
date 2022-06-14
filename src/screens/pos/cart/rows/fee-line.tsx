@@ -13,6 +13,7 @@ type ColumnProps = import('@wcpos/components/src/table/types').ColumnProps;
 interface Props {
 	fee: FeeLineDocument;
 	columns: any;
+	itemIndex: number;
 }
 
 const cells = {
@@ -23,7 +24,7 @@ const cells = {
 	name: FeeName,
 };
 
-const FeeLine = ({ fee, columns }: Props) => {
+const FeeLine = ({ fee, columns, itemIndex }: Props) => {
 	const cellRenderer = React.useCallback((item: FeeLineDocument, column: ColumnProps) => {
 		const Cell = get(cells, column.key);
 		// if (column.key === 'quantity') {
@@ -32,7 +33,14 @@ const FeeLine = ({ fee, columns }: Props) => {
 		return Cell ? <Cell item={item} column={column} /> : null;
 	}, []);
 
-	return <Table.Row<FeeLineDocument> item={fee} columns={columns} cellRenderer={cellRenderer} />;
+	return (
+		<Table.Row<FeeLineDocument>
+			item={fee}
+			columns={columns}
+			cellRenderer={cellRenderer}
+			itemIndex={itemIndex}
+		/>
+	);
 };
 
 export default FeeLine;

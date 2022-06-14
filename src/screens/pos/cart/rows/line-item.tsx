@@ -15,6 +15,7 @@ type ColumnProps = import('@wcpos/components/src/table/types').ColumnProps;
 interface LineItemProps {
 	lineItem: LineItemDocument;
 	columns: ColumnProps[];
+	itemIndex: number;
 }
 
 const cells = {
@@ -28,7 +29,7 @@ const cells = {
 	name: Name,
 };
 
-const LineItem = ({ lineItem, columns }: LineItemProps) => {
+const LineItem = ({ lineItem, columns, itemIndex }: LineItemProps) => {
 	useWhyDidYouUpdate('CartLineItem', { lineItem, columns });
 
 	const cellRenderer = React.useCallback((item: LineItemDocument, column: ColumnProps) => {
@@ -37,7 +38,12 @@ const LineItem = ({ lineItem, columns }: LineItemProps) => {
 	}, []);
 
 	return (
-		<Table.Row<LineItemDocument> item={lineItem} columns={columns} cellRenderer={cellRenderer} />
+		<Table.Row<LineItemDocument>
+			item={lineItem}
+			columns={columns}
+			cellRenderer={cellRenderer}
+			itemIndex={itemIndex}
+		/>
 	);
 };
 

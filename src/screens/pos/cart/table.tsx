@@ -93,13 +93,13 @@ const CartTable = ({ cartResource, ui }: ICartTableProps) => {
 			let row;
 			switch (item.collection.name) {
 				case 'line_items':
-					row = <LineItem lineItem={item} columns={visibleColumns} />;
+					row = <LineItem lineItem={item} columns={visibleColumns} itemIndex={index} />;
 					break;
 				case 'fee_lines':
-					row = <FeeLine fee={item} columns={visibleColumns} />;
+					row = <FeeLine fee={item} columns={visibleColumns} itemIndex={index} />;
 					break;
 				case 'shipping_lines':
-					row = <ShippingLine shipping={item} columns={visibleColumns} />;
+					row = <ShippingLine shipping={item} columns={visibleColumns} itemIndex={index} />;
 					break;
 				default:
 					row = null;
