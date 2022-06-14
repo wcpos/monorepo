@@ -21,25 +21,30 @@
     "with-flipper": "yarn workspace @wcpos/app-with-flipper",
     "with-sentry": "yarn workspace @wcpos/app-with-sentry"
   },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "nohoist": [
+      "@wcpos/components/webpack/**/**",
+      "@wcpos/components/react-scripts/**/**"
+    ]
+  },
   "resolutions": {
     "react": "17.0.2",
     "react-dom": "17.0.2",
-    "react-native": "0.68.1",
-    "react-scripts": "4.0.3"
+    "react-native": "0.68.2"
   },
   "devDependencies": {
-    "@types/jest": "27.5.1",
+    "@types/jest": "27.5.2",
     "@wcpos/eslint-config": "*",
-    "jest": "28.1.0",
+    "jest": "28.1.1",
     "patch-package": "6.4.7",
     "postinstall-postinstall": "2.1.0",
-    "prettier": "2.6.2",
-    "ts-jest": "28.0.3",
-    "typescript": "4.7.2"
+    "prettier": "2.7.0",
+    "ts-jest": "28.0.5",
+    "typescript": "4.7.3"
   },
   "packageManager": "yarn@3.2.0",
   "eslintConfig": {
