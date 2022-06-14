@@ -27,11 +27,11 @@
 		"pouchdb-adapter-react-native-sqlite": "3.0.1",
 		"pouchdb-debug": "7.2.1",
 		"random-token": "^0.0.8",
-		"rxdb": "12.4.2",
+		"rxdb": "12.4.3",
 		"rxjs": "7.5.5"
 	},
 	"devDependencies": {
-		"@types/jest": "27.5.1",
+		"@types/jest": "27.5.2",
 		"@types/lodash": "4.14.182",
 		"@types/pouchdb-adapter-http": "6.1.3",
 		"@types/pouchdb-adapter-idb": "6.1.4",
@@ -39,10 +39,10 @@
 		"@types/pouchdb-core": "7.0.10",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
-		"jest": "28.1.0",
+		"jest": "28.1.1",
 		"jsonschema-to-interface": "1.0.5",
-		"ts-jest": "28.0.3",
-		"typescript": "4.7.2"
+		"ts-jest": "28.0.5",
+		"typescript": "4.7.3"
 	},
 	"eslintConfig": {
 		"extends": "@wcpos/eslint-config"
