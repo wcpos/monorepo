@@ -20,13 +20,13 @@
 		"lodash": "4.17.21"
 	},
 	"devDependencies": {
-		"@types/jest": "27.5.1",
+		"@types/jest": "27.5.2",
 		"@types/lodash": "4.14.182",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
-		"jest": "28.1.0",
-		"ts-jest": "28.0.3",
-		"typescript": "4.7.2"
+		"jest": "28.1.1",
+		"ts-jest": "28.0.5",
+		"typescript": "4.7.3"
 	},
 	"eslintConfig": {
 		"extends": "@wcpos/eslint-config"
