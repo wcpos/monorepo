@@ -105,9 +105,8 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 				<Table.Row
 					// config={renderContext}
 					item={item}
-					// @ts-ignore
 					columns={visibleColumns}
-					// itemIndex={index}
+					itemIndex={index}
 					cellRenderer={cellRenderer}
 				/>
 			);

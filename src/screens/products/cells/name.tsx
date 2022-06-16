@@ -13,7 +13,9 @@ const Name = ({ item: product }: Props) => {
 		await product.atomicPatch({ name: newValue });
 	};
 
-	return <EdittableText label="Name" value={name} onChange={handleChangeText} hideLabel />;
+	return (
+		<EdittableText label="Name" value={name} onChange={handleChangeText} hideLabel weight="bold" />
+	);
 };
 
 export default Name;

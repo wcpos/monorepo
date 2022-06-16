@@ -5,6 +5,7 @@ import { Header as ReactNavigationHeader } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useObservableState } from 'observable-hooks';
+import { useTheme } from 'styled-components/native';
 import useAppState from '@wcpos/hooks/src/use-app-state';
 import Platform from '@wcpos/utils/src/platform';
 import Left from './left';
@@ -16,17 +17,18 @@ const Header = ({ route, layout, options }: DrawerHeaderProps) => {
 	const right = React.useCallback(() => <Right />, []);
 	const { store } = useAppState();
 	const storeName = useObservableState(store.name$, store.name);
+	const theme = useTheme();
 
 	const headerStyle = React.useMemo(() => {
 		if (Platform.isElectron) {
 			return {
-				backgroundColor: '#2c3e50',
+				backgroundColor: theme.colors.headerBackground,
 				height: 40 + insets.top,
 				WebkitAppRegion: 'drag',
 			};
 		}
 		return {
-			backgroundColor: '#2c3e50',
+			backgroundColor: theme.colors.headerBackground,
 			height: 40 + insets.top,
 		};
 	}, [insets.top]);

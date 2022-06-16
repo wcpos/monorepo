@@ -10,7 +10,6 @@ import Animated, {
 import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
 import Gutter from '@wcpos/components/src/gutter';
 import Box from '@wcpos/components/src/box';
-import * as Styled from './styles';
 
 interface ResizableColumnsProps {
 	leftComponent: React.ReactNode;

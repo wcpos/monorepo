@@ -31,7 +31,7 @@ const Name = ({ item: product, column }: Props) => {
 
 	return (
 		<Box space="xSmall">
-			<Text>{product.name}</Text>
+			<Text weight="bold">{product.name}</Text>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{show('stock_quantity') && product.manage_stock && product.stock_quantity && (
 				<Text size="small">{product.stock_quantity} in stock</Text>

@@ -3,7 +3,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { SafeAreaProviderCompat } from '@react-navigation/elements';
 import { Text } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { ThemeProvider } from 'styled-components/native';
 import get from 'lodash/get';
 import { enableFreeze } from 'react-native-screens';
@@ -72,16 +72,31 @@ const App = (initialProps: InitialProps) => {
 		},
 	};
 
+	const theme = React.useMemo(() => getTheme('default', 'light'), []);
+
 	return (
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<GestureHandlerRootView style={{ flex: 1 }}>
 					<AppStateProvider initialProps={initialProps}>
-						<ThemeProvider theme={getTheme('default', 'dark')}>
+						<ThemeProvider theme={theme}>
 							<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
 								<SnackbarProvider>
 									<Portal.Provider>
-										<NavigationContainer linking={linking}>
+										<NavigationContainer
+											linking={linking}
+											theme={{
+												dark: false,
+												colors: {
+													primary: theme.colors.primary,
+													background: theme.colors.bodyBackground,
+													card: 'rgb(255, 255, 255)',
+													text: theme.colors.text,
+													border: theme.colors.border,
+													notification: 'rgb(255, 69, 58)',
+												},
+											}}
+										>
 											<AppNavigator />
 										</NavigationContainer>
 										<Portal.Manager />

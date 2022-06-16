@@ -26,6 +26,7 @@ const HeaderLeft = () => {
 					onPress={openDrawer}
 					title="Menu"
 					accessoryLeft={<Icon name="bars" type="inverse" />}
+					type="headerBackground"
 				/>
 			);
 		}

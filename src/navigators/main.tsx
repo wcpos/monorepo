@@ -117,7 +117,7 @@ const MainNavigator = () => {
 						header,
 						drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
 						drawerStyle: {
-							backgroundColor: '#2c3e50',
+							backgroundColor: theme.colors.headerBackground,
 							width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
 						},
 						sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
