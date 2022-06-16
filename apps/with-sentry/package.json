@@ -25,13 +25,13 @@
     "react": "17.0.2",
     "react-dom": "17.0.2",
     "react-native": "0.68.2",
-    "react-native-web": "0.18.0",
+    "react-native-web": "0.18.1",
     "sentry-expo": "4.2.0"
   },
   "devDependencies": {
     "@babel/core": "7.18.5",
     "@sentry/cli": "2.1.0",
-    "@types/react": "17.0.45",
+    "@types/react": "17.0.46",
     "@types/react-dom": "17.0.17",
     "@types/react-native": "0.67.8",
     "@wcpos/babel-preset-expo": "*",

@@ -32,13 +32,13 @@
     "react-native-safe-area-context": "4.3.1",
     "react-native-screens": "3.13.1",
     "react-native-svg": "12.3.0",
-    "react-native-web": "0.18.0"
+    "react-native-web": "0.18.1"
   },
   "devDependencies": {
     "@babel/core": "7.18.5",
     "@expo/webpack-config": "0.16.24",
     "@svgr/webpack": "5.5.0",
-    "@types/react": "17.0.45",
+    "@types/react": "17.0.46",
     "@types/react-dom": "17.0.17",
     "@types/react-native": "0.67.8",
     "@wcpos/babel-preset-expo": "*",
