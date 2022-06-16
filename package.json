@@ -27,7 +27,7 @@
 		"pouchdb-adapter-react-native-sqlite": "3.0.1",
 		"pouchdb-debug": "7.2.1",
 		"random-token": "^0.0.8",
-		"rxdb": "12.4.3",
+		"rxdb": "12.5.3",
 		"rxjs": "7.5.5"
 	},
 	"devDependencies": {
