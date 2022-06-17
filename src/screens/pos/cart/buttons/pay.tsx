@@ -22,7 +22,12 @@ const PayButton = ({ order }: PayModalProps) => {
 				title={`Checkout ${format(total || 0)}`}
 				onPress={open}
 				type="success"
-				style={{ flex: 3 }}
+				style={{
+					flex: 3,
+					borderTopLeftRadius: 0,
+					borderTopRightRadius: 0,
+					borderBottomLeftRadius: 0,
+				}}
 			/>
 			<Modal ref={ref} title="Checkout" size="large">
 				<Checkout order={order} />

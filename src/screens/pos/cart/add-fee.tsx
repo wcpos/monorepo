@@ -10,9 +10,9 @@ interface AddFeeProps {
 }
 
 const AddFee = ({ order }: AddFeeProps) => {
-	const handleAddFee = () => {
+	const handleAddFee = React.useCallback(() => {
 		order.addFeeLine({ name: 'Fee', total: '10' });
-	};
+	}, [order]);
 
 	return (
 		<Box horizontal space="small" padding="small" align="center">

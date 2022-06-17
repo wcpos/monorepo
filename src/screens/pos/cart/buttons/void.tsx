@@ -35,7 +35,7 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 				});
 			}}
 			type="critical"
-			// style={{ width: '33%' }}
+			style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
 		/>
 	);
 };

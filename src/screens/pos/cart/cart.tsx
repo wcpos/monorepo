@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
@@ -25,6 +26,7 @@ interface CartProps {
 const Cart = ({ order }: CartProps) => {
 	const ui = useObservableSuspense(useUIResource('pos.cart'));
 	const cartResource = new ObservableResource(order.cart$);
+	const theme = useTheme();
 	useCalcTotals(order);
 
 	useWhyDidYouUpdate('Cart', { order, ui });
@@ -54,7 +56,13 @@ const Cart = ({ order }: CartProps) => {
 			<Box>
 				<Totals order={order} />
 			</Box>
-			<Box horizontal space="small" padding="small" align="center">
+			<Box
+				horizontal
+				space="small"
+				padding="small"
+				align="center"
+				style={{ backgroundColor: theme.colors.lightGrey }}
+			>
 				<AddNoteButton order={order} />
 				<OrderMetaButton order={order} />
 				<SaveButton order={order} />

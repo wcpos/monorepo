@@ -61,7 +61,7 @@ const CartTabs = ({ ordersResource }: CartTabsProps) => {
 			if (!route || !currentOrder) {
 				return null;
 			}
-			if (currentOrder.isCartEmpty()) {
+			if (currentOrder.isCartEmpty('hi')) {
 				return <EmptyCart order={currentOrder} />;
 			}
 			return <Cart order={currentOrder} />;

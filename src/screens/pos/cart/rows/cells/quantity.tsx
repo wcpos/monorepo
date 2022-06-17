@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import Button from '@wcpos/components/src/button';
+import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
 import Popover from '@wcpos/components/src/popover';
 import Numpad from '@wcpos/components/src/numpad';
 
@@ -17,7 +18,9 @@ const Quantity = ({ item }: Props) => {
 
 	return (
 		<Popover content={<Numpad initialValue={String(quantity)} onChange={handleQuantityChange} />}>
-			<Button title={String(quantity)} background="outline" />
+			<Box border paddingY="xSmall" paddingX="small" rounding="large">
+				<Text>{String(quantity)}</Text>
+			</Box>
 		</Popover>
 	);
 };
