@@ -27,6 +27,12 @@ export const orders = {
 	// pouchSettings: {},
 	statics,
 	methods,
+	// methods: {
+	// 	whoAmI() {
+	// 		debugger;
+	// 		return `I am ${this.name}!!`;
+	// 	},
+	// },
 	// attachments: {},
 	options: {
 		middlewares: {

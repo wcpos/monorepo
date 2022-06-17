@@ -66,7 +66,7 @@ const methods: SiteMethods = {
 	},
 
 	async addWpCredentials(this: SiteDocument, data) {
-		const wpCredentials = await this.collections().wp_credentials.insert(data);
+		const wpCredentials = await this.collection.database.collections.wp_credentials.insert(data);
 		await this.update({ $push: { wp_credentials: wpCredentials.localID } }).catch((err) => {
 			console.log(err);
 			return err;

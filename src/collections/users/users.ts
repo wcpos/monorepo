@@ -28,7 +28,7 @@ const methods: UserMethods = {
 		const cleanUrl = isString(url) && url.replace(/^.*:\/{2,}|\s|\/+$/g, '');
 		if (!cleanUrl) return;
 
-		const site = await this.collections().sites.insert({ url: cleanUrl });
+		const site = await this.collection.database.collections.sites.insert({ url: cleanUrl });
 		await this.update({ $push: { sites: site.localID } }).catch((err) => {
 			console.log(err);
 			return err;
@@ -41,7 +41,7 @@ const methods: UserMethods = {
 	 * @param data
 	 */
 	async addSite(this: UserDocument, data: any) {
-		const site = await this.collections().sites.insert(data);
+		const site = await this.collection.database.collections.sites.insert(data);
 		await this.update({ $push: { sites: site.localID } }).catch((err) => {
 			console.log(err);
 			return err;

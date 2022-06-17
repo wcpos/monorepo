@@ -20,7 +20,7 @@ export default {
 			// @ts-ignore
 			const localID = get(find(item.meta_data, { key: '_pos' }), 'value');
 			// @ts-ignore
-			const upsertedItem = this.collections().shipping_lines.upsert({
+			const upsertedItem = this.database.collections.shipping_lines.upsert({
 				localID,
 				...(item as Record<string, unknown>),
 			});

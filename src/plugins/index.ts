@@ -16,7 +16,6 @@ import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 
 // custom plugins
-import collectionsHelper from './utils/collections';
 import collectionCounts from './collection-counts';
 import RxDBGenerateIdPlugin from './generate-id';
 import RxDBWooCommercePlugin from './woocommerce';
@@ -54,7 +53,6 @@ addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBKeyCompressionPlugin);
 
 // custom plugins
-addRxPlugin(collectionsHelper);
 addRxPlugin(collectionCounts);
 addRxPlugin(RxDBWooCommercePlugin);
 addRxPlugin(RxDBAjvValidatePlugin);

@@ -151,8 +151,8 @@ export default {
 		}
 
 		// else, create new lineItem
-		const newLineItem: LineItemDocument = await this.collections()
-			.line_items.insert({
+		const newLineItem: LineItemDocument = await this.collection.database.collections.line_items
+			.insert({
 				product_id: product.id,
 				name: product.name,
 				quantity: 1,
@@ -224,8 +224,8 @@ export default {
 		const meta_data = product.meta_data || [];
 
 		// else, create new lineItem
-		const newLineItem: LineItemDocument = await this.collections()
-			.line_items.insert({
+		const newLineItem: LineItemDocument = await this.collection.database.collections.line_items
+			.insert({
 				product_id: parent.id,
 				name: parent.name,
 				variation_id: product.id,
@@ -283,8 +283,8 @@ export default {
 	 *
 	 */
 	async addFeeLine(this: OrderDocument, data: Record<string, unknown>) {
-		await this.collections()
-			.fee_lines.insert(data)
+		return this.collection.database.collections.fee_lines
+			.insert(data)
 			.then((newFee: FeeLineDocument) => {
 				return this.update({
 					$push: {
@@ -311,8 +311,8 @@ export default {
 	 *
 	 */
 	async addShippingLine(this: OrderDocument, data: Record<string, unknown>) {
-		await this.collections()
-			.shipping_lines.insert(data)
+		await this.collection.database.collections.shipping_lines
+			.insert(data)
 			.then((newShipping: ShippingLineDocument) => {
 				return this.update({
 					$push: {

@@ -68,7 +68,7 @@ export const methods: WPCredentialsMethods = {
 	 *
 	 */
 	async addStore(this: WPCredentialsDocument, data) {
-		const store: StoreDocument = await this.collections().stores.insert(data);
+		const store: StoreDocument = await this.collection.database.collections.stores.insert(data);
 		await this.update({ $push: { stores: store.localID } }).catch((err) => {
 			console.log(err);
 			return err;
