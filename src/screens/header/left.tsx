@@ -27,6 +27,7 @@ const HeaderLeft = () => {
 					title="Menu"
 					accessoryLeft={<Icon name="bars" type="inverse" />}
 					type="headerBackground"
+					style={{ padding: 0 }}
 				/>
 			);
 		}

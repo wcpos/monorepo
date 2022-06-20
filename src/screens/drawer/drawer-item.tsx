@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { DrawerProps } from '@react-navigation/drawer/src/types';
 import { Link } from '@react-navigation/native';
+import { useTheme } from 'styled-components/native';
 import Text from '@wcpos/components/src/text';
 import Icon from '@wcpos/components/src/icon';
 import Pressable from '@wcpos/components/src/pressable';
@@ -73,14 +74,17 @@ type Props = {
  *
  */
 const DrawItem = ({ label, icon, focused, onPress, drawerType, ...rest }: Props) => {
+	const theme = useTheme();
+
 	const iconNode = icon ? icon({ focused }) : null;
+
 	const labelNode =
 		typeof label === 'string' ? (
 			<Text
 				type={focused ? 'primary' : 'inverse'}
 				size="large"
 				weight="bold"
-				style={{ marginLeft: 20 }}
+				style={{ marginLeft: 10, minWidth: 150 }}
 			>
 				{label}
 			</Text>
@@ -88,30 +92,37 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, ...rest }: Props)
 			label({ focused })
 		);
 
+	const buttonNode = (
+		<Pressable
+			onPress={onPress}
+			style={({ hovered }) => {
+				return {
+					flexDirection: 'row',
+					alignItems: 'center',
+					paddingHorizontal: drawerType === 'permanent' ? 10 : 20,
+					paddingVertical: 10,
+					backgroundColor: hovered && !focused ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+					borderLeftWidth: 5,
+					borderRightWidth: 5,
+					borderColor: 'transparent',
+					borderLeftColor: focused ? theme.colors.primary : 'transparent',
+				};
+			}}
+		>
+			{iconNode}
+			{drawerType !== 'permanent' && labelNode}
+		</Pressable>
+	);
+
 	return (
-		<View style={{ paddingHorizontal: 10, paddingVertical: 5 }}>
-			<Tooltip content={label} placement="right">
-				<Pressable
-					onPress={onPress}
-					style={({ hovered }) => {
-						return {
-							flexDirection: 'row',
-							alignItems: 'center',
-							paddingHorizontal: drawerType === 'permanent' ? 10 : 20,
-							paddingVertical: 10,
-							backgroundColor: focused
-								? '#fff'
-								: hovered
-								? 'rgba(255, 255, 255, 0.1)'
-								: 'transparent',
-							borderRadius: 5,
-						};
-					}}
-				>
-					{iconNode}
-					{drawerType !== 'permanent' && labelNode}
-				</Pressable>
-			</Tooltip>
+		<View>
+			{drawerType === 'permanent' ? (
+				<Tooltip content={label} placement="right">
+					{buttonNode}
+				</Tooltip>
+			) : (
+				buttonNode
+			)}
 		</View>
 	);
 };

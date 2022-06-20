@@ -10,7 +10,7 @@ import DrawerItemList from './drawer-item-list';
 
 const Drawer = (props: DrawerContentComponentProps) => {
 	return (
-		<DrawerContentScrollView {...props}>
+		<DrawerContentScrollView {...props} contentContainerStyle={{ paddingTop: 0 }}>
 			<DrawerItemList {...props} />
 			{/* <DrawerItem label="Help" onPress={() => Linking.openURL('https://mywebsite.com/help')} /> */}
 		</DrawerContentScrollView>

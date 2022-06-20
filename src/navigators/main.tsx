@@ -119,6 +119,8 @@ const MainNavigator = () => {
 						drawerStyle: {
 							backgroundColor: theme.colors.headerBackground,
 							width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
+							borderRightColor: 'rgba(0, 0, 0, 0.2)',
+							// borderRightWidth: 0,
 						},
 						sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
 					}}
