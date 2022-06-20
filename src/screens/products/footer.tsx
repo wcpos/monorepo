@@ -1,9 +1,9 @@
 import * as React from 'react';
+import { useTheme } from 'styled-components/native';
 import { useObservableState } from 'observable-hooks';
-import Button from '@wcpos/components/src/button';
+import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import useAppState from '@wcpos/hooks/src/use-app-state';
-import * as Styled from './styles';
 
 interface ProductFooterProps {
 	count: number;
@@ -12,13 +12,22 @@ interface ProductFooterProps {
 const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { storeDB } = useAppState();
 	const total = useObservableState(storeDB.products.totalDocCount$, 0);
+	const theme = useTheme();
 
 	return (
-		<Styled.Footer>
-			<Text>
-				{count} of {total}
+		<Box
+			padding="small"
+			align="end"
+			style={{
+				backgroundColor: theme.colors.lightGrey,
+				borderBottomLeftRadius: theme.rounding.medium,
+				borderBottomRightRadius: theme.rounding.medium,
+			}}
+		>
+			<Text size="small">
+				Showing {count} of {total}
 			</Text>
-		</Styled.Footer>
+		</Box>
 	);
 };
 

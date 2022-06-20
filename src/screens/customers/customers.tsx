@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useTheme } from 'styled-components/native';
 import { QueryProvider } from '@wcpos/hooks/src/use-query';
 import Box from '@wcpos/components/src/box';
 import useUIResource from '@wcpos/hooks/src/use-ui-resource';
@@ -9,7 +10,6 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';
-import * as Styled from './styles';
 
 // type CustomersScreenProps = import('@wcpos/core/src/navigators/main').CustomersScreenProps;
 
@@ -18,6 +18,7 @@ import * as Styled from './styles';
  */
 const Customers = () => {
 	const ui = useObservableSuspense(useUIResource('customers'));
+	const theme = useTheme();
 	// useIdAudit('customers');
 	// useRestQuery('customers');
 
@@ -28,7 +29,17 @@ const Customers = () => {
 				rounding="medium"
 				style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
 			>
-				<Box horizontal space="small" padding="small" align="center">
+				<Box
+					horizontal
+					space="small"
+					padding="small"
+					align="center"
+					style={{
+						backgroundColor: theme.colors.grey,
+						borderTopLeftRadius: theme.rounding.medium,
+						borderTopRightRadius: theme.rounding.medium,
+					}}
+				>
 					<SearchBar />
 					<UiSettings ui={ui} />
 				</Box>

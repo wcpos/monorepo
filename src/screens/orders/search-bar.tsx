@@ -40,8 +40,8 @@ const SearchBar = () => {
 
 	return (
 		<Search
-			label="Order Products"
-			placeholder="Order Products"
+			label="Search Orders"
+			placeholder="Search Orders"
 			value={get(query, ['search', 'name'], '')}
 			onSearch={onSearch}
 			filters={filters}
