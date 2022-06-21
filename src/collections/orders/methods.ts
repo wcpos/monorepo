@@ -283,15 +283,33 @@ export default {
 	 *
 	 */
 	async addFeeLine(this: OrderDocument, data: Record<string, unknown>) {
-		return this.collection.database.collections.fee_lines
+		const newFee = await this.collection.database.collections.fee_lines
 			.insert(data)
-			.then((newFee: FeeLineDocument) => {
-				return this.update({
-					$push: {
-						fee_lines: newFee._id,
-					},
-				});
+			.catch((err: any) => {
+				debugger;
 			});
+
+		/**
+		 * Special case if the order is not yet saved, eg: new order
+		 */
+		if (this._isTemporary) {
+			const feeLines = this.fee_lines || [];
+			feeLines.push(newFee._id);
+			this.set('fee_lines', feeLines);
+			return this.save()
+				.then(() => this)
+				.catch((err: any) => {
+					debugger;
+				});
+		}
+
+		return this.update({
+			$push: {
+				fee_lines: newFee._id,
+			},
+		}).catch((err: any) => {
+			debugger;
+		});
 	},
 
 	/**
@@ -311,18 +329,33 @@ export default {
 	 *
 	 */
 	async addShippingLine(this: OrderDocument, data: Record<string, unknown>) {
-		await this.collection.database.collections.shipping_lines
+		const newShipping = await this.collection.database.collections.shipping_lines
 			.insert(data)
-			.then((newShipping: ShippingLineDocument) => {
-				return this.update({
-					$push: {
-						shipping_lines: newShipping._id,
-					},
-				});
-			})
 			.catch((err: any) => {
-				console.log(err);
+				debugger;
 			});
+
+		/**
+		 * Special case if the order is not yet saved, eg: new order
+		 */
+		if (this._isTemporary) {
+			const shippingLines = this.shipping_lines || [];
+			shippingLines.push(newShipping._id);
+			this.set('shipping_lines', shippingLines);
+			return this.save()
+				.then(() => this)
+				.catch((err: any) => {
+					debugger;
+				});
+		}
+
+		return this.update({
+			$push: {
+				shipping_lines: newShipping._id,
+			},
+		}).catch((err: any) => {
+			console.log(err);
+		});
 	},
 
 	/**

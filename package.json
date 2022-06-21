@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -42,7 +42,7 @@
 		"jest": "28.1.1",
 		"jsonschema-to-interface": "1.0.5",
 		"ts-jest": "28.0.5",
-		"typescript": "4.7.3"
+		"typescript": "4.7.4"
 	},
 	"eslintConfig": {
 		"extends": "@wcpos/eslint-config"
