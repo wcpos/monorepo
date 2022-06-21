@@ -43,11 +43,11 @@ module.exports = override(
 	addWebpackAlias({
 		'react-native-linear-gradient': 'react-native-web-linear-gradient',
 	}),
-	addWebpackModuleRule({
-		test: /\.svg$/,
-		exclude: /node_modules/,
-		use: [{ loader: '@svgr/webpack' }],
-	}),
+	// addWebpackModuleRule({
+	// 	test: /\.svg$/,
+	// 	exclude: /node_modules/,
+	// 	use: [{ loader: '@svgr/webpack' }],
+	// }),
 	addWebpackPlugin(
 		new webpack.DefinePlugin({
 			'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),

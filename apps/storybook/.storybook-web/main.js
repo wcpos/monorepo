@@ -65,11 +65,11 @@ module.exports = {
 			},
 		});
 
-		config.module.rules.push({
-			test: /\.svg$/,
-			exclude: /node_modules/,
-			use: [{ loader: '@svgr/webpack' }],
-		});
+		// config.module.rules.push({
+		// 	test: /\.svg$/,
+		// 	exclude: /node_modules/,
+		// 	use: [{ loader: '@svgr/webpack' }],
+		// });
 
 		//
 		config.resolve.alias = config.resolve.alias || {};

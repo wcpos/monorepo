@@ -44,7 +44,7 @@
     "postinstall-postinstall": "2.1.0",
     "prettier": "2.7.1",
     "ts-jest": "28.0.5",
-    "typescript": "4.7.3"
+    "typescript": "4.7.4"
   },
   "packageManager": "yarn@3.2.0",
   "eslintConfig": {
