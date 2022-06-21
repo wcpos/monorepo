@@ -60,11 +60,12 @@ const Auth = () => {
 						<Box
 							raised
 							rounding="medium"
-							padding="medium"
+							// padding="medium"
+							// space="medium"
 							style={{ width: '100%', backgroundColor: 'white' }}
 						>
-							{sites.map((site) => (
-								<Site key={site.localID} site={site} user={user} />
+							{sites.map((site, index) => (
+								<Site key={site.localID} site={site} user={user} first={index === 0} />
 							))}
 						</Box>
 					)}

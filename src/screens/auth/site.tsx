@@ -20,9 +20,10 @@ type WPCredentialsDocument = import('@wcpos/database').WPCredentialsDocument;
 interface SiteProps {
 	site: SiteDocument;
 	user: UserDocument;
+	first: boolean;
 }
 
-const Site = ({ site, user }: SiteProps) => {
+const Site = ({ site, user, first }: SiteProps) => {
 	const { ref: dialogRef, open: openConfirmDialog } = useDialog();
 
 	/**
@@ -38,7 +39,13 @@ const Site = ({ site, user }: SiteProps) => {
 
 	return (
 		<>
-			<Box horizontal space="medium" align="center">
+			<Box
+				horizontal
+				padding="medium"
+				space="medium"
+				align="center"
+				style={{ borderTopWidth: first ? 0 : 1 }}
+			>
 				<Box>
 					<Avatar src={`https://icon.horse/icon/${site.getUrlWithoutProtocol()}`} />
 				</Box>

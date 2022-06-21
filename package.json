@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/core",
-	"version": "1.0.3",
+	"version": "1.0.4",
 	"description": "The core WooCommerce POS app",
 	"author": "kilbot <paul@kilbot.com>",
 	"license": "MIT",
@@ -53,6 +53,7 @@
 		"react-native-web-linear-gradient": "1.1.2",
 		"react-native-webview": "11.22.2",
 		"react-test-renderer": "17.0.2",
+		"react-to-print": "^2.14.7",
 		"rxdb": "12.5.3",
 		"rxjs": "7.5.5",
 		"styled-components": "5.3.5",
