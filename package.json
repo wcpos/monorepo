@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/hooks",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "Hooks for WooCommerce POS",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/hooks#readme",
@@ -42,7 +42,7 @@
 		"@types/jest": "27.5.2",
 		"@types/lodash": "4.14.182",
 		"@types/react": "17.0.47",
-		"@types/react-native": "0.67.9",
+		"@types/react-native": "0.67.11",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
 		"babel-loader": "8.2.5",
