@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
 import get from 'lodash/get';
 import useData from '@wcpos/hooks/src/use-collection-query';
-import useQuery from '@wcpos/hooks/src/use-query';
+import useCustomers from '@wcpos/hooks/src/use-customers';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table from '@wcpos/components/src/table';
 import useRestQuery from '@wcpos/hooks/src/use-rest-query-customers';
@@ -15,11 +15,10 @@ import Address from './cells/address';
 import Avatar from './cells/avatar';
 import Footer from './footer';
 
-type Sort = import('@wcpos/components/src/table/types').Sort;
-type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
+type Sort = import('@wcpos/components/src/table/table').Sort;
+type SortDirection = import('@wcpos/components/src/table/table').SortDirection;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
-type ColumnProps =
-	import('@wcpos/components/src/table/table').ColumnProps<CustomerDocument>;
+type ColumnProps = import('@wcpos/components/src/table/table').ColumnProps<CustomerDocument>;
 type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 
 interface CustomersTableProps {
@@ -41,8 +40,10 @@ const cells = {
  */
 const CustomersTable = ({ ui }: CustomersTableProps) => {
 	const { t } = useTranslation();
-	const { data } = useData('customers');
-	const { query, setQuery } = useQuery();
+	// const { data } = useData('customers');
+	const { query$, setQuery, resource } = useCustomers();
+	const query = useObservableState(query$, query$.getValue());
+	const customers = useObservableSuspense(resource);
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 	// useRestQuery('customers');
 
@@ -71,8 +72,8 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 	 * in memory sort
 	 */
 	const sortedData = React.useMemo(() => {
-		return orderBy(data, [query.sortBy], [query.sortDirection]);
-	}, [data, query.sortBy, query.sortDirection]);
+		return orderBy(customers, [query.sortBy], [query.sortDirection]);
+	}, [customers, query.sortBy, query.sortDirection]);
 
 	/**
 	 * handle sort
@@ -121,7 +122,7 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 		[cellRenderer, visibleColumns]
 	);
 
-	useWhyDidYouUpdate('Table', { data });
+	useWhyDidYouUpdate('Table', { customers });
 
 	return (
 		<Table<CustomerDocument>
@@ -130,7 +131,7 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 			sort={handleSort}
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}
-			footer={<Footer count={data.length} />}
+			footer={<Footer count={customers.length} />}
 			rowRenderer={rowRenderer}
 		/>
 	);

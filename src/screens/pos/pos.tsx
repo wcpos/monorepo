@@ -7,7 +7,6 @@ import { map, debounceTime } from 'rxjs/operators';
 import isEqual from 'lodash/isEqual';
 import orderBy from 'lodash/orderBy';
 import useUIResource from '@wcpos/hooks/src/use-ui-resource';
-import { QueryProvider } from '@wcpos/hooks/src/use-query';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useAppState from '@wcpos/hooks/src/use-app-state';
 import Text from '@wcpos/components/src/text';
@@ -64,9 +63,7 @@ const POS = () => {
 
 	const leftComponent = (
 		<ErrorBoundary>
-			<QueryProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }}>
-				<Products ui={productsUI} />
-			</QueryProvider>
+			<Products ui={productsUI} />
 		</ErrorBoundary>
 	);
 

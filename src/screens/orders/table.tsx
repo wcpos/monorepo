@@ -1,10 +1,8 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
-import orderBy from 'lodash/orderBy';
 import get from 'lodash/get';
-import useData from '@wcpos/hooks/src/use-collection-query';
-import useQuery from '@wcpos/hooks/src/use-query';
+import useOrders from '@wcpos/hooks/src/use-orders';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
@@ -16,8 +14,8 @@ import Status from './cells/status';
 import Total from './cells/total';
 import Footer from './footer';
 
-type Sort = import('@wcpos/components/src/table/types').Sort;
-type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
+type Sort = import('@wcpos/components/src/table/table').Sort;
+type SortDirection = import('@wcpos/components/src/table/table').SortDirection;
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type ColumnProps = import('@wcpos/components/src/table/table').ColumnProps<OrderDocument>;
 type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
@@ -41,8 +39,9 @@ const cells = {
  */
 const OrdersTable = ({ ui }: OrdersTableProps) => {
 	const { t } = useTranslation();
-	const { data } = useData('orders');
-	const { query, setQuery } = useQuery();
+	const { query$, setQuery, resource } = useOrders();
+	const query = useObservableState(query$, query$.getValue());
+	const data = useObservableSuspense(resource);
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
@@ -60,13 +59,6 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 				})),
 		[columns, t]
 	);
-
-	/**
-	 * in memory sort
-	 */
-	const sortedData = React.useMemo(() => {
-		return orderBy(data, [query.sortBy], [query.sortDirection]);
-	}, [data, query.sortBy, query.sortDirection]);
 
 	/**
 	 * handle sort
@@ -119,7 +111,7 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 	return (
 		<Table<OrderDocument>
 			columns={visibleColumns}
-			data={sortedData}
+			data={data}
 			sort={handleSort}
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}

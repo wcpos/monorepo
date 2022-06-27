@@ -1,4 +1,5 @@
 import * as React from 'react';
+import pick from 'lodash/pick';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
 import Modal, { useModal } from '@wcpos/components/src/modal';
@@ -24,6 +25,26 @@ const Actions = ({ item: customer }: Props) => {
 		customer.remove();
 	};
 
+	/**
+	 *
+	 */
+	const schema = React.useMemo(() => {
+		return {
+			...customer.collection.schema.jsonSchema,
+			properties: pick(customer.collection.schema.jsonSchema.properties, [
+				'id',
+				'email',
+				'first_name',
+				'last_name',
+				'role',
+				'username',
+				'billing',
+				'shipping',
+				'meta_data',
+			]),
+		};
+	}, [customer.collection.schema.jsonSchema]);
+
 	return (
 		<>
 			<Dropdown
@@ -41,7 +62,7 @@ const Actions = ({ item: customer }: Props) => {
 				primaryAction={{ label: 'Sync Customer', action: handleSync }}
 				secondaryActions={[{ label: 'Cancel', action: close }]}
 			>
-				<EditCustomer item={customer} />
+				<EditCustomer item={customer} schema={schema} uiSchema={{}} />
 			</Modal>
 		</>
 	);

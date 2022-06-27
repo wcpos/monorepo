@@ -88,7 +88,7 @@ const MainNavigator = () => {
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
 	const storeName = useObservableState(store.name$, store.name);
-	useIdAudit();
+	// useIdAudit();
 	// useStoreSync();
 
 	const header = React.useCallback((props) => <CustomHeader {...props} />, []);

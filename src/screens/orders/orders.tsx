@@ -1,15 +1,14 @@
 import * as React from 'react';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
-import { QueryProvider } from '@wcpos/hooks/src/use-query';
+import { OrdersProvider } from '@wcpos/hooks/src/use-orders';
 import Box from '@wcpos/components/src/box';
-import useIdAudit from '@wcpos/hooks/src/use-id-audit';
 import useUIResource from '@wcpos/hooks/src/use-ui-resource';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';
 
-type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
+type SortDirection = import('@wcpos/components/src/table/table').SortDirection;
 type OrderDocument = import('@wcpos/database').OrderDocument;
 interface QueryState {
 	search: string;
@@ -23,11 +22,9 @@ interface QueryState {
 const Orders = () => {
 	const ui = useObservableSuspense(useUIResource('orders'));
 	const theme = useTheme();
-	// useIdAudit('orders');
-	// useRestQuery('products');
 
 	return (
-		<QueryProvider initialQuery={{ sortBy: 'date_created_gmt', sortDirection: 'asc' }}>
+		<OrdersProvider initialQuery={{ sortBy: 'date_created_gmt', sortDirection: 'desc' }}>
 			<Box
 				raised
 				rounding="medium"
@@ -51,7 +48,7 @@ const Orders = () => {
 					<Table ui={ui} />
 				</Box>
 			</Box>
-		</QueryProvider>
+		</OrdersProvider>
 	);
 };
 

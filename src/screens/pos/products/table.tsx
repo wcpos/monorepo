@@ -1,19 +1,15 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
-import orderBy from 'lodash/orderBy';
-import useData from '@wcpos/hooks/src/use-collection-query';
-import useQuery from '@wcpos/hooks/src/use-query';
+import useProducts from '@wcpos/hooks/src/use-products';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table from '@wcpos/components/src/table';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import { SimpleProductRow, VariableProductRow } from './rows';
 import Footer from './footer';
 
-type Sort = import('@wcpos/components/src/table/types').Sort;
-type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
+type Sort = import('@wcpos/components/src/table/table').Sort;
 type ProductDocument = import('@wcpos/database').ProductDocument;
-type ColumnProps = import('@wcpos/components/src/table/table').ColumnProps<ProductDocument>;
 type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 
 interface POSProductsTableProps {
@@ -25,8 +21,9 @@ interface POSProductsTableProps {
  */
 const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	const { t } = useTranslation();
-	const { data } = useData('products');
-	const { query, setQuery } = useQuery();
+	const { query$, resource, setQuery } = useProducts();
+	const query = useObservableState(query$, query$.getValue());
+	const data = useObservableSuspense(resource);
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
@@ -45,13 +42,6 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 				};
 			});
 	}, [columns, t]);
-
-	/**
-	 * in memory sort
-	 */
-	const sortedData = React.useMemo(() => {
-		return orderBy(data, [query.sortBy], [query.sortDirection]);
-	}, [data, query.sortBy, query.sortDirection]);
 
 	/**
 	 * handle sort
@@ -91,7 +81,6 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 		data,
 		columns,
 		query,
-		sortedData,
 		visibleColumns,
 		rowRenderer,
 	});
@@ -99,7 +88,7 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	return (
 		<Table<ProductDocument>
 			columns={visibleColumns}
-			data={sortedData}
+			data={data}
 			sort={handleSort}
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}

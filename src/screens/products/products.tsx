@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
-import { QueryProvider } from '@wcpos/hooks/src/use-query';
+import { ProductsProvider } from '@wcpos/hooks/src/use-products';
 import Box from '@wcpos/components/src/box';
 import useUIResource from '@wcpos/hooks/src/use-ui-resource';
 import Table from './table';
@@ -18,7 +18,7 @@ const Products = () => {
 	// useRestQuery('products');
 
 	return (
-		<QueryProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }}>
+		<ProductsProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }}>
 			<Box
 				raised
 				rounding="medium"
@@ -42,7 +42,7 @@ const Products = () => {
 					<Table ui={ui} />
 				</Box>
 			</Box>
-		</QueryProvider>
+		</ProductsProvider>
 	);
 };
 

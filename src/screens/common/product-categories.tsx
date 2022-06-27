@@ -1,7 +1,7 @@
 import * as React from 'react';
 import set from 'lodash/set';
 import Tag from '@wcpos/components/src/tag';
-import useQuery from '@wcpos/hooks/src/use-query';
+import useProducts from '@wcpos/hooks/src/use-products';
 
 interface ProductCategoriesProps {
 	item: import('@wcpos/database').ProductDocument;
@@ -9,7 +9,7 @@ interface ProductCategoriesProps {
 
 const ProductCategories = ({ item: product }: ProductCategoriesProps) => {
 	const { categories } = product;
-	const { setQuery } = useQuery();
+	const { setQuery } = useProducts();
 
 	/**
 	 *

@@ -18,6 +18,7 @@ const gateways = [
 	{ key: 'card', title: 'Card' },
 	{ key: 'paypal', title: 'PayPal' },
 	{ key: 'stripe', title: 'Stripe' },
+	{ key: 'bacs', title: 'BACS' },
 ];
 
 export const Checkout = ({ order }: CheckoutProps) => {

@@ -34,17 +34,19 @@ export const UserMenu = () => {
 							store.collection.upsertLocal('current', { id: null });
 							navigation.navigate('Auth');
 						},
-						type: 'warning',
+						type: 'critical',
 					},
 				]}
 			>
 				<Box horizontal space="xSmall" align="center">
 					<Avatar
-						src="https://secure.gravatar.com/avatar/a2a53c07cdd4a8aa81c043baafd0915f"
+						src={wpCredentials?.avatar_url}
 						// placeholder="PK"
 						size="small"
 					/>
-					{dimensions.width >= theme.screens.small ? <Text type="inverse">Test</Text> : null}
+					{dimensions.width >= theme.screens.small ? (
+						<Text type="inverse">{wpCredentials?.display_name}</Text>
+					) : null}
 					<Icon name="caretDown" type="inverse" size="small" />
 				</Box>
 			</Dropdown>

@@ -1,10 +1,9 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import orderBy from 'lodash/orderBy';
 import get from 'lodash/get';
-import useData from '@wcpos/hooks/src/use-collection-query';
-import useQuery from '@wcpos/hooks/src/use-query';
+import useProducts from '@wcpos/hooks/src/use-products';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table from '@wcpos/components/src/table';
 import Actions from './cells/actions';
@@ -44,8 +43,9 @@ const cells = {
  */
 const ProductsTable = ({ ui }: ProductsTableProps) => {
 	const { t } = useTranslation();
-	const { data } = useData('products');
-	const { query, setQuery } = useQuery();
+	const { query$, setQuery, resource } = useProducts();
+	const query = useObservableState(query$, query$.getValue());
+	const data = useObservableSuspense(resource);
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
@@ -68,13 +68,6 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 		const Cell = get(cells, column.key);
 		return Cell ? <Cell item={item} column={column} /> : null;
 	}, []);
-
-	/**
-	 * in memory sort
-	 */
-	const sortedData = React.useMemo(() => {
-		return orderBy(data, [query.sortBy], [query.sortDirection]);
-	}, [data, query.sortBy, query.sortDirection]);
 
 	/**
 	 * handle sort
@@ -119,7 +112,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	return (
 		<Table<ProductDocument>
 			columns={visibleColumns}
-			data={sortedData}
+			data={data}
 			sort={handleSort}
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}

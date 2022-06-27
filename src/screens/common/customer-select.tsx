@@ -1,18 +1,9 @@
 import * as React from 'react';
-import { useObservable, useObservableState } from 'observable-hooks';
-import {
-	switchMap,
-	tap,
-	debounceTime,
-	catchError,
-	distinctUntilChanged,
-	map,
-} from 'rxjs/operators';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import useCustomers, { CustomersProvider } from '@wcpos/hooks/src/use-customers';
 import orderBy from 'lodash/orderBy';
 import { useTranslation } from 'react-i18next';
-import useDataObservable from '@wcpos/hooks/src/use-data-observable';
 import Combobox from '@wcpos/components/src/combobox';
-import useAppState from '@wcpos/hooks/src/use-app-state';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -25,11 +16,9 @@ interface CustomerSelectProps {
 
 const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectProps) => {
 	const { t } = useTranslation();
-	const { data$, query, setQuery } = useDataObservable('customers', {
-		search: '',
-		sortBy: 'lastName',
-		sortDirection: 'asc',
-	});
+	const { query$, setQuery, resource } = useCustomers();
+	const query = useObservableState(query$, query$.getValue());
+	const customers = useObservableSuspense(resource);
 
 	const displayCustomerNameOrUsername = React.useCallback((customer: CustomerDocument) => {
 		if (!customer.firstName && !customer.lastName) return customer.username;
@@ -38,12 +27,10 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 
 	const onSearch = React.useCallback(
 		(search: string) => {
-			setQuery((prev) => ({ ...prev, search }));
+			setQuery('search', search);
 		},
 		[setQuery]
 	);
-
-	const customers = useObservableState(data$, []) as CustomerDocument[];
 
 	const options = React.useMemo(() => {
 		const sortedCustomers = orderBy(customers, 'lastName');
@@ -79,4 +66,14 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 	);
 };
 
-export default CustomerSelect;
+export default (props: CustomerSelectProps) => (
+	<CustomersProvider
+		initialQuery={{
+			search: '',
+			sortBy: 'lastName',
+			sortDirection: 'asc',
+		}}
+	>
+		<CustomerSelect {...props} />
+	</CustomersProvider>
+);

@@ -1,15 +1,16 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
 import Search from '@wcpos/components/src/search';
-import useQuery from '@wcpos/hooks/src/use-query';
+import useOrders from '@wcpos/hooks/src/use-orders';
 
 const SearchBar = () => {
-	const { query, setQuery } = useQuery();
+	const { query$, setQuery } = useOrders();
+	const query = useObservableState(query$, query$.getValue());
 
 	const onSearch = React.useCallback(
 		(search: string) => {
-			setQuery(['search', 'name'], search);
+			setQuery('search', search);
 		},
 		[setQuery]
 	);
@@ -42,7 +43,7 @@ const SearchBar = () => {
 		<Search
 			label="Search Orders"
 			placeholder="Search Orders"
-			value={get(query, ['search', 'name'], '')}
+			value={query.search}
 			onSearch={onSearch}
 			filters={filters}
 		/>

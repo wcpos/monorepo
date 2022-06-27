@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
-import { QueryProvider } from '@wcpos/hooks/src/use-query';
+import { CustomersProvider } from '@wcpos/hooks/src/use-customers';
 import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
 import useUIResource from '@wcpos/hooks/src/use-ui-resource';
 import useIdAudit from '@wcpos/hooks/src/use-id-audit';
 import useRestQuery from '@wcpos/hooks/src/use-rest-query-customers';
@@ -23,7 +24,7 @@ const Customers = () => {
 	// useRestQuery('customers');
 
 	return (
-		<QueryProvider initialQuery={{ sortBy: 'lastName', sortDirection: 'asc' }}>
+		<CustomersProvider initialQuery={{ sortBy: 'last_name', sortDirection: 'asc' }}>
 			<Box
 				raised
 				rounding="medium"
@@ -44,10 +45,12 @@ const Customers = () => {
 					<UiSettings ui={ui} />
 				</Box>
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-					<Table ui={ui} />
+					<React.Suspense fallback={<Text>Loading Customers Table</Text>}>
+						<Table ui={ui} />
+					</React.Suspense>
 				</Box>
 			</Box>
-		</QueryProvider>
+		</CustomersProvider>
 	);
 };
 

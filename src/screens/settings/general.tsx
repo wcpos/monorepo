@@ -33,7 +33,7 @@ export const GeneralSettings = () => {
 		};
 
 		// fix html entities for currency
-		_schema.properties.currency.enumNames = _schema.properties.currency.enumNames.map(decode);
+		// _schema.properties.currency.enumNames = _schema.properties.currency.enumNames.map(decode);
 
 		return _schema;
 	}, [store?.collection.schema.jsonSchema]);
