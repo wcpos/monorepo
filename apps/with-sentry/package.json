@@ -13,9 +13,9 @@
     "eject": "expo eject"
   },
   "dependencies": {
-    "@sentry/react-native": "3.4.3",
+    "@sentry/react-native": "4.0.1",
     "@wcpos/core": "*",
-    "expo": "45.0.5",
+    "expo": "45.0.6",
     "expo-application": "4.1.0",
     "expo-constants": "13.1.1",
     "expo-device": "4.2.0",
@@ -33,7 +33,7 @@
     "@sentry/cli": "2.2.0",
     "@types/react": "17.0.47",
     "@types/react-dom": "17.0.17",
-    "@types/react-native": "0.67.9",
+    "@types/react-native": "0.67.11",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
