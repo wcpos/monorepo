@@ -9,7 +9,7 @@ import useRestHttpClient from '../use-rest-http-client';
 import { getAuditIdReplicationState } from './id-audit';
 import { getReplicationState } from './replication';
 
-type CustomerDocument = import('@wcpos/database/src/collections/customers').CustomerDocument;
+type OrderDocument = import('@wcpos/database/src/collections/customers').OrderDocument;
 type SortDirection = import('@wcpos/components/src/table/table').SortDirection;
 
 export interface QueryState {
@@ -20,21 +20,21 @@ export interface QueryState {
 	filters?: Record<string, unknown>;
 }
 
-export const CustomersContext = React.createContext<{
+export const OrdersContext = React.createContext<{
 	query$: BehaviorSubject<QueryState>;
 	setQuery: (path: string | string[], value: any) => void;
-	resource: ObservableResource<CustomerDocument[]>;
+	resource: ObservableResource<OrderDocument[]>;
 }>(null);
 
-interface CustomersProviderProps {
+interface OrdersProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
 }
 
-const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) => {
+const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
 	const { storeDB } = useAppState();
-	const collection = storeDB.collections.customers;
+	const collection = storeDB.collections.orders;
 	const http = useRestHttpClient();
 
 	/**
@@ -126,7 +126,7 @@ const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) =
 		[query$, resource, setQuery]
 	);
 
-	return <CustomersContext.Provider value={value}>{children}</CustomersContext.Provider>;
+	return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>;
 };
 
-export default CustomersProvider;
+export default OrdersProvider;
