@@ -100,6 +100,7 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 					columns={visibleColumns}
 					// itemIndex={index}
 					cellRenderer={cellRenderer}
+					itemIndex={index}
 				/>
 			);
 		},

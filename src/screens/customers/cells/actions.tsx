@@ -14,13 +14,22 @@ const Actions = ({ item: customer }: Props) => {
 	const { ref: modalRef, open, close } = useModal();
 	const http = useRestHttpClient();
 
+	/**
+	 *
+	 */
 	const handleSync = async () => {
 		// push
 		const result = await http.post(`customers/${customer.id}`, customer.toJSON());
-
-		debugger;
+		if (result && result.data) {
+			// parse raw data
+			const data = customer.collection.parseRestResponse(result.data);
+			customer.atomicPatch(data);
+		}
 	};
 
+	/**
+	 *
+	 */
 	const handleDelete = () => {
 		customer.remove();
 	};

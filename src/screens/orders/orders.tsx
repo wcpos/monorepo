@@ -3,6 +3,7 @@ import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 import { OrdersProvider } from '@wcpos/hooks/src/use-orders';
 import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
 import useUIResource from '@wcpos/hooks/src/use-ui-resource';
 import Table from './table';
 import SearchBar from './search-bar';
@@ -45,7 +46,9 @@ const Orders = () => {
 					<UiSettings ui={ui} />
 				</Box>
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-					<Table ui={ui} />
+					<React.Suspense fallback={<Text>Loading orders table...</Text>}>
+						<Table ui={ui} />
+					</React.Suspense>
 				</Box>
 			</Box>
 		</OrdersProvider>

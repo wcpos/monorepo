@@ -2,6 +2,7 @@ import * as React from 'react';
 import { ProductsProvider } from '@wcpos/hooks/src/use-products';
 import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
 import UiSettings from '../../common/ui-settings';
 import Table from './table';
 import SearchBar from './search-bar';
@@ -38,7 +39,9 @@ const POSProducts = ({ ui }: POSProductsProps) => {
 					<UiSettings ui={ui} />
 				</Box>
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-					<Table ui={ui} />
+					<React.Suspense fallback={<Text>Loading products...</Text>}>
+						<Table ui={ui} />
+					</React.Suspense>
 				</Box>
 			</Box>
 		</ProductsProvider>

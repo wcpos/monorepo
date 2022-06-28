@@ -2,11 +2,6 @@ import axios from 'axios';
 
 export const noConfigAxios = axios;
 
-const user = {
-	key: 'ck_3a5b30b5570a020fa613a7be5cdfc516c21e8371',
-	secret: 'cs_a57adc1116df21dac39a0483cd635f2d3becfb6b',
-};
-
 /**
  * React Native does not have global btoa
  */

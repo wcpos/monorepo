@@ -1,13 +1,10 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
-import orderBy from 'lodash/orderBy';
 import get from 'lodash/get';
-import useData from '@wcpos/hooks/src/use-collection-query';
 import useCustomers from '@wcpos/hooks/src/use-customers';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table from '@wcpos/components/src/table';
-import useRestQuery from '@wcpos/hooks/src/use-rest-query-customers';
 import Actions from './cells/actions';
 import Name from './cells/name';
 import Email from './cells/email';
@@ -26,9 +23,9 @@ interface CustomersTableProps {
 }
 
 const cells = {
-	avatarUrl: Avatar,
-	firstName: Name,
-	lastName: Name,
+	avatar_url: Avatar,
+	first_name: Name,
+	last_name: Name,
 	email: Email,
 	billing: Address,
 	shipping: Address,
@@ -40,12 +37,10 @@ const cells = {
  */
 const CustomersTable = ({ ui }: CustomersTableProps) => {
 	const { t } = useTranslation();
-	// const { data } = useData('customers');
 	const { query$, setQuery, resource } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
-	const customers = useObservableSuspense(resource);
+	const data = useObservableSuspense(resource);
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
-	// useRestQuery('customers');
 
 	/**
 	 * - filter visible columns
@@ -67,13 +62,6 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 				}),
 		[columns, t]
 	);
-
-	/**
-	 * in memory sort
-	 */
-	const sortedData = React.useMemo(() => {
-		return orderBy(customers, [query.sortBy], [query.sortDirection]);
-	}, [customers, query.sortBy, query.sortDirection]);
 
 	/**
 	 * handle sort
@@ -116,22 +104,23 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 					columns={visibleColumns}
 					// itemIndex={index}
 					cellRenderer={cellRenderer}
+					itemIndex={index}
 				/>
 			);
 		},
 		[cellRenderer, visibleColumns]
 	);
 
-	useWhyDidYouUpdate('Table', { customers });
+	useWhyDidYouUpdate('Table', { data });
 
 	return (
 		<Table<CustomerDocument>
 			columns={visibleColumns}
-			data={sortedData}
+			data={data}
 			sort={handleSort}
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}
-			footer={<Footer count={customers.length} />}
+			footer={<Footer count={data.length} />}
 			rowRenderer={rowRenderer}
 		/>
 	);
