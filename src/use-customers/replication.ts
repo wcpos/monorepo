@@ -34,10 +34,12 @@ export const getReplicationState = async (http, collection) => {
 							console.log(response);
 						});
 
-					const documents = map(result?.data, (item) => collection.parseRestResponse(item));
-					await collection.bulkUpsert(documents).catch(() => {
-						debugger;
-					});
+					if (result) {
+						const documents = map(result?.data, (item) => collection.parseRestResponse(item));
+						await collection.bulkUpsert(documents).catch(() => {
+							debugger;
+						});
+					}
 					// await Promise.all(map(documents, (doc) => collection.atomicUpsert(doc))).catch(() => {
 					// 	debugger;
 					// });

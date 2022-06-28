@@ -11,6 +11,7 @@ export const useErrorResponseHandler = () => {
 		(res: AxiosResponse) => {
 			if (!res) {
 				console.log('CORS error?');
+				console.log('also happens when site is offline');
 				return;
 			}
 

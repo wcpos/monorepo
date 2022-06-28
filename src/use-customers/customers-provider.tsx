@@ -24,6 +24,7 @@ export const CustomersContext = React.createContext<{
 	query$: BehaviorSubject<QueryState>;
 	setQuery: (path: string | string[], value: any) => void;
 	resource: ObservableResource<CustomerDocument[]>;
+	runReplication: () => void;
 }>(null);
 
 interface CustomersProviderProps {
@@ -36,6 +37,7 @@ const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) =
 	const { storeDB } = useAppState();
 	const collection = storeDB.collections.customers;
 	const http = useRestHttpClient();
+	const replicationStates = React.useRef({ audit: null, sync: null });
 
 	/**
 	 *
@@ -54,6 +56,7 @@ const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) =
 	 */
 	React.useEffect(() => {
 		const replicationState = getAuditIdReplicationState(http, collection);
+		replicationStates.current.audit = replicationState;
 
 		return function cleanUp() {
 			replicationState.then((result) => {
@@ -67,6 +70,7 @@ const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) =
 	 */
 	React.useEffect(() => {
 		const replicationState = getReplicationState(http, collection);
+		replicationStates.current.sync = replicationState;
 
 		return function cleanUp() {
 			replicationState.then((result) => {
@@ -74,6 +78,19 @@ const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) =
 			});
 		};
 	}, [collection, http]);
+
+	/**
+	 *
+	 */
+	const runReplication = React.useCallback(() => {
+		const { audit } = replicationStates.current;
+
+		if (audit) {
+			audit.then((result) => {
+				result.run();
+			});
+		}
+	}, []);
 
 	/**
 	 *
@@ -122,8 +139,9 @@ const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) =
 			// query: query$.getValue(),
 			setQuery,
 			resource,
+			runReplication,
 		}),
-		[query$, resource, setQuery]
+		[query$, resource, setQuery, runReplication]
 	);
 
 	return <CustomersContext.Provider value={value}>{children}</CustomersContext.Provider>;
