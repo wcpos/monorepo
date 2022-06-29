@@ -27,9 +27,9 @@ const Cart = ({ order }: CartProps) => {
 	const ui = useObservableSuspense(useUIResource('pos.cart'));
 	const cartResource = new ObservableResource(order.cart$);
 	const theme = useTheme();
-	useCalcTotals(order);
+	// useCalcTotals(order);
 
-	useWhyDidYouUpdate('Cart', { order, ui });
+	useWhyDidYouUpdate('Cart', { order, ui, cartResource, theme });
 
 	return (
 		<Box

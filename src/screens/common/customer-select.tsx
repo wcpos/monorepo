@@ -14,17 +14,26 @@ interface CustomerSelectProps {
 	onSelectCustomer: (value: CustomerDocument) => void;
 }
 
+/**
+ *
+ */
 const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectProps) => {
 	const { t } = useTranslation();
 	const { query$, setQuery, resource } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
 	const customers = useObservableSuspense(resource);
 
+	/**
+	 *
+	 */
 	const displayCustomerNameOrUsername = React.useCallback((customer: CustomerDocument) => {
 		if (!customer.firstName && !customer.lastName) return customer.username;
 		return `${customer.firstName} ${customer.lastName}`;
 	}, []);
 
+	/**
+	 *
+	 */
 	const onSearch = React.useCallback(
 		(search: string) => {
 			setQuery('search', search);
@@ -32,6 +41,9 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 		[setQuery]
 	);
 
+	/**
+	 *
+	 */
 	const options = React.useMemo(() => {
 		const sortedCustomers = orderBy(customers, 'lastName');
 
@@ -42,16 +54,19 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 		}));
 	}, [customers, displayCustomerNameOrUsername]);
 
-	// useWhyDidYouUpdate('Customer Select', {
-	// 	selectedCustomer,
-	// 	onSelectCustomer,
-	// 	customers,
-	// 	onSearch,
-	// 	query,
-	// 	setQuery,
-	// 	data$,
-	// });
+	useWhyDidYouUpdate('Customer Select', {
+		selectedCustomer,
+		onSelectCustomer,
+		customers,
+		onSearch,
+		query,
+		setQuery,
+		options,
+	});
 
+	/**
+	 *
+	 */
 	return (
 		<Combobox
 			label="Search customers"

@@ -1,7 +1,12 @@
 import * as React from 'react';
 import Box from '@wcpos/components/src/box';
 import { useTheme } from 'styled-components/native';
+import { useObservableState } from 'observable-hooks';
+import pick from 'lodash/pick';
 import useAppState from '@wcpos/hooks/src/use-app-state';
+import Tag from '@wcpos/components/src/tag';
+import Modal, { useModal } from '@wcpos/components/src/modal';
+import Form from '@wcpos/react-native-jsonschema-form';
 import CustomerSelect from '../../common/customer-select';
 import AddCustomer from '../../common/add-new-customer';
 import UISettings from '../../common/ui-settings';
@@ -13,11 +18,57 @@ interface CartHeaderProps {
 	ui: any;
 }
 
+/**
+ *
+ */
 const CartHeader = ({ order, ui }: CartHeaderProps) => {
 	const theme = useTheme();
-	// const { storeDB } = useAppState();
-	// const customer = storeDB.collections.customers.newDocument({ first_name: 'test' });
+	const { storeDB } = useAppState();
+	let customer = useObservableState(
+		storeDB?.collections.customers.findOne({ selector: { id: order.customer_id } }).$
+	);
+	const { ref, open, close } = useModal();
 
+	if (order.customer_id === 0) {
+		customer = { username: 'Guest' };
+	}
+
+	/**
+	 *
+	 */
+	const handleCustomerRemove = React.useCallback(async () => {
+		await order.atomicPatch({ customer_id: -1 });
+	}, [order]);
+
+	/**
+	 *
+	 */
+	const handleCustomerSelect = React.useCallback((customer) => {
+		console.log(customer);
+	}, []);
+
+	/**
+	 *
+	 */
+	const handleSaveCustomer = React.useCallback(() => {
+		console.log('save');
+	}, []);
+
+	/**
+	 *
+	 */
+	const schema = React.useMemo(() => {
+		const _schema = {
+			...order.collection.schema.jsonSchema,
+			properties: pick(order.collection.schema.jsonSchema.properties, ['billing', 'shipping']),
+		};
+
+		return _schema;
+	}, [order.collection.schema.jsonSchema]);
+
+	/**
+	 *
+	 */
 	return (
 		<Box
 			horizontal
@@ -30,13 +81,29 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 				borderTopRightRadius: theme.rounding.medium,
 			}}
 		>
-			<CustomerSelect
-				onSelectCustomer={(val) => {
-					console.log(val);
-				}}
-			/>
+			<Box style={{ flex: 1 }}>
+				{customer ? (
+					<Tag removable onRemove={handleCustomerRemove} onPress={open}>
+						Customer: {customer.username}
+					</Tag>
+				) : (
+					<CustomerSelect onSelectCustomer={handleCustomerSelect} />
+				)}
+			</Box>
 			<AddCustomer />
 			<UISettings ui={ui} />
+			<Modal
+				ref={ref}
+				title="Edit Customer Addresses"
+				primaryAction={{ label: 'Edit Customer', action: handleSaveCustomer }}
+				secondaryActions={[{ label: 'Cancel', action: close }]}
+			>
+				<Form
+					formData={{ billing: order.billing, shipping: order.shipping }}
+					schema={schema}
+					uiSchema={{}}
+				/>
+			</Modal>
 		</Box>
 	);
 };

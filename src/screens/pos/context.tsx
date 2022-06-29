@@ -28,6 +28,9 @@ const POSContextProvider = ({ children }: POSContextProviderProps) => {
 	return <POSContext.Provider value={value}>{children}</POSContext.Provider>;
 };
 
+/**
+ *
+ */
 export const usePOSContext = () => {
 	if (POSContext === undefined) {
 		throw new Error(`usePOSContext must be called within POSContextProvider`);

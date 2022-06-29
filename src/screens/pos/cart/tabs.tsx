@@ -1,8 +1,8 @@
 import * as React from 'react';
-import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import Tabs from '@wcpos/components/src/tabs';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import debounce from 'lodash/debounce';
+import useOrders from '@wcpos/hooks/src/use-orders';
 import Cart from './cart';
 import EmptyCart from './empty-cart';
 import CartTabTitle from './tab-title';
@@ -12,16 +12,14 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 
 type RenderTabTitle = (focused: boolean, order?: OrderDocument) => React.ReactElement;
 
-interface CartTabsProps {
-	ordersResource: ObservableResource<OrderDocument[]>;
-}
-
 /**
  *
  */
-const CartTabs = ({ ordersResource }: CartTabsProps) => {
+const CartTabs = () => {
 	const { currentOrder, setCurrentOrder } = usePOSContext();
-	const orders = useObservableSuspense(ordersResource);
+	const { resource } = useOrders();
+	const orders = useObservableSuspense(resource);
+	console.log(orders.length);
 	const index = orders.findIndex((order) => order === currentOrder);
 
 	/**
@@ -61,7 +59,7 @@ const CartTabs = ({ ordersResource }: CartTabsProps) => {
 			if (!route || !currentOrder) {
 				return null;
 			}
-			if (currentOrder.isCartEmpty('hi')) {
+			if (currentOrder.isCartEmpty()) {
 				return <EmptyCart order={currentOrder} />;
 			}
 			return <Cart order={currentOrder} />;
@@ -79,7 +77,14 @@ const CartTabs = ({ ordersResource }: CartTabsProps) => {
 		[orders, setCurrentOrder]
 	);
 
-	useWhyDidYouUpdate('CartTabs', { orders, currentOrder, routes, index });
+	useWhyDidYouUpdate('CartTabs', {
+		orders,
+		currentOrder,
+		routes,
+		index,
+		handleTabChange,
+		renderScene,
+	});
 
 	/**
 	 *

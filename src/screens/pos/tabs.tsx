@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Tabs from '@wcpos/components/src/tabs';
 
 export interface POSTabsProps {
@@ -26,6 +27,15 @@ const POSTabs = ({ leftComponent, rightComponent }: POSTabsProps) => {
 		{ key: 'cart', title: 'Cart' },
 	];
 
+	useWhyDidYouUpdate('POSTabs', {
+		leftComponent,
+		rightComponent,
+		renderScene,
+		routes,
+		index,
+		setIndex,
+	});
+
 	return (
 		<Tabs<typeof routes[number]>
 			navigationState={{ index, routes }}
@@ -37,4 +47,4 @@ const POSTabs = ({ leftComponent, rightComponent }: POSTabsProps) => {
 	);
 };
 
-export default POSTabs;
+export default React.memo(POSTabs);

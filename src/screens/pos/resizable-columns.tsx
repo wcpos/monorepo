@@ -10,6 +10,7 @@ import Animated, {
 import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
 import Gutter from '@wcpos/components/src/gutter';
 import Box from '@wcpos/components/src/box';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 interface ResizableColumnsProps {
 	leftComponent: React.ReactNode;
@@ -78,6 +79,19 @@ const ResizableColumns = ({ leftComponent, rightComponent, ui }: ResizableColumn
 			isActivePanGesture.value = false;
 			runOnJS(saveColumnWidth)(columnWidth.value);
 		},
+	});
+
+	useWhyDidYouUpdate('ResizableColumns', {
+		leftComponent,
+		rightComponent,
+		ui,
+		columnWidth,
+		isActivePanGesture,
+		containerWidth,
+		onContainerLayout,
+		columnStyle,
+		panGestureHandler,
+		saveColumnWidth,
 	});
 
 	return (

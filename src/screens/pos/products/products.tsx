@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ProductsProvider } from '@wcpos/hooks/src/use-products';
 import { useTheme } from 'styled-components/native';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import UiSettings from '../../common/ui-settings';
@@ -16,9 +17,10 @@ interface POSProductsProps {
  */
 const POSProducts = ({ ui }: POSProductsProps) => {
 	const theme = useTheme();
+	const initialQuery = React.useMemo(() => ({ sortBy: 'name', sortDirection: 'asc' }), []);
 
 	return (
-		<ProductsProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }}>
+		<ProductsProvider initialQuery={initialQuery}>
 			<Box
 				raised
 				rounding="medium"
@@ -39,13 +41,15 @@ const POSProducts = ({ ui }: POSProductsProps) => {
 					<UiSettings ui={ui} />
 				</Box>
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-					<React.Suspense fallback={<Text>Loading products...</Text>}>
-						<Table ui={ui} />
-					</React.Suspense>
+					<ErrorBoundary>
+						<React.Suspense fallback={<Text>Loading products...</Text>}>
+							<Table ui={ui} />
+						</React.Suspense>
+					</ErrorBoundary>
 				</Box>
 			</Box>
 		</ProductsProvider>
 	);
 };
 
-export default POSProducts;
+export default React.memo(POSProducts);
