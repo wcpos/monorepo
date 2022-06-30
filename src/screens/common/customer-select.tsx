@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import useAppState from '@wcpos/hooks/src/use-app-state';
 import useCustomers, { CustomersProvider } from '@wcpos/hooks/src/use-customers';
 import orderBy from 'lodash/orderBy';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,7 @@ interface CustomerSelectProps {
  */
 const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectProps) => {
 	const { t } = useTranslation();
+	const { storeDB } = useAppState();
 	const { query$, setQuery, resource } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
 	const customers = useObservableSuspense(resource);
@@ -27,8 +29,8 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 	 *
 	 */
 	const displayCustomerNameOrUsername = React.useCallback((customer: CustomerDocument) => {
-		if (!customer.firstName && !customer.lastName) return customer.username;
-		return `${customer.firstName} ${customer.lastName}`;
+		if (!customer.first_name && !customer.last_name) return customer.username;
+		return `${customer.first_name} ${customer.last_name}`;
 	}, []);
 
 	/**
@@ -45,14 +47,15 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 	 *
 	 */
 	const options = React.useMemo(() => {
-		const sortedCustomers = orderBy(customers, 'lastName');
+		const guest = storeDB?.collections.customers.newDocument({ id: 0, first_name: 'Guest ' });
+		customers.unshift(guest);
 
-		return sortedCustomers.map((customer) => ({
+		return customers.map((customer) => ({
 			label: displayCustomerNameOrUsername(customer),
 			value: customer,
-			key: customer.localID,
+			key: customer.id,
 		}));
-	}, [customers, displayCustomerNameOrUsername]);
+	}, [customers, displayCustomerNameOrUsername, storeDB?.collections.customers]);
 
 	useWhyDidYouUpdate('Customer Select', {
 		selectedCustomer,
@@ -85,7 +88,7 @@ export default (props: CustomerSelectProps) => (
 	<CustomersProvider
 		initialQuery={{
 			search: '',
-			sortBy: 'lastName',
+			sortBy: 'last_name',
 			sortDirection: 'asc',
 		}}
 	>

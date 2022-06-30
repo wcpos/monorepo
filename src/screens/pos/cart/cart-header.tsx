@@ -6,7 +6,8 @@ import pick from 'lodash/pick';
 import useAppState from '@wcpos/hooks/src/use-app-state';
 import Tag from '@wcpos/components/src/tag';
 import Modal, { useModal } from '@wcpos/components/src/modal';
-import Form from '@wcpos/react-native-jsonschema-form';
+// import Form from '@wcpos/react-native-jsonschema-form';
+import EditModal from '../../common/edit-modal';
 import CustomerSelect from '../../common/customer-select';
 import AddCustomer from '../../common/add-new-customer';
 import UISettings from '../../common/ui-settings';
@@ -43,9 +44,18 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 	/**
 	 *
 	 */
-	const handleCustomerSelect = React.useCallback((customer) => {
-		console.log(customer);
-	}, []);
+	const handleCustomerSelect = React.useCallback(
+		async ({ value: selectedCustomer }) => {
+			const billingEmail = selectedCustomer.billing.email || selectedCustomer.email;
+
+			await order.atomicPatch({
+				customer_id: selectedCustomer.id,
+				billing: { ...selectedCustomer.billing, email: billingEmail },
+				shipping: selectedCustomer.shipping,
+			});
+		},
+		[order]
+	);
 
 	/**
 	 *
@@ -81,7 +91,7 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 				borderTopRightRadius: theme.rounding.medium,
 			}}
 		>
-			<Box style={{ flex: 1 }}>
+			<Box style={{ flex: 1 }} errorBoundary>
 				{customer ? (
 					<Tag removable onRemove={handleCustomerRemove} onPress={open}>
 						Customer: {customer.username}
@@ -98,8 +108,9 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 				primaryAction={{ label: 'Edit Customer', action: handleSaveCustomer }}
 				secondaryActions={[{ label: 'Cancel', action: close }]}
 			>
-				<Form
-					formData={{ billing: order.billing, shipping: order.shipping }}
+				<EditModal
+					// formData={{ billing: order.billing, shipping: order.shipping }}
+					item={order}
 					schema={schema}
 					uiSchema={{}}
 				/>

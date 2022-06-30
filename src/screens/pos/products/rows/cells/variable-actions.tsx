@@ -3,7 +3,6 @@ import { ObservableResource } from 'observable-hooks';
 import { tap, filter, switchMap } from 'rxjs/operators';
 import difference from 'lodash/difference';
 import map from 'lodash/map';
-// import { replicateRxCollection } from 'rxdb/plugins/replication';
 // import useAppState from '@wcpos/hooks/src/use-app-state';
 import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
 import Icon from '@wcpos/components/src/icon';
