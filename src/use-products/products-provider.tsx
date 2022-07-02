@@ -3,6 +3,7 @@ import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
 import useAppState from '@wcpos/hooks/src/use-app-state';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
@@ -140,6 +141,17 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 		}),
 		[query$, resource, setQuery]
 	);
+
+	useWhyDidYouUpdate('ProductsProvider', {
+		value,
+		query$,
+		resource,
+		setQuery,
+		products$,
+		storeDB,
+		collection,
+		http,
+	});
 
 	return <ProductsContext.Provider value={value}>{children}</ProductsContext.Provider>;
 };

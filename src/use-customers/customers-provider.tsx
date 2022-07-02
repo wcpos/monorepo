@@ -5,6 +5,8 @@ import { ObservableResource } from 'observable-hooks';
 import useAppState from '@wcpos/hooks/src/use-app-state';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
+import _get from 'lodash/get';
+import _forEach from 'lodash/forEach';
 import useRestHttpClient from '../use-rest-http-client';
 import { getAuditIdReplicationState } from './id-audit';
 import { getReplicationState } from './replication';
@@ -31,6 +33,8 @@ interface CustomersProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
 }
+
+const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
 const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
@@ -101,11 +105,14 @@ const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) =
 		// switchMap to the collection query
 		switchMap((q) => {
 			const selector = {};
-			// forEach(q.search, function (value, key) {
-			// 	if (value) {
-			// 		set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
-			// 	}
-			// });
+
+			// const searchFields = ['username'];
+			// if (q.search) {
+			// 	selector.$or = searchFields.map((field) => ({
+			// 		[field]: { $regex: new RegExp(escape(q.search), 'i') },
+			// 	}));
+			// }
+			_set(selector, ['username', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
 
 			const RxQuery = collection.find({ selector });
 

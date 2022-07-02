@@ -3,8 +3,10 @@ import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
 import useAppState from '@wcpos/hooks/src/use-app-state';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
+import _get from 'lodash/get';
 import useRestHttpClient from '../use-rest-http-client';
 import { getAuditIdReplicationState } from './id-audit';
 import { getReplicationState } from './replication';
@@ -78,7 +80,7 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 	/**
 	 *
 	 */
-	const customers$ = query$.pipe(
+	const orders$ = query$.pipe(
 		// debounce hits to the local db
 		debounceTime(100),
 		// switchMap to the collection query
@@ -89,6 +91,10 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 			// 		set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
 			// 	}
 			// });
+
+			if (_get(q, 'filters.status')) {
+				_set(selector, ['status'], _get(q, 'filters.status'));
+			}
 
 			const RxQuery = collection.find({ selector });
 
@@ -111,7 +117,7 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 		})
 	);
 
-	const resource = React.useMemo(() => new ObservableResource(customers$), [customers$]);
+	const resource = React.useMemo(() => new ObservableResource(orders$), [orders$]);
 
 	/**
 	 *
@@ -125,6 +131,17 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 		}),
 		[query$, resource, setQuery]
 	);
+
+	useWhyDidYouUpdate('OrdersProvider', {
+		value,
+		query$,
+		resource,
+		setQuery,
+		orders$,
+		storeDB,
+		collection,
+		http,
+	});
 
 	return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>;
 };
