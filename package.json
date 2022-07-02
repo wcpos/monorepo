@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.6",
+	"version": "1.0.7",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -27,7 +27,7 @@
 		"pouchdb-adapter-react-native-sqlite": "3.0.1",
 		"pouchdb-debug": "7.2.1",
 		"random-token": "^0.0.8",
-		"rxdb": "12.5.4",
+		"rxdb": "12.6.8",
 		"rxjs": "7.5.5"
 	},
 	"devDependencies": {
@@ -39,7 +39,7 @@
 		"@types/pouchdb-core": "7.0.10",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
-		"jest": "28.1.1",
+		"jest": "28.1.2",
 		"jsonschema-to-interface": "1.0.5",
 		"ts-jest": "28.0.5",
 		"typescript": "4.7.4"

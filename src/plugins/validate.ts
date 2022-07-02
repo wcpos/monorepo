@@ -68,6 +68,7 @@ function validateFullDocumentData(this: RxSchema, obj: any): any {
 
 	if (isValid) return obj;
 
+	console.error(validator.errors);
 	throw new Error(validator.errors);
 }
 
@@ -94,6 +95,22 @@ export const RxDBAjvValidatePlugin: RxPlugin = {
 	hooks: {
 		createRxSchema: {
 			after: runAfterSchemaCreated,
+		},
+		/**
+		 * @TODO - remove this hack!!
+		 * https://github.com/pubkey/rxdb/issues/3878
+		 */
+		createRxCollection: {
+			after({ collection }) {
+				collection.preInsert(function (data) {
+					Object.assign(data, collection.schema.validate(data));
+					return data;
+				}, true);
+				collection.preSave(function (data) {
+					Object.assign(data, collection.schema.validate(data));
+					return data;
+				}, true);
+			},
 		},
 	},
 };

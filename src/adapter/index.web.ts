@@ -1,11 +1,11 @@
 import { addPouchPlugin, getRxStoragePouch, PouchDB } from 'rxdb/plugins/pouchdb';
 import IDBAdapter from 'pouchdb-adapter-idb';
-import pouchdbDebug from 'pouchdb-debug';
+// import pouchdbDebug from 'pouchdb-debug';
 
-if (process.env.NODE_ENV === 'development') {
-	PouchDB.plugin(pouchdbDebug);
-	PouchDB.debug.enable('*');
-}
+// if (process.env.NODE_ENV === 'development') {
+// 	PouchDB.plugin(pouchdbDebug);
+// 	PouchDB.debug.enable('*');
+// }
 
 addPouchPlugin(IDBAdapter);
 
