@@ -14,19 +14,31 @@ const Actions = ({ item }: ActionProps) => {
 	const { currentOrder } = usePOSContext();
 	const addSnackbar = useSnackbar();
 
-	const undoRemove = () => {
-		console.log('Undo remove', item);
-	};
+	/**
+	 *
+	 */
+	const undoRemove = React.useCallback(async () => {
+		currentOrder.undoRemoveCartLine(item);
+	}, [currentOrder, item]);
 
-	const handleRemove = () => {
-		currentOrder?.removeCartLine(item);
+	/**
+	 *
+	 */
+	const handleRemove = React.useCallback(async () => {
+		const name = item.name || item.method_title;
+
+		await currentOrder?.removeCartLine(item);
+
 		addSnackbar({
-			message: `${item.name} removed from cart`,
+			message: `${name} removed from cart`,
 			dismissable: true,
 			action: { label: 'Undo', action: undoRemove },
 		});
-	};
+	}, [addSnackbar, currentOrder, item, undoRemove]);
 
+	/**
+	 *
+	 */
 	return <Icon name="circleXmark" size="xLarge" onPress={handleRemove} type="critical" />;
 };
 

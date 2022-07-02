@@ -4,8 +4,9 @@ import { useTheme } from 'styled-components/native';
 import { useObservableState } from 'observable-hooks';
 import pick from 'lodash/pick';
 import useAppState from '@wcpos/hooks/src/use-app-state';
-import Tag from '@wcpos/components/src/tag';
+import Pill from '@wcpos/components/src/pill';
 import Modal, { useModal } from '@wcpos/components/src/modal';
+import Text from '@wcpos/components/src/text';
 // import Form from '@wcpos/react-native-jsonschema-form';
 import EditModal from '../../common/edit-modal';
 import CustomerSelect from '../../common/customer-select';
@@ -89,13 +90,17 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 				backgroundColor: theme.colors.grey,
 				borderTopLeftRadius: theme.rounding.medium,
 				borderTopRightRadius: theme.rounding.medium,
+				height: 51,
 			}}
 		>
 			<Box style={{ flex: 1 }} errorBoundary>
 				{customer ? (
-					<Tag removable onRemove={handleCustomerRemove} onPress={open}>
-						Customer: {customer.username}
-					</Tag>
+					<Box horizontal align="center" space="small">
+						<Text weight="bold">Customer:</Text>
+						<Pill removable onRemove={handleCustomerRemove} onPress={open}>
+							{customer.username}
+						</Pill>
+					</Box>
 				) : (
 					<CustomerSelect onSelectCustomer={handleCustomerSelect} />
 				)}

@@ -73,35 +73,40 @@ const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 	 */
 	return (
 		<Box space="xSmall">
-			{state.attributes?.map((attribute) => (
-				<Box key={attribute.name} space="xSmall">
-					<Text>{attribute.name}</Text>
-					{attribute.characterCount < 15 ? (
-						<Button.Group>
-							{attribute.options?.map((option) => (
-								<Button
-									key={option.value}
-									type={option.selected ? 'success' : 'primary'}
-									disabled={option.disabled}
-									onPress={() => {
-										handleSelect(attribute, option);
-									}}
-								>
-									{option.label}
-								</Button>
-							))}
-						</Button.Group>
-					) : (
-						<Select
-							options={attribute.options}
-							onChange={(option) => {
-								debugger;
-							}}
-							placeholder="Select an option"
-						/>
-					)}
-				</Box>
-			))}
+			{state.attributes?.map((attribute) => {
+				const selected = find(attribute.options, { selected: true });
+
+				return (
+					<Box key={attribute.name} space="xSmall">
+						<Text>{attribute.name}</Text>
+						{attribute.characterCount < 15 ? (
+							<Button.Group>
+								{attribute.options?.map((option) => (
+									<Button
+										key={option.value}
+										type={option.selected ? 'success' : 'primary'}
+										disabled={option.disabled}
+										onPress={() => {
+											handleSelect(attribute, option);
+										}}
+									>
+										{option.label}
+									</Button>
+								))}
+							</Button.Group>
+						) : (
+							<Select
+								value={selected}
+								options={attribute.options}
+								onChange={(option) => {
+									handleSelect(attribute, option);
+								}}
+								placeholder="Select an option"
+							/>
+						)}
+					</Box>
+				);
+			})}
 			{selectedVariation && (
 				<Button
 					title={`Add to Cart: ${format(selectedVariation.price || 0)}`}

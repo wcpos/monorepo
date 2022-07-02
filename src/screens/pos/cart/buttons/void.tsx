@@ -7,33 +7,48 @@ interface VoidButtonProps {
 	order: import('@wcpos/database').OrderDocument;
 }
 
+let voidedOrderJSON = null;
+
 const VoidButton = ({ order }: VoidButtonProps) => {
 	const { setCurrentOrder } = usePOSContext();
 	const addSnackbar = useSnackbar();
 
-	const undoRemove = async () => {
-		// @TODO - see https://github.com/pubkey/rxdb/issues/911
-		// await order.atomicUpdate((oldData) => {
-		// 	oldData._deleted = false;
-		// 	return oldData;
-		// });
-		// setCurrentOrder(order);
-	};
+	/**
+	 *
+	 */
+	const undoRemove = React.useCallback(async () => {
+		const success = await order.collection.insert(voidedOrderJSON).catch(() => {
+			debugger;
+		});
 
+		if (success) {
+			setCurrentOrder(success);
+		}
+	}, [order.collection, setCurrentOrder]);
+
+	/**
+	 *
+	 */
+	const handleRemove = React.useCallback(async () => {
+		voidedOrderJSON = await order.toRestApiJSON();
+		await order.remove();
+		setCurrentOrder(null);
+		addSnackbar({
+			message: 'Order removed',
+			dismissable: true,
+			action: { label: 'Undo', action: undoRemove },
+		});
+	}, [addSnackbar, order, setCurrentOrder, undoRemove]);
+
+	/**
+	 *
+	 */
 	return (
 		<Button
 			fill
 			size="large"
 			title="Void"
-			onPress={async () => {
-				await order.remove();
-				setCurrentOrder(null);
-				addSnackbar({
-					message: 'Order removed',
-					dismissable: true,
-					action: { label: 'Undo', action: undoRemove },
-				});
-			}}
+			onPress={handleRemove}
 			type="critical"
 			style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
 		/>

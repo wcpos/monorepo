@@ -4,7 +4,7 @@ import axios from 'axios';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 import forEach from 'lodash/forEach';
-import Tag from '@wcpos/components/src/tag';
+import Pill from '@wcpos/components/src/pill';
 import Text from '@wcpos/components/src/text';
 import Button from '@wcpos/components/src/button';
 import Dialog, { useDialog } from '@wcpos/components/src/dialog';
@@ -71,14 +71,14 @@ const WpUser = ({ site, wpUser }: Props) => {
 
 	return (
 		<>
-			<Tag
+			<Pill
 				removable
 				onPress={handleStoreSelect}
 				onRemove={openConfirmDialog}
 				disabled={stores.length === 0}
 			>
 				{wpUser.display_name ? wpUser.display_name : 'No name?'}
-			</Tag>
+			</Pill>
 
 			<Dialog ref={dialogRef} onClose={handleUserRemove}>
 				Remove logged in user?

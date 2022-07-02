@@ -1,6 +1,6 @@
 import * as React from 'react';
 import set from 'lodash/set';
-import Tag from '@wcpos/components/src/tag';
+import Pill from '@wcpos/components/src/pill';
 import useProducts from '@wcpos/hooks/src/use-products';
 
 type ProductTagsProps = {
@@ -40,7 +40,7 @@ const ProductTags = ({ item: product }: ProductTagsProps) => {
 	/**
 	 *
 	 */
-	return tags ? <Tag.Group tags={tagsArray} /> : <Tag.Group.Skeleton numberOfTags={2} />;
+	return tags ? <Pill.Group pills={tagsArray} /> : <Pill.Group.Skeleton number={2} />;
 };
 
 export default ProductTags;

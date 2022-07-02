@@ -1,6 +1,6 @@
 import * as React from 'react';
 import set from 'lodash/set';
-import Tag from '@wcpos/components/src/tag';
+import Pill from '@wcpos/components/src/pill';
 import useProducts from '@wcpos/hooks/src/use-products';
 
 interface ProductCategoriesProps {
@@ -24,7 +24,7 @@ const ProductCategories = ({ item: product }: ProductCategoriesProps) => {
 	/**
 	 *
 	 */
-	const tagsArray = React.useMemo(() => {
+	const catArray = React.useMemo(() => {
 		if (Array.isArray(categories)) {
 			return categories.map((cat: any) => {
 				return {
@@ -40,7 +40,11 @@ const ProductCategories = ({ item: product }: ProductCategoriesProps) => {
 	/**
 	 *
 	 */
-	return categories ? <Tag.Group tags={tagsArray} /> : <Tag.Group.Skeleton numberOfTags={2} />;
+	return categories ? (
+		<Pill.Group pills={catArray} size="small" color="secondary" />
+	) : (
+		<Pill.Group.Skeleton number={2} size="small" />
+	);
 };
 
 export default ProductCategories;
