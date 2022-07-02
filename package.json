@@ -39,7 +39,7 @@
   "devDependencies": {
     "@types/jest": "27.5.2",
     "@wcpos/eslint-config": "*",
-    "jest": "28.1.1",
+    "jest": "28.1.2",
     "patch-package": "6.4.7",
     "postinstall-postinstall": "2.1.0",
     "prettier": "2.7.1",
