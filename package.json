@@ -24,7 +24,7 @@
 		"@types/lodash": "4.14.182",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
-		"jest": "28.1.1",
+		"jest": "28.1.2",
 		"ts-jest": "28.0.5",
 		"typescript": "4.7.4"
 	},
