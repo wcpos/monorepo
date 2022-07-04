@@ -10,8 +10,8 @@ export const useErrorResponseHandler = () => {
 	const errorResponseHandler = React.useCallback(
 		(res: AxiosResponse) => {
 			if (!res) {
-				console.log('CORS error?');
-				console.log('also happens when site is offline');
+				// console.log('CORS error?');
+				addSnackbar({ message: 'Server is unavailable' });
 				return;
 			}
 

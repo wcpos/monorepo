@@ -3,16 +3,15 @@ import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
 import useAppState from '@wcpos/hooks/src/use-app-state';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
-import _orderBy from 'lodash/orderBy';
+import _forEach from 'lodash/forEach';
 import useRestHttpClient from '../use-rest-http-client';
 import { getAuditIdReplicationState } from './id-audit';
 import { getReplicationState } from './replication';
 
-type OrderDocument = import('@wcpos/database/src/collections/customers').OrderDocument;
+type TaxRateDocument = import('@wcpos/database/src/collections/taxes').TaxRateDocument;
 type SortDirection = import('@wcpos/components/src/table/table').SortDirection;
 
 export interface QueryState {
@@ -23,22 +22,26 @@ export interface QueryState {
 	filters?: Record<string, unknown>;
 }
 
-export const OrdersContext = React.createContext<{
+export const TaxesContext = React.createContext<{
 	query$: BehaviorSubject<QueryState>;
 	setQuery: (path: string | string[], value: any) => void;
-	resource: ObservableResource<OrderDocument[]>;
+	resource: ObservableResource<TaxRateDocument[]>;
+	runReplication: () => void;
 }>(null);
 
-interface OrdersProviderProps {
+interface TaxesProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
 }
 
-const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
+const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+
+const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
 	const { storeDB } = useAppState();
-	const collection = storeDB.collections.orders;
+	const collection = storeDB.collections.taxes;
 	const http = useRestHttpClient();
+	const replicationStates = React.useRef({ audit: null, sync: null });
 
 	/**
 	 *
@@ -57,6 +60,7 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 	 */
 	React.useEffect(() => {
 		const replicationState = getAuditIdReplicationState(http, collection);
+		replicationStates.current.audit = replicationState;
 
 		return function cleanUp() {
 			replicationState.then((result) => {
@@ -68,43 +72,53 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 	/**
 	 * Start replication
 	 */
-	React.useEffect(() => {
-		const replicationState = getReplicationState(http, collection);
+	// React.useEffect(() => {
+	// 	const replicationState = getReplicationState(http, collection);
+	// 	replicationStates.current.sync = replicationState;
 
-		return function cleanUp() {
-			replicationState.then((result) => {
-				result.cancel();
-			});
-		};
-	}, [collection, http]);
+	// 	return function cleanUp() {
+	// 		replicationState.then((result) => {
+	// 			result.cancel();
+	// 		});
+	// 	};
+	// }, [collection, http]);
 
 	/**
 	 *
 	 */
-	const orders$ = query$.pipe(
+	const runReplication = React.useCallback(() => {
+		const { audit } = replicationStates.current;
+
+		if (audit) {
+			audit.then((result) => {
+				result.run();
+			});
+		}
+	}, []);
+
+	/**
+	 *
+	 */
+	const taxes$ = query$.pipe(
 		// debounce hits to the local db
 		debounceTime(100),
 		// switchMap to the collection query
 		switchMap((q) => {
 			const selector = {};
-			// forEach(q.search, function (value, key) {
-			// 	if (value) {
-			// 		set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
-			// 	}
-			// });
 
-			if (_get(q, 'filters.status')) {
-				_set(selector, ['status'], _get(q, 'filters.status'));
-			}
+			// const searchFields = ['username'];
+			// if (q.search) {
+			// 	selector.$or = searchFields.map((field) => ({
+			// 		[field]: { $regex: new RegExp(escape(q.search), 'i') },
+			// 	}));
+			// }
+			// _set(selector, ['username', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
 
 			const RxQuery = collection.find({ selector });
 
 			return RxQuery.$.pipe(
 				// sort the results
-				// sort the results
-				map((result) => {
-					return _orderBy(result, [q.sortBy], [q.sortDirection]);
-				})
+				map((result) => result)
 				// @ts-ignore
 				// map((result) => {
 				// 	const array = Array.isArray(result) ? result : [];
@@ -121,7 +135,7 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 		})
 	);
 
-	const resource = React.useMemo(() => new ObservableResource(orders$), [orders$]);
+	const resource = React.useMemo(() => new ObservableResource(taxes$), [taxes$]);
 
 	/**
 	 *
@@ -132,22 +146,12 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 			// query: query$.getValue(),
 			setQuery,
 			resource,
+			runReplication,
 		}),
-		[query$, resource, setQuery]
+		[query$, resource, setQuery, runReplication]
 	);
 
-	useWhyDidYouUpdate('OrdersProvider', {
-		value,
-		query$,
-		resource,
-		setQuery,
-		orders$,
-		storeDB,
-		collection,
-		http,
-	});
-
-	return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>;
+	return <TaxesContext.Provider value={value}>{children}</TaxesContext.Provider>;
 };
 
-export default OrdersProvider;
+export default TaxesProvider;

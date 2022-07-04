@@ -13,36 +13,34 @@ export const getReplicationState = async (http, collection) => {
 				const unsyncedDocs = collection.unsyncedIds$.getValue();
 				const syncedDocs = collection.syncedIds$.getValue();
 
-				if (unsyncedDocs.length > 0) {
-					const params = {
-						order: 'asc',
-						orderby: 'title',
-					};
+				// if (unsyncedDocs.length > 0) {
+				const params = {};
 
-					// choose the smallest array, max of 1000
-					if (syncedDocs.length > unsyncedDocs.length) {
-						params.include = unsyncedDocs.slice(0, 1000).join(',');
-					} else {
-						params.exclude = syncedDocs.slice(0, 1000).join(',');
-					}
+				// choose the smallest array, max of 1000
+				// if (syncedDocs.length > unsyncedDocs.length) {
+				// 	params.include = unsyncedDocs.slice(0, 1000).join(',');
+				// } else {
+				// 	params.exclude = syncedDocs.slice(0, 1000).join(',');
+				// }
 
-					const result = await http
-						.get(collection.name, {
-							params,
-						})
-						.catch(({ response }) => {
-							console.log(response);
-						});
+				const result = await http
+					.get(collection.name, {
+						params,
+					})
+					.catch(({ response }) => {
+						console.log(response);
+					});
 
+				if (result) {
 					const documents = map(result?.data, (item) => collection.parseRestResponse(item));
-					await collection.bulkUpsert(documents).catch((err) => {
-						console.error(err);
+					await collection.bulkUpsert(documents).catch(() => {
 						debugger;
 					});
-					// await Promise.all(map(documents, (doc) => collection.atomicUpsert(doc))).catch(() => {
-					// 	debugger;
-					// });
 				}
+				// await Promise.all(map(documents, (doc) => collection.atomicUpsert(doc))).catch(() => {
+				// 	debugger;
+				// });
+				// }
 
 				return {
 					documents: [],
