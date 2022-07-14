@@ -58,23 +58,9 @@ const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 	/**
 	 * Start id audit
 	 */
-	React.useEffect(() => {
-		const replicationState = getAuditIdReplicationState(http, collection);
-		replicationStates.current.audit = replicationState;
-
-		return function cleanUp() {
-			replicationState.then((result) => {
-				result.cancel();
-			});
-		};
-	}, [collection, http]);
-
-	/**
-	 * Start replication
-	 */
 	// React.useEffect(() => {
-	// 	const replicationState = getReplicationState(http, collection);
-	// 	replicationStates.current.sync = replicationState;
+	// 	const replicationState = getAuditIdReplicationState(http, collection);
+	// 	replicationStates.current.audit = replicationState;
 
 	// 	return function cleanUp() {
 	// 		replicationState.then((result) => {
@@ -82,6 +68,20 @@ const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 	// 		});
 	// 	};
 	// }, [collection, http]);
+
+	/**
+	 * Start replication
+	 */
+	React.useEffect(() => {
+		const replicationState = getReplicationState(http, collection);
+		replicationStates.current.sync = replicationState;
+
+		return function cleanUp() {
+			replicationState.then((result) => {
+				result.cancel();
+			});
+		};
+	}, [collection, http]);
 
 	/**
 	 *

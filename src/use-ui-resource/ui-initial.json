@@ -3,11 +3,11 @@
 		"sortBy": "name",
 		"sortDirection": "asc",
 		"width": 60,
+		"showOutOfStock": false,
 		"columns": [
 			{
 				"key": "image",
 				"disableSort": true,
-				"order": 1,
 				"width": "15%",
 				"flexShrink": 0,
 				"hideLabel": true,
@@ -43,7 +43,8 @@
 			},
 			{
 				"key": "stock_quantity",
-				"show": false
+				"show": false,
+				"align": "center"
 			},
 			{
 				"key": "price",
@@ -55,7 +56,7 @@
 			{
 				"key": "actions",
 				"disableSort": true,
-				"width": "38px",
+				"width": "46px",
 				"flexShrink": 0,
 				"hideLabel": true,
 				"show": true
@@ -68,55 +69,57 @@
 		"columns": [
 			{
 				"key": "quantity",
-				"order": 0,
 				"width": "15%",
 				"flexShrink": 0,
-				"show": true
+				"show": true,
+				"align": "center"
 			},
 			{
 				"key": "name",
-				"order": 1,
-				"width": "50%",
-				"show": true
+				"show": true,
+				"display": [
+					{
+						"key": "sku",
+						"show": false
+					}
+				]
 			},
 			{
 				"key": "sku",
-				"order": 2,
 				"width": "20%",
 				"flexShrink": 0,
 				"show": false
 			},
 			{
 				"key": "price",
-				"order": 3,
 				"width": "20%",
 				"flexShrink": 0,
-				"show": true
+				"show": true,
+				"align": "right"
 			},
 			{
 				"key": "subtotal",
-				"order": 4,
 				"width": "20%",
 				"flexShrink": 0,
-				"show": false
+				"show": false,
+				"align": "right"
 			},
 			{
 				"key": "subtotal_tax",
-				"order": 5,
 				"width": "20%",
 				"flexShrink": 0,
-				"show": false
+				"show": false,
+				"align": "right"
 			},
 			{
 				"key": "total_tax",
-				"order": 6,
 				"width": "20%",
 				"flexShrink": 0,
-				"show": false
+				"show": false,
+				"align": "right"
 			},
 			{
 				"key": "total",
-				"order": 7,
 				"width": "20%",
 				"flexShrink": 0,
 				"align": "right",
@@ -124,8 +127,7 @@
 			},
 			{
 				"key": "actions",
-				"order": 8,
-				"width": "60px",
+				"width": "46px",
 				"flexShrink": 0,
 				"hideLabel": true,
 				"show": true
@@ -186,7 +188,6 @@
 			{
 				"key": "sale_price",
 				"width": "100px",
-				"order": 8,
 				"show": true
 			},
 			{
@@ -216,70 +217,59 @@
 			{
 				"key": "status",
 				"width": "38px",
-				"order": 1,
 				"hideLabel": true,
 				"show": true
 			},
 			{
 				"key": "number",
 				"width": "38px",
-				"order": 2,
 				"hideLabel": true,
 				"show": true
 			},
 			{
 				"key": "customer",
 				"width": "20%",
-				"order": 3,
 				"show": true
 			},
 			{
 				"key": "billing",
 				"width": "20%",
-				"order": 4,
 				"show": true
 			},
 			{
 				"key": "shipping",
 				"width": "20%",
-				"order": 5,
 				"show": true
 			},
 			{
 				"key": "customer_note",
 				"width": "38px",
-				"order": 6,
 				"show": true
 			},
 			{
 				"key": "date_created",
 				"width": "100px",
-				"order": 7,
 				"show": true
 			},
 			{
 				"key": "date_modified",
 				"width": "100px",
-				"order": 8,
 				"show": false
 			},
 			{
 				"key": "date_completed",
 				"width": "100px",
-				"order": 9,
 				"show": false
 			},
 			{
 				"key": "total",
 				"width": "90px",
-				"order": 10,
 				"show": true
 			},
 			{
 				"key": "actions",
 				"disableSort": true,
 				"width": "38px",
-				"order": 11,
 				"hideLabel": true,
 				"show": true
 			}
@@ -293,57 +283,48 @@
 				"key": "avatar_url",
 				"disableSort": true,
 				"width": "15%",
-				"order": 1,
 				"hideLabel": true,
 				"show": true
 			},
 			{
 				"key": "first_name",
 				"width": "20%",
-				"order": 2,
 				"show": true
 			},
 			{
 				"key": "last_name",
 				"width": "20%",
-				"order": 3,
 				"show": true
 			},
 			{
 				"key": "email",
 				"width": "20%",
-				"order": 4,
 				"show": true
 			},
 			{
 				"key": "role",
 				"width": "20%",
-				"order": 5,
 				"show": false
 			},
 			{
 				"key": "username",
 				"width": "20%",
-				"order": 6,
 				"show": false
 			},
 			{
 				"key": "billing",
 				"width": "20%",
-				"order": 7,
 				"show": true
 			},
 			{
 				"key": "shipping",
 				"width": "20%",
-				"order": 8,
 				"show": true
 			},
 			{
 				"key": "actions",
 				"disableSort": true,
 				"width": "38px",
-				"order": 9,
 				"hideLabel": true,
 				"show": true
 			}
