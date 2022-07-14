@@ -8,7 +8,7 @@ import filter from 'lodash/filter';
 import parseInt from 'lodash/parseInt';
 import Text from '@wcpos/components/src/text';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
-import useResource from '@wcpos/hooks/src/use-resource';
+import useTaxes from '@wcpos/hooks/src/use-taxes';
 import useAppState from '@wcpos/hooks/src/use-app-state';
 import { calcTaxes, sumTaxes } from './utils';
 
@@ -19,8 +19,8 @@ type PriceProps = {
 const Price = ({ item: product }: PriceProps) => {
 	const { format } = useCurrencyFormat();
 	const price = useObservableState(product.price$, product.price);
-	const { taxRatesResource } = useResource();
-	const taxRates = useObservableSuspense(taxRatesResource);
+	const { resource } = useTaxes();
+	const taxRates = useObservableSuspense(resource);
 	const { store } = useAppState();
 	const {
 		default_country,

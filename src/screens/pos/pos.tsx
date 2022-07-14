@@ -9,6 +9,7 @@ import orderBy from 'lodash/orderBy';
 import useUIResource from '@wcpos/hooks/src/use-ui-resource';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useAppState from '@wcpos/hooks/src/use-app-state';
+import { TaxesProvider } from '@wcpos/hooks/src/use-taxes';
 import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import OpenOrders from './cart/open-orders';
@@ -76,34 +77,36 @@ const POS = () => {
 
 	return (
 		<POSContextProvider>
-			{dimensions.width >= theme.screens.small ? (
-				<ResizeableColumns
-					ui={productsUI}
-					leftComponent={
-						<ErrorBoundary>
-							<Products ui={productsUI} />
-						</ErrorBoundary>
-					}
-					rightComponent={
-						<ErrorBoundary>
-							<OpenOrders />
-						</ErrorBoundary>
-					}
-				/>
-			) : (
-				<POSTabs
-					leftComponent={
-						<ErrorBoundary>
-							<Products ui={productsUI} />
-						</ErrorBoundary>
-					}
-					rightComponent={
-						<ErrorBoundary>
-							<OpenOrders />
-						</ErrorBoundary>
-					}
-				/>
-			)}
+			<TaxesProvider>
+				{dimensions.width >= theme.screens.small ? (
+					<ResizeableColumns
+						ui={productsUI}
+						leftComponent={
+							<ErrorBoundary>
+								<Products ui={productsUI} />
+							</ErrorBoundary>
+						}
+						rightComponent={
+							<ErrorBoundary>
+								<OpenOrders />
+							</ErrorBoundary>
+						}
+					/>
+				) : (
+					<POSTabs
+						leftComponent={
+							<ErrorBoundary>
+								<Products ui={productsUI} />
+							</ErrorBoundary>
+						}
+						rightComponent={
+							<ErrorBoundary>
+								<OpenOrders />
+							</ErrorBoundary>
+						}
+					/>
+				)}
+			</TaxesProvider>
 		</POSContextProvider>
 	);
 };

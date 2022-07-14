@@ -76,7 +76,11 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 	 */
 	const cellRenderer = React.useCallback((item: OrderDocument, column: ColumnProps) => {
 		const Cell = get(cells, column.key);
-		return Cell ? <Cell item={item} column={column} /> : <Text>{item[column.key]}</Text>;
+		return Cell ? (
+			<Cell item={item} column={column} />
+		) : (
+			<Text numberOfLines={1}>{item[column.key]}</Text>
+		);
 	}, []);
 
 	/**

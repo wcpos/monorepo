@@ -11,6 +11,9 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 	const http = useRestHttpClient();
 	const { setCurrentOrder } = usePOSContext();
 
+		/**
+	 * 
+	 */
 	const saveOrder = React.useCallback(async () => {
 		const data = await order.toRestApiJSON();
 		let endpoint = 'orders';
@@ -35,7 +38,7 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 		}
 	}, [http, order, setCurrentOrder]);
 
-	return <Button title="Save" background="outline" onPress={saveOrder} />;
+	return <Button title="Save Order" background="outline" onPress={saveOrder} />;
 };
 
 export default SaveButton;

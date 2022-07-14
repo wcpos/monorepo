@@ -7,10 +7,10 @@ interface Props {
 		| import('@wcpos/database').LineItemDocument
 		| import('@wcpos/database').FeeLineDocument
 		| import('@wcpos/database').ShippingLineDocument;
-	type?: 'totalTax' | 'subtotalTax';
+	type?: 'total_tax' | 'subtotal_tax';
 }
 
-const Tax = ({ item, type = 'totalTax' }: Props) => {
+const Tax = ({ item, type = 'total_tax' }: Props) => {
 	const tax = useObservableState(item[`${type}$`], item[type]);
 	return <Text>{tax}</Text>;
 };

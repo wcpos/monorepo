@@ -13,7 +13,7 @@ import Icon from '@wcpos/components/src/icon';
 import Form from '@wcpos/react-native-jsonschema-form';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
-import useResource from '@wcpos/hooks/src/use-resource';
+import useCountries from '@wcpos/hooks/src/use-countries';
 
 /**
  *
@@ -26,8 +26,8 @@ const AddNewCustomer = () => {
 	const customerCollection = storeDB.collections.customers;
 	const http = useRestHttpClient();
 	const [extraErrors, setExtraErrors] = React.useState();
-	const { countriesResource } = useResource();
-	const countries = useObservableSuspense(countriesResource);
+	// const { resource } = useCountries();
+	const countries = {};
 
 	const handleSave = async () => {
 		const result = await http('customers', {

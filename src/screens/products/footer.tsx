@@ -22,6 +22,8 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 				backgroundColor: theme.colors.lightGrey,
 				borderBottomLeftRadius: theme.rounding.medium,
 				borderBottomRightRadius: theme.rounding.medium,
+				borderTopWidth: 1,
+				borderTopColor: theme.colors.grey,
 			}}
 		>
 			<Text size="small">

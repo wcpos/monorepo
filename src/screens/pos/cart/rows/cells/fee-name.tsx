@@ -45,15 +45,16 @@ const FeeName = ({ item }: Props) => {
 	);
 
 	return (
-		<Box horizontal>
+		<Box horizontal space="xSmall" style={{ width: '100%' }}>
 			<Box fill>
 				<Text>{name}</Text>
 			</Box>
-
-			<Icon name="ellipsisVertical" onPress={openEditor} tooltip="Edit" />
-			<Modal ref={refEditor} title={`Edit ${name}`}>
-				<EditModal schema={schema} uiSchema={uiSchema} item={item} />
-			</Modal>
+			<Box>
+				<Icon name="ellipsisVertical" onPress={openEditor} tooltip="Edit" />
+				<Modal ref={refEditor} title={`Edit ${name}`}>
+					<EditModal schema={schema} uiSchema={uiSchema} item={item} />
+				</Modal>
+			</Box>
 		</Box>
 	);
 };

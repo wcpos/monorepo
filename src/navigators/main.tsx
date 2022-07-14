@@ -19,11 +19,8 @@ import Icon, { IconName } from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
 import useAppState from '@wcpos/hooks/src/use-app-state';
-import useStoreSync from '@wcpos/hooks/src/use-store-sync';
-import useIdAudit from '@wcpos/hooks/src/use-id-audit';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import { useTheme } from 'styled-components/native';
-import { ResourceProvider } from '@wcpos/hooks/src/use-resource';
 
 export type DrawerParamList = {
 	POS: undefined;
@@ -88,8 +85,6 @@ const MainNavigator = () => {
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
 	const storeName = useObservableState(store.name$, store.name);
-	// useIdAudit();
-	// useStoreSync();
 
 	const header = React.useCallback((props) => <CustomHeader {...props} />, []);
 	const drawer = React.useCallback((props) => <CustomDrawer {...props} />, []);
@@ -111,40 +106,34 @@ const MainNavigator = () => {
 
 	return (
 		<OnlineStatusProvider>
-			<ResourceProvider>
-				<Drawer.Navigator
-					screenOptions={{
-						header,
-						drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
-						drawerStyle: {
-							backgroundColor: theme.colors.headerBackground,
-							width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
-							borderRightColor: 'rgba(0, 0, 0, 0.2)',
-							// borderRightWidth: 0,
-						},
-						sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
-					}}
-					drawerContent={drawer}
-				>
-					<Drawer.Screen name="POS" component={ScreenMemoized} options={getOptions('pos')} />
-					<Drawer.Screen
-						name="Products"
-						component={ScreenMemoized}
-						options={getOptions('products')}
-					/>
-					<Drawer.Screen name="Orders" component={ScreenMemoized} options={getOptions('orders')} />
-					<Drawer.Screen
-						name="Customers"
-						component={ScreenMemoized}
-						options={getOptions('customers')}
-					/>
-					<Drawer.Screen
-						name="Support"
-						component={ScreenMemoized}
-						options={getOptions('support')}
-					/>
-				</Drawer.Navigator>
-			</ResourceProvider>
+			<Drawer.Navigator
+				screenOptions={{
+					header,
+					drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
+					drawerStyle: {
+						backgroundColor: theme.colors.headerBackground,
+						width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
+						borderRightColor: 'rgba(0, 0, 0, 0.2)',
+						// borderRightWidth: 0,
+					},
+					sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
+				}}
+				drawerContent={drawer}
+			>
+				<Drawer.Screen name="POS" component={ScreenMemoized} options={getOptions('pos')} />
+				<Drawer.Screen
+					name="Products"
+					component={ScreenMemoized}
+					options={getOptions('products')}
+				/>
+				<Drawer.Screen name="Orders" component={ScreenMemoized} options={getOptions('orders')} />
+				<Drawer.Screen
+					name="Customers"
+					component={ScreenMemoized}
+					options={getOptions('customers')}
+				/>
+				<Drawer.Screen name="Support" component={ScreenMemoized} options={getOptions('support')} />
+			</Drawer.Navigator>
 		</OnlineStatusProvider>
 	);
 };
