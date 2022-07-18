@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
-import { ObservableResource } from 'observable-hooks';
+import { ObservableResource, useObservableState } from 'observable-hooks';
 import useAppState from '@wcpos/hooks/src/use-app-state';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
@@ -26,20 +26,24 @@ export const ProductsContext = React.createContext<{
 	query$: BehaviorSubject<QueryState>;
 	setQuery: (path: string | string[], value: any) => void;
 	resource: ObservableResource<ProductDocument[]>;
+	sync: () => void;
 }>(null);
 
 interface ProductsProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
+	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
 }
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
-const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => {
+const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
 	const { storeDB } = useAppState();
 	const collection = storeDB.collections.products;
 	const http = useRestHttpClient();
+	const replicationStates = React.useRef({ audit: null, sync: null });
+	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
 
 	/**
 	 *
@@ -58,6 +62,7 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 	 */
 	React.useEffect(() => {
 		const replicationState = getAuditIdReplicationState(http, collection);
+		replicationStates.current.audit = replicationState;
 
 		return function cleanUp() {
 			replicationState.then((result) => {
@@ -71,6 +76,7 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 	 */
 	React.useEffect(() => {
 		const replicationState = getReplicationState(http, collection);
+		replicationStates.current.sync = replicationState;
 
 		return function cleanUp() {
 			replicationState.then((result) => {
@@ -78,6 +84,19 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 			});
 		};
 	}, [collection, http]);
+
+	/**
+	 *
+	 */
+	const sync = React.useCallback(() => {
+		const { audit } = replicationStates.current;
+
+		if (audit) {
+			audit.then((result) => {
+				result.run();
+			});
+		}
+	}, []);
 
 	/**
 	 *
@@ -102,6 +121,11 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 			}
 			if (_get(q, 'filters.tag.id')) {
 				_set(selector, ['tags', '$elemMatch', 'id'], _get(q, 'filters.tag.id'));
+			}
+
+			// hide out-of-stock products
+			if (!showOutOfStock) {
+				selector.$or = [{ manage_stock: { $eq: false } }, { stock_quantity: { $gt: 0 } }];
 			}
 
 			const RxQuery = collection.find({ selector });
@@ -138,6 +162,7 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 			// query: query$.getValue(),
 			setQuery,
 			resource,
+			sync,
 		}),
 		[query$, resource, setQuery]
 	);
