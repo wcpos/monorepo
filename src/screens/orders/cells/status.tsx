@@ -12,7 +12,7 @@ const iconMap = {
 
 const Status = ({ item: order }: Props) => {
 	return order.status ? (
-		<Icon name={iconMap[order.status]} tooltip={order.status} />
+		<Icon name={iconMap[order.status]} tooltip={order.status} tooltipPlacement="right" />
 	) : (
 		<Icon.Skeleton />
 	);

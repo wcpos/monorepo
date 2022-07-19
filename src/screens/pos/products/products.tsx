@@ -3,9 +3,9 @@ import { ProductsProvider } from '@wcpos/hooks/src/use-products';
 import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
-import UiSettings from '../../common/ui-settings';
 import Table from './table';
 import SearchBar from './search-bar';
+import Settings from './settings';
 
 interface POSProductsProps {
 	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
@@ -19,7 +19,7 @@ const POSProducts = ({ ui }: POSProductsProps) => {
 	const initialQuery = React.useMemo(() => ({ sortBy: 'name', sortDirection: 'asc' }), []);
 
 	return (
-		<ProductsProvider initialQuery={initialQuery}>
+		<ProductsProvider initialQuery={initialQuery} ui={ui}>
 			<Box
 				raised
 				rounding="medium"
@@ -38,7 +38,7 @@ const POSProducts = ({ ui }: POSProductsProps) => {
 					errorBoundary
 				>
 					<SearchBar />
-					<UiSettings ui={ui} />
+					<Settings ui={ui} />
 				</Box>
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }} errorBoundary>
 					<React.Suspense fallback={<Text>Loading products...</Text>}>

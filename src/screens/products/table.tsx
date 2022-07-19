@@ -1,19 +1,20 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
-import orderBy from 'lodash/orderBy';
 import get from 'lodash/get';
 import useProducts from '@wcpos/hooks/src/use-products';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table from '@wcpos/components/src/table';
+import Text from '@wcpos/components/src/text';
 import Actions from './cells/actions';
 import Categories from '../common/product-categories';
 import Image from './cells/image';
 import Name from './cells/name';
 import Price from './cells/price';
 import RegularPrice from './cells/regular-price';
+import SalePrice from './cells/sale-price';
 import StockQuanity from './cells/stock-quantity';
-// import Sku from './cells/sku';
+import DateCreated from './cells/date-created';
 import Tag from '../common/product-tags';
 import Footer from './footer';
 
@@ -33,7 +34,8 @@ const cells = {
 	name: Name,
 	price: Price,
 	regular_price: RegularPrice,
-	// sku: Sku,
+	sale_price: SalePrice,
+	date_created: DateCreated,
 	stock_quantity: StockQuanity,
 	tag: Tag,
 };
@@ -66,7 +68,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 
 	const cellRenderer = React.useCallback((item: ProductDocument, column: ColumnProps) => {
 		const Cell = get(cells, column.key);
-		return Cell ? <Cell item={item} column={column} /> : null;
+		return Cell ? <Cell item={item} column={column} /> : <Text>{String(item[column.key])}</Text>;
 	}, []);
 
 	/**

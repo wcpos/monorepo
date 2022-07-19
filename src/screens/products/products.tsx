@@ -17,7 +17,7 @@ const Products = () => {
 	const theme = useTheme();
 
 	return (
-		<ProductsProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }}>
+		<ProductsProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }} ui={ui}>
 			<Box
 				raised
 				rounding="medium"

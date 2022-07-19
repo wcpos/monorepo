@@ -35,7 +35,7 @@ const cells = {
 };
 
 const VariableProduct = ({ product, columns, itemIndex }: Props) => {
-	// const rerender = useObservableState(product.$);
+	const triggerRender = useObservableState(product.$);
 
 	const cellRenderer = React.useCallback((item: ProductDocument, column: ColumnProps) => {
 		const Cell = get(cells, column.key);

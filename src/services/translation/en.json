@@ -46,6 +46,7 @@
 		"pos": {
 			"title": "POS",
 			"products": {
+				"showOutOfStock": "Show out-of-stock products",
 				"column": {
 					"label": {
 						"actions": "Actions",

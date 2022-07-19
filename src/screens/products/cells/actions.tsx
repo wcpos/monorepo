@@ -71,7 +71,12 @@ const Actions = ({ item: product }: Props) => {
 				<Text>You are about to delete {product.name}</Text>
 			</Dialog>
 
-			<Modal ref={modalRef} title={`Edit ${product.name}`}>
+			<Modal
+				ref={modalRef}
+				title={`Edit ${product.name}`}
+				primaryAction={{ label: 'Save', action: close }}
+				secondaryActions={[{ label: 'Cancel', action: close }]}
+			>
 				<EditModal item={product} schema={schema} uiSchema={{}} />
 			</Modal>
 		</>
