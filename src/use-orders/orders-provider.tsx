@@ -7,7 +7,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
-import _orderBy from 'lodash/orderBy';
+import { orderBy } from '@shelf/fast-natural-order-by';
 import useRestHttpClient from '../use-rest-http-client';
 import { getAuditIdReplicationState } from './id-audit';
 import { getReplicationState } from './replication';
@@ -103,7 +103,7 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 				// sort the results
 				// sort the results
 				map((result) => {
-					return _orderBy(result, [q.sortBy], [q.sortDirection]);
+					return orderBy(result, [q.sortBy], [q.sortDirection]);
 				})
 				// @ts-ignore
 				// map((result) => {

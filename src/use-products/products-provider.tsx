@@ -7,7 +7,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
-import _orderBy from 'lodash/orderBy';
+import { orderBy } from '@shelf/fast-natural-order-by';
 import useRestHttpClient from '../use-rest-http-client';
 import { getAuditIdReplicationState } from './id-audit';
 import { getReplicationState } from './replication';
@@ -131,22 +131,9 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 			const RxQuery = collection.find({ selector });
 
 			return RxQuery.$.pipe(
-				// sort the results
 				map((result) => {
-					return _orderBy(result, [q.sortBy], [q.sortDirection]);
+					return orderBy(result, [(p) => p[q.sortBy]], [q.sortDirection]);
 				})
-				// @ts-ignore
-				// map((result) => {
-				// 	const array = Array.isArray(result) ? result : [];
-				// 	const productSorter = (product: any) => {
-				// 		if (q.sortBy === 'name') {
-				// 			// @TODO - this doens't work
-				// 			return product[q.sortBy].toLowerCase();
-				// 		}
-				// 		return product[q.sortBy];
-				// 	};
-				// 	return orderBy(array, [productSorter], [q.sortDirection]);
-				// })
 			);
 		})
 	);
@@ -164,7 +151,7 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 			resource,
 			sync,
 		}),
-		[query$, resource, setQuery]
+		[query$, resource, setQuery, sync]
 	);
 
 	useWhyDidYouUpdate('ProductsProvider', {
@@ -176,6 +163,9 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 		storeDB,
 		collection,
 		http,
+		replicationStates,
+		showOutOfStock,
+		sync,
 	});
 
 	return <ProductsContext.Provider value={value}>{children}</ProductsContext.Provider>;
