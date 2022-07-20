@@ -81,7 +81,7 @@ jobs:
             const projectQR = `exp://exp.host/${project}`;
 
             // Add the comment
-            github.issues.create({
+            github.rest.issues.create({
               title: `Preview ${tag}`,
               owner: context.repo.owner,
               repo: context.repo.repo,
