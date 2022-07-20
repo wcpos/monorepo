@@ -33,7 +33,7 @@
     "storybook-addon-mock": "^2.4.1"
   },
   "devDependencies": {
-    "@babel/core": "7.18.6",
+    "@babel/core": "7.18.9",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
