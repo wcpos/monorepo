@@ -18,8 +18,8 @@ import DateCreated from './cells/date-created';
 import Tag from '../common/product-tags';
 import Footer from './footer';
 
-type Sort = import('@wcpos/components/src/table/types').Sort;
-type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
+type Sort = import('@wcpos/components/src/table').Sort;
+type SortDirection = import('@wcpos/components/src/table').SortDirection;
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 
@@ -85,17 +85,8 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	/**
 	 *
 	 */
-	const rowRenderer = React.useCallback(
-		(
-			item,
-			index
-			// renderContext: TableRowRenderContext<T>,
-		) => {
-			// subscribe to item, special case to trigger render for data changes
-			// @TODO: find a better way to do this
-			// @ts-ignore
-			// const forceRender = useObservableState(item.$);
-
+	const renderItem = React.useCallback(
+		({ item, index }) => {
 			return (
 				<Table.Row
 					// config={renderContext}
@@ -119,7 +110,8 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}
 			footer={<Footer count={data.length} />}
-			rowRenderer={rowRenderer}
+			renderItem={renderItem}
+			estimatedItemSize={138}
 		/>
 	);
 };

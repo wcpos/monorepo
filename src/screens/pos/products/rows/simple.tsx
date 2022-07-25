@@ -13,7 +13,7 @@ import Categories from '../../../common/product-categories';
 import Tag from '../../../common/product-tags';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
-type ColumnProps = import('@wcpos/components/src/table/types').ColumnProps;
+type ColumnProps = import('@wcpos/components/src/table2').ColumnProps;
 
 interface Props {
 	// order: import('@wcpos/database').OrderDocument;

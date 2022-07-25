@@ -12,9 +12,9 @@ import FeeLine from './rows/fee-line';
 import ShippingLine from './rows/shipping-line';
 import { usePOSContext } from '../context';
 
-type ColumnProps = import('@wcpos/components/src/table/types').ColumnProps;
-type Sort = import('@wcpos/components/src/table/types').Sort;
-type SortDirection = import('@wcpos/components/src/table/types').SortDirection;
+type ColumnProps = import('@wcpos/components/src/table').ColumnProps;
+type Sort = import('@wcpos/components/src/table').Sort;
+type SortDirection = import('@wcpos/components/src/table').SortDirection;
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
@@ -84,12 +84,8 @@ const CartTable = ({ cartResource, ui }: ICartTableProps) => {
 	/**
 	 *
 	 */
-	const rowRenderer = React.useCallback(
-		(
-			item,
-			index
-			// renderContext: TableRowRenderContext<T>,
-		) => {
+	const renderItem = React.useCallback(
+		({ item, index }) => {
 			let row;
 			switch (item.collection.name) {
 				case 'line_items':
@@ -109,7 +105,14 @@ const CartTable = ({ cartResource, ui }: ICartTableProps) => {
 		[visibleColumns]
 	);
 
-	return <Table<CartItem> data={items} columns={visibleColumns} rowRenderer={rowRenderer} />;
+	return (
+		<Table<CartItem>
+			data={items}
+			columns={visibleColumns}
+			renderItem={renderItem}
+			estimatedItemSize={46}
+		/>
+	);
 };
 
 export default CartTable;

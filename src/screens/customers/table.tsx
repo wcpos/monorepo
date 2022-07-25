@@ -12,10 +12,10 @@ import Address from './cells/address';
 import Avatar from './cells/avatar';
 import Footer from './footer';
 
-type Sort = import('@wcpos/components/src/table/table').Sort;
-type SortDirection = import('@wcpos/components/src/table/table').SortDirection;
+type Sort = import('@wcpos/components/src/table').Sort;
+type SortDirection = import('@wcpos/components/src/table').SortDirection;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
-type ColumnProps = import('@wcpos/components/src/table/table').ColumnProps<CustomerDocument>;
+type ColumnProps = import('@wcpos/components/src/table').ColumnProps<CustomerDocument>;
 type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 
 interface CustomersTableProps {
@@ -85,17 +85,8 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 	/**
 	 *
 	 */
-	const rowRenderer = React.useCallback(
-		(
-			item,
-			index
-			// renderContext: TableRowRenderContext<T>,
-		) => {
-			// subscribe to item, special case to trigger render for data changes
-			// @TODO: find a better way to do this
-			// @ts-ignore
-			// const forceRender = useObservableState(item.$);
-
+	const renderItem = React.useCallback(
+		({ item, index }) => {
 			return (
 				<Table.Row
 					// config={renderContext}
@@ -121,7 +112,8 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}
 			footer={<Footer count={data.length} />}
-			rowRenderer={rowRenderer}
+			renderItem={renderItem}
+			estimatedItemSize={100}
 		/>
 	);
 };

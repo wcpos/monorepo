@@ -8,7 +8,7 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import { SimpleProductRow, VariableProductRow } from './rows';
 import Footer from './footer';
 
-type Sort = import('@wcpos/components/src/table/table').Sort;
+type Sort = import('@wcpos/components/src/table').Sort;
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 
@@ -57,12 +57,8 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	/**
 	 *
 	 */
-	const rowRenderer = React.useCallback(
-		(
-			item,
-			index
-			// renderContext: TableRowRenderContext<T>,
-		) => {
+	const renderItem = React.useCallback(
+		({ item, index }) => {
 			let row;
 			switch (item.type) {
 				case 'variable':
@@ -82,7 +78,7 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 		columns,
 		query,
 		visibleColumns,
-		rowRenderer,
+		renderItem,
 	});
 
 	return (
@@ -93,7 +89,8 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 			sortBy={query.sortBy}
 			sortDirection={query.sortDirection}
 			footer={<Footer count={data.length} />}
-			rowRenderer={rowRenderer}
+			renderItem={renderItem}
+			estimatedItemSize={100}
 		/>
 	);
 };
