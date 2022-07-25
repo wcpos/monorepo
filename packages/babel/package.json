@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/babel-preset-expo",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Babel configuration for React Native with Expo",
   "author": "kilbot <paul@kilbot.com>",
   "license": "MIT",
