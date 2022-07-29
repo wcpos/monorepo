@@ -7,7 +7,7 @@ type Props = {
 	item: import('@wcpos/database').ProductDocument;
 };
 
-const StockQuantity = ({ item: product }: Props) => {
+export const StockQuantity = ({ item: product }: Props) => {
 	return product.manage_stock && isFinite(product.stock_quantity) ? (
 		<Text>{product.stock_quantity}</Text>
 	) : null;

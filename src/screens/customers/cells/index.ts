@@ -1,15 +1,15 @@
-import avatarUrl from './avatar';
+import avatar_url from './avatar';
 import actions from './actions';
-import Address from './address';
-import Name from './name';
+import address from './address';
+import name from './name';
 import email from './email';
 
 export default {
-	avatarUrl,
-	firstName: Name,
-	lastName: Name,
+	avatar_url,
+	first_name: name,
+	last_name: name,
 	email,
-	billing: Address,
-	shipping: Address,
+	billing: address,
+	shipping: address,
 	actions,
 };

@@ -1,16 +1,12 @@
 import * as React from 'react';
-import { Observable } from 'rxjs';
 import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
-import orderBy from 'lodash/orderBy';
 import flatten from 'lodash/flatten';
-import Table from '@wcpos/components/src/table';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import get from 'lodash/get';
+import Table, { TableContextProps } from '@wcpos/components/src/table';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import LineItem from './rows/line-item';
-import FeeLine from './rows/fee-line';
-import ShippingLine from './rows/shipping-line';
 import { usePOSContext } from '../context';
+import * as cells from './cells';
 
 type ColumnProps = import('@wcpos/components/src/table').ColumnProps;
 type Sort = import('@wcpos/components/src/table').Sort;
@@ -39,80 +35,50 @@ const CartTable = ({ cartResource, ui }: ICartTableProps) => {
 	const items = React.useMemo(() => flatten(Object.values(cart)), [cart]); // @TODO - add sorting
 	const { setCurrentOrder } = usePOSContext();
 
-	useWhyDidYouUpdate('CartTable', { cartResource, ui, columns, items, cart, t });
+	/**
+	 *
+	 */
+	const cellRenderer = React.useCallback(({ item, column, index }) => {
+		const Cell = get(cells, [item.collection.name, column.key]);
+		return Cell ? <Cell item={item} column={column} index={index} /> : null;
+	}, []);
 
 	/**
-	 * If Cart Table is emptied, delete the order
+	 *
 	 */
-	// React.useEffect(() => {
-	// 	if (items.length === 0) {
-	// 		order.remove().then(() => {
-	// 			setCurrentOrder(null);
-	// 		});
-	// 	}
-	// }, [items, order]);
-
-	/**
-	 * - filter visible columns
-	 * - translate column label
-	 */
-	const visibleColumns = React.useMemo(() => {
-		return columns
-			.filter((column) => column.show)
-			.map((column) => {
-				// clone column and add label
-				return {
-					...column,
-					label: t(`pos.cart.column.label.${column.key}`),
-				};
-			});
-	}, [columns, t]);
-
-	const [query, setQuery] = React.useState({
-		sortBy: 'id',
-		sortDirection: 'asc',
-	});
-
-	const handleSort = React.useCallback<Sort>(
-		({ sortBy, sortDirection }) => {
-			// @ts-ignore
-			setQuery({ ...query, sortBy, sortDirection });
+	const headerLabel = React.useCallback(
+		({ column }) => {
+			return t(`pos.cart.column.label.${column.key}`);
 		},
-		[query]
+		[t]
 	);
 
 	/**
 	 *
 	 */
-	const renderItem = React.useCallback(
-		({ item, index }) => {
-			let row;
-			switch (item.collection.name) {
-				case 'line_items':
-					row = <LineItem lineItem={item} columns={visibleColumns} itemIndex={index} />;
-					break;
-				case 'fee_lines':
-					row = <FeeLine fee={item} columns={visibleColumns} itemIndex={index} />;
-					break;
-				case 'shipping_lines':
-					row = <ShippingLine shipping={item} columns={visibleColumns} itemIndex={index} />;
-					break;
-				default:
-					row = null;
-			}
-			return row ? <ErrorBoundary>{row}</ErrorBoundary> : null;
-		},
-		[visibleColumns]
-	);
+	const tableContext = React.useMemo<TableContextProps<CartItem>>(() => {
+		return {
+			columns: columns.filter((column) => column.show),
+			// sort: ({ sortBy, sortDirection }) => {
+			// 	setQuery('sortBy', sortBy);
+			// 	setQuery('sortDirection', sortDirection);
+			// },
+			// sortBy: query.sortBy,
+			// sortDirection: query.sortDirection,
+			cellRenderer,
+			headerLabel,
+		};
+	}, [columns, cellRenderer, headerLabel]);
 
-	return (
-		<Table<CartItem>
-			data={items}
-			columns={visibleColumns}
-			renderItem={renderItem}
-			estimatedItemSize={46}
-		/>
-	);
+	/**
+	 *
+	 */
+	useWhyDidYouUpdate('CartTable', { cartResource, ui, columns, items, cart, t });
+
+	/**
+	 *
+	 */
+	return <Table<CartItem> data={items} estimatedItemSize={46} context={tableContext} />;
 };
 
 export default CartTable;

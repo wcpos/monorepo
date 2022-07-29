@@ -1,6 +1,6 @@
 import * as React from 'react';
 import Icon from '@wcpos/components/src/icon';
-import { usePOSContext } from '../../../context';
+import { usePOSContext } from '../../context';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;
@@ -9,7 +9,7 @@ interface Props {
 /**
  *
  */
-const Actions = ({ item: product }: Props) => {
+export const Actions = ({ item: product }: Props) => {
 	const { currentOrder } = usePOSContext();
 
 	/**

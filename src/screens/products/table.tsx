@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import useProducts from '@wcpos/hooks/src/use-products';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Table from '@wcpos/components/src/table';
+import Table, { TableContextProps } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import Actions from './cells/actions';
 import Categories from '../common/product-categories';
@@ -18,8 +18,6 @@ import DateCreated from './cells/date-created';
 import Tag from '../common/product-tags';
 import Footer from './footer';
 
-type Sort = import('@wcpos/components/src/table').Sort;
-type SortDirection = import('@wcpos/components/src/table').SortDirection;
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 
@@ -51,67 +49,48 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
-	 * - filter visible columns
-	 * - translate column label
-	 * - asssign cell renderer
+	 *
 	 */
-	const visibleColumns = React.useMemo(
-		() =>
-			columns
-				.filter((column) => column.show)
-				.map((column) => ({
-					...column,
-					label: t(`products.column.label.${column.key}`),
-				})),
-		[columns, t]
-	);
-
-	const cellRenderer = React.useCallback((item: ProductDocument, column: ColumnProps) => {
-		const Cell = get(cells, column.key);
-		return Cell ? <Cell item={item} column={column} /> : <Text>{String(item[column.key])}</Text>;
+	const cellRenderer = React.useCallback(({ item, column, index }) => {
+		const Cell = cells[column.key];
+		return Cell ? <Cell item={item} column={column} index={index} /> : null;
 	}, []);
 
 	/**
-	 * handle sort
+	 *
 	 */
-	const handleSort: Sort = React.useCallback(
-		({ sortBy, sortDirection }) => {
-			setQuery('sortBy', sortBy);
-			setQuery('sortDirection', sortDirection);
+	const headerLabel = React.useCallback(
+		({ column }) => {
+			return t(`products.column.label.${column.key}`);
 		},
-		[setQuery]
+		[t]
 	);
 
 	/**
 	 *
 	 */
-	const renderItem = React.useCallback(
-		({ item, index }) => {
-			return (
-				<Table.Row
-					// config={renderContext}
-					item={item}
-					columns={visibleColumns}
-					itemIndex={index}
-					cellRenderer={cellRenderer}
-				/>
-			);
-		},
-		[cellRenderer, visibleColumns]
-	);
+	const tableContext = React.useMemo<TableContextProps<ProductDocument>>(() => {
+		return {
+			columns: columns.filter((column) => column.show),
+			sort: ({ sortBy, sortDirection }) => {
+				setQuery('sortBy', sortBy);
+				setQuery('sortDirection', sortDirection);
+			},
+			sortBy: query.sortBy,
+			sortDirection: query.sortDirection,
+			cellRenderer,
+			headerLabel,
+		};
+	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer, headerLabel]);
 
 	useWhyDidYouUpdate('Table', { data });
 
 	return (
 		<Table<ProductDocument>
-			columns={visibleColumns}
 			data={data}
-			sort={handleSort}
-			sortBy={query.sortBy}
-			sortDirection={query.sortDirection}
 			footer={<Footer count={data.length} />}
-			renderItem={renderItem}
-			estimatedItemSize={138}
+			estimatedItemSize={150}
+			context={tableContext}
 		/>
 	);
 };

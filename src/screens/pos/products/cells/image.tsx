@@ -7,7 +7,7 @@ type Props = {
 	item: import('@wcpos/database').ProductDocument;
 };
 
-const Image = ({ item: product }: Props) => {
+export const Image = ({ item: product }: Props) => {
 	const { thumbnail } = product;
 	const [size, setSize] = React.useState({ width: undefined, height: undefined });
 

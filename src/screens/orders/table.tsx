@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import useOrders from '@wcpos/hooks/src/use-orders';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Table from '@wcpos/components/src/table';
+import Table, { TableContextProps } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import Actions from './cells/actions';
 import Address from './cells/address';
@@ -15,10 +15,7 @@ import Total from './cells/total';
 import DateCreated from './cells/date-created';
 import Footer from './footer';
 
-type Sort = import('@wcpos/components/src/table').Sort;
-type SortDirection = import('@wcpos/components/src/table').SortDirection;
 type OrderDocument = import('@wcpos/database').OrderDocument;
-type ColumnProps = import('@wcpos/components/src/table').ColumnProps<OrderDocument>;
 type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 
 interface OrdersTableProps {
@@ -47,75 +44,48 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
-	 * - filter visible columns
-	 * - translate column label
-	 * - asssign cell renderer
-	 */
-	const visibleColumns = React.useMemo(
-		() =>
-			columns
-				.filter((column) => column.show)
-				.map((column) => ({
-					...column,
-					label: t(`orders.column.label.${column.key}`),
-				})),
-		[columns, t]
-	);
-
-	/**
-	 * handle sort
-	 */
-	const handleSort: Sort = React.useCallback(
-		({ sortBy, sortDirection }) => {
-			setQuery('sortBy', sortBy);
-			setQuery('sortDirection', sortDirection);
-		},
-		[setQuery]
-	);
-
-	/**
 	 *
 	 */
-	const cellRenderer = React.useCallback((item: OrderDocument, column: ColumnProps) => {
-		const Cell = get(cells, column.key);
-		return Cell ? (
-			<Cell item={item} column={column} />
-		) : (
-			<Text numberOfLines={1}>{item[column.key]}</Text>
-		);
+	const cellRenderer = React.useCallback(({ item, column, index }) => {
+		const Cell = cells[column.key];
+		return Cell ? <Cell item={item} column={column} index={index} /> : null;
 	}, []);
 
 	/**
 	 *
 	 */
-	const renderItem = React.useCallback(
-		({ item, index }) => {
-			return (
-				<Table.Row
-					// config={renderContext}
-					item={item}
-					columns={visibleColumns}
-					// itemIndex={index}
-					cellRenderer={cellRenderer}
-					itemIndex={index}
-				/>
-			);
+	const headerLabel = React.useCallback(
+		({ column }) => {
+			return t(`orders.column.label.${column.key}`);
 		},
-		[cellRenderer, visibleColumns]
+		[t]
 	);
+
+	/**
+	 *
+	 */
+	const tableContext = React.useMemo<TableContextProps<OrderDocument>>(() => {
+		return {
+			columns: columns.filter((column) => column.show),
+			sort: ({ sortBy, sortDirection }) => {
+				setQuery('sortBy', sortBy);
+				setQuery('sortDirection', sortDirection);
+			},
+			sortBy: query.sortBy,
+			sortDirection: query.sortDirection,
+			cellRenderer,
+			headerLabel,
+		};
+	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer, headerLabel]);
 
 	useWhyDidYouUpdate('Table', { data });
 
 	return (
 		<Table<OrderDocument>
-			columns={visibleColumns}
 			data={data}
-			sort={handleSort}
-			sortBy={query.sortBy}
-			sortDirection={query.sortDirection}
 			footer={<Footer count={data.length} />}
-			renderItem={renderItem}
 			estimatedItemSize={100}
+			context={tableContext}
 		/>
 	);
 };

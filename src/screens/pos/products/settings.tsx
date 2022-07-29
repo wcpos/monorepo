@@ -104,8 +104,9 @@ export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 			<Modal
 				ref={ref}
 				title="Product UI Settings"
-				primaryAction={{ label: 'Save', action: close }}
-				secondaryActions={[{ label: 'Restore Defaults', action: ui.reset, type: 'critical' }]}
+				// primaryAction={{ label: 'Save', action: close }}
+				// secondaryActions={[{ label: 'Restore Defaults', action: ui.reset, type: 'critical' }]}
+				primaryAction={{ label: 'Restore Defaults', action: ui.reset, type: 'critical' }}
 			>
 				<Form
 					schema={schema}

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import Icon from '@wcpos/components/src/icon';
 import useSnackbar from '@wcpos/components/src/snackbar';
-import { usePOSContext } from '../../../context';
+import { usePOSContext } from '../../context';
 
 interface ActionProps {
 	item:
@@ -10,7 +10,7 @@ interface ActionProps {
 		| import('@wcpos/database').ShippingLineDocument;
 }
 
-const Actions = ({ item }: ActionProps) => {
+export const Actions = ({ item }: ActionProps) => {
 	const { currentOrder } = usePOSContext();
 	const addSnackbar = useSnackbar();
 
@@ -41,5 +41,3 @@ const Actions = ({ item }: ActionProps) => {
 	 */
 	return <Icon name="circleXmark" size="xLarge" onPress={handleRemove} type="critical" />;
 };
-
-export default Actions;

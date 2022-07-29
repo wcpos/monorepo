@@ -3,12 +3,10 @@ import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import useProducts from '@wcpos/hooks/src/use-products';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Table from '@wcpos/components/src/table';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import { SimpleProductRow, VariableProductRow } from './rows';
+import Table, { TableContextProps } from '@wcpos/components/src/table';
 import Footer from './footer';
+import * as cells from './cells';
 
-type Sort = import('@wcpos/components/src/table').Sort;
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 
@@ -27,70 +25,65 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
-	 * - filter visible columns
-	 * - translate column label
-	 * - asssign cell renderer
+	 *
 	 */
-	const visibleColumns = React.useMemo(() => {
-		return columns
-			.filter((column) => column.show)
-			.map((column) => {
-				// clone column and add label
-				return {
-					...column,
-					label: t(`pos.products.column.label.${column.key}`),
-				};
-			});
-	}, [columns, t]);
+	const cellRenderer = React.useCallback(({ item, column, index }) => {
+		const Cell = cells[column.key];
+		return Cell ? <Cell item={item} column={column} index={index} /> : null;
+	}, []);
 
 	/**
-	 * handle sort
+	 *
 	 */
-	const handleSort: Sort = React.useCallback(
-		({ sortBy, sortDirection }) => {
-			setQuery('sortBy', sortBy);
-			setQuery('sortDirection', sortDirection);
+	const headerLabel = React.useCallback(
+		({ column }) => {
+			return t(`pos.products.column.label.${column.key}`);
 		},
-		[setQuery]
+		[t]
 	);
 
 	/**
 	 *
 	 */
-	const renderItem = React.useCallback(
-		({ item, index }) => {
-			let row;
-			switch (item.type) {
-				case 'variable':
-					row = <VariableProductRow product={item} columns={visibleColumns} itemIndex={index} />;
-					break;
-				default:
-					row = <SimpleProductRow product={item} columns={visibleColumns} itemIndex={index} />;
-			}
+	const tableContext = React.useMemo<TableContextProps<ProductDocument>>(() => {
+		return {
+			columns: columns.filter((column) => column.show),
+			sort: ({ sortBy, sortDirection }) => {
+				setQuery('sortBy', sortBy);
+				setQuery('sortDirection', sortDirection);
+			},
+			sortBy: query.sortBy,
+			sortDirection: query.sortDirection,
+			cellRenderer,
+			headerLabel,
+		};
+	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer, headerLabel]);
 
-			return row ? <ErrorBoundary>{row}</ErrorBoundary> : null;
-		},
-		[visibleColumns]
-	);
-
+	/**
+	 *
+	 */
 	useWhyDidYouUpdate('ProductsTable', {
+		t,
+		query$,
+		resource,
+		setQuery,
+		ui,
 		data,
 		columns,
 		query,
-		visibleColumns,
-		renderItem,
+		tableContext,
+		headerLabel,
 	});
 
+	/**
+	 *
+	 */
 	return (
 		<Table<ProductDocument>
-			columns={visibleColumns}
 			data={data}
-			sort={handleSort}
-			sortBy={query.sortBy}
-			sortDirection={query.sortDirection}
 			footer={<Footer count={data.length} />}
-			renderItem={renderItem}
-			estimatedItemSize={100}
+			estimatedItemSize={150}
+			context={tableContext}
 		/>
 	);
 };

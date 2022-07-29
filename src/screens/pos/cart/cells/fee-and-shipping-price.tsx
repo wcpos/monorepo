@@ -9,7 +9,7 @@ interface Props {
 	item: import('@wcpos/database').FeeLineDocument | import('@wcpos/database').ShippingLineDocument;
 }
 
-const FeeAndShippingPrice = ({ item }: Props) => {
+export const FeeAndShippingPrice = ({ item }: Props) => {
 	const price = useObservableState(item.total$, item.total);
 
 	const handleChange = async (newValue: string): Promise<void> => {
@@ -24,5 +24,3 @@ const FeeAndShippingPrice = ({ item }: Props) => {
 		</Popover>
 	);
 };
-
-export default FeeAndShippingPrice;

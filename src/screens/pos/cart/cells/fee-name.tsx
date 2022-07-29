@@ -5,13 +5,13 @@ import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
 import Modal, { useModal } from '@wcpos/components/src/modal';
-import EditModal from '../../../../common/edit-modal';
+import EditModal from '../../../common/edit-modal';
 
 interface Props {
 	item: import('@wcpos/database').FeeLineDocument;
 }
 
-const FeeName = ({ item }: Props) => {
+export const FeeName = ({ item }: Props) => {
 	const name = useObservableState(item.name$, item.name);
 	const { ref: refEditor, open: openEditor, close: closeEditor } = useModal();
 
@@ -49,7 +49,7 @@ const FeeName = ({ item }: Props) => {
 			<Box fill>
 				<Text>{name}</Text>
 			</Box>
-			<Box>
+			<Box distribution="center">
 				<Icon name="ellipsisVertical" onPress={openEditor} tooltip="Edit" />
 				<Modal ref={refEditor} title={`Edit ${name}`}>
 					<EditModal schema={schema} uiSchema={uiSchema} item={item} />
@@ -58,5 +58,3 @@ const FeeName = ({ item }: Props) => {
 		</Box>
 	);
 };
-
-export default FeeName;

@@ -12,12 +12,10 @@ interface Props {
 	type?: 'total' | 'subtotal';
 }
 
-const Total = ({ item, type = 'total' }: Props) => {
+export const Total = ({ item, type = 'total' }: Props) => {
 	const total = useObservableState(item[`${type}$`], item[type]);
 	const { format } = useCurrencyFormat();
 	useWhyDidYouUpdate('CartLineItemTotal', { item, total });
 
 	return <Text>{format(total || 0)}</Text>;
 };
-
-export default Total;

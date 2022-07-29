@@ -5,7 +5,7 @@ type SKUProps = {
 	item: import('@wcpos/database').ProductDocument;
 };
 
-const SKU = ({ item: product }: SKUProps) => {
+export const SKU = ({ item: product }: SKUProps) => {
 	return product.isSynced() ? <Text>{product.sku}</Text> : <Text.Skeleton length="short" />;
 };
 

@@ -9,7 +9,7 @@ interface Props {
 	item: import('@wcpos/database').LineItemDocument;
 }
 
-const Price = ({ item }: Props) => {
+export const Price = ({ item }: Props) => {
 	const price = useObservableState(item.price$, item.price);
 
 	const handleChange = async (newValue: string): Promise<void> => {
@@ -24,5 +24,3 @@ const Price = ({ item }: Props) => {
 		</Popover>
 	);
 };
-
-export default Price;

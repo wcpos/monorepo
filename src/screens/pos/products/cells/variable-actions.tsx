@@ -9,7 +9,7 @@ import Icon from '@wcpos/components/src/icon';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 import Variations from './variations';
-import { usePOSContext } from '../../../context';
+import { usePOSContext } from '../../context';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -40,7 +40,7 @@ interface Props {
 // 	return replicationState;
 // };
 
-const Actions = ({ item: product }: Props) => {
+export const VariableActions = ({ item: product }: Props) => {
 	const { currentOrder } = usePOSContext();
 	const http = useRestHttpClient();
 
@@ -102,4 +102,4 @@ const Actions = ({ item: product }: Props) => {
 	);
 };
 
-export default Actions;
+export default VariableActions;

@@ -3,15 +3,17 @@ import { View } from 'react-native';
 import find from 'lodash/find';
 import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
-import Categories from '../../../../common/product-categories';
-import Tags from '../../../../common/product-tags';
+import Categories from '../../../common/product-categories';
+import Tags from '../../../common/product-tags';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;
-	column: any;
+	column: import('@wcpos/components/src/table').ColumnProps<
+		import('@wcpos/database').ProductDocument
+	>;
 }
 
-const Name = ({ item: product, column }: Props) => {
+export const Name = ({ item: product, column }: Props) => {
 	const { display } = column;
 
 	/**
@@ -20,7 +22,7 @@ const Name = ({ item: product, column }: Props) => {
 	const show = React.useCallback(
 		(key: string): boolean => {
 			const d = find(display, { key });
-			return d.show;
+			return !!(d && d.show);
 		},
 		[display]
 	);

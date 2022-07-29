@@ -3,6 +3,7 @@ import { ProductsProvider } from '@wcpos/hooks/src/use-products';
 import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table from './table';
 import SearchBar from './search-bar';
 import Settings from './settings';
@@ -35,15 +36,20 @@ const POSProducts = ({ ui }: POSProductsProps) => {
 						borderTopLeftRadius: theme.rounding.medium,
 						borderTopRightRadius: theme.rounding.medium,
 					}}
-					errorBoundary
 				>
-					<SearchBar />
-					<Settings ui={ui} />
+					<ErrorBoundary>
+						<SearchBar />
+					</ErrorBoundary>
+					<ErrorBoundary>
+						<Settings ui={ui} />
+					</ErrorBoundary>
 				</Box>
-				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }} errorBoundary>
-					<React.Suspense fallback={<Text>Loading products...</Text>}>
-						<Table ui={ui} />
-					</React.Suspense>
+				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+					<ErrorBoundary>
+						<React.Suspense fallback={<Text>Loading products...</Text>}>
+							<Table ui={ui} />
+						</React.Suspense>
+					</ErrorBoundary>
 				</Box>
 			</Box>
 		</ProductsProvider>

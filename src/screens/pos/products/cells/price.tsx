@@ -16,7 +16,7 @@ type PriceProps = {
 	item: import('@wcpos/database').ProductDocument;
 };
 
-const Price = ({ item: product }: PriceProps) => {
+export const Price = ({ item: product }: PriceProps) => {
 	const { format } = useCurrencyFormat();
 	const price = useObservableState(product.price$, product.price);
 	const { resource } = useTaxes();

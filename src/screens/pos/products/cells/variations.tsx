@@ -23,7 +23,7 @@ interface Props {
 	addToCart: (variation: ProductVariationDocument, metaData: any) => void;
 }
 
-const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
+export const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
 	const variations = useObservableSuspense(variationsResource);
 	const [state, setState] = React.useState(() => init(attributes));
 	const { format } = useCurrencyFormat();

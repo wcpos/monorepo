@@ -10,9 +10,7 @@ interface Props {
 	type?: 'total_tax' | 'subtotal_tax';
 }
 
-const Tax = ({ item, type = 'total_tax' }: Props) => {
+export const Tax = ({ item, type = 'total_tax' }: Props) => {
 	const tax = useObservableState(item[`${type}$`], item[type]);
 	return <Text>{tax}</Text>;
 };
-
-export default Tax;
