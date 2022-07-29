@@ -7,6 +7,7 @@ import useAppState from '@wcpos/hooks/src/use-app-state';
 import Pill from '@wcpos/components/src/pill';
 import Modal, { useModal } from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 // import Form from '@wcpos/react-native-jsonschema-form';
 import EditModal from '../../common/edit-modal';
 import CustomerSelect from '../../common/customer-select';
@@ -93,17 +94,19 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 				height: 51,
 			}}
 		>
-			<Box style={{ flex: 1 }} errorBoundary>
-				{customer ? (
-					<Box horizontal align="center" space="small">
-						<Text weight="bold">Customer:</Text>
-						<Pill removable onRemove={handleCustomerRemove} onPress={open}>
-							{customer.username}
-						</Pill>
-					</Box>
-				) : (
-					<CustomerSelect onSelectCustomer={handleCustomerSelect} />
-				)}
+			<Box style={{ flex: 1 }}>
+				<ErrorBoundary>
+					{customer ? (
+						<Box horizontal align="center" space="small">
+							<Text weight="bold">Customer:</Text>
+							<Pill removable onRemove={handleCustomerRemove} onPress={open}>
+								{customer.username}
+							</Pill>
+						</Box>
+					) : (
+						<CustomerSelect onSelectCustomer={handleCustomerSelect} />
+					)}
+				</ErrorBoundary>
 			</Box>
 			<AddCustomer />
 			<UISettings ui={ui} />
