@@ -36,6 +36,32 @@ const Actions = ({ item: order }: Props) => {
 	/**
 	 *
 	 */
+	const saveOrder = React.useCallback(async () => {
+		const data = await order.toRestApiJSON();
+		let endpoint = 'orders';
+		if (order.id) {
+			endpoint += `/${order.id}`;
+		}
+
+		const result = await http(endpoint, {
+			method: 'post',
+			data,
+		});
+
+		if (result.status === 201 || result.status === 200) {
+			order.atomicPatch(result.data);
+		}
+
+		/**
+		 * @TODO - close the modal?
+		 * @TODO - show a success message?
+		 * @TODO - BUG: form refreshes with old data
+		 */
+	}, [http, order]);
+
+	/**
+	 *
+	 */
 	const handleOpen = React.useCallback(() => {
 		order.atomicPatch({ status: 'pos-open' });
 		// @ts-ignore
@@ -81,7 +107,12 @@ const Actions = ({ item: order }: Props) => {
 			<Dropdown items={menuItems}>
 				<Icon name="ellipsisVertical" />
 			</Dropdown>
-			<Modal ref={editModalRef} title="Edit Order">
+			<Modal
+				ref={editModalRef}
+				title="Edit Order"
+				primaryAction={{ label: 'Sync to server', action: saveOrder }}
+				secondaryActions={[{ label: 'Cancel', action: closeEditModal }]}
+			>
 				<EditModal item={order} schema={schema} uiSchema={{}} />
 			</Modal>
 			<Modal ref={receiptModalRef} title="Receipt">
