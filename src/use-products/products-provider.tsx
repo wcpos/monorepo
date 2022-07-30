@@ -13,7 +13,7 @@ import { getAuditIdReplicationState } from './id-audit';
 import { getReplicationState } from './replication';
 
 type ProductDocument = import('@wcpos/database/src/collections/products').ProductDocument;
-type SortDirection = import('@wcpos/components/src/table/table').SortDirection;
+type SortDirection = import('@wcpos/components/src/table').SortDirection;
 
 export interface QueryState {
 	search?: string;

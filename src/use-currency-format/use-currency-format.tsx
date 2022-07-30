@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
+import defaults from 'lodash/defaults';
 import useAppState from '../use-app-state';
 import {
 	toNumericString,
@@ -11,10 +12,18 @@ import {
 } from './format.helpers';
 import symbols from './symbols.json';
 
+interface CurrencyFormatProps {
+	/**
+	 *
+	 */
+	withSymbol?: boolean;
+}
+
 /**
  *
  */
-export const useCurrencyFormat = () => {
+export const useCurrencyFormat = (options: CurrencyFormatProps) => {
+	const { withSymbol } = defaults(options, { withSymbol: true });
 	const { store } = useAppState();
 	const currency = useObservableState(store?.currency$, store?.currency);
 	const currencyPosition = useObservableState(store?.currency_pos$, store?.currency_pos);
@@ -54,13 +63,17 @@ export const useCurrencyFormat = () => {
 			}
 
 			// add prefix and suffix
-			const symbol = get(symbols, currency);
-			if (symbol && (currencyPosition === 'left' || currencyPosition === 'left_space')) {
-				beforeDecimal =
-					currencyPosition === 'left_space' ? `${symbol} ${beforeDecimal}` : symbol + beforeDecimal;
-			}
-			if (symbol && (currencyPosition === 'right' || currencyPosition === 'right_space')) {
-				afterDecimal += currencyPosition === 'right_space' ? ` ${symbol}` : symbol;
+			if (withSymbol) {
+				const symbol = get(symbols, currency);
+				if (symbol && (currencyPosition === 'left' || currencyPosition === 'left_space')) {
+					beforeDecimal =
+						currencyPosition === 'left_space'
+							? `${symbol} ${beforeDecimal}`
+							: symbol + beforeDecimal;
+				}
+				if (symbol && (currencyPosition === 'right' || currencyPosition === 'right_space')) {
+					afterDecimal += currencyPosition === 'right_space' ? ` ${symbol}` : symbol;
+				}
 			}
 
 			// restore negation sign
@@ -76,6 +89,7 @@ export const useCurrencyFormat = () => {
 			decimalSeparator,
 			fixedDecimalPrecision,
 			thousandSeparator,
+			withSymbol,
 		]
 	);
 
@@ -83,8 +97,8 @@ export const useCurrencyFormat = () => {
 	 *
 	 */
 	const format = React.useCallback(
-		(value: number | string) => {
-			let numStr = value;
+		(value: number | string | undefined) => {
+			let numStr = value || '0';
 
 			if (typeof numStr === 'number') {
 				numStr = toNumericString(numStr);
