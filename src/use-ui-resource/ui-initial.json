@@ -8,14 +8,13 @@
 			{
 				"key": "image",
 				"disableSort": true,
-				"width": "15%",
-				"flexShrink": 0,
 				"hideLabel": true,
 				"show": true
 			},
 			{
 				"key": "name",
 				"show": true,
+				"flex": "3",
 				"display": [
 					{
 						"key": "stock_quantity",
@@ -37,9 +36,7 @@
 			},
 			{
 				"key": "sku",
-				"show": false,
-				"width": "20%",
-				"flexShrink": 0
+				"show": false
 			},
 			{
 				"key": "stock_quantity",
@@ -48,14 +45,13 @@
 			},
 			{
 				"key": "price",
-				"width": "90px",
-				"flexShrink": 0,
 				"align": "right",
 				"show": true
 			},
 			{
 				"key": "actions",
 				"disableSort": true,
+				"flex": "0 0 46px",
 				"width": "46px",
 				"flexShrink": 0,
 				"hideLabel": true,
@@ -69,14 +65,13 @@
 		"columns": [
 			{
 				"key": "quantity",
-				"width": "15%",
-				"flexShrink": 0,
 				"show": true,
 				"align": "center"
 			},
 			{
 				"key": "name",
 				"show": true,
+				"flex": "3",
 				"display": [
 					{
 						"key": "sku",
@@ -86,49 +81,36 @@
 			},
 			{
 				"key": "sku",
-				"width": "20%",
-				"flexShrink": 0,
 				"show": false
 			},
 			{
 				"key": "price",
-				"width": "20%",
-				"flexShrink": 0,
 				"show": true,
 				"align": "right"
 			},
 			{
 				"key": "subtotal",
-				"width": "20%",
-				"flexShrink": 0,
 				"show": false,
 				"align": "right"
 			},
 			{
 				"key": "subtotal_tax",
-				"width": "20%",
-				"flexShrink": 0,
 				"show": false,
 				"align": "right"
 			},
 			{
 				"key": "total_tax",
-				"width": "20%",
-				"flexShrink": 0,
 				"show": false,
 				"align": "right"
 			},
 			{
 				"key": "total",
-				"width": "20%",
-				"flexShrink": 0,
 				"align": "right",
 				"show": true
 			},
 			{
 				"key": "actions",
-				"width": "46px",
-				"flexShrink": 0,
+				"flex": "0 0 46px",
 				"hideLabel": true,
 				"show": true
 			}
@@ -140,71 +122,71 @@
 		"columns": [
 			{
 				"key": "image",
-				"width": "15%",
 				"disableSort": true,
-				"flexShrink": 0,
 				"hideLabel": true,
 				"show": true
 			},
 			{
 				"key": "id",
-				"width": "50px",
-				"flexShrink": 0,
-				"show": false
+				"show": false,
+				"align": "center"
 			},
 			{
 				"key": "name",
-				"width": "30%",
-				"show": true
+				"show": true,
+				"flex": "3",
+				"display": [
+					{
+						"key": "sku",
+						"show": false
+					}
+				]
 			},
 			{
 				"key": "sku",
-				"width": "80px",
-				"flexShrink": 0,
 				"show": false
 			},
 			{
 				"key": "stock_quantity",
-				"width": "100px",
 				"show": true
 			},
 			{
 				"key": "categories",
-				"width": "20%",
 				"disableSort": true,
 				"show": true
 			},
 			{
 				"key": "tags",
-				"width": "20%",
 				"disableSort": true,
 				"show": false
 			},
 			{
+				"key": "price",
+				"show": true,
+				"align": "right"
+			},
+			{
 				"key": "regular_price",
-				"width": "100px",
-				"show": true
+				"show": true,
+				"align": "right"
 			},
 			{
 				"key": "sale_price",
-				"width": "100px",
-				"show": true
+				"show": true,
+				"align": "right"
 			},
 			{
 				"key": "date_created",
-				"width": "100px",
 				"show": false
 			},
 			{
 				"key": "date_modified",
-				"width": "100px",
 				"show": false
 			},
 			{
 				"key": "actions",
 				"disableSort": true,
-				"width": "38px",
-				"flexShrink": 0,
+				"flex": "0 0 38px",
 				"hideLabel": true,
 				"show": true
 			}
@@ -216,60 +198,55 @@
 		"columns": [
 			{
 				"key": "status",
-				"width": "38px",
+				"flex": "0 0 45px",
+				"align": "center",
 				"hideLabel": true,
 				"show": true
 			},
 			{
 				"key": "number",
-				"width": "38px",
+				"align": "center",
 				"hideLabel": true,
 				"show": true
 			},
 			{
 				"key": "customer",
-				"width": "20%",
 				"show": true
 			},
 			{
 				"key": "billing",
-				"width": "20%",
 				"show": true
 			},
 			{
 				"key": "shipping",
-				"width": "20%",
 				"show": true
 			},
 			{
 				"key": "customer_note",
-				"width": "38px",
+				"flex": "0 0 38px",
 				"show": true
 			},
 			{
 				"key": "date_created",
-				"width": "100px",
 				"show": true
 			},
 			{
 				"key": "date_modified",
-				"width": "100px",
 				"show": false
 			},
 			{
 				"key": "date_completed",
-				"width": "100px",
 				"show": false
 			},
 			{
 				"key": "total",
-				"width": "90px",
+				"align": "right",
 				"show": true
 			},
 			{
 				"key": "actions",
 				"disableSort": true,
-				"width": "38px",
+				"flex": "0 0 38px",
 				"hideLabel": true,
 				"show": true
 			}
@@ -282,49 +259,41 @@
 			{
 				"key": "avatar_url",
 				"disableSort": true,
-				"width": "15%",
 				"hideLabel": true,
 				"show": true
 			},
 			{
 				"key": "first_name",
-				"width": "20%",
 				"show": true
 			},
 			{
 				"key": "last_name",
-				"width": "20%",
 				"show": true
 			},
 			{
 				"key": "email",
-				"width": "20%",
 				"show": true
 			},
 			{
 				"key": "role",
-				"width": "20%",
 				"show": false
 			},
 			{
 				"key": "username",
-				"width": "20%",
 				"show": false
 			},
 			{
 				"key": "billing",
-				"width": "20%",
 				"show": true
 			},
 			{
 				"key": "shipping",
-				"width": "20%",
 				"show": true
 			},
 			{
 				"key": "actions",
 				"disableSort": true,
-				"width": "38px",
+				"flex": "0 0 38px",
 				"hideLabel": true,
 				"show": true
 			}
