@@ -35,7 +35,14 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 			<Text size="small">
 				Showing {count} of {total}
 			</Text>
-			<Icon name="arrowRotateRight" size="small" onPress={sync} />
+			<Icon
+				name="arrowRotateRight"
+				size="small"
+				onPress={sync}
+				onLongPress={() => {
+					console.log('long');
+				}}
+			/>
 		</Box>
 	);
 };
