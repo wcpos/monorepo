@@ -9,7 +9,7 @@ type RxDocument = import('rxdb/dist/types').RxDocument;
  *
  */
 function isSynced(this: RxCollection) {
-	return !!this.date_created;
+	return !!this.date_modified_gmt;
 }
 
 /**

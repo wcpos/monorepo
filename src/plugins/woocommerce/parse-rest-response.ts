@@ -33,11 +33,11 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 	/**
 	 * @TODO - should I update created and modified dates??
 	 */
-	if (topLevelFields.includes('date_created_gmt') && !plainData.date_created_gmt) {
-		const timestamp = Date.now();
-		const date_created_gmt = new Date(timestamp).toISOString().split('.')[0];
-		plainData.date_created_gmt = date_created_gmt;
-	}
+	// if (topLevelFields.includes('date_created_gmt') && !plainData.date_created_gmt) {
+	// 	const timestamp = Date.now();
+	// 	const date_created_gmt = new Date(timestamp).toISOString().split('.')[0];
+	// 	plainData.date_created_gmt = date_created_gmt;
+	// }
 
 	/**
 	 * @TODO - change this to a validator?

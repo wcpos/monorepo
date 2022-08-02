@@ -61,17 +61,17 @@ const collectionCountsPlugin: RxPlugin = {
 					collection.storageInstance.internals.pouch
 						.find({
 							selector: { id: { $exists: true } },
-							fields: ['id', 'date_created'],
+							fields: ['id', 'date_modified_gmt'],
 						})
 						.then((res: any) => {
 							const totalDocCount = res.docs.length;
 							console.log(collection.name, totalDocCount);
 
 							const unsyncedIds = res.docs
-								.filter((doc: any) => !doc.date_created)
+								.filter((doc: any) => !doc.date_modified_gmt)
 								.map((doc: any) => doc.id);
 							const syncedIds = res.docs
-								.filter((doc: any) => doc.date_created)
+								.filter((doc: any) => doc.date_modified_gmt)
 								.map((doc: any) => doc.id);
 
 							collection.totalDocCount$.next(totalDocCount);

@@ -261,11 +261,17 @@
 		"state": {
 			"type": "string"
 		},
-		"postcode": {
-			"type": "string"
+		"postcodes": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
 		},
-		"city": {
-			"type": "string"
+		"cities": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
 		},
 		"rate": {
 			"type": "string"
@@ -291,6 +297,9 @@
 		"class": {
 			"type": "string",
 			"default": "standard"
+		},
+		"date_modified_gmt": {
+			"type": "string"
 		},
 		"links": {
 			"type": "object",
