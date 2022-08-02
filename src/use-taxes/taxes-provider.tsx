@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
-import { ObservableResource } from 'observable-hooks';
+import { ObservableResource, useObservablePickState } from 'observable-hooks';
 import useAppState from '@wcpos/hooks/src/use-app-state';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
@@ -27,6 +27,9 @@ export const TaxesContext = React.createContext<{
 	setQuery: (path: string | string[], value: any) => void;
 	resource: ObservableResource<TaxRateDocument[]>;
 	runReplication: () => void;
+	settings: {
+		calc_taxes: 'yes' | 'no';
+	};
 }>(null);
 
 interface TaxesProviderProps {
@@ -38,10 +41,29 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
 
 const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
-	const { storeDB } = useAppState();
+	const { storeDB, store } = useAppState();
 	const collection = storeDB.collections.taxes;
 	const http = useRestHttpClient();
 	const replicationStates = React.useRef({ audit: null, sync: null });
+	const settings = useObservablePickState(
+		store.$,
+		() => ({
+			calc_taxes: store?.calc_taxes,
+			default_country: store?.default_country,
+			prices_include_tax: store?.prices_include_tax,
+			store_city: store?.store_city,
+			store_postcode: store?.store_postcode,
+			tax_display_shop: store?.tax_display_shop,
+			tax_round_at_subtotal: store?.tax_round_at_subtotal,
+		}),
+		'calc_taxes',
+		'default_country',
+		'prices_include_tax',
+		'store_city',
+		'store_postcode',
+		'tax_display_shop',
+		'tax_round_at_subtotal'
+	);
 
 	/**
 	 *
@@ -58,16 +80,16 @@ const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 	/**
 	 * Start id audit
 	 */
-	// React.useEffect(() => {
-	// 	const replicationState = getAuditIdReplicationState(http, collection);
-	// 	replicationStates.current.audit = replicationState;
+	React.useEffect(() => {
+		const replicationState = getAuditIdReplicationState(http, collection);
+		replicationStates.current.audit = replicationState;
 
-	// 	return function cleanUp() {
-	// 		replicationState.then((result) => {
-	// 			result.cancel();
-	// 		});
-	// 	};
-	// }, [collection, http]);
+		return function cleanUp() {
+			replicationState.then((result) => {
+				result.cancel();
+			});
+		};
+	}, [collection, http]);
 
 	/**
 	 * Start replication
@@ -147,8 +169,9 @@ const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 			setQuery,
 			resource,
 			runReplication,
+			settings,
 		}),
-		[query$, resource, setQuery, runReplication]
+		[query$, resource, setQuery, runReplication, settings]
 	);
 
 	return <TaxesContext.Provider value={value}>{children}</TaxesContext.Provider>;

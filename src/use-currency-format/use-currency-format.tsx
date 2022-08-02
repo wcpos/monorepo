@@ -22,7 +22,7 @@ interface CurrencyFormatProps {
 /**
  *
  */
-export const useCurrencyFormat = (options: CurrencyFormatProps) => {
+export const useCurrencyFormat = (options?: CurrencyFormatProps) => {
 	const { withSymbol } = defaults(options, { withSymbol: true });
 	const { store } = useAppState();
 	const currency = useObservableState(store?.currency$, store?.currency);

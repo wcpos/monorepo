@@ -132,8 +132,9 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 			// query: query$.getValue(),
 			setQuery,
 			resource,
+			collection,
 		}),
-		[query$, resource, setQuery]
+		[query$, resource, setQuery, collection]
 	);
 
 	useWhyDidYouUpdate('OrdersProvider', {

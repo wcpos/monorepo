@@ -12,7 +12,7 @@ export const getAuditIdReplicationState = async (http, collection) => {
 			async handler() {
 				const result = await http
 					.get(collection.name, {
-						params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: -1 },
+						params: { fields: ['id'], posts_per_page: -1 },
 					})
 					.catch(({ response }) => {
 						console.log(response);
