@@ -38,7 +38,6 @@ module.exports = async function (env, argv) {
 	// 	);
 	// }
 	console.log(config);
-	delete config.devServer; // hack for expo 46 beta
 
 	return config;
 };

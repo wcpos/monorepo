@@ -1,7 +1,7 @@
 {
 	"private": true,
 	"name": "@wcpos/managed-expo",
-	"version": "1.0.0-alpha.12",
+	"version": "1.0.0-alpha.13",
 	"main": "index.js",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://wcpos.github.io/managed-expo",
@@ -21,7 +21,7 @@
 		"@shopify/flash-list": "^1.2.0",
 		"@wcpos/core": "*",
 		"base-64": "1.0.0",
-		"expo": "^46.0.1",
+		"expo": "^46.0.2",
 		"expo-haptics": "~11.3.0",
 		"expo-sqlite": "~10.3.0",
 		"expo-status-bar": "~1.4.0",
@@ -33,20 +33,20 @@
 		"react-native-pager-view": "5.4.25",
 		"react-native-reanimated": "~2.9.1",
 		"react-native-screens": "~3.15.0",
-		"react-native-svg": "12.4.1",
+		"react-native-svg": "12.4.3",
 		"react-native-web": "~0.18.7"
 	},
 	"devDependencies": {
-		"@babel/core": "^7.18.9",
+		"@babel/core": "^7.18.10",
 		"@expo/webpack-config": "^0.17.0",
 		"@types/react": "~18.0.15",
 		"@types/react-dom": "~18.0.6",
-		"@types/react-native": "~0.69.3",
+		"@types/react-native": "~0.69.5",
 		"@wcpos/babel-preset-expo": "*",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
 		"file-loader": "^6.2.0",
-		"typescript": "^4.6.3",
+		"typescript": "^4.7.4",
 		"webpack-bundle-analyzer": "^4.5.0"
 	},
 	"eslintConfig": {
