@@ -53,7 +53,16 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	 */
 	const cellRenderer = React.useCallback(({ item, column, index }) => {
 		const Cell = cells[column.key];
-		return Cell ? <Cell item={item} column={column} index={index} /> : null;
+
+		if (Cell) {
+			return <Cell item={item} column={column} index={index} />;
+		}
+
+		if (item[column.key]) {
+			return <Text>{String(item[column.key])}</Text>;
+		}
+
+		return null;
 	}, []);
 
 	/**

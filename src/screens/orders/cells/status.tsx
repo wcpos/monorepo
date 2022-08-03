@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
 import Icon from '@wcpos/components/src/icon';
+import useOrders from '@wcpos/hooks/src/use-orders';
 
 type Props = {
 	item: import('@wcpos/database').OrderDocument;
@@ -42,15 +43,40 @@ const iconMap = {
 	},
 };
 
+/**
+ *
+ */
 const Status = ({ item: order }: Props) => {
 	const status = useObservableState(order.status$, order.status);
 	const iconName = get(iconMap, [status, 'name'], 'circleQuestion');
 	const iconType = get(iconMap, [status, 'type'], 'disabled');
+	const { setQuery } = useOrders();
 
-	return status ? (
-		<Icon name={iconName} type={iconType} tooltip={status} tooltipPlacement="right" />
-	) : (
-		<Icon.Skeleton />
+	/**
+	 *
+	 */
+	const handlePress = React.useCallback(() => {
+		setQuery('filters.status', status);
+	}, [setQuery, status]);
+
+	/**
+	 *
+	 */
+	if (!order.isSynced()) {
+		return <Icon.Skeleton />;
+	}
+
+	/**
+	 *
+	 */
+	return (
+		<Icon
+			name={iconName}
+			type={iconType}
+			tooltip={status}
+			tooltipPlacement="right"
+			onPress={handlePress}
+		/>
 	);
 };
 

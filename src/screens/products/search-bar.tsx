@@ -43,7 +43,7 @@ const SearchBar = () => {
 		<Search
 			label="Search Products"
 			placeholder="Search Products"
-			value={get(query, ['search', 'name'], '')}
+			value={query.search}
 			onSearch={onSearch}
 			filters={filters}
 		/>

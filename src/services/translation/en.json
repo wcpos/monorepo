@@ -59,7 +59,9 @@
 						"sku": "SKU",
 						"stock_quantity": "Stock",
 						"categories": "Categories",
-						"tags": "Tags"
+						"tags": "Tags",
+						"type": "Type",
+						"tax": "Tax"
 					}
 				}
 			},

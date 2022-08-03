@@ -6,6 +6,7 @@ import useAppState from '@wcpos/hooks/src/use-app-state';
 import useProducts from '@wcpos/hooks/src/use-products';
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
+import Popover, { usePopover } from '@wcpos/components/src/popover';
 
 interface ProductFooterProps {
 	count: number;
@@ -16,6 +17,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const total = useObservableState(storeDB.products.totalDocCount$, 0);
 	const theme = useTheme();
 	const { sync } = useProducts();
+	const { ref, open, close } = usePopover();
 
 	return (
 		<Box
@@ -35,14 +37,9 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 			<Text size="small">
 				Showing {count} of {total}
 			</Text>
-			<Icon
-				name="arrowRotateRight"
-				size="small"
-				onPress={sync}
-				onLongPress={() => {
-					console.log('long');
-				}}
-			/>
+			<Popover content={<Text>hi</Text>} placement="top">
+				<Icon name="arrowRotateRight" size="small" onPress={sync} onLongPress={open} />
+			</Popover>
 		</Box>
 	);
 };

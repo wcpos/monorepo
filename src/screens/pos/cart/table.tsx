@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import flatten from 'lodash/flatten';
 import get from 'lodash/get';
 import Table, { TableContextProps } from '@wcpos/components/src/table';
+import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import { usePOSContext } from '../context';
 import * as cells from './cells';
@@ -40,7 +41,16 @@ const CartTable = ({ cartResource, ui }: ICartTableProps) => {
 	 */
 	const cellRenderer = React.useCallback(({ item, column, index }) => {
 		const Cell = get(cells, [item.collection.name, column.key]);
-		return Cell ? <Cell item={item} column={column} index={index} /> : null;
+
+		if (Cell) {
+			return <Cell item={item} column={column} index={index} />;
+		}
+
+		if (item[column.key]) {
+			return <Text>{item[column.key]}</Text>;
+		}
+
+		return null;
 	}, []);
 
 	/**

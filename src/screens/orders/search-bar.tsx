@@ -20,22 +20,15 @@ const SearchBar = () => {
 	 */
 	const filters = React.useMemo(() => {
 		const f: any[] = [];
-		// if (get(query, 'filters.category')) {
-		// 	f.push({
-		// 		label: get(query, 'filters.category.name'),
-		// 		onRemove: () => {
-		// 			setQuery('filters.category', null);
-		// 		},
-		// 	});
-		// }
-		// if (get(query, 'filters.tag')) {
-		// 	f.push({
-		// 		label: get(query, 'filters.tag.name'),
-		// 		onRemove: () => {
-		// 			setQuery('filters.tag', null);
-		// 		},
-		// 	});
-		// }
+		debugger;
+		if (get(query, ['filters', 'status'])) {
+			f.push({
+				label: get(query, 'filters.status'),
+				onRemove: () => {
+					setQuery('filters.status', null);
+				},
+			});
+		}
 		return f;
 	}, [query, setQuery]);
 

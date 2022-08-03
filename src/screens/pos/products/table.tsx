@@ -5,6 +5,7 @@ import get from 'lodash/get';
 import useProducts from '@wcpos/hooks/src/use-products';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table, { TableContextProps } from '@wcpos/components/src/table';
+import Text from '@wcpos/components/src/text';
 import Footer from './footer';
 import cells from './cells';
 
@@ -29,8 +30,17 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	 *
 	 */
 	const cellRenderer = React.useCallback(({ item, column, index }) => {
-		const Cell = get(cells, [item.type, column.key]);
-		return Cell ? <Cell item={item} column={column} index={index} /> : null;
+		const Cell = get(cells, [item.type, column.key], cells.simple[column.key]);
+
+		if (Cell) {
+			return <Cell item={item} column={column} index={index} />;
+		}
+
+		if (item[column.key]) {
+			return <Text>{String(item[column.key])}</Text>;
+		}
+
+		return null;
 	}, []);
 
 	/**

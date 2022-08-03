@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, ObservableResource, useObservableSuspense } from 'observable-hooks';
 import Text from '@wcpos/components/src/text';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
 import useTaxes from '@wcpos/hooks/src/use-taxes';
@@ -12,7 +12,7 @@ interface Props {
 	>;
 }
 
-export const Price = ({ item: product, column }: Props) => {
+export const VariablePrice = ({ item: product, column }: Props) => {
 	const { format } = useCurrencyFormat();
 	const price = useObservableState(product.price$, product.price);
 	const tax_status = useObservableState(product.tax_status$, product.tax_status);
@@ -53,4 +53,4 @@ export const Price = ({ item: product, column }: Props) => {
 	);
 };
 
-export default Price;
+export default VariablePrice;

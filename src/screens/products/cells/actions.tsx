@@ -48,6 +48,8 @@ const Actions = ({ item: product }: Props) => {
 				'sku',
 				'stock_quantity',
 				'manage_stock',
+				'tax_status',
+				'tax_class',
 			]),
 		};
 	}, [product.collection.schema.jsonSchema]);

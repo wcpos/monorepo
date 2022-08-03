@@ -17,9 +17,14 @@ type RenderTabTitle = (focused: boolean, order?: OrderDocument) => React.ReactEl
  */
 const CartTabs = () => {
 	const { currentOrder, setCurrentOrder } = usePOSContext();
-	const { resource } = useOrders();
+	const { resource, collection } = useOrders();
 	const orders = useObservableSuspense(resource);
-	console.log(orders.length);
+	const newOrder = React.useMemo(() => {
+		return collection.newDocument({
+			status: 'pos-open',
+		});
+	}, [collection]);
+	orders.push(newOrder);
 	const index = orders.findIndex((order) => order === currentOrder);
 
 	/**
