@@ -39,6 +39,10 @@
 				"show": false
 			},
 			{
+				"key": "type",
+				"show": false
+			},
+			{
 				"key": "stock_quantity",
 				"show": false,
 				"align": "center"
@@ -46,7 +50,13 @@
 			{
 				"key": "price",
 				"align": "right",
-				"show": true
+				"show": true,
+				"display": [
+					{
+						"key": "tax",
+						"show": false
+					}
+				]
 			},
 			{
 				"key": "actions",
@@ -141,6 +151,10 @@
 						"show": false
 					}
 				]
+			},
+			{
+				"key": "type",
+				"show": false
 			},
 			{
 				"key": "sku",

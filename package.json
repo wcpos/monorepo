@@ -45,7 +45,7 @@
 		"@types/jest": "28.1.6",
 		"@types/lodash": "4.14.182",
 		"@types/react": "~18.0.15",
-		"@types/react-native": "~0.69.4",
+		"@types/react-native": "~0.69.5",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
 		"babel-loader": "8.2.5",
