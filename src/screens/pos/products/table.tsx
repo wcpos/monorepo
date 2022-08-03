@@ -3,6 +3,7 @@ import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import useProducts from '@wcpos/hooks/src/use-products';
+import { ProductVariationsProvider } from '@wcpos/hooks/src/use-product-variations';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table, { TableContextProps } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
@@ -73,6 +74,20 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	/**
 	 *
 	 */
+	const renderItem = ({ item, index }) => {
+		if (item.type === 'variable') {
+			return (
+				<ProductVariationsProvider parent={item} ui={ui}>
+					<Table.Row item={item} itemIndex={index} />
+				</ProductVariationsProvider>
+			);
+		}
+		return <Table.Row item={item} itemIndex={index} />;
+	};
+
+	/**
+	 *
+	 */
 	useWhyDidYouUpdate('ProductsTable', {
 		t,
 		query$,
@@ -95,6 +110,8 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 			footer={<Footer count={data.length} />}
 			estimatedItemSize={150}
 			context={tableContext}
+			getItemType={(item) => item.type}
+			renderItem={renderItem}
 		/>
 	);
 };

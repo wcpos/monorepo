@@ -2,6 +2,7 @@ import * as React from 'react';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import find from 'lodash/find';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
+import useProductVariations from '@wcpos/hooks/src/use-product-variations';
 import Text from '@wcpos/components/src/text';
 import Button from '@wcpos/components/src/button';
 import Select from '@wcpos/components/src/select';
@@ -18,13 +19,12 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 // type ProductAttributes = import('@wcpos/database').ProductDocument['attributes'];
 
 interface Props {
-	variationsResource: ObservableResource<ProductVariationDocument[]>;
+	variations: ProductVariationDocument[];
 	attributes: ProductAttribute[];
 	addToCart: (variation: ProductVariationDocument, metaData: any) => void;
 }
 
-export const Variations = ({ variationsResource, attributes, addToCart }: Props) => {
-	const variations = useObservableSuspense(variationsResource);
+const Variations = ({ variations, attributes, addToCart }: Props) => {
 	const [state, setState] = React.useState(() => init(attributes));
 	const { format } = useCurrencyFormat();
 

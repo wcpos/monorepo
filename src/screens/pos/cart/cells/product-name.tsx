@@ -84,7 +84,7 @@ export const ProductName = ({ item, column }: Props) => {
 				{show('sku') && <Text size="small">{item.sku}</Text>}
 
 				{attributes.map((meta) => (
-					<Box space="xxSmall" key={meta.key} horizontal>
+					<Box space="xxSmall" key={meta.display_key} horizontal>
 						<Text size="small" type="secondary">{`${meta.display_key || meta.key}:`}</Text>
 						<Text size="small">{meta.display_value || meta.value}</Text>
 					</Box>

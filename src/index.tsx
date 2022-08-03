@@ -18,6 +18,7 @@ import AppNavigator from './navigators';
 // import SplashScreen from './screens/splash';
 import Url from './lib/url-parse';
 // import { AuthLoginProvider } from './hooks/use-auth-login';
+import RootError from './root-error';
 
 // enable freeze
 enableFreeze(true);
@@ -75,34 +76,36 @@ const App = (initialProps: InitialProps) => {
 	const theme = React.useMemo(() => getTheme('default', 'light'), []);
 
 	return (
-		<ErrorBoundary>
+		<ErrorBoundary FallbackComponent={RootError}>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<GestureHandlerRootView style={{ flex: 1 }}>
 					<AppStateProvider initialProps={initialProps}>
 						<ThemeProvider theme={theme}>
-							<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-								<SnackbarProvider>
-									<Portal.Provider>
-										<NavigationContainer
-											linking={linking}
-											theme={{
-												dark: false,
-												colors: {
-													primary: theme.colors.primary,
-													background: theme.colors.bodyBackground,
-													card: 'rgb(255, 255, 255)',
-													text: theme.colors.text,
-													border: theme.colors.border,
-													notification: 'rgb(255, 69, 58)',
-												},
-											}}
-										>
-											<AppNavigator />
-										</NavigationContainer>
-										<Portal.Manager />
-									</Portal.Provider>
-								</SnackbarProvider>
-							</SafeAreaProviderCompat>
+							<ErrorBoundary>
+								<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
+									<SnackbarProvider>
+										<Portal.Provider>
+											<NavigationContainer
+												linking={linking}
+												theme={{
+													dark: false,
+													colors: {
+														primary: theme.colors.primary,
+														background: theme.colors.bodyBackground,
+														card: 'rgb(255, 255, 255)',
+														text: theme.colors.text,
+														border: theme.colors.border,
+														notification: 'rgb(255, 69, 58)',
+													},
+												}}
+											>
+												<AppNavigator />
+											</NavigationContainer>
+											<Portal.Manager />
+										</Portal.Provider>
+									</SnackbarProvider>
+								</SafeAreaProviderCompat>
+							</ErrorBoundary>
 						</ThemeProvider>
 					</AppStateProvider>
 				</GestureHandlerRootView>
