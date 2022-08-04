@@ -36,6 +36,18 @@
 		"web": {
 			"favicon": "./assets/square-icon-512x512.png",
 			"backgroundColor": "#F0F4F8"
+		},
+		"plugins": ["sentry-expo"],
+		"hooks": {
+			"postPublish": [
+				{
+					"file": "sentry-expo/upload-sourcemaps",
+					"config": {
+						"organization": "wcpos",
+						"project": "woocommerce-pos"
+					}
+				}
+			]
 		}
 	}
 }
