@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 import { useObservableState } from 'observable-hooks';
 import EdittableText from '@wcpos/components/src/edittable-text';
 import Text from '@wcpos/components/src/text';

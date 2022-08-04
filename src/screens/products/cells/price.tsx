@@ -11,6 +11,10 @@ const Price = ({ item: product }: Props) => {
 	const price = useObservableState(product.price$, product.price);
 	const { format } = useCurrencyFormat();
 
+	if (!product.isSynced()) {
+		return <Text.Skeleton length="short" />;
+	}
+
 	return <Text>{format(price || 0)}</Text>;
 };
 

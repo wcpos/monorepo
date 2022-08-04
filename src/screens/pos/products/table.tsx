@@ -6,8 +6,9 @@ import type { ListRenderItemInfo } from '@shopify/flash-list';
 import useProducts from '@wcpos/hooks/src/use-products';
 import { ProductVariationsProvider } from '@wcpos/hooks/src/use-product-variations';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Table, { TableExtraDataProps } from '@wcpos/components/src/table';
+import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Footer from './footer';
 import cells from './cells';
 
@@ -31,19 +32,22 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	/**
 	 *
 	 */
-	const cellRenderer = React.useCallback(({ item, column, index }) => {
-		const Cell = get(cells, [item.type, column.key], cells.simple[column.key]);
+	const cellRenderer = React.useCallback<CellRenderer<ProductDocument>>(
+		({ item, column, index }) => {
+			const Cell = get(cells, [item.type, column.key], cells.simple[column.key]);
 
-		if (Cell) {
-			return <Cell item={item} column={column} index={index} />;
-		}
+			if (Cell) {
+				return <Cell item={item} column={column} index={index} />;
+			}
 
-		if (item[column.key]) {
-			return <Text>{String(item[column.key])}</Text>;
-		}
+			if (item[column.key]) {
+				return <Text>{String(item[column.key])}</Text>;
+			}
 
-		return null;
-	}, []);
+			return null;
+		},
+		[]
+	);
 
 	/**
 	 *
@@ -75,15 +79,21 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	/**
 	 *
 	 */
-	const renderItem = ({ item, index, extraData, target }: ListRenderItemInfo<T>) => {
+	const renderItem = ({ item, index, extraData, target }: ListRenderItemInfo<ProductDocument>) => {
 		if (item.type === 'variable') {
 			return (
-				<ProductVariationsProvider parent={item} ui={ui}>
-					<Table.Row item={item} index={index} extraData={extraData} target={target} />
-				</ProductVariationsProvider>
+				<ErrorBoundary>
+					<ProductVariationsProvider parent={item} ui={ui}>
+						<Table.Row item={item} index={index} extraData={extraData} target={target} />
+					</ProductVariationsProvider>
+				</ErrorBoundary>
 			);
 		}
-		return <Table.Row item={item} index={index} extraData={extraData} target={target} />;
+		return (
+			<ErrorBoundary>
+				<Table.Row item={item} index={index} extraData={extraData} target={target} />
+			</ErrorBoundary>
+		);
 	};
 
 	/**

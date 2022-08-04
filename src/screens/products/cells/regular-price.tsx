@@ -11,7 +11,11 @@ const RegularPrice = ({ item: product }: Props) => {
 	const regularPrice = useObservableState(product.regular_price$, product.regular_price);
 	const { format } = useCurrencyFormat();
 
-	return regularPrice ? <Text>{format(regularPrice || 0)}</Text> : <Text.Skeleton length="short" />;
+	if (!product.isSynced()) {
+		return <Text.Skeleton length="short" />;
+	}
+
+	return regularPrice ? <Text>{format(regularPrice || 0)}</Text> : null;
 };
 
 export default RegularPrice;

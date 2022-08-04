@@ -3,13 +3,13 @@ import { useObservableState } from 'observable-hooks';
 import useAppState from '@wcpos/hooks/src/use-app-state';
 import Button from '@wcpos/components/src/button';
 import Box from '@wcpos/components/src/box';
-import Checkout from '../pos/checkout';
+// import Checkout from '../pos/checkout';
 // import Settings from '../settings';
 // import Receipt from '../receipt';
 
 const Support = () => {
 	const { storeDB } = useAppState();
-	const order = useObservableState(storeDB.orders.findOne({ selector: { status: 'pos-open' } }).$);
+	// const order = useObservableState(storeDB.orders.findOne({ selector: { status: 'pos-open' } }).$);
 	const totalProducts = useObservableState(storeDB?.products.totalDocCount$, 0);
 	const totalVariations = useObservableState(storeDB?.variations.totalDocCount$, 0);
 	const totalOrders = useObservableState(storeDB?.orders.totalDocCount$, 0);
@@ -69,7 +69,6 @@ const Support = () => {
 					storeDB?.shipping_lines.remove();
 				}}
 			/>
-			<Checkout order={order} />
 		</Box>
 	);
 };

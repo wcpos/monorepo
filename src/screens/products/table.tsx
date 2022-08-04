@@ -6,17 +6,11 @@ import useProducts from '@wcpos/hooks/src/use-products';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import Actions from './cells/actions';
-import Categories from '../common/product-categories';
-import Image from './cells/image';
-import Name from './cells/name';
-import Price from './cells/price';
-import RegularPrice from './cells/regular-price';
-import SalePrice from './cells/sale-price';
-import StockQuanity from './cells/stock-quantity';
-import DateCreated from './cells/date-created';
-import Tag from '../common/product-tags';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import { ProductVariationsProvider } from '@wcpos/hooks/src/use-product-variations';
+import type { ListRenderItemInfo } from '@shopify/flash-list';
 import Footer from './footer';
+import cells from './cells';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
@@ -24,19 +18,6 @@ type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
 interface ProductsTableProps {
 	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
 }
-
-const cells = {
-	actions: Actions,
-	categories: Categories,
-	image: Image,
-	name: Name,
-	price: Price,
-	regular_price: RegularPrice,
-	sale_price: SalePrice,
-	date_created: DateCreated,
-	stock_quantity: StockQuanity,
-	tag: Tag,
-};
 
 /**
  *
@@ -53,7 +34,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	 */
 	const cellRenderer = React.useCallback<CellRenderer<ProductDocument>>(
 		({ item, column, index }) => {
-			const Cell = cells[column.key];
+			const Cell = get(cells, [item.type, column.key], cells.simple[column.key]);
 
 			if (Cell) {
 				return <Cell item={item} column={column} index={index} />;
@@ -95,14 +76,41 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 		};
 	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer, headerLabel]);
 
+	/**
+	 *
+	 */
+	const renderItem = ({ item, index, extraData, target }: ListRenderItemInfo<ProductDocument>) => {
+		if (item.type === 'variable') {
+			return (
+				<ErrorBoundary>
+					<ProductVariationsProvider parent={item} ui={ui}>
+						<Table.Row item={item} index={index} extraData={extraData} target={target} />
+					</ProductVariationsProvider>
+				</ErrorBoundary>
+			);
+		}
+		return (
+			<ErrorBoundary>
+				<Table.Row item={item} index={index} extraData={extraData} target={target} />
+			</ErrorBoundary>
+		);
+	};
+
+	/**
+	 *
+	 */
 	useWhyDidYouUpdate('Table', { data });
 
+	/**
+	 *
+	 */
 	return (
 		<Table<ProductDocument>
 			data={data}
 			footer={<Footer count={data.length} />}
 			estimatedItemSize={150}
 			extraData={context}
+			renderItem={renderItem}
 		/>
 	);
 };
