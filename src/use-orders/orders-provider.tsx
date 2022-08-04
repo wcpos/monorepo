@@ -35,6 +35,8 @@ interface OrdersProviderProps {
 	initialQuery: QueryState;
 }
 
+const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+
 const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
 	const { storeDB } = useAppState();
@@ -88,11 +90,9 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 		// switchMap to the collection query
 		switchMap((q) => {
 			const selector = {};
-			// forEach(q.search, function (value, key) {
-			// 	if (value) {
-			// 		set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
-			// 	}
-			// });
+
+			// search
+			_set(selector, ['number', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
 
 			if (_get(q, 'filters.status')) {
 				_set(selector, ['status'], _get(q, 'filters.status'));
