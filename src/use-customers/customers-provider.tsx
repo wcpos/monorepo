@@ -6,6 +6,7 @@ import useAppState from '@wcpos/hooks/src/use-app-state';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
+import _cloneDeep from 'lodash/cloneDeep';
 import _forEach from 'lodash/forEach';
 import useRestHttpClient from '../use-rest-http-client';
 import { getAuditIdReplicationState } from './id-audit';
@@ -48,7 +49,7 @@ const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) =
 	 */
 	const setQuery = React.useCallback(
 		(path, value) => {
-			const prev = query$.getValue();
+			const prev = _cloneDeep(query$.getValue());
 			const next = _set(prev, path, value);
 			query$.next(next);
 		},

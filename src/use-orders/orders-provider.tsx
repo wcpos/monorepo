@@ -7,6 +7,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
+import _cloneDeep from 'lodash/cloneDeep';
 import { orderBy } from '@shelf/fast-natural-order-by';
 import useRestHttpClient from '../use-rest-http-client';
 import { getAuditIdReplicationState } from './id-audit';
@@ -45,7 +46,7 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 	 */
 	const setQuery = React.useCallback(
 		(path, value) => {
-			const prev = query$.getValue();
+			const prev = _cloneDeep(query$.getValue()); // query needs to be immutable
 			const next = _set(prev, path, value);
 			query$.next(next);
 		},

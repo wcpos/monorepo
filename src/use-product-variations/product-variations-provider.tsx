@@ -53,7 +53,7 @@ const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsPr
 	 */
 	// const setQuery = React.useCallback(
 	// 	(path, value) => {
-	// 		const prev = { ...query$.getValue() }; // query needs to be immutable
+	// 		const prev = _cloneDeep(query$.getValue()); // query needs to be immutable
 	// 		const next = _set(prev, path, value);
 	// 		query$.next(next);
 	// 	},
