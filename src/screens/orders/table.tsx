@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import useOrders from '@wcpos/hooks/src/use-orders';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Table, { TableContextProps } from '@wcpos/components/src/table';
+import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import Actions from './cells/actions';
 import Address from './cells/address';
@@ -46,7 +46,7 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 	/**
 	 *
 	 */
-	const cellRenderer = React.useCallback(({ item, column, index }) => {
+	const cellRenderer = React.useCallback<CellRenderer<OrderDocument>>(({ item, column, index }) => {
 		const Cell = cells[column.key];
 		return Cell ? (
 			<Cell item={item} column={column} index={index} />
@@ -68,7 +68,7 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 	/**
 	 *
 	 */
-	const tableContext = React.useMemo<TableContextProps<OrderDocument>>(() => {
+	const context = React.useMemo<TableExtraDataProps<OrderDocument>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
 			sort: ({ sortBy, sortDirection }) => {
@@ -82,14 +82,14 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 		};
 	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer, headerLabel]);
 
-	useWhyDidYouUpdate('Table', { data });
+	useWhyDidYouUpdate('Table', { data, context });
 
 	return (
 		<Table<OrderDocument>
 			data={data}
 			footer={<Footer count={data.length} />}
 			estimatedItemSize={100}
-			context={tableContext}
+			extraData={context}
 		/>
 	);
 };

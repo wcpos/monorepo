@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import useProducts from '@wcpos/hooks/src/use-products';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Table, { TableContextProps } from '@wcpos/components/src/table';
+import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import Actions from './cells/actions';
 import Categories from '../common/product-categories';
@@ -51,19 +51,22 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	/**
 	 *
 	 */
-	const cellRenderer = React.useCallback(({ item, column, index }) => {
-		const Cell = cells[column.key];
+	const cellRenderer = React.useCallback<CellRenderer<ProductDocument>>(
+		({ item, column, index }) => {
+			const Cell = cells[column.key];
 
-		if (Cell) {
-			return <Cell item={item} column={column} index={index} />;
-		}
+			if (Cell) {
+				return <Cell item={item} column={column} index={index} />;
+			}
 
-		if (item[column.key]) {
-			return <Text>{String(item[column.key])}</Text>;
-		}
+			if (item[column.key]) {
+				return <Text>{String(item[column.key])}</Text>;
+			}
 
-		return null;
-	}, []);
+			return null;
+		},
+		[]
+	);
 
 	/**
 	 *
@@ -78,7 +81,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	/**
 	 *
 	 */
-	const tableContext = React.useMemo<TableContextProps<ProductDocument>>(() => {
+	const context = React.useMemo<TableExtraDataProps<ProductDocument>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
 			sort: ({ sortBy, sortDirection }) => {
@@ -99,7 +102,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 			data={data}
 			footer={<Footer count={data.length} />}
 			estimatedItemSize={150}
-			context={tableContext}
+			extraData={context}
 		/>
 	);
 };

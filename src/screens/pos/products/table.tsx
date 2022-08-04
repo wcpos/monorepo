@@ -2,10 +2,11 @@ import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
+import type { ListRenderItemInfo } from '@shopify/flash-list';
 import useProducts from '@wcpos/hooks/src/use-products';
 import { ProductVariationsProvider } from '@wcpos/hooks/src/use-product-variations';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Table, { TableContextProps } from '@wcpos/components/src/table';
+import Table, { TableExtraDataProps } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import Footer from './footer';
 import cells from './cells';
@@ -57,7 +58,7 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	/**
 	 *
 	 */
-	const tableContext = React.useMemo<TableContextProps<ProductDocument>>(() => {
+	const context = React.useMemo<TableExtraDataProps<ProductDocument>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
 			sort: ({ sortBy, sortDirection }) => {
@@ -74,15 +75,15 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	/**
 	 *
 	 */
-	const renderItem = ({ item, index }) => {
+	const renderItem = ({ item, index, extraData, target }: ListRenderItemInfo<T>) => {
 		if (item.type === 'variable') {
 			return (
 				<ProductVariationsProvider parent={item} ui={ui}>
-					<Table.Row item={item} itemIndex={index} />
+					<Table.Row item={item} index={index} extraData={extraData} target={target} />
 				</ProductVariationsProvider>
 			);
 		}
-		return <Table.Row item={item} itemIndex={index} />;
+		return <Table.Row item={item} index={index} extraData={extraData} target={target} />;
 	};
 
 	/**
@@ -97,7 +98,7 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 		data,
 		columns,
 		query,
-		tableContext,
+		context,
 		headerLabel,
 	});
 
@@ -109,9 +110,9 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 			data={data}
 			footer={<Footer count={data.length} />}
 			estimatedItemSize={150}
-			context={tableContext}
 			getItemType={(item) => item.type}
 			renderItem={renderItem}
+			extraData={context}
 		/>
 	);
 };

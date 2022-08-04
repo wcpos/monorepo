@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import useCustomers from '@wcpos/hooks/src/use-customers';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Table, { TableContextProps } from '@wcpos/components/src/table';
+import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Footer from './footer';
 import cells from './cells';
 
@@ -28,10 +28,13 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 	/**
 	 *
 	 */
-	const cellRenderer = React.useCallback(({ item, column, index }) => {
-		const Cell = cells[column.key];
-		return Cell ? <Cell item={item} column={column} index={index} /> : null;
-	}, []);
+	const cellRenderer = React.useCallback<CellRenderer<CustomerDocument>>(
+		({ item, column, index }) => {
+			const Cell = cells[column.key];
+			return Cell ? <Cell item={item} column={column} index={index} /> : null;
+		},
+		[]
+	);
 
 	/**
 	 *
@@ -46,7 +49,7 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 	/**
 	 *
 	 */
-	const tableContext = React.useMemo<TableContextProps<CustomerDocument>>(() => {
+	const context = React.useMemo<TableExtraDataProps<CustomerDocument>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
 			sort: ({ sortBy, sortDirection }) => {
@@ -67,7 +70,7 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 			data={data}
 			footer={<Footer count={data.length} />}
 			estimatedItemSize={100}
-			context={tableContext}
+			extraData={context}
 		/>
 	);
 };

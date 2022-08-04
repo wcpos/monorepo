@@ -3,7 +3,7 @@ import { useObservableState, useObservableSuspense, ObservableResource } from 'o
 import { useTranslation } from 'react-i18next';
 import flatten from 'lodash/flatten';
 import get from 'lodash/get';
-import Table, { TableContextProps } from '@wcpos/components/src/table';
+import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import { usePOSContext } from '../context';
@@ -39,7 +39,7 @@ const CartTable = ({ cartResource, ui }: ICartTableProps) => {
 	/**
 	 *
 	 */
-	const cellRenderer = React.useCallback(({ item, column, index }) => {
+	const cellRenderer = React.useCallback<CellRenderer<CartItem>>(({ item, column, index }) => {
 		const Cell = get(cells, [item.collection.name, column.key]);
 
 		if (Cell) {
@@ -66,7 +66,7 @@ const CartTable = ({ cartResource, ui }: ICartTableProps) => {
 	/**
 	 *
 	 */
-	const tableContext = React.useMemo<TableContextProps<CartItem>>(() => {
+	const context = React.useMemo<TableExtraDataProps<CartItem>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
 			// sort: ({ sortBy, sortDirection }) => {
@@ -83,12 +83,12 @@ const CartTable = ({ cartResource, ui }: ICartTableProps) => {
 	/**
 	 *
 	 */
-	useWhyDidYouUpdate('CartTable', { cartResource, ui, columns, items, cart, t });
+	useWhyDidYouUpdate('CartTable', { cartResource, ui, columns, items, cart, t, context });
 
 	/**
 	 *
 	 */
-	return <Table<CartItem> data={items} estimatedItemSize={46} context={tableContext} />;
+	return <Table<CartItem> data={items} estimatedItemSize={46} extraData={context} />;
 };
 
 export default CartTable;
