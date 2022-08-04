@@ -3,11 +3,15 @@ import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
 import Search from '@wcpos/components/src/search';
 import useOrders from '@wcpos/hooks/src/use-orders';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 const SearchBar = () => {
 	const { query$, setQuery } = useOrders();
 	const query = useObservableState(query$, query$.getValue());
 
+	/**
+	 *
+	 */
 	const onSearch = React.useCallback(
 		(search: string) => {
 			setQuery('search', search);
@@ -20,7 +24,6 @@ const SearchBar = () => {
 	 */
 	const filters = React.useMemo(() => {
 		const f: any[] = [];
-		debugger;
 		if (get(query, ['filters', 'status'])) {
 			f.push({
 				label: get(query, 'filters.status'),
@@ -32,6 +35,14 @@ const SearchBar = () => {
 		return f;
 	}, [query, setQuery]);
 
+	/**
+	 *
+	 */
+	useWhyDidYouUpdate('OrderSearchBar', { query, filters, onSearch, query$, setQuery });
+
+	/**
+	 *
+	 */
 	return (
 		<Search
 			label="Search Orders"
