@@ -44,7 +44,8 @@
 					"file": "sentry-expo/upload-sourcemaps",
 					"config": {
 						"organization": "wcpos",
-						"project": "woocommerce-pos"
+						"project": "woocommerce-pos",
+						"authToken": "8bc79357b8af4bf88549574408df55deafbcf10642444795b2308e1d6471d6c5"
 					}
 				}
 			]
