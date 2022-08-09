@@ -20,7 +20,7 @@ function sanitizeStoreName(id: string) {
 /**
  *
  */
-const storeDBMap: Map<string, Promise<StoreDatabase>> = new Map();
+const storeDBMap = new Map<string, Promise<StoreDatabase>>();
 
 /**
  * creates the Store database

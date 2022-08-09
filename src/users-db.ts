@@ -18,7 +18,7 @@ let userDB: Promise<UserDatabase>;
 /**
  * This could be called more than once, so we need to make sure we only create the DB once.
  */
-export async function userDBPromise() {
+export function userDBPromise() {
 	if (userDB) {
 		return userDB;
 	}
