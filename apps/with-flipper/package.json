@@ -24,7 +24,7 @@
     "react": "18.2.0",
     "react-devtools-core": "4.25.0",
     "react-dom": "18.2.0",
-    "react-native": "0.69.3",
+    "react-native": "0.69.4",
     "react-native-flipper": "0.157.0",
     "react-native-get-random-values": "~1.8.0",
     "react-native-pager-view": "5.4.25",
@@ -37,7 +37,7 @@
   "devDependencies": {
     "@babel/core": "^7.18.10",
     "@expo/webpack-config": "^0.17.0",
-    "@types/react": "~18.0.15",
+    "@types/react": "~18.0.17",
     "@types/react-dom": "~18.0.6",
     "@types/react-native": "~0.69.5",
     "@wcpos/babel-preset-expo": "*",
