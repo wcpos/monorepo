@@ -16,7 +16,7 @@ type LineItemDocument = import('../line-items').LineItemDocument;
 function postCreate(
 	this: OrderCollection,
 	plainData: Record<string, unknown>,
-	order: OrderDocument
+	order: OrderDocument 
 ) {
 	const lineItems$ = order.line_items$.pipe(
 		switchMap(() => order.populate('line_items')),

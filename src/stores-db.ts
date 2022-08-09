@@ -18,19 +18,33 @@ function sanitizeStoreName(id: string) {
 }
 
 /**
+ *
+ */
+const storeDBMap: Map<string, Promise<StoreDatabase>> = new Map();
+
+/**
  * creates the Store database
  */
-export async function storeDBPromise(id: string) {
-	const name = sanitizeStoreName(id);
-	const db = await createDB<StoreDatabaseCollections>(name);
+export function storeDBPromise(id: string) {
+	if (storeDBMap.has(id)) {
+		return storeDBMap.get(id);
+	}
 
-	// @ts-ignore
-	const collections = await db.addCollections(storeCollections).catch((error) => {
-		debugger;
-		if (process.env.NODE_ENV === 'development') {
-			return removeDB(name);
-		}
-	});
+	const name = sanitizeStoreName(id);
+
+	const db = createDB<StoreDatabaseCollections>(name)
+		.then(async (db) => {
+			await db.addCollections(storeCollections);
+			return db;
+		})
+		.catch((error) => {
+			console.error(error);
+			if (process.env.NODE_ENV === 'development') {
+				return removeDB(name);
+			}
+		});
+
+	storeDBMap.set(id, db);
 
 	return db;
 }

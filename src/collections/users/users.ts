@@ -1,5 +1,6 @@
 import { Observable } from 'rxjs';
 import { switchMap, map } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
 import isString from 'lodash/isString';
 import get from 'lodash/get';
 import pull from 'lodash/pull';
@@ -81,9 +82,27 @@ export const users = {
 	// statics: {},
 	methods,
 	// attachments: {},
-	// options: {},
+	options: {
+		middlewares: {
+			postCreate: {
+				handle: (data, user) => {
+					const populatedSites$ = user.sites$.pipe(
+						switchMap(async (args: any) => {
+							const sites = await user.populate('sites');
+							return sites || [];
+						})
+					);
+					Object.assign(user, {
+						populatedSites$,
+						sitesResource: new ObservableResource(populatedSites$),
+					});
+				},
+				parallel: false,
+			},
+		},
+	},
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},
-	localDocuments: true,
+	// localDocuments: true,
 };

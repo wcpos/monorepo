@@ -7,8 +7,8 @@ import './plugins';
 /**
  * creates the generic database
  */
-export async function createDB<T>(name: string) {
-	const db = await createRxDatabase<T>({
+export function createDB<T>(name: string) {
+	return createRxDatabase<T>({
 		name,
 		...config,
 		password: 'posInstanceId',
@@ -23,12 +23,12 @@ export async function createDB<T>(name: string) {
 	// 	(window as any).dbs[name] = db;
 	// }
 
-	return db;
+	// return db;
 }
 
 /**
  * deletes the generic database
  */
-export async function removeDB(name: string) {
+export function removeDB(name: string) {
 	return removeRxDatabase(name, config.storage);
 }

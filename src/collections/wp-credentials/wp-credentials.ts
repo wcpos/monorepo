@@ -1,5 +1,6 @@
 import { Observable } from 'rxjs';
 import { switchMap, map } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
 import get from 'lodash/get';
 import forEach from 'lodash/forEach';
 import remove from 'lodash/remove';
@@ -96,9 +97,27 @@ export const wpCredentials = {
 	// statics,
 	methods,
 	// attachments: {},
-	// options: {},
+	options: {
+		middlewares: {
+			postCreate: {
+				handle: (data, wpCredentials) => {
+					const populatedStores$ = wpCredentials.stores$.pipe(
+						switchMap(async (args: any) => {
+							const stores = await wpCredentials.populate('stores');
+							return stores || [];
+						})
+					);
+					Object.assign(wpCredentials, {
+						populatedStores$,
+						storesResource: new ObservableResource(populatedStores$),
+					});
+				},
+				parallel: false,
+			},
+		},
+	},
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},
-	localDocuments: true,
+	// localDocuments: true,
 };

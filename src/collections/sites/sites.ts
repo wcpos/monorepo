@@ -1,4 +1,5 @@
 import { switchMap } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
 import get from 'lodash/get';
 import schema from './schema.json';
 
@@ -120,14 +121,25 @@ export const sites = {
 	// attachments: {},
 	options: {
 		middlewares: {
-			// postCreate: {
-			// 	handle: postCreate,
-			// 	parallel: false,
-			// },
+			postCreate: {
+				handle: (data, site) => {
+					const populatedWpCredentials$ = site.wp_credentials$.pipe(
+						switchMap(async (args: any) => {
+							const wpCredentials = await site.populate('wp_credentials');
+							return wpCredentials || [];
+						})
+					);
+					Object.assign(site, {
+						populatedWpCredentials$,
+						wpCredentialsResource: new ObservableResource(populatedWpCredentials$),
+					});
+				},
+				parallel: false,
+			},
 		},
 	},
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},
-	localDocuments: true,
+	// localDocuments: true,
 };
