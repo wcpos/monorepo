@@ -16,12 +16,20 @@ interface Props {
 export const VariablePrice = ({ item: product, column }: Props) => {
 	const { format } = useCurrencyFormat();
 	const { data } = useProductVariations();
+
 	const priceRange = React.useMemo(() => {
 		const prices = data.map((variation) => variation.price);
-		const min = Math.min(...prices);
-		const max = Math.max(...prices);
-		return `${format(min)} - ${format(max)}`;
+		if (prices.length > 0) {
+			const min = Math.min(...prices);
+			const max = Math.max(...prices);
+			return `${format(min)} - ${format(max)}`;
+		}
+		return '';
 	}, [data, format]);
+
+	const variationsSynced = React.useMemo(() => {
+		return product.isSynced() && data.length > 0 && data.every((variation) => variation.isSynced());
+	}, [product, data]);
 
 	// const price = useObservableState(product.price$, product.price);
 	// const tax_status = useObservableState(product.tax_status$, product.tax_status);
@@ -48,7 +56,7 @@ export const VariablePrice = ({ item: product, column }: Props) => {
 		[display]
 	);
 
-	return product.isSynced() ? (
+	return variationsSynced ? (
 		<>
 			<Text>{priceRange}</Text>
 			{/* {show('tax') && tax_status === 'taxable' && (
@@ -58,7 +66,11 @@ export const VariablePrice = ({ item: product, column }: Props) => {
 			)} */}
 		</>
 	) : (
-		<Text.Skeleton length="short" />
+		<>
+			<Text.Skeleton length="short" />
+			<Text> - </Text>
+			<Text.Skeleton length="short" />
+		</>
 	);
 };
 

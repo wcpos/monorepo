@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 import Dialog from '@wcpos/components/src/dialog';
 import TextInput from '@wcpos/components/src/textinput';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 import Tabs from '@wcpos/components/src/tabs';
 import Tree from '@wcpos/components/src/tree';
 
@@ -12,7 +12,7 @@ export interface AddCustomerProps {
 }
 
 const AddCustomer = ({ onClose, customer }: AddCustomerProps) => {
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	const [firstName, setFirstName] = React.useState(customer?.firstName);
 	const [email, setEmail] = React.useState(customer?.email);
 	const [selected, setSelected] = React.useState(0);

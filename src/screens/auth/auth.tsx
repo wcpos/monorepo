@@ -1,27 +1,20 @@
 import * as React from 'react';
 import { KeyboardAvoidingView, StyleSheet, View } from 'react-native';
 import Platform from '@wcpos/core/src/utils/platform';
-import { useObservableState, useObservable } from 'observable-hooks';
-import useAppState from '@wcpos/hooks/src/use-app-state';
 import Logo from '@wcpos/components/src/logo';
 import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
+import Icon from '@wcpos/components/src/icon';
 import TextInput from '@wcpos/components/src/textinput';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useSiteConnect from './use-site-connect';
-import Site from './site';
-
-type UserDocument = import('@wcpos/database').UserDocument;
-type SiteDocument = import('@wcpos/database').SiteDocument;
+import Sites from './sites';
 
 /**
  *
  */
 const Auth = () => {
-	const { user } = useAppState();
 	const { onConnect, loading, error } = useSiteConnect();
-	const [sites] = useObservableState(user.getSites$, []);
-
-	// useWhyDidYouUpdate('Auth', { user, sites, onConnect });
 
 	return (
 		<KeyboardAvoidingView
@@ -56,19 +49,23 @@ const Auth = () => {
 							/>
 						</Box>
 					</Box>
-					{sites.length > 0 && (
-						<Box
-							raised
-							rounding="medium"
-							// padding="medium"
-							// space="medium"
-							style={{ width: '100%', backgroundColor: 'white' }}
-						>
-							{sites.map((site, index) => (
-								<Site key={site.localID} site={site} user={user} first={index === 0} />
-							))}
-						</Box>
-					)}
+					<ErrorBoundary>
+						<React.Suspense>
+							<Sites />
+						</React.Suspense>
+					</ErrorBoundary>
+					<Box>
+						<Button
+							title="Enter Demo Store"
+							background="clear"
+							size="small"
+							type="secondary"
+							accessoryRight={<Icon name="arrowRight" size="small" type="secondary" />}
+							onPress={() => {
+								console.log('login to demo store');
+							}}
+						/>
+					</Box>
 				</Box>
 			</Box>
 		</KeyboardAvoidingView>

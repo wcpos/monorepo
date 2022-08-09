@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 import useCustomers, { CustomersProvider } from '@wcpos/hooks/src/use-customers';
 import orderBy from 'lodash/orderBy';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +20,7 @@ interface CustomerSelectProps {
  */
 const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectProps) => {
 	const { t } = useTranslation();
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	const { query$, setQuery, resource } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
 	const customers = useObservableSuspense(resource);

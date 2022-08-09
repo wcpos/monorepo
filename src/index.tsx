@@ -9,7 +9,7 @@ import get from 'lodash/get';
 import { enableFreeze } from 'react-native-screens';
 import getTheme from '@wcpos/themes';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import { AppStateProvider } from '@wcpos/hooks/src/use-app-state';
+import { AuthProvider } from '@wcpos/hooks/src/use-auth';
 import Portal from '@wcpos/components/src/portal';
 import { SnackbarProvider } from '@wcpos/components/src/snackbar';
 import * as Linking from 'expo-linking';
@@ -79,7 +79,7 @@ const App = (initialProps: InitialProps) => {
 		<ErrorBoundary FallbackComponent={RootError}>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<GestureHandlerRootView style={{ flex: 1 }}>
-					<AppStateProvider initialProps={initialProps}>
+					<AuthProvider initialProps={initialProps}>
 						<ThemeProvider theme={theme}>
 							<ErrorBoundary>
 								<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
@@ -107,7 +107,7 @@ const App = (initialProps: InitialProps) => {
 								</SafeAreaProviderCompat>
 							</ErrorBoundary>
 						</ThemeProvider>
-					</AppStateProvider>
+					</AuthProvider>
 				</GestureHandlerRootView>
 			</React.Suspense>
 		</ErrorBoundary>

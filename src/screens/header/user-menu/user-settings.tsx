@@ -5,14 +5,14 @@ import { View } from 'react-native';
 import Text from '@wcpos/components/src/text';
 import Select from '@wcpos/components/src/select';
 import Table from '@wcpos/components/src/table';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 
 interface UserSettingsProps {
 	onClose: () => void;
 }
 
 const UserSettings = ({ onClose }: UserSettingsProps) => {
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	const [country, setCountry] = React.useState('GB');
 
 	const taxRates$ = useObservable(

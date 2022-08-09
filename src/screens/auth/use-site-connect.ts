@@ -3,7 +3,7 @@ import get from 'lodash/get';
 import find from 'lodash/find';
 import http from '@wcpos/core/src/lib/http';
 import Platform from '@wcpos/core/src/lib/platform';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useAuth from '@wcpos/hooks/src/use-auth';
 import Url from '@wcpos/core/src/lib/url-parse';
 
 interface WpJsonResponse {
@@ -21,7 +21,7 @@ interface WpJsonResponse {
 }
 
 const useSiteConnect = () => {
-	const { user, userDB } = useAppState();
+	const { user, userDB } = useAuth();
 	const [loading, setLoading] = React.useState(false);
 	const [error, setError] = React.useState(false);
 

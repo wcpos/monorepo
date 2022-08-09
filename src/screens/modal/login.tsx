@@ -1,18 +1,36 @@
 import * as React from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, StackActions } from '@react-navigation/native';
 import Modal from '@wcpos/components/src/modal';
 import TextInput from '@wcpos/components/src/textinput';
+import Box from '@wcpos/components/src/box';
 import http from '@wcpos/core/src/lib/http';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useAuth from '@wcpos/hooks/src/use-auth';
 
-const Login = () => {
+const Login = ({ route }) => {
+	const { siteID } = route.params;
 	const navigation = useNavigation();
 	const [username, setUsername] = React.useState('');
 	const [password, setPassword] = React.useState('');
-	const { site, wpCredentials } = useAppState();
+	const { site: _site, wpCredentials, userDB } = useAuth();
 
 	const handleLogin = async () => {
 		let success = false;
+		let site = _site;
+
+		if (!_site) {
+			// get site from siteID
+			site = await userDB.sites
+				.findOne({ selector: { localID: siteID } })
+				.exec()
+				.catch((error) => {
+					debugger;
+				});
+		}
+
+		if (!site) {
+			debugger;
+			return;
+		}
 
 		/** @TODO - use generic http with error handling */
 		const { data } = await http
@@ -38,11 +56,27 @@ const Login = () => {
 	return (
 		<Modal
 			alwaysOpen
-			onClose={() => navigation.goBack()}
+			title="Login"
+			onClose={() => navigation.dispatch(StackActions.pop(1))}
 			primaryAction={{ label: 'Login', action: handleLogin }}
+			secondaryActions={[{ label: 'Cancel', action: () => navigation.goBack() }]}
 		>
-			<TextInput label="Username" placeholder="username" value={username} onChange={setUsername} />
-			<TextInput label="Password" placeholder="password" value={password} onChange={setPassword} />
+			<Box space="medium">
+				<TextInput
+					label="Username"
+					placeholder="username"
+					value={username}
+					onChange={setUsername}
+					type="username"
+				/>
+				<TextInput
+					label="Password"
+					placeholder="password"
+					value={password}
+					onChange={setPassword}
+					type="password"
+				/>
+			</Box>
 		</Modal>
 	);
 };

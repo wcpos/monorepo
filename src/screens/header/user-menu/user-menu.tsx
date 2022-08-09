@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useWindowDimensions } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+// import { useNavigation } from '@react-navigation/native';
 import { useTheme } from 'styled-components/native';
 import Avatar from '@wcpos/components/src/avatar';
 import Dropdown from '@wcpos/components/src/dropdown';
@@ -8,13 +8,13 @@ import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
 import Modal, { useModal } from '@wcpos/components/src/modal';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useAuth from '@wcpos/hooks/src/use-auth';
 import Settings from '../../settings';
 
 export const UserMenu = () => {
-	const { site, wpCredentials, store } = useAppState();
+	const { logout, wpCredentials } = useAuth();
 	const { ref: refSettingsModal, open: openSettingsModal, close: closeSettingsModal } = useModal();
-	const navigation = useNavigation();
+	// const navigation = useNavigation();
 	const theme = useTheme();
 	const dimensions = useWindowDimensions();
 
@@ -28,12 +28,7 @@ export const UserMenu = () => {
 					},
 					{
 						label: 'Logout',
-						action: () => {
-							site.collection.upsertLocal('current', { id: null });
-							wpCredentials.collection.upsertLocal('current', { id: null });
-							store.collection.upsertLocal('current', { id: null });
-							navigation.navigate('Auth');
-						},
+						action: logout,
 						type: 'critical',
 					},
 				]}

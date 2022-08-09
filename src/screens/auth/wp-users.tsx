@@ -1,22 +1,19 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
+import { useNavigation } from '@react-navigation/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import Button from '@wcpos/components/src/button';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import WpUser from './wp-user';
-import Login from './login';
 
 interface WpUserProps {
 	site: import('@wcpos/database').SiteDocument;
 }
 
 const WpUsers = ({ site }: WpUserProps) => {
-	const [wpCreds] = useObservableState(site.getWpCredentials$, []);
-	const loginRef = React.useRef<typeof Login>(null);
-
-	// const open = React.useCallback(() => {
-	// 	ref.current?.open();
-	// }, []);
+	const wpCreds = useObservableSuspense(site.wpCredentialsResource);
+	const navigation = useNavigation();
 
 	return (
 		<>
@@ -27,14 +24,18 @@ const WpUsers = ({ site }: WpUserProps) => {
 					title="Add new user"
 					type="secondary"
 					background="outline"
-					onPress={loginRef.current?.open}
+					onPress={() => navigation.navigate('Login', { siteID: site.localID })}
 				/>
 			</Box>
-			{wpCreds.map((wpCred) => (
-				<WpUser key={wpCred.localID} wpUser={wpCred} site={site} />
-			))}
-
-			<Login ref={loginRef} site={site} />
+			{Array.isArray(wpCreds) &&
+				wpCreds.length > 0 &&
+				wpCreds.map((wpCred) => (
+					<ErrorBoundary key={wpCred.localID}>
+						<React.Suspense>
+							<WpUser wpUser={wpCred} site={site} />
+						</React.Suspense>
+					</ErrorBoundary>
+				))}
 		</>
 	);
 };

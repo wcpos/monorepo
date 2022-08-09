@@ -5,7 +5,7 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 import useCustomers from '@wcpos/hooks/src/use-customers';
 
 interface CustomersFooterProps {
@@ -13,7 +13,7 @@ interface CustomersFooterProps {
 }
 
 const CustomersFooter = ({ count }: CustomersFooterProps) => {
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	const total = useObservableState(storeDB.customers.totalDocCount$, 0);
 	const theme = useTheme();
 	const { runReplication } = useCustomers();

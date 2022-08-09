@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useAuth from '@wcpos/hooks/src/use-auth';
 import Platform from '@wcpos/utils/src/platform';
 import Left from './left';
 import Right from './right';
@@ -15,7 +15,7 @@ const Header = ({ route, layout, options }: DrawerHeaderProps) => {
 	const insets = useSafeAreaInsets();
 	const left = React.useCallback(() => <Left />, []);
 	const right = React.useCallback(() => <Right />, []);
-	const { store } = useAppState();
+	const { store } = useAuth();
 	const storeName = useObservableState(store.name$, store.name);
 	const theme = useTheme();
 

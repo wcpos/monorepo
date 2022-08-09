@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import axios from 'axios';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
@@ -8,7 +8,7 @@ import Pill from '@wcpos/components/src/pill';
 import Text from '@wcpos/components/src/text';
 import Button from '@wcpos/components/src/button';
 import Dialog, { useDialog } from '@wcpos/components/src/dialog';
-import * as Styled from './styles';
+import useAuth from '@wcpos/hooks/src/use-auth';
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
@@ -20,7 +20,8 @@ function sanitizeStoreName(id: string) {
 }
 
 const WpUser = ({ site, wpUser }: Props) => {
-	const [stores] = useObservableState(wpUser.getStores$, []);
+	const { login } = useAuth();
+	const stores = useObservableSuspense(wpUser.storesResource);
 	const { ref: dialogRef, open: openConfirmDialog } = useDialog();
 
 	// 	/**
@@ -40,13 +41,19 @@ const WpUser = ({ site, wpUser }: Props) => {
 	/**
 	 *
 	 */
-	const handleStoreSelect = React.useCallback(async () => {
-		if (stores.length === 1) {
-			site.collection.upsertLocal('current', { id: site.localID });
-			wpUser.collection.upsertLocal('current', { id: wpUser.localID });
-			stores[0].collection.upsertLocal('current', { id: stores[0].localID });
-		}
-	}, [site, stores, wpUser]);
+	const handleStoreSelect = React.useCallback(() => {
+		login({
+			siteID: site.localID,
+			wpCredentialsID: wpUser.localID,
+			storeID: stores[0].localID,
+		});
+		// const current =
+		// if (stores.length === 1) {
+		// 	site.collection.upsertLocal('current', { id: site.localID });
+		// 	wpUser.collection.upsertLocal('current', { id: wpUser.localID });
+		// 	stores[0].collection.upsertLocal('current', { id: stores[0].localID });
+		// }
+	}, [login, site.localID, stores, wpUser.localID]);
 
 	/**
 	 *

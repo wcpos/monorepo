@@ -1,6 +1,6 @@
 import * as React from 'react';
 import Format from '@wcpos/react-native-jsonschema-format';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+// import useStore from '@wcpos/hooks/src/use-store';
 
 interface Props {
 	item: any;
@@ -8,7 +8,7 @@ interface Props {
 }
 
 export const FormattedPrice = ({ item, column }: Props) => {
-	// const { userDB, storeID } = useAppState();
+	// const { userDB, storeID } = useStore();
 	// const [currency, setCurrency] = React.useState();
 
 	// // get currency settings

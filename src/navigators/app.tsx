@@ -1,9 +1,10 @@
 import * as React from 'react';
+import { Text } from 'react-native';
 import { RouteProp, CompositeNavigationProp } from '@react-navigation/native';
 import { createStackNavigator, StackNavigationProp } from '@react-navigation/stack';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
-import useAppState from '@wcpos/hooks/src/use-app-state';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import useAuth from '@wcpos/hooks/src/use-auth';
+// import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Auth from '@wcpos/core/src/screens/auth';
 import { Login, Modal } from '@wcpos/core/src/screens/modal';
 import MainNavigator from './main';
@@ -21,14 +22,12 @@ const Stack = createStackNavigator<AppStackParamList>();
 /**
  *
  */
-const AppNavigator = () => {
-	const { storeDB } = useAppState();
-
-	// useWhyDidYouUpdate('AppNavigator', { props, storeDB });
+export const AppNavigator = () => {
+	const { storeDBResource } = useAuth();
 
 	return (
 		<Stack.Navigator screenOptions={{ headerShown: false }}>
-			{storeDB ? (
+			{storeDBResource ? (
 				<Stack.Screen name="Main" component={MainNavigator} />
 			) : (
 				<Stack.Screen name="Auth" component={Auth} />
@@ -38,5 +37,3 @@ const AppNavigator = () => {
 		</Stack.Navigator>
 	);
 };
-
-export default AppNavigator;

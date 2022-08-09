@@ -7,7 +7,7 @@ import Modal, { useModal } from '@wcpos/components/src/modal';
 import Icon from '@wcpos/components/src/icon';
 
 interface POSProductSettingsProps {
-	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-store').UIDocument;
 }
 
 /**
@@ -83,12 +83,12 @@ export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 			// remove rootId and 'show'
 			const path = id.split('.').slice(2, -1);
 			if (path.length === 0) {
-				return t(`${ui.getID()}.${label}`);
+				return t(`${ui.id}.${label}`);
 			}
 
 			const key = get(columns, path.concat('key'), null);
 			if (key) {
-				return t(`${ui.getID()}.column.label.${key}`);
+				return t(`${ui.id}.column.label.${key}`);
 			}
 			return 'No label found';
 		},

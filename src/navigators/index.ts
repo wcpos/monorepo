@@ -1,1 +1,1 @@
-export { default } from './app';
+export { AppNavigator as default } from './app';

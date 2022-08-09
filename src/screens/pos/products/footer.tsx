@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 import Text from '@wcpos/components/src/text';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 import useProducts from '@wcpos/hooks/src/use-products';
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
@@ -13,7 +13,7 @@ interface ProductFooterProps {
 }
 
 const ProductsFooter = ({ count }: ProductFooterProps) => {
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	const total = useObservableState(storeDB.products.totalDocCount$, 0);
 	const theme = useTheme();
 	const { sync } = useProducts();

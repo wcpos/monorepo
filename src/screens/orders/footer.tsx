@@ -3,14 +3,14 @@ import { useTheme } from 'styled-components/native';
 import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 
 interface OrderFooterProps {
 	count: number;
 }
 
 const OrdersFooter = ({ count }: OrderFooterProps) => {
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	const total = useObservableState(storeDB.orders.totalDocCount$, 0);
 	const theme = useTheme();
 

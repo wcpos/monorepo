@@ -3,7 +3,7 @@ import Box from '@wcpos/components/src/box';
 import { useTheme } from 'styled-components/native';
 import { useObservableState } from 'observable-hooks';
 import pick from 'lodash/pick';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 import Pill from '@wcpos/components/src/pill';
 import Modal, { useModal } from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
@@ -26,7 +26,7 @@ interface CartHeaderProps {
  */
 const CartHeader = ({ order, ui }: CartHeaderProps) => {
 	const theme = useTheme();
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	let customer = useObservableState(
 		storeDB?.collections.customers.findOne({ selector: { id: order.customer_id } }).$
 	);

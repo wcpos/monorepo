@@ -4,7 +4,7 @@ import { useTheme } from 'styled-components/native';
 import { ProductsProvider } from '@wcpos/hooks/src/use-products';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
-import useUIResource from '@wcpos/hooks/src/use-ui-resource';
+import useStore from '@wcpos/hooks/src/use-store';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';
@@ -13,7 +13,8 @@ import UiSettings from '../common/ui-settings';
  *
  */
 const Products = () => {
-	const ui = useObservableSuspense(useUIResource('products'));
+	const { uiResources } = useStore();
+	const ui = useObservableSuspense(uiResources.products);
 	const theme = useTheme();
 
 	return (

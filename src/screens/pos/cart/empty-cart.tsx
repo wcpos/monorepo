@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
-import useUIResource from '@wcpos/hooks/src/use-ui-resource';
+import useStore from '@wcpos/hooks/src/use-store';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import CartHeader from './cart-header';
 import AddFee from './add-fee';
@@ -15,7 +15,9 @@ interface EmptyCartProps {
 }
 
 const EmptyCart = ({ order }: EmptyCartProps) => {
-	const ui = useObservableSuspense(useUIResource('pos.cart')); // @TODO - remove ui settings from empty cart?
+	// @TODO - remove ui settings from empty cart?
+	const { uiResources } = useStore();
+	const ui = useObservableSuspense(uiResources['pos.cart']);
 
 	return (
 		<Box raised rounding="medium" style={{ height: '100%', backgroundColor: 'white' }}>

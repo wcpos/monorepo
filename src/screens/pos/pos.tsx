@@ -6,9 +6,8 @@ import { distinctUntilChanged } from 'rxjs';
 import { map, debounceTime } from 'rxjs/operators';
 import isEqual from 'lodash/isEqual';
 import orderBy from 'lodash/orderBy';
-import useUIResource from '@wcpos/hooks/src/use-ui-resource';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 import { TaxesProvider } from '@wcpos/hooks/src/use-taxes';
 import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
@@ -22,9 +21,9 @@ import POSContextProvider from './context';
  *
  */
 const POS = () => {
-	const productsUI = useObservableSuspense(useUIResource('pos.products'));
+	const { storeDB, uiResources } = useStore();
+	const productsUI = useObservableSuspense(uiResources['pos.products']);
 	const theme = useTheme();
-	const { storeDB } = useAppState();
 
 	/**
 	 * TODO: useWindowDimensions updates state which triggers re-rendering of the whole POS

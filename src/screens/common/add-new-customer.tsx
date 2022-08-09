@@ -6,7 +6,7 @@ import set from 'lodash/set';
 import get from 'lodash/get';
 import map from 'lodash/map';
 import find from 'lodash/find';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 import Tabs from '@wcpos/components/src/tabs';
 import Tree from '@wcpos/components/src/tree';
 import Icon from '@wcpos/components/src/icon';
@@ -22,7 +22,7 @@ const AddNewCustomer = () => {
 	const { ref, open, close } = useModal();
 	const [index, setIndex] = React.useState(0);
 	const [customerData, setCustomerData] = React.useState({});
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	const customerCollection = storeDB.collections.customers;
 	const http = useRestHttpClient();
 	const [extraErrors, setExtraErrors] = React.useState();

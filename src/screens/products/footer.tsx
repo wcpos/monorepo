@@ -4,7 +4,7 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import Icon from '@wcpos/components/src/icon';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 
 interface ProductFooterProps {
 	count: number;
@@ -14,7 +14,7 @@ interface ProductFooterProps {
  *
  */
 const ProductsFooter = ({ count }: ProductFooterProps) => {
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	const total = useObservableState(storeDB.products.totalDocCount$, 0);
 	const theme = useTheme();
 

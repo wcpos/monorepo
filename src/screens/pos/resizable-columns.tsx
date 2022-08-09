@@ -15,7 +15,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 interface ResizableColumnsProps {
 	leftComponent: React.ReactNode;
 	rightComponent: React.ReactNode;
-	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-store').UIDocument;
 }
 
 const clamp = (value: number, lowerBound: number, upperBound: number) => {

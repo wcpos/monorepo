@@ -5,7 +5,7 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import useUIResource from '@wcpos/hooks/src/use-ui-resource';
+import useStore from '@wcpos/hooks/src/use-store';
 import Totals from './totals';
 import Table from './table';
 import CartHeader from './cart-header';
@@ -25,7 +25,8 @@ interface CartProps {
 }
 
 const Cart = ({ order }: CartProps) => {
-	const ui = useObservableSuspense(useUIResource('pos.cart'));
+	const { uiResources } = useStore();
+	const ui = useObservableSuspense(uiResources['pos.cart']);
 	const cartResource = new ObservableResource(order.cart$);
 	const theme = useTheme();
 	// useCalcTotals(order);

@@ -8,7 +8,7 @@ import Button from '@wcpos/components/src/button';
 import Form from '@wcpos/react-native-jsonschema-form';
 
 interface UiSettingsProps {
-	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-store').UIDocument;
 }
 
 const schema = {
@@ -63,7 +63,7 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 			const path = id.split('.').slice(1, -1).concat('key');
 			const key = get(columns, path, null);
 			if (key) {
-				return t(`${ui.getID()}.column.label.${key}`);
+				return t(`${ui.id}.column.label.${key}`);
 			}
 			return 'No label found';
 		},

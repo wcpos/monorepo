@@ -16,10 +16,10 @@ import DateCreated from './cells/date-created';
 import Footer from './footer';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
-type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
+type UIColumn = import('@wcpos/hooks/src/use-store').UIColumn;
 
 interface OrdersTableProps {
-	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-store').UIDocument;
 }
 
 const cells = {

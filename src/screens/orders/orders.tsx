@@ -4,12 +4,12 @@ import { useTheme } from 'styled-components/native';
 import { OrdersProvider } from '@wcpos/hooks/src/use-orders';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
-import useUIResource from '@wcpos/hooks/src/use-ui-resource';
+import useStore from '@wcpos/hooks/src/use-store';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';
 
-type SortDirection = import('@wcpos/components/src/table/table').SortDirection;
+type SortDirection = import('@wcpos/components/src/table').SortDirection;
 type OrderDocument = import('@wcpos/database').OrderDocument;
 interface QueryState {
 	search: string;
@@ -21,7 +21,8 @@ interface QueryState {
  *
  */
 const Orders = () => {
-	const ui = useObservableSuspense(useUIResource('orders'));
+	const { uiResources } = useStore();
+	const ui = useObservableSuspense(uiResources.orders);
 	const theme = useTheme();
 
 	return (

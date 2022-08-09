@@ -17,7 +17,7 @@ type LineItemDocument = import('@wcpos/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
 type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
-type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
+type UIColumn = import('@wcpos/hooks/src/use-store').UIColumn;
 type Cart = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
 
 interface ICartTableProps {

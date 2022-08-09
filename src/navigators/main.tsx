@@ -5,7 +5,8 @@ import {
 	DrawerScreenProps,
 } from '@react-navigation/drawer';
 import { useTranslation } from 'react-i18next';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { from } from 'rxjs';
 import POS from '@wcpos/core/src/screens/pos';
 import Products from '@wcpos/core/src/screens/products';
 import Orders from '@wcpos/core/src/screens/orders';
@@ -18,9 +19,11 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon, { IconName } from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import { StoreProvider } from '@wcpos/hooks/src/use-store';
+import useAuth from '@wcpos/hooks/src/use-auth';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import { useTheme } from 'styled-components/native';
+import { storeDBPromise } from '@wcpos/database/src/stores-db';
 
 export type DrawerParamList = {
 	POS: undefined;
@@ -80,12 +83,19 @@ const iconMap = {
  *
  */
 const MainNavigator = () => {
-	const { store } = useAppState();
+	const { store, storeDBResource } = useAuth();
+	if (!storeDBResource) {
+		/**
+		 * @TODO - this is a temporary workaround to prevent the app from crashing
+		 * How to unmount MainNavigator when storeDBResource is not available?
+		 */
+		throw new Promise(() => {});
+	}
+	const storeDB = useObservableSuspense(storeDBResource);
+	const storeName = useObservableState(store.name$, store.name);
 	const { t } = useTranslation();
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
-	const storeName = useObservableState(store.name$, store.name);
-
 	const header = React.useCallback((props) => <CustomHeader {...props} />, []);
 	const drawer = React.useCallback((props) => <CustomDrawer {...props} />, []);
 
@@ -106,34 +116,40 @@ const MainNavigator = () => {
 
 	return (
 		<OnlineStatusProvider>
-			<Drawer.Navigator
-				screenOptions={{
-					header,
-					drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
-					drawerStyle: {
-						backgroundColor: theme.colors.headerBackground,
-						width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
-						borderRightColor: 'rgba(0, 0, 0, 0.2)',
-						// borderRightWidth: 0,
-					},
-					sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
-				}}
-				drawerContent={drawer}
-			>
-				<Drawer.Screen name="POS" component={ScreenMemoized} options={getOptions('pos')} />
-				<Drawer.Screen
-					name="Products"
-					component={ScreenMemoized}
-					options={getOptions('products')}
-				/>
-				<Drawer.Screen name="Orders" component={ScreenMemoized} options={getOptions('orders')} />
-				<Drawer.Screen
-					name="Customers"
-					component={ScreenMemoized}
-					options={getOptions('customers')}
-				/>
-				<Drawer.Screen name="Support" component={ScreenMemoized} options={getOptions('support')} />
-			</Drawer.Navigator>
+			<StoreProvider store={store} storeDB={storeDB}>
+				<Drawer.Navigator
+					screenOptions={{
+						header,
+						drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
+						drawerStyle: {
+							backgroundColor: theme.colors.headerBackground,
+							width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
+							borderRightColor: 'rgba(0, 0, 0, 0.2)',
+							// borderRightWidth: 0,
+						},
+						sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
+					}}
+					drawerContent={drawer}
+				>
+					<Drawer.Screen name="POS" component={ScreenMemoized} options={getOptions('pos')} />
+					<Drawer.Screen
+						name="Products"
+						component={ScreenMemoized}
+						options={getOptions('products')}
+					/>
+					<Drawer.Screen name="Orders" component={ScreenMemoized} options={getOptions('orders')} />
+					<Drawer.Screen
+						name="Customers"
+						component={ScreenMemoized}
+						options={getOptions('customers')}
+					/>
+					<Drawer.Screen
+						name="Support"
+						component={ScreenMemoized}
+						options={getOptions('support')}
+					/>
+				</Drawer.Navigator>
+			</StoreProvider>
 		</OnlineStatusProvider>
 	);
 };

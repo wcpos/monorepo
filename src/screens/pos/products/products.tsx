@@ -9,7 +9,7 @@ import SearchBar from './search-bar';
 import Settings from './settings';
 
 interface POSProductsProps {
-	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-store').UIDocument;
 }
 
 /**

@@ -13,10 +13,10 @@ import Footer from './footer';
 import cells from './cells';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
-type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
+type UIColumn = import('@wcpos/hooks/src/use-store').UIColumn;
 
 interface POSProductsTableProps {
-	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-store').UIDocument;
 }
 
 /**

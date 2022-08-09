@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 import Button from '@wcpos/components/src/button';
 import Box from '@wcpos/components/src/box';
 // import Checkout from '../pos/checkout';
@@ -8,7 +8,7 @@ import Box from '@wcpos/components/src/box';
 // import Receipt from '../receipt';
 
 const Support = () => {
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	// const order = useObservableState(storeDB.orders.findOne({ selector: { status: 'pos-open' } }).$);
 	const totalProducts = useObservableState(storeDB?.products.totalDocCount$, 0);
 	const totalVariations = useObservableState(storeDB?.variations.totalDocCount$, 0);

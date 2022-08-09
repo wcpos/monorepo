@@ -9,10 +9,10 @@ import Footer from './footer';
 import cells from './cells';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
-type UIColumn = import('@wcpos/hooks/src/use-ui-resource').UIColumn;
+type UIColumn = import('@wcpos/hooks/src/use-store').UIColumn;
 
 interface CustomersTableProps {
-	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-store').UIDocument;
 }
 
 /**
