@@ -2,7 +2,7 @@ import * as React from 'react';
 import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
@@ -39,7 +39,7 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
 
 const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	const collection = storeDB.collections.orders;
 	const http = useRestHttpClient();
 

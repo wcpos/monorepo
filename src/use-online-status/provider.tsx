@@ -5,7 +5,7 @@ import NetInfo, {
 	NetInfoStateType,
 } from '@react-native-community/netinfo';
 import useSnackbar from '@wcpos/components/src/snackbar';
-import useAppState from '../use-app-state';
+import useAuth from '../use-auth';
 
 const initialState: NetInfoState = {
 	type: NetInfoStateType.unknown,
@@ -21,7 +21,7 @@ interface Props {
 }
 
 const OnlineStatusProvider = ({ children }: Props) => {
-	const { site } = useAppState();
+	const { site } = useAuth();
 	const addSnackbar = useSnackbar();
 	const [status, setStatus] = React.useState<NetInfoState>(initialState);
 

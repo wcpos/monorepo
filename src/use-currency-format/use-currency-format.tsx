@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
 import defaults from 'lodash/defaults';
-import useAppState from '../use-app-state';
+import useStore from '../use-store';
 import {
 	toNumericString,
 	roundToPrecision,
@@ -24,7 +24,7 @@ interface CurrencyFormatProps {
  */
 export const useCurrencyFormat = (options?: CurrencyFormatProps) => {
 	const { withSymbol } = defaults(options, { withSymbol: true });
-	const { store } = useAppState();
+	const { store } = useStore();
 	const currency = useObservableState(store?.currency$, store?.currency);
 	const currencyPosition = useObservableState(store?.currency_pos$, store?.currency_pos);
 	const decimalSeparator = useObservableState(store?.price_decimal_sep$, store?.price_decimal_sep);

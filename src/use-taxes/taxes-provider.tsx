@@ -2,7 +2,7 @@ import * as React from 'react';
 import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource, useObservablePickState } from 'observable-hooks';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
@@ -42,7 +42,7 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
 
 const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
-	const { storeDB, store } = useAppState();
+	const { storeDB, store } = useStore();
 	const collection = storeDB.collections.taxes;
 	const http = useRestHttpClient();
 	const replicationStates = React.useRef({ audit: null, sync: null });

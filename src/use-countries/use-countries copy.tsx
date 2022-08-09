@@ -2,7 +2,7 @@ import * as React from 'react';
 import { ObservableResource } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 import useRestHttpClient from '../use-rest-http-client';
-import useAppState from '../use-app-state';
+import useStore from '../use-store';
 
 interface State {
 	code: string;
@@ -20,7 +20,7 @@ export interface Country {
  */
 export const useCountryResource = (): ObservableResource<Country[]> => {
 	const http = useRestHttpClient();
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 
 	const fetchAndSaveCountries = React.useCallback(async () => {
 		const { data } = await http.get('data/countries');

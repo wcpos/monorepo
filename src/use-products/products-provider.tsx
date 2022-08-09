@@ -2,7 +2,7 @@ import * as React from 'react';
 import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource, useObservableState } from 'observable-hooks';
-import useAppState from '@wcpos/hooks/src/use-app-state';
+import useStore from '@wcpos/hooks/src/use-store';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
@@ -33,14 +33,14 @@ export const ProductsContext = React.createContext<{
 interface ProductsProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
-	ui: import('@wcpos/hooks/src/use-ui-resource').UIDocument;
+	ui: import('@wcpos/hooks/src/use-store').UIDocument;
 }
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
 const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
-	const { storeDB } = useAppState();
+	const { storeDB } = useStore();
 	const collection = storeDB.collections.products;
 	const http = useRestHttpClient();
 	const replicationStates = React.useRef({ audit: null, sync: null });

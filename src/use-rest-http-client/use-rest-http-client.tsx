@@ -1,12 +1,12 @@
 import * as React from 'react';
 import axios from 'axios';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import useAppState from '../use-app-state';
+import useAuth from '../use-auth';
 import { useErrorResponseHandler } from './use-error-handler';
 import useOnlineStatus from '../use-online-status';
 
 export const useRestHttpClient = () => {
-	const { site, wpCredentials } = useAppState();
+	const { site, wpCredentials } = useAuth();
 	const errorResponseHandler = useErrorResponseHandler();
 	const controller = React.useMemo(() => new AbortController(), []);
 	const { isInternetReachable } = useOnlineStatus();
