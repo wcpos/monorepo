@@ -1,7 +1,7 @@
 {
 	"private": true,
 	"name": "@wcpos/managed-expo",
-	"version": "1.0.0-alpha.15",
+	"version": "1.0.0-alpha.16",
 	"main": "index.js",
 	"author": "kilbot <paul@kilbot.com>",
 	"scripts": {
@@ -18,7 +18,7 @@
 	},
 	"dependencies": {
 		"@react-native-community/netinfo": "9.3.0",
-		"@sentry/react-native": "^4.2.2",
+		"@sentry/react-native": "^4.2.3",
 		"@shopify/flash-list": "^1.2.1",
 		"@wcpos/core": "*",
 		"base-64": "1.0.0",
@@ -33,7 +33,7 @@
 		"expo-updates": "~0.14.3",
 		"react": "18.2.0",
 		"react-dom": "18.2.0",
-		"react-native": "0.69.3",
+		"react-native": "0.69.4",
 		"react-native-get-random-values": "~1.8.0",
 		"react-native-pager-view": "5.4.25",
 		"react-native-reanimated": "~2.9.1",
@@ -45,7 +45,7 @@
 	"devDependencies": {
 		"@babel/core": "^7.18.10",
 		"@expo/webpack-config": "^0.17.0",
-		"@types/react": "~18.0.15",
+		"@types/react": "~18.0.17",
 		"@types/react-dom": "~18.0.6",
 		"@types/react-native": "~0.69.5",
 		"@wcpos/babel-preset-expo": "*",
