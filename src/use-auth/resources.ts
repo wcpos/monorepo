@@ -31,20 +31,33 @@ const user$ = userDB$.pipe(
 			/**
 			 *
 			 */
-			switchMap((current) => {
-				return userDB.users.findOne({ selector: { localID: current.get('userID') } }).exec();
+			filter(async (current) => {
+				const userID = current && current.get('userID');
+
+				if (!userID) {
+					/**
+					 * @TODO - what if current userID bu there is a User in the DB?
+					 */
+					const defaultUser = await userDB.users.insert({
+						first_name: 'Global',
+						last_name: 'User',
+					});
+					userDB.upsertLocal('current', { userID: defaultUser.localID });
+				}
+
+				return !!userID;
 			}),
 			/**
 			 *
 			 */
-			tap(async (user) => {
-				if (!user) {
-					const defaultUser = await userDB.users.insert({
-						first_name: 'Test',
-						last_name: 'User',
-					});
-					await userDB.upsertLocal('current', { userID: defaultUser.localID });
-				}
+			switchMap((current) => {
+				const userID = current && current.get('userID');
+				// userDB.users.findOne({ selector: { localID: current.get('userID') } }).exec();
+				/**
+				 * @TODO - this will always return a user, I think it is a bug in rxdb
+				 * but handy here because it will return the first UserDocument found if no userID is found
+				 */
+				return userDB.users.findOne(userID).exec();
 			}),
 			/**
 			 *

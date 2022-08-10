@@ -40,7 +40,7 @@ export const useRestHttpClient = () => {
 			config.headers = config.headers || {};
 			config.headers['X-WCPOS'] = '1';
 			if (wpCredentials?.wp_nonce) {
-				config.header['X-WP-Nonce'] = wpCredentials?.wp_nonce;
+				config.headers['X-WP-Nonce'] = wpCredentials?.wp_nonce;
 			}
 			if (wpCredentials?.jwt) {
 				config.headers.Authorization = `Bearer ${wpCredentials?.jwt}`;
@@ -57,6 +57,7 @@ export const useRestHttpClient = () => {
 		const resId = client.interceptors.response.use(
 			(res) => res,
 			(err) => {
+				console.error(err);
 				errorResponseHandler(err.response);
 				return Promise.reject(err);
 			}
