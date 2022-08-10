@@ -1,12 +1,7 @@
 import * as React from 'react';
-import {
-	createDrawerNavigator,
-	DrawerNavigationProp,
-	DrawerScreenProps,
-} from '@react-navigation/drawer';
+import { createDrawerNavigator, DrawerScreenProps } from '@react-navigation/drawer';
 import { useTranslation } from 'react-i18next';
-import { useObservableState, ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { from } from 'rxjs';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import POS from '@wcpos/core/src/screens/pos';
 import Products from '@wcpos/core/src/screens/products';
 import Orders from '@wcpos/core/src/screens/orders';
@@ -23,7 +18,6 @@ import { StoreProvider } from '@wcpos/hooks/src/use-store';
 import useAuth from '@wcpos/hooks/src/use-auth';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import { useTheme } from 'styled-components/native';
-import { storeDBPromise } from '@wcpos/database/src/stores-db';
 
 export type DrawerParamList = {
 	POS: undefined;

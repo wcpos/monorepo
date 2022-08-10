@@ -1,13 +1,13 @@
 export type InitialSiteProps = {
 	description: string;
-	gmtOffset: string;
+	gmt_offset: string;
 	home: string;
 	name: string;
-	timezoneString: string;
+	timezone_string: string;
 	url: string;
-	wcApiAuthUrl: string;
-	wcApiUrl: string;
-	wpApiUrl: string;
+	wc_api_auth_url: string;
+	wc_api_url: string;
+	wp_api_url: string;
 };
 
 export type InitialStoresProps = {
@@ -16,13 +16,13 @@ export type InitialStoresProps = {
 };
 
 export type InitialWpCredentialsProps = {
-	displayName: string;
+	display_name: string;
 	email: string;
-	firstName: string;
+	firstN_nme: string;
 	id: number;
-	lastAccess: string;
-	lastName: string;
-	niceName: string;
+	last_access: string;
+	last_name: string;
+	nice_name: string;
 	username: string;
 };
 
@@ -30,7 +30,7 @@ export type InitialProps = {
 	homepage: string;
 	manifest: string;
 	site: InitialSiteProps;
-	stores: InitialStoresProps;
+	store: InitialStoresProps;
 	version: string;
-	wpCredentials: InitialWpCredentialsProps;
+	wp_credentials: InitialWpCredentialsProps;
 };

@@ -30,10 +30,10 @@ const useSiteConnect = () => {
 			setLoading(true);
 
 			// first get siteData
-			let protocol = 'https';
-			if (Platform.OS === 'web' && process.env.NODE_ENV === 'development') {
-				protocol = 'http';
-			}
+			const protocol = 'https';
+			// if (Platform.OS === 'web' && process.env.NODE_ENV === 'development') {
+			// 	protocol = 'https';
+			// }
 
 			const urlWithoutProtocol = url.replace(/^.*:\/{2,}|\s|\/+$/g, '') || '';
 

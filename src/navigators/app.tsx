@@ -7,8 +7,8 @@ import useAuth from '@wcpos/hooks/src/use-auth';
 // import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Auth from '@wcpos/core/src/screens/auth';
 import { Login, Modal } from '@wcpos/core/src/screens/modal';
-import MainNavigator from './main';
-// const MainNavigator = React.lazy(() => import('./main'));
+// import MainNavigator from './main';
+const MainNavigator = React.lazy(() => import('./main'));
 
 export type AppStackParamList = {
 	Auth: undefined;
@@ -18,6 +18,8 @@ export type AppStackParamList = {
 };
 
 const Stack = createStackNavigator<AppStackParamList>();
+
+// const Test = () => <Text>hello world</Text>;
 
 /**
  *
@@ -30,7 +32,7 @@ export const AppNavigator = () => {
 			{storeDBResource ? (
 				<Stack.Screen name="Main" component={MainNavigator} />
 			) : (
-				<Stack.Screen name="Auth" component={Auth} />
+				<Stack.Screen name="Auth" component={Auth} options={{ title: 'WooCommerce POS' }} />
 			)}
 			<Stack.Screen name="Login" component={Login} options={{ presentation: 'transparentModal' }} />
 			<Stack.Screen name="Modal" component={Modal} options={{ presentation: 'transparentModal' }} />

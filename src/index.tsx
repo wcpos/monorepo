@@ -29,7 +29,12 @@ type InitialProps = import('./types').InitialProps;
 
 const prefix = Linking.createURL('/');
 
-const App = (initialProps: InitialProps) => {
+let initialProps = {};
+if (window) {
+	initialProps = window.initialProps as InitialProps;
+}
+
+const App = () => {
 	const homepage = get(initialProps, 'homepage');
 	const prefixes = ['wcpos://', prefix];
 	console.log(prefixes);
@@ -45,6 +50,7 @@ const App = (initialProps: InitialProps) => {
 	const linking = {
 		prefixes,
 		config: {
+			initialRouteName: 'Auth',
 			screens: {
 				Auth: `${pathname}/auth`,
 				Main: {
