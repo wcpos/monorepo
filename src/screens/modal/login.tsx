@@ -5,9 +5,10 @@ import TextInput from '@wcpos/components/src/textinput';
 import Box from '@wcpos/components/src/box';
 import http from '@wcpos/core/src/lib/http';
 import useAuth from '@wcpos/hooks/src/use-auth';
+import get from 'lodash/get';
 
 const Login = ({ route }) => {
-	const { siteID } = route.params;
+	const siteID = get(route, ['params', 'siteID']);
 	const navigation = useNavigation();
 	const [username, setUsername] = React.useState('');
 	const [password, setPassword] = React.useState('');
@@ -17,7 +18,7 @@ const Login = ({ route }) => {
 		let success = false;
 		let site = _site;
 
-		if (!_site) {
+		if (!site) {
 			// get site from siteID
 			site = await userDB.sites
 				.findOne({ selector: { localID: siteID } })

@@ -6,6 +6,8 @@ import Platform from '@wcpos/core/src/lib/platform';
 import useAuth from '@wcpos/hooks/src/use-auth';
 import Url from '@wcpos/core/src/lib/url-parse';
 
+type SiteDocument = import('@wcpos/database/src').SiteDocument;
+
 interface WpJsonResponse {
 	authentication: Record<string, unknown>;
 	description: string;
@@ -26,8 +28,9 @@ const useSiteConnect = () => {
 	const [error, setError] = React.useState(false);
 
 	const onConnect = React.useCallback(
-		async (url: string): Promise<void> => {
+		async (url: string): Promise<SiteDocument> => {
 			setLoading(true);
+			let site;
 
 			// first get siteData
 			const protocol = 'https';
@@ -91,22 +94,22 @@ const useSiteConnect = () => {
 				const sites = await user.populate('sites').catch((err) => {
 					console.error(err);
 				});
-				const existingSite = find(sites, { url: siteData?.url });
+				site = find(sites, { url: siteData?.url });
 
 				// if not existingSite, then insert site data
-				if (!existingSite) {
-					const newSite = await userDB.sites.insert(siteData);
+				if (!site) {
+					site = await userDB.sites.insert(siteData);
 
-					user.update({ $push: { sites: newSite?.localID } }).catch((err) => {
+					user.update({ $push: { sites: site?.localID } }).catch((err) => {
 						console.log(err);
 						return err;
 					});
-				} else {
-					debugger;
 				}
 
 				setLoading(false);
 			}
+
+			return site;
 		},
 		[user, userDB]
 	);

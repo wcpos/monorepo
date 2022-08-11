@@ -7,6 +7,7 @@ import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
 import TextInput from '@wcpos/components/src/textinput';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import http from '@wcpos/core/src/lib/http';
 import useSiteConnect from './use-site-connect';
 import Sites from './sites';
 
@@ -15,6 +16,25 @@ import Sites from './sites';
  */
 const Auth = () => {
 	const { onConnect, loading, error } = useSiteConnect();
+
+	const handleDemoLogin = async () => {
+		const site = await onConnect('https://wcposdev.wpengine.com/');
+
+		if (site) {
+			const { data } = await http
+				.post(`${site?.wc_api_auth_url}/authorize`, {
+					username: 'demo',
+					password: 'demo',
+				})
+				.catch((err) => {
+					debugger;
+				});
+
+			if (data) {
+				await site?.addWpCredentials(data);
+			}
+		}
+	};
 
 	return (
 		<KeyboardAvoidingView
@@ -61,9 +81,7 @@ const Auth = () => {
 							size="small"
 							type="secondary"
 							accessoryRight={<Icon name="arrowRight" size="small" type="secondary" />}
-							onPress={() => {
-								console.log('login to demo store');
-							}}
+							onPress={handleDemoLogin}
 						/>
 					</Box>
 				</Box>
