@@ -1,12 +1,18 @@
 import * as React from 'react';
 import { AxiosResponse } from 'axios';
 import { useNavigation } from '@react-navigation/native';
-import useSnackbar from '@wcpos/components/src/snackbar/';
+import useSnackbar from '@wcpos/components/src/snackbar';
 
+/**
+ *
+ */
 export const useErrorResponseHandler = () => {
 	const navigation = useNavigation();
 	const addSnackbar = useSnackbar();
 
+	/**
+	 *
+	 */
 	const errorResponseHandler = React.useCallback(
 		(res: AxiosResponse) => {
 			if (!res) {
@@ -21,7 +27,17 @@ export const useErrorResponseHandler = () => {
 					break;
 				case 401:
 				case 403:
-					navigation.navigate('Login');
+					if (res.data) {
+						/**
+						 * @TODO - Errors may be better in a global Dialog component, like Snackbar?
+						 */
+						addSnackbar({
+							message: `Recieved "${res.data.message}" when trying to access endpoint: ${res.config.url}`,
+							// type: 'critical',
+						});
+					} else {
+						navigation.navigate('Login');
+					}
 					break;
 				case 404:
 					console.log('404 error', res);
