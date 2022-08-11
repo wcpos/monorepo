@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.10",
+	"version": "1.0.11",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -28,6 +28,7 @@
 		"pouchdb-debug": "7.2.1",
 		"random-token": "^0.0.8",
 		"rxdb": "12.7.16",
+		"rxdb-premium": "12.7.16",
 		"rxjs": "7.5.6"
 	},
 	"devDependencies": {
@@ -46,5 +47,8 @@
 	},
 	"eslintConfig": {
 		"extends": "@wcpos/eslint-config"
+	},
+	"accessTokens": {
+		"rxdb-premium": ""
 	}
 }
