@@ -1,10 +1,10 @@
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 import map from 'lodash/map';
 
-export const getReplicationState = async (http, collection) => {
+export const getReplicationState = async (http, collection, parentID) => {
 	const replicationState = replicateRxCollection({
 		collection,
-		replicationIdentifier: `${collection.name}-replication`,
+		replicationIdentifier: `${collection.name}-${parentID}-replication`,
 		live: true,
 		liveInterval: 600000,
 		retryTime: 5000,
@@ -27,7 +27,7 @@ export const getReplicationState = async (http, collection) => {
 					}
 
 					const result = await http
-						.get(collection.name, {
+						.get(`products/${parentID}/variations`, {
 							params,
 						})
 						.catch(({ response }) => {

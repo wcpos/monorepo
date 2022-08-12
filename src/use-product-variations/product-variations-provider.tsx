@@ -63,22 +63,22 @@ const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsPr
 	/**
 	 * Start id audit
 	 */
-	React.useEffect(() => {
-		const replicationState = getAuditIdReplicationState(http, collection);
-		replicationStates.current.audit = replicationState;
+	// React.useEffect(() => {
+	// 	const replicationState = getAuditIdReplicationState(http, collection);
+	// 	replicationStates.current.audit = replicationState;
 
-		return function cleanUp() {
-			replicationState.then((result) => {
-				result.cancel();
-			});
-		};
-	}, [collection, http]);
+	// 	return function cleanUp() {
+	// 		replicationState.then((result) => {
+	// 			result.cancel();
+	// 		});
+	// 	};
+	// }, [collection, http]);
 
 	/**
 	 * Start replication
 	 */
 	React.useEffect(() => {
-		const replicationState = getReplicationState(http, collection);
+		const replicationState = getReplicationState(http, collection, parent.id);
 		replicationStates.current.sync = replicationState;
 
 		return function cleanUp() {
@@ -86,19 +86,18 @@ const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsPr
 				result.cancel();
 			});
 		};
-	}, [collection, http]);
+	}, [collection, http, parent.id]);
 
 	/**
 	 *
 	 */
 	const sync = React.useCallback(() => {
-		const { audit } = replicationStates.current;
-
-		if (audit) {
-			audit.then((result) => {
-				result.run();
-			});
-		}
+		// const { audit } = replicationStates.current;
+		// if (audit) {
+		// 	audit.then((result) => {
+		// 		result.run();
+		// 	});
+		// }
 	}, []);
 
 	/**
