@@ -5,6 +5,7 @@ import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
 import Modal, { useModal } from '@wcpos/components/src/modal';
 import Dialog, { useDialog } from '@wcpos/components/src/dialog';
+import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
 import EditModal from '../../common/edit-modal';
 
 type Props = {
@@ -14,16 +15,22 @@ type Props = {
 const Actions = ({ item: product }: Props) => {
 	const { ref: modalRef, open, close } = useModal();
 	const { ref: dialogRef, open: dialogOpen } = useDialog();
+	const http = useRestHttpClient();
 
 	/**
 	 *
 	 */
-	const handleSync = () => {
-		const replicationState = product.syncRestApi({
-			push: {},
-		});
-		replicationState.run(false);
-	};
+	const handleSync = React.useCallback(() => {
+		// could use the link url?
+		http
+			.get(`/products/${product._id}`)
+			.then(({ data }) => {
+				product.atomicPatch(data);
+			})
+			.catch(() => {
+				debugger;
+			});
+	}, [http, product]);
 
 	/**
 	 *
