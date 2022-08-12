@@ -117,6 +117,9 @@
 		"backordered": {
 			"type": "boolean"
 		},
+		"low_stock_amount": {
+			"type": ["integer", "null"]
+		},
 		"weight": {
 			"type": "string"
 		},
@@ -204,6 +207,33 @@
 					},
 					"value": {
 						"type": "string"
+					}
+				}
+			}
+		},
+		"links": {
+			"type": "object",
+			"properties": {
+				"collection": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"href": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"self": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"href": {
+								"type": "string"
+							}
+						}
 					}
 				}
 			}

@@ -1,86 +1,47 @@
+import map from 'lodash/map';
 import schema from './schema.json';
-import statics from './statics';
 
 export type ProductSchema = import('./interface').WooCommerceProductSchema;
-export type ProductDocument = import('rxdb').RxDocument<ProductSchema, ProductMethods>;
-export type ProductCollection = import('rxdb').RxCollection<
-	ProductDocument,
-	ProductMethods,
-	ProductStatics
->;
-
-interface ProductMethods {
-	isVariable: (this: ProductDocument) => boolean;
-	// isSynced: (this: ProductDocument) => boolean;
-}
-
-type ProductStatics = Record<string, never>;
+export type ProductDocument = import('rxdb').RxDocument<ProductSchema, null>;
+export type ProductCollection = import('rxdb').RxCollection<ProductDocument, null, null>;
 
 /**
  *
  */
-export const methods: ProductMethods = {
-	/**
-	 *
-	 */
-	isVariable(this) {
-		return this.type === 'variable';
-	},
-	/**
-	 *
-	 */
-	// isSynced(this) {
-	// 	return !!this.date_modified_gmt;
-	// },
-};
-
-/**
- *
- */
-async function preInsert(this: ProductCollection, plainData: Record<string, any>) {
-	// totalSales is meant to be interger, but comes as string
-	const { totalSales } = plainData;
-	if (totalSales) {
-		plainData.totalSales = parseFloat(totalSales);
+async function auditVariations(this: ProductCollection, plainData: Record<string, any>) {
+	if (plainData.type === 'variable') {
+		// insert ids into variations
+		const variationsCollection = this.database.collections.variations;
+		const documents = map(plainData.variations, (id) =>
+			variationsCollection.parseRestResponse({ id: Number(id) })
+		);
+		variationsCollection.bulkUpsert(documents).catch((err) => {
+			console.error(err);
+			debugger;
+		});
 	}
-
-	return plainData;
 }
 
 /**
  *
  */
-async function preSave(
-	this: ProductCollection,
-	plainData: Record<string, any>,
-	product: ProductDocument
-) {
-	// totalSales is meant to be interger, but comes as string
-	const { totalSales } = plainData;
-	if (totalSales) {
-		plainData.totalSales = parseFloat(totalSales);
-	}
-
-	return plainData;
-}
-
 export const products = {
 	schema,
 	// pouchSettings: {},
-	statics,
-	methods,
+	// statics,
+	// methods,
 	// attachments: {},
 	options: {
-		// middlewares: {
-		// 	preInsert: {
-		// 		handle: preInsert,
-		// 		parallel: false,
-		// 	},
-		// 	preSave: {
-		// 		handle: preSave,
-		// 		parallel: false,
-		// 	},
-		// },
+		middlewares: {
+			preInsert: {
+				handle: auditVariations,
+				parallel: false,
+			},
+			preSave: {
+				handle: auditVariations,
+				parallel: false,
+			},
+		},
 	},
 	// migrationStrategies: {},
 	// autoMigrate: true,
