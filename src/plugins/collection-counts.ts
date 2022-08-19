@@ -4,6 +4,8 @@ import { debounceTime, shareReplay, tap } from 'rxjs/operators';
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb/dist/types').RxCollection;
 
+const usersCollections = ['logs', 'users', 'sites', 'wp_credentials', 'stores'];
+
 const collectionCountsPlugin: RxPlugin = {
 	name: 'collection-counts',
 	rxdb: true, // this must be true so rxdb knows that this is a rxdb-plugin and not a pouchdb-plugin
@@ -57,22 +59,25 @@ const collectionCountsPlugin: RxPlugin = {
 					syncedIds$: new BehaviorSubject([]),
 				});
 
+				const id = usersCollections.includes(collection.name) ? 'localID' : 'id';
+
 				function updateCounts() {
-					collection.storageInstance.internals.pouch
+					collection
 						.find({
-							selector: { id: { $exists: true } },
-							fields: ['id', 'date_modified_gmt'],
+							selector: { [id]: { $exists: true } },
+							// fields: ['id', 'date_modified_gmt'],
 						})
-						.then((res: any) => {
-							const totalDocCount = res.docs.length;
+						.exec()
+						.then((docs: any) => {
+							const totalDocCount = docs.length;
 							console.log(collection.name, totalDocCount);
 
-							const unsyncedIds = res.docs
+							const unsyncedIds = docs
 								.filter((doc: any) => !doc.date_modified_gmt)
-								.map((doc: any) => doc.id);
-							const syncedIds = res.docs
+								.map((doc: any) => doc[id]);
+							const syncedIds = docs
 								.filter((doc: any) => doc.date_modified_gmt)
-								.map((doc: any) => doc.id);
+								.map((doc: any) => doc[id]);
 
 							collection.totalDocCount$.next(totalDocCount);
 							collection.unsyncedIds$.next(unsyncedIds);

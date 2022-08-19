@@ -61,7 +61,6 @@ export function postCreate(
 
 export const shippingLines = {
 	schema,
-	// pouchSettings: {},
 	// statics,
 	// methods: {},
 	// attachments: {},

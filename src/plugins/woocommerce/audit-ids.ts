@@ -11,11 +11,12 @@ type RxCollection = import('rxdb/dist/types').RxCollection;
  */
 export async function auditRestApiIds(this: RxCollection, data: Record<string, any>[]) {
 	// fetch all ids from local database
-	const { docs } = await this.storageInstance.internals.pouch
-		.find({
-			selector: { id: { $exists: true } },
-			fields: ['id'],
-		})
+	// const { docs } = await this.storageInstance.internals.pouch
+	const docs = await this.find({
+		selector: { id: { $exists: true } },
+		// fields: ['id'],
+	})
+		.exec()
 		.catch((err: any) => {
 			console.log(err);
 		});

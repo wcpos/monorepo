@@ -27,7 +27,6 @@ async function preRemove(this: StoreCollection, plainData: any, store: StoreDocu
 
 export const stores = {
 	schema,
-	// pouchSettings: {},
 	// statics: {},
 	// methods: {},
 	// attachments: {},

@@ -16,7 +16,6 @@ export type TaxRateCollection = import('rxdb').RxCollection<TaxRateDocument>;
 
 export const taxes = {
 	schema,
-	// pouchSettings: {},
 	// statics: {},
 	// methods,
 	// attachments: {},

@@ -53,7 +53,7 @@ addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBKeyCompressionPlugin);
 
 // custom plugins
-addRxPlugin(collectionCounts);
+// addRxPlugin(collectionCounts);
 addRxPlugin(RxDBWooCommercePlugin);
 addRxPlugin(RxDBAjvValidatePlugin);
 addRxPlugin(childrenPlugin);

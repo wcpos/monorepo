@@ -27,7 +27,6 @@ async function auditVariations(this: ProductCollection, plainData: Record<string
  */
 export const products = {
 	schema,
-	// pouchSettings: {},
 	// statics,
 	// methods,
 	// attachments: {},

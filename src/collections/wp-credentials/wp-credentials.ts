@@ -93,7 +93,6 @@ export const methods: WPCredentialsMethods = {
 
 export const wpCredentials = {
 	schema,
-	// pouchSettings: {},
 	// statics,
 	methods,
 	// attachments: {},
