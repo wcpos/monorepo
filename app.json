@@ -34,6 +34,7 @@
 			}
 		},
 		"web": {
+			"bundler": "metro",
 			"favicon": "./assets/square-icon-512x512.png",
 			"backgroundColor": "#F0F4F8"
 		},
