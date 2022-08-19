@@ -13,11 +13,11 @@
     "eject": "expo eject"
   },
   "dependencies": {
-    "expo": "^46.0.2",
-    "expo-dev-client": "~1.1.1",
+    "expo": "^46.0.7",
+    "expo-dev-client": "~1.2.1",
     "expo-splash-screen": "~0.16.1",
     "expo-status-bar": "~1.4.0",
-    "expo-updates": "~0.14.3",
+    "expo-updates": "~0.14.4",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-native": "0.69.4",
@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.18.10",
-    "@expo/config-plugins": "^5.0.0",
+    "@expo/config-plugins": "^5.0.1",
     "@types/react": "~18.0.17",
     "@types/react-dom": "~18.0.6",
     "@types/react-native": "~0.69.5",
