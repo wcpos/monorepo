@@ -41,7 +41,7 @@ jobs:
       - name: 🚀 Setup repo
         uses: actions/checkout@v2
       - name: 🚀 Setup Node
-        uses: actions/setup-node@v3.1.1
+        uses: actions/setup-node@v3.4.1
         with:
           node-version: 16.x
       - name: 🚀 Setup Expo
