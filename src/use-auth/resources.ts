@@ -22,7 +22,10 @@ const user$ = userDB$.pipe(
 	/**
 	 *
 	 */
-	filter((userDB) => !!userDB),
+	filter((userDB) => {
+		console.log('userDB', userDB);
+		return !!userDB;
+	}),
 	/**
 	 *
 	 */
@@ -32,6 +35,7 @@ const user$ = userDB$.pipe(
 			 *
 			 */
 			filter(async (current) => {
+				console.log('current', current);
 				const userID = current && current.get('userID');
 
 				if (!userID) {
@@ -52,17 +56,27 @@ const user$ = userDB$.pipe(
 			 */
 			switchMap((current) => {
 				const userID = current && current.get('userID');
+				console.log('userID', userID);
 				// userDB.users.findOne({ selector: { localID: current.get('userID') } }).exec();
 				/**
 				 * @TODO - this will always return a user, I think it is a bug in rxdb
 				 * but handy here because it will return the first UserDocument found if no userID is found
 				 */
-				return userDB.users.findOne(userID).exec();
+				return userDB.users.findOne({ selector: { localID: userID } }).exec();
 			}),
 			/**
 			 *
 			 */
-			filter((user) => !!user)
+			filter((user) => {
+				console.log('user', user);
+				return !!user;
+			}),
+			/**
+			 *
+			 */
+			tap((result) => {
+				console.log('user result', result);
+			})
 		)
 	)
 );
@@ -86,6 +100,7 @@ const selected$ = userDB$.pipe(
 			 *
 			 */
 			switchMap((current) => {
+				console.log('selected', current);
 				return forkJoin([
 					userDB.sites.findOne({ selector: { localID: current.get('siteID') } }).exec(),
 					userDB.wp_credentials
@@ -93,6 +108,13 @@ const selected$ = userDB$.pipe(
 						.exec(),
 					userDB.stores.findOne({ selector: { localID: current.get('storeID') } }).exec(),
 				]);
+			}),
+
+			/**
+			 *
+			 */
+			tap((result) => {
+				console.log('selected result', result);
 			})
 		);
 	}),

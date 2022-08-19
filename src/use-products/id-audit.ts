@@ -38,6 +38,7 @@ export const getAuditIdReplicationState = async (http, collection) => {
 
 				const data = await collection.auditRestApiIds(result?.data);
 				const documents = map(data, (item) => collection.parseRestResponse(item));
+
 				// @TODO - handle mapping in parseRestResponse?
 				await collection.bulkUpsert(documents).catch((err) => {
 					console.error(err);
