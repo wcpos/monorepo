@@ -2,13 +2,12 @@ import { getRxStorageSQLite, SQLiteQueryWithParams } from 'rxdb-premium/plugins/
 
 const sqliteBasics = {
 	open: async (name: string) => {
-		const db = await window.sqlite.open(name);
-		return {};
+		return window.sqlite.open(name);
 	},
 	all: async (db, queryWithParams: SQLiteQueryWithParams) => {
 		console.log(`all sql: ${queryWithParams.query}`, queryWithParams.params);
 
-		const result = await window.sqlite.all(queryWithParams);
+		const result = await window.sqlite.all(db.name, queryWithParams);
 		console.log(result);
 		return result;
 	},
@@ -16,7 +15,7 @@ const sqliteBasics = {
 		console.log(`run sql: ${queryWithParams.query}`, queryWithParams.params);
 		console.log(db);
 
-		await window.sqlite.run(queryWithParams);
+		await window.sqlite.run(db.name, queryWithParams);
 	},
 	close: async () => {
 		debugger;
