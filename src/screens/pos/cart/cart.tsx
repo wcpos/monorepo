@@ -40,7 +40,9 @@ const Cart = ({ order }: CartProps) => {
 			// style={{ backgroundColor: 'white' }}
 			style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
 		>
-			<CartHeader order={order} ui={ui} />
+			<ErrorBoundary>
+				<CartHeader order={order} ui={ui} />
+			</ErrorBoundary>
 			<Box
 				// fill
 				style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
@@ -52,13 +54,19 @@ const Cart = ({ order }: CartProps) => {
 				</ErrorBoundary>
 			</Box>
 			<Box>
-				<AddFee order={order} />
+				<ErrorBoundary>
+					<AddFee order={order} />
+				</ErrorBoundary>
 			</Box>
 			<Box>
-				<AddShipping order={order} />
+				<ErrorBoundary>
+					<AddShipping order={order} />
+				</ErrorBoundary>
 			</Box>
 			<Box>
-				<Totals order={order} />
+				<ErrorBoundary>
+					<Totals order={order} />
+				</ErrorBoundary>
 			</Box>
 			<Box
 				horizontal
@@ -67,13 +75,17 @@ const Cart = ({ order }: CartProps) => {
 				align="center"
 				style={{ backgroundColor: theme.colors.lightGrey }}
 			>
-				<AddNoteButton order={order} />
-				<OrderMetaButton order={order} />
-				<SaveButton order={order} />
+				<ErrorBoundary>
+					<AddNoteButton order={order} />
+					<OrderMetaButton order={order} />
+					<SaveButton order={order} />
+				</ErrorBoundary>
 			</Box>
 			<Box horizontal>
-				<VoidButton order={order} />
-				<PayButton order={order} />
+				<ErrorBoundary>
+					<VoidButton order={order} />
+					<PayButton order={order} />
+				</ErrorBoundary>
 			</Box>
 		</Box>
 	);
