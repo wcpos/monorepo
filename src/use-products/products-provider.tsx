@@ -114,7 +114,7 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 			// 	}
 			// });
 			// search
-			_set(selector, ['name', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
+			// _set(selector, ['name', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
 
 			// filters
 			if (_get(q, 'filters.category.id')) {

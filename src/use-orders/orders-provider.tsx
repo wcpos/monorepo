@@ -92,7 +92,7 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 			const selector = {};
 
 			// search
-			_set(selector, ['number', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
+			// _set(selector, ['number', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
 
 			if (_get(q, 'filters.status')) {
 				_set(selector, ['status'], _get(q, 'filters.status'));
