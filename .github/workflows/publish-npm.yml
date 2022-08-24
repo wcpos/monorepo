@@ -2,14 +2,15 @@ on: push
 
 jobs:
   publish:
+    if: ${{ github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-node@v2.4.1
+      - uses: actions/setup-node@v3.4.1
         with:
           node-version: 16.x
       - run: npm install --force
-      - run: npm test
+      # - run: npm test
       - uses: JS-DevTools/npm-publish@v1
         with:
           token: ${{ secrets.NPM_TOKEN }}

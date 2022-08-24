@@ -30,7 +30,7 @@
 		"rxjs": "7.5.6"
 	},
 	"devDependencies": {
-		"@types/jest": "28.1.7",
+		"@types/jest": "^28.1.7",
 		"@types/lodash": "4.14.184",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
