@@ -43,7 +43,7 @@
 	"eslintConfig": {
 		"extends": "@wcpos/eslint-config"
 	},
-	"accessToken": {
+	"accessTokens": {
 		"rxdb-premium": "0xecf86d97285e29a47f643249d2f271cf8d93d33d0efd7f9d285bb2cda0e08749"
 	}
 }
