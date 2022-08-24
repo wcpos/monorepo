@@ -15,7 +15,6 @@ type ProductVariationStatics = Record<string, never>;
 
 export const productVariations = {
 	schema,
-	// pouchSettings: {},
 	// statics: {},
 	// methods: {},
 	// attachments: {},

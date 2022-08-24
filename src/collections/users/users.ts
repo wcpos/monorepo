@@ -78,7 +78,6 @@ const methods: UserMethods = {
 
 export const users = {
 	schema,
-	// pouchSettings: {},
 	// statics: {},
 	methods,
 	// attachments: {},

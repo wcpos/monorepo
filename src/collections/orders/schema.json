@@ -31,16 +31,6 @@
 		},
 		"status": {
 			"default": "pending",
-			"enum": [
-				"pending",
-				"processing",
-				"on-hold",
-				"completed",
-				"cancelled",
-				"refunded",
-				"failed",
-				"pos-open"
-			],
 			"description": "Order status.",
 			"type": "string"
 		},

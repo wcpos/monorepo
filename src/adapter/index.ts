@@ -1,26 +1,70 @@
-import 'react-native-get-random-values';
-import { decode, encode } from 'base-64';
-import * as SQLite from 'expo-sqlite';
-import HTTPAdapter from 'pouchdb-adapter-http';
-import SQLiteAdapterFactory from 'pouchdb-adapter-react-native-sqlite';
-import { addPouchPlugin, getRxStoragePouch } from 'rxdb/plugins/pouchdb';
+import { getRxStorageSQLite, SQLiteQueryWithParams } from 'rxdb-premium/plugins/sqlite';
+import { openDatabase, WebSQLDatabase, ResultSet } from 'expo-sqlite';
 
-const SQLiteAdapter = SQLiteAdapterFactory(SQLite);
+/**
+ *
+ */
+const getSQLiteBasicsExpoSQLite = (openDB: typeof openDatabase) => {
+	return {
+		open: async (name: string) => {
+			return Promise.resolve(openDB(name));
+		},
+		all: async (db: WebSQLDatabase, queryWithParams: SQLiteQueryWithParams) => {
+			const result = new Promise<ResultSet['rows']>((resolve, reject) => {
+				console.log(`all sql: ${queryWithParams.query}`, queryWithParams.params);
+				db.exec(
+					[{ sql: queryWithParams.query, args: queryWithParams.params }],
+					false,
+					(err, res) => {
+						console.log('sql response: ', res);
 
-addPouchPlugin(SQLiteAdapter);
-addPouchPlugin(HTTPAdapter);
+						if (err) {
+							return reject(err);
+						}
 
-// Polyfill
-if (!global.btoa) {
-	global.btoa = encode;
-}
+						if (Array.isArray(res)) {
+							const queryResult = res[0]; // there is only one query
+							if (Object.prototype.hasOwnProperty.call(queryResult, 'rows')) {
+								return resolve(queryResult.rows);
+							}
+							return reject(queryResult.error);
+						}
 
-if (!global.atob) {
-	global.atob = decode;
-}
+						return reject(new Error(`Unexpected response from SQLite: ${res}`));
+					}
+				);
+			});
+			return result;
+		},
+		run: async (db: WebSQLDatabase, queryWithParams: SQLiteQueryWithParams) => {
+			console.log(`run sql: ${queryWithParams.query}`, queryWithParams.params);
+			db.exec([{ sql: queryWithParams.query, args: queryWithParams.params }], false, () => {});
+		},
+		close: async (db: WebSQLDatabase) => {
+			return db.closeAsync();
+		},
+		journalMode: '',
+	};
+};
 
+/**
+ *
+ */
+
+/**
+ *
+ */
 const config = {
-	storage: getRxStoragePouch('react-native-sqlite', { revs_limit: 1, auto_compaction: true }),
+	storage: getRxStorageSQLite({
+		/**
+		 * Different runtimes have different interfaces to SQLite.
+		 * For example in node.js we have a callback API,
+		 * while in capacitor sqlite we have Promises.
+		 * So we need a helper object that is capable of doing the basic
+		 * sqlite operations.
+		 */
+		sqliteBasics: getSQLiteBasicsExpoSQLite(openDatabase),
+	}),
 	multiInstance: false,
 	ignoreDuplicate: true,
 };

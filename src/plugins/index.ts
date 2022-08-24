@@ -3,10 +3,10 @@ import { addRxPlugin } from 'rxdb';
 // default plugins
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 // import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
-import { RxDBKeyCompressionPlugin } from 'rxdb/plugins/key-compression';
+// import { RxDBKeyCompressionPlugin } from 'rxdb/plugins/key-compression';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
-import { RxDBEncryptionPlugin } from 'rxdb/plugins/encryption';
+// import { RxDBEncryptionPlugin } from 'rxdb/plugins/encryption';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 // import { RxDBReplicationCouchDBPlugin } from 'rxdb/plugins/replication-couchdb';
 import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
@@ -20,7 +20,7 @@ import collectionCounts from './collection-counts';
 import RxDBGenerateIdPlugin from './generate-id';
 import RxDBWooCommercePlugin from './woocommerce';
 import childrenPlugin from './children';
-import { RxDBAjvValidatePlugin } from './validate';
+// import { RxDBAjvValidatePlugin } from './validate';
 import middlewaresPlugin from './middlewares';
 import toJSONPlugin from './to-json';
 
@@ -46,16 +46,16 @@ addRxPlugin(RxDBLocalDocumentsPlugin);
 addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBLeaderElectionPlugin);
-addRxPlugin(RxDBEncryptionPlugin);
+// addRxPlugin(RxDBEncryptionPlugin);
 addRxPlugin(RxDBMigrationPlugin);
-addRxPlugin(RxDBKeyCompressionPlugin);
+// addRxPlugin(RxDBKeyCompressionPlugin);
 addRxPlugin(RxDBJsonDumpPlugin);
-addRxPlugin(RxDBKeyCompressionPlugin);
+// addRxPlugin(RxDBKeyCompressionPlugin);
 
 // custom plugins
 addRxPlugin(collectionCounts);
 addRxPlugin(RxDBWooCommercePlugin);
-addRxPlugin(RxDBAjvValidatePlugin);
+// addRxPlugin(RxDBAjvValidatePlugin);
 addRxPlugin(childrenPlugin);
 addRxPlugin(middlewaresPlugin);
 addRxPlugin(toJSONPlugin);

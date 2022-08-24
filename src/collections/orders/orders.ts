@@ -24,7 +24,6 @@ export type OrderCollection = import('rxdb').RxCollection<
  */
 export const orders = {
 	schema,
-	// pouchSettings: {},
 	statics,
 	methods,
 	// methods: {

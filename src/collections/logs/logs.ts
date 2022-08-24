@@ -8,7 +8,6 @@ type LogStatics = Record<string, never>;
 
 export const logs = {
 	schema,
-	// pouchSettings: {},
 	// statics: {},
 	// methods: {},
 	// attachments: {},

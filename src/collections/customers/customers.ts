@@ -1,5 +1,4 @@
 import schema from './schema.json';
-import statics from './statics';
 
 export type CustomerSchema = import('./interface').WooCommerceCustomerSchema;
 export type CustomerDocument = import('rxdb').RxDocument<CustomerSchema, CustomerMethods>;
@@ -21,8 +20,7 @@ type CustomerMethods = Record<string, never>;
 
 export const customers = {
 	schema,
-	// pouchSettings: {},
-	statics,
+	// statics: {},
 	// methods: {},
 	// attachments: {},
 	// options: {},

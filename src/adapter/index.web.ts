@@ -1,17 +1,16 @@
-import { addPouchPlugin, getRxStoragePouch, PouchDB } from 'rxdb/plugins/pouchdb';
-import IDBAdapter from 'pouchdb-adapter-idb';
-// import pouchdbDebug from 'pouchdb-debug';
-
-// if (process.env.NODE_ENV === 'development') {
-// 	PouchDB.plugin(pouchdbDebug);
-// 	PouchDB.debug.enable('*');
-// }
-
-addPouchPlugin(IDBAdapter);
+import { getRxStorageIndexedDB } from 'rxdb-premium/plugins/indexeddb';
 
 const config = {
-	storage: getRxStoragePouch('idb', { revs_limit: 1, auto_compaction: true }),
-	ignoreDuplicate: process.env.NODE_ENV === 'development',
+	storage: getRxStorageIndexedDB({
+		/**
+		 * For better performance, queries run with a batched cursor.
+		 * You can change the batchSize to optimize the query time
+		 * for specific queries.
+		 * You should only change this value when you are also doing performance measurements.
+		 * [default=50]
+		 */
+		batchSize: 50,
+	}),
 };
 
 export default config;

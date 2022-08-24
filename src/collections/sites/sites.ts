@@ -115,7 +115,6 @@ const methods: SiteMethods = {
 
 export const sites = {
 	schema,
-	// pouchSettings: {},
 	// statics: {},
 	methods,
 	// attachments: {},
