@@ -8,7 +8,7 @@ jobs:
       - uses: actions/setup-node@v3.4.1
         with:
           node-version: 16
-      - run: yarn install
+      - run: yarn install --force
       # - run: npm test
       - uses: JS-DevTools/npm-publish@v1
         with:

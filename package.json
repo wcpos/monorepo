@@ -18,6 +18,9 @@
 		"generate-interfaces": "generate-interfaces \"./src/**/schema.json\"",
 		"generate-interfaces:watch": "generate-interfaces -w \"./src/**/schema.json\""
 	},
+	"resolutions": {
+		"rxdb-premium@13.0.0-beta.20": "patch:rxdb-premium@npm:13.0.0-beta.20#.yarn/patches/rxdb-premium-npm-13.0.0-beta.20-056a46b1da.patch"
+	},
 	"dependencies": {
 		"ajv": "8.11.0",
 		"ajv-formats": "2.1.1",
