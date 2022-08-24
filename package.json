@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.14",
+	"version": "1.0.15",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -17,9 +17,6 @@
 		"test": "eslint --ext ts,tsx ./src",
 		"generate-interfaces": "generate-interfaces \"./src/**/schema.json\"",
 		"generate-interfaces:watch": "generate-interfaces -w \"./src/**/schema.json\""
-	},
-	"resolutions": {
-		"rxdb-premium@13.0.0-beta.20": "patch:rxdb-premium@npm:13.0.0-beta.20#.yarn/patches/rxdb-premium-npm-13.0.0-beta.20-056a46b1da.patch"
 	},
 	"dependencies": {
 		"ajv": "8.11.0",
@@ -45,5 +42,8 @@
 	},
 	"eslintConfig": {
 		"extends": "@wcpos/eslint-config"
+	},
+	"accessToken": {
+		"rxdb-premium": "0xecf86d97285e29a47f643249d2f271cf8d93d33d0efd7f9d285bb2cda0e08749"
 	}
 }
