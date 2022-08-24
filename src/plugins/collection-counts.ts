@@ -61,32 +61,34 @@ const collectionCountsPlugin: RxPlugin = {
 
 				const id = usersCollections.includes(collection.name) ? 'localID' : 'id';
 
-				function updateCounts() {
-					collection
-						.find({
-							selector: { [id]: { $exists: true } },
-							// fields: ['id', 'date_modified_gmt'],
-						})
-						.exec()
-						.then((docs: any) => {
-							const totalDocCount = docs.length;
-							console.log(collection.name, totalDocCount);
+				function updateCounts() {}
 
-							const unsyncedIds = docs
-								.filter((doc: any) => !doc.date_modified_gmt)
-								.map((doc: any) => doc[id]);
-							const syncedIds = docs
-								.filter((doc: any) => doc.date_modified_gmt)
-								.map((doc: any) => doc[id]);
+				// function updateCounts() {
+				// 	collection
+				// 		.find({
+				// 			selector: { [id]: { $exists: true } },
+				// 			// fields: ['id', 'date_modified_gmt'],
+				// 		})
+				// 		.exec()
+				// 		.then((docs: any) => {
+				// 			const totalDocCount = docs.length;
+				// 			console.log(collection.name, totalDocCount);
 
-							collection.totalDocCount$.next(totalDocCount);
-							collection.unsyncedIds$.next(unsyncedIds);
-							collection.syncedIds$.next(syncedIds);
-						})
-						.catch((err: any) => {
-							console.log(err);
-						});
-				}
+				// 			const unsyncedIds = docs
+				// 				.filter((doc: any) => !doc.date_modified_gmt)
+				// 				.map((doc: any) => doc[id]);
+				// 			const syncedIds = docs
+				// 				.filter((doc: any) => doc.date_modified_gmt)
+				// 				.map((doc: any) => doc[id]);
+
+				// 			collection.totalDocCount$.next(totalDocCount);
+				// 			collection.unsyncedIds$.next(unsyncedIds);
+				// 			collection.syncedIds$.next(syncedIds);
+				// 		})
+				// 		.catch((err: any) => {
+				// 			console.log(err);
+				// 		});
+				// }
 
 				// collection.$ will emit on insert, update and remove
 				// for each emit we are going to loop through all docs for counting

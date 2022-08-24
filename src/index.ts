@@ -40,3 +40,4 @@ export type { StoreDatabase, StoreDatabaseCollections } from './stores-db';
 
 export { userDBPromise } from './users-db';
 export { storeDBPromise } from './stores-db';
+export { removeDB } from './create-db';
