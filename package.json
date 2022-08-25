@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.15",
+	"version": "1.0.16",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -26,7 +26,6 @@
 		"random-token": "^0.0.8",
 		"react": "18.2.0",
 		"rxdb": "13.0.0-beta.20",
-		"rxdb-premium": "13.0.0-beta.20",
 		"rxjs": "7.5.6"
 	},
 	"devDependencies": {
@@ -42,8 +41,5 @@
 	},
 	"eslintConfig": {
 		"extends": "@wcpos/eslint-config"
-	},
-	"accessTokens": {
-		"rxdb-premium": "0xecf86d97285e29a47f643249d2f271cf8d93d33d0efd7f9d285bb2cda0e08749"
 	}
 }

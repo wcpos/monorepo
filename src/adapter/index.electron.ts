@@ -1,4 +1,6 @@
-import { getRxStorageSQLite, SQLiteQueryWithParams } from 'rxdb-premium/plugins/sqlite';
+import { getRxStorageSQLite } from './plugins/sqlite';
+
+import type { SQLiteQueryWithParams } from './plugins/sqlite';
 
 const sqliteBasics = {
 	open: async (name: string) => {

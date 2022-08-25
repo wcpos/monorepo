@@ -1,5 +1,7 @@
-import { getRxStorageSQLite, SQLiteQueryWithParams } from 'rxdb-premium/plugins/sqlite';
 import { openDatabase, WebSQLDatabase, ResultSet } from 'expo-sqlite';
+import { getRxStorageSQLite } from './plugins/sqlite';
+
+import type { SQLiteQueryWithParams } from './plugins/sqlite';
 
 /**
  *
