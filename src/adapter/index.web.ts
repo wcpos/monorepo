@@ -1,4 +1,4 @@
-import { getRxStorageIndexedDB } from 'rxdb-premium/plugins/indexeddb';
+import { getRxStorageIndexedDB } from './plugins/indexeddb';
 
 const config = {
 	storage: getRxStorageIndexedDB({
