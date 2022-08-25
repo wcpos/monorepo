@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ScrollView } from 'react-native';
 import type { FallbackProps } from 'react-error-boundary';
+import { removeDB } from '@wcpos/database';
 
 const styles: any = StyleSheet.create({
 	container: {
@@ -38,16 +39,25 @@ const styles: any = StyleSheet.create({
 });
 
 const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
+	const handleReset = async () => {
+		// clear userDB to ensure clean start
+		removeDB('wcposusers');
+		// try again
+		resetErrorBoundary();
+	};
+
 	return (
 		<SafeAreaView style={styles.container}>
-			<View style={styles.content}>
-				<Text style={styles.title}>Oops!</Text>
-				<Text style={styles.subtitle}>There's an error</Text>
-				<Text style={styles.error}>{error.toString()}</Text>
-				<TouchableOpacity style={styles.button} onPress={resetErrorBoundary}>
-					<Text style={styles.buttonText}>Try again</Text>
-				</TouchableOpacity>
-			</View>
+			<ScrollView>
+				<View style={styles.content}>
+					<Text style={styles.title}>Oops!</Text>
+					<Text style={styles.subtitle}>There's an error</Text>
+					<Text style={styles.error}>{error.toString()}</Text>
+					<TouchableOpacity style={styles.button} onPress={handleReset}>
+						<Text style={styles.buttonText}>Try again</Text>
+					</TouchableOpacity>
+				</View>
+			</ScrollView>
 		</SafeAreaView>
 	);
 };

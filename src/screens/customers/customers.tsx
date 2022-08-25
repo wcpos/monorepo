@@ -9,6 +9,7 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';
+import AddNewCustomer from '../common/add-new-customer';
 
 /**
  *
@@ -37,6 +38,7 @@ const Customers = () => {
 					}}
 				>
 					<SearchBar />
+					<AddNewCustomer />
 					<UiSettings ui={ui} />
 				</Box>
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
