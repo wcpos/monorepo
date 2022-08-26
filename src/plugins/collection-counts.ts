@@ -4,7 +4,8 @@ import { debounceTime, shareReplay, tap } from 'rxjs/operators';
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb/dist/types').RxCollection;
 
-const usersCollections = ['logs', 'users', 'sites', 'wp_credentials', 'stores'];
+// const usersCollections = ['logs', 'users', 'sites', 'wp_credentials', 'stores'];
+const collections = ['products', 'orders', 'customers', 'taxes'];
 
 const collectionCountsPlugin: RxPlugin = {
 	name: 'collection-counts',
@@ -53,42 +54,45 @@ const collectionCountsPlugin: RxPlugin = {
 		 */
 		createRxCollection: {
 			after({ collection }) {
+				/**
+				 * early return
+				 */
+				if (!collections.includes(collection.name)) {
+					return;
+				}
+
 				Object.assign(collection, {
 					totalDocCount$: new BehaviorSubject(0),
 					unsyncedIds$: new BehaviorSubject([]),
 					syncedIds$: new BehaviorSubject([]),
 				});
 
-				const id = usersCollections.includes(collection.name) ? 'localID' : 'id';
+				function updateCounts() {
+					collection
+						.find()
+						.exec()
+						.then((docs) => {
+							const totalDocCount = docs.length;
+							const unsyncedIds = [];
+							const syncedIds = [];
+							console.log(collection.name, totalDocCount);
 
-				function updateCounts() {}
+							docs.forEach((doc) => {
+								if (doc.date_modified_gmt) {
+									syncedIds.push(doc.id);
+								} else {
+									unsyncedIds.push(doc.id);
+								}
+							});
 
-				// function updateCounts() {
-				// 	collection
-				// 		.find({
-				// 			selector: { [id]: { $exists: true } },
-				// 			// fields: ['id', 'date_modified_gmt'],
-				// 		})
-				// 		.exec()
-				// 		.then((docs: any) => {
-				// 			const totalDocCount = docs.length;
-				// 			console.log(collection.name, totalDocCount);
-
-				// 			const unsyncedIds = docs
-				// 				.filter((doc: any) => !doc.date_modified_gmt)
-				// 				.map((doc: any) => doc[id]);
-				// 			const syncedIds = docs
-				// 				.filter((doc: any) => doc.date_modified_gmt)
-				// 				.map((doc: any) => doc[id]);
-
-				// 			collection.totalDocCount$.next(totalDocCount);
-				// 			collection.unsyncedIds$.next(unsyncedIds);
-				// 			collection.syncedIds$.next(syncedIds);
-				// 		})
-				// 		.catch((err: any) => {
-				// 			console.log(err);
-				// 		});
-				// }
+							collection.totalDocCount$.next(totalDocCount);
+							collection.unsyncedIds$.next(unsyncedIds);
+							collection.syncedIds$.next(syncedIds);
+						})
+						.catch((err: any) => {
+							console.log(err);
+						});
+				}
 
 				// collection.$ will emit on insert, update and remove
 				// for each emit we are going to loop through all docs for counting
