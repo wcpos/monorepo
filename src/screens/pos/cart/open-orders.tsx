@@ -5,7 +5,7 @@ import CartTabs from './tabs';
 
 const OpenOrders = () => {
 	return (
-		<React.Suspense fallback={<Text>test 2</Text>}>
+		<React.Suspense fallback={<Text>Loading Open Orders</Text>}>
 			<OrdersProvider
 				initialQuery={{
 					sortBy: 'date_created_gmt',
@@ -19,4 +19,4 @@ const OpenOrders = () => {
 	);
 };
 
-export default React.memo(OpenOrders);
+export default OpenOrders;

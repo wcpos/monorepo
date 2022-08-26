@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 import Tabs from '@wcpos/components/src/tabs';
+import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import useOrders from '@wcpos/hooks/src/use-orders';
 import Cart from './cart';
@@ -65,9 +66,17 @@ const CartTabs = () => {
 				return null;
 			}
 			if (currentOrder.isCartEmpty()) {
-				return <EmptyCart order={currentOrder} />;
+				return (
+					<React.Suspense fallback={<Text>Loading Empty Cart</Text>}>
+						<EmptyCart order={currentOrder} />
+					</React.Suspense>
+				);
 			}
-			return <Cart order={currentOrder} />;
+			return (
+				<React.Suspense fallback={<Text>Loading Cart</Text>}>
+					<Cart order={currentOrder} />
+				</React.Suspense>
+			);
 		},
 		[currentOrder]
 	);
