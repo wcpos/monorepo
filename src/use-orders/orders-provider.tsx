@@ -102,22 +102,9 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 
 			return RxQuery.$.pipe(
 				// sort the results
-				// sort the results
 				map((result) => {
 					return orderBy(result, [q.sortBy], [q.sortDirection]);
 				})
-				// @ts-ignore
-				// map((result) => {
-				// 	const array = Array.isArray(result) ? result : [];
-				// 	const productSorter = (product: any) => {
-				// 		if (q.sortBy === 'name') {
-				// 			// @TODO - this doens't work
-				// 			return product[q.sortBy].toLowerCase();
-				// 		}
-				// 		return product[q.sortBy];
-				// 	};
-				// 	return orderBy(array, [productSorter], [q.sortDirection]);
-				// })
 			);
 		})
 	);

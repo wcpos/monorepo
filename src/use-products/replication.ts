@@ -5,57 +5,55 @@ export const getReplicationState = async (http, collection) => {
 	const replicationState = replicateRxCollection({
 		collection,
 		replicationIdentifier: `${collection.name}-replication`,
-		live: true,
-		liveInterval: 600000, // this has been removed
+		live: false,
 		retryTime: 5000,
 		pull: {
-			async handler() {
-				// const unsyncedDocs = collection.unsyncedIds$.getValue();
-				// const syncedDocs = collection.syncedIds$.getValue();
+			async handler(lastCheckpoint, batchSize) {
+				const unsyncedDocs = collection.unsyncedIds$.getValue();
+				const syncedDocs = collection.syncedIds$.getValue();
 
-				if (true) {
-					const params = {
-						order: 'asc',
-						orderby: 'title',
+				if (unsyncedDocs.length === 0) {
+					return {
+						documents: [],
+						checkpoint: null,
 					};
-
-					// choose the smallest array, max of 1000
-					// if (syncedDocs.length > unsyncedDocs.length) {
-					// 	params.include = unsyncedDocs.slice(0, 1000).join(',');
-					// } else {
-					// 	params.exclude = syncedDocs.slice(0, 1000).join(',');
-					// }
-
-					const result = await http
-						.get(collection.name, {
-							params,
-						})
-						.catch(({ response }) => {
-							console.log(response);
-						});
-
-					// const documents = map(result?.data, (item) => collection.parseRestResponse(item));
-					// await collection.bulkUpsert(documents).catch((err) => {
-					// 	console.error(err);
-					// 	debugger;
-					// });
-					// await Promise.all(map(documents, (doc) => collection.atomicUpsert(doc))).catch(() => {
-					// 	debugger;
-					// });
 				}
 
+				const params = {
+					order: 'asc',
+					orderby: 'title',
+				};
+
+				// choose the smallest array, max of 1000
+				if (syncedDocs.length > unsyncedDocs.length) {
+					params.include = unsyncedDocs.slice(0, 1000).join(',');
+				} else {
+					params.exclude = syncedDocs.slice(0, 1000).join(',');
+				}
+
+				const response = await http
+					.get(collection.name, {
+						params,
+					})
+					.catch((error) => {
+						debugger;
+						console.log(error);
+					});
+
 				return {
-					documents: result?.data,
-					hasMoreDocuments: false,
+					documents: response?.data || [],
+					checkpoint: null,
 				};
 			},
-			// async modifier(docData) {
-			// 	debugger;
-			// },
+			batchSize: 10,
+			async modifier(docData) {
+				return collection.parseRestResponse(docData);
+			},
 		},
 	});
 
 	replicationState.error$.subscribe((error) => {
+		debugger;
 		console.log('something was wrong');
 		console.dir(error);
 	});

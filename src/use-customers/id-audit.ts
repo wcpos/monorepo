@@ -5,49 +5,27 @@ export const getAuditIdReplicationState = async (http, collection) => {
 	const replicationState = replicateRxCollection({
 		collection,
 		replicationIdentifier: `${collection.name}-audit-id-replication`,
-		live: true,
-		liveInterval: 600000,
-		// retryTime: 600000,
+		live: false,
 		pull: {
-			async handler() {
-				const result = await http
+			async handler(lastCheckpoint, batchSize) {
+				const response = await http
 					.get(collection.name, {
-						params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: -1 },
+						params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: batchSize },
 					})
-					.catch(({ response }) => {
-						console.log(response);
-						// if (!response) {
-						// 	console.error('CORS error');
-						// 	return;
-						// }
-						// if (response.status === 401) {
-						// 	// @ts-ignore
-						// 	navigation.navigate('Login');
-						// }
-						// if (response.status === 403) {
-						// 	console.error('invalid nonce');
-						// }
+					.catch((error) => {
+						console.log(error);
 					});
 
-				if (!result?.data) {
-					return {
-						documents: [],
-						hasMoreDocuments: false,
-					};
-				}
-
-				const data = await collection.auditRestApiIds(result?.data);
-				const documents = map(data, (item) => collection.parseRestResponse(item));
-				// @TODO - handle mapping in parseRestResponse?
-				await collection.bulkUpsert(documents).catch((err) => {
-					console.error(err);
-					debugger;
-				});
+				const documents = await collection.auditRestApiIds(response?.data);
 
 				return {
-					documents: [],
-					hasMoreDocuments: false,
+					documents,
+					checkpoint: null,
 				};
+			},
+			batchSize: -1,
+			async modifier(docData) {
+				return collection.parseRestResponse(docData);
 			},
 		},
 	});

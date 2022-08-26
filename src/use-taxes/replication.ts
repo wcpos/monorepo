@@ -5,19 +5,20 @@ export const getReplicationState = async (http, collection) => {
 	const replicationState = replicateRxCollection({
 		collection,
 		replicationIdentifier: `${collection.name}-replication`,
-		live: true,
-		liveInterval: 600000,
+		live: false,
 		retryTime: 5000,
 		pull: {
-			async handler() {
+			async handler(lastCheckpoint, batchSize) {
 				const unsyncedDocs = collection.unsyncedIds$.getValue();
 				const syncedDocs = collection.syncedIds$.getValue();
 
 				if (unsyncedDocs.length === 0) {
-					return;
+					return {
+						documents: [],
+						checkpoint: null,
+					};
 				}
 
-				// if (unsyncedDocs.length > 0) {
 				const params = {};
 
 				// choose the smallest array, max of 1000
@@ -27,37 +28,28 @@ export const getReplicationState = async (http, collection) => {
 					params.exclude = syncedDocs.slice(0, 1000).join(',');
 				}
 
-				const result = await http
+				const response = await http
 					.get(collection.name, {
 						params,
 					})
-					.catch(({ response }) => {
-						console.log(response);
-					});
-
-				if (result) {
-					const documents = map(result?.data, (item) => {
-						// add date_modified_gmt
-						if (!item.date_modified_gmt) {
-							const timestamp = Date.now();
-							const date_modified_gmt = new Date(timestamp).toISOString().split('.')[0];
-							item.date_modified_gmt = date_modified_gmt;
-						}
-						return collection.parseRestResponse(item);
-					});
-					await collection.bulkUpsert(documents).catch(() => {
+					.catch((error) => {
 						debugger;
+						console.log(error);
 					});
-				}
-				// await Promise.all(map(documents, (doc) => collection.atomicUpsert(doc))).catch(() => {
-				// 	debugger;
-				// });
-				// }
 
 				return {
-					documents: [],
-					hasMoreDocuments: false,
+					documents: response?.data || [],
+					checkpoint: null,
 				};
+			},
+			batchSize: 10,
+			async modifier(docData) {
+				if (!docData.date_modified_gmt) {
+					const timestamp = Date.now();
+					const date_modified_gmt = new Date(timestamp).toISOString().split('.')[0];
+					docData.date_modified_gmt = date_modified_gmt;
+				}
+				return collection.parseRestResponse(docData);
 			},
 		},
 	});
