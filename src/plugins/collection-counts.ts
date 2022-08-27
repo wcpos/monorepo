@@ -63,7 +63,8 @@ const collectionCountsPlugin: RxPlugin = {
 
 				Object.assign(collection, {
 					totalDocCount$: new BehaviorSubject(0),
-					unsyncedIds$: new BehaviorSubject([]),
+					pullRemoteIds$: new BehaviorSubject([]),
+					pushLocalIds$: new BehaviorSubject([]),
 					syncedIds$: new BehaviorSubject([]),
 				});
 
@@ -73,20 +74,28 @@ const collectionCountsPlugin: RxPlugin = {
 						.exec()
 						.then((docs) => {
 							const totalDocCount = docs.length;
-							const unsyncedIds = [];
+							const pullRemoteIds = [];
+							const pushLocalIds = [];
 							const syncedIds = [];
 							console.log(collection.name, totalDocCount);
 
 							docs.forEach((doc) => {
-								if (doc.date_modified_gmt) {
-									syncedIds.push(doc.id);
+								if (doc.id) {
+									if (doc.date_modified_gmt) {
+										syncedIds.push(doc.id);
+									} else {
+										pullRemoteIds.push(doc.id);
+									}
+								} else if (doc._id) {
+									pushLocalIds.push(doc._id);
 								} else {
-									unsyncedIds.push(doc.id);
+									throw new Error(`Orphaned doc: ${String(doc)}`);
 								}
 							});
 
 							collection.totalDocCount$.next(totalDocCount);
-							collection.unsyncedIds$.next(unsyncedIds);
+							collection.pullRemoteIds$.next(pullRemoteIds);
+							collection.pushLocalIds$.next(pushLocalIds);
 							collection.syncedIds$.next(syncedIds);
 						})
 						.catch((err: any) => {

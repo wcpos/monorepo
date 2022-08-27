@@ -1,6 +1,12 @@
 import { openDatabase, WebSQLDatabase, ResultSet } from 'expo-sqlite';
 import { getRxStorageSQLite } from './plugins/sqlite';
 
+/**
+ * Polyfill for TextEncoder
+ * fixes: ReferenceError: Can't find variable: TextEncoder
+ */
+import 'fast-text-encoding';
+
 import type { SQLiteQueryWithParams } from './plugins/sqlite';
 
 /**

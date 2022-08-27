@@ -25,8 +25,9 @@ export function userDBPromise() {
 
 	userDB = createDB<UserDatabaseCollections>('wcposusers')
 		.then(async (db) => {
-			console.log('hello');
-			await db.addCollections(userCollections);
+			await db.addCollections(userCollections).catch((error) => {
+				console.error(error);
+			});
 			return db;
 		})
 		.catch((error) => {

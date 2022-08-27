@@ -1,7 +1,4 @@
-import forEach from 'lodash/forEach';
 import find from 'lodash/find';
-import pull from 'lodash/pull';
-import map from 'lodash/map';
 
 type RxCollection = import('rxdb/dist/types').RxCollection;
 
