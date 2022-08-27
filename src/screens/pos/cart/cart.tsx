@@ -31,7 +31,7 @@ const Cart = ({ order }: CartProps) => {
 	const theme = useTheme();
 	// useCalcTotals(order);
 
-	useWhyDidYouUpdate('Cart', { order, ui, cartResource, theme });
+	useWhyDidYouUpdate('Cart', { order, ui, cartResource, theme, uiResources });
 
 	return (
 		<Box

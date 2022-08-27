@@ -47,16 +47,19 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 	 *
 	 */
 	const options = React.useMemo(() => {
-		const guest = storeDB?.collections.customers.newDocument({ id: 0, first_name: 'Guest ' });
-		customers.unshift(guest);
-
-		return customers.map((customer) => ({
+		const opts = customers.map((customer) => ({
 			label: displayCustomerNameOrUsername(customer),
 			value: customer,
 			key: customer.id,
 		}));
-	}, [customers, displayCustomerNameOrUsername, storeDB?.collections.customers]);
 
+		opts.unshift({ key: 0, label: 'Guest', value: { id: 0 } });
+		return opts;
+	}, [customers, displayCustomerNameOrUsername]);
+
+	/**
+	 *
+	 */
 	useWhyDidYouUpdate('Customer Select', {
 		selectedCustomer,
 		onSelectCustomer,
@@ -87,7 +90,7 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 export default (props: CustomerSelectProps) => (
 	<CustomersProvider
 		initialQuery={{
-			search: '',
+			// search: '',
 			sortBy: 'last_name',
 			sortDirection: 'asc',
 		}}

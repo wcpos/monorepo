@@ -41,7 +41,14 @@ const styles: any = StyleSheet.create({
 const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 	const handleReset = async () => {
 		// clear userDB to ensure clean start
-		removeDB('wcposusers');
+		await removeDB('wcposusers')
+			.then((result) => {
+				console.log(result);
+			})
+			.catch((error) => {
+				console.log(error);
+			});
+
 		// try again
 		resetErrorBoundary();
 	};

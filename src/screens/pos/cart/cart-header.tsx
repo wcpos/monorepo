@@ -8,6 +8,7 @@ import Pill from '@wcpos/components/src/pill';
 import Modal, { useModal } from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 // import Form from '@wcpos/react-native-jsonschema-form';
 import EditModal from '../../common/edit-modal';
 import CustomerSelect from '../../common/customer-select';
@@ -77,6 +78,11 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 
 		return _schema;
 	}, [order.collection.schema.jsonSchema]);
+
+	/**
+	 *
+	 */
+	useWhyDidYouUpdate('Cart Header', { order, ui, theme, storeDB, customer });
 
 	/**
 	 *
