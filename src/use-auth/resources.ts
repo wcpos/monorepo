@@ -24,6 +24,7 @@ const user$ = userDB$.pipe(
 	 */
 	filter((userDB) => {
 		console.log('userDB', userDB);
+		console.log('userDB Collections', userDB.collections);
 		return !!userDB;
 	}),
 	/**
@@ -42,11 +43,17 @@ const user$ = userDB$.pipe(
 					/**
 					 * @TODO - what if current userID bu there is a User in the DB?
 					 */
-					const defaultUser = await userDB.users.insert({
-						first_name: 'Global',
-						last_name: 'User',
+					const defaultUser = await userDB.users
+						.insert({
+							first_name: 'Global',
+							last_name: 'User',
+						})
+						.catch((error) => {
+							console.error(error);
+						});
+					userDB.upsertLocal('current', { userID: defaultUser.localID }).catch((error) => {
+						console.error(error);
 					});
-					userDB.upsertLocal('current', { userID: defaultUser.localID });
 				}
 
 				return !!userID;

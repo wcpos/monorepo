@@ -113,7 +113,9 @@ const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) =
 			// 		[field]: { $regex: new RegExp(escape(q.search), 'i') },
 			// 	}));
 			// }
-			_set(selector, ['username', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
+			if (_get(q, 'search', '')) {
+				_set(selector, ['username', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
+			}
 
 			const RxQuery = collection.find({ selector });
 

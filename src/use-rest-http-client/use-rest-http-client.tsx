@@ -1,6 +1,7 @@
 import * as React from 'react';
 import axios from 'axios';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import set from 'lodash/set';
 import useAuth from '../use-auth';
 import { useErrorResponseHandler } from './use-error-handler';
 import useOnlineStatus from '../use-online-status';
@@ -37,18 +38,19 @@ export const useRestHttpClient = () => {
 	 */
 	React.useEffect(() => {
 		const reqId = client.interceptors.request.use((config) => {
-			config.headers = config.headers || {};
-			config.headers['X-WCPOS'] = '1';
-			if (wpCredentials?.wp_nonce) {
-				config.headers['X-WP-Nonce'] = wpCredentials?.wp_nonce;
-			}
-			if (wpCredentials?.jwt) {
-				config.headers.Authorization = `Bearer ${wpCredentials?.jwt}`;
-			}
-
 			if (isInternetReachable === false) {
 				// prevent requests when there is no internet connection
 				return false;
+			}
+
+			set(config, ['headers', 'X-WCPOS'], '1');
+
+			if (wpCredentials?.wp_nonce) {
+				set(config, ['headers', 'X-WP-Nonce'], wpCredentials?.wp_nonce);
+			}
+
+			if (wpCredentials?.jwt) {
+				set(config, ['headers', 'Authorization'], `Bearer ${wpCredentials?.jwt}`);
 			}
 
 			return config;
@@ -69,6 +71,7 @@ export const useRestHttpClient = () => {
 		};
 	}, [
 		client,
+		controller,
 		errorResponseHandler,
 		isInternetReachable,
 		wpCredentials?.jwt,

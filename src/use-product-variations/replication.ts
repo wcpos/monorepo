@@ -9,10 +9,10 @@ export const getReplicationState = async (http, collection, parentID) => {
 		retryTime: 5000,
 		pull: {
 			async handler(lastCheckpoint, batchSize) {
-				const unsyncedDocs = collection.unsyncedIds$.getValue();
-				const syncedDocs = collection.syncedIds$.getValue();
+				// const unsyncedDocs = collection.unsyncedIds$.getValue();
+				// const syncedDocs = collection.syncedIds$.getValue();
 
-				if (unsyncedDocs.length === 0) {
+				if (true) {
 					return {
 						documents: [],
 						checkpoint: null,
@@ -53,6 +53,7 @@ export const getReplicationState = async (http, collection, parentID) => {
 	});
 
 	replicationState.error$.subscribe((error) => {
+		debugger;
 		console.log('something was wrong');
 		console.dir(error);
 	});

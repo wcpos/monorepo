@@ -9,10 +9,10 @@ export const getReplicationState = async (http, collection) => {
 		retryTime: 5000,
 		pull: {
 			async handler(lastCheckpoint, batchSize) {
-				const unsyncedDocs = collection.unsyncedIds$.getValue();
+				const pullRemoteIds = collection.pullRemoteIds$.getValue();
 				const syncedDocs = collection.syncedIds$.getValue();
 
-				if (unsyncedDocs.length === 0) {
+				if (pullRemoteIds.length === 0) {
 					return {
 						documents: [],
 						checkpoint: null,
@@ -22,8 +22,8 @@ export const getReplicationState = async (http, collection) => {
 				const params = {};
 
 				// choose the smallest array, max of 1000
-				if (syncedDocs.length > unsyncedDocs.length) {
-					params.include = unsyncedDocs.slice(0, 1000).join(',');
+				if (syncedDocs.length > pullRemoteIds.length) {
+					params.include = pullRemoteIds.slice(0, 1000).join(',');
 				} else {
 					params.exclude = syncedDocs.slice(0, 1000).join(',');
 				}

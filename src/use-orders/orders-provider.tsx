@@ -104,6 +104,9 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 				// sort the results
 				map((result) => {
 					return orderBy(result, [q.sortBy], [q.sortDirection]);
+				}),
+				tap((res) => {
+					console.log(res);
 				})
 			);
 		})
