@@ -3,13 +3,13 @@ import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource, useObservableState } from 'observable-hooks';
 import useStore from '@wcpos/hooks/src/use-store';
+import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
 import { orderBy } from '@shelf/fast-natural-order-by';
 import useRestHttpClient from '../use-rest-http-client';
-import { getAuditIdReplicationState } from './id-audit';
 import { getReplicationState } from './replication';
 
 type ProductVariationDocument =
@@ -39,14 +39,16 @@ interface ProductVariationsProviderProps {
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
+const replicationMap = new Map();
+
 const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsProviderProps) => {
 	// const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.variations;
 	const http = useRestHttpClient();
-	const replicationStates = React.useRef({ audit: null, sync: null });
 	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
 	const variationIds = useObservableState(parent.variations$, parent.variations);
+	const { isConnected } = useOnlineStatus();
 
 	/**
 	 *
@@ -61,43 +63,48 @@ const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsPr
 	// );
 
 	/**
-	 * Start id audit
+	 *
 	 */
-	// React.useEffect(() => {
-	// 	const replicationState = getAuditIdReplicationState(http, collection);
-	// 	replicationStates.current.audit = replicationState;
-
-	// 	return function cleanUp() {
-	// 		replicationState.then((result) => {
-	// 			result.cancel();
-	// 		});
-	// 	};
-	// }, [collection, http]);
+	React.useEffect(() => {
+		if (!isConnected) {
+			replicationMap.forEach((replicationState) => {
+				replicationState.then((result) => {
+					result.cancel();
+				});
+			});
+		}
+	}, [isConnected]);
 
 	/**
 	 * Start replication
+	 * - audit id (checks for deleted or new ids on server)
+	 * - replication (syncs all data and checks for modified data)
 	 */
 	React.useEffect(() => {
-		const replicationState = getReplicationState(http, collection, parent.id);
-		replicationStates.current.sync = replicationState;
+		if (!replicationMap.get(`sync-${parent.id}`)) {
+			replicationMap.set(`sync-${parent.id}`, getReplicationState(http, collection, parent));
+		}
 
 		return function cleanUp() {
-			replicationState.then((result) => {
-				result.cancel();
+			replicationMap.forEach((replicationState) => {
+				replicationState.then((result) => {
+					result.cancel();
+				});
 			});
 		};
-	}, [collection, http, parent.id]);
+	}, [collection, http, parent]);
 
 	/**
 	 *
 	 */
 	const sync = React.useCallback(() => {
-		// const { audit } = replicationStates.current;
-		// if (audit) {
-		// 	audit.then((result) => {
-		// 		result.run();
-		// 	});
-		// }
+		const audit = replicationMap.get('audit');
+
+		if (audit) {
+			audit.then((result) => {
+				result.run();
+			});
+		}
 	}, []);
 
 	/**
@@ -132,7 +139,6 @@ const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsPr
 		storeDB,
 		collection,
 		http,
-		replicationStates,
 		showOutOfStock,
 		sync,
 	});

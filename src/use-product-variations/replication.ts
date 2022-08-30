@@ -1,7 +1,7 @@
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 import map from 'lodash/map';
 
-export const getReplicationState = async (http, collection, parentID) => {
+export const getReplicationState = async (http, collection, parent) => {
 	const replicationState = replicateRxCollection({
 		collection,
 		replicationIdentifier: `${collection.name}-replication`,
@@ -9,30 +9,40 @@ export const getReplicationState = async (http, collection, parentID) => {
 		retryTime: 5000,
 		pull: {
 			async handler(lastCheckpoint, batchSize) {
-				// const unsyncedDocs = collection.unsyncedIds$.getValue();
-				// const syncedDocs = collection.syncedIds$.getValue();
+				const variations = await parent.populate('variations');
+				const pullRemoteIds = [];
+				const syncedIds = [];
 
-				if (true) {
+				if (variations.length !== parent.variations.length) {
+					throw Error('Mismatch between parent variations and database');
+				}
+
+				variations.forEach((variation) => {
+					if (variation.date_modified_gmt) {
+						syncedIds.push(variation.id);
+					} else {
+						pullRemoteIds.push(variation.id);
+					}
+				});
+
+				if (pullRemoteIds.length === 0) {
 					return {
 						documents: [],
 						checkpoint: null,
 					};
 				}
 
-				const params = {
-					order: 'asc',
-					orderby: 'title',
-				};
+				const params = {};
 
 				// choose the smallest array, max of 1000
-				if (syncedDocs.length > unsyncedDocs.length) {
-					params.include = unsyncedDocs.slice(0, 1000).join(',');
+				if (syncedIds.length > pullRemoteIds.length) {
+					params.include = pullRemoteIds.slice(0, 1000).join(',');
 				} else {
-					params.exclude = syncedDocs.slice(0, 1000).join(',');
+					params.exclude = syncedIds.slice(0, 1000).join(',');
 				}
 
 				const response = await http
-					.get(`products/${parentID}/variations`, {
+					.get(`products/${parent.id}/variations`, {
 						params,
 					})
 					.catch((error) => {
@@ -53,9 +63,14 @@ export const getReplicationState = async (http, collection, parentID) => {
 	});
 
 	replicationState.error$.subscribe((error) => {
-		debugger;
 		console.log('something was wrong');
-		console.dir(error);
+		if (error.parameters.errors) {
+			error.parameters.errors.forEach((err) => {
+				console.error(err);
+			});
+		} else {
+			console.dir(error);
+		}
 	});
 
 	return replicationState;

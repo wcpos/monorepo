@@ -3,6 +3,7 @@ import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource, useObservablePickState } from 'observable-hooks';
 import useStore from '@wcpos/hooks/src/use-store';
+import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
@@ -40,12 +41,14 @@ interface TaxesProviderProps {
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
+const replicationMap = new Map();
+
 const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
 	const { storeDB, store } = useStore();
 	const collection = storeDB.collections.taxes;
 	const http = useRestHttpClient();
-	const replicationStates = React.useRef({ audit: null, sync: null });
+	const { isConnected } = useOnlineStatus();
 	const settings = useObservablePickState(
 		store.$,
 		() => ({
@@ -79,29 +82,37 @@ const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 	);
 
 	/**
-	 * Start id audit
+	 *
 	 */
 	React.useEffect(() => {
-		const replicationState = getAuditIdReplicationState(http, collection);
-		replicationStates.current.audit = replicationState;
-
-		return function cleanUp() {
-			replicationState.then((result) => {
-				result.cancel();
+		if (!isConnected) {
+			replicationMap.forEach((replicationState) => {
+				replicationState.then((result) => {
+					result.cancel();
+				});
 			});
-		};
-	}, [collection, http]);
+		}
+	}, [isConnected]);
 
 	/**
 	 * Start replication
+	 * - audit id (checks for deleted or new ids on server)
+	 * - replication (syncs all data and checks for modified data)
 	 */
 	React.useEffect(() => {
-		const replicationState = getReplicationState(http, collection);
-		replicationStates.current.sync = replicationState;
+		if (!replicationMap.get('audit')) {
+			replicationMap.set('audit', getAuditIdReplicationState(http, collection));
+		}
+
+		if (!replicationMap.get('sync')) {
+			replicationMap.set('sync', getReplicationState(http, collection));
+		}
 
 		return function cleanUp() {
-			replicationState.then((result) => {
-				result.cancel();
+			replicationMap.forEach((replicationState) => {
+				replicationState.then((result) => {
+					result.cancel();
+				});
 			});
 		};
 	}, [collection, http]);
@@ -109,8 +120,8 @@ const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 	/**
 	 *
 	 */
-	const runReplication = React.useCallback(() => {
-		const { audit } = replicationStates.current;
+	const sync = React.useCallback(() => {
+		const audit = replicationMap.get('audit');
 
 		if (audit) {
 			audit.then((result) => {
@@ -169,10 +180,10 @@ const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 			// query: query$.getValue(),
 			setQuery,
 			resource,
-			runReplication,
+			sync,
 			settings,
 		}),
-		[query$, resource, setQuery, runReplication, settings]
+		[query$, resource, setQuery, sync, settings]
 	);
 
 	return <TaxesContext.Provider value={value}>{children}</TaxesContext.Provider>;

@@ -3,6 +3,7 @@ import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
 import useStore from '@wcpos/hooks/src/use-store';
+import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
@@ -37,11 +38,14 @@ interface OrdersProviderProps {
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
+const replicationMap = new Map();
+
 const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.orders;
 	const http = useRestHttpClient();
+	const { isConnected } = useOnlineStatus();
 
 	/**
 	 *
@@ -56,30 +60,53 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 	);
 
 	/**
-	 * Start id audit
+	 *
 	 */
 	React.useEffect(() => {
-		const replicationState = getAuditIdReplicationState(http, collection);
+		if (!isConnected) {
+			replicationMap.forEach((replicationState) => {
+				replicationState.then((result) => {
+					result.cancel();
+				});
+			});
+		}
+	}, [isConnected]);
+
+	/**
+	 * Start replication
+	 * - audit id (checks for deleted or new ids on server)
+	 * - replication (syncs all data and checks for modified data)
+	 */
+	React.useEffect(() => {
+		if (!replicationMap.get('audit')) {
+			replicationMap.set('audit', getAuditIdReplicationState(http, collection));
+		}
+
+		if (!replicationMap.get('sync')) {
+			replicationMap.set('sync', getReplicationState(http, collection));
+		}
 
 		return function cleanUp() {
-			replicationState.then((result) => {
-				result.cancel();
+			replicationMap.forEach((replicationState) => {
+				replicationState.then((result) => {
+					result.cancel();
+				});
 			});
 		};
 	}, [collection, http]);
 
 	/**
-	 * Start replication
+	 *
 	 */
-	React.useEffect(() => {
-		const replicationState = getReplicationState(http, collection);
+	const sync = React.useCallback(() => {
+		const audit = replicationMap.get('audit');
 
-		return function cleanUp() {
-			replicationState.then((result) => {
-				result.cancel();
+		if (audit) {
+			audit.then((result) => {
+				result.run();
 			});
-		};
-	}, [collection, http]);
+		}
+	}, []);
 
 	/**
 	 *
@@ -124,8 +151,9 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 			setQuery,
 			resource,
 			collection,
+			sync,
 		}),
-		[query$, resource, setQuery, collection]
+		[query$, resource, setQuery, collection, sync]
 	);
 
 	useWhyDidYouUpdate('OrdersProvider', {
@@ -137,6 +165,7 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 		storeDB,
 		collection,
 		http,
+		sync,
 	});
 
 	return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>;

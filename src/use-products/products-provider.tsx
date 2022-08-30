@@ -3,6 +3,7 @@ import { BehaviorSubject, combineLatest } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource, useObservableState } from 'observable-hooks';
 import useStore from '@wcpos/hooks/src/use-store';
+import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import _map from 'lodash/map';
 import _set from 'lodash/set';
@@ -38,13 +39,15 @@ interface ProductsProviderProps {
 
 const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
 
+const replicationMap = new Map();
+
 const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.products;
 	const http = useRestHttpClient();
-	const replicationStates = React.useRef({ audit: null, sync: null });
 	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
+	const { isConnected } = useOnlineStatus();
 
 	/**
 	 *
@@ -59,29 +62,37 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 	);
 
 	/**
-	 * Start id audit
+	 *
 	 */
 	React.useEffect(() => {
-		const replicationState = getAuditIdReplicationState(http, collection);
-		replicationStates.current.audit = replicationState;
-
-		return function cleanUp() {
-			replicationState.then((result) => {
-				result.cancel();
+		if (!isConnected) {
+			replicationMap.forEach((replicationState) => {
+				replicationState.then((result) => {
+					result.cancel();
+				});
 			});
-		};
-	}, [collection, http]);
+		}
+	}, [isConnected]);
 
 	/**
 	 * Start replication
+	 * - audit id (checks for deleted or new ids on server)
+	 * - replication (syncs all data and checks for modified data)
 	 */
 	React.useEffect(() => {
-		const replicationState = getReplicationState(http, collection);
-		replicationStates.current.sync = replicationState;
+		if (!replicationMap.get('audit')) {
+			replicationMap.set('audit', getAuditIdReplicationState(http, collection));
+		}
+
+		if (!replicationMap.get('sync')) {
+			replicationMap.set('sync', getReplicationState(http, collection));
+		}
 
 		return function cleanUp() {
-			replicationState.then((result) => {
-				result.cancel();
+			replicationMap.forEach((replicationState) => {
+				replicationState.then((result) => {
+					result.cancel();
+				});
 			});
 		};
 	}, [collection, http]);
@@ -90,7 +101,7 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 	 *
 	 */
 	const sync = React.useCallback(() => {
-		const { audit } = replicationStates.current;
+		const audit = replicationMap.get('audit');
 
 		if (audit) {
 			audit.then((result) => {
@@ -164,7 +175,6 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 		storeDB,
 		collection,
 		http,
-		replicationStates,
 		showOutOfStock,
 		sync,
 	});

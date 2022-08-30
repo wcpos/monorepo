@@ -16,6 +16,13 @@ export const getAuditIdReplicationState = async (http, collection) => {
 						console.log(error);
 					});
 
+				/**
+				 * What to do when server is unreachable?
+				 */
+				if (!response?.data) {
+					throw Error('No response from server');
+				}
+
 				const documents = await collection.auditRestApiIds(response?.data);
 
 				return {
