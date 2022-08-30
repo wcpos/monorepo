@@ -3,6 +3,7 @@ import map from 'lodash/map';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 import isPlainObject from 'lodash/isPlainObject';
+import isInteger from 'lodash/isInteger';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb').RxCollection;
@@ -27,11 +28,16 @@ async function preInsertOrSave(this: RxCollection, data: any) {
 	const waitForAllProps = map(hasChildren, async (object, key) => {
 		const childCollection = get(this, `database.collections.${object?.ref}`);
 
-		if (childCollection && isJSONArray(data[key])) {
+		// if (childCollection && isJSONArray(data[key])) {
+		if (childCollection) {
 			const waitForUpsertChildren = data[key].map(async (item) => {
 				// only upsert if it's a plain object
 				if (item && isPlainObject(item)) {
 					return childCollection.upsert(childCollection.parseRestResponse(item));
+				}
+				// what about case like variations? an array of integers
+				if (item && isInteger(item)) {
+					return childCollection.upsert(childCollection.parseRestResponse({ id: item }));
 				}
 				return Promise.resolve();
 			});

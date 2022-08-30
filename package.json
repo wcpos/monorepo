@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.19",
+	"version": "1.0.20",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -26,11 +26,11 @@
 		"observable-hooks": "4.2.0",
 		"random-token": "^0.0.8",
 		"react": "18.2.0",
-		"rxdb": "13.0.0-beta.22",
+		"rxdb": "13.0.0-beta.26",
 		"rxjs": "7.5.6"
 	},
 	"devDependencies": {
-		"@types/jest": "^28.1.8",
+		"@types/jest": "^29.0.0",
 		"@types/lodash": "4.14.184",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
