@@ -33,7 +33,7 @@
     "@expo/config-plugins": "^5.0.1",
     "@types/react": "~18.0.17",
     "@types/react-dom": "~18.0.6",
-    "@types/react-native": "~0.69.5",
+    "@types/react-native": "~0.69.6",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",

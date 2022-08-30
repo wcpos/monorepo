@@ -8,6 +8,7 @@ const workspaceRoot = path.resolve(__dirname, '../..');
 const config = getDefaultConfig(__dirname);
 
 config.watchFolders = [workspaceRoot, './.storybook'];
+config.resolver.disableHierarchicalLookup = true;
 config.resolver.nodeModulesPath = [
 	path.resolve(projectRoot, 'node_modules'),
 	path.resolve(workspaceRoot, 'node_modules'),

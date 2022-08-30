@@ -1,37 +1,46 @@
 {
-	"expo": {
-		"name": "wcpos-monorepo-app-with-flipper",
-		"slug": "wcpos-monorepo-app-with-flipper",
-		"owner": "kilbot",
-		"version": "1.0.0",
-		"jsEngine": "hermes",
-		"orientation": "portrait",
-		"icon": "./assets/icon.png",
-		"splash": {
-			"image": "./assets/splash.png",
-			"resizeMode": "contain",
-			"backgroundColor": "#ffffff"
-		},
-		"updates": {
-			"fallbackToCacheTimeout": 0
-		},
-		"assetBundlePatterns": ["**/*"],
-		"ios": {
-			"bundleIdentifier": "com.wcpos.client.flipper",
-			"buildNumber": "1.0.0",
-			"supportsTablet": true
-		},
-		"android": {
-			"package": "com.wcpos.client.flipper",
-			"versionCode": 400010000,
-			"adaptiveIcon": {
-				"foregroundImage": "./assets/adaptive-icon.png",
-				"backgroundColor": "#FFFFFF"
-			}
-		},
-		"web": {
-			"favicon": "./assets/favicon.png"
-		},
-		"plugins": ["expo-community-flipper"]
-	}
+  "expo": {
+    "name": "wcpos-monorepo-app-with-flipper",
+    "slug": "wcpos-monorepo-app-with-flipper",
+    "owner": "kilbot",
+    "version": "1.0.0",
+    "jsEngine": "hermes",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.wcpos.client.flipper",
+      "buildNumber": "1.0.0",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.wcpos.client.flipper",
+      "versionCode": 400010000,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-community-flipper"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2a051d9c-1c4c-40e2-98c2-f87ee7b6e485"
+      }
+    }
+  }
 }

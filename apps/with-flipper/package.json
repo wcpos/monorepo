@@ -38,7 +38,7 @@
     "react-native-pager-view": "5.4.25",
     "react-native-reanimated": "~2.10.0",
     "react-native-screens": "~3.17.0",
-    "react-native-svg": "13.0.0",
+    "react-native-svg": "13.1.0",
     "react-native-web": "~0.18.8"
   },
   "devDependencies": {
@@ -46,7 +46,7 @@
     "@expo/webpack-config": "^0.17.2",
     "@types/react": "~18.0.17",
     "@types/react-dom": "~18.0.6",
-    "@types/react-native": "~0.69.5",
+    "@types/react-native": "~0.69.6",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
