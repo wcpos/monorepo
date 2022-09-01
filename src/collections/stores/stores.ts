@@ -1,5 +1,5 @@
 import schema from './schema.json';
-// import DatabaseService from '../../index';
+import { removeStoreDB } from '../..';
 
 export type StoreSchema = import('./interface').WCPOSStoreSchema;
 export type StoreDocument = import('rxdb').RxDocument<StoreSchema, StoreMethods>;
@@ -19,10 +19,7 @@ function sanitizeStoreName(id: string) {
  *
  */
 async function preRemove(this: StoreCollection, plainData: any, store: StoreDocument) {
-	// @ts-ignore
-	const storeDB = DatabaseService.getStoreDB(sanitizeStoreName(plainData.localID));
-	// @ts-ignore
-	return storeDB.remove();
+	return removeStoreDB(plainData.localID);
 }
 
 export const stores = {
@@ -31,12 +28,12 @@ export const stores = {
 	// methods: {},
 	// attachments: {},
 	options: {
-		// middlewares: {
-		// 	preRemove: {
-		// 		handle: preRemove,
-		// 		parallel: false,
-		// 	},
-		// },
+		middlewares: {
+			preRemove: {
+				handle: preRemove,
+				parallel: false,
+			},
+		},
 	},
 	// migrationStrategies: {},
 	// autoMigrate: true,

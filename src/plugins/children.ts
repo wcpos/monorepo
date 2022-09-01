@@ -18,6 +18,14 @@ const isJSONArray = (data: any) => {
 };
 
 /**
+ * Check if the given value is a JSON array
+ * Note: empty arrays should return false
+ */
+const isIntegerArray = (data: any) => {
+	return Array.isArray(data) && data.length > 0 && data.every((item) => isInteger(item));
+};
+
+/**
  *
  */
 async function preInsertOrSave(this: RxCollection, data: any) {
@@ -28,23 +36,35 @@ async function preInsertOrSave(this: RxCollection, data: any) {
 	const waitForAllProps = map(hasChildren, async (object, key) => {
 		const childCollection = get(this, `database.collections.${object?.ref}`);
 
-		// if (childCollection && isJSONArray(data[key])) {
+		/**
+		 * This is fragile
+		 * - plain JSON is okay, that's data from the WC REST API
+		 * - integers .. most likely something like product variations, but could be edge cases
+		 *
+		 * Do we really want to update the children for each parent save?
+		 * ie: it could be changing something unrelated
+		 */
 		if (childCollection) {
-			const waitForUpsertChildren = data[key].map(async (item) => {
-				// only upsert if it's a plain object
-				if (item && isPlainObject(item)) {
-					return childCollection.upsert(childCollection.parseRestResponse(item));
-				}
-				// what about case like variations? an array of integers
-				if (item && isInteger(item)) {
-					return childCollection.upsert(childCollection.parseRestResponse({ id: item }));
-				}
-				return Promise.resolve();
-			});
+			if (isJSONArray(data[key]) || isIntegerArray(data[key])) {
+				console.log(`Upserting children for ${this.name}.${key}`);
+				const waitForUpsertChildren = data[key].map(async (item) => {
+					// only upsert if it's a plain object
+					if (item && isPlainObject(item)) {
+						return childCollection.upsert(childCollection.parseRestResponse(item));
+					}
+					// what about case like variations? an array of integers
+					if (item && isInteger(item)) {
+						return childCollection.upsert(childCollection.parseRestResponse({ id: item }));
+					}
+					return Promise.resolve();
+				});
 
-			return Promise.all(waitForUpsertChildren).then((docs) => {
-				data[key] = docs.map((doc) => doc._id);
-			});
+				return Promise.all(waitForUpsertChildren).then((docs) => {
+					if (docs.length > 0) {
+						data[key] = docs.filter((doc) => !!doc).map((doc) => doc._id);
+					}
+				});
+			}
 		}
 
 		return Promise.resolve().catch((err) => {

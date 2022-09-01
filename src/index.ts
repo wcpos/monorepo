@@ -39,5 +39,5 @@ export type { UserDatabase, UserDatabaseCollections } from './users-db';
 export type { StoreDatabase, StoreDatabaseCollections } from './stores-db';
 
 export { userDBPromise } from './users-db';
-export { storeDBPromise } from './stores-db';
+export { storeDBPromise, removeStoreDB } from './stores-db';
 export { removeDB } from './create-db';

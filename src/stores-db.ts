@@ -48,3 +48,11 @@ export function storeDBPromise(id: string) {
 
 	return db;
 }
+
+/**
+ * creates the Store database
+ */
+export function removeStoreDB(id: string) {
+	const name = sanitizeStoreName(id);
+	return removeDB(name);
+}

@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.20",
+	"version": "1.0.21",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -22,11 +22,11 @@
 		"ajv": "8.11.0",
 		"ajv-formats": "2.1.1",
 		"expo-sqlite": "^10.3.0",
-		"fast-text-encoding": "^1.0.4",
+		"fast-text-encoding": "^1.0.6",
 		"observable-hooks": "4.2.0",
 		"random-token": "^0.0.8",
 		"react": "18.2.0",
-		"rxdb": "13.0.0-beta.26",
+		"rxdb": "13.0.0-beta.27",
 		"rxjs": "7.5.6"
 	},
 	"devDependencies": {

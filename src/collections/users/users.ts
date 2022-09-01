@@ -60,7 +60,7 @@ const methods: UserMethods = {
 			oldData.sites = pull(oldData.sites || [], site.localID);
 			return oldData;
 		});
-		await site.remove();
+		return site.remove();
 	},
 
 	/**
