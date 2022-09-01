@@ -1,7 +1,7 @@
 import * as React from 'react';
 import get from 'lodash/get';
 import find from 'lodash/find';
-import http from '@wcpos/core/src/lib/http';
+import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import Platform from '@wcpos/core/src/lib/platform';
 import useAuth from '@wcpos/hooks/src/use-auth';
 import Url from '@wcpos/core/src/lib/url-parse';
@@ -26,6 +26,7 @@ const useSiteConnect = () => {
 	const { user, userDB } = useAuth();
 	const [loading, setLoading] = React.useState(false);
 	const [error, setError] = React.useState(false);
+	const http = useHttpClient();
 
 	const onConnect = React.useCallback(
 		async (url: string): Promise<SiteDocument> => {

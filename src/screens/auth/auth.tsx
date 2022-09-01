@@ -7,7 +7,7 @@ import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
 import TextInput from '@wcpos/components/src/textinput';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import http from '@wcpos/core/src/lib/http';
+import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import useSiteConnect from './use-site-connect';
 import Sites from './sites';
 
@@ -16,6 +16,7 @@ import Sites from './sites';
  */
 const Auth = () => {
 	const { onConnect, loading, error } = useSiteConnect();
+	const http = useHttpClient();
 
 	const handleDemoLogin = async () => {
 		const site = await onConnect('https://wcposdev.wpengine.com/');

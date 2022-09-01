@@ -3,7 +3,7 @@ import { useNavigation, StackActions } from '@react-navigation/native';
 import Modal from '@wcpos/components/src/modal';
 import TextInput from '@wcpos/components/src/textinput';
 import Box from '@wcpos/components/src/box';
-import http from '@wcpos/core/src/lib/http';
+import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import useAuth from '@wcpos/hooks/src/use-auth';
 import get from 'lodash/get';
 
@@ -13,6 +13,7 @@ const Login = ({ route }) => {
 	const [username, setUsername] = React.useState('');
 	const [password, setPassword] = React.useState('');
 	const { site: _site, wpCredentials, userDB } = useAuth();
+	const http = useHttpClient();
 
 	const handleLogin = async () => {
 		let success = false;

@@ -25,7 +25,9 @@ const Site = ({ site, user, first }: SiteProps) => {
 	const handleRemoveSite = React.useCallback(
 		async (confirm: boolean) => {
 			if (!confirm) return;
-			await user.removeSite(site);
+			await user.removeSite(site).catch((err) => {
+				console.error(err);
+			});
 		},
 		[user, site]
 	);
