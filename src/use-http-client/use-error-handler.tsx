@@ -16,12 +16,20 @@ export const useErrorResponseHandler = () => {
 	const errorResponseHandler = React.useCallback(
 		(res: AxiosResponse) => {
 			if (!res) {
-				// console.log('CORS error?');
+				console.log('CORS error?');
 				addSnackbar({ message: 'Server is unavailable' });
 				return;
 			}
 
 			switch (res.status) {
+				case 0:
+					/**
+					 * This can happen for self-signed certificates, eg: development servers
+					 * The solution for web is to go to the site and manually trust the certificate
+					 * @TODO - what happens on desktop and mobile?
+					 */
+					addSnackbar({ message: 'The certificate for this server is invalid.' });
+					break;
 				case 400:
 					addSnackbar({ message: res.data.message });
 					break;

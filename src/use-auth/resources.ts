@@ -127,9 +127,17 @@ const selected$ = userDB$.pipe(
 	}),
 
 	/**
-	 *
+	 * @TODO - do sanity check: store should be in wpCredentials, creds in site, site in user
 	 */
 	map(([site, wpCredentials, store]) => {
+		if (!site || !wpCredentials || !store) {
+			return {
+				site: null,
+				wpCredentials: null,
+				store: null,
+			};
+		}
+
 		return {
 			site,
 			wpCredentials,
