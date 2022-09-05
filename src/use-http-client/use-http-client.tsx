@@ -1,7 +1,7 @@
 import * as React from 'react';
-import axios from 'axios';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import set from 'lodash/set';
+import axios from './http';
 import { useErrorResponseHandler } from './use-error-handler';
 import useOnlineStatus from '../use-online-status';
 
