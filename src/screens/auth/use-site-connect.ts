@@ -62,7 +62,7 @@ const useSiteConnect = () => {
 						const wcNamespace = 'wc/v3';
 						const wcposNamespace = 'wcpos/v1';
 
-						return http.get(wpApiUrl).then((res) => {
+						return http.get(wpApiUrl, { headers: { 'X-WCPOS': 1 } }).then((res) => {
 							const data = get(res, 'data') as WpJsonResponse;
 							const namespaces = get(data, 'namespaces');
 							if (!namespaces) {

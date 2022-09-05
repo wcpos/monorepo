@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/core",
-	"version": "1.0.24",
+	"version": "1.0.25",
 	"description": "The core WooCommerce POS app",
 	"author": "kilbot <paul@kilbot.com>",
 	"license": "MIT",
@@ -51,7 +51,7 @@
 		"react-native-svg": "13.1.0",
 		"react-native-web": "~0.18.9",
 		"react-native-web-linear-gradient": "1.1.2",
-		"react-native-webview": "11.23.0",
+		"react-native-webview": "11.23.1",
 		"react-test-renderer": "18.2.0",
 		"react-to-print": "^2.14.7",
 		"rxjs": "7.5.6",
@@ -60,7 +60,7 @@
 	},
 	"devDependencies": {
 		"@testing-library/jest-dom": "5.16.5",
-		"@testing-library/react": "13.3.0",
+		"@testing-library/react": "^13.4.0",
 		"@testing-library/react-hooks": "8.0.1",
 		"@types/core-js": "^2.5.5",
 		"@types/jest": "^29.0.0",
