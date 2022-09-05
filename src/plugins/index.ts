@@ -23,6 +23,7 @@ import childrenPlugin from './children';
 // import { RxDBAjvValidatePlugin } from './validate';
 import middlewaresPlugin from './middlewares';
 import toJSONPlugin from './to-json';
+// import deleteDBPlugin from './delete-db';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -60,3 +61,4 @@ addRxPlugin(childrenPlugin);
 addRxPlugin(middlewaresPlugin);
 addRxPlugin(toJSONPlugin);
 addRxPlugin(RxDBGenerateIdPlugin); // must be after parse-rest-response
+// addRxPlugin(deleteDBPlugin);

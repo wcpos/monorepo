@@ -4,24 +4,35 @@ import type { SQLiteQueryWithParams } from './plugins/sqlite';
 
 const sqliteBasics = {
 	open: async (name: string) => {
-		return window.sqlite.open(name);
+		return window.ipcRenderer.invoke('sqlite', { type: 'open', name });
 	},
 	all: async (db, queryWithParams: SQLiteQueryWithParams) => {
 		console.log(`all sql: ${queryWithParams.query}`, queryWithParams.params);
 
-		const result = await window.sqlite.all(db.name, queryWithParams);
+		const result = await window.ipcRenderer.invoke('sqlite', {
+			type: 'all',
+			name: db.name,
+			sql: queryWithParams,
+		});
+
 		console.log(result);
+
 		return result;
 	},
 	run: async (db, queryWithParams: SQLiteQueryWithParams) => {
 		console.log(`run sql: ${queryWithParams.query}`, queryWithParams.params);
-		console.log(db);
 
-		await window.sqlite.run(db.name, queryWithParams);
+		await window.ipcRenderer.invoke('sqlite', {
+			type: 'run',
+			name: db.name,
+			sql: queryWithParams,
+		});
 	},
-	close: async () => {
-		debugger;
-		// window.sqlite.close();
+	close: async (db) => {
+		return window.ipcRenderer.invoke('sqlite', {
+			type: 'close',
+			name: db.name,
+		});
 	},
 	journalMode: '',
 };
