@@ -1,6 +1,7 @@
 import { switchMap } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
 import get from 'lodash/get';
+import pull from 'lodash/pull';
 import schema from './schema.json';
 
 export type SiteSchema = import('./interface').SiteSchema;
@@ -74,6 +75,18 @@ const methods: SiteMethods = {
 		});
 
 		return wpCredentials;
+	},
+
+	/**
+	 *
+	 */
+	async removeWpCredentials(this: SiteDocument, wpCredentials: WPCredentialsDocument) {
+		// await this.update({ $pull: { sites: site.localID } });
+		await this.atomicUpdate((oldData) => {
+			pull(oldData.wp_credentials || [], wpCredentials.localID);
+			return oldData;
+		});
+		return wpCredentials.remove();
 	},
 
 	/**
