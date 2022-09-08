@@ -13,7 +13,7 @@
     "eject": "expo eject"
   },
   "dependencies": {
-    "expo": "^46.0.9",
+    "expo": "^46.0.10",
     "expo-dev-client": "~1.2.1",
     "expo-splash-screen": "~0.16.2",
     "expo-status-bar": "~1.4.0",
@@ -23,17 +23,17 @@
     "react-native": "0.69.5",
     "react-native-gesture-handler": "~2.6.0",
     "react-native-mmkv": "2.4.3",
-    "react-native-reanimated": "~2.10.0",
+    "react-native-reanimated": "2.6.0",
     "react-native-safe-area-context": "4.3.3",
     "react-native-screens": "~3.17.0",
-    "react-native-web": "~0.18.8"
+    "react-native-web": "~0.18.9"
   },
   "devDependencies": {
-    "@babel/core": "^7.18.13",
+    "@babel/core": "^7.19.0",
     "@expo/config-plugins": "^5.0.1",
-    "@types/react": "~18.0.17",
+    "@types/react": "^18.0.18",
     "@types/react-dom": "~18.0.6",
-    "@types/react-native": "~0.69.6",
+    "@types/react-native": "~0.69.8",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
