@@ -9,7 +9,15 @@ export const getReplicationState = async (http, collection, parent) => {
 		retryTime: 5000,
 		pull: {
 			async handler(lastCheckpoint, batchSize) {
-				const variations = await parent.populate('variations');
+				/**
+				 * Note: variations are integers but ids are strings so we can't use populate
+				 */
+				const variations = await collection
+					.findByIds(parent.variations.map((id) => String(id)) || [])
+					.then((res) => {
+						const valuesIterator = res.values();
+						return Array.from(valuesIterator) as any;
+					});
 				const pullRemoteIds = [];
 				const syncedIds = [];
 

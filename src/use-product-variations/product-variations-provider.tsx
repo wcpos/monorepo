@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BehaviorSubject, combineLatest } from 'rxjs';
+import { BehaviorSubject, combineLatest, from } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource, useObservableState } from 'observable-hooks';
 import useStore from '@wcpos/hooks/src/use-store';
@@ -108,7 +108,7 @@ const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsPr
 	}, []);
 
 	/**
-	 *
+	 * Note: variations are integers but ids are strings so we can't use populate
 	 */
 	const variations$ = collection
 		.findByIds$(variationIds?.map((id) => String(id)) || [])

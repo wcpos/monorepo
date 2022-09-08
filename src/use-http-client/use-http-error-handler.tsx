@@ -1,12 +1,15 @@
 import * as React from 'react';
-import { AxiosResponse } from 'axios';
 import { useNavigation } from '@react-navigation/native';
 import useSnackbar from '@wcpos/components/src/snackbar';
+import get from 'lodash/get';
+
+type AxiosResponse = import('axios').AxiosResponse;
+type AxiosError = import('axios').AxiosError;
 
 /**
  *
  */
-export const useErrorResponseHandler = () => {
+const useHttpErrorHandler = () => {
 	const navigation = useNavigation();
 	const addSnackbar = useSnackbar();
 
@@ -16,8 +19,6 @@ export const useErrorResponseHandler = () => {
 	const errorResponseHandler = React.useCallback(
 		(res: AxiosResponse) => {
 			if (!res) {
-				console.log('CORS error?');
-				addSnackbar({ message: 'Server is unavailable' });
 				return;
 			}
 
@@ -27,8 +28,10 @@ export const useErrorResponseHandler = () => {
 					 * This can happen for self-signed certificates, eg: development servers
 					 * The solution for web is to go to the site and manually trust the certificate
 					 * @TODO - what happens on desktop and mobile?
+					 *
+					 * status = 0
 					 */
-					addSnackbar({ message: 'The certificate for this server is invalid.' });
+					addSnackbar({ message: 'Domain is invalid' });
 					break;
 				case 400:
 					addSnackbar({ message: res.data.message });
@@ -60,5 +63,31 @@ export const useErrorResponseHandler = () => {
 		[addSnackbar, navigation]
 	);
 
-	return errorResponseHandler;
+	/**
+	 *
+	 */
+	const errorHandler = React.useCallback(
+		(error: AxiosError | Error | undefined) => {
+			const response = get(error, 'response');
+			const request = get(error, 'request');
+
+			if (response) {
+				// client received an error response (5xx, 4xx)
+				errorResponseHandler(response);
+			} else if (request) {
+				// client never received a response, or request never left
+				console.log(request);
+				addSnackbar({ message: 'Server is unavailable' });
+			} else {
+				// anything else
+				console.log(error);
+				addSnackbar({ message: 'Network error' });
+			}
+		},
+		[addSnackbar, errorResponseHandler]
+	);
+
+	return errorHandler;
 };
+
+export default useHttpErrorHandler;

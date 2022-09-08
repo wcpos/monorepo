@@ -133,6 +133,7 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 					return orderBy(result, [q.sortBy], [q.sortDirection]);
 				}),
 				tap((res) => {
+					debugger;
 					console.log(res);
 				})
 			);
