@@ -35,19 +35,23 @@ const Login = ({ route }) => {
 		}
 
 		/** @TODO - use generic http with error handling */
-		const { data } = await http
-			.post(`${site?.wc_api_auth_url}/authorize`, {
-				username,
-				password,
+		const response = await http
+			.get(`${site?.wc_api_auth_url}/authorize`, {
+				auth: {
+					username,
+					password,
+				},
 			})
 			.catch((err) => {
 				debugger;
 			});
 
-		if (wpCredentials) {
-			success = await wpCredentials.atomicPatch(data);
-		} else {
-			success = await site?.addWpCredentials(data);
+		if (response) {
+			if (wpCredentials) {
+				success = await wpCredentials.atomicPatch(response.data);
+			} else {
+				success = await site?.addWpCredentials(response.data);
+			}
 		}
 
 		if (success) {

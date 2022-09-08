@@ -22,17 +22,19 @@ const Auth = () => {
 		const site = await onConnect('https://wcposdev.wpengine.com/');
 
 		if (site) {
-			const { data } = await http
-				.post(`${site?.wc_api_auth_url}/authorize`, {
-					username: 'demo',
-					password: 'demo',
+			const response = await http
+				.get(`${site?.wc_api_auth_url}/authorize`, {
+					auth: {
+						username: 'demo',
+						password: 'demo',
+					},
 				})
 				.catch((err) => {
 					debugger;
 				});
 
-			if (data) {
-				await site?.addWpCredentials(data);
+			if (response) {
+				await site?.addWpCredentials(response.data);
 			}
 		}
 	};

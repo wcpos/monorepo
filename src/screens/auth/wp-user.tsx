@@ -1,14 +1,9 @@
 import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
-import axios from 'axios';
-import get from 'lodash/get';
-import isEmpty from 'lodash/isEmpty';
-import forEach from 'lodash/forEach';
 import Pill from '@wcpos/components/src/pill';
-import Text from '@wcpos/components/src/text';
-import Button from '@wcpos/components/src/button';
 import Dialog, { useDialog } from '@wcpos/components/src/dialog';
 import useAuth from '@wcpos/hooks/src/use-auth';
+import useHttpClient from '@wcpos/hooks/src/use-http-client';
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
@@ -23,14 +18,16 @@ const WpUser = ({ site, wpUser }: Props) => {
 	const { login } = useAuth();
 	const stores = useObservableSuspense(wpUser.storesResource);
 	const { ref: dialogRef, open: openConfirmDialog } = useDialog();
+	const http = useHttpClient();
 
-	// 	/**
-	//  * Populate stores on first render
-	//  */
+	/**
+	 * Populate stores on first render
+	 * @TODO - get stores when user first authenticates
+	 */
 	React.useEffect(() => {
-		axios
+		http
 			.get(`${site.getWcposApiUrl()}/stores`, {
-				headers: { 'X-WCPOS': '1', Authorization: `Bearer ${wpUser.jwt}` },
+				headers: { Authorization: `Bearer ${wpUser.jwt}` },
 			})
 			.then((response) => {
 				// @ts-ignore
@@ -59,19 +56,9 @@ const WpUser = ({ site, wpUser }: Props) => {
 	 *
 	 */
 	const handleUserRemove = React.useCallback(
-		async (confirm) => {
+		async (confirm: boolean) => {
 			if (!confirm) return;
-			forEach(wpUser.stores, async (id) => {
-				// const db = await DatabaseService.getStoreDB(sanitizeStoreName(id));
-				// await db?.remove();
-			});
-			// need to remove wpUser from site from site
-			await site.update({
-				$pullAll: {
-					wpCredentials: [wpUser.localID],
-				},
-			});
-			await wpUser.remove();
+			await site.removeWpCredentials(wpUser);
 		},
 		[site, wpUser]
 	);

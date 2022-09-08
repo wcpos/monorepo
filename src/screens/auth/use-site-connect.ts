@@ -112,7 +112,7 @@ const useSiteConnect = () => {
 
 			return site;
 		},
-		[user, userDB]
+		[http, user, userDB.sites]
 	);
 
 	return { onConnect, loading, error };
