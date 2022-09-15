@@ -32,7 +32,7 @@
     "react-devtools-core": "4.25.0",
     "react-dom": "18.2.0",
     "react-native": "0.69.5",
-    "react-native-flipper": "0.163.0",
+    "react-native-flipper": "0.164.0",
     "react-native-gesture-handler": "^2.6.0",
     "react-native-get-random-values": "~1.8.0",
     "react-native-pager-view": "5.4.25",
@@ -42,16 +42,16 @@
     "react-native-web": "~0.18.9"
   },
   "devDependencies": {
-    "@babel/core": "^7.19.0",
+    "@babel/core": "^7.19.1",
     "@expo/webpack-config": "^0.17.2",
-    "@types/react": "^18.0.18",
+    "@types/react": "^18.0.20",
     "@types/react-dom": "~18.0.6",
-    "@types/react-native": "~0.69.8",
+    "@types/react-native": "~0.69.9",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
     "react-native-svg-transformer": "1.0.0",
-    "typescript": "^4.8.2"
+    "typescript": "^4.8.3"
   },
   "eslintConfig": {
     "extends": "@wcpos/eslint-config"

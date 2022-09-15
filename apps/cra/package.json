@@ -20,7 +20,7 @@
     "worker-loader": "3.0.8"
   },
   "devDependencies": {
-    "@types/react": "^18.0.18",
+    "@types/react": "^18.0.20",
     "@types/react-dom": "~18.0.6",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
@@ -30,7 +30,7 @@
     "customize-cra": "1.0.0",
     "react-app-rewired": "2.2.1",
     "react-scripts": "5.0.1",
-    "typescript": "4.8.2",
+    "typescript": "^4.8.3",
     "webpack-bundle-analyzer": "^4.6.1"
   },
   "eslintConfig": {
