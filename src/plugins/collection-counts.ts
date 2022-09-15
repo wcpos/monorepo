@@ -5,7 +5,7 @@ type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb/dist/types').RxCollection;
 
 // const usersCollections = ['logs', 'users', 'sites', 'wp_credentials', 'stores'];
-const collections = ['products', 'orders', 'customers', 'taxes'];
+const collections = ['products', 'orders', 'customers', 'taxes', 'variations'];
 
 const collectionCountsPlugin: RxPlugin = {
 	name: 'collection-counts',

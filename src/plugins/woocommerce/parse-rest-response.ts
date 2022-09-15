@@ -72,3 +72,10 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 
 	return plainData;
 }
+
+/**
+ *
+ */
+export function bulkParseRestResponse(this: RxCollection, dataArray: Record<string, unknown>[]) {
+	return dataArray.map((data) => parseRestResponse.call(this, data));
+}
