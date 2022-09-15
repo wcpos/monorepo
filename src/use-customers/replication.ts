@@ -48,6 +48,7 @@ export const getReplicationState = async (http, collection) => {
 			},
 			batchSize: 10,
 			async modifier(docData) {
+				await collection.upsertChildren(docData);
 				return collection.parseRestResponse(docData);
 			},
 		},

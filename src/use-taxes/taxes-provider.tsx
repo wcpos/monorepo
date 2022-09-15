@@ -140,30 +140,12 @@ const TaxesProvider = ({ children, initialQuery }: TaxesProviderProps) => {
 		switchMap((q) => {
 			const selector = {};
 
-			// const searchFields = ['username'];
-			// if (q.search) {
-			// 	selector.$or = searchFields.map((field) => ({
-			// 		[field]: { $regex: new RegExp(escape(q.search), 'i') },
-			// 	}));
-			// }
-			// _set(selector, ['username', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
-
 			const RxQuery = collection.find({ selector });
 
 			return RxQuery.$.pipe(
-				// sort the results
 				map((result) => result)
-				// @ts-ignore
-				// map((result) => {
-				// 	const array = Array.isArray(result) ? result : [];
-				// 	const productSorter = (product: any) => {
-				// 		if (q.sortBy === 'name') {
-				// 			// @TODO - this doens't work
-				// 			return product[q.sortBy].toLowerCase();
-				// 		}
-				// 		return product[q.sortBy];
-				// 	};
-				// 	return orderBy(array, [productSorter], [q.sortDirection]);
+				// tap((res) => {
+				// 	debugger;
 				// })
 			);
 		})

@@ -39,8 +39,8 @@ export const getAuditIdReplicationState = async (http, collection) => {
 
 	replicationState.error$.subscribe((error) => {
 		console.log('something was wrong');
-		if (error?.errors && Array.isArray(error.errors)) {
-			error.errors.map((err) => {
+		if (error?.parameters?.errors && Array.isArray(error.parameters.errors)) {
+			error.parameters.errors.map((err) => {
 				console.error(err);
 			});
 		} else {

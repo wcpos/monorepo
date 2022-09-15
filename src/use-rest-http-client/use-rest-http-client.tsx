@@ -8,11 +8,12 @@ import useHttpClient from '../use-http-client';
  */
 export const useRestHttpClient = () => {
 	const { site, wpCredentials } = useAuth();
+	const httpClient = useHttpClient();
 
 	/**
 	 *
 	 */
-	const instanceConfig = React.useMemo(() => {
+	const http = React.useMemo(() => {
 		const config = {
 			baseURL: site?.wc_api_url,
 		};
@@ -25,11 +26,13 @@ export const useRestHttpClient = () => {
 			set(config, ['headers', 'Authorization'], `Bearer ${wpCredentials?.jwt}`);
 		}
 
-		return config;
-	}, [site?.wc_api_url, wpCredentials?.jwt, wpCredentials?.wp_nonce]);
+		const instance = httpClient.create(config);
+
+		return instance;
+	}, [httpClient, site?.wc_api_url, wpCredentials?.jwt, wpCredentials?.wp_nonce]);
 
 	/**
 	 *
 	 */
-	return useHttpClient(instanceConfig);
+	return http;
 };

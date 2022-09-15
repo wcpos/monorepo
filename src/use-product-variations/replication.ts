@@ -18,20 +18,23 @@ export const getReplicationState = async (http, collection, parent) => {
 						const valuesIterator = res.values();
 						return Array.from(valuesIterator) as any;
 					});
-				const pullRemoteIds = [];
+				let pullRemoteIds = [];
 				const syncedIds = [];
 
-				if (variations.length !== parent.variations.length) {
-					throw Error('Mismatch between parent variations and database');
+				/**
+				 * If variations length is 0, it could be the first pull
+				 */
+				if (variations.length < parent.variations.length) {
+					pullRemoteIds = parent.variations;
+				} else {
+					variations.forEach((variation) => {
+						if (variation.date_modified_gmt) {
+							syncedIds.push(variation.id);
+						} else {
+							pullRemoteIds.push(variation.id);
+						}
+					});
 				}
-
-				variations.forEach((variation) => {
-					if (variation.date_modified_gmt) {
-						syncedIds.push(variation.id);
-					} else {
-						pullRemoteIds.push(variation.id);
-					}
-				});
 
 				if (pullRemoteIds.length === 0) {
 					return {
@@ -65,6 +68,7 @@ export const getReplicationState = async (http, collection, parent) => {
 			},
 			batchSize: 10,
 			async modifier(docData) {
+				await collection.upsertChildren(docData);
 				return collection.parseRestResponse(docData);
 			},
 		},

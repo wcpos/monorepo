@@ -1,20 +1,24 @@
 import * as React from 'react';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import set from 'lodash/set';
+import defaults from 'lodash/defaults';
 import http from './http';
 import useHttpErrorHandler from './use-http-error-handler';
 import useOnlineStatus from '../use-online-status';
 
 type AxiosRequestConfig = import('axios').AxiosRequestConfig;
-type AxiosInstance = import('axios').AxiosInstance;
 
 /**
  * Http Client provides a standard API for all platforms
  * also wraps request to provide a common error handler
  *
+ * NOTE: this hook makes axios.create unnecessary
+ * - axios.create is synchronous for web, but async for electron
+ * - axios.create creates more pain than it's worth
+ *
  * @TODO - how best to cancel requests
  */
-export const useHttpClient = (options: AxiosRequestConfig = {}) => {
+export const useHttpClient = () => {
 	const errorResponseHandler = useHttpErrorHandler();
 	const { isInternetReachable } = useOnlineStatus();
 	// const controller = React.useMemo(() => new AbortController(), []);
@@ -32,24 +36,25 @@ export const useHttpClient = (options: AxiosRequestConfig = {}) => {
 	 *
 	 */
 	const httpWrapper = React.useMemo(() => {
-		// signal: controller.signal,
-		const instance = http.create(options) as AxiosInstance;
+		let _defaultConfig = {};
 
 		/**
-		 *
+		 * @TODO - merge config with default?
 		 */
 		const request = async (config: AxiosRequestConfig = {}) => {
+			const _config = defaults(config, _defaultConfig);
+
 			/**
 			 * Add X-WCPOS header to every request
 			 */
-			if (config.method?.toLowerCase() !== 'head') {
-				set(config, ['headers', 'X-WCPOS'], 1);
+			if (_config.method?.toLowerCase() !== 'head') {
+				set(_config, ['headers', 'X-WCPOS'], 1);
 			}
 
 			/**
 			 *
 			 */
-			const response = await instance.request(config).catch((error) => {
+			const response = await http.request(_config).catch((error) => {
 				errorResponseHandler(error.response);
 			});
 
@@ -64,8 +69,14 @@ export const useHttpClient = (options: AxiosRequestConfig = {}) => {
 			return response;
 		};
 
-		return {
-			get: (url: string, config: AxiosRequestConfig = {}) => {
+		/**
+		 * API
+		 */
+		const api = {
+			/**
+			 *
+			 */
+			get(url: string, config: AxiosRequestConfig = {}) {
 				return request({
 					...config,
 					method: 'GET',
@@ -74,7 +85,10 @@ export const useHttpClient = (options: AxiosRequestConfig = {}) => {
 				});
 			},
 
-			post: (url: string, data: any, config: AxiosRequestConfig = {}) => {
+			/**
+			 *
+			 */
+			post(url: string, data: any, config: AxiosRequestConfig = {}) {
 				/**
 				 * @TODO - 'Content-Type': 'multipart/form-data'
 				 */
@@ -86,7 +100,7 @@ export const useHttpClient = (options: AxiosRequestConfig = {}) => {
 				});
 			},
 
-			put: (url: string, data: any, config: AxiosRequestConfig = {}) => {
+			put(url: string, data: any, config: AxiosRequestConfig = {}) {
 				/**
 				 * @TODO - 'Content-Type': 'multipart/form-data'
 				 */
@@ -98,7 +112,10 @@ export const useHttpClient = (options: AxiosRequestConfig = {}) => {
 				});
 			},
 
-			patch: (url: string, data: any, config: AxiosRequestConfig = {}) => {
+			/**
+			 *
+			 */
+			patch(url: string, data: any, config: AxiosRequestConfig = {}) {
 				/**
 				 * @TODO - 'Content-Type': 'multipart/form-data'
 				 */
@@ -110,7 +127,10 @@ export const useHttpClient = (options: AxiosRequestConfig = {}) => {
 				});
 			},
 
-			delete: (url: string, config: AxiosRequestConfig = {}) => {
+			/**
+			 *
+			 */
+			del(url: string, config: AxiosRequestConfig = {}) {
 				return request({
 					...config,
 					method: 'DELETE',
@@ -119,7 +139,10 @@ export const useHttpClient = (options: AxiosRequestConfig = {}) => {
 				});
 			},
 
-			head: (url: string, config: AxiosRequestConfig = {}) => {
+			/**
+			 *
+			 */
+			head(url: string, config: AxiosRequestConfig = {}) {
 				return request({
 					...config,
 					method: 'HEAD',
@@ -128,7 +151,18 @@ export const useHttpClient = (options: AxiosRequestConfig = {}) => {
 				});
 			},
 		};
-	}, [errorResponseHandler, options]);
+
+		/**
+		 * Exposed API
+		 */
+		return {
+			create: (config: AxiosRequestConfig = {}) => {
+				_defaultConfig = config;
+				return api;
+			},
+			...api,
+		};
+	}, [errorResponseHandler]);
 
 	/**
 	 *
