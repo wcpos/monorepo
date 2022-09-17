@@ -31,8 +31,7 @@ const PayButton = ({ order }: PayModalProps) => {
 			endpoint += `/${order.id}`;
 		}
 
-		const result = await http(endpoint, {
-			method: 'post',
+		const result = await http.post(endpoint, {
 			data,
 		});
 

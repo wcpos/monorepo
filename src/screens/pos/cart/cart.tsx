@@ -48,7 +48,7 @@ const Cart = ({ order }: CartProps) => {
 				style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
 			>
 				<ErrorBoundary>
-					<React.Suspense fallback={<Text>loading cart...</Text>}>
+					<React.Suspense fallback={<Text>loading cart items...</Text>}>
 						<Table cartResource={cartResource} ui={ui} />
 					</React.Suspense>
 				</ErrorBoundary>

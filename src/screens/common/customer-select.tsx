@@ -4,8 +4,9 @@ import useStore from '@wcpos/hooks/src/use-store';
 import useCustomers, { CustomersProvider } from '@wcpos/hooks/src/use-customers';
 import orderBy from 'lodash/orderBy';
 import { useTranslation } from 'react-i18next';
-import Combobox from '@wcpos/components/src/combobox';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import Combobox from '@wcpos/components/src/combobox';
+import Text from '@wcpos/components/src/text';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type StoreDatabase = import('@wcpos/database').StoreDatabase;
@@ -87,14 +88,21 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 	);
 };
 
-export default (props: CustomerSelectProps) => (
-	<CustomersProvider
-		initialQuery={{
+export default (props: CustomerSelectProps) => {
+	const initialQuery = React.useMemo(
+		() => ({
 			// search: '',
 			sortBy: 'last_name',
 			sortDirection: 'asc',
-		}}
-	>
-		<CustomerSelect {...props} />
-	</CustomersProvider>
-);
+		}),
+		[]
+	);
+
+	return (
+		<CustomersProvider initialQuery={initialQuery}>
+			<React.Suspense fallback={<Text>Loading Customer Select</Text>}>
+				<CustomerSelect {...props} />
+			</React.Suspense>
+		</CustomersProvider>
+	);
+};
