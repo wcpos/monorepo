@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BehaviorSubject, combineLatest } from 'rxjs';
+import { BehaviorSubject, combineLatest, of } from 'rxjs';
 import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
 import useStore from '@wcpos/hooks/src/use-store';
@@ -150,10 +150,9 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 			// query: query$.getValue(),
 			setQuery,
 			resource,
-			collection,
 			sync,
 		}),
-		[query$, resource, setQuery, collection, sync]
+		[query$, resource, setQuery, sync]
 	);
 
 	useWhyDidYouUpdate('OrdersProvider', {

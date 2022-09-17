@@ -14,11 +14,11 @@ const axiosOnElectronMain = {
 					type: 'request',
 					config,
 				})
-				.then((response) => {
-					if (response.status) {
-						resolve(response);
+				.then((result) => {
+					if (result.code) {
+						reject(result);
 					} else {
-						reject(response);
+						resolve(result);
 					}
 				});
 		});

@@ -21,7 +21,6 @@ const useHttpErrorHandler = () => {
 			if (!res) {
 				return;
 			}
-			debugger;
 
 			switch (res.status) {
 				case 0:

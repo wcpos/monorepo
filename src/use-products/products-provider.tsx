@@ -139,6 +139,7 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 			if (!showOutOfStock) {
 				selector.$or = [{ manage_stock: { $eq: false } }, { stock_quantity: { $gt: 0 } }];
 			}
+			console.log(selector);
 
 			const RxQuery = collection.find({ selector });
 

@@ -55,7 +55,7 @@ export const useHttpClient = () => {
 			 *
 			 */
 			const response = await http.request(_config).catch((error) => {
-				errorResponseHandler(error.response);
+				errorResponseHandler(error);
 			});
 
 			if (!response) {

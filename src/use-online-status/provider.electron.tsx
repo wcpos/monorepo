@@ -36,37 +36,23 @@ const OnlineStatusProvider = ({ children }: Props) => {
 		});
 
 		/**
-		 * Create axios instance (on main Electron thread)
-		 * @TODO - should I import useHttpClient here?
-		 * - this may make it circular, depending on how cancelled requests are handled
+		 *
 		 */
-		const httpPromise = window.ipcRenderer.invoke('axios', {
-			type: 'create',
-			config: {
-				method: 'head',
-				baseUrl: site?.wp_api_url,
-				timeout: 60 * 1000,
-			},
-		});
-
 		async function ping() {
-			/**
-			 *
-			 */
-			const instanceID = await httpPromise;
 			const response = await window.ipcRenderer.invoke('axios', {
 				type: 'request',
-				instanceID,
-				// config: {
-				// 	url: '',
-				// },
+				config: {
+					method: 'head',
+					url: site?.wp_api_url,
+					timeout: 60 * 1000,
+				},
 			});
 
 			if (response.status === 200) {
 				setStatus((prev) => ({ ...prev, isConnected: true }));
 			} else {
 				// wait for a while and try again
-				timeoutRef = setTimeout(ping, 5 * 1000);
+				timeoutRef = setTimeout(ping, 10 * 1000);
 			}
 		}
 
