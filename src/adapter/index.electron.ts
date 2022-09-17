@@ -22,11 +22,15 @@ const sqliteBasics = {
 	run: async (db, queryWithParams: SQLiteQueryWithParams) => {
 		console.log(`run sql: ${queryWithParams.query}`, queryWithParams.params);
 
-		await window.ipcRenderer.invoke('sqlite', {
-			type: 'run',
-			name: db.name,
-			sql: queryWithParams,
-		});
+		await window.ipcRenderer
+			.invoke('sqlite', {
+				type: 'run',
+				name: db.name,
+				sql: queryWithParams,
+			})
+			.catch((error) => {
+				debugger;
+			});
 	},
 	close: async (db) => {
 		return window.ipcRenderer.invoke('sqlite', {
