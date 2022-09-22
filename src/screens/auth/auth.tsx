@@ -6,6 +6,7 @@ import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
 import TextInput from '@wcpos/components/src/textinput';
+import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import useSiteConnect from './use-site-connect';
