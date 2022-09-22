@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/hooks",
-	"version": "1.0.27",
+	"version": "1.0.28",
 	"description": "Hooks for WooCommerce POS",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/hooks#readme",
@@ -19,12 +19,13 @@
 		"build-storybook": "build-storybook -o docs-build"
 	},
 	"dependencies": {
-		"@react-native-community/netinfo": "9.3.0",
+		"@react-native-community/netinfo": "9.3.1",
 		"@react-navigation/native": "6.0.13",
 		"@shelf/fast-natural-order-by": "^1.1.0",
 		"@wcpos/components": "*",
 		"@wcpos/database": "*",
 		"axios": "0.27.2",
+		"base-64": "^1.0.0",
 		"lodash": "4.17.21",
 		"moment": "^2.29.4",
 		"observable-hooks": "4.2.0",
@@ -33,7 +34,7 @@
 		"react-native": "0.69.5",
 		"react-native-reanimated": "2.6.0",
 		"react-native-web": "~0.18.9",
-		"rxdb": "13.0.2",
+		"rxdb": "13.2.0",
 		"rxjs": "7.5.6"
 	},
 	"devDependencies": {
@@ -53,7 +54,7 @@
 		"@types/jest": "^29.0.3",
 		"@types/lodash": "4.14.185",
 		"@types/react": "^18.0.20",
-		"@types/react-native": "~0.70.0",
+		"@types/react-native": "~0.70.3",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
 		"babel-loader": "8.2.5",

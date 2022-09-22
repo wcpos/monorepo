@@ -9,6 +9,7 @@ import _map from 'lodash/map';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
 import _cloneDeep from 'lodash/cloneDeep';
+import _isEmpty from 'lodash/isEmpty';
 import { orderBy } from '@shelf/fast-natural-order-by';
 import useRestHttpClient from '../use-rest-http-client';
 import { getAuditIdReplicationState } from './id-audit';
@@ -125,7 +126,9 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 			// 	}
 			// });
 			// search
-			// _set(selector, ['name', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
+			if (!_isEmpty(_get(q, 'search'))) {
+				_set(selector, ['name', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
+			}
 
 			// filters
 			if (_get(q, 'filters.category.id')) {

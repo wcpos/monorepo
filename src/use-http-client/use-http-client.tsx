@@ -60,6 +60,7 @@ export const useHttpClient = () => {
 
 			if (!response) {
 				console.log('no response at all');
+				console.log(JSON.stringify(_config.url));
 				throw Error('Network Error');
 			}
 
