@@ -18,8 +18,8 @@ const getSQLiteBasicsExpoSQLite = (openDB: typeof openDatabase) => {
 			return Promise.resolve(openDB(name));
 		},
 		all: async (db: WebSQLDatabase, queryWithParams: SQLiteQueryWithParams) => {
+			console.log(`all sql: ${queryWithParams.query}`, queryWithParams.params);
 			const result = new Promise<ResultSet['rows']>((resolve, reject) => {
-				console.log(`all sql: ${queryWithParams.query}`, queryWithParams.params);
 				db.exec(
 					[{ sql: queryWithParams.query, args: queryWithParams.params }],
 					false,
@@ -46,7 +46,11 @@ const getSQLiteBasicsExpoSQLite = (openDB: typeof openDatabase) => {
 		},
 		run: async (db: WebSQLDatabase, queryWithParams: SQLiteQueryWithParams) => {
 			console.log(`run sql: ${queryWithParams.query}`, queryWithParams.params);
-			db.exec([{ sql: queryWithParams.query, args: queryWithParams.params }], false, () => {});
+			db.exec([{ sql: queryWithParams.query, args: queryWithParams.params }], false, (err, res) => {
+				if (err) {
+					console.log('sql error: ', err);
+				}
+			});
 		},
 		close: async (db: WebSQLDatabase) => {
 			return db.closeAsync();

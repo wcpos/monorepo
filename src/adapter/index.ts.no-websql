@@ -1,0 +1,165 @@
+/**
+ * Polyfill for TextEncoder
+ * fixes: ReferenceError: Can't find variable: TextEncoder
+ */
+import 'fast-text-encoding';
+import './polyfillNextTick';
+import { Platform } from 'react-native';
+import { NativeModulesProxy } from 'expo-modules-core';
+import type {
+	Query,
+	ResultSet,
+	ResultSetError,
+	SQLiteCallback,
+	WebSQLDatabase,
+} from 'expo-sqlite/src/SQLite.types';
+import { getRxStorageSQLite, getSQLiteBasicsNode } from './plugins/sqlite';
+
+const { ExponentSQLite } = NativeModulesProxy;
+
+function zipObject(keys: string[], values: any[]) {
+	const result = {};
+	for (let i = 0; i < keys.length; i++) {
+		result[keys[i]] = values[i];
+	}
+	return result;
+}
+
+function _escapeBlob<T>(data: T): T {
+	if (typeof data === 'string') {
+		/* eslint-disable no-control-regex */
+		return data
+			.replace(/\u0002/g, '\u0002\u0002')
+			.replace(/\u0001/g, '\u0001\u0002')
+			.replace(/\u0000/g, '\u0001\u0001') as any;
+		/* eslint-enable no-control-regex */
+	}
+	return data;
+}
+
+function _serializeQuery(query: Query): [string, unknown[]] {
+	return [query.sql, Platform.OS === 'android' ? query.args.map(_escapeBlob) : query.args];
+}
+
+function _deserializeResultSet(nativeResult): ResultSet | ResultSetError {
+	const [errorMessage, insertId, rowsAffected, columns, rows] = nativeResult;
+	// TODO: send more structured error information from the native module so we can better construct
+	// a SQLException object
+	if (errorMessage !== null) {
+		return { error: new Error(errorMessage) } as ResultSetError;
+	}
+
+	return {
+		insertId,
+		rowsAffected,
+		rows: rows.map((row) => zipObject(columns, row)),
+	};
+}
+
+/**
+ *
+ */
+class SQLiteDatabase {
+	_name: string;
+	_closed = false;
+
+	constructor(name: string) {
+		this._name = name;
+	}
+
+	exec(queries: Query[], readOnly: boolean, callback: SQLiteCallback): void {
+		if (this._closed) {
+			throw new Error(`The SQLite database is closed`);
+		}
+
+		ExponentSQLite.exec(this._name, queries.map(_serializeQuery), readOnly).then(
+			(nativeResultSets) => {
+				callback(null, nativeResultSets.map(_deserializeResultSet));
+			},
+			(error) => {
+				// TODO: make the native API consistently reject with an error, not a string or other type
+				callback(error instanceof Error ? error : new Error(error));
+			}
+		);
+	}
+
+	close() {
+		this._closed = true;
+		return ExponentSQLite.close(this._name);
+	}
+
+	deleteAsync(): Promise<void> {
+		if (!this._closed) {
+			throw new Error(
+				`Unable to delete '${this._name}' database that is currently open. Close it prior to deletion.`
+			);
+		}
+
+		return ExponentSQLite.deleteAsync(this._name);
+	}
+}
+
+/**
+ *
+ */
+const sqliteBasics = {
+	open: async (name: string) => {
+		const db = new SQLiteDatabase(name);
+		return db;
+	},
+	all: async (db: SQLiteDatabase, queryWithParams: any) => {
+		console.log(`all sql: ${queryWithParams.query}`, queryWithParams.params);
+
+		const result = new Promise<ResultSet['rows']>((resolve, reject) => {
+			db.exec([{ sql: queryWithParams.query, args: queryWithParams.params }], false, (err, res) => {
+				console.log('sql response: ', res);
+
+				if (err) {
+					return reject(err);
+				}
+
+				if (Array.isArray(res)) {
+					const queryResult = res[0]; // there is only one query
+					if (Object.prototype.hasOwnProperty.call(queryResult, 'rows')) {
+						return resolve(queryResult.rows);
+					}
+					return reject(queryResult.error);
+				}
+
+				return reject(new Error(`Unexpected response from SQLite: ${res}`));
+			});
+		});
+		return result;
+	},
+	run: async (db: SQLiteDatabase, queryWithParams: any) => {
+		console.log(`run sql: ${queryWithParams.query}`, queryWithParams.params);
+		db.exec([{ sql: queryWithParams.query, args: queryWithParams.params }], false, (err, res) => {
+			console.log('run sql res', err, res);
+		});
+	},
+	close: (db: SQLiteDatabase) => {
+		return db.close();
+	},
+	journalMode: '',
+};
+
+/**
+ *
+ */
+const config = {
+	storage: getRxStorageSQLite({
+		/**
+		 * Different runtimes have different interfaces to SQLite.
+		 * For example in node.js we have a callback API,
+		 * while in capacitor sqlite we have Promises.
+		 * So we need a helper object that is capable of doing the basic
+		 * sqlite operations.
+		 */
+		// sqliteBasics: getSQLiteBasicsNode({ Database: SQLiteDatabase }),
+		sqliteBasics,
+	}),
+	multiInstance: false,
+	ignoreDuplicate: true,
+};
+
+export default config;
