@@ -21,7 +21,7 @@
 		"react-native-web": "~0.18.9"
 	},
 	"devDependencies": {
-		"@types/jest": "^29.0.2",
+		"@types/jest": "^29.0.3",
 		"@types/lodash": "4.14.185",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
