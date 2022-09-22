@@ -8,6 +8,7 @@
     "core": "yarn workspace @wcpos/core",
     "cra": "yarn workspace @wcpos/cra",
     "database": "yarn workspace @wcpos/database",
+    "ejected": "yarn workspace @wcpos/ejected-expo",
     "electron": "yarn workspace @wcpos/app-electron",
     "expo": "expo",
     "form": "yarn workspace @wcpos/react-native-jsonschema-form",
@@ -33,7 +34,7 @@
     "react-native-reanimated": "2.6.0"
   },
   "devDependencies": {
-    "@types/jest": "^29.0.2",
+    "@types/jest": "^29.0.3",
     "@wcpos/eslint-config": "*",
     "jest": "^29.0.3",
     "prettier": "2.7.1",

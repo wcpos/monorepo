@@ -36,7 +36,7 @@ This monorepo contains all the code necessary to build the client applications. 
 
 ## 📁 Structure
 
-- [`apps`](./apps) - Expo apps that only use packages and aren't aware of other apps.
+- [`apps`](./apps) - Apps that only use packages and aren't aware of other apps.
 - [`packages`](./packages) - Node packages that may use external and/or local packages.
 
 ### Apps
