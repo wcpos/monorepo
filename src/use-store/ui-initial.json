@@ -14,7 +14,7 @@
 			{
 				"key": "name",
 				"show": true,
-				"flex": "3",
+				"flex": 3,
 				"display": [
 					{
 						"key": "stock_quantity",
@@ -61,9 +61,7 @@
 			{
 				"key": "actions",
 				"disableSort": true,
-				"flex": "0 0 46px",
-				"width": "46px",
-				"flexShrink": 0,
+				"width": 46,
 				"hideLabel": true,
 				"show": true
 			}
@@ -81,7 +79,7 @@
 			{
 				"key": "name",
 				"show": true,
-				"flex": "3",
+				"flex": 3,
 				"display": [
 					{
 						"key": "sku",
@@ -120,7 +118,7 @@
 			},
 			{
 				"key": "actions",
-				"flex": "0 0 46px",
+				"width": 46,
 				"hideLabel": true,
 				"show": true
 			}
@@ -144,7 +142,7 @@
 			{
 				"key": "name",
 				"show": true,
-				"flex": "3",
+				"flex": 3,
 				"display": [
 					{
 						"key": "sku",
@@ -200,7 +198,7 @@
 			{
 				"key": "actions",
 				"disableSort": true,
-				"flex": "0 0 38px",
+				"width": 38,
 				"hideLabel": true,
 				"show": true
 			}
@@ -212,7 +210,7 @@
 		"columns": [
 			{
 				"key": "status",
-				"flex": "0 0 45px",
+				"width": 45,
 				"align": "center",
 				"hideLabel": true,
 				"show": true
@@ -237,7 +235,7 @@
 			},
 			{
 				"key": "customer_note",
-				"flex": "0 0 38px",
+				"width": 38,
 				"show": true
 			},
 			{
@@ -260,7 +258,7 @@
 			{
 				"key": "actions",
 				"disableSort": true,
-				"flex": "0 0 38px",
+				"width": 38,
 				"hideLabel": true,
 				"show": true
 			}
@@ -307,7 +305,7 @@
 			{
 				"key": "actions",
 				"disableSort": true,
-				"flex": "0 0 38px",
+				"width": 38,
 				"hideLabel": true,
 				"show": true
 			}
