@@ -13,14 +13,14 @@
   "dependencies": {
     "@wcpos/core": "*",
     "random-token": "0.0.8",
-    "react": "18.2.0",
-    "react-art": "18.2.0",
-    "react-dom": "18.2.0",
+    "react": "18.0.0",
+    "react-art": "18.0.0",
+    "react-dom": "18.0.0",
     "react-native-web": "~0.18.9",
     "worker-loader": "3.0.8"
   },
   "devDependencies": {
-    "@types/react": "^18.0.20",
+    "@types/react": "^18.0.21",
     "@types/react-dom": "~18.0.6",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
