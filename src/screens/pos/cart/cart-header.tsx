@@ -63,7 +63,7 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 				height: 51,
 			}}
 		>
-			<Box style={{ flex: 1 }}>
+			<Box fill>
 				<ErrorBoundary>
 					{customerID !== -1 ? (
 						<Customer order={order} />
