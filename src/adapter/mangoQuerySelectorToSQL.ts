@@ -3,6 +3,18 @@ import isPlainObject from 'lodash/isPlainObject';
 
 const LOGICAL_MANGO_OPERATORS = ['$or', '$and'];
 
+function unescape(s: string): string {
+	if (s === '(?:)') return '';
+	if (!s.includes('\\')) return s;
+	const r: string[] = [];
+	let i = 0;
+	while (i < s.length) {
+		if (s[i] === '\\' && i + 1 < s.length) i++;
+		r.push(s[i++]);
+	}
+	return r.join('');
+}
+
 export function mangoQuerySelectorToSQL(
 	selector: MangoQuerySelector<any>,
 	mutableParams: any[],
@@ -77,10 +89,10 @@ export function mangoQuerySelectorToSQL(
 				/**
 				 * TODO add to documentation that the $regex operator does not work
 				 */
-				/* case '$regex':
-											mutableParams[paramKey] = selectorPart;
-											return 'json_extract(data, \'$.' + prePath + '\')>' + paramKey;
-											*/
+				case '$regex':
+					const pattern = `%${unescape(selectorPart.source)}%`;
+					return `json_extract(data, '$.${prePath}') LIKE '${pattern}'`;
+					break;
 
 				default:
 					throw new Error(`operator ${key} not implemented`);
@@ -90,6 +102,10 @@ export function mangoQuerySelectorToSQL(
 				// is is an $eq shortcut like { foo: 'bar'}
 				const paramKey = '?';
 				mutableParams.push(selectorPart);
+				if (prePath) {
+					// fix nested elemMatch
+					return `json_extract(data, '$.${prePath}[0].${key}')=${paramKey}`;
+				}
 				return `json_extract(data, '$.${key}')=${paramKey}`;
 			}
 			// is not an operator
