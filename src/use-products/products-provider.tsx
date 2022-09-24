@@ -132,6 +132,7 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 
 			// filters
 			if (_get(q, 'filters.category.id')) {
+				// _set(selector, ['categories[0].id', '$eq'], _get(q, 'filters.category.id'));
 				_set(selector, ['categories', '$elemMatch', 'id'], _get(q, 'filters.category.id'));
 			}
 			if (_get(q, 'filters.tag.id')) {
