@@ -1,50 +1,69 @@
 import * as React from 'react';
-import { View } from 'react-native';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Tabs from '@wcpos/components/src/tabs';
+import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { View, Text, TouchableOpacity } from 'react-native';
+import Box from '@wcpos/components/src/box';
+import Button from '@wcpos/components/src/button';
+import Products from './products';
+import OpenOrders from './cart';
 
-export interface POSTabsProps {
-	leftComponent: React.ReactNode;
-	rightComponent: React.ReactNode;
+const Tab = createBottomTabNavigator();
+
+function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+	return (
+		<Box horizontal style={{ backgroundColor: '#FFFFFF', borderTopColor: '#f5f5f5' }}>
+			<Button.Group background="clear" alignment="full">
+				{state.routes.map((route, index) => {
+					const { options } = descriptors[route.key];
+					const label =
+						options.tabBarLabel !== undefined
+							? options.tabBarLabel
+							: options.title !== undefined
+							? options.title
+							: route.name;
+
+					const isFocused = state.index === index;
+
+					const onPress = () => {
+						const event = navigation.emit({
+							type: 'tabPress',
+							target: route.key,
+							canPreventDefault: true,
+						});
+
+						if (!isFocused && !event.defaultPrevented) {
+							// The `merge: true` option makes sure that the params inside the tab screen are preserved
+							navigation.navigate({ name: route.name, merge: true });
+						}
+					};
+
+					return (
+						<Button
+							onPress={onPress}
+							disabled={isFocused}
+							accessibilityRole="button"
+							accessibilityState={isFocused ? { selected: true } : {}}
+							accessibilityLabel={options.tabBarAccessibilityLabel}
+						>
+							{label}
+						</Button>
+					);
+				})}
+			</Button.Group>
+		</Box>
+	);
 }
 
-const POSTabs = ({ leftComponent, rightComponent }: POSTabsProps) => {
-	const [index, setIndex] = React.useState(0);
-
-	const renderScene = ({ route }) => {
-		switch (route.key) {
-			case 'products':
-				return leftComponent;
-			case 'cart':
-				return rightComponent;
-			default:
-				return null;
-		}
-	};
-
-	const routes = [
-		{ key: 'products', title: 'Products' },
-		{ key: 'cart', title: 'Cart' },
-	];
-
-	useWhyDidYouUpdate('POSTabs', {
-		leftComponent,
-		rightComponent,
-		renderScene,
-		routes,
-		index,
-		setIndex,
-	});
-
+const POSTabs = () => {
 	return (
-		<Tabs<typeof routes[number]>
-			navigationState={{ index, routes }}
-			renderScene={renderScene}
-			onIndexChange={setIndex}
-			tabBarPosition="bottom"
-			style={{ height: '100%' }}
-		/>
+		<Tab.Navigator
+			screenOptions={{ headerShown: false }}
+			tabBar={TabBar}
+			// detachInactiveScreens={false} - @TODO - this is not working in web?!
+		>
+			<Tab.Screen name="Products" component={Products} />
+			<Tab.Screen name="Cart" component={OpenOrders} />
+		</Tab.Navigator>
 	);
 };
 
-export default React.memo(POSTabs);
+export default POSTabs;

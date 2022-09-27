@@ -1,16 +1,22 @@
 import * as React from 'react';
-import { Linking } from 'react-native';
+// import { Linking } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
 	DrawerContentScrollView,
-	DrawerItem,
+	// DrawerItem,
 	DrawerContentComponentProps,
 } from '@react-navigation/drawer';
-import Icon from '@wcpos/components/src/icon';
+// import Icon from '@wcpos/components/src/icon';
 import DrawerItemList from './drawer-item-list';
 
 const Drawer = (props: DrawerContentComponentProps) => {
+	const insets = useSafeAreaInsets();
+
 	return (
-		<DrawerContentScrollView {...props} contentContainerStyle={{ paddingTop: 0 }}>
+		<DrawerContentScrollView
+			{...props}
+			contentContainerStyle={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+		>
 			<DrawerItemList {...props} />
 			{/* <DrawerItem label="Help" onPress={() => Linking.openURL('https://mywebsite.com/help')} /> */}
 		</DrawerContentScrollView>

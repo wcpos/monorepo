@@ -54,9 +54,9 @@ const Screen = (props: DrawerScreenProps<DrawerParamList>) => {
 	return (
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>Loading {props.route.name}</Text>}>
-				<Box padding="small" style={{ height: '100%' }}>
-					{screen}
-				</Box>
+				{/* <Box padding="small" style={{ height: '100%' }}> */}
+				{screen}
+				{/* </Box> */}
 			</React.Suspense>
 		</ErrorBoundary>
 	);
@@ -125,23 +125,11 @@ const MainNavigator = () => {
 					}}
 					drawerContent={drawer}
 				>
-					<Drawer.Screen name="POS" component={ScreenMemoized} options={getOptions('pos')} />
-					<Drawer.Screen
-						name="Products"
-						component={ScreenMemoized}
-						options={getOptions('products')}
-					/>
-					<Drawer.Screen name="Orders" component={ScreenMemoized} options={getOptions('orders')} />
-					<Drawer.Screen
-						name="Customers"
-						component={ScreenMemoized}
-						options={getOptions('customers')}
-					/>
-					<Drawer.Screen
-						name="Support"
-						component={ScreenMemoized}
-						options={getOptions('support')}
-					/>
+					<Drawer.Screen name="POS" component={POS} options={getOptions('pos')} />
+					<Drawer.Screen name="Products" component={Products} options={getOptions('products')} />
+					<Drawer.Screen name="Orders" component={Orders} options={getOptions('orders')} />
+					<Drawer.Screen name="Customers" component={Customers} options={getOptions('customers')} />
+					<Drawer.Screen name="Support" component={Support} options={getOptions('support')} />
 				</Drawer.Navigator>
 			</StoreProvider>
 		</OnlineStatusProvider>

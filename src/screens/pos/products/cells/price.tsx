@@ -17,14 +17,14 @@ export const Price = ({ item: product, column }: Props) => {
 	const price = useObservableState(product.price$, product.price);
 	const tax_status = useObservableState(product.tax_status$, product.tax_status);
 	const tax_class = useObservableState(product.tax_class$, product.tax_class);
-	const { calcTaxes } = useTaxes();
-	let displayPrice = price;
-	let taxTotal = 0;
-	if (tax_status === 'taxable') {
-		const result = calcTaxes(price, tax_class);
-		displayPrice = result.displayPrice;
-		taxTotal = result.taxTotal;
-	}
+	// const { calcTaxes } = useTaxes();
+	const displayPrice = price;
+	const taxTotal = 0;
+	// if (tax_status === 'taxable') {
+	// 	const result = calcTaxes(price, tax_class);
+	// 	displayPrice = result.displayPrice;
+	// 	taxTotal = result.taxTotal;
+	// }
 
 	const { display } = column;
 

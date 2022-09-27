@@ -76,36 +76,36 @@ const POS = () => {
 
 	return (
 		<POSContextProvider>
-			<TaxesProvider>
-				{dimensions.width >= theme.screens.small ? (
-					<ResizeableColumns
-						ui={productsUI}
-						leftComponent={
-							<ErrorBoundary>
-								<Products ui={productsUI} />
-							</ErrorBoundary>
-						}
-						rightComponent={
-							<ErrorBoundary>
-								<OpenOrders />
-							</ErrorBoundary>
-						}
-					/>
-				) : (
-					<POSTabs
-						leftComponent={
-							<ErrorBoundary>
-								<Products ui={productsUI} />
-							</ErrorBoundary>
-						}
-						rightComponent={
-							<ErrorBoundary>
-								<OpenOrders />
-							</ErrorBoundary>
-						}
-					/>
-				)}
-			</TaxesProvider>
+			{/* <TaxesProvider> */}
+			{dimensions.width >= theme.screens.small ? (
+				<ResizeableColumns
+					ui={productsUI}
+					leftComponent={
+						<ErrorBoundary>
+							<Products ui={productsUI} />
+						</ErrorBoundary>
+					}
+					rightComponent={
+						<ErrorBoundary>
+							<OpenOrders />
+						</ErrorBoundary>
+					}
+				/>
+			) : (
+				<POSTabs
+					leftComponent={
+						<ErrorBoundary>
+							<Products ui={productsUI} />
+						</ErrorBoundary>
+					}
+					rightComponent={
+						<ErrorBoundary>
+							<OpenOrders />
+						</ErrorBoundary>
+					}
+				/>
+			)}
+			{/* </TaxesProvider> */}
 		</POSContextProvider>
 	);
 };

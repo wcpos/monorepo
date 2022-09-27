@@ -20,18 +20,19 @@ const Header = ({ route, layout, options }: DrawerHeaderProps) => {
 	const theme = useTheme();
 
 	const headerStyle = React.useMemo(() => {
-		if (Platform.isElectron) {
-			return {
-				backgroundColor: theme.colors.headerBackground,
-				height: 40 + insets.top,
-				WebkitAppRegion: 'drag',
-			};
-		}
+		// @TODO - this is required if we want to remove the OS titlebar
+		// if (Platform.isElectron) {
+		// 	return {
+		// 		backgroundColor: theme.colors.headerBackground,
+		// 		height: 40 + insets.top,
+		// 		WebkitAppRegion: 'drag',
+		// 	};
+		// }
 		return {
 			backgroundColor: theme.colors.headerBackground,
 			height: 40 + insets.top,
 		};
-	}, [insets.top]);
+	}, [insets.top, theme.colors.headerBackground]);
 
 	// const title = React.useMemo(() => {
 	// 	return `${route.name} - ${store.name}`;

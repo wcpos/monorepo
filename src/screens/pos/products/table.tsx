@@ -80,8 +80,8 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	 *
 	 */
 	const renderItem = ({ item, index, extraData, target }: ListRenderItemInfo<ProductDocument>) => {
+		console.log(`render item ${item.id}`);
 		if (item.type === 'variable') {
-			return <></>;
 			return (
 				<ErrorBoundary>
 					<ProductVariationsProvider parent={item} ui={ui}>
