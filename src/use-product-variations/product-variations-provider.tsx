@@ -42,13 +42,14 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
 const replicationMap = new Map();
 
 const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsProviderProps) => {
+	console.log(`render variation provider ${parent.id}`);
 	// const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.variations;
 	const http = useRestHttpClient();
 	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
 	const variationIds = useObservableState(parent.variations$, parent.variations);
-	const { isConnected } = useOnlineStatus();
+	// const { isConnected } = useOnlineStatus();
 
 	/**
 	 *
@@ -65,56 +66,60 @@ const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsPr
 	/**
 	 *
 	 */
-	React.useEffect(() => {
-		if (!isConnected) {
-			replicationMap.forEach((replicationState) => {
-				replicationState.then((result) => {
-					result.cancel();
-				});
-			});
-		}
-	}, [isConnected]);
+	// React.useEffect(() => {
+	// 	if (!isConnected) {
+	// 		replicationMap.forEach((replicationState) => {
+	// 			replicationState.then((result) => {
+	// 				result.cancel();
+	// 			});
+	// 		});
+	// 	}
+	// }, [isConnected]);
 
 	/**
 	 * Start replication
 	 * - audit id (checks for deleted or new ids on server)
 	 * - replication (syncs all data and checks for modified data)
 	 */
-	React.useEffect(() => {
-		if (!replicationMap.get(`sync-${parent.id}`)) {
-			replicationMap.set(`sync-${parent.id}`, getReplicationState(http, collection, parent));
-		}
+	// React.useEffect(() => {
+	// 	if (!replicationMap.get(`sync-${parent.id}`)) {
+	// 		replicationMap.set(`sync-${parent.id}`, getReplicationState(http, collection, parent));
+	// 	}
 
-		return function cleanUp() {
-			replicationMap.forEach((replicationState) => {
-				replicationState.then((result) => {
-					result.cancel();
-				});
-			});
-		};
-	}, [collection, http, parent]);
+	// 	return function cleanUp() {
+	// 		replicationMap.forEach((replicationState) => {
+	// 			replicationState.then((result) => {
+	// 				result.cancel();
+	// 			});
+	// 		});
+	// 	};
+	// }, [collection, http, parent]);
 
 	/**
 	 *
 	 */
-	const sync = React.useCallback(() => {
-		const audit = replicationMap.get('audit');
+	// const sync = React.useCallback(() => {
+	// 	const audit = replicationMap.get('audit');
 
-		if (audit) {
-			audit.then((result) => {
-				result.run();
-			});
-		}
-	}, []);
+	// 	if (audit) {
+	// 		audit.then((result) => {
+	// 			result.run();
+	// 		});
+	// 	}
+	// }, []);
 
 	/**
 	 * Note: variations are integers but ids are strings so we can't use populate
 	 */
-	const variations$ = collection
-		.findByIds$(variationIds?.map((id) => String(id)) || [])
-		.pipe(map((docsMap) => Array.from(docsMap.values())));
-
-	const resource = React.useMemo(() => new ObservableResource(variations$), [variations$]);
+	const resource = React.useMemo(
+		() =>
+			new ObservableResource(
+				collection
+					.findByIds$(variationIds?.map((id) => String(id)) || [])
+					.pipe(map((docsMap) => Array.from(docsMap.values())))
+			),
+		[collection, variationIds]
+	);
 
 	/**
 	 *
@@ -125,12 +130,15 @@ const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsPr
 			// query: query$.getValue(),
 			// setQuery,
 			resource,
-			sync,
+			// sync,
 		}),
-		[resource, sync]
+		[
+			resource,
+			// sync
+		]
 	);
 
-	useWhyDidYouUpdate('ProductsProvider', {
+	useWhyDidYouUpdate('ProductVariationsProvider', {
 		value,
 		// query$,
 		resource,
@@ -140,7 +148,8 @@ const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsPr
 		collection,
 		http,
 		showOutOfStock,
-		sync,
+		variationIds,
+		// sync,
 	});
 
 	return (
@@ -148,4 +157,5 @@ const ProductVariationsProvider = ({ children, parent, ui }: ProductVariationsPr
 	);
 };
 
-export default ProductVariationsProvider;
+const ProductVariationsProviderMemoized = React.memo(ProductVariationsProvider);
+export default ProductVariationsProviderMemoized;

@@ -43,12 +43,13 @@ const escape = (text: string) => text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'
 const replicationMap = new Map();
 
 const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps) => {
+	console.log('render product provider');
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.products;
 	const http = useRestHttpClient();
 	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
-	const { isConnected } = useOnlineStatus();
+	// const { isConnected } = useOnlineStatus();
 
 	/**
 	 *
@@ -65,97 +66,102 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 	/**
 	 *
 	 */
-	React.useEffect(() => {
-		if (!isConnected) {
-			replicationMap.forEach((replicationState) => {
-				replicationState.then((result) => {
-					result.cancel();
-				});
-			});
-		}
-	}, [isConnected]);
+	// React.useEffect(() => {
+	// 	if (!isConnected) {
+	// 		replicationMap.forEach((replicationState) => {
+	// 			replicationState.then((result) => {
+	// 				result.cancel();
+	// 			});
+	// 		});
+	// 	}
+	// }, [isConnected]);
 
 	/**
 	 * Start replication
 	 * - audit id (checks for deleted or new ids on server)
 	 * - replication (syncs all data and checks for modified data)
 	 */
-	React.useEffect(() => {
-		if (!replicationMap.get('audit')) {
-			replicationMap.set('audit', getAuditIdReplicationState(http, collection));
-		}
+	// React.useEffect(() => {
+	// 	if (!replicationMap.get('audit')) {
+	// 		replicationMap.set('audit', getAuditIdReplicationState(http, collection));
+	// 	}
 
-		if (!replicationMap.get('sync')) {
-			replicationMap.set('sync', getReplicationState(http, collection));
-		}
+	// 	if (!replicationMap.get('sync')) {
+	// 		replicationMap.set('sync', getReplicationState(http, collection));
+	// 	}
 
-		return function cleanUp() {
-			replicationMap.forEach((replicationState) => {
-				replicationState.then((result) => {
-					result.cancel();
-				});
-			});
-		};
-	}, [collection, http]);
-
-	/**
-	 *
-	 */
-	const sync = React.useCallback(() => {
-		const audit = replicationMap.get('audit');
-
-		if (audit) {
-			audit.then((result) => {
-				result.run();
-			});
-		}
-	}, []);
+	// 	return function cleanUp() {
+	// 		replicationMap.forEach((replicationState) => {
+	// 			replicationState.then((result) => {
+	// 				result.cancel();
+	// 			});
+	// 		});
+	// 	};
+	// }, [collection, http]);
 
 	/**
 	 *
 	 */
-	const products$ = query$.pipe(
-		// debounce hits to the local db
-		debounceTime(100),
-		// switchMap to the collection query
-		switchMap((q) => {
-			const selector = {};
-			// forEach(q.search, function (value, key) {
-			// 	if (value) {
-			// 		set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
-			// 	}
-			// });
-			// search
-			if (!_isEmpty(_get(q, 'search'))) {
-				_set(selector, ['name', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
-			}
+	// const sync = React.useCallback(() => {
+	// 	const audit = replicationMap.get('audit');
 
-			// filters
-			if (_get(q, 'filters.category.id')) {
-				// _set(selector, ['categories[0].id', '$eq'], _get(q, 'filters.category.id'));
-				_set(selector, ['categories', '$elemMatch', 'id'], _get(q, 'filters.category.id'));
-			}
-			if (_get(q, 'filters.tag.id')) {
-				_set(selector, ['tags', '$elemMatch', 'id'], _get(q, 'filters.tag.id'));
-			}
+	// 	if (audit) {
+	// 		audit.then((result) => {
+	// 			result.run();
+	// 		});
+	// 	}
+	// }, []);
 
-			// hide out-of-stock products
-			if (!showOutOfStock) {
-				selector.$or = [{ manage_stock: { $eq: false } }, { stock_quantity: { $gt: 0 } }];
-			}
-			console.log(selector);
+	/**
+	 *
+	 */
+	const resource = React.useMemo(
+		() =>
+			new ObservableResource(
+				query$.pipe(
+					// debounce hits to the local db
+					debounceTime(100),
+					// switchMap to the collection query
+					switchMap((q) => {
+						const selector = {};
+						// forEach(q.search, function (value, key) {
+						// 	if (value) {
+						// 		set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
+						// 	}
+						// });
+						// search
+						if (!_isEmpty(_get(q, 'search'))) {
+							_set(selector, ['name', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
+						}
 
-			const RxQuery = collection.find({ selector });
+						// filters
+						if (_get(q, 'filters.category.id')) {
+							// _set(selector, ['categories[0].id', '$eq'], _get(q, 'filters.category.id'));
+							_set(selector, ['categories', '$elemMatch', 'id'], _get(q, 'filters.category.id'));
+						}
+						if (_get(q, 'filters.tag.id')) {
+							_set(selector, ['tags', '$elemMatch', 'id'], _get(q, 'filters.tag.id'));
+						}
 
-			return RxQuery.$.pipe(
-				map((result) => {
-					return orderBy(result, [(p) => p[q.sortBy]], [q.sortDirection]);
-				})
-			);
-		})
+						// hide out-of-stock products
+						if (!showOutOfStock) {
+							selector.$or = [{ manage_stock: { $eq: false } }, { stock_quantity: { $gt: 0 } }];
+						}
+						console.log(selector);
+
+						const RxQuery = collection.find({ selector });
+
+						return RxQuery.$.pipe(
+							map((result) => {
+								console.log('product query result');
+								return orderBy(result, [(p) => p[q.sortBy]], [q.sortDirection]);
+							})
+						);
+					})
+				)
+			),
+		[collection, query$, showOutOfStock]
 	);
-
-	const resource = React.useMemo(() => new ObservableResource(products$), [products$]);
 
 	/**
 	 *
@@ -166,9 +172,14 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 			// query: query$.getValue(),
 			setQuery,
 			resource,
-			sync,
+			// sync,
 		}),
-		[query$, resource, setQuery, sync]
+		[
+			query$,
+			resource,
+			setQuery,
+			// sync
+		]
 	);
 
 	useWhyDidYouUpdate('ProductsProvider', {
@@ -176,15 +187,16 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 		query$,
 		resource,
 		setQuery,
-		products$,
+		// products$,
 		storeDB,
 		collection,
 		http,
 		showOutOfStock,
-		sync,
+		// sync,
 	});
 
 	return <ProductsContext.Provider value={value}>{children}</ProductsContext.Provider>;
 };
 
-export default ProductsProvider;
+const ProductsProviderMemoized = React.memo(ProductsProvider);
+export default ProductsProviderMemoized;
