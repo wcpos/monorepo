@@ -1,8 +1,10 @@
 import * as React from 'react';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
+import Icon from '@wcpos/components/src/icon';
+import Text from '@wcpos/components/src/text';
 import Products from './products';
 import OpenOrders from './cart';
 
@@ -13,18 +15,18 @@ export type TabsParamList = {
 
 const Tab = createBottomTabNavigator<TabsParamList>();
 
-function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+/**
+ *
+ */
+const TabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
+	const theme = useTheme();
+
 	return (
-		<Box horizontal style={{ backgroundColor: '#FFFFFF', borderTopColor: '#f5f5f5' }}>
-			<Button.Group background="clear" alignment="full">
+		<Box horizontal style={{ backgroundColor: '#FFFFFF', borderTopColor: theme.colors.border }}>
+			<Button.Group background="clear" fill>
 				{state.routes.map((route, index) => {
-					const { options } = descriptors[route.key];
-					const label =
-						options.tabBarLabel !== undefined
-							? options.tabBarLabel
-							: options.title !== undefined
-							? options.title
-							: route.name;
+					// const { options } = descriptors[route.key];
+					const label = route.name;
 
 					const isFocused = state.index === index;
 
@@ -45,25 +47,38 @@ function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 						<Button
 							key={label}
 							onPress={onPress}
-							disabled={isFocused}
-							accessibilityRole="button"
-							accessibilityState={isFocused ? { selected: true } : {}}
-							accessibilityLabel={options.tabBarAccessibilityLabel}
+							// disabled={isFocused}
+							// accessibilityRole="button"
+							// accessibilityState={isFocused ? { selected: true } : {}}
+							// accessibilityLabel={options.tabBarAccessibilityLabel}
 						>
-							{label}
+							<Box space="xxSmall" align="center">
+								<Icon
+									name={label === 'Products' ? 'gifts' : 'cartShopping'}
+									type={isFocused ? 'primary' : 'text'}
+								/>
+								<Text size="xSmall" type={isFocused ? 'primary' : 'text'} uppercase>
+									{label}
+								</Text>
+							</Box>
 						</Button>
 					);
 				})}
 			</Button.Group>
 		</Box>
 	);
-}
+};
 
+/**
+ *
+ */
 const POSTabs = () => {
+	const tabBar = React.useCallback((props: BottomTabBarProps) => <TabBar {...props} />, []);
+
 	return (
 		<Tab.Navigator
 			screenOptions={{ headerShown: false }}
-			tabBar={TabBar}
+			tabBar={tabBar}
 			// detachInactiveScreens={false} - @TODO - this is not working in web?!
 		>
 			<Tab.Screen name="Products" component={Products} />

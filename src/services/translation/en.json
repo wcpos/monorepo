@@ -46,6 +46,7 @@
 		"pos": {
 			"title": "POS",
 			"products": {
+				"title": "Products",
 				"showOutOfStock": "Show out-of-stock products",
 				"column": {
 					"label": {
@@ -66,6 +67,7 @@
 				}
 			},
 			"cart": {
+				"title": "Cart",
 				"column": {
 					"label": {
 						"quantity": "Qty",
