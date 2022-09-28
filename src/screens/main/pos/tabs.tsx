@@ -6,7 +6,12 @@ import Button from '@wcpos/components/src/button';
 import Products from './products';
 import OpenOrders from './cart';
 
-const Tab = createBottomTabNavigator();
+export type TabsParamList = {
+	Products: undefined;
+	Cart: undefined;
+};
+
+const Tab = createBottomTabNavigator<TabsParamList>();
 
 function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 	return (
@@ -38,6 +43,7 @@ function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
 					return (
 						<Button
+							key={label}
 							onPress={onPress}
 							disabled={isFocused}
 							accessibilityRole="button"

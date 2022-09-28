@@ -11,28 +11,40 @@ import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-g
 import Gutter from '@wcpos/components/src/gutter';
 import Box from '@wcpos/components/src/box';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import Products from './products';
+import OpenOrders from './cart';
 
 interface ResizableColumnsProps {
-	leftComponent: React.ReactNode;
-	rightComponent: React.ReactNode;
 	ui: import('@wcpos/hooks/src/use-store').UIDocument;
 }
 
+/**
+ *
+ */
 const clamp = (value: number, lowerBound: number, upperBound: number) => {
 	'worklet';
 
 	return Math.min(Math.max(lowerBound, value), upperBound);
 };
 
-const ResizableColumns = ({ leftComponent, rightComponent, ui }: ResizableColumnsProps) => {
+/**
+ *
+ */
+const ResizableColumns = ({ ui }: ResizableColumnsProps) => {
 	const columnWidth = useSharedValue(ui.get('width'));
 	const isActivePanGesture = useSharedValue(false);
 	const containerWidth = useSharedValue(800);
 
+	/**
+	 *
+	 */
 	useSubscription(ui.get$('width'), (width: number) => {
 		columnWidth.value = width;
 	});
 
+	/**
+	 *
+	 */
 	const onContainerLayout = React.useCallback(
 		(e: LayoutChangeEvent) => {
 			containerWidth.value = e.nativeEvent.layout.width;
@@ -40,26 +52,26 @@ const ResizableColumns = ({ leftComponent, rightComponent, ui }: ResizableColumn
 		[containerWidth]
 	);
 
+	/**
+	 *
+	 */
 	const columnStyle = useAnimatedStyle(() => ({
 		width: `${columnWidth.value}%`,
 	}));
 
+	/**
+	 *
+	 */
 	const saveColumnWidth = React.useCallback(
 		(width: number) => {
 			ui.atomicPatch({ width });
-			// ui.atomicUpdate((oldData) => {
-			// 	oldData.width = width;
-			// 	return oldData;
-			// });
-			// ui.update({
-			// 	$set: {
-			// 		width,
-			// 	},
-			// });
 		},
 		[ui]
 	);
 
+	/**
+	 *
+	 */
 	const panGestureHandler = useAnimatedGestureHandler<
 		PanGestureHandlerGestureEvent,
 		{ startWidth: number }
@@ -82,8 +94,6 @@ const ResizableColumns = ({ leftComponent, rightComponent, ui }: ResizableColumn
 	});
 
 	useWhyDidYouUpdate('ResizableColumns', {
-		leftComponent,
-		rightComponent,
 		ui,
 		columnWidth,
 		isActivePanGesture,
@@ -94,15 +104,22 @@ const ResizableColumns = ({ leftComponent, rightComponent, ui }: ResizableColumn
 		saveColumnWidth,
 	});
 
+	/**
+	 *
+	 */
 	return (
 		<Box horizontal onLayout={onContainerLayout} style={{ height: '100%' }}>
-			<Animated.View style={[columnStyle]}>{leftComponent}</Animated.View>
+			<Animated.View style={[columnStyle]}>
+				<Products isColumn />
+			</Animated.View>
 			<PanGestureHandler onGestureEvent={panGestureHandler}>
 				<Animated.View style={{ width: 10 }}>
 					<Gutter />
 				</Animated.View>
 			</PanGestureHandler>
-			<View style={{ flex: 1 }}>{rightComponent}</View>
+			<View style={{ flex: 1 }}>
+				<OpenOrders isColumn />
+			</View>
 		</Box>
 	);
 };

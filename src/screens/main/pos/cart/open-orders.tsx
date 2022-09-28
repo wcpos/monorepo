@@ -4,7 +4,7 @@ import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
 import CartTabs from './tabs';
 
-const OpenOrders = () => {
+const OpenOrders = ({ isColumn = false }) => {
 	const initialQuery = React.useMemo(
 		() => ({
 			sortBy: 'date_created_gmt',
@@ -17,7 +17,7 @@ const OpenOrders = () => {
 	return (
 		<OrdersProvider initialQuery={initialQuery}>
 			<React.Suspense fallback={<Text>Loading Open Orders</Text>}>
-				<Box padding="small" style={{ height: '100%' }}>
+				<Box padding="small" paddingLeft={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
 					<CartTabs />
 				</Box>
 			</React.Suspense>

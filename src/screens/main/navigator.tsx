@@ -1,23 +1,20 @@
 import * as React from 'react';
-import { createDrawerNavigator, DrawerScreenProps } from '@react-navigation/drawer';
+import { createDrawerNavigator } from '@react-navigation/drawer';
 import { useTranslation } from 'react-i18next';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import POS from '@wcpos/core/src/screens/pos';
-import Products from '@wcpos/core/src/screens/products';
-import Orders from '@wcpos/core/src/screens/orders';
-import Customers from '@wcpos/core/src/screens/customers';
-import Support from '@wcpos/core/src/screens/support';
-import CustomHeader from '@wcpos/core/src/screens/header';
-import CustomDrawer from '@wcpos/core/src/screens/drawer';
 import { useWindowDimensions } from 'react-native';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon, { IconName } from '@wcpos/components/src/icon';
-import Text from '@wcpos/components/src/text';
-import Box from '@wcpos/components/src/box';
 import { StoreProvider } from '@wcpos/hooks/src/use-store';
 import useAuth from '@wcpos/hooks/src/use-auth';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import { useTheme } from 'styled-components/native';
+import Support from './support';
+import Customers from './customers';
+import Orders from './orders';
+import Products from './products';
+import POS from './pos';
+import CustomDrawer from './drawer';
+import CustomHeader from './header';
 
 export type DrawerParamList = {
 	POS: undefined;
@@ -28,41 +25,6 @@ export type DrawerParamList = {
 };
 
 const Drawer = createDrawerNavigator<DrawerParamList>();
-
-/**
- * Use memoized Screen Component to apply layout and errorboundary
- * https://reactnavigation.org/docs/screen/#children
- */
-const Screen = (props: DrawerScreenProps<DrawerParamList>) => {
-	const screen = React.useMemo(() => {
-		switch (props.route.name) {
-			case 'POS':
-				return <POS />;
-			case 'Products':
-				return <Products />;
-			case 'Orders':
-				return <Orders />;
-			case 'Customers':
-				return <Customers />;
-			case 'Support':
-				return <Support />;
-			default:
-				return null;
-		}
-	}, [props]);
-
-	return (
-		<ErrorBoundary>
-			<React.Suspense fallback={<Text>Loading {props.route.name}</Text>}>
-				{/* <Box padding="small" style={{ height: '100%' }}> */}
-				{screen}
-				{/* </Box> */}
-			</React.Suspense>
-		</ErrorBoundary>
-	);
-};
-
-const ScreenMemoized = React.memo(Screen);
 
 // Map icons to screens
 const iconMap = {
@@ -76,7 +38,7 @@ const iconMap = {
 /**
  *
  */
-const MainNavigator = () => {
+export const MainNavigator = () => {
 	const { store, storeDBResource } = useAuth();
 	if (!storeDBResource) {
 		/**
@@ -135,5 +97,3 @@ const MainNavigator = () => {
 		</OnlineStatusProvider>
 	);
 };
-
-export default MainNavigator;

@@ -13,7 +13,7 @@ import Settings from './settings';
 /**
  *
  */
-const POSProducts = () => {
+const POSProducts = ({ isColumn = false }) => {
 	const theme = useTheme();
 	const { uiResources } = useStore();
 	const ui = useObservableSuspense(uiResources['pos.products']);
@@ -22,7 +22,7 @@ const POSProducts = () => {
 
 	return (
 		<ProductsProvider initialQuery={initialQuery} ui={ui}>
-			<Box padding="small" style={{ height: '100%' }}>
+			<Box padding="small" paddingRight={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
 				<Box
 					raised
 					rounding="medium"
