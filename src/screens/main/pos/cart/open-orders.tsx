@@ -2,6 +2,7 @@ import * as React from 'react';
 import { OrdersProvider } from '@wcpos/hooks/src/use-orders';
 import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import CartTabs from './tabs';
 
 const OpenOrders = ({ isColumn = false }) => {
@@ -16,11 +17,13 @@ const OpenOrders = ({ isColumn = false }) => {
 
 	return (
 		<OrdersProvider initialQuery={initialQuery}>
-			<React.Suspense fallback={<Text>Loading Open Orders</Text>}>
-				<Box padding="small" paddingLeft={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
-					<CartTabs />
-				</Box>
-			</React.Suspense>
+			<ErrorBoundary>
+				<React.Suspense fallback={<Text>Loading Open Orders</Text>}>
+					<Box padding="small" paddingLeft={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
+						<CartTabs />
+					</Box>
+				</React.Suspense>
+			</ErrorBoundary>
 		</OrdersProvider>
 	);
 };

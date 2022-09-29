@@ -6,6 +6,7 @@ import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import useStore from '@wcpos/hooks/src/use-store';
+import { CartProvider } from '@wcpos/core/src/contexts/cart';
 import Totals from './totals';
 import Table from './table';
 import CartHeader from './cart-header';
@@ -27,11 +28,9 @@ interface CartProps {
 const Cart = ({ order }: CartProps) => {
 	const { uiResources } = useStore();
 	const ui = useObservableSuspense(uiResources['pos.cart']);
-	const cartResource = new ObservableResource(order.cart$);
 	const theme = useTheme();
-	// useCalcTotals(order);
 
-	useWhyDidYouUpdate('Cart', { order, ui, cartResource, theme, uiResources });
+	useWhyDidYouUpdate('Cart', { order, ui, theme, uiResources });
 
 	return (
 		<Box
@@ -47,11 +46,13 @@ const Cart = ({ order }: CartProps) => {
 				// fill
 				style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
 			>
-				<ErrorBoundary>
-					<React.Suspense fallback={<Text>loading cart items...</Text>}>
-						<Table cartResource={cartResource} ui={ui} />
-					</React.Suspense>
-				</ErrorBoundary>
+				<CartProvider order={order}>
+					<ErrorBoundary>
+						<React.Suspense fallback={<Text>loading cart items...</Text>}>
+							<Table ui={ui} />
+						</React.Suspense>
+					</ErrorBoundary>
+				</CartProvider>
 			</Box>
 			<Box>
 				<ErrorBoundary>

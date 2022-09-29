@@ -5,6 +5,7 @@ import flatten from 'lodash/flatten';
 import get from 'lodash/get';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
+import useCart from '@wcpos/core/src/contexts/cart';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import { usePOSContext } from '../context';
 import * as cells from './cells';
@@ -21,20 +22,14 @@ type UIColumn = import('@wcpos/hooks/src/use-store').UIColumn;
 type Cart = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
 
 interface ICartTableProps {
-	cartResource: ObservableResource<{
-		line_items: LineItemDocument[];
-		fee_lines: FeeLineDocument[];
-		shipping_lines: ShippingLineDocument[];
-	}>;
 	ui: any;
 }
 
-const CartTable = ({ cartResource, ui }: ICartTableProps) => {
+const CartTable = ({ ui }: ICartTableProps) => {
 	const { t } = useTranslation();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
-	const cart = useObservableSuspense(cartResource);
+	const cart = useCart();
 	const items = React.useMemo(() => flatten(Object.values(cart)), [cart]); // @TODO - add sorting
-	const { setCurrentOrder } = usePOSContext();
 
 	/**
 	 *
@@ -83,7 +78,7 @@ const CartTable = ({ cartResource, ui }: ICartTableProps) => {
 	/**
 	 *
 	 */
-	useWhyDidYouUpdate('CartTable', { cartResource, ui, columns, items, cart, t, context });
+	useWhyDidYouUpdate('CartTable', { ui, columns, items, cart, t, context });
 
 	/**
 	 *
