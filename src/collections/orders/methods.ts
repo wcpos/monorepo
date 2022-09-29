@@ -44,88 +44,6 @@ export default {
 	/**
 	 *
 	 */
-	getLineItems$(
-		this: OrderDocument,
-		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Observable<LineItemDocument[]> {
-		return this.line_items$.pipe(
-			switchMap(async () => {
-				const lineItems = await this.populate('line_items');
-				if (!lineItems) {
-					return [];
-				}
-				return q ? _orderBy(lineItems, q.sortBy, q.sortDirection) : lineItems;
-			})
-		);
-	},
-
-	/**
-	 *
-	 */
-	getFeeLines$(
-		this: OrderDocument,
-		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Observable<FeeLineDocument[]> {
-		return this.fee_lines$.pipe(
-			switchMap(async () => {
-				const feeLines = await this.populate('fee_lines');
-				if (!feeLines) {
-					return [];
-				}
-				return q ? _orderBy(feeLines, q.sortBy, q.sortDirection) : feeLines;
-			})
-			// tap((res) => {
-			// 	debugger;
-			// })
-		);
-	},
-
-	/**
-	 *
-	 */
-	getShippingLines$(
-		this: OrderDocument,
-		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Observable<ShippingLineDocument[]> {
-		return this.shipping_lines$.pipe(
-			switchMap(async () => {
-				const shippingLines = await this.populate('shipping_lines');
-				if (!shippingLines) {
-					return [];
-				}
-				return q ? _orderBy(shippingLines, q.sortBy, q.sortDirection) : shippingLines;
-			})
-		);
-	},
-
-	/**
-	 *
-	 */
-	getCart$(
-		this: OrderDocument,
-		q?: { sortBy: string; sortDirection: 'asc' | 'desc' }
-	): Observable<CartLines> {
-		return combineLatest([
-			this.getLineItems$(q),
-			this.getFeeLines$(q),
-			this.getShippingLines$(q),
-		]).pipe(
-			/**
-			 * the population promises return at different times
-			 * debounce emissions to prevent unneccesary re-renders
-			 * @TODO - is there a better way?
-			 */
-			debounceTime(10),
-			map((cartLines) => {
-				const [lineItems = [], feeLines = [], shippingLines = []] = cartLines;
-				return lineItems.concat(feeLines, shippingLines);
-			})
-		);
-	},
-
-	/**
-	 *
-	 */
 	async addOrUpdateProduct(
 		this: OrderDocument,
 		product: ProductDocument
@@ -423,48 +341,48 @@ export default {
 		});
 	},
 
-	/**
-	 *
-	 */
-	computedTotal$(this: OrderDocument) {
-		return this.getCart$().pipe(
-			switchMap((cartLines: CartLines) => {
-				const totals$ = _map(cartLines, 'total$');
-				return combineLatest(totals$);
-			}),
-			map((totals: string[]) => String(_sumBy(totals, (total) => Number(total ?? 0)))),
-			tap((total: string) => {
-				if (total !== this.total) this.atomicPatch({ total });
-			})
-		);
-	},
+	// /**
+	//  *
+	//  */
+	// computedTotal$(this: OrderDocument) {
+	// 	return this.getCart$().pipe(
+	// 		switchMap((cartLines: CartLines) => {
+	// 			const totals$ = _map(cartLines, 'total$');
+	// 			return combineLatest(totals$);
+	// 		}),
+	// 		map((totals: string[]) => String(_sumBy(totals, (total) => Number(total ?? 0)))),
+	// 		tap((total: string) => {
+	// 			if (total !== this.total) this.atomicPatch({ total });
+	// 		})
+	// 	);
+	// },
 
-	/**
-	 *
-	 */
-	computedSubtotal$(this: OrderDocument) {
-		return this.getLineItems$().pipe(
-			switchMap((lineItems: LineItemDocument[]) => {
-				const subtotals$ = _map(lineItems, 'subtotal$');
-				return combineLatest(subtotals$);
-			}),
-			map((subtotals: string[]) => String(_sumBy(subtotals, (subtotal) => Number(subtotal ?? 0))))
-		);
-	},
+	// /**
+	//  *
+	//  */
+	// computedSubtotal$(this: OrderDocument) {
+	// 	return this.getLineItems$().pipe(
+	// 		switchMap((lineItems: LineItemDocument[]) => {
+	// 			const subtotals$ = _map(lineItems, 'subtotal$');
+	// 			return combineLatest(subtotals$);
+	// 		}),
+	// 		map((subtotals: string[]) => String(_sumBy(subtotals, (subtotal) => Number(subtotal ?? 0))))
+	// 	);
+	// },
 
-	/**
-	 *
-	 */
-	computedTotalTax$(this: OrderDocument) {
-		return this.getCart$().pipe(
-			switchMap((cartLines: CartLines) => {
-				const totalTax$ = _map(cartLines, (cartLine) => cartLine.computedTotalTax$());
-				return combineLatest(totalTax$);
-			}),
-			map((totals: string[]) => String(_sumBy(totals, (total) => Number(total ?? 0)))),
-			tap((totalTax: string) => {
-				if (totalTax !== this.totalTax) this.atomicPatch({ total_tax: totalTax });
-			})
-		);
-	},
+	// /**
+	//  *
+	//  */
+	// computedTotalTax$(this: OrderDocument) {
+	// 	return this.getCart$().pipe(
+	// 		switchMap((cartLines: CartLines) => {
+	// 			const totalTax$ = _map(cartLines, (cartLine) => cartLine.computedTotalTax$());
+	// 			return combineLatest(totalTax$);
+	// 		}),
+	// 		map((totals: string[]) => String(_sumBy(totals, (total) => Number(total ?? 0)))),
+	// 		tap((totalTax: string) => {
+	// 			if (totalTax !== this.totalTax) this.atomicPatch({ total_tax: totalTax });
+	// 		})
+	// 	);
+	// },
 };

@@ -7,7 +7,6 @@ import forEach from 'lodash/forEach';
 import schema from './schema.json';
 import methods from './methods';
 import statics from './statics';
-import postCreate from './postCreate';
 
 type OrderMethods = typeof import('./methods');
 type OrderStatics = typeof import('./statics');
@@ -35,10 +34,10 @@ export const orders = {
 	// attachments: {},
 	options: {
 		middlewares: {
-			postCreate: {
-				handle: postCreate,
-				parallel: false,
-			},
+			// postCreate: {
+			// 	handle: postCreate,
+			// 	parallel: false,
+			// },
 			// preInsert: {
 			// 	handle: preInsert,
 			// 	parallel: false,
