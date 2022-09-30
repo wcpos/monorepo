@@ -22,6 +22,7 @@ export type RootStackParamList = {
 
 const Stack = createStackNavigator<RootStackParamList>();
 const prefix = Linking.createURL('/');
+const prefixes = ['wcpos://', prefix];
 
 /**
  *
@@ -30,7 +31,6 @@ export const RootNavigator = ({ initialProps }) => {
 	const { storeDBResource } = useAuth();
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
-	const prefixes = ['wcpos://', prefix];
 	console.log(prefixes);
 
 	let pathname = '';
@@ -41,46 +41,49 @@ export const RootNavigator = ({ initialProps }) => {
 		pathname = parsedUrl.pathname;
 	}
 
-	const linking = {
-		prefixes,
-		config: {
-			initialRouteName: 'Auth',
-			screens: {
-				Auth: `${pathname}/auth`,
-				Main: {
-					path: pathname,
-					screens: {
-						POS: {
-							path: '',
-							screens: {
-								Products: {
-									path: 'products-tab',
-								},
-								Cart: {
-									path: 'cart-tab',
+	const linking = React.useMemo(
+		() => ({
+			prefixes,
+			config: {
+				initialRouteName: 'Auth',
+				screens: {
+					Auth: `${pathname}/auth`,
+					Main: {
+						path: pathname,
+						screens: {
+							POS: {
+								path: '',
+								screens: {
+									Products: {
+										path: 'products-tab',
+									},
+									Cart: {
+										path: 'cart-tab',
+									},
 								},
 							},
-						},
-						Products: {
-							path: 'products',
-						},
-						Orders: {
-							path: 'orders',
-						},
-						Customers: {
-							path: 'customers',
-						},
-						Support: {
-							path: 'support',
+							Products: {
+								path: 'products',
+							},
+							Orders: {
+								path: 'orders',
+							},
+							Customers: {
+								path: 'customers',
+							},
+							Support: {
+								path: 'support',
+							},
 						},
 					},
+					Modal: `${pathname}/#`,
+					Login: `${pathname}/login`,
+					Settings: `${pathname}/settings`,
 				},
-				Modal: `${pathname}/#`,
-				Login: `${pathname}/login`,
-				Settings: `${pathname}/settings`,
 			},
-		},
-	};
+		}),
+		[pathname]
+	);
 
 	return (
 		<NavigationContainer

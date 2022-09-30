@@ -1,13 +1,13 @@
 import * as React from 'react';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
-import useProducts from '@wcpos/hooks/src/use-products';
+import useProducts from '@wcpos/core/src/contexts/products';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import { ProductVariationsProvider } from '@wcpos/hooks/src/use-product-variations';
+import { VariationsProvider } from '@wcpos/core/src/contexts/variations';
 import type { ListRenderItemInfo } from '@shopify/flash-list';
 import Footer from './footer';
 import cells from './cells';
@@ -24,9 +24,8 @@ interface ProductsTableProps {
  */
 const ProductsTable = ({ ui }: ProductsTableProps) => {
 	const { t } = useTranslation();
-	const { query$, setQuery, resource } = useProducts();
+	const { query$, setQuery, data: products } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
-	const data = useObservableSuspense(resource);
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
@@ -83,9 +82,9 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 		if (item.type === 'variable') {
 			return (
 				<ErrorBoundary>
-					<ProductVariationsProvider parent={item} ui={ui}>
+					<VariationsProvider parent={item} ui={ui}>
 						<Table.Row item={item} index={index} extraData={extraData} target={target} />
-					</ProductVariationsProvider>
+					</VariationsProvider>
 				</ErrorBoundary>
 			);
 		}
@@ -99,15 +98,15 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	/**
 	 *
 	 */
-	useWhyDidYouUpdate('Table', { data });
+	useWhyDidYouUpdate('Table', { products });
 
 	/**
 	 *
 	 */
 	return (
 		<Table<ProductDocument>
-			data={data}
-			footer={<Footer count={data.length} />}
+			data={products}
+			footer={<Footer count={products.length} />}
 			estimatedItemSize={150}
 			extraData={context}
 			renderItem={renderItem}

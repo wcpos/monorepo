@@ -3,7 +3,7 @@ import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 import Text from '@wcpos/components/src/text';
 import useStore from '@wcpos/hooks/src/use-store';
-import useProducts from '@wcpos/hooks/src/use-products';
+import useProducts from '@wcpos/core/src/contexts/products';
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
 import Popover, { usePopover } from '@wcpos/components/src/popover';

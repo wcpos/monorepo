@@ -2,8 +2,8 @@ import * as React from 'react';
 import { useObservableState, ObservableResource, useObservableSuspense } from 'observable-hooks';
 import Text from '@wcpos/components/src/text';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
-import useProductVariations from '@wcpos/hooks/src/use-product-variations';
-import useTaxes from '@wcpos/hooks/src/use-taxes';
+import useVariations from '@wcpos/core/src/contexts/variations';
+import useTaxes from '@wcpos/core/src/contexts/taxes';
 import find from 'lodash/find';
 
 interface Props {
@@ -15,7 +15,7 @@ interface Props {
 
 const VariablePrice = ({ item: product, column }: Props) => {
 	const { format } = useCurrencyFormat();
-	const { data } = useProductVariations();
+	const { data } = useVariations();
 	const priceRange = React.useMemo(() => {
 		const prices = data.map((variation) => variation.regular_price);
 		const min = Math.min(...prices);

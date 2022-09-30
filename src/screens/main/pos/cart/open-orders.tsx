@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { OrdersProvider } from '@wcpos/hooks/src/use-orders';
+import { OrdersProvider } from '@wcpos/core/src/contexts/orders';
 import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';

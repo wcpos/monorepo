@@ -3,8 +3,8 @@ import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import type { ListRenderItemInfo } from '@shopify/flash-list';
-import useProducts from '@wcpos/hooks/src/use-products';
-import { ProductVariationsProvider } from '@wcpos/hooks/src/use-product-variations';
+import useProducts from '@wcpos/core/src/contexts/products';
+import { VariationsProvider } from '@wcpos/core/src/contexts/variations';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
@@ -24,9 +24,8 @@ interface POSProductsTableProps {
  */
 const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	const { t } = useTranslation();
-	const { query$, resource, setQuery } = useProducts();
+	const { query$, setQuery, data } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
-	const data = useObservableSuspense(resource);
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
@@ -79,23 +78,26 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	/**
 	 *
 	 */
-	const renderItem = ({ item, index, extraData, target }: ListRenderItemInfo<ProductDocument>) => {
-		console.log(`render item ${item.id}`);
-		if (item.type === 'variable') {
+	const renderItem = React.useCallback(
+		({ item, index, extraData, target }: ListRenderItemInfo<ProductDocument>) => {
+			console.log(`render item ${item.id}`);
+			if (item.type === 'variable') {
+				return (
+					<ErrorBoundary>
+						<VariationsProvider parent={item} ui={ui}>
+							<Table.Row item={item} index={index} extraData={extraData} target={target} />
+						</VariationsProvider>
+					</ErrorBoundary>
+				);
+			}
 			return (
 				<ErrorBoundary>
-					<ProductVariationsProvider parent={item} ui={ui}>
-						<Table.Row item={item} index={index} extraData={extraData} target={target} />
-					</ProductVariationsProvider>
+					<Table.Row item={item} index={index} extraData={extraData} target={target} />
 				</ErrorBoundary>
 			);
-		}
-		return (
-			<ErrorBoundary>
-				<Table.Row item={item} index={index} extraData={extraData} target={target} />
-			</ErrorBoundary>
-		);
-	};
+		},
+		[ui]
+	);
 
 	/**
 	 *
@@ -103,7 +105,6 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	useWhyDidYouUpdate('ProductsTable', {
 		t,
 		query$,
-		resource,
 		setQuery,
 		ui,
 		data,

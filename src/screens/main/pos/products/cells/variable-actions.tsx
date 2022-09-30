@@ -3,7 +3,7 @@ import { useObservableSuspense } from 'observable-hooks';
 import { tap, filter, switchMap } from 'rxjs/operators';
 import difference from 'lodash/difference';
 import map from 'lodash/map';
-import useProductVariations from '@wcpos/hooks/src/use-product-variations';
+import useVariations from '@wcpos/core/src/contexts/variations';
 import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
 import Icon from '@wcpos/components/src/icon';
 import Popover from '@wcpos/components/src/popover';
@@ -43,7 +43,7 @@ interface Props {
 export const VariableActions = ({ item: product }: Props) => {
 	const { currentOrder } = usePOSContext();
 	const http = useRestHttpClient();
-	const { data } = useProductVariations();
+	const { data } = useVariations();
 
 	// const variationsResource = React.useMemo(
 	// 	() =>

@@ -1,8 +1,7 @@
 import * as React from 'react';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
-import get from 'lodash/get';
-import useCustomers from '@wcpos/hooks/src/use-customers';
+import useCustomers from '@wcpos/core/src/contexts/customers';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Footer from './footer';
@@ -20,9 +19,8 @@ interface CustomersTableProps {
  */
 const CustomersTable = ({ ui }: CustomersTableProps) => {
 	const { t } = useTranslation();
-	const { query$, setQuery, resource } = useCustomers();
+	const { query$, setQuery, data: customers } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
-	const data = useObservableSuspense(resource);
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
@@ -63,12 +61,12 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 		};
 	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer, headerLabel]);
 
-	useWhyDidYouUpdate('Table', { data });
+	useWhyDidYouUpdate('Table', { customers });
 
 	return (
 		<Table<CustomerDocument>
-			data={data}
-			footer={<Footer count={data.length} />}
+			data={customers}
+			footer={<Footer count={customers.length} />}
 			estimatedItemSize={100}
 			extraData={context}
 		/>

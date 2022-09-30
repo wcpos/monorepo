@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
 import Search from '@wcpos/components/src/search';
-import useProducts from '@wcpos/hooks/src/use-products';
+import useProducts from '@wcpos/core/src/contexts/products';
 
 const SearchBar = () => {
 	const { query$, setQuery } = useProducts();

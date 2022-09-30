@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
 import Search from '@wcpos/components/src/search';
-import useOrders from '@wcpos/hooks/src/use-orders';
+import useOrders from '@wcpos/core/src/contexts/orders';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 const SearchBar = () => {

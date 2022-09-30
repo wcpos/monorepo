@@ -3,7 +3,7 @@ import { useTheme } from 'styled-components/native';
 import { useObservableSuspense } from 'observable-hooks';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useStore from '@wcpos/hooks/src/use-store';
-import { TaxesProvider } from '@wcpos/hooks/src/use-taxes';
+import { TaxesProvider } from '@wcpos/core/src/contexts/taxes';
 import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import ResizeableColumns from './resizable-columns';
@@ -17,6 +17,7 @@ const POS = () => {
 	const { storeDB, uiResources } = useStore();
 	const productsUI = useObservableSuspense(uiResources['pos.products']);
 	const theme = useTheme();
+	console.log('render POS');
 
 	/**
 	 * TODO: useWindowDimensions updates state which triggers re-rendering of the whole POS
@@ -32,13 +33,13 @@ const POS = () => {
 
 	return (
 		<POSContextProvider>
-			{/* <TaxesProvider> */}
-			{theme._dimensions.width >= theme.screens.small ? (
-				<ResizeableColumns ui={productsUI} />
-			) : (
-				<POSTabs />
-			)}
-			{/* </TaxesProvider> */}
+			<TaxesProvider>
+				{theme._dimensions.width >= theme.screens.small ? (
+					<ResizeableColumns ui={productsUI} />
+				) : (
+					<POSTabs />
+				)}
+			</TaxesProvider>
 		</POSContextProvider>
 	);
 };

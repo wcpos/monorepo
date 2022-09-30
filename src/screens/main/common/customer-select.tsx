@@ -1,8 +1,6 @@
 import * as React from 'react';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import useStore from '@wcpos/hooks/src/use-store';
-import useCustomers, { CustomersProvider } from '@wcpos/hooks/src/use-customers';
-import orderBy from 'lodash/orderBy';
+import { useObservableState } from 'observable-hooks';
+import useCustomers, { CustomersProvider } from '@wcpos/core/src/contexts/customers';
 import { useTranslation } from 'react-i18next';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Combobox from '@wcpos/components/src/combobox';
@@ -21,10 +19,8 @@ interface CustomerSelectProps {
  */
 const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectProps) => {
 	const { t } = useTranslation();
-	const { storeDB } = useStore();
-	const { query$, setQuery, resource } = useCustomers();
+	const { query$, setQuery, data: customers } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
-	const customers = useObservableSuspense(resource);
 
 	/**
 	 *
@@ -88,6 +84,9 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 	);
 };
 
+/**
+ *
+ */
 export default (props: CustomerSelectProps) => {
 	const initialQuery = React.useMemo(
 		() => ({

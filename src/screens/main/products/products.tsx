@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
-import { ProductsProvider } from '@wcpos/hooks/src/use-products';
-import { TaxesProvider } from '@wcpos/hooks/src/use-taxes';
+import { ProductsProvider } from '@wcpos/core/src/contexts/products';
+import { TaxesProvider } from '@wcpos/core/src/contexts/taxes';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import useStore from '@wcpos/hooks/src/use-store';

@@ -6,7 +6,7 @@ import Text from '@wcpos/components/src/text';
 import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
 import useStore from '@wcpos/hooks/src/use-store';
-import useCustomers from '@wcpos/hooks/src/use-customers';
+// import useCustomers from '@wcpos/hooks/src/use-customers';
 
 interface CustomersFooterProps {
 	count: number;
@@ -16,7 +16,7 @@ const CustomersFooter = ({ count }: CustomersFooterProps) => {
 	const { storeDB } = useStore();
 	const total = useObservableState(storeDB.customers.totalDocCount$, 0);
 	const theme = useTheme();
-	const { runReplication } = useCustomers();
+	// const { runReplication } = useCustomers();
 
 	return (
 		<Box
@@ -34,7 +34,7 @@ const CustomersFooter = ({ count }: CustomersFooterProps) => {
 			<Text size="small">
 				Showing {count} of {total}
 			</Text>
-			<Button type="secondary" size="small" background="outline" onPress={runReplication}>
+			<Button type="secondary" size="small" background="outline" onPress={() => {}}>
 				<Icon name="arrowRotateRight" size="small" />
 			</Button>
 		</Box>

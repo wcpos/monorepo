@@ -2,7 +2,7 @@ import * as React from 'react';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import find from 'lodash/find';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
-import useProductVariations from '@wcpos/hooks/src/use-product-variations';
+import useVariations from '@wcpos/core/src/contexts/variations';
 import Text from '@wcpos/components/src/text';
 import Button from '@wcpos/components/src/button';
 import Select from '@wcpos/components/src/select';

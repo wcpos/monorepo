@@ -1,11 +1,12 @@
 import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 import useStore from '@wcpos/hooks/src/use-store';
-import { ProductsProvider } from '@wcpos/hooks/src/use-products';
+import { ProductsProvider } from '@wcpos/core/src/contexts/products';
 import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table from './table';
 import SearchBar from './search-bar';
 import Settings from './settings';
@@ -19,6 +20,8 @@ const POSProducts = ({ isColumn = false }) => {
 	const ui = useObservableSuspense(uiResources['pos.products']);
 	const initialQuery = React.useMemo(() => ({ sortBy: 'name', sortDirection: 'asc' }), []);
 	console.log('render POSProducts');
+
+	useWhyDidYouUpdate('POSProducts', { isColumn, theme, ui, uiResources, initialQuery });
 
 	return (
 		<ProductsProvider initialQuery={initialQuery} ui={ui}>

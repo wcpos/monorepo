@@ -1,21 +1,13 @@
 import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
-import { OrdersProvider } from '@wcpos/hooks/src/use-orders';
+import { OrdersProvider } from '@wcpos/core/src/contexts/orders';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import useStore from '@wcpos/hooks/src/use-store';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';
-
-type SortDirection = import('@wcpos/components/src/table').SortDirection;
-type OrderDocument = import('@wcpos/database').OrderDocument;
-interface QueryState {
-	search: string;
-	sortBy: string;
-	sortDirection: SortDirection;
-}
 
 /**
  *

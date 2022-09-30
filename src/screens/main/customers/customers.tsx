@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
-import { CustomersProvider } from '@wcpos/hooks/src/use-customers';
+import { CustomersProvider } from '@wcpos/core/src/contexts/customers';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import useStore from '@wcpos/hooks/src/use-store';

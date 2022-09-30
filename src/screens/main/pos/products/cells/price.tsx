@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import Text from '@wcpos/components/src/text';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
-import useTaxes from '@wcpos/hooks/src/use-taxes';
+import useTaxes from '@wcpos/core/src/contexts/taxes';
 import find from 'lodash/find';
 
 interface Props {

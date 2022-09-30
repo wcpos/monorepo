@@ -8,7 +8,7 @@ import { StoreProvider } from '@wcpos/hooks/src/use-store';
 import useAuth from '@wcpos/hooks/src/use-auth';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import { useTheme } from 'styled-components/native';
-import Support from './support';
+// import Support from './support';
 import Customers from './customers';
 import Orders from './orders';
 import Products from './products';
@@ -32,7 +32,7 @@ const iconMap = {
 	products: 'gifts',
 	orders: 'receipt',
 	customers: 'users',
-	support: 'lifeRing',
+	// support: 'lifeRing',
 };
 
 /**
@@ -91,7 +91,7 @@ export const MainNavigator = () => {
 					<Drawer.Screen name="Products" component={Products} options={getOptions('products')} />
 					<Drawer.Screen name="Orders" component={Orders} options={getOptions('orders')} />
 					<Drawer.Screen name="Customers" component={Customers} options={getOptions('customers')} />
-					<Drawer.Screen name="Support" component={Support} options={getOptions('support')} />
+					{/* <Drawer.Screen name="Support" component={Support} options={getOptions('support')} /> */}
 				</Drawer.Navigator>
 			</StoreProvider>
 		</OnlineStatusProvider>

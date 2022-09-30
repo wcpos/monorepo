@@ -1,9 +1,8 @@
 import * as React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
 import Tabs from '@wcpos/components/src/tabs';
 import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import useOrders from '@wcpos/hooks/src/use-orders';
+import useOrders from '@wcpos/core/src/contexts/orders';
 import Cart from './cart';
 import EmptyCart from './empty-cart';
 import CartTabTitle from './tab-title';
@@ -18,18 +17,17 @@ type RenderTabTitle = (focused: boolean, order?: OrderDocument) => React.ReactEl
  */
 const CartTabs = () => {
 	const { currentOrder, setCurrentOrder } = usePOSContext();
-	const { resource } = useOrders();
-	const orders = useObservableSuspense(resource);
+	const { data: orders } = useOrders();
 	const index = orders.findIndex((order) => order === currentOrder);
 
 	/**
 	 *
 	 */
-	React.useEffect(() => {
-		if (index === -1) {
-			setCurrentOrder(orders[0]);
-		}
-	}, [index, orders, setCurrentOrder]);
+	// React.useEffect(() => {
+	// 	if (index === -1) {
+	// 		setCurrentOrder(orders[0]);
+	// 	}
+	// }, [index, orders, setCurrentOrder]);
 
 	/**
 	 *

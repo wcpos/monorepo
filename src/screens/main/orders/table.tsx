@@ -1,8 +1,7 @@
 import * as React from 'react';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 import { useTranslation } from 'react-i18next';
-import get from 'lodash/get';
-import useOrders from '@wcpos/hooks/src/use-orders';
+import useOrders from '@wcpos/core/src/contexts/orders';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
@@ -38,9 +37,8 @@ const cells = {
  */
 const OrdersTable = ({ ui }: OrdersTableProps) => {
 	const { t } = useTranslation();
-	const { query$, setQuery, resource } = useOrders();
+	const { query$, setQuery, data: orders } = useOrders();
 	const query = useObservableState(query$, query$.getValue());
-	const data = useObservableSuspense(resource);
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 
 	/**
@@ -82,12 +80,12 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 		};
 	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer, headerLabel]);
 
-	useWhyDidYouUpdate('Table', { data, context });
+	useWhyDidYouUpdate('Table', { orders, context });
 
 	return (
 		<Table<OrderDocument>
-			data={data}
-			footer={<Footer count={data.length} />}
+			data={orders}
+			footer={<Footer count={orders.length} />}
 			estimatedItemSize={100}
 			extraData={context}
 		/>
