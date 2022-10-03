@@ -84,20 +84,6 @@ export default {
 			});
 
 		/**
-		 * Special case if the order is not yet saved, eg: new order
-		 */
-		if (this._isTemporary) {
-			const lineItems = this.line_items || [];
-			lineItems.push(newLineItem._id);
-			this.set('line_items', lineItems);
-			return this.save()
-				.then(() => this)
-				.catch((err: any) => {
-					debugger;
-				});
-		}
-
-		/**
 		 * Add new line item id to the lineItems
 		 * - use atomicUpdate just in case lineItems is undefined
 		 */
@@ -158,20 +144,6 @@ export default {
 			});
 
 		/**
-		 * Special case if the order is not yet saved, eg: new order
-		 */
-		if (this._isTemporary) {
-			const lineItems = this.line_items || [];
-			lineItems.push(newLineItem._id);
-			this.set('line_items', lineItems);
-			return this.save()
-				.then(() => this)
-				.catch((err: any) => {
-					debugger;
-				});
-		}
-
-		/**
 		 * Add new line item id to the lineItems
 		 * - use atomicUpdate just in case lineItems is undefined
 		 */
@@ -207,20 +179,6 @@ export default {
 				debugger;
 			});
 
-		/**
-		 * Special case if the order is not yet saved, eg: new order
-		 */
-		if (this._isTemporary) {
-			const feeLines = this.fee_lines || [];
-			feeLines.push(newFee._id);
-			this.set('fee_lines', feeLines);
-			return this.save()
-				.then(() => this)
-				.catch((err: any) => {
-					debugger;
-				});
-		}
-
 		return this.update({
 			$push: {
 				fee_lines: newFee._id,
@@ -252,20 +210,6 @@ export default {
 			.catch((err: any) => {
 				debugger;
 			});
-
-		/**
-		 * Special case if the order is not yet saved, eg: new order
-		 */
-		if (this._isTemporary) {
-			const shippingLines = this.shipping_lines || [];
-			shippingLines.push(newShipping._id);
-			this.set('shipping_lines', shippingLines);
-			return this.save()
-				.then(() => this)
-				.catch((err: any) => {
-					debugger;
-				});
-		}
 
 		return this.update({
 			$push: {

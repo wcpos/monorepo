@@ -12,6 +12,15 @@ import 'fast-text-encoding';
 
 import type { SQLiteQueryWithParams } from './plugins/sqlite';
 
+// expo=sqlite examples use the db.transaction() method
+// db.transaction((tx) => {
+// 	tx.executeSql(
+// 		`select * from items where done = ?;`,
+// 		[doneHeading ? 1 : 0],
+// 		(_, { rows: { _array } }) => setItems(_array)
+// 	);
+// });
+
 /**
  *
  */
