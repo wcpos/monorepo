@@ -8,6 +8,7 @@ import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 import useAuth from '@wcpos/hooks/src/use-auth';
 import Platform from '@wcpos/utils/src/platform';
+import Text from '@wcpos/components/src/text';
 import Left from './left';
 import Right from './right';
 
@@ -34,15 +35,26 @@ const Header = ({ route, layout, options }: DrawerHeaderProps) => {
 		};
 	}, [insets.top, theme.colors.headerBackground]);
 
-	// const title = React.useMemo(() => {
-	// 	return `${route.name} - ${store.name}`;
-	// }, [route.name, store.name]);
+	/**
+	 * @TODO - text trucation doesn't trigger when screen size changes
+	 */
+	const headerTitle = React.useCallback(({ children }) => {
+		return (
+			<Text size="large" type="inverse" numberOfLines={1}>
+				{children}
+			</Text>
+		);
+	}, []);
+
+	/**
+	 *
+	 */
 	return (
 		<View nativeID="titlebar">
 			<ReactNavigationHeader
 				title={`${route.name} - ${storeName}`}
+				headerTitle={headerTitle}
 				headerTitleAlign="center"
-				headerTintColor="white"
 				headerStyle={headerStyle}
 				headerLeft={left}
 				headerRight={right}

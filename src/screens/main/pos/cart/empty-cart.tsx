@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import useStore from '@wcpos/hooks/src/use-store';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import CartHeader from './cart-header';
 import AddFee from './add-fee';
 import AddShipping from './add-shipping';
@@ -21,7 +21,9 @@ const EmptyCart = ({ order }: EmptyCartProps) => {
 
 	return (
 		<Box raised rounding="medium" style={{ height: '100%', backgroundColor: 'white' }}>
-			<CartHeader order={order} ui={ui} />
+			<ErrorBoundary>
+				<CartHeader order={order} ui={ui} />
+			</ErrorBoundary>
 			<Box>
 				<AddFee order={order} />
 			</Box>

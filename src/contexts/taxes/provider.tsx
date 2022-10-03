@@ -19,7 +19,7 @@ interface TaxesProviderProps {
 }
 
 const TaxesProvider = ({ children, initialQuery, ui }: TaxesProviderProps) => {
-	console.log('render product provider');
+	console.log('render tax provider');
 	const { query$, setQuery } = useQuery(initialQuery);
 
 	/**

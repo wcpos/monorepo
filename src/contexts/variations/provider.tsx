@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { of } from 'rxjs';
-import { ObservableResource } from 'observable-hooks';
+import { useObservableState, ObservableResource } from 'observable-hooks';
+import { map, tap } from 'rxjs/operators';
+import useStore from '@wcpos/hooks/src/use-store';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type ProductVariationDocument =
@@ -16,14 +17,18 @@ export const VariationsContext = React.createContext<{
 
 interface VariationsProviderProps {
 	children: React.ReactNode;
-	initialQuery: QueryState;
+	initialQuery?: QueryState;
 	parent: ProductDocument;
 	ui?: import('@wcpos/hooks/src/use-store').UIDocument;
 }
 
 const VariationsProvider = ({ children, initialQuery, parent, ui }: VariationsProviderProps) => {
 	console.log('render variations provider');
-	const { query$, setQuery } = useQuery(initialQuery);
+	const { storeDB } = useStore();
+	const collection = storeDB.collections.variations;
+	const variationIds = useObservableState(parent.variations$, parent.variations);
+
+	// const { query$, setQuery } = useQuery(initialQuery);
 
 	/**
 	 *
@@ -34,13 +39,17 @@ const VariationsProvider = ({ children, initialQuery, parent, ui }: VariationsPr
 	 *
 	 */
 	const value = React.useMemo(() => {
+		const variations$ = collection
+			.findByIds$(variationIds?.map((id) => String(id)) || [])
+			.pipe(map((docsMap) => Array.from(docsMap.values())));
+
 		return {
-			query$,
-			setQuery,
-			resource: new ObservableResource(of([])),
+			// query$,
+			// setQuery,
+			resource: new ObservableResource(variations$),
 			sync,
 		};
-	}, [query$, setQuery, sync]);
+	}, [collection, sync, variationIds]);
 
 	return <VariationsContext.Provider value={value}>{children}</VariationsContext.Provider>;
 };

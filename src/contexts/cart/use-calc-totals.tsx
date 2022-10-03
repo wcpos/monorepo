@@ -59,75 +59,87 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 	 * add new items to the registry
 	 * @TODO - unsubscribe on remove
 	 */
-	const lineCalc$ = cart$.pipe(
-		tap(({ line_items = [], fee_lines = [], shipping_lines = [] }) => {
-			/**
-			 * Line Items
-			 */
-			forEach(line_items, (lineItem) => {
-				if (!lineItemRegistry.has(lineItem._id)) {
-					const subscription = combineLatest([lineItem.quantity$, lineItem.price$])
-						.pipe(
-							tap(async ([qty, price]) => {
-								const totals = calcLineItemTotals(qty, price, rates);
-								await lineItem.atomicPatch(totals);
-								const orderTotals = calcOrderTotals(
-									flatten([line_items, fee_lines, shipping_lines])
-								);
-								await order.atomicPatch(orderTotals);
-							})
-						)
-						.subscribe();
+	const lineCalc$ = React.useMemo(() => {
+		/**
+		 * helper function to update order totals (if needed)
+		 */
+		const updateOrderTotals = async (line_items, fee_lines, shipping_lines) => {
+			const orderTotals = calcOrderTotals(flatten([line_items, fee_lines, shipping_lines]));
+			await order.atomicPatch(orderTotals);
+		};
 
-					lineItemRegistry.set(lineItem._id, subscription);
-				}
-			});
+		return cart$.pipe(
+			tap(({ line_items = [], fee_lines = [], shipping_lines = [] }) => {
+				/**
+				 * Line Items
+				 */
+				forEach(line_items, (lineItem) => {
+					if (!lineItemRegistry.has(lineItem._id)) {
+						const subscription = combineLatest([lineItem.quantity$, lineItem.price$])
+							.pipe(
+								tap(async ([qty, price]) => {
+									const totals = calcLineItemTotals(qty, price, rates);
+									await lineItem.atomicPatch(totals);
+									await updateOrderTotals(line_items, fee_lines, shipping_lines);
+									// let changed = false;
+									// await lineItem.atomicUpdate((oldData) => {
+									// 	if (oldData.total !== totals.total) {
+									// 		oldData.total = totals.total;
+									// 		changed = true;
+									// 	}
+									// 	return oldData;
+									// });
+									// if (changed) {
+									// 	await updateOrderTotals(line_items, fee_lines, shipping_lines);
+									// }
+								})
+							)
+							.subscribe();
 
-			/**
-			 * Fee Lines
-			 */
-			forEach(fee_lines, (feeLine) => {
-				if (!feeLineRegistry.has(feeLine._id)) {
-					const subscription = combineLatest([feeLine.total$])
-						.pipe(
-							tap(async ([price]) => {
-								const totals = calcLineItemTotals(1, price, rates);
-								await feeLine.atomicPatch(totals);
-								const orderTotals = calcOrderTotals(
-									flatten([line_items, fee_lines, shipping_lines])
-								);
-								await order.atomicPatch(orderTotals);
-							})
-						)
-						.subscribe();
+						lineItemRegistry.set(lineItem._id, subscription);
+					}
+				});
 
-					feeLineRegistry.set(feeLine._id, subscription);
-				}
-			});
+				/**
+				 * Fee Lines
+				 */
+				forEach(fee_lines, (feeLine) => {
+					if (!feeLineRegistry.has(feeLine._id)) {
+						const subscription = combineLatest([feeLine.total$])
+							.pipe(
+								tap(async ([price]) => {
+									const totals = calcLineItemTotals(1, price, rates);
+									await feeLine.atomicPatch(totals);
+									await updateOrderTotals(line_items, fee_lines, shipping_lines);
+								})
+							)
+							.subscribe();
 
-			/**
-			 * Shipping Lines
-			 */
-			forEach(shipping_lines, (shippingLine) => {
-				if (!shippingLineRegistry.has(shippingLine._id)) {
-					const subscription = combineLatest([shippingLine.total$])
-						.pipe(
-							tap(async ([price]) => {
-								const totals = calcLineItemTotals(1, price, rates);
-								await shippingLine.atomicPatch(totals);
-								const orderTotals = calcOrderTotals(
-									flatten([line_items, fee_lines, shipping_lines])
-								);
-								await order.atomicPatch(orderTotals);
-							})
-						)
-						.subscribe();
+						feeLineRegistry.set(feeLine._id, subscription);
+					}
+				});
 
-					shippingLineRegistry.set(shippingLine._id, subscription);
-				}
-			});
-		})
-	);
+				/**
+				 * Shipping Lines
+				 */
+				forEach(shipping_lines, (shippingLine) => {
+					if (!shippingLineRegistry.has(shippingLine._id)) {
+						const subscription = combineLatest([shippingLine.total$])
+							.pipe(
+								tap(async ([price]) => {
+									const totals = calcLineItemTotals(1, price, rates);
+									await shippingLine.atomicPatch(totals);
+									await updateOrderTotals(line_items, fee_lines, shipping_lines);
+								})
+							)
+							.subscribe();
+
+						shippingLineRegistry.set(shippingLine._id, subscription);
+					}
+				});
+			})
+		);
+	}, [cart$, feeLineRegistry, lineItemRegistry, order, shippingLineRegistry]);
 
 	useSubscription(lineCalc$);
 };
