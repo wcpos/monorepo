@@ -89,42 +89,33 @@ export const useHttpClient = () => {
 			/**
 			 *
 			 */
-			post(url: string, data: any, config: AxiosRequestConfig = {}) {
-				/**
-				 * @TODO - 'Content-Type': 'multipart/form-data'
-				 */
+			post(url: string, config: AxiosRequestConfig = {}) {
 				return request({
 					...config,
 					method: 'POST',
 					url,
-					data,
+					data: (config || {}).data,
 				});
 			},
 
-			put(url: string, data: any, config: AxiosRequestConfig = {}) {
-				/**
-				 * @TODO - 'Content-Type': 'multipart/form-data'
-				 */
+			put(url: string, config: AxiosRequestConfig = {}) {
 				return request({
 					...config,
 					method: 'PUT',
 					url,
-					data,
+					data: (config || {}).data,
 				});
 			},
 
 			/**
 			 *
 			 */
-			patch(url: string, data: any, config: AxiosRequestConfig = {}) {
-				/**
-				 * @TODO - 'Content-Type': 'multipart/form-data'
-				 */
+			patch(url: string, config: AxiosRequestConfig = {}) {
 				return request({
 					...config,
 					method: 'PATCH',
 					url,
-					data,
+					data: (config || {}).data,
 				});
 			},
 
