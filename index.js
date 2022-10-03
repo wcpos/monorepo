@@ -1,7 +1,16 @@
 import { registerRootComponent } from 'expo';
 import * as Sentry from 'sentry-expo';
+// import * as React from 'react';
 
 import App from '@wcpos/core';
+
+// const StrictApp = () => {
+// 	return (
+// 		<React.StrictMode>
+// 			<App />
+// 		</React.StrictMode>
+// 	);
+// };
 
 Sentry.init({
 	dsn: 'https://39233e9d1e5046cbb67dae52f807de5f@o159038.ingest.sentry.io/1220733',
