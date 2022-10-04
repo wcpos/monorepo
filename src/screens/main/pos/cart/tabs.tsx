@@ -1,10 +1,11 @@
 import * as React from 'react';
+import useOrders from '@wcpos/core/src/contexts/orders';
 import Tabs from '@wcpos/components/src/tabs';
 import Text from '@wcpos/components/src/text';
 import Icon from '@wcpos/components/src/icon';
+import Box from '@wcpos/components/src/box';
 import useTimeout from '@wcpos/hooks/src/use-timeout';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import useOrders from '@wcpos/core/src/contexts/orders';
 import Cart from './cart';
 import EmptyCart from './empty-cart';
 import CartTabTitle from './tab-title';
@@ -23,21 +24,26 @@ const CartTabs = () => {
 	const { data: orders } = useOrders();
 	const newOrder = useNewOrder();
 	orders.push(newOrder);
-	const index = orders.findIndex((order) => order === currentOrder);
+
+	if (!currentOrder) {
+		setCurrentOrder(orders[0]);
+	}
+
+	const focusedIndex = orders.findIndex((order) => order === currentOrder);
 
 	/**
 	 * In cases where the current order is not found, set the currentOrder = first order
 	 * Note: this happens when a newOrder is created, the query takes longer to come back
 	 * @TODO: this is fragile, what happens if query takes longer than 100ms?
 	 */
-	useTimeout(() => index === -1 && setCurrentOrder(orders[0]), 100);
+	// useTimeout(() => focusedIndex === -1 && setCurrentOrder(orders[0]), 100);
 
 	/**
 	 *
 	 */
 	const renderTabTitle: RenderTabTitle = React.useCallback(
 		(focused, order) =>
-			order._id ? (
+			order?._id ? (
 				<CartTabTitle focused={focused} order={order} />
 			) : (
 				<Icon name="plus" type={focused ? 'inverse' : 'primary'} />
@@ -60,30 +66,6 @@ const CartTabs = () => {
 	/**
 	 *
 	 */
-	const renderScene = React.useCallback(
-		({ route }: { route: typeof routes[number] }) => {
-			if (!route || !currentOrder) {
-				return null;
-			}
-			if (currentOrder.isCartEmpty()) {
-				return (
-					<React.Suspense fallback={<Text>Loading Empty Cart</Text>}>
-						<EmptyCart order={currentOrder} />
-					</React.Suspense>
-				);
-			}
-			return (
-				<React.Suspense fallback={<Text>Loading Cart</Text>}>
-					<Cart order={currentOrder} />
-				</React.Suspense>
-			);
-		},
-		[currentOrder]
-	);
-
-	/**
-	 *
-	 */
 	const handleTabChange = React.useCallback(
 		(idx: number) => {
 			setCurrentOrder(orders[idx]);
@@ -95,22 +77,16 @@ const CartTabs = () => {
 		orders,
 		currentOrder,
 		routes,
-		index,
+		focusedIndex,
 		handleTabChange,
-		renderScene,
+		// renderScene,
 	});
 
 	/**
 	 *
 	 */
 	return (
-		<Tabs<typeof routes[number]>
-			onIndexChange={handleTabChange}
-			navigationState={{ index, routes }}
-			renderScene={renderScene}
-			tabBarPosition="bottom"
-			style={{ height: '100%' }}
-		/>
+		<Tabs.TabBar routes={routes} onIndexChange={handleTabChange} focusedIndex={focusedIndex} />
 	);
 };
 

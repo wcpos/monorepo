@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { ObservableResource, useObservableState } from 'observable-hooks';
-import { switchMap, map, debounceTime, tap } from 'rxjs/operators';
+import { switchMap, map, debounceTime, tap, distinctUntilChanged } from 'rxjs/operators';
 import useStore from '@wcpos/hooks/src/use-store';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
-import _isEmpty from 'lodash/isEmpty';
+import isEqual from 'lodash/isEqual';
 import { orderBy } from '@shelf/fast-natural-order-by';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
@@ -55,6 +55,13 @@ const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => 
 				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$.pipe(
+					// query will update for any change to orders, eg: totals
+					distinctUntilChanged((prev, curr) => {
+						return isEqual(
+							prev.map((doc) => doc._id),
+							curr.map((doc) => doc._id)
+						);
+					}),
 					// sort the results
 					map((result) => {
 						return orderBy(result, [q.sortBy], [q.sortDirection]);

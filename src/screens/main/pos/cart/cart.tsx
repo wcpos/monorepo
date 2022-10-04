@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
@@ -17,20 +17,19 @@ import SaveButton from './buttons/save-order';
 import AddNoteButton from './buttons/add-note';
 import VoidButton from './buttons/void';
 import PayButton from './buttons/pay';
-import { useCalcTotals } from './calc';
+import { usePOSContext } from '../context';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
-interface CartProps {
-	order: OrderDocument;
-}
-
-const Cart = ({ order }: CartProps) => {
+const Cart = () => {
 	const { uiResources } = useStore();
 	const ui = useObservableSuspense(uiResources['pos.cart']);
 	const theme = useTheme();
+	const { currentOrder } = usePOSContext();
 
-	useWhyDidYouUpdate('Cart', { order, ui, theme, uiResources });
+	useWhyDidYouUpdate('Cart', { currentOrder, ui, theme, uiResources });
+
+	if (!currentOrder) {
+		return null;
+	}
 
 	return (
 		<Box
@@ -40,54 +39,62 @@ const Cart = ({ order }: CartProps) => {
 			style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
 		>
 			<ErrorBoundary>
-				<CartHeader order={order} ui={ui} />
+				<CartHeader order={currentOrder} ui={ui} />
 			</ErrorBoundary>
-			<Box
-				// fill
-				style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
-			>
-				<CartProvider order={order}>
-					<ErrorBoundary>
-						<React.Suspense fallback={<Text>loading cart items...</Text>}>
-							<Table ui={ui} />
-						</React.Suspense>
-					</ErrorBoundary>
-				</CartProvider>
-			</Box>
+
+			{!currentOrder.isCartEmpty() && (
+				// show cart only if cart not empty
+				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+					<CartProvider order={currentOrder}>
+						<ErrorBoundary>
+							<React.Suspense fallback={<Text>loading cart items...</Text>}>
+								<Table ui={ui} />
+							</React.Suspense>
+						</ErrorBoundary>
+					</CartProvider>
+				</Box>
+			)}
+
 			<Box>
 				<ErrorBoundary>
-					<AddFee order={order} />
-				</ErrorBoundary>
-			</Box>
-			<Box>
-				<ErrorBoundary>
-					<AddShipping order={order} />
+					<AddFee order={currentOrder} />
 				</ErrorBoundary>
 			</Box>
 			<Box>
 				<ErrorBoundary>
-					<Totals order={order} />
+					<AddShipping order={currentOrder} />
 				</ErrorBoundary>
 			</Box>
-			<Box
-				horizontal
-				space="small"
-				padding="small"
-				align="center"
-				style={{ backgroundColor: theme.colors.lightGrey }}
-			>
-				<ErrorBoundary>
-					<AddNoteButton order={order} />
-					<OrderMetaButton order={order} />
-					<SaveButton order={order} />
-				</ErrorBoundary>
-			</Box>
-			<Box horizontal>
-				<ErrorBoundary>
-					<VoidButton order={order} />
-					<PayButton order={order} />
-				</ErrorBoundary>
-			</Box>
+
+			{!currentOrder.isCartEmpty() && (
+				// show order totals only if cart not empty
+				<>
+					<Box>
+						<ErrorBoundary>
+							<Totals order={currentOrder} />
+						</ErrorBoundary>
+					</Box>
+					<Box
+						horizontal
+						space="small"
+						padding="small"
+						align="center"
+						style={{ backgroundColor: theme.colors.lightGrey }}
+					>
+						<ErrorBoundary>
+							<AddNoteButton order={currentOrder} />
+							<OrderMetaButton order={currentOrder} />
+							<SaveButton order={currentOrder} />
+						</ErrorBoundary>
+					</Box>
+					<Box horizontal>
+						<ErrorBoundary>
+							<VoidButton order={currentOrder} />
+							<PayButton order={currentOrder} />
+						</ErrorBoundary>
+					</Box>
+				</>
+			)}
 		</Box>
 	);
 };
