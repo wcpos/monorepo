@@ -1,12 +1,12 @@
 import * as React from 'react';
 import pick from 'lodash/pick';
 import Form from '@wcpos/react-native-jsonschema-form';
-import useStore from '@wcpos/hooks/src/use-store';
+import useAuth from '@wcpos/hooks/src/use-auth';
 
 const uiSchema = {};
 
 export const TaxSettings = () => {
-	const { store } = useStore();
+	const { store } = useAuth();
 
 	const schema = React.useMemo(() => {
 		const _schema = {
