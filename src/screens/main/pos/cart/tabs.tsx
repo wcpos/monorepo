@@ -1,16 +1,9 @@
 import * as React from 'react';
-import useOrders from '@wcpos/core/src/contexts/orders';
 import Tabs from '@wcpos/components/src/tabs';
-import Text from '@wcpos/components/src/text';
 import Icon from '@wcpos/components/src/icon';
-import Box from '@wcpos/components/src/box';
-import useTimeout from '@wcpos/hooks/src/use-timeout';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Cart from './cart';
-import EmptyCart from './empty-cart';
 import CartTabTitle from './tab-title';
-import { usePOSContext } from '../context';
-import useNewOrder from './use-new-order';
+import useOpenOrders from '../contexts/open-orders';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -20,15 +13,7 @@ type RenderTabTitle = (focused: boolean, order?: OrderDocument) => React.ReactEl
  *
  */
 const CartTabs = () => {
-	const { currentOrder, setCurrentOrder } = usePOSContext();
-	const { data: orders } = useOrders();
-	const newOrder = useNewOrder();
-	orders.push(newOrder);
-
-	if (!currentOrder) {
-		setCurrentOrder(orders[0]);
-	}
-
+	const { orders, currentOrder, setCurrentOrder } = useOpenOrders();
 	const focusedIndex = orders.findIndex((order) => order === currentOrder);
 
 	/**

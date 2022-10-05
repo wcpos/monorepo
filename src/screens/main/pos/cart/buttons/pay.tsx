@@ -5,7 +5,7 @@ import Modal, { useModal } from '@wcpos/components/src/modal';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
 import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
 import Checkout from '../../checkout';
-import { usePOSContext } from '../../context';
+import useOpenOrders from '../../contexts/open-orders';
 
 interface PayModalProps {
 	order: import('@wcpos/database').OrderDocument;
@@ -19,7 +19,7 @@ const PayButton = ({ order }: PayModalProps) => {
 	const { format } = useCurrencyFormat();
 	const { ref, open, close } = useModal();
 	const http = useRestHttpClient();
-	const { setCurrentOrder } = usePOSContext();
+	const { setCurrentOrder } = useOpenOrders();
 
 	/**
 	 *

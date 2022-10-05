@@ -6,9 +6,10 @@ import useStore from '@wcpos/hooks/src/use-store';
 import { TaxesProvider } from '@wcpos/core/src/contexts/taxes';
 import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import { OrdersProvider } from '@wcpos/core/src/contexts/orders';
+import { OpenOrdersProvider } from './contexts/open-orders';
 import ResizeableColumns from './resizable-columns';
 import POSTabs from './tabs';
-import POSContextProvider from './context';
 
 /**
  *
@@ -20,9 +21,16 @@ const POS = () => {
 	console.log('render POS');
 
 	/**
-	 * TODO: useWindowDimensions updates state which triggers re-rendering of the whole POS
-	 * Is there a way to use a reanimated shared value or similar?
+	 *
 	 */
+	const initialQuery = React.useMemo(
+		() => ({
+			sortBy: 'date_created_gmt',
+			sortDirection: 'desc',
+			filters: { status: 'pos-open' },
+		}),
+		[]
+	);
 
 	useWhyDidYouUpdate('POS', {
 		productsUI,
@@ -32,15 +40,17 @@ const POS = () => {
 	});
 
 	return (
-		<POSContextProvider>
-			<TaxesProvider>
-				{theme._dimensions.width >= theme.screens.small ? (
-					<ResizeableColumns ui={productsUI} />
-				) : (
-					<POSTabs />
-				)}
-			</TaxesProvider>
-		</POSContextProvider>
+		<OrdersProvider initialQuery={initialQuery}>
+			<OpenOrdersProvider>
+				<TaxesProvider>
+					{theme._dimensions.width >= theme.screens.small ? (
+						<ResizeableColumns ui={productsUI} />
+					) : (
+						<POSTabs />
+					)}
+				</TaxesProvider>
+			</OpenOrdersProvider>
+		</OrdersProvider>
 	);
 };
 

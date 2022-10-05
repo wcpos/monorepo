@@ -1,9 +1,8 @@
-import * as React from 'react';
+// import * as React from 'react';
 import { BehaviorSubject } from 'rxjs';
-import useStore from '@wcpos/hooks/src/use-store';
-import { usePOSContext } from '../context';
+// import useStore from '@wcpos/hooks/src/use-store';
 
-type CustomerDocument = import('@wcpos/database').CustomerDocument;
+// type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 /**
@@ -13,7 +12,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  * The suggestion is to use an empty JSON and update the data there
  * but I need some extra functionality so I'm using a custom class
  */
-class NewOrder {
+export default class NewOrder {
 	public collection;
 	public customer_id: number;
 	public customer_id$: BehaviorSubject<number>;
@@ -105,22 +104,21 @@ class NewOrder {
 /**
  *
  */
-const useNewOrder = () => {
-	const { storeDB } = useStore();
-	const orderCollection = storeDB.collections.orders;
-	const { setCurrentOrder } = usePOSContext();
+// const useNewOrder = ({ setCurrentOrder }) => {
+// 	const { storeDB } = useStore();
+// 	const orderCollection = storeDB.collections.orders;
 
-	// get default customer from the store settings
+// 	// get default customer from the store settings
 
-	// I will need the customer provider here to get the default customer
+// 	// I will need the customer provider here to get the default customer
 
-	// create a new order
-	const newOrder = React.useMemo(
-		() => new NewOrder({ collection: orderCollection, setCurrentOrder }),
-		[orderCollection, setCurrentOrder]
-	);
+// 	// create a new order
+// 	const newOrder = React.useMemo(
+// 		() => new NewOrder({ collection: orderCollection, setCurrentOrder }),
+// 		[orderCollection, setCurrentOrder]
+// 	);
 
-	return newOrder;
-};
+// 	return newOrder;
+// };
 
-export default useNewOrder;
+// export default useNewOrder;

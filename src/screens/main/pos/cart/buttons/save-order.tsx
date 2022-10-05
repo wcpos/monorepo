@@ -1,7 +1,7 @@
 import * as React from 'react';
 import Button from '@wcpos/components/src/button';
 import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
-import { usePOSContext } from '../../context';
+import useOpenOrders from '../../contexts/open-orders';
 
 interface SaveButtonProps {
 	order: import('@wcpos/database').OrderDocument;
@@ -9,7 +9,7 @@ interface SaveButtonProps {
 
 const SaveButton = ({ order }: SaveButtonProps) => {
 	const http = useRestHttpClient();
-	const { setCurrentOrder } = usePOSContext();
+	const { setCurrentOrder } = useOpenOrders();
 
 	/**
 	 *

@@ -17,13 +17,13 @@ import SaveButton from './buttons/save-order';
 import AddNoteButton from './buttons/add-note';
 import VoidButton from './buttons/void';
 import PayButton from './buttons/pay';
-import { usePOSContext } from '../context';
+import useOpenOrders from '../contexts/open-orders';
 
 const Cart = () => {
 	const { uiResources } = useStore();
 	const ui = useObservableSuspense(uiResources['pos.cart']);
 	const theme = useTheme();
-	const { currentOrder } = usePOSContext();
+	const { currentOrder } = useOpenOrders();
 
 	useWhyDidYouUpdate('Cart', { currentOrder, ui, theme, uiResources });
 

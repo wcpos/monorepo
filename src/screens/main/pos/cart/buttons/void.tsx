@@ -1,7 +1,7 @@
 import * as React from 'react';
 import Button from '@wcpos/components/src/button';
 import useSnackbar from '@wcpos/components/src/snackbar';
-import { usePOSContext } from '../../context';
+import useOpenOrders from '../../contexts/open-orders';
 
 interface VoidButtonProps {
 	order: import('@wcpos/database').OrderDocument;
@@ -10,7 +10,7 @@ interface VoidButtonProps {
 let voidedOrderJSON = null;
 
 const VoidButton = ({ order }: VoidButtonProps) => {
-	const { setCurrentOrder } = usePOSContext();
+	const { setCurrentOrder } = useOpenOrders();
 	const addSnackbar = useSnackbar();
 
 	/**

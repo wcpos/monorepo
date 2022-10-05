@@ -1,7 +1,7 @@
 import * as React from 'react';
 import Icon from '@wcpos/components/src/icon';
 import useSnackbar from '@wcpos/components/src/snackbar';
-import { usePOSContext } from '../../context';
+import useOpenOrders from '../../contexts/open-orders';
 
 interface ActionProps {
 	item:
@@ -11,7 +11,7 @@ interface ActionProps {
 }
 
 export const Actions = ({ item }: ActionProps) => {
-	const { currentOrder } = usePOSContext();
+	const { currentOrder } = useOpenOrders();
 	const addSnackbar = useSnackbar();
 
 	/**

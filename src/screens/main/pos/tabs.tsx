@@ -7,6 +7,7 @@ import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
 import Products from './products';
 import OpenOrders from './cart';
+// import { usePOSContext } from './context';
 
 export type TabsParamList = {
 	Products: undefined;
@@ -20,6 +21,11 @@ const Tab = createBottomTabNavigator<TabsParamList>();
  */
 const TabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
 	const theme = useTheme();
+	// @TODO - add currentOrder total to cart tab
+	// this means I would have to either:
+	// 1. prefetch the first current order because the cart is not rendered yet
+	// 2. reender the cart to get the currentOrder
+	// const { currentOrder } = usePOSContext();
 
 	return (
 		<Box horizontal style={{ backgroundColor: '#FFFFFF', borderTopColor: theme.colors.border }}>
