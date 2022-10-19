@@ -1,5 +1,6 @@
 import { auditRestApiIds } from './audit-ids';
 import { parseRestResponse, bulkParseRestResponse } from './parse-rest-response';
+import { clear } from './clear';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb/dist/types').RxCollection;
@@ -48,6 +49,7 @@ export const WoocommercePlugin: RxPlugin = {
 			proto.auditRestApiIds = auditRestApiIds;
 			proto.parseRestResponse = parseRestResponse;
 			proto.bulkParseRestResponse = bulkParseRestResponse;
+			proto.clear = clear;
 		},
 		RxDocument: (proto: any) => {
 			// proto.syncRestApi = syncRestApiDocument;
