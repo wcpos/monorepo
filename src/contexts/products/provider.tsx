@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ObservableResource, useObservableState } from 'observable-hooks';
-import { switchMap, map, debounceTime } from 'rxjs/operators';
+import { from } from 'rxjs';
+import { switchMap, map, debounceTime, tap } from 'rxjs/operators';
 import useStore from '@wcpos/hooks/src/use-store';
 import _set from 'lodash/set';
 import _get from 'lodash/get';
@@ -8,6 +9,7 @@ import _isEmpty from 'lodash/isEmpty';
 import { orderBy } from '@shelf/fast-natural-order-by';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
+import { useReplication } from './use-replication';
 
 type ProductDocument = import('@wcpos/database/src/collections/products').ProductDocument;
 
@@ -24,17 +26,23 @@ interface ProductsProviderProps {
 	ui?: import('@wcpos/hooks/src/use-store').UIDocument;
 }
 
+/**
+ *
+ */
 const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps) => {
 	console.log('render product provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.products;
 	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
 	const { query$, setQuery } = useQuery(initialQuery);
+	const replicationState = useReplication({ collection });
 
 	/**
 	 *
 	 */
-	const sync = React.useCallback(() => {}, []);
+	// const sync = React.useCallback(() => {
+	// 	console.log('sync');
+	// }, []);
 
 	/**
 	 *
@@ -66,10 +74,14 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 				}
 
 				// hide out-of-stock products
-				if (!showOutOfStock) {
-					selector.$or = [{ manage_stock: { $eq: false } }, { stock_quantity: { $gt: 0 } }];
-				}
-				console.log(selector);
+				// @TODO - filter out-of-stock products after query
+				// if (!showOutOfStock) {
+				// 	selector.$or = [
+				// 		{ manage_stock: { $eq: false } },
+				// 		{ stock_quantity: { $gt: 0 } },
+				// 		{ date_created_gmt: { $eq: undefined } },
+				// 	];
+				// }
 
 				const RxQuery = collection.find({ selector });
 
@@ -86,9 +98,10 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 			query$,
 			setQuery,
 			resource: new ObservableResource(resource$),
-			sync,
+			replicationState,
+			// sync,
 		};
-	}, [collection, query$, setQuery, showOutOfStock, sync]);
+	}, [collection, query$, replicationState, setQuery, showOutOfStock]);
 
 	useWhyDidYouUpdate('ProductsProvider', {
 		value,
@@ -100,7 +113,7 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 		showOutOfStock,
 		query$,
 		setQuery,
-		sync,
+		// sync,
 	});
 
 	return <ProductsContext.Provider value={value}>{children}</ProductsContext.Provider>;

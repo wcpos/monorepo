@@ -69,7 +69,7 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 		};
 
 		return cart$.pipe(
-			tap(({ line_items = [], fee_lines = [], shipping_lines = [] }) => {
+			tap(async ({ line_items = [], fee_lines = [], shipping_lines = [] }) => {
 				/**
 				 * Line Items
 				 */
@@ -137,6 +137,8 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 						shippingLineRegistry.set(shippingLine._id, subscription);
 					}
 				});
+
+				await updateOrderTotals(line_items, fee_lines, shipping_lines);
 			})
 		);
 	}, [cart$, feeLineRegistry, lineItemRegistry, order, shippingLineRegistry]);
