@@ -37,9 +37,13 @@ export const useReplication = ({ collection }) => {
 
 			const documents = await collection.auditRestApiIds(response?.data);
 
-			//
+			/**
+			 * @TODO: This is bit of a hack, I want documents to always return non-empty array
+			 * so that it passes to the replication phase. This works but not sure if there is
+			 * unforeseen consequences of returning [{}]
+			 */
 			return {
-				documents,
+				documents: documents.length > 0 ? documents : [{}],
 				checkpoint: {
 					audit: false,
 				},

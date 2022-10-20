@@ -17,6 +17,9 @@ const VariablePrice = ({ item: product, column }: Props) => {
 	const { format } = useCurrencyFormat();
 	const { data } = useVariations();
 	const priceRange = React.useMemo(() => {
+		if (data.length === 0) {
+			return null;
+		}
 		const prices = data.map((variation) => variation.price);
 		const min = Math.min(...prices);
 		const max = Math.max(...prices);
@@ -48,7 +51,7 @@ const VariablePrice = ({ item: product, column }: Props) => {
 		[display]
 	);
 
-	return product.isSynced() ? (
+	return product.isSynced() && data.length > 0 ? (
 		<>
 			<Text>{priceRange}</Text>
 			{/* {show('tax') && tax_status === 'taxable' && (

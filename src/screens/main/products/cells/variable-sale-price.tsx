@@ -48,7 +48,7 @@ const VariablePrice = ({ item: product, column }: Props) => {
 		[display]
 	);
 
-	return product.isSynced() ? (
+	return product.isSynced() && data.length > 0 ? (
 		<>
 			<Text>{priceRange}</Text>
 			{/* {show('tax') && tax_status === 'taxable' && (

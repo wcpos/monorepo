@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useTheme } from 'styled-components/native';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useSubscription } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import Icon from '@wcpos/components/src/icon';
@@ -17,6 +17,33 @@ interface ProductFooterProps {
 /**
  *
  */
+const SyncButton = () => {
+	const { replicationState } = useProducts();
+	const isSyncing = useObservableState(replicationState.active$, false);
+
+	/**
+	 *
+	 */
+	const handleSync = React.useCallback(() => {
+		replicationState.reSync();
+	}, [replicationState]);
+
+	/**
+	 *
+	 */
+	return (
+		<Icon
+			name="arrowRotateRight"
+			size="small"
+			onPress={handleSync}
+			type={isSyncing ? 'info' : 'warning'}
+		/>
+	);
+};
+
+/**
+ *
+ */
 const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { storeDB } = useStore();
 	const total = useObservableState(storeDB.products.totalDocCount$, 0);
@@ -24,7 +51,6 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const http = useHttpClient();
 	const { site, wpCredentials } = useAuth();
 	const navigation = useNavigation();
-	const { replicationState } = useProducts();
 
 	/**
 	 *
@@ -34,13 +60,6 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 			console.log(res);
 		});
 	}, [http, site.wc_api_auth_url]);
-
-	/**
-	 *
-	 */
-	const handleSync = React.useCallback(() => {
-		replicationState.reSync();
-	}, [replicationState]);
 
 	/**
 	 *
@@ -83,7 +102,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 				}}
 			/>
 			<Icon name="user" size="small" onPress={handleJWT} />
-			<Icon name="arrowRotateRight" size="small" onPress={handleSync} />
+			<SyncButton />
 			<Icon name="arrowRotateRight" size="small" onLongPress={handleClear} />
 		</Box>
 	);
