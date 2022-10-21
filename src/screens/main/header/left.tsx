@@ -5,7 +5,7 @@ import { useTheme } from 'styled-components/native';
 import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
 import Box from '@wcpos/components/src/box';
-import * as Styled from './styles';
+import { t } from '@wcpos/core/src/lib/translations';
 
 const HeaderLeft = () => {
 	const { width } = useWindowDimensions();
@@ -24,7 +24,7 @@ const HeaderLeft = () => {
 			return (
 				<Button
 					onPress={openDrawer}
-					title="Menu"
+					title={t('Menu')}
 					accessoryLeft={<Icon name="bars" type="inverse" />}
 					type="headerBackground"
 					style={{ padding: 0 }}

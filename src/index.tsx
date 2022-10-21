@@ -13,6 +13,7 @@ import TranslationService from './services/translation';
 import RootNavigator from './screens';
 // import SplashScreen from './screens/splash';
 import RootError from './root-error';
+import { translationsResource } from './lib/translations';
 
 // enable freeze
 enableFreeze(true);
@@ -42,7 +43,7 @@ const App = () => {
 		<ErrorBoundary FallbackComponent={RootError}>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<GestureHandlerRootView style={{ flex: 1 }}>
-					<AuthProvider initialProps={initialProps}>
+					<AuthProvider initialProps={{ ...initialProps, translationsResource }}>
 						<ThemeProvider theme={theme}>
 							<ErrorBoundary>
 								<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
