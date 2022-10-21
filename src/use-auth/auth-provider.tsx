@@ -19,6 +19,7 @@ export const AuthProvider = ({ children, initialProps }: AuthProviderProps) => {
 	const userDB = useObservableSuspense(userDBResource);
 	const user = useObservableSuspense(userResource);
 	const { site, wpCredentials, store } = useObservableSuspense(selectedResource);
+	useObservableSuspense(initialProps.translationsResource);
 
 	/**
 	 *
