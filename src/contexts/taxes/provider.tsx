@@ -1,7 +1,9 @@
 import * as React from 'react';
-import { of } from 'rxjs';
+import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
+import useStore from '@wcpos/hooks/src/use-store';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
+import { useReplication } from './use-replication';
 
 type TaxRateDocument = import('@wcpos/database/src/collections/taxes').TaxRateDocument;
 
@@ -20,24 +22,44 @@ interface TaxesProviderProps {
 
 const TaxesProvider = ({ children, initialQuery, ui }: TaxesProviderProps) => {
 	console.log('render tax provider');
+	const { storeDB } = useStore();
+	const collection = storeDB.collections.taxes;
 	const { query$, setQuery } = useQuery(initialQuery);
-
-	/**
-	 *
-	 */
-	const sync = React.useCallback(() => {}, []);
+	const replicationState = useReplication({ collection });
 
 	/**
 	 *
 	 */
 	const value = React.useMemo(() => {
+		const resource$ = query$.pipe(
+			// debounce hits to the local db
+			debounceTime(100),
+			// switchMap to the collection query
+			switchMap((q) => {
+				const selector = {
+					country: {
+						$eq: q.country,
+					},
+				};
+
+				const RxQuery = collection.find({ selector });
+
+				return RxQuery.$.pipe(
+					map((result) => result)
+					// tap((res) => {
+					// 	debugger;
+					// })
+				);
+			})
+		);
+
 		return {
 			query$,
 			setQuery,
-			resource: new ObservableResource(of([])),
-			sync,
+			resource: new ObservableResource(resource$),
+			replicationState,
 		};
-	}, [query$, setQuery, sync]);
+	}, [query$, setQuery, replicationState, collection]);
 
 	return <TaxesContext.Provider value={value}>{children}</TaxesContext.Provider>;
 };

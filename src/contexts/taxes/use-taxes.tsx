@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 import { TaxesContext } from './provider';
+import { calcTaxes as _calcTaxes } from './utils';
 
 export const useTaxes = () => {
 	const context = React.useContext(TaxesContext);
@@ -8,7 +9,11 @@ export const useTaxes = () => {
 		throw new Error(`useTaxes must be called within TaxesContext`);
 	}
 
-	const data = useObservableSuspense(context.resource);
+	const rates = useObservableSuspense(context.resource);
 
-	return { ...context, data };
+	const calcTaxes = (price) => {
+		return _calcTaxes(price, rates);
+	};
+
+	return { ...context, rates, calcTaxes };
 };

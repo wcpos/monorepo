@@ -7,6 +7,7 @@ import _get from 'lodash/get';
 import isEqual from 'lodash/isEqual';
 import { orderBy } from '@shelf/fast-natural-order-by';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
+import { useReplication } from './use-replication';
 
 type OrderDocument = import('@wcpos/database/src/collections/orders').OrderDocument;
 
@@ -28,11 +29,7 @@ const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => 
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.orders;
 	const { query$, setQuery } = useQuery(initialQuery);
-
-	/**
-	 *
-	 */
-	const sync = React.useCallback(() => {}, []);
+	const replicationState = useReplication({ collection });
 
 	/**
 	 *
@@ -77,9 +74,9 @@ const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => 
 			query$,
 			setQuery,
 			resource: new ObservableResource(orders$),
-			sync,
+			replicationState,
 		};
-	}, [collection, query$, setQuery, sync]);
+	}, [collection, query$, setQuery, replicationState]);
 
 	return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>;
 };

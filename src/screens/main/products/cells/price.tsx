@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import Text from '@wcpos/components/src/text';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
+import useTaxes from '@wcpos/core/src/contexts/taxes';
 
 type Props = {
 	item: import('@wcpos/database').CustomerDocument;
@@ -10,6 +11,8 @@ type Props = {
 const Price = ({ item: product }: Props) => {
 	const price = useObservableState(product.price$, product.price);
 	const { format } = useCurrencyFormat();
+	const { calcTaxes } = useTaxes();
+	console.log(calcTaxes(price));
 
 	if (!product.isSynced()) {
 		return <Text.Skeleton length="short" />;

@@ -19,7 +19,7 @@ const Products = () => {
 	const theme = useTheme();
 
 	return (
-		<TaxesProvider>
+		<TaxesProvider initialQuery={{ country: 'GB' }}>
 			<ProductsProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }} ui={ui}>
 				<Box padding="small" style={{ height: '100%' }}>
 					<Box
