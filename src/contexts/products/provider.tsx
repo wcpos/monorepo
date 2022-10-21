@@ -40,13 +40,6 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 	/**
 	 *
 	 */
-	// const sync = React.useCallback(() => {
-	// 	console.log('sync');
-	// }, []);
-
-	/**
-	 *
-	 */
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			// debounce hits to the local db
@@ -99,9 +92,8 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 			setQuery,
 			resource: new ObservableResource(resource$),
 			replicationState,
-			// sync,
 		};
-	}, [collection, query$, replicationState, setQuery, showOutOfStock]);
+	}, [collection, query$, replicationState, setQuery]);
 
 	useWhyDidYouUpdate('ProductsProvider', {
 		value,

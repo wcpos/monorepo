@@ -1,7 +1,14 @@
 import * as React from 'react';
 import { of } from 'rxjs';
+import { switchMap, map, debounceTime, tap } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
+import _set from 'lodash/set';
+import _get from 'lodash/get';
+import _isEmpty from 'lodash/isEmpty';
+import { orderBy } from '@shelf/fast-natural-order-by';
+import useStore from '@wcpos/hooks/src/use-store';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
+import { useReplication } from './use-replication';
 
 type CustomerDocument = import('@wcpos/database/src/collections/customers').CustomerDocument;
 
@@ -20,24 +27,60 @@ interface CustomersProviderProps {
 
 const CustomersProvider = ({ children, initialQuery, ui }: CustomersProviderProps) => {
 	console.log('render customer provider');
+	const { storeDB } = useStore();
+	const collection = storeDB.collections.customers;
 	const { query$, setQuery } = useQuery(initialQuery);
-
-	/**
-	 *
-	 */
-	const sync = React.useCallback(() => {}, []);
+	const replicationState = useReplication({ collection });
 
 	/**
 	 *
 	 */
 	const value = React.useMemo(() => {
+		const resource$ = query$.pipe(
+			// debounce hits to the local db
+			debounceTime(100),
+			// switchMap to the collection query
+			switchMap((q) => {
+				const selector = {};
+
+				// const searchFields = ['username'];
+				// if (q.search) {
+				// 	selector.$or = searchFields.map((field) => ({
+				// 		[field]: { $regex: new RegExp(escape(q.search), 'i') },
+				// 	}));
+				// }
+				if (_get(q, 'search', '')) {
+					_set(selector, ['username', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
+				}
+
+				const RxQuery = collection.find({ selector });
+
+				return RxQuery.$.pipe(
+					// sort the results
+					map((result) => result)
+					// @ts-ignore
+					// map((result) => {
+					// 	const array = Array.isArray(result) ? result : [];
+					// 	const productSorter = (product: any) => {
+					// 		if (q.sortBy === 'name') {
+					// 			// @TODO - this doens't work
+					// 			return product[q.sortBy].toLowerCase();
+					// 		}
+					// 		return product[q.sortBy];
+					// 	};
+					// 	return orderBy(array, [productSorter], [q.sortDirection]);
+					// })
+				);
+			})
+		);
+
 		return {
 			query$,
 			setQuery,
-			resource: new ObservableResource(of([])),
-			sync,
+			resource: new ObservableResource(resource$),
+			replicationState,
 		};
-	}, [query$, setQuery, sync]);
+	}, [query$, setQuery, replicationState, collection]);
 
 	return <CustomersContext.Provider value={value}>{children}</CustomersContext.Provider>;
 };
