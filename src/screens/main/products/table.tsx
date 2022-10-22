@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import useProducts from '@wcpos/core/src/contexts/products';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
@@ -9,6 +8,7 @@ import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import { VariationsProvider } from '@wcpos/core/src/contexts/variations';
 import type { ListRenderItemInfo } from '@shopify/flash-list';
+import { t } from '@wcpos/core/src/lib/translations';
 import Footer from './footer';
 import cells from './cells';
 
@@ -23,7 +23,6 @@ interface ProductsTableProps {
  *
  */
 const ProductsTable = ({ ui }: ProductsTableProps) => {
-	const { t } = useTranslation();
 	const { query$, setQuery, data: products } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
@@ -51,12 +50,26 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	/**
 	 *
 	 */
-	const headerLabel = React.useCallback(
-		({ column }) => {
-			return t(`products.column.label.${column.key}`);
-		},
-		[t]
-	);
+	const headerLabel = React.useCallback(({ column }) => {
+		switch (column.key) {
+			case 'name':
+				return t('Products');
+			case 'sku':
+				return t('SKU');
+			case 'type':
+				return t('Type');
+			case 'stock_quantity':
+				return t('Stock');
+			case 'price':
+				return t('Price');
+			case 'regular_price':
+				return t('Regular Price');
+			case 'sale_price':
+				return t('Sale Price');
+			default:
+				return column.key;
+		}
+	}, []);
 
 	/**
 	 *

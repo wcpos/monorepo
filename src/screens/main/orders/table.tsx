@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import { useTranslation } from 'react-i18next';
 import useOrders from '@wcpos/core/src/contexts/orders';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
+import { t } from '@wcpos/core/src/lib/translations';
 import Actions from './cells/actions';
 import Address from './cells/address';
 import Customer from './cells/customer';
@@ -36,7 +36,6 @@ const cells = {
  *
  */
 const OrdersTable = ({ ui }: OrdersTableProps) => {
-	const { t } = useTranslation();
 	const { query$, setQuery, data: orders } = useOrders();
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
@@ -56,12 +55,32 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 	/**
 	 *
 	 */
-	const headerLabel = React.useCallback(
-		({ column }) => {
-			return t(`orders.column.label.${column.key}`);
-		},
-		[t]
-	);
+	const headerLabel = React.useCallback(({ column }) => {
+		switch (column.key) {
+			case 'status':
+				return t('Status');
+			case 'number':
+				return t('Order Number');
+			case 'customer':
+				return t('Customer');
+			case 'billing':
+				return t('Billing Address');
+			case 'shipping':
+				return t('Shipping Address');
+			case 'customer_note':
+				return t('Note');
+			case 'date_created':
+				return t('Date Created');
+			case 'date_completed':
+				return t('Date Completed');
+			case 'date_modified':
+				return t('Date Modified');
+			case 'total':
+				return t('Total');
+			default:
+				return column.key;
+		}
+	}, []);
 
 	/**
 	 *

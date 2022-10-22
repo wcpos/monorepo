@@ -1,11 +1,11 @@
 import * as React from 'react';
-import { useTranslation } from 'react-i18next';
 import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
 import Popover from '@wcpos/components/src/popover';
 import Icon from '@wcpos/components/src/icon';
 import Button from '@wcpos/components/src/button';
 import Form from '@wcpos/react-native-jsonschema-form';
+import { t } from '@wcpos/core/src/lib/translations';
 
 interface UiSettingsProps {
 	ui: import('@wcpos/hooks/src/use-store').UIDocument;
@@ -51,23 +51,30 @@ const uiSchema = {
 };
 
 const UiSettings = ({ ui }: UiSettingsProps) => {
-	const { t } = useTranslation();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
 
 	/**
 	 * Translate column key into label
 	 */
 	const label = React.useCallback(
-		(id) => {
-			// remove rootId and 'show'
-			const path = id.split('.').slice(1, -1).concat('key');
-			const key = get(columns, path, null);
-			if (key) {
-				return t(`${ui.id}.column.label.${key}`);
+		(id, label) => {
+			const path = id.split('.').slice(2, -1);
+			const key = get(columns, path.concat('key'), null);
+
+			// root level
+			if (!key) {
+				switch (label) {
+					default:
+						return label;
+				}
 			}
-			return 'No label found';
+
+			switch (key) {
+				default:
+					return t('No label found');
+			}
 		},
-		[columns, t, ui]
+		[columns]
 	);
 
 	const settings = (

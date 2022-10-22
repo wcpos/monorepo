@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
-import { useTranslation } from 'react-i18next';
 import useCustomers from '@wcpos/core/src/contexts/customers';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
+import { t } from '@wcpos/core/src/lib/translations';
 import Footer from './footer';
 import cells from './cells';
 
@@ -18,7 +18,6 @@ interface CustomersTableProps {
  *
  */
 const CustomersTable = ({ ui }: CustomersTableProps) => {
-	const { t } = useTranslation();
 	const { query$, setQuery, data: customers } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
@@ -37,12 +36,28 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 	/**
 	 *
 	 */
-	const headerLabel = React.useCallback(
-		({ column }) => {
-			return t(`customers.column.label.${column.key}`);
-		},
-		[t]
-	);
+	const headerLabel = React.useCallback(({ column }) => {
+		switch (column.key) {
+			case 'avatar_url':
+				return t('Image');
+			case 'first_name':
+				return t('First Name');
+			case 'last_name':
+				return t('Last Name');
+			case 'email':
+				return t('Email');
+			case 'billing':
+				return t('Billing Address');
+			case 'shipping':
+				return t('Shipping Address');
+			case 'role':
+				return t('Role');
+			case 'username':
+				return t('Username');
+			default:
+				return column.key;
+		}
+	}, []);
 
 	/**
 	 *

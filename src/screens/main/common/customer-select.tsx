@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import useCustomers, { CustomersProvider } from '@wcpos/core/src/contexts/customers';
-import { useTranslation } from 'react-i18next';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Combobox from '@wcpos/components/src/combobox';
 import Text from '@wcpos/components/src/text';
+import { t } from '@wcpos/core/src/lib/translations';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type StoreDatabase = import('@wcpos/database').StoreDatabase;
@@ -18,7 +18,6 @@ interface CustomerSelectProps {
  *
  */
 const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectProps) => {
-	const { t } = useTranslation();
 	const { query$, setQuery, data: customers } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
 
@@ -72,10 +71,10 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 	 */
 	return (
 		<Combobox
-			label="Search customers"
+			label={t('Search Customers')}
 			hideLabel
 			options={options}
-			placeholder={t('customers.search.placeholder')}
+			placeholder={t('Search Customers')}
 			selected={selectedCustomer ? displayCustomerNameOrUsername(selectedCustomer) : ''}
 			onSearch={onSearch}
 			searchValue={query.search}

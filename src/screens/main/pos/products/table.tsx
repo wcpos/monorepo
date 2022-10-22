@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import { useTranslation } from 'react-i18next';
 import get from 'lodash/get';
 import type { ListRenderItemInfo } from '@shopify/flash-list';
 import useProducts from '@wcpos/core/src/contexts/products';
@@ -9,6 +8,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import { t } from '@wcpos/core/src/lib/translations';
 import Footer from './footer';
 import cells from './cells';
 
@@ -23,7 +23,6 @@ interface POSProductsTableProps {
  *
  */
 const POSProductsTable = ({ ui }: POSProductsTableProps) => {
-	const { t } = useTranslation();
 	const { query$, setQuery, data } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
@@ -51,12 +50,22 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	/**
 	 *
 	 */
-	const headerLabel = React.useCallback(
-		({ column }) => {
-			return t(`pos.products.column.label.${column.key}`);
-		},
-		[t]
-	);
+	const headerLabel = React.useCallback(({ column }) => {
+		switch (column.key) {
+			case 'name':
+				return t('Products');
+			case 'sku':
+				return t('SKU');
+			case 'type':
+				return t('Type');
+			case 'stock_quantity':
+				return t('Stock');
+			case 'price':
+				return t('Price');
+			default:
+				return column.key;
+		}
+	}, []);
 
 	/**
 	 *

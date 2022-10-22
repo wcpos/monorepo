@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { useTranslation } from 'react-i18next';
 import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
 import Form from '@wcpos/react-native-jsonschema-form';
 import Modal, { useModal } from '@wcpos/components/src/modal';
 import Icon from '@wcpos/components/src/icon';
+import { t } from '@wcpos/core/src/lib/translations';
 
 interface POSProductSettingsProps {
 	ui: import('@wcpos/hooks/src/use-store').UIDocument;
@@ -71,7 +71,6 @@ const uiSchema = {
  */
 export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 	const { ref, open, close } = useModal();
-	const { t } = useTranslation();
 	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
 
@@ -80,19 +79,45 @@ export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 	 */
 	const label = React.useCallback(
 		(id, label) => {
-			// remove rootId and 'show'
 			const path = id.split('.').slice(2, -1);
-			if (path.length === 0) {
-				return t(`${ui.id}.${label}`);
+			const key = get(columns, path.concat('key'), null);
+
+			// root level
+			if (!key) {
+				switch (label) {
+					case 'showOutOfStock':
+						return t('Show out-of-stock products');
+					default:
+						return label;
+				}
 			}
 
-			const key = get(columns, path.concat('key'), null);
-			if (key) {
-				return t(`${ui.id}.column.label.${key}`);
+			switch (key) {
+				case 'image':
+					return t('Image');
+				case 'name':
+					return t('Product');
+				case 'stock_quantity':
+					return t('Stock');
+				case 'sku':
+					return t('SKU');
+				case 'categories':
+					return t('Categories');
+				case 'tags':
+					return t('Tags');
+				case 'type':
+					return t('Type');
+				case 'price':
+					return t('Price');
+				case 'tax':
+					return t('Tax');
+				case 'actions':
+					return t('Actions');
+				default:
+					return t('No label found');
 			}
-			return 'No label found';
 		},
-		[columns, t, ui]
+		[columns]
 	);
 
 	/**

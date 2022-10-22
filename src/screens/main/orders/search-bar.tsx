@@ -4,6 +4,7 @@ import get from 'lodash/get';
 import Search from '@wcpos/components/src/search';
 import useOrders from '@wcpos/core/src/contexts/orders';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import { t } from '@wcpos/core/src/lib/translations';
 
 const SearchBar = () => {
 	const { query$, setQuery } = useOrders();
@@ -45,8 +46,8 @@ const SearchBar = () => {
 	 */
 	return (
 		<Search
-			label="Search Orders"
-			placeholder="Search Orders"
+			label={t('Search Orders')}
+			placeholder={t('Search Orders')}
 			value={query.search}
 			onSearch={onSearch}
 			filters={filters}

@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import { useTranslation } from 'react-i18next';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useWindowDimensions } from 'react-native';
 import Icon, { IconName } from '@wcpos/components/src/icon';
@@ -9,6 +8,7 @@ import useAuth from '@wcpos/hooks/src/use-auth';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import { useTheme } from 'styled-components/native';
 // import Support from './support';
+import { t } from '@wcpos/core/src/lib/translations';
 import Customers from './customers';
 import Orders from './orders';
 import Products from './products';
@@ -49,7 +49,6 @@ export const MainNavigator = () => {
 	}
 	const storeDB = useObservableSuspense(storeDBResource);
 	const storeName = useObservableState(store.name$, store.name);
-	const { t } = useTranslation();
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
 	const header = React.useCallback((props) => <CustomHeader {...props} />, []);
@@ -67,7 +66,7 @@ export const MainNavigator = () => {
 				drawerIcon: renderIcon,
 			};
 		},
-		[storeName, t]
+		[storeName]
 	);
 
 	return (

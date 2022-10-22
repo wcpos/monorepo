@@ -1,13 +1,12 @@
 import * as React from 'react';
 import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
-import { useTranslation } from 'react-i18next';
 import flatten from 'lodash/flatten';
 import get from 'lodash/get';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import useCart from '@wcpos/core/src/contexts/cart';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import { usePOSContext } from '../context';
+import { t } from '@wcpos/core/src/lib/translations';
 import * as cells from './cells';
 
 type ColumnProps = import('@wcpos/components/src/table').ColumnProps;
@@ -26,7 +25,6 @@ interface ICartTableProps {
 }
 
 const CartTable = ({ ui }: ICartTableProps) => {
-	const { t } = useTranslation();
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 	const cart = useCart();
 	const items = React.useMemo(() => flatten(Object.values(cart)), [cart]); // @TODO - add sorting
@@ -51,12 +49,26 @@ const CartTable = ({ ui }: ICartTableProps) => {
 	/**
 	 *
 	 */
-	const headerLabel = React.useCallback(
-		({ column }) => {
-			return t(`pos.cart.column.label.${column.key}`);
-		},
-		[t]
-	);
+	const headerLabel = React.useCallback(({ column }) => {
+		switch (column.key) {
+			case 'quantity':
+				return t('QTY');
+			case 'name':
+				return t('Name');
+			case 'price':
+				return t('Price');
+			case 'total':
+				return t('Total');
+			case 'subtotal':
+				return t('Subtotal');
+			case 'subtotal_tax':
+				return t('Subtotal Tax');
+			case 'total_tax':
+				return t('Total Tax');
+			default:
+				return column.key;
+		}
+	}, []);
 
 	/**
 	 *

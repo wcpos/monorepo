@@ -7,6 +7,7 @@ import useProducts from '@wcpos/core/src/contexts/products';
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
 import Popover, { usePopover } from '@wcpos/components/src/popover';
+import { T } from '@wcpos/core/src/lib/translations';
 
 interface ProductFooterProps {
 	count: number;
@@ -35,7 +36,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 			}}
 		>
 			<Text size="small">
-				Showing {count} of {total}
+				<T _str="Showing {count} of {total}" count={count} total={total} />
 			</Text>
 			<Popover content={<Text>hi</Text>} placement="top">
 				<Icon name="arrowRotateRight" size="small" onPress={sync} onLongPress={open} />

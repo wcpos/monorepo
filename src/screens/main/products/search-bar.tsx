@@ -3,6 +3,7 @@ import { useObservableState } from 'observable-hooks';
 import get from 'lodash/get';
 import Search from '@wcpos/components/src/search';
 import useProducts from '@wcpos/core/src/contexts/products';
+import { t } from '@wcpos/core/src/lib/translations';
 
 const SearchBar = () => {
 	const { query$, setQuery } = useProducts();
@@ -41,8 +42,8 @@ const SearchBar = () => {
 
 	return (
 		<Search
-			label="Search Products"
-			placeholder="Search Products"
+			label={t('Search Products')}
+			placeholder={t('Search Products')}
 			value={query.search}
 			onSearch={onSearch}
 			filters={filters}

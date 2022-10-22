@@ -9,7 +9,6 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import { AuthProvider } from '@wcpos/hooks/src/use-auth';
 import Portal from '@wcpos/components/src/portal';
 import { SnackbarProvider } from '@wcpos/components/src/snackbar';
-import TranslationService from './services/translation';
 import RootNavigator from './screens';
 // import SplashScreen from './screens/splash';
 import RootError from './root-error';
@@ -17,8 +16,6 @@ import { translationsResource } from './lib/translations';
 
 // enable freeze
 enableFreeze(true);
-
-const i18n = new TranslationService();
 
 type InitialProps = import('./types').InitialProps;
 
