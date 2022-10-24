@@ -52,6 +52,14 @@ export const useHttpClient = () => {
 			}
 
 			/**
+			 * Fix a bug in windows - see https://github.com/axios/axios/issues/1658
+			 * I get an "unexpected end of file" error on HEAD requests because body is empty
+			 */
+			if (_config.method?.toLowerCase() === 'head') {
+				set(_config, 'decompress', false);
+			}
+
+			/**
 			 *
 			 */
 			const response = await http.request(_config).catch((error) => {
