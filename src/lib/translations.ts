@@ -15,7 +15,9 @@ const translations$ = from(
 		.setCurrentLocale('es')
 		.then(() => {
 			console.log('es translations loaded');
-			console.log(t('Menu')); // -> 'Γειά'
+		})
+		.then(() => {
+			console.log(t('Menu'));
 		})
 		.catch((err) => console.error(err))
 );

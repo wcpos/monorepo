@@ -1,10 +1,13 @@
 import * as React from 'react';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useTheme } from 'styled-components/native';
+import { useObservableState } from 'observable-hooks';
+import useAuth from '@wcpos/hooks/src/use-auth';
 import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
+import { t } from '@wcpos/core/src/lib/translations';
 import Products from './products';
 import OpenOrders from './cart';
 // import { usePOSContext } from './context';
@@ -21,6 +24,7 @@ const Tab = createBottomTabNavigator<TabsParamList>();
  */
 const TabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
 	const theme = useTheme();
+
 	// @TODO - add currentOrder total to cart tab
 	// this means I would have to either:
 	// 1. prefetch the first current order because the cart is not rendered yet
@@ -31,9 +35,7 @@ const TabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
 		<Box horizontal style={{ backgroundColor: '#FFFFFF', borderTopColor: theme.colors.border }}>
 			<Button.Group background="clear" fill>
 				{state.routes.map((route, index) => {
-					// const { options } = descriptors[route.key];
-					const label = route.name;
-
+					const { options } = descriptors[route.key];
 					const isFocused = state.index === index;
 
 					const onPress = () => {
@@ -51,7 +53,7 @@ const TabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
 
 					return (
 						<Button
-							key={label}
+							key={route.name}
 							onPress={onPress}
 							// disabled={isFocused}
 							// accessibilityRole="button"
@@ -60,11 +62,11 @@ const TabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
 						>
 							<Box space="xxSmall" align="center">
 								<Icon
-									name={label === 'Products' ? 'gifts' : 'cartShopping'}
+									name={route.name === 'Products' ? 'gifts' : 'cartShopping'}
 									type={isFocused ? 'primary' : 'text'}
 								/>
 								<Text size="xSmall" type={isFocused ? 'primary' : 'text'} uppercase>
-									{label}
+									{options.label}
 								</Text>
 							</Box>
 						</Button>
@@ -79,6 +81,8 @@ const TabBar = ({ state, descriptors, navigation }: BottomTabBarProps) => {
  *
  */
 const POSTabs = () => {
+	const { store } = useAuth();
+	const storeName = useObservableState(store.name$, store.name);
 	const tabBar = React.useCallback((props: BottomTabBarProps) => <TabBar {...props} />, []);
 
 	return (
@@ -87,8 +91,16 @@ const POSTabs = () => {
 			tabBar={tabBar}
 			// detachInactiveScreens={false} - @TODO - this is not working in web?!
 		>
-			<Tab.Screen name="Products" component={Products} />
-			<Tab.Screen name="Cart" component={OpenOrders} />
+			<Tab.Screen
+				name="Products"
+				component={Products}
+				options={{ title: `${t('Products')} - ${storeName}`, label: t('Products') }}
+			/>
+			<Tab.Screen
+				name="Cart"
+				component={OpenOrders}
+				options={{ title: `${t('Cart')} - ${storeName}`, label: t('Cart') }}
+			/>
 		</Tab.Navigator>
 	);
 };

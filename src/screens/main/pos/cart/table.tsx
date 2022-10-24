@@ -52,7 +52,7 @@ const CartTable = ({ ui }: ICartTableProps) => {
 	const headerLabel = React.useCallback(({ column }) => {
 		switch (column.key) {
 			case 'quantity':
-				return t('QTY');
+				return t('Qty');
 			case 'name':
 				return t('Name');
 			case 'price':

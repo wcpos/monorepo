@@ -6,6 +6,7 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import Pill from '@wcpos/components/src/pill';
 import Modal, { useModal } from '@wcpos/components/src/modal';
+import { t } from '@wcpos/core/src/lib/translations';
 import EditModal from '../../common/edit-modal';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -79,7 +80,7 @@ const Customer = ({ order }: CustomerProps) => {
 	 */
 	return (
 		<Box horizontal align="center" space="small">
-			<Text weight="bold">Customer:</Text>
+			<Text weight="bold">{t('Customer')}:</Text>
 			<Pill removable onRemove={handleCustomerRemove} onPress={open}>
 				{label}
 			</Pill>

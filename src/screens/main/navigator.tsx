@@ -26,15 +26,6 @@ export type DrawerParamList = {
 
 const Drawer = createDrawerNavigator<DrawerParamList>();
 
-// Map icons to screens
-const iconMap = {
-	pos: 'cashRegister',
-	products: 'gifts',
-	orders: 'receipt',
-	customers: 'users',
-	// support: 'lifeRing',
-};
-
 /**
  *
  */
@@ -54,21 +45,19 @@ export const MainNavigator = () => {
 	const header = React.useCallback((props) => <CustomHeader {...props} />, []);
 	const drawer = React.useCallback((props) => <CustomDrawer {...props} />, []);
 
-	const getOptions = React.useCallback(
-		(key: Extract<keyof typeof iconMap, string>) => {
-			const renderIcon = ({ focused }: { focused: boolean }) => (
-				<Icon name={iconMap[key] as IconName} type={focused ? 'primary' : 'inverse'} size="large" />
-			);
-
-			return {
-				title: `${t(`${key}.title`)} - ${storeName}`,
-				drawerLabel: t(`${key}.title`),
-				drawerIcon: renderIcon,
-			};
-		},
-		[storeName]
+	/**
+	 * Render the drawer icon
+	 */
+	const renderIcon = React.useCallback(
+		({ icon, focused }: { icon: IconName; focused: boolean }) => (
+			<Icon name={icon} type={focused ? 'primary' : 'inverse'} size="large" />
+		),
+		[]
 	);
 
+	/**
+	 *
+	 */
 	return (
 		<OnlineStatusProvider>
 			<StoreProvider store={store} storeDB={storeDB}>
@@ -86,10 +75,42 @@ export const MainNavigator = () => {
 					}}
 					drawerContent={drawer}
 				>
-					<Drawer.Screen name="POS" component={POS} options={getOptions('pos')} />
-					<Drawer.Screen name="Products" component={Products} options={getOptions('products')} />
-					<Drawer.Screen name="Orders" component={Orders} options={getOptions('orders')} />
-					<Drawer.Screen name="Customers" component={Customers} options={getOptions('customers')} />
+					<Drawer.Screen
+						name="POS"
+						component={POS}
+						options={{
+							title: `${t('POS')} - ${storeName}`,
+							drawerLabel: t('POS'),
+							drawerIcon: ({ focused }) => renderIcon({ icon: 'cashRegister', focused }),
+						}}
+					/>
+					<Drawer.Screen
+						name="Products"
+						component={Products}
+						options={{
+							title: `${t('Products')} - ${storeName}`,
+							drawerLabel: t('Products'),
+							drawerIcon: ({ focused }) => renderIcon({ icon: 'gifts', focused }),
+						}}
+					/>
+					<Drawer.Screen
+						name="Orders"
+						component={Orders}
+						options={{
+							title: `${t('Orders')} - ${storeName}`,
+							drawerLabel: t('Orders'),
+							drawerIcon: ({ focused }) => renderIcon({ icon: 'receipt', focused }),
+						}}
+					/>
+					<Drawer.Screen
+						name="Customers"
+						component={Customers}
+						options={{
+							title: `${t('Customers')} - ${storeName}`,
+							drawerLabel: t('Customers'),
+							drawerIcon: ({ focused }) => renderIcon({ icon: 'users', focused }),
+						}}
+					/>
 					{/* <Drawer.Screen name="Support" component={Support} options={getOptions('support')} /> */}
 				</Drawer.Navigator>
 			</StoreProvider>

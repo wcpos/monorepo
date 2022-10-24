@@ -53,7 +53,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	const headerLabel = React.useCallback(({ column }) => {
 		switch (column.key) {
 			case 'name':
-				return t('Products');
+				return t('Products', { _context: 'Table header' });
 			case 'sku':
 				return t('SKU');
 			case 'type':
