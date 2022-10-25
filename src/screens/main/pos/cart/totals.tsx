@@ -4,6 +4,7 @@ import { useTheme } from 'styled-components/native';
 import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
+import { t } from '@wcpos/core/src/lib/translations';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -29,7 +30,7 @@ const Totals = ({ order }: Props) => {
 		>
 			<Box horizontal>
 				<Box fill padding="small">
-					<Text>Subtotal:</Text>
+					<Text>{t('Subtotal')}:</Text>
 				</Box>
 				<Box padding="small">
 					<Text>{format(total - totalTax || 0)}</Text>
@@ -37,7 +38,7 @@ const Totals = ({ order }: Props) => {
 			</Box>
 			<Box horizontal>
 				<Box fill padding="small">
-					<Text>Total Tax:</Text>
+					<Text>{t('Total Tax')}:</Text>
 				</Box>
 				<Box padding="small">
 					<Text>{format(totalTax || 0)}</Text>

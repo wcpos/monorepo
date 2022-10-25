@@ -1,6 +1,7 @@
 import * as React from 'react';
 import Button from '@wcpos/components/src/button';
 import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
+import { t } from '@wcpos/core/src/lib/translations';
 import useOpenOrders from '../../contexts/open-orders';
 
 interface SaveButtonProps {
@@ -39,7 +40,7 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 		}
 	}, [http, order, setCurrentOrder]);
 
-	return <Button title="Save Order" background="outline" onPress={saveOrder} />;
+	return <Button title={t('Save Order')} background="outline" onPress={saveOrder} />;
 };
 
 export default SaveButton;

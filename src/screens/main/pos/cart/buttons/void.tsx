@@ -1,6 +1,7 @@
 import * as React from 'react';
 import Button from '@wcpos/components/src/button';
 import useSnackbar from '@wcpos/components/src/snackbar';
+import { t } from '@wcpos/core/src/lib/translations';
 import useOpenOrders from '../../contexts/open-orders';
 
 interface VoidButtonProps {
@@ -34,7 +35,7 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 		await order.remove();
 		setCurrentOrder(null);
 		addSnackbar({
-			message: 'Order removed',
+			message: t('Order removed'),
 			dismissable: true,
 			action: { label: 'Undo', action: undoRemove },
 		});
@@ -47,7 +48,7 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 		<Button
 			fill
 			size="large"
-			title="Void"
+			title={t('Void')}
 			onPress={handleRemove}
 			type="critical"
 			style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}

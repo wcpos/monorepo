@@ -4,6 +4,7 @@ import Button from '@wcpos/components/src/button';
 import Modal, { useModal } from '@wcpos/components/src/modal';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
 import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
+import { t } from '@wcpos/core/src/lib/translations';
 import Checkout from '../../checkout';
 import useOpenOrders from '../../contexts/open-orders';
 
@@ -64,7 +65,7 @@ const PayButton = ({ order }: PayModalProps) => {
 			<Button
 				fill
 				size="large"
-				title={`Checkout ${format(total || 0)}`}
+				title={t('Checkout {order_total}', { order_total: format(total || 0) })}
 				onPress={handlePay}
 				type="success"
 				style={{
@@ -74,7 +75,7 @@ const PayButton = ({ order }: PayModalProps) => {
 					borderBottomLeftRadius: 0,
 				}}
 			/>
-			<Modal ref={ref} title="Checkout" size="large">
+			<Modal ref={ref} title={t('Checkout')} size="large">
 				<Checkout order={order} />
 			</Modal>
 		</>

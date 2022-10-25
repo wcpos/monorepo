@@ -2,6 +2,7 @@ import * as React from 'react';
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
+import { t } from '@wcpos/core/src/lib/translations';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -17,7 +18,7 @@ const AddShipping = ({ order }: AddShippingProps) => {
 	return (
 		<Box horizontal space="small" padding="small" align="center">
 			<Box fill>
-				<Text>Add Shipping</Text>
+				<Text>{t('Add Shipping')}</Text>
 			</Box>
 			<Box>
 				<Icon name="circlePlus" onPress={handleAddShipping} />

@@ -2,6 +2,7 @@ import * as React from 'react';
 import pick from 'lodash/pick';
 import Button from '@wcpos/components/src/button';
 import Modal, { useModal } from '@wcpos/components/src/modal';
+import { t } from '@wcpos/core/src/lib/translations';
 import EditModal from '../../../common/edit-modal';
 
 interface OrderMetaButtonProps {
@@ -57,8 +58,8 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 
 	return (
 		<>
-			<Button title="Order Meta" background="outline" onPress={open} />
-			<Modal ref={ref} title="Edit Order">
+			<Button title={t('Order Meta')} background="outline" onPress={open} />
+			<Modal ref={ref} title={t('Edit Order')}>
 				<EditModal item={order} schema={schema} uiSchema={uiSchema} />
 			</Modal>
 		</>
