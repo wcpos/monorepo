@@ -4,7 +4,7 @@ import { tap } from 'rxjs/operators';
 import { useSubscription } from 'observable-hooks';
 import forEach from 'lodash/forEach';
 import flatten from 'lodash/flatten';
-import { calcOrderTotals, calcLineItemTotals } from './utils';
+import useTaxes from '../taxes';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
@@ -12,25 +12,12 @@ type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
 type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
 
-const rates: any[] = [
-	{
-		id: 2,
-		country: 'GB',
-		rate: '20.0000',
-		name: 'VAT',
-		priority: 1,
-		compound: true,
-		shipping: true,
-		order: 1,
-		class: 'standard',
-	},
-];
-
 export const useCalcTotals = (cart$, order: OrderDocument) => {
 	console.log('order calc');
 	const lineItemRegistry = React.useMemo(() => new Map(), []);
 	const feeLineRegistry = React.useMemo(() => new Map(), []);
 	const shippingLineRegistry = React.useMemo(() => new Map(), []);
+	const { calcLineItemTotals, calcOrderTotals } = useTaxes();
 
 	/**
 	 * Subcribe to all items in cart individually
@@ -75,10 +62,14 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 				 */
 				forEach(line_items, (lineItem) => {
 					if (!lineItemRegistry.has(lineItem._id)) {
-						const subscription = combineLatest([lineItem.quantity$, lineItem.price$])
+						const subscription = combineLatest([
+							lineItem.quantity$,
+							lineItem.price$,
+							lineItem.tax_class$,
+						])
 							.pipe(
-								tap(async ([qty, price]) => {
-									const totals = calcLineItemTotals(qty, price, rates);
+								tap(async ([qty, price, taxClass]) => {
+									const totals = calcLineItemTotals(qty, price, taxClass);
 									await lineItem.atomicPatch(totals);
 									await updateOrderTotals(line_items, fee_lines, shipping_lines);
 									// let changed = false;
@@ -105,10 +96,14 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 				 */
 				forEach(fee_lines, (feeLine) => {
 					if (!feeLineRegistry.has(feeLine._id)) {
-						const subscription = combineLatest([feeLine.total$])
+						const subscription = combineLatest([
+							feeLine.total$,
+							feeLine.tax_class$,
+							feeLine.tax_status$,
+						])
 							.pipe(
-								tap(async ([price]) => {
-									const totals = calcLineItemTotals(1, price, rates);
+								tap(async ([price, taxClass, taxStatus]) => {
+									const totals = calcLineItemTotals(1, price, taxClass);
 									await feeLine.atomicPatch(totals);
 									await updateOrderTotals(line_items, fee_lines, shipping_lines);
 								})
@@ -127,7 +122,7 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 						const subscription = combineLatest([shippingLine.total$])
 							.pipe(
 								tap(async ([price]) => {
-									const totals = calcLineItemTotals(1, price, rates);
+									const totals = calcLineItemTotals(1, price, 'shipping');
 									await shippingLine.atomicPatch(totals);
 									await updateOrderTotals(line_items, fee_lines, shipping_lines);
 								})
@@ -141,7 +136,15 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 				await updateOrderTotals(line_items, fee_lines, shipping_lines);
 			})
 		);
-	}, [cart$, feeLineRegistry, lineItemRegistry, order, shippingLineRegistry]);
+	}, [
+		calcLineItemTotals,
+		calcOrderTotals,
+		cart$,
+		feeLineRegistry,
+		lineItemRegistry,
+		order,
+		shippingLineRegistry,
+	]);
 
 	useSubscription(lineCalc$);
 };

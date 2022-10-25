@@ -61,10 +61,6 @@ const CartTable = ({ ui }: ICartTableProps) => {
 				return t('Total');
 			case 'subtotal':
 				return t('Subtotal');
-			case 'subtotal_tax':
-				return t('Subtotal Tax');
-			case 'total_tax':
-				return t('Total Tax');
 			default:
 				return column.key;
 		}
