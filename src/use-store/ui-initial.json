@@ -99,22 +99,24 @@
 			{
 				"key": "subtotal",
 				"show": false,
-				"align": "right"
-			},
-			{
-				"key": "subtotal_tax",
-				"show": false,
-				"align": "right"
-			},
-			{
-				"key": "total_tax",
-				"show": false,
-				"align": "right"
+				"align": "right",
+				"display": [
+					{
+						"key": "tax",
+						"show": false
+					}
+				]
 			},
 			{
 				"key": "total",
 				"align": "right",
-				"show": true
+				"show": true,
+				"display": [
+					{
+						"key": "tax",
+						"show": false
+					}
+				]
 			},
 			{
 				"key": "actions",
