@@ -11,8 +11,6 @@ type Props = {
 const Price = ({ item: product }: Props) => {
 	const price = useObservableState(product.price$, product.price);
 	const { format } = useCurrencyFormat();
-	const { calcTaxes } = useTaxes();
-	console.log(calcTaxes(price));
 
 	if (!product.isSynced()) {
 		return <Text.Skeleton length="short" />;

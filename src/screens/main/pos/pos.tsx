@@ -42,7 +42,7 @@ const POS = () => {
 	return (
 		<OrdersProvider initialQuery={initialQuery}>
 			<OpenOrdersProvider>
-				<TaxesProvider>
+				<TaxesProvider initialQuery={{ country: 'GB' }}>
 					{theme._dimensions.width >= theme.screens.small ? (
 						<ResizeableColumns ui={productsUI} />
 					) : (

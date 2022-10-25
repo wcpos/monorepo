@@ -1,5 +1,6 @@
 import forEach from 'lodash/forEach';
 import reverse from 'lodash/reverse';
+import sum from 'lodash/sum';
 import sumBy from 'lodash/sumBy';
 import sortBy from 'lodash/sortBy';
 import round from 'lodash/round';
@@ -123,10 +124,10 @@ function calcExclusiveTax(price: number, rates: TaxRateSchema[]) {
  * Takes a price and an array of tax rates, eg: [{ id: 1, rate: '4.0000', order: 1 }]
  * Returns the calculated array of taxes tax, eg: [{ id: 1, total: 1.2345 }]
  */
-export function calcTaxes(price: number, rates: TaxRateSchema[], priceIncludesTax = false) {
+export function calcTaxes(price: number, rates: TaxRateSchema[], pricesIncludeTax = false) {
 	const sortedRates = sortBy(rates, 'order');
 
-	return priceIncludesTax
+	return pricesIncludeTax
 		? calcInclusiveTax(+price, sortedRates)
 		: calcExclusiveTax(+price, sortedRates);
 }
