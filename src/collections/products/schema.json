@@ -284,6 +284,9 @@
 				}
 			}
 		},
+		"has_options": {
+			"type": "boolean"
+		},
 		"attributes": {
 			"type": "array",
 			"items": {
