@@ -8,9 +8,10 @@ type Props = {
 };
 
 export const StockQuantity = ({ item: product }: Props) => {
-	return product.manage_stock && isFinite(product.stock_quantity) ? (
-		<Text>{product.stock_quantity}</Text>
-	) : null;
+	const stockQuantity = useObservableState(product.stock_quantity$, product.stock_quantity);
+	const manageStock = useObservableState(product.manage_stock$, product.manage_stock);
+
+	return manageStock && isFinite(stockQuantity) ? <Text>{stockQuantity}</Text> : null;
 };
 
 export default StockQuantity;

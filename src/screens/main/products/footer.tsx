@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { useTheme } from 'styled-components/native';
 import { useObservableState, useSubscription } from 'observable-hooks';
+import get from 'lodash/get';
+import set from 'lodash/set';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import Icon from '@wcpos/components/src/icon';
@@ -25,6 +27,17 @@ const SyncButton = () => {
 	 *
 	 */
 	const handleSync = React.useCallback(() => {
+		/**
+		 * I need to clear the last checkpoint to get the audit to work
+		 * This works, but not sure if it is the best way to do it
+		 */
+		if (get(replicationState, ['internalReplicationState', 'lastCheckpointDoc', 'down', 'data'])) {
+			set(
+				replicationState,
+				['internalReplicationState', 'lastCheckpointDoc', 'down', 'data'],
+				null
+			);
+		}
 		replicationState.reSync();
 	}, [replicationState]);
 
@@ -67,6 +80,8 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const handleClear = React.useCallback(() => {
 		// storeDB.products.remove() will clear the collection instance, so I would need to re-create it
 		// for the moment, I think it's better just to flush the collection
+
+		// I probably need to clear the last checkpoint as well here
 
 		Promise.all([storeDB?.products.clear(), storeDB?.variations.clear()]).then(() => {
 			console.log('Products cleared');

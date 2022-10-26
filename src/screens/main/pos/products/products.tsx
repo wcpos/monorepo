@@ -10,6 +10,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Table from './table';
 import SearchBar from './search-bar';
 import Settings from './settings';
+// import BarcodeScanner from './barcode-scanner';
 
 /**
  *
@@ -42,6 +43,9 @@ const POSProducts = ({ isColumn = false }) => {
 							borderTopRightRadius: theme.rounding.medium,
 						}}
 					>
+						{/* <ErrorBoundary>
+							<BarcodeScanner />
+						</ErrorBoundary> */}
 						<ErrorBoundary>
 							<SearchBar />
 						</ErrorBoundary>

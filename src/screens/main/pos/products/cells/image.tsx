@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Image as RNImage, View } from 'react-native';
+import { useObservableState } from 'observable-hooks';
 // import Img from '@wcpos/components/src/image';
 import Skeleton from '@wcpos/components/src/skeleton';
 
@@ -8,7 +9,7 @@ type Props = {
 };
 
 export const Image = ({ item: product }: Props) => {
-	const { thumbnail } = product;
+	const thumbnail = useObservableState(product.thumbnail$, product.thumbnail);
 	const [size, setSize] = React.useState({ width: undefined, height: undefined });
 
 	const onLayout = React.useCallback((event) => {
