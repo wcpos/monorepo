@@ -23,7 +23,10 @@
 		"ios": {
 			"bundleIdentifier": "com.wcpos.client.managed",
 			"buildNumber": "1.0.0",
-			"supportsTablet": true
+			"supportsTablet": true,
+			"infoPlist": {
+				"NSCameraUsageDescription": "This app uses the camera to scan product barcodes."
+			}
 		},
 		"android": {
 			"package": "com.wcpos.client.managed",
