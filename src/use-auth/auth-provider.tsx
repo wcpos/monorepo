@@ -72,6 +72,11 @@ export const AuthProvider = ({ children, initialProps }: AuthProviderProps) => {
 					console.log(err);
 					return err;
 				});
+			} else {
+				await siteDoc.atomicPatch(_site).catch((err) => {
+					console.log(err);
+					return err;
+				});
 			}
 
 			/**
@@ -90,6 +95,11 @@ export const AuthProvider = ({ children, initialProps }: AuthProviderProps) => {
 					console.log(err);
 					return err;
 				});
+			} else {
+				await wpCredentialsDoc.atomicPatch(wp_credentials).catch((err) => {
+					console.log(err);
+					return err;
+				});
 			}
 
 			/**
@@ -105,6 +115,11 @@ export const AuthProvider = ({ children, initialProps }: AuthProviderProps) => {
 				storeDoc = await userDB.stores.insert(_store);
 
 				wpCredentialsDoc.update({ $push: { stores: storeDoc?.localID } }).catch((err) => {
+					console.log(err);
+					return err;
+				});
+			} else {
+				await storeDoc.atomicPatch(_store).catch((err) => {
 					console.log(err);
 					return err;
 				});
