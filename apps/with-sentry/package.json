@@ -20,7 +20,7 @@
     "expo-constants": "~13.2.4",
     "expo-device": "~4.3.0",
     "expo-file-system": "~14.1.0",
-    "expo-status-bar": "~1.4.0",
+    "expo-status-bar": "~1.4.1",
     "expo-updates": "~0.14.6",
     "react": "18.2.0",
     "react-dom": "18.2.0",
@@ -29,10 +29,10 @@
     "sentry-expo": "~5.0.3"
   },
   "devDependencies": {
-    "@babel/core": "^7.19.3",
+    "@babel/core": "^7.19.6",
     "@sentry/cli": "2.7.0",
-    "@types/react": "^18.0.21",
-    "@types/react-dom": "~18.0.6",
+    "@types/react": "^18.0.23",
+    "@types/react-dom": "~18.0.7",
     "@types/react-native": "~0.70.6",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
