@@ -52,11 +52,22 @@ export const useHttpClient = () => {
 			}
 
 			/**
+			 * HTTP HEAD Requests
+			 *
+			 * 1. Set decompress to false
 			 * Fix a bug in windows - see https://github.com/axios/axios/issues/1658
 			 * I get an "unexpected end of file" error on HEAD requests because body is empty
+			 *
+			 * 2. Remove Cookie (probably not needed)
+			 *
+			 * 3. Set query param http_method to HEAD
+			 * Some servers convert HEAD requests to GET requests, eg: WPengine
+			 * I don't know why, but it causes problems with CORS settings in the PHP plugin
 			 */
 			if (_config.method?.toLowerCase() === 'head') {
 				set(_config, 'decompress', false);
+				// set(_config, ['headers', 'Cookie'], undefined);
+				set(_config, ['params', 'wcpos_http_method'], 'head');
 			}
 
 			/**
