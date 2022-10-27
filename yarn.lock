@@ -8591,7 +8591,7 @@ __metadata:
     react-dom: 18.2.0
     react-native: 0.69.6
     react-native-device-info: 10.3.0
-    react-native-flipper: 0.171.1
+    react-native-flipper: 0.172.0
     react-native-gesture-handler: ~2.7.1
     react-native-get-random-values: ~1.8.0
     react-native-reanimated: 2.6.0
@@ -28498,13 +28498,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-flipper@npm:0.171.1":
-  version: 0.171.1
-  resolution: "react-native-flipper@npm:0.171.1"
+"react-native-flipper@npm:0.172.0":
+  version: 0.172.0
+  resolution: "react-native-flipper@npm:0.172.0"
   peerDependencies:
     react: ^16.8.0 || ^17.0.0 || ^18.0.0
     react-native: ">0.62.0"
-  checksum: 45a2bfe177b0068375923005a0892e0fd626d018ee40f0aefce902acfa8d43b475cb068fec7702db73b79f0a5d7fe730a74378b768cfeaa522f077fa3fe8ab0d
+  checksum: 3166e7e5b5f616e47505896ab3c98b5b1f4ee672cadd8aece864d426f09b71e216f8acd609fdeaa82560c647d59d69707cdf7c0e07634873a6d14387df8d2513
   languageName: node
   linkType: hard
 
