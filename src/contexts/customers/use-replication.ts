@@ -14,6 +14,7 @@ function wait(milliseconds: number) {
 export const useReplication = ({ collection }) => {
 	const http = useRestHttpClient();
 	const { site } = useAuth();
+	const runAudit = React.useRef(true);
 
 	const replicationStatePromise = React.useMemo(() => {
 		/**
@@ -36,6 +37,7 @@ export const useReplication = ({ collection }) => {
 			}
 
 			const documents = await collection.auditRestApiIds(response?.data);
+			runAudit.current = false;
 
 			/**
 			 * @TODO: This is bit of a hack, I want documents to always return non-empty array
@@ -44,9 +46,7 @@ export const useReplication = ({ collection }) => {
 			 */
 			return {
 				documents: documents.length > 0 ? documents : [{}],
-				checkpoint: {
-					audit: false,
-				},
+				checkpoint: null,
 			};
 		};
 
@@ -63,9 +63,10 @@ export const useReplication = ({ collection }) => {
 			const syncedDocs = collection.syncedIds$.getValue();
 
 			if (pullRemoteIds.length === 0) {
+				runAudit.current = false;
 				return {
 					documents: [],
-					checkpoint: { audit: false },
+					checkpoint: null,
 				};
 			}
 
@@ -95,7 +96,7 @@ export const useReplication = ({ collection }) => {
 
 			return {
 				documents: response?.data || [],
-				checkpoint: { audit: false },
+				checkpoint: null,
 			};
 		};
 
@@ -108,7 +109,7 @@ export const useReplication = ({ collection }) => {
 			// retryTime: 1000000000,
 			pull: {
 				async handler(lastCheckpoint, batchSize) {
-					return isEmpty(lastCheckpoint) ? audit() : replicate(lastCheckpoint, batchSize);
+					return runAudit.current ? audit() : replicate(lastCheckpoint, batchSize);
 				},
 				batchSize: 10,
 				modifier: (doc) => collection.parseRestResponse(doc),

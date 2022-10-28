@@ -35,7 +35,7 @@ export const useReplication = ({ collection, parent }) => {
 			await wait(1000);
 			const pullRemoteIds = collection.pullRemoteIds$.getValue();
 			const syncedDocs = collection.syncedIds$.getValue();
-			const variationIds = parent.variations;
+			const variationIds = parent.variations.map((id) => +id);
 			const include = intersection(pullRemoteIds, variationIds);
 
 			if (include.length === 0) {

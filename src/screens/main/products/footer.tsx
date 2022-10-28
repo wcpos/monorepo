@@ -27,17 +27,6 @@ const SyncButton = () => {
 	 *
 	 */
 	const handleSync = React.useCallback(() => {
-		/**
-		 * I need to clear the last checkpoint to get the audit to work
-		 * This works, but not sure if it is the best way to do it
-		 */
-		if (get(replicationState, ['internalReplicationState', 'lastCheckpointDoc', 'down', 'data'])) {
-			set(
-				replicationState,
-				['internalReplicationState', 'lastCheckpointDoc', 'down', 'data'],
-				null
-			);
-		}
 		replicationState.reSync();
 	}, [replicationState]);
 

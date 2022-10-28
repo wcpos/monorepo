@@ -11,9 +11,12 @@ function wait(milliseconds: number) {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+const runAudit = true;
+
 export const useReplication = ({ collection }) => {
 	const http = useRestHttpClient();
 	const { site } = useAuth();
+	const runAudit = React.useRef(true);
 
 	const replicationStatePromise = React.useMemo(() => {
 		/**
@@ -36,7 +39,7 @@ export const useReplication = ({ collection }) => {
 			}
 
 			const documents = await collection.auditRestApiIds(response?.data);
-
+			runAudit.current = false;
 			/**
 			 * @TODO: This is bit of a hack, I want documents to always return non-empty array
 			 * so that it passes to the replication phase. This works but not sure if there is
@@ -44,9 +47,7 @@ export const useReplication = ({ collection }) => {
 			 */
 			return {
 				documents: documents.length > 0 ? documents : [{}],
-				checkpoint: {
-					audit: false,
-				},
+				checkpoint: null,
 			};
 		};
 
@@ -63,9 +64,10 @@ export const useReplication = ({ collection }) => {
 			const syncedDocs = collection.syncedIds$.getValue();
 
 			if (pullRemoteIds.length === 0) {
+				runAudit.current = true;
 				return {
 					documents: [],
-					checkpoint: { audit: false },
+					checkpoint: null,
 				};
 			}
 
@@ -91,7 +93,7 @@ export const useReplication = ({ collection }) => {
 
 			return {
 				documents: response?.data || [],
-				checkpoint: { audit: false },
+				checkpoint: null,
 			};
 		};
 
@@ -104,11 +106,15 @@ export const useReplication = ({ collection }) => {
 			// retryTime: 1000000000,
 			pull: {
 				async handler(lastCheckpoint, batchSize) {
-					return isEmpty(lastCheckpoint) ? audit() : replicate(lastCheckpoint, batchSize);
+					return runAudit.current ? audit() : replicate(lastCheckpoint, batchSize);
 				},
 				batchSize: 10,
 				modifier: (doc) => {
-					if (!doc.date_modified_gmt) {
+					/**
+					 * @TODO - this is a hack, WC REST Taxes don't have a modified date
+					 * I just set it to current date here, but will need to output a modified date from the server
+					 */
+					if (doc.name && !doc.date_modified_gmt) {
 						const timestamp = Date.now();
 						const date_modified_gmt = new Date(timestamp).toISOString().split('.')[0];
 						doc.date_modified_gmt = date_modified_gmt;
