@@ -3,6 +3,7 @@ import { useObservableState, ObservableResource } from 'observable-hooks';
 import { map, tap } from 'rxjs/operators';
 import useStore from '@wcpos/hooks/src/use-store';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
+import { useReplication } from './use-replication';
 
 type ProductVariationDocument =
 	import('@wcpos/database/src/collections/variations').ProductVariationDocument;
@@ -27,13 +28,9 @@ const VariationsProvider = ({ children, initialQuery, parent, ui }: VariationsPr
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.variations;
 	const variationIds = useObservableState(parent.variations$, parent.variations);
+	const replicationState = useReplication({ collection, parent });
 
 	// const { query$, setQuery } = useQuery(initialQuery);
-
-	/**
-	 *
-	 */
-	const sync = React.useCallback(() => {}, []);
 
 	/**
 	 *
@@ -47,9 +44,9 @@ const VariationsProvider = ({ children, initialQuery, parent, ui }: VariationsPr
 			// query$,
 			// setQuery,
 			resource: new ObservableResource(variations$),
-			sync,
+			replicationState,
 		};
-	}, [collection, sync, variationIds]);
+	}, [collection, replicationState, variationIds]);
 
 	return <VariationsContext.Provider value={value}>{children}</VariationsContext.Provider>;
 };
