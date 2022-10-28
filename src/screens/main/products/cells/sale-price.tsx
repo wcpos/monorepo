@@ -1,21 +1,58 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
+import find from 'lodash/find';
 import Text from '@wcpos/components/src/text';
-import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
+import PriceWithTax from '../../common/price';
 
 type Props = {
 	item: import('@wcpos/database').CustomerDocument;
+	column: import('@wcpos/components/src/table').ColumnProps<
+		import('@wcpos/database').ProductDocument
+	>;
 };
 
-const RegularPrice = ({ item: product }: Props) => {
-	const salePrice = useObservableState(product.sale_price$, product.sale_price);
-	const { format } = useCurrencyFormat();
+const SalePrice = ({ item: product, column }: Props) => {
+	const price = useObservableState(product.sale_price$, product.sale_price);
+	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
+	const taxClass = useObservableState(product.tax_class$, product.tax_class);
+	const { display } = column;
 
+	/**
+	 *
+	 */
+	const show = React.useCallback(
+		(key: string): boolean => {
+			const d = find(display, { key });
+			return !!(d && d.show);
+		},
+		[display]
+	);
+
+	/**
+	 * Early exit, show skeleton if not downloaded yet
+	 */
 	if (!product.isSynced()) {
 		return <Text.Skeleton length="short" />;
 	}
 
-	return salePrice ? <Text>{format(salePrice)}</Text> : null;
+	/**
+	 * Early exit, no price!
+	 */
+	if (!price) {
+		return null;
+	}
+
+	/**
+	 *
+	 */
+	return (
+		<PriceWithTax
+			price={price}
+			taxStatus={taxStatus}
+			taxClass={taxClass}
+			taxDisplay={show('tax') ? 'text' : 'tooltip'}
+		/>
+	);
 };
 
-export default RegularPrice;
+export default SalePrice;

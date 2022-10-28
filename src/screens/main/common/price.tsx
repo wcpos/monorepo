@@ -1,28 +1,62 @@
 import * as React from 'react';
-import Format from '@wcpos/react-native-jsonschema-format';
-// import useStore from '@wcpos/hooks/src/use-store';
+import { useObservableState } from 'observable-hooks';
+import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
+import useAuth from '@wcpos/hooks/src/use-auth';
+import useTaxes from '@wcpos/core/src/contexts/taxes';
+import Text from '@wcpos/components/src/text';
+import Tooltip from '@wcpos/components/src/tooltip';
 
 interface Props {
-	item: any;
-	column: any;
+	price: string;
+	taxStatus: string;
+	taxClass: string;
+	taxDisplay: 'text' | 'tooltip' | 'none';
 }
 
-export const FormattedPrice = ({ item, column }: Props) => {
-	// const { userDB, storeID } = useStore();
-	// const [currency, setCurrency] = React.useState();
+export const Price = ({ price, taxStatus, taxClass, taxDisplay = 'tooltip' }: Props) => {
+	const { format } = useCurrencyFormat();
+	const { store } = useAuth();
+	const taxDisplayShop = useObservableState(store?.tax_display_shop$, store?.tax_display_shop);
+	const calcTaxes = useObservableState(store?.calc_taxes$, store?.calc_taxes);
+	const taxable = taxStatus === 'taxable' && calcTaxes === 'yes';
+	const { getDisplayValues } = useTaxes();
 
-	// // get currency settings
-	// React.useEffect(() => {
-	// 	async function fetchStore() {
-	// 		if (storeID) {
-	// 			const store = await userDB?.collections.stores.findOne(storeID).exec();
-	// 			setCurrency(store?.accounting.currency);
-	// 		}
-	// 	}
-	// 	fetchStore();
-	// }, []);
+	let displayPrice = price;
+	let taxTotal = 0;
 
-	return <Format.Currency symbol="$">{item[column.key]}</Format.Currency>;
+	if (taxable) {
+		const result = getDisplayValues(price, taxClass, taxDisplayShop);
+		displayPrice = result.displayPrice;
+		taxTotal = result.taxTotal;
+	}
+
+	/**
+	 * Show price with tax available as tooltip
+	 */
+	if (taxDisplay === 'tooltip' && taxable) {
+		return (
+			<Tooltip content={`${taxDisplayShop === 'incl' ? 'incl.' : 'excl.'} ${format(taxTotal)} tax`}>
+				<Text>{format(displayPrice)}</Text>
+			</Tooltip>
+		);
+	}
+
+	/**
+	 * Show price and tax
+	 */
+	if (taxDisplay === 'text' && taxable) {
+		return (
+			<>
+				<Text>{format(displayPrice)}</Text>
+				<Text type="textMuted" size="small">
+					{`${taxDisplayShop === 'incl' ? 'incl.' : 'excl.'} ${format(taxTotal)} tax`}
+				</Text>
+			</>
+		);
+	}
+
+	// default just show the displayPrice
+	return <Text>{format(displayPrice)}</Text>;
 };
 
-export default FormattedPrice;
+export default Price;
