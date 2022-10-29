@@ -111,7 +111,10 @@ export const useReplication = ({ collection }) => {
 					return runAudit.current ? audit() : replicate(lastCheckpoint, batchSize);
 				},
 				batchSize: 10,
-				modifier: (doc) => collection.parseRestResponse(doc),
+				modifier: async (doc) => {
+					await collection.upsertChildren(doc);
+					return collection.parseRestResponse(doc);
+				},
 				// stream$: timedObservable(1000),
 			},
 		});

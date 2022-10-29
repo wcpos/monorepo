@@ -86,9 +86,9 @@ const Customer = ({ order }: CustomerProps) => {
 			</Pill>
 			<Modal
 				ref={ref}
-				title="Edit Customer Addresses"
-				primaryAction={{ label: 'Edit Customer', action: handleSaveCustomer }}
-				secondaryActions={[{ label: 'Cancel', action: close }]}
+				title={t('Edit Customer Addresses')}
+				primaryAction={{ label: t('Edit Customer'), action: handleSaveCustomer }}
+				secondaryActions={[{ label: t('Cancel'), action: close }]}
 			>
 				<EditModal
 					// formData={{ billing: order.billing, shipping: order.shipping }}

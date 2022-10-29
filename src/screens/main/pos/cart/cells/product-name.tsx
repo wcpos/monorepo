@@ -6,6 +6,7 @@ import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
 import Modal, { useModal } from '@wcpos/components/src/modal';
+import { t } from '@wcpos/core/src/lib/translations';
 import EditModal from '../../../common/edit-modal';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
@@ -68,8 +69,8 @@ export const ProductName = ({ item, column }: Props) => {
 	 */
 	const uiSchema = React.useMemo(
 		() => ({
-			taxes: { 'ui:collapsible': 'closed', 'ui:title': 'Taxes' },
-			meta_data: { 'ui:collapsible': 'closed', 'ui:title': 'Meta Data' },
+			taxes: { 'ui:collapsible': 'closed', 'ui:title': t('Taxes') },
+			meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data') },
 		}),
 		[]
 	);
@@ -91,8 +92,8 @@ export const ProductName = ({ item, column }: Props) => {
 				))}
 			</Box>
 			<Box distribution="center">
-				<Icon name="ellipsisVertical" onPress={openEditor} tooltip="Edit" />
-				<Modal ref={refEditor} title={`Edit ${name}`}>
+				<Icon name="ellipsisVertical" onPress={openEditor} tooltip={t('Edit')} />
+				<Modal ref={refEditor} title={t('Edit {name}', { name })}>
 					<EditModal schema={schema} uiSchema={uiSchema} item={item} />
 				</Modal>
 			</Box>

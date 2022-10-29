@@ -38,13 +38,13 @@ const Header = ({ route, layout, options }: DrawerHeaderProps) => {
 	/**
 	 * @TODO - text trucation doesn't trigger when screen size changes
 	 */
-	const headerTitle = React.useCallback(({ children }) => {
+	const headerTitle = React.useCallback(() => {
 		return (
 			<Text size="large" type="inverse" numberOfLines={1}>
-				{children}
+				{options.title}
 			</Text>
 		);
-	}, []);
+	}, [options.title]);
 
 	/**
 	 *

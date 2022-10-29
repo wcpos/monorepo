@@ -37,7 +37,7 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 		addSnackbar({
 			message: t('Order removed'),
 			dismissable: true,
-			action: { label: 'Undo', action: undoRemove },
+			action: { label: t('Undo'), action: undoRemove },
 		});
 	}, [addSnackbar, order, setCurrentOrder, undoRemove]);
 

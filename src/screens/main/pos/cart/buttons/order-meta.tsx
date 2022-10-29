@@ -48,10 +48,10 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 	 */
 	const uiSchema = React.useMemo(
 		() => ({
-			billing: { 'ui:collapsible': 'closed', 'ui:title': 'Billing Address' },
-			shipping: { 'ui:collapsible': 'closed', 'ui:title': 'Shipping Address' },
-			tax_lines: { 'ui:collapsible': 'closed', 'ui:title': 'Taxes' },
-			meta_data: { 'ui:collapsible': 'closed', 'ui:title': 'Meta Data' },
+			billing: { 'ui:collapsible': 'closed', 'ui:title': t('Billing Address') },
+			shipping: { 'ui:collapsible': 'closed', 'ui:title': t('Shipping Address') },
+			tax_lines: { 'ui:collapsible': 'closed', 'ui:title': t('Taxes') },
+			meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data') },
 		}),
 		[]
 	);

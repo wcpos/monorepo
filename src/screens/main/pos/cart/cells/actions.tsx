@@ -1,6 +1,7 @@
 import * as React from 'react';
 import Icon from '@wcpos/components/src/icon';
 import useSnackbar from '@wcpos/components/src/snackbar';
+import { t } from '@wcpos/core/src/lib/translations';
 import useOpenOrders from '../../contexts/open-orders';
 
 interface ActionProps {
@@ -30,9 +31,9 @@ export const Actions = ({ item }: ActionProps) => {
 		await currentOrder?.removeCartLine(item);
 
 		addSnackbar({
-			message: `${name} removed from cart`,
+			message: t('{name} removed from cart', { name }),
 			dismissable: true,
-			action: { label: 'Undo', action: undoRemove },
+			action: { label: t('Undo'), action: undoRemove },
 		});
 	}, [addSnackbar, currentOrder, item, undoRemove]);
 
