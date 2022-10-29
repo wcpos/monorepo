@@ -5,6 +5,7 @@ import useAuth from '@wcpos/hooks/src/use-auth';
 import useTaxes from '@wcpos/core/src/contexts/taxes';
 import Text from '@wcpos/components/src/text';
 import Tooltip from '@wcpos/components/src/tooltip';
+import Box from '@wcpos/components/src/box';
 
 interface Props {
 	price: string;
@@ -46,12 +47,12 @@ export const Price = ({ price, taxStatus, taxClass, taxDisplay = 'tooltip' }: Pr
 	 */
 	if (taxDisplay === 'text' && taxable) {
 		return (
-			<>
+			<Box align="end">
 				<Text>{format(displayPrice)}</Text>
 				<Text type="textMuted" size="small">
 					{`${taxDisplayShop === 'incl' ? 'incl.' : 'excl.'} ${format(taxTotal)} tax`}
 				</Text>
-			</>
+			</Box>
 		);
 	}
 
