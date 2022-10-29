@@ -6,6 +6,7 @@ import PriceWithTax from './price';
 interface Props {
 	variations: import('@wcpos/database').ProductVariationDocument[];
 	taxDisplay: 'text' | 'tooltip' | 'none';
+	propertyName: 'price' | 'regular_price' | 'sale_price';
 }
 
 /**
@@ -19,16 +20,24 @@ interface Props {
  * Also, prices should react to changes in variation properties, I'm not sure if
  * that will happen in this case
  */
-const VariablePrice = ({ variations, taxDisplay }: Props) => {
+const VariablePrice = ({ variations, taxDisplay, propertyName = 'price' }: Props) => {
 	// order variations by price, don't nutate the original array
-	const sortedVariations = [...variations].sort((a, b) => a.price - b.price);
-	const min = sortedVariations.shift();
-	const max = sortedVariations.pop();
+	const sortedVariations = [...variations]
+		.filter((doc) => !!doc[propertyName])
+		.sort((a, b) => a[propertyName] - b[propertyName]);
+	const min = sortedVariations[0];
+	const max = sortedVariations[sortedVariations.length - 1];
 
-	if (min.price === max.price) {
+	// propertyName is undefined for all variations
+	if (sortedVariations.length === 0) {
+		return null;
+	}
+
+	// min and max exist by are equal
+	if (min[propertyName] === max[propertyName]) {
 		return (
 			<PriceWithTax
-				price={max.price}
+				price={max[propertyName]}
 				taxStatus={max.tax_status}
 				taxClass={max.tax_class}
 				taxDisplay={taxDisplay}
@@ -36,17 +45,18 @@ const VariablePrice = ({ variations, taxDisplay }: Props) => {
 		);
 	}
 
+	// default, min and max are different
 	return (
 		<Box align="end">
 			<PriceWithTax
-				price={min.price}
+				price={min[propertyName]}
 				taxStatus={min.tax_status}
 				taxClass={min.tax_class}
 				taxDisplay={taxDisplay}
 			/>
 			<Text> - </Text>
 			<PriceWithTax
-				price={max.price}
+				price={max[propertyName]}
 				taxStatus={max.tax_status}
 				taxClass={max.tax_class}
 				taxDisplay={taxDisplay}

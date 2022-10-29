@@ -34,7 +34,13 @@ const VariablePrice = ({ item: product, column }: Props) => {
 		<Text.Skeleton length="short" />;
 	}
 
-	return <VariablePriceWithTax variations={data} taxDisplay={show('tax') ? 'text' : 'tooltip'} />;
+	return (
+		<VariablePriceWithTax
+			variations={data}
+			taxDisplay={show('tax') ? 'text' : 'tooltip'}
+			propertyName="price"
+		/>
+	);
 };
 
 export default VariablePrice;
