@@ -58,12 +58,14 @@ const user$ = userDB$.pipe(
 
 				return !!userID;
 			}),
+
 			/**
 			 *
 			 */
 			switchMap((current) => {
 				const userID = current && current.get('userID');
 				console.log('userID', userID);
+
 				// userDB.users.findOne({ selector: { localID: current.get('userID') } }).exec();
 				/**
 				 * @TODO - this will always return a user, I think it is a bug in rxdb
@@ -71,6 +73,7 @@ const user$ = userDB$.pipe(
 				 */
 				return userDB.users.findOne({ selector: { localID: userID } }).exec();
 			}),
+
 			/**
 			 *
 			 */
