@@ -20,8 +20,8 @@
     "worker-loader": "3.0.8"
   },
   "devDependencies": {
-    "@types/react": "^18.0.23",
-    "@types/react-dom": "~18.0.7",
+    "@types/react": "^18.0.24",
+    "@types/react-dom": "~18.0.8",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
