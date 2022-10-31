@@ -7,6 +7,7 @@ import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import type { RxPlugin } from 'rxdb';
 import { RxSchema } from 'rxdb';
+import pickBy from 'lodash/pickBy';
 
 /**
  * run the callback if requestIdleCallback available
@@ -27,6 +28,7 @@ const VALIDATOR_CACHE: Map<string, any> = new Map();
 const ajv = new Ajv({ strict: 'log', coerceTypes: true });
 addFormats(ajv);
 ajv.addVocabulary(['version', 'primaryKey', 'indexes', 'encrypted', 'enumNames', 'keyCompression']);
+const ignoredKeys = ['_attachments', '_meta', '_rev'];
 
 /**
  * Duck punch the WC REST schema for children
@@ -51,7 +53,10 @@ ajv.addKeyword({
 export function getValidator(rxSchema: RxSchema): any {
 	const { hash } = rxSchema;
 	if (!VALIDATOR_CACHE.has(hash)) {
-		const validator = ajv.compile(rxSchema.jsonSchema);
+		// remove private rxdb from required
+		const required = rxSchema.jsonSchema.required.filter((key) => !ignoredKeys.includes(key));
+		const validator = ajv.compile({ ...rxSchema.jsonSchema, required });
+		// const validator = ajv.compile(rxSchema.jsonSchema);
 		VALIDATOR_CACHE.set(hash, validator);
 	}
 	return VALIDATOR_CACHE.get(hash);
@@ -62,14 +67,15 @@ export function getValidator(rxSchema: RxSchema): any {
  * @param  schemaPath if given, the sub-schema will be validated
  * @throws {RxError} if not valid
  */
-function validateFullDocumentData(this: RxSchema, obj: any): any {
+function validateFullDocumentData(this: RxSchema, docData: any): any {
 	const validator = getValidator(this);
-	const isValid = validator(obj);
+	const isValid = validator(docData);
 
-	if (isValid) return obj;
+	if (!isValid) {
+		console.warn('validation', validator.errors);
+	}
 
-	console.error(validator.errors);
-	throw new Error(validator.errors);
+	return docData;
 }
 
 const runAfterSchemaCreated = (rxSchema: RxSchema) => {
@@ -89,28 +95,12 @@ export const RxDBAjvValidatePlugin: RxPlugin = {
 		 */
 		RxSchema: (proto: any) => {
 			proto._getValidator = getValidator;
-			proto.validateFullDocumentData = validateFullDocumentData;
+			proto.validate = validateFullDocumentData;
 		},
 	},
 	hooks: {
 		createRxSchema: {
 			after: runAfterSchemaCreated,
-		},
-		/**
-		 * @TODO - remove this hack!!
-		 * https://github.com/pubkey/rxdb/issues/3878
-		 */
-		createRxCollection: {
-			after({ collection }) {
-				collection.preInsert(function (data) {
-					Object.assign(data, collection.schema.validate(data));
-					return data;
-				}, true);
-				collection.preSave(function (data) {
-					Object.assign(data, collection.schema.validate(data));
-					return data;
-				}, true);
-			},
 		},
 	},
 };

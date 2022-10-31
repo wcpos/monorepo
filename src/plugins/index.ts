@@ -20,7 +20,7 @@ import collectionCounts from './collection-counts';
 import RxDBGenerateIdPlugin from './generate-id';
 import RxDBWooCommercePlugin from './woocommerce';
 import childrenPlugin from './children';
-// import { RxDBAjvValidatePlugin } from './validate';
+import { RxDBAjvValidatePlugin } from './validate';
 import middlewaresPlugin from './middlewares';
 import toJSONPlugin from './to-json';
 // import deleteDBPlugin from './delete-db';
@@ -56,7 +56,7 @@ addRxPlugin(RxDBJsonDumpPlugin);
 // custom plugins
 addRxPlugin(collectionCounts);
 addRxPlugin(RxDBWooCommercePlugin);
-// addRxPlugin(RxDBAjvValidatePlugin);
+addRxPlugin(RxDBAjvValidatePlugin);
 addRxPlugin(childrenPlugin);
 addRxPlugin(middlewaresPlugin);
 addRxPlugin(toJSONPlugin);

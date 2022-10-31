@@ -102,6 +102,20 @@
 					}
 				}
 			}
+		},
+		"image": {
+			"description": "Product image.",
+			"type": "object",
+			"properties": {
+				"id": {
+					"description": "Image ID.",
+					"type": "integer"
+				},
+				"src": {
+					"description": "Image URL.",
+					"type": "string"
+				}
+			}
 		}
 	}
 }
