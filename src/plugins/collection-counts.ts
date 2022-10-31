@@ -61,8 +61,22 @@ const collectionCountsPlugin: RxPlugin = {
 					return;
 				}
 
+				// collection.count({ selector: { _id: { $exists: true } } }).$.subscribe((count) => {
+				// 	debugger;
+				// });
+				// collection
+				// 	.count({ selector: { _id: { $exists: true } } })
+				// 	.exec()
+				// 	.then((count) => {
+				// 		debugger;
+				// 	})
+				// 	.catch((err) => {
+				// 		debugger;
+				// 	});
+
 				Object.assign(collection, {
 					totalDocCount$: new BehaviorSubject(0),
+					// totalDocCount$: ,
 					pullRemoteIds$: new BehaviorSubject([]),
 					pushLocalIds$: new BehaviorSubject([]),
 					syncedIds$: new BehaviorSubject([]),
