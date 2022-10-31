@@ -38,10 +38,15 @@ const PayButton = ({ order }: PayModalProps) => {
 
 		if (result.status === 201 || result.status === 200) {
 			if (order.id) {
+				await order.collection.upsertChildren(result.data);
+
+				// const parsed = order.collection.parseRestResponse(result.data);
+
 				order.atomicPatch(result.data);
 			} else {
-				// switcharoo
+				await order.collection.upsertChildren(result.data);
 				const newOrder = await order.collection.insert(result.data);
+				// switcharoo
 				await order.remove();
 				setCurrentOrder(newOrder);
 			}

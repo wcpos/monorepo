@@ -28,16 +28,15 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 
 		if (result.status === 201 || result.status === 200) {
 			if (order.id) {
-				// order.upsertChildren(result.data);
 				await order.collection.upsertChildren(result.data);
-				// parsed = collection.parseRestResponse(parsed);
-				// does this go through insert/update?
+
+				// const parsed = order.collection.parseRestResponse(result.data);
+
 				order.atomicPatch(result.data);
 			} else {
-				// switcharoo
-				// order.upsertChildren(result.data);
 				await order.collection.upsertChildren(result.data);
 				const newOrder = await order.collection.insert(result.data);
+				// switcharoo
 				await order.remove();
 				setCurrentOrder(newOrder);
 			}
