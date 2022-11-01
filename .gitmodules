@@ -25,9 +25,6 @@
 [submodule "apps/managed"]
 	path = apps/managed
 	url = https://github.com/wcpos/managed-expo
-[submodule "apps/ejected"]
-	path = apps/ejected
-	url = https://github.com/wcpos/ejected-expo
 [submodule "apps/with-flipper"]
 	path = apps/with-flipper
 	url = https://github.com/wcpos/app-with-flipper
