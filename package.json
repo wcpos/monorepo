@@ -6,9 +6,7 @@
     "clean": "node scripts/clean-node-modules",
     "components": "yarn workspace @wcpos/components",
     "core": "yarn workspace @wcpos/core",
-    "cra": "yarn workspace @wcpos/cra",
     "database": "yarn workspace @wcpos/database",
-    "ejected": "yarn workspace @wcpos/ejected-expo",
     "electron": "yarn workspace @wcpos/app-electron",
     "expo": "expo",
     "form": "yarn workspace @wcpos/react-native-jsonschema-form",
@@ -17,9 +15,7 @@
     "storybook": "yarn workspace @wcpos/storybook",
     "test": "yarn workspaces foreach run test",
     "theme": "yarn workspace @wcpos/theme",
-    "with-dev-client": "yarn workspace @wcpos/app-with-dev-client",
-    "with-flipper": "yarn workspace @wcpos/app-with-flipper",
-    "with-sentry": "yarn workspace @wcpos/app-with-sentry"
+    "with-flipper": "yarn workspace @wcpos/app-with-flipper"
   },
   "workspaces": {
     "packages": [
@@ -27,19 +23,19 @@
       "packages/*"
     ]
   },
+  "resolutions": {
+    "react-native-reanimated@2.12.0": "patch:react-native-reanimated@npm:2.12.0#.yarn/patches/react-native-reanimated-npm-2.12.0-079a224d00.patch"
+  },
   "devDependencies": {
-    "@types/jest": "^29.2.0",
+    "@types/jest": "^29.2.1",
     "@wcpos/eslint-config": "*",
     "jest": "^29.2.2",
     "prettier": "2.7.1",
     "ts-jest": "^29.0.3",
-    "typescript": "^4.8.4"
+    "typescript": "^4.6.3"
   },
   "packageManager": "yarn@3.2.0",
   "eslintConfig": {
     "extends": "@wcpos/eslint-config"
-  },
-  "resolutions": {
-    "react-native-reanimated@2.12.0": "patch:react-native-reanimated@npm:2.12.0#.yarn/patches/react-native-reanimated-npm-2.12.0-079a224d00.patch"
   }
 }
