@@ -1,7 +1,7 @@
 {
 	"private": true,
 	"name": "@wcpos/managed-expo",
-	"version": "1.0.0-alpha.39",
+	"version": "1.0.0-alpha.40",
 	"main": "index.js",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://wcpos.github.io/managed-expo",
@@ -21,6 +21,9 @@
 		"eas-build-on-success": "echo 'Success'",
 		"eas-build-on-error": "echo 'Error'",
 		"eas-build-on-complete": "echo 'Complete'"
+	},
+	"resolutions": {
+		"react-native-reanimated@2.12.0": "patch:react-native-reanimated@npm:2.12.0#.yarn/patches/react-native-reanimated-npm-2.12.0-079a224d00.patch"
 	},
 	"dependencies": {
 		"@react-native-community/netinfo": "9.3.6",
