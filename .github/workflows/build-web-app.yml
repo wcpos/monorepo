@@ -31,7 +31,7 @@ jobs:
         token: ${{ secrets.EXPO_TOKEN }}
     
     - name: Install NPM packages
-      run: yarn install
+      run: YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn install
     
     - name: Build project
       run: PUBLIC_URL="https://wcpos.github.io/managed-expo/" yarn export:web

@@ -42,6 +42,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-yarn-
       - name: 📋 Install dependencies
-        run: yarn install --frozen-lockfile --check-files
+        run: YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn install
       - name: 📢 Start EAS build
         run: eas build --non-interactive --wait --platform=${{ github.event.inputs.platform }} --profile=${{ github.event.inputs.profile }}
