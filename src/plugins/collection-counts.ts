@@ -65,7 +65,7 @@ const collectionCountsPlugin: RxPlugin = {
 				// 	debugger;
 				// });
 				// collection
-				// 	.count({ selector: { _id: { $exists: true } } })
+				// 	.count({ selector: {} })
 				// 	.exec()
 				// 	.then((count) => {
 				// 		debugger;
@@ -75,8 +75,8 @@ const collectionCountsPlugin: RxPlugin = {
 				// 	});
 
 				Object.assign(collection, {
-					totalDocCount$: new BehaviorSubject(0),
-					// totalDocCount$: ,
+					// totalDocCount$: new BehaviorSubject(0),
+					totalDocCount$: collection.count({ selector: {} }).$,
 					pullRemoteIds$: new BehaviorSubject([]),
 					pushLocalIds$: new BehaviorSubject([]),
 					syncedIds$: new BehaviorSubject([]),
@@ -107,7 +107,7 @@ const collectionCountsPlugin: RxPlugin = {
 								}
 							});
 
-							collection.totalDocCount$.next(totalDocCount);
+							// collection.totalDocCount$.next(totalDocCount);
 							collection.pullRemoteIds$.next(pullRemoteIds);
 							collection.pushLocalIds$.next(pushLocalIds);
 							collection.syncedIds$.next(syncedIds);
