@@ -17,8 +17,21 @@ export interface WooCommercePaymentGatewaySchema {
   description?: string;
   order?: number;
   enabled?: boolean;
+  title?: string;
   method_title?: string;
   method_description?: string;
   method_supports?: string[];
+  connection_url?: string;
+  links?: {
+    collection?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    self?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    [k: string]: any;
+  };
   [k: string]: any;
 }

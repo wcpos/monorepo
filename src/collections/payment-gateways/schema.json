@@ -22,6 +22,9 @@
 		"enabled": {
 			"type": "boolean"
 		},
+		"title": {
+			"type": "string"
+		},
 		"method_title": {
 			"type": "string"
 		},
@@ -32,6 +35,36 @@
 			"type": "array",
 			"items": {
 				"type": "string"
+			}
+		},
+		"connection_url": {
+			"type": "string"
+		},
+		"links": {
+			"type": "object",
+			"properties": {
+				"collection": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"href": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"self": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"href": {
+								"type": "string"
+							}
+						}
+					}
+				}
 			}
 		}
 	}
