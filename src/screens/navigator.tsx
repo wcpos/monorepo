@@ -8,7 +8,7 @@ import useAuth from '@wcpos/hooks/src/use-auth';
 import { Login, Modal, Settings } from './modals';
 import Auth from './auth';
 import MainNavigator from './main';
-import Url from '../lib/url-parse';
+import { URL } from '../lib/url';
 // import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 // const MainNavigator = React.lazy(() => import('./main'));
 
@@ -36,7 +36,7 @@ export const RootNavigator = ({ initialProps }) => {
 	let pathname = '';
 
 	if (homepage) {
-		const parsedUrl = new Url(homepage);
+		const parsedUrl = new URL(homepage);
 		prefixes.push(parsedUrl.host);
 		pathname = parsedUrl.pathname;
 	}

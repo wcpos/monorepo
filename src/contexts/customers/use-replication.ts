@@ -20,39 +20,6 @@ export const useReplication = ({ collection }) => {
 		/**
 		 *
 		 */
-		const audit = async () => {
-			const response = await http
-				.get(collection.name, {
-					params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: -1 },
-				})
-				.catch((error) => {
-					console.log(error);
-				});
-
-			/**
-			 * What to do when server is unreachable?
-			 */
-			if (!response?.data) {
-				throw Error('No response from server');
-			}
-
-			const documents = await collection.auditRestApiIds(response?.data);
-			runAudit.current = false;
-
-			/**
-			 * @TODO: This is bit of a hack, I want documents to always return non-empty array
-			 * so that it passes to the replication phase. This works but not sure if there is
-			 * unforeseen consequences of returning [{}]
-			 */
-			return {
-				documents: documents.length > 0 ? documents : [{}],
-				checkpoint: null,
-			};
-		};
-
-		/**
-		 *
-		 */
 		const replicate = async (lastCheckpoint, batchSize) => {
 			/**
 			 * This is the data replication
@@ -96,6 +63,39 @@ export const useReplication = ({ collection }) => {
 
 			return {
 				documents: response?.data || [],
+				checkpoint: null,
+			};
+		};
+
+		/**
+		 *
+		 */
+		const audit = async () => {
+			const response = await http
+				.get(collection.name, {
+					params: { fields: ['id', 'firstName', 'lastName'], posts_per_page: -1 },
+				})
+				.catch((error) => {
+					console.log(error);
+				});
+
+			/**
+			 * What to do when server is unreachable?
+			 */
+			if (!response?.data) {
+				throw Error('No response from server');
+			}
+
+			const documents = await collection.auditRestApiIds(response?.data);
+			runAudit.current = false;
+
+			/** @TODO - hack */
+			if (documents.length === 0) {
+				return replicate(null, 10);
+			}
+
+			return {
+				documents,
 				checkpoint: null,
 			};
 		};

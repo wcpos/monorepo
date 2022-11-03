@@ -4,7 +4,7 @@ import find from 'lodash/find';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import Platform from '@wcpos/core/src/lib/platform';
 import useAuth from '@wcpos/hooks/src/use-auth';
-import Url from '@wcpos/core/src/lib/url-parse';
+import { parseLinkHeader } from '@wcpos/core/src/lib/url';
 
 type SiteDocument = import('@wcpos/database/src').SiteDocument;
 
@@ -55,7 +55,7 @@ const useSiteConnect = () => {
 						throw Error('Link is not exposed');
 					}
 
-					const parsed = Url.parseLinkHeader(link);
+					const parsed = parseLinkHeader(link);
 					const wpApiUrl = get(parsed, ['https://api.w.org/', 'url']);
 
 					if (wpApiUrl) {
