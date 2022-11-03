@@ -10,31 +10,35 @@ import Accordion from '@wcpos/components/src/accordion';
 import Loader from '@wcpos/components/src/loader';
 import Tabs from '@wcpos/components/src/tabs';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import useGateways from '@wcpos/core/src/contexts/gateways';
+import useOrders from '@wcpos/core/src/contexts/orders';
 // import { POSContext } from '../pos';
 
-interface CheckoutProps {
-	order: import('@wcpos/database').OrderDocument;
-}
+// interface CheckoutProps {
+// 	order: import('@wcpos/database').OrderDocument;
+// }
 
-const gateways = [
-	{ key: 'pos_cash', title: 'Cash' },
-	{ key: 'card', title: 'Card' },
-	{ key: 'paypal', title: 'PayPal' },
-	{ key: 'stripe', title: 'Stripe' },
-	{ key: 'bacs', title: 'BACS' },
-];
-
-export const Checkout = ({ order }: CheckoutProps) => {
+export const CheckoutTabs = () => {
 	const [index, setIndex] = React.useState(0);
 	const [loading, setLoading] = React.useState(true);
-	const paymentUrl = get(order, ['links', 'payment', 0, 'href'], '');
 	const { format } = useCurrencyFormat();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
+	const { data: gateways } = useGateways();
+	const { data } = useOrders();
+	const order = data?.[0]; // @TODO - findOne option
+	const paymentUrl = get(order, ['links', 'payment', 0, 'href'], '');
 
 	/**
 	 *
 	 */
-	const routes = gateways;
+	const routes = React.useMemo(() => {
+		return gateways.map((gateway) => {
+			return {
+				key: gateway.id,
+				title: gateway.title,
+			};
+		});
+	}, [gateways]);
 
 	/**
 	 *
@@ -55,7 +59,11 @@ export const Checkout = ({ order }: CheckoutProps) => {
 	 *
 	 */
 	const renderScene = React.useCallback(
-		({ route }: { route: typeof routes[number] }) => {
+		({ route }) => {
+			if (!route) {
+				return <Text>No route</Text>;
+			}
+
 			return (
 				<View style={{ position: 'relative', height: '100%', paddingLeft: 10 }}>
 					{loading ? (
@@ -117,7 +125,7 @@ export const Checkout = ({ order }: CheckoutProps) => {
 			<Text size="large" align="center" weight="bold">
 				{`Amount to Pay: ${format(order.total || 0)}`}
 			</Text>
-			<Tabs<typeof routes[number]>
+			<Tabs
 				onIndexChange={(idx) => {
 					setLoading(true);
 					setIndex(idx);

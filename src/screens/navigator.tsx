@@ -54,11 +54,25 @@ export const RootNavigator = ({ initialProps }) => {
 							POS: {
 								path: '',
 								screens: {
-									Products: {
-										path: 'products-tab',
+									Columns: {
+										path: '',
 									},
-									Cart: {
-										path: 'cart-tab',
+									Tabs: {
+										path: 'tab',
+										screens: {
+											Products: {
+												path: 'products',
+											},
+											Cart: {
+												path: 'cart',
+											},
+										},
+									},
+									Checkout: {
+										path: 'checkout/:id',
+									},
+									Receipt: {
+										path: 'receipt/:id',
 									},
 								},
 							},

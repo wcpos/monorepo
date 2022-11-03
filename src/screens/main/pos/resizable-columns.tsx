@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { LayoutChangeEvent, View } from 'react-native';
-import { useSubscription } from 'observable-hooks';
+import { useSubscription, useObservableSuspense } from 'observable-hooks';
 import Animated, {
 	useAnimatedGestureHandler,
 	useSharedValue,
@@ -8,15 +8,16 @@ import Animated, {
 	runOnJS,
 } from 'react-native-reanimated';
 import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
+import useStore from '@wcpos/hooks/src/use-store';
 import Gutter from '@wcpos/components/src/gutter';
 import Box from '@wcpos/components/src/box';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Products from './products';
 import OpenOrders from './cart';
 
-interface ResizableColumnsProps {
-	ui: import('@wcpos/hooks/src/use-store').UIDocument;
-}
+// interface ResizableColumnsProps {
+// 	ui: import('@wcpos/hooks/src/use-store').UIDocument;
+// }
 
 /**
  *
@@ -30,7 +31,9 @@ const clamp = (value: number, lowerBound: number, upperBound: number) => {
 /**
  *
  */
-const ResizableColumns = ({ ui }: ResizableColumnsProps) => {
+const ResizableColumns = () => {
+	const { uiResources } = useStore();
+	const ui = useObservableSuspense(uiResources['pos.products']);
 	const columnWidth = useSharedValue(ui.get('width'));
 	const isActivePanGesture = useSharedValue(false);
 	const containerWidth = useSharedValue(800);

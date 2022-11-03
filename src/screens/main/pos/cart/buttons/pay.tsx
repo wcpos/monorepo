@@ -1,11 +1,10 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
+import { useNavigation, StackActions } from '@react-navigation/native';
 import Button from '@wcpos/components/src/button';
-import Modal, { useModal } from '@wcpos/components/src/modal';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
 import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
 import { t } from '@wcpos/core/src/lib/translations';
-import Checkout from '../../checkout';
 import useOpenOrders from '../../contexts/open-orders';
 
 interface PayModalProps {
@@ -18,9 +17,9 @@ interface PayModalProps {
 const PayButton = ({ order }: PayModalProps) => {
 	const total = useObservableState(order.total$, order.total);
 	const { format } = useCurrencyFormat();
-	const { ref, open, close } = useModal();
 	const http = useRestHttpClient();
 	const { setCurrentOrder } = useOpenOrders();
+	const navigation = useNavigation();
 
 	/**
 	 *
@@ -58,32 +57,27 @@ const PayButton = ({ order }: PayModalProps) => {
 	 */
 	const handlePay = React.useCallback(() => {
 		saveOrder().then(() => {
-			open();
+			navigation.navigate('Checkout', { id: order.id });
 		});
-	}, [open, saveOrder]);
+	}, [navigation, order.id, saveOrder]);
 
 	/**
 	 *
 	 */
 	return (
-		<>
-			<Button
-				fill
-				size="large"
-				title={t('Checkout {order_total}', { order_total: format(total || 0) })}
-				onPress={handlePay}
-				type="success"
-				style={{
-					flex: 3,
-					borderTopLeftRadius: 0,
-					borderTopRightRadius: 0,
-					borderBottomLeftRadius: 0,
-				}}
-			/>
-			<Modal ref={ref} title={t('Checkout')} size="large">
-				<Checkout order={order} />
-			</Modal>
-		</>
+		<Button
+			fill
+			size="large"
+			title={t('Checkout {order_total}', { order_total: format(total || 0) })}
+			onPress={handlePay}
+			type="success"
+			style={{
+				flex: 3,
+				borderTopLeftRadius: 0,
+				borderTopRightRadius: 0,
+				borderBottomLeftRadius: 0,
+			}}
+		/>
 	);
 };
 

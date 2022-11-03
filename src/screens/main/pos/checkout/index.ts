@@ -1,1 +1,1 @@
-export { Checkout as default } from './checkout';
+export { CheckoutModal as default } from './modal';
