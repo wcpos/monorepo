@@ -15,7 +15,8 @@
     "storybook": "yarn workspace @wcpos/storybook",
     "test": "yarn workspaces foreach run test",
     "theme": "yarn workspace @wcpos/theme",
-    "with-flipper": "yarn workspace @wcpos/app-with-flipper"
+    "with-flipper": "yarn workspace @wcpos/app-with-flipper",
+    "postinstall": "patch-package"
   },
   "workspaces": {
     "packages": [
@@ -23,13 +24,12 @@
       "packages/*"
     ]
   },
-  "resolutions": {
-    "react-native-reanimated@2.12.0": "patch:react-native-reanimated@npm:2.12.0#.yarn/patches/react-native-reanimated-npm-2.12.0-079a224d00.patch"
-  },
   "devDependencies": {
     "@types/jest": "^29.2.1",
     "@wcpos/eslint-config": "*",
     "jest": "^29.2.2",
+    "patch-package": "^6.5.0",
+    "postinstall-postinstall": "^2.1.0",
     "prettier": "2.7.1",
     "ts-jest": "^29.0.3",
     "typescript": "^4.6.3"
