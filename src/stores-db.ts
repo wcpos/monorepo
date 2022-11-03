@@ -10,6 +10,7 @@ export type StoreDatabaseCollections = {
 	shipping_lines: import('./collections/shipping-lines').ShippingLineCollection;
 	customers: import('./collections/customers').CustomerCollection;
 	taxes: import('./collections/taxes').TaxRateCollection;
+	payment_gateways: import('./collections/payment-gateways').PaymentGatewayCollection;
 };
 export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
 

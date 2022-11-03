@@ -6,19 +6,19 @@
  */
 
 /**
- * Logs events for debugging and user record
+ * WooCommerce Payment Gateway schema
  */
-export interface LogSchema {
+export interface WooCommercePaymentGatewaySchema {
   /**
    * Unique local identifier for the resource.
    */
-  localID?: string;
-  dateCreatedGmt?: string;
-  user?: string;
-  level?: string;
-  message?: string;
-  meta?: {
-    [k: string]: any;
-  };
+  _id?: string;
+  id?: string;
+  description?: string;
+  order?: number;
+  enabled?: boolean;
+  method_title?: string;
+  method_description?: string;
+  method_supports?: string[];
   [k: string]: any;
 }

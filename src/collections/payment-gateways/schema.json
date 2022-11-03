@@ -1,0 +1,38 @@
+{
+	"title": "WooCommerce Payment Gateway schema",
+	"version": 0,
+	"description": "WooCommerce Payment Gateway schema",
+	"type": "object",
+	"primaryKey": "_id",
+	"properties": {
+		"_id": {
+			"description": "Unique local identifier for the resource.",
+			"type": "string",
+			"maxLength": 100
+		},
+		"id": {
+			"type": "string"
+		},
+		"description": {
+			"type": "string"
+		},
+		"order": {
+			"type": "integer"
+		},
+		"enabled": {
+			"type": "boolean"
+		},
+		"method_title": {
+			"type": "string"
+		},
+		"method_description": {
+			"type": "string"
+		},
+		"method_supports": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+		}
+	}
+}

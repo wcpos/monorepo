@@ -19,6 +19,10 @@ export interface WooCommerceOrderFeeLineSchema {
    */
   name?: string;
   /**
+   * Fee amount.
+   */
+  amount?: string;
+  /**
    * Tax class of fee.
    */
   tax_class?: string;

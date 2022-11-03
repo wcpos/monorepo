@@ -98,5 +98,19 @@ export interface WooCommerceOrderLineItemSchema {
     value?: string;
     [k: string]: any;
   }[];
+  /**
+   * Product image.
+   */
+  image?: {
+    /**
+     * Image ID.
+     */
+    id?: number;
+    /**
+     * Image URL.
+     */
+    src?: string;
+    [k: string]: any;
+  };
   [k: string]: any;
 }

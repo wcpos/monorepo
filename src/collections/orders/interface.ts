@@ -25,7 +25,7 @@ export interface WooCommerceOrderSchema {
   /**
    * Order status.
    */
-  status?: "pending" | "processing" | "on-hold" | "completed" | "cancelled" | "refunded" | "failed" | "pos-open";
+  status?: string;
   /**
    * Currency the order was created with, in ISO format.
    */
@@ -370,6 +370,11 @@ export interface WooCommerceOrderSchema {
     [k: string]: any;
   }[];
   currency_symbol?: string;
+  payment_url?: string;
+  set_paid?: boolean;
+  is_editable?: boolean;
+  needs_payment?: boolean;
+  needs_processing?: boolean;
   links?: {
     collection?: {
       href?: string;

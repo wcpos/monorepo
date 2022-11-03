@@ -261,6 +261,9 @@
 		"state": {
 			"type": "string"
 		},
+		"postcode": {
+			"type": "string"
+		},
 		"postcodes": {
 			"type": "array",
 			"items": {
@@ -272,6 +275,9 @@
 			"items": {
 				"type": "string"
 			}
+		},
+		"city": {
+			"type": "string"
 		},
 		"rate": {
 			"type": "string"

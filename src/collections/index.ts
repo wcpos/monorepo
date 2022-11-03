@@ -11,6 +11,7 @@ import fee_lines from './fee-lines';
 import shipping_lines from './shipping-lines';
 import customers from './customers';
 import taxes from './taxes';
+import payment_gateways from './payment-gateways';
 
 export const userCollections = { logs, users, sites, wp_credentials, stores };
 export const storeCollections = {
@@ -22,4 +23,5 @@ export const storeCollections = {
 	shipping_lines,
 	customers,
 	taxes,
+	payment_gateways,
 };

@@ -44,6 +44,7 @@ export interface WooCommerceProductVariationSchema {
   backorders?: "no" | "notify" | "yes";
   backorders_allowed?: boolean;
   backordered?: boolean;
+  low_stock_amount?: number | null;
   weight?: string;
   dimensions?: {
     length?: string;
@@ -56,6 +57,7 @@ export interface WooCommerceProductVariationSchema {
   image?: {
     [k: string]: any;
   } | null;
+  has_options?: boolean;
   attributes?: {
     id?: number;
     name?: string;
@@ -69,6 +71,17 @@ export interface WooCommerceProductVariationSchema {
     value?: string;
     [k: string]: any;
   }[];
+  links?: {
+    collection?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    self?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    [k: string]: any;
+  };
   thumbnail?: string;
   [k: string]: any;
 }

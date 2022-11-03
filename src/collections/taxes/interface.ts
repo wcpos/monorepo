@@ -257,6 +257,8 @@ export interface WooCommerceTaxRateSchema {
     | "ZW";
   state?: string;
   postcode?: string;
+  postcodes?: string[];
+  cities?: string[];
   city?: string;
   rate?: string;
   name?: string;
@@ -265,6 +267,7 @@ export interface WooCommerceTaxRateSchema {
   shipping?: boolean;
   order?: number;
   class?: string;
+  date_modified_gmt?: string;
   links?: {
     collection?: {
       href?: string;

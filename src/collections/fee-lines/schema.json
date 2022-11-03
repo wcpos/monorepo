@@ -17,6 +17,10 @@
 			"description": "Fee name.",
 			"type": "string"
 		},
+		"amount": {
+			"description": "Fee amount.",
+			"type": "string"
+		},
 		"tax_class": {
 			"description": "Tax class of fee.",
 			"type": "string"

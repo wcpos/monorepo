@@ -98,6 +98,7 @@ export interface WooCommerceProductSchema {
     alt?: string;
     [k: string]: any;
   }[];
+  has_options?: boolean;
   attributes?: {
     id?: number;
     name?: string;

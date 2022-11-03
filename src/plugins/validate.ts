@@ -7,7 +7,6 @@ import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import type { RxPlugin } from 'rxdb';
 import { RxSchema } from 'rxdb';
-import pickBy from 'lodash/pickBy';
 
 /**
  * run the callback if requestIdleCallback available
