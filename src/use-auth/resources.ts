@@ -107,16 +107,15 @@ const selected$ = userDB$.pipe(
 			filter((current) => !!current),
 
 			/**
-			 *
+			 * @TODO - findOne(undefined|null|'') will match the first record, I think it is a bug in rxdb
+			 * I use '_' here which should not match a record, empty string will match the first record
 			 */
 			switchMap((current) => {
 				console.log('selected', current);
 				return forkJoin([
-					userDB.sites.findOne({ selector: { localID: current.get('siteID') } }).exec(),
-					userDB.wp_credentials
-						.findOne({ selector: { localID: current.get('wpCredentialsID') } })
-						.exec(),
-					userDB.stores.findOne({ selector: { localID: current.get('storeID') } }).exec(),
+					userDB.sites.findOne(current.get('siteID') || '_').exec(),
+					userDB.wp_credentials.findOne(current.get('wpCredentialsID') || '_').exec(),
+					userDB.stores.findOne(current.get('storeID') || '_').exec(),
 				]);
 			}),
 
