@@ -14,16 +14,17 @@ type RxCollection = import('rxdb/dist/types').RxCollection;
  */
 export function parseRestResponse(this: RxCollection, plainData: Record<string, unknown>) {
 	const topLevelFields = Object.keys(get(this, ['schema', 'jsonSchema', 'properties'], {}));
+	const primaryPath = get(this, ['schema', 'primaryPath'], '');
 	console.log('parseRestResponse', plainData);
 
-	// if (!plainData._id && plainData.id && plainData.meta_data) {
-	// 	debugger;
-	// }
-
-	// @TODO - should I move this to the generate id plugin?
-	if (!plainData._id && plainData.id && typeof plainData.id === 'number') {
+	if (primaryPath === '_id' && !plainData._id && plainData.id) {
 		plainData._id = String(plainData.id);
 	}
+
+	// @TODO - should I move this to the generate id plugin?
+	// if (!plainData._id && plainData.id && typeof plainData.id === 'number') {
+	// 	plainData._id = String(plainData.id);
+	// }
 	if (plainData._links) {
 		plainData.links = plainData._links;
 		unset(plainData, '_links');
