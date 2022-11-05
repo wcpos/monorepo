@@ -25,7 +25,7 @@
     ]
   },
   "devDependencies": {
-    "@types/jest": "^29.2.1",
+    "@types/jest": "^29.2.2",
     "@wcpos/eslint-config": "*",
     "jest": "^29.2.2",
     "patch-package": "^6.5.0",
