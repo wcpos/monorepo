@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { View, StyleSheet } from 'react-native';
+import { useNavigation, StackActions } from '@react-navigation/native';
 import get from 'lodash/get';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
 import Box from '@wcpos/components/src/box';
@@ -27,6 +28,13 @@ export const CheckoutTabs = () => {
 	const { data } = useOrders();
 	const order = data?.[0]; // @TODO - findOne option
 	const paymentUrl = get(order, ['links', 'payment', 0, 'href'], '');
+	const navigation = useNavigation();
+
+	// React.useEffect(() => {
+	// 	if (order.status !== 'pos-open') {
+	// 		debugger;
+	// 	}
+	// }, [order]);
 
 	/**
 	 *
@@ -43,17 +51,24 @@ export const CheckoutTabs = () => {
 	/**
 	 *
 	 */
-	// React.useEffect(() => {
-	// 	if (iframeRef.current) {
-	// 		iframeRef.current.contentWindow?.addEventListener(
-	// 			'message',
-	// 			(event) => {
-	// 				console.log(event);
-	// 			},
-	// 			false
-	// 		);
-	// 	}
-	// }, []);
+	React.useEffect(() => {
+		const handlePaymentReceived = (event: MessageEvent) => {
+			if (event?.data?.action === 'wcpos-payment-received') {
+				order.atomicPatch(event?.data?.payload);
+				navigation.dispatch(
+					StackActions.replace('Receipt', {
+						_id: order._id,
+					})
+				);
+			}
+		};
+
+		window.addEventListener('message', handlePaymentReceived);
+
+		return () => {
+			window.removeEventListener('message', handlePaymentReceived);
+		};
+	}, [navigation, order]);
 
 	/**
 	 *
@@ -113,8 +128,14 @@ export const CheckoutTabs = () => {
 	 *
 	 */
 	if (!order) {
-		// TODO: show error
-		return null;
+		return <Text>Order not found</Text>;
+	}
+
+	/**
+	 *
+	 */
+	if (gateways.length === 0) {
+		return <Text>No gateways found</Text>;
 	}
 
 	/**

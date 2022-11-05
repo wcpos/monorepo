@@ -18,8 +18,8 @@ import Receipt from './receipt';
 export type POSStackParamList = {
 	Columns: undefined;
 	Tabs: undefined;
-	Checkout: undefined;
-	Receipt: undefined;
+	Checkout: { _id: string };
+	Receipt: { _id: string };
 	// Settings: undefined;
 };
 
@@ -59,7 +59,7 @@ const POS = () => {
 		<OrdersProvider initialQuery={initialQuery}>
 			<OpenOrdersProvider>
 				<TaxesProvider initialQuery={{ country: 'GB' }}>
-					<Stack.Navigator screenOptions={{ headerShown: false }}>
+					<Stack.Navigator initialRouteName="Columns" screenOptions={{ headerShown: false }}>
 						{theme._dimensions.width >= theme.screens.small ? (
 							<Stack.Screen name="Columns" component={Columns} options={{ title: storeName }} />
 						) : (

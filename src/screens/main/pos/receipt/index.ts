@@ -1,1 +1,1 @@
-export { Receipt as default } from './receipt';
+export { ReceiptModal as default } from './modal';

@@ -42,13 +42,14 @@ const PayButton = ({ order }: PayModalProps) => {
 				// const parsed = order.collection.parseRestResponse(result.data);
 
 				order.atomicPatch(result.data);
-			} else {
-				await order.collection.upsertChildren(result.data);
-				const newOrder = await order.collection.insert(result.data);
-				// switcharoo
-				await order.remove();
-				setCurrentOrder(newOrder);
+				return order;
 			}
+			await order.collection.upsertChildren(result.data);
+			const newOrder = await order.collection.insert(result.data);
+			// switcharoo
+			await order.remove();
+			setCurrentOrder(newOrder);
+			return newOrder;
 		}
 	}, [http, order, setCurrentOrder]);
 
@@ -56,10 +57,12 @@ const PayButton = ({ order }: PayModalProps) => {
 	 *
 	 */
 	const handlePay = React.useCallback(() => {
-		saveOrder().then(() => {
-			navigation.navigate('Checkout', { id: order.id });
+		saveOrder().then((o) => {
+			if (o) {
+				navigation.navigate('Checkout', { _id: o._id });
+			}
 		});
-	}, [navigation, order.id, saveOrder]);
+	}, [navigation, saveOrder]);
 
 	/**
 	 *

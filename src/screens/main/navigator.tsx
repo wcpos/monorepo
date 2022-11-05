@@ -62,6 +62,7 @@ export const MainNavigator = () => {
 		<OnlineStatusProvider>
 			<StoreProvider store={store} storeDB={storeDB}>
 				<Drawer.Navigator
+					initialRouteName="POS"
 					screenOptions={{
 						header,
 						drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',

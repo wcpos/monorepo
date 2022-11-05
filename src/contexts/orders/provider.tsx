@@ -49,8 +49,8 @@ const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => 
 					_set(selector, ['status'], _get(q, 'filters.status'));
 				}
 
-				if (_get(q, 'filters.id')) {
-					_set(selector, ['id'], _get(q, 'filters.id'));
+				if (_get(q, 'filters._id')) {
+					_set(selector, ['_id'], _get(q, 'filters._id'));
 				}
 
 				const RxQuery = collection.find({ selector });
