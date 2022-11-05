@@ -105,6 +105,7 @@ export const useReplication = ({ collection }) => {
 		 */
 		return replicateRxCollection({
 			collection,
+			autoStart: false,
 			replicationIdentifier: `wc-rest-replication-to-${site.wc_api_url}/${collection.name}`,
 			// retryTime: 1000000000,
 			pull: {

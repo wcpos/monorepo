@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
 import { useTheme } from 'styled-components/native';
@@ -42,60 +42,61 @@ export const RootNavigator = ({ initialProps }) => {
 	}
 
 	const linking = React.useMemo(
-		() => ({
-			prefixes,
-			config: {
-				initialRouteName: 'Auth',
-				screens: {
-					Auth: `${pathname}/auth`,
-					Main: {
-						path: pathname,
-						screens: {
-							POS: {
-								path: '',
-								screens: {
-									Columns: {
-										path: '',
-									},
-									Tabs: {
-										path: 'tab',
-										screens: {
-											Products: {
-												path: 'products',
-											},
-											Cart: {
-												path: 'cart',
+		() =>
+			({
+				prefixes,
+				config: {
+					initialRouteName: 'Main',
+					screens: {
+						Auth: `${pathname}/auth`,
+						Main: {
+							path: pathname,
+							screens: {
+								POS: {
+									path: '',
+									screens: {
+										Columns: {
+											path: '',
+										},
+										Tabs: {
+											path: 'tab',
+											screens: {
+												Products: {
+													path: 'products',
+												},
+												Cart: {
+													path: 'cart',
+												},
 											},
 										},
-									},
-									Checkout: {
-										path: 'checkout/:id',
-									},
-									Receipt: {
-										path: 'receipt/:id',
+										Checkout: {
+											path: 'checkout/:_id',
+										},
+										Receipt: {
+											path: 'receipt/:_id',
+										},
 									},
 								},
-							},
-							Products: {
-								path: 'products',
-							},
-							Orders: {
-								path: 'orders',
-							},
-							Customers: {
-								path: 'customers',
-							},
-							Support: {
-								path: 'support',
+								Products: {
+									path: 'products',
+								},
+								Orders: {
+									path: 'orders',
+								},
+								Customers: {
+									path: 'customers',
+								},
+								Support: {
+									path: 'support',
+								},
 							},
 						},
+						Modal: `${pathname}/#`,
+						Login: `${pathname}/login`,
+						Settings: `${pathname}/settings`,
 					},
-					Modal: `${pathname}/#`,
-					Login: `${pathname}/login`,
-					Settings: `${pathname}/settings`,
 				},
-			},
-		}),
+			} as LinkingOptions<RootStackParamList>),
 		[pathname]
 	);
 

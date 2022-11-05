@@ -76,6 +76,7 @@ export const useReplication = ({ collection, parent }) => {
 		 */
 		return replicateRxCollection({
 			collection,
+			autoStart: false,
 			replicationIdentifier: `wc-rest-replication-to-${site.wc_api_url}/products/${parent.id}/${collection.name}`,
 			// retryTime: 1000000000,
 			pull: {
@@ -90,7 +91,7 @@ export const useReplication = ({ collection, parent }) => {
 				// stream$: timedObservable(1000),
 			},
 		});
-	}, [collection, http, parent.id, site.wc_api_url]);
+	}, [collection, http, parent.id, parent.variations, site.wc_api_url]);
 
 	return replicationStatePromise;
 };

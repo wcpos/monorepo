@@ -38,6 +38,17 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 	const replicationState = useReplication({ collection });
 
 	/**
+	 * Only run the replication when the Provider is mounted
+	 */
+	React.useEffect(() => {
+		replicationState.start();
+		return () => {
+			// this is async, should we wait?
+			replicationState.cancel();
+		};
+	}, [replicationState]);
+
+	/**
 	 *
 	 */
 	const value = React.useMemo(() => {

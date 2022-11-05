@@ -32,6 +32,17 @@ const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => 
 	const replicationState = useReplication({ collection });
 
 	/**
+	 * Only run the replication when the Provider is mounted
+	 */
+	React.useEffect(() => {
+		replicationState.start();
+		return () => {
+			// this is async, should we wait?
+			replicationState.cancel();
+		};
+	}, [replicationState]);
+
+	/**
 	 *
 	 */
 	const value = React.useMemo(() => {
@@ -49,8 +60,8 @@ const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => 
 					_set(selector, ['status'], _get(q, 'filters.status'));
 				}
 
-				if (_get(q, 'filters.id')) {
-					_set(selector, ['id'], _get(q, 'filters.id'));
+				if (_get(q, 'filters._id')) {
+					_set(selector, ['_id'], _get(q, 'filters._id'));
 				}
 
 				const RxQuery = collection.find({ selector });
