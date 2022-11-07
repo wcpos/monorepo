@@ -29,7 +29,10 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 		plainData.links = plainData._links;
 		unset(plainData, '_links');
 	}
-	plainData._deleted = false;
+
+	if (plainData._deleted === undefined) {
+		plainData._deleted = false; // @TODO - should I take care of this in validation, eg: default value?
+	}
 
 	/**
 	 * @TODO - should I update created and modified dates??

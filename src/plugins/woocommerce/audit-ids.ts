@@ -23,7 +23,7 @@ export async function auditRestApiIds(this: RxCollection, data: Record<string, a
 
 	const remove = docs
 		.filter((d) => !find(data, { id: d.id }))
-		.map((d) => ({ ...d, _deleted: true }));
+		.map((d) => ({ ...d.toJSON(), _deleted: true }));
 
 	// return changes to replication plugin
 	return add.concat(remove);
