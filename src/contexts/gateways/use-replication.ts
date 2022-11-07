@@ -72,7 +72,7 @@ export const useReplication = ({ collection }) => {
 		const audit = async () => {
 			const response = await http
 				.get(collection.name, {
-					params: { fields: ['id'], posts_per_page: -1 },
+					params: { fields: ['id', 'title'], posts_per_page: -1 },
 				})
 				.catch((error) => {
 					console.log(error);
@@ -86,12 +86,12 @@ export const useReplication = ({ collection }) => {
 			}
 
 			const documents = await collection.auditRestApiIds(response?.data);
-			runAudit.current = false;
+			// runAudit.current = false;
 
 			/** @TODO - hack */
-			if (documents.length === 0) {
-				return replicate(null, 10);
-			}
+			// if (documents.length === 0) {
+			// 	return replicate(null, 10);
+			// }
 
 			return {
 				documents,
@@ -109,7 +109,8 @@ export const useReplication = ({ collection }) => {
 			// retryTime: 1000000000,
 			pull: {
 				async handler(lastCheckpoint, batchSize) {
-					return runAudit.current ? audit() : replicate(lastCheckpoint, batchSize);
+					// return runAudit.current ? audit() : replicate(lastCheckpoint, batchSize);
+					return audit();
 				},
 				batchSize: 10,
 				modifier: async (doc) => {

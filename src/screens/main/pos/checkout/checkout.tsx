@@ -19,7 +19,7 @@ import useOrders from '@wcpos/core/src/contexts/orders';
 // 	order: import('@wcpos/database').OrderDocument;
 // }
 
-export const CheckoutTabs = () => {
+export const CheckoutTabs = React.forwardRef((props, ref) => {
 	const [index, setIndex] = React.useState(0);
 	const [loading, setLoading] = React.useState(true);
 	const { format } = useCurrencyFormat();
@@ -106,6 +106,7 @@ export const CheckoutTabs = () => {
 							onMessage={(event) => {
 								console.log(event);
 							}}
+							style={{ height: '100%' }}
 						/>
 					</ErrorBoundary>
 				</View>
@@ -117,12 +118,30 @@ export const CheckoutTabs = () => {
 	/**
 	 *
 	 */
-	const handleProcessPayment = React.useCallback(() => {
-		if (iframeRef.current && iframeRef.current.contentWindow) {
-			setLoading(true);
-			iframeRef.current.contentWindow.postMessage({ action: 'wcpos-process-payment' }, '*');
-		}
-	}, []);
+	// const handleProcessPayment = React.useCallback(() => {
+	// 	if (iframeRef.current && iframeRef.current.contentWindow) {
+	// 		setLoading(true);
+	// 		iframeRef.current.contentWindow.postMessage({ action: 'wcpos-process-payment' }, '*');
+	// 	}
+	// }, []);
+
+	/**
+	 *
+	 */
+	React.useImperativeHandle(
+		ref,
+		() => {
+			return {
+				processPayment() {
+					if (iframeRef.current && iframeRef.current.contentWindow) {
+						setLoading(true);
+						iframeRef.current.contentWindow.postMessage({ action: 'wcpos-process-payment' }, '*');
+					}
+				},
+			};
+		},
+		[]
+	);
 
 	/**
 	 *
@@ -156,7 +175,6 @@ export const CheckoutTabs = () => {
 				tabBarPosition="left"
 				style={{ minHeight: 400 }}
 			/>
-			<Button title="Process Order" onPress={handleProcessPayment} />
 		</Box>
 	);
-};
+});

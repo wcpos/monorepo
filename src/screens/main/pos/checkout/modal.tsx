@@ -14,6 +14,7 @@ type CheckoutModalProps = import('@react-navigation/stack').StackScreenProps<
 
 export const CheckoutModal = ({ route, navigation }: CheckoutModalProps) => {
 	const { _id } = route.params;
+	const checkoutRef = React.useRef(null);
 
 	React.useEffect(() => {
 		if (!navigation.canGoBack()) {
@@ -43,10 +44,18 @@ export const CheckoutModal = ({ route, navigation }: CheckoutModalProps) => {
 			title={t('Checkout')}
 			size="large"
 			onClose={() => navigation.dispatch(StackActions.pop(1))}
+			primaryAction={{
+				label: t('Process Payment'),
+				action: () => {
+					if (checkoutRef) {
+						checkoutRef.current.processPayment();
+					}
+				},
+			}}
 		>
 			<OrdersProvider initialQuery={{ filters: { _id } }}>
 				<GatewaysProvider>
-					<CheckoutTabs />
+					<CheckoutTabs ref={checkoutRef} />
 				</GatewaysProvider>
 			</OrdersProvider>
 		</Modal>
