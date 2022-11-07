@@ -3,8 +3,10 @@ import { View } from 'react-native';
 import find from 'lodash/find';
 import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
+import { T } from '@wcpos/core/src/lib/translations';
 import Categories from '../../../common/product-categories';
 import Tags from '../../../common/product-tags';
+import StockQuantity from '../../../components/product/stock-quantity';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;
@@ -35,9 +37,7 @@ export const Name = ({ item: product, column }: Props) => {
 		<Box space="xSmall">
 			<Text weight="bold">{product.name}</Text>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
-			{show('stock_quantity') && product.manage_stock && product.stock_quantity && (
-				<Text size="small">{product.stock_quantity} in stock</Text>
-			)}
+			{show('stock_quantity') && <StockQuantity product={product} size="small" />}
 			{show('categories') && <Categories item={product} />}
 			{show('tags') && <Tags item={product} />}
 
