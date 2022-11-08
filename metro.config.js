@@ -4,9 +4,19 @@
 
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
+const fs = require('fs');
+
+function getWorkspaceRoot() {
+	const packageFile = path.join(__dirname, '../../package.json');
+	const packageContent = fs.existsSync(packageFile) ? fs.readFileSync(packageFile, 'utf-8') : null;
+	if (packageContent && JSON.parse(packageContent).name === '@wcpos/monorepo') {
+		return path.resolve(__dirname, '../..');
+	}
+	return null;
+}
 
 const projectRoot = __dirname;
-const workspaceRoot = path.resolve(__dirname, '../..');
+const workspaceRoot = getWorkspaceRoot();
 
 module.exports = (() => {
 	const config = getDefaultConfig(__dirname);
@@ -15,12 +25,16 @@ module.exports = (() => {
 		resolver: { sourceExts, assetExts },
 	} = config;
 
-	config.watchFolders = [workspaceRoot];
+	if (workspaceRoot) {
+		config.watchFolders = [workspaceRoot];
+	}
+
 	config.resolver.disableHierarchicalLookup = true;
-	config.resolver.nodeModulesPaths = [
-		path.resolve(projectRoot, 'node_modules'),
-		path.resolve(workspaceRoot, 'node_modules'),
-	];
+	config.resolver.nodeModulesPaths = [path.resolve(projectRoot, 'node_modules')];
+
+	if (workspaceRoot) {
+		config.resolver.nodeModulesPaths.push(path.resolve(workspaceRoot, 'node_modules'));
+	}
 
 	return config;
 })();

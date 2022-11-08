@@ -23,6 +23,11 @@
 		"eas-build-on-complete": "echo 'Complete'",
 		"postinstall": "patch-package"
 	},
+	"resolutions": {
+		"ajv": "8.11.0",
+		"axios": "0.27.2",
+		"tslib": "2.4.1"
+	},
 	"dependencies": {
 		"@react-native-community/netinfo": "9.3.6",
 		"@react-navigation/bottom-tabs": "^6.4.0",
