@@ -10,6 +10,7 @@ function getWorkspaceRoot() {
 	const packageFile = path.join(__dirname, '../../package.json');
 	const packageContent = fs.existsSync(packageFile) ? fs.readFileSync(packageFile, 'utf-8') : null;
 	if (packageContent && JSON.parse(packageContent).name === '@wcpos/monorepo') {
+		console.log('Found workspace root');
 		return path.resolve(__dirname, '../..');
 	}
 	return null;
