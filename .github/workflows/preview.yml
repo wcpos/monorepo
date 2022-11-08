@@ -47,7 +47,7 @@ jobs:
       - name: 🚀 Setup Expo
         uses: expo/expo-github-action@v7
         with:
-          expo-version: 4.x
+          expo-version: latest
           expo-cache: true
           token: ${{ secrets.EXPO_TOKEN }}
       - name: 🔎 Find cache
