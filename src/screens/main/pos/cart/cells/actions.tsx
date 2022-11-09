@@ -2,7 +2,7 @@ import * as React from 'react';
 import Icon from '@wcpos/components/src/icon';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import { t } from '@wcpos/core/src/lib/translations';
-import useOpenOrders from '../../contexts/open-orders';
+import useCurrentOrder from '../../contexts/current-order';
 
 interface ActionProps {
 	item:
@@ -12,7 +12,7 @@ interface ActionProps {
 }
 
 export const Actions = ({ item }: ActionProps) => {
-	const { currentOrder } = useOpenOrders();
+	const { currentOrder } = useCurrentOrder();
 	const addSnackbar = useSnackbar();
 
 	/**

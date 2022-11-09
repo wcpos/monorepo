@@ -5,7 +5,7 @@ import Button from '@wcpos/components/src/button';
 import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
 import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
 import { t } from '@wcpos/core/src/lib/translations';
-import useOpenOrders from '../../contexts/open-orders';
+import useCurrentOrder from '../../contexts/current-order';
 
 interface PayModalProps {
 	order: import('@wcpos/database').OrderDocument;
@@ -18,7 +18,7 @@ const PayButton = ({ order }: PayModalProps) => {
 	const total = useObservableState(order.total$, order.total);
 	const { format } = useCurrencyFormat();
 	const http = useRestHttpClient();
-	const { setCurrentOrder } = useOpenOrders();
+	const { setCurrentOrder } = useCurrentOrder();
 	const navigation = useNavigation();
 
 	/**

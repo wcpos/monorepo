@@ -2,10 +2,23 @@ import * as React from 'react';
 import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import { OrdersProvider } from '@wcpos/core/src/contexts/orders';
 import Cart from './cart';
 import Tabs from './tabs';
 
 const OpenOrders = ({ isColumn = false }) => {
+	/**
+	 *
+	 */
+	const initialQuery = React.useMemo(
+		() => ({
+			sortBy: 'date_created_gmt',
+			sortDirection: 'desc',
+			filters: { status: 'pos-open' },
+		}),
+		[]
+	);
+
 	/**
 	 *
 	 */
@@ -20,7 +33,9 @@ const OpenOrders = ({ isColumn = false }) => {
 			</Box>
 			<ErrorBoundary>
 				<React.Suspense fallback={<Text>Loading Cart Tabs</Text>}>
-					<Tabs />
+					<OrdersProvider initialQuery={initialQuery}>
+						<Tabs />
+					</OrdersProvider>
 				</React.Suspense>
 			</ErrorBoundary>
 		</Box>

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import Icon from '@wcpos/components/src/icon';
-import useOpenOrders from '../../contexts/open-orders';
+import useCurrentOrder from '../../contexts/current-order';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;
@@ -12,7 +12,7 @@ interface Props {
  */
 export const Actions = ({ item: product }: Props) => {
 	const render = useObservableState(product.date_modified_gmt$, product.date_modified_gmt);
-	const { currentOrder } = useOpenOrders();
+	const { currentOrder } = useCurrentOrder();
 
 	/**
 	 *

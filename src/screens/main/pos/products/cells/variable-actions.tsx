@@ -9,7 +9,7 @@ import Icon from '@wcpos/components/src/icon';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 import Variations from './variations';
-import useOpenOrders from '../../contexts/open-orders';
+import useCurrentOrder from '../../contexts/current-order';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -41,7 +41,7 @@ interface Props {
 // };
 
 export const VariableActions = ({ item: product }: Props) => {
-	const { currentOrder } = useOpenOrders();
+	const { currentOrder } = useCurrentOrder();
 	const http = useRestHttpClient();
 	const { data } = useVariations();
 

@@ -2,7 +2,7 @@ import * as React from 'react';
 import Button from '@wcpos/components/src/button';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import { t } from '@wcpos/core/src/lib/translations';
-import useOpenOrders from '../../contexts/open-orders';
+import useCurrentOrder from '../../contexts/current-order';
 
 interface VoidButtonProps {
 	order: import('@wcpos/database').OrderDocument;
@@ -11,11 +11,11 @@ interface VoidButtonProps {
 let voidedOrderJSON = null;
 
 const VoidButton = ({ order }: VoidButtonProps) => {
-	const { setCurrentOrder } = useOpenOrders();
+	const { setCurrentOrder } = useCurrentOrder();
 	const addSnackbar = useSnackbar();
 
 	/**
-	 *
+	 * @TODO - upsert children, should be done during preInsert hook
 	 */
 	const undoRemove = React.useCallback(async () => {
 		const success = await order.collection.insert(voidedOrderJSON).catch(() => {

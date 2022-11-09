@@ -2,7 +2,7 @@ import * as React from 'react';
 import Button from '@wcpos/components/src/button';
 import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
 import { t } from '@wcpos/core/src/lib/translations';
-import useOpenOrders from '../../contexts/open-orders';
+import useCurrentOrder from '../../contexts/current-order';
 
 interface SaveButtonProps {
 	order: import('@wcpos/database').OrderDocument;
@@ -10,7 +10,7 @@ interface SaveButtonProps {
 
 const SaveButton = ({ order }: SaveButtonProps) => {
 	const http = useRestHttpClient();
-	const { setCurrentOrder } = useOpenOrders();
+	const { setCurrentOrder } = useCurrentOrder();
 
 	/**
 	 *

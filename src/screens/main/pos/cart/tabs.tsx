@@ -2,8 +2,9 @@ import * as React from 'react';
 import Tabs from '@wcpos/components/src/tabs';
 import Icon from '@wcpos/components/src/icon';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import useOrders from '@wcpos/core/src/contexts/orders';
 import CartTabTitle from './tab-title';
-import useOpenOrders from '../contexts/open-orders';
+import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -13,8 +14,19 @@ type RenderTabTitle = (focused: boolean, order?: OrderDocument) => React.ReactEl
  *
  */
 const CartTabs = () => {
-	const { orders, currentOrder, setCurrentOrder } = useOpenOrders();
+	const { currentOrder, setCurrentOrder, newOrder } = useCurrentOrder();
+	const { data } = useOrders();
+	const orders = React.useMemo(() => [...data, newOrder], [data, newOrder]);
 	const focusedIndex = orders.findIndex((order) => order === currentOrder);
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		if (focusedIndex === -1) {
+			setCurrentOrder(orders[0]);
+		}
+	}, [focusedIndex, orders, setCurrentOrder]);
 
 	/**
 	 * In cases where the current order is not found, set the currentOrder = first order
