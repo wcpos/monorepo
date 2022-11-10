@@ -54,7 +54,7 @@ export type UIResourceID =
 export const StoreContext = React.createContext<{
 	store: StoreDocument;
 	storeDB: StoreDatabase;
-	uiResources: Record<UIResourceID, UIResource>;
+	// uiResources: Record<UIResourceID, UIResource>;
 }>(null);
 
 /**
@@ -66,37 +66,37 @@ export const StoreProvider = ({ store, storeDB, children }: StoreProviderProps) 
 	/**
 	 *
 	 */
-	const getUIResource = React.useCallback(
-		(id: UIResourceID) => {
-			const resource = storeDB.getLocal$(id).pipe(
-				filter((localDoc) => {
-					const initial = get(initialUI, id);
+	// const getUIResource = React.useCallback(
+	// 	(id: UIResourceID) => {
+	// 		const resource = storeDB.getLocal$(id).pipe(
+	// 			filter((localDoc) => {
+	// 				const initial = get(initialUI, id);
 
-					if (!initial) {
-						throw Error(`No initial UI for ${id}`);
-					}
+	// 				if (!initial) {
+	// 					throw Error(`No initial UI for ${id}`);
+	// 				}
 
-					if (!localDoc) {
-						storeDB.insertLocal(id, initial);
-						return false;
-					}
+	// 				if (!localDoc) {
+	// 					storeDB.insertLocal(id, initial);
+	// 					return false;
+	// 				}
 
-					// add helper functions
-					Object.assign(localDoc, {
-						// reset the ui settings
-						reset: () => {
-							storeDB.upsertLocal(id, initial);
-						},
-					});
+	// 				// add helper functions
+	// 				Object.assign(localDoc, {
+	// 					// reset the ui settings
+	// 					reset: () => {
+	// 						storeDB.upsertLocal(id, initial);
+	// 					},
+	// 				});
 
-					return localDoc;
-				})
-			);
+	// 				return localDoc;
+	// 			})
+	// 		);
 
-			return new ObservableResource(resource);
-		},
-		[storeDB]
-	);
+	// 		return new ObservableResource(resource);
+	// 	},
+	// 	[storeDB]
+	// );
 
 	/**
 	 *
@@ -105,17 +105,17 @@ export const StoreProvider = ({ store, storeDB, children }: StoreProviderProps) 
 		() => ({
 			store,
 			storeDB,
-			uiResources: {
-				'pos.products': getUIResource('pos.products'),
-				'pos.cart': getUIResource('pos.cart'),
-				// 'pos.checkout': getUIResource('pos.checkout'),
-				products: getUIResource('products'),
-				orders: getUIResource('orders'),
-				customers: getUIResource('customers'),
-				// coupons: getResource('pos.products'),
-			},
+			// uiResources: {
+			// 	'pos.products': getUIResource('pos.products'),
+			// 	'pos.cart': getUIResource('pos.cart'),
+			// 	// 'pos.checkout': getUIResource('pos.checkout'),
+			// 	products: getUIResource('products'),
+			// 	orders: getUIResource('orders'),
+			// 	customers: getUIResource('customers'),
+			// 	// coupons: getResource('pos.products'),
+			// },
 		}),
-		[getUIResource, store, storeDB]
+		[store, storeDB]
 	);
 
 	/**
