@@ -6,12 +6,12 @@ import { OrdersProvider } from '@wcpos/core/src/contexts/orders';
 import { Receipt } from './receipt';
 
 type POSStackParamList = import('../navigator').POSStackParamList;
-type CheckoutModalProps = import('@react-navigation/stack').StackScreenProps<
+type ReceiptModalProps = import('@react-navigation/stack').StackScreenProps<
 	POSStackParamList,
-	'Checkout'
+	'Receipt'
 >;
 
-export const ReceiptModal = ({ route, navigation }: CheckoutModalProps) => {
+export const ReceiptModal = ({ route, navigation }: ReceiptModalProps) => {
 	const { _id } = route.params;
 
 	return (

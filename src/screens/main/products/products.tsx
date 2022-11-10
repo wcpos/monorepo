@@ -1,21 +1,20 @@
 import * as React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 import { ProductsProvider } from '@wcpos/core/src/contexts/products';
 import { TaxesProvider } from '@wcpos/core/src/contexts/taxes';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
-import useStore from '@wcpos/hooks/src/use-store';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';
+import useUI from '../../../contexts/ui';
 
 /**
  *
  */
 const Products = () => {
-	const { uiResources } = useStore();
-	const ui = useObservableSuspense(uiResources.products);
+	const { ui } = useUI('products');
 	const theme = useTheme();
 
 	return (
@@ -53,4 +52,14 @@ const Products = () => {
 	);
 };
 
-export default Products;
+const WrappedProducts = () => {
+	return (
+		<ErrorBoundary>
+			<React.Suspense fallback={<Text>Loading products UI</Text>}>
+				<Products />
+			</React.Suspense>
+		</ErrorBoundary>
+	);
+};
+
+export default WrappedProducts;

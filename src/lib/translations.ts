@@ -19,7 +19,9 @@ const translations$ = from(
 		.then(() => {
 			console.log(t('Menu'));
 		})
-		.catch((err) => console.error(err))
+		.catch((err) => {
+			console.error(err);
+		})
 );
 const translationsResource = new ObservableResource(translations$);
 

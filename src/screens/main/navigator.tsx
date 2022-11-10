@@ -15,6 +15,7 @@ import Products from './products';
 import POS from './pos';
 import CustomDrawer from './drawer';
 import CustomHeader from './header';
+import { UIProvider } from '../../contexts/ui';
 
 export type DrawerParamList = {
 	POS: undefined;
@@ -61,59 +62,61 @@ export const MainNavigator = () => {
 	return (
 		<OnlineStatusProvider>
 			<StoreProvider store={store} storeDB={storeDB}>
-				<Drawer.Navigator
-					initialRouteName="POS"
-					screenOptions={{
-						header,
-						drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
-						drawerStyle: {
-							backgroundColor: theme.colors.headerBackground,
-							width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
-							borderRightColor: 'rgba(0, 0, 0, 0.2)',
-							// borderRightWidth: 0,
-						},
-						sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
-					}}
-					drawerContent={drawer}
-				>
-					<Drawer.Screen
-						name="POS"
-						component={POS}
-						options={{
-							title: `${t('POS')} - ${storeName}`,
-							drawerLabel: t('POS'),
-							drawerIcon: ({ focused }) => renderIcon({ icon: 'cashRegister', focused }),
+				<UIProvider>
+					<Drawer.Navigator
+						initialRouteName="POS"
+						screenOptions={{
+							header,
+							drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
+							drawerStyle: {
+								backgroundColor: theme.colors.headerBackground,
+								width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
+								borderRightColor: 'rgba(0, 0, 0, 0.2)',
+								// borderRightWidth: 0,
+							},
+							sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
 						}}
-					/>
-					<Drawer.Screen
-						name="Products"
-						component={Products}
-						options={{
-							title: `${t('Products')} - ${storeName}`,
-							drawerLabel: t('Products'),
-							drawerIcon: ({ focused }) => renderIcon({ icon: 'gifts', focused }),
-						}}
-					/>
-					<Drawer.Screen
-						name="Orders"
-						component={Orders}
-						options={{
-							title: `${t('Orders')} - ${storeName}`,
-							drawerLabel: t('Orders'),
-							drawerIcon: ({ focused }) => renderIcon({ icon: 'receipt', focused }),
-						}}
-					/>
-					<Drawer.Screen
-						name="Customers"
-						component={Customers}
-						options={{
-							title: `${t('Customers')} - ${storeName}`,
-							drawerLabel: t('Customers'),
-							drawerIcon: ({ focused }) => renderIcon({ icon: 'users', focused }),
-						}}
-					/>
-					{/* <Drawer.Screen name="Support" component={Support} options={getOptions('support')} /> */}
-				</Drawer.Navigator>
+						drawerContent={drawer}
+					>
+						<Drawer.Screen
+							name="POS"
+							component={POS}
+							options={{
+								title: `${t('POS')} - ${storeName}`,
+								drawerLabel: t('POS'),
+								drawerIcon: ({ focused }) => renderIcon({ icon: 'cashRegister', focused }),
+							}}
+						/>
+						<Drawer.Screen
+							name="Products"
+							component={Products}
+							options={{
+								title: `${t('Products')} - ${storeName}`,
+								drawerLabel: t('Products'),
+								drawerIcon: ({ focused }) => renderIcon({ icon: 'gifts', focused }),
+							}}
+						/>
+						<Drawer.Screen
+							name="Orders"
+							component={Orders}
+							options={{
+								title: `${t('Orders')} - ${storeName}`,
+								drawerLabel: t('Orders'),
+								drawerIcon: ({ focused }) => renderIcon({ icon: 'receipt', focused }),
+							}}
+						/>
+						<Drawer.Screen
+							name="Customers"
+							component={Customers}
+							options={{
+								title: `${t('Customers')} - ${storeName}`,
+								drawerLabel: t('Customers'),
+								drawerIcon: ({ focused }) => renderIcon({ icon: 'users', focused }),
+							}}
+						/>
+						{/* <Drawer.Screen name="Support" component={Support} options={getOptions('support')} /> */}
+					</Drawer.Navigator>
+				</UIProvider>
 			</StoreProvider>
 		</OnlineStatusProvider>
 	);

@@ -1,20 +1,19 @@
 import * as React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 import { OrdersProvider } from '@wcpos/core/src/contexts/orders';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
-import useStore from '@wcpos/hooks/src/use-store';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';
+import useUI from '../../../contexts/ui';
 
 /**
  *
  */
 const Orders = () => {
-	const { uiResources } = useStore();
-	const ui = useObservableSuspense(uiResources.orders);
+	const { ui } = useUI('orders');
 	const theme = useTheme();
 
 	return (
@@ -50,4 +49,14 @@ const Orders = () => {
 	);
 };
 
-export default Orders;
+const WrappedOrders = (props) => {
+	return (
+		<ErrorBoundary>
+			<React.Suspense fallback={<Text>Loading orders UI</Text>}>
+				<Orders {...props} />
+			</React.Suspense>
+		</ErrorBoundary>
+	);
+};
+
+export default WrappedOrders;

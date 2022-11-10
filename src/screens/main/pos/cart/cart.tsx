@@ -1,11 +1,9 @@
 import * as React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import useStore from '@wcpos/hooks/src/use-store';
 import { CartProvider } from '@wcpos/core/src/contexts/cart';
 import Totals from './totals';
 import Table from './table';
@@ -18,14 +16,14 @@ import AddNoteButton from './buttons/add-note';
 import VoidButton from './buttons/void';
 import PayButton from './buttons/pay';
 import useCurrentOrder from '../contexts/current-order';
+import useUI from '../../../../contexts/ui';
 
 const Cart = () => {
-	const { uiResources } = useStore();
-	const ui = useObservableSuspense(uiResources['pos.cart']);
+	const { ui } = useUI('pos.cart');
 	const theme = useTheme();
 	const { currentOrder } = useCurrentOrder();
 
-	useWhyDidYouUpdate('Cart', { currentOrder, ui, theme, uiResources });
+	useWhyDidYouUpdate('Cart', { currentOrder, ui, theme });
 
 	if (!currentOrder) {
 		return null;

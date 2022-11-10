@@ -28,40 +28,40 @@ const Stack = createStackNavigator<POSStackParamList>();
  *
  */
 const POS = ({ navigation, route }) => {
-	const { storeDB, uiResources } = useStore();
-	const productsUI = useObservableSuspense(uiResources['pos.products']);
 	const theme = useTheme();
 	const { store } = useAuth();
 	const storeName = useObservableState(store?.name$, store.name);
 	console.log('render POS');
 
 	useWhyDidYouUpdate('POS', {
-		productsUI,
+		// productsUI,
 		// openOrdersResource,
 		theme,
-		storeDB,
+		// storeDB,
 		storeName,
-		uiResources,
+		// uiResources,
 		navigation,
 		route,
 	});
 
 	return (
-		<CurrentOrderProvider>
-			<TaxesProvider initialQuery={{ country: 'GB' }}>
-				<Stack.Navigator initialRouteName="Columns" screenOptions={{ headerShown: false }}>
-					{theme._dimensions.width >= theme.screens.small ? (
-						<Stack.Screen name="Columns" component={Columns} options={{ title: storeName }} />
-					) : (
-						<Stack.Screen name="Tabs" component={Tabs} />
-					)}
-					<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-						<Stack.Screen name="Checkout" component={Checkout} />
-						<Stack.Screen name="Receipt" component={Receipt} />
-					</Stack.Group>
-				</Stack.Navigator>
-			</TaxesProvider>
-		</CurrentOrderProvider>
+		<ErrorBoundary>
+			<CurrentOrderProvider>
+				<TaxesProvider initialQuery={{ country: 'GB' }}>
+					<Stack.Navigator screenOptions={{ headerShown: false }}>
+						{theme._dimensions.width >= theme.screens.small ? (
+							<Stack.Screen name="Columns" component={Columns} options={{ title: storeName }} />
+						) : (
+							<Stack.Screen name="Tabs" component={Tabs} />
+						)}
+						<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
+							<Stack.Screen name="Checkout" component={Checkout} />
+							<Stack.Screen name="Receipt" component={Receipt} />
+						</Stack.Group>
+					</Stack.Navigator>
+				</TaxesProvider>
+			</CurrentOrderProvider>
+		</ErrorBoundary>
 	);
 };
 

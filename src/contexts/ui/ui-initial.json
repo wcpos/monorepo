@@ -1,0 +1,316 @@
+{
+	"pos.products": {
+		"sortBy": "name",
+		"sortDirection": "asc",
+		"width": 60,
+		"showOutOfStock": false,
+		"columns": [
+			{
+				"key": "image",
+				"disableSort": true,
+				"hideLabel": true,
+				"show": true
+			},
+			{
+				"key": "name",
+				"show": true,
+				"flex": 3,
+				"display": [
+					{
+						"key": "stock_quantity",
+						"show": true
+					},
+					{
+						"key": "sku",
+						"show": false
+					},
+					{
+						"key": "categories",
+						"show": true
+					},
+					{
+						"key": "tags",
+						"hide": false
+					}
+				]
+			},
+			{
+				"key": "sku",
+				"show": false
+			},
+			{
+				"key": "type",
+				"show": false
+			},
+			{
+				"key": "stock_quantity",
+				"show": false,
+				"align": "center"
+			},
+			{
+				"key": "price",
+				"align": "right",
+				"show": true,
+				"display": [
+					{
+						"key": "tax",
+						"show": false
+					}
+				]
+			},
+			{
+				"key": "actions",
+				"disableSort": true,
+				"width": 46,
+				"hideLabel": true,
+				"show": true
+			}
+		]
+	},
+	"pos.cart": {
+		"sortBy": "id",
+		"sortDirection": "asc",
+		"columns": [
+			{
+				"key": "quantity",
+				"show": true,
+				"align": "center"
+			},
+			{
+				"key": "name",
+				"show": true,
+				"flex": 3,
+				"display": [
+					{
+						"key": "sku",
+						"show": false
+					}
+				]
+			},
+			{
+				"key": "sku",
+				"show": false
+			},
+			{
+				"key": "price",
+				"show": true,
+				"align": "right"
+			},
+			{
+				"key": "subtotal",
+				"show": false,
+				"align": "right",
+				"display": [
+					{
+						"key": "tax",
+						"show": false
+					}
+				]
+			},
+			{
+				"key": "total",
+				"align": "right",
+				"show": true,
+				"display": [
+					{
+						"key": "tax",
+						"show": false
+					}
+				]
+			},
+			{
+				"key": "actions",
+				"width": 46,
+				"hideLabel": true,
+				"show": true
+			}
+		]
+	},
+	"products": {
+		"sortBy": "name",
+		"sortDirection": "asc",
+		"columns": [
+			{
+				"key": "image",
+				"disableSort": true,
+				"hideLabel": true,
+				"show": true
+			},
+			{
+				"key": "id",
+				"show": false,
+				"align": "center"
+			},
+			{
+				"key": "name",
+				"show": true,
+				"flex": 3,
+				"display": [
+					{
+						"key": "sku",
+						"show": false
+					}
+				]
+			},
+			{
+				"key": "type",
+				"show": false
+			},
+			{
+				"key": "sku",
+				"show": false
+			},
+			{
+				"key": "stock_quantity",
+				"show": true
+			},
+			{
+				"key": "categories",
+				"disableSort": true,
+				"show": true
+			},
+			{
+				"key": "tags",
+				"disableSort": true,
+				"show": false
+			},
+			{
+				"key": "price",
+				"show": true,
+				"align": "right"
+			},
+			{
+				"key": "regular_price",
+				"show": true,
+				"align": "right"
+			},
+			{
+				"key": "sale_price",
+				"show": true,
+				"align": "right"
+			},
+			{
+				"key": "date_created",
+				"show": false
+			},
+			{
+				"key": "date_modified",
+				"show": false
+			},
+			{
+				"key": "actions",
+				"disableSort": true,
+				"width": 38,
+				"hideLabel": true,
+				"show": true
+			}
+		]
+	},
+	"orders": {
+		"sortBy": "number",
+		"sortDirection": "desc",
+		"columns": [
+			{
+				"key": "status",
+				"width": 45,
+				"align": "center",
+				"hideLabel": true,
+				"show": true
+			},
+			{
+				"key": "number",
+				"align": "center",
+				"hideLabel": true,
+				"show": true
+			},
+			{
+				"key": "customer",
+				"show": true
+			},
+			{
+				"key": "billing",
+				"show": true
+			},
+			{
+				"key": "shipping",
+				"show": true
+			},
+			{
+				"key": "customer_note",
+				"width": 38,
+				"show": true
+			},
+			{
+				"key": "date_created",
+				"show": true
+			},
+			{
+				"key": "date_modified",
+				"show": false
+			},
+			{
+				"key": "date_completed",
+				"show": false
+			},
+			{
+				"key": "total",
+				"align": "right",
+				"show": true
+			},
+			{
+				"key": "actions",
+				"disableSort": true,
+				"width": 38,
+				"hideLabel": true,
+				"show": true
+			}
+		]
+	},
+	"customers": {
+		"sortBy": "last_name",
+		"sortDirection": "asc",
+		"columns": [
+			{
+				"key": "avatar_url",
+				"disableSort": true,
+				"hideLabel": true,
+				"show": true
+			},
+			{
+				"key": "first_name",
+				"show": true
+			},
+			{
+				"key": "last_name",
+				"show": true
+			},
+			{
+				"key": "email",
+				"show": true
+			},
+			{
+				"key": "role",
+				"show": false
+			},
+			{
+				"key": "username",
+				"show": false
+			},
+			{
+				"key": "billing",
+				"show": true
+			},
+			{
+				"key": "shipping",
+				"show": true
+			},
+			{
+				"key": "actions",
+				"disableSort": true,
+				"width": 38,
+				"hideLabel": true,
+				"show": true
+			}
+		]
+	}
+}

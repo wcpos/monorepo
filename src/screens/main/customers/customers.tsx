@@ -1,22 +1,20 @@
 import * as React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 import { CustomersProvider } from '@wcpos/core/src/contexts/customers';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
-import useStore from '@wcpos/hooks/src/use-store';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table from './table';
 import SearchBar from './search-bar';
 import UiSettings from '../common/ui-settings';
 import AddNewCustomer from '../common/add-new-customer';
+import useUI from '../../../contexts/ui';
 
 /**
  *
  */
 const Customers = () => {
-	const { uiResources } = useStore();
-	const ui = useObservableSuspense(uiResources.customers);
+	const { ui } = useUI('customers');
 	const theme = useTheme();
 
 	return (
@@ -55,4 +53,14 @@ const Customers = () => {
 	);
 };
 
-export default Customers;
+const WrappedCustomers = () => {
+	return (
+		<ErrorBoundary>
+			<React.Suspense fallback={<Text>Loading customers UI</Text>}>
+				<Customers />
+			</React.Suspense>
+		</ErrorBoundary>
+	);
+};
+
+export default WrappedCustomers;

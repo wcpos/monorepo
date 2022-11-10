@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { LayoutChangeEvent, View } from 'react-native';
+import { LayoutChangeEvent, View, Text } from 'react-native';
 import { useSubscription, useObservableSuspense } from 'observable-hooks';
 import Animated, {
 	useAnimatedGestureHandler,
@@ -11,9 +11,11 @@ import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-g
 import useStore from '@wcpos/hooks/src/use-store';
 import Gutter from '@wcpos/components/src/gutter';
 import Box from '@wcpos/components/src/box';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Products from './products';
 import OpenOrders from './cart';
+import useUI from '../../../contexts/ui';
 
 // interface ResizableColumnsProps {
 // 	ui: import('@wcpos/hooks/src/use-store').UIDocument;
@@ -32,8 +34,7 @@ const clamp = (value: number, lowerBound: number, upperBound: number) => {
  *
  */
 const ResizableColumns = () => {
-	const { uiResources } = useStore();
-	const ui = useObservableSuspense(uiResources['pos.products']);
+	const { ui } = useUI('pos.products');
 	const columnWidth = useSharedValue(ui.get('width'));
 	const isActivePanGesture = useSharedValue(false);
 	const containerWidth = useSharedValue(800);
@@ -127,4 +128,14 @@ const ResizableColumns = () => {
 	);
 };
 
-export default ResizableColumns;
+const WrappedResizableColumns = () => {
+	return (
+		<ErrorBoundary>
+			<React.Suspense fallback={<Text>Loading products UI</Text>}>
+				<ResizableColumns />
+			</React.Suspense>
+		</ErrorBoundary>
+	);
+};
+
+export default WrappedResizableColumns;
