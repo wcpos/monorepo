@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Dimensions } from 'react-native';
+
 import debounce from 'lodash/debounce';
 
 export function useScreenSize() {

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import Text from '@wcpos/components/src/text';
+
 import styled from 'styled-components/native';
+
+import Text from '@wcpos/components/src/text';
 
 import { useMeasure } from './use-measure';
 

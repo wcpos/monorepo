@@ -1,11 +1,12 @@
 import * as React from 'react';
+
 import NetInfo, {
 	// useNetInfo,
 	NetInfoState,
 	NetInfoStateType,
 } from '@react-native-community/netinfo';
+
 import useSnackbar from '@wcpos/components/src/snackbar';
-import useAuth from '../use-auth';
 
 const initialState: NetInfoState = {
 	type: NetInfoStateType.unknown,
@@ -18,10 +19,10 @@ export const OnlineStatusContext = React.createContext<NetInfoState>(initialStat
 
 interface Props {
 	children: React.ReactNode;
+	wpAPIURL: string;
 }
 
-const OnlineStatusProvider = ({ children }: Props) => {
-	const { site } = useAuth();
+const OnlineStatusProvider = ({ children, wpAPIURL }: Props) => {
 	const addSnackbar = useSnackbar();
 	const [status, setStatus] = React.useState<NetInfoState>(initialState);
 
@@ -31,7 +32,7 @@ const OnlineStatusProvider = ({ children }: Props) => {
 	 */
 	React.useEffect(() => {
 		NetInfo.configure({
-			reachabilityUrl: site?.wp_api_url,
+			reachabilityUrl: wpAPIURL,
 			reachabilityTest: async (response) => response.status === 200,
 			// reachabilityLongTimeout: 60 * 1000, // 60s
 			// reachabilityShortTimeout: 5 * 1000, // 5s
@@ -64,7 +65,7 @@ const OnlineStatusProvider = ({ children }: Props) => {
 
 		// Unsubscribe
 		return unsubscribe;
-	}, [addSnackbar, site?.wp_api_url]);
+	}, [addSnackbar, wpAPIURL]);
 
 	return <OnlineStatusContext.Provider value={status}>{children}</OnlineStatusContext.Provider>;
 };

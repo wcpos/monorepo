@@ -1,7 +1,10 @@
 import * as React from 'react';
+
 import { useNavigation } from '@react-navigation/native';
-import useSnackbar from '@wcpos/components/src/snackbar';
 import get from 'lodash/get';
+
+import useSnackbar from '@wcpos/components/src/snackbar';
+import log from '@wcpos/utils/src/logger';
 
 type AxiosResponse = import('axios').AxiosResponse;
 type AxiosError = import('axios').AxiosError;
@@ -51,13 +54,13 @@ const useHttpErrorHandler = () => {
 					}
 					break;
 				case 404:
-					console.log('404 error', res);
+					log.error('404 error', res);
 					break;
 				case 500:
-					console.log('500 Internal server error', res);
+					log.error('500 Internal server error', res);
 					break;
 				default:
-					console.log('Unknown error', res);
+					log.error('Unknown error', res);
 			}
 		},
 		[addSnackbar, navigation]
@@ -76,11 +79,11 @@ const useHttpErrorHandler = () => {
 				errorResponseHandler(response);
 			} else if (request) {
 				// client never received a response, or request never left
-				console.log(request);
+				log.error(request);
 				addSnackbar({ message: 'Server is unavailable' });
 			} else {
 				// anything else
-				console.log(error);
+				log.error(error);
 				addSnackbar({ message: 'Network error' });
 			}
 		},

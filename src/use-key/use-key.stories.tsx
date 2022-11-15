@@ -1,7 +1,7 @@
 import * as React from 'react';
-import Text from '../../components/text';
 
 import useKey, { useEscKey } from '.';
+import Text from '../../components/text';
 
 export default {
 	title: 'Hooks/useKey',

@@ -1,10 +1,14 @@
 import * as React from 'react';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import set from 'lodash/set';
+
 import defaults from 'lodash/defaults';
+import set from 'lodash/set';
+
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import log from '@wcpos/utils/src/logger';
+
+import useOnlineStatus from '../use-online-status';
 import http from './http';
 import useHttpErrorHandler from './use-http-error-handler';
-import useOnlineStatus from '../use-online-status';
 
 type AxiosRequestConfig = import('axios').AxiosRequestConfig;
 
@@ -74,12 +78,12 @@ export const useHttpClient = () => {
 			 *
 			 */
 			const response = await http.request(_config).catch((error) => {
+				log.error(error);
 				errorResponseHandler(error);
 			});
 
 			if (!response) {
-				console.log('no response at all');
-				console.log(JSON.stringify(_config.url));
+				log.error('no response at all', config);
 				throw Error('Network Error');
 			}
 
