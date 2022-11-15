@@ -1,8 +1,11 @@
 import * as React from 'react';
+
 import { StackActions } from '@react-navigation/native';
+
 import Modal from '@wcpos/components/src/modal';
-import { t } from '@wcpos/core/src/lib/translations';
-import { OrdersProvider } from '@wcpos/core/src/contexts/orders';
+
+import { OrdersProvider } from '../../../../contexts/orders';
+import { t } from '../../../../lib/translations';
 import { Receipt } from './receipt';
 
 type POSStackParamList = import('../navigator').POSStackParamList;

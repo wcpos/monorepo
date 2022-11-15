@@ -1,10 +1,13 @@
 import * as React from 'react';
-import get from 'lodash/get';
+
 import find from 'lodash/find';
+import get from 'lodash/get';
+
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
-import Platform from '@wcpos/core/src/lib/platform';
-import useAuth from '@wcpos/hooks/src/use-auth';
-import { parseLinkHeader } from '@wcpos/core/src/lib/url';
+import log from '@wcpos/utils/src/logger';
+
+import useAuth from '../../contexts/auth';
+import { parseLinkHeader } from '../../lib/url';
 
 type SiteDocument = import('@wcpos/database/src').SiteDocument;
 
@@ -94,7 +97,7 @@ const useSiteConnect = () => {
 				// check against database
 				// populate user sites
 				const sites = await user.populate('sites').catch((err) => {
-					console.error(err);
+					log.error(err);
 				});
 				site = find(sites, { url: siteData?.url });
 
@@ -103,7 +106,7 @@ const useSiteConnect = () => {
 					site = await userDB.sites.insert(siteData);
 
 					user.update({ $push: { sites: site?.localID } }).catch((err) => {
-						console.log(err);
+						log.log(err);
 						return err;
 					});
 				}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Text, View, StyleSheet, Button } from 'react-native';
 import { BarCodeScanner } from 'expo-barcode-scanner';
 import { Camera } from 'expo-camera';
+import log from '@wcpos/utils/src/logger';
 
 export default function App() {
 	const [hasPermission, setHasPermission] = useState(null);
@@ -30,7 +31,7 @@ export default function App() {
 		<View style={styles.container}>
 			<Camera
 				style={StyleSheet.absoluteFillObject}
-				onBarCodeScanned={console.log}
+				onBarCodeScanned={log.debug}
 				barCodeScannerSettings={{
 					barCodeTypes: [BarCodeScanner.Constants.BarCodeType.qr],
 				}}

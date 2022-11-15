@@ -1,7 +1,10 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
+
 import Text from '@wcpos/components/src/text';
-import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
+
+import useCurrencyFormat from '../../../../hooks/use-currency-format';
 
 type Props = {
 	item: import('@wcpos/database').OrderDocument;

@@ -1,22 +1,26 @@
 import * as React from 'react';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+
 import get from 'lodash/get';
-import type { ListRenderItemInfo } from '@shopify/flash-list';
-import useProducts from '@wcpos/core/src/contexts/products';
-import { VariationsProvider } from '@wcpos/core/src/contexts/variations';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
+
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import { t } from '@wcpos/core/src/lib/translations';
-import Footer from './footer';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+
+import useProducts from '../../../../contexts/products';
+import { VariationsProvider } from '../../../../contexts/variations';
+import { t } from '../../../../lib/translations';
 import cells from './cells';
+import Footer from './footer';
+
+import type { ListRenderItemInfo } from '@shopify/flash-list';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
-type UIColumn = import('@wcpos/hooks/src/use-store').UIColumn;
+type UIColumn = import('../../../../contexts/ui').UIColumn;
 
 interface POSProductsTableProps {
-	ui: import('@wcpos/hooks/src/use-store').UIDocument;
+	ui: import('../../../../contexts/ui').UIDocument;
 }
 
 /**

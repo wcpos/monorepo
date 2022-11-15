@@ -1,9 +1,12 @@
 import * as React from 'react';
+
 import { useObservableSuspense } from 'observable-hooks';
-import Pill from '@wcpos/components/src/pill';
+
 import Dialog, { useDialog } from '@wcpos/components/src/dialog';
-import useAuth from '@wcpos/hooks/src/use-auth';
+import Pill from '@wcpos/components/src/pill';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
+
+import useAuth from '../../contexts/auth';
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;

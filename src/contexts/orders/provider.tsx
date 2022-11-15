@@ -1,11 +1,15 @@
 import * as React from 'react';
-import { ObservableResource, useObservableState } from 'observable-hooks';
-import { switchMap, map, debounceTime, tap, distinctUntilChanged } from 'rxjs/operators';
-import useStore from '@wcpos/hooks/src/use-store';
-import _set from 'lodash/set';
+
+import { orderBy } from '@shelf/fast-natural-order-by';
 import _get from 'lodash/get';
 import isEqual from 'lodash/isEqual';
-import { orderBy } from '@shelf/fast-natural-order-by';
+import _set from 'lodash/set';
+import { ObservableResource } from 'observable-hooks';
+import { switchMap, map, debounceTime, tap, distinctUntilChanged } from 'rxjs/operators';
+
+import log from '@wcpos/utils/src/logger';
+
+import useStore from '../../contexts/store';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import { useReplication } from './use-replication';
 
@@ -21,11 +25,11 @@ export const OrdersContext = React.createContext<{
 interface OrdersProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
-	ui?: import('@wcpos/hooks/src/use-store').UIDocument;
+	ui?: import('../../contexts/ui').UIDocument;
 }
 
 const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => {
-	console.log('render order provider');
+	log.debug('render order provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.orders;
 	const { query$, setQuery } = useQuery(initialQuery);
@@ -79,7 +83,7 @@ const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => 
 						return orderBy(result, [q.sortBy], [q.sortDirection]);
 					}),
 					tap((res) => {
-						console.log(res);
+						log.silly(res);
 					})
 				);
 			})

@@ -1,10 +1,12 @@
 import * as React from 'react';
-import Tabs from '@wcpos/components/src/tabs';
+
 import Icon from '@wcpos/components/src/icon';
+import Tabs from '@wcpos/components/src/tabs';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import useOrders from '@wcpos/core/src/contexts/orders';
-import CartTabTitle from './tab-title';
+
+import useOrders from '../../../../contexts/orders';
 import useCurrentOrder from '../contexts/current-order';
+import CartTabTitle from './tab-title';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

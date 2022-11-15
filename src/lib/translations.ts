@@ -2,6 +2,7 @@ import { tx, t } from '@transifex/native';
 import { T } from '@transifex/react';
 import { from } from 'rxjs';
 import { ObservableResource } from 'observable-hooks';
+import log from '@wcpos/utils/src/logger';
 
 tx.init({
 	token: '1/53ff5ea9a168aa4e7b8a72157b83537886a51938',
@@ -14,13 +15,13 @@ const translations$ = from(
 	tx
 		.setCurrentLocale('es')
 		.then(() => {
-			console.log('es translations loaded');
+			log.silly('es translations loaded');
 		})
 		.then(() => {
-			console.log(t('Menu'));
+			log.silly(t('Menu'));
 		})
 		.catch((err) => {
-			console.error(err);
+			log.error(err);
 		})
 );
 const translationsResource = new ObservableResource(translations$);

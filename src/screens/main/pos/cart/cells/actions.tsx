@@ -1,7 +1,9 @@
 import * as React from 'react';
+
 import Icon from '@wcpos/components/src/icon';
 import useSnackbar from '@wcpos/components/src/snackbar';
-import { t } from '@wcpos/core/src/lib/translations';
+
+import { t } from '../../../../../lib/translations';
 import useCurrentOrder from '../../contexts/current-order';
 
 interface ActionProps {

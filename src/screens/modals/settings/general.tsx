@@ -1,8 +1,11 @@
 import * as React from 'react';
-import pick from 'lodash/pick';
+
 import { decode } from 'html-entities';
+import pick from 'lodash/pick';
+
 import Form from '@wcpos/react-native-jsonschema-form';
-import useAuth from '@wcpos/hooks/src/use-auth';
+
+import useAuth from '../../../contexts/auth';
 
 const uiSchema = {};
 

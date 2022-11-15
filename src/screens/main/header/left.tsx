@@ -1,11 +1,14 @@
 import * as React from 'react';
-import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { useWindowDimensions } from 'react-native';
+
+import { useNavigation, DrawerActions } from '@react-navigation/native';
 import { useTheme } from 'styled-components/native';
+
+import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
-import Box from '@wcpos/components/src/box';
-import { t } from '@wcpos/core/src/lib/translations';
+
+import { t } from '../../../lib/translations';
 
 const HeaderLeft = () => {
 	const { width } = useWindowDimensions();

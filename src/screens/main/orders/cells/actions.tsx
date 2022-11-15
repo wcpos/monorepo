@@ -1,10 +1,13 @@
 import * as React from 'react';
+
 import { useNavigation } from '@react-navigation/native';
 import pick from 'lodash/pick';
+
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
 import Modal, { useModal } from '@wcpos/components/src/modal';
-import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
+
+import useRestHttpClient from '../../../../hooks/use-rest-http-client';
 import EditModal from '../../common/edit-modal';
 import Receipt from '../../receipt';
 

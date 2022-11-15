@@ -1,9 +1,11 @@
 import * as React from 'react';
+
 import Box from '@wcpos/components/src/box';
-import UserMenu from './user-menu';
-import Online from './online';
+
 import Notifications from './notifications';
+import Online from './online';
 import * as Styled from './styles';
+import UserMenu from './user-menu';
 
 const HeaderRight = () => {
 	return (

@@ -1,8 +1,11 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
-import useStore from '@wcpos/hooks/src/use-store';
-import Button from '@wcpos/components/src/button';
+
 import Box from '@wcpos/components/src/box';
+import Button from '@wcpos/components/src/button';
+
+import useStore from '../../../contexts/store';
 // import Checkout from '../pos/checkout';
 // import Settings from '../settings';
 // import Receipt from '../receipt';

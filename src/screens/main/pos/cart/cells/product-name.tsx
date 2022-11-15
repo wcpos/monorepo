@@ -1,12 +1,15 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
-import pick from 'lodash/pick';
+
 import find from 'lodash/find';
-import Text from '@wcpos/components/src/text';
+import pick from 'lodash/pick';
+import { useObservableState } from 'observable-hooks';
+
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
 import Modal, { useModal } from '@wcpos/components/src/modal';
-import { t } from '@wcpos/core/src/lib/translations';
+import Text from '@wcpos/components/src/text';
+
+import { t } from '../../../../../lib/translations';
 import EditModal from '../../../common/edit-modal';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;

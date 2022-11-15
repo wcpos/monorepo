@@ -1,7 +1,10 @@
 import * as React from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ScrollView } from 'react-native';
-import type { FallbackProps } from 'react-error-boundary';
+
 import { removeDB } from '@wcpos/database';
+import log from '@wcpos/utils/src/logger';
+
+import type { FallbackProps } from 'react-error-boundary';
 
 const styles: any = StyleSheet.create({
 	container: {
@@ -42,11 +45,11 @@ const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 	const handleReset = async () => {
 		// clear userDB to ensure clean start
 		await removeDB('wcposusers')
-			.then((result) => {
-				console.log(result);
+			.then(() => {
+				log.info('UserDB removed');
 			})
 			.catch((error) => {
-				console.log(error);
+				log.error(error);
 			});
 
 		// try again

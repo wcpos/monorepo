@@ -1,12 +1,15 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
+
 import Box from '@wcpos/components/src/box';
-import useStore from '@wcpos/hooks/src/use-store';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import CustomerSelect from '../../common/customer-select';
+
+import useStore from '../../../../contexts/store';
 import AddCustomer from '../../common/add-new-customer';
+import CustomerSelect from '../../common/customer-select';
 import UISettings from '../../common/ui-settings';
 import Customer from './customer';
 

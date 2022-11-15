@@ -1,22 +1,27 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
+
 import get from 'lodash/get';
-import useProducts from '@wcpos/core/src/contexts/products';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import { useObservableState } from 'observable-hooks';
+
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import { VariationsProvider } from '@wcpos/core/src/contexts/variations';
-import type { ListRenderItemInfo } from '@shopify/flash-list';
-import { t } from '@wcpos/core/src/lib/translations';
-import Footer from './footer';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import log from '@wcpos/utils/src/logger';
+
+import useProducts from '../../../contexts/products';
+import { VariationsProvider } from '../../../contexts/variations';
+import { t } from '../../../lib/translations';
 import cells from './cells';
+import Footer from './footer';
+
+import type { ListRenderItemInfo } from '@shopify/flash-list';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
-type UIColumn = import('@wcpos/hooks/src/use-store').UIColumn;
+type UIColumn = import('../../../contexts/ui').UIColumn;
 
 interface ProductsTableProps {
-	ui: import('@wcpos/hooks/src/use-store').UIDocument;
+	ui: import('../../../contexts/ui').UIDocument;
 }
 
 /**
@@ -26,6 +31,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	const { query$, setQuery, data: products } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
+	log.debug('render products table');
 
 	/**
 	 *

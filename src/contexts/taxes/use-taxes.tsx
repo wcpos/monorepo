@@ -1,8 +1,10 @@
 import * as React from 'react';
-import { useObservableSuspense, useObservableState } from 'observable-hooks';
-import useAuth from '@wcpos/hooks/src/use-auth';
+
 import map from 'lodash/map';
 import sumBy from 'lodash/sumBy';
+import { useObservableSuspense, useObservableState } from 'observable-hooks';
+
+import useAuth from '../auth';
 import { TaxesContext } from './provider';
 import { calcTaxes, sumItemizedTaxes, sumTaxes } from './utils';
 

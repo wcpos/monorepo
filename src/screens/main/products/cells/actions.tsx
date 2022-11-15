@@ -1,11 +1,14 @@
 import * as React from 'react';
+
 import pick from 'lodash/pick';
+
+import Dialog, { useDialog } from '@wcpos/components/src/dialog';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
-import Text from '@wcpos/components/src/text';
 import Modal, { useModal } from '@wcpos/components/src/modal';
-import Dialog, { useDialog } from '@wcpos/components/src/dialog';
-import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
+import Text from '@wcpos/components/src/text';
+
+import useRestHttpClient from '../../../../hooks/use-rest-http-client';
 import EditModal from '../../common/edit-modal';
 
 type Props = {

@@ -1,14 +1,18 @@
 import * as React from 'react';
+
 import { useTheme } from 'styled-components/native';
-import { ProductsProvider } from '@wcpos/core/src/contexts/products';
-import { TaxesProvider } from '@wcpos/core/src/contexts/taxes';
+
 import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Table from './table';
-import SearchBar from './search-bar';
-import UiSettings from '../common/ui-settings';
+import Text from '@wcpos/components/src/text';
+import log from '@wcpos/utils/src/logger';
+
+import { ProductsProvider } from '../../../contexts/products';
+import { TaxesProvider } from '../../../contexts/taxes';
 import useUI from '../../../contexts/ui';
+import UiSettings from '../common/ui-settings';
+import SearchBar from './search-bar';
+import Table from './table';
 
 /**
  *

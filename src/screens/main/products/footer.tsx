@@ -1,16 +1,18 @@
 import * as React from 'react';
-import { useTheme } from 'styled-components/native';
-import { useObservableState, useSubscription } from 'observable-hooks';
-import get from 'lodash/get';
-import set from 'lodash/set';
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
-import Icon from '@wcpos/components/src/icon';
-import useStore from '@wcpos/hooks/src/use-store';
-import useAuth from '@wcpos/hooks/src/use-auth';
-import useHttpClient from '@wcpos/hooks/src/use-http-client';
-import useProducts from '@wcpos/core/src/contexts/products';
+
 import { useNavigation } from '@react-navigation/native';
+import { useObservableState } from 'observable-hooks';
+import { useTheme } from 'styled-components/native';
+
+import Box from '@wcpos/components/src/box';
+import Icon from '@wcpos/components/src/icon';
+import Text from '@wcpos/components/src/text';
+import useHttpClient from '@wcpos/hooks/src/use-http-client';
+import log from '@wcpos/utils/src/logger';
+
+import useAuth from '../../../contexts/auth';
+import useProducts from '../../../contexts/products';
+import useStore from '../../../contexts/store';
 
 interface ProductFooterProps {
 	count: number;
@@ -59,7 +61,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	 */
 	const handleJWT = React.useCallback(() => {
 		http.get(`${site.wc_api_auth_url}/refresh`).then((res) => {
-			console.log(res);
+			log.debug(res);
 		});
 	}, [http, site.wc_api_auth_url]);
 
@@ -73,7 +75,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 		// I probably need to clear the last checkpoint as well here
 
 		Promise.all([storeDB?.products.clear(), storeDB?.variations.clear()]).then(() => {
-			console.log('Products cleared');
+			log.debug('Products cleared');
 		});
 	}, [storeDB?.products, storeDB?.variations]);
 

@@ -1,15 +1,18 @@
 import * as React from 'react';
+
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { useTheme } from 'styled-components/native';
 import { useObservableState } from 'observable-hooks';
-import useAuth from '@wcpos/hooks/src/use-auth';
+import { useTheme } from 'styled-components/native';
+
 import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
-import { t } from '@wcpos/core/src/lib/translations';
-import Products from './products';
+
+import useAuth from '../../../contexts/auth';
+import { t } from '../../../lib/translations';
 import OpenOrders from './cart';
+import Products from './products';
 // import { usePOSContext } from './context';
 
 export type TabsParamList = {

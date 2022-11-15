@@ -1,9 +1,12 @@
 import * as React from 'react';
-import { useTheme } from 'styled-components/native';
+
 import { useObservableState } from 'observable-hooks';
+import { useTheme } from 'styled-components/native';
+
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
-import useStore from '@wcpos/hooks/src/use-store';
+
+import useStore from '../../../contexts/store';
 
 interface OrderFooterProps {
 	count: number;

@@ -1,15 +1,18 @@
 import * as React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
-import { tap, filter, switchMap } from 'rxjs/operators';
+
 import difference from 'lodash/difference';
 import map from 'lodash/map';
-import useVariations from '@wcpos/core/src/contexts/variations';
-import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
+import { useObservableSuspense } from 'observable-hooks';
+import { tap, filter, switchMap } from 'rxjs/operators';
+
 import Icon from '@wcpos/components/src/icon';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
-import Variations from './variations';
+
+import useVariations from '../../../../../contexts/variations';
+import useRestHttpClient from '../../../../../hooks/use-rest-http-client';
 import useCurrentOrder from '../../contexts/current-order';
+import Variations from './variations';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

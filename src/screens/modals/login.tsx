@@ -1,11 +1,14 @@
 import * as React from 'react';
+
 import { useNavigation, StackActions } from '@react-navigation/native';
+import get from 'lodash/get';
+
+import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
 import TextInput from '@wcpos/components/src/textinput';
-import Box from '@wcpos/components/src/box';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
-import useAuth from '@wcpos/hooks/src/use-auth';
-import get from 'lodash/get';
+
+import useAuth from '../../contexts/auth';
 
 const Login = ({ route }) => {
 	const siteID = get(route, ['params', 'siteID']);

@@ -1,8 +1,11 @@
 import * as React from 'react';
+
 import { useObservableSuspense } from 'observable-hooks';
-import useAuth from '@wcpos/hooks/src/use-auth';
+
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+
+import useAuth from '../../contexts/auth';
 import Site from './site';
 
 const Sites = () => {

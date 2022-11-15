@@ -1,11 +1,14 @@
 import * as React from 'react';
-import { useTheme } from 'styled-components/native';
+
 import { useObservableState } from 'observable-hooks';
+import { useTheme } from 'styled-components/native';
+
 import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
 import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
-import useStore from '@wcpos/hooks/src/use-store';
+import Text from '@wcpos/components/src/text';
+
+import useStore from '../../../contexts/store';
 // import useCustomers from '@wcpos/hooks/src/use-customers';
 
 interface CustomersFooterProps {

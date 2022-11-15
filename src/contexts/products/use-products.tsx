@@ -1,5 +1,7 @@
 import * as React from 'react';
+
 import { useObservableSuspense } from 'observable-hooks';
+
 import { ProductsContext } from './provider';
 
 export const useProducts = () => {

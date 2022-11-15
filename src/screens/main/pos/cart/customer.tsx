@@ -1,12 +1,16 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
-import pick from 'lodash/pick';
+
 import compact from 'lodash/compact';
+import pick from 'lodash/pick';
+import { useObservableState } from 'observable-hooks';
+
 import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
-import Pill from '@wcpos/components/src/pill';
 import Modal, { useModal } from '@wcpos/components/src/modal';
-import { t } from '@wcpos/core/src/lib/translations';
+import Pill from '@wcpos/components/src/pill';
+import Text from '@wcpos/components/src/text';
+import log from '@wcpos/utils/src/logger';
+
+import { t } from '../../../../lib/translations';
 import EditModal from '../../common/edit-modal';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -60,7 +64,7 @@ const Customer = ({ order }: CustomerProps) => {
 	 *
 	 */
 	const handleSaveCustomer = React.useCallback(() => {
-		console.log('save');
+		log.debug('save');
 	}, []);
 
 	/**

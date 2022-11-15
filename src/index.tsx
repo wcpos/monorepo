@@ -1,18 +1,21 @@
 import * as React from 'react';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProviderCompat } from '@react-navigation/elements';
 import { Text, useWindowDimensions } from 'react-native';
-import { ThemeProvider } from 'styled-components/native';
+
+import { SafeAreaProviderCompat } from '@react-navigation/elements';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { enableFreeze } from 'react-native-screens';
-import getTheme from '@wcpos/themes';
+import { ThemeProvider } from 'styled-components/native';
+
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import { AuthProvider } from '@wcpos/hooks/src/use-auth';
 import Portal from '@wcpos/components/src/portal';
 import { SnackbarProvider } from '@wcpos/components/src/snackbar';
-import RootNavigator from './screens';
-// import SplashScreen from './screens/splash';
-import RootError from './root-error';
+import getTheme from '@wcpos/themes';
+
+import { AuthProvider } from './contexts/auth';
+import { StoreProvider } from './contexts/store';
 import { translationsResource } from './lib/translations';
+import RootError from './root-error';
+import RootNavigator from './screens';
 
 // enable freeze
 enableFreeze(true);
@@ -41,18 +44,20 @@ const App = () => {
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<GestureHandlerRootView style={{ flex: 1 }}>
 					<AuthProvider initialProps={{ ...initialProps, translationsResource }}>
-						<ThemeProvider theme={theme}>
-							<ErrorBoundary>
-								<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-									<SnackbarProvider>
-										<Portal.Provider>
-											<RootNavigator initialProps={initialProps} />
-											<Portal.Manager />
-										</Portal.Provider>
-									</SnackbarProvider>
-								</SafeAreaProviderCompat>
-							</ErrorBoundary>
-						</ThemeProvider>
+						<StoreProvider>
+							<ThemeProvider theme={theme}>
+								<ErrorBoundary>
+									<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
+										<SnackbarProvider>
+											<Portal.Provider>
+												<RootNavigator initialProps={initialProps} />
+												<Portal.Manager />
+											</Portal.Provider>
+										</SnackbarProvider>
+									</SafeAreaProviderCompat>
+								</ErrorBoundary>
+							</ThemeProvider>
+						</StoreProvider>
 					</AuthProvider>
 				</GestureHandlerRootView>
 			</React.Suspense>

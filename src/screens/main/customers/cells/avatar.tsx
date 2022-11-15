@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Image as RNImage, View } from 'react-native';
+
 // import Img from '@wcpos/components/src/image';
 import Skeleton from '@wcpos/components/src/skeleton';
 
@@ -21,7 +22,7 @@ const Avatar = ({ item: customer }: AvatarProps) => {
 				<RNImage
 					source={{ uri: customer.avatarUrl }}
 					style={{ width: size.width, height: size.width, aspectRatio: 1 }}
-					// placeholder={<Img source={require('@wcpos/core/src/assets/placeholder.png')} />}
+					// placeholder={<Img source={require('/assets/placeholder.png')} />}
 				/>
 			) : (
 				<Skeleton style={{ width: size.width, height: size.width }} />

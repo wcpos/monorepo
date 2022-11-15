@@ -1,13 +1,16 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
+
 import get from 'lodash/get';
-import Form from '@wcpos/react-native-jsonschema-form';
-import Modal, { useModal } from '@wcpos/components/src/modal';
+import { useObservableState } from 'observable-hooks';
+
 import Icon from '@wcpos/components/src/icon';
-import { t } from '@wcpos/core/src/lib/translations';
+import Modal, { useModal } from '@wcpos/components/src/modal';
+import Form from '@wcpos/react-native-jsonschema-form';
+
+import { t } from '../../../../lib/translations';
 
 interface POSProductSettingsProps {
-	ui: import('@wcpos/hooks/src/use-store').UIDocument;
+	ui: import('../../../../contexts/ui').UIDocument;
 }
 
 /**

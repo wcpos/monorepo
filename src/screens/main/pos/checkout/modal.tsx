@@ -1,9 +1,13 @@
 import * as React from 'react';
+
 import { StackActions, CommonActions } from '@react-navigation/native';
+
 import Modal from '@wcpos/components/src/modal';
-import { t } from '@wcpos/core/src/lib/translations';
-import { GatewaysProvider } from '@wcpos/core/src/contexts/gateways';
-import { OrdersProvider } from '@wcpos/core/src/contexts/orders';
+import log from '@wcpos/utils/src/logger';
+
+import { GatewaysProvider } from '../../../../contexts/gateways';
+import { OrdersProvider } from '../../../../contexts/orders';
+import { t } from '../../../../lib/translations';
 import { CheckoutTabs } from './checkout';
 
 type POSStackParamList = import('../navigator').POSStackParamList;
@@ -33,7 +37,7 @@ export const CheckoutModal = ({ route, navigation }: CheckoutModalProps) => {
 					],
 				})
 			);
-			console.log(navigation.getState());
+			log.debug(navigation.getState());
 		}
 	}, [_id, navigation]);
 

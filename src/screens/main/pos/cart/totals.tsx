@@ -1,10 +1,13 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
-import Text from '@wcpos/components/src/text';
+
 import Box from '@wcpos/components/src/box';
-import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
-import { t } from '@wcpos/core/src/lib/translations';
+import Text from '@wcpos/components/src/text';
+
+import useCurrencyFormat from '../../../../hooks/use-currency-format';
+import { t } from '../../../../lib/translations';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

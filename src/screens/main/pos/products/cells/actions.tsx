@@ -1,6 +1,10 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
+
 import Icon from '@wcpos/components/src/icon';
+import log from '@wcpos/utils/src/logger';
+
 import useCurrentOrder from '../../contexts/current-order';
 
 interface Props {
@@ -21,7 +25,7 @@ export const Actions = ({ item: product }: Props) => {
 		if (currentOrder) {
 			currentOrder.addOrUpdateProduct(product);
 		} else {
-			console.log('No order found');
+			log.error('No order found');
 		}
 	}, [currentOrder, product]);
 

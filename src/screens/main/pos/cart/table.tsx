@@ -1,12 +1,15 @@
 import * as React from 'react';
-import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
+
 import flatten from 'lodash/flatten';
 import get from 'lodash/get';
+import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
+
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import useCart from '@wcpos/core/src/contexts/cart';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import { t } from '@wcpos/core/src/lib/translations';
+
+import useCart from '../../../../contexts/cart';
+import { t } from '../../../../lib/translations';
 import * as cells from './cells';
 
 type ColumnProps = import('@wcpos/components/src/table').ColumnProps;
@@ -17,8 +20,8 @@ type LineItemDocument = import('@wcpos/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
 type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
-type UIColumn = import('@wcpos/hooks/src/use-store').UIColumn;
-type Cart = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
+type UIColumn = import('../../../../contexts/ui').UIColumn;
+type Cart = (LineItemDocument | FeeLineDocument | ShippingLineDocument)[];
 
 interface ICartTableProps {
 	ui: any;

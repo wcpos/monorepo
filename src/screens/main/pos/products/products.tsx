@@ -1,14 +1,19 @@
 import * as React from 'react';
-import { ProductsProvider } from '@wcpos/core/src/contexts/products';
+
 import { useTheme } from 'styled-components/native';
+
 import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Table from './table';
+import log from '@wcpos/utils/src/logger';
+
+import { ProductsProvider } from '../../../../contexts/products';
+import useUI from '../../../../contexts/ui';
 import SearchBar from './search-bar';
 import Settings from './settings';
-import useUI from '../../../../contexts/ui';
+import Table from './table';
+
 // import BarcodeScanner from './barcode-scanner';
 
 /**
@@ -18,7 +23,7 @@ const POSProducts = ({ isColumn = false }) => {
 	const theme = useTheme();
 	const { ui } = useUI('pos.products');
 	const initialQuery = React.useMemo(() => ({ sortBy: 'name', sortDirection: 'asc' }), []);
-	console.log('render POSProducts');
+	log.debug('render POSProducts');
 
 	useWhyDidYouUpdate('POSProducts', { isColumn, theme, ui, initialQuery });
 

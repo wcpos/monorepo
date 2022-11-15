@@ -1,7 +1,9 @@
 import * as React from 'react';
+
 import Button from '@wcpos/components/src/button';
-import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
-import { t } from '@wcpos/core/src/lib/translations';
+
+import useRestHttpClient from '../../../../../hooks/use-rest-http-client';
+import { t } from '../../../../../lib/translations';
 import useCurrentOrder from '../../contexts/current-order';
 
 interface SaveButtonProps {

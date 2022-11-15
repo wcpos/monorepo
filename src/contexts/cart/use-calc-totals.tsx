@@ -4,6 +4,7 @@ import { tap } from 'rxjs/operators';
 import { useSubscription } from 'observable-hooks';
 import forEach from 'lodash/forEach';
 import flatten from 'lodash/flatten';
+import log from '@wcpos/utils/src/logger';
 import useTaxes from '../taxes';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -13,7 +14,7 @@ type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
 
 export const useCalcTotals = (cart$, order: OrderDocument) => {
-	console.log('order calc');
+	log.debug('order calc');
 	const lineItemRegistry = React.useMemo(() => new Map(), []);
 	const feeLineRegistry = React.useMemo(() => new Map(), []);
 	const shippingLineRegistry = React.useMemo(() => new Map(), []);

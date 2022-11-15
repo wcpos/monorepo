@@ -1,8 +1,11 @@
 import * as React from 'react';
+
 import pick from 'lodash/pick';
+
 import Button from '@wcpos/components/src/button';
 import Modal, { useModal } from '@wcpos/components/src/modal';
-import { t } from '@wcpos/core/src/lib/translations';
+
+import { t } from '../../../../../lib/translations';
 import EditModal from '../../../common/edit-modal';
 
 interface OrderMetaButtonProps {

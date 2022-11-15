@@ -1,18 +1,21 @@
 import * as React from 'react';
 import { View, StyleSheet } from 'react-native';
+
 import { useNavigation, StackActions } from '@react-navigation/native';
 import get from 'lodash/get';
-import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
+
 import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
-import WebView from '@wcpos/components/src/webview';
-import Button from '@wcpos/components/src/button';
-import Accordion from '@wcpos/components/src/accordion';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Loader from '@wcpos/components/src/loader';
 import Tabs from '@wcpos/components/src/tabs';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import useGateways from '@wcpos/core/src/contexts/gateways';
-import useOrders from '@wcpos/core/src/contexts/orders';
+import Text from '@wcpos/components/src/text';
+import WebView from '@wcpos/components/src/webview';
+import log from '@wcpos/utils/src/logger';
+
+import useGateways from '../../../../contexts/gateways';
+import useOrders from '../../../../contexts/orders';
+import useCurrencyFormat from '../../../../hooks/use-currency-format';
+
 // import { POSContext } from '../pos';
 
 // interface CheckoutProps {
@@ -104,7 +107,7 @@ export const CheckoutTabs = React.forwardRef((props, ref) => {
 								setLoading(false);
 							}}
 							onMessage={(event) => {
-								console.log(event);
+								log.debug(event);
 							}}
 							style={{ height: '100%' }}
 						/>

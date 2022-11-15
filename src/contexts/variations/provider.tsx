@@ -1,8 +1,12 @@
 import * as React from 'react';
+
 import { useObservableState, ObservableResource } from 'observable-hooks';
-import { map, tap } from 'rxjs/operators';
-import useStore from '@wcpos/hooks/src/use-store';
-import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
+import { map } from 'rxjs/operators';
+
+import log from '@wcpos/utils/src/logger';
+
+import useStore from '../../contexts/store';
+import { QueryObservable, QueryState, SetQuery } from '../use-query';
 import { useReplication } from './use-replication';
 
 type ProductVariationDocument =
@@ -20,11 +24,11 @@ interface VariationsProviderProps {
 	children: React.ReactNode;
 	initialQuery?: QueryState;
 	parent: ProductDocument;
-	ui?: import('@wcpos/hooks/src/use-store').UIDocument;
+	ui?: import('../../contexts/ui').UIDocument;
 }
 
 const VariationsProvider = ({ children, initialQuery, parent, ui }: VariationsProviderProps) => {
-	console.log('render variations provider');
+	log.debug('render variations provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.variations;
 	const variationIds = useObservableState(parent.variations$, parent.variations);

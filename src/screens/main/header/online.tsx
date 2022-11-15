@@ -1,6 +1,7 @@
 import * as React from 'react';
-import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
+
 import Icon from '@wcpos/components/src/icon';
+import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 
 type OnlineState = {
 	type: 'success' | 'warning' | 'critical';

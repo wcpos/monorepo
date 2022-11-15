@@ -1,14 +1,19 @@
 import * as React from 'react';
+
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
-import { useTheme } from 'styled-components/native';
 import get from 'lodash/get';
-import useAuth from '@wcpos/hooks/src/use-auth';
-import { Login, Modal, Settings } from './modals';
+import { useTheme } from 'styled-components/native';
+
+import log from '@wcpos/utils/src/logger';
+
+import useStore from '../contexts/store';
+import { URL } from '../lib/url';
 import Auth from './auth';
 import MainNavigator from './main';
-import { URL } from '../lib/url';
+import { Login, Modal, Settings } from './modals';
+
 // import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 // const MainNavigator = React.lazy(() => import('./main'));
 
@@ -28,10 +33,10 @@ const prefixes = ['wcpos://', prefix];
  *
  */
 export const RootNavigator = ({ initialProps }) => {
-	const { storeDBResource } = useAuth();
+	const { storeDB } = useStore();
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
-	console.log(prefixes);
+	log.silly(prefixes);
 
 	let pathname = '';
 
@@ -116,7 +121,7 @@ export const RootNavigator = ({ initialProps }) => {
 			}}
 		>
 			<Stack.Navigator screenOptions={{ headerShown: false }}>
-				{storeDBResource ? (
+				{storeDB ? (
 					<Stack.Screen name="Main" component={MainNavigator} />
 				) : (
 					<Stack.Screen name="Auth" component={Auth} options={{ title: 'WooCommerce POS' }} />

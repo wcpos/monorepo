@@ -1,10 +1,13 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
-import Popover from '@wcpos/components/src/popover';
-import Numpad from '@wcpos/components/src/numpad';
+
 import Box from '@wcpos/components/src/box';
+import Numpad from '@wcpos/components/src/numpad';
+import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
-import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
+
+import useCurrencyFormat from '../../../../../hooks/use-currency-format';
 
 interface Props {
 	item: import('@wcpos/database').LineItemDocument;

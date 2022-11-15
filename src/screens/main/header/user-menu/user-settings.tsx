@@ -1,11 +1,14 @@
 import * as React from 'react';
-import { useObservable, useObservableState, useObservableSuspense } from 'observable-hooks';
-import { tap, switchMap } from 'rxjs/operators';
-import { View } from 'react-native';
-import Text from '@wcpos/components/src/text';
+
+import { useObservable, useObservableState } from 'observable-hooks';
+import { switchMap } from 'rxjs/operators';
+
 import Select from '@wcpos/components/src/select';
 import Table from '@wcpos/components/src/table';
-import useAuth from '@wcpos/hooks/src/use-auth';
+import Text from '@wcpos/components/src/text';
+import log from '@wcpos/utils/src/logger';
+
+import useAuth from '../../../../contexts/auth';
 
 interface UserSettingsProps {
 	onClose: () => void;
@@ -28,7 +31,7 @@ const UserSettings = ({ onClose }: UserSettingsProps) => {
 	);
 
 	const taxRates = useObservableState(taxRates$, []);
-	console.log(taxRates);
+	log.silly(taxRates);
 
 	return (
 		<>

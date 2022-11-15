@@ -1,8 +1,11 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
-import Text from '@wcpos/components/src/text';
-import { T } from '@wcpos/core/src/lib/translations';
+
 import isFinite from 'lodash/isFinite';
+import { useObservableState } from 'observable-hooks';
+
+import Text from '@wcpos/components/src/text';
+
+import { T } from '../../../../../lib/translations';
 
 interface Props {
 	product: import('@wcpos/database').ProductDocument;

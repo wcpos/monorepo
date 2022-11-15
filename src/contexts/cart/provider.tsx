@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { from, of, combineLatest, distinctUntilChanged } from 'rxjs';
-import { switchMap, tap, catchError, map, debounceTime, shareReplay } from 'rxjs/operators';
+import { combineLatest, distinctUntilChanged } from 'rxjs';
+import { switchMap, tap, map, shareReplay } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
-import flatten from 'lodash/flatten';
 import isEqual from 'lodash/isEqual';
+import log from '@wcpos/utils/src/logger';
 import { useCalcTotals } from './use-calc-totals';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
@@ -83,7 +83,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 				shipping_lines,
 			})),
 			tap((args) => {
-				console.log('CartProvider', args);
+				log.silly('CartProvider', args);
 			}),
 			shareReplay(1) // cart$ is subscribed to in multiple places
 		);

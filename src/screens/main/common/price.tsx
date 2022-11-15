@@ -1,11 +1,14 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
-import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
-import useAuth from '@wcpos/hooks/src/use-auth';
-import useTaxes from '@wcpos/core/src/contexts/taxes';
+
+import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import Tooltip from '@wcpos/components/src/tooltip';
-import Box from '@wcpos/components/src/box';
+
+import useAuth from '../../../contexts/auth';
+import useTaxes from '../../../contexts/taxes';
+import useCurrencyFormat from '../../../hooks/use-currency-format';
 
 interface Props {
 	price: string;

@@ -1,25 +1,23 @@
 import * as React from 'react';
 import { LayoutChangeEvent, View, Text } from 'react-native';
+
 import { useSubscription, useObservableSuspense } from 'observable-hooks';
+import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
 import Animated, {
 	useAnimatedGestureHandler,
 	useSharedValue,
 	useAnimatedStyle,
 	runOnJS,
 } from 'react-native-reanimated';
-import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
-import useStore from '@wcpos/hooks/src/use-store';
-import Gutter from '@wcpos/components/src/gutter';
+
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Gutter from '@wcpos/components/src/gutter';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
-import Products from './products';
-import OpenOrders from './cart';
-import useUI from '../../../contexts/ui';
 
-// interface ResizableColumnsProps {
-// 	ui: import('@wcpos/hooks/src/use-store').UIDocument;
-// }
+import useUI from '../../../contexts/ui';
+import OpenOrders from './cart';
+import Products from './products';
 
 /**
  *

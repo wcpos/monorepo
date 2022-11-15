@@ -1,12 +1,15 @@
 import * as React from 'react';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+
 import find from 'lodash/find';
-import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
-import useVariations from '@wcpos/core/src/contexts/variations';
-import Text from '@wcpos/components/src/text';
+// import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+
+import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
 import Select from '@wcpos/components/src/select';
-import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
+
+// import useVariations from '../../../../../contexts/variations';
+import useCurrencyFormat from '../../../../../hooks/use-currency-format';
 import {
 	init,
 	updateState,

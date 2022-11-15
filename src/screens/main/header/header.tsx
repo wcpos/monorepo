@@ -1,14 +1,16 @@
 import * as React from 'react';
 import { View } from 'react-native';
+
 import { DrawerHeaderProps } from '@react-navigation/drawer';
 import { Header as ReactNavigationHeader } from '@react-navigation/elements';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useObservableState } from 'observable-hooks';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from 'styled-components/native';
-import useAuth from '@wcpos/hooks/src/use-auth';
-import Platform from '@wcpos/utils/src/platform';
+
 import Text from '@wcpos/components/src/text';
+
+import useAuth from '../../../contexts/auth';
 import Left from './left';
 import Right from './right';
 

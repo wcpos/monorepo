@@ -1,5 +1,6 @@
 import * as React from 'react';
-import useStore from '@wcpos/hooks/src/use-store';
+
+import useStore from '../../../../../contexts/store';
 import NewOrder from './new-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;

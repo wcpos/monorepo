@@ -1,5 +1,7 @@
 import * as React from 'react';
+
 import { useObservableSuspense } from 'observable-hooks';
+
 import { UIContext, UIResourceID } from './provider';
 
 export const useUI = (id: UIResourceID) => {

@@ -1,8 +1,10 @@
 import * as React from 'react';
+
 import Button from '@wcpos/components/src/button';
 import Modal, { useModal } from '@wcpos/components/src/modal';
 import TextInput from '@wcpos/components/src/textinput';
-import { t } from '@wcpos/core/src/lib/translations';
+
+import { t } from '../../../../../lib/translations';
 
 interface AddNoteButtonProps {
 	order: import('@wcpos/database').OrderDocument;

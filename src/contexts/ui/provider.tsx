@@ -1,8 +1,10 @@
 import * as React from 'react';
+
+import get from 'lodash/get';
 import { ObservableResource } from 'observable-hooks';
 import { filter } from 'rxjs/operators';
-import get from 'lodash/get';
-import useStore from '@wcpos/hooks/src/use-store';
+
+import useStore from '../../contexts/store';
 import initialUI from './ui-initial.json';
 
 type StoreDatabase = import('@wcpos/database').StoreDatabase;

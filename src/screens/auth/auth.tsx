@@ -1,16 +1,18 @@
 import * as React from 'react';
 import { KeyboardAvoidingView, StyleSheet, View } from 'react-native';
-import Platform from '@wcpos/core/src/utils/platform';
-import Logo from '@wcpos/components/src/logo';
+
 import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
-import Icon from '@wcpos/components/src/icon';
-import TextInput from '@wcpos/components/src/textinput';
-import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Icon from '@wcpos/components/src/icon';
+import Logo from '@wcpos/components/src/logo';
+import Text from '@wcpos/components/src/text';
+import TextInput from '@wcpos/components/src/textinput';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
-import useSiteConnect from './use-site-connect';
+
+import Platform from '../../utils/platform';
 import Sites from './sites';
+import useSiteConnect from './use-site-connect';
 
 /**
  *

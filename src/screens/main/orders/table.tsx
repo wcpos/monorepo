@@ -1,24 +1,27 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
-import useOrders from '@wcpos/core/src/contexts/orders';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import { t } from '@wcpos/core/src/lib/translations';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+
+import useOrders from '../../../contexts/orders';
+import { t } from '../../../lib/translations';
 import Actions from './cells/actions';
 import Address from './cells/address';
 import Customer from './cells/customer';
+import DateCreated from './cells/date-created';
 import CustomerNote from './cells/note';
 import Status from './cells/status';
 import Total from './cells/total';
-import DateCreated from './cells/date-created';
 import Footer from './footer';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
-type UIColumn = import('@wcpos/hooks/src/use-store').UIColumn;
+type UIColumn = import('../../../contexts/ui').UIColumn;
 
 interface OrdersTableProps {
-	ui: import('@wcpos/hooks/src/use-store').UIDocument;
+	ui: import('../../../contexts/ui').UIDocument;
 }
 
 const cells = {

@@ -1,10 +1,13 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
-import useCustomers, { CustomersProvider } from '@wcpos/core/src/contexts/customers';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+
 import Combobox from '@wcpos/components/src/combobox';
 import Text from '@wcpos/components/src/text';
-import { t } from '@wcpos/core/src/lib/translations';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+
+import useCustomers, { CustomersProvider } from '../../../contexts/customers';
+import { t } from '../../../lib/translations';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type StoreDatabase = import('@wcpos/database').StoreDatabase;

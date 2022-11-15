@@ -1,9 +1,12 @@
 import * as React from 'react';
-import { replicateRxCollection } from 'rxdb/plugins/replication';
-import useRestHttpClient from '@wcpos/hooks/src/use-rest-http-client';
-import useAuth from '@wcpos/hooks/src/use-auth';
-import isEmpty from 'lodash/isEmpty';
+
 import intersection from 'lodash/intersection';
+import { replicateRxCollection } from 'rxdb/plugins/replication';
+
+import log from '@wcpos/utils/src/logger';
+
+import useRestHttpClient from '../../hooks/use-rest-http-client';
+import useAuth from '../auth';
 
 /**
  * Hack, I want the replication to wait before looping to allow counts to be updated
@@ -21,7 +24,7 @@ export const useReplication = ({ collection, parent }) => {
 		 *
 		 */
 		const audit = async () => {
-			console.log('audit');
+			log.silly('audit');
 		};
 
 		/**
@@ -55,7 +58,7 @@ export const useReplication = ({ collection, parent }) => {
 			const response = await http
 				.get(`products/${parent.id}/${collection.name}`, { params })
 				.catch((error) => {
-					console.log(error);
+					log.error(error);
 				});
 
 			/**

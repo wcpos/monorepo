@@ -1,13 +1,16 @@
 import * as React from 'react';
 import { useWindowDimensions } from 'react-native';
+
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from 'styled-components/native';
+
 import Avatar from '@wcpos/components/src/avatar';
-import Dropdown from '@wcpos/components/src/dropdown';
-import Text from '@wcpos/components/src/text';
 import Box from '@wcpos/components/src/box';
+import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
-import useAuth from '@wcpos/hooks/src/use-auth';
+import Text from '@wcpos/components/src/text';
+
+import useAuth from '../../../../contexts/auth';
 
 export const UserMenu = () => {
 	const { logout, wpCredentials } = useAuth();

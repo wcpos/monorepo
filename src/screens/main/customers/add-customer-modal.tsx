@@ -1,10 +1,12 @@
 import * as React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
+
 import Dialog from '@wcpos/components/src/dialog';
-import TextInput from '@wcpos/components/src/textinput';
-import useStore from '@wcpos/hooks/src/use-store';
 import Tabs from '@wcpos/components/src/tabs';
+import TextInput from '@wcpos/components/src/textinput';
 import Tree from '@wcpos/components/src/tree';
+import log from '@wcpos/utils/src/logger';
+
+import useStore from '../../../contexts/store';
 
 export interface AddCustomerProps {
 	onClose: () => void;
@@ -37,7 +39,7 @@ const AddCustomer = ({ onClose, customer }: AddCustomerProps) => {
 			replicationState.error$.subscribe((err: any) => {
 				if (err.code === 401) {
 					// showAuthLogin();
-					console.log('need to login');
+					log.error('need to login');
 				}
 			});
 			replicationState.run(false);

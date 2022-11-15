@@ -1,7 +1,10 @@
 import * as React from 'react';
+
 import set from 'lodash/set';
+
 import Pill from '@wcpos/components/src/pill';
-import useProducts from '@wcpos/core/src/contexts/products';
+
+import useProducts from '../../../contexts/products';
 
 interface ProductCategoriesProps {
 	item: import('@wcpos/database').ProductDocument;

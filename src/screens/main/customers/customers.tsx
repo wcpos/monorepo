@@ -1,14 +1,17 @@
 import * as React from 'react';
+
 import { useTheme } from 'styled-components/native';
-import { CustomersProvider } from '@wcpos/core/src/contexts/customers';
+
 import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Table from './table';
-import SearchBar from './search-bar';
-import UiSettings from '../common/ui-settings';
-import AddNewCustomer from '../common/add-new-customer';
+import Text from '@wcpos/components/src/text';
+
+import { CustomersProvider } from '../../../contexts/customers';
 import useUI from '../../../contexts/ui';
+import AddNewCustomer from '../common/add-new-customer';
+import UiSettings from '../common/ui-settings';
+import SearchBar from './search-bar';
+import Table from './table';
 
 /**
  *

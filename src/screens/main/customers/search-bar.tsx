@@ -1,10 +1,13 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
 import { View } from 'react-native';
+
 import get from 'lodash/get';
+import { useObservableState } from 'observable-hooks';
+
 import Search from '@wcpos/components/src/search';
-import useCustomers from '@wcpos/core/src/contexts/customers';
-import { t } from '@wcpos/core/src/lib/translations';
+
+import useCustomers from '../../../contexts/customers';
+import { t } from '../../../lib/translations';
 
 const SearchBar = () => {
 	const { query$, setQuery } = useCustomers();

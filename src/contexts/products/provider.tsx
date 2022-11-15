@@ -1,13 +1,16 @@
 import * as React from 'react';
-import { ObservableResource, useObservableState } from 'observable-hooks';
-import { from } from 'rxjs';
-import { switchMap, map, debounceTime, tap } from 'rxjs/operators';
-import useStore from '@wcpos/hooks/src/use-store';
-import _set from 'lodash/set';
+
+import { orderBy } from '@shelf/fast-natural-order-by';
 import _get from 'lodash/get';
 import _isEmpty from 'lodash/isEmpty';
-import { orderBy } from '@shelf/fast-natural-order-by';
+import _set from 'lodash/set';
+import { ObservableResource, useObservableState } from 'observable-hooks';
+import { switchMap, map } from 'rxjs/operators';
+
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import log from '@wcpos/utils/src/logger';
+
+import useStore from '../../contexts/store';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import { useReplication } from './use-replication';
 
@@ -23,14 +26,14 @@ export const ProductsContext = React.createContext<{
 interface ProductsProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
-	ui?: import('@wcpos/hooks/src/use-store').UIDocument;
+	ui?: import('../../contexts/ui').UIDocument;
 }
 
 /**
  *
  */
 const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps) => {
-	console.log('render product provider');
+	log.debug('render product provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.products;
 	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
@@ -91,7 +94,7 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 
 				return RxQuery.$.pipe(
 					map((result) => {
-						console.log('product query result');
+						log.silly('product query result', result);
 						return orderBy(result, [(p) => p[q.sortBy]], [q.sortDirection]);
 					})
 				);

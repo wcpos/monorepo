@@ -1,17 +1,20 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
-import useCustomers from '@wcpos/core/src/contexts/customers';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
-import { t } from '@wcpos/core/src/lib/translations';
-import Footer from './footer';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+
+import useCustomers from '../../../contexts/customers';
+import { t } from '../../../lib/translations';
 import cells from './cells';
+import Footer from './footer';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
-type UIColumn = import('@wcpos/hooks/src/use-store').UIColumn;
+type UIColumn = import('../../../contexts/ui').UIColumn;
 
 interface CustomersTableProps {
-	ui: import('@wcpos/hooks/src/use-store').UIDocument;
+	ui: import('../../../contexts/ui').UIDocument;
 }
 
 /**

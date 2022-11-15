@@ -1,13 +1,16 @@
 import * as React from 'react';
+
 import { useTheme } from 'styled-components/native';
-import { OrdersProvider } from '@wcpos/core/src/contexts/orders';
+
 import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Table from './table';
-import SearchBar from './search-bar';
-import UiSettings from '../common/ui-settings';
+import Text from '@wcpos/components/src/text';
+
+import { OrdersProvider } from '../../../contexts/orders';
 import useUI from '../../../contexts/ui';
+import UiSettings from '../common/ui-settings';
+import SearchBar from './search-bar';
+import Table from './table';
 
 /**
  *

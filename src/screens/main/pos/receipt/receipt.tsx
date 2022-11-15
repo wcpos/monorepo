@@ -1,6 +1,8 @@
 import * as React from 'react';
+
 import Text from '@wcpos/components/src/text';
-import useOrders from '@wcpos/core/src/contexts/orders';
+
+import useOrders from '../../../../contexts/orders';
 
 export const Receipt = () => {
 	const { data } = useOrders();

@@ -1,8 +1,11 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
-import useCurrencyFormat from '@wcpos/hooks/src/use-currency-format';
+
 import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+
+import useCurrencyFormat from '../../../../../hooks/use-currency-format';
 
 interface Props {
 	item:

@@ -1,18 +1,21 @@
 import * as React from 'react';
+
 import { createStackNavigator } from '@react-navigation/stack';
+import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
-import { useObservableSuspense, useObservableState } from 'observable-hooks';
+
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import useStore from '@wcpos/hooks/src/use-store';
-import useAuth from '@wcpos/hooks/src/use-auth';
-import { TaxesProvider } from '@wcpos/core/src/contexts/taxes';
 import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
+import log from '@wcpos/utils/src/logger';
+
+import useAuth from '../../../contexts/auth';
+import { TaxesProvider } from '../../../contexts/taxes';
+import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
+import Receipt from './receipt';
 import Columns from './resizable-columns';
 import Tabs from './tabs';
-import Checkout from './checkout';
-import Receipt from './receipt';
 
 export type POSStackParamList = {
 	Columns: undefined;
@@ -31,7 +34,7 @@ const POS = ({ navigation, route }) => {
 	const theme = useTheme();
 	const { store } = useAuth();
 	const storeName = useObservableState(store?.name$, store.name);
-	console.log('render POS');
+	log.debug('render POS');
 
 	useWhyDidYouUpdate('POS', {
 		// productsUI,

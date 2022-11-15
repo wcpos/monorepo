@@ -1,7 +1,10 @@
 import * as React from 'react';
-import Text from '@wcpos/components/src/text';
-import useVariations from '@wcpos/core/src/contexts/variations';
+
 import find from 'lodash/find';
+
+import Text from '@wcpos/components/src/text';
+
+import useVariations from '../../../../../contexts/variations';
 import VariablePriceWithTax from '../../../common/variable-price';
 
 interface Props {

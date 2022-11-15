@@ -1,7 +1,11 @@
 import * as React from 'react';
-import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
+
 import { ObservableResource } from 'observable-hooks';
-import useStore from '@wcpos/hooks/src/use-store';
+import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
+
+import log from '@wcpos/utils/src/logger';
+
+import useStore from '../../contexts/store';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import { useReplication } from './use-replication';
 
@@ -17,11 +21,11 @@ export const TaxesContext = React.createContext<{
 interface TaxesProviderProps {
 	children: React.ReactNode;
 	initialQuery?: QueryState;
-	ui?: import('@wcpos/hooks/src/use-store').UIDocument;
+	ui?: import('../../contexts/ui').UIDocument;
 }
 
 const TaxesProvider = ({ children, initialQuery, ui }: TaxesProviderProps) => {
-	console.log('render tax provider');
+	log.debug('render tax provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.taxes;
 	const { query$, setQuery } = useQuery(initialQuery);

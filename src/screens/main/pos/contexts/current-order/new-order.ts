@@ -1,6 +1,5 @@
 // import * as React from 'react';
 import { BehaviorSubject } from 'rxjs';
-// import useStore from '@wcpos/hooks/src/use-store';
 
 // type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;

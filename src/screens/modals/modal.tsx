@@ -1,10 +1,9 @@
 import * as React from 'react';
-import Text from '@wcpos/components/src/text';
+
 import Dialog from '@wcpos/components/src/dialog';
+import Text from '@wcpos/components/src/text';
 
-type ModalScreenProps = import('@wcpos/core/src/navigators/app').ModalScreenProps;
-
-const ModalScreen = ({ route, navigation }: ModalScreenProps) => {
+const ModalScreen = ({ route, navigation }) => {
 	return (
 		<Dialog
 			sectioned

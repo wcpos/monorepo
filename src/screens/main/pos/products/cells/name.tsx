@@ -1,9 +1,12 @@
 import * as React from 'react';
 import { View } from 'react-native';
+
 import find from 'lodash/find';
-import Text from '@wcpos/components/src/text';
+
 import Box from '@wcpos/components/src/box';
-import { T } from '@wcpos/core/src/lib/translations';
+import Text from '@wcpos/components/src/text';
+
+import { T } from '../../../../../lib/translations';
 import Categories from '../../../common/product-categories';
 import Tags from '../../../common/product-tags';
 import StockQuantity from '../../../components/product/stock-quantity';

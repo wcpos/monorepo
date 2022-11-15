@@ -1,8 +1,10 @@
 import * as React from 'react';
-import Text from '@wcpos/components/src/text';
+
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import { OrdersProvider } from '@wcpos/core/src/contexts/orders';
+import Text from '@wcpos/components/src/text';
+
+import { OrdersProvider } from '../../../../contexts/orders';
 import Cart from './cart';
 import Tabs from './tabs';
 
