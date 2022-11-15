@@ -1,7 +1,5 @@
-import type Ajv from 'ajv';
-import type { Plugin, Format } from 'ajv';
 import { _, Name } from 'ajv/dist/compile/codegen';
-import formatLimit from './limit';
+
 import {
 	DefinedFormats,
 	FormatMode,
@@ -10,6 +8,10 @@ import {
 	fastFormats,
 	fullFormats,
 } from './formats';
+import formatLimit from './limit';
+
+import type Ajv from 'ajv';
+import type { Plugin, Format } from 'ajv';
 
 export type { FormatMode, FormatName } from './formats';
 export type { LimitFormatError } from './limit';
@@ -64,7 +66,10 @@ function addFormats(ajv: Ajv, list: FormatName[], fs: DefinedFormats, exportName
 	for (const f of list) ajv.addFormat(f, fs[f]);
 }
 
-module.exports = exports = formatsPlugin;
-Object.defineProperty(exports, '__esModule', { value: true });
+/**
+ * Breaks electron
+ */
+// module.exports = exports = formatsPlugin;
+// Object.defineProperty(exports, '__esModule', { value: true });
 
 export default formatsPlugin;

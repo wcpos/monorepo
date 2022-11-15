@@ -1,6 +1,8 @@
 import { BehaviorSubject } from 'rxjs';
 import { debounceTime, shareReplay, tap } from 'rxjs/operators';
 
+import log from '@wcpos/utils/src/logger';
+
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb/dist/types').RxCollection;
 
@@ -91,7 +93,7 @@ const collectionCountsPlugin: RxPlugin = {
 							const pullRemoteIds = [];
 							const pushLocalIds = [];
 							const syncedIds = [];
-							console.log(collection.name, totalDocCount);
+							log.debug(collection.name, totalDocCount);
 
 							docs.forEach((doc) => {
 								if (doc.id) {
@@ -113,7 +115,7 @@ const collectionCountsPlugin: RxPlugin = {
 							collection.syncedIds$.next(syncedIds);
 						})
 						.catch((err: any) => {
-							console.log(err);
+							log.error(err);
 						});
 				}
 

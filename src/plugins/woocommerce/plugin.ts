@@ -1,6 +1,8 @@
+import log from '@wcpos/utils/src/logger';
+
 import { auditRestApiIds } from './audit-ids';
-import { parseRestResponse, bulkParseRestResponse } from './parse-rest-response';
 import { clear } from './clear';
+import { parseRestResponse, bulkParseRestResponse } from './parse-rest-response';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb/dist/types').RxCollection;
@@ -25,7 +27,7 @@ function maybeAddMeta(this: RxCollection, plainData, doc: RxDocument) {
 				return oldData;
 			})
 			.catch((err) => {
-				console.log(err);
+				log.error(err);
 			});
 	}
 }

@@ -1,6 +1,6 @@
-import pickBy from 'lodash/pickBy';
-import map from 'lodash/map';
 import isEmpty from 'lodash/isEmpty';
+import map from 'lodash/map';
+import pickBy from 'lodash/pickBy';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxDocument = import('rxdb/dist/types').RxDocument;

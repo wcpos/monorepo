@@ -1,5 +1,6 @@
 import { openDatabase, WebSQLDatabase, ResultSet } from 'expo-sqlite';
 import { clone } from 'rxdb';
+import log from '@wcpos/utils/src/logger';
 import { getRxStorageSQLite } from './plugins/sqlite';
 import { mangoQuerySelectorToSQL } from './mangoQuerySelectorToSQL';
 import { mangoQuerySortToSQL } from './plugins/sqlite/sqlite-statics';
@@ -30,13 +31,13 @@ const getSQLiteBasicsExpoSQLite = (openDB: typeof openDatabase) => {
 			return Promise.resolve(openDB(name));
 		},
 		all: async (db: WebSQLDatabase, queryWithParams: SQLiteQueryWithParams) => {
-			console.log(`all sql: ${queryWithParams.query}`, queryWithParams.params);
+			log.debug(`all sql: ${queryWithParams.query}`, queryWithParams.params);
 			const result = new Promise<ResultSet['rows']>((resolve, reject) => {
 				db.exec(
 					[{ sql: queryWithParams.query, args: queryWithParams.params }],
 					false,
 					(err, res) => {
-						console.log('sql response: ', res);
+						log.silly('sql response: ', res);
 
 						if (err) {
 							return reject(err);
@@ -57,10 +58,10 @@ const getSQLiteBasicsExpoSQLite = (openDB: typeof openDatabase) => {
 			return result;
 		},
 		run: async (db: WebSQLDatabase, queryWithParams: SQLiteQueryWithParams) => {
-			console.log(`run sql: ${queryWithParams.query}`, queryWithParams.params);
+			log.debug(`run sql: ${queryWithParams.query}`, queryWithParams.params);
 			db.exec([{ sql: queryWithParams.query, args: queryWithParams.params }], false, (err, res) => {
 				if (err) {
-					console.log('sql error: ', err);
+					log.error('sql error: ', err);
 				}
 			});
 		},

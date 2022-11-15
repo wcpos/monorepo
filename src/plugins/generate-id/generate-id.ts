@@ -1,5 +1,5 @@
-import { RxPlugin, RxCollection } from 'rxdb';
 import randomToken from 'random-token';
+import { RxPlugin, RxCollection } from 'rxdb';
 
 export function generateId(): string {
 	return `${randomToken(10)}:${Date.now()}`;

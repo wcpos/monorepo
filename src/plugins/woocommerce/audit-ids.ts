@@ -1,5 +1,7 @@
 import find from 'lodash/find';
 
+import log from '@wcpos/utils/src/logger';
+
 type RxCollection = import('rxdb/dist/types').RxCollection;
 
 /**
@@ -15,7 +17,7 @@ export async function auditRestApiIds(this: RxCollection, data: Record<string, a
 	})
 		.exec()
 		.catch((err: any) => {
-			console.log(err);
+			log.error(err);
 		});
 
 	// compare local and server ids

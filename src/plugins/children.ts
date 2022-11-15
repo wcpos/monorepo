@@ -1,9 +1,9 @@
-import pickBy from 'lodash/pickBy';
-import map from 'lodash/map';
-import isEmpty from 'lodash/isEmpty';
 import get from 'lodash/get';
-import isPlainObject from 'lodash/isPlainObject';
+import isEmpty from 'lodash/isEmpty';
 import isInteger from 'lodash/isInteger';
+import isPlainObject from 'lodash/isPlainObject';
+import map from 'lodash/map';
+import pickBy from 'lodash/pickBy';
 
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 type RxCollection = import('rxdb').RxCollection;

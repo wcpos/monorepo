@@ -2,6 +2,7 @@ import { switchMap } from 'rxjs/operators';
 import { ObservableResource } from 'observable-hooks';
 import get from 'lodash/get';
 import pull from 'lodash/pull';
+import log from '@wcpos/utils/src/logger';
 import schema from './schema.json';
 
 export type SiteSchema = import('./interface').SiteSchema;
@@ -70,7 +71,7 @@ const methods: SiteMethods = {
 	async addWpCredentials(this: SiteDocument, data) {
 		const wpCredentials = await this.collection.database.collections.wp_credentials.insert(data);
 		await this.update({ $push: { wp_credentials: wpCredentials.localID } }).catch((err) => {
-			console.log(err);
+			log.error(err);
 			return err;
 		});
 

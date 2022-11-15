@@ -1,3 +1,5 @@
+import log from '@wcpos/utils/src/logger';
+
 type RxCollection = import('rxdb/dist/types').RxCollection;
 
 /**
@@ -11,7 +13,7 @@ export async function clear(this: RxCollection) {
 	})
 		.exec()
 		.catch((err: any) => {
-			console.log(err);
+			log.error(err);
 		});
 
 	//

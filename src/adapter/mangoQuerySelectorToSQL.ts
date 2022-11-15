@@ -1,5 +1,5 @@
-import { MangoQuerySelector, randomCouchString } from 'rxdb';
 import isPlainObject from 'lodash/isPlainObject';
+import { MangoQuerySelector, randomCouchString } from 'rxdb';
 
 const LOGICAL_MANGO_OPERATORS = ['$or', '$and'];
 

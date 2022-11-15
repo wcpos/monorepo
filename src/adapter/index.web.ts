@@ -1,4 +1,5 @@
 import { requestIdlePromise } from 'rxdb';
+
 import { getRxStorageIndexedDB } from './plugins/indexeddb';
 import { getMemorySyncedRxStorage } from './plugins/memory-synced';
 

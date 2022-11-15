@@ -1,17 +1,17 @@
-import logs from './logs';
-import users from './users';
-import sites from './sites';
-import wp_credentials from './wp-credentials';
-import stores from './stores';
-import products from './products';
-import variations from './variations';
-import orders from './orders';
-import line_items from './line-items';
-import fee_lines from './fee-lines';
-import shipping_lines from './shipping-lines';
 import customers from './customers';
-import taxes from './taxes';
+import fee_lines from './fee-lines';
+import line_items from './line-items';
+import logs from './logs';
+import orders from './orders';
 import payment_gateways from './payment-gateways';
+import products from './products';
+import shipping_lines from './shipping-lines';
+import sites from './sites';
+import stores from './stores';
+import taxes from './taxes';
+import users from './users';
+import variations from './variations';
+import wp_credentials from './wp-credentials';
 
 export const userCollections = { logs, users, sites, wp_credentials, stores };
 export const storeCollections = {

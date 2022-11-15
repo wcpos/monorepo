@@ -1,6 +1,7 @@
 import forEach from 'lodash/forEach';
 import get from 'lodash/get';
 import find from 'lodash/find';
+import log from '@wcpos/utils/src/logger';
 
 type ShippingLineCollection = import('.').ShippingLineCollection;
 type ShippingLineDocument = import('.').ShippingLineDocument;
@@ -29,7 +30,7 @@ export default {
 		});
 
 		return Promise.all(promises).catch((err: any) => {
-			console.log(err);
+			log.error(err);
 		});
 	},
 };

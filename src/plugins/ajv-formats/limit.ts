@@ -1,3 +1,6 @@
+import { KeywordCxt } from 'ajv';
+import { _, str, or, getProperty, operators } from 'ajv/dist/compile/codegen';
+
 import type Ajv from 'ajv';
 import type {
 	Plugin,
@@ -7,10 +10,8 @@ import type {
 	Name,
 	ErrorObject,
 } from 'ajv';
-import type { AddedFormat } from 'ajv/dist/types';
 import type { Rule } from 'ajv/dist/compile/rules';
-import { KeywordCxt } from 'ajv';
-import { _, str, or, getProperty, operators } from 'ajv/dist/compile/codegen';
+import type { AddedFormat } from 'ajv/dist/types';
 
 type Kwd = 'formatMaximum' | 'formatMinimum' | 'formatExclusiveMaximum' | 'formatExclusiveMinimum';
 

@@ -1,8 +1,10 @@
+import difference from 'lodash/difference';
 import forEach from 'lodash/forEach';
 import get from 'lodash/get';
 import set from 'lodash/set';
 import unset from 'lodash/unset';
-import difference from 'lodash/difference';
+
+import log from '@wcpos/utils/src/logger';
 
 type RxCollection = import('rxdb/dist/types').RxCollection;
 
@@ -15,7 +17,7 @@ type RxCollection = import('rxdb/dist/types').RxCollection;
 export function parseRestResponse(this: RxCollection, plainData: Record<string, unknown>) {
 	const topLevelFields = Object.keys(get(this, ['schema', 'jsonSchema', 'properties'], {}));
 	const primaryPath = get(this, ['schema', 'primaryPath'], '');
-	console.log('parseRestResponse', plainData);
+	log.debug('parseRestResponse', plainData);
 
 	if (primaryPath === '_id' && !plainData._id && plainData.id) {
 		plainData._id = String(plainData.id);
@@ -68,7 +70,7 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 	 */
 	const omitProperties = difference(Object.keys(plainData), topLevelFields);
 	if (omitProperties.length > 0) {
-		console.log('the following properties are being omitted', omitProperties);
+		log.debug('the following properties are being omitted', omitProperties);
 		omitProperties.forEach((prop: string) => {
 			unset(plainData, prop);
 		});
@@ -77,7 +79,7 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 	/**
 	 * remove any properties not in the schema
 	 */
-	this.schema.validate(plainData);
+	// this.schema.validate(plainData);
 
 	return plainData;
 }

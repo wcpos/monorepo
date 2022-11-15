@@ -4,9 +4,11 @@
  * @link https://github.com/epoberezkin/ajv
  */
 import Ajv from 'ajv';
-import type { RxPlugin } from 'rxdb';
 import { RxSchema } from 'rxdb';
+
 import addFormats from './ajv-formats';
+
+import type { RxPlugin } from 'rxdb';
 
 /**
  * run the callback if requestIdleCallback available

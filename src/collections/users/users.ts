@@ -4,6 +4,7 @@ import { ObservableResource } from 'observable-hooks';
 import isString from 'lodash/isString';
 import get from 'lodash/get';
 import pull from 'lodash/pull';
+import log from '@wcpos/utils/src/logger';
 import schema from './schema.json';
 
 export type UserSchema = import('./interface').UserSchema;
@@ -31,7 +32,7 @@ const methods: UserMethods = {
 
 		const site = await this.collection.database.collections.sites.insert({ url: cleanUrl });
 		await this.update({ $push: { sites: site.localID } }).catch((err) => {
-			console.log(err);
+			log.error(err);
 			return err;
 		});
 	},
@@ -44,7 +45,7 @@ const methods: UserMethods = {
 	async addSite(this: UserDocument, data: any) {
 		const site = await this.collection.database.collections.sites.insert(data);
 		await this.update({ $push: { sites: site.localID } }).catch((err) => {
-			console.log(err);
+			log.error(err);
 			return err;
 		});
 

@@ -1,8 +1,10 @@
 import { clone } from 'rxdb';
-import { getRxStorageSQLite } from './plugins/sqlite';
+
+import log from '@wcpos/utils/src/logger';
+
 import { mangoQuerySelectorToSQL } from './mangoQuerySelectorToSQL';
+import { getRxStorageSQLite } from './plugins/sqlite';
 import { mangoQuerySortToSQL } from './plugins/sqlite/sqlite-statics';
-// import { getMemorySyncedRxStorage } from './plugins/memory-synced';
 
 import type { SQLiteQueryWithParams } from './plugins/sqlite';
 
@@ -14,20 +16,24 @@ const sqliteBasics = {
 		return window.ipcRenderer.invoke('sqlite', { type: 'open', name });
 	},
 	all: async (db, queryWithParams: SQLiteQueryWithParams) => {
-		console.log(`all sql: ${queryWithParams.query}`, queryWithParams.params);
+		log.debug(`all sql: ${queryWithParams.query}`, queryWithParams.params);
 
-		const result = await window.ipcRenderer.invoke('sqlite', {
-			type: 'all',
-			name: db.name,
-			sql: queryWithParams,
-		});
+		const result = await window.ipcRenderer
+			.invoke('sqlite', {
+				type: 'all',
+				name: db.name,
+				sql: queryWithParams,
+			})
+			.catch((error) => {
+				log.error(error);
+			});
 
-		console.log(result);
+		log.silly(result);
 
 		return result;
 	},
 	run: async (db, queryWithParams: SQLiteQueryWithParams) => {
-		console.log(`run sql: ${queryWithParams.query}`, queryWithParams.params);
+		log.debug(`run sql: ${queryWithParams.query}`, queryWithParams.params);
 
 		await window.ipcRenderer
 			.invoke('sqlite', {
@@ -36,7 +42,7 @@ const sqliteBasics = {
 				sql: queryWithParams,
 			})
 			.catch((error) => {
-				debugger;
+				log.error(error);
 			});
 	},
 	close: async (db) => {

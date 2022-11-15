@@ -4,25 +4,25 @@ import { addRxPlugin } from 'rxdb';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 // import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
 // import { RxDBKeyCompressionPlugin } from 'rxdb/plugins/key-compression';
-import { RxDBMigrationPlugin } from 'rxdb/plugins/migration';
-import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 // import { RxDBEncryptionPlugin } from 'rxdb/plugins/encryption';
-import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 // import { RxDBReplicationCouchDBPlugin } from 'rxdb/plugins/replication-couchdb';
 import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
+import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 // import { RxDBInMemoryPlugin } from 'rxdb/plugins/in-memory';
 // import { RxDBAttachmentsPlugin } from 'rxdb/plugins/attachments';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
+import { RxDBMigrationPlugin } from 'rxdb/plugins/migration';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
+import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 
 // custom plugins
+import childrenPlugin from './children';
 import collectionCounts from './collection-counts';
 import RxDBGenerateIdPlugin from './generate-id';
-import RxDBWooCommercePlugin from './woocommerce';
-import childrenPlugin from './children';
-import { RxDBAjvValidatePlugin } from './validate';
+// import { RxDBAjvValidatePlugin } from './validate';
 import middlewaresPlugin from './middlewares';
 import toJSONPlugin from './to-json';
+import RxDBWooCommercePlugin from './woocommerce';
 // import deleteDBPlugin from './delete-db';
 
 if (process.env.NODE_ENV === 'development') {
@@ -56,7 +56,7 @@ addRxPlugin(RxDBJsonDumpPlugin);
 // custom plugins
 addRxPlugin(collectionCounts);
 addRxPlugin(RxDBWooCommercePlugin);
-addRxPlugin(RxDBAjvValidatePlugin);
+// addRxPlugin(RxDBAjvValidatePlugin);
 addRxPlugin(childrenPlugin);
 addRxPlugin(middlewaresPlugin);
 addRxPlugin(toJSONPlugin);

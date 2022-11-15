@@ -1,9 +1,8 @@
-import { from, of, combineLatest, Observable } from 'rxjs';
-import { switchMap, tap, catchError, map, debounceTime } from 'rxjs/operators';
 import _orderBy from 'lodash/orderBy';
 import _filter from 'lodash/filter';
 import _sumBy from 'lodash/sumBy';
 import _map from 'lodash/map';
+import log from '@wcpos/utils/src/logger';
 
 type OrderDocument = import('./orders').OrderDocument;
 type OrderCollection = import('./orders').OrderCollection;
@@ -216,7 +215,7 @@ export default {
 				shipping_lines: newShipping._id,
 			},
 		}).catch((err: any) => {
-			console.log(err);
+			log.error(err);
 		});
 	},
 
@@ -281,7 +280,7 @@ export default {
 				email: customer.email,
 			},
 		}).then((res) => {
-			console.log(res);
+			log.error(res);
 		});
 	},
 

@@ -1,6 +1,7 @@
+// import Platform from '@wcpos/core/src/lib/platform';
+// import set from 'lodash/set';
 import { createRxDatabase, removeRxDatabase } from 'rxdb';
-import Platform from '@wcpos/core/src/lib/platform';
-import set from 'lodash/set';
+
 import config from './adapter';
 import './plugins';
 

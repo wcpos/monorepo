@@ -1,3 +1,5 @@
+import log from '@wcpos/utils/src/logger';
+
 type RxPlugin = import('rxdb/dist/types').RxPlugin;
 
 const deleteDBPlugin: RxPlugin = {
@@ -46,11 +48,10 @@ const deleteDBPlugin: RxPlugin = {
 				if (storage?.name === 'indexeddb') {
 					const DBDeleteRequest = window.indexedDB.deleteDatabase(databaseName);
 					DBDeleteRequest.onerror = (event) => {
-						console.error('Error deleting database.');
+						log.error('Error deleting database.');
 					};
 					DBDeleteRequest.onsuccess = (event) => {
-						console.log('Database deleted successfully');
-						console.log(event.result); // should be undefined
+						log.debug('Database deleted successfully', event);
 					};
 				}
 			},

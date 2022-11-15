@@ -1,9 +1,11 @@
+import log from '@wcpos/utils/src/logger';
+import forEach from 'lodash/forEach';
+import get from 'lodash/get';
+import remove from 'lodash/remove';
+import { ObservableResource } from 'observable-hooks';
 import { Observable } from 'rxjs';
 import { switchMap, map } from 'rxjs/operators';
-import { ObservableResource } from 'observable-hooks';
-import get from 'lodash/get';
-import forEach from 'lodash/forEach';
-import remove from 'lodash/remove';
+
 import schema from './schema.json';
 
 type StoreCollection = import('../stores').StoreCollection;
@@ -42,7 +44,7 @@ export const methods: WPCredentialsMethods = {
 			const existingStore = remove(stores, { id: rawStore.id });
 
 			if (existingStore.length > 1) {
-				console.log('this should not happen');
+				log.error('this should not happen');
 				debugger;
 			} else if (existingStore.length === 1) {
 				// update existing store
@@ -59,7 +61,7 @@ export const methods: WPCredentialsMethods = {
 			}
 
 			if (Array.isArray(stores) && stores.length > 0) {
-				console.log('these stores need to be removed');
+				log.error('these stores need to be removed');
 				debugger;
 			}
 		});
@@ -71,7 +73,7 @@ export const methods: WPCredentialsMethods = {
 	async addStore(this: WPCredentialsDocument, data) {
 		const store: StoreDocument = await this.collection.database.collections.stores.insert(data);
 		await this.update({ $push: { stores: store.localID } }).catch((err) => {
-			console.log(err);
+			log.error(err);
 			return err;
 		});
 
