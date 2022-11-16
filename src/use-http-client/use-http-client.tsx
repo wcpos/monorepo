@@ -75,6 +75,13 @@ export const useHttpClient = () => {
 			}
 
 			/**
+			 * XDEBUG for development
+			 */
+			if (process.env.NODE_ENV === 'development') {
+				set(_config, ['params', 'XDEBUG_SESSION'], 'PHPSTORM');
+			}
+
+			/**
 			 *
 			 */
 			const response = await http.request(_config).catch((error) => {
