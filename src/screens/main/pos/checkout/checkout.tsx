@@ -54,8 +54,8 @@ export const CheckoutTabs = React.forwardRef((props, ref) => {
 	/**
 	 *
 	 */
-	React.useEffect(() => {
-		const handlePaymentReceived = (event: MessageEvent) => {
+	const handlePaymentReceived = React.useCallback(
+		(event: MessageEvent) => {
 			if (event?.data?.action === 'wcpos-payment-received') {
 				order.atomicPatch(event?.data?.payload);
 				navigation.dispatch(
@@ -64,14 +64,27 @@ export const CheckoutTabs = React.forwardRef((props, ref) => {
 					})
 				);
 			}
-		};
+		},
+		[navigation, order]
+	);
+	// React.useEffect(() => {
+	// 	const handlePaymentReceived = (event: MessageEvent) => {
+	// 		if (event?.data?.action === 'wcpos-payment-received') {
+	// 			order.atomicPatch(event?.data?.payload);
+	// 			navigation.dispatch(
+	// 				StackActions.replace('Receipt', {
+	// 					_id: order._id,
+	// 				})
+	// 			);
+	// 		}
+	// 	};
 
-		window.addEventListener('message', handlePaymentReceived);
+	// 	window.addEventListener('message', handlePaymentReceived);
 
-		return () => {
-			window.removeEventListener('message', handlePaymentReceived);
-		};
-	}, [navigation, order]);
+	// 	return () => {
+	// 		window.removeEventListener('message', handlePaymentReceived);
+	// 	};
+	// }, [navigation, order]);
 
 	/**
 	 *
@@ -108,6 +121,7 @@ export const CheckoutTabs = React.forwardRef((props, ref) => {
 							}}
 							onMessage={(event) => {
 								log.debug(event);
+								handlePaymentReceived(event);
 							}}
 							style={{ height: '100%' }}
 						/>
@@ -115,7 +129,7 @@ export const CheckoutTabs = React.forwardRef((props, ref) => {
 				</View>
 			);
 		},
-		[loading, paymentUrl]
+		[handlePaymentReceived, loading, paymentUrl]
 	);
 
 	/**

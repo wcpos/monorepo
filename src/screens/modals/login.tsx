@@ -5,8 +5,10 @@ import get from 'lodash/get';
 
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
+import Text from '@wcpos/components/src/text';
 import TextInput from '@wcpos/components/src/textinput';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
+import log from '@wcpos/utils/src/logger';
 
 import useAuth from '../../contexts/auth';
 
@@ -28,12 +30,12 @@ const Login = ({ route }) => {
 				.findOne({ selector: { localID: siteID } })
 				.exec()
 				.catch((error) => {
-					debugger;
+					log.error(error);
 				});
 		}
 
 		if (!site) {
-			debugger;
+			log.error('Site not found');
 			return;
 		}
 
@@ -46,7 +48,7 @@ const Login = ({ route }) => {
 				},
 			})
 			.catch((err) => {
-				debugger;
+				log.error(err);
 			});
 
 		if (response) {
@@ -65,6 +67,7 @@ const Login = ({ route }) => {
 	return (
 		<Modal
 			alwaysOpen
+			withPortal={false}
 			title="Login"
 			onClose={() => navigation.dispatch(StackActions.pop(1))}
 			primaryAction={{ label: 'Login', action: handleLogin }}

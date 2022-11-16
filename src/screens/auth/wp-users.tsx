@@ -1,10 +1,13 @@
 import * as React from 'react';
-import { useObservableSuspense } from 'observable-hooks';
+
 import { useNavigation } from '@react-navigation/native';
+import { useObservableSuspense } from 'observable-hooks';
+
 import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
 import Button from '@wcpos/components/src/button';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Text from '@wcpos/components/src/text';
+
 import WpUser from './wp-user';
 
 interface WpUserProps {

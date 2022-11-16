@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import Button from '@wcpos/components/src/button';
 import useSnackbar from '@wcpos/components/src/snackbar';
+import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../../lib/translations';
 import useCurrentOrder from '../../contexts/current-order';
@@ -20,8 +21,8 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 	 * @TODO - upsert children, should be done during preInsert hook
 	 */
 	const undoRemove = React.useCallback(async () => {
-		const success = await order.collection.insert(voidedOrderJSON).catch(() => {
-			debugger;
+		const success = await order.collection.insert(voidedOrderJSON).catch((err) => {
+			log.error(err);
 		});
 
 		if (success) {

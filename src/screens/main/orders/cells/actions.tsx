@@ -6,6 +6,7 @@ import pick from 'lodash/pick';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
 import Modal, { useModal } from '@wcpos/components/src/modal';
+import log from '@wcpos/utils/src/logger';
 
 import useRestHttpClient from '../../../../hooks/use-rest-http-client';
 import EditModal from '../../common/edit-modal';
@@ -31,8 +32,8 @@ const Actions = ({ item: order }: Props) => {
 			.then(({ data }) => {
 				order.atomicPatch(data);
 			})
-			.catch(() => {
-				debugger;
+			.catch((err) => {
+				log.error(err);
 			});
 	}, [http, order]);
 

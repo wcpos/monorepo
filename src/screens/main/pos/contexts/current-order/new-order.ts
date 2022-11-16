@@ -1,6 +1,8 @@
 // import * as React from 'react';
 import { BehaviorSubject } from 'rxjs';
 
+import log from '@wcpos/utils/src/logger';
+
 // type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -62,7 +64,7 @@ export default class NewOrder {
 		const newFee = await this.collection.database.collections.fee_lines
 			.insert(data)
 			.catch((err: any) => {
-				debugger;
+				log.error(err);
 			});
 
 		this.fee_lines.push(newFee._id);
@@ -73,7 +75,7 @@ export default class NewOrder {
 		const newShipping = await this.collection.database.collections.shipping_lines
 			.insert(data)
 			.catch((err: any) => {
-				debugger;
+				log.error(err);
 			});
 
 		this.shipping_lines.push(newShipping._id);
@@ -92,7 +94,7 @@ export default class NewOrder {
 				meta_data: product.meta_data,
 			})
 			.catch((err: any) => {
-				debugger;
+				log.error(err);
 			});
 
 		this.line_items.push(newLineItem._id);

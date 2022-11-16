@@ -9,6 +9,7 @@ import Logo from '@wcpos/components/src/logo';
 import Text from '@wcpos/components/src/text';
 import TextInput from '@wcpos/components/src/textinput';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
+import log from '@wcpos/utils/src/logger';
 
 import Platform from '../../utils/platform';
 import Sites from './sites';
@@ -33,7 +34,7 @@ const Auth = () => {
 					},
 				})
 				.catch((err) => {
-					debugger;
+					log.error(err);
 				});
 
 			if (response) {
