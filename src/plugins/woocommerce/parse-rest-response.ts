@@ -79,7 +79,7 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 	/**
 	 * remove any properties not in the schema
 	 */
-	// this.schema.validate(plainData);
+	this.schema.validate(plainData);
 
 	return plainData;
 }

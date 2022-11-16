@@ -1,10 +1,11 @@
-import log from '@wcpos/utils/src/logger';
 import forEach from 'lodash/forEach';
 import get from 'lodash/get';
 import remove from 'lodash/remove';
 import { ObservableResource } from 'observable-hooks';
 import { Observable } from 'rxjs';
 import { switchMap, map } from 'rxjs/operators';
+
+import log from '@wcpos/utils/src/logger';
 
 import schema from './schema.json';
 
@@ -45,7 +46,6 @@ export const methods: WPCredentialsMethods = {
 
 			if (existingStore.length > 1) {
 				log.error('this should not happen');
-				debugger;
 			} else if (existingStore.length === 1) {
 				// update existing store
 				// @ts-ignore
@@ -62,7 +62,6 @@ export const methods: WPCredentialsMethods = {
 
 			if (Array.isArray(stores) && stores.length > 0) {
 				log.error('these stores need to be removed');
-				debugger;
 			}
 		});
 	},

@@ -1,7 +1,8 @@
-import _orderBy from 'lodash/orderBy';
 import _filter from 'lodash/filter';
-import _sumBy from 'lodash/sumBy';
 import _map from 'lodash/map';
+import _orderBy from 'lodash/orderBy';
+import _sumBy from 'lodash/sumBy';
+
 import log from '@wcpos/utils/src/logger';
 
 type OrderDocument = import('./orders').OrderDocument;
@@ -15,8 +16,8 @@ type ShippingLineDocument = import('../shipping-lines').ShippingLineDocument;
 type ShippingLineCollection = import('../shipping-lines').ShippingLineCollection;
 type ProductVariationDocument = import('../variations').ProductVariationDocument;
 type CustomerDocument = import('../customers').CustomerDocument;
-type CartLine = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
-type CartLines = Array<LineItemDocument | FeeLineDocument | ShippingLineDocument>;
+type CartLine = (LineItemDocument | FeeLineDocument | ShippingLineDocument)[];
+type CartLines = (LineItemDocument | FeeLineDocument | ShippingLineDocument)[];
 
 /**
  * WooCommerce Order Model methods
@@ -62,7 +63,7 @@ export default {
 					},
 				})
 				.catch((err: any) => {
-					debugger;
+					log.error(err);
 				});
 			return this;
 		}
@@ -79,7 +80,7 @@ export default {
 				meta_data: product.meta_data,
 			})
 			.catch((err: any) => {
-				debugger;
+				log.error(err);
 			});
 
 		/**
@@ -91,7 +92,7 @@ export default {
 			order.line_items.push(newLineItem._id);
 			return order;
 		}).catch((err: any) => {
-			debugger;
+			log.error(err);
 		});
 	},
 
@@ -119,7 +120,7 @@ export default {
 					},
 				})
 				.catch((err: any) => {
-					debugger;
+					log.error(err);
 				});
 			return this;
 		}
@@ -139,7 +140,7 @@ export default {
 				meta_data: meta_data.concat(metaData),
 			})
 			.catch((err: any) => {
-				debugger;
+				log.error(err);
 			});
 
 		/**
@@ -151,7 +152,7 @@ export default {
 			order.line_items.push(newLineItem._id);
 			return order;
 		}).catch((err: any) => {
-			debugger;
+			log.error(err);
 		});
 	},
 
@@ -175,7 +176,7 @@ export default {
 		const newFee = await this.collection.database.collections.fee_lines
 			.insert(data)
 			.catch((err: any) => {
-				debugger;
+				log.error(err);
 			});
 
 		return this.update({
@@ -183,7 +184,7 @@ export default {
 				fee_lines: newFee._id,
 			},
 		}).catch((err: any) => {
-			debugger;
+			log.error(err);
 		});
 	},
 
@@ -207,7 +208,7 @@ export default {
 		const newShipping = await this.collection.database.collections.shipping_lines
 			.insert(data)
 			.catch((err: any) => {
-				debugger;
+				log.error(err);
 			});
 
 		return this.update({
@@ -255,8 +256,8 @@ export default {
 	async undoRemoveCartLine(this: OrderDocument, item: CartLine) {
 		const itemJSON = item.toJSON();
 
-		const success = await item.collection.insert(itemJSON).catch(() => {
-			debugger;
+		const success = await item.collection.insert(itemJSON).catch((err) => {
+			log.error(err);
 		});
 
 		if (success) {
@@ -265,7 +266,7 @@ export default {
 				order[item.collection.name].push(success._id);
 				return order;
 			}).catch((err: any) => {
-				debugger;
+				log.error(err);
 			});
 		}
 	},

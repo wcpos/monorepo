@@ -1,4 +1,7 @@
 import map from 'lodash/map';
+
+import log from '@wcpos/utils/src/logger';
+
 import schema from './schema.json';
 
 export type ProductSchema = import('./interface').WooCommerceProductSchema;
@@ -23,8 +26,7 @@ async function auditVariations(this: ProductCollection, plainData: Record<string
 			variationsCollection.parseRestResponse({ id: Number(id) })
 		);
 		variationsCollection.bulkUpsert(documents).catch((err) => {
-			console.error(err);
-			debugger;
+			log.error(err);
 		});
 	}
 }

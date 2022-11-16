@@ -1,5 +1,4 @@
 import { addRxPlugin } from 'rxdb';
-
 // default plugins
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 // import { RxDBValidatePlugin } from 'rxdb/plugins/validate';
@@ -19,9 +18,9 @@ import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 import childrenPlugin from './children';
 import collectionCounts from './collection-counts';
 import RxDBGenerateIdPlugin from './generate-id';
-// import { RxDBAjvValidatePlugin } from './validate';
 import middlewaresPlugin from './middlewares';
 import toJSONPlugin from './to-json';
+import { RxDBAjvValidatePlugin } from './validate';
 import RxDBWooCommercePlugin from './woocommerce';
 // import deleteDBPlugin from './delete-db';
 
@@ -56,7 +55,7 @@ addRxPlugin(RxDBJsonDumpPlugin);
 // custom plugins
 addRxPlugin(collectionCounts);
 addRxPlugin(RxDBWooCommercePlugin);
-// addRxPlugin(RxDBAjvValidatePlugin);
+addRxPlugin(RxDBAjvValidatePlugin);
 addRxPlugin(childrenPlugin);
 addRxPlugin(middlewaresPlugin);
 addRxPlugin(toJSONPlugin);
