@@ -90,7 +90,7 @@ const POSTabs = () => {
 
 	return (
 		<Tab.Navigator
-			initialRouteName="Cart"
+			initialRouteName="Products"
 			screenOptions={{ headerShown: false }}
 			tabBar={tabBar}
 			// detachInactiveScreens={false} - @TODO - this is not working in web?!
