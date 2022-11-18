@@ -27,7 +27,8 @@
 			"type": "integer"
 		},
 		"parent_name": {
-			"type": "string"
+			"type": "string",
+			"default": ""
 		},
 		"sku": {
 			"description": "Product SKU.",

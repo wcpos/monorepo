@@ -2,6 +2,7 @@ import { clone } from 'rxdb';
 
 import log from '@wcpos/utils/src/logger';
 
+import { wrappedValidateAjvStorage } from '../plugins/validate';
 import { mangoQuerySelectorToSQL } from './mangoQuerySelectorToSQL';
 import { getRxStorageSQLite } from './plugins/sqlite';
 import { mangoQuerySortToSQL } from './plugins/sqlite/sqlite-statics';
@@ -54,13 +55,17 @@ const sqliteBasics = {
 	journalMode: '',
 };
 
-const parentStorage = getRxStorageSQLite({ sqliteBasics });
+// const parentStorage = getRxStorageSQLite({ sqliteBasics });
+
+const storage = wrappedValidateAjvStorage({
+	storage: getRxStorageSQLite({ sqliteBasics }),
+});
 
 /**
  *
  */
 const config = {
-	storage: parentStorage,
+	storage,
 	// storage: getMemorySyncedRxStorage({
 	// 	storage: parentStorage,
 

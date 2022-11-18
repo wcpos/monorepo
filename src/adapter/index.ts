@@ -1,8 +1,11 @@
 import { openDatabase, WebSQLDatabase, ResultSet } from 'expo-sqlite';
 import { clone } from 'rxdb';
+
 import log from '@wcpos/utils/src/logger';
-import { getRxStorageSQLite } from './plugins/sqlite';
+
+// import { wrappedValidateAjvStorage } from '../plugins/validate';
 import { mangoQuerySelectorToSQL } from './mangoQuerySelectorToSQL';
+import { getRxStorageSQLite } from './plugins/sqlite';
 import { mangoQuerySortToSQL } from './plugins/sqlite/sqlite-statics';
 
 /**
@@ -72,20 +75,35 @@ const getSQLiteBasicsExpoSQLite = (openDB: typeof openDatabase) => {
 	};
 };
 
+// const storage = wrappedValidateAjvStorage({
+// 	storage: getRxStorageSQLite({
+// 		/**
+// 		 * Different runtimes have different interfaces to SQLite.
+// 		 * For example in node.js we have a callback API,
+// 		 * while in capacitor sqlite we have Promises.
+// 		 * So we need a helper object that is capable of doing the basic
+// 		 * sqlite operations.
+// 		 */
+// 		sqliteBasics: getSQLiteBasicsExpoSQLite(openDatabase),
+// 	}),
+// });
+
+const storage = getRxStorageSQLite({
+	/**
+	 * Different runtimes have different interfaces to SQLite.
+	 * For example in node.js we have a callback API,
+	 * while in capacitor sqlite we have Promises.
+	 * So we need a helper object that is capable of doing the basic
+	 * sqlite operations.
+	 */
+	sqliteBasics: getSQLiteBasicsExpoSQLite(openDatabase),
+});
+
 /**
  *
  */
 const config = {
-	storage: getRxStorageSQLite({
-		/**
-		 * Different runtimes have different interfaces to SQLite.
-		 * For example in node.js we have a callback API,
-		 * while in capacitor sqlite we have Promises.
-		 * So we need a helper object that is capable of doing the basic
-		 * sqlite operations.
-		 */
-		sqliteBasics: getSQLiteBasicsExpoSQLite(openDatabase),
-	}),
+	storage,
 	multiInstance: false,
 	ignoreDuplicate: true,
 };

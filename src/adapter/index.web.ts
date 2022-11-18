@@ -1,9 +1,13 @@
 import { requestIdlePromise } from 'rxdb';
 
+import { wrappedValidateAjvStorage } from '../plugins/validate';
 import { getRxStorageIndexedDB } from './plugins/indexeddb';
 import { getMemorySyncedRxStorage } from './plugins/memory-synced';
 
-const parentStorage = getRxStorageIndexedDB();
+// const parentStorage = getRxStorageIndexedDB();
+const parentStorage = wrappedValidateAjvStorage({
+	storage: getRxStorageIndexedDB(),
+});
 
 const config = {
 	storage: getMemorySyncedRxStorage({
