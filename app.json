@@ -5,9 +5,6 @@
     "slug": "wcpos-monorepo-app-managed",
     "owner": "kilbot",
     "version": "1.0.0",
-    "runtimeVersion": {
-      "policy": "sdkVersion"
-    },
     "githubUrl": "https://github.com/wcpos/managed-expo",
     "jsEngine": "hermes",
     "orientation": "portrait",
