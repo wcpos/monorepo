@@ -153,6 +153,9 @@ export const CheckoutTabs = React.forwardRef((props, ref) => {
 					if (iframeRef.current && iframeRef.current.contentWindow) {
 						setLoading(true);
 						iframeRef.current.contentWindow.postMessage({ action: 'wcpos-process-payment' }, '*');
+					} else {
+						setLoading(true);
+						iframeRef.current.postMessage({ action: 'wcpos-process-payment' }, '*');
 					}
 				},
 			};
