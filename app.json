@@ -1,58 +1,70 @@
 {
-	"expo": {
-		"name": "wcpos-monorepo-app-managed",
-		"description": "Take WooCommerce orders at the Point of Sale.",
-		"slug": "wcpos-monorepo-app-managed",
-		"owner": "kilbot",
-		"version": "1.0.0",
-		"githubUrl": "https://github.com/wcpos/managed-expo",
-		"jsEngine": "hermes",
-		"orientation": "portrait",
-		"icon": "./assets/icon.png",
-		"backgroundColor": "#F0F4F8",
-		"scheme": "wcpos",
-		"splash": {
-			"image": "./assets/splash.png",
-			"resizeMode": "contain",
-			"backgroundColor": "#F0F4F8"
-		},
-		"updates": {
-			"fallbackToCacheTimeout": 0
-		},
-		"assetBundlePatterns": ["**/*"],
-		"ios": {
-			"bundleIdentifier": "com.wcpos.client.managed",
-			"buildNumber": "1.0.0",
-			"supportsTablet": true,
-			"infoPlist": {
-				"NSCameraUsageDescription": "This app uses the camera to scan product barcodes."
-			}
-		},
-		"android": {
-			"package": "com.wcpos.client.managed",
-			"versionCode": 400010000,
-			"adaptiveIcon": {
-				"foregroundImage": "./assets/adaptive-icon.png",
-				"backgroundColor": "#F0F4F8"
-			}
-		},
-		"web": {
-			"bundler": "metro",
-			"favicon": "./assets/square-icon-512x512.png",
-			"backgroundColor": "#F0F4F8"
-		},
-		"plugins": ["sentry-expo"],
-		"hooks": {
-			"postPublish": [
-				{
-					"file": "sentry-expo/upload-sourcemaps",
-					"config": {
-						"organization": "wcpos",
-						"project": "woocommerce-pos",
-						"authToken": "8bc79357b8af4bf88549574408df55deafbcf10642444795b2308e1d6471d6c5"
-					}
-				}
-			]
-		}
-	}
+  "expo": {
+    "name": "wcpos-monorepo-app-managed",
+    "description": "Take WooCommerce orders at the Point of Sale.",
+    "slug": "wcpos-monorepo-app-managed",
+    "owner": "kilbot",
+    "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "githubUrl": "https://github.com/wcpos/managed-expo",
+    "jsEngine": "hermes",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "backgroundColor": "#F0F4F8",
+    "scheme": "wcpos",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F0F4F8"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.wcpos.client.managed",
+      "buildNumber": "1.0.0",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to scan product barcodes."
+      }
+    },
+    "android": {
+      "package": "com.wcpos.client.managed",
+      "versionCode": 400010000,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F0F4F8"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/square-icon-512x512.png",
+      "backgroundColor": "#F0F4F8"
+    },
+    "plugins": [
+      "sentry-expo"
+    ],
+    "hooks": {
+      "postPublish": [
+        {
+          "file": "sentry-expo/upload-sourcemaps",
+          "config": {
+            "organization": "wcpos",
+            "project": "woocommerce-pos",
+            "authToken": "8bc79357b8af4bf88549574408df55deafbcf10642444795b2308e1d6471d6c5"
+          }
+        }
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "5e329da0-4df9-4384-b3e3-be8a7b25b1ab"
+      }
+    }
+  }
 }
