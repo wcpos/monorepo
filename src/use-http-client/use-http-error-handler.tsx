@@ -49,6 +49,7 @@ const useHttpErrorHandler = () => {
 							message: `Recieved "${res.data.message}" when trying to access endpoint: ${res.config.url}`,
 							// type: 'critical',
 						});
+						navigation.navigate('Login');
 					} else {
 						navigation.navigate('Login');
 					}

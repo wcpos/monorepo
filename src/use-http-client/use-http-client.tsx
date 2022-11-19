@@ -71,6 +71,12 @@ export const useHttpClient = () => {
 			if (_config.method?.toLowerCase() === 'head') {
 				set(_config, 'decompress', false);
 				// set(_config, ['headers', 'Cookie'], undefined);
+				/**
+				 * WordPress REST API check for:
+				 * HTTP_X_HTTP_METHOD_OVERRIDE (header)
+				 * _method (get param)
+				 * @TODO - check if I should use this instead
+				 */
 				set(_config, ['params', 'wcpos_http_method'], 'head');
 			}
 
@@ -78,7 +84,7 @@ export const useHttpClient = () => {
 			 * XDEBUG for development
 			 */
 			if (process.env.NODE_ENV === 'development') {
-				set(_config, ['params', 'XDEBUG_SESSION'], 'PHPSTORM');
+				set(_config, ['params', 'XDEBUG_SESSION'], 'start');
 			}
 
 			/**
