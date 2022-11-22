@@ -18,7 +18,7 @@ import RootError from './root-error';
 import RootNavigator from './screens';
 
 // enable freeze
-enableFreeze(true);
+// enableFreeze(true);
 
 type InitialProps = import('./types').InitialProps;
 

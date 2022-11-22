@@ -33,7 +33,7 @@ const Drawer = createDrawerNavigator<DrawerParamList>();
  *
  */
 export const MainNavigator = () => {
-	const { store } = useAuth();
+	const { store, site } = useAuth();
 	if (!store) {
 		/**
 		 * @TODO - this is a temporary workaround to prevent the app from crashing
@@ -42,6 +42,7 @@ export const MainNavigator = () => {
 		throw new Promise(() => {});
 	}
 	const storeName = useObservableState(store.name$, store.name);
+	const wpAPIURL = useObservableState(site.wp_api_url$, site.wp_api_url);
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
 	const header = React.useCallback((props) => <CustomHeader {...props} />, []);
@@ -61,7 +62,7 @@ export const MainNavigator = () => {
 	 *
 	 */
 	return (
-		<OnlineStatusProvider wpAPIURL={store?.wp_api_url}>
+		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 			<UIProvider>
 				<Drawer.Navigator
 					initialRouteName="POS"
