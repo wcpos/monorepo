@@ -71,7 +71,7 @@ const getSQLiteBasicsExpoSQLite = (openDB: typeof openDatabase) => {
 		close: async (db: WebSQLDatabase) => {
 			return db.closeAsync();
 		},
-		journalMode: '',
+		journalMode: 'WAL',
 	};
 };
 

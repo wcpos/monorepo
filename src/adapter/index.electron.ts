@@ -52,7 +52,7 @@ const sqliteBasics = {
 			name: db.name,
 		});
 	},
-	journalMode: '',
+	journalMode: 'WAL',
 };
 
 // const parentStorage = getRxStorageSQLite({ sqliteBasics });
