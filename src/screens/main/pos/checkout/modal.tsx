@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { StackActions, CommonActions } from '@react-navigation/native';
+import { useTheme } from 'styled-components/native';
 
 import Modal from '@wcpos/components/src/modal';
 import log from '@wcpos/utils/src/logger';
@@ -19,17 +20,20 @@ type CheckoutModalProps = import('@react-navigation/stack').StackScreenProps<
 export const CheckoutModal = ({ route, navigation }: CheckoutModalProps) => {
 	const { _id } = route.params;
 	const checkoutRef = React.useRef(null);
+	const theme = useTheme();
 
+	/**
+	 * If checkout is the only one in stack (ie: page refresh),
+	 * then reset navigation with a sensible stack
+	 * @TODO - is there a better way to do this?
+	 */
 	React.useEffect(() => {
 		if (!navigation.canGoBack()) {
-			/**
-			 * @TODO - this doesn't do anything, how to render the POS on deep link access?
-			 */
 			navigation.dispatch(
 				CommonActions.reset({
 					index: 1,
 					routes: [
-						{ name: 'Columns' },
+						{ name: theme._dimensions.width >= theme.screens.small ? 'Columns' : 'Tabs' },
 						{
 							name: 'Checkout',
 							params: { _id },
@@ -37,9 +41,8 @@ export const CheckoutModal = ({ route, navigation }: CheckoutModalProps) => {
 					],
 				})
 			);
-			log.debug(navigation.getState());
 		}
-	}, [_id, navigation]);
+	}, [_id, navigation, theme._dimensions.width, theme.screens.small]);
 
 	return (
 		<Modal

@@ -120,7 +120,6 @@ export const CheckoutTabs = React.forwardRef((props, ref) => {
 								setLoading(false);
 							}}
 							onMessage={(event) => {
-								log.debug(event);
 								handlePaymentReceived(event);
 							}}
 							style={{ height: '100%' }}

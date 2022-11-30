@@ -1,7 +1,8 @@
 import * as React from 'react';
 
-import { StackActions } from '@react-navigation/native';
+import { StackActions, CommonActions } from '@react-navigation/native';
 import { useReactToPrint } from 'react-to-print';
+import { useTheme } from 'styled-components/native';
 
 import Modal from '@wcpos/components/src/modal';
 
@@ -24,6 +25,29 @@ export const ReceiptModal = ({ route, navigation }: ReceiptModalProps) => {
 		content: () => receiptRef.current,
 		pageStyle: 'html, body { height: 100%; width: 100%; }',
 	});
+	const theme = useTheme();
+
+	/**
+	 * If checkout is the only one in stack (ie: page refresh),
+	 * then reset navigation with a sensible stack
+	 * @TODO - is there a better way to do this?
+	 */
+	React.useEffect(() => {
+		if (!navigation.canGoBack()) {
+			navigation.dispatch(
+				CommonActions.reset({
+					index: 1,
+					routes: [
+						{ name: theme._dimensions.width >= theme.screens.small ? 'Columns' : 'Tabs' },
+						{
+							name: 'Receipt',
+							params: { _id },
+						},
+					],
+				})
+			);
+		}
+	}, [_id, navigation, theme._dimensions.width, theme.screens.small]);
 
 	return (
 		<Modal
