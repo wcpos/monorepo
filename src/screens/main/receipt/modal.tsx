@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import { StackActions, CommonActions } from '@react-navigation/native';
 import { useReactToPrint } from 'react-to-print';
-import { useTheme } from 'styled-components/native';
 
 import Modal from '@wcpos/components/src/modal';
 
-import { OrdersProvider } from '../../../../contexts/orders';
-import { t } from '../../../../lib/translations';
+import { OrdersProvider } from '../../../contexts/orders';
+import useModalRefreshFix from '../../../hooks/use-modal-refresh-fix';
+import { t } from '../../../lib/translations';
 import { EmailModal } from './email';
 import { Receipt } from './receipt';
 
@@ -25,29 +25,32 @@ export const ReceiptModal = ({ route, navigation }: ReceiptModalProps) => {
 		content: () => receiptRef.current,
 		pageStyle: 'html, body { height: 100%; width: 100%; }',
 	});
-	const theme = useTheme();
+	useModalRefreshFix();
 
 	/**
 	 * If checkout is the only one in stack (ie: page refresh),
 	 * then reset navigation with a sensible stack
 	 * @TODO - is there a better way to do this?
+	 *
+	 * @TODO - move to useModalRefreshFix with screen size dependency
 	 */
-	React.useEffect(() => {
-		if (!navigation.canGoBack()) {
-			navigation.dispatch(
-				CommonActions.reset({
-					index: 1,
-					routes: [
-						{ name: theme._dimensions.width >= theme.screens.small ? 'Columns' : 'Tabs' },
-						{
-							name: 'Receipt',
-							params: { _id },
-						},
-					],
-				})
-			);
-		}
-	}, [_id, navigation, theme._dimensions.width, theme.screens.small]);
+	// React.useEffect(() => {
+	// 	const state = navigation.getState();
+	// 	if (state.routes.length === 1) {
+	// 		navigation.dispatch(
+	// 			CommonActions.reset({
+	// 				index: 1,
+	// 				routes: [
+	// 					{ name: state.routeNames[0] },
+	// 					{
+	// 						name: 'Receipt',
+	// 						params: { _id },
+	// 					},
+	// 				],
+	// 			})
+	// 		);
+	// 	}
+	// }, [_id, navigation]);
 
 	return (
 		<Modal

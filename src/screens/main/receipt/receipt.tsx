@@ -1,30 +1,49 @@
 import * as React from 'react';
-import { useReactToPrint } from 'react-to-print';
+
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
-import Button from '@wcpos/components/src/button';
-import Box from '@wcpos/components/src/box';
+import WebView from '@wcpos/components/src/webview';
+import log from '@wcpos/utils/src/logger';
 
-interface ReceiptProps {
-	order: import('@wcpos/database').OrderDocument;
-}
+import useOrders from '../../../contexts/orders';
 
-const ComponentToPrint = () => {
-	return <Text>Hello World!</Text>;
-};
+export const Receipt = React.forwardRef((props, ref) => {
+	const { data } = useOrders();
+	const order = data?.[0]; // @TODO - findOne option
+	const iframeRef = React.useRef<HTMLIFrameElement>();
 
-export const Receipt = ({ order }: ReceiptProps) => {
-	const componentRef = React.useRef<typeof Box>();
-
-	const handlePrint = useReactToPrint({
-		content: () => componentRef.current,
-	});
+	/**
+	 *
+	 */
+	// React.useImperativeHandle(
+	// 	ref,
+	// 	() => {
+	// 		return {
+	// 			print() {
+	// 				if (iframeRef.current && iframeRef.current.contentWindow) {
+	// 					iframeRef.current.contentWindow.print();
+	// 				} else {
+	// 					iframeRef.current?.print();
+	// 				}
+	// 			},
+	// 		};
+	// 	},
+	// 	[]
+	// );
 
 	return (
-		<>
-			<Box ref={componentRef}>
-				<Text>Hello World!</Text>
-			</Box>
-			<Button onPress={handlePrint}>Print this out!</Button>
-		</>
+		<ErrorBoundary>
+			<WebView
+				ref={ref}
+				src="https://test.com/wcpos-checkout/wcpos-receipt/74/?wcpos=1&template=default"
+				onLoad={() => {
+					// setLoading(false);
+				}}
+				onMessage={(event) => {
+					// log.debug(event);
+				}}
+				style={{ height: '100%' }}
+			/>
+		</ErrorBoundary>
 	);
-};
+});

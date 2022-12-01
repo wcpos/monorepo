@@ -87,6 +87,14 @@ export const RootNavigator = ({ initialProps }) => {
 								},
 								Orders: {
 									path: 'orders',
+									screens: {
+										Orders: {
+											path: '/', // if this is empty it will be the default screen?
+										},
+										Receipt: {
+											path: 'receipt/:_id',
+										},
+									},
 								},
 								Customers: {
 									path: 'customers',
@@ -100,6 +108,11 @@ export const RootNavigator = ({ initialProps }) => {
 						Login: `${pathname}/login`,
 						Settings: `${pathname}/settings`,
 					},
+				},
+				getStateFromPath: (path, options) => {
+					const state = getStateFromPath(path, options);
+					log.debug('getStateFromPath', state);
+					return state;
 				},
 			} as LinkingOptions<RootStackParamList>),
 		[pathname]

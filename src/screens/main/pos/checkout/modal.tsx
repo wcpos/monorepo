@@ -1,13 +1,13 @@
 import * as React from 'react';
 
-import { StackActions, CommonActions } from '@react-navigation/native';
-import { useTheme } from 'styled-components/native';
+import { StackActions } from '@react-navigation/native';
 
 import Modal from '@wcpos/components/src/modal';
 import log from '@wcpos/utils/src/logger';
 
 import { GatewaysProvider } from '../../../../contexts/gateways';
 import { OrdersProvider } from '../../../../contexts/orders';
+import useModalRefreshFix from '../../../../hooks/use-modal-refresh-fix';
 import { t } from '../../../../lib/translations';
 import { CheckoutTabs } from './checkout';
 
@@ -20,29 +20,7 @@ type CheckoutModalProps = import('@react-navigation/stack').StackScreenProps<
 export const CheckoutModal = ({ route, navigation }: CheckoutModalProps) => {
 	const { _id } = route.params;
 	const checkoutRef = React.useRef(null);
-	const theme = useTheme();
-
-	/**
-	 * If checkout is the only one in stack (ie: page refresh),
-	 * then reset navigation with a sensible stack
-	 * @TODO - is there a better way to do this?
-	 */
-	React.useEffect(() => {
-		if (!navigation.canGoBack()) {
-			navigation.dispatch(
-				CommonActions.reset({
-					index: 1,
-					routes: [
-						{ name: theme._dimensions.width >= theme.screens.small ? 'Columns' : 'Tabs' },
-						{
-							name: 'Checkout',
-							params: { _id },
-						},
-					],
-				})
-			);
-		}
-	}, [_id, navigation, theme._dimensions.width, theme.screens.small]);
+	useModalRefreshFix();
 
 	return (
 		<Modal

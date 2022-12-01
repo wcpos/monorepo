@@ -18,7 +18,7 @@ interface Props {
 
 const Actions = ({ item: order }: Props) => {
 	const { ref: editModalRef, open: openEditModal, close: closeEditModal } = useModal();
-	const { ref: receiptModalRef, open: openReceiptModal, close: closeReceiptModal } = useModal();
+	// const { ref: receiptModalRef, open: openReceiptModal, close: closeReceiptModal } = useModal();
 	const navigation = useNavigation();
 	const http = useRestHttpClient();
 
@@ -97,11 +97,18 @@ const Actions = ({ item: order }: Props) => {
 			{ label: 'Delete', action: order.remove },
 		];
 		if (order.status === 'completed') {
-			menu.splice(1, 0, { label: 'Receipt', action: openReceiptModal });
+			menu.splice(1, 0, {
+				label: 'Receipt',
+				action: () => {
+					if (order) {
+						navigation.navigate('Receipt', { _id: order._id });
+					}
+				},
+			});
 		}
 
 		return menu;
-	}, [handleOpen, handleSync, openEditModal, openReceiptModal, order.remove, order.status]);
+	}, [handleOpen, handleSync, navigation, openEditModal, order]);
 
 	/**
 	 *
@@ -119,9 +126,9 @@ const Actions = ({ item: order }: Props) => {
 			>
 				<EditModal item={order} schema={schema} uiSchema={{}} />
 			</Modal>
-			<Modal ref={receiptModalRef} title="Receipt">
+			{/* <Modal ref={receiptModalRef} title="Receipt">
 				<Receipt order={order} />
-			</Modal>
+			</Modal> */}
 		</>
 	);
 };

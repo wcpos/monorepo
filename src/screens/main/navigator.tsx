@@ -7,6 +7,7 @@ import { useTheme } from 'styled-components/native';
 
 import Icon, { IconName } from '@wcpos/components/src/icon';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
+import log from '@wcpos/utils/src/logger';
 
 import useAuth from '../../contexts/auth';
 import { UIProvider } from '../../contexts/ui';
@@ -14,10 +15,9 @@ import { t } from '../../lib/translations';
 import Customers from './customers';
 import CustomDrawer from './drawer';
 import CustomHeader from './header';
-import Orders from './orders';
+import OrdersNavigator from './orders';
 import POS from './pos';
 import Products from './products';
-// import Support from './support';
 
 export type DrawerParamList = {
 	POS: undefined;
@@ -28,6 +28,13 @@ export type DrawerParamList = {
 };
 
 const Drawer = createDrawerNavigator<DrawerParamList>();
+
+const iconMap = {
+	POS: 'cashRegister',
+	Products: 'gifts',
+	Orders: 'receipt',
+	Customers: 'users',
+} as Record<string, IconName>;
 
 /**
  *
@@ -47,15 +54,51 @@ export const MainNavigator = () => {
 	const theme = useTheme();
 	const header = React.useCallback((props) => <CustomHeader {...props} />, []);
 	const drawer = React.useCallback((props) => <CustomDrawer {...props} />, []);
+	log.debug('render MainNavigator');
 
 	/**
-	 * Render the drawer icon
+	 * screenOptions change depending on the screen size
+	 *
+	 * @TODO - screen size changes is janky on electron, seems okay on web though
 	 */
-	const renderIcon = React.useCallback(
-		({ icon, focused }: { icon: IconName; focused: boolean }) => (
-			<Icon name={icon} type={focused ? 'primary' : 'inverse'} size="large" />
-		),
-		[]
+	const screenOptions = React.useMemo(() => {
+		return {
+			header,
+			drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
+			drawerStyle: {
+				backgroundColor: theme.colors.headerBackground,
+				width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
+				borderRightColor: 'rgba(0, 0, 0, 0.2)',
+				// borderRightWidth: 0,
+			},
+			sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
+		};
+	}, [dimensions.width, header, theme.colors.headerBackground, theme.screens.medium]);
+
+	/**
+	 * Drawer Screen options are memoized to avoid re-rendering
+	 */
+	const options = React.useCallback(
+		({ route }) => {
+			return {
+				/**
+				 * Translations strings for @transifex/cli
+				 * t('POS')
+				 * t('Products')
+				 * t('Orders')
+				 * t('Customers')
+				 * t('Coupons')
+				 * t('Reports')
+				 * t('Support')
+				 */
+				title: `${t(route.name)} - ${storeName}`,
+				drawerLabel: t(route.name),
+				drawerIcon: ({ focused }) => (
+					<Icon name={iconMap[route.name]} type={focused ? 'primary' : 'inverse'} size="large" />
+				),
+			};
+		},
+		[storeName]
 	);
 
 	/**
@@ -66,56 +109,13 @@ export const MainNavigator = () => {
 			<UIProvider>
 				<Drawer.Navigator
 					initialRouteName="POS"
-					screenOptions={{
-						header,
-						drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
-						drawerStyle: {
-							backgroundColor: theme.colors.headerBackground,
-							width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
-							borderRightColor: 'rgba(0, 0, 0, 0.2)',
-							// borderRightWidth: 0,
-						},
-						sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
-					}}
+					screenOptions={screenOptions}
 					drawerContent={drawer}
 				>
-					<Drawer.Screen
-						name="POS"
-						component={POS}
-						options={{
-							title: `${t('POS')} - ${storeName}`,
-							drawerLabel: t('POS'),
-							drawerIcon: ({ focused }) => renderIcon({ icon: 'cashRegister', focused }),
-						}}
-					/>
-					<Drawer.Screen
-						name="Products"
-						component={Products}
-						options={{
-							title: `${t('Products')} - ${storeName}`,
-							drawerLabel: t('Products'),
-							drawerIcon: ({ focused }) => renderIcon({ icon: 'gifts', focused }),
-						}}
-					/>
-					<Drawer.Screen
-						name="Orders"
-						component={Orders}
-						options={{
-							title: `${t('Orders')} - ${storeName}`,
-							drawerLabel: t('Orders'),
-							drawerIcon: ({ focused }) => renderIcon({ icon: 'receipt', focused }),
-						}}
-					/>
-					<Drawer.Screen
-						name="Customers"
-						component={Customers}
-						options={{
-							title: `${t('Customers')} - ${storeName}`,
-							drawerLabel: t('Customers'),
-							drawerIcon: ({ focused }) => renderIcon({ icon: 'users', focused }),
-						}}
-					/>
-					{/* <Drawer.Screen name="Support" component={Support} options={getOptions('support')} /> */}
+					<Drawer.Screen name="POS" component={POS} options={options} />
+					<Drawer.Screen name="Products" component={Products} options={options} />
+					<Drawer.Screen name="Orders" component={OrdersNavigator} options={options} />
+					<Drawer.Screen name="Customers" component={Customers} options={options} />
 				</Drawer.Navigator>
 			</UIProvider>
 		</OnlineStatusProvider>

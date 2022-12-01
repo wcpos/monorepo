@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
+import log from '@wcpos/utils/src/logger';
 
 import { OrdersProvider } from '../../../contexts/orders';
 import useUI from '../../../contexts/ui';
@@ -18,9 +18,15 @@ import Table from './table';
 const Orders = () => {
 	const { ui } = useUI('orders');
 	const theme = useTheme();
+	log.debug('render Orders');
+
+	const initialQuery = React.useMemo(
+		() => ({ sortBy: 'date_created_gmt', sortDirection: 'desc' }),
+		[]
+	);
 
 	return (
-		<OrdersProvider initialQuery={{ sortBy: 'date_created_gmt', sortDirection: 'desc' }}>
+		<OrdersProvider initialQuery={initialQuery}>
 			<Box padding="small" style={{ height: '100%' }}>
 				<Box
 					raised
@@ -52,14 +58,4 @@ const Orders = () => {
 	);
 };
 
-const WrappedOrders = (props) => {
-	return (
-		<ErrorBoundary>
-			<React.Suspense fallback={<Text>Loading orders UI</Text>}>
-				<Orders {...props} />
-			</React.Suspense>
-		</ErrorBoundary>
-	);
-};
-
-export default WrappedOrders;
+export default Orders;

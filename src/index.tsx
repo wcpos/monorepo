@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Text, useWindowDimensions } from 'react-native';
+import { Text } from 'react-native';
 
 import { SafeAreaProviderCompat } from '@react-navigation/elements';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -18,7 +18,7 @@ import RootError from './root-error';
 import RootNavigator from './screens';
 
 // enable freeze
-// enableFreeze(true);
+enableFreeze(true);
 
 type InitialProps = import('./types').InitialProps;
 
@@ -28,15 +28,13 @@ if (window) {
 }
 
 const App = () => {
-	const dimensions = useWindowDimensions();
 	const theme = React.useMemo(
 		() =>
 			getTheme({
 				name: 'default',
 				mode: 'light',
-				dimensions,
 			}),
-		[dimensions]
+		[]
 	);
 
 	return (

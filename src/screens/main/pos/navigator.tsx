@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useWindowDimensions } from 'react-native';
 
 import { createStackNavigator } from '@react-navigation/stack';
 import { useObservableState } from 'observable-hooks';
@@ -11,9 +12,9 @@ import log from '@wcpos/utils/src/logger';
 
 import useAuth from '../../../contexts/auth';
 import { TaxesProvider } from '../../../contexts/taxes';
+import Receipt from '../receipt';
 import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
-import Receipt from './receipt';
 import Columns from './resizable-columns';
 import Tabs from './tabs';
 
@@ -32,6 +33,7 @@ const Stack = createStackNavigator<POSStackParamList>();
  */
 const POS = ({ navigation, route }) => {
 	const theme = useTheme();
+	const dimensions = useWindowDimensions();
 	const { store } = useAuth();
 	const storeName = useObservableState(store?.name$, store.name);
 	log.debug('render POS');
@@ -47,12 +49,14 @@ const POS = ({ navigation, route }) => {
 		route,
 	});
 
+	const taxQuery = React.useMemo(() => ({ country: 'GB' }), []);
+
 	return (
 		<ErrorBoundary>
 			<CurrentOrderProvider>
-				<TaxesProvider initialQuery={{ country: 'GB' }}>
+				<TaxesProvider initialQuery={taxQuery}>
 					<Stack.Navigator screenOptions={{ headerShown: false }}>
-						{theme._dimensions.width >= theme.screens.small ? (
+						{dimensions.width >= theme.screens.small ? (
 							<Stack.Screen name="Columns" component={Columns} options={{ title: storeName }} />
 						) : (
 							<Stack.Screen name="Tabs" component={Tabs} />

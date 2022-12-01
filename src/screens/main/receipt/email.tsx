@@ -5,8 +5,8 @@ import Checkbox from '@wcpos/components/src/checkbox';
 import Modal from '@wcpos/components/src/modal';
 import TextInput from '@wcpos/components/src/textinput';
 
-import useRestHttpClient from '../../../../hooks/use-rest-http-client';
-import { t } from '../../../../lib/translations';
+import useRestHttpClient from '../../../hooks/use-rest-http-client';
+import { t } from '../../../lib/translations';
 
 export const EmailModal = ({ orderID, onClose }) => {
 	const http = useRestHttpClient();
