@@ -24,7 +24,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.wcpos.client.managed",
-      "buildNumber": "1.0.0",
+      "buildNumber": "1.0.0.1",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan product barcodes."
@@ -32,7 +32,7 @@
     },
     "android": {
       "package": "com.wcpos.client.managed",
-      "versionCode": 400010000,
+      "versionCode": 400010001,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F0F4F8"
