@@ -13,7 +13,7 @@ const defaultConfig = {
 	transportOptions: {
 		colors: {
 			info: 'blueBright',
-			warn: 'yellowBright',
+			warn: 'yellow',
 			error: 'redBright',
 			silly: 'white',
 		},
