@@ -10,7 +10,8 @@ import useOrders from '../../../contexts/orders';
 export const Receipt = React.forwardRef((props, ref) => {
 	const { data } = useOrders();
 	const order = data?.[0]; // @TODO - findOne option
-	const iframeRef = React.useRef<HTMLIFrameElement>();
+	const receiptURL = order.getReceiptURL();
+	// const iframeRef = React.useRef<HTMLIFrameElement>();
 
 	/**
 	 *
@@ -35,7 +36,7 @@ export const Receipt = React.forwardRef((props, ref) => {
 		<ErrorBoundary>
 			<WebView
 				ref={ref}
-				src="https://test.com/wcpos-checkout/wcpos-receipt/74/?wcpos=1&template=default"
+				src={receiptURL}
 				onLoad={() => {
 					// setLoading(false);
 				}}

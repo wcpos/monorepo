@@ -7,6 +7,7 @@ import get from 'lodash/get';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Loader from '@wcpos/components/src/loader';
+import useSnackbar from '@wcpos/components/src/snackbar';
 import Tabs from '@wcpos/components/src/tabs';
 import Text from '@wcpos/components/src/text';
 import WebView from '@wcpos/components/src/webview';
@@ -30,8 +31,9 @@ export const CheckoutTabs = React.forwardRef((props, ref) => {
 	const { data: gateways } = useGateways();
 	const { data } = useOrders();
 	const order = data?.[0]; // @TODO - findOne option
-	const paymentUrl = get(order, ['links', 'payment', 0, 'href'], '');
+	const paymentUrl = order.getPaymentURL();
 	const navigation = useNavigation();
+	const addSnackbar = useSnackbar();
 
 	// React.useEffect(() => {
 	// 	if (order.status !== 'pos-open') {
@@ -120,7 +122,11 @@ export const CheckoutTabs = React.forwardRef((props, ref) => {
 								setLoading(false);
 							}}
 							onMessage={(event) => {
-								handlePaymentReceived(event);
+								if (event?.data?.payload?.data) {
+									addSnackbar({ message: event?.data?.payload?.message });
+								} else {
+									handlePaymentReceived(event);
+								}
 							}}
 							style={{ height: '100%' }}
 						/>
@@ -128,7 +134,7 @@ export const CheckoutTabs = React.forwardRef((props, ref) => {
 				</View>
 			);
 		},
-		[handlePaymentReceived, loading, paymentUrl]
+		[addSnackbar, handlePaymentReceived, loading, paymentUrl]
 	);
 
 	/**
