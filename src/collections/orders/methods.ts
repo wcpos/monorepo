@@ -1,7 +1,5 @@
 import _filter from 'lodash/filter';
-import _map from 'lodash/map';
-import _orderBy from 'lodash/orderBy';
-import _sumBy from 'lodash/sumBy';
+import _find from 'lodash/find';
 
 import log from '@wcpos/utils/src/logger';
 
@@ -285,48 +283,23 @@ export default {
 		});
 	},
 
-	// /**
-	//  *
-	//  */
-	// computedTotal$(this: OrderDocument) {
-	// 	return this.getCart$().pipe(
-	// 		switchMap((cartLines: CartLines) => {
-	// 			const totals$ = _map(cartLines, 'total$');
-	// 			return combineLatest(totals$);
-	// 		}),
-	// 		map((totals: string[]) => String(_sumBy(totals, (total) => Number(total ?? 0)))),
-	// 		tap((total: string) => {
-	// 			if (total !== this.total) this.atomicPatch({ total });
-	// 		})
-	// 	);
-	// },
+	/**
+	 * Helper to extract the payment URL from the order
+	 */
+	getPaymentURL(this: OrderDocument) {
+		if (this.links?.payment) {
+			const link = this.links.payment.find((link: any) => link.href);
+			return link?.href;
+		}
+	},
 
-	// /**
-	//  *
-	//  */
-	// computedSubtotal$(this: OrderDocument) {
-	// 	return this.getLineItems$().pipe(
-	// 		switchMap((lineItems: LineItemDocument[]) => {
-	// 			const subtotals$ = _map(lineItems, 'subtotal$');
-	// 			return combineLatest(subtotals$);
-	// 		}),
-	// 		map((subtotals: string[]) => String(_sumBy(subtotals, (subtotal) => Number(subtotal ?? 0))))
-	// 	);
-	// },
-
-	// /**
-	//  *
-	//  */
-	// computedTotalTax$(this: OrderDocument) {
-	// 	return this.getCart$().pipe(
-	// 		switchMap((cartLines: CartLines) => {
-	// 			const totalTax$ = _map(cartLines, (cartLine) => cartLine.computedTotalTax$());
-	// 			return combineLatest(totalTax$);
-	// 		}),
-	// 		map((totals: string[]) => String(_sumBy(totals, (total) => Number(total ?? 0)))),
-	// 		tap((totalTax: string) => {
-	// 			if (totalTax !== this.totalTax) this.atomicPatch({ total_tax: totalTax });
-	// 		})
-	// 	);
-	// },
+	/**
+	 * Helper to extract the receipt URL from the order
+	 */
+	getReceiptURL(this: OrderDocument) {
+		if (this.links?.receipt) {
+			const link = this.links.receipt.find((link: any) => link.href);
+			return link?.href;
+		}
+	},
 };

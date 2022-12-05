@@ -1,11 +1,5 @@
-import map from 'lodash/map';
-import get from 'lodash/get';
-import isArray from 'lodash/isArray';
-import isString from 'lodash/isString';
-import find from 'lodash/find';
-import forEach from 'lodash/forEach';
-import schema from './schema.json';
 import methods from './methods';
+import schema from './schema.json';
 import statics from './statics';
 
 type OrderMethods = typeof import('./methods');
@@ -25,13 +19,6 @@ export const orders = {
 	schema,
 	statics,
 	methods,
-	// methods: {
-	// 	whoAmI() {
-	// 		debugger;
-	// 		return `I am ${this.name}!!`;
-	// 	},
-	// },
-	// attachments: {},
 	options: {
 		middlewares: {
 			// postCreate: {

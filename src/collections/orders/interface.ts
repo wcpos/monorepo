@@ -384,6 +384,14 @@ export interface WooCommerceOrderSchema {
       href?: string;
       [k: string]: any;
     }[];
+    payment?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    receipt?: {
+      href?: string;
+      [k: string]: any;
+    }[];
     [k: string]: any;
   };
   [k: string]: any;

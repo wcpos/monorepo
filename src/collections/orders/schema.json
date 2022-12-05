@@ -559,6 +559,28 @@
 							}
 						}
 					}
+				},
+				"payment": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"href": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"receipt": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"href": {
+								"type": "string"
+							}
+						}
+					}
 				}
 			}
 		}
