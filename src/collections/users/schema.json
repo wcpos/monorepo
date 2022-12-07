@@ -19,6 +19,9 @@
 		"display_name": {
 			"type": "string"
 		},
+		"locale": {
+			"type": "string"
+		},
 		"sites": {
 			"type": "array",
 			"ref": "sites",

@@ -451,11 +451,7 @@
 			"default": "base",
 			"type": "string",
 			"enum": ["shipping", "billing", "base"],
-			"enumNames": [
-				"Customer shipping address",
-				"Customer billing address",
-				"Shop base address"
-			]
+			"enumNames": ["Customer shipping address", "Customer billing address", "Shop base address"]
 		},
 		"shipping_tax_class": {
 			"title": "Shipping tax class",
@@ -503,6 +499,10 @@
 			"default": "itemized",
 			"enum": ["single", "itemized"],
 			"enumNames": ["As a single total", "Itemized"]
+		},
+		"locale": {
+			"title": "Language",
+			"type": "string"
 		}
 	}
 }
