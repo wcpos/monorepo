@@ -25,13 +25,13 @@
     ]
   },
   "devDependencies": {
-    "@transifex/cli": "^4.3.0",
+    "@transifex/cli": "^5.0.1",
     "@types/jest": "^29.2.4",
     "@wcpos/eslint-config": "*",
     "jest": "^29.3.1",
     "patch-package": "^6.5.0",
     "postinstall-postinstall": "^2.1.0",
-    "prettier": "2.8.0",
+    "prettier": "2.8.1",
     "ts-jest": "^29.0.3",
     "typescript": "^4.6.3"
   },
