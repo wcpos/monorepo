@@ -7,6 +7,7 @@ import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
 import useAuth from '../../contexts/auth';
+import { t } from '../../lib/translations';
 import { parseLinkHeader } from '../../lib/url';
 
 type SiteDocument = import('@wcpos/database/src').SiteDocument;
@@ -55,7 +56,7 @@ const useSiteConnect = () => {
 						 * For CORS requests only a few headers are allowed by default.
 						 *  Access-Control-Expose-Headers: Link is needed on the server side to get the link header
 						 */
-						throw Error('Link is not exposed');
+						throw Error(t('Link header is not exposed'));
 					}
 
 					const parsed = parseLinkHeader(link);
@@ -70,13 +71,13 @@ const useSiteConnect = () => {
 							const data = get(res, 'data') as WpJsonResponse;
 							const namespaces = get(data, 'namespaces');
 							if (!namespaces) {
-								throw Error('WordPress API not found');
+								throw Error(t('WordPress API not found'));
 							}
 							if (!namespaces.includes(wcNamespace)) {
-								throw Error('WooCommerce API not found');
+								throw Error(t('WooCommerce API not found'));
 							}
 							if (!namespaces.includes(wcposNamespace)) {
-								throw Error('WooCommerce POS API not found');
+								throw Error(t('WooCommerce POS API not found'));
 							}
 							return {
 								...data,
@@ -86,7 +87,7 @@ const useSiteConnect = () => {
 							};
 						});
 					}
-					throw Error('Site does not seem to be a WordPress site');
+					throw Error(t('Site does not seem to be a WordPress site'));
 				})
 				.catch((err) => {
 					setError(err.message);

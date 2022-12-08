@@ -7,6 +7,7 @@ import Pill from '@wcpos/components/src/pill';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 
 import useAuth from '../../contexts/auth';
+import { t } from '../../lib/translations';
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
@@ -78,7 +79,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 			</Pill>
 
 			<Dialog ref={dialogRef} onClose={handleUserRemove}>
-				Remove logged in user?
+				{t('Remove user?')}
 			</Dialog>
 		</>
 	);

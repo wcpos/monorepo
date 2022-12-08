@@ -1,10 +1,13 @@
 import * as React from 'react';
+
 import Avatar from '@wcpos/components/src/avatar';
-import Text from '@wcpos/components/src/text';
-import Icon from '@wcpos/components/src/icon';
-import Dialog, { useDialog } from '@wcpos/components/src/dialog';
 import Box from '@wcpos/components/src/box';
+import Dialog, { useDialog } from '@wcpos/components/src/dialog';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Icon from '@wcpos/components/src/icon';
+import Text from '@wcpos/components/src/text';
+
+import { t } from '../../lib/translations';
 import WpUsers from './wp-users';
 
 type SiteDocument = import('@wcpos/database').SiteDocument;
@@ -65,7 +68,7 @@ const Site = ({ site, user, first }: SiteProps) => {
 			</Box>
 
 			<Dialog ref={dialogRef} onClose={handleRemoveSite}>
-				Remove store and associated users?
+				{t('Remove store and associated users?')}
 			</Dialog>
 		</>
 	);

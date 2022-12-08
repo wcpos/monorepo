@@ -8,6 +8,7 @@ import Button from '@wcpos/components/src/button';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
 
+import { t } from '../../lib/translations';
 import WpUser from './wp-user';
 
 interface WpUserProps {
@@ -21,10 +22,10 @@ const WpUsers = ({ site }: WpUserProps) => {
 	return (
 		<>
 			<Box horizontal align="center" space="medium">
-				<Text>Logged in users</Text>
+				<Text>{t('Logged in users')}</Text>
 				<Button
 					size="small"
-					title="Add new user"
+					title={t('Add new user')}
 					type="secondary"
 					background="outline"
 					onPress={() => navigation.navigate('Login', { siteID: site.localID })}

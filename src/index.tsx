@@ -13,7 +13,6 @@ import getTheme from '@wcpos/themes';
 
 import { AuthProvider } from './contexts/auth';
 import { StoreProvider } from './contexts/store';
-import { translationsResource } from './lib/translations';
 import RootError from './root-error';
 import RootNavigator from './screens';
 
@@ -41,7 +40,7 @@ const App = () => {
 		<ErrorBoundary FallbackComponent={RootError}>
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<GestureHandlerRootView style={{ flex: 1 }}>
-					<AuthProvider initialProps={{ ...initialProps, translationsResource }}>
+					<AuthProvider initialProps={initialProps}>
 						<StoreProvider>
 							<ThemeProvider theme={theme}>
 								<ErrorBoundary>

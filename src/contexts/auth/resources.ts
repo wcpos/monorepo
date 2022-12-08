@@ -28,6 +28,7 @@ const user$ = userDB$.pipe(
 		log.silly('userDB Collections', userDB.collections);
 		return !!userDB;
 	}),
+
 	/**
 	 *
 	 */
@@ -42,7 +43,7 @@ const user$ = userDB$.pipe(
 
 				if (!userID) {
 					/**
-					 * @TODO - what if current userID bu there is a User in the DB?
+					 * @TODO - what if current userID but there is a User in the DB?
 					 */
 					userDB.users
 						.insert({
@@ -80,6 +81,11 @@ const user$ = userDB$.pipe(
 			 */
 			filter((user) => {
 				log.silly('user', user);
+				if (!user) {
+					// @TODO - what if no user?
+					// delete and start again?
+					userDB.upsertLocal('current', null);
+				}
 				return !!user;
 			})
 		)

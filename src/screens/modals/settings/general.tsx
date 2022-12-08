@@ -20,6 +20,7 @@ export const GeneralSettings = () => {
 			...store?.collection.schema.jsonSchema,
 			properties: pick(store?.collection.schema.jsonSchema.properties, [
 				'name',
+				'locale',
 				// 'store_address',
 				// 'store_address_2',
 				// 'store_city',

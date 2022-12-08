@@ -3,10 +3,13 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 
-import { storeDBPromise } from '@wcpos/database/src/stores-db';
+import { userDBPromise } from '@wcpos/database/src/users-db';
 import log from '@wcpos/utils/src/logger';
 
+// import useLanguage from '../../hooks/use-language';
+import { t, tx } from '../../lib/translations';
 import { userDBResource, userResource, selectedResource } from './resources';
 
 export const AuthContext = React.createContext<any>(null);
@@ -16,6 +19,19 @@ interface AuthProviderProps {
 	initialProps: import('../../types').InitialProps;
 }
 
+const Language = ({ children, languageResource }) => {
+	const translations = useObservableSuspense(languageResource);
+
+	return <>{children}</>;
+};
+
+const useSystemLocale = () => {
+	// this works in web and electron, may be better way in electron
+	return (
+		(navigator.languages && navigator.languages[0]) || navigator.language || navigator.userLanguage
+	);
+};
+
 /**
  *
  */
@@ -23,7 +39,37 @@ export const AuthProvider = ({ children, initialProps }: AuthProviderProps) => {
 	const userDB = useObservableSuspense(userDBResource);
 	const user = useObservableSuspense(userResource);
 	const { site, wpCredentials, store } = useObservableSuspense(selectedResource);
-	useObservableSuspense(initialProps.translationsResource);
+	const systemLocale = useSystemLocale();
+
+	const languageResource = React.useMemo(() => {
+		const locale$ = store?.locale$ || user.locale$;
+
+		return new ObservableResource(
+			locale$.pipe(
+				switchMap((locale) => {
+					return userDBPromise().then((userDB) =>
+						userDB.getLocal('translations').then((translations) => {
+							const localeCode = locale || systemLocale;
+
+							if (translations?.get(localeCode)) {
+								tx.cache.update(localeCode, translations?.get(localeCode), true);
+							}
+
+							return tx.setCurrentLocale(localeCode).catch((err) => {
+								/**
+								 * @TODO - little hack here to go back to original if there is an error
+								 */
+								if (localeCode !== tx.getCurrentLocale()) {
+									tx.setCurrentLocale('');
+								}
+								log.error(err);
+							});
+						})
+					);
+				})
+			)
+		);
+	}, [store?.locale$, user.locale$, systemLocale]);
 
 	/**
 	 *
@@ -162,5 +208,9 @@ export const AuthProvider = ({ children, initialProps }: AuthProviderProps) => {
 		};
 	}, [userDB, login, logout, site, store, user, wpCredentials]);
 
-	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+	return (
+		<AuthContext.Provider value={value}>
+			<Language languageResource={languageResource}>{children}</Language>
+		</AuthContext.Provider>
+	);
 };

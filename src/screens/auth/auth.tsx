@@ -11,6 +11,7 @@ import TextInput from '@wcpos/components/src/textinput';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
+import { t } from '../../lib/translations';
 import Platform from '../../utils/platform';
 import Sites from './sites';
 import useSiteConnect from './use-site-connect';
@@ -66,9 +67,9 @@ const Auth = () => {
 					>
 						<Box>
 							<TextInput
-								label="Enter the URL of your WooCommerce store:"
+								label={t('Enter the URL of your WooCommerce store') + ':'}
 								prefix="https://"
-								action={{ label: 'Connect', action: onConnect }}
+								action={{ label: t('Connect'), action: onConnect }}
 								type="url"
 								clearable
 								error={error}
@@ -83,7 +84,7 @@ const Auth = () => {
 					</ErrorBoundary>
 					<Box>
 						<Button
-							title="Enter Demo Store"
+							title={t('Enter Demo Store')}
 							background="clear"
 							size="small"
 							type="secondary"
