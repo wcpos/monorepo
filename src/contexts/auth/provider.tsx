@@ -10,6 +10,7 @@ import log from '@wcpos/utils/src/logger';
 
 // import useLanguage from '../../hooks/use-language';
 import { t, tx } from '../../lib/translations';
+import locales from '../../lib/translations/locales';
 import { userDBResource, userResource, selectedResource } from './resources';
 
 export const AuthContext = React.createContext<any>(null);
@@ -20,16 +21,46 @@ interface AuthProviderProps {
 }
 
 const Language = ({ children, languageResource }) => {
-	const translations = useObservableSuspense(languageResource);
+	// const [oldLocale, setLocale] = React.useState<string>('');
+	const locale = useObservableSuspense(languageResource);
+	log.debug('locale: ' + locale);
+
+	/**
+	 * @TODO - I want to re-render the app when locale changes
+	 * There is a gap in my understanding, why doesn't this re-render the entire app?
+	 */
+	// React.useEffect(() => {
+	// 	if (oldLocale !== locale) {
+	// 		setLocale(locale);
+	// 	}
+	// }, [locale, oldLocale]);
 
 	return <>{children}</>;
 };
 
+/**
+ * A little map function to convert system locales to Transifex locales
+ */
+const getLocaleFromCode = (code: string) => {
+	let lang = locales[code.toLowerCase()];
+
+	// try the country code only, eg: es-ar -> es
+	if (!lang) {
+		lang = locales[code.split('-')[0]];
+	}
+
+	// default to english
+	if (!lang) {
+		lang = locales['en'];
+	}
+
+	return lang.locale;
+};
+
 const useSystemLocale = () => {
-	// this works in web and electron, may be better way in electron
-	return (
-		(navigator.languages && navigator.languages[0]) || navigator.language || navigator.userLanguage
-	);
+	const code =
+		(navigator.languages && navigator.languages[0]) || navigator.language || navigator.userLanguage;
+	return getLocaleFromCode(code);
 };
 
 /**
@@ -41,6 +72,9 @@ export const AuthProvider = ({ children, initialProps }: AuthProviderProps) => {
 	const { site, wpCredentials, store } = useObservableSuspense(selectedResource);
 	const systemLocale = useSystemLocale();
 
+	/**
+	 *
+	 */
 	const languageResource = React.useMemo(() => {
 		const locale$ = store?.locale$ || user.locale$;
 
@@ -55,15 +89,20 @@ export const AuthProvider = ({ children, initialProps }: AuthProviderProps) => {
 								tx.cache.update(localeCode, translations?.get(localeCode), true);
 							}
 
-							return tx.setCurrentLocale(localeCode).catch((err) => {
-								/**
-								 * @TODO - little hack here to go back to original if there is an error
-								 */
-								if (localeCode !== tx.getCurrentLocale()) {
-									tx.setCurrentLocale('');
-								}
-								log.error(err);
-							});
+							return tx
+								.setCurrentLocale(localeCode)
+								.catch((err) => {
+									/**
+									 * @TODO - little hack here to go back to original if there is an error
+									 */
+									if (localeCode !== tx.getCurrentLocale()) {
+										tx.setCurrentLocale('');
+									}
+									log.error(err);
+								})
+								.then(() => {
+									return localeCode;
+								});
 						})
 					);
 				})

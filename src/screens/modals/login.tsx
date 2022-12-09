@@ -11,6 +11,7 @@ import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
 import useAuth from '../../contexts/auth';
+import { t } from '../../lib/translations';
 
 const Login = ({ route }) => {
 	const siteID = get(route, ['params', 'siteID']);
@@ -68,21 +69,21 @@ const Login = ({ route }) => {
 		<Modal
 			alwaysOpen
 			withPortal={false}
-			title="Login"
+			title={t('Login')}
 			onClose={() => navigation.dispatch(StackActions.pop(1))}
-			primaryAction={{ label: 'Login', action: handleLogin }}
-			secondaryActions={[{ label: 'Cancel', action: () => navigation.goBack() }]}
+			primaryAction={{ label: t('Login'), action: handleLogin }}
+			secondaryActions={[{ label: t('Cancel'), action: () => navigation.goBack() }]}
 		>
 			<Box space="medium">
 				<TextInput
-					label="Username"
+					label={t('Username')}
 					placeholder="username"
 					value={username}
 					onChange={setUsername}
 					type="username"
 				/>
 				<TextInput
-					label="Password"
+					label={t('Password')}
 					placeholder="password"
 					value={password}
 					onChange={setPassword}
