@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/hooks",
-	"version": "1.0.52",
+	"version": "1.0.53",
 	"description": "Hooks for WooCommerce POS",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/hooks#readme",
@@ -20,7 +20,7 @@
 	},
 	"dependencies": {
 		"@react-native-community/netinfo": "9.3.7",
-		"@react-navigation/native": "6.1.0",
+		"@react-navigation/native": "6.1.1",
 		"@wcpos/components": "*",
 		"axios": "0.27.2",
 		"js-base64": "^3.7.3",
