@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.50",
+	"version": "1.0.51",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -25,7 +25,7 @@
 		"observable-hooks": "4.2.1",
 		"random-token": "^0.0.8",
 		"react": "18.1.0",
-		"rxdb": "13.14.0",
+		"rxdb": "13.15.2",
 		"rxjs": "7.6.0"
 	},
 	"devDependencies": {
