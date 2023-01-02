@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { find } from 'lodash';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 
 import log from '@wcpos/utils/src/logger';
@@ -17,42 +18,23 @@ function wait(milliseconds: number) {
 export const useReplication = ({ collection }) => {
 	const http = useRestHttpClient();
 	const { site } = useAuth();
-	const runAudit = React.useRef(true);
+	// const runAudit = React.useRef(true);
 
 	const replicationStatePromise = React.useMemo(() => {
 		/**
-		 *
+		 * Payment gateways endpoint always returns all gateways
+		 * so we need to do the audit and replicate all in one
 		 */
-		const replicate = async (lastCheckpoint, batchSize) => {
+		const auditAndReplicate = async () => {
 			/**
 			 * This is the data replication
 			 * we need to delay for a little while to allow the collection count to be updated
 			 */
-			await wait(1000);
+			// await wait(1000);
 			const pullRemoteIds = collection.pullRemoteIds$.getValue();
-			const syncedDocs = collection.syncedIds$.getValue();
+			// const syncedDocs = collection.syncedIds$.getValue();
 
-			if (pullRemoteIds.length === 0) {
-				runAudit.current = true;
-				return {
-					documents: [],
-					checkpoint: null,
-				};
-			}
-
-			const params = {
-				order: 'desc',
-				orderby: 'date',
-			};
-
-			// choose the smallest array, max of 1000
-			if (syncedDocs.length > pullRemoteIds.length) {
-				params.include = pullRemoteIds.slice(0, 1000).join(',');
-			} else {
-				params.exclude = syncedDocs.slice(0, 1000).join(',');
-			}
-
-			const response = await http.get(collection.name, { params }).catch((error) => {
+			const response = await http.get(collection.name).catch((error) => {
 				log.error(error);
 			});
 
@@ -63,41 +45,17 @@ export const useReplication = ({ collection }) => {
 				throw Error('No response from server');
 			}
 
-			return {
-				documents: response?.data || [],
-				checkpoint: null,
-			};
-		};
+			const data = response.data;
 
-		/**
-		 *
-		 */
-		const audit = async () => {
-			const response = await http
-				.get(collection.name, {
-					params: { fields: ['id', 'title'], posts_per_page: -1 },
-				})
-				.catch((error) => {
-					log.error(error);
+			pullRemoteIds
+				.filter((id: string) => !find(data, { id }))
+				.map((d) => {
+					debugger;
+					d._deleted = true;
 				});
 
-			/**
-			 * What to do when server is unreachable?
-			 */
-			if (!response?.data) {
-				throw Error('No response from server');
-			}
-
-			const documents = await collection.auditRestApiIds(response?.data);
-			// runAudit.current = false;
-
-			/** @TODO - hack */
-			// if (documents.length === 0) {
-			// 	return replicate(null, 10);
-			// }
-
 			return {
-				documents,
+				documents: data,
 				checkpoint: null,
 			};
 		};
@@ -111,9 +69,8 @@ export const useReplication = ({ collection }) => {
 			replicationIdentifier: `wc-rest-replication-to-${site.wc_api_url}/${collection.name}`,
 			// retryTime: 1000000000,
 			pull: {
-				async handler(lastCheckpoint, batchSize) {
-					// return runAudit.current ? audit() : replicate(lastCheckpoint, batchSize);
-					return audit();
+				async handler() {
+					return auditAndReplicate();
 				},
 				batchSize: 10,
 				modifier: async (doc) => {

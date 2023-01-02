@@ -3,10 +3,12 @@ import * as React from 'react';
 import _get from 'lodash/get';
 import _set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
+import { switchMap, map, debounceTime, tap, distinctUntilChanged } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
 import useStore from '../../contexts/store';
+import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import { useReplication } from './use-replication';
 
 type PaymentGatewayDocument =
@@ -21,15 +23,15 @@ export const GatewaysContext = React.createContext<{
 
 interface GatewaysProviderProviderProps {
 	children: React.ReactNode;
-	// initialQuery: QueryState;
+	initialQuery: QueryState;
 	// ui?: import('../../contexts/ui').UIDocument;
 }
 
-const GatewaysProvider = ({ children }: GatewaysProviderProviderProps) => {
+const GatewaysProvider = ({ children, initialQuery }: GatewaysProviderProviderProps) => {
 	log.debug('render gateways provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.payment_gateways;
-	// const { query$, setQuery } = useQuery(initialQuery);
+	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplication({ collection });
 
 	/**
@@ -47,13 +49,19 @@ const GatewaysProvider = ({ children }: GatewaysProviderProviderProps) => {
 	 *
 	 */
 	const value = React.useMemo(() => {
-		const RxQuery = collection.find();
+		const gateways$ = query$.pipe(
+			switchMap((q) => {
+				const RxQuery = collection.find({ selector: q.filters });
+
+				return RxQuery.$;
+			})
+		);
 
 		return {
-			resource: new ObservableResource(RxQuery.$),
+			resource: new ObservableResource(gateways$),
 			replicationState,
 		};
-	}, [collection, replicationState]);
+	}, [collection, query$, replicationState]);
 
 	return <GatewaysContext.Provider value={value}>{children}</GatewaysContext.Provider>;
 };

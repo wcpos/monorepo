@@ -34,7 +34,7 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 
 				// const parsed = order.collection.parseRestResponse(result.data);
 
-				order.atomicPatch(result.data);
+				order.atomicPatch({ ...result.data, _id: '64' });
 			} else {
 				await order.collection.upsertChildren(result.data);
 				const newOrder = await order.collection.insert(result.data);
