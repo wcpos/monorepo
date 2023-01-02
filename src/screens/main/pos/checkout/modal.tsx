@@ -39,7 +39,7 @@ export const CheckoutModal = ({ route, navigation }: CheckoutModalProps) => {
 			}}
 		>
 			<OrdersProvider initialQuery={{ filters: { _id } }}>
-				<GatewaysProvider>
+				<GatewaysProvider initialQuery={{ filters: { enabled: true } }}>
 					<CheckoutTabs ref={checkoutRef} />
 				</GatewaysProvider>
 			</OrdersProvider>

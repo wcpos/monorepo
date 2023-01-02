@@ -39,33 +39,39 @@ const PayButton = ({ order }: PayModalProps) => {
 		});
 
 		if (result.status === 201 || result.status === 200) {
-			if (order.id) {
-				await order.collection.upsertChildren(result.data);
-
-				// const parsed = order.collection.parseRestResponse(result.data);
-
-				order.atomicPatch(result.data);
-				return order;
-			}
+			// @TODO - this should be part of the parseRestResponse
 			await order.collection.upsertChildren(result.data);
-			const newOrder = await order.collection.insert(result.data);
-			// switcharoo
-			await order.remove();
-			setCurrentOrder(newOrder);
-			return newOrder;
+			return order.atomicPatch(result.data);
+			// if (order.id) {
+			// 	await order.collection.upsertChildren(result.data);
+
+			// 	// const parsed = order.collection.parseRestResponse(result.data);
+
+			// 	order.atomicPatch(result.data);
+			// 	return order;
+			// }
+			// await order.collection.upsertChildren(result.data);
+			// const newOrder = await order.collection.insert(result.data);
+			// // switcharoo
+			// await order.remove();
+			// setCurrentOrder(newOrder);
+			// return newOrder;
 		}
-	}, [http, order, setCurrentOrder]);
+	}, [http, order]);
 
 	/**
 	 *
 	 */
 	const handlePay = React.useCallback(() => {
-		saveOrder().then((o) => {
-			if (o) {
-				navigation.navigate('Checkout', { _id: o._id });
-			}
-		});
-	}, [navigation, saveOrder]);
+		saveOrder();
+		navigation.navigate('Checkout', { _id: order._id });
+
+		// saveOrder().then((o) => {
+		// 	if (o) {
+		// 		navigation.navigate('Checkout', { _id: o._id });
+		// 	}
+		// });
+	}, [navigation, order._id, saveOrder]);
 
 	/**
 	 *
