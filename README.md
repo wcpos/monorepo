@@ -59,7 +59,29 @@ This monorepo contains all the code necessary to build the client applications. 
 
 ## 👷 Workflows
 
-Coming soon.
+Clone the monorepo repository, using the `recursive` flag will also clone the submodules.
+
+```sh
+> git clone --recursive https://github.com/wcpos/monorepo.git
+```
+
+Next install the Javascript dependencies using yarn:
+
+```sh
+> yarn install
+```
+
+To start the web, iOS and Android development build, use:
+
+```sh
+> yarn managed start
+```
+
+To start the electron (desktop) development build, use:
+
+```
+> yarn electron start
+```
 
 ## 🚀 How to use it
 
