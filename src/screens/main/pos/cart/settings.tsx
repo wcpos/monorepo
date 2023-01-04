@@ -19,12 +19,9 @@ interface POSProductSettingsProps {
  *
  */
 const schema = {
-	title: 'Product Table Settings',
+	title: 'Cart Table Settings',
 	type: 'object',
 	properties: {
-		showOutOfStock: {
-			type: 'boolean',
-		},
 		columns: {
 			// uniqueItems: false,
 			title: 'Table Columns',
@@ -91,34 +88,32 @@ export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 			// root level
 			if (!key) {
 				switch (label) {
-					case 'showOutOfStock':
-						return t('Show out-of-stock products');
 					default:
 						return label;
 				}
 			}
 
 			switch (key) {
-				case 'image':
-					return t('Image');
-				case 'name':
-					return t('Product');
-				case 'stock_quantity':
-					return t('Stock');
-				case 'sku':
-					return t('SKU');
-				case 'categories':
-					return t('Categories');
-				case 'tags':
-					return t('Tags');
-				case 'type':
-					return t('Type');
-				case 'price':
-					return t('Price');
-				case 'tax':
-					return t('Tax');
-				case 'actions':
-					return t('Actions');
+				// case 'image':
+				// 	return t('Image');
+				// case 'name':
+				// 	return t('Product');
+				// case 'stock_quantity':
+				// 	return t('Stock');
+				// case 'sku':
+				// 	return t('SKU');
+				// case 'categories':
+				// 	return t('Categories');
+				// case 'tags':
+				// 	return t('Tags');
+				// case 'type':
+				// 	return t('Type');
+				// case 'price':
+				// 	return t('Price');
+				// case 'tax':
+				// 	return t('Tax');
+				// case 'actions':
+				// 	return t('Actions');
 				default:
 					return t('No label found');
 			}
@@ -134,7 +129,7 @@ export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 			<Icon name="sliders" onPress={open} />
 			<Modal
 				ref={ref}
-				title="Product UI Settings"
+				title="Cart UI Settings"
 				// primaryAction={{ label: 'Save', action: close }}
 				// secondaryActions={[{ label: 'Restore Defaults', action: ui.reset, type: 'critical' }]}
 				primaryAction={{ label: 'Restore Defaults', action: ui.reset, type: 'critical' }}

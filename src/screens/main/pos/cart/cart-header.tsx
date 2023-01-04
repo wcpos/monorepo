@@ -10,8 +10,9 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import useStore from '../../../../contexts/store';
 import AddCustomer from '../../common/add-new-customer';
 import CustomerSelect from '../../common/customer-select';
-import UISettings from '../../common/ui-settings';
+// import UISettings from '../../common/ui-settings';
 import Customer from './customer';
+import Settings from './settings';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -76,7 +77,9 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 				</ErrorBoundary>
 			</Box>
 			<AddCustomer />
-			<UISettings ui={ui} />
+			<ErrorBoundary>
+				<Settings ui={ui} />
+			</ErrorBoundary>
 		</Box>
 	);
 };

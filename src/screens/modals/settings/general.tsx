@@ -1,9 +1,12 @@
 import * as React from 'react';
 
+import validator from '@rjsf/validator-ajv8';
 import { decode } from 'html-entities';
 import pick from 'lodash/pick';
+import { useObservableState } from 'observable-hooks';
 
-import Form from '@wcpos/react-native-jsonschema-form';
+// import Form from '@wcpos/react-native-jsonschema-form';
+import Form from '@wcpos/rjsf-native';
 
 import useAuth from '../../../contexts/auth';
 
@@ -11,6 +14,7 @@ const uiSchema = {};
 
 export const GeneralSettings = () => {
 	const { store } = useAuth();
+	const formData = useObservableState(store.$, store.toJSON());
 
 	/**
 	 *
@@ -46,8 +50,8 @@ export const GeneralSettings = () => {
 	 *
 	 */
 	const handleOnChange = React.useCallback(
-		(data) => {
-			store?.atomicPatch(data);
+		({ formData }) => {
+			store?.atomicPatch(formData);
 		},
 		[store]
 	);
@@ -56,6 +60,12 @@ export const GeneralSettings = () => {
 	 *
 	 */
 	return (
-		<Form schema={schema} uiSchema={uiSchema} formData={store.toJSON()} onChange={handleOnChange} />
+		<Form
+			schema={schema}
+			uiSchema={uiSchema}
+			formData={formData}
+			onChange={handleOnChange}
+			validator={validator}
+		/>
 	);
 };
