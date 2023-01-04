@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.52",
+	"version": "1.0.53",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -19,7 +19,7 @@
 		"generate-interfaces:watch": "generate-interfaces -w \"./src/**/schema.json\""
 	},
 	"dependencies": {
-		"ajv": "8.11.2",
+		"ajv": "8.12.0",
 		"expo-sqlite": "~11.0.0",
 		"fast-text-encoding": "^1.0.6",
 		"observable-hooks": "4.2.1",
