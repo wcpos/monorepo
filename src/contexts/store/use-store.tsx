@@ -7,7 +7,7 @@ import { StoreContext } from './provider';
 export const useStore = () => {
 	const context = React.useContext(StoreContext);
 	if (!context) {
-		throw new Error(`useStore must be called within StoreContext`);
+		throw new Error(`useStore must be called within StoreProvider`);
 	}
 
 	const storeDB = useObservableSuspense(context.storeDBResource);

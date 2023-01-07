@@ -12,6 +12,7 @@ import { SnackbarProvider } from '@wcpos/components/src/snackbar';
 import getTheme from '@wcpos/themes';
 
 import { AuthProvider } from './contexts/auth';
+import { LanguageProvider } from './contexts/language';
 import { StoreProvider } from './contexts/store';
 import RootError from './root-error';
 import RootNavigator from './screens';
@@ -41,20 +42,22 @@ const App = () => {
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<GestureHandlerRootView style={{ flex: 1 }}>
 					<AuthProvider initialProps={initialProps}>
-						<StoreProvider>
-							<ThemeProvider theme={theme}>
-								<ErrorBoundary>
-									<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-										<SnackbarProvider>
-											<Portal.Provider>
-												<RootNavigator initialProps={initialProps} />
-												<Portal.Manager />
-											</Portal.Provider>
-										</SnackbarProvider>
-									</SafeAreaProviderCompat>
-								</ErrorBoundary>
-							</ThemeProvider>
-						</StoreProvider>
+						<LanguageProvider>
+							<StoreProvider>
+								<ThemeProvider theme={theme}>
+									<ErrorBoundary>
+										<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
+											<SnackbarProvider>
+												<Portal.Provider>
+													<RootNavigator initialProps={initialProps} />
+													<Portal.Manager />
+												</Portal.Provider>
+											</SnackbarProvider>
+										</SafeAreaProviderCompat>
+									</ErrorBoundary>
+								</ThemeProvider>
+							</StoreProvider>
+						</LanguageProvider>
 					</AuthProvider>
 				</GestureHandlerRootView>
 			</React.Suspense>

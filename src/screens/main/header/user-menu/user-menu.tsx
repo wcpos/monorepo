@@ -22,10 +22,12 @@ export const UserMenu = () => {
 		<Dropdown
 			items={[
 				{
+					icon: 'gear',
 					label: 'Settings',
 					action: () => navigation.navigate('Settings'),
 				},
 				{
+					icon: 'arrowRightFromBracket',
 					label: 'Logout',
 					action: logout,
 					type: 'critical',

@@ -73,7 +73,7 @@ const Actions = ({ item: product }: Props) => {
 			<Dropdown
 				items={[
 					{ label: 'Show', action: open },
-					{ label: 'Sync', action: handleSync },
+					{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
 					{ label: 'Delete', action: dialogOpen, type: 'critical' },
 				]}
 			>

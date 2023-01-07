@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/core",
-	"version": "1.0.64",
+	"version": "1.0.65",
 	"description": "The core WooCommerce POS app",
 	"author": "kilbot <paul@kilbot.com>",
 	"license": "MIT",
@@ -36,7 +36,7 @@
 		"expo-barcode-scanner": "~12.1.0",
 		"expo-haptics": "~12.0.1",
 		"expo-linking": "~3.3.0",
-		"expo-modules-core": "1.1.0",
+		"expo-modules-core": "1.1.1",
 		"expo-sqlite": "~11.0.0",
 		"expo-status-bar": "~1.4.2",
 		"html-entities": "2.3.3",
