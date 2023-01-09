@@ -45,7 +45,9 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 		}
 	}, [http, order, setCurrentOrder]);
 
-	return <Button title={t('Save Order')} background="outline" onPress={saveOrder} />;
+	return (
+		<Button title={t('Save Order', { _tags: 'core' })} background="outline" onPress={saveOrder} />
+	);
 };
 
 export default SaveButton;

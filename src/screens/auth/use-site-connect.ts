@@ -56,7 +56,7 @@ const useSiteConnect = () => {
 						 * For CORS requests only a few headers are allowed by default.
 						 *  Access-Control-Expose-Headers: Link is needed on the server side to get the link header
 						 */
-						throw Error(t('Link header is not exposed'));
+						throw Error(t('Link header is not exposed', { _tags: 'core' }));
 					}
 
 					const parsed = parseLinkHeader(link);
@@ -71,13 +71,13 @@ const useSiteConnect = () => {
 							const data = get(res, 'data') as WpJsonResponse;
 							const namespaces = get(data, 'namespaces');
 							if (!namespaces) {
-								throw Error(t('WordPress API not found'));
+								throw Error(t('WordPress API not found', { _tags: 'core' }));
 							}
 							if (!namespaces.includes(wcNamespace)) {
-								throw Error(t('WooCommerce API not found'));
+								throw Error(t('WooCommerce API not found', { _tags: 'core' }));
 							}
 							if (!namespaces.includes(wcposNamespace)) {
-								throw Error(t('WooCommerce POS API not found'));
+								throw Error(t('WooCommerce POS API not found', { _tags: 'core' }));
 							}
 							return {
 								...data,
@@ -87,7 +87,7 @@ const useSiteConnect = () => {
 							};
 						});
 					}
-					throw Error(t('Site does not seem to be a WordPress site'));
+					throw Error(t('Site does not seem to be a WordPress site', { _tags: 'core' }));
 				})
 				.catch((err) => {
 					setError(err.message);

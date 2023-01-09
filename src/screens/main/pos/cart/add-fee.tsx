@@ -20,7 +20,7 @@ const AddFee = ({ order }: AddFeeProps) => {
 	return (
 		<Box horizontal space="small" padding="small" align="center">
 			<Box fill>
-				<Text>{t('Add Fee')}</Text>
+				<Text>{t('Add Fee', { _tags: 'core' })}</Text>
 			</Box>
 			<Box>
 				<Icon name="circlePlus" onPress={handleAddFee} />

@@ -61,25 +61,25 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 	const headerLabel = React.useCallback(({ column }) => {
 		switch (column.key) {
 			case 'status':
-				return t('Status');
+				return t('Status', { _tags: 'core' });
 			case 'number':
-				return t('Order Number');
+				return t('Order Number', { _tags: 'core' });
 			case 'customer':
-				return t('Customer');
+				return t('Customer', { _tags: 'core' });
 			case 'billing':
-				return t('Billing Address');
+				return t('Billing Address', { _tags: 'core' });
 			case 'shipping':
-				return t('Shipping Address');
+				return t('Shipping Address', { _tags: 'core' });
 			case 'customer_note':
-				return t('Note');
+				return t('Note', { _tags: 'core' });
 			case 'date_created':
-				return t('Date Created');
+				return t('Date Created', { _tags: 'core' });
 			case 'date_completed':
-				return t('Date Completed');
+				return t('Date Completed', { _tags: 'core' });
 			case 'date_modified':
-				return t('Date Modified');
+				return t('Date Modified', { _tags: 'core' });
 			case 'total':
-				return t('Total');
+				return t('Total', { _tags: 'core' });
 			default:
 				return column.key;
 		}

@@ -69,21 +69,23 @@ const Login = ({ route }) => {
 		<Modal
 			alwaysOpen
 			withPortal={false}
-			title={t('Login')}
+			title={t('Login', { _tags: 'core' })}
 			onClose={() => navigation.dispatch(StackActions.pop(1))}
-			primaryAction={{ label: t('Login'), action: handleLogin }}
-			secondaryActions={[{ label: t('Cancel'), action: () => navigation.goBack() }]}
+			primaryAction={{ label: t('Login', { _tags: 'core' }), action: handleLogin }}
+			secondaryActions={[
+				{ label: t('Cancel', { _tags: 'core' }), action: () => navigation.goBack() },
+			]}
 		>
 			<Box space="medium">
 				<TextInput
-					label={t('Username')}
+					label={t('Username', { _tags: 'core' })}
 					placeholder="username"
 					value={username}
 					onChange={setUsername}
 					type="username"
 				/>
 				<TextInput
-					label={t('Password')}
+					label={t('Password', { _tags: 'core' })}
 					placeholder="password"
 					value={password}
 					onChange={setPassword}

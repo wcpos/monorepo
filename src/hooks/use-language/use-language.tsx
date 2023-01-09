@@ -17,7 +17,7 @@ export const useLanguage = ({ userLanguageResource, storeLanguageResource }: Pro
 			log.silly('es translations loaded');
 		})
 		.then(() => {
-			log.silly(t('Menu'));
+			log.silly(t('Menu', { _tags: 'core' }));
 		})
 		.catch((err) => {
 			log.error(err);

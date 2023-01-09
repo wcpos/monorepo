@@ -27,7 +27,7 @@ const HeaderLeft = () => {
 			return (
 				<Button
 					onPress={openDrawer}
-					title={t('Menu')}
+					title={t('Menu', { _tags: 'core' })}
 					accessoryLeft={<Icon name="bars" type="inverse" />}
 					type="headerBackground"
 					style={{ padding: 0 }}

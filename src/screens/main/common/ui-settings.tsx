@@ -74,7 +74,7 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 
 			switch (key) {
 				default:
-					return t('No label found');
+					return t('No label found', { _tags: 'core' });
 			}
 		},
 		[columns]

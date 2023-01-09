@@ -79,7 +79,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 			</Pill>
 
 			<Dialog ref={dialogRef} onClose={handleUserRemove}>
-				{t('Remove user?')}
+				{t('Remove user?', { _tags: 'core' })}
 			</Dialog>
 		</>
 	);

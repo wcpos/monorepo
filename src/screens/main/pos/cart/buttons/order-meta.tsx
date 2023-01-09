@@ -51,18 +51,21 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 	 */
 	const uiSchema = React.useMemo(
 		() => ({
-			billing: { 'ui:collapsible': 'closed', 'ui:title': t('Billing Address') },
-			shipping: { 'ui:collapsible': 'closed', 'ui:title': t('Shipping Address') },
-			tax_lines: { 'ui:collapsible': 'closed', 'ui:title': t('Taxes') },
-			meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data') },
+			billing: { 'ui:collapsible': 'closed', 'ui:title': t('Billing Address', { _tags: 'core' }) },
+			shipping: {
+				'ui:collapsible': 'closed',
+				'ui:title': t('Shipping Address', { _tags: 'core' }),
+			},
+			tax_lines: { 'ui:collapsible': 'closed', 'ui:title': t('Taxes', { _tags: 'core' }) },
+			meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data', { _tags: 'core' }) },
 		}),
 		[]
 	);
 
 	return (
 		<>
-			<Button title={t('Order Meta')} background="outline" onPress={open} />
-			<Modal ref={ref} title={t('Edit Order')}>
+			<Button title={t('Order Meta', { _tags: 'core' })} background="outline" onPress={open} />
+			<Modal ref={ref} title={t('Edit Order', { _tags: 'core' })}>
 				<EditModal item={order} schema={schema} uiSchema={uiSchema} />
 			</Modal>
 		</>

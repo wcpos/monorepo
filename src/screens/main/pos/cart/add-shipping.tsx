@@ -20,7 +20,7 @@ const AddShipping = ({ order }: AddShippingProps) => {
 	return (
 		<Box horizontal space="small" padding="small" align="center">
 			<Box fill>
-				<Text>{t('Add Shipping')}</Text>
+				<Text>{t('Add Shipping', { _tags: 'core' })}</Text>
 			</Box>
 			<Box>
 				<Icon name="circlePlus" onPress={handleAddShipping} />

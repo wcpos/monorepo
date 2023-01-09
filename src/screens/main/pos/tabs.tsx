@@ -98,12 +98,18 @@ const POSTabs = () => {
 			<Tab.Screen
 				name="Products"
 				component={Products}
-				options={{ title: `${t('Products')} - ${storeName}`, label: t('Products') }}
+				options={{
+					title: `${t('Products', { _tags: 'core' })} - ${storeName}`,
+					label: t('Products', { _tags: 'core' }),
+				}}
 			/>
 			<Tab.Screen
 				name="Cart"
 				component={OpenOrders}
-				options={{ title: `${t('Cart')} - ${storeName}`, label: t('Cart') }}
+				options={{
+					title: `${t('Cart', { _tags: 'core' })} - ${storeName}`,
+					label: t('Cart', { _tags: 'core' }),
+				}}
 			/>
 		</Tab.Navigator>
 	);

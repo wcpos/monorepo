@@ -68,7 +68,7 @@ const Site = ({ site, user, first }: SiteProps) => {
 			</Box>
 
 			<Dialog ref={dialogRef} onClose={handleRemoveSite}>
-				{t('Remove store and associated users?')}
+				{t('Remove store and associated users?', { _tags: 'core' })}
 			</Dialog>
 		</>
 	);

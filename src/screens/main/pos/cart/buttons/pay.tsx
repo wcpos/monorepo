@@ -80,7 +80,7 @@ const PayButton = ({ order }: PayModalProps) => {
 		<Button
 			fill
 			size="large"
-			title={t('Checkout {order_total}', { order_total: format(total || 0) })}
+			title={t('Checkout {order_total}', { order_total: format(total || 0), _tags: 'core' })}
 			onPress={handlePay}
 			type="success"
 			style={{

@@ -67,9 +67,9 @@ const Auth = () => {
 					>
 						<Box>
 							<TextInput
-								label={t('Enter the URL of your WooCommerce store') + ':'}
+								label={t('Enter the URL of your WooCommerce store', { _tags: 'core' }) + ':'}
 								prefix="https://"
-								action={{ label: t('Connect'), action: onConnect }}
+								action={{ label: t('Connect', { _tags: 'core' }), action: onConnect }}
 								type="url"
 								clearable
 								error={error}
@@ -84,7 +84,7 @@ const Auth = () => {
 					</ErrorBoundary>
 					<Box>
 						<Button
-							title={t('Enter Demo Store')}
+							title={t('Enter Demo Store', { _tags: 'core' })}
 							background="clear"
 							size="small"
 							type="secondary"

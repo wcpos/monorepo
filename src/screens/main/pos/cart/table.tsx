@@ -55,15 +55,15 @@ const CartTable = ({ ui }: ICartTableProps) => {
 	const headerLabel = React.useCallback(({ column }) => {
 		switch (column.key) {
 			case 'quantity':
-				return t('Qty');
+				return t('Qty', { _tags: 'core' });
 			case 'name':
-				return t('Name');
+				return t('Name', { _tags: 'core' });
 			case 'price':
-				return t('Price');
+				return t('Price', { _tags: 'core' });
 			case 'total':
-				return t('Total');
+				return t('Total', { _tags: 'core' });
 			case 'subtotal':
-				return t('Subtotal');
+				return t('Subtotal', { _tags: 'core' });
 			default:
 				return column.key;
 		}

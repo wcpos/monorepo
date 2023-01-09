@@ -59,19 +59,19 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	const headerLabel = React.useCallback(({ column }) => {
 		switch (column.key) {
 			case 'name':
-				return t('Products', { _context: 'Table header' });
+				return t('Products', { _tags: 'core', _context: 'Table header' });
 			case 'sku':
-				return t('SKU');
+				return t('SKU', { _tags: 'core' });
 			case 'type':
-				return t('Type');
+				return t('Type', { _tags: 'core' });
 			case 'stock_quantity':
-				return t('Stock');
+				return t('Stock', { _tags: 'core' });
 			case 'price':
-				return t('Price');
+				return t('Price', { _tags: 'core' });
 			case 'regular_price':
-				return t('Regular Price');
+				return t('Regular Price', { _tags: 'core' });
 			case 'sale_price':
-				return t('Sale Price');
+				return t('Sale Price', { _tags: 'core' });
 			default:
 				return column.key;
 		}

@@ -56,17 +56,17 @@ export const ReceiptModal = ({ route, navigation }: ReceiptModalProps) => {
 		<Modal
 			withPortal={false}
 			alwaysOpen
-			title={t('Receipt')}
+			title={t('Receipt', { _tags: 'core' })}
 			size="large"
 			onClose={() => navigation.dispatch(StackActions.pop(1))}
 			style={{ height: '100%' }}
 			primaryAction={{
-				label: t('Print Receipt'),
+				label: t('Print Receipt', { _tags: 'core' }),
 				action: handlePrint,
 			}}
 			secondaryActions={[
 				{
-					label: t('Email Receipt'),
+					label: t('Email Receipt', { _tags: 'core' }),
 					action: () => {
 						seShowEmailModal(true);
 					},

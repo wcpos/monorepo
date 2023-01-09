@@ -22,10 +22,10 @@ const WpUsers = ({ site }: WpUserProps) => {
 	return (
 		<>
 			<Box horizontal align="center" space="medium">
-				<Text>{t('Logged in users')}</Text>
+				<Text>{t('Logged in users', { _tags: 'core' })}</Text>
 				<Button
 					size="small"
-					title={t('Add new user')}
+					title={t('Add new user', { _tags: 'core' })}
 					type="secondary"
 					background="outline"
 					onPress={() => navigation.navigate('Login', { siteID: site.localID })}

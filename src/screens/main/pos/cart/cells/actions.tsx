@@ -33,9 +33,9 @@ export const Actions = ({ item }: ActionProps) => {
 		await currentOrder?.removeCartLine(item);
 
 		addSnackbar({
-			message: t('{name} removed from cart', { name }),
+			message: t('{name} removed from cart', { name, _tags: 'core' }),
 			dismissable: true,
-			action: { label: t('Undo'), action: undoRemove },
+			action: { label: t('Undo', { _tags: 'core' }), action: undoRemove },
 		});
 	}, [addSnackbar, currentOrder, item, undoRemove]);
 

@@ -5,7 +5,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
-import { T } from '../../../../../lib/translations';
+import { t } from '../../../../../lib/translations';
 
 interface Props {
 	product: import('@wcpos/database').ProductDocument;
@@ -31,8 +31,6 @@ export const StockQuantity = ({ product, size }: Props) => {
 	}
 
 	return (
-		<Text size={size}>
-			<T _str="{quantity} in stock" quantity={stockQuantity} />
-		</Text>
+		<Text size={size}>{t('{quantity} in stock', { quantity: stockQuantity, _tags: 'core' })}</Text>
 	);
 };

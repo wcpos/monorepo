@@ -57,15 +57,15 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 	const headerLabel = React.useCallback(({ column }) => {
 		switch (column.key) {
 			case 'name':
-				return t('Products');
+				return t('Products', { _tags: 'core' });
 			case 'sku':
-				return t('SKU');
+				return t('SKU', { _tags: 'core' });
 			case 'type':
-				return t('Type');
+				return t('Type', { _tags: 'core' });
 			case 'stock_quantity':
-				return t('Stock');
+				return t('Stock', { _tags: 'core' });
 			case 'price':
-				return t('Price');
+				return t('Price', { _tags: 'core' });
 			default:
 				return column.key;
 		}

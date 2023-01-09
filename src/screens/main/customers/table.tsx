@@ -42,21 +42,21 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 	const headerLabel = React.useCallback(({ column }) => {
 		switch (column.key) {
 			case 'avatar_url':
-				return t('Image');
+				return t('Image', { _tags: 'core' });
 			case 'first_name':
-				return t('First Name');
+				return t('First Name', { _tags: 'core' });
 			case 'last_name':
-				return t('Last Name');
+				return t('Last Name', { _tags: 'core' });
 			case 'email':
-				return t('Email');
+				return t('Email', { _tags: 'core' });
 			case 'billing':
-				return t('Billing Address');
+				return t('Billing Address', { _tags: 'core' });
 			case 'shipping':
-				return t('Shipping Address');
+				return t('Shipping Address', { _tags: 'core' });
 			case 'role':
-				return t('Role');
+				return t('Role', { _tags: 'core' });
 			case 'username':
-				return t('Username');
+				return t('Username', { _tags: 'core' });
 			default:
 				return column.key;
 		}

@@ -38,9 +38,9 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 		await order.remove();
 		setCurrentOrder(null);
 		addSnackbar({
-			message: t('Order removed'),
+			message: t('Order removed', { _tags: 'core' }),
 			dismissable: true,
-			action: { label: t('Undo'), action: undoRemove },
+			action: { label: t('Undo', { _tags: 'core' }), action: undoRemove },
 		});
 	}, [addSnackbar, order, setCurrentOrder, undoRemove]);
 
@@ -51,7 +51,7 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 		<Button
 			fill
 			size="large"
-			title={t('Void')}
+			title={t('Void', { _tags: 'core' })}
 			onPress={handleRemove}
 			type="critical"
 			style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}

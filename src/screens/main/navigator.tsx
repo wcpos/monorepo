@@ -83,13 +83,13 @@ export const MainNavigator = () => {
 			return {
 				/**
 				 * Translations strings for @transifex/cli
-				 * t('POS')
-				 * t('Products')
-				 * t('Orders')
-				 * t('Customers')
-				 * t('Coupons')
-				 * t('Reports')
-				 * t('Support')
+				 * t('POS', { _tags: 'core' })
+				 * t('Products', { _tags: 'core' })
+				 * t('Orders', { _tags: 'core' })
+				 * t('Customers', { _tags: 'core' })
+				 * t('Coupons', { _tags: 'core' })
+				 * t('Reports', { _tags: 'core' })
+				 * t('Support', { _tags: 'core' })
 				 */
 				title: `${t(route.name)} - ${storeName}`,
 				drawerLabel: t(route.name),

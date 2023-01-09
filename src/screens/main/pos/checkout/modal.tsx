@@ -26,11 +26,11 @@ export const CheckoutModal = ({ route, navigation }: CheckoutModalProps) => {
 		<Modal
 			withPortal={false}
 			alwaysOpen
-			title={t('Checkout')}
+			title={t('Checkout', { _tags: 'core' })}
 			size="large"
 			onClose={() => navigation.dispatch(StackActions.pop(1))}
 			primaryAction={{
-				label: t('Process Payment'),
+				label: t('Process Payment', { _tags: 'core' }),
 				action: () => {
 					if (checkoutRef) {
 						checkoutRef.current.processPayment();

@@ -10,7 +10,7 @@ import Text from '@wcpos/components/src/text';
 
 import useProducts from '../../../../contexts/products';
 import useStore from '../../../../contexts/store';
-import { T } from '../../../../lib/translations';
+import { t } from '../../../../lib/translations';
 
 interface ProductFooterProps {
 	count: number;
@@ -38,9 +38,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 				borderTopColor: theme.colors.grey,
 			}}
 		>
-			<Text size="small">
-				<T _str="Showing {count} of {total}" count={count} total={total} />
-			</Text>
+			<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
 			<Popover content={<Text>hi</Text>} placement="top">
 				<Icon name="arrowRotateRight" size="small" onPress={sync} onLongPress={open} />
 			</Popover>

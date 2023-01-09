@@ -33,7 +33,7 @@ const Totals = ({ order }: Props) => {
 		>
 			<Box horizontal>
 				<Box fill padding="small">
-					<Text>{t('Subtotal')}:</Text>
+					<Text>{t('Subtotal', { _tags: 'core' })}:</Text>
 				</Box>
 				<Box padding="small">
 					<Text>{format(total - totalTax || 0)}</Text>
@@ -41,7 +41,7 @@ const Totals = ({ order }: Props) => {
 			</Box>
 			<Box horizontal>
 				<Box fill padding="small">
-					<Text>{t('Total Tax')}:</Text>
+					<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
 				</Box>
 				<Box padding="small">
 					<Text>{format(totalTax || 0)}</Text>

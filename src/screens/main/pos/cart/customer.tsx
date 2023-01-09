@@ -84,15 +84,15 @@ const Customer = ({ order }: CustomerProps) => {
 	 */
 	return (
 		<Box horizontal align="center" space="small">
-			<Text weight="bold">{t('Customer')}:</Text>
+			<Text weight="bold">{t('Customer', { _tags: 'core' })}:</Text>
 			<Pill removable onRemove={handleCustomerRemove} onPress={open}>
 				{label}
 			</Pill>
 			<Modal
 				ref={ref}
-				title={t('Edit Customer Addresses')}
-				primaryAction={{ label: t('Edit Customer'), action: handleSaveCustomer }}
-				secondaryActions={[{ label: t('Cancel'), action: close }]}
+				title={t('Edit Customer Addresses', { _tags: 'core' })}
+				primaryAction={{ label: t('Edit Customer', { _tags: 'core' }), action: handleSaveCustomer }}
+				secondaryActions={[{ label: t('Cancel', { _tags: 'core' }), action: close }]}
 			>
 				<EditModal
 					// formData={{ billing: order.billing, shipping: order.shipping }}

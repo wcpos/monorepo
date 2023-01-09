@@ -13,7 +13,7 @@ const CartTabTitle = ({ focused, order }: { focused: boolean; order: any }) => {
 
 	return (
 		<Text type={focused ? 'inverse' : 'primary'}>
-			{t('Cart {order_total}', { order_total: format(total || 0) })}
+			{t('Cart {order_total}', { order_total: format(total || 0), _tags: 'core' })}
 		</Text>
 	);
 };

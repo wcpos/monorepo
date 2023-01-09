@@ -51,8 +51,8 @@ const SearchBar = () => {
 	 */
 	return (
 		<Search
-			label={t('Search Products')}
-			placeholder={t('Search Products')}
+			label={t('Search Products', { _tags: 'core' })}
+			placeholder={t('Search Products', { _tags: 'core' })}
 			value={query.search || ''}
 			onSearch={onSearch}
 			filters={filters}

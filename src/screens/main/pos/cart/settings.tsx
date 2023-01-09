@@ -95,27 +95,27 @@ export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 
 			switch (key) {
 				// case 'image':
-				// 	return t('Image');
+				// 	return t('Image', { _tags: 'core' });
 				// case 'name':
-				// 	return t('Product');
+				// 	return t('Product', { _tags: 'core' });
 				// case 'stock_quantity':
-				// 	return t('Stock');
+				// 	return t('Stock', { _tags: 'core' });
 				// case 'sku':
-				// 	return t('SKU');
+				// 	return t('SKU', { _tags: 'core' });
 				// case 'categories':
-				// 	return t('Categories');
+				// 	return t('Categories', { _tags: 'core' });
 				// case 'tags':
-				// 	return t('Tags');
+				// 	return t('Tags', { _tags: 'core' });
 				// case 'type':
-				// 	return t('Type');
+				// 	return t('Type', { _tags: 'core' });
 				// case 'price':
-				// 	return t('Price');
+				// 	return t('Price', { _tags: 'core' });
 				// case 'tax':
-				// 	return t('Tax');
+				// 	return t('Tax', { _tags: 'core' });
 				// case 'actions':
-				// 	return t('Actions');
+				// 	return t('Actions', { _tags: 'core' });
 				default:
-					return t('No label found');
+					return t('No label found', { _tags: 'core' });
 			}
 		},
 		[columns]

@@ -35,8 +35,8 @@ export const EmailModal = ({ orderID, onClose }) => {
 	return (
 		<Modal
 			alwaysOpen
-			title={t('Email Receipt')}
-			primaryAction={{ label: t('Send'), action: sendEmail, isLoading }}
+			title={t('Email Receipt', { _tags: 'core' })}
+			primaryAction={{ label: t('Send', { _tags: 'core' }), action: sendEmail, isLoading }}
 			onClose={onClose}
 		>
 			<Box space="medium">
@@ -48,7 +48,7 @@ export const EmailModal = ({ orderID, onClose }) => {
 						})
 					}
 					value={form.email}
-					label={t('Email Address')}
+					label={t('Email Address', { _tags: 'core' })}
 				/>
 				<Checkbox
 					onChange={(save_to) =>
@@ -58,7 +58,7 @@ export const EmailModal = ({ orderID, onClose }) => {
 						})
 					}
 					value={form.save_to}
-					label={t('Save email to Billing Address')}
+					label={t('Save email to Billing Address', { _tags: 'core' })}
 				/>
 			</Box>
 		</Modal>

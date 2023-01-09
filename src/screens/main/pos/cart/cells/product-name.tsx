@@ -72,8 +72,8 @@ export const ProductName = ({ item, column }: Props) => {
 	 */
 	const uiSchema = React.useMemo(
 		() => ({
-			taxes: { 'ui:collapsible': 'closed', 'ui:title': t('Taxes') },
-			meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data') },
+			taxes: { 'ui:collapsible': 'closed', 'ui:title': t('Taxes', { _tags: 'core' }) },
+			meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data', { _tags: 'core' }) },
 		}),
 		[]
 	);
@@ -95,7 +95,7 @@ export const ProductName = ({ item, column }: Props) => {
 				))}
 			</Box>
 			<Box distribution="center">
-				<Icon name="ellipsisVertical" onPress={openEditor} tooltip={t('Edit')} />
+				<Icon name="ellipsisVertical" onPress={openEditor} tooltip={t('Edit', { _tags: 'core' })} />
 				<Modal ref={refEditor} title={t('Edit {name}', { name })}>
 					<EditModal schema={schema} uiSchema={uiSchema} item={item} />
 				</Modal>
