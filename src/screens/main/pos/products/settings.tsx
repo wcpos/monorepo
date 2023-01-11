@@ -19,7 +19,6 @@ interface POSProductSettingsProps {
  *
  */
 const schema = {
-	title: 'Product Table Settings',
 	type: 'object',
 	properties: {
 		showOutOfStock: {
@@ -27,7 +26,7 @@ const schema = {
 		},
 		columns: {
 			// uniqueItems: false,
-			title: 'Table Columns',
+			title: 'Columns',
 			type: 'array',
 			items: {
 				type: 'object',
@@ -36,6 +35,7 @@ const schema = {
 						type: 'boolean',
 					},
 					display: {
+						title: 'Display',
 						type: 'array',
 						items: {
 							type: 'object',
@@ -63,6 +63,7 @@ const uiSchema = {
 		},
 		items: {
 			display: {
+				'ui:collapsible': 'closed',
 				'ui:options': {
 					removable: false,
 					addable: false,
@@ -134,10 +135,14 @@ export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 			<Icon name="sliders" onPress={open} />
 			<Modal
 				ref={ref}
-				title="Product UI Settings"
+				title={t('Product Settings', { _tags: 'core' })}
 				// primaryAction={{ label: 'Save', action: close }}
 				// secondaryActions={[{ label: 'Restore Defaults', action: ui.reset, type: 'critical' }]}
-				primaryAction={{ label: 'Restore Defaults', action: ui.reset, type: 'critical' }}
+				primaryAction={{
+					label: t('Restore Defaults', { _tags: 'core' }),
+					action: ui.reset,
+					type: 'critical',
+				}}
 			>
 				<Form
 					schema={schema}

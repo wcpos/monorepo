@@ -35,7 +35,7 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
 		const promise = store?.localID ? storeDBPromise(store.localID) : Promise.resolve(null);
 		const storeDBResource = new ObservableResource(from(promise));
 		return { storeDBResource };
-	}, [store.localID]);
+	}, [store]);
 
 	/**
 	 *

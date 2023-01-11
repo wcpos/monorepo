@@ -19,12 +19,11 @@ interface POSProductSettingsProps {
  *
  */
 const schema = {
-	title: 'Cart Table Settings',
 	type: 'object',
 	properties: {
 		columns: {
 			// uniqueItems: false,
-			title: 'Table Columns',
+			title: 'Columns',
 			type: 'array',
 			items: {
 				type: 'object',
@@ -33,6 +32,7 @@ const schema = {
 						type: 'boolean',
 					},
 					display: {
+						title: 'Display',
 						type: 'array',
 						items: {
 							type: 'object',
@@ -60,6 +60,7 @@ const uiSchema = {
 		},
 		items: {
 			display: {
+				'ui:collapsible': 'closed',
 				'ui:options': {
 					removable: false,
 					addable: false,
@@ -94,28 +95,24 @@ export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 			}
 
 			switch (key) {
-				// case 'image':
-				// 	return t('Image', { _tags: 'core' });
-				// case 'name':
-				// 	return t('Product', { _tags: 'core' });
-				// case 'stock_quantity':
-				// 	return t('Stock', { _tags: 'core' });
-				// case 'sku':
-				// 	return t('SKU', { _tags: 'core' });
-				// case 'categories':
-				// 	return t('Categories', { _tags: 'core' });
-				// case 'tags':
-				// 	return t('Tags', { _tags: 'core' });
-				// case 'type':
-				// 	return t('Type', { _tags: 'core' });
-				// case 'price':
-				// 	return t('Price', { _tags: 'core' });
-				// case 'tax':
-				// 	return t('Tax', { _tags: 'core' });
-				// case 'actions':
-				// 	return t('Actions', { _tags: 'core' });
+				case 'quantity':
+					return t('Qty', { _tags: 'core', _context: 'Short for quantity' });
+				case 'name':
+					return t('Name', { _tags: 'core' });
+				case 'sku':
+					return t('SKU', { _tags: 'core' });
+				case 'price':
+					return t('Price', { _tags: 'core' });
+				case 'total':
+					return t('Total', { _tags: 'core' });
+				case 'subtotal':
+					return t('Subtotal', { _tags: 'core' });
+				case 'tax':
+					return t('Tax', { _tags: 'core' });
+				case 'actions':
+					return t('Actions', { _tags: 'core' });
 				default:
-					return t('No label found', { _tags: 'core' });
+					return t('No label found for {key}', { key, _tags: 'core' });
 			}
 		},
 		[columns]
@@ -129,10 +126,14 @@ export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 			<Icon name="sliders" onPress={open} />
 			<Modal
 				ref={ref}
-				title="Cart UI Settings"
+				title={t('Cart Settings', { _tags: 'core' })}
 				// primaryAction={{ label: 'Save', action: close }}
 				// secondaryActions={[{ label: 'Restore Defaults', action: ui.reset, type: 'critical' }]}
-				primaryAction={{ label: 'Restore Defaults', action: ui.reset, type: 'critical' }}
+				primaryAction={{
+					label: t('Restore Defaults', { _tags: 'core' }),
+					action: ui.reset,
+					type: 'critical',
+				}}
 			>
 				<Form
 					schema={schema}

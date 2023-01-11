@@ -15,6 +15,7 @@ import Customer from './customer';
 import Settings from './settings';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
 interface CartHeaderProps {
 	order: OrderDocument;
@@ -33,11 +34,11 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 	 *
 	 */
 	const handleCustomerSelect = React.useCallback(
-		async ({ value: selectedCustomer }) => {
+		(selectedCustomer: CustomerDocument) => {
 			const billingEmail = selectedCustomer?.billing?.email || selectedCustomer?.email;
 			const firstName = selectedCustomer?.billing?.first_name || selectedCustomer?.username;
 
-			await order.atomicPatch({
+			order.atomicPatch({
 				customer_id: selectedCustomer.id,
 				billing: { ...selectedCustomer.billing, email: billingEmail, first_name: firstName },
 				shipping: selectedCustomer.shipping,
