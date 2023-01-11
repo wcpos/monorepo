@@ -31,7 +31,7 @@ export const useReplication = ({ collection }) => {
 			 * we need to delay for a little while to allow the collection count to be updated
 			 */
 			// await wait(1000);
-			const pullRemoteIds = collection.pullRemoteIds$.getValue();
+			// const pullRemoteIds = collection.pullRemoteIds$.getValue(); // throws error
 			// const syncedDocs = collection.syncedIds$.getValue();
 
 			const response = await http.get(collection.name).catch((error) => {
@@ -47,12 +47,12 @@ export const useReplication = ({ collection }) => {
 
 			const data = response.data;
 
-			pullRemoteIds
-				.filter((id: string) => !find(data, { id }))
-				.map((d) => {
-					debugger;
-					d._deleted = true;
-				});
+			// pullRemoteIds
+			// 	.filter((id: string) => !find(data, { id }))
+			// 	.map((d) => {
+			// 		debugger;
+			// 		d._deleted = true;
+			// 	});
 
 			return {
 				documents: data,
