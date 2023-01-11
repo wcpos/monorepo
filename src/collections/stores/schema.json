@@ -46,7 +46,12 @@
 			"title": "Default customer location",
 			"type": "string",
 			"default": "base",
-			"enum": ["", "base", "geolocation", "geolocation_ajax"],
+			"enum": [
+				"",
+				"base",
+				"geolocation",
+				"geolocation_ajax"
+			],
 			"enumNames": [
 				"No location by default",
 				"Shop country/region",
@@ -59,23 +64,41 @@
 			"description": "Enable tax rates and calculations",
 			"type": "string",
 			"default": "no",
-			"enum": ["yes", "no"],
-			"enumNames": ["Yes", "No"]
+			"enum": [
+				"yes",
+				"no"
+			],
+			"enumNames": [
+				"Yes",
+				"No"
+			]
 		},
 		"enable_coupons": {
 			"title": "Enable coupons",
 			"description": "Enable the use of coupon codes",
 			"type": "string",
 			"default": "yes",
-			"enum": ["yes", "no"],
-			"enumNames": ["Yes", "No"]
+			"enum": [
+				"yes",
+				"no"
+			],
+			"enumNames": [
+				"Yes",
+				"No"
+			]
 		},
 		"calc_discounts_sequentially": {
 			"description": "Calculate coupon discounts sequentially",
 			"type": "string",
 			"default": "no",
-			"enum": ["yes", "no"],
-			"enumNames": ["Yes", "No"]
+			"enum": [
+				"yes",
+				"no"
+			],
+			"enumNames": [
+				"Yes",
+				"No"
+			]
 		},
 		"currency": {
 			"title": "Currency",
@@ -418,8 +441,18 @@
 			"description": "This controls the position of the currency symbol.",
 			"type": "string",
 			"default": "left",
-			"enum": ["left", "right", "left_space", "right_space"],
-			"enumNames": ["Left", "Right", "Left with space", "Right with space"]
+			"enum": [
+				"left",
+				"right",
+				"left_space",
+				"right_space"
+			],
+			"enumNames": [
+				"Left",
+				"Right",
+				"Left with space",
+				"Right with space"
+			]
 		},
 		"price_thousand_sep": {
 			"title": "Thousand Separator",
@@ -443,22 +476,41 @@
 			"title": "Prices entered with tax",
 			"default": "no",
 			"type": "string",
-			"enum": ["yes", "no"],
-			"enumNames": ["Yes", "No"]
+			"enum": [
+				"yes",
+				"no"
+			],
+			"enumNames": [
+				"Yes",
+				"No"
+			]
 		},
 		"tax_based_on": {
 			"title": "Calculate tax based on",
 			"default": "base",
 			"type": "string",
-			"enum": ["shipping", "billing", "base"],
-			"enumNames": ["Customer shipping address", "Customer billing address", "Shop base address"]
+			"enum": [
+				"shipping",
+				"billing",
+				"base"
+			],
+			"enumNames": [
+				"Customer shipping address",
+				"Customer billing address",
+				"Shop base address"
+			]
 		},
 		"shipping_tax_class": {
 			"title": "Shipping tax class",
 			"description": "Optionally control which tax class shipping gets, or leave it so shipping tax is based on the cart items themselves.",
 			"type": "string",
 			"default": "inherit",
-			"enum": ["inherit", "", "reduced-rate", "zero-rate"],
+			"enum": [
+				"inherit",
+				"",
+				"reduced-rate",
+				"zero-rate"
+			],
 			"enumNames": [
 				"Shipping tax class based on cart items",
 				"Standard",
@@ -471,22 +523,40 @@
 			"description": "Round tax at subtotal level, instead of rounding per line",
 			"default": "no",
 			"type": "string",
-			"enum": ["yes", "no"],
-			"enumNames": ["Yes", "No"]
+			"enum": [
+				"yes",
+				"no"
+			],
+			"enumNames": [
+				"Yes",
+				"No"
+			]
 		},
 		"tax_display_shop": {
 			"title": "Display prices in the shop",
 			"type": "string",
 			"default": "excl",
-			"enum": ["incl", "excl"],
-			"enumNames": ["Including tax", "Excluding tax"]
+			"enum": [
+				"incl",
+				"excl"
+			],
+			"enumNames": [
+				"Including tax",
+				"Excluding tax"
+			]
 		},
 		"tax_display_cart": {
 			"title": "Display prices during cart and checkout",
 			"type": "string",
 			"default": "excl",
-			"enum": ["incl", "excl"],
-			"enumNames": ["Including tax", "Excluding tax"]
+			"enum": [
+				"incl",
+				"excl"
+			],
+			"enumNames": [
+				"Including tax",
+				"Excluding tax"
+			]
 		},
 		"price_display_suffix": {
 			"title": "Price display suffix",
@@ -497,8 +567,14 @@
 			"title": "Display tax totals",
 			"type": "string",
 			"default": "itemized",
-			"enum": ["single", "itemized"],
-			"enumNames": ["As a single total", "Itemized"]
+			"enum": [
+				"single",
+				"itemized"
+			],
+			"enumNames": [
+				"As a single total",
+				"Itemized"
+			]
 		},
 		"locale": {
 			"title": "Language",
