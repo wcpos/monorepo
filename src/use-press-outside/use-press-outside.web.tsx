@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import * as React from 'react';
 
 const DEFAULT_EVENTS = ['mousedown', 'touchstart'];
 
@@ -7,9 +7,9 @@ export function usePressOutside<T extends HTMLElement = any>(
 	events?: string[] | null,
 	nodes?: (HTMLElement | null)[]
 ) {
-	const ref = useRef<T>();
+	const ref = React.useRef<T>();
 
-	useEffect(() => {
+	React.useEffect(() => {
 		const listener = (event: any) => {
 			const { target } = event ?? {};
 			if (Array.isArray(nodes)) {
