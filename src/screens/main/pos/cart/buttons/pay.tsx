@@ -63,15 +63,15 @@ const PayButton = ({ order }: PayModalProps) => {
 	 *
 	 */
 	const handlePay = React.useCallback(() => {
-		saveOrder();
-		navigation.navigate('Checkout', { _id: order._id });
+		// saveOrder();
+		// navigation.navigate('Checkout', { _id: order._id });
 
-		// saveOrder().then((o) => {
-		// 	if (o) {
-		// 		navigation.navigate('Checkout', { _id: o._id });
-		// 	}
-		// });
-	}, [navigation, order._id, saveOrder]);
+		saveOrder().then((o) => {
+			if (o) {
+				navigation.navigate('Checkout', { _id: o._id });
+			}
+		});
+	}, [navigation, saveOrder]);
 
 	/**
 	 *
