@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
@@ -39,7 +40,11 @@ export const Actions = ({ item: product }: Props) => {
 	/**
 	 *
 	 */
-	return <Icon name="circlePlus" size="xLarge" onPress={addToCart} type="success" />;
+	return (
+		<View style={{ position: 'relative', zIndex: 1000 }}>
+			<Icon name="circlePlus" size="xLarge" onPress={addToCart} type="success" />
+		</View>
+	);
 };
 
 export default Actions;

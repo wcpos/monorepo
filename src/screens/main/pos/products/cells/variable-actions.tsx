@@ -9,10 +9,10 @@ import Icon from '@wcpos/components/src/icon';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
+import Variations from './variations';
 import useVariations from '../../../../../contexts/variations';
 import useRestHttpClient from '../../../../../hooks/use-rest-http-client';
 import useCurrentOrder from '../../contexts/current-order';
-import Variations from './variations';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -47,6 +47,7 @@ export const VariableActions = ({ item: product }: Props) => {
 	const { currentOrder } = useCurrentOrder();
 	const http = useRestHttpClient();
 	const { data } = useVariations();
+	const [open, setOpen] = React.useState(false);
 
 	// const variationsResource = React.useMemo(
 	// 	() =>
@@ -90,14 +91,28 @@ export const VariableActions = ({ item: product }: Props) => {
 
 	return (
 		<Popover
+			opened={open}
+			onClose={() => {
+				setOpen(false);
+			}}
+			withinPortal
 			placement="right"
-			content={
+		>
+			<Popover.Target>
+				<Icon
+					name="circleChevronRight"
+					size="xLarge"
+					type="success"
+					onPress={() => {
+						setOpen(true);
+					}}
+				/>
+			</Popover.Target>
+			<Popover.Content>
 				<React.Suspense fallback={<Text>loading variations...</Text>}>
 					<Variations variations={data} attributes={product.attributes} addToCart={addToCart} />
 				</React.Suspense>
-			}
-		>
-			<Icon name="circleChevronRight" size="xLarge" type="success" />
+			</Popover.Content>
 		</Popover>
 	);
 };

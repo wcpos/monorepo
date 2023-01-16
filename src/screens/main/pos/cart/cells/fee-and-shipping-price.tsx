@@ -22,10 +22,15 @@ export const FeeAndShippingPrice = ({ item }: Props) => {
 	};
 
 	return (
-		<Popover content={<Numpad initialValue={String(price)} onChange={handleChange} />}>
-			<Box border paddingY="xSmall" paddingX="small" rounding="large">
-				<Text>{format(price)}</Text>
-			</Box>
+		<Popover>
+			<Popover.Target>
+				<Box border paddingY="xSmall" paddingX="small" rounding="large">
+					<Text>{format(price)}</Text>
+				</Box>
+			</Popover.Target>
+			<Popover.Content>
+				<Numpad initialValue={String(price)} onChange={handleChange} />
+			</Popover.Content>
 		</Popover>
 	);
 };

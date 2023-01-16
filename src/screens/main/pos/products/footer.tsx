@@ -4,8 +4,9 @@ import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
+import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
-import Popover, { usePopover } from '@wcpos/components/src/popover';
+import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
 import useProducts from '../../../../contexts/products';
@@ -21,7 +22,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const total = useObservableState(storeDB.products.totalDocCount$, 0);
 	const theme = useTheme();
 	const { sync } = useProducts();
-	const { ref, open, close } = usePopover();
+	const [openMenu, setOpenMenu] = React.useState(false);
 
 	return (
 		<Box
@@ -39,9 +40,36 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 			}}
 		>
 			<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
-			<Popover content={<Text>hi</Text>} placement="top">
-				<Icon name="arrowRotateRight" size="small" onPress={sync} onLongPress={open} />
-			</Popover>
+			<Dropdown
+				opened={openMenu}
+				onClose={() => {
+					setOpenMenu(false);
+				}}
+				placement="top-end"
+				items={[
+					{ label: 'Sync', action: sync, icon: 'arrowRotateRight' },
+					{
+						label: 'Clear and Refresh',
+						action: () => {
+							console.log('clear');
+						},
+						type: 'critical',
+						icon: 'trash',
+					},
+				]}
+				trigger="longpress"
+			>
+				<Icon
+					name="arrowRotateRight"
+					size="small"
+					onPress={sync}
+					onLongPress={() => {
+						setOpenMenu(true);
+					}}
+					tooltip="Press to sync products, long press for more options"
+					tooltipPlacement="top-end"
+				/>
+			</Dropdown>
 		</Box>
 	);
 };

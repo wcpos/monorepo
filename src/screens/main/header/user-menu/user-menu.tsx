@@ -20,12 +20,14 @@ export const UserMenu = () => {
 
 	return (
 		<Dropdown
+			placement="bottom-end"
 			items={[
 				{
 					icon: 'gear',
 					label: 'Settings',
 					action: () => navigation.navigate('Settings'),
 				},
+				{ label: '__' },
 				{
 					icon: 'arrowRightFromBracket',
 					label: 'Logout',

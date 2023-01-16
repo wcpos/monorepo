@@ -10,9 +10,9 @@ import { useTheme } from 'styled-components/native';
 
 import Text from '@wcpos/components/src/text';
 
-import useAuth from '../../../contexts/auth';
 import Left from './left';
 import Right from './right';
+import useAuth from '../../../contexts/auth';
 
 const Header = ({ route, layout, options }: DrawerHeaderProps) => {
 	const insets = useSafeAreaInsets();

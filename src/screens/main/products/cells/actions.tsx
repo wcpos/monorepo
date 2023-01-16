@@ -20,6 +20,7 @@ const Actions = ({ item: product }: Props) => {
 	const { ref: modalRef, open, close } = useModal();
 	const { ref: dialogRef, open: dialogOpen } = useDialog();
 	const http = useRestHttpClient();
+	const [menuOpened, setMenuOpened] = React.useState(false);
 
 	/**
 	 *
@@ -71,13 +72,25 @@ const Actions = ({ item: product }: Props) => {
 	return (
 		<>
 			<Dropdown
+				opened={menuOpened}
+				onClose={() => {
+					setMenuOpened(false);
+				}}
+				withinPortal={true}
+				placement="bottom-end"
 				items={[
-					{ label: 'Show', action: open },
+					{ label: 'Edit', action: open, icon: 'penToSquare' },
 					{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
-					{ label: 'Delete', action: dialogOpen, type: 'critical' },
+					{ label: '__' },
+					{ label: 'Delete', action: dialogOpen, icon: 'trash', type: 'critical' },
 				]}
 			>
-				<Icon name="ellipsisVertical" />
+				<Icon
+					name="ellipsisVertical"
+					onPress={() => {
+						setMenuOpened(true);
+					}}
+				/>
 			</Dropdown>
 
 			<Dialog ref={dialogRef} onClose={handleDelete}>

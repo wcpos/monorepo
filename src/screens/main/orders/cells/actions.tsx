@@ -21,6 +21,7 @@ const Actions = ({ item: order }: Props) => {
 	// const { ref: receiptModalRef, open: openReceiptModal, close: closeReceiptModal } = useModal();
 	const navigation = useNavigation();
 	const http = useRestHttpClient();
+	const [menuOpened, setMenuOpened] = React.useState(false);
 
 	/**
 	 *
@@ -91,14 +92,16 @@ const Actions = ({ item: order }: Props) => {
 	 */
 	const menuItems = React.useMemo(() => {
 		const menu = [
-			{ label: 'Edit', action: openEditModal },
-			{ label: 'Re-open', action: handleOpen },
-			{ label: 'Sync', action: handleSync },
-			{ label: 'Delete', action: order.remove },
+			{ label: 'Edit', action: openEditModal, icon: 'penToSquare' },
+			{ label: 'Re-open', action: handleOpen, icon: 'cartShopping' },
+			{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
+			{ label: '__' },
+			{ label: 'Delete', action: order.remove, icon: 'trash', type: 'critical' },
 		];
 		if (order.status === 'completed') {
 			menu.splice(1, 0, {
 				label: 'Receipt',
+				icon: 'receipt',
 				action: () => {
 					if (order) {
 						navigation.navigate('Receipt', { _id: order._id });
@@ -115,8 +118,21 @@ const Actions = ({ item: order }: Props) => {
 	 */
 	return (
 		<>
-			<Dropdown items={menuItems}>
-				<Icon name="ellipsisVertical" />
+			<Dropdown
+				opened={menuOpened}
+				onClose={() => {
+					setMenuOpened(false);
+				}}
+				withinPortal={true}
+				placement="bottom-end"
+				items={menuItems}
+			>
+				<Icon
+					name="ellipsisVertical"
+					onPress={() => {
+						setMenuOpened(true);
+					}}
+				/>
 			</Dropdown>
 			<Modal
 				ref={editModalRef}

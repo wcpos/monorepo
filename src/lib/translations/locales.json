@@ -76,7 +76,9 @@
 		"nativeName": "Беларуская мова",
 		"code": "be",
 		"locale": "be",
-		"alternatives": ["bel"]
+		"alternatives": [
+			"bel"
+		]
 	},
 	"bn": {
 		"name": "Bengali",
@@ -95,7 +97,9 @@
 		"nativeName": "Brezhoneg",
 		"code": "br",
 		"locale": "br",
-		"alternatives": ["bre"]
+		"alternatives": [
+			"bre"
+		]
 	},
 	"bg": {
 		"name": "Bulgarian",
@@ -270,7 +274,9 @@
 		"nativeName": "Pulaar",
 		"code": "ff",
 		"locale": "ff",
-		"alternatives": ["fuc"]
+		"alternatives": [
+			"fuc"
+		]
 	},
 	"gl": {
 		"name": "Galician",
@@ -307,7 +313,9 @@
 		"nativeName": "Kalaallisut",
 		"code": "kl",
 		"locale": "kl",
-		"alternatives": ["kal"]
+		"alternatives": [
+			"kal"
+		]
 	},
 	"gu": {
 		"name": "Gujarati",
@@ -410,7 +418,9 @@
 		"nativeName": "Ikinyarwanda",
 		"code": "rw",
 		"locale": "rw",
-		"alternatives": ["kin"]
+		"alternatives": [
+			"kin"
+		]
 	},
 	"ky": {
 		"name": "Kirghiz",
@@ -453,7 +463,9 @@
 		"nativeName": "Ngala",
 		"code": "ln",
 		"locale": "ln",
-		"alternatives": ["lin"]
+		"alternatives": [
+			"lin"
+		]
 	},
 	"lt": {
 		"name": "Lithuanian",
@@ -496,7 +508,9 @@
 		"nativeName": "Te Reo Māori",
 		"code": "mi",
 		"locale": "mi",
-		"alternatives": ["mri"]
+		"alternatives": [
+			"mri"
+		]
 	},
 	"mr": {
 		"name": "Marathi",
@@ -551,7 +565,9 @@
 		"nativeName": "Occitan",
 		"code": "oc",
 		"locale": "oc",
-		"alternatives": ["oci"]
+		"alternatives": [
+			"oci"
+		]
 	},
 	"ps": {
 		"name": "Pashto",
@@ -606,7 +622,9 @@
 		"nativeName": "Rumantsch",
 		"code": "rm",
 		"locale": "rm",
-		"alternatives": ["roh"]
+		"alternatives": [
+			"roh"
+		]
 	},
 	"ru": {
 		"name": "Russian",
@@ -637,7 +655,9 @@
 		"nativeName": "Sardu",
 		"code": "sc",
 		"locale": "sc",
-		"alternatives": ["srd"]
+		"alternatives": [
+			"srd"
+		]
 	},
 	"gd": {
 		"name": "Scottish Gaelic",
@@ -662,7 +682,9 @@
 		"nativeName": "سنڌي",
 		"code": "sd",
 		"locale": "sd",
-		"alternatives": ["snd"]
+		"alternatives": [
+			"snd"
+		]
 	},
 	"si": {
 		"name": "Sinhala",
@@ -819,7 +841,9 @@
 		"nativeName": "ትግርኛ",
 		"code": "ti",
 		"locale": "ti",
-		"alternatives": ["tir"]
+		"alternatives": [
+			"tir"
+		]
 	},
 	"tr": {
 		"name": "Turkish",
@@ -832,7 +856,9 @@
 		"nativeName": "Türkmençe",
 		"code": "tk",
 		"locale": "tk",
-		"alternatives": ["tuk"]
+		"alternatives": [
+			"tuk"
+		]
 	},
 	"twd": {
 		"name": "Tweants",
@@ -881,6 +907,8 @@
 		"nativeName": "Yorùbá",
 		"code": "yo",
 		"locale": "yo",
-		"alternatives": ["yor"]
+		"alternatives": [
+			"yor"
+		]
 	}
 }

@@ -16,6 +16,7 @@ type Props = {
 const Actions = ({ item: customer }: Props) => {
 	const { ref: modalRef, open, close } = useModal();
 	const http = useRestHttpClient();
+	const [menuOpened, setMenuOpened] = React.useState(false);
 
 	/**
 	 *
@@ -60,14 +61,34 @@ const Actions = ({ item: customer }: Props) => {
 	return (
 		<>
 			<Dropdown
+				opened={menuOpened}
+				onClose={() => {
+					setMenuOpened(false);
+				}}
+				withinPortal={true}
+				placement="bottom-end"
 				items={[
-					{ label: 'Edit', action: open },
-					{ label: 'Sync', action: handleSync },
-					{ label: 'Delete', action: handleDelete },
+					{ label: 'Edit', action: open, icon: 'penToSquare' },
+					{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
+					{ label: '__' },
+					{
+						label: 'Delete',
+						action: () => {
+							console.log('delete');
+						},
+						icon: 'trash',
+						type: 'critical',
+					},
 				]}
 			>
-				<Icon name="ellipsisVertical" />
+				<Icon
+					name="ellipsisVertical"
+					onPress={() => {
+						setMenuOpened(true);
+					}}
+				/>
 			</Dropdown>
+
 			<Modal
 				ref={modalRef}
 				title="Edit Customer"

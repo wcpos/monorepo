@@ -5,6 +5,7 @@ import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
+import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
@@ -55,6 +56,8 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const http = useHttpClient();
 	const { site, wpCredentials } = useAuth();
 	const navigation = useNavigation();
+	const { sync } = useProducts();
+	const [openMenu, setOpenMenu] = React.useState(false);
 
 	/**
 	 *
@@ -100,16 +103,34 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 			<Text size="small">
 				Showing {count} of {total}
 			</Text>
-			<Icon
-				name="user"
-				size="small"
-				onPress={() => {
-					navigation.navigate('Login');
+			<Dropdown
+				opened={openMenu}
+				onClose={() => {
+					setOpenMenu(false);
 				}}
-			/>
-			<Icon name="user" size="small" onPress={handleJWT} />
-			<SyncButton />
-			<Icon name="arrowRotateRight" size="small" onLongPress={handleClear} />
+				placement="top-end"
+				items={[
+					{ label: 'Sync', action: sync, icon: 'arrowRotateRight' },
+					{
+						label: 'Clear and Refresh',
+						action: handleClear,
+						type: 'critical',
+						icon: 'trash',
+					},
+				]}
+				trigger="longpress"
+			>
+				<Icon
+					name="arrowRotateRight"
+					size="small"
+					onPress={sync}
+					onLongPress={() => {
+						setOpenMenu(true);
+					}}
+					tooltip="Press to sync products, long press for more options"
+					tooltipPlacement="top-end"
+				/>
+			</Dropdown>
 		</Box>
 	);
 };

@@ -9,11 +9,11 @@ import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
+import cells from './cells';
+import Footer from './footer';
 import useProducts from '../../../contexts/products';
 import { VariationsProvider } from '../../../contexts/variations';
 import { t } from '../../../lib/translations';
-import cells from './cells';
-import Footer from './footer';
 
 import type { ListRenderItemInfo } from '@shopify/flash-list';
 
