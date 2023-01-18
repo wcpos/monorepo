@@ -3,9 +3,8 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 
-import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
-import Popover from '@wcpos/components/src/popover';
+import Modal from '@wcpos/components/src/modal';
 import Form from '@wcpos/react-native-jsonschema-form';
 
 import { t } from '../../../lib/translations';
@@ -55,6 +54,7 @@ const uiSchema = {
 
 const UiSettings = ({ ui }: UiSettingsProps) => {
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
+	const [opened, setOpened] = React.useState(false);
 
 	/**
 	 * Translate column key into label
@@ -80,25 +80,32 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 		[columns]
 	);
 
-	const settings = (
-		<>
-			<Form
-				schema={schema}
-				uiSchema={uiSchema}
-				formData={columns}
-				onChange={(value) => {
-					ui.atomicPatch({ columns: value });
-				}}
-				formContext={{ label }}
-			/>
-			<Button title="Restore Default Settings" onPress={ui.reset} />
-		</>
-	);
-
 	return (
-		<Popover content={settings} placement="bottom-end">
-			<Icon name="sliders" />
-		</Popover>
+		<>
+			<Icon
+				name="sliders"
+				onPress={() => {
+					setOpened(true);
+				}}
+			/>
+			<Modal
+				opened={opened}
+				onClose={() => {
+					setOpened(false);
+				}}
+				primaryAction={{ label: t('Restore Default Settings', { _tags: 'core' }) }}
+			>
+				<Form
+					schema={schema}
+					uiSchema={uiSchema}
+					formData={columns}
+					onChange={(value) => {
+						ui.atomicPatch({ columns: value });
+					}}
+					formContext={{ label }}
+				/>
+			</Modal>
+		</>
 	);
 };
 

@@ -5,23 +5,21 @@ import pick from 'lodash/pick';
 
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
-import Modal, { useModal } from '@wcpos/components/src/modal';
+import Modal from '@wcpos/components/src/modal';
 import log from '@wcpos/utils/src/logger';
 
 import useRestHttpClient from '../../../../hooks/use-rest-http-client';
-import EditModal from '../../common/edit-modal';
-import Receipt from '../../receipt';
+import EditForm from '../../common/edit-form';
 
 interface Props {
 	item: import('@wcpos/database').OrderDocument;
 }
 
 const Actions = ({ item: order }: Props) => {
-	const { ref: editModalRef, open: openEditModal, close: closeEditModal } = useModal();
-	// const { ref: receiptModalRef, open: openReceiptModal, close: closeReceiptModal } = useModal();
 	const navigation = useNavigation();
 	const http = useRestHttpClient();
 	const [menuOpened, setMenuOpened] = React.useState(false);
+	const [editModalOpened, setEditModalOpened] = React.useState(false);
 
 	/**
 	 *
@@ -92,7 +90,13 @@ const Actions = ({ item: order }: Props) => {
 	 */
 	const menuItems = React.useMemo(() => {
 		const menu = [
-			{ label: 'Edit', action: openEditModal, icon: 'penToSquare' },
+			{
+				label: 'Edit',
+				action: () => {
+					setEditModalOpened(true);
+				},
+				icon: 'penToSquare',
+			},
 			{ label: 'Re-open', action: handleOpen, icon: 'cartShopping' },
 			{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
 			{ label: '__' },
@@ -111,7 +115,7 @@ const Actions = ({ item: order }: Props) => {
 		}
 
 		return menu;
-	}, [handleOpen, handleSync, navigation, openEditModal, order]);
+	}, [handleOpen, handleSync, navigation, order]);
 
 	/**
 	 *
@@ -134,17 +138,30 @@ const Actions = ({ item: order }: Props) => {
 					}}
 				/>
 			</Dropdown>
+
 			<Modal
-				ref={editModalRef}
-				title="Edit Order"
-				primaryAction={{ label: 'Sync to server', action: saveOrder }}
-				secondaryActions={[{ label: 'Cancel', action: closeEditModal }]}
+				opened={editModalOpened}
+				onClose={() => {
+					setEditModalOpened(false);
+				}}
+				title={`Edit Order`}
+				primaryAction={{
+					label: 'Save',
+					action: () => {
+						console.log('save');
+					},
+				}}
+				secondaryActions={[
+					{
+						label: 'Cancel',
+						action: () => {
+							setEditModalOpened(false);
+						},
+					},
+				]}
 			>
-				<EditModal item={order} schema={schema} uiSchema={{}} />
+				<EditForm item={order} schema={schema} uiSchema={{}} />
 			</Modal>
-			{/* <Modal ref={receiptModalRef} title="Receipt">
-				<Receipt order={order} />
-			</Modal> */}
 		</>
 	);
 };

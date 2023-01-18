@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import Button from '@wcpos/components/src/button';
-import Modal, { useModal } from '@wcpos/components/src/modal';
+import Modal from '@wcpos/components/src/modal';
 import TextInput from '@wcpos/components/src/textinput';
 
 import { t } from '../../../../../lib/translations';
@@ -10,8 +10,11 @@ interface AddNoteButtonProps {
 	order: import('@wcpos/database').OrderDocument;
 }
 
+/**
+ *
+ */
 const AddNoteButton = ({ order }: AddNoteButtonProps) => {
-	const { ref, open, close } = useModal();
+	const [opened, setOpened] = React.useState(false);
 	const [note, setNote] = React.useState('');
 
 	const handleSaveNote = React.useCallback(
@@ -21,12 +24,28 @@ const AddNoteButton = ({ order }: AddNoteButtonProps) => {
 
 	return (
 		<>
-			<Button title={t('Order Note', { _tags: 'core' })} background="outline" onPress={open} />
+			<Button
+				title={t('Order Note', { _tags: 'core' })}
+				background="outline"
+				onPress={() => {
+					setOpened(true);
+				}}
+			/>
 			<Modal
-				ref={ref}
+				opened={opened}
+				onClose={() => {
+					setOpened(false);
+				}}
 				title={t('Order Note', { _tags: 'core' })}
 				primaryAction={{ label: t('Save', { _tags: 'core' }), action: handleSaveNote }}
-				secondaryActions={[{ label: t('Cancel', { _tags: 'core' }), action: close }]}
+				secondaryActions={[
+					{
+						label: t('Cancel', { _tags: 'core' }),
+						action: () => {
+							setOpened(false);
+						},
+					},
+				]}
 			>
 				<TextInput label={t('Order Note', { _tags: 'core' })} value={note} onChange={setNote} />
 			</Modal>

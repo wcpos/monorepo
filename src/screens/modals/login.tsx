@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useNavigation, StackActions } from '@react-navigation/native';
 import get from 'lodash/get';
 
+import Backdrop from '@wcpos/components/src/backdrop';
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
@@ -66,33 +67,38 @@ const Login = ({ route }) => {
 	};
 
 	return (
-		<Modal
-			alwaysOpen
-			withPortal={false}
-			title={t('Login', { _tags: 'core' })}
-			onClose={() => navigation.dispatch(StackActions.pop(1))}
-			primaryAction={{ label: t('Login', { _tags: 'core' }), action: handleLogin }}
-			secondaryActions={[
-				{ label: t('Cancel', { _tags: 'core' }), action: () => navigation.goBack() },
-			]}
-		>
-			<Box space="medium">
-				<TextInput
-					label={t('Username', { _tags: 'core' })}
-					placeholder="username"
-					value={username}
-					onChange={setUsername}
-					type="username"
+		<>
+			<Backdrop />
+			<Modal.Container>
+				<Modal.Header onClose={() => navigation.dispatch(StackActions.pop(1))}>
+					{t('Login', { _tags: 'core' })}
+				</Modal.Header>
+				<Modal.Content>
+					<Box space="medium">
+						<TextInput
+							label={t('Username', { _tags: 'core' })}
+							placeholder="username"
+							value={username}
+							onChange={setUsername}
+							type="username"
+						/>
+						<TextInput
+							label={t('Password', { _tags: 'core' })}
+							placeholder="password"
+							value={password}
+							onChange={setPassword}
+							type="password"
+						/>
+					</Box>
+				</Modal.Content>
+				<Modal.Footer
+					primaryAction={{ label: t('Login', { _tags: 'core' }), action: handleLogin }}
+					secondaryActions={[
+						{ label: t('Cancel', { _tags: 'core' }), action: () => navigation.goBack() },
+					]}
 				/>
-				<TextInput
-					label={t('Password', { _tags: 'core' })}
-					placeholder="password"
-					value={password}
-					onChange={setPassword}
-					type="password"
-				/>
-			</Box>
-		</Modal>
+			</Modal.Container>
+		</>
 	);
 };
 

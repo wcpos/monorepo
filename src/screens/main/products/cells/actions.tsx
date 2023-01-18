@@ -5,19 +5,19 @@ import pick from 'lodash/pick';
 import Dialog, { useDialog } from '@wcpos/components/src/dialog';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
-import Modal, { useModal } from '@wcpos/components/src/modal';
+import Modal from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import useRestHttpClient from '../../../../hooks/use-rest-http-client';
-import EditModal from '../../common/edit-modal';
+import EditForm from '../../common/edit-form';
 
 type Props = {
 	item: import('@wcpos/database').ProductDocument;
 };
 
 const Actions = ({ item: product }: Props) => {
-	const { ref: modalRef, open, close } = useModal();
+	const [modalOpened, setModalOpened] = React.useState(false);
 	const { ref: dialogRef, open: dialogOpen } = useDialog();
 	const http = useRestHttpClient();
 	const [menuOpened, setMenuOpened] = React.useState(false);
@@ -79,7 +79,13 @@ const Actions = ({ item: product }: Props) => {
 				withinPortal={true}
 				placement="bottom-end"
 				items={[
-					{ label: 'Edit', action: open, icon: 'penToSquare' },
+					{
+						label: 'Edit',
+						action: () => {
+							setModalOpened(true);
+						},
+						icon: 'penToSquare',
+					},
 					{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
 					{ label: '__' },
 					{ label: 'Delete', action: dialogOpen, icon: 'trash', type: 'critical' },
@@ -98,12 +104,27 @@ const Actions = ({ item: product }: Props) => {
 			</Dialog>
 
 			<Modal
-				ref={modalRef}
+				opened={modalOpened}
+				onClose={() => {
+					setModalOpened(false);
+				}}
 				title={`Edit ${product.name}`}
-				primaryAction={{ label: 'Save', action: close }}
-				secondaryActions={[{ label: 'Cancel', action: close }]}
+				primaryAction={{
+					label: 'Save',
+					action: () => {
+						console.log('save');
+					},
+				}}
+				secondaryActions={[
+					{
+						label: 'Cancel',
+						action: () => {
+							setModalOpened(false);
+						},
+					},
+				]}
 			>
-				<EditModal item={product} schema={schema} uiSchema={{}} />
+				<EditForm item={product} schema={schema} uiSchema={{}} />
 			</Modal>
 		</>
 	);

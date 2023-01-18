@@ -1,4 +1,5 @@
 import * as React from 'react';
+
 import Tabs from '@wcpos/components/src/tabs';
 import Tree from '@wcpos/components/src/tree';
 import Form from '@wcpos/react-native-jsonschema-form';
@@ -18,7 +19,7 @@ export interface EditModalProps {
 /**
  *
  */
-const EditModal = ({ schema, uiSchema, item }: EditModalProps) => {
+const EditForm = ({ schema, uiSchema, item }: EditModalProps) => {
 	const [index, setIndex] = React.useState(0);
 
 	/**
@@ -64,7 +65,7 @@ const EditModal = ({ schema, uiSchema, item }: EditModalProps) => {
 	 *
 	 */
 	return (
-		<Tabs<typeof routes[number]>
+		<Tabs<(typeof routes)[number]>
 			navigationState={{ index, routes }}
 			renderScene={renderScene}
 			onIndexChange={setIndex}
@@ -72,4 +73,4 @@ const EditModal = ({ schema, uiSchema, item }: EditModalProps) => {
 	);
 };
 
-export default EditModal;
+export default EditForm;

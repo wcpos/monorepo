@@ -8,11 +8,11 @@ import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
-import { ProductsProvider } from '../../../../contexts/products';
-import useUI from '../../../../contexts/ui';
 import SearchBar from './search-bar';
 import Settings from './settings';
 import Table from './table';
+import { ProductsProvider } from '../../../../contexts/products';
+import useUI from '../../../../contexts/ui';
 
 // import BarcodeScanner from './barcode-scanner';
 

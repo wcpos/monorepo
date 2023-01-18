@@ -5,12 +5,10 @@ import pick from 'lodash/pick';
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
-import Icon from '@wcpos/components/src/icon';
-import Modal, { useModal } from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
 
+import { EditButton } from './edit-button';
 import { t } from '../../../../../lib/translations';
-import EditModal from '../../../common/edit-modal';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
 interface Props {
@@ -21,7 +19,6 @@ interface Props {
 export const ProductName = ({ item, column }: Props) => {
 	const name = useObservableState(item.name$, item.name);
 	const metaData = useObservableState(item.meta_data$, item.meta_data) || [];
-	const { ref: refEditor, open: openEditor, close: closeEditor } = useModal();
 	const { display } = column;
 
 	/**
@@ -95,10 +92,7 @@ export const ProductName = ({ item, column }: Props) => {
 				))}
 			</Box>
 			<Box distribution="center">
-				<Icon name="ellipsisVertical" onPress={openEditor} tooltip={t('Edit', { _tags: 'core' })} />
-				<Modal ref={refEditor} title={t('Edit {name}', { name })}>
-					<EditModal schema={schema} uiSchema={uiSchema} item={item} />
-				</Modal>
+				<EditButton schema={schema} uiSchema={uiSchema} item={item} />
 			</Box>
 		</Box>
 	);

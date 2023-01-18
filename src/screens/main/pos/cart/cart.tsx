@@ -7,9 +7,6 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
-import { CartProvider } from '../../../../contexts/cart';
-import useUI from '../../../../contexts/ui';
-import useCurrentOrder from '../contexts/current-order';
 import AddFee from './add-fee';
 import AddShipping from './add-shipping';
 import AddNoteButton from './buttons/add-note';
@@ -20,6 +17,9 @@ import VoidButton from './buttons/void';
 import CartHeader from './cart-header';
 import Table from './table';
 import Totals from './totals';
+import { CartProvider } from '../../../../contexts/cart';
+import useUI from '../../../../contexts/ui';
+import useCurrentOrder from '../contexts/current-order';
 
 const Cart = () => {
 	const { ui } = useUI('pos.cart');

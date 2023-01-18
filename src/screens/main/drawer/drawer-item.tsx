@@ -1,11 +1,13 @@
 import * as React from 'react';
 import { View, StyleProp, ViewStyle, TextStyle } from 'react-native';
+
 import { DrawerProps } from '@react-navigation/drawer/src/types';
 import { Link } from '@react-navigation/native';
 import { useTheme } from 'styled-components/native';
-import Text from '@wcpos/components/src/text';
+
 import Icon from '@wcpos/components/src/icon';
 import Pressable from '@wcpos/components/src/pressable';
+import Text from '@wcpos/components/src/text';
 import Tooltip from '@wcpos/components/src/tooltip';
 
 type Props = {
@@ -117,7 +119,7 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, ...rest }: Props)
 	return (
 		<View>
 			{drawerType === 'permanent' ? (
-				<Tooltip content={label} placement="right">
+				<Tooltip content={label} placement="right" withinPortal>
 					{buttonNode}
 				</Tooltip>
 			) : (

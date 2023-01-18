@@ -3,17 +3,17 @@ import * as React from 'react';
 import pick from 'lodash/pick';
 
 import Button from '@wcpos/components/src/button';
-import Modal, { useModal } from '@wcpos/components/src/modal';
+import Modal from '@wcpos/components/src/modal';
 
 import { t } from '../../../../../lib/translations';
-import EditModal from '../../../common/edit-modal';
+import EditModal from '../../../common/edit-form';
 
 interface OrderMetaButtonProps {
 	order: import('@wcpos/database').OrderDocument;
 }
 
 const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
-	const { ref, open, close } = useModal();
+	const [opened, setOpened] = React.useState(false);
 
 	/**
 	 *  filter schema for edit form
@@ -64,8 +64,20 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 
 	return (
 		<>
-			<Button title={t('Order Meta', { _tags: 'core' })} background="outline" onPress={open} />
-			<Modal ref={ref} title={t('Edit Order', { _tags: 'core' })}>
+			<Button
+				title={t('Order Meta', { _tags: 'core' })}
+				background="outline"
+				onPress={() => {
+					setOpened(true);
+				}}
+			/>
+			<Modal
+				opened={opened}
+				onClose={() => {
+					setOpened(false);
+				}}
+				title={t('Edit Order', { _tags: 'core' })}
+			>
 				<EditModal item={order} schema={schema} uiSchema={uiSchema} />
 			</Modal>
 		</>

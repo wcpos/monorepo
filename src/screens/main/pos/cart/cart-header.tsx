@@ -7,12 +7,12 @@ import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
+import Customer from './customer';
+import Settings from './settings';
 import useStore from '../../../../contexts/store';
 import AddCustomer from '../../common/add-new-customer';
 import CustomerSelect from '../../common/customer-select';
 // import UISettings from '../../common/ui-settings';
-import Customer from './customer';
-import Settings from './settings';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -77,7 +77,9 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 					)}
 				</ErrorBoundary>
 			</Box>
-			<AddCustomer />
+			<ErrorBoundary>
+				<AddCustomer />
+			</ErrorBoundary>
 			<ErrorBoundary>
 				<Settings ui={ui} />
 			</ErrorBoundary>

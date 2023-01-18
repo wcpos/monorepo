@@ -7,12 +7,12 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
+import SearchBar from './search-bar';
+import Table from './table';
 import { ProductsProvider } from '../../../contexts/products';
 import { TaxesProvider } from '../../../contexts/taxes';
 import useUI from '../../../contexts/ui';
 import UiSettings from '../common/ui-settings';
-import SearchBar from './search-bar';
-import Table from './table';
 
 /**
  *

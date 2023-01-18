@@ -11,7 +11,7 @@ import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
-import EditModal from '../../common/edit-modal';
+import EditModal from '../../common/edit-form';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

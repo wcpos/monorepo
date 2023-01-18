@@ -7,7 +7,7 @@ import pick from 'lodash/pick';
 import set from 'lodash/set';
 
 import Icon from '@wcpos/components/src/icon';
-import Modal, { useModal } from '@wcpos/components/src/modal';
+import Modal from '@wcpos/components/src/modal';
 import Tabs from '@wcpos/components/src/tabs';
 import Tree from '@wcpos/components/src/tree';
 // import useCountries from '@wcpos/hooks/src/use-countries';
@@ -21,7 +21,7 @@ import useRestHttpClient from '../../../hooks/use-rest-http-client';
  *
  */
 const AddNewCustomer = () => {
-	const { ref, open, close } = useModal();
+	const [opened, setOpened] = React.useState(false);
 	const [index, setIndex] = React.useState(0);
 	const [customerData, setCustomerData] = React.useState({});
 	const { storeDB } = useStore();
@@ -150,7 +150,6 @@ const AddNewCustomer = () => {
 		customerData,
 		index,
 		routes,
-		ref,
 		open,
 		close,
 		handleSave,
@@ -161,14 +160,23 @@ const AddNewCustomer = () => {
 
 	return (
 		<>
-			<Icon name="userPlus" onPress={open} tooltip="Add new customer" />
+			<Icon
+				name="userPlus"
+				onPress={() => {
+					setOpened(true);
+				}}
+				tooltip="Add new customer"
+			/>
 			<Modal
-				ref={ref}
+				opened={opened}
+				onClose={() => {
+					setOpened(false);
+				}}
 				title="Add New Customer"
 				primaryAction={{ label: 'Add Customer', action: handleSave }}
 				secondaryActions={[{ label: 'Cancel', action: close }]}
 			>
-				<Tabs<typeof routes[number]>
+				<Tabs<(typeof routes)[number]>
 					navigationState={{ index, routes }}
 					renderScene={renderScene}
 					onIndexChange={setIndex}

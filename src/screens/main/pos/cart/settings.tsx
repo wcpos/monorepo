@@ -5,7 +5,7 @@ import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
-import Modal, { useModal } from '@wcpos/components/src/modal';
+import Modal from '@wcpos/components/src/modal';
 import Form from '@wcpos/react-native-jsonschema-form';
 // import Form from '@wcpos/rjsf-native';
 
@@ -74,7 +74,7 @@ const uiSchema = {
  *
  */
 export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
-	const { ref, open, close } = useModal();
+	const [opened, setOpened] = React.useState(false);
 	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
 
@@ -123,9 +123,15 @@ export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 	 */
 	return (
 		<>
-			<Icon name="sliders" onPress={open} />
+			<Icon
+				name="sliders"
+				onPress={() => {
+					setOpened(true);
+				}}
+			/>
 			<Modal
-				ref={ref}
+				opened={opened}
+				onClose={() => setOpened(false)}
 				title={t('Cart Settings', { _tags: 'core' })}
 				// primaryAction={{ label: 'Save', action: close }}
 				// secondaryActions={[{ label: 'Restore Defaults', action: ui.reset, type: 'critical' }]}

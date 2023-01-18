@@ -4,19 +4,19 @@ import pick from 'lodash/pick';
 
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
-import Modal, { useModal } from '@wcpos/components/src/modal';
+import Modal from '@wcpos/components/src/modal';
 
 import useRestHttpClient from '../../../../hooks/use-rest-http-client';
-import EditCustomer from '../../common/edit-modal';
+import EditCustomer from '../../common/edit-form';
 
 type Props = {
 	item: import('@wcpos/database').CustomerDocument;
 };
 
 const Actions = ({ item: customer }: Props) => {
-	const { ref: modalRef, open, close } = useModal();
 	const http = useRestHttpClient();
 	const [menuOpened, setMenuOpened] = React.useState(false);
+	const [editModalOpened, setEditModalOpened] = React.useState(false);
 
 	/**
 	 *
@@ -68,7 +68,13 @@ const Actions = ({ item: customer }: Props) => {
 				withinPortal={true}
 				placement="bottom-end"
 				items={[
-					{ label: 'Edit', action: open, icon: 'penToSquare' },
+					{
+						label: 'Edit',
+						action: () => {
+							setEditModalOpened(true);
+						},
+						icon: 'penToSquare',
+					},
 					{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
 					{ label: '__' },
 					{
@@ -90,10 +96,23 @@ const Actions = ({ item: customer }: Props) => {
 			</Dropdown>
 
 			<Modal
-				ref={modalRef}
-				title="Edit Customer"
-				primaryAction={{ label: 'Sync Customer', action: handleSync }}
-				secondaryActions={[{ label: 'Cancel', action: close }]}
+				opened={editModalOpened}
+				onClose={() => {
+					setEditModalOpened(false);
+				}}
+				title={`Edit Customer`}
+				primaryAction={{
+					label: 'Save',
+					action: handleSync,
+				}}
+				secondaryActions={[
+					{
+						label: 'Cancel',
+						action: () => {
+							setEditModalOpened(false);
+						},
+					},
+				]}
 			>
 				<EditCustomer item={customer} schema={schema} uiSchema={{}} />
 			</Modal>

@@ -4,12 +4,10 @@ import pick from 'lodash/pick';
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
-import Icon from '@wcpos/components/src/icon';
-import Modal, { useModal } from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
 
+import { EditButton } from './edit-button';
 import { t } from '../../../../../lib/translations';
-import EditModal from '../../../common/edit-modal';
 
 interface Props {
 	item: import('@wcpos/database').FeeLineDocument;
@@ -17,7 +15,6 @@ interface Props {
 
 export const FeeName = ({ item }: Props) => {
 	const name = useObservableState(item.name$, item.name);
-	const { ref: refEditor, open: openEditor, close: closeEditor } = useModal();
 
 	/**
 	 *  filter schema for edit form
@@ -54,10 +51,7 @@ export const FeeName = ({ item }: Props) => {
 				<Text>{name}</Text>
 			</Box>
 			<Box distribution="center">
-				<Icon name="ellipsisVertical" onPress={openEditor} tooltip={t('Edit', { _tags: 'core' })} />
-				<Modal ref={refEditor} title={t('Edit {name}', { name, _tags: 'core' })}>
-					<EditModal schema={schema} uiSchema={uiSchema} item={item} />
-				</Modal>
+				<EditButton schema={schema} uiSchema={uiSchema} item={item} />
 			</Box>
 		</Box>
 	);
