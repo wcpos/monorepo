@@ -66,6 +66,7 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 				borderTopLeftRadius: theme.rounding.medium,
 				borderTopRightRadius: theme.rounding.medium,
 				height: 51,
+				zIndex: 1, // this makes sure the customer select is on top of the cart
 			}}
 		>
 			<Box fill>

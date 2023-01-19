@@ -2,13 +2,13 @@ import * as React from 'react';
 
 import Avatar from '@wcpos/components/src/avatar';
 import Box from '@wcpos/components/src/box';
-import Dialog, { useDialog } from '@wcpos/components/src/dialog';
+import Dialog from '@wcpos/components/src/dialog';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../lib/translations';
 import WpUsers from './wp-users';
+import { t } from '../../lib/translations';
 
 type SiteDocument = import('@wcpos/database').SiteDocument;
 type UserDocument = import('@wcpos/database').UserDocument;
@@ -20,18 +20,16 @@ interface SiteProps {
 }
 
 const Site = ({ site, user, first }: SiteProps) => {
-	const { ref: dialogRef, open: openConfirmDialog } = useDialog();
+	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 
 	/**
 	 * Remove site
 	 */
 	const handleRemoveSite = React.useCallback(
-		async (confirm: boolean) => {
-			if (!confirm) return;
-			await user.removeSite(site).catch((err) => {
+		() =>
+			user.removeSite(site).catch((err) => {
 				console.error(err);
-			});
-		},
+			}),
 		[user, site]
 	);
 
@@ -67,7 +65,13 @@ const Site = ({ site, user, first }: SiteProps) => {
 				</Box>
 			</Box>
 
-			<Dialog ref={dialogRef} onClose={handleRemoveSite}>
+			<Dialog
+				opened={deleteDialogOpened}
+				onAccept={handleRemoveSite}
+				onClose={() => {
+					setDeleteDialogOpened(false);
+				}}
+			>
 				{t('Remove store and associated users?', { _tags: 'core' })}
 			</Dialog>
 		</>

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import Dialog, { useDialog } from '@wcpos/components/src/dialog';
+import Dialog from '@wcpos/components/src/dialog';
 import Pill from '@wcpos/components/src/pill';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 
@@ -21,8 +21,8 @@ function sanitizeStoreName(id: string) {
 const WpUser = ({ site, wpUser }: Props) => {
 	const { login } = useAuth();
 	const stores = useObservableSuspense(wpUser.storesResource);
-	const { ref: dialogRef, open: openConfirmDialog } = useDialog();
 	const http = useHttpClient();
+	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 
 	/**
 	 * Populate stores on first render
@@ -56,29 +56,22 @@ const WpUser = ({ site, wpUser }: Props) => {
 		// }
 	}, [login, site.localID, stores, wpUser.localID]);
 
-	/**
-	 *
-	 */
-	const handleUserRemove = React.useCallback(
-		async (confirm: boolean) => {
-			if (!confirm) return;
-			await site.removeWpCredentials(wpUser);
-		},
-		[site, wpUser]
-	);
-
 	return (
 		<>
 			<Pill
 				removable
 				onPress={handleStoreSelect}
-				onRemove={openConfirmDialog}
+				onRemove={() => setDeleteDialogOpened(true)}
 				disabled={stores.length === 0}
 			>
 				{wpUser.display_name ? wpUser.display_name : 'No name?'}
 			</Pill>
 
-			<Dialog ref={dialogRef} onClose={handleUserRemove}>
+			<Dialog
+				opened={deleteDialogOpened}
+				onAccept={() => site.removeWpCredentials(wpUser)}
+				onClose={() => setDeleteDialogOpened(false)}
+			>
 				{t('Remove user?', { _tags: 'core' })}
 			</Dialog>
 		</>

@@ -2,11 +2,10 @@ import * as React from 'react';
 
 import pick from 'lodash/pick';
 
-import Dialog, { useDialog } from '@wcpos/components/src/dialog';
+import Dialog from '@wcpos/components/src/dialog';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
-import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import useRestHttpClient from '../../../../hooks/use-rest-http-client';
@@ -17,10 +16,10 @@ type Props = {
 };
 
 const Actions = ({ item: product }: Props) => {
-	const [modalOpened, setModalOpened] = React.useState(false);
-	const { ref: dialogRef, open: dialogOpen } = useDialog();
-	const http = useRestHttpClient();
 	const [menuOpened, setMenuOpened] = React.useState(false);
+	const [editModalOpened, setEditModalOpened] = React.useState(false);
+	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
+	const http = useRestHttpClient();
 
 	/**
 	 *
@@ -36,18 +35,6 @@ const Actions = ({ item: product }: Props) => {
 				log.error(err);
 			});
 	}, [http, product]);
-
-	/**
-	 *
-	 */
-	const handleDelete = React.useCallback(
-		(confirm) => {
-			if (confirm) {
-				product.remove();
-			}
-		},
-		[product]
-	);
 
 	/**
 	 *
@@ -73,41 +60,40 @@ const Actions = ({ item: product }: Props) => {
 		<>
 			<Dropdown
 				opened={menuOpened}
-				onClose={() => {
-					setMenuOpened(false);
-				}}
+				onClose={() => setMenuOpened(false)}
 				withinPortal={true}
 				placement="bottom-end"
 				items={[
 					{
 						label: 'Edit',
 						action: () => {
-							setModalOpened(true);
+							setEditModalOpened(true);
 						},
 						icon: 'penToSquare',
 					},
 					{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
 					{ label: '__' },
-					{ label: 'Delete', action: dialogOpen, icon: 'trash', type: 'critical' },
+					{
+						label: 'Delete',
+						action: () => setDeleteDialogOpened(true),
+						icon: 'trash',
+						type: 'critical',
+					},
 				]}
 			>
-				<Icon
-					name="ellipsisVertical"
-					onPress={() => {
-						setMenuOpened(true);
-					}}
-				/>
+				<Icon name="ellipsisVertical" onPress={() => setMenuOpened(true)} />
 			</Dropdown>
 
-			<Dialog ref={dialogRef} onClose={handleDelete}>
-				<Text>You are about to delete {product.name}</Text>
-			</Dialog>
+			<Dialog
+				opened={deleteDialogOpened}
+				onAccept={() => product.remove()}
+				onClose={() => setDeleteDialogOpened(false)}
+				children={`You are about to delete ${product.name}`}
+			/>
 
 			<Modal
-				opened={modalOpened}
-				onClose={() => {
-					setModalOpened(false);
-				}}
+				opened={editModalOpened}
+				onClose={() => setEditModalOpened(false)}
 				title={`Edit ${product.name}`}
 				primaryAction={{
 					label: 'Save',
@@ -118,9 +104,7 @@ const Actions = ({ item: product }: Props) => {
 				secondaryActions={[
 					{
 						label: 'Cancel',
-						action: () => {
-							setModalOpened(false);
-						},
+						action: () => setEditModalOpened(false),
 					},
 				]}
 			>

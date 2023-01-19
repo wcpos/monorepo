@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 import pick from 'lodash/pick';
+import { useObservableState } from 'observable-hooks';
 
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
@@ -20,6 +21,7 @@ const Actions = ({ item: order }: Props) => {
 	const http = useRestHttpClient();
 	const [menuOpened, setMenuOpened] = React.useState(false);
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
+	const status = useObservableState(order.status$, order.status);
 
 	/**
 	 *
@@ -102,7 +104,7 @@ const Actions = ({ item: order }: Props) => {
 			{ label: '__' },
 			{ label: 'Delete', action: order.remove, icon: 'trash', type: 'critical' },
 		];
-		if (order.status === 'completed') {
+		if (status === 'completed') {
 			menu.splice(1, 0, {
 				label: 'Receipt',
 				icon: 'receipt',
@@ -115,7 +117,7 @@ const Actions = ({ item: order }: Props) => {
 		}
 
 		return menu;
-	}, [handleOpen, handleSync, navigation, order]);
+	}, [handleOpen, handleSync, navigation, order, status]);
 
 	/**
 	 *

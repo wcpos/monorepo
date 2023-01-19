@@ -5,13 +5,13 @@ import pick from 'lodash/pick';
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
-import Modal, { useModal } from '@wcpos/components/src/modal';
+import Modal from '@wcpos/components/src/modal';
 import Pill from '@wcpos/components/src/pill';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
-import EditModal from '../../common/edit-form';
+import EditForm from '../../common/edit-form';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -23,7 +23,7 @@ interface CustomerProps {
  *
  */
 const Customer = ({ order }: CustomerProps) => {
-	const { ref, open, close } = useModal();
+	const [editModalOpened, setEditModalOpened] = React.useState(false);
 	const billing = useObservableState(order.billing$, order.billing);
 	const shipping = useObservableState(order.shipping$, order.shipping);
 
@@ -85,16 +85,25 @@ const Customer = ({ order }: CustomerProps) => {
 	return (
 		<Box horizontal align="center" space="small">
 			<Text weight="bold">{t('Customer', { _tags: 'core' })}:</Text>
-			<Pill removable onRemove={handleCustomerRemove} onPress={open}>
+			<Pill
+				removable
+				onRemove={handleCustomerRemove}
+				onPress={() => {
+					setEditModalOpened(true);
+				}}
+			>
 				{label}
 			</Pill>
 			<Modal
-				ref={ref}
+				opened={editModalOpened}
+				onClose={() => {
+					setEditModalOpened(false);
+				}}
 				title={t('Edit Customer Addresses', { _tags: 'core' })}
 				primaryAction={{ label: t('Edit Customer', { _tags: 'core' }), action: handleSaveCustomer }}
 				secondaryActions={[{ label: t('Cancel', { _tags: 'core' }), action: close }]}
 			>
-				<EditModal
+				<EditForm
 					// formData={{ billing: order.billing, shipping: order.shipping }}
 					item={order}
 					schema={schema}
