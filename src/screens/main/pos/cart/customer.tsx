@@ -94,7 +94,9 @@ const Customer = ({ order }: CustomerProps) => {
 			>
 				{label}
 			</Pill>
+
 			<Modal
+				size="large"
 				opened={editModalOpened}
 				onClose={() => {
 					setEditModalOpened(false);

@@ -74,8 +74,6 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 	 */
 	return (
 		<Combobox
-			label={t('Search Customers', { _tags: 'core' })}
-			hideLabel
 			options={options}
 			placeholder={t('Search Customers', { _tags: 'core' })}
 			selected={selectedCustomer ? displayCustomerNameOrUsername(selectedCustomer) : ''}

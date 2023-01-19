@@ -167,7 +167,9 @@ const AddNewCustomer = () => {
 				}}
 				tooltip="Add new customer"
 			/>
+
 			<Modal
+				size="large"
 				opened={opened}
 				onClose={() => {
 					setOpened(false);

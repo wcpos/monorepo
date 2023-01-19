@@ -35,7 +35,7 @@ export const SettingsTabs = () => {
 	return (
 		<>
 			<Backdrop />
-			<Modal.Container>
+			<Modal.Container size="large">
 				<Modal.Header onClose={() => navigation.dispatch(StackActions.pop(1))}>
 					{t('Settings', { _tags: 'core' })}
 				</Modal.Header>
