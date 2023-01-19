@@ -6,11 +6,12 @@ import set from 'lodash/set';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
-import useOnlineStatus from '../use-online-status';
 import http from './http';
 import useHttpErrorHandler from './use-http-error-handler';
+import useOnlineStatus from '../use-online-status';
 
 type AxiosRequestConfig = import('axios').AxiosRequestConfig;
+type AxiosError = import('axios').AxiosError;
 
 /**
  * Http Client provides a standard API for all platforms
@@ -90,20 +91,23 @@ export const useHttpClient = () => {
 			/**
 			 *
 			 */
-			const response = await http.request(_config).catch((error) => {
+			try {
+				const response = await http.request(_config);
+				return response;
+			} catch (error) {
 				log.error(error);
-				errorResponseHandler(error);
-			});
-
-			if (!response) {
-				log.error('no response at all', config);
-				throw Error('Network Error');
+				errorResponseHandler(error as AxiosError);
 			}
+
+			// if (!response) {
+			// 	log.error('no response at all', config);
+			// 	throw Error('Network Error');
+			// }
 
 			/**
 			 * A response should only return is status is ok
 			 */
-			return response;
+			// return response;
 		};
 
 		/**
