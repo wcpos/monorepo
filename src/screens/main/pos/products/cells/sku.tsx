@@ -1,5 +1,7 @@
 import * as React from 'react';
+
 import { useObservableState } from 'observable-hooks';
+
 import Text from '@wcpos/components/src/text';
 
 type SKUProps = {
@@ -11,5 +13,3 @@ export const SKU = ({ item: product }: SKUProps) => {
 
 	return product.isSynced() ? <Text>{sku}</Text> : <Text.Skeleton length="short" />;
 };
-
-export default SKU;

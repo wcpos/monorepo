@@ -46,5 +46,3 @@ export const Actions = ({ item: product }: Props) => {
 		</View>
 	);
 };
-
-export default Actions;

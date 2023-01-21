@@ -39,5 +39,3 @@ export const VariablePrice = ({ item: product, column }: Props) => {
 
 	return <VariablePriceWithTax variations={data} taxDisplay={show('tax') ? 'text' : 'tooltip'} />;
 };
-
-export default VariablePrice;

@@ -1,16 +1,16 @@
 import * as React from 'react';
-import { Image as RNImage, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
-// import Img from '@wcpos/components/src/image';
+import Image from '@wcpos/components/src/image';
 import Skeleton from '@wcpos/components/src/skeleton';
 
 type Props = {
 	item: import('@wcpos/database').ProductDocument;
 };
 
-export const Image = ({ item: product }: Props) => {
+export const ProductImage = ({ item: product }: Props) => {
 	const thumbnail = useObservableState(product.thumbnail$, product.thumbnail);
 	const [size, setSize] = React.useState({ width: undefined, height: undefined });
 
@@ -22,9 +22,10 @@ export const Image = ({ item: product }: Props) => {
 	return (
 		<View onLayout={onLayout} style={{ width: '100%' }}>
 			{thumbnail ? (
-				<RNImage
-					source={{ uri: thumbnail }}
+				<Image
+					source={thumbnail}
 					style={{ width: size.width, height: size.width, aspectRatio: 1 }}
+					border="rounded"
 					// placeholder={<Img source={require('assets/placeholder.png')} />}
 				/>
 			) : (
@@ -33,5 +34,3 @@ export const Image = ({ item: product }: Props) => {
 		</View>
 	);
 };
-
-export default Image;

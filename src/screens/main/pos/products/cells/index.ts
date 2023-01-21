@@ -1,16 +1,16 @@
 import { Actions } from './actions';
-import { Image } from './image';
+import { GroupedName } from './grouped-name';
+import { ProductImage } from './image';
 import { Name } from './name';
 import { Price } from './price';
 import { SKU } from './sku';
 import { StockQuantity } from './stock-quantity';
 import { VariableActions } from './variable-actions';
-import { GroupedName } from './grouped-name';
 import { VariablePrice } from './variable-price';
 
 const simple = {
 	actions: Actions,
-	image: Image,
+	image: ProductImage,
 	name: Name,
 	price: Price,
 	sku: SKU,
@@ -19,7 +19,7 @@ const simple = {
 
 const variable = {
 	actions: VariableActions,
-	image: Image,
+	image: ProductImage,
 	name: Name,
 	price: VariablePrice,
 	sku: SKU,

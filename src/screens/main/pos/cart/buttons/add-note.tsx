@@ -30,7 +30,9 @@ const AddNoteButton = ({ order }: AddNoteButtonProps) => {
 				onPress={() => {
 					setOpened(true);
 				}}
+				style={{ flex: 1 }}
 			/>
+
 			<Modal
 				opened={opened}
 				onClose={() => {

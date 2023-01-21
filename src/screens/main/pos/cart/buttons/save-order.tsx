@@ -46,7 +46,12 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 	}, [http, order, setCurrentOrder]);
 
 	return (
-		<Button title={t('Save Order', { _tags: 'core' })} background="outline" onPress={saveOrder} />
+		<Button
+			title={t('Save Order', { _tags: 'core' })}
+			background="outline"
+			onPress={saveOrder}
+			style={{ flex: 1 }}
+		/>
 	);
 };
 

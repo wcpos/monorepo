@@ -38,7 +38,7 @@ export const UserMenu = () => {
 		>
 			<Box horizontal space="xSmall" align="center">
 				<Avatar
-					src={wpCredentials?.avatar_url}
+					source={wpCredentials?.avatar_url}
 					// placeholder="PK"
 					size="small"
 				/>

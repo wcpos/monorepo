@@ -32,10 +32,7 @@ const AddNewCustomer = () => {
 	const countries = {};
 
 	const handleSave = async () => {
-		const result = await http('customers', {
-			method: 'post',
-			data: customerData,
-		}).catch((error) => {
+		const result = await http.post('customers', { data: customerData }).catch((error) => {
 			if (error.response) {
 				const { data } = error.response;
 				const { data: d, code, message } = data;

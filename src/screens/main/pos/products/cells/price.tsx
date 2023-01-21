@@ -1,7 +1,10 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
-import Text from '@wcpos/components/src/text';
+
 import find from 'lodash/find';
+import { useObservableState } from 'observable-hooks';
+
+import Text from '@wcpos/components/src/text';
+
 import PriceWithTax from '../../../common/price';
 
 interface Props {

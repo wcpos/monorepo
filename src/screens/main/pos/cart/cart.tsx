@@ -82,17 +82,13 @@ const Cart = () => {
 						align="center"
 						style={{ backgroundColor: theme.colors.lightGrey }}
 					>
-						<ErrorBoundary>
-							<AddNoteButton order={currentOrder} />
-							<OrderMetaButton order={currentOrder} />
-							<SaveButton order={currentOrder} />
-						</ErrorBoundary>
+						<AddNoteButton order={currentOrder} />
+						<OrderMetaButton order={currentOrder} />
+						<SaveButton order={currentOrder} />
 					</Box>
 					<Box horizontal>
-						<ErrorBoundary>
-							<VoidButton order={currentOrder} />
-							<PayButton order={currentOrder} />
-						</ErrorBoundary>
+						<VoidButton order={currentOrder} />
+						<PayButton order={currentOrder} />
 					</Box>
 				</>
 			)}

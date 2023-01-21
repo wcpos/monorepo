@@ -1,6 +1,8 @@
 import * as React from 'react';
-import { useObservableState } from 'observable-hooks';
+
 import isFinite from 'lodash/isFinite';
+import { useObservableState } from 'observable-hooks';
+
 import Text from '@wcpos/components/src/text';
 
 type Props = {
@@ -13,5 +15,3 @@ export const StockQuantity = ({ item: product }: Props) => {
 
 	return manageStock && isFinite(stockQuantity) ? <Text>{stockQuantity}</Text> : null;
 };
-
-export default StockQuantity;

@@ -1,8 +1,8 @@
+import cloneDeep from 'lodash/cloneDeep';
+import differenceWith from 'lodash/differenceWith';
 import find from 'lodash/find';
 import forEach from 'lodash/forEach';
-import cloneDeep from 'lodash/cloneDeep';
 import map from 'lodash/map';
-import differenceWith from 'lodash/differenceWith';
 
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 export type ProductAttribute = {

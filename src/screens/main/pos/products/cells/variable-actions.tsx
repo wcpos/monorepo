@@ -9,7 +9,7 @@ import Icon from '@wcpos/components/src/icon';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
-import Variations from './variations';
+import { Variations } from './variations';
 import useVariations from '../../../../../contexts/variations';
 import useRestHttpClient from '../../../../../hooks/use-rest-http-client';
 import useCurrentOrder from '../../contexts/current-order';
@@ -116,5 +116,3 @@ export const VariableActions = ({ item: product }: Props) => {
 		</Popover>
 	);
 };
-
-export default VariableActions;

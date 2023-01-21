@@ -9,7 +9,6 @@ import Select from '@wcpos/components/src/select';
 import Text from '@wcpos/components/src/text';
 
 // import useVariations from '../../../../../contexts/variations';
-import useCurrencyFormat from '../../../../../hooks/use-currency-format';
 import {
 	init,
 	updateState,
@@ -17,6 +16,7 @@ import {
 	getSelectedFromAttributes,
 	ProductAttribute,
 } from './variations.helpers';
+import useCurrencyFormat from '../../../../../hooks/use-currency-format';
 
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 // type ProductAttributes = import('@wcpos/database').ProductDocument['attributes'];
@@ -27,7 +27,7 @@ interface Props {
 	addToCart: (variation: ProductVariationDocument, metaData: any) => void;
 }
 
-const Variations = ({ variations, attributes, addToCart }: Props) => {
+export const Variations = ({ variations, attributes, addToCart }: Props) => {
 	const [state, setState] = React.useState(() => init(attributes));
 	const { format } = useCurrencyFormat();
 
@@ -119,5 +119,3 @@ const Variations = ({ variations, attributes, addToCart }: Props) => {
 		</Box>
 	);
 };
-
-export default Variations;

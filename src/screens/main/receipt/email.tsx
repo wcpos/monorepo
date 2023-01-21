@@ -8,7 +8,7 @@ import TextInput from '@wcpos/components/src/textinput';
 import useRestHttpClient from '../../../hooks/use-rest-http-client';
 import { t } from '../../../lib/translations';
 
-export const EmailModal = ({ orderID, onClose }) => {
+export const EmailModal = ({ orderID }) => {
 	const http = useRestHttpClient();
 	const [isLoading, setIsLoading] = React.useState(false);
 	const [form, setForm] = React.useState({
@@ -33,34 +33,34 @@ export const EmailModal = ({ orderID, onClose }) => {
 	};
 
 	return (
-		<Modal
-			alwaysOpen
-			title={t('Email Receipt', { _tags: 'core' })}
-			primaryAction={{ label: t('Send', { _tags: 'core' }), action: sendEmail, isLoading }}
-			onClose={onClose}
-		>
-			<Box space="medium">
-				<TextInput
-					onChange={(email) =>
-						setForm({
-							...form,
-							email,
-						})
-					}
-					value={form.email}
-					label={t('Email Address', { _tags: 'core' })}
-				/>
-				<Checkbox
-					onChange={(save_to) =>
-						setForm({
-							...form,
-							save_to,
-						})
-					}
-					value={form.save_to}
-					label={t('Save email to Billing Address', { _tags: 'core' })}
-				/>
-			</Box>
-		</Modal>
+		// <Modal
+		// 	alwaysOpen
+		// 	title={t('Email Receipt', { _tags: 'core' })}
+		// 	primaryAction={{ label: t('Send', { _tags: 'core' }), action: sendEmail, isLoading }}
+		// 	onClose={onClose}
+		// >
+		<Box space="medium">
+			<TextInput
+				onChange={(email) =>
+					setForm({
+						...form,
+						email,
+					})
+				}
+				value={form.email}
+				label={t('Email Address', { _tags: 'core' })}
+			/>
+			<Checkbox
+				onChange={(save_to) =>
+					setForm({
+						...form,
+						save_to,
+					})
+				}
+				value={form.save_to}
+				label={t('Save email to Billing Address', { _tags: 'core' })}
+			/>
+		</Box>
+		// </Modal>
 	);
 };

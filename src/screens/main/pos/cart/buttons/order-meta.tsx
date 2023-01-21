@@ -70,6 +70,7 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 				onPress={() => {
 					setOpened(true);
 				}}
+				style={{ flex: 1 }}
 			/>
 			<Modal
 				opened={opened}

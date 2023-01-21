@@ -59,5 +59,3 @@ export const Name = ({ item: product, column }: Props) => {
 		</Box>
 	);
 };
-
-export default Name;

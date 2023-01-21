@@ -5,11 +5,11 @@ import { useReactToPrint } from 'react-to-print';
 
 import Modal from '@wcpos/components/src/modal';
 
+import { EmailModal } from './email';
+import { Receipt } from './receipt';
 import { OrdersProvider } from '../../../contexts/orders';
 import useModalRefreshFix from '../../../hooks/use-modal-refresh-fix';
 import { t } from '../../../lib/translations';
-import { EmailModal } from './email';
-import { Receipt } from './receipt';
 
 type POSStackParamList = import('../navigator').POSStackParamList;
 type ReceiptModalProps = import('@react-navigation/stack').StackScreenProps<
@@ -19,7 +19,7 @@ type ReceiptModalProps = import('@react-navigation/stack').StackScreenProps<
 
 export const ReceiptModal = ({ route, navigation }: ReceiptModalProps) => {
 	const { _id } = route.params;
-	const [showEmailModal, seShowEmailModal] = React.useState(false);
+	const [showEmailModal, setShowEmailModal] = React.useState(false);
 	const receiptRef = React.useRef(null);
 	const handlePrint = useReactToPrint({
 		content: () => receiptRef.current,
@@ -27,63 +27,42 @@ export const ReceiptModal = ({ route, navigation }: ReceiptModalProps) => {
 	});
 	useModalRefreshFix();
 
-	/**
-	 * If checkout is the only one in stack (ie: page refresh),
-	 * then reset navigation with a sensible stack
-	 * @TODO - is there a better way to do this?
-	 *
-	 * @TODO - move to useModalRefreshFix with screen size dependency
-	 */
-	// React.useEffect(() => {
-	// 	const state = navigation.getState();
-	// 	if (state.routes.length === 1) {
-	// 		navigation.dispatch(
-	// 			CommonActions.reset({
-	// 				index: 1,
-	// 				routes: [
-	// 					{ name: state.routeNames[0] },
-	// 					{
-	// 						name: 'Receipt',
-	// 						params: { _id },
-	// 					},
-	// 				],
-	// 			})
-	// 		);
-	// 	}
-	// }, [_id, navigation]);
-
 	return (
-		<Modal
-			withPortal={false}
-			alwaysOpen
-			title={t('Receipt', { _tags: 'core' })}
-			size="large"
-			onClose={() => navigation.dispatch(StackActions.pop(1))}
-			style={{ height: '100%' }}
-			primaryAction={{
-				label: t('Print Receipt', { _tags: 'core' }),
-				action: handlePrint,
-			}}
-			secondaryActions={[
-				{
-					label: t('Email Receipt', { _tags: 'core' }),
-					action: () => {
-						seShowEmailModal(true);
-					},
-				},
-			]}
-		>
-			<OrdersProvider initialQuery={{ filters: { _id } }}>
-				<Receipt ref={receiptRef} />
-				{showEmailModal && (
-					<EmailModal
-						orderID={_id}
-						onClose={() => {
-							seShowEmailModal(false);
-						}}
-					/>
-				)}
-			</OrdersProvider>
-		</Modal>
+		<>
+			<Modal.Container size="large">
+				<Modal.Header onClose={() => navigation.dispatch(StackActions.pop(1))}>
+					{t('Receipt', { _tags: 'core' })}
+				</Modal.Header>
+				<Modal.Content>
+					<OrdersProvider initialQuery={{ filters: { _id } }}>
+						<Receipt ref={receiptRef} />
+					</OrdersProvider>
+				</Modal.Content>
+				<Modal.Footer
+					primaryAction={{
+						label: t('Print Receipt', { _tags: 'core' }),
+						action: handlePrint,
+					}}
+					secondaryActions={[
+						{
+							label: t('Email Receipt', { _tags: 'core' }),
+							action: () => {
+								setShowEmailModal(true);
+							},
+						},
+					]}
+				/>
+			</Modal.Container>
+
+			<Modal
+				opened={showEmailModal}
+				onClose={() => {
+					setShowEmailModal(false);
+				}}
+				title={t('Email Receipt', { _tags: 'core' })}
+			>
+				<EmailModal orderID={_id} />
+			</Modal>
+		</>
 	);
 };

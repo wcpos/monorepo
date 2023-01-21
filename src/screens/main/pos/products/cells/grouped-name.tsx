@@ -1,9 +1,12 @@
 import * as React from 'react';
+
+import find from 'lodash/find';
 import { useObservableState, ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { from } from 'rxjs';
-import find from 'lodash/find';
-import Text from '@wcpos/components/src/text';
+
 import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
+
 import Categories from '../../../common/product-categories';
 import Tags from '../../../common/product-tags';
 
@@ -78,5 +81,3 @@ export const GroupedName = ({ item: product, column }: Props) => {
 		</Box>
 	);
 };
-
-export default GroupedName;
