@@ -7,37 +7,54 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
+// import Logo from '@wcpos/components/src/logo';
 
 import { t } from '../../../lib/translations';
 
 const HeaderLeft = () => {
 	const { width } = useWindowDimensions();
-	const navigation = useNavigation();
 	const theme = useTheme();
+	const navigation = useNavigation();
+	const [drawerOpen, setDrawerOpen] = React.useState(false);
 
-	const openDrawer = React.useCallback(() => {
-		navigation.dispatch(DrawerActions.openDrawer());
+	/**
+	 * This is a bit of a hack
+	 * @TODO - how to tell drawer status of child navigator?
+	 */
+	const handleToggleDrawer = React.useCallback(() => {
+		navigation.dispatch(DrawerActions.toggleDrawer());
+		// setDrawerOpen((s) => !s); // doesn't track clickoutside
 	}, [navigation]);
 
-	const renderMenuButton = () => {
-		if (width < theme.screens.small) {
-			return <Icon name="bars" onPress={openDrawer} type="inverse" />;
-		}
-		if (width < theme.screens.medium) {
-			return (
+	/**
+	 *
+	 */
+	if (width < theme.screens.small) {
+		return (
+			<Box padding="small">
+				<Icon name={drawerOpen ? 'xmark' : 'bars'} onPress={handleToggleDrawer} type="inverse" />
+			</Box>
+		);
+	}
+
+	/**
+	 *
+	 */
+	if (width < theme.screens.medium) {
+		return (
+			<Box padding="small" paddingLeft="none">
 				<Button
-					onPress={openDrawer}
+					onPress={handleToggleDrawer}
 					title={t('Menu', { _tags: 'core' })}
-					accessoryLeft={<Icon name="bars" type="inverse" />}
+					accessoryLeft={<Icon name={drawerOpen ? 'xmark' : 'bars'} type="inverse" />}
 					type="headerBackground"
 					style={{ padding: 0 }}
 				/>
-			);
-		}
-		return null;
-	};
+			</Box>
+		);
+	}
 
-	return <Box padding="small">{renderMenuButton()}</Box>;
+	return null;
 };
 
 export default HeaderLeft;

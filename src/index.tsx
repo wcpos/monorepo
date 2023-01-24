@@ -15,7 +15,7 @@ import { AuthProvider } from './contexts/auth';
 import { LanguageProvider } from './contexts/language';
 import { StoreProvider } from './contexts/store';
 import RootError from './root-error';
-import RootNavigator from './screens';
+import RootNavigator from './screens/_rootNavigator';
 
 // enable freeze
 enableFreeze(true);

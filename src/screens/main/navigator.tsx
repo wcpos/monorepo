@@ -9,15 +9,15 @@ import Icon, { IconName } from '@wcpos/components/src/icon';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import log from '@wcpos/utils/src/logger';
 
-import useAuth from '../../contexts/auth';
-import { UIProvider } from '../../contexts/ui';
-import { t } from '../../lib/translations';
 import Customers from './customers';
 import CustomDrawer from './drawer';
 import CustomHeader from './header';
 import OrdersNavigator from './orders';
 import POS from './pos';
 import Products from './products';
+import useAuth from '../../contexts/auth';
+import { UIProvider } from '../../contexts/ui';
+import { t } from '../../lib/translations';
 
 export type DrawerParamList = {
 	POS: undefined;
