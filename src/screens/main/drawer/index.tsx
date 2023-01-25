@@ -7,9 +7,10 @@ import { useTheme } from 'styled-components/native';
 import Icon from '@wcpos/components/src/icon';
 
 import DrawerContent from './components/drawer-content';
+import Header from './components/header';
 import CustomersNavigator from './customers/_navigator';
 import OrdersNavigator from './orders/_navigator';
-import POSNavigator from './pos/_navigator';
+import POSNavigator from './pos';
 import ProductsNavigator from './products/_navigator';
 import { UIProvider } from '../../../contexts/ui';
 import { t } from '../../../lib/translations';
@@ -38,8 +39,7 @@ const DrawerNavigator = () => {
 			<Drawer.Navigator
 				initialRouteName="POSStack"
 				screenOptions={{
-					headerShown: false,
-					headerTitle: 'HeaderTitle',
+					header: (props) => <Header {...props} />,
 					drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
 					drawerStyle: {
 						backgroundColor: theme.colors.headerBackground,

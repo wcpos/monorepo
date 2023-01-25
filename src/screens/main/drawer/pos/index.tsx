@@ -1,16 +1,50 @@
 import * as React from 'react';
-import { useWindowDimensions } from 'react-native';
 
-import { useTheme } from 'styled-components/native';
+import { createStackNavigator } from '@react-navigation/stack';
 
-import POSColumns from './columns';
-import POSTabs from './tabs';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Text from '@wcpos/components/src/text';
 
-const POS = ({ navigation, route }) => {
-	const theme = useTheme();
-	const dimensions = useWindowDimensions();
+import Checkout from './checkout';
+import { CurrentOrderProvider } from './contexts/current-order';
+import POS from './pos';
+import { TaxesProvider } from '../../../../contexts/taxes';
+import Receipt from '../receipt';
 
-	return dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />;
+export type POSStackParamList = {
+	POS: undefined;
+	Checkout: { orderID: string };
+	Receipt: undefined;
 };
 
-export default POS;
+const Stack = createStackNavigator<POSStackParamList>();
+
+/**
+ *
+ */
+const POSNavigator = ({ navigation, route }) => {
+	// const { orderID } = route.params;
+	const orderID = '123';
+
+	const taxQuery = React.useMemo(() => ({ country: 'GB' }), []);
+
+	return (
+		<ErrorBoundary>
+			<React.Suspense fallback={<Text>Loading POSNavigator...</Text>}>
+				<CurrentOrderProvider orderID={orderID}>
+					<TaxesProvider initialQuery={taxQuery}>
+						<Stack.Navigator screenOptions={{ headerShown: false }}>
+							<Stack.Screen name="POS" component={POS} />
+							<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
+								<Stack.Screen name="Checkout" component={Checkout} />
+								<Stack.Screen name="Receipt" component={Receipt} />
+							</Stack.Group>
+						</Stack.Navigator>
+					</TaxesProvider>
+				</CurrentOrderProvider>
+			</React.Suspense>
+		</ErrorBoundary>
+	);
+};
+
+export default POSNavigator;

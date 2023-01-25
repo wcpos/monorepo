@@ -11,7 +11,7 @@ import { useTheme } from 'styled-components/native';
 import Left from './left';
 import Right from './right';
 import HeaderTitle from './title';
-import useAuth from '../../../contexts/auth';
+import useAuth from '../../../../../contexts/auth';
 
 const Header = ({ route }: DrawerHeaderProps) => {
 	const insets = useSafeAreaInsets();

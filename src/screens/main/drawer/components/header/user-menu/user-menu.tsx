@@ -10,7 +10,7 @@ import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
 
-import useAuth from '../../../../contexts/auth';
+import useAuth from '../../../../../../contexts/auth';
 
 export const UserMenu = () => {
 	const { logout, wpCredentials } = useAuth();

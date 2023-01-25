@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useRoute, useNavigation } from '@react-navigation/native';
+
 import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
@@ -16,6 +18,7 @@ type RenderTabTitle = (focused: boolean, order?: OrderDocument) => React.ReactEl
  *
  */
 const CartTabs = () => {
+	const navigation = useNavigation();
 	const { currentOrder, setCurrentOrder, newOrder } = useCurrentOrder();
 	const { data } = useOrders();
 	const orders = React.useMemo(() => [...data, newOrder], [data, newOrder]);
@@ -67,9 +70,10 @@ const CartTabs = () => {
 	 */
 	const handleTabChange = React.useCallback(
 		(idx: number) => {
-			setCurrentOrder(orders[idx]);
+			navigation.navigate('POS', { orderID: orders[idx]?._id });
+			// setCurrentOrder(orders[idx]);
 		},
-		[orders, setCurrentOrder]
+		[navigation, orders]
 	);
 
 	useWhyDidYouUpdate('CartTabs', {

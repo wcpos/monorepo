@@ -94,9 +94,7 @@ const Actions = ({ item: order }: Props) => {
 		const menu = [
 			{
 				label: 'Edit',
-				action: () => {
-					setEditModalOpened(true);
-				},
+				action: () => navigation.navigate('EditOrder', { orderID: order._id }),
 				icon: 'penToSquare',
 			},
 			{ label: 'Re-open', action: handleOpen, icon: 'cartShopping' },
@@ -108,11 +106,7 @@ const Actions = ({ item: order }: Props) => {
 			menu.splice(1, 0, {
 				label: 'Receipt',
 				icon: 'receipt',
-				action: () => {
-					if (order) {
-						navigation.navigate('Receipt', { _id: order._id });
-					}
-				},
+				action: () => navigation.navigate('Receipt', { orderID: order._id }),
 			});
 		}
 

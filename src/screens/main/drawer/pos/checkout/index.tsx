@@ -10,7 +10,7 @@ import { OrdersProvider } from '../../../../../contexts/orders';
 import useModalRefreshFix from '../../../../../hooks/use-modal-refresh-fix';
 import { t } from '../../../../../lib/translations';
 
-type POSStackParamList = import('../_navigator').POSStackParamList;
+type POSStackParamList = import('..').POSStackParamList;
 type CheckoutModalProps = import('@react-navigation/stack').StackScreenProps<
 	POSStackParamList,
 	'Checkout'

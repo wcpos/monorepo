@@ -11,7 +11,7 @@ import log from '@wcpos/utils/src/logger';
 
 import Customers from './customers';
 import CustomDrawer from './drawer';
-import CustomHeader from './header';
+import CustomHeader from './drawer/components/header';
 import OrdersNavigator from './orders';
 import POS from './pos';
 import Products from './products';

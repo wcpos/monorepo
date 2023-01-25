@@ -6,7 +6,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Form from '@wcpos/react-native-jsonschema-form';
 
-import useAuth from '../../../../contexts/auth';
+import useAuth from '../../../contexts/auth';
 
 const uiSchema = {};
 

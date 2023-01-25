@@ -11,7 +11,7 @@ import { OrdersProvider } from '../../../../contexts/orders';
 import useModalRefreshFix from '../../../../hooks/use-modal-refresh-fix';
 import { t } from '../../../../lib/translations';
 
-type POSStackParamList = import('../pos/_navigator').POSStackParamList;
+type POSStackParamList = import('../pos').POSStackParamList;
 type OrdersStackParamList = import('../orders/_navigator').OrdersStackParamList;
 type ReceiptModalProps = import('@react-navigation/stack').StackScreenProps<
 	POSStackParamList | OrdersStackParamList,

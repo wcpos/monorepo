@@ -8,7 +8,7 @@ import Table from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
-import useAuth from '../../../../contexts/auth';
+import useAuth from '../../../../../../contexts/auth';
 
 interface UserSettingsProps {
 	onClose: () => void;

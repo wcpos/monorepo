@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useNavigation } from '@react-navigation/native';
 import pick from 'lodash/pick';
 
 import Dropdown from '@wcpos/components/src/dropdown';
@@ -15,6 +16,7 @@ type Props = {
 
 const Actions = ({ item: customer }: Props) => {
 	const http = useRestHttpClient();
+	const navigation = useNavigation();
 	const [menuOpened, setMenuOpened] = React.useState(false);
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
 
@@ -70,9 +72,7 @@ const Actions = ({ item: customer }: Props) => {
 				items={[
 					{
 						label: 'Edit',
-						action: () => {
-							setEditModalOpened(true);
-						},
+						action: () => navigation.navigate('EditCustomer', { customerID: customer.id }),
 						icon: 'penToSquare',
 					},
 					{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
