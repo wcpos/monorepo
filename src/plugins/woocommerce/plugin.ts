@@ -19,6 +19,7 @@ function isSynced(this: RxCollection) {
  *
  */
 function maybeAddMeta(this: RxCollection, plainData, doc: RxDocument) {
+	debugger; // should only be for docs created in POS
 	if (doc._id && doc._id.includes(':')) {
 		doc
 			.atomicUpdate((oldData) => {

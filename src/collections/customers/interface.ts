@@ -12,7 +12,7 @@ export interface WooCommerceCustomerSchema {
   /**
    * Unique local identifier for the resource.
    */
-  _id?: string;
+  localID?: string;
   /**
    * Unique remote identifier for the resource.
    */

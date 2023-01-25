@@ -102,8 +102,8 @@ const collectionCountsPlugin: RxPlugin = {
 									} else {
 										pullRemoteIds.push(doc.id);
 									}
-								} else if (doc._id) {
-									pushLocalIds.push(doc._id);
+								} else if (doc.localID) {
+									pushLocalIds.push(doc.localID);
 								} else {
 									throw new Error(`Orphaned doc: ${String(doc)}`);
 								}

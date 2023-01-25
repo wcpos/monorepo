@@ -3,9 +3,9 @@
 	"version": 0,
 	"description": "WooCommerce Customer schema",
 	"type": "object",
-	"primaryKey": "_id",
+	"primaryKey": "localID",
 	"properties": {
-		"_id": {
+		"localID": {
 			"description": "Unique local identifier for the resource.",
 			"type": "string",
 			"maxLength": 100

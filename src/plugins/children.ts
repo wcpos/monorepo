@@ -60,6 +60,7 @@ async function upsertChildren(this: RxCollection, data: any) {
 		}
 
 		if (docs.length > 0) {
+			debugger;
 			data[key] = docs.filter((doc) => !!doc).map((doc) => doc._id);
 		}
 	});

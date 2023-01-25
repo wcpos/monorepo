@@ -16,6 +16,7 @@ export interface UserSchema {
   first_name?: string;
   last_name?: string;
   display_name?: string;
+  locale?: string;
   sites?: string[];
   [k: string]: any;
 }

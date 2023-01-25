@@ -14,6 +14,7 @@ export const RxDBGenerateIdPlugin: RxPlugin = {
 		createRxCollection: {
 			after({ collection }) {
 				collection.preInsert(function (data) {
+					debugger;
 					if (!data[collection.schema.primaryPath]) {
 						data[collection.schema.primaryPath] = generateId();
 					}

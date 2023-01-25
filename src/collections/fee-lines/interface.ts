@@ -12,7 +12,7 @@ export interface WooCommerceOrderFeeLineSchema {
   /**
    * Unique local identifier for the resource.
    */
-  _id?: string;
+  localID?: string;
   id?: number;
   /**
    * Fee name.

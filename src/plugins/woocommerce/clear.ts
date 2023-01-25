@@ -17,5 +17,6 @@ export async function clear(this: RxCollection) {
 		});
 
 	//
+	debugger;
 	return this.bulkRemove(docs.map((doc) => doc._id));
 }

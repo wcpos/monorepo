@@ -3,9 +3,9 @@
 	"version": 0,
 	"description": "WooCommerce Order Fee Line schema",
 	"type": "object",
-	"primaryKey": "_id",
+	"primaryKey": "localID",
 	"properties": {
-		"_id": {
+		"localID": {
 			"description": "Unique local identifier for the resource.",
 			"type": "string",
 			"maxLength": 100
@@ -28,7 +28,10 @@
 		"tax_status": {
 			"description": "Tax status of fee.",
 			"type": "string",
-			"enum": ["taxable", "none"]
+			"enum": [
+				"taxable",
+				"none"
+			]
 		},
 		"total": {
 			"description": "Line total (after discounts).",

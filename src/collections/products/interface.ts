@@ -12,7 +12,7 @@ export interface WooCommerceProductSchema {
   /**
    * Unique local identifier for the resource.
    */
-  _id?: string;
+  localID?: string;
   id?: number;
   name?: string;
   slug?: string;

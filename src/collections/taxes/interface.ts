@@ -12,7 +12,7 @@ export interface WooCommerceTaxRateSchema {
   /**
    * Unique local identifier for the resource.
    */
-  _id?: string;
+  localID?: string;
   id?: number;
   country?:
     | "AX"

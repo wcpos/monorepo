@@ -3,9 +3,9 @@
 	"version": 0,
 	"description": "WooCommerce Order schema",
 	"type": "object",
-	"primaryKey": "_id",
+	"primaryKey": "localID",
 	"properties": {
-		"_id": {
+		"localID": {
 			"description": "Unique local identifier for the resource.",
 			"type": "string",
 			"maxLength": 100
@@ -477,7 +477,6 @@
 					"meta_data": {
 						"description": "Meta data.",
 						"type": "array",
-
 						"items": {
 							"type": "object",
 							"properties": {

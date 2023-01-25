@@ -3,9 +3,9 @@
 	"version": 0,
 	"description": "WooCommerce Product schema",
 	"type": "object",
-	"primaryKey": "_id",
+	"primaryKey": "localID",
 	"properties": {
-		"_id": {
+		"localID": {
 			"description": "Unique local identifier for the resource.",
 			"type": "string",
 			"maxLength": 100
@@ -37,12 +37,22 @@
 		},
 		"type": {
 			"default": "simple",
-			"enum": ["simple", "grouped", "external", "variable"],
+			"enum": [
+				"simple",
+				"grouped",
+				"external",
+				"variable"
+			],
 			"type": "string"
 		},
 		"status": {
 			"default": "publish",
-			"enum": ["draft", "pending", "private", "publish"],
+			"enum": [
+				"draft",
+				"pending",
+				"private",
+				"publish"
+			],
 			"type": "string"
 		},
 		"featured": {
@@ -120,7 +130,11 @@
 		},
 		"tax_status": {
 			"default": "taxable",
-			"enum": ["taxable", "shipping", "none"],
+			"enum": [
+				"taxable",
+				"shipping",
+				"none"
+			],
 			"type": "string"
 		},
 		"tax_class": {
@@ -131,16 +145,27 @@
 			"type": "boolean"
 		},
 		"stock_quantity": {
-			"type": ["number", "null"]
+			"type": [
+				"number",
+				"null"
+			]
 		},
 		"stock_status": {
 			"default": "instock",
-			"enum": ["instock", "outofstock", "onbackorder"],
+			"enum": [
+				"instock",
+				"outofstock",
+				"onbackorder"
+			],
 			"type": "string"
 		},
 		"backorders": {
 			"default": "no",
-			"enum": ["no", "notify", "yes"],
+			"enum": [
+				"no",
+				"notify",
+				"yes"
+			],
 			"type": "string"
 		},
 		"backorders_allowed": {
@@ -150,7 +175,10 @@
 			"type": "boolean"
 		},
 		"low_stock_amount": {
-			"type": ["integer", "null"]
+			"type": [
+				"integer",
+				"null"
+			]
 		},
 		"sold_individually": {
 			"type": "boolean"

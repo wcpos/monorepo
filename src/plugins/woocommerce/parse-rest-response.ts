@@ -19,14 +19,6 @@ export function parseRestResponse(this: RxCollection, plainData: Record<string, 
 	const primaryPath = get(this, ['schema', 'primaryPath'], '');
 	log.debug('parseRestResponse', plainData);
 
-	if (primaryPath === '_id' && !plainData._id && plainData.id) {
-		plainData._id = String(plainData.id);
-	}
-
-	// @TODO - should I move this to the generate id plugin?
-	// if (!plainData._id && plainData.id && typeof plainData.id === 'number') {
-	// 	plainData._id = String(plainData.id);
-	// }
 	if (plainData._links) {
 		plainData.links = plainData._links;
 		unset(plainData, '_links');
