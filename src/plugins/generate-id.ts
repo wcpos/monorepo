@@ -1,9 +1,5 @@
-import randomToken from 'random-token';
 import { RxPlugin, RxCollection } from 'rxdb';
-
-export function generateId(): string {
-	return `${randomToken(10)}:${Date.now()}`;
-}
+import { v4 as uuidv4 } from 'uuid';
 
 export const RxDBGenerateIdPlugin: RxPlugin = {
 	name: 'generate-id',
@@ -16,7 +12,7 @@ export const RxDBGenerateIdPlugin: RxPlugin = {
 				collection.preInsert(function (data) {
 					debugger;
 					if (!data[collection.schema.primaryPath]) {
-						data[collection.schema.primaryPath] = generateId();
+						data[collection.schema.primaryPath] = uuidv4();
 					}
 				}, false);
 			},

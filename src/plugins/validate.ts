@@ -1,65 +1,62 @@
-/**
- * this plugin validates documents before they can be inserted into the RxCollection.
- * It's using ajv as jsonschema-validator
- * @link https://github.com/epoberezkin/ajv
- */
-import Ajv from 'ajv';
+import difference from 'lodash/difference';
+import unset from 'lodash/unset';
 import { wrappedValidateStorageFactory } from 'rxdb';
+import ZSchema from 'z-schema';
 
-import addFormats from './ajv-formats';
+import log from '@wcpos/utils/src/logger';
 
-import type { RxDocumentData, RxJsonSchema } from 'rxdb';
-
-// const ajv = new Ajv({
-// 	strict: false,
-// });
-
-const ajv = new Ajv({ strict: 'log', coerceTypes: true });
-ajv.addVocabulary([
-	'version',
-	'primaryKey',
-	'indexes',
-	'encrypted',
-	'enumNames',
-	'keyCompression',
-	'sharding',
-]);
-// const ignoredKeys = ['_attachments', '_meta', '_rev'];
+import type { RxJsonSchema } from 'rxdb';
 
 /**
- * Duck punch the WC REST schema for children
- * - rxdb won't allow this type of schema (at the moment)
+ * Without a validator, rxdb will save any properties to the database
  */
-ajv.addKeyword({
-	keyword: 'ref',
-	code(cxt) {
-		cxt.parentSchema = {
-			...cxt.parentSchema,
-			items: {
-				oneOf: [{ type: 'string' }, { type: 'object' }],
-			},
-		};
-		Object.freeze(cxt.parentSchema);
-	},
-});
+function pruneProperties(obj: any, schema: RxJsonSchema<any>) {
+	const topLevelFields = Object.keys(schema.properties);
+	const omitProperties = difference(Object.keys(obj), topLevelFields);
+	if (omitProperties.length > 0) {
+		log.debug('the following properties are being omitted', omitProperties);
+		omitProperties.forEach((prop: string) => {
+			unset(obj, prop);
+		});
+	}
+}
 
 /**
- * Add formats to ajv
+ *
  */
-addFormats(ajv);
-
 export function getValidator(schema: RxJsonSchema<any>) {
-	const validator = ajv.compile(schema);
+	const validatorInstance = new (ZSchema as any)();
 
-	return (docData: RxDocumentData<any>) => {
-		const isValid = validator(docData);
+	const validator = (obj: any) => {
+		pruneProperties(obj, schema);
+		validatorInstance.validate(obj, schema);
+		return validatorInstance;
+	};
 
-		if (!isValid) {
-			console.warn('validation', validator.errors);
+	return (docData: any) => {
+		const useValidator = validator(docData);
+		if (useValidator === true) {
+			return;
 		}
-
-		return docData;
+		const errors: ZSchema.SchemaErrorDetail[] = (useValidator as any).getLastErrors();
+		if (errors) {
+			const formattedZSchemaErrors = (errors as any).map(
+				({ title, description, message }: any) => ({
+					title,
+					description,
+					message,
+				})
+			);
+			log.error('z-schema validation failed', formattedZSchemaErrors);
+			debugger;
+			return formattedZSchemaErrors;
+		} else {
+			return [];
+		}
 	};
 }
 
-export const wrappedValidateAjvStorage = wrappedValidateStorageFactory(getValidator, 'ajv');
+export const wrappedValidateZSchemaStorage = wrappedValidateStorageFactory(
+	getValidator,
+	'z-schema'
+);

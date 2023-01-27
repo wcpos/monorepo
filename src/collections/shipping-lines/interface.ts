@@ -12,7 +12,7 @@ export interface WooCommerceOrderShippingLineSchema {
   /**
    * Unique local identifier for the resource.
    */
-  localID?: string;
+  uuid?: string;
   id?: number;
   /**
    * Shipping method name.
@@ -21,7 +21,7 @@ export interface WooCommerceOrderShippingLineSchema {
   /**
    * Shipping method ID.
    */
-  method_id: string;
+  method_id?: string;
   /**
    * Shipping instance ID.
    */

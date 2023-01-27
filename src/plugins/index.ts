@@ -17,8 +17,9 @@ import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 // custom plugins
 import childrenPlugin from './children';
 import collectionCounts from './collection-counts';
-import RxDBGenerateIdPlugin from './generate-id';
+import { RxDBGenerateIdPlugin } from './generate-id';
 import middlewaresPlugin from './middlewares';
+import populatePlugin from './populate';
 import toJSONPlugin from './to-json';
 // import { RxDBAjvValidatePlugin } from './validate';
 import RxDBWooCommercePlugin from './woocommerce';
@@ -53,11 +54,12 @@ addRxPlugin(RxDBJsonDumpPlugin);
 // addRxPlugin(RxDBKeyCompressionPlugin);
 
 // custom plugins
-addRxPlugin(collectionCounts);
-addRxPlugin(RxDBWooCommercePlugin);
+// addRxPlugin(collectionCounts);
+// addRxPlugin(RxDBWooCommercePlugin);
 // addRxPlugin(RxDBAjvValidatePlugin);
-addRxPlugin(childrenPlugin);
-addRxPlugin(middlewaresPlugin);
-addRxPlugin(toJSONPlugin);
-addRxPlugin(RxDBGenerateIdPlugin); // must be after parse-rest-response
+// addRxPlugin(childrenPlugin);
+// addRxPlugin(middlewaresPlugin);
+// addRxPlugin(toJSONPlugin);
+addRxPlugin(RxDBGenerateIdPlugin); // should be before populate?
+addRxPlugin(populatePlugin);
 // addRxPlugin(deleteDBPlugin);

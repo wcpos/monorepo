@@ -12,7 +12,7 @@ export interface WooCommerceOrderSchema {
   /**
    * Unique local identifier for the resource.
    */
-  localID?: string;
+  uuid?: string;
   id?: number;
   /**
    * Parent order ID.

@@ -12,7 +12,7 @@ export interface SiteSchema {
   /**
    * Unique local identifier for the resource.
    */
-  localID?: string;
+  uuid?: string;
   url?: string;
   name?: string;
   description?: string;

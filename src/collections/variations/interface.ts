@@ -12,7 +12,7 @@ export interface WooCommerceProductVariationSchema {
   /**
    * Unique local identifier for the resource.
    */
-  localID?: string;
+  uuid?: string;
   id?: number;
   date_created?: string;
   date_created_gmt?: string;

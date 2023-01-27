@@ -3,12 +3,12 @@
 	"version": 0,
 	"description": "WooCommerce Tax Rate schema",
 	"type": "object",
-	"primaryKey": "localID",
+	"primaryKey": "uuid",
 	"properties": {
-		"localID": {
+		"uuid": {
 			"description": "Unique local identifier for the resource.",
 			"type": "string",
-			"maxLength": 100
+			"maxLength": 36
 		},
 		"id": {
 			"type": "integer"

@@ -12,7 +12,7 @@ export interface WooCommerceOrderLineItemSchema {
   /**
    * Unique local identifier for the resource.
    */
-  localID?: string;
+  uuid?: string;
   /**
    * Item ID.
    */
