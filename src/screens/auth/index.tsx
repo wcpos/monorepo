@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { createStackNavigator } from '@react-navigation/stack';
 
-import Connect from './index';
-import Login from './modals/login';
+import Connect from './connect';
+import Login from './login';
 
 export type ConnectStackParamList = {
 	Connect: undefined;
@@ -15,7 +15,7 @@ const Stack = createStackNavigator<ConnectStackParamList>();
 /**
  *
  */
-const ConnectNavigator = () => {
+const AuthNavigator = () => {
 	return (
 		<Stack.Navigator
 			screenOptions={{
@@ -28,4 +28,4 @@ const ConnectNavigator = () => {
 	);
 };
 
-export default ConnectNavigator;
+export default AuthNavigator;

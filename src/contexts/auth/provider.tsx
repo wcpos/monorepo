@@ -8,7 +8,8 @@ import { switchMap } from 'rxjs/operators';
 import { userDBPromise } from '@wcpos/database/src/users-db';
 import log from '@wcpos/utils/src/logger';
 
-import { userDBResource, userResource, selectedResource } from './resources';
+import { selectedResource } from './resources';
+import { userDBResource, userResource } from './user-resource';
 
 export const AuthContext = React.createContext<any>(null);
 
@@ -23,6 +24,7 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children, initialProps }: AuthProviderProps) => {
 	const userDB = useObservableSuspense(userDBResource);
 	const user = useObservableSuspense(userResource);
+
 	const { site, wpCredentials, store } = useObservableSuspense(selectedResource);
 
 	/**

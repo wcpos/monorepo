@@ -1,5 +1,8 @@
 import * as React from 'react';
 
+import { ObservableResource } from 'observable-hooks';
+import { switchMap, tap } from 'rxjs/operators';
+
 import Avatar from '@wcpos/components/src/avatar';
 import Box from '@wcpos/components/src/box';
 import Dialog from '@wcpos/components/src/dialog';
@@ -7,7 +10,8 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
 
-import UsersList from './users-list';
+import WPUsersList from './wp-users-list';
+import useAuth from '../../../contexts/auth';
 import { t } from '../../../lib/translations';
 
 type SiteDocument = import('@wcpos/database').SiteDocument;
@@ -15,23 +19,33 @@ type UserDocument = import('@wcpos/database').UserDocument;
 
 interface SiteProps {
 	site: SiteDocument;
-	user: UserDocument;
+	// user: UserDocument;
 	first: boolean;
 }
 
-const Site = ({ site, user, first }: SiteProps) => {
+const Site = ({ site, first }: SiteProps) => {
+	const { user } = useAuth();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
+	const wpUsersResource = React.useMemo(
+		() => new ObservableResource(site.populate$('wp_credentials')),
+		[site]
+	);
 
 	/**
 	 * Remove site
 	 */
-	const handleRemoveSite = React.useCallback(
-		() =>
-			user.removeSite(site).catch((err) => {
-				console.error(err);
-			}),
-		[user, site]
-	);
+	const handleRemoveSite = React.useCallback(async () => {
+		try {
+			await site.remove();
+			await user.update({
+				$pullAll: {
+					sites: [site.uuid],
+				},
+			});
+		} catch (err) {
+			throw err;
+		}
+	}, [user, site]);
 
 	return (
 		<>
@@ -55,7 +69,7 @@ const Site = ({ site, user, first }: SiteProps) => {
 					<Box>
 						<ErrorBoundary>
 							<React.Suspense>
-								<UsersList site={site} />
+								<WPUsersList wpUsersResource={wpUsersResource} site={site} />
 							</React.Suspense>
 						</ErrorBoundary>
 					</Box>

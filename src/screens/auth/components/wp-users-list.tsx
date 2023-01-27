@@ -8,15 +8,15 @@ import Button from '@wcpos/components/src/button';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
 
-import User from './user';
+import WPUser from './wp-user';
 import { t } from '../../../lib/translations';
 
 interface WpUserProps {
 	site: import('@wcpos/database').SiteDocument;
 }
 
-const UsersList = ({ site }: WpUserProps) => {
-	const wpCreds = useObservableSuspense(site.wpCredentialsResource);
+const WPUsersList = ({ wpUsersResource, site }: WpUserProps) => {
+	const wpCreds = useObservableSuspense(wpUsersResource);
 	const navigation = useNavigation();
 
 	return (
@@ -28,7 +28,7 @@ const UsersList = ({ site }: WpUserProps) => {
 					title={t('Add new user', { _tags: 'core' })}
 					type="secondary"
 					background="outline"
-					onPress={() => navigation.navigate('Login', { siteID: site.localID })}
+					onPress={() => navigation.navigate('Login', { siteID: site.uuid })}
 				/>
 			</Box>
 			{Array.isArray(wpCreds) &&
@@ -36,7 +36,7 @@ const UsersList = ({ site }: WpUserProps) => {
 				wpCreds.map((wpCred) => (
 					<ErrorBoundary key={wpCred.localID}>
 						<React.Suspense>
-							<User wpUser={wpCred} site={site} />
+							<WPUser wpUser={wpCred} site={site} />
 						</React.Suspense>
 					</ErrorBoundary>
 				))}
@@ -44,4 +44,4 @@ const UsersList = ({ site }: WpUserProps) => {
 	);
 };
 
-export default UsersList;
+export default WPUsersList;

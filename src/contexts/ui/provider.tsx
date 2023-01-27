@@ -4,8 +4,8 @@ import get from 'lodash/get';
 import { ObservableResource } from 'observable-hooks';
 import { filter } from 'rxjs/operators';
 
-import useStore from '../../contexts/store';
 import initialUI from './ui-initial.json';
+import useStore from '../../contexts/store';
 
 type StoreDatabase = import('@wcpos/database').StoreDatabase;
 
@@ -60,6 +60,7 @@ export const UIContext = React.createContext<{
  */
 export const UIProvider = ({ children }: UIProviderProps) => {
 	const { storeDB } = useStore();
+
 	/**
 	 *
 	 */

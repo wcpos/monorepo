@@ -14,84 +14,84 @@ type SiteDocument = import('@wcpos/database').SiteDocument;
 type WPCredentialsDocument = import('@wcpos/database').WPCredentialsDocument;
 
 const userDB$ = from(userDBPromise());
-export const userDBResource = new ObservableResource(userDB$, (value: any) => !!value);
+// export const userDBResource = new ObservableResource(userDB$, (value: any) => !!value);
 
-/**
- * User
- */
-const user$ = userDB$.pipe(
-	/**
-	 *
-	 */
-	filter((userDB) => {
-		log.silly('userDB', userDB);
-		log.silly('userDB Collections', userDB.collections);
-		return !!userDB;
-	}),
+// /**
+//  * User
+//  */
+// const user$ = userDB$.pipe(
+// 	/**
+// 	 *
+// 	 */
+// 	filter((userDB) => {
+// 		log.silly('userDB', userDB);
+// 		log.silly('userDB Collections', userDB.collections);
+// 		return !!userDB;
+// 	}),
 
-	/**
-	 *
-	 */
-	switchMap((userDB) =>
-		userDB.getLocal$('current').pipe(
-			/**
-			 *
-			 */
-			filter((current) => {
-				log.debug('current', current);
-				const userID = current && current.get('userID');
+// 	/**
+// 	 *
+// 	 */
+// 	switchMap((userDB) =>
+// 		userDB.getLocal$('current').pipe(
+// 			/**
+// 			 *
+// 			 */
+// 			filter((current) => {
+// 				log.debug('current', current);
+// 				const userID = current && current.get('userID');
 
-				if (!userID) {
-					/**
-					 * @TODO - what if current userID but there is a User in the DB?
-					 */
-					userDB.users
-						.insert({
-							first_name: 'Global',
-							last_name: 'User',
-						})
-						.then((defaultUser) => {
-							return userDB.upsertLocal('current', { userID: defaultUser.localID });
-						})
-						.catch((error) => {
-							log.error(error);
-						});
-				}
+// 				if (!userID) {
+// 					/**
+// 					 * @TODO - what if current userID but there is a User in the DB?
+// 					 */
+// 					userDB.users
+// 						.insert({
+// 							first_name: 'Global',
+// 							last_name: 'User',
+// 						})
+// 						.then((defaultUser) => {
+// 							return userDB.upsertLocal('current', { userID: defaultUser.uuid });
+// 						})
+// 						.catch((error) => {
+// 							log.error(error);
+// 						});
+// 				}
 
-				return !!userID;
-			}),
+// 				return !!userID;
+// 			}),
 
-			/**
-			 *
-			 */
-			switchMap((current) => {
-				const userID = current && current.get('userID');
-				log.debug('userID', userID);
+// 			/**
+// 			 *
+// 			 */
+// 			switchMap((current) => {
+// 				const userID = current && current.get('userID');
+// 				log.debug('userID', userID);
 
-				// userDB.users.findOne({ selector: { localID: current.get('userID') } }).exec();
-				/**
-				 * @TODO - this will always return a user, I think it is a bug in rxdb
-				 * but handy here because it will return the first UserDocument found if no userID is found
-				 */
-				return userDB.users.findOne({ selector: { localID: userID } }).exec();
-			}),
+// 				// userDB.users.findOne({ selector: { localID: current.get('userID') } }).exec();
+// 				/**
+// 				 * @TODO - this will always return a user, I think it is a bug in rxdb
+// 				 * but handy here because it will return the first UserDocument found if no userID is found
+// 				 */
+// 				return userDB.users.findOne(userID).exec();
+// 			}),
 
-			/**
-			 *
-			 */
-			filter((user) => {
-				log.silly('user', user);
-				if (!user) {
-					// @TODO - what if no user?
-					// delete and start again?
-					userDB.upsertLocal('current', null);
-				}
-				return !!user;
-			})
-		)
-	)
-);
-export const userResource = new ObservableResource(user$, (value: any) => !!value);
+// 			/**
+// 			 *
+// 			 */
+// 			filter((user) => {
+// 				log.silly('user', user);
+// 				if (!user) {
+// 					// @TODO - what if no user?
+// 					// delete and start again?
+// 					userDB.upsertLocal('current', null);
+// 				}
+// 				return !!user;
+// 			})
+// 		)
+// 	)
+// );
+// export const userResource = new ObservableResource(user$, (value: any) => !!value);
 
 /**
  * Selected Store

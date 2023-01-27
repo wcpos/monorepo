@@ -1,6 +1,9 @@
 import * as React from 'react';
 import { KeyboardAvoidingView, StyleSheet } from 'react-native';
 
+import { ObservableResource } from 'observable-hooks';
+import { switchMap, tap, map } from 'rxjs/operators';
+
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Logo from '@wcpos/components/src/logo';
@@ -8,9 +11,16 @@ import Logo from '@wcpos/components/src/logo';
 import DemoButton from './components/demo-button';
 import SitesList from './components/sites-list';
 import UrlInput from './components/url-input';
+import useAuth from '../../contexts/auth';
 import Platform from '../../utils/platform';
 
 const Connect = () => {
+	const { user } = useAuth();
+	const sitesResource = React.useMemo(
+		() => new ObservableResource(user.populate$('sites')),
+		[user]
+	);
+
 	return (
 		<KeyboardAvoidingView
 			behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -36,7 +46,7 @@ const Connect = () => {
 					</Box>
 					<ErrorBoundary>
 						<React.Suspense>
-							<SitesList />
+							<SitesList sitesResource={sitesResource} />
 						</React.Suspense>
 					</ErrorBoundary>
 					<Box>

@@ -12,7 +12,7 @@ import Settings from './settings';
 import useAuth from '../../contexts/auth';
 
 export type MainStackParamList = {
-	Drawer: undefined;
+	MainDrawer: undefined;
 	Settings: undefined;
 	Login: undefined;
 };
@@ -29,7 +29,7 @@ const MainNavigator = ({ navigation, route }) => {
 	return (
 		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 			<Stack.Navigator screenOptions={{ headerShown: false }}>
-				<Stack.Screen name="Drawer" component={DrawerNavigator} />
+				<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
 				<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
 					<Stack.Screen
 						name="Settings"

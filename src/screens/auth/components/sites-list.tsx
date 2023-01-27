@@ -6,11 +6,9 @@ import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 
 import Site from './site';
-import useAuth from '../../../contexts/auth';
 
-export const SitesList = () => {
-	const { user } = useAuth();
-	const sites = useObservableSuspense(user.sitesResource);
+export const SitesList = ({ sitesResource }) => {
+	const sites = useObservableSuspense(sitesResource);
 
 	if (!Array.isArray(sites) || sites.length === 0) {
 		return null;
@@ -25,8 +23,8 @@ export const SitesList = () => {
 			style={{ width: '100%', backgroundColor: 'white' }}
 		>
 			{sites.map((site, index) => (
-				<ErrorBoundary key={site.localID}>
-					<Site site={site} user={user} first={index === 0} />
+				<ErrorBoundary key={site.uuid}>
+					<Site site={site} first={index === 0} />
 				</ErrorBoundary>
 			))}
 		</Box>

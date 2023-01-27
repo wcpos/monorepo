@@ -8,7 +8,7 @@ import { useTheme } from 'styled-components/native';
 
 import log from '@wcpos/utils/src/logger';
 
-import ConnectNavigator from './connect/_navigator';
+import AuthNavigator from './auth';
 import MainNavigator from './main';
 import useStore from '../contexts/store';
 import { URL } from '../lib/url';
@@ -17,8 +17,8 @@ import { URL } from '../lib/url';
 // const MainNavigator = React.lazy(() => import('./main'));
 
 export type RootStackParamList = {
-	Connect: undefined;
-	Main: undefined;
+	AuthStack: undefined;
+	MainStack: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -48,7 +48,7 @@ const RootNavigator = ({ initialProps }) => {
 				prefixes,
 				config: {
 					screens: {
-						Connect: {
+						AuthStack: {
 							path: 'connect',
 							screens: {
 								Connect: {
@@ -59,10 +59,10 @@ const RootNavigator = ({ initialProps }) => {
 								},
 							},
 						},
-						Main: {
+						MainStack: {
 							path: pathname,
 							screens: {
-								Drawer: {
+								MainDrawer: {
 									path: '',
 									screens: {
 										POSStack: {
@@ -161,11 +161,11 @@ const RootNavigator = ({ initialProps }) => {
 		>
 			<Stack.Navigator screenOptions={{ headerShown: false }}>
 				{storeDB ? (
-					<Stack.Screen name="Main" component={MainNavigator} />
+					<Stack.Screen name="MainStack" component={MainNavigator} />
 				) : (
 					<Stack.Screen
-						name="Connect"
-						component={ConnectNavigator}
+						name="AuthStack"
+						component={AuthNavigator}
 						options={{ title: 'WooCommerce POS' }}
 					/>
 				)}
