@@ -1,4 +1,5 @@
-// import { removeStoreDB } from '../..';
+import { v4 as uuidv4 } from 'uuid';
+
 import schema from './schema.json';
 
 export type StoreSchema = import('./interface').WCPOSStoreSchema;
@@ -11,30 +12,19 @@ export type StoreCollection = import('rxdb').RxCollection<
 type StoreMethods = Record<string, never>;
 type StoreStatics = Record<string, never>;
 
-// function sanitizeStoreName(id: string) {
-// 	return `store_${id.replace(':', '_')}`;
-// }
-
-/**
- *
- */
-// async function preRemove(this: StoreCollection, plainData: any, store: StoreDocument) {
-// 	return removeStoreDB(plainData.localID);
-// }
-
 export const stores = {
 	schema,
 	// statics: {},
 	// methods: {},
 	// attachments: {},
-	options: {
-		// middlewares: {
-		// 	preRemove: {
-		// 		handle: preRemove,
-		// 		parallel: false,
-		// 	},
-		// },
-	},
+	// options: {
+	// 	middlewares: {
+	// 		preInsert: {
+	// 			handle: preInsert,
+	// 			parallel: true,
+	// 		},
+	// 	},
+	// },
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},

@@ -1,8 +1,10 @@
-import { switchMap } from 'rxjs/operators';
-import { ObservableResource } from 'observable-hooks';
 import get from 'lodash/get';
 import pull from 'lodash/pull';
+import { ObservableResource } from 'observable-hooks';
+import { switchMap } from 'rxjs/operators';
+
 import log from '@wcpos/utils/src/logger';
+
 import schema from './schema.json';
 
 export type SiteSchema = import('./interface').SiteSchema;
@@ -132,25 +134,25 @@ export const sites = {
 	// statics: {},
 	methods,
 	// attachments: {},
-	options: {
-		middlewares: {
-			postCreate: {
-				handle: (data, site) => {
-					const populatedWpCredentials$ = site.wp_credentials$.pipe(
-						switchMap(async (args: any) => {
-							const wpCredentials = await site.populate('wp_credentials');
-							return wpCredentials || [];
-						})
-					);
-					Object.assign(site, {
-						populatedWpCredentials$,
-						wpCredentialsResource: new ObservableResource(populatedWpCredentials$),
-					});
-				},
-				parallel: false,
-			},
-		},
-	},
+	// options: {
+	// 	middlewares: {
+	// 		postCreate: {
+	// 			handle: (data, site) => {
+	// 				const populatedWpCredentials$ = site.wp_credentials$.pipe(
+	// 					switchMap(async (args: any) => {
+	// 						const wpCredentials = await site.populate('wp_credentials');
+	// 						return wpCredentials || [];
+	// 					})
+	// 				);
+	// 				Object.assign(site, {
+	// 					populatedWpCredentials$,
+	// 					wpCredentialsResource: new ObservableResource(populatedWpCredentials$),
+	// 				});
+	// 			},
+	// 			parallel: false,
+	// 		},
+	// 	},
+	// },
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},

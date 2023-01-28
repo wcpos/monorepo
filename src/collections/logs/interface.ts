@@ -10,7 +10,7 @@
  */
 export interface LogSchema {
   /**
-   * Unique local identifier for the resource.
+   * Unique identifier for the resource.
    */
   uuid?: string;
   dateCreatedGmt?: string;

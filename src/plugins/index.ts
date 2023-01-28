@@ -58,7 +58,7 @@ addRxPlugin(RxDBJsonDumpPlugin);
 // addRxPlugin(RxDBWooCommercePlugin);
 // addRxPlugin(RxDBAjvValidatePlugin);
 // addRxPlugin(childrenPlugin);
-// addRxPlugin(middlewaresPlugin);
+addRxPlugin(middlewaresPlugin);
 // addRxPlugin(toJSONPlugin);
 addRxPlugin(RxDBGenerateIdPlugin); // should be before populate?
 addRxPlugin(populatePlugin);

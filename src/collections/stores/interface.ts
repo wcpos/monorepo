@@ -433,9 +433,9 @@ export type Language =
  */
 export interface WCPOSStoreSchema {
   /**
-   * Unique local identifier for the resource.
+   * Unique local identifier for the resource. Not a UUID.
    */
-  uuid?: string;
+  localID?: string;
   id?: number;
   name?: string;
   store_address?: AddressLine1;

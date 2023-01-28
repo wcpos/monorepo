@@ -39,18 +39,18 @@ export const products = {
 	// statics,
 	// methods,
 	// attachments: {},
-	options: {
-		middlewares: {
-			preInsert: {
-				handle: auditVariations,
-				parallel: false,
-			},
-			preSave: {
-				handle: auditVariations,
-				parallel: false,
-			},
-		},
-	},
+	// options: {
+	// 	middlewares: {
+	// 		preInsert: {
+	// 			handle: auditVariations,
+	// 			parallel: false,
+	// 		},
+	// 		preSave: {
+	// 			handle: auditVariations,
+	// 			parallel: false,
+	// 		},
+	// 	},
+	// },
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},

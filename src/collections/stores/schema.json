@@ -3,12 +3,12 @@
 	"version": 0,
 	"description": "WooCommerce POS Store",
 	"type": "object",
-	"primaryKey": "uuid",
+	"primaryKey": "localID",
 	"properties": {
-		"uuid": {
-			"description": "Unique local identifier for the resource.",
+		"localID": {
+			"description": "Unique local identifier for the resource. Not a UUID.",
 			"type": "string",
-			"maxLength": 36
+			"maxLength": 8
 		},
 		"id": {
 			"type": "number"

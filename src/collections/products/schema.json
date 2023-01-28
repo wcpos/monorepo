@@ -6,7 +6,7 @@
 	"primaryKey": "uuid",
 	"properties": {
 		"uuid": {
-			"description": "Unique local identifier for the resource.",
+			"description": "Unique identifier for the resource.",
 			"type": "string",
 			"maxLength": 36
 		},
