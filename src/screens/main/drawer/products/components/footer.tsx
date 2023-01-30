@@ -51,7 +51,7 @@ const SyncButton = () => {
  */
 const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { storeDB } = useStore();
-	const total = useObservableState(storeDB.products.totalDocCount$, 0);
+	const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
 	const http = useHttpClient();
 	const { site, wpCredentials } = useAuth();

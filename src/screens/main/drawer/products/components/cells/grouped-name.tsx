@@ -3,6 +3,7 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableState, ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { from } from 'rxjs';
+import { switchMap, tap, map } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 import EdittableText from '@wcpos/components/src/edittable-text';
@@ -16,11 +17,11 @@ interface Props {
 }
 
 /**
- *
+ * @TODO - this needs to be in a Product provider, because products may not be downlaoded yet
  */
 const GroupedNames = ({ groupedResource }) => {
 	const grouped = useObservableSuspense(groupedResource);
-	const names = Array.from(grouped.values()).map((doc) => doc.name);
+	const names = grouped.map((doc) => doc.name);
 
 	return (
 		<Text>
@@ -37,7 +38,6 @@ const GroupedNames = ({ groupedResource }) => {
  */
 const GroupedName = ({ item: product, column }: Props) => {
 	const { display } = column;
-	const grouped_ids = useObservableState(product.grouped_products$, product.grouped_products);
 	const name = useObservableState(product.name$, product.name);
 
 	/**
@@ -53,9 +53,11 @@ const GroupedName = ({ item: product, column }: Props) => {
 	const groupedResource = React.useMemo(
 		() =>
 			new ObservableResource(
-				from(product.collection.findByIds(grouped_ids.map((id) => String(id))))
+				product.grouped_products$.pipe(
+					switchMap((ids) => product.collection.find({ selector: { id: { $in: ids } } }).$)
+				)
 			),
-		[grouped_ids, product.collection]
+		[product.collection, product.grouped_products$]
 	);
 
 	/**

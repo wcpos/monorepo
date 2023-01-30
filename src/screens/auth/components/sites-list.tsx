@@ -10,10 +10,6 @@ import Site from './site';
 export const SitesList = ({ sitesResource }) => {
 	const sites = useObservableSuspense(sitesResource);
 
-	if (!Array.isArray(sites) || sites.length === 0) {
-		return null;
-	}
-
 	return (
 		<Box
 			raised

@@ -11,7 +11,7 @@ import Header from './components/header';
 import CustomersNavigator from './customers/_navigator';
 import OrdersNavigator from './orders/_navigator';
 import POSNavigator from './pos';
-import ProductsNavigator from './products/_navigator';
+import ProductsNavigator from './products';
 import { UIProvider } from '../../../contexts/ui';
 import { t } from '../../../lib/translations';
 

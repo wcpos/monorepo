@@ -17,7 +17,7 @@ interface CustomersFooterProps {
 
 const CustomersFooter = ({ count }: CustomersFooterProps) => {
 	const { storeDB } = useStore();
-	const total = useObservableState(storeDB.customers.totalDocCount$, 0);
+	const total = useObservableState(storeDB.customers.count().$, 0);
 	const theme = useTheme();
 	const [openMenu, setOpenMenu] = React.useState(false);
 	// const { runReplication } = useCustomers();

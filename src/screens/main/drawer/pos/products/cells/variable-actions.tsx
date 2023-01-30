@@ -85,10 +85,6 @@ export const VariableActions = ({ item: product }: Props) => {
 		[currentOrder, product]
 	);
 
-	if (!product.isSynced()) {
-		return <Icon.Skeleton size="xLarge" />;
-	}
-
 	return (
 		<Popover
 			opened={open}

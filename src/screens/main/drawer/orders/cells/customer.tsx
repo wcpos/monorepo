@@ -9,6 +9,7 @@ type Props = {
 };
 
 const Customer = ({ item: order }: Props) => {
+	return null;
 	const customerId = useObservableState(order.customer_id$, order.customer_id);
 	const billing = useObservableState(order.billing$, order.billing);
 
@@ -29,10 +30,6 @@ const Customer = ({ item: order }: Props) => {
 
 		return name;
 	}, [billing?.first_name, billing?.last_name, customerId]);
-
-	if (!order.isSynced()) {
-		return <Text.Skeleton />;
-	}
 
 	return <Text>{customerName}</Text>;
 };

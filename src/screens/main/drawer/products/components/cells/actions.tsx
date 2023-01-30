@@ -26,7 +26,7 @@ const Actions = ({ item: product }: Props) => {
 	const handleSync = React.useCallback(() => {
 		// could use the link url?
 		http
-			.get(`/products/${product._id}`)
+			.get(`/products/${product.uuid}`)
 			.then(({ data }) => {
 				product.atomicPatch(data);
 			})
@@ -65,7 +65,7 @@ const Actions = ({ item: product }: Props) => {
 				items={[
 					{
 						label: 'Edit',
-						action: () => navigation.navigate('EditProduct', { productID: product._id }),
+						action: () => navigation.navigate('EditProduct', { productID: product.uuid }),
 						icon: 'penToSquare',
 					},
 					{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },

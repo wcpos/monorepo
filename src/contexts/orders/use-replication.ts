@@ -112,12 +112,28 @@ export const useReplication = ({ collection }) => {
 			// retryTime: 1000000000,
 			pull: {
 				async handler(lastCheckpoint, batchSize) {
-					return runAudit.current ? audit() : replicate(lastCheckpoint, batchSize);
+					const params = {
+						order: 'desc',
+						orderby: 'date',
+					};
+					const { data } = await http.get(collection.name, { params });
+
+					if (lastCheckpoint) {
+						return {
+							documents: [],
+						};
+					}
+
+					return {
+						documents: data,
+						checkpoint: true,
+					};
 				},
 				batchSize: 10,
 				modifier: async (doc) => {
-					await collection.upsertChildren(doc);
-					return collection.parseRestResponse(doc);
+					// await collection.upsertChildren(doc);
+					// return collection.parseRestResponse(doc);
+					return doc;
 				},
 				// stream$: timedObservable(1000),
 			},

@@ -9,9 +9,9 @@ import { switchMap, map, debounceTime, tap, distinctUntilChanged } from 'rxjs/op
 
 import log from '@wcpos/utils/src/logger';
 
+import { useReplication } from './use-replication';
 import useStore from '../../contexts/store';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
-import { useReplication } from './use-replication';
 
 type OrderDocument = import('@wcpos/database/src/collections/orders').OrderDocument;
 

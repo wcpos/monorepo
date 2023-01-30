@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { TextInput as RNTextInput } from 'react-native';
 
 import { useNavigation } from '@react-navigation/native';
 
@@ -15,8 +16,8 @@ import { t } from '../../lib/translations';
 const Login = ({ route }) => {
 	const { siteID } = route.params;
 	const navigation = useNavigation();
-	const [username, setUsername] = React.useState('');
-	const [password, setPassword] = React.useState('');
+	const usernameRef = React.useRef<RNTextInput>(null);
+	const passwordRef = React.useRef<RNTextInput>(null);
 	const { userDB } = useAuth();
 	const http = useHttpClient();
 	useModalRefreshFix();
@@ -26,8 +27,8 @@ const Login = ({ route }) => {
 			const site = await userDB.sites.findOne(siteID).exec();
 			const { data } = await http.get(`${site?.wc_api_auth_url}/authorize`, {
 				auth: {
-					username,
-					password,
+					username: usernameRef.current?.value,
+					password: passwordRef.current?.value,
 				},
 			});
 			site.update({ $push: { wp_credentials: data } });
@@ -36,7 +37,7 @@ const Login = ({ route }) => {
 		}
 
 		navigation.goBack();
-	}, [http, navigation, password, siteID, userDB.sites, username]);
+	}, [http, navigation, siteID, userDB.sites]);
 
 	return (
 		<Modal
@@ -50,17 +51,15 @@ const Login = ({ route }) => {
 		>
 			<Box space="medium">
 				<TextInputWithLabel
+					ref={usernameRef}
 					label={t('Username', { _tags: 'core' })}
 					placeholder="username"
-					value={username}
-					onChange={setUsername}
 					type="username"
 				/>
 				<TextInputWithLabel
+					ref={passwordRef}
 					label={t('Password', { _tags: 'core' })}
 					placeholder="password"
-					value={password}
-					onChange={setPassword}
 					type="password"
 				/>
 			</Box>

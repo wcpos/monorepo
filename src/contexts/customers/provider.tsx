@@ -10,9 +10,9 @@ import { switchMap, map, debounceTime, tap } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
+import { useReplication } from './use-replication';
 import useStore from '../../contexts/store';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
-import { useReplication } from './use-replication';
 
 type CustomerDocument = import('@wcpos/database/src/collections/customers').CustomerDocument;
 
@@ -39,13 +39,13 @@ const CustomersProvider = ({ children, initialQuery, ui }: CustomersProviderProp
 	/**
 	 * Only run the replication when the Provider is mounted
 	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, [replicationState]);
+	// React.useEffect(() => {
+	// 	replicationState.start();
+	// 	return () => {
+	// 		// this is async, should we wait?
+	// 		replicationState.cancel();
+	// 	};
+	// }, [replicationState]);
 
 	/**
 	 *

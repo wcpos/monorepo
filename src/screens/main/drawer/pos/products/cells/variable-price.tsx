@@ -29,13 +29,5 @@ export const VariablePrice = ({ item: product, column }: Props) => {
 		[display]
 	);
 
-	const variationsSynced = React.useMemo(() => {
-		return product.isSynced() && data.length > 0 && data.every((variation) => variation.isSynced());
-	}, [product, data]);
-
-	if (!variationsSynced) {
-		<Text.Skeleton length="short" />;
-	}
-
 	return <VariablePriceWithTax variations={data} taxDisplay={show('tax') ? 'text' : 'tooltip'} />;
 };

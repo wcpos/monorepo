@@ -65,13 +65,6 @@ const Status = ({ item: order }: Props) => {
 	/**
 	 *
 	 */
-	if (!order.isSynced()) {
-		return <Icon.Skeleton />;
-	}
-
-	/**
-	 *
-	 */
 	return (
 		<Icon
 			name={iconName}

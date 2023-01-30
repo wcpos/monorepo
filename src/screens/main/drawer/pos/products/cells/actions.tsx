@@ -33,13 +33,6 @@ export const Actions = ({ item: product }: Props) => {
 	/**
 	 *
 	 */
-	if (!product.isSynced()) {
-		return <Icon.Skeleton size="xLarge" />;
-	}
-
-	/**
-	 *
-	 */
 	return (
 		<View style={{ position: 'relative', zIndex: 1000 }}>
 			<Icon name="circlePlus" size="xLarge" onPress={addToCart} type="success" />

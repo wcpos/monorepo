@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 
 import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
@@ -12,40 +12,24 @@ import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
-type RenderTabTitle = (focused: boolean, order?: OrderDocument) => React.ReactElement;
+type RenderTabTitle = (focused: boolean, order: OrderDocument) => React.ReactElement;
 
 /**
  *
  */
 const CartTabs = () => {
 	const navigation = useNavigation();
-	const { currentOrder, setCurrentOrder, newOrder } = useCurrentOrder();
-	const { data } = useOrders();
-	const orders = React.useMemo(() => [...data, newOrder], [data, newOrder]);
-	const focusedIndex = orders.findIndex((order) => order === currentOrder);
-
-	/**
-	 *
-	 */
-	React.useEffect(() => {
-		if (focusedIndex === -1) {
-			setCurrentOrder(orders[0]);
-		}
-	}, [focusedIndex, orders, setCurrentOrder]);
-
-	/**
-	 * In cases where the current order is not found, set the currentOrder = first order
-	 * Note: this happens when a newOrder is created, the query takes longer to come back
-	 * @TODO: this is fragile, what happens if query takes longer than 100ms?
-	 */
-	// useTimeout(() => focusedIndex === -1 && setCurrentOrder(orders[0]), 100);
+	const { currentOrder } = useCurrentOrder();
+	const { data: orders } = useOrders();
+	orders.push({}); //
+	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
 	/**
 	 *
 	 */
 	const renderTabTitle: RenderTabTitle = React.useCallback(
 		(focused, order) =>
-			order?._id ? (
+			order.uuid ? (
 				<CartTabTitle focused={focused} order={order} />
 			) : (
 				<Icon name="plus" type={focused ? 'inverse' : 'primary'} />
@@ -59,7 +43,7 @@ const CartTabs = () => {
 	const routes = React.useMemo(
 		() =>
 			orders.map((order) => ({
-				key: order?._id || 0,
+				key: order.uuid || 'new',
 				title: ({ focused }: { focused: boolean }) => renderTabTitle(focused, order),
 			})),
 		[orders, renderTabTitle]
@@ -70,8 +54,12 @@ const CartTabs = () => {
 	 */
 	const handleTabChange = React.useCallback(
 		(idx: number) => {
-			navigation.navigate('POS', { orderID: orders[idx]?._id });
-			// setCurrentOrder(orders[idx]);
+			/**
+			 * @TODO - setParams updates the currentOrder without refreshing the products,
+			 * this is great!, but I lose the back button. Push refreshes the products.
+			 * Can I use StackActions.push('POS', { orderID }) without refreshing the products?
+			 */
+			navigation.setParams({ orderID: orders[idx].uuid });
 		},
 		[navigation, orders]
 	);

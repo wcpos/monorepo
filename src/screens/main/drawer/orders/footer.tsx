@@ -16,7 +16,7 @@ interface OrderFooterProps {
 
 const OrdersFooter = ({ count }: OrderFooterProps) => {
 	const { storeDB } = useStore();
-	const total = useObservableState(storeDB.orders.totalDocCount$, 0);
+	const total = useObservableState(storeDB.orders.count().$, 0);
 	const theme = useTheme();
 	const [openMenu, setOpenMenu] = React.useState(false);
 
@@ -52,8 +52,16 @@ const OrdersFooter = ({ count }: OrderFooterProps) => {
 					},
 					{
 						label: 'Clear and Refresh',
-						action: () => {
-							console.log('clear');
+						action: async () => {
+							/**
+							 * @todo - what's the most effecient way to get all uuids?
+							 */
+							const all = await storeDB?.collections.orders
+								.find()
+								.exec()
+								.then((docs) => docs.map((doc) => doc.uuid));
+							await storeDB?.collections.orders.bulkRemove(all);
+							// sync
 						},
 						type: 'critical',
 						icon: 'trash',

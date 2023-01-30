@@ -26,84 +26,84 @@ export const useReplication = ({ collection }) => {
 		/**
 		 *
 		 */
-		const replicate = async (lastCheckpoint, batchSize) => {
-			/**
-			 * This is the data replication
-			 * we need to delay for a little while to allow the collection count to be updated
-			 */
-			await wait(1000);
-			const pullRemoteIds = collection.pullRemoteIds$.getValue();
-			const syncedDocs = collection.syncedIds$.getValue();
+		// const replicate = async (lastCheckpoint, batchSize) => {
+		// 	/**
+		// 	 * This is the data replication
+		// 	 * we need to delay for a little while to allow the collection count to be updated
+		// 	 */
+		// 	await wait(1000);
+		// 	const pullRemoteIds = collection.pullRemoteIds$.getValue();
+		// 	const syncedDocs = collection.syncedIds$.getValue();
 
-			if (pullRemoteIds.length === 0) {
-				runAudit.current = true;
-				return {
-					documents: [],
-					checkpoint: null,
-				};
-			}
+		// 	if (pullRemoteIds.length === 0) {
+		// 		runAudit.current = true;
+		// 		return {
+		// 			documents: [],
+		// 			checkpoint: null,
+		// 		};
+		// 	}
 
-			const params = {
-				order: 'asc',
-				orderby: 'title',
-			};
+		// 	const params = {
+		// 		order: 'asc',
+		// 		orderby: 'title',
+		// 	};
 
-			// choose the smallest array, max of 1000
-			if (syncedDocs.length > pullRemoteIds.length) {
-				params.include = pullRemoteIds.slice(0, 1000).join(',');
-			} else {
-				params.exclude = syncedDocs.slice(0, 1000).join(',');
-			}
+		// 	// choose the smallest array, max of 1000
+		// 	if (syncedDocs.length > pullRemoteIds.length) {
+		// 		params.include = pullRemoteIds.slice(0, 1000).join(',');
+		// 	} else {
+		// 		params.exclude = syncedDocs.slice(0, 1000).join(',');
+		// 	}
 
-			const response = await http.get(collection.name, { params }).catch((error) => {
-				log.error(error);
-			});
+		// 	const response = await http.get(collection.name, { params }).catch((error) => {
+		// 		log.error(error);
+		// 	});
 
-			/**
-			 * What to do when server is unreachable?
-			 */
-			if (!response?.data) {
-				throw Error('No response from server');
-			}
+		// 	/**
+		// 	 * What to do when server is unreachable?
+		// 	 */
+		// 	if (!response?.data) {
+		// 		throw Error('No response from server');
+		// 	}
 
-			return {
-				documents: response?.data || [],
-				checkpoint: null,
-			};
-		};
+		// 	return {
+		// 		documents: response?.data || [],
+		// 		checkpoint: null,
+		// 	};
+		// };
 
-		/**
-		 *
-		 */
-		const audit = async () => {
-			const response = await http
-				.get(collection.name, {
-					params: { fields: ['id', 'name'], posts_per_page: -1 },
-				})
-				.catch((error) => {
-					log.error(error);
-				});
+		// /**
+		//  *
+		//  */
+		// const audit = async () => {
+		// 	const response = await http
+		// 		.get(collection.name, {
+		// 			params: { fields: ['id', 'name'], posts_per_page: -1 },
+		// 		})
+		// 		.catch((error) => {
+		// 			log.error(error);
+		// 		});
 
-			/**
-			 * What to do when server is unreachable?
-			 */
-			if (!response?.data) {
-				throw Error('No response from server');
-			}
+		// 	/**
+		// 	 * What to do when server is unreachable?
+		// 	 */
+		// 	if (!response?.data) {
+		// 		throw Error('No response from server');
+		// 	}
 
-			const documents = await collection.auditRestApiIds(response?.data);
-			runAudit.current = false;
+		// 	const documents = await collection.auditRestApiIds(response?.data);
+		// 	runAudit.current = false;
 
-			/** @TODO - hack */
-			if (documents.length === 0) {
-				return replicate(null, 10);
-			}
+		// 	/** @TODO - hack */
+		// 	if (documents.length === 0) {
+		// 		return replicate(null, 10);
+		// 	}
 
-			return {
-				documents,
-				checkpoint: null,
-			};
-		};
+		// 	return {
+		// 		documents,
+		// 		checkpoint: null,
+		// 	};
+		// };
 
 		/**
 		 *
@@ -115,12 +115,28 @@ export const useReplication = ({ collection }) => {
 			// retryTime: 1000000000,
 			pull: {
 				async handler(lastCheckpoint, batchSize) {
-					return runAudit.current ? audit() : replicate(lastCheckpoint, batchSize);
+					const params = {
+						order: 'asc',
+						orderby: 'title',
+					};
+					const { data } = await http.get(collection.name, { params });
+
+					if (lastCheckpoint) {
+						return {
+							documents: [],
+						};
+					}
+
+					return {
+						documents: data,
+						checkpoint: true,
+					};
 				},
 				batchSize: 10,
 				modifier: async (doc) => {
-					await collection.upsertChildren(doc);
-					return collection.parseRestResponse(doc);
+					// await collection.upsertChildren(doc);
+					// return collection.parseRestResponse(doc);
+					return doc;
 				},
 				// stream$: timedObservable(1000),
 			},

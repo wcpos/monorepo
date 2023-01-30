@@ -69,7 +69,7 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 				zIndex: 1, // this makes sure the customer select is on top of the cart
 			}}
 		>
-			<Box fill>
+			{/* <Box fill>
 				<ErrorBoundary>
 					{customerID !== -1 ? (
 						<Customer order={order} />
@@ -77,7 +77,7 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 						<CustomerSelect onSelectCustomer={handleCustomerSelect} />
 					)}
 				</ErrorBoundary>
-			</Box>
+			</Box> */}
 			<ErrorBoundary>
 				<AddCustomer />
 			</ErrorBoundary>

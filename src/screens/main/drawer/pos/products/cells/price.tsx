@@ -32,13 +32,6 @@ export const Price = ({ item: product, column }: Props) => {
 	);
 
 	/**
-	 * Early exit, show skeleton if not downloaded yet
-	 */
-	if (!product.isSynced()) {
-		return <Text.Skeleton length="short" />;
-	}
-
-	/**
 	 *
 	 */
 	return (

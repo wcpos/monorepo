@@ -1,69 +1,42 @@
 import * as React from 'react';
 
-import { useTheme } from 'styled-components/native';
+import { createStackNavigator } from '@react-navigation/stack';
 
-import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Text from '@wcpos/components/src/text';
-import log from '@wcpos/utils/src/logger';
-
-import SearchBar from './components/search-bar';
-import Table from './components/table';
+import EditProduct from './edit-product';
+import Products from './products';
 import { ProductsProvider } from '../../../../contexts/products';
-import { TaxesProvider } from '../../../../contexts/taxes';
-import useUI from '../../../../contexts/ui';
-import UiSettings from '../../common/ui-settings';
+import { ModalLayout } from '../../../components/modal-layout';
+
+export type ProductsStackParamList = {
+	Products: undefined;
+	EditProduct: { productID: string };
+};
+
+const Stack = createStackNavigator<ProductsStackParamList>();
 
 /**
  *
  */
-const Products = () => {
-	const { ui } = useUI('products');
-	const theme = useTheme();
-
+const ProductsNavigator = () => {
 	return (
-		<TaxesProvider initialQuery={{ country: 'GB' }}>
-			<ProductsProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }} ui={ui}>
-				<Box padding="small" style={{ height: '100%' }}>
-					<Box
-						raised
-						rounding="medium"
-						style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
-					>
-						<Box
-							horizontal
-							space="small"
-							padding="small"
-							align="center"
-							style={{
-								backgroundColor: theme.colors.grey,
-								borderTopLeftRadius: theme.rounding.medium,
-								borderTopRightRadius: theme.rounding.medium,
-							}}
-						>
-							<SearchBar />
-							<UiSettings ui={ui} />
-						</Box>
-						<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-							<React.Suspense fallback={<Text>Loading products table...</Text>}>
-								<Table ui={ui} />
-							</React.Suspense>
-						</Box>
-					</Box>
-				</Box>
-			</ProductsProvider>
-		</TaxesProvider>
+		<Stack.Navigator screenOptions={{ headerShown: false }}>
+			<Stack.Screen name="Products" component={Products} />
+			<Stack.Screen
+				name="EditProduct"
+				component={({ route }) => {
+					const { productID } = route.params;
+					return (
+						<ProductsProvider initialQuery={{ filters: { uuid: productID } }}>
+							<ModalLayout>
+								<EditProduct />
+							</ModalLayout>
+						</ProductsProvider>
+					);
+				}}
+				options={{ presentation: 'transparentModal' }}
+			/>
+		</Stack.Navigator>
 	);
 };
 
-const WrappedProducts = () => {
-	return (
-		<ErrorBoundary>
-			<React.Suspense fallback={<Text>Loading products UI</Text>}>
-				<Products />
-			</React.Suspense>
-		</ErrorBoundary>
-	);
-};
-
-export default WrappedProducts;
+export default ProductsNavigator;

@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { decode } from 'html-entities';
 import pick from 'lodash/pick';
-import { useObservableState } from 'observable-hooks';
+import { useObservablePickState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import Form from '@wcpos/react-native-jsonschema-form';
 
@@ -12,7 +13,7 @@ const uiSchema = {};
 
 export const GeneralSettings = () => {
 	const { store } = useAuth();
-	const formData = useObservableState(store.$, store.toJSON());
+	const formData = store.toJSON();
 
 	/**
 	 *
@@ -49,7 +50,7 @@ export const GeneralSettings = () => {
 	 */
 	const handleOnChange = React.useCallback(
 		(data) => {
-			store?.atomicPatch(data);
+			store?.update(data);
 		},
 		[store]
 	);

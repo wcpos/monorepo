@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useObservableSuspense } from 'observable-hooks';
+
 import { CurrentOrderContext } from './provider';
 
 /**
@@ -10,5 +12,8 @@ export const useCurrentOrder = () => {
 		throw new Error(`useCurrentOrder must be called within CurrentOrderProvider`);
 	}
 
-	return React.useContext(CurrentOrderContext);
+	const { currentOrderResource } = React.useContext(CurrentOrderContext);
+	const currentOrder = useObservableSuspense(currentOrderResource);
+
+	return { currentOrder };
 };

@@ -10,9 +10,10 @@ import { switchMap, map } from 'rxjs/operators';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
-import useStore from '../../contexts/store';
-import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import { useReplication } from './use-replication';
+import useStore from '../../contexts/store';
+import useUI from '../ui';
+import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type ProductDocument = import('@wcpos/database/src/collections/products').ProductDocument;
 
@@ -32,10 +33,11 @@ interface ProductsProviderProps {
 /**
  *
  */
-const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps) => {
+const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => {
 	log.debug('render product provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.products;
+	const { ui } = useUI('pos.products');
 	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplication({ collection });
@@ -89,6 +91,13 @@ const ProductsProvider = ({ children, initialQuery, ui }: ProductsProviderProps)
 				// 		{ date_created_gmt: { $eq: undefined } },
 				// 	];
 				// }
+
+				/**
+				 * @TODO - hack for find by uuid
+				 */
+				if (_get(q, 'filters.uuid')) {
+					return collection.findOneFix(q.filters.uuid).$;
+				}
 
 				const RxQuery = collection.find({ selector });
 

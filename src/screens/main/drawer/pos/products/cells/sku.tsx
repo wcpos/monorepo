@@ -11,5 +11,5 @@ type SKUProps = {
 export const SKU = ({ item: product }: SKUProps) => {
 	const sku = useObservableState(product.sku$, product.sku);
 
-	return product.isSynced() ? <Text>{sku}</Text> : <Text.Skeleton length="short" />;
+	return <Text>{sku}</Text>;
 };

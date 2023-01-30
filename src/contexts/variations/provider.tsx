@@ -5,9 +5,9 @@ import { map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
+import { useReplication } from './use-replication';
 import useStore from '../../contexts/store';
 import { QueryObservable, QueryState, SetQuery } from '../use-query';
-import { useReplication } from './use-replication';
 
 type ProductVariationDocument =
 	import('@wcpos/database/src/collections/variations').ProductVariationDocument;
@@ -31,29 +31,13 @@ const VariationsProvider = ({ children, initialQuery, parent, ui }: VariationsPr
 	log.debug('render variations provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.variations;
-	const variationIds = useObservableState(parent.variations$, parent.variations);
 	const replicationState = useReplication({ collection, parent });
-
-	// const { query$, setQuery } = useQuery(initialQuery);
-
-	/**
-	 * Only run the replication when the Provider is mounted
-	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, [replicationState]);
 
 	/**
 	 *
 	 */
 	const value = React.useMemo(() => {
-		const variations$ = collection
-			.findByIds$(variationIds?.map((id) => String(id)) || [])
-			.pipe(map((docsMap) => Array.from(docsMap.values())));
+		const variations$ = parent.populate$('variations');
 
 		return {
 			// query$,
@@ -61,7 +45,7 @@ const VariationsProvider = ({ children, initialQuery, parent, ui }: VariationsPr
 			resource: new ObservableResource(variations$),
 			replicationState,
 		};
-	}, [collection, replicationState, variationIds]);
+	}, [parent, replicationState]);
 
 	return <VariationsContext.Provider value={value}>{children}</VariationsContext.Provider>;
 };

@@ -6,7 +6,6 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
-import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
 import useProducts from '../../../../../contexts/products';
@@ -19,7 +18,7 @@ interface ProductFooterProps {
 
 const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { storeDB } = useStore();
-	const total = useObservableState(storeDB.products.totalDocCount$, 0);
+	const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
 	const { sync } = useProducts();
 	const [openMenu, setOpenMenu] = React.useState(false);

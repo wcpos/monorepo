@@ -32,13 +32,6 @@ const RegularPrice = ({ item: product, column }: Props) => {
 	);
 
 	/**
-	 * Early exit, show skeleton if not downloaded yet
-	 */
-	if (!product.isSynced()) {
-		return <Text.Skeleton length="short" />;
-	}
-
-	/**
 	 * Early exit, no price!
 	 */
 	if (!price) {

@@ -1,14 +1,19 @@
 import * as React from 'react';
 
+import { ObservableResource } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
+import { from } from 'rxjs';
+import { map, tap } from 'rxjs/operators';
+
 import NewOrder from './new-order';
 import useStore from '../../../../../../contexts/store';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CurrentOrderContextProps {
-	currentOrder?: OrderDocument;
-	setCurrentOrder: React.Dispatch<React.SetStateAction<OrderDocument | undefined>>;
-	newOrder: typeof NewOrder;
+	currentOrderResource: ObservableResource<OrderDocument | typeof NewOrder>;
+	// setCurrentOrder: React.Dispatch<React.SetStateAction<OrderDocument | undefined>>;
+	// newOrder: typeof NewOrder;
 }
 
 export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>(null);
@@ -19,28 +24,40 @@ interface CurrentOrderContextProviderProps {
 }
 
 /**
- *
+ * Providers the active order by uuid
+ * If no orderID is provided, active order will be a new order (mock Order class)
+ * Current order should be set by route only
  */
 const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProviderProps) => {
 	const { storeDB } = useStore();
-	const collection = storeDB.collections.orders;
-	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | undefined>();
+	const collection = storeDB?.collections.orders;
 
 	/**
 	 *
 	 */
-	const newOrder = React.useMemo(() => new NewOrder({ collection, setCurrentOrder }), [collection]);
+	const currentOrderResource = React.useMemo(
+		() =>
+			new ObservableResource(
+				collection
+					.findOneFix(orderID)
+					.$.pipe(map((order) => (order ? order : new NewOrder(collection))))
+			),
+		[collection, orderID]
+	);
+
+	/**
+	 *
+	 */
+	// const newOrder = React.useMemo(() => new NewOrder({ collection, setCurrentOrder }), [collection]);
 
 	/**
 	 *
 	 */
 	const value = React.useMemo(() => {
 		return {
-			currentOrder,
-			setCurrentOrder,
-			newOrder,
+			currentOrderResource,
 		};
-	}, [currentOrder, newOrder]);
+	}, [currentOrderResource]);
 
 	return <CurrentOrderContext.Provider value={value}>{children}</CurrentOrderContext.Provider>;
 };

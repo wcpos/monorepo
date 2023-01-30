@@ -17,13 +17,6 @@ export const StockQuantity = ({ product, size }: Props) => {
 	const manageStock = useObservableState(product.manage_stock$, product.manage_stock);
 
 	/**
-	 * Early exit, show skeleton if not downloaded yet
-	 */
-	if (!product.isSynced()) {
-		return <Text.Skeleton length="short" />;
-	}
-
-	/**
 	 * Early exit
 	 */
 	if (!manageStock || !isFinite(stockQuantity)) {

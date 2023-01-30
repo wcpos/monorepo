@@ -5,6 +5,7 @@ import log from '@wcpos/utils/src/logger';
 
 // type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type OrderDocument = import('@wcpos/database').OrderDocument;
+type OrderCollection = import('@wcpos/database').OrderCollection;
 
 /**
  * RxDB removed Temporary Documents in v13
@@ -24,11 +25,9 @@ export default class NewOrder {
 	public line_items = [];
 	public fee_lines = [];
 	public shipping_lines = [];
-	public setCurrentOrder: (order: OrderDocument) => void;
 
-	constructor({ collection, setCurrentOrder }) {
+	constructor(collection: OrderCollection) {
 		this.collection = collection;
-		this.setCurrentOrder = setCurrentOrder;
 
 		this.customer_id = 0;
 		this.customer_id$ = new BehaviorSubject(0);
@@ -56,8 +55,7 @@ export default class NewOrder {
 	}
 
 	async save() {
-		const orderDoc = await this.collection.insert(this.toJSON());
-		this.setCurrentOrder(orderDoc);
+		return this.collection.insert(this.toJSON());
 	}
 
 	async addFeeLine(data) {

@@ -5,9 +5,9 @@ import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
+import { useReplication } from './use-replication';
 import useStore from '../../contexts/store';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
-import { useReplication } from './use-replication';
 
 type TaxRateDocument = import('@wcpos/database/src/collections/taxes').TaxRateDocument;
 
@@ -34,13 +34,13 @@ const TaxesProvider = ({ children, initialQuery, ui }: TaxesProviderProps) => {
 	/**
 	 * Only run the replication when the Provider is mounted
 	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, [replicationState]);
+	// React.useEffect(() => {
+	// 	replicationState.start();
+	// 	return () => {
+	// 		// this is async, should we wait?
+	// 		replicationState.cancel();
+	// 	};
+	// }, [replicationState]);
 
 	/**
 	 *

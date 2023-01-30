@@ -31,15 +31,13 @@ const WPUsersList = ({ wpUsersResource, site }: WpUserProps) => {
 					onPress={() => navigation.navigate('Login', { siteID: site.uuid })}
 				/>
 			</Box>
-			{Array.isArray(wpCreds) &&
-				wpCreds.length > 0 &&
-				wpCreds.map((wpCred) => (
-					<ErrorBoundary key={wpCred.localID}>
-						<React.Suspense>
-							<WPUser wpUser={wpCred} site={site} />
-						</React.Suspense>
-					</ErrorBoundary>
-				))}
+			{wpCreds.map((wpCred) => (
+				<ErrorBoundary key={wpCred.uuid}>
+					<React.Suspense>
+						<WPUser wpUser={wpCred} site={site} />
+					</React.Suspense>
+				</ErrorBoundary>
+			))}
 		</>
 	);
 };

@@ -14,7 +14,7 @@ const user$ = userDB$.pipe(
 			switchMap(async (current) => {
 				const userID = current && current.get('userID');
 				/** @NOTE - findOne returns an RxDocument if userID is null | undefined */
-				const user = await userDB.users.findOne(userID || '').exec();
+				const user = await userDB.users.findOneFix(userID).exec();
 				if (!user) {
 					/**
 					 * Init with Global User
