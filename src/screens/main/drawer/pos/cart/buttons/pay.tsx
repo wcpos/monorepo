@@ -8,7 +8,6 @@ import Button from '@wcpos/components/src/button';
 import useCurrencyFormat from '../../../../../../hooks/use-currency-format';
 import useRestHttpClient from '../../../../../../hooks/use-rest-http-client';
 import { t } from '../../../../../../lib/translations';
-import useCurrentOrder from '../../contexts/current-order';
 
 interface PayModalProps {
 	order: import('@wcpos/database').OrderDocument;
@@ -21,43 +20,42 @@ const PayButton = ({ order }: PayModalProps) => {
 	const total = useObservableState(order.total$, order.total);
 	const { format } = useCurrencyFormat();
 	const http = useRestHttpClient();
-	const { setCurrentOrder } = useCurrentOrder();
 	const navigation = useNavigation();
 
 	/**
 	 *
 	 */
-	const saveOrder = React.useCallback(async () => {
-		const data = await order.toRestApiJSON();
-		let endpoint = 'orders';
-		if (order.id) {
-			endpoint += `/${order.id}`;
-		}
+	// const saveOrder = React.useCallback(async () => {
+	// 	const data = await order.toRestApiJSON();
+	// 	let endpoint = 'orders';
+	// 	if (order.id) {
+	// 		endpoint += `/${order.id}`;
+	// 	}
 
-		const result = await http.post(endpoint, {
-			data,
-		});
+	// 	const result = await http.post(endpoint, {
+	// 		data,
+	// 	});
 
-		if (result.status === 201 || result.status === 200) {
-			// @TODO - this should be part of the parseRestResponse
-			await order.collection.upsertChildren(result.data);
-			return order.atomicPatch(result.data);
-			// if (order.id) {
-			// 	await order.collection.upsertChildren(result.data);
+	// 	if (result.status === 201 || result.status === 200) {
+	// 		// @TODO - this should be part of the parseRestResponse
+	// 		await order.collection.upsertChildren(result.data);
+	// 		return order.atomicPatch(result.data);
+	// 		// if (order.id) {
+	// 		// 	await order.collection.upsertChildren(result.data);
 
-			// 	// const parsed = order.collection.parseRestResponse(result.data);
+	// 		// 	// const parsed = order.collection.parseRestResponse(result.data);
 
-			// 	order.atomicPatch(result.data);
-			// 	return order;
-			// }
-			// await order.collection.upsertChildren(result.data);
-			// const newOrder = await order.collection.insert(result.data);
-			// // switcharoo
-			// await order.remove();
-			// setCurrentOrder(newOrder);
-			// return newOrder;
-		}
-	}, [http, order]);
+	// 		// 	order.atomicPatch(result.data);
+	// 		// 	return order;
+	// 		// }
+	// 		// await order.collection.upsertChildren(result.data);
+	// 		// const newOrder = await order.collection.insert(result.data);
+	// 		// // switcharoo
+	// 		// await order.remove();
+	// 		// setCurrentOrder(newOrder);
+	// 		// return newOrder;
+	// 	}
+	// }, [http, order]);
 
 	/**
 	 *

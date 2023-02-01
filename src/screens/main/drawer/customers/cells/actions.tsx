@@ -1,14 +1,11 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
-import pick from 'lodash/pick';
 
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
-import Modal from '@wcpos/components/src/modal';
 
 import useRestHttpClient from '../../../../../hooks/use-rest-http-client';
-import EditCustomer from '../../../common/edit-form';
 
 type Props = {
 	item: import('@wcpos/database').CustomerDocument;
@@ -18,7 +15,6 @@ const Actions = ({ item: customer }: Props) => {
 	const http = useRestHttpClient();
 	const navigation = useNavigation();
 	const [menuOpened, setMenuOpened] = React.useState(false);
-	const [editModalOpened, setEditModalOpened] = React.useState(false);
 
 	/**
 	 *
@@ -40,26 +36,6 @@ const Actions = ({ item: customer }: Props) => {
 		customer.remove();
 	};
 
-	/**
-	 *
-	 */
-	const schema = React.useMemo(() => {
-		return {
-			...customer.collection.schema.jsonSchema,
-			properties: pick(customer.collection.schema.jsonSchema.properties, [
-				'id',
-				'email',
-				'first_name',
-				'last_name',
-				'role',
-				'username',
-				'billing',
-				'shipping',
-				'meta_data',
-			]),
-		};
-	}, [customer.collection.schema.jsonSchema]);
-
 	return (
 		<>
 			<Dropdown
@@ -72,7 +48,7 @@ const Actions = ({ item: customer }: Props) => {
 				items={[
 					{
 						label: 'Edit',
-						action: () => navigation.navigate('EditCustomer', { customerID: customer.id }),
+						action: () => navigation.navigate('EditCustomer', { customerID: customer.uuid }),
 						icon: 'penToSquare',
 					},
 					{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
@@ -94,28 +70,6 @@ const Actions = ({ item: customer }: Props) => {
 					}}
 				/>
 			</Dropdown>
-
-			<Modal
-				opened={editModalOpened}
-				onClose={() => {
-					setEditModalOpened(false);
-				}}
-				title={`Edit Customer`}
-				primaryAction={{
-					label: 'Save',
-					action: handleSync,
-				}}
-				secondaryActions={[
-					{
-						label: 'Cancel',
-						action: () => {
-							setEditModalOpened(false);
-						},
-					},
-				]}
-			>
-				<EditCustomer item={customer} schema={schema} uiSchema={{}} />
-			</Modal>
 		</>
 	);
 };

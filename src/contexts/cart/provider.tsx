@@ -1,9 +1,12 @@
 import * as React from 'react';
+
+import isEqual from 'lodash/isEqual';
+import { ObservableResource } from 'observable-hooks';
 import { combineLatest, distinctUntilChanged } from 'rxjs';
 import { switchMap, tap, map, shareReplay } from 'rxjs/operators';
-import { ObservableResource } from 'observable-hooks';
-import isEqual from 'lodash/isEqual';
+
 import log from '@wcpos/utils/src/logger';
+
 import { useCalcTotals } from './use-calc-totals';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
@@ -76,7 +79,11 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 		/**
 		 * Outputs { line_items: [], fee_lines: [], shipping_lines: [] }
 		 */
-		const cart$ = combineLatest([lineItems$, feeLines$, shippingLines$]).pipe(
+		const cart$ = combineLatest([
+			order.populate$('line_items'),
+			order.populate$('fee_lines'),
+			order.populate$('shipping_lines'),
+		]).pipe(
 			map(([line_items, fee_lines, shipping_lines]) => ({
 				line_items,
 				fee_lines,
@@ -92,9 +99,9 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 		 *
 		 */
 		return {
-			lineItems$,
-			feeLines$,
-			shippingLines$,
+			// lineItems$,
+			// feeLines$,
+			// shippingLines$,
 			cart$,
 			cartResource: new ObservableResource(cart$),
 		};
@@ -103,7 +110,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 	/**
 	 * Calc totals
 	 */
-	useCalcTotals(value.cart$, order);
+	// useCalcTotals(value.cart$, order);
 
 	/**
 	 *

@@ -1,15 +1,12 @@
 import * as React from 'react';
 
-import { useNavigationState } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
 
 import Checkout from './checkout';
-import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
-import { TaxesProvider } from '../../../../contexts/taxes';
 import Receipt from '../receipt';
 
 export type POSStackParamList = {
@@ -23,15 +20,7 @@ const Stack = createStackNavigator<POSStackParamList>();
 /**
  *
  */
-const POSStackNavigator = ({ navigation, route }) => {
-	// const state = useNavigationState((state) => state);
-	// const orderID = undefined;
-	// const { orderID } = route.params || {};
-	// const route_ = useRoute();
-	// console.log(navigation.);
-	// debugger;
-	// const taxQuery = React.useMemo(() => ({ country: 'GB' }), []);
-
+const POSStackNavigator = () => {
 	return (
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>Loading POSStackNavigator...</Text>}>

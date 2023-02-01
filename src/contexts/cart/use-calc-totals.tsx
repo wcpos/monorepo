@@ -1,10 +1,13 @@
 import * as React from 'react';
+
+import flatten from 'lodash/flatten';
+import forEach from 'lodash/forEach';
+import { useSubscription } from 'observable-hooks';
 import { combineLatest } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { useSubscription } from 'observable-hooks';
-import forEach from 'lodash/forEach';
-import flatten from 'lodash/flatten';
+
 import log from '@wcpos/utils/src/logger';
+
 import useTaxes from '../taxes';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;

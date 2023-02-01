@@ -8,7 +8,7 @@ import Icon from '@wcpos/components/src/icon';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
-import CustomersNavigator from './customers/_navigator';
+import CustomersNavigator from './customers';
 import OrdersNavigator from './orders/_navigator';
 import POSNavigator from './pos';
 import ProductsNavigator from './products';

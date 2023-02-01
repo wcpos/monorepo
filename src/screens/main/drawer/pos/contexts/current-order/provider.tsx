@@ -1,9 +1,11 @@
 import * as React from 'react';
 
+import { useRoute } from '@react-navigation/native';
+import get from 'lodash/get';
 import { ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
-import { from } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
+import { Subject } from 'rxjs';
+import { tap } from 'rxjs/operators';
 
 import NewOrder from './new-order';
 import useStore from '../../../../../../contexts/store';
@@ -20,35 +22,32 @@ export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
-	orderID?: string;
 }
+
+const currentOrder$ = new Subject<OrderDocument | typeof NewOrder>();
+const currentOrderResource = new ObservableResource(currentOrder$, (val) => !!val);
 
 /**
  * Providers the active order by uuid
  * If no orderID is provided, active order will be a new order (mock Order class)
  * Current order should be set by route only
  */
-const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProviderProps) => {
+const CurrentOrderProvider = ({ children }: CurrentOrderContextProviderProps) => {
 	const { storeDB } = useStore();
 	const collection = storeDB?.collections.orders;
-
-	/**
-	 *
-	 */
-	const currentOrderResource = React.useMemo(
-		() =>
-			new ObservableResource(
-				collection
-					.findOneFix(orderID)
-					.$.pipe(map((order) => (order ? order : new NewOrder(collection))))
-			),
-		[collection, orderID]
-	);
-
-	/**
-	 *
-	 */
-	// const newOrder = React.useMemo(() => new NewOrder({ collection, setCurrentOrder }), [collection]);
+	const route = useRoute();
+	const orderID = get(route, ['params', 'orderID']);
+	currentOrder$.next(null); // bit of a hack to suspend the compnents waiting for updated order
+	collection
+		.findOneFix(orderID)
+		.exec()
+		.then((order) => {
+			if (order) {
+				currentOrder$.next(order);
+			} else {
+				currentOrder$.next(new NewOrder(collection));
+			}
+		});
 
 	/**
 	 *
@@ -57,7 +56,7 @@ const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProvider
 		return {
 			currentOrderResource,
 		};
-	}, [currentOrderResource]);
+	}, []);
 
 	return <CurrentOrderContext.Provider value={value}>{children}</CurrentOrderContext.Provider>;
 };

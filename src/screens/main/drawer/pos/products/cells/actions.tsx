@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
+import { useNavigation } from '@react-navigation/native';
+import { useObservableSuspense } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
 import log from '@wcpos/utils/src/logger';
@@ -16,19 +17,19 @@ interface Props {
  *
  */
 export const Actions = ({ item: product }: Props) => {
-	const render = useObservableState(product.date_modified_gmt$, product.date_modified_gmt);
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderResource } = useCurrentOrder();
+	const currentOrder = useObservableSuspense(currentOrderResource);
+	const navigation = useNavigation();
 
 	/**
 	 *
 	 */
 	const addToCart = React.useCallback(async () => {
-		if (currentOrder) {
-			currentOrder.addOrUpdateProduct(product);
-		} else {
-			log.error('No order found');
+		const updatedOrder = await currentOrder.addOrUpdateProduct(product);
+		if (updatedOrder.uuid !== currentOrder.uuid) {
+			navigation.setParams({ orderID: updatedOrder.uuid });
 		}
-	}, [currentOrder, product]);
+	}, [currentOrder, navigation, product]);
 
 	/**
 	 *

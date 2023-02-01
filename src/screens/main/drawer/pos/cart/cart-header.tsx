@@ -12,20 +12,19 @@ import Settings from './settings';
 import useStore from '../../../../../contexts/store';
 import AddCustomer from '../../../common/add-new-customer';
 import CustomerSelect from '../../../common/customer-select';
-// import UISettings from '../../common/ui-settings';
+import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
 interface CartHeaderProps {
 	order: OrderDocument;
-	ui: any;
 }
 
 /**
  *
  */
-const CartHeader = ({ order, ui }: CartHeaderProps) => {
+const CartHeader = ({ order }: CartHeaderProps) => {
 	const theme = useTheme();
 	const { storeDB } = useStore();
 	const customerID = useObservableState(order.customer_id$, order.customer_id);
@@ -50,7 +49,7 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 	/**
 	 *
 	 */
-	useWhyDidYouUpdate('Cart Header', { order, ui, theme, storeDB });
+	useWhyDidYouUpdate('Cart Header', { order, theme, storeDB });
 
 	/**
 	 *
@@ -69,7 +68,7 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 				zIndex: 1, // this makes sure the customer select is on top of the cart
 			}}
 		>
-			{/* <Box fill>
+			<Box fill>
 				<ErrorBoundary>
 					{customerID !== -1 ? (
 						<Customer order={order} />
@@ -77,12 +76,12 @@ const CartHeader = ({ order, ui }: CartHeaderProps) => {
 						<CustomerSelect onSelectCustomer={handleCustomerSelect} />
 					)}
 				</ErrorBoundary>
-			</Box> */}
+			</Box>
 			<ErrorBoundary>
 				<AddCustomer />
 			</ErrorBoundary>
 			<ErrorBoundary>
-				<Settings ui={ui} />
+				<Settings />
 			</ErrorBoundary>
 		</Box>
 	);

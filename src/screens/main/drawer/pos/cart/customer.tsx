@@ -24,8 +24,11 @@ interface CustomerProps {
  */
 const Customer = ({ order }: CustomerProps) => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
-	const billing = useObservableState(order.billing$, order.billing);
-	const shipping = useObservableState(order.shipping$, order.shipping);
+	// const billing = useObservableState(order.billing$, order.billing);
+	// const shipping = useObservableState(order.shipping$, order.shipping);
+	const billing = order.billing;
+	const shipping = order.shipping;
+	debugger;
 
 	/**
 	 *

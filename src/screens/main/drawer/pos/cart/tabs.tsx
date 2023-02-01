@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, StackActions } from '@react-navigation/native';
+import { useObservableSuspense } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
@@ -19,9 +20,10 @@ type RenderTabTitle = (focused: boolean, order: OrderDocument) => React.ReactEle
  */
 const CartTabs = () => {
 	const navigation = useNavigation();
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderResource } = useCurrentOrder();
+	const currentOrder = useObservableSuspense(currentOrderResource);
 	const { data: orders } = useOrders();
-	orders.push({}); //
+	orders.push({}); // adds an empty tab for the new order
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
 	/**
@@ -56,8 +58,7 @@ const CartTabs = () => {
 		(idx: number) => {
 			/**
 			 * @TODO - setParams updates the currentOrder without refreshing the products,
-			 * this is great!, but I lose the back button. Push refreshes the products.
-			 * Can I use StackActions.push('POS', { orderID }) without refreshing the products?
+			 * this is great!, but I lose the back button. Push keeps the old order in the stack.
 			 */
 			navigation.setParams({ orderID: orders[idx].uuid });
 		},
@@ -66,9 +67,9 @@ const CartTabs = () => {
 
 	useWhyDidYouUpdate('CartTabs', {
 		orders,
-		currentOrder,
+		// currentOrder,
 		routes,
-		focusedIndex,
+		// focusedIndex,
 		handleTabChange,
 		// renderScene,
 	});

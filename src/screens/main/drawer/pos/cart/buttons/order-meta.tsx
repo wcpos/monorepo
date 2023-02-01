@@ -74,6 +74,7 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 			/>
 			<Modal
 				opened={opened}
+				size="large"
 				onClose={() => {
 					setOpened(false);
 				}}

@@ -1,5 +1,7 @@
 import * as React from 'react';
+
 import { useObservableSuspense } from 'observable-hooks';
+
 import { CartContext } from './provider';
 
 export const useCart = () => {

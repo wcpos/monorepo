@@ -1,48 +1,52 @@
 import * as React from 'react';
 
+import { useNavigation } from '@react-navigation/native';
+
 import Button from '@wcpos/components/src/button';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../../../lib/translations';
-import useCurrentOrder from '../../contexts/current-order';
 
 interface VoidButtonProps {
 	order: import('@wcpos/database').OrderDocument;
 }
 
-let voidedOrderJSON = null;
-
+/**
+ *
+ */
 const VoidButton = ({ order }: VoidButtonProps) => {
-	const { setCurrentOrder } = useCurrentOrder();
 	const addSnackbar = useSnackbar();
-
-	/**
-	 * @TODO - upsert children, should be done during preInsert hook
-	 */
-	const undoRemove = React.useCallback(async () => {
-		const success = await order.collection.insert(voidedOrderJSON).catch((err) => {
-			log.error(err);
-		});
-
-		if (success) {
-			setCurrentOrder(success);
-		}
-	}, [order.collection, setCurrentOrder]);
+	const navigation = useNavigation();
 
 	/**
 	 *
 	 */
+	const undoRemove = React.useCallback(
+		async (orderJson) => {
+			try {
+				await order.collection.insert(orderJson);
+				navigation.setParams({ orderID: orderJson.uuid });
+			} catch (err) {
+				log.error(err);
+			}
+		},
+		[navigation, order.collection]
+	);
+
+	/**
+	 * @TODO - don't we just want to set the status to cancelled?
+	 */
 	const handleRemove = React.useCallback(async () => {
-		voidedOrderJSON = await order.toRestApiJSON();
+		const orderJson = await order.toPopulatedJSON();
 		await order.remove();
-		setCurrentOrder(null);
+		navigation.setParams({ orderID: null });
 		addSnackbar({
 			message: t('Order removed', { _tags: 'core' }),
 			dismissable: true,
-			action: { label: t('Undo', { _tags: 'core' }), action: undoRemove },
+			action: { label: t('Undo', { _tags: 'core' }), action: () => undoRemove(orderJson) },
 		});
-	}, [addSnackbar, order, setCurrentOrder, undoRemove]);
+	}, [addSnackbar, navigation, order, undoRemove]);
 
 	/**
 	 *

@@ -39,7 +39,11 @@ const POSProductsTable = ({ ui }: POSProductsTableProps) => {
 			const Cell = get(cells, [item.type, column.key], cells.simple[column.key]);
 
 			if (Cell) {
-				return <Cell item={item} column={column} index={index} />;
+				return (
+					<React.Suspense fallback={<Text>loading cell...</Text>}>
+						<Cell item={item} column={column} index={index} />
+					</React.Suspense>
+				);
 			}
 
 			if (item[column.key]) {

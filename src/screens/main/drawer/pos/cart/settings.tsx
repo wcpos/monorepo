@@ -7,13 +7,9 @@ import { useObservableState } from 'observable-hooks';
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 import Form from '@wcpos/react-native-jsonschema-form';
-// import Form from '@wcpos/rjsf-native';
 
+import useUI from '../../../../../contexts/ui';
 import { t } from '../../../../../lib/translations';
-
-interface POSProductSettingsProps {
-	ui: import('../../../../../contexts/ui').UIDocument;
-}
 
 /**
  *
@@ -73,7 +69,8 @@ const uiSchema = {
 /**
  *
  */
-export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
+export const POSProductSettings = () => {
+	const { ui } = useUI('pos.cart');
 	const [opened, setOpened] = React.useState(false);
 	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));

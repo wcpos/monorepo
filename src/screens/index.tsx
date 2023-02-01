@@ -110,6 +110,9 @@ const RootNavigator = ({ initialProps }) => {
 												Customers: {
 													path: '',
 												},
+												AddCustomer: {
+													path: 'add',
+												},
 												EditCustomer: {
 													path: 'edit/:customerID',
 												},

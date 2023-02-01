@@ -134,9 +134,9 @@ export const useReplication = ({ collection }) => {
 				},
 				batchSize: 10,
 				modifier: async (doc) => {
-					// await collection.upsertChildren(doc);
-					// return collection.parseRestResponse(doc);
-					return doc;
+					const parsedData = collection.parseRestResponse(doc);
+					await collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+					return parsedData;
 				},
 				// stream$: timedObservable(1000),
 			},

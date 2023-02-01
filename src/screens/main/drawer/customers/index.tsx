@@ -1,69 +1,56 @@
 import * as React from 'react';
 
-import { useTheme } from 'styled-components/native';
+import { createStackNavigator } from '@react-navigation/stack';
 
-import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Text from '@wcpos/components/src/text';
-
-import SearchBar from './search-bar';
-import Table from './table';
+import AddCustomer from './add-customer';
+import Customers from './customers';
+import EditCustomer from './edit-customer';
 import { CustomersProvider } from '../../../../contexts/customers';
-import useUI from '../../../../contexts/ui';
-import AddNewCustomer from '../../common/add-new-customer';
-import UiSettings from '../../common/ui-settings';
+import { ModalLayout } from '../../../components/modal-layout';
+
+export type CustomersStackParamList = {
+	Customers: undefined;
+	AddCustomer: undefined;
+	EditCustomer: { customerID: string };
+};
+
+const Stack = createStackNavigator<CustomersStackParamList>();
 
 /**
  *
  */
-const Customers = () => {
-	const { ui } = useUI('customers');
-	const theme = useTheme();
-
+const CustomersNavigator = () => {
 	return (
-		<CustomersProvider initialQuery={{ sortBy: 'last_name', sortDirection: 'asc' }}>
-			<Box padding="small" style={{ height: '100%' }}>
-				<Box
-					raised
-					rounding="medium"
-					style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
-				>
-					<Box
-						horizontal
-						space="small"
-						padding="small"
-						align="center"
-						style={{
-							backgroundColor: theme.colors.grey,
-							borderTopLeftRadius: theme.rounding.medium,
-							borderTopRightRadius: theme.rounding.medium,
-						}}
-					>
-						<SearchBar />
-						<AddNewCustomer />
-						<UiSettings ui={ui} />
-					</Box>
-					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-						<ErrorBoundary>
-							<React.Suspense fallback={<Text>Loading Customers Table</Text>}>
-								<Table ui={ui} />
-							</React.Suspense>
-						</ErrorBoundary>
-					</Box>
-				</Box>
-			</Box>
-		</CustomersProvider>
+		<Stack.Navigator screenOptions={{ headerShown: false }}>
+			<Stack.Screen name="Customers" component={Customers} />
+			<Stack.Screen
+				name="AddCustomer"
+				component={() => {
+					return (
+						<ModalLayout>
+							<AddCustomer />
+						</ModalLayout>
+					);
+				}}
+				options={{ presentation: 'transparentModal' }}
+			/>
+			<Stack.Screen
+				name="EditCustomer"
+				component={({ route }) => {
+					const { customerID } = route.params;
+					/** @TODO - findOne */
+					return (
+						<CustomersProvider initialQuery={{ filters: { uuid: customerID } }}>
+							<ModalLayout>
+								<EditCustomer />
+							</ModalLayout>
+						</CustomersProvider>
+					);
+				}}
+				options={{ presentation: 'transparentModal' }}
+			/>
+		</Stack.Navigator>
 	);
 };
 
-const WrappedCustomers = () => {
-	return (
-		<ErrorBoundary>
-			<React.Suspense fallback={<Text>Loading customers UI</Text>}>
-				<Customers />
-			</React.Suspense>
-		</ErrorBoundary>
-	);
-};
-
-export default WrappedCustomers;
+export default CustomersNavigator;

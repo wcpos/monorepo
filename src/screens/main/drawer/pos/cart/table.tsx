@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import flatten from 'lodash/flatten';
 import get from 'lodash/get';
-import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
@@ -10,6 +10,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import * as cells from './cells';
 import useCart from '../../../../../contexts/cart';
+import useUI from '../../../../../contexts/ui';
 import { t } from '../../../../../lib/translations';
 
 type ColumnProps = import('@wcpos/components/src/table').ColumnProps;
@@ -23,11 +24,11 @@ type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
 type UIColumn = import('../../../../../contexts/ui').UIColumn;
 type Cart = (LineItemDocument | FeeLineDocument | ShippingLineDocument)[];
 
-interface ICartTableProps {
-	ui: any;
-}
-
-const CartTable = ({ ui }: ICartTableProps) => {
+/**
+ *
+ */
+const CartTable = () => {
+	const { ui } = useUI('pos.cart');
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
 	const cart = useCart();
 	const items = React.useMemo(() => flatten(Object.values(cart)), [cart]); // @TODO - add sorting

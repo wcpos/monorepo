@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -18,19 +19,18 @@ import CartHeader from './cart-header';
 import Table from './table';
 import Totals from './totals';
 import { CartProvider } from '../../../../../contexts/cart';
-import useUI from '../../../../../contexts/ui';
 import useCurrentOrder from '../contexts/current-order';
 
 const Cart = () => {
-	const { ui } = useUI('pos.cart');
 	const theme = useTheme();
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrderResource } = useCurrentOrder();
+	const currentOrder = useObservableSuspense(currentOrderResource);
+	const hasItems =
+		currentOrder.line_items.length > 0 ||
+		currentOrder.fee_lines.length > 0 ||
+		currentOrder.shipping_lines.length > 0;
 
-	useWhyDidYouUpdate('Cart', { currentOrder, ui, theme });
-
-	if (!currentOrder) {
-		return null;
-	}
+	useWhyDidYouUpdate('Cart', { currentOrder, theme });
 
 	return (
 		<Box
@@ -40,16 +40,16 @@ const Cart = () => {
 			style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
 		>
 			<ErrorBoundary>
-				<CartHeader order={currentOrder} ui={ui} />
+				<CartHeader order={currentOrder} />
 			</ErrorBoundary>
 
-			{!currentOrder.isCartEmpty() && (
+			{hasItems && (
 				// show cart only if cart not empty
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 					<CartProvider order={currentOrder}>
 						<ErrorBoundary>
 							<React.Suspense fallback={<Text>loading cart items...</Text>}>
-								<Table ui={ui} />
+								<Table order={currentOrder} />
 							</React.Suspense>
 						</ErrorBoundary>
 					</CartProvider>
@@ -67,7 +67,7 @@ const Cart = () => {
 				</ErrorBoundary>
 			</Box>
 
-			{!currentOrder.isCartEmpty() && (
+			{hasItems && (
 				// show order totals only if cart not empty
 				<>
 					<Box>

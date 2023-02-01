@@ -81,22 +81,21 @@ export default class NewOrder {
 	}
 
 	async addOrUpdateProduct(product) {
-		const newLineItem = await this.collection.database.collections.line_items
-			.insert({
-				product_id: product.id,
-				name: product.name,
-				quantity: 1,
-				price: parseFloat(product.price || ''),
-				sku: product.sku,
-				tax_class: product.tax_class,
-				meta_data: product.meta_data,
-			})
-			.catch((err: any) => {
-				log.error(err);
-			});
-
-		this.line_items.push(newLineItem._id);
-		await this.save();
+		/** @TODO - need to get customer data */
+		return this.collection.insert({
+			status: 'pos-open',
+			line_items: [
+				{
+					product_id: product.id,
+					name: product.name,
+					quantity: 1,
+					price: parseFloat(product.price || ''),
+					sku: product.sku,
+					tax_class: product.tax_class,
+					meta_data: product.meta_data,
+				},
+			],
+		});
 	}
 }
 
