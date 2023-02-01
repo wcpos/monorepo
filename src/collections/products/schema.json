@@ -112,7 +112,21 @@
 			"type": "boolean"
 		},
 		"downloads": {
-			"type": "array"
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"file": {
+						"type": "string"
+					}
+				}
+			}
 		},
 		"download_limit": {
 			"default": -1,
@@ -365,9 +379,8 @@
 		},
 		"variations": {
 			"type": "array",
-			"ref": "variations",
 			"items": {
-				"type": "string"
+				"type": "integer"
 			}
 		},
 		"grouped_products": {

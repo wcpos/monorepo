@@ -6,12 +6,8 @@ import isPlainObject from 'lodash/isPlainObject';
 import map from 'lodash/map';
 import pickBy from 'lodash/pickBy';
 import uniq from 'lodash/uniq';
-import { isRxCollection } from 'rxdb';
+import { isRxCollection, RxPlugin, RxCollection, RxDocument } from 'rxdb';
 import { switchMap, tap } from 'rxjs/operators';
-
-type RxPlugin = import('rxdb/dist/types').RxPlugin;
-type RxCollection = import('rxdb').RxCollection;
-type RxDocument = import('rxdb').RxDocument;
 
 /**
  * Get children props from the schema
@@ -60,8 +56,7 @@ async function upsertRefs(this: RxCollection, data: any) {
 
 	const childrenPromises = map(childrenProps, async (object, path) => {
 		const refCollection = getRefCollection(collection, path);
-		const childrenData = data[path] || [];
-		data[path] = await upsertRef(refCollection, childrenData);
+		data[path] = await upsertRef(refCollection, data[path] || []);
 	});
 
 	return Promise.all(childrenPromises);
@@ -133,9 +128,7 @@ const populatePlugin: RxPlugin = {
 			proto.removeRefs = removeRefs;
 		},
 		RxDocument: (proto: any) => {
-			/**
-			 *
-			 */
+			/** */
 			proto.populate$ = function (this: RxDocument, key: string) {
 				const refCollection = getRefCollection(this.collection, key);
 				return this.get$(key).pipe(
@@ -149,6 +142,25 @@ const populatePlugin: RxPlugin = {
 							})
 					)
 				);
+			};
+			/** */
+			proto.toPopulatedJSON = function (this: RxDocument) {
+				const childrenProps = getPropsWithRef(this.collection.schema.jsonSchema.properties);
+
+				// if there are no children, return plain json
+				if (isEmpty(childrenProps)) return Promise.resolve(this.toJSON());
+
+				// get json and populate children
+				const json = { ...this.toJSON() };
+				const childrenPromises = map(childrenProps, async (object, path) => {
+					const childDocs = await this.populate(path);
+					const childPromises = childDocs.map(async (doc) => {
+						return await doc.toPopulatedJSON();
+					});
+					json[path] = await Promise.all(childPromises);
+				});
+
+				return Promise.all(childrenPromises).then(() => json);
 			};
 		},
 	},

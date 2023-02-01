@@ -6,16 +6,17 @@ import { getRxStorageIndexedDB } from './plugins/storage-indexeddb';
 import { getMemorySyncedRxStorage } from './plugins/storage-memory-synced';
 import { wrappedValidateZSchemaStorage } from '../plugins/validate';
 
-const parentStorage = wrappedValidateZSchemaStorage({ storage: getRxStorageIndexedDB() });
+// const parentStorage = wrappedValidateZSchemaStorage({ storage: getRxStorageIndexedDB() });
 // const parentStorage = wrappedValidateAjvStorage({
 // 	storage: getRxStorageIndexedDB(),
 // });
 
 const config = {
 	storage: getMemorySyncedRxStorage({
-		storage: wrappedValidateZSchemaStorage({
-			storage: getRxStorageIndexedDB(),
-		}),
+		storage: getRxStorageIndexedDB(),
+		// storage: wrappedValidateZSchemaStorage({
+		// 	storage: getRxStorageIndexedDB(),
+		// }),
 
 		/**
 		 * Defines how many document
