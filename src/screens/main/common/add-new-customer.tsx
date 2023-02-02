@@ -54,7 +54,7 @@ const AddNewCustomer = () => {
 		if (result?.status === 201 || result?.status === 200) {
 			const newCustomer = await customerCollection.insert(result.data);
 			if (newCustomer) {
-				close();
+				setOpened(false);
 			}
 		}
 	};
@@ -147,8 +147,6 @@ const AddNewCustomer = () => {
 		customerData,
 		index,
 		routes,
-		open,
-		close,
 		handleSave,
 		handleChange,
 		renderScene,

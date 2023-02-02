@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -23,8 +22,7 @@ import useCurrentOrder from '../contexts/current-order';
 
 const Cart = () => {
 	const theme = useTheme();
-	const { currentOrderResource } = useCurrentOrder();
-	const currentOrder = useObservableSuspense(currentOrderResource);
+	const { currentOrder } = useCurrentOrder();
 	const hasItems =
 		currentOrder.line_items.length > 0 ||
 		currentOrder.fee_lines.length > 0 ||

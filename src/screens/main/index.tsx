@@ -31,14 +31,13 @@ const MainNavigator = ({ navigation, route }) => {
 			<Stack.Navigator screenOptions={{ headerShown: false }}>
 				<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
 				<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-					<Stack.Screen
-						name="Settings"
-						component={() => (
+					<Stack.Screen name="Settings">
+						{() => (
 							<ModalLayout>
 								<Settings />
 							</ModalLayout>
 						)}
-					/>
+					</Stack.Screen>
 					<Stack.Screen name="Login" component={Login} />
 				</Stack.Group>
 			</Stack.Navigator>

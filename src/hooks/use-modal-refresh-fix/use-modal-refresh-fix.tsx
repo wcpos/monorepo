@@ -14,10 +14,12 @@ export const useModalRefreshFix = () => {
 	React.useEffect(() => {
 		const state = navigation.getState();
 		if (state.routes.length === 1) {
+			/** I need to get the orderID also */
+			const params = state.routes[0].params;
 			navigation.dispatch(() => {
 				return CommonActions.reset({
 					...state,
-					routes: [{ name: state.routeNames[0] }, ...state.routes],
+					routes: [{ name: state.routeNames[0], params }, ...state.routes],
 					index: 1,
 				});
 			});

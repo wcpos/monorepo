@@ -28,7 +28,6 @@ const Customer = ({ order }: CustomerProps) => {
 	// const shipping = useObservableState(order.shipping$, order.shipping);
 	const billing = order.billing;
 	const shipping = order.shipping;
-	debugger;
 
 	/**
 	 *

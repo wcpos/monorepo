@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useRoute } from '@react-navigation/native';
+
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
 
@@ -7,42 +9,19 @@ import GatewayTabs from './components/gateway-tabs';
 import CheckoutTitle from './components/title';
 import { GatewaysProvider } from '../../../../../contexts/gateways';
 import { OrdersProvider } from '../../../../../contexts/orders';
-import useModalRefreshFix from '../../../../../hooks/use-modal-refresh-fix';
 import { t } from '../../../../../lib/translations';
 
-type POSStackParamList = import('..').POSStackParamList;
-type CheckoutModalProps = import('@react-navigation/stack').StackScreenProps<
-	POSStackParamList,
-	'Checkout'
->;
-
-const Checkout = ({ navigation, route }: CheckoutModalProps) => {
+const Checkout = () => {
+	const route = useRoute();
 	const { orderID } = route.params;
-	useModalRefreshFix();
 
 	return (
-		<OrdersProvider initialQuery={{ filters: { localID: orderID } }}>
+		<OrdersProvider initialQuery={{ filters: { uuid: orderID } }}>
 			<GatewaysProvider initialQuery={{ filters: { enabled: true } }}>
-				<Modal
-					opened
-					onClose={() => navigation.goBack()}
-					withPortal={false}
-					size="large"
-					title={t('Checkout', { _tags: 'core' })}
-					primaryAction={{
-						label: t('Process Payment', { _tags: 'core' }),
-						action: () => {
-							// if (checkoutRef) {
-							// 	checkoutRef.current.processPayment();
-							// }
-						},
-					}}
-				>
-					<Box space="medium">
-						<CheckoutTitle />
-						<GatewayTabs />
-					</Box>
-				</Modal>
+				<Box space="medium">
+					<CheckoutTitle />
+					<GatewayTabs />
+				</Box>
 			</GatewaysProvider>
 		</OrdersProvider>
 	);

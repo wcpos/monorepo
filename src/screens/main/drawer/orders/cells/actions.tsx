@@ -68,9 +68,8 @@ const Actions = ({ item: order }: Props) => {
 	 *
 	 */
 	const handleOpen = React.useCallback(() => {
-		order.atomicPatch({ status: 'pos-open' });
-		// @ts-ignore
-		navigation.navigate('POS', { currentOrder: order });
+		order.patch({ status: 'pos-open' });
+		navigation.navigate('POSStack', { screen: 'POS', params: { orderID: order.uuid } });
 	}, [navigation, order]);
 
 	/**

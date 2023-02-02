@@ -7,7 +7,6 @@ import useGateways from '../../../../../../contexts/gateways';
 
 const GatewayTabs = () => {
 	const [index, setIndex] = React.useState(0);
-	const [loading, setLoading] = React.useState(true);
 	const { data: gateways } = useGateways();
 
 	/**
@@ -22,13 +21,16 @@ const GatewayTabs = () => {
 		});
 	}, [gateways]);
 
+	if (gateways.length === 0) {
+		return null;
+	}
+
 	/**
 	 *
 	 */
 	return (
 		<Tabs
 			onIndexChange={(idx) => {
-				setLoading(true);
 				setIndex(idx);
 			}}
 			navigationState={{ index, routes }}

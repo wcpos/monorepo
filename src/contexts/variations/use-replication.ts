@@ -84,8 +84,15 @@ export const useReplication = ({ collection, parent }) => {
 			// retryTime: 1000000000,
 			pull: {
 				async handler(lastCheckpoint, batchSize) {
-					// return isEmpty(lastCheckpoint) ? audit() : replicate(lastCheckpoint, batchSize);
-					return replicate(lastCheckpoint, batchSize);
+					try {
+						const { data } = await http.get(`products/${parent.id}/${collection.name}`);
+						return {
+							documents: data,
+							checkpoint: true,
+						};
+					} catch (err) {
+						throw new Error(err);
+					}
 				},
 				batchSize: 10,
 				modifier: async (doc) => {

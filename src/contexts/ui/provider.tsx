@@ -60,6 +60,7 @@ export const UIContext = React.createContext<{
  */
 export const UIProvider = ({ children }: UIProviderProps) => {
 	const { storeDB } = useStore();
+	console.log('render UIProvider');
 
 	/**
 	 *
@@ -99,8 +100,8 @@ export const UIProvider = ({ children }: UIProviderProps) => {
 	/**
 	 *
 	 */
-	const value = React.useMemo(
-		() => ({
+	const value = React.useMemo(() => {
+		return {
 			uiResources: {
 				'pos.products': getUIResource('pos.products'),
 				'pos.cart': getUIResource('pos.cart'),
@@ -110,9 +111,8 @@ export const UIProvider = ({ children }: UIProviderProps) => {
 				customers: getUIResource('customers'),
 				// coupons: getResource('pos.products'),
 			},
-		}),
-		[getUIResource]
-	);
+		};
+	}, [getUIResource]);
 
 	/**
 	 *

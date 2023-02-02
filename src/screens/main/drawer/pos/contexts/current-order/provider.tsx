@@ -2,10 +2,8 @@ import * as React from 'react';
 
 import { useRoute } from '@react-navigation/native';
 import get from 'lodash/get';
-import { ObservableResource } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
-import { Subject } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { ObservableResource, useObservable } from 'observable-hooks';
+import { map, tap, switchMap } from 'rxjs/operators';
 
 import NewOrder from './new-order';
 import useStore from '../../../../../../contexts/store';
@@ -24,9 +22,6 @@ interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
 }
 
-const currentOrder$ = new Subject<OrderDocument | typeof NewOrder>();
-const currentOrderResource = new ObservableResource(currentOrder$, (val) => !!val);
-
 /**
  * Providers the active order by uuid
  * If no orderID is provided, active order will be a new order (mock Order class)
@@ -37,26 +32,28 @@ const CurrentOrderProvider = ({ children }: CurrentOrderContextProviderProps) =>
 	const collection = storeDB?.collections.orders;
 	const route = useRoute();
 	const orderID = get(route, ['params', 'orderID']);
-	currentOrder$.next(null); // bit of a hack to suspend the compnents waiting for updated order
-	collection
-		.findOneFix(orderID)
-		.exec()
-		.then((order) => {
-			if (order) {
-				currentOrder$.next(order);
-			} else {
-				currentOrder$.next(new NewOrder(collection));
-			}
-		});
 
 	/**
-	 *
+	 * Subscribe to the route orderID
+	 */
+	const currentOrder$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(([uuid]) => collection.findOneFix(uuid).$),
+				map((order) => (order ? order : new NewOrder(collection)))
+			),
+		[orderID]
+	);
+
+	/**
+	 * This returns a new ObservableResource every time the orderID changes
+	 * kind of defeats the purpose of using ObservableResource
 	 */
 	const value = React.useMemo(() => {
 		return {
-			currentOrderResource,
+			currentOrderResource: new ObservableResource(currentOrder$, (val) => !!val),
 		};
-	}, []);
+	}, [currentOrder$]);
 
 	return <CurrentOrderContext.Provider value={value}>{children}</CurrentOrderContext.Provider>;
 };

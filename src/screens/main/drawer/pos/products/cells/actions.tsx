@@ -17,26 +17,14 @@ interface Props {
  *
  */
 export const Actions = ({ item: product }: Props) => {
-	const { currentOrderResource } = useCurrentOrder();
-	const currentOrder = useObservableSuspense(currentOrderResource);
-	const navigation = useNavigation();
-
-	/**
-	 *
-	 */
-	const addToCart = React.useCallback(async () => {
-		const updatedOrder = await currentOrder.addOrUpdateProduct(product);
-		if (updatedOrder.uuid !== currentOrder.uuid) {
-			navigation.setParams({ orderID: updatedOrder.uuid });
-		}
-	}, [currentOrder, navigation, product]);
+	const { addProduct } = useCurrentOrder();
 
 	/**
 	 *
 	 */
 	return (
 		<View style={{ position: 'relative', zIndex: 1000 }}>
-			<Icon name="circlePlus" size="xLarge" onPress={addToCart} type="success" />
+			<Icon name="circlePlus" size="xLarge" onPress={() => addProduct(product)} type="success" />
 		</View>
 	);
 };

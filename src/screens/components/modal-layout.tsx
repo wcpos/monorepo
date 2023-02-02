@@ -2,20 +2,21 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 
-import Modal from '@wcpos/components/src/modal';
+import Modal, { ModalProps } from '@wcpos/components/src/modal';
 
 import useModalRefreshFix from '../../hooks/use-modal-refresh-fix';
 
-interface ModalLayoutProps {
-	children: React.ReactNode;
-}
+type ModalLayoutProps = Omit<ModalProps, 'opened' | 'onClose'>;
 
-export const ModalLayout = ({ children }: ModalLayoutProps) => {
+/**
+ *
+ */
+export const ModalLayout = ({ children, ...props }: ModalLayoutProps) => {
 	const navigation = useNavigation();
 	useModalRefreshFix();
 
 	return (
-		<Modal opened withPortal={false} size="large" onClose={() => navigation.goBack()}>
+		<Modal size="large" {...props} withPortal={false} opened onClose={() => navigation.goBack()}>
 			{children}
 		</Modal>
 	);

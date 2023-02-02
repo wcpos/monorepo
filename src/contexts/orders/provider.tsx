@@ -68,6 +68,13 @@ const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => 
 					_set(selector, ['_id'], _get(q, 'filters._id'));
 				}
 
+				/**
+				 * @TODO - hack for find by uuid
+				 */
+				if (_get(q, 'filters.uuid')) {
+					return collection.findOneFix(q.filters.uuid).$;
+				}
+
 				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$.pipe(

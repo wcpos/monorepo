@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { useNavigation, StackActions } from '@react-navigation/native';
-import { useObservableSuspense } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
@@ -20,8 +19,7 @@ type RenderTabTitle = (focused: boolean, order: OrderDocument) => React.ReactEle
  */
 const CartTabs = () => {
 	const navigation = useNavigation();
-	const { currentOrderResource } = useCurrentOrder();
-	const currentOrder = useObservableSuspense(currentOrderResource);
+	const { currentOrder } = useCurrentOrder();
 	const { data: orders } = useOrders();
 	orders.push({}); // adds an empty tab for the new order
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
@@ -61,6 +59,7 @@ const CartTabs = () => {
 			 * this is great!, but I lose the back button. Push keeps the old order in the stack.
 			 */
 			navigation.setParams({ orderID: orders[idx].uuid });
+			// navigation.dispatch(StackActions.push('POS', { orderID: orders[idx].uuid }));
 		},
 		[navigation, orders]
 	);
