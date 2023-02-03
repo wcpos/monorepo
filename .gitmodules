@@ -28,6 +28,3 @@
 [submodule "apps/with-flipper"]
 	path = apps/with-flipper
 	url = https://github.com/wcpos/app-with-flipper
-[submodule "packages/rjsf-native"]
-	path = packages/rjsf-native
-	url = https://github.com/wcpos/rjsf-native
