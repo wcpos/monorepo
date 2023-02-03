@@ -27,7 +27,7 @@ const EditForm = ({ schema, uiSchema, item }: EditModalProps) => {
 	 */
 	const handleChange = React.useCallback(
 		(newData) => {
-			item.atomicPatch(newData);
+			item.patch(newData);
 		},
 		[item]
 	);

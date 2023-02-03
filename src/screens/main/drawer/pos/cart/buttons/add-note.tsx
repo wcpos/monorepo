@@ -18,7 +18,7 @@ const AddNoteButton = ({ order }: AddNoteButtonProps) => {
 	const [note, setNote] = React.useState('');
 
 	const handleSaveNote = React.useCallback(
-		() => order.atomicPatch({ customer_note: note }),
+		() => order.patch({ customer_note: note }),
 		[note, order]
 	);
 

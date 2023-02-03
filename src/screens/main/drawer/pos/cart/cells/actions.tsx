@@ -21,7 +21,11 @@ export const Actions = ({ item }: ActionProps) => {
 	 *
 	 */
 	const undoRemove = React.useCallback(async () => {
-		currentOrder.undoRemoveCartLine(item);
+		return currentOrder?.incrementalUpdate({
+			$push: {
+				[item.collection.name]: item.toJSON(),
+			},
+		});
 	}, [currentOrder, item]);
 
 	/**

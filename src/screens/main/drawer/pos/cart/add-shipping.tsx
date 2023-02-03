@@ -14,7 +14,15 @@ interface AddShippingProps {
 
 const AddShipping = ({ order }: AddShippingProps) => {
 	const handleAddShipping = () => {
-		order.addShippingLine({ method_title: 'Shipping', method_id: '0', total: '10' });
+		order.update({
+			$push: {
+				shipping_lines: {
+					method_title: 'Shipping',
+					method_id: '0',
+					total: '10',
+				},
+			},
+		});
 	};
 
 	return (

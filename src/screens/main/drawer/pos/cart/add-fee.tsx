@@ -14,7 +14,14 @@ interface AddFeeProps {
 
 const AddFee = ({ order }: AddFeeProps) => {
 	const handleAddFee = React.useCallback(() => {
-		order.addFeeLine({ name: 'Fee', total: '10' });
+		order.update({
+			$push: {
+				fee_lines: {
+					name: 'Fee',
+					total: '10',
+				},
+			},
+		});
 	}, [order]);
 
 	return (

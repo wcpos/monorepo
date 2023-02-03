@@ -12,7 +12,6 @@ import Settings from './settings';
 import useStore from '../../../../../contexts/store';
 import AddCustomer from '../../../common/add-new-customer';
 import CustomerSelect from '../../../common/customer-select';
-import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -37,7 +36,7 @@ const CartHeader = ({ order }: CartHeaderProps) => {
 			const billingEmail = selectedCustomer?.billing?.email || selectedCustomer?.email;
 			const firstName = selectedCustomer?.billing?.first_name || selectedCustomer?.username;
 
-			order.atomicPatch({
+			order.patch({
 				customer_id: selectedCustomer.id,
 				billing: { ...selectedCustomer.billing, email: billingEmail, first_name: firstName },
 				shipping: selectedCustomer.shipping,

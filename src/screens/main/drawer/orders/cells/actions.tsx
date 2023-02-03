@@ -26,16 +26,16 @@ const Actions = ({ item: order }: Props) => {
 	/**
 	 *
 	 */
-	const handleSync = React.useCallback(() => {
+	const handleSync = React.useCallback(async () => {
 		// could use the link url?
-		http
-			.get(`/orders/${order._id}`)
-			.then(({ data }) => {
-				order.atomicPatch(data);
-			})
-			.catch((err) => {
-				log.error(err);
-			});
+		// this should be done in replication, can get link and parse data there
+		try {
+			const { data } = await http.get(`/orders/${order.id}`);
+			const parsedData = order.collection.parseRestResponse(data);
+			return order.patch(parsedData);
+		} catch (err) {
+			log.error(err);
+		}
 	}, [http, order]);
 
 	/**

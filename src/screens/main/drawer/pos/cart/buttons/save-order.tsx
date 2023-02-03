@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import Button from '@wcpos/components/src/button';
+import log from '@wcpos/utils/src/logger';
 
 import useRestHttpClient from '../../../../../../hooks/use-rest-http-client';
 import { t } from '../../../../../../lib/translations';
@@ -16,28 +17,21 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 	 *
 	 */
 	const saveOrder = React.useCallback(async () => {
-		// const data = await order.toRestApiJSON();
-		// let endpoint = 'orders';
-		// if (order.id) {
-		// 	endpoint += `/${order.id}`;
-		// }
-		// const result = await http.post(endpoint, {
-		// 	data,
-		// });
-		// if (result.status === 201 || result.status === 200) {
-		// 	if (order.id) {
-		// 		await order.collection.upsertChildren(result.data);
-		// 		// const parsed = order.collection.parseRestResponse(result.data);
-		// 		order.atomicPatch({ ...result.data, _id: '64' });
-		// 	} else {
-		// 		await order.collection.upsertChildren(result.data);
-		// 		const newOrder = await order.collection.insert(result.data);
-		// 		// switcharoo
-		// 		await order.remove();
-		// 		setCurrentOrder(newOrder);
-		// 	}
-		// }
-	}, []);
+		let endpoint = 'orders';
+		if (order.id) {
+			endpoint += `/${order.id}`;
+		}
+		try {
+			const { data } = await http.post(endpoint, {
+				data: await order.toPopulatedJSON(),
+			});
+			//
+			const parsedData = order.collection.parseRestResponse(data);
+			await order.collection.upsert(parsedData);
+		} catch (err) {
+			log.error(err);
+		}
+	}, [http, order]);
 
 	return (
 		<Button

@@ -59,7 +59,7 @@ const Customer = ({ order }: CustomerProps) => {
 	 *
 	 */
 	const handleCustomerRemove = React.useCallback(async () => {
-		await order.atomicPatch({ customer_id: -1, billing: {}, shipping: {} });
+		await order.patch({ customer_id: -1, billing: {}, shipping: {} });
 	}, [order]);
 
 	/**
