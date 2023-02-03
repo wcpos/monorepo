@@ -27,6 +27,9 @@ interface Props {
 	addToCart: (variation: ProductVariationDocument, metaData: any) => void;
 }
 
+/**
+ * @TODO- this is kind of messy, needs a refactor
+ */
 export const Variations = ({ variations, attributes, addToCart }: Props) => {
 	const [state, setState] = React.useState(() => init(attributes));
 	const { format } = useCurrencyFormat();

@@ -14,7 +14,7 @@ interface ActionProps {
 }
 
 export const Actions = ({ item }: ActionProps) => {
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrder, removeItem } = useCurrentOrder();
 	const addSnackbar = useSnackbar();
 
 	/**
@@ -29,15 +29,16 @@ export const Actions = ({ item }: ActionProps) => {
 	 */
 	const handleRemove = React.useCallback(async () => {
 		const name = item.name || item.method_title;
+		await removeItem(item);
 
-		await currentOrder?.removeCartLine(item);
+		// await currentOrder?.removeCartLine(item);
 
 		addSnackbar({
 			message: t('{name} removed from cart', { name, _tags: 'core' }),
 			dismissable: true,
 			action: { label: t('Undo', { _tags: 'core' }), action: undoRemove },
 		});
-	}, [addSnackbar, currentOrder, item, undoRemove]);
+	}, [addSnackbar, item, removeItem, undoRemove]);
 
 	/**
 	 *

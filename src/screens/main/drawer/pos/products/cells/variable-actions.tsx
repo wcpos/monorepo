@@ -1,11 +1,14 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
+
 import Icon from '@wcpos/components/src/icon';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
-import { VariationSelect } from './variation-select';
+import { Variations } from './variations';
 import { useVariations } from '../../../../../../contexts/variations/use-variations';
+import { useCurrentOrder } from '../../contexts/current-order/use-current-order';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;
@@ -19,6 +22,8 @@ interface Props {
 export const VariableActions = ({ item: product }: Props) => {
 	const [open, setOpen] = React.useState(false);
 	const { data: variations } = useVariations();
+	const { addVariation } = useCurrentOrder();
+	const attributes = useObservableState(product.attributes$, product.attributes);
 
 	return (
 		<Popover
@@ -40,9 +45,11 @@ export const VariableActions = ({ item: product }: Props) => {
 				/>
 			</Popover.Target>
 			<Popover.Content>
-				<React.Suspense fallback={<Text>loading variations...</Text>}>
-					<VariationSelect parent={product} variations={variations} />
-				</React.Suspense>
+				<Variations
+					variations={variations}
+					attributes={attributes}
+					addToCart={(variation, metaData) => addVariation(variation, product, metaData)}
+				/>
 			</Popover.Content>
 		</Popover>
 	);
