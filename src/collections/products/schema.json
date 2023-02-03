@@ -435,9 +435,6 @@
 					}
 				}
 			}
-		},
-		"thumbnail": {
-			"type": "string"
 		}
 	}
 }

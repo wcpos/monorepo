@@ -186,6 +186,20 @@ describe('parseRestResponse', () => {
 								type: 'string',
 							},
 						},
+						meta_data: {
+							type: 'array',
+							items: {
+								type: 'object',
+								properties: {
+									key: {
+										type: 'string',
+									},
+									value: {
+										type: 'string',
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -217,6 +231,20 @@ describe('parseRestResponse', () => {
 								},
 							},
 						},
+						meta_data: {
+							type: 'array',
+							items: {
+								type: 'object',
+								properties: {
+									key: {
+										type: 'string',
+									},
+									value: {
+										type: 'string',
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -241,10 +269,23 @@ describe('parseRestResponse', () => {
 						id: '46',
 						src: 'https://wchpos.local/wp-content/uploads/2022/12/belt-2.jpg',
 					},
+					meta_data: [
+						{
+							key: '_woocommerce_pos_uuid',
+							value: 'line-item-uuid',
+						},
+					],
+				},
+			],
+			meta_data: [
+				{
+					key: '_woocommerce_pos_uuid',
+					value: 'order-uuid',
 				},
 			],
 		};
 		expect(ordersCollection.parseRestResponse(response)).toEqual({
+			uuid: 'order-uuid',
 			id: 1,
 			number: '1',
 			line_items: [
@@ -256,6 +297,18 @@ describe('parseRestResponse', () => {
 						id: 46,
 						src: 'https://wchpos.local/wp-content/uploads/2022/12/belt-2.jpg',
 					},
+					meta_data: [
+						{
+							key: '_woocommerce_pos_uuid',
+							value: 'line-item-uuid',
+						},
+					],
+				},
+			],
+			meta_data: [
+				{
+					key: '_woocommerce_pos_uuid',
+					value: 'order-uuid',
 				},
 			],
 		});

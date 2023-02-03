@@ -4,6 +4,8 @@ import unset from 'lodash/unset';
 
 import log from '@wcpos/utils/src/logger';
 
+import { getMetaUUID } from './generate-id';
+
 import type { RxCollection, RxJsonSchema, RxPlugin } from 'rxdb';
 
 /**
@@ -100,6 +102,7 @@ export function parseRestResponse(this: RxCollection, json: Record<string, any>)
 	const collection = this;
 	const schema = collection.schema.jsonSchema;
 	if (isPlainObject(json)) {
+		getMetaUUID.call(this, json);
 		pruneProperties(schema, json); // mutates json
 		return coerceData(schema, json, collection); // return json
 	}

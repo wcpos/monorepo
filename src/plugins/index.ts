@@ -40,7 +40,7 @@ addRxPlugin(RxDBJsonDumpPlugin);
 
 // custom plugins
 addRxPlugin(middlewaresPlugin);
-addRxPlugin(RxDBGenerateIdPlugin); // should be before populate
+addRxPlugin(RxDBGenerateIdPlugin); // should run before populate and parseRestResponse
 addRxPlugin(populatePlugin);
 addRxPlugin(findOneFixPlugin);
 addRxPlugin(parseRestResponsePlugin);
