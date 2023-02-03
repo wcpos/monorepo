@@ -10,9 +10,9 @@
  */
 export interface WPCredentialsSchema {
   /**
-   * Unique local identifier for the resource. Note: id is not unique for WP User IDs
+   * Unique identifier for the resource.
    */
-  localID?: string;
+  uuid?: string;
   id?: number;
   username?: string;
   first_name?: string;

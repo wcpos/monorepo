@@ -5,8 +5,8 @@ import log from '@wcpos/utils/src/logger';
 
 // import { wrappedValidateAjvStorage } from '../plugins/validate';
 import { mangoQuerySelectorToSQL } from './mangoQuerySelectorToSQL';
-import { getRxStorageSQLite } from './plugins/sqlite';
-import { mangoQuerySortToSQL } from './plugins/sqlite/sqlite-statics';
+import { getRxStorageSQLite } from './plugins/storage-sqlite';
+import { mangoQuerySortToSQL } from './plugins/storage-sqlite/sqlite-statics';
 
 /**
  * Polyfill for TextEncoder
@@ -14,7 +14,8 @@ import { mangoQuerySortToSQL } from './plugins/sqlite/sqlite-statics';
  */
 import 'fast-text-encoding';
 
-import type { SQLiteQueryWithParams } from './plugins/sqlite';
+// import type { SQLiteQueryWithParams } from './plugins/storage-sqlite';
+type SQLiteQueryWithParams = any;
 
 // expo=sqlite examples use the db.transaction() method
 // db.transaction((tx) => {

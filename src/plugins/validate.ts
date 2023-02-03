@@ -1,65 +1,56 @@
-/**
- * this plugin validates documents before they can be inserted into the RxCollection.
- * It's using ajv as jsonschema-validator
- * @link https://github.com/epoberezkin/ajv
- */
-import Ajv from 'ajv';
 import { wrappedValidateStorageFactory } from 'rxdb';
+import ZSchema from 'z-schema';
 
-import addFormats from './ajv-formats';
+import log from '@wcpos/utils/src/logger';
 
-import type { RxDocumentData, RxJsonSchema } from 'rxdb';
-
-// const ajv = new Ajv({
-// 	strict: false,
-// });
-
-const ajv = new Ajv({ strict: 'log', coerceTypes: true });
-ajv.addVocabulary([
-	'version',
-	'primaryKey',
-	'indexes',
-	'encrypted',
-	'enumNames',
-	'keyCompression',
-	'sharding',
-]);
-// const ignoredKeys = ['_attachments', '_meta', '_rev'];
+import type { RxJsonSchema } from 'rxdb';
 
 /**
- * Duck punch the WC REST schema for children
- * - rxdb won't allow this type of schema (at the moment)
+ *
  */
-ajv.addKeyword({
-	keyword: 'ref',
-	code(cxt) {
-		cxt.parentSchema = {
-			...cxt.parentSchema,
-			items: {
-				oneOf: [{ type: 'string' }, { type: 'object' }],
-			},
-		};
-		Object.freeze(cxt.parentSchema);
-	},
-});
-
-/**
- * Add formats to ajv
- */
-addFormats(ajv);
-
 export function getValidator(schema: RxJsonSchema<any>) {
-	const validator = ajv.compile(schema);
+	const validatorInstance = new (ZSchema as any)({
+		customValidator: (report, refSchema, json) => {
+			if (refSchema.ref && report.hasError('INVALID_TYPE', ['string', 'object'])) {
+				report.errors = report.errors.filter((error: any) => {
+					return error.code !== 'INVALID_TYPE' || !error.path.includes(report.path[0]);
+				});
+			}
+		},
+	});
 
-	return (docData: RxDocumentData<any>) => {
-		const isValid = validator(docData);
+	const validator = (data: any) => {
+		validatorInstance.validate(data, schema);
+		return validatorInstance;
+	};
 
-		if (!isValid) {
-			console.warn('validation', validator.errors);
+	return (docData: any) => {
+		if (schema.title === 'RxInternalDocument' || schema.title === 'RxLocalDocument') {
+			return [];
 		}
-
-		return docData;
+		const useValidator = validator(docData);
+		if (useValidator === true) {
+			return;
+		}
+		const errors: ZSchema.SchemaErrorDetail[] = (useValidator as any).getLastErrors();
+		if (errors) {
+			const formattedZSchemaErrors = (errors as any).map(
+				({ title, description, message }: any) => ({
+					title,
+					description,
+					message,
+				})
+			);
+			log.error('z-schema validation failed', docData);
+			log.error('z-schema validation errors', formattedZSchemaErrors);
+			return formattedZSchemaErrors;
+		} else {
+			return [];
+		}
 	};
 }
 
-export const wrappedValidateAjvStorage = wrappedValidateStorageFactory(getValidator, 'ajv');
+export const wrappedValidateZSchemaStorage = wrappedValidateStorageFactory(
+	getValidator,
+	'z-schema'
+);

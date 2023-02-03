@@ -1,10 +1,12 @@
+import get from 'lodash/get';
+import isString from 'lodash/isString';
+import pull from 'lodash/pull';
+import { ObservableResource } from 'observable-hooks';
 import { Observable } from 'rxjs';
 import { switchMap, map } from 'rxjs/operators';
-import { ObservableResource } from 'observable-hooks';
-import isString from 'lodash/isString';
-import get from 'lodash/get';
-import pull from 'lodash/pull';
+
 import log from '@wcpos/utils/src/logger';
+
 import schema from './schema.json';
 
 export type UserSchema = import('./interface').UserSchema;
@@ -80,26 +82,26 @@ const methods: UserMethods = {
 export const users = {
 	schema,
 	// statics: {},
-	methods,
+	// methods,
 	// attachments: {},
 	options: {
-		middlewares: {
-			postCreate: {
-				handle: (data, user) => {
-					const populatedSites$ = user.sites$.pipe(
-						switchMap(async (args: any) => {
-							const sites = await user.populate('sites');
-							return sites || [];
-						})
-					);
-					Object.assign(user, {
-						populatedSites$,
-						sitesResource: new ObservableResource(populatedSites$),
-					});
-				},
-				parallel: false,
-			},
-		},
+		// middlewares: {
+		// 	postCreate: {
+		// 		handle: (data, user) => {
+		// 			const populatedSites$ = user.sites$.pipe(
+		// 				switchMap(async (args: any) => {
+		// 					const sites = await user.populate('sites');
+		// 					return sites || [];
+		// 				})
+		// 			);
+		// 			Object.assign(user, {
+		// 				populatedSites$,
+		// 				sitesResource: new ObservableResource(populatedSites$),
+		// 			});
+		// 		},
+		// 		parallel: false,
+		// 	},
+		// },
 	},
 	// migrationStrategies: {},
 	// autoMigrate: true,

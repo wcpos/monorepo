@@ -3,12 +3,12 @@
 	"version": 0,
 	"description": "WooCommerce Customer schema",
 	"type": "object",
-	"primaryKey": "localID",
+	"primaryKey": "uuid",
 	"properties": {
-		"localID": {
-			"description": "Unique local identifier for the resource.",
+		"uuid": {
+			"description": "Unique identifier for the resource.",
 			"type": "string",
-			"maxLength": 100
+			"maxLength": 36
 		},
 		"id": {
 			"description": "Unique remote identifier for the resource.",

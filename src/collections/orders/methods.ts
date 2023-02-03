@@ -251,27 +251,6 @@ export default {
 	/**
 	 *
 	 */
-	async undoRemoveCartLine(this: OrderDocument, item: CartLine) {
-		const itemJSON = item.toJSON();
-
-		const success = await item.collection.insert(itemJSON).catch((err) => {
-			log.error(err);
-		});
-
-		if (success) {
-			return this.atomicUpdate((order) => {
-				order[item.collection.name] = order[item.collection.name] ?? [];
-				order[item.collection.name].push(success._id);
-				return order;
-			}).catch((err: any) => {
-				log.error(err);
-			});
-		}
-	},
-
-	/**
-	 *
-	 */
 	async addCustomer(this: OrderDocument, customer: CustomerDocument) {
 		await this.atomicPatch({
 			customer_id: customer.id,

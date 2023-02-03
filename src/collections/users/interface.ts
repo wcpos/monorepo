@@ -10,9 +10,9 @@
  */
 export interface UserSchema {
   /**
-   * Unique local identifier for the resource.
+   * Unique identifier for the resource.
    */
-  localID?: string;
+  uuid?: string;
   first_name?: string;
   last_name?: string;
   display_name?: string;

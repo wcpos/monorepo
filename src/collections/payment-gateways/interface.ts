@@ -10,9 +10,9 @@
  */
 export interface WooCommercePaymentGatewaySchema {
   /**
-   * Unique local identifier for the resource.
+   * Unique identifier for the resource.
    */
-  localID?: string;
+  uuid?: string;
   id?: string;
   description?: string;
   order?: number;

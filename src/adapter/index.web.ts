@@ -1,17 +1,22 @@
 import { requestIdlePromise } from 'rxdb';
 
-import { wrappedValidateAjvStorage } from '../plugins/validate';
-import { getRxStorageIndexedDB } from './plugins/indexeddb';
-import { getMemorySyncedRxStorage } from './plugins/memory-synced';
+// import { wrappedValidateAjvStorage } from '../plugins/validate';
 
-// const parentStorage = getRxStorageIndexedDB();
-const parentStorage = wrappedValidateAjvStorage({
-	storage: getRxStorageIndexedDB(),
-});
+import { getRxStorageIndexedDB } from './plugins/storage-indexeddb';
+import { getMemorySyncedRxStorage } from './plugins/storage-memory-synced';
+import { wrappedValidateZSchemaStorage } from '../plugins/validate';
+
+// const parentStorage = wrappedValidateZSchemaStorage({ storage: getRxStorageIndexedDB() });
+// const parentStorage = wrappedValidateAjvStorage({
+// 	storage: getRxStorageIndexedDB(),
+// });
 
 const config = {
 	storage: getMemorySyncedRxStorage({
-		storage: parentStorage,
+		storage: getRxStorageIndexedDB(),
+		// storage: wrappedValidateZSchemaStorage({
+		// 	storage: getRxStorageIndexedDB(),
+		// }),
 
 		/**
 		 * Defines how many document

@@ -3,15 +3,12 @@
 	"version": 0,
 	"description": "WooCommerce Payment Gateway schema",
 	"type": "object",
-	"primaryKey": "localID",
+	"primaryKey": "id",
 	"properties": {
-		"localID": {
-			"description": "Unique local identifier for the resource.",
+		"id": {
+			"description": "Unique identifier for the resource.",
 			"type": "string",
 			"maxLength": 100
-		},
-		"id": {
-			"type": "string"
 		},
 		"description": {
 			"type": "string"

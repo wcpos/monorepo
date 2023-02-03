@@ -3,12 +3,12 @@
 	"version": 0,
 	"description": "WordPress credentials",
 	"type": "object",
-	"primaryKey": "localID",
+	"primaryKey": "uuid",
 	"properties": {
-		"localID": {
-			"description": "Unique local identifier for the resource. Note: id is not unique for WP User IDs",
+		"uuid": {
+			"description": "Unique identifier for the resource.",
 			"type": "string",
-			"maxLength": 100
+			"maxLength": 36
 		},
 		"id": {
 			"type": "number"

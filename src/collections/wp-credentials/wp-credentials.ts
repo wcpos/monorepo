@@ -97,25 +97,25 @@ export const wpCredentials = {
 	// statics,
 	methods,
 	// attachments: {},
-	options: {
-		middlewares: {
-			postCreate: {
-				handle: (data, wpCredentials) => {
-					const populatedStores$ = wpCredentials.stores$.pipe(
-						switchMap(async (args: any) => {
-							const stores = await wpCredentials.populate('stores');
-							return stores || [];
-						})
-					);
-					Object.assign(wpCredentials, {
-						populatedStores$,
-						storesResource: new ObservableResource(populatedStores$),
-					});
-				},
-				parallel: false,
-			},
-		},
-	},
+	// options: {
+	// 	middlewares: {
+	// 		postCreate: {
+	// 			handle: (data, wpCredentials) => {
+	// 				const populatedStores$ = wpCredentials.stores$.pipe(
+	// 					switchMap(async (args: any) => {
+	// 						const stores = await wpCredentials.populate('stores');
+	// 						return stores || [];
+	// 					})
+	// 				);
+	// 				Object.assign(wpCredentials, {
+	// 					populatedStores$,
+	// 					storesResource: new ObservableResource(populatedStores$),
+	// 				});
+	// 			},
+	// 			parallel: false,
+	// 		},
+	// 	},
+	// },
 	// migrationStrategies: {},
 	// autoMigrate: true,
 	// cacheReplacementPolicy() {},

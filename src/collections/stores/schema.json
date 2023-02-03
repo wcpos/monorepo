@@ -6,9 +6,9 @@
 	"primaryKey": "localID",
 	"properties": {
 		"localID": {
-			"description": "Unique local identifier for the resource. Note: id is not unique for stores",
+			"description": "Unique local identifier for the resource. Not a UUID.",
 			"type": "string",
-			"maxLength": 100
+			"maxLength": 8
 		},
 		"id": {
 			"type": "number"

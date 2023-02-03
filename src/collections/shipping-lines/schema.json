@@ -3,15 +3,12 @@
 	"version": 0,
 	"description": "WooCommerce Order Shipping Line schema",
 	"type": "object",
-	"primaryKey": "localID",
-	"required": [
-		"method_id"
-	],
+	"primaryKey": "uuid",
 	"properties": {
-		"localID": {
-			"description": "Unique local identifier for the resource.",
+		"uuid": {
+			"description": "Unique identifier for the resource.",
 			"type": "string",
-			"maxLength": 100
+			"maxLength": 36
 		},
 		"id": {
 			"type": "integer"
