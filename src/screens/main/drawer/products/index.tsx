@@ -2,6 +2,9 @@ import * as React from 'react';
 
 import { createStackNavigator } from '@react-navigation/stack';
 
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Text from '@wcpos/components/src/text';
+
 import EditProduct from './edit-product';
 import Products from './products';
 import { ProductsProvider } from '../../../../contexts/products';
@@ -20,21 +23,29 @@ const Stack = createStackNavigator<ProductsStackParamList>();
 const ProductsNavigator = () => {
 	return (
 		<Stack.Navigator screenOptions={{ headerShown: false }}>
-			<Stack.Screen name="Products" component={Products} />
-			<Stack.Screen
-				name="EditProduct"
-				component={({ route }) => {
+			<Stack.Screen name="Products">
+				{() => (
+					<ErrorBoundary>
+						<React.Suspense fallback={<Text>Loading products</Text>}>
+							<Products />
+						</React.Suspense>
+					</ErrorBoundary>
+				)}
+			</Stack.Screen>
+			<Stack.Screen name="EditProduct" options={{ presentation: 'transparentModal' }}>
+				{({ route }) => {
 					const { productID } = route.params;
 					return (
 						<ProductsProvider initialQuery={{ filters: { uuid: productID } }}>
 							<ModalLayout>
-								<EditProduct />
+								<React.Suspense fallback={<Text>Loading product</Text>}>
+									<EditProduct />
+								</React.Suspense>
 							</ModalLayout>
 						</ProductsProvider>
 					);
 				}}
-				options={{ presentation: 'transparentModal' }}
-			/>
+			</Stack.Screen>
 		</Stack.Navigator>
 	);
 };

@@ -126,14 +126,4 @@ const ResizableColumns = () => {
 	);
 };
 
-const WrappedResizableColumns = () => {
-	return (
-		<ErrorBoundary>
-			<React.Suspense fallback={<Text>Loading products UI</Text>}>
-				<ResizableColumns />
-			</React.Suspense>
-		</ErrorBoundary>
-	);
-};
-
-export default WrappedResizableColumns;
+export default ResizableColumns;

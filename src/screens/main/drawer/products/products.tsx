@@ -56,14 +56,4 @@ const Products = () => {
 	);
 };
 
-const WrappedProducts = () => {
-	return (
-		<ErrorBoundary>
-			<React.Suspense fallback={<Text>Loading products UI</Text>}>
-				<Products />
-			</React.Suspense>
-		</ErrorBoundary>
-	);
-};
-
-export default WrappedProducts;
+export default Products;

@@ -1,61 +1,59 @@
 import * as React from 'react';
 
-import { useTheme } from 'styled-components/native';
+import { createStackNavigator } from '@react-navigation/stack';
 
-import Box from '@wcpos/components/src/box';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
-import log from '@wcpos/utils/src/logger';
 
-import SearchBar from './search-bar';
-import Table from './table';
+import EditOrder from './edit-order';
+import Orders from './orders';
 import { OrdersProvider } from '../../../../contexts/orders';
-import useUI from '../../../../contexts/ui';
-import UiSettings from '../../common/ui-settings';
+import { ModalLayout } from '../../../components/modal-layout';
+import Receipt from '../receipt';
+
+export type OrdersStackParamList = {
+	Orders: undefined;
+	EditOrder: { orderID: string };
+	Receipt: { orderID: string };
+};
+
+const Stack = createStackNavigator<OrdersStackParamList>();
 
 /**
  *
  */
-const Orders = () => {
-	const { ui } = useUI('orders');
-	const theme = useTheme();
-	log.debug('render Orders');
-
-	const initialQuery = React.useMemo(
-		() => ({ sortBy: 'date_created_gmt', sortDirection: 'desc' }),
-		[]
-	);
-
+const OrdersNavigator = () => {
 	return (
-		<OrdersProvider initialQuery={initialQuery}>
-			<Box padding="small" style={{ height: '100%' }}>
-				<Box
-					raised
-					rounding="medium"
-					style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
-				>
-					<Box
-						horizontal
-						space="small"
-						padding="small"
-						align="center"
-						style={{
-							backgroundColor: theme.colors.grey,
-							borderTopLeftRadius: theme.rounding.medium,
-							borderTopRightRadius: theme.rounding.medium,
-						}}
-					>
-						<SearchBar />
-						<UiSettings ui={ui} />
-					</Box>
-					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-						<React.Suspense fallback={<Text>Loading orders table...</Text>}>
-							<Table ui={ui} />
+		<Stack.Navigator screenOptions={{ headerShown: false }}>
+			<Stack.Screen name="Orders">
+				{() => (
+					<ErrorBoundary>
+						<React.Suspense fallback={<Text>Loading orders</Text>}>
+							<Orders />
 						</React.Suspense>
-					</Box>
-				</Box>
-			</Box>
-		</OrdersProvider>
+					</ErrorBoundary>
+				)}
+			</Stack.Screen>
+			<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
+				<Stack.Screen name="EditOrder">
+					{({ route }) => {
+						const { orderID } = route.params;
+						/** @TODO - findOne */
+						return (
+							<OrdersProvider initialQuery={{ filters: { uuid: orderID } }}>
+								<ModalLayout>
+									<React.Suspense fallback={<Text>Loading order</Text>}>
+										<EditOrder />
+									</React.Suspense>
+								</ModalLayout>
+							</OrdersProvider>
+						);
+					}}
+				</Stack.Screen>
+				<Stack.Screen name="Receipt" component={Receipt} />
+			</Stack.Group>
+		</Stack.Navigator>
 	);
 };
 
-export default Orders;
+export default OrdersNavigator;

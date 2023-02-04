@@ -1,6 +1,9 @@
-name: NPM
+name: Publish NPM
 
-on: push
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   publish:

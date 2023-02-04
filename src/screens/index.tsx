@@ -34,6 +34,9 @@ const RootNavigator = ({ initialProps }) => {
 	const homepage = get(initialProps, 'homepage');
 	log.silly(prefixes);
 
+	/**
+	 * Pathname eg: 'pos' for default web app
+	 */
 	let pathname = '';
 
 	if (homepage) {
@@ -49,7 +52,7 @@ const RootNavigator = ({ initialProps }) => {
 				config: {
 					screens: {
 						AuthStack: {
-							path: 'connect',
+							path: `${pathname}/connect`,
 							screens: {
 								Connect: {
 									path: '',
@@ -63,7 +66,7 @@ const RootNavigator = ({ initialProps }) => {
 							path: pathname,
 							screens: {
 								MainDrawer: {
-									path: '',
+									path: pathname,
 									screens: {
 										POSStack: {
 											path: 'cart',

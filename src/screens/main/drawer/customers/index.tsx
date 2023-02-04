@@ -2,6 +2,9 @@ import * as React from 'react';
 
 import { createStackNavigator } from '@react-navigation/stack';
 
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Text from '@wcpos/components/src/text';
+
 import AddCustomer from './add-customer';
 import Customers from './customers';
 import EditCustomer from './edit-customer';
@@ -22,7 +25,15 @@ const Stack = createStackNavigator<CustomersStackParamList>();
 const CustomersNavigator = () => {
 	return (
 		<Stack.Navigator screenOptions={{ headerShown: false }}>
-			<Stack.Screen name="Customers" component={Customers} />
+			<Stack.Screen name="Customers">
+				{() => (
+					<ErrorBoundary>
+						<React.Suspense fallback={<Text>Loading customers</Text>}>
+							<Customers />
+						</React.Suspense>
+					</ErrorBoundary>
+				)}
+			</Stack.Screen>
 			<Stack.Screen
 				name="AddCustomer"
 				component={() => {
@@ -34,21 +45,21 @@ const CustomersNavigator = () => {
 				}}
 				options={{ presentation: 'transparentModal' }}
 			/>
-			<Stack.Screen
-				name="EditCustomer"
-				component={({ route }) => {
+			<Stack.Screen name="EditCustomer" options={{ presentation: 'transparentModal' }}>
+				{({ route }) => {
 					const { customerID } = route.params;
 					/** @TODO - findOne */
 					return (
 						<CustomersProvider initialQuery={{ filters: { uuid: customerID } }}>
 							<ModalLayout>
-								<EditCustomer />
+								<React.Suspense fallback={<Text>Loading customer</Text>}>
+									<EditCustomer />
+								</React.Suspense>
 							</ModalLayout>
 						</CustomersProvider>
 					);
 				}}
-				options={{ presentation: 'transparentModal' }}
-			/>
+			</Stack.Screen>
 		</Stack.Navigator>
 	);
 };
