@@ -290,6 +290,7 @@ describe('parseRestResponse', () => {
 			number: '1',
 			line_items: [
 				{
+					uuid: 'line-item-uuid',
 					id: 1,
 					name: 'Belt',
 					parent_name: '',

@@ -107,22 +107,22 @@ const config = {
 /**
  * Duck punch the prepareQuery function to implement our own mango-to-sqlite query converter.
  */
-config.storage.statics.prepareQuery = (r, t) => {
-	const a = t.limit ? `LIMIT ${t.limit}` : 'LIMIT -1';
-	const n = t.skip ? `OFFSET ${t.skip}` : '';
-	const o = [];
-	let s = mangoQuerySelectorToSQL(t.selector, o);
-	s = s !== '()' ? ` AND ${s} ` : '';
-	let c = '';
-	t.index && (c = `INDEXED BY "${u(t.index)}"`);
-	return {
-		schema: r,
-		mangoQuery: clone(t),
-		sqlQuery: {
-			query: `${c} WHERE deleted=0 ${s}${mangoQuerySortToSQL(t.sort)} ${a} ${n} ;`,
-			params: o,
-		},
-	};
-};
+// config.storage.statics.prepareQuery = (r, t) => {
+// 	const a = t.limit ? `LIMIT ${t.limit}` : 'LIMIT -1';
+// 	const n = t.skip ? `OFFSET ${t.skip}` : '';
+// 	const o = [];
+// 	let s = mangoQuerySelectorToSQL(t.selector, o);
+// 	s = s !== '()' ? ` AND ${s} ` : '';
+// 	let c = '';
+// 	t.index && (c = `INDEXED BY "${u(t.index)}"`);
+// 	return {
+// 		schema: r,
+// 		mangoQuery: clone(t),
+// 		sqlQuery: {
+// 			query: `${c} WHERE deleted=0 ${s}${mangoQuerySortToSQL(t.sort)} ${a} ${n} ;`,
+// 			params: o,
+// 		},
+// 	};
+// };
 
 export default config;

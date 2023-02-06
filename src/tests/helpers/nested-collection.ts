@@ -59,7 +59,7 @@ export async function create(
 	const collections = await db.addCollections({
 		[collectionName]: {
 			schema: nestedDefaultSchema,
-			localDocuments: true,
+			localDocuments: false,
 		},
 	});
 

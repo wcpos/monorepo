@@ -36,6 +36,7 @@ async function upsertRef(childCollection: RxCollection, data: any[]) {
 	const childPromises = data.map(async (childData) => {
 		if (isPlainObject(childData)) {
 			const primaryPath = childCollection.schema.primaryPath;
+			/** @TODO - I think this is a bug, shouldn't upsert do an insert if no primary? */
 			if (isEmpty(childData[primaryPath])) {
 				return childCollection.insert(childData).then((doc: RxDocument) => doc[primaryPath]);
 			}

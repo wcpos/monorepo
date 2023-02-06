@@ -3,15 +3,12 @@
 	"version": 0,
 	"description": "WooCommerce Tax Rate schema",
 	"type": "object",
-	"primaryKey": "uuid",
+	"primaryKey": "id",
 	"properties": {
-		"uuid": {
-			"description": "Unique identifier for the resource.",
-			"type": "string",
-			"maxLength": 36
-		},
 		"id": {
-			"type": "integer"
+			"description": "Not a UUID! This is the WC REST API ID but coerced to a string",
+			"type": "string",
+			"maxLength": 8
 		},
 		"country": {
 			"type": "string",

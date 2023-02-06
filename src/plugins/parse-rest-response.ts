@@ -51,6 +51,10 @@ export function coerceData(
 			const coercedData = {};
 			for (const prop in schema.properties) {
 				if (prop.startsWith('_')) continue;
+				if (prop === 'meta_data') {
+					const uuid = json.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+					if (uuid) coercedData['uuid'] = uuid.value;
+				}
 				if (data.hasOwnProperty(prop)) {
 					coercedData[prop] = traverse(schema.properties[prop], data[prop], schema);
 				} else if (schema.properties[prop].hasOwnProperty('default')) {
@@ -102,7 +106,6 @@ export function parseRestResponse(this: RxCollection, json: Record<string, any>)
 	const collection = this;
 	const schema = collection.schema.jsonSchema;
 	if (isPlainObject(json)) {
-		getMetaUUID.call(this, json);
 		pruneProperties(schema, json); // mutates json
 		return coerceData(schema, json, collection); // return json
 	}

@@ -22,7 +22,7 @@ export async function create(
 	const collections = await db.addCollections({
 		[collectionName]: {
 			schema: productDefaultSchema,
-			localDocuments: true,
+			localDocuments: false,
 		},
 	});
 
