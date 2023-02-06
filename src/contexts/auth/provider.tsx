@@ -58,7 +58,7 @@ export const AuthProvider = ({ children, initialProps }: AuthProviderProps) => {
 	 */
 	React.useEffect(() => {
 		const hydrateInitialProps = async (site) => {
-			await user.upsert({ $push: { sites: site } });
+			await user.update({ $push: { sites: site } });
 
 			// return login({
 			// 	siteID: siteDoc.localID,
