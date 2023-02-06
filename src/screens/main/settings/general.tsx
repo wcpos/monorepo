@@ -50,7 +50,7 @@ export const GeneralSettings = () => {
 	 */
 	const handleOnChange = React.useCallback(
 		(data) => {
-			store?.update(data);
+			store?.incrementalPatch(data);
 		},
 		[store]
 	);

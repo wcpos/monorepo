@@ -1,7 +1,6 @@
 import * as React from 'react';
-import { LayoutChangeEvent, View, Text } from 'react-native';
+import { LayoutChangeEvent, View } from 'react-native';
 
-import { useSubscription, useObservableSuspense } from 'observable-hooks';
 import { PanGestureHandler, PanGestureHandlerGestureEvent } from 'react-native-gesture-handler';
 import Animated, {
 	useAnimatedGestureHandler,
@@ -36,11 +35,7 @@ const ResizableColumns = () => {
 	const columnWidth = useSharedValue(ui.get('width'));
 	const isActivePanGesture = useSharedValue(false);
 	const containerWidth = useSharedValue(800);
-
-	/**
-	 *
-	 */
-	useSubscription(ui.get$('width'), (width: number) => {
+	ui.get$('width').subscribe((width) => {
 		columnWidth.value = width;
 	});
 
@@ -66,7 +61,7 @@ const ResizableColumns = () => {
 	 */
 	const saveColumnWidth = React.useCallback(
 		(width: number) => {
-			ui.atomicPatch({ width });
+			ui.incrementalPatch({ width });
 		},
 		[ui]
 	);
@@ -97,13 +92,13 @@ const ResizableColumns = () => {
 
 	useWhyDidYouUpdate('ResizableColumns', {
 		ui,
-		columnWidth,
-		isActivePanGesture,
-		containerWidth,
-		onContainerLayout,
-		columnStyle,
-		panGestureHandler,
-		saveColumnWidth,
+		// columnWidth,
+		// isActivePanGesture,
+		// containerWidth,
+		// onContainerLayout,
+		// columnStyle,
+		// panGestureHandler,
+		// saveColumnWidth,
 	});
 
 	/**

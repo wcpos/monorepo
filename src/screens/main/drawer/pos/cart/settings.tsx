@@ -144,7 +144,7 @@ export const POSProductSettings = () => {
 					formData={{ showOutOfStock, columns }}
 					onChange={(value) => {
 						// debugger;
-						ui.atomicPatch(value);
+						ui.incrementalPatch(value);
 					}}
 					formContext={{ label }}
 					// validator={validator}

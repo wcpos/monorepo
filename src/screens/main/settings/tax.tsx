@@ -35,7 +35,7 @@ export const TaxSettings = () => {
 	 */
 	const handleOnChange = React.useCallback(
 		(data) => {
-			store?.atomicPatch(data);
+			store?.incrementalPatch(data);
 		},
 		[store]
 	);

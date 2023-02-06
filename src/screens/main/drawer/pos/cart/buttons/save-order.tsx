@@ -27,7 +27,7 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 			});
 			//
 			const parsedData = order.collection.parseRestResponse(data);
-			await order.collection.upsert(parsedData);
+			await order.update(parsedData);
 		} catch (err) {
 			log.error(err);
 		}

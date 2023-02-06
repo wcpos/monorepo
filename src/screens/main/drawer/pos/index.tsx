@@ -63,11 +63,6 @@ const POSStackNavigator = () => {
 												title={t('Checkout', { _tags: 'core' })}
 												primaryAction={{
 													label: t('Process Payment', { _tags: 'core' }),
-													action: () => {
-														// if (checkoutRef) {
-														// 	checkoutRef.current.processPayment();
-														// }
-													},
 												}}
 											>
 												<React.Suspense fallback={<Text>Loading Checkout...</Text>}>

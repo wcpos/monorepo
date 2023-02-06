@@ -4,6 +4,7 @@ import { from } from 'rxjs';
 import { catchError, switchMap, filter } from 'rxjs/operators';
 
 import { userDBPromise } from '@wcpos/database/src/users-db';
+import log from '@wcpos/utils/src/logger';
 
 const userDB$ = from(userDBPromise());
 export const userDBResource = new ObservableResource(userDB$, (value: any) => !!value);
@@ -30,7 +31,8 @@ const user$ = userDB$.pipe(
 			filter((user) => isRxDocument(user || {}))
 		)
 	),
-	catchError(() => {
+	catchError((err) => {
+		log.error(err);
 		throw new Error('Error finding global user');
 	})
 );

@@ -34,13 +34,13 @@ const TaxesProvider = ({ children, initialQuery, ui }: TaxesProviderProps) => {
 	/**
 	 * Only run the replication when the Provider is mounted
 	 */
-	// React.useEffect(() => {
-	// 	replicationState.start();
-	// 	return () => {
-	// 		// this is async, should we wait?
-	// 		replicationState.cancel();
-	// 	};
-	// }, [replicationState]);
+	React.useEffect(() => {
+		replicationState.start();
+		return () => {
+			// this is async, should we wait?
+			replicationState.cancel();
+		};
+	}, [replicationState]);
 
 	/**
 	 *

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { ObservableResource } from 'observable-hooks';
-import { filter } from 'rxjs/operators';
+import { tap, catchError } from 'rxjs/operators';
 
 import initialUI from './ui-initial.json';
 import useStore from '../../contexts/store';
@@ -34,7 +34,6 @@ export interface UISchema {
 
 export type UIDocument = import('rxdb').RxLocalDocument<StoreDatabase, UISchema> & {
 	reset: () => void;
-	getID: () => string;
 };
 export type UIResource = import('observable-hooks').ObservableResource<UIDocument>;
 
@@ -42,18 +41,29 @@ interface UIProviderProps {
 	children: React.ReactNode;
 }
 
-export type UIResourceID =
-	| 'pos.products'
-	| 'pos.cart'
-	| 'pos.checkout'
-	| 'products'
-	| 'orders'
-	| 'customers'
-	| 'coupons';
+const resourceIDs = [
+	'pos.products',
+	'pos.cart',
+	'pos.checkout',
+	'products',
+	'orders',
+	'customers',
+	'coupons',
+] as const;
+export type UIResourceID = (typeof resourceIDs)[number];
 
 export const UIContext = React.createContext<{
 	uiResources: Record<UIResourceID, UIResource>;
 }>(null);
+
+const getLabel = (key: string) => {
+	debugger;
+	const label = get(initialUI, `${key}.label`);
+	if (!label) {
+		throw Error(`No label for ${key}`);
+	}
+	return label;
+};
 
 /**
  *
@@ -65,54 +75,56 @@ export const UIProvider = ({ children }: UIProviderProps) => {
 	/**
 	 *
 	 */
-	const getUIResource = React.useCallback(
-		(id: UIResourceID) => {
-			const resource = storeDB.getLocal$(id).pipe(
-				filter((localDoc) => {
-					const initial = get(initialUI, id);
+	const value = React.useMemo(() => {
+		/**
+		 *
+		 */
+		function reset(id: UIResourceID) {
+			const initial = get(initialUI, id);
 
-					if (!initial) {
-						throw Error(`No initial UI for ${id}`);
-					}
+			if (!initial) {
+				throw Error(`No initial UI for ${id}`);
+			}
 
+			storeDB.upsertLocal(id, initial);
+		}
+
+		/**
+		 *
+		 */
+		function createUIResource(id: UIResourceID) {
+			const resource$ = storeDB.getLocal$(id).pipe(
+				tap((localDoc) => {
 					if (!localDoc) {
-						storeDB.insertLocal(id, initial);
-						return false;
+						reset(id);
 					}
 
 					// add helper functions
-					Object.assign(localDoc, {
-						// reset the ui settings
-						reset: () => {
-							storeDB.upsertLocal(id, initial);
-						},
-					});
-
-					return !!localDoc;
+					Object.assign(localDoc, reset, getLabel);
+				}),
+				catchError(() => {
+					throw new Error('Error finding global user');
 				})
 			);
 
-			return new ObservableResource(resource);
-		},
-		[storeDB]
-	);
+			return new ObservableResource(resource$, (val) => !!val);
+		}
 
-	/**
-	 *
-	 */
-	const value = React.useMemo(() => {
+		/**
+		 *
+		 */
 		return {
 			uiResources: {
-				'pos.products': getUIResource('pos.products'),
-				'pos.cart': getUIResource('pos.cart'),
-				// 'pos.checkout': getUIResource('pos.checkout'),
-				products: getUIResource('products'),
-				orders: getUIResource('orders'),
-				customers: getUIResource('customers'),
+				'pos.products': createUIResource('pos.products'),
+				'pos.cart': createUIResource('pos.cart'),
+				// 'pos.checkout': createUIResource('pos.checkout'),
+				products: createUIResource('products'),
+				orders: createUIResource('orders'),
+				customers: createUIResource('customers'),
 				// coupons: getResource('pos.products'),
 			},
 		};
-	}, [getUIResource]);
+	}, [storeDB]);
 
 	/**
 	 *

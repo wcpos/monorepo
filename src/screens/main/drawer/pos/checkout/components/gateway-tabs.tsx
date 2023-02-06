@@ -21,6 +21,9 @@ const GatewayTabs = () => {
 		});
 	}, [gateways]);
 
+	/**
+	 * @TODO - what if no gateways?
+	 */
 	if (gateways.length === 0) {
 		return null;
 	}
@@ -30,9 +33,7 @@ const GatewayTabs = () => {
 	 */
 	return (
 		<Tabs
-			onIndexChange={(idx) => {
-				setIndex(idx);
-			}}
+			onIndexChange={setIndex}
 			navigationState={{ index, routes }}
 			renderScene={({ route }) => <PaymentWebview gatewayID={route.key} />}
 			tabBarPosition="left"

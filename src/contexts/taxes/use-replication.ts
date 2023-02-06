@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { find } from 'lodash';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 
 import log from '@wcpos/utils/src/logger';
@@ -25,85 +26,6 @@ export const useReplication = ({ collection }) => {
 		/**
 		 *
 		 */
-		const replicate = async (lastCheckpoint, batchSize) => {
-			/**
-			 * This is the data replication
-			 * we need to delay for a little while to allow the collection count to be updated
-			 */
-			await wait(1000);
-			const pullRemoteIds = collection.pullRemoteIds$.getValue();
-			const syncedDocs = collection.syncedIds$.getValue();
-
-			if (pullRemoteIds.length === 0) {
-				runAudit.current = true;
-				return {
-					documents: [],
-					checkpoint: null,
-				};
-			}
-
-			const params = {};
-
-			// choose the smallest array, max of 1000
-			if (syncedDocs.length > pullRemoteIds.length) {
-				params.include = pullRemoteIds.slice(0, 1000).join(',');
-			} else {
-				params.exclude = syncedDocs.slice(0, 1000).join(',');
-			}
-
-			const response = await http.get(collection.name, { params }).catch((error) => {
-				log.error(error);
-			});
-
-			/**
-			 * What to do when server is unreachable?
-			 */
-			if (!response?.data) {
-				throw Error('No response from server');
-			}
-
-			return {
-				documents: response?.data || [],
-				checkpoint: null,
-			};
-		};
-
-		/**
-		 *
-		 */
-		const audit = async () => {
-			const response = await http
-				.get(collection.name, {
-					params: { fields: ['id'], posts_per_page: -1 },
-				})
-				.catch((error) => {
-					log.error(error);
-				});
-
-			/**
-			 * What to do when server is unreachable?
-			 */
-			if (!response?.data) {
-				throw Error('No response from server');
-			}
-
-			const documents = await collection.auditRestApiIds(response?.data);
-			runAudit.current = false;
-
-			/** @TODO - hack */
-			if (documents.length === 0) {
-				return replicate(null, 10);
-			}
-
-			return {
-				documents,
-				checkpoint: null,
-			};
-		};
-
-		/**
-		 *
-		 */
 		return replicateRxCollection({
 			collection,
 			autoStart: false,
@@ -111,19 +33,46 @@ export const useReplication = ({ collection }) => {
 			// retryTime: 1000000000,
 			pull: {
 				async handler(lastCheckpoint, batchSize) {
-					return runAudit.current ? audit() : replicate(lastCheckpoint, batchSize);
+					try {
+						/**
+						 * @TODO - getting the localIds returns stale data so we need to wait
+						 * Need to find a better way to do this
+						 * Is the collection not updated yet? or is find() being cached?
+						 *
+						 * @NOTE - this is similar to gateways, but we need pagination
+						 */
+						await wait(1000);
+						const [{ data }, localIds] = await Promise.all([
+							http.get(collection.name),
+							collection
+								.find()
+								.exec()
+								.then((docs) => docs.map((d) => d.id)),
+						]);
+
+						// compare local and server ids
+						// @NOTE - rest api ids are integers, local ids are strings
+						const add = data
+							.filter((d) => !localIds.includes(String(d.id)))
+							.map((d) => ({ ...d, _deleted: false }));
+
+						const remove = localIds
+							.filter((id) => !find(data, { id: Number(id) }))
+							.map((d) => ({ ...d.toJSON(), _deleted: true }));
+
+						//
+						const documents = add.concat(remove);
+
+						return {
+							documents,
+							checkpoint: null,
+						};
+					} catch (err) {
+						log.error(err);
+					}
 				},
 				batchSize: 10,
 				modifier: (doc) => {
-					/**
-					 * @TODO - this is a hack, WC REST Taxes don't have a modified date
-					 * I just set it to current date here, but will need to output a modified date from the server
-					 */
-					if (doc.name && !doc.date_modified_gmt) {
-						const timestamp = Date.now();
-						const date_modified_gmt = new Date(timestamp).toISOString().split('.')[0];
-						doc.date_modified_gmt = date_modified_gmt;
-					}
 					return collection.parseRestResponse(doc);
 				},
 				// stream$: timedObservable(1000),

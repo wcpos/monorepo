@@ -1,14 +1,20 @@
 import * as React from 'react';
 import { View, StyleSheet } from 'react-native';
 
+import { useNavigation, StackActions } from '@react-navigation/native';
 import get from 'lodash/get';
+import { useObservableState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Loader from '@wcpos/components/src/loader';
+import { useModal } from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import WebView from '@wcpos/components/src/webview';
+import log from '@wcpos/utils/src/logger';
 
 import useOrders from '../../../../../../contexts/orders';
+import useRestHttpClient from '../../../../../../hooks/use-rest-http-client';
 
 export interface PaymentWebviewProps {
 	gatewayID: string;
@@ -17,26 +23,80 @@ export interface PaymentWebviewProps {
 const PaymentWebview = ({ gatewayID }: PaymentWebviewProps) => {
 	const [loading, setLoading] = React.useState(true);
 	const { data: order } = useOrders();
-	const paymentUrl = get(order, ['links', 'payment', 0, 'href']);
 	const addSnackbar = useSnackbar();
+	const { onPrimaryAction } = useModal();
+	const iframeRef = React.useRef<HTMLIFrameElement>();
+	const http = useRestHttpClient();
+	const navigation = useNavigation();
+
+	const paymentUrl = useObservableState(
+		order.links$.pipe(map((links) => get(links, ['payment', 0, 'href']))),
+		get(order, ['links', 'payment', 0, 'href'])
+	);
 
 	/**
 	 *
 	 */
-	const handlePaymentReceived = React.useCallback((event: MessageEvent) => {
-		if (event?.data?.action === 'wcpos-payment-received') {
-			debugger;
+	React.useEffect(() => {
+		async function saveOrder() {
+			try {
+				const { data } = await http.post('orders', {
+					data: await order.toPopulatedJSON(),
+				});
+				//
+				const parsedData = order.collection.parseRestResponse(data);
+				await order.update(parsedData);
+			} catch (err) {
+				log.error(err);
+			}
 		}
-	}, []);
 
-	if (!order) {
-		throw new Error('Order not found');
-	}
+		if (!paymentUrl) {
+			saveOrder();
+		}
+	}, [http, order, paymentUrl]);
 
-	if (!paymentUrl) {
-		throw new Error('Payment url not found');
-	}
+	/**
+	 *
+	 */
+	React.useEffect(() => setLoading(true), [gatewayID]);
 
+	/**
+	 *
+	 */
+	const handlePaymentReceived = React.useCallback(
+		async (event: MessageEvent) => {
+			if (event?.data?.action === 'wcpos-payment-received') {
+				try {
+					const { payload } = event.data;
+					const parsedData = order.collection.parseRestResponse(payload);
+					await order.update(parsedData);
+					navigation.dispatch(
+						StackActions.replace('Receipt', {
+							orderID: order.uuid,
+						})
+					);
+				} catch (err) {
+					log.error(err);
+				}
+			}
+		},
+		[navigation, order]
+	);
+
+	/**
+	 *
+	 */
+	onPrimaryAction(() => {
+		if (iframeRef.current && iframeRef.current.contentWindow) {
+			setLoading(true);
+			iframeRef.current.contentWindow.postMessage({ action: 'wcpos-process-payment' }, '*');
+		}
+	});
+
+	/**
+	 *
+	 */
 	return (
 		<View style={{ position: 'relative', height: '100%', paddingLeft: 10 }}>
 			{loading ? (
@@ -55,21 +115,23 @@ const PaymentWebview = ({ gatewayID }: PaymentWebviewProps) => {
 				</View>
 			) : null}
 			<ErrorBoundary>
-				<WebView
-					// ref={iframeRef}
-					src={`${paymentUrl}&wcpos=1&gateway=${gatewayID}`}
-					onLoad={() => {
-						setLoading(false);
-					}}
-					onMessage={(event) => {
-						if (event?.data?.payload?.data) {
-							addSnackbar({ message: event?.data?.payload?.message });
-						} else {
-							handlePaymentReceived(event);
-						}
-					}}
-					style={{ height: '100%' }}
-				/>
+				{paymentUrl ? (
+					<WebView
+						ref={iframeRef}
+						src={`${paymentUrl}&wcpos=1&gateway=${gatewayID}`}
+						onLoad={() => {
+							setLoading(false);
+						}}
+						onMessage={(event) => {
+							if (event?.data?.payload?.data) {
+								addSnackbar({ message: event?.data?.payload?.message });
+							} else {
+								handlePaymentReceived(event);
+							}
+						}}
+						style={{ height: '100%' }}
+					/>
+				) : null}
 			</ErrorBoundary>
 		</View>
 	);

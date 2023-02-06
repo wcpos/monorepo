@@ -157,10 +157,11 @@ export const POSProductSettings = ({ ui }: POSProductSettingsProps) => {
 					uiSchema={uiSchema}
 					formData={{ showOutOfStock, columns }}
 					onChange={(value) => {
-						// debugger;
-						ui.atomicPatch(value);
+						ui.incrementalPatch(value);
 					}}
-					formContext={{ label }}
+					formContext={{
+						label,
+					}}
 					// validator={validator}
 				/>
 			</Modal>
