@@ -46,15 +46,23 @@ export function coerceData(
 		schema: RxJsonSchema<any>,
 		data: Record<string, any>,
 		parentSchema: RxJsonSchema<any> | null = null
-	) {
+	): Record<string, any> {
+		/**
+		 * JSON nodes
+		 */
 		if (schema.type === 'object') {
 			const coercedData = {};
 			for (const prop in schema.properties) {
+				/** Special case for rxdb internals */
 				if (prop.startsWith('_')) continue;
-				if (prop === 'meta_data') {
-					const uuid = json.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
-					if (uuid) coercedData['uuid'] = uuid.value;
+
+				/** Special case for extracting uuid from meta_data */
+				if (prop === 'uuid' && Array.isArray(json.meta_data)) {
+					const uuidMeta = json.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+					if (uuidMeta) coercedData['uuid'] = uuidMeta.value;
+					continue;
 				}
+
 				if (data.hasOwnProperty(prop)) {
 					coercedData[prop] = traverse(schema.properties[prop], data[prop], schema);
 				} else if (schema.properties[prop].hasOwnProperty('default')) {

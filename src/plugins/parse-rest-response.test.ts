@@ -173,6 +173,9 @@ describe('parseRestResponse', () => {
 				jsonSchema: {
 					type: 'object',
 					properties: {
+						uuid: {
+							type: 'string',
+						},
 						id: {
 							type: 'integer',
 						},
@@ -211,6 +214,9 @@ describe('parseRestResponse', () => {
 				jsonSchema: {
 					type: 'object',
 					properties: {
+						uuid: {
+							type: 'string',
+						},
 						id: {
 							type: 'integer',
 						},

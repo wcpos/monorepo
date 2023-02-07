@@ -17,27 +17,27 @@ export type OrderCollection = import('rxdb').RxCollection<
  */
 export const orders = {
 	schema,
-	statics,
-	methods,
+	// statics,
+	// methods,
 	options: {
-		middlewares: {
-			// postCreate: {
-			// 	handle: postCreate,
-			// 	parallel: false,
-			// },
-			// preInsert: {
-			// 	handle: preInsert,
-			// 	parallel: false,
-			// },
-			// preSave: {
-			// 	handle: preSave,
-			// 	parallel: false,
-			// },
-			// preRemove: {
-			// 	handle: preRemove,
-			// 	parallel: false,
-			// },
-		},
+		// middlewares: {
+		// postCreate: {
+		// 	handle: postCreate,
+		// 	parallel: false,
+		// },
+		// preInsert: {
+		// 	handle: preInsert,
+		// 	parallel: false,
+		// },
+		// preSave: {
+		// 	handle: preSave,
+		// 	parallel: false,
+		// },
+		// preRemove: {
+		// 	handle: preRemove,
+		// 	parallel: false,
+		// },
+		// },
 	},
 	// migrationStrategies: {},
 	// autoMigrate: true,
