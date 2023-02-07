@@ -77,7 +77,12 @@ const CartTabs = () => {
 	 *
 	 */
 	return (
-		<Tabs.TabBar routes={routes} onIndexChange={handleTabChange} focusedIndex={focusedIndex} />
+		<Tabs.TabBar
+			routes={routes}
+			onIndexChange={handleTabChange}
+			focusedIndex={focusedIndex}
+			style={{ paddingBottom: 0, paddingLeft: 0, paddingRight: 0 }}
+		/>
 	);
 };
 

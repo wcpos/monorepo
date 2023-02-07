@@ -4,6 +4,8 @@ import get from 'lodash/get';
 import { ObservableResource } from 'observable-hooks';
 import { tap, catchError } from 'rxjs/operators';
 
+import log from '@wcpos/utils/src/logger';
+
 import initialUI from './ui-initial.json';
 import useStore from '../../../../contexts/store';
 
@@ -56,6 +58,9 @@ export const UIContext = React.createContext<{
 	uiResources: Record<UIResourceID, UIResource>;
 }>(null);
 
+/**
+ *
+ */
 const getLabel = (key: string) => {
 	debugger;
 	const label = get(initialUI, `${key}.label`);
@@ -97,13 +102,14 @@ export const UIProvider = ({ children }: UIProviderProps) => {
 				tap((localDoc) => {
 					if (!localDoc) {
 						reset(id);
+					} else {
+						// add helper functions
+						Object.assign(localDoc, reset, getLabel);
 					}
-
-					// add helper functions
-					Object.assign(localDoc, reset, getLabel);
 				}),
-				catchError(() => {
-					throw new Error('Error finding global user');
+				catchError((err) => {
+					log.error(err);
+					throw new Error('Error loading UI resources');
 				})
 			);
 

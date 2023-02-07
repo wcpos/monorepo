@@ -1,57 +1,55 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
-import { StackActions, CommonActions } from '@react-navigation/native';
-import { useReactToPrint } from 'react-to-print';
+import { useObservableState } from 'observable-hooks';
 
-import Modal from '@wcpos/components/src/modal';
+import Modal, { useModal } from '@wcpos/components/src/modal';
 
-import { EmailModal } from './email';
-import { Receipt } from './receipt';
-import useModalRefreshFix from '../../../hooks/use-modal-refresh-fix';
+import { EmailModal } from './components/email';
+import { ReceiptTemplate } from './components/template-webview';
 import { t } from '../../../lib/translations';
-import { OrdersProvider } from '../contexts/orders';
+import useOrder from '../contexts/orders';
+import useRestHttpClient from '../hooks/use-rest-http-client';
 
-type POSStackParamList = import('../pos').POSStackParamList;
-type OrdersStackParamList = import('../orders').OrdersStackParamList;
-type ReceiptModalProps = import('@react-navigation/stack').StackScreenProps<
-	POSStackParamList | OrdersStackParamList,
-	'Receipt'
->;
-
-export const ReceiptModal = ({ route, navigation }: ReceiptModalProps) => {
-	const { orderID } = route.params;
+export const ReceiptModal = () => {
 	const [showEmailModal, setShowEmailModal] = React.useState(false);
-	const receiptRef = React.useRef(null);
-	const handlePrint = useReactToPrint({
-		content: () => receiptRef.current,
-		pageStyle: 'html, body { height: 100%; width: 100%; }',
-	});
-	useModalRefreshFix();
+	const { onSecondaryAction } = useModal();
+	const { data: order } = useOrder();
+	const id = useObservableState(order.id$, order.id);
+	const http = useRestHttpClient();
+	const emailFieldRef = React.useRef('');
+	const saveCheckboxRef = React.useRef(false);
 
+	/**
+	 *
+	 */
+	onSecondaryAction(() => setShowEmailModal(true));
+
+	/**
+	 *
+	 */
+	const sendEmail = React.useCallback(async () => {
+		try {
+			const { success } = await http.post(`/orders/${id}/email`, {
+				data: {
+					email: emailFieldRef.current.value,
+					save_to: saveCheckboxRef.current.value ? 'billing' : '',
+				},
+			});
+			if (success) {
+				// refresh order because it might have email added to it
+			}
+		} catch (error) {
+			console.log(error);
+		}
+	}, [http, id]);
+
+	/**
+	 *
+	 */
 	return (
-		<>
-			<Modal
-				opened
-				size="large"
-				title={t('Receipt', { _tags: 'core' })}
-				onClose={() => navigation.goBack()}
-				primaryAction={{
-					label: t('Print Receipt', { _tags: 'core' }),
-					action: handlePrint,
-				}}
-				secondaryActions={[
-					{
-						label: t('Email Receipt', { _tags: 'core' }),
-						action: () => {
-							setShowEmailModal(true);
-						},
-					},
-				]}
-			>
-				<OrdersProvider initialQuery={{ filters: { _id: orderID } }}>
-					<Receipt ref={receiptRef} />
-				</OrdersProvider>
-			</Modal>
+		<View style={{ height: '100%' }}>
+			<ReceiptTemplate />
 
 			<Modal
 				opened={showEmailModal}
@@ -59,10 +57,14 @@ export const ReceiptModal = ({ route, navigation }: ReceiptModalProps) => {
 					setShowEmailModal(false);
 				}}
 				title={t('Email Receipt', { _tags: 'core' })}
+				primaryAction={{
+					label: t('Send', { _tags: 'core' }),
+					action: sendEmail,
+				}}
 			>
-				<EmailModal orderID={orderID} />
+				<EmailModal emailFieldRef={emailFieldRef} saveCheckboxRef={saveCheckboxRef} />
 			</Modal>
-		</>
+		</View>
 	);
 };
 

@@ -1,6 +1,6 @@
 import { ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
-import { from } from 'rxjs';
+import { from, of } from 'rxjs';
 import { catchError, switchMap, filter } from 'rxjs/operators';
 
 import { userDBPromise } from '@wcpos/database/src/users-db';
@@ -12,8 +12,8 @@ export const userDBResource = new ObservableResource(userDB$, (value: any) => !!
 const user$ = userDB$.pipe(
 	switchMap((userDB) =>
 		userDB.getLocal$('current').pipe(
-			switchMap(async (current) => {
-				const userID = current && current.get('userID');
+			switchMap((current) => (current ? current?.get$('userID') : of(null))),
+			switchMap(async (userID) => {
 				/** @NOTE - findOne returns an RxDocument if userID is null | undefined */
 				const user = await userDB.users.findOneFix(userID).exec();
 				if (!user) {
@@ -27,8 +27,7 @@ const user$ = userDB$.pipe(
 				}
 				return user;
 			}),
-			/** @NOTE - isRxDocument needs an object */
-			filter((user) => isRxDocument(user || {}))
+			filter((user) => isRxDocument(user))
 		)
 	),
 	catchError((err) => {

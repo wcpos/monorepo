@@ -96,34 +96,9 @@ const useSiteConnect = () => {
 	/**
 	 *
 	 */
-	const saveSiteData = React.useCallback(
-		async (siteData: WpJsonResponse) => {
-			let site;
-
-			/**
-			 * @TODO - what to do if site exists?
-			 * ie: alert user and skip, or update some properties?
-			 */
-			// const existingSite = await userDB.sites.findOne(siteData.uuid || '').exec();
-
-			// if not existingSite, then insert site data
-			// if (!user.sites.includes(siteData.uuid)) {
-			// 	debugger;
-			site = user.update({ $push: { sites: siteData } });
-			// }
-
-			return site;
-		},
-		[user]
-	);
-
-	/**
-	 *
-	 */
 	const onConnect = React.useCallback(
-		async (url: string): Promise<SiteDocument> => {
+		async (url: string): Promise<SiteDocument | undefined> => {
 			setLoading(true);
-			let site;
 
 			try {
 				const wpApiUrl = await getWPAPIUrl(url);
@@ -132,16 +107,15 @@ const useSiteConnect = () => {
 				}
 
 				const siteData = await getSiteData(wpApiUrl);
-				site = await saveSiteData(siteData);
+				await user.update({ $push: { sites: siteData } });
+				return await userDB.sites.findOneFix(siteData.uuid).exec();
 			} catch (err) {
 				setError(err.message);
+			} finally {
 				setLoading(false);
 			}
-
-			setLoading(false);
-			return site;
 		},
-		[getSiteData, getWPAPIUrl, saveSiteData]
+		[getSiteData, getWPAPIUrl, user, userDB.sites]
 	);
 
 	return { onConnect, loading, error };

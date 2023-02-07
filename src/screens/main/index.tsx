@@ -93,7 +93,7 @@ const MainNavigator = () => {
 									name="POSStack"
 									component={POSNavigator}
 									options={{
-										// title: 'POS',
+										title: t('POS', { _tags: 'core' }),
 										drawerLabel: t('POS', { _tags: 'core' }),
 										drawerIcon: ({ focused }) => (
 											<Icon
@@ -119,7 +119,7 @@ const MainNavigator = () => {
 									name="OrdersStack"
 									component={OrdersNavigator}
 									options={{
-										title: 'gsdgd',
+										title: t('Orders', { _tags: 'core' }),
 										drawerLabel: t('Orders', { _tags: 'core' }),
 										drawerIcon: ({ focused }) => (
 											<Icon name="receipt" type={focused ? 'primary' : 'inverse'} size="large" />
@@ -130,7 +130,7 @@ const MainNavigator = () => {
 									name="CustomersStack"
 									component={CustomersNavigator}
 									options={{
-										title: 'Customers',
+										title: t('Customers', { _tags: 'core' }),
 										drawerLabel: t('Customers', { _tags: 'core' }),
 										drawerIcon: ({ focused }) => (
 											<Icon name="users" type={focused ? 'primary' : 'inverse'} size="large" />

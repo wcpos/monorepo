@@ -29,7 +29,7 @@ const PaymentWebview = ({ gatewayID }: PaymentWebviewProps) => {
 	const http = useRestHttpClient();
 	const navigation = useNavigation();
 
-	const paymentUrl = useObservableState(
+	const paymentURL = useObservableState(
 		order.links$.pipe(map((links) => get(links, ['payment', 0, 'href']))),
 		get(order, ['links', 'payment', 0, 'href'])
 	);
@@ -51,10 +51,10 @@ const PaymentWebview = ({ gatewayID }: PaymentWebviewProps) => {
 			}
 		}
 
-		if (!paymentUrl) {
+		if (!paymentURL) {
 			saveOrder();
 		}
-	}, [http, order, paymentUrl]);
+	}, [http, order, paymentURL]);
 
 	/**
 	 *
@@ -115,10 +115,10 @@ const PaymentWebview = ({ gatewayID }: PaymentWebviewProps) => {
 				</View>
 			) : null}
 			<ErrorBoundary>
-				{paymentUrl ? (
+				{paymentURL ? (
 					<WebView
 						ref={iframeRef}
-						src={`${paymentUrl}&wcpos=1&gateway=${gatewayID}`}
+						src={`${paymentURL}&wcpos=1&gateway=${gatewayID}`}
 						onLoad={() => {
 							setLoading(false);
 						}}

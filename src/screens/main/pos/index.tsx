@@ -89,7 +89,31 @@ const POSStackNavigator = () => {
 								);
 							}}
 						</Stack.Screen>
-						<Stack.Screen name="Receipt" component={Receipt} />
+						<Stack.Screen name="Receipt">
+							{({ route }) => {
+								const { orderID } = route.params;
+								return (
+									<OrdersProvider initialQuery={{ filters: { uuid: orderID } }}>
+										<ModalLayout
+											title={t('Receipt', { _tags: 'core' })}
+											primaryAction={{
+												label: t('Print Receipt', { _tags: 'core' }),
+											}}
+											secondaryActions={[
+												{
+													label: t('Email Receipt', { _tags: 'core' }),
+												},
+											]}
+											style={{ height: '100%' }}
+										>
+											<React.Suspense fallback={<Text>Loading Receipt...</Text>}>
+												<Receipt />
+											</React.Suspense>
+										</ModalLayout>
+									</OrdersProvider>
+								);
+							}}
+						</Stack.Screen>
 					</Stack.Group>
 				</Stack.Navigator>
 			</React.Suspense>

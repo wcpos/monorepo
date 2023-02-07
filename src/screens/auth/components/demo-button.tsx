@@ -2,7 +2,9 @@ import * as React from 'react';
 
 import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
+import Loader from '@wcpos/components/src/loader';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
+import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../lib/translations';
 import useSiteConnect from '../hooks/use-site-connect';
@@ -10,25 +12,23 @@ import useSiteConnect from '../hooks/use-site-connect';
 const DemoButton = () => {
 	const { onConnect } = useSiteConnect();
 	const http = useHttpClient();
+	const [loading, setLoading] = React.useState(false);
 
 	const handleDemoLogin = async () => {
-		const site = await onConnect('https://wcposdev.wpengine.com/');
-
-		if (site) {
-			const response = await http
-				.get(`${site?.wc_api_auth_url}/authorize`, {
-					auth: {
-						username: 'demo',
-						password: 'demo',
-					},
-				})
-				.catch((err) => {
-					log.error(err);
-				});
-
-			if (response) {
-				await site?.addWpCredentials(response.data);
-			}
+		setLoading(true);
+		try {
+			const site = await onConnect('https://wcposdev.wpengine.com/');
+			const { data } = await http.get(`${site?.wc_api_auth_url}/authorize`, {
+				auth: {
+					username: 'demo',
+					password: 'demo',
+				},
+			});
+			site.update({ $push: { wp_credentials: data } });
+		} catch (err) {
+			log.error(err);
+		} finally {
+			setLoading(false);
 		}
 	};
 
@@ -38,7 +38,13 @@ const DemoButton = () => {
 			background="clear"
 			size="small"
 			type="secondary"
-			accessoryRight={<Icon name="arrowRight" size="small" type="secondary" />}
+			accessoryRight={
+				loading ? (
+					<Loader size="small" type="secondary" />
+				) : (
+					<Icon name="arrowRight" size="small" type="secondary" />
+				)
+			}
 			onPress={handleDemoLogin}
 		/>
 	);
