@@ -1,7 +1,9 @@
 import * as React from 'react';
+
 import { ObservableResource } from 'observable-hooks';
 import { map } from 'rxjs/operators';
-import useRestHttpClient from '../use-rest-http-client';
+
+import useRestHttpClient from '../../screens/main/hooks/use-rest-http-client';
 import useStore from '../use-store';
 
 interface State {

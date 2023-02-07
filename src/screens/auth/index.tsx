@@ -5,12 +5,24 @@ import { createStackNavigator } from '@react-navigation/stack';
 import Connect from './connect';
 import Login from './login';
 
-export type ConnectStackParamList = {
+export type AuthStackParamList = {
 	Connect: undefined;
 	Login: { siteID: string };
 };
 
-const Stack = createStackNavigator<ConnectStackParamList>();
+const Stack = createStackNavigator<AuthStackParamList>();
+
+export const authStackRoutes = {
+	path: 'connect',
+	screens: {
+		Connect: {
+			path: '',
+		},
+		Login: {
+			path: 'login/:siteID',
+		},
+	},
+};
 
 /**
  *
