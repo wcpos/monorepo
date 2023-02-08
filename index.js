@@ -1,3 +1,4 @@
+import 'react-native-get-random-values';
 import { registerRootComponent } from 'expo';
 import * as Sentry from 'sentry-expo';
 // import * as React from 'react';
