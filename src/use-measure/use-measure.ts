@@ -36,7 +36,8 @@ const adjustPageY = (pageY: number) => {
 };
 
 /**
- * A render prop to measure given node by passing `onLayout` and `ref` handlers. This differs from `ViewMeasure` in that it does not create any node in the tree
+ * A render prop to measure given node by passing `onLayout` and `ref` handlers.
+ * This differs from `ViewMeasure` in that it does not create any node in the tree
  */
 export const useMeasure = ({ onMeasure, ref, initial = initialMeasurements }: UseMeasureProps) => {
 	const measurements = useSharedValue(initial);
@@ -77,7 +78,7 @@ export const useMeasure = ({ onMeasure, ref, initial = initialMeasurements }: Us
 	React.useEffect(() => {
 		Dimensions.addEventListener('change', handleResize);
 
-		return () => Dimensions.removeEventListener('change', handleResize);
+		// return () => Dimensions.removeEventListener('change', handleResize);
 	}, [handleResize, measurements]);
 
 	return {
