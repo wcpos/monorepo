@@ -7,6 +7,7 @@ import _set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
 import { switchMap, map, debounceTime, tap, distinctUntilChanged } from 'rxjs/operators';
 
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import { useReplication } from './use-replication';
@@ -28,7 +29,7 @@ interface OrdersProviderProps {
 	ui?: import('../ui').UIDocument;
 }
 
-const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => {
+const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 	log.debug('render order provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.orders;
@@ -52,7 +53,7 @@ const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => 
 	const value = React.useMemo(() => {
 		const orders$ = query$.pipe(
 			// debounce hits to the local db
-			debounceTime(100),
+			// debounceTime(100),
 			// switchMap to the collection query
 			switchMap((q) => {
 				const selector = {};
@@ -79,12 +80,12 @@ const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => 
 
 				return RxQuery.$.pipe(
 					// query will update for any change to orders, eg: totals
-					distinctUntilChanged((prev, curr) => {
-						return isEqual(
-							prev.map((doc) => doc._id),
-							curr.map((doc) => doc._id)
-						);
-					}),
+					// distinctUntilChanged((prev, curr) => {
+					// 	return isEqual(
+					// 		prev.map((doc) => doc.uuid),
+					// 		curr.map((doc) => doc.uuid)
+					// 	);
+					// }),
 					// sort the results
 					map((result) => {
 						return orderBy(result, [q.sortBy], [q.sortDirection]);
@@ -102,7 +103,7 @@ const OrdersProvider = ({ children, initialQuery, ui }: OrdersProviderProps) => 
 			resource: new ObservableResource(orders$),
 			replicationState,
 		};
-	}, [collection, query$, setQuery, replicationState]);
+	}, [collection, query$, replicationState, setQuery]);
 
 	return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>;
 };

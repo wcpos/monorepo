@@ -7,8 +7,11 @@ import Text from '@wcpos/components/src/text';
 import Cart from './cart';
 import Tabs from './tabs';
 import { OrdersProvider } from '../../contexts/orders';
+import useCurrentOrder from '../contexts/current-order';
 
 const OpenOrders = ({ isColumn = false }) => {
+	const { currentOrder } = useCurrentOrder();
+
 	/**
 	 *
 	 */
@@ -29,14 +32,14 @@ const OpenOrders = ({ isColumn = false }) => {
 			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading Cart</Text>}>
-						<Cart />
+						<Cart currentOrder={currentOrder} />
 					</React.Suspense>
 				</ErrorBoundary>
 			</Box>
 			<ErrorBoundary>
 				<React.Suspense fallback={<Text>Loading Cart Tabs</Text>}>
 					<OrdersProvider initialQuery={initialQuery}>
-						<Tabs />
+						<Tabs currentOrder={currentOrder} />
 					</OrdersProvider>
 				</React.Suspense>
 			</ErrorBoundary>

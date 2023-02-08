@@ -75,6 +75,7 @@ const POSStackNavigator = () => {
 									<OrdersProvider initialQuery={{ filters: { uuid: orderID } }}>
 										<GatewaysProvider initialQuery={{ filters: { enabled: true } }}>
 											<ModalLayout
+												size="xLarge"
 												title={t('Checkout', { _tags: 'core' })}
 												primaryAction={{
 													label: t('Process Payment', { _tags: 'core' }),

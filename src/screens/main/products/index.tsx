@@ -7,8 +7,8 @@ import Text from '@wcpos/components/src/text';
 
 import EditProduct from './edit-product';
 import Products from './products';
-import { ProductsProvider } from '../contexts/products';
 import { ModalLayout } from '../../components/modal-layout';
+import { ProductsProvider } from '../contexts/products';
 
 export type ProductsStackParamList = {
 	Products: undefined;

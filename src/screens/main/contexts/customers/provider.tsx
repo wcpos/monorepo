@@ -29,7 +29,7 @@ interface CustomersProviderProps {
 	ui?: import('../ui').UIDocument;
 }
 
-const CustomersProvider = ({ children, initialQuery, ui }: CustomersProviderProps) => {
+const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) => {
 	log.debug('render customer provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.customers;
@@ -53,7 +53,7 @@ const CustomersProvider = ({ children, initialQuery, ui }: CustomersProviderProp
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			// debounce hits to the local db
-			debounceTime(100),
+			// debounceTime(100),
 			// switchMap to the collection query
 			switchMap((q) => {
 				const selector = {};

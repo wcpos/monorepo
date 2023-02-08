@@ -7,8 +7,8 @@ import Text from '@wcpos/components/src/text';
 
 import EditOrder from './edit-order';
 import Orders from './orders';
-import { OrdersProvider } from '../contexts/orders';
 import { ModalLayout } from '../../components/modal-layout';
+import { OrdersProvider } from '../contexts/orders';
 import Receipt from '../receipt';
 
 export type OrdersStackParamList = {

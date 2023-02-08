@@ -4,12 +4,13 @@ import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import SearchBar from './search-bar';
 import Table from './table';
-import { OrdersProvider } from '../contexts/orders';
 import UiSettings from '../components/ui-settings';
+import { OrdersProvider } from '../contexts/orders';
 import useUI from '../contexts/ui';
 
 /**
@@ -18,7 +19,6 @@ import useUI from '../contexts/ui';
 const Orders = () => {
 	const { ui } = useUI('orders');
 	const theme = useTheme();
-	log.debug('render Orders');
 
 	const initialQuery = React.useMemo(
 		() => ({ sortBy: 'date_created_gmt', sortDirection: 'desc' }),

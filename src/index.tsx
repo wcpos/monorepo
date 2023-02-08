@@ -42,22 +42,28 @@ const App = () => {
 			<React.Suspense fallback={<Text>loading app...</Text>}>
 				<GestureHandlerRootView style={{ flex: 1 }}>
 					<AuthProvider initialProps={initialProps}>
-						<LanguageProvider>
-							<StoreProvider>
-								<ThemeProvider theme={theme}>
-									<ErrorBoundary>
-										<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-											<SnackbarProvider>
-												<Portal.Provider>
-													<RootNavigator initialProps={initialProps} />
-													<Portal.Manager />
-												</Portal.Provider>
-											</SnackbarProvider>
-										</SafeAreaProviderCompat>
-									</ErrorBoundary>
-								</ThemeProvider>
-							</StoreProvider>
-						</LanguageProvider>
+						<React.Suspense fallback={<Text>loading user...</Text>}>
+							<LanguageProvider>
+								<React.Suspense fallback={<Text>loading language...</Text>}>
+									<StoreProvider>
+										<ThemeProvider theme={theme}>
+											<ErrorBoundary>
+												<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
+													<SnackbarProvider>
+														<Portal.Provider>
+															<React.Suspense fallback={<Text>loading storeDB...</Text>}>
+																<RootNavigator initialProps={initialProps} />
+															</React.Suspense>
+															<Portal.Manager />
+														</Portal.Provider>
+													</SnackbarProvider>
+												</SafeAreaProviderCompat>
+											</ErrorBoundary>
+										</ThemeProvider>
+									</StoreProvider>
+								</React.Suspense>
+							</LanguageProvider>
+						</React.Suspense>
 					</AuthProvider>
 				</GestureHandlerRootView>
 			</React.Suspense>

@@ -100,12 +100,12 @@ const Customer = ({ order }: CustomerProps) => {
 			<Modal
 				size="large"
 				opened={editModalOpened}
-				onClose={() => {
-					setEditModalOpened(false);
-				}}
+				onClose={() => setEditModalOpened(false)}
 				title={t('Edit Customer Addresses', { _tags: 'core' })}
 				primaryAction={{ label: t('Edit Customer', { _tags: 'core' }), action: handleSaveCustomer }}
-				secondaryActions={[{ label: t('Cancel', { _tags: 'core' }), action: close }]}
+				secondaryActions={[
+					{ label: t('Cancel', { _tags: 'core' }), action: () => setEditModalOpened(false) },
+				]}
 			>
 				<EditForm
 					// formData={{ billing: order.billing, shipping: order.shipping }}

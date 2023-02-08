@@ -1,12 +1,12 @@
 import * as React from 'react';
 
-import { ObservableResource } from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import { from } from 'rxjs';
 
 import { storeDBPromise } from '@wcpos/database/src/stores-db';
 
 import useAuth from '../auth';
-import useLanguage from '../language';
+import { useLanguage } from '../language/use-language';
 
 export const StoreContext = React.createContext<{
 	storeDBResource: ObservableResource<import('@wcpos/database').StoreDatabase | null>;
@@ -21,12 +21,7 @@ interface StoreProviderProps {
  */
 export const StoreProvider = ({ children }: StoreProviderProps) => {
 	const { store } = useAuth();
-
-	/**
-	 * Loading language here, and adding to the key so that the app re-renders
-	 * @TODO - refine this init process
-	 */
-	const language = useLanguage();
+	const locale = useLanguage();
 
 	/**
 	 *
@@ -41,7 +36,7 @@ export const StoreProvider = ({ children }: StoreProviderProps) => {
 	 *
 	 */
 	return (
-		<StoreContext.Provider key={language.locale} value={value}>
+		<StoreContext.Provider key={locale} value={value}>
 			{children}
 		</StoreContext.Provider>
 	);

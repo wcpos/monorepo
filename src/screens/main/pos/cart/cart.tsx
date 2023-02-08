@@ -18,11 +18,14 @@ import CartHeader from './cart-header';
 import Table from './table';
 import Totals from './totals';
 import { CartProvider } from '../../contexts/cart';
-import useCurrentOrder from '../contexts/current-order';
 
-const Cart = () => {
+export interface CartProps {
+	currentOrder: import('@wcpos/database').OrderDocument;
+}
+
+const Cart = ({ currentOrder }: CartProps) => {
 	const theme = useTheme();
-	const { currentOrder } = useCurrentOrder();
+
 	const hasItems =
 		currentOrder.line_items.length > 0 ||
 		currentOrder.fee_lines.length > 0 ||

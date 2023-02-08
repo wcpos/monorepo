@@ -1,8 +1,12 @@
 import * as React from 'react';
 
-import { ObservableResource } from 'observable-hooks';
-import { switchMap } from 'rxjs/operators';
+import { getLocales } from 'expo-localization';
+import get from 'lodash/get';
+import { ObservableResource, useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
+import { catchError, map, tap } from 'rxjs/operators';
 
+import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import { t, tx } from '../../lib/translations';
@@ -18,82 +22,50 @@ interface LanguageProviderProps {
 }
 
 /**
- * A little map function to convert system locales to Transifex locales
+ * Convert system locales to our Transifex locales
  */
-const getLocaleFromCode = (code: string) => {
-	let lang = locales[code.toLowerCase()];
-
-	// try the country code only, eg: es-ar -> es
-	if (!lang) {
-		lang = locales[code.split('-')[0]];
-	}
-
-	// default to english
-	if (!lang) {
-		lang = locales['en'];
-	}
-
-	return lang.locale;
-};
-
-/**
- * @TODO - get locale from system, eg: native
- */
-const useSystemLocale = () => {
-	const code =
-		(navigator.languages && navigator.languages[0]) || navigator.language || navigator.userLanguage;
-	return getLocaleFromCode(code);
-};
+const systemLocales = getLocales();
+const { languageCode, languageTag } = systemLocales[0];
+const { locale: systemLocale } =
+	locales[languageTag.toLowerCase()] || locales[languageCode] || locales['en'];
 
 /**
  *
  */
 export const LanguageProvider = ({ children }: LanguageProviderProps) => {
 	const { user, store, userDB } = useAuth();
-	const systemLocale = useSystemLocale();
 
 	/**
-	 *
+	 * The locale set in the store is loaded preferentially, then user locale, then system locale
 	 */
-	const languageResource = React.useMemo(() => {
-		const locale$ = store ? store.locale$ : user.locale$;
-
-		return new ObservableResource(
-			locale$.pipe(
-				switchMap((locale) => {
-					return userDB.getLocal('translations').then((translations) => {
-						const localeCode = locale || systemLocale;
-
-						if (translations?.get(localeCode)) {
-							tx.cache.update(localeCode, translations?.get(localeCode), true);
-						}
-
-						return tx
-							.setCurrentLocale(localeCode)
-							.catch((err) => {
-								/**
-								 * @TODO - little hack here to go back to original if there is an error
-								 */
-								if (localeCode !== tx.getCurrentLocale()) {
-									tx.setCurrentLocale('');
-								}
-								log.error(err);
-							})
-							.then(() => {
-								return localeCode;
-							});
-					});
-				})
-			)
+	const value = React.useMemo(() => {
+		const storeOrUserDoc = store || user;
+		const language$ = storeOrUserDoc.locale$.pipe(
+			map((l) => l || systemLocale),
+			tap(async (locale) => {
+				const doc = await userDB.getLocal('translations');
+				if (doc) {
+					const translations = doc.get(locale);
+					if (translations) {
+						tx.cache.update(locale, translations, true);
+					}
+				}
+				tx.setCurrentLocale(locale);
+			}),
+			catchError((err) => {
+				log.error(err);
+			})
 		);
-	}, [store, user.locale$, userDB, systemLocale]);
+
+		return {
+			languageResource: new ObservableResource(language$, (val) => !!val),
+		};
+	}, [store, user, userDB]);
 
 	/**
 	 *
 	 */
-	return (
-		<LanguageContext.Provider value={{ languageResource }}>{children}</LanguageContext.Provider>
-	);
+	return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 };
 
 export default LanguageProvider;

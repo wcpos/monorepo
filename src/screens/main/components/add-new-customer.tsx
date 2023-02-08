@@ -166,12 +166,10 @@ const AddNewCustomer = () => {
 			<Modal
 				size="large"
 				opened={opened}
-				onClose={() => {
-					setOpened(false);
-				}}
+				onClose={() => setOpened(false)}
 				title="Add New Customer"
 				primaryAction={{ label: 'Add Customer', action: handleSave }}
-				secondaryActions={[{ label: 'Cancel', action: close }]}
+				secondaryActions={[{ label: 'Cancel', action: () => setOpened(false) }]}
 			>
 				<Tabs<(typeof routes)[number]>
 					navigationState={{ index, routes }}
