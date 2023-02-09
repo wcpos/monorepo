@@ -1,3 +1,4 @@
+import isEmpty from 'lodash/isEmpty';
 import { RxPlugin } from 'rxdb';
 import { of } from 'rxjs';
 
@@ -7,7 +8,7 @@ export const findOneFixPlugin: RxPlugin = {
 	prototypes: {
 		RxCollection: (proto: any) => {
 			proto.findOneFix = function (this, queryObj) {
-				if (queryObj === undefined || queryObj === null) {
+				if (isEmpty(queryObj)) {
 					return {
 						exec: () => Promise.resolve(null),
 						$: of(null),
