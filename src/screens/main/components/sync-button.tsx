@@ -12,7 +12,6 @@ interface SyncButtonProps {
 
 const SyncButton = ({ sync, clear }: SyncButtonProps) => {
 	const [openMenu, setOpenMenu] = React.useState(false);
-	console.log('hi');
 
 	return (
 		<Dropdown

@@ -56,7 +56,7 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 		 */
 		const updateOrderTotals = async (line_items, fee_lines, shipping_lines) => {
 			const orderTotals = calcOrderTotals(flatten([line_items, fee_lines, shipping_lines]));
-			await order.atomicPatch(orderTotals);
+			await order.patch(orderTotals);
 		};
 
 		return cart$.pipe(
@@ -74,7 +74,7 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 							.pipe(
 								tap(async ([qty, price, taxClass]) => {
 									const totals = calcLineItemTotals(qty, price, taxClass);
-									await lineItem.atomicPatch(totals);
+									await lineItem.patch(totals);
 									await updateOrderTotals(line_items, fee_lines, shipping_lines);
 									// let changed = false;
 									// await lineItem.atomicUpdate((oldData) => {
@@ -108,7 +108,7 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 							.pipe(
 								tap(async ([price, taxClass, taxStatus]) => {
 									const totals = calcLineItemTotals(1, price, taxClass);
-									await feeLine.atomicPatch(totals);
+									await feeLine.patch(totals);
 									await updateOrderTotals(line_items, fee_lines, shipping_lines);
 								})
 							)
@@ -127,7 +127,7 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 							.pipe(
 								tap(async ([price]) => {
 									const totals = calcLineItemTotals(1, price, 'shipping');
-									await shippingLine.atomicPatch(totals);
+									await shippingLine.patch(totals);
 									await updateOrderTotals(line_items, fee_lines, shipping_lines);
 								})
 							)

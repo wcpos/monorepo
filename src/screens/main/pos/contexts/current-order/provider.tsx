@@ -39,7 +39,11 @@ const CurrentOrderProvider = ({ children }: CurrentOrderContextProviderProps) =>
 	const currentOrder$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
-				switchMap(([uuid]) => collection.findOneFix(uuid).exec()),
+				/**
+				 * @NOTE - we need to observe the query result because otherwise the currentOrder is stale
+				 * This causes problems when trying to update the currentOrder
+				 */
+				switchMap(([uuid]) => collection.findOneFix(uuid).$),
 				map((order) => (order ? order : new NewOrder(collection)))
 			),
 		[orderID]
