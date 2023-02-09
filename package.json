@@ -1,7 +1,7 @@
 {
 	"private": true,
 	"name": "@wcpos/managed-expo",
-	"version": "1.0.0-alpha.63",
+	"version": "1.0.0-alpha.64",
 	"main": "index.js",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://wcpos.github.io/managed-expo",
@@ -47,7 +47,7 @@
 		"expo-haptics": "~12.2.0",
 		"expo-image": "^1.0.0-beta.6",
 		"expo-linking": "~4.0.0",
-		"expo-localization": "^14.0.0",
+		"expo-localization": "^14.1.0",
 		"expo-modules-core": "1.2.0",
 		"expo-sqlite": "~11.1.0",
 		"expo-status-bar": "~1.4.3",
