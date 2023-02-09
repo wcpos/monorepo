@@ -12,6 +12,7 @@ import Settings from './settings';
 import useStore from '../../../../contexts/store';
 import AddCustomer from '../../components/add-new-customer';
 import CustomerSelect from '../../components/customer-select';
+import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -27,22 +28,30 @@ const CartHeader = ({ order }: CartHeaderProps) => {
 	const theme = useTheme();
 	const { storeDB } = useStore();
 	const customerID = useObservableState(order.customer_id$, order.customer_id);
+	const { addCustomer } = useCurrentOrder();
 
 	/**
 	 *
 	 */
 	const handleCustomerSelect = React.useCallback(
 		(selectedCustomer: CustomerDocument) => {
-			const billingEmail = selectedCustomer?.billing?.email || selectedCustomer?.email;
-			const firstName = selectedCustomer?.billing?.first_name || selectedCustomer?.username;
+			/** Special case for Guest */
+			if (selectedCustomer.id === 0) {
+				return addCustomer({ customer_id: 0, billing: {}, shipping: {} });
+			}
 
-			order.patch({
-				customer_id: selectedCustomer.id,
-				billing: { ...selectedCustomer.billing, email: billingEmail, first_name: firstName },
-				shipping: selectedCustomer.shipping,
+			const customerJSON = selectedCustomer.toJSON();
+			return addCustomer({
+				customer_id: customerJSON.id,
+				billing: {
+					...(customerJSON.billing || {}),
+					email: customerJSON?.billing?.email || customerJSON?.email,
+					first_name: customerJSON?.billing?.first_name || customerJSON?.username,
+				},
+				shipping: customerJSON.shipping,
 			});
 		},
-		[order]
+		[addCustomer]
 	);
 
 	/**

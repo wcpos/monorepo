@@ -93,7 +93,7 @@ const Actions = ({ item: order }: Props) => {
 		const menu = [
 			{
 				label: 'Edit',
-				action: () => navigation.navigate('EditOrder', { orderID: order._id }),
+				action: () => navigation.navigate('EditOrder', { orderID: order.uuid }),
 				icon: 'penToSquare',
 			},
 			{ label: 'Re-open', action: handleOpen, icon: 'cartShopping' },
@@ -105,7 +105,7 @@ const Actions = ({ item: order }: Props) => {
 			menu.splice(1, 0, {
 				label: 'Receipt',
 				icon: 'receipt',
-				action: () => navigation.navigate('Receipt', { orderID: order._id }),
+				action: () => navigation.navigate('Receipt', { orderID: order.uuid }),
 			});
 		}
 

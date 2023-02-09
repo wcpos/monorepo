@@ -14,8 +14,8 @@ import CustomerNote from './cells/note';
 import Status from './cells/status';
 import Total from './cells/total';
 import Footer from './footer';
-import useOrders from '../contexts/orders';
 import { t } from '../../../lib/translations';
+import useOrders from '../contexts/orders';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type UIColumn = import('../contexts/ui').UIColumn;

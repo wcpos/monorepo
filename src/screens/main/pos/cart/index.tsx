@@ -37,11 +37,11 @@ const OpenOrders = ({ isColumn = false }) => {
 				</ErrorBoundary>
 			</Box>
 			<ErrorBoundary>
-				<React.Suspense fallback={<Text>Loading Cart Tabs</Text>}>
-					<OrdersProvider initialQuery={initialQuery}>
+				<OrdersProvider initialQuery={initialQuery}>
+					<React.Suspense fallback={<Text>Loading Cart Tabs</Text>}>
 						<Tabs currentOrder={currentOrder} />
-					</OrdersProvider>
-				</React.Suspense>
+					</React.Suspense>
+				</OrdersProvider>
 			</ErrorBoundary>
 		</Box>
 	);

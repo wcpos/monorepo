@@ -6,6 +6,7 @@ import * as Linking from 'expo-linking';
 import get from 'lodash/get';
 import { useTheme } from 'styled-components/native';
 
+import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import AuthNavigator from './auth';

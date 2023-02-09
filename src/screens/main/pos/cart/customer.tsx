@@ -12,6 +12,7 @@ import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
 import EditForm from '../../components/edit-form';
+import { useCurrentOrder } from '../contexts/current-order/use-current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -24,6 +25,7 @@ interface CustomerProps {
  */
 const Customer = ({ order }: CustomerProps) => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
+	const { removeCustomer } = useCurrentOrder();
 	// const billing = useObservableState(order.billing$, order.billing);
 	// const shipping = useObservableState(order.shipping$, order.shipping);
 	const billing = order.billing;
@@ -58,13 +60,6 @@ const Customer = ({ order }: CustomerProps) => {
 	/**
 	 *
 	 */
-	const handleCustomerRemove = React.useCallback(async () => {
-		await order.patch({ customer_id: -1, billing: {}, shipping: {} });
-	}, [order]);
-
-	/**
-	 *
-	 */
 	const handleSaveCustomer = React.useCallback(() => {
 		log.debug('save');
 	}, []);
@@ -89,7 +84,7 @@ const Customer = ({ order }: CustomerProps) => {
 			<Text weight="bold">{t('Customer', { _tags: 'core' })}:</Text>
 			<Pill
 				removable
-				onRemove={handleCustomerRemove}
+				onRemove={removeCustomer}
 				onPress={() => {
 					setEditModalOpened(true);
 				}}

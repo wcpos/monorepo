@@ -37,10 +37,6 @@ export default class NewOrder {
 		this.shipping$ = new BehaviorSubject({});
 	}
 
-	isCartEmpty() {
-		return true;
-	}
-
 	toJSON() {
 		return {
 			status: 'pos-open',
@@ -53,70 +49,4 @@ export default class NewOrder {
 			date_created_gmt: new Date(Date.now()).toISOString().split('.')[0],
 		};
 	}
-
-	async save() {
-		return this.collection.insert(this.toJSON());
-	}
-
-	async addFeeLine(data) {
-		const newFee = await this.collection.database.collections.fee_lines
-			.insert(data)
-			.catch((err: any) => {
-				log.error(err);
-			});
-
-		this.fee_lines.push(newFee._id);
-		await this.save();
-	}
-
-	async addShippingLine(data) {
-		const newShipping = await this.collection.database.collections.shipping_lines
-			.insert(data)
-			.catch((err: any) => {
-				log.error(err);
-			});
-
-		this.shipping_lines.push(newShipping._id);
-		await this.save();
-	}
-
-	async addOrUpdateProduct(product) {
-		/** @TODO - need to get customer data */
-		return this.collection.insert({
-			status: 'pos-open',
-			line_items: [
-				{
-					product_id: product.id,
-					name: product.name,
-					quantity: 1,
-					price: parseFloat(product.price || ''),
-					sku: product.sku,
-					tax_class: product.tax_class,
-					meta_data: product.meta_data,
-				},
-			],
-		});
-	}
 }
-
-/**
- *
- */
-// const useNewOrder = ({ setCurrentOrder }) => {
-// 	const { storeDB } = useStore();
-// 	const orderCollection = storeDB.collections.orders;
-
-// 	// get default customer from the store settings
-
-// 	// I will need the customer provider here to get the default customer
-
-// 	// create a new order
-// 	const newOrder = React.useMemo(
-// 		() => new NewOrder({ collection: orderCollection, setCurrentOrder }),
-// 		[orderCollection, setCurrentOrder]
-// 	);
-
-// 	return newOrder;
-// };
-
-// export default useNewOrder;

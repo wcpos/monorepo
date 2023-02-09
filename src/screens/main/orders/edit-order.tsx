@@ -7,8 +7,7 @@ import EditModal from '../components/edit-form';
 import useOrder from '../contexts/orders';
 
 const EditOrder = () => {
-	const { data: orders } = useOrder();
-	const order = orders[0];
+	const { data: order } = useOrder();
 
 	/**
 	 *  filter schema for edit form

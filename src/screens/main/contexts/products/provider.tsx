@@ -7,6 +7,7 @@ import _set from 'lodash/set';
 import { ObservableResource, useObservableState } from 'observable-hooks';
 import { switchMap, map } from 'rxjs/operators';
 
+// import products from '@wcpos/database/src/collections/products';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
@@ -22,6 +23,7 @@ export const ProductsContext = React.createContext<{
 	setQuery: SetQuery;
 	resource: ObservableResource<ProductDocument[]>;
 	sync: () => void;
+	clear: () => Promise<any>;
 }>(null);
 
 interface ProductsProviderProps {
@@ -51,6 +53,25 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 			// this is async, should we wait?
 			replicationState.cancel();
 		};
+	}, [replicationState]);
+
+	/**
+	 * Clear all docs
+	 * @TODO - I thought it would be better to use the collection.remove() method
+	 * but it seems to make the app hang. Need to investigate later.
+	 * // await collection.remove();
+	 * // return storeDB?.addCollections({ products });
+	 */
+	const clear = React.useCallback(async () => {
+		const query = collection.find();
+		return query.remove();
+	}, [collection]);
+
+	/**
+	 * Sync
+	 */
+	const sync = React.useCallback(() => {
+		replicationState.reSync();
 	}, [replicationState]);
 
 	/**
@@ -111,12 +132,9 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 		);
 
 		return {
-			query$,
-			setQuery,
 			resource: new ObservableResource(resource$),
-			replicationState,
 		};
-	}, [collection, query$, replicationState, setQuery]);
+	}, [collection, query$]);
 
 	useWhyDidYouUpdate('ProductsProvider', {
 		value,
@@ -131,7 +149,11 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 		// sync,
 	});
 
-	return <ProductsContext.Provider value={value}>{children}</ProductsContext.Provider>;
+	return (
+		<ProductsContext.Provider value={{ ...value, sync, clear, setQuery, query$ }}>
+			{children}
+		</ProductsContext.Provider>
+	);
 };
 
 export default ProductsProvider;

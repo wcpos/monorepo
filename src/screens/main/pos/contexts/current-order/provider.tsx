@@ -39,15 +39,14 @@ const CurrentOrderProvider = ({ children }: CurrentOrderContextProviderProps) =>
 	const currentOrder$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
-				switchMap(([uuid]) => collection.findOneFix(uuid).$),
+				switchMap(([uuid]) => collection.findOneFix(uuid).exec()),
 				map((order) => (order ? order : new NewOrder(collection)))
 			),
 		[orderID]
 	);
 
 	/**
-	 * This returns a new ObservableResource every time the orderID changes
-	 * kind of defeats the purpose of using ObservableResource
+	 *
 	 */
 	const value = React.useMemo(() => {
 		return {

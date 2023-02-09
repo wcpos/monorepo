@@ -12,12 +12,6 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  * Helpers
  */
-const createNewOrder = async (ordersCollection, data) =>
-	ordersCollection.insert({
-		status: 'pos-open',
-		...data,
-	});
-
 const addItem = async (currentOrder, $push) =>
 	currentOrder.update({
 		$push,
@@ -47,6 +41,9 @@ export const useCurrentOrder = () => {
 	const currentOrder = useObservableSuspense(currentOrderResource);
 	const navigation = useNavigation();
 
+	/**
+	 *
+	 */
 	const addProduct = React.useCallback(
 		async (product: ProductDocument) => {
 			const newLineItem = {
@@ -69,12 +66,18 @@ export const useCurrentOrder = () => {
 				}
 				return addItem(currentOrder, { line_items: newLineItem });
 			}
-			const newOrder = await createNewOrder(ordersCollection, { line_items: [newLineItem] });
+			const newOrder = await ordersCollection.insert({
+				...currentOrder.toJSON(),
+				line_items: [newLineItem],
+			});
 			navigation.setParams({ orderID: newOrder?.uuid });
 		},
 		[currentOrder, navigation, ordersCollection]
 	);
 
+	/**
+	 *
+	 */
 	const addVariation = React.useCallback(
 		async (variation, parent, metaData) => {
 			const newLineItem = {
@@ -97,12 +100,18 @@ export const useCurrentOrder = () => {
 				}
 				return addItem(currentOrder, { line_items: newLineItem });
 			}
-			const newOrder = await createNewOrder(ordersCollection, { line_items: [newLineItem] });
+			const newOrder = await ordersCollection.insert({
+				...currentOrder.toJSON(),
+				line_items: [newLineItem],
+			});
 			navigation.setParams({ orderID: newOrder?.uuid });
 		},
 		[currentOrder, navigation, ordersCollection]
 	);
 
+	/**
+	 *
+	 */
 	const removeItem = React.useCallback(
 		async (item) => {
 			const collection = item.collection.name;
@@ -116,10 +125,42 @@ export const useCurrentOrder = () => {
 		[currentOrder]
 	);
 
+	/**
+	 *
+	 */
+	const removeCustomer = React.useCallback(async () => {
+		if (isRxDocument(currentOrder)) {
+			return currentOrder.patch({
+				customer_id: -1,
+				billing: {},
+				shipping: {},
+			});
+		}
+		currentOrder.customer_id$.next(-1);
+	}, [currentOrder]);
+
+	/**
+	 *
+	 */
+	const addCustomer = React.useCallback(
+		async (data) => {
+			if (isRxDocument(currentOrder)) {
+				return currentOrder.patch(data);
+			}
+			currentOrder.customer_id = data.customer_id;
+			currentOrder.billing = data.billing;
+			currentOrder.shipping = data.shipping;
+			currentOrder.customer_id$.next(data.customer_id);
+		},
+		[currentOrder]
+	);
+
 	return {
 		currentOrder,
 		addProduct,
 		addVariation,
 		removeItem,
+		removeCustomer,
+		addCustomer,
 	};
 };

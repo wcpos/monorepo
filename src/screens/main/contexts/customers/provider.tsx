@@ -21,6 +21,7 @@ export const CustomersContext = React.createContext<{
 	setQuery: SetQuery;
 	resource: ObservableResource<CustomerDocument[]>;
 	sync: () => void;
+	clear: () => Promise<any>;
 }>(null);
 
 interface CustomersProviderProps {
@@ -45,6 +46,21 @@ const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) =
 			// this is async, should we wait?
 			replicationState.cancel();
 		};
+	}, [replicationState]);
+
+	/**
+	 * Clear
+	 */
+	const clear = React.useCallback(async () => {
+		const query = collection.find();
+		return query.remove();
+	}, [collection]);
+
+	/**
+	 * Sync
+	 */
+	const sync = React.useCallback(() => {
+		replicationState.reSync();
 	}, [replicationState]);
 
 	/**
@@ -90,14 +106,15 @@ const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) =
 		);
 
 		return {
-			query$,
-			setQuery,
 			resource: new ObservableResource(resource$),
-			replicationState,
 		};
-	}, [query$, setQuery, replicationState, collection]);
+	}, [query$, collection]);
 
-	return <CustomersContext.Provider value={value}>{children}</CustomersContext.Provider>;
+	return (
+		<CustomersContext.Provider value={{ ...value, sync, clear, query$, setQuery }}>
+			{children}
+		</CustomersContext.Provider>
+	);
 };
 
 export default CustomersProvider;
