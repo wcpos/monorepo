@@ -8,8 +8,8 @@ import { useTheme } from 'styled-components/native';
 
 import log from '@wcpos/utils/src/logger';
 
-import AuthNavigator, { authStackRoutes } from './auth';
-import MainNavigator, { mainStackRoutes } from './main';
+import AuthNavigator from './auth';
+import MainNavigator from './main';
 import useStore from '../contexts/store';
 import { URL } from '../lib/url';
 
@@ -22,8 +22,6 @@ export type RootStackParamList = {
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
-const prefix = Linking.createURL('/');
-const prefixes = ['wcpos://', prefix];
 
 /**
  *
@@ -32,33 +30,74 @@ const RootNavigator = ({ initialProps }) => {
 	const { storeDB } = useStore();
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
-	log.silly(prefixes);
 
 	/**
 	 * Pathname eg: 'pos' for default web app
 	 */
-	let pathname;
-
+	let pathname = '/';
 	if (homepage) {
 		const parsedUrl = new URL(homepage);
-		prefixes.push(parsedUrl.host);
 		pathname = parsedUrl.pathname;
 	}
+	const baseURL = Linking.createURL(pathname);
 
 	const linking = {
-		prefixes,
+		prefixes: ['wcpos://', baseURL],
 		config: {
 			screens: {
-				AuthStack: authStackRoutes,
-				MainStack: mainStackRoutes,
+				AuthStack: {
+					path: pathname + 'connect',
+					screens: {
+						Connect: '',
+						Login: 'login/:siteID',
+					},
+				},
+				MainStack: {
+					path: pathname,
+					screens: {
+						MainDrawer: {
+							// path: pathname,
+							screens: {
+								POSStack: {
+									path: 'cart',
+									screens: {
+										POS: ':orderID?',
+										Checkout: ':orderID/checkout',
+										Receipt: 'receipt/:orderID',
+									},
+								},
+								ProductsStack: {
+									path: 'products',
+									screens: {
+										Products: '',
+										EditProduct: 'edit/:productID',
+									},
+								},
+								OrdersStack: {
+									path: 'orders',
+									screens: {
+										Orders: '',
+										EditOrder: 'edit/:orderID',
+										Receipt: 'receipt/:orderID',
+									},
+								},
+								CustomersStack: {
+									path: 'customers',
+									screens: {
+										Customers: '',
+										AddCustomer: 'add',
+										EditCustomer: 'edit/:customerID',
+									},
+								},
+							},
+						},
+						Settings: 'settings',
+						Login: 'login',
+					},
+				},
 			},
 		},
 	} as LinkingOptions<RootStackParamList>;
-
-	// add pathname to linking config for web, eg: 'pos' slug
-	if (pathname) {
-		linking.config.screens.path = pathname;
-	}
 
 	return (
 		<NavigationContainer

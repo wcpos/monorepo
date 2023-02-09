@@ -26,21 +26,6 @@ export type POSStackParamList = {
 
 const Stack = createStackNavigator<POSStackParamList>();
 
-export const posStackRoutes = {
-	path: 'cart',
-	screens: {
-		POS: {
-			path: ':orderID?',
-		},
-		Checkout: {
-			path: ':orderID/checkout',
-		},
-		Receipt: {
-			path: 'receipt/:orderID',
-		},
-	},
-};
-
 /**
  *
  */

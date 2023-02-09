@@ -12,18 +12,6 @@ export type AuthStackParamList = {
 
 const Stack = createStackNavigator<AuthStackParamList>();
 
-export const authStackRoutes = {
-	path: 'connect',
-	screens: {
-		Connect: {
-			path: '',
-		},
-		Login: {
-			path: 'login/:siteID',
-		},
-	},
-};
-
 /**
  *
  */

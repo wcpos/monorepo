@@ -17,18 +17,6 @@ export type ProductsStackParamList = {
 
 const Stack = createStackNavigator<ProductsStackParamList>();
 
-export const productsStackRoutes = {
-	path: 'products',
-	screens: {
-		Products: {
-			path: '',
-		},
-		EditProduct: {
-			path: 'edit/:productID',
-		},
-	},
-};
-
 /**
  *
  */

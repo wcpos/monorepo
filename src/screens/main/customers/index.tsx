@@ -19,21 +19,6 @@ export type CustomersStackParamList = {
 
 const Stack = createStackNavigator<CustomersStackParamList>();
 
-export const customersStackRoutes = {
-	path: 'customers',
-	screens: {
-		Customers: {
-			path: '',
-		},
-		AddCustomer: {
-			path: 'add',
-		},
-		EditCustomer: {
-			path: 'edit/:customerID',
-		},
-	},
-};
-
 /**
  *
  */

@@ -12,11 +12,11 @@ import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
 import { UIProvider } from './contexts/ui';
-import CustomersNavigator, { customersStackRoutes } from './customers';
+import CustomersNavigator from './customers';
 import Login from './login';
-import OrdersNavigator, { ordersStackRoutes } from './orders';
-import POSNavigator, { posStackRoutes } from './pos';
-import ProductsNavigator, { productsStackRoutes } from './products';
+import OrdersNavigator from './orders';
+import POSNavigator from './pos';
+import ProductsNavigator from './products';
 import Settings from './settings';
 import useAuth from '../../contexts/auth';
 import { t } from '../../lib/translations';
@@ -38,26 +38,6 @@ export type DrawerParamList = {
 };
 
 const Drawer = createDrawerNavigator<DrawerParamList>();
-
-export const mainStackRoutes = {
-	screens: {
-		MainDrawer: {
-			path: '',
-			screens: {
-				POSStack: posStackRoutes,
-				ProductsStack: productsStackRoutes,
-				OrdersStack: ordersStackRoutes,
-				CustomersStack: customersStackRoutes,
-			},
-		},
-		Settings: {
-			path: 'settings',
-		},
-		Login: {
-			path: 'login',
-		},
-	},
-};
 
 /**
  *

@@ -19,21 +19,6 @@ export type OrdersStackParamList = {
 
 const Stack = createStackNavigator<OrdersStackParamList>();
 
-export const ordersStackRoutes = {
-	path: 'orders',
-	screens: {
-		Orders: {
-			path: '',
-		},
-		EditOrder: {
-			path: 'edit/:orderID',
-		},
-		Receipt: {
-			path: 'receipt/:orderID',
-		},
-	},
-};
-
 /**
  *
  */
