@@ -1,13 +1,14 @@
+import * as React from 'react';
+
 import Logo from '@wcpos/components/src/logo';
 import log from '@wcpos/utils/src/logger';
-import * as React from 'react';
 
 import * as Styled from './styles';
 
 /**
  *
  */
-export const Splash = () => {
+const Splash = () => {
 	log.debug('splash render');
 
 	return (
@@ -16,3 +17,5 @@ export const Splash = () => {
 		</Styled.Container>
 	);
 };
+
+export default Splash;

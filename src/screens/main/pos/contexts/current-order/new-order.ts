@@ -25,8 +25,9 @@ export default class NewOrder {
 	public line_items = [];
 	public fee_lines = [];
 	public shipping_lines = [];
+	public currency_symbol: string;
 
-	constructor(collection: OrderCollection) {
+	constructor(collection: OrderCollection, currency_symbol: string) {
 		this.collection = collection;
 
 		this.customer_id = 0;
@@ -35,18 +36,30 @@ export default class NewOrder {
 		this.billing$ = new BehaviorSubject({});
 		this.shipping = {};
 		this.shipping$ = new BehaviorSubject({});
+		this.currency_symbol = currency_symbol;
 	}
 
 	toJSON() {
+		const {
+			customer_id,
+			billing,
+			shipping,
+			line_items,
+			fee_lines,
+			shipping_lines,
+			currency_symbol,
+		} = this;
+
 		return {
 			status: 'pos-open',
-			customer_id: this.customer_id,
-			billing: this.billing,
-			shipping: this.shipping,
-			line_items: this.line_items,
-			fee_lines: this.fee_lines,
-			shipping_lines: this.shipping_lines,
 			date_created_gmt: new Date(Date.now()).toISOString().split('.')[0],
+			customer_id,
+			billing,
+			shipping,
+			line_items,
+			fee_lines,
+			shipping_lines,
+			currency_symbol,
 		};
 	}
 }

@@ -155,6 +155,40 @@ export const useCurrentOrder = () => {
 		[currentOrder]
 	);
 
+	/**
+	 *
+	 */
+	const addFee = React.useCallback(
+		async (data) => {
+			if (isRxDocument(currentOrder)) {
+				return addItem(currentOrder, { fee_lines: data });
+			}
+			const newOrder = await ordersCollection.insert({
+				...currentOrder.toJSON(),
+				fee_lines: [data],
+			});
+			navigation.setParams({ orderID: newOrder?.uuid });
+		},
+		[currentOrder, navigation, ordersCollection]
+	);
+
+	/**
+	 *
+	 */
+	const addShipping = React.useCallback(
+		async (data) => {
+			if (isRxDocument(currentOrder)) {
+				return addItem(currentOrder, { shipping_lines: data });
+			}
+			const newOrder = await ordersCollection.insert({
+				...currentOrder.toJSON(),
+				shipping_lines: [data],
+			});
+			navigation.setParams({ orderID: newOrder?.uuid });
+		},
+		[currentOrder, navigation, ordersCollection]
+	);
+
 	return {
 		currentOrder,
 		addProduct,
@@ -162,5 +196,7 @@ export const useCurrentOrder = () => {
 		removeItem,
 		removeCustomer,
 		addCustomer,
+		addFee,
+		addShipping,
 	};
 };

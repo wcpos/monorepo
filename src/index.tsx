@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { Text } from 'react-native';
 
 import { SafeAreaProviderCompat } from '@react-navigation/elements';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -16,6 +15,7 @@ import { LanguageProvider } from './contexts/language';
 import { StoreProvider } from './contexts/store';
 import RootError from './root-error';
 import RootNavigator from './screens';
+import Splash from './screens/splash';
 
 // enable freeze
 enableFreeze(true);
@@ -39,19 +39,19 @@ const App = () => {
 
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
-			<React.Suspense fallback={<Text>loading app...</Text>}>
+			<React.Suspense fallback={<Splash />}>
 				<GestureHandlerRootView style={{ flex: 1 }}>
 					<AuthProvider initialProps={initialProps}>
-						<React.Suspense fallback={<Text>loading user...</Text>}>
+						<React.Suspense fallback={<Splash />}>
 							<LanguageProvider>
-								<React.Suspense fallback={<Text>loading language...</Text>}>
+								<React.Suspense fallback={<Splash />}>
 									<StoreProvider>
 										<ThemeProvider theme={theme}>
 											<ErrorBoundary>
 												<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
 													<SnackbarProvider>
 														<Portal.Provider>
-															<React.Suspense fallback={<Text>loading storeDB...</Text>}>
+															<React.Suspense fallback={<Splash />}>
 																<RootNavigator initialProps={initialProps} />
 															</React.Suspense>
 															<Portal.Manager />

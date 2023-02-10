@@ -7,6 +7,7 @@ import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Icon from '@wcpos/components/src/icon';
+import Portal from '@wcpos/components/src/portal';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 
 import DrawerContent from './components/drawer-content';
@@ -50,94 +51,98 @@ const MainNavigator = () => {
 
 	return (
 		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
-			<Stack.Navigator screenOptions={{ headerShown: false }}>
-				<Stack.Screen name="MainDrawer">
-					{() => (
-						<UIProvider>
-							<Drawer.Navigator
-								initialRouteName="POSStack"
-								screenOptions={{
-									header: (props) => <Header {...props} />,
-									drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
-									drawerStyle: {
-										backgroundColor: theme.colors.headerBackground,
-										width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
-										borderRightColor: 'rgba(0, 0, 0, 0.2)',
-										// borderRightWidth: 0,
-									},
-									sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
-								}}
-								drawerContent={(props) => <DrawerContent {...props} />}
-							>
-								<Drawer.Screen
-									name="POSStack"
-									component={POSNavigator}
-									options={{
-										title: t('POS', { _tags: 'core' }),
-										drawerLabel: t('POS', { _tags: 'core' }),
-										drawerIcon: ({ focused }) => (
-											<Icon
-												name="cashRegister"
-												type={focused ? 'primary' : 'inverse'}
-												size="large"
-											/>
-										),
-									}}
-								/>
-								<Drawer.Screen
-									name="ProductsStack"
-									component={ProductsNavigator}
-									options={{
-										title: t('Products', { _tags: 'core' }),
-										drawerLabel: t('Products', { _tags: 'core' }),
-										drawerIcon: ({ focused }) => (
-											<Icon name="gifts" type={focused ? 'primary' : 'inverse'} size="large" />
-										),
-									}}
-								/>
-								<Drawer.Screen
-									name="OrdersStack"
-									component={OrdersNavigator}
-									options={{
-										title: t('Orders', { _tags: 'core' }),
-										drawerLabel: t('Orders', { _tags: 'core' }),
-										drawerIcon: ({ focused }) => (
-											<Icon name="receipt" type={focused ? 'primary' : 'inverse'} size="large" />
-										),
-									}}
-								/>
-								<Drawer.Screen
-									name="CustomersStack"
-									component={CustomersNavigator}
-									options={{
-										title: t('Customers', { _tags: 'core' }),
-										drawerLabel: t('Customers', { _tags: 'core' }),
-										drawerIcon: ({ focused }) => (
-											<Icon name="users" type={focused ? 'primary' : 'inverse'} size="large" />
-										),
-									}}
-								/>
-							</Drawer.Navigator>
-						</UIProvider>
-					)}
-				</Stack.Screen>
-				<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-					<Stack.Screen name="Settings">
+			{/** @NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
+			<Portal.Provider>
+				<Stack.Navigator screenOptions={{ headerShown: false }}>
+					<Stack.Screen name="MainDrawer">
 						{() => (
-							<ModalLayout title={t('Settings', { _tags: 'core' })}>
-								<Settings />
-							</ModalLayout>
+							<UIProvider>
+								<Drawer.Navigator
+									initialRouteName="POSStack"
+									screenOptions={{
+										header: (props) => <Header {...props} />,
+										drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
+										drawerStyle: {
+											backgroundColor: theme.colors.headerBackground,
+											width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
+											borderRightColor: 'rgba(0, 0, 0, 0.2)',
+											// borderRightWidth: 0,
+										},
+										sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
+									}}
+									drawerContent={(props) => <DrawerContent {...props} />}
+								>
+									<Drawer.Screen
+										name="POSStack"
+										component={POSNavigator}
+										options={{
+											title: t('POS', { _tags: 'core' }),
+											drawerLabel: t('POS', { _tags: 'core' }),
+											drawerIcon: ({ focused }) => (
+												<Icon
+													name="cashRegister"
+													type={focused ? 'primary' : 'inverse'}
+													size="large"
+												/>
+											),
+										}}
+									/>
+									<Drawer.Screen
+										name="ProductsStack"
+										component={ProductsNavigator}
+										options={{
+											title: t('Products', { _tags: 'core' }),
+											drawerLabel: t('Products', { _tags: 'core' }),
+											drawerIcon: ({ focused }) => (
+												<Icon name="gifts" type={focused ? 'primary' : 'inverse'} size="large" />
+											),
+										}}
+									/>
+									<Drawer.Screen
+										name="OrdersStack"
+										component={OrdersNavigator}
+										options={{
+											title: t('Orders', { _tags: 'core' }),
+											drawerLabel: t('Orders', { _tags: 'core' }),
+											drawerIcon: ({ focused }) => (
+												<Icon name="receipt" type={focused ? 'primary' : 'inverse'} size="large" />
+											),
+										}}
+									/>
+									<Drawer.Screen
+										name="CustomersStack"
+										component={CustomersNavigator}
+										options={{
+											title: t('Customers', { _tags: 'core' }),
+											drawerLabel: t('Customers', { _tags: 'core' }),
+											drawerIcon: ({ focused }) => (
+												<Icon name="users" type={focused ? 'primary' : 'inverse'} size="large" />
+											),
+										}}
+									/>
+								</Drawer.Navigator>
+							</UIProvider>
 						)}
 					</Stack.Screen>
-					<Stack.Screen name="Login">
-						{() => (
-							<ModalLayout title={t('Login', { _tags: 'core' })}>
-								<Login />
-							</ModalLayout>
-						)}
-					</Stack.Screen>
-				</Stack.Group>
-			</Stack.Navigator>
+					<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
+						<Stack.Screen name="Settings">
+							{() => (
+								<ModalLayout title={t('Settings', { _tags: 'core' })}>
+									<Settings />
+								</ModalLayout>
+							)}
+						</Stack.Screen>
+						<Stack.Screen name="Login">
+							{() => (
+								<ModalLayout title={t('Login', { _tags: 'core' })}>
+									<Login />
+								</ModalLayout>
+							)}
+						</Stack.Screen>
+					</Stack.Group>
+				</Stack.Navigator>
+				<Portal.Manager />
+			</Portal.Provider>
 		</OnlineStatusProvider>
 	);
 };

@@ -11,6 +11,7 @@ export const useOrders = () => {
 	}
 
 	const data = useObservableSuspense(context.resource);
+	// const deferredData = React.useDeferredValue(data);
 
 	return { ...context, data };
 };

@@ -10,7 +10,8 @@ import { OrdersProvider } from '../../contexts/orders';
 import useCurrentOrder from '../contexts/current-order';
 
 const OpenOrders = ({ isColumn = false }) => {
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrder: order } = useCurrentOrder();
+	const currentOrder = React.useDeferredValue(order);
 
 	/**
 	 *

@@ -6,6 +6,7 @@ import { ObservableResource, useObservable } from 'observable-hooks';
 import { map, tap, switchMap } from 'rxjs/operators';
 
 import NewOrder from './new-order';
+import useAuth from '../../../../../contexts/auth';
 import useStore from '../../../../../contexts/store';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -26,8 +27,11 @@ interface CurrentOrderContextProviderProps {
  * Providers the active order by uuid
  * If no orderID is provided, active order will be a new order (mock Order class)
  * Current order should be set by route only
+ *
+ * @TODO - need a way to currency symbol from store document
  */
 const CurrentOrderProvider = ({ children }: CurrentOrderContextProviderProps) => {
+	const { store } = useAuth();
 	const { storeDB } = useStore();
 	const collection = storeDB?.collections.orders;
 	const route = useRoute();
@@ -44,7 +48,7 @@ const CurrentOrderProvider = ({ children }: CurrentOrderContextProviderProps) =>
 				 * This causes problems when trying to update the currentOrder
 				 */
 				switchMap(([uuid]) => collection.findOneFix(uuid).$),
-				map((order) => (order ? order : new NewOrder(collection)))
+				map((order) => (order ? order : new NewOrder(collection, store.currency)))
 			),
 		[orderID]
 	);

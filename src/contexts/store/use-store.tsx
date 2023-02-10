@@ -11,6 +11,8 @@ export const useStore = () => {
 	}
 
 	const storeDB = useObservableSuspense(context.storeDBResource);
+	// const deferredStoreDB = React.useDeferredValue(storeDB);
 
+	// return { storeDB: deferredStoreDB };
 	return { storeDB };
 };

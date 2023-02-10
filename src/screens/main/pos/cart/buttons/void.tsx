@@ -58,7 +58,12 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 			title={t('Void', { _tags: 'core' })}
 			onPress={handleRemove}
 			type="critical"
-			style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+			style={{
+				flex: 1,
+				borderTopLeftRadius: 0,
+				borderTopRightRadius: 0,
+				borderBottomRightRadius: 0,
+			}}
 		/>
 	);
 };
