@@ -17,10 +17,6 @@ export const Price = ({ item }: Props) => {
 	const price = useObservableState(item.price$, item.price);
 	const { format } = useCurrencyFormat({ withSymbol: false });
 
-	const handleChange = async (newValue: string): Promise<void> => {
-		item.atomicPatch({ price: Number(newValue) });
-	};
-
 	return (
 		<Popover withinPortal>
 			<Popover.Target>
@@ -29,7 +25,12 @@ export const Price = ({ item }: Props) => {
 				</Box>
 			</Popover.Target>
 			<Popover.Content>
-				<Numpad initialValue={String(price)} onChange={handleChange} />
+				<Numpad
+					initialValue={String(price)}
+					onChange={(newValue: string) => {
+						item.patch({ price: Number(newValue) });
+					}}
+				/>
 			</Popover.Content>
 		</Popover>
 	);

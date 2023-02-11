@@ -14,10 +14,6 @@ interface Props {
 export const Quantity = ({ item }: Props) => {
 	const quantity = useObservableState(item.quantity$, item.quantity);
 
-	const handleQuantityChange = async (newValue: string): Promise<void> => {
-		item.atomicPatch({ quantity: Number(newValue) });
-	};
-
 	return (
 		<Popover withinPortal>
 			<Popover.Target>
@@ -26,7 +22,12 @@ export const Quantity = ({ item }: Props) => {
 				</Box>
 			</Popover.Target>
 			<Popover.Content>
-				<Numpad initialValue={String(quantity)} onChange={handleQuantityChange} />
+				<Numpad
+					initialValue={String(quantity)}
+					onChange={(newValue: string) => {
+						item.patch({ quantity: Number(newValue) });
+					}}
+				/>
 			</Popover.Content>
 		</Popover>
 	);

@@ -1,8 +1,12 @@
 import * as React from 'react';
+import { TextInput } from 'react-native';
+
+import { useObservableState } from 'observable-hooks';
 
 import Button from '@wcpos/components/src/button';
 import Modal from '@wcpos/components/src/modal';
-import TextInput from '@wcpos/components/src/textinput';
+import TextArea from '@wcpos/components/src/textarea';
+import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
 
 import { t } from '../../../../../lib/translations';
 
@@ -15,12 +19,13 @@ interface AddNoteButtonProps {
  */
 const AddNoteButton = ({ order }: AddNoteButtonProps) => {
 	const [opened, setOpened] = React.useState(false);
-	const [note, setNote] = React.useState('');
+	const note = useObservableState(order.customer_note$, order.customer_note);
+	const textareaRef = React.useRef<TextInput>(null);
 
-	const handleSaveNote = React.useCallback(
-		() => order.patch({ customer_note: note }),
-		[note, order]
-	);
+	const handleSaveNote = React.useCallback(() => {
+		order.patch({ customer_note: textareaRef.current?.value });
+		setOpened(false);
+	}, [order, textareaRef]);
 
 	return (
 		<>
@@ -39,7 +44,7 @@ const AddNoteButton = ({ order }: AddNoteButtonProps) => {
 					setOpened(false);
 				}}
 				title={t('Order Note', { _tags: 'core' })}
-				primaryAction={{ label: t('Save', { _tags: 'core' }), action: handleSaveNote }}
+				primaryAction={{ label: t('Add Note', { _tags: 'core' }), action: handleSaveNote }}
 				secondaryActions={[
 					{
 						label: t('Cancel', { _tags: 'core' }),
@@ -49,7 +54,7 @@ const AddNoteButton = ({ order }: AddNoteButtonProps) => {
 					},
 				]}
 			>
-				<TextInput label={t('Order Note', { _tags: 'core' })} value={note} onChange={setNote} />
+				<TextArea ref={textareaRef} value={note} />
 			</Modal>
 		</>
 	);
