@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.61",
+	"version": "1.0.62",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -22,7 +22,7 @@
 		"uuid": "3.4.0"
 	},
 	"dependencies": {
-		"expo-sqlite": "~11.1.0",
+		"expo-sqlite": "~11.1.1",
 		"fast-text-encoding": "^1.0.6",
 		"observable-hooks": "4.2.1",
 		"react": "18.2.0",
