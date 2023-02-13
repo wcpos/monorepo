@@ -13,9 +13,26 @@ interface Props {
 
 export const Quantity = ({ item }: Props) => {
 	const quantity = useObservableState(item.quantity$, item.quantity);
+	const quantityRef = React.useRef(String(quantity));
 
+	/**
+	 *
+	 */
+	const handleUpdate = React.useCallback(() => {
+		item.patch({ quantity: Number(quantityRef.current) });
+	}, [item]);
+
+	/**
+	 *
+	 */
 	return (
-		<Popover withinPortal>
+		<Popover
+			withinPortal
+			primaryAction={{
+				label: 'Done',
+				action: handleUpdate,
+			}}
+		>
 			<Popover.Target>
 				<Box border paddingY="xSmall" paddingX="small" rounding="large">
 					<Text>{String(quantity)}</Text>
@@ -25,7 +42,7 @@ export const Quantity = ({ item }: Props) => {
 				<Numpad
 					initialValue={String(quantity)}
 					onChange={(newValue: string) => {
-						item.patch({ quantity: Number(newValue) });
+						quantityRef.current = newValue;
 					}}
 				/>
 			</Popover.Content>

@@ -72,4 +72,5 @@ const CartTabs = ({ currentOrder }: CartTabsProps) => {
 	);
 };
 
-export default CartTabs;
+// export default CartTabs;
+export default React.memo(CartTabs);

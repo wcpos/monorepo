@@ -16,9 +16,26 @@ interface Props {
 export const FeeAndShippingPrice = ({ item }: Props) => {
 	const price = useObservableState(item.total$, item.total);
 	const { format } = useCurrencyFormat({ withSymbol: false });
+	const priceRef = React.useRef(String(price));
 
+	/**
+	 *
+	 */
+	const handleUpdate = React.useCallback(() => {
+		item.patch({ total: priceRef.current });
+	}, [item]);
+
+	/**
+	 *
+	 */
 	return (
-		<Popover>
+		<Popover
+			withinPortal
+			primaryAction={{
+				label: 'Done',
+				action: handleUpdate,
+			}}
+		>
 			<Popover.Target>
 				<Box border paddingY="xSmall" paddingX="small" rounding="large">
 					<Text>{format(price)}</Text>
@@ -28,7 +45,7 @@ export const FeeAndShippingPrice = ({ item }: Props) => {
 				<Numpad
 					initialValue={String(price)}
 					onChange={(newValue: string) => {
-						item.patch({ total: newValue });
+						priceRef.current = newValue;
 					}}
 				/>
 			</Popover.Content>

@@ -16,6 +16,7 @@ import {
 	getSelectedFromAttributes,
 	ProductAttribute,
 } from './variations.helpers';
+import { t } from '../../../../../lib/translations';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
@@ -25,22 +26,47 @@ interface Props {
 	variations: ProductVariationDocument[];
 	attributes: ProductAttribute[];
 	addToCart: (variation: ProductVariationDocument, metaData: any) => void;
+	setPrimaryAction: (action: { label: string; action: () => void }) => void;
 }
 
 /**
- * @TODO- this is kind of messy, needs a refactor
+ * @TODO: this is kind of messy, needs a refactor
+ * - it may be better to search via the VariationsProvider
  */
-export const Variations = ({ variations, attributes, addToCart }: Props) => {
+export const Variations = ({ variations, attributes, addToCart, setPrimaryAction }: Props) => {
 	const [state, setState] = React.useState(() => init(attributes));
 	const { format } = useCurrencyFormat();
 
 	/**
-	 * Find the variation that matches the current state
+	 *
 	 */
-	const selectedVariation = React.useMemo(
-		() => find(variations, { id: state.selectedVariationId }),
-		[variations, state.selectedVariationId]
-	) as ProductVariationDocument | undefined;
+	React.useEffect(() => {
+		if (state.selectedVariationId) {
+			const selectedVariation = find(variations, { id: state.selectedVariationId });
+			const metaData = getSelectedFromAttributes(state.attributes).map((attribute) => ({
+				attr_id: attribute.id,
+				display_key: attribute.name,
+				display_value: attribute.value,
+			}));
+
+			setPrimaryAction({
+				label: t('Add to cart: {price}', {
+					_tags: 'core',
+					price: format(selectedVariation?.price || 0),
+				}),
+				action: () => {
+					addToCart(selectedVariation, metaData);
+				},
+			});
+		}
+	}, [
+		addToCart,
+		format,
+		setPrimaryAction,
+		state.attributes,
+		state.selectedVariationId,
+		variations,
+	]);
 
 	/**
 	 * Expand possible variations to account for 'any' options
@@ -61,20 +87,6 @@ export const Variations = ({ variations, attributes, addToCart }: Props) => {
 	);
 
 	/**
-	 * Add selected variation to cart
-	 */
-	const handleAddToCart = React.useCallback(async () => {
-		if (selectedVariation) {
-			const metaData = getSelectedFromAttributes(state.attributes).map((attribute) => ({
-				attr_id: attribute.id,
-				display_key: attribute.name,
-				display_value: attribute.value,
-			}));
-			addToCart(selectedVariation, metaData);
-		}
-	}, [addToCart, selectedVariation, state.attributes]);
-
-	/**
 	 * Render variation options
 	 */
 	return (
@@ -90,7 +102,7 @@ export const Variations = ({ variations, attributes, addToCart }: Props) => {
 								{attribute.options?.map((option) => (
 									<Button
 										key={option.value}
-										type={option.selected ? 'success' : 'primary'}
+										type={option.selected ? 'success' : 'secondary'}
 										disabled={option.disabled}
 										onPress={() => {
 											handleSelect(attribute, option);
@@ -105,7 +117,7 @@ export const Variations = ({ variations, attributes, addToCart }: Props) => {
 								value={selected}
 								options={attribute.options}
 								onChange={(option) => {
-									handleSelect(attribute, option);
+									handleSelect(attribute, { label: option, value: option });
 								}}
 								placeholder="Select an option"
 							/>
@@ -113,12 +125,6 @@ export const Variations = ({ variations, attributes, addToCart }: Props) => {
 					</Box>
 				);
 			})}
-			{selectedVariation && (
-				<Button
-					title={`Add to Cart: ${format(selectedVariation.price || 0)}`}
-					onPress={handleAddToCart}
-				/>
-			)}
 		</Box>
 	);
 };

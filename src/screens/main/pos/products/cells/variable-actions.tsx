@@ -15,40 +15,53 @@ interface Props {
 }
 
 /**
- * @NOTE - popover is in portal outside of VariationsProvider
+ * @NOTE popover is in portal outside of VariationsProvider
  * An inline popover cannot overflow the parent FlashList
  * I could wrap VariationsSelect in VariationsProvider, but that seems messy
  */
 export const VariableActions = ({ item: product }: Props) => {
-	const [open, setOpen] = React.useState(false);
+	const [opened, setOpened] = React.useState(false);
 	const { data: variations } = useVariations();
 	const { addVariation } = useCurrentOrder();
 	const attributes = useObservableState(product.attributes$, product.attributes);
+	const [primaryAction, setPrimaryAction] = React.useState(undefined);
 
+	/**
+	 *
+	 */
+	const addToCart = React.useCallback(
+		(variation, metaData) => {
+			addVariation(variation, product, metaData);
+			setOpened(false);
+		},
+		[addVariation, product]
+	);
+
+	/**
+	 *
+	 */
 	return (
 		<Popover
-			opened={open}
-			onClose={() => {
-				setOpen(false);
-			}}
+			opened={opened}
+			onClose={() => setOpened(false)}
 			withinPortal
 			placement="right"
+			primaryAction={primaryAction}
 		>
 			<Popover.Target>
 				<Icon
 					name="circleChevronRight"
 					size="xLarge"
 					type="success"
-					onPress={() => {
-						setOpen(true);
-					}}
+					onPress={() => setOpened(true)}
 				/>
 			</Popover.Target>
 			<Popover.Content>
 				<Variations
 					variations={variations}
 					attributes={attributes}
-					addToCart={(variation, metaData) => addVariation(variation, product, metaData)}
+					setPrimaryAction={setPrimaryAction}
+					addToCart={addToCart}
 				/>
 			</Popover.Content>
 		</Popover>

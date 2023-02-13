@@ -101,4 +101,8 @@ const Cart = ({ currentOrder }: CartProps) => {
 	);
 };
 
-export default Cart;
+/**
+ * TODO: I'm not sure if I'm doing this right, but it does make the cart UI better
+ * https://beta.reactjs.org/reference/react/useDeferredValue#examples
+ */
+export default React.memo(Cart);
