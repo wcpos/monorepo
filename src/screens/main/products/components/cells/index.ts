@@ -1,6 +1,6 @@
 import Actions from './actions';
 import DateCreated from './date-created';
-import GroupedName from './grouped-name';
+// import GroupedName from './grouped-name';
 import Name from './name';
 import Price from './price';
 import RegularPrice from './regular-price';
@@ -10,8 +10,8 @@ import VariablePrice from './variable-price';
 import VariableRegularPrice from './variable-regular-price';
 import VariableSalePrice from './variable-sale-price';
 import Categories from '../../../components/product/categories';
-import Tag from '../../../components/product/tags';
 import { ProductImage } from '../../../components/product/image';
+import Tag from '../../../components/product/tags';
 
 const simple = {
 	actions: Actions,
@@ -32,8 +32,6 @@ const variable = {
 	sale_price: VariableSalePrice,
 };
 
-const grouped = {
-	name: GroupedName,
-};
+const grouped = {};
 
 export default { simple, variable, grouped };

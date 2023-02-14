@@ -9,8 +9,9 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import SearchBar from './search-bar';
-import Settings from './settings';
 import Table from './table';
+import { t } from '../../../../lib/translations';
+import Settings from '../../components/ui-settings';
 import { ProductsProvider } from '../../contexts/products';
 import useUI from '../../contexts/ui';
 
@@ -53,7 +54,7 @@ const POSProducts = ({ isColumn = false }) => {
 							<SearchBar />
 						</ErrorBoundary>
 						<ErrorBoundary>
-							<Settings ui={ui} />
+							<Settings ui={ui} title={t('Product Settings', { _tags: 'core' })} />
 						</ErrorBoundary>
 					</Box>
 					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>

@@ -19,7 +19,7 @@ export const Quantity = ({ item }: Props) => {
 	 *
 	 */
 	const handleUpdate = React.useCallback(() => {
-		item.patch({ quantity: Number(quantityRef.current) });
+		item.incrementalPatch({ quantity: Number(quantityRef.current) });
 	}, [item]);
 
 	/**

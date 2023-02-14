@@ -8,6 +8,7 @@ import Text from '@wcpos/components/src/text';
 
 import SearchBar from './search-bar';
 import Table from './table';
+import { t } from '../../../lib/translations';
 import AddNewCustomer from '../components/add-new-customer';
 import UiSettings from '../components/ui-settings';
 import { CustomersProvider } from '../contexts/customers';
@@ -41,7 +42,7 @@ const Customers = () => {
 					>
 						<SearchBar />
 						<AddNewCustomer />
-						<UiSettings ui={ui} />
+						<UiSettings ui={ui} title={t('Customer Settings', { _tags: 'core' })} />
 					</Box>
 					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 						<ErrorBoundary>

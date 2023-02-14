@@ -13,6 +13,7 @@ import cells from './cells';
 import Footer from './footer';
 import { t } from '../../../../lib/translations';
 import useProducts from '../../contexts/products';
+import { labels } from '../../contexts/ui';
 import { VariationsProvider } from '../../contexts/variations';
 
 import type { ListRenderItemInfo } from '@shopify/flash-list';
@@ -90,9 +91,9 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 			sortBy: query.sortBy,
 			sortDirection: query.sortDirection,
 			cellRenderer,
-			headerLabel,
+			headerLabel: ({ column }) => get(labels, ['products', column.key], column.key),
 		};
-	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer, headerLabel]);
+	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer]);
 
 	/**
 	 *

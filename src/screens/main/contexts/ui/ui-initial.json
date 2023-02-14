@@ -286,7 +286,8 @@
 			},
 			{
 				"key": "email",
-				"show": true
+				"show": true,
+				"flex": 2
 			},
 			{
 				"key": "role",
@@ -298,11 +299,13 @@
 			},
 			{
 				"key": "billing",
-				"show": true
+				"show": true,
+				"flex": 2
 			},
 			{
 				"key": "shipping",
-				"show": true
+				"show": true,
+				"flex": 2
 			},
 			{
 				"key": "actions",

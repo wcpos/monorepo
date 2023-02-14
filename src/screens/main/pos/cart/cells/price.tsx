@@ -22,7 +22,7 @@ export const Price = ({ item }: Props) => {
 	 *
 	 */
 	const handleUpdate = React.useCallback(() => {
-		item.patch({ price: Number(priceRef.current) });
+		item.incrementalPatch({ price: Number(priceRef.current) });
 	}, [item]);
 
 	/**

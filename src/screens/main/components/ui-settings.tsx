@@ -11,24 +11,32 @@ import { t } from '../../../lib/translations';
 
 interface UiSettingsProps {
 	ui: import('../contexts/ui').UIDocument;
+	title: string;
 }
 
 const schema = {
-	title: 'Table Columns',
-	type: 'array',
-	items: {
-		type: 'object',
-		properties: {
-			show: {
-				type: 'boolean',
-			},
-			display: {
-				type: 'array',
-				items: {
-					type: 'object',
-					properties: {
-						show: {
-							type: 'boolean',
+	type: 'object',
+	properties: {
+		columns: {
+			// uniqueItems: false,
+			title: 'Columns',
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					show: {
+						type: 'boolean',
+					},
+					display: {
+						title: 'Display',
+						type: 'array',
+						items: {
+							type: 'object',
+							properties: {
+								show: {
+									type: 'boolean',
+								},
+							},
 						},
 					},
 				},
@@ -38,47 +46,26 @@ const schema = {
 };
 
 const uiSchema = {
-	'ui:options': {
-		removable: false,
-		addable: false,
-	},
-	items: {
-		display: {
-			'ui:options': {
-				removable: false,
-				addable: false,
+	columns: {
+		'ui:options': {
+			removable: false,
+			addable: false,
+		},
+		items: {
+			display: {
+				'ui:collapsible': 'closed',
+				'ui:options': {
+					removable: false,
+					addable: false,
+				},
 			},
 		},
 	},
 };
 
-const UiSettings = ({ ui }: UiSettingsProps) => {
+const UISettings = ({ ui, title }: UiSettingsProps) => {
 	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
 	const [opened, setOpened] = React.useState(false);
-
-	/**
-	 * Translate column key into label
-	 */
-	const label = React.useCallback(
-		(id, label) => {
-			const path = id.split('.').slice(2, -1);
-			const key = get(columns, path.concat('key'), null);
-
-			// root level
-			if (!key) {
-				switch (label) {
-					default:
-						return label;
-				}
-			}
-
-			switch (key) {
-				default:
-					return t('No label found', { _tags: 'core' });
-			}
-		},
-		[columns]
-	);
 
 	return (
 		<>
@@ -89,24 +76,29 @@ const UiSettings = ({ ui }: UiSettingsProps) => {
 				}}
 			/>
 			<Modal
+				title={title}
 				opened={opened}
 				onClose={() => {
 					setOpened(false);
 				}}
-				primaryAction={{ label: t('Restore Default Settings', { _tags: 'core' }) }}
+				primaryAction={{
+					label: t('Restore Default Settings', { _tags: 'core' }),
+					action: () => ui.reset(ui.id),
+					type: 'critical',
+				}}
 			>
 				<Form
 					schema={schema}
 					uiSchema={uiSchema}
-					formData={columns}
+					formData={{ columns }}
 					onChange={(value) => {
-						ui.atomicPatch({ columns: value });
+						ui.incrementalPatch(value);
 					}}
-					formContext={{ label }}
+					formContext={{ label: ui.getLabel }}
 				/>
 			</Modal>
 		</>
 	);
 };
 
-export default UiSettings;
+export default UISettings;

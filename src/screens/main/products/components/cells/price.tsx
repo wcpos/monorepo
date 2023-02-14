@@ -32,13 +32,6 @@ const Price = ({ item: product, column }: Props) => {
 	);
 
 	/**
-	 * Early exit, no price!
-	 */
-	if (!price) {
-		return null;
-	}
-
-	/**
 	 *
 	 */
 	return (

@@ -4,7 +4,7 @@ import flatten from 'lodash/flatten';
 import forEach from 'lodash/forEach';
 import { useSubscription } from 'observable-hooks';
 import { combineLatest } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { tap, switchMap } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
@@ -56,42 +56,37 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 		 */
 		const updateOrderTotals = async (line_items, fee_lines, shipping_lines) => {
 			const orderTotals = calcOrderTotals(flatten([line_items, fee_lines, shipping_lines]));
-			await order.patch(orderTotals);
+			await order.incrementalPatch(orderTotals);
 		};
 
 		return cart$.pipe(
-			tap(async ({ line_items = [], fee_lines = [], shipping_lines = [] }) => {
+			tap(({ line_items = [], fee_lines = [], shipping_lines = [] }) => {
+				// this works but needs to be optimsed, ie: subscribe only to total?
+				// const array = flatten([line_items, fee_lines, shipping_lines]).map((item) => item.$);
+				// combineLatest(array).subscribe((res) => {
+				// 	const orderTotals = calcOrderTotals(res);
+				// 	order.incrementalPatch(orderTotals);
+				// });
+
 				/**
 				 * Line Items
 				 */
 				forEach(line_items, (lineItem) => {
-					if (!lineItemRegistry.has(lineItem._id)) {
+					if (!lineItemRegistry.has(lineItem.uuid)) {
 						const subscription = combineLatest([
 							lineItem.quantity$,
 							lineItem.price$,
 							lineItem.tax_class$,
 						])
 							.pipe(
-								tap(async ([qty, price, taxClass]) => {
+								tap(([qty, price, taxClass]) => {
 									const totals = calcLineItemTotals(qty, price, taxClass);
-									await lineItem.patch(totals);
-									await updateOrderTotals(line_items, fee_lines, shipping_lines);
-									// let changed = false;
-									// await lineItem.atomicUpdate((oldData) => {
-									// 	if (oldData.total !== totals.total) {
-									// 		oldData.total = totals.total;
-									// 		changed = true;
-									// 	}
-									// 	return oldData;
-									// });
-									// if (changed) {
-									// 	await updateOrderTotals(line_items, fee_lines, shipping_lines);
-									// }
+									lineItem.incrementalPatch(totals);
 								})
 							)
 							.subscribe();
 
-						lineItemRegistry.set(lineItem._id, subscription);
+						lineItemRegistry.set(lineItem.uuid, subscription);
 					}
 				});
 
@@ -99,22 +94,21 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 				 * Fee Lines
 				 */
 				forEach(fee_lines, (feeLine) => {
-					if (!feeLineRegistry.has(feeLine._id)) {
+					if (!feeLineRegistry.has(feeLine.uuid)) {
 						const subscription = combineLatest([
 							feeLine.total$,
 							feeLine.tax_class$,
 							feeLine.tax_status$,
 						])
 							.pipe(
-								tap(async ([price, taxClass, taxStatus]) => {
+								tap(([price, taxClass, taxStatus]) => {
 									const totals = calcLineItemTotals(1, price, taxClass);
-									await feeLine.patch(totals);
-									await updateOrderTotals(line_items, fee_lines, shipping_lines);
+									feeLine.incrementalPatch(totals);
 								})
 							)
 							.subscribe();
 
-						feeLineRegistry.set(feeLine._id, subscription);
+						feeLineRegistry.set(feeLine.uuid, subscription);
 					}
 				});
 
@@ -122,22 +116,19 @@ export const useCalcTotals = (cart$, order: OrderDocument) => {
 				 * Shipping Lines
 				 */
 				forEach(shipping_lines, (shippingLine) => {
-					if (!shippingLineRegistry.has(shippingLine._id)) {
+					if (!shippingLineRegistry.has(shippingLine.uuid)) {
 						const subscription = combineLatest([shippingLine.total$])
 							.pipe(
-								tap(async ([price]) => {
+								tap(([price]) => {
 									const totals = calcLineItemTotals(1, price, 'shipping');
-									await shippingLine.patch(totals);
-									await updateOrderTotals(line_items, fee_lines, shipping_lines);
+									shippingLine.incrementalPatch(totals);
 								})
 							)
 							.subscribe();
 
-						shippingLineRegistry.set(shippingLine._id, subscription);
+						shippingLineRegistry.set(shippingLine.uuid, subscription);
 					}
 				});
-
-				await updateOrderTotals(line_items, fee_lines, shipping_lines);
 			})
 		);
 	}, [

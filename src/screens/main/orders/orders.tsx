@@ -9,6 +9,7 @@ import log from '@wcpos/utils/src/logger';
 
 import SearchBar from './search-bar';
 import Table from './table';
+import { t } from '../../../lib/translations';
 import UiSettings from '../components/ui-settings';
 import { OrdersProvider } from '../contexts/orders';
 import useUI from '../contexts/ui';
@@ -45,7 +46,7 @@ const Orders = () => {
 						}}
 					>
 						<SearchBar />
-						<UiSettings ui={ui} />
+						<UiSettings ui={ui} title={t('Order Settings', { _tags: 'core' })} />
 					</Box>
 					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 						<React.Suspense fallback={<Text>Loading orders table...</Text>}>

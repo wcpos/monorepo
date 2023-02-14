@@ -1,13 +1,16 @@
 import * as React from 'react';
 
+import bind from 'lodash/bind';
 import get from 'lodash/get';
 import { ObservableResource } from 'observable-hooks';
 import { tap, catchError } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
+import { getLabel } from './labels';
 import initialUI from './ui-initial.json';
 import useStore from '../../../../contexts/store';
+import { t } from '../../../../lib/translations';
 
 type StoreDatabase = import('@wcpos/database').StoreDatabase;
 
@@ -61,14 +64,14 @@ export const UIContext = React.createContext<{
 /**
  *
  */
-const getLabel = (key: string) => {
-	debugger;
-	const label = get(initialUI, `${key}.label`);
-	if (!label) {
-		throw Error(`No label for ${key}`);
-	}
-	return label;
-};
+// const getLabel = (key: string, label: string) => {
+// 	debugger;
+// 	// const label = get(initialUI, `${key}.label`);
+// 	if (!label) {
+// 		throw Error(`No label for ${key}`);
+// 	}
+// 	return label;
+// };
 
 /**
  *
@@ -104,7 +107,20 @@ export const UIProvider = ({ children }: UIProviderProps) => {
 						reset(id);
 					} else {
 						// add helper functions
-						Object.assign(localDoc, reset, getLabel);
+						// const resetExists = Object.getOwnPropertyDescriptor(localDoc, 'reset');
+						// Object.defineProperty(localDoc, 'reset', {
+						// 	value: reset,
+						// 	writable: false,
+						// });
+						// Object.defineProperty(localDoc, 'getLabel', {
+						// 	value: getLabel,
+						// 	writable: false,
+						// });
+
+						Object.assign(localDoc, {
+							reset,
+							getLabel: bind(getLabel, localDoc),
+						});
 					}
 				}),
 				catchError((err) => {

@@ -22,7 +22,7 @@ export const FeeAndShippingPrice = ({ item }: Props) => {
 	 *
 	 */
 	const handleUpdate = React.useCallback(() => {
-		item.patch({ total: priceRef.current });
+		item.incrementalPatch({ total: priceRef.current });
 	}, [item]);
 
 	/**

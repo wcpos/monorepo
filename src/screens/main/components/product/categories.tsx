@@ -19,7 +19,7 @@ const ProductCategories = ({ item: product }: ProductCategoriesProps) => {
 	 */
 	const handleSelectCategory = React.useCallback(
 		(category: any) => {
-			setQuery('filters.category', category);
+			setQuery('selector.categories.$elemMatch.id', category.id);
 		},
 		[setQuery]
 	);

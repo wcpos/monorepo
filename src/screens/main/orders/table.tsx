@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
@@ -16,6 +17,7 @@ import Total from './cells/total';
 import Footer from './footer';
 import { t } from '../../../lib/translations';
 import useOrders from '../contexts/orders';
+import { labels } from '../contexts/ui';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type UIColumn = import('../contexts/ui').UIColumn;
@@ -98,9 +100,9 @@ const OrdersTable = ({ ui }: OrdersTableProps) => {
 			sortBy: query.sortBy,
 			sortDirection: query.sortDirection,
 			cellRenderer,
-			headerLabel,
+			headerLabel: ({ column }) => get(labels, ['orders', column.key], column.key),
 		};
-	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer, headerLabel]);
+	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer]);
 
 	useWhyDidYouUpdate('Table', { orders, context });
 

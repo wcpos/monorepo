@@ -11,7 +11,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import * as cells from './cells';
 import { t } from '../../../../lib/translations';
 import useCart from '../../contexts/cart';
-import useUI from '../../contexts/ui';
+import useUI, { labels } from '../../contexts/ui';
 
 type ColumnProps = import('@wcpos/components/src/table').ColumnProps;
 type Sort = import('@wcpos/components/src/table').Sort;
@@ -53,26 +53,6 @@ const CartTable = () => {
 	/**
 	 *
 	 */
-	const headerLabel = React.useCallback(({ column }) => {
-		switch (column.key) {
-			case 'quantity':
-				return t('Qty', { _tags: 'core' });
-			case 'name':
-				return t('Name', { _tags: 'core' });
-			case 'price':
-				return t('Price', { _tags: 'core' });
-			case 'total':
-				return t('Total', { _tags: 'core' });
-			case 'subtotal':
-				return t('Subtotal', { _tags: 'core' });
-			default:
-				return column.key;
-		}
-	}, []);
-
-	/**
-	 *
-	 */
 	const context = React.useMemo<TableExtraDataProps<CartItem>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
@@ -83,9 +63,9 @@ const CartTable = () => {
 			// sortBy: query.sortBy,
 			// sortDirection: query.sortDirection,
 			cellRenderer,
-			headerLabel,
+			headerLabel: ({ column }) => get(labels, ['pos.cart', column.key], column.key),
 		};
-	}, [columns, cellRenderer, headerLabel]);
+	}, [columns, cellRenderer]);
 
 	/**
 	 *

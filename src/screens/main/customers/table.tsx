@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
@@ -8,7 +9,9 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import cells from './cells';
 import Footer from './footer';
 import { t } from '../../../lib/translations';
+import TextCell from '../components/text-cell';
 import useCustomers from '../contexts/customers';
+import { labels } from '../contexts/ui';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type UIColumn = import('../contexts/ui').UIColumn;
@@ -30,37 +33,11 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 	 */
 	const cellRenderer = React.useCallback<CellRenderer<CustomerDocument>>(
 		({ item, column, index }) => {
-			const Cell = cells[column.key];
-			return Cell ? <Cell item={item} column={column} index={index} /> : null;
+			const Cell = get(cells, column.key, TextCell);
+			return <Cell item={item} column={column} index={index} />;
 		},
 		[]
 	);
-
-	/**
-	 *
-	 */
-	const headerLabel = React.useCallback(({ column }) => {
-		switch (column.key) {
-			case 'avatar_url':
-				return t('Image', { _tags: 'core' });
-			case 'first_name':
-				return t('First Name', { _tags: 'core' });
-			case 'last_name':
-				return t('Last Name', { _tags: 'core' });
-			case 'email':
-				return t('Email', { _tags: 'core' });
-			case 'billing':
-				return t('Billing Address', { _tags: 'core' });
-			case 'shipping':
-				return t('Shipping Address', { _tags: 'core' });
-			case 'role':
-				return t('Role', { _tags: 'core' });
-			case 'username':
-				return t('Username', { _tags: 'core' });
-			default:
-				return column.key;
-		}
-	}, []);
 
 	/**
 	 *
@@ -75,9 +52,9 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 			sortBy: query.sortBy,
 			sortDirection: query.sortDirection,
 			cellRenderer,
-			headerLabel,
+			headerLabel: ({ column }) => get(labels, ['customers', column.key], column.key),
 		};
-	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer, headerLabel]);
+	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer]);
 
 	useWhyDidYouUpdate('Table', { customers });
 

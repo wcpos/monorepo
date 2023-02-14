@@ -1,8 +1,9 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
+import { BehaviorSubject } from 'rxjs';
 
 import { CurrentOrderContext } from './provider';
 import { useStore } from '../../../../../contexts/store/use-store';
@@ -13,12 +14,12 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
  * Helpers
  */
 const addItem = async (currentOrder, $push) =>
-	currentOrder.update({
+	currentOrder.incrementalUpdate({
 		$push,
 	});
 
 const increaseQuantity = async (lineItem) =>
-	lineItem.update({
+	lineItem.incrementalUpdate({
 		$inc: {
 			quantity: 1,
 		},
@@ -57,14 +58,15 @@ export const useCurrentOrder = () => {
 			};
 
 			if (isRxDocument(currentOrder)) {
+				const order = currentOrder.getLatest();
 				// check if product is already in order
-				const populatedLineItems = await currentOrder.populate('line_items');
+				const populatedLineItems = await order.populate('line_items');
 				const existing = populatedLineItems.filter((li) => li.product_id === product.id);
 				if (existing.length === 1) {
 					await increaseQuantity(existing[0]);
-					return currentOrder;
+					return order;
 				}
-				return addItem(currentOrder, { line_items: newLineItem });
+				return addItem(order, { line_items: newLineItem });
 			}
 			const newOrder = await ordersCollection.insert({
 				...currentOrder.toJSON(),
@@ -92,13 +94,14 @@ export const useCurrentOrder = () => {
 			};
 
 			if (isRxDocument(currentOrder)) {
-				const populatedLineItems = await currentOrder.populate('line_items');
+				const order = currentOrder.getLatest();
+				const populatedLineItems = await order.populate('line_items');
 				const existing = populatedLineItems.filter((li) => li.variation_id === variation.id);
 				if (existing.length === 1) {
 					await increaseQuantity(existing[0]);
-					return currentOrder;
+					return order;
 				}
-				return addItem(currentOrder, { line_items: newLineItem });
+				return addItem(order, { line_items: newLineItem });
 			}
 			const newOrder = await ordersCollection.insert({
 				...currentOrder.toJSON(),
@@ -114,13 +117,14 @@ export const useCurrentOrder = () => {
 	 */
 	const removeItem = React.useCallback(
 		async (item) => {
+			const order = currentOrder.getLatest();
 			const collection = item.collection.name;
-			await currentOrder.update({
+			await order.update({
 				$pullAll: {
 					[collection]: [item.uuid],
 				},
 			});
-			return item.remove();
+			return item.incrementalRemove();
 		},
 		[currentOrder]
 	);
@@ -130,7 +134,8 @@ export const useCurrentOrder = () => {
 	 */
 	const removeCustomer = React.useCallback(async () => {
 		if (isRxDocument(currentOrder)) {
-			return currentOrder.patch({
+			const order = currentOrder.getLatest();
+			return order.patch({
 				customer_id: -1,
 				billing: {},
 				shipping: {},
@@ -145,7 +150,8 @@ export const useCurrentOrder = () => {
 	const addCustomer = React.useCallback(
 		async (data) => {
 			if (isRxDocument(currentOrder)) {
-				return currentOrder.patch(data);
+				const order = currentOrder.getLatest();
+				return order.patch(data);
 			}
 			currentOrder.customer_id = data.customer_id;
 			currentOrder.billing = data.billing;
@@ -161,7 +167,8 @@ export const useCurrentOrder = () => {
 	const addFee = React.useCallback(
 		async (data) => {
 			if (isRxDocument(currentOrder)) {
-				return addItem(currentOrder, { fee_lines: data });
+				const order = currentOrder.getLatest();
+				return addItem(order, { fee_lines: data });
 			}
 			const newOrder = await ordersCollection.insert({
 				...currentOrder.toJSON(),
@@ -178,7 +185,8 @@ export const useCurrentOrder = () => {
 	const addShipping = React.useCallback(
 		async (data) => {
 			if (isRxDocument(currentOrder)) {
-				return addItem(currentOrder, { shipping_lines: data });
+				const order = currentOrder.getLatest();
+				return addItem(order, { shipping_lines: data });
 			}
 			const newOrder = await ordersCollection.insert({
 				...currentOrder.toJSON(),

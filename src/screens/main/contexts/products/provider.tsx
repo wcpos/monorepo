@@ -1,9 +1,9 @@
 import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
-import _get from 'lodash/get';
+import get from 'lodash/get';
 import _isEmpty from 'lodash/isEmpty';
-import _set from 'lodash/set';
+import set from 'lodash/set';
 import { ObservableResource, useObservableState } from 'observable-hooks';
 import { switchMap, map } from 'rxjs/operators';
 
@@ -79,53 +79,58 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 	 */
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
-			// debounce hits to the local db
-			// debounceTime(100),
-			// switchMap to the collection query
-			switchMap((q) => {
-				const selector = {};
-				// forEach(q.search, function (value, key) {
-				// 	if (value) {
-				// 		set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
-				// 	}
-				// });
-				// search
-				if (!_isEmpty(_get(q, 'search'))) {
-					_set(selector, ['name', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
+			switchMap((query) => {
+				const { search, selector = {}, sort } = query;
+
+				if (search) {
+					set(selector, ['name', '$regex'], new RegExp(escape(search), 'i'));
 				}
 
-				// filters
-				if (_get(q, 'filters.category.id')) {
-					// _set(selector, ['categories[0].id', '$eq'], _get(q, 'filters.category.id'));
-					_set(selector, ['categories', '$elemMatch', 'id'], _get(q, 'filters.category.id'));
-				}
-				if (_get(q, 'filters.tag.id')) {
-					_set(selector, ['tags', '$elemMatch', 'id'], _get(q, 'filters.tag.id'));
-				}
-
-				// hide out-of-stock products
-				// @TODO - filter out-of-stock products after query
-				// if (!showOutOfStock) {
-				// 	selector.$or = [
-				// 		{ manage_stock: { $eq: false } },
-				// 		{ stock_quantity: { $gt: 0 } },
-				// 		{ date_created_gmt: { $eq: undefined } },
-				// 	];
+				// const selector = {};
+				// // forEach(q.search, function (value, key) {
+				// // 	if (value) {
+				// // 		set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
+				// // 	}
+				// // });
+				// // search
+				// if (!_isEmpty(_get(q, 'search'))) {
+				// 	_set(selector, ['name', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
 				// }
 
-				/**
-				 * @TODO - hack for find by uuid
-				 */
-				if (_get(q, 'filters.uuid')) {
-					return collection.findOneFix(q.filters.uuid).$;
-				}
+				// // filters
+				// if (_get(q, 'filters.category.id')) {
+				// 	// _set(selector, ['categories[0].id', '$eq'], _get(q, 'filters.category.id'));
+				// 	_set(selector, ['categories', '$elemMatch', 'id'], _get(q, 'filters.category.id'));
+				// }
+				// if (_get(q, 'filters.tag.id')) {
+				// 	_set(selector, ['tags', '$elemMatch', 'id'], _get(q, 'filters.tag.id'));
+				// }
+
+				// // hide out-of-stock products
+				// // @TODO - filter out-of-stock products after query
+				// // if (!showOutOfStock) {
+				// // 	selector.$or = [
+				// // 		{ manage_stock: { $eq: false } },
+				// // 		{ stock_quantity: { $gt: 0 } },
+				// // 		{ date_created_gmt: { $eq: undefined } },
+				// // 	];
+				// // }
+
+				// /**
+				//  * @TODO - hack for find by uuid
+				//  */
+				// if (_get(q, 'filters.uuid')) {
+				// 	return collection.findOneFix(q.filters.uuid).$;
+				// }
 
 				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$.pipe(
 					map((result) => {
 						log.silly('product query result', result);
-						return orderBy(result, [(p) => p[q.sortBy]], [q.sortDirection]);
+						const sortBy = get(sort, 'sortBy', 'name');
+						const sortDirection = get(sort, 'sortDirection', 'asc');
+						return orderBy(result, [(p) => p[sortBy]], [sortDirection]);
 					})
 				);
 			})

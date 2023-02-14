@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { BehaviorSubject } from 'rxjs';
+
 import cloneDeep from 'lodash/cloneDeep';
 import set from 'lodash/set';
+import { BehaviorSubject } from 'rxjs';
 
 type SortDirection = import('@wcpos/components/src/table').SortDirection;
 

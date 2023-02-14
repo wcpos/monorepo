@@ -1,32 +1,38 @@
 import * as React from 'react';
-import { Image as RNImage, View } from 'react-native';
+import { View } from 'react-native';
 
-// import Img from '@wcpos/components/src/image';
-import Skeleton from '@wcpos/components/src/skeleton';
+import { useObservableState } from 'observable-hooks';
+
+import Image from '@wcpos/components/src/image';
+import useMeasure from '@wcpos/hooks/src/use-measure';
 
 type AvatarProps = {
 	item: import('@wcpos/database').CustomerDocument;
 };
 
 const Avatar = ({ item: customer }: AvatarProps) => {
-	const [size, setSize] = React.useState({ width: undefined, height: undefined });
+	const avatar_url = useObservableState(customer.avatar_url$, customer.avatar_url);
 
-	const onLayout = React.useCallback((event) => {
-		const { width, height } = event.nativeEvent.layout;
-		setSize({ width, height });
-	}, []);
+	const [measurements, onMeasure] = React.useState({
+		width: 50,
+		height: 50,
+		pageX: 0,
+		pageY: 0,
+		x: 0,
+		y: 0,
+	});
+
+	const ref = React.useRef<View>(null);
+	const { onLayout } = useMeasure({ onMeasure, ref });
 
 	return (
-		<View onLayout={onLayout} style={{ width: '100%' }}>
-			{customer.avatarUrl ? (
-				<RNImage
-					source={{ uri: customer.avatarUrl }}
-					style={{ width: size.width, height: size.width, aspectRatio: 1 }}
-					// placeholder={<Img source={require('/assets/placeholder.png')} />}
-				/>
-			) : (
-				<Skeleton style={{ width: size.width, height: size.width }} />
-			)}
+		<View ref={ref} onLayout={onLayout} style={{ width: '100%' }}>
+			<Image
+				source={avatar_url}
+				style={{ width: measurements.width, height: measurements.width, aspectRatio: 1 }}
+				border="rounded"
+				// placeholder={<Img source={require('assets/placeholder.png')} />}
+			/>
 		</View>
 	);
 };

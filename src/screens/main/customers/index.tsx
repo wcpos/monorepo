@@ -34,17 +34,13 @@ const CustomersNavigator = () => {
 					</ErrorBoundary>
 				)}
 			</Stack.Screen>
-			<Stack.Screen
-				name="AddCustomer"
-				component={() => {
-					return (
-						<ModalLayout>
-							<AddCustomer />
-						</ModalLayout>
-					);
-				}}
-				options={{ presentation: 'transparentModal' }}
-			/>
+			<Stack.Screen name="AddCustomer" options={{ presentation: 'transparentModal' }}>
+				{() => (
+					<ModalLayout>
+						<AddCustomer />
+					</ModalLayout>
+				)}
+			</Stack.Screen>
 			<Stack.Screen name="EditCustomer" options={{ presentation: 'transparentModal' }}>
 				{({ route }) => {
 					const { customerID } = route.params;

@@ -9,6 +9,7 @@ import log from '@wcpos/utils/src/logger';
 
 import SearchBar from './components/search-bar';
 import Table from './components/table';
+import { t } from '../../../lib/translations';
 import UiSettings from '../components/ui-settings';
 import { ProductsProvider } from '../contexts/products';
 import { TaxesProvider } from '../contexts/taxes';
@@ -23,7 +24,7 @@ const Products = () => {
 
 	return (
 		<TaxesProvider initialQuery={{ country: 'GB' }}>
-			<ProductsProvider initialQuery={{ sortBy: 'name', sortDirection: 'asc' }} ui={ui}>
+			<ProductsProvider initialQuery={{ sort: { sortBy: 'name', sortDirection: 'asc' } }} ui={ui}>
 				<Box padding="small" style={{ height: '100%' }}>
 					<Box
 						raised
@@ -42,7 +43,7 @@ const Products = () => {
 							}}
 						>
 							<SearchBar />
-							<UiSettings ui={ui} />
+							<UiSettings ui={ui} title={t('Product Settings', { _tags: 'core' })} />
 						</Box>
 						<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 							<React.Suspense fallback={<Text>Loading products table...</Text>}>
