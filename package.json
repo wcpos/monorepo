@@ -1,7 +1,7 @@
 {
 	"private": true,
 	"name": "@wcpos/managed-expo",
-	"version": "1.0.0-alpha.64",
+	"version": "1.0.0-alpha.65",
 	"main": "index.js",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://wcpos.github.io/managed-expo",
@@ -31,11 +31,11 @@
 	},
 	"dependencies": {
 		"@react-native-community/netinfo": "9.3.7",
-		"@react-navigation/bottom-tabs": "^6.5.4",
-		"@react-navigation/drawer": "6.5.8",
-		"@react-navigation/elements": "1.3.14",
-		"@react-navigation/native": "6.1.3",
-		"@react-navigation/stack": "6.3.12",
+		"@react-navigation/bottom-tabs": "^6.5.5",
+		"@react-navigation/drawer": "6.6.0",
+		"@react-navigation/elements": "1.3.15",
+		"@react-navigation/native": "6.1.4",
+		"@react-navigation/stack": "6.3.13",
 		"@sentry/react-native": "4.9.0",
 		"@shopify/flash-list": "1.4.1",
 		"@wcpos/core": "*",
@@ -71,7 +71,7 @@
 	"devDependencies": {
 		"@babel/core": "^7.20.12",
 		"@expo/webpack-config": "^18.0.1",
-		"@types/react": "~18.0.27",
+		"@types/react": "~18.0.28",
 		"@types/react-dom": "~18.0.10",
 		"@wcpos/babel-preset-expo": "*",
 		"@wcpos/eslint-config": "*",
@@ -80,7 +80,7 @@
 		"patch-package": "^6.5.1",
 		"postinstall-postinstall": "^2.1.0",
 		"typescript": "^4.6.3",
-		"webpack-bundle-analyzer": "^4.7.0"
+		"webpack-bundle-analyzer": "^4.8.0"
 	},
 	"eslintConfig": {
 		"extends": "@wcpos/eslint-config"
