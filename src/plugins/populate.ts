@@ -1,13 +1,14 @@
 import forEach from 'lodash/forEach';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
+import isEqual from 'lodash/isEqual';
 import isInteger from 'lodash/isInteger';
 import isPlainObject from 'lodash/isPlainObject';
 import map from 'lodash/map';
 import pickBy from 'lodash/pickBy';
 import uniq from 'lodash/uniq';
 import { isRxCollection, RxPlugin, RxCollection, RxDocument } from 'rxdb';
-import { switchMap, tap } from 'rxjs/operators';
+import { switchMap, tap, distinctUntilChanged } from 'rxjs/operators';
 
 /**
  * Get children props from the schema
@@ -133,6 +134,7 @@ const populatePlugin: RxPlugin = {
 			proto.populate$ = function (this: RxDocument, key: string) {
 				const refCollection = getRefCollection(this.collection, key);
 				return this.get$(key).pipe(
+					distinctUntilChanged(isEqual),
 					switchMap((ids: string[]) =>
 						refCollection
 							.findByIds(ids)
@@ -144,6 +146,7 @@ const populatePlugin: RxPlugin = {
 					)
 				);
 			};
+
 			/** */
 			proto.toPopulatedJSON = function (this: RxDocument) {
 				const childrenProps = getPropsWithRef(this.collection.schema.jsonSchema.properties);
@@ -152,7 +155,7 @@ const populatePlugin: RxPlugin = {
 				if (isEmpty(childrenProps)) return Promise.resolve(this.toJSON());
 
 				// get json and populate children
-				const json = { ...this.toJSON() };
+				const json = this.toMutableJSON();
 				const childrenPromises = map(childrenProps, async (object, path) => {
 					const childDocs = await this.populate(path);
 					const childPromises = childDocs.map(async (doc) => {
