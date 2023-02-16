@@ -24,7 +24,7 @@ export const GatewaysContext = React.createContext<{
 interface GatewaysProviderProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
-	// ui?: import('../../contexts/ui').UIDocument;
+	// ui?: import('../../contexts/ui').UISettingsDocument;
 }
 
 const GatewaysProvider = ({ children, initialQuery }: GatewaysProviderProviderProps) => {

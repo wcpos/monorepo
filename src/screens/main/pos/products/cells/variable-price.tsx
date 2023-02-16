@@ -4,8 +4,8 @@ import find from 'lodash/find';
 
 import Text from '@wcpos/components/src/text';
 
-import useVariations from '../../../contexts/variations';
 import VariablePriceWithTax from '../../../components/product/variable-price';
+import useVariations from '../../../contexts/variations';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;

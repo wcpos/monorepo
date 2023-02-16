@@ -21,7 +21,7 @@ interface StoreProviderProps {
  */
 export const StoreProvider = ({ children }: StoreProviderProps) => {
 	const { store } = useAuth();
-	const locale = useLanguage();
+	const { locale } = useLanguage();
 
 	/**
 	 *

@@ -8,7 +8,7 @@ import useTheme from '@wcpos/themes';
 import SearchBar from './search-bar';
 import UISettings from './ui-settings';
 
-const TableContainer = ({ ui }) => {
+const TableContainer = ({ uiSettings }) => {
 	const theme = useTheme();
 
 	return (
@@ -32,13 +32,13 @@ const TableContainer = ({ ui }) => {
 					<SearchBar />
 				</ErrorBoundary>
 				<ErrorBoundary>
-					<UISettings ui={ui} />
+					<UISettings uiSettings={uiSettings} />
 				</ErrorBoundary>
 			</Box>
 			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<ErrorBoundary>
 					<React.Suspense fallback={<Text>Loading data...</Text>}>
-						<Table ui={ui} />
+						<Table uiSettings={uiSettings} />
 					</React.Suspense>
 				</ErrorBoundary>
 			</Box>

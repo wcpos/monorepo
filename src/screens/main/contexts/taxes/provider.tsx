@@ -21,7 +21,7 @@ export const TaxesContext = React.createContext<{
 interface TaxesProviderProps {
 	children: React.ReactNode;
 	initialQuery?: QueryState;
-	ui?: import('../ui').UIDocument;
+	uiSettings: import('../ui-settings').UISettingsDocument;
 }
 
 const TaxesProvider = ({ children, initialQuery, ui }: TaxesProviderProps) => {

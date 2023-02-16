@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
@@ -12,13 +13,13 @@ import Table from './table';
 import { t } from '../../../lib/translations';
 import UiSettings from '../components/ui-settings';
 import { OrdersProvider } from '../contexts/orders';
-import useUI from '../contexts/ui';
+import useUI from '../contexts/ui-settings';
 
 /**
  *
  */
 const Orders = () => {
-	const { ui } = useUI('orders');
+	const { uiSettings } = useUI('orders');
 	const theme = useTheme();
 
 	const initialQuery = React.useMemo(
@@ -45,13 +46,19 @@ const Orders = () => {
 							borderTopRightRadius: theme.rounding.medium,
 						}}
 					>
-						<SearchBar />
-						<UiSettings ui={ui} title={t('Order Settings', { _tags: 'core' })} />
+						<ErrorBoundary>
+							<SearchBar />
+						</ErrorBoundary>
+						<ErrorBoundary>
+							<UiSettings uiSettings={uiSettings} title={t('Order Settings', { _tags: 'core' })} />
+						</ErrorBoundary>
 					</Box>
 					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-						<React.Suspense fallback={<Text>Loading orders table...</Text>}>
-							<Table ui={ui} />
-						</React.Suspense>
+						<ErrorBoundary>
+							<React.Suspense fallback={<Text>Loading orders table...</Text>}>
+								<Table uiSettings={uiSettings} />
+							</React.Suspense>
+						</ErrorBoundary>
 					</Box>
 				</Box>
 			</Box>

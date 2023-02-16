@@ -12,7 +12,7 @@ import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
-import { UIProvider } from './contexts/ui';
+import { UISettingsProvider } from './contexts/ui-settings';
 import CustomersNavigator from './customers';
 import Login from './login';
 import OrdersNavigator from './orders';
@@ -50,13 +50,13 @@ const MainNavigator = () => {
 	const theme = useTheme();
 
 	return (
-		<OnlineStatusProvider wpAPIURL={wpAPIURL}>
-			{/** @NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
-			<Portal.Provider>
-				<Stack.Navigator screenOptions={{ headerShown: false }}>
-					<Stack.Screen name="MainDrawer">
-						{() => (
-							<UIProvider>
+		<UISettingsProvider>
+			<OnlineStatusProvider wpAPIURL={wpAPIURL}>
+				{/** @NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
+				<Portal.Provider>
+					<Stack.Navigator screenOptions={{ headerShown: false }}>
+						<Stack.Screen name="MainDrawer">
+							{() => (
 								<Drawer.Navigator
 									initialRouteName="POSStack"
 									screenOptions={{
@@ -121,29 +121,29 @@ const MainNavigator = () => {
 										}}
 									/>
 								</Drawer.Navigator>
-							</UIProvider>
-						)}
-					</Stack.Screen>
-					<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-						<Stack.Screen name="Settings">
-							{() => (
-								<ModalLayout title={t('Settings', { _tags: 'core' })}>
-									<Settings />
-								</ModalLayout>
 							)}
 						</Stack.Screen>
-						<Stack.Screen name="Login">
-							{() => (
-								<ModalLayout title={t('Login', { _tags: 'core' })}>
-									<Login />
-								</ModalLayout>
-							)}
-						</Stack.Screen>
-					</Stack.Group>
-				</Stack.Navigator>
-				<Portal.Manager />
-			</Portal.Provider>
-		</OnlineStatusProvider>
+						<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
+							<Stack.Screen name="Settings">
+								{() => (
+									<ModalLayout title={t('Settings', { _tags: 'core' })}>
+										<Settings />
+									</ModalLayout>
+								)}
+							</Stack.Screen>
+							<Stack.Screen name="Login">
+								{() => (
+									<ModalLayout title={t('Login', { _tags: 'core' })}>
+										<Login />
+									</ModalLayout>
+								)}
+							</Stack.Screen>
+						</Stack.Group>
+					</Stack.Navigator>
+					<Portal.Manager />
+				</Portal.Provider>
+			</OnlineStatusProvider>
+		</UISettingsProvider>
 	);
 };
 

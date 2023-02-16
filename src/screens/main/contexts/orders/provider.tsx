@@ -27,10 +27,10 @@ export const OrdersContext = React.createContext<{
 interface OrdersProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
-	ui?: import('../ui').UIDocument;
+	uiSettings: import('../ui-settings').UISettingsDocument;
 }
 
-const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
+const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderProps) => {
 	log.debug('render order provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.orders;
@@ -119,7 +119,7 @@ const OrdersProvider = ({ children, initialQuery }: OrdersProviderProps) => {
 	}, [collection, query$]);
 
 	return (
-		<OrdersContext.Provider value={{ ...value, sync, clear, query$, setQuery }}>
+		<OrdersContext.Provider value={{ ...value, sync, clear, query$, setQuery, replicationState }}>
 			{children}
 		</OrdersContext.Provider>
 	);

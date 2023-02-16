@@ -15,9 +15,7 @@ export default class CustomCache {
 	update(localeCode, translations, fromLocalStorage) {
 		if (!fromLocalStorage) {
 			userDBPromise().then((userDB) => {
-				return userDB.upsertLocal('translations', {
-					[localeCode]: translations,
-				});
+				return userDB.upsertLocal(localeCode, translations);
 			});
 		}
 

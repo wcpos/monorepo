@@ -24,10 +24,15 @@ interface VariationsProviderProps {
 	children: React.ReactNode;
 	initialQuery?: QueryState;
 	parent: ProductDocument;
-	ui?: import('../ui').UIDocument;
+	uiSettings: import('../ui-settings').UISettingsDocument;
 }
 
-const VariationsProvider = ({ children, initialQuery, parent, ui }: VariationsProviderProps) => {
+const VariationsProvider = ({
+	children,
+	initialQuery,
+	parent,
+	uiSettings,
+}: VariationsProviderProps) => {
 	log.debug('render variations provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.variations;

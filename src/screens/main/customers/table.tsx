@@ -11,22 +11,24 @@ import Footer from './footer';
 import { t } from '../../../lib/translations';
 import TextCell from '../components/text-cell';
 import useCustomers from '../contexts/customers';
-import { labels } from '../contexts/ui';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
-type UIColumn = import('../contexts/ui').UIColumn;
+type UISettingsColumn = import('../contexts/ui-settings').UISettingsColumn;
 
 interface CustomersTableProps {
-	ui: import('../contexts/ui').UIDocument;
+	uiSettings: import('../contexts/ui-settings').UISettingsDocument;
 }
 
 /**
  *
  */
-const CustomersTable = ({ ui }: CustomersTableProps) => {
+const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 	const { query$, setQuery, data: customers } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
-	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
+	const columns = useObservableState(
+		uiSettings.get$('columns'),
+		uiSettings.get('columns')
+	) as UISettingsColumn[];
 
 	/**
 	 *
@@ -52,9 +54,9 @@ const CustomersTable = ({ ui }: CustomersTableProps) => {
 			sortBy: query.sortBy,
 			sortDirection: query.sortDirection,
 			cellRenderer,
-			headerLabel: ({ column }) => get(labels, ['customers', column.key], column.key),
+			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
 		};
-	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer]);
+	}, [columns, query.sortBy, query.sortDirection, cellRenderer, setQuery, uiSettings]);
 
 	useWhyDidYouUpdate('Table', { customers });
 

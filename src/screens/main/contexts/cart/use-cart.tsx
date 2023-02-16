@@ -11,8 +11,6 @@ export const useCart = () => {
 	}
 
 	const data = useObservableSuspense(context.cartResource);
-	// const deferredData = React.useDeferredValue(data);
 
-	// return deferredData;
 	return data;
 };

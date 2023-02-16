@@ -1,8 +1,9 @@
-import get from 'lodash/get';
-
 import { t } from '../../../../lib/translations';
 
-export const labels = {
+/**
+ *
+ */
+export const getTranslatedLabels = () => ({
 	'pos.products': {
 		showOutOfStock: t('Show out-of-stock products', { _tags: 'core' }),
 		image: t('Image', { _tags: 'core' }),
@@ -67,15 +68,4 @@ export const labels = {
 		username: t('Username', { _tags: 'core' }),
 		actions: t('Actions', { _tags: 'core' }),
 	},
-};
-
-export function getLabel(id, label) {
-	const path = id.split('.').slice(2, -1);
-	const key = get(this.get('columns'), path.concat('key'), null);
-
-	return get(
-		labels,
-		[this.id, key],
-		get(labels, [this.id, label], t('{item} label not found', { _tags: 'core', item: key }))
-	);
-}
+});

@@ -11,7 +11,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import * as cells from './cells';
 import { t } from '../../../../lib/translations';
 import useCart from '../../contexts/cart';
-import useUI, { labels } from '../../contexts/ui';
+import useUI from '../../contexts/ui-settings';
 
 type ColumnProps = import('@wcpos/components/src/table').ColumnProps;
 type Sort = import('@wcpos/components/src/table').Sort;
@@ -21,15 +21,18 @@ type LineItemDocument = import('@wcpos/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
 type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
-type UIColumn = import('../../contexts/ui').UIColumn;
+type UISettingsColumn = import('../../contexts/ui-settings').UISettingsColumn;
 type Cart = (LineItemDocument | FeeLineDocument | ShippingLineDocument)[];
 
 /**
  *
  */
 const CartTable = () => {
-	const { ui } = useUI('pos.cart');
-	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
+	const { uiSettings } = useUI('pos.cart');
+	const columns = useObservableState(
+		uiSettings.get$('columns'),
+		uiSettings.get('columns')
+	) as UISettingsColumn[];
 	const cart = useCart();
 	const items = React.useMemo(() => flatten(Object.values(cart)), [cart]); // @TODO - add sorting
 
@@ -63,14 +66,14 @@ const CartTable = () => {
 			// sortBy: query.sortBy,
 			// sortDirection: query.sortDirection,
 			cellRenderer,
-			headerLabel: ({ column }) => get(labels, ['pos.cart', column.key], column.key),
+			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
 		};
-	}, [columns, cellRenderer]);
+	}, [columns, cellRenderer, uiSettings]);
 
 	/**
 	 *
 	 */
-	useWhyDidYouUpdate('CartTable', { ui, columns, items, cart, t, context });
+	useWhyDidYouUpdate('CartTable', { uiSettings, columns, items, cart, t, context });
 
 	/**
 	 *

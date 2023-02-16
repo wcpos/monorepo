@@ -67,7 +67,7 @@ const CartTabs = ({ currentOrder }: CartTabsProps) => {
 			routes={routes}
 			onIndexChange={handleTabChange}
 			focusedIndex={focusedIndex === -1 ? orders.length : focusedIndex}
-			style={{ paddingBottom: 0, paddingLeft: 0, paddingRight: 0 }}
+			style={{ paddingBottom: 0, paddingLeft: 0 }}
 		/>
 	);
 };

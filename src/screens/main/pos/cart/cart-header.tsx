@@ -12,8 +12,8 @@ import useStore from '../../../../contexts/store';
 import { t } from '../../../../lib/translations';
 import AddCustomer from '../../components/add-new-customer';
 import CustomerSelect from '../../components/customer-select';
-import Settings from '../../components/ui-settings';
-import useUI from '../../contexts/ui';
+import UISettings from '../../components/ui-settings';
+import useUI from '../../contexts/ui-settings';
 import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -27,7 +27,7 @@ interface CartHeaderProps {
  *
  */
 const CartHeader = ({ order }: CartHeaderProps) => {
-	const { ui } = useUI('pos.cart');
+	const { uiSettings } = useUI('pos.cart');
 	const theme = useTheme();
 	const { storeDB } = useStore();
 	const customerID = useObservableState(order.customer_id$, order.customer_id);
@@ -92,7 +92,7 @@ const CartHeader = ({ order }: CartHeaderProps) => {
 				<AddCustomer />
 			</ErrorBoundary>
 			<ErrorBoundary>
-				<Settings ui={ui} title={t('Cart Settings', { _tags: 'core' })} />
+				<UISettings uiSettings={uiSettings} title={t('Cart Settings', { _tags: 'core' })} />
 			</ErrorBoundary>
 		</Box>
 	);

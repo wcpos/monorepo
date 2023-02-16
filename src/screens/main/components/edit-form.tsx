@@ -27,7 +27,8 @@ const EditForm = ({ schema, uiSchema, item }: EditModalProps) => {
 	 */
 	const handleChange = React.useCallback(
 		(newData) => {
-			item.patch(newData);
+			const latest = item.getLatest();
+			latest.patch(newData);
 		},
 		[item]
 	);
@@ -35,31 +36,34 @@ const EditForm = ({ schema, uiSchema, item }: EditModalProps) => {
 	/**
 	 *
 	 */
-	const renderScene = ({ route }) => {
-		switch (route.key) {
-			case 'form':
-				return (
-					<Form
-						schema={schema}
-						formData={item.toJSON()}
-						uiSchema={uiSchema}
-						onChange={handleChange}
-					/>
-				);
-			case 'json':
-				return <Tree data={item.toJSON()} />;
-			default:
-				return null;
-		}
-	};
+	const renderScene = React.useCallback(
+		({ route }) => {
+			const latest = item.getLatest();
+			const data = latest.toMutableJSON();
+			switch (route.key) {
+				case 'form':
+					return (
+						<Form schema={schema} formData={data} uiSchema={uiSchema} onChange={handleChange} />
+					);
+				case 'json':
+					return <Tree data={data} />;
+				default:
+					return null;
+			}
+		},
+		[handleChange, item, schema, uiSchema]
+	);
 
 	/**
 	 *
 	 */
-	const routes = [
-		{ key: 'form', title: 'Form' },
-		{ key: 'json', title: 'JSON' },
-	];
+	const routes = React.useMemo(
+		() => [
+			{ key: 'form', title: 'Form' },
+			{ key: 'json', title: 'JSON' },
+		],
+		[]
+	);
 
 	/**
 	 *

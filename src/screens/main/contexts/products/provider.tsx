@@ -13,7 +13,6 @@ import log from '@wcpos/utils/src/logger';
 
 import { useReplication } from './use-replication';
 import useStore from '../../../../contexts/store';
-import useUI from '../ui';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type ProductDocument = import('@wcpos/database/src/collections/products').ProductDocument;
@@ -29,20 +28,22 @@ export const ProductsContext = React.createContext<{
 interface ProductsProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
-	ui?: import('../ui').UIDocument;
+	uiSettings: import('../ui-settings').UISettingsDocument;
 }
 
 /**
  *
  */
-const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => {
+const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProviderProps) => {
 	log.debug('render product provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.products;
-	const { ui } = useUI('pos.products');
-	const showOutOfStock = useObservableState(ui.get$('showOutOfStock'), ui.get('showOutOfStock'));
+	const showOutOfStock = useObservableState(
+		uiSettings.get$('showOutOfStock'),
+		uiSettings.get('showOutOfStock')
+	);
 	const { query$, setQuery } = useQuery(initialQuery);
-	const replicationState = useReplication({ collection });
+	const { replicationState } = useReplication({ collection });
 
 	/**
 	 * Only run the replication when the Provider is mounted
@@ -80,57 +81,17 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			switchMap((query) => {
-				const { search, selector = {}, sort } = query;
+				const { search, selector = {}, sortBy, sortDirection } = query;
 
 				if (search) {
 					set(selector, ['name', '$regex'], new RegExp(escape(search), 'i'));
 				}
 
-				// const selector = {};
-				// // forEach(q.search, function (value, key) {
-				// // 	if (value) {
-				// // 		set(selector, [key, '$regex'], new RegExp(escape(value), 'i'));
-				// // 	}
-				// // });
-				// // search
-				// if (!_isEmpty(_get(q, 'search'))) {
-				// 	_set(selector, ['name', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
-				// }
-
-				// // filters
-				// if (_get(q, 'filters.category.id')) {
-				// 	// _set(selector, ['categories[0].id', '$eq'], _get(q, 'filters.category.id'));
-				// 	_set(selector, ['categories', '$elemMatch', 'id'], _get(q, 'filters.category.id'));
-				// }
-				// if (_get(q, 'filters.tag.id')) {
-				// 	_set(selector, ['tags', '$elemMatch', 'id'], _get(q, 'filters.tag.id'));
-				// }
-
-				// // hide out-of-stock products
-				// // @TODO - filter out-of-stock products after query
-				// // if (!showOutOfStock) {
-				// // 	selector.$or = [
-				// // 		{ manage_stock: { $eq: false } },
-				// // 		{ stock_quantity: { $gt: 0 } },
-				// // 		{ date_created_gmt: { $eq: undefined } },
-				// // 	];
-				// // }
-
-				// /**
-				//  * @TODO - hack for find by uuid
-				//  */
-				// if (_get(q, 'filters.uuid')) {
-				// 	return collection.findOneFix(q.filters.uuid).$;
-				// }
-
 				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$.pipe(
 					map((result) => {
-						log.silly('product query result', result);
-						const sortBy = get(sort, 'sortBy', 'name');
-						const sortDirection = get(sort, 'sortDirection', 'asc');
-						return orderBy(result, [(p) => p[sortBy]], [sortDirection]);
+						return orderBy(result, [sortBy], [sortDirection]);
 					})
 				);
 			})
@@ -145,17 +106,18 @@ const ProductsProvider = ({ children, initialQuery }: ProductsProviderProps) => 
 		value,
 		children,
 		initialQuery,
-		ui,
+		uiSettings,
 		storeDB,
 		collection,
 		showOutOfStock,
 		query$,
 		setQuery,
+		replicationState,
 		// sync,
 	});
 
 	return (
-		<ProductsContext.Provider value={{ ...value, sync, clear, setQuery, query$ }}>
+		<ProductsContext.Provider value={{ ...value, sync, clear, setQuery, query$, replicationState }}>
 			{children}
 		</ProductsContext.Provider>
 	);

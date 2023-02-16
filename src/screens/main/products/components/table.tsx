@@ -11,27 +11,29 @@ import log from '@wcpos/utils/src/logger';
 
 import cells from './cells';
 import Footer from './footer';
-import { t } from '../../../../lib/translations';
+import TextCell from '../../components/text-cell';
 import useProducts from '../../contexts/products';
-import { labels } from '../../contexts/ui';
 import { VariationsProvider } from '../../contexts/variations';
 
 import type { ListRenderItemInfo } from '@shopify/flash-list';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
-type UIColumn = import('../../contexts/ui').UIColumn;
+type UISettingsColumn = import('../../contexts/ui-settings').UISettingsColumn;
 
 interface ProductsTableProps {
-	ui: import('../../contexts/ui').UIDocument;
+	uiSettings: import('../../contexts/ui-settings').UISettingsDocument;
 }
 
 /**
  *
  */
-const ProductsTable = ({ ui }: ProductsTableProps) => {
+const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	const { query$, setQuery, data: products } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
-	const columns = useObservableState(ui.get$('columns'), ui.get('columns')) as UIColumn[];
+	const columns = useObservableState(
+		uiSettings.get$('columns'),
+		uiSettings.get('columns')
+	) as UISettingsColumn[];
 	log.debug('render products table');
 
 	/**
@@ -42,41 +44,19 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 			const Cell = get(cells, [item.type, column.key], cells.simple[column.key]);
 
 			if (Cell) {
-				return <Cell item={item} column={column} index={index} />;
+				return (
+					<ErrorBoundary>
+						<React.Suspense fallback={<Text>Loading...</Text>}>
+							<Cell item={item} column={column} index={index} />
+						</React.Suspense>
+					</ErrorBoundary>
+				);
 			}
 
-			if (item[column.key]) {
-				return <Text>{String(item[column.key])}</Text>;
-			}
-
-			return null;
+			return <TextCell item={item} column={column} />;
 		},
 		[]
 	);
-
-	/**
-	 *
-	 */
-	const headerLabel = React.useCallback(({ column }) => {
-		switch (column.key) {
-			case 'name':
-				return t('Products', { _tags: 'core', _context: 'Table header' });
-			case 'sku':
-				return t('SKU', { _tags: 'core' });
-			case 'type':
-				return t('Type', { _tags: 'core' });
-			case 'stock_quantity':
-				return t('Stock', { _tags: 'core' });
-			case 'price':
-				return t('Price', { _tags: 'core' });
-			case 'regular_price':
-				return t('Regular Price', { _tags: 'core' });
-			case 'sale_price':
-				return t('Sale Price', { _tags: 'core' });
-			default:
-				return column.key;
-		}
-	}, []);
 
 	/**
 	 *
@@ -85,15 +65,15 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 		return {
 			columns: columns.filter((column) => column.show),
 			sort: ({ sortBy, sortDirection }) => {
-				setQuery('sortBy', sortBy);
-				setQuery('sortDirection', sortDirection);
+				setQuery('sort.sortBy', sortBy);
+				setQuery('sort.sortDirection', sortDirection);
 			},
 			sortBy: query.sortBy,
 			sortDirection: query.sortDirection,
 			cellRenderer,
-			headerLabel: ({ column }) => get(labels, ['products', column.key], column.key),
+			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
 		};
-	}, [columns, query.sortBy, query.sortDirection, setQuery, cellRenderer]);
+	}, [columns, query.sortBy, query.sortDirection, cellRenderer, setQuery, uiSettings]);
 
 	/**
 	 *
@@ -102,7 +82,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 		if (item.type === 'variable') {
 			return (
 				<ErrorBoundary>
-					<VariationsProvider parent={item} ui={ui}>
+					<VariationsProvider parent={item} uiSettings={uiSettings}>
 						<Table.Row item={item} index={index} extraData={extraData} target={target} />
 					</VariationsProvider>
 				</ErrorBoundary>
@@ -118,7 +98,7 @@ const ProductsTable = ({ ui }: ProductsTableProps) => {
 	/**
 	 *
 	 */
-	useWhyDidYouUpdate('Table', { products });
+	useWhyDidYouUpdate('Table', { products, uiSettings });
 
 	/**
 	 *

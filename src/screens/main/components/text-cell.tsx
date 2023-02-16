@@ -6,7 +6,7 @@ import Text from '@wcpos/components/src/text';
 
 type Props = {
 	item: import('rxdb').RxDocument;
-	column: import('../contexts/ui').UIColumn;
+	column: import('../contexts/ui-settings').UISettingsColumn;
 };
 
 const TextCell = ({ item, column }: Props) => {

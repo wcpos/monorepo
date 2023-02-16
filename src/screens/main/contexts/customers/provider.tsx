@@ -27,10 +27,10 @@ export const CustomersContext = React.createContext<{
 interface CustomersProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
-	ui?: import('../ui').UIDocument;
+	uiSettings: import('../ui-settings').UISettingsDocument;
 }
 
-const CustomersProvider = ({ children, initialQuery }: CustomersProviderProps) => {
+const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProviderProps) => {
 	log.debug('render customer provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.customers;

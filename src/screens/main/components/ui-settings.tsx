@@ -10,13 +10,22 @@ import Form from '@wcpos/react-native-jsonschema-form';
 import { t } from '../../../lib/translations';
 
 interface UiSettingsProps {
-	ui: import('../contexts/ui').UIDocument;
+	uiSettings: import('../contexts/ui-settings').UISettingsDocument;
 	title: string;
 }
 
 const schema = {
 	type: 'object',
 	properties: {
+		sortBy: {
+			type: 'string',
+		},
+		sortDirection: {
+			type: 'string',
+			enum: ['asc', 'desc'],
+			enumNames: ['Ascending', 'Descending'],
+		},
+
 		columns: {
 			// uniqueItems: false,
 			title: 'Columns',
@@ -28,7 +37,6 @@ const schema = {
 						type: 'boolean',
 					},
 					display: {
-						title: 'Display',
 						type: 'array',
 						items: {
 							type: 'object',
@@ -53,7 +61,8 @@ const uiSchema = {
 		},
 		items: {
 			display: {
-				'ui:collapsible': 'closed',
+				// 'ui:collapsible': 'closed',
+				'ui:indent': true,
 				'ui:options': {
 					removable: false,
 					addable: false,
@@ -63,8 +72,8 @@ const uiSchema = {
 	},
 };
 
-const UISettings = ({ ui, title }: UiSettingsProps) => {
-	const columns = useObservableState(ui.get$('columns'), ui.get('columns'));
+const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
+	const formData = uiSettings.toJSON().data;
 	const [opened, setOpened] = React.useState(false);
 
 	return (
@@ -83,18 +92,42 @@ const UISettings = ({ ui, title }: UiSettingsProps) => {
 				}}
 				primaryAction={{
 					label: t('Restore Default Settings', { _tags: 'core' }),
-					action: () => ui.reset(ui.id),
+					action: () => uiSettings.reset(uiSettings.id),
 					type: 'critical',
 				}}
 			>
 				<Form
 					schema={schema}
 					uiSchema={uiSchema}
-					formData={{ columns }}
+					formData={formData}
 					onChange={(value) => {
-						ui.incrementalPatch(value);
+						uiSettings.incrementalPatch(value);
 					}}
-					formContext={{ label: ui.getLabel }}
+					formContext={{
+						/**
+						 * Turns schema path into a label
+						 */
+						label: (jsonSchemaPath, key) => {
+							// special case for common labels
+							if (key === 'sortBy') {
+								return t('Sort by', { _tags: 'core' });
+							}
+							if (key === 'sortDirection') {
+								return t('Sort direction', { _tags: 'core' });
+							}
+
+							// root
+							const path = jsonSchemaPath.split('.').slice(2, -1);
+							if (path.length === 0) {
+								return uiSettings.getLabel(key);
+							}
+
+							// nested columns
+							const columnKey = get(uiSettings.get('columns'), path.concat('key'), null);
+							const label = uiSettings.getLabel(columnKey);
+							return label;
+						},
+					}}
 				/>
 			</Modal>
 		</>

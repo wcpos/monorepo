@@ -13,18 +13,24 @@ import { t } from '../../../lib/translations';
 import UiSettings from '../components/ui-settings';
 import { ProductsProvider } from '../contexts/products';
 import { TaxesProvider } from '../contexts/taxes';
-import useUI from '../contexts/ui';
+import useUI from '../contexts/ui-settings';
 
 /**
  *
  */
 const Products = () => {
-	const { ui } = useUI('products');
+	const { uiSettings } = useUI('products');
 	const theme = useTheme();
 
 	return (
 		<TaxesProvider initialQuery={{ country: 'GB' }}>
-			<ProductsProvider initialQuery={{ sort: { sortBy: 'name', sortDirection: 'asc' } }} ui={ui}>
+			<ProductsProvider
+				initialQuery={{
+					sortBy: uiSettings.get('sortBy'),
+					sortDirection: uiSettings.get('sortDirection'),
+				}}
+				uiSettings={uiSettings}
+			>
 				<Box padding="small" style={{ height: '100%' }}>
 					<Box
 						raised
@@ -43,11 +49,14 @@ const Products = () => {
 							}}
 						>
 							<SearchBar />
-							<UiSettings ui={ui} title={t('Product Settings', { _tags: 'core' })} />
+							<UiSettings
+								uiSettings={uiSettings}
+								title={t('Product Settings', { _tags: 'core' })}
+							/>
 						</Box>
 						<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 							<React.Suspense fallback={<Text>Loading products table...</Text>}>
-								<Table ui={ui} />
+								<Table uiSettings={uiSettings} />
 							</React.Suspense>
 						</Box>
 					</Box>

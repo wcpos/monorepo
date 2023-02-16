@@ -23,7 +23,8 @@ const AddNoteButton = ({ order }: AddNoteButtonProps) => {
 	const textareaRef = React.useRef<TextInput>(null);
 
 	const handleSaveNote = React.useCallback(() => {
-		order.patch({ customer_note: textareaRef.current?.value });
+		const latestDoc = order.getLatest();
+		latestDoc.patch({ customer_note: textareaRef.current?.value });
 		setOpened(false);
 	}, [order, textareaRef]);
 

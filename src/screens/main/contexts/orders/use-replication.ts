@@ -14,15 +14,18 @@ function wait(milliseconds: number) {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+/**
+ *
+ */
 export const useReplication = ({ collection }) => {
 	const http = useRestHttpClient();
 	const { site } = useAuth();
 
-	const replicationStatePromise = React.useMemo(() => {
+	const replicationState = React.useMemo(() => {
 		/**
 		 *
 		 */
-		return replicateRxCollection({
+		const state = replicateRxCollection({
 			collection,
 			autoStart: false,
 			replicationIdentifier: `wc-rest-replication-to-${site.wc_api_url}/${collection.name}`,
@@ -55,7 +58,9 @@ export const useReplication = ({ collection }) => {
 				// stream$: timedObservable(1000),
 			},
 		});
+
+		return state;
 	}, [collection, http, site.wc_api_url]);
 
-	return replicationStatePromise;
+	return replicationState;
 };

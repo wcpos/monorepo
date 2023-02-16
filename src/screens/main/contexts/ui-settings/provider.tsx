@@ -1,48 +1,49 @@
 import * as React from 'react';
 
-import bind from 'lodash/bind';
 import get from 'lodash/get';
 import { ObservableResource } from 'observable-hooks';
 import { tap, catchError } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import { getLabel } from './labels';
-import initialUI from './ui-initial.json';
+import initialSettings from './initial-settings.json';
+import { getTranslatedLabels } from './labels';
+import useLanguage from '../../../../contexts/language';
 import useStore from '../../../../contexts/store';
 import { t } from '../../../../lib/translations';
 
 type StoreDatabase = import('@wcpos/database').StoreDatabase;
 
-export interface UIDisplay {
+export interface UISettingsDisplay {
 	key: string;
 	hide: boolean;
 	order: number;
 }
 
-export interface UIColumn {
+export interface UISettingsColumn {
 	key: string;
 	disableSort: boolean;
 	order: number;
 	width: string;
 	show: boolean;
 	hideLabel: boolean;
-	display: UIDisplay[];
+	display: UISettingsDisplay[];
 }
 
-export interface UISchema {
+export interface UISettingsSchema {
 	sortBy: string;
 	sortDirection: import('@wcpos/components/src/table').SortDirection;
 	width: number;
-	columns: UIColumn[];
+	columns: UISettingsColumn[];
 }
 
-export type UIDocument = import('rxdb').RxLocalDocument<StoreDatabase, UISchema> & {
+export type UISettingsDocument = import('rxdb').RxLocalDocument<StoreDatabase, UISettingsSchema> & {
 	reset: () => void;
+	getLabel: (key: string) => string;
 };
-export type UIResource = import('observable-hooks').ObservableResource<UIDocument>;
+export type UISettingsResource = import('observable-hooks').ObservableResource<UISettingsDocument>;
 
-interface UIProviderProps {
+interface UISettingsProviderProps {
 	children: React.ReactNode;
 }
 
@@ -55,30 +56,30 @@ const resourceIDs = [
 	'customers',
 	'coupons',
 ] as const;
-export type UIResourceID = (typeof resourceIDs)[number];
+export type UISettingsResourceID = (typeof resourceIDs)[number];
 
-export const UIContext = React.createContext<{
-	uiResources: Record<UIResourceID, UIResource>;
+export const UISettingsContext = React.createContext<{
+	uiResources: Record<UISettingsResourceID, UISettingsResource>;
 }>(null);
 
 /**
  *
  */
-// const getLabel = (key: string, label: string) => {
-// 	debugger;
-// 	// const label = get(initialUI, `${key}.label`);
-// 	if (!label) {
-// 		throw Error(`No label for ${key}`);
-// 	}
-// 	return label;
-// };
-
-/**
- *
- */
-export const UIProvider = ({ children }: UIProviderProps) => {
+export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 	const { storeDB } = useStore();
-	console.log('render UIProvider');
+	const { locale } = useLanguage();
+	console.log('render UISettingsProvider');
+
+	/**
+	 *
+	 */
+	const getLabel = React.useCallback(
+		(id: string, key: string) => {
+			const labels = getTranslatedLabels();
+			return get(labels, [id, key], t('{item} label not found', { _tags: 'core', item: key }));
+		},
+		[locale]
+	);
 
 	/**
 	 *
@@ -87,39 +88,24 @@ export const UIProvider = ({ children }: UIProviderProps) => {
 		/**
 		 *
 		 */
-		function reset(id: UIResourceID) {
-			const initial = get(initialUI, id);
-
-			if (!initial) {
-				throw Error(`No initial UI for ${id}`);
-			}
-
+		function reset(id: UISettingsResourceID) {
+			const initial = get(initialSettings, id);
 			storeDB.upsertLocal(id, initial);
 		}
 
 		/**
 		 *
 		 */
-		function createUIResource(id: UIResourceID) {
+		function createUIResource(id: UISettingsResourceID) {
 			const resource$ = storeDB.getLocal$(id).pipe(
 				tap((localDoc) => {
 					if (!localDoc) {
 						reset(id);
 					} else {
 						// add helper functions
-						// const resetExists = Object.getOwnPropertyDescriptor(localDoc, 'reset');
-						// Object.defineProperty(localDoc, 'reset', {
-						// 	value: reset,
-						// 	writable: false,
-						// });
-						// Object.defineProperty(localDoc, 'getLabel', {
-						// 	value: getLabel,
-						// 	writable: false,
-						// });
-
 						Object.assign(localDoc, {
 							reset,
-							getLabel: bind(getLabel, localDoc),
+							getLabel: (key) => getLabel(localDoc.id, key),
 						});
 					}
 				}),
@@ -146,10 +132,10 @@ export const UIProvider = ({ children }: UIProviderProps) => {
 				// coupons: getResource('pos.products'),
 			},
 		};
-	}, [storeDB]);
+	}, [storeDB, getLabel]);
 
 	/**
 	 *
 	 */
-	return <UIContext.Provider value={value}>{children}</UIContext.Provider>;
+	return <UISettingsContext.Provider value={value}>{children}</UISettingsContext.Provider>;
 };

@@ -104,5 +104,9 @@ const Cart = ({ currentOrder }: CartProps) => {
 /**
  * TODO: I'm not sure if I'm doing this right, but it does make the cart UI better
  * https://beta.reactjs.org/reference/react/useDeferredValue#examples
+ *
+ * Not having memo seems to work okay
+ * If I have memo then the language update doesn't work
  */
-export default React.memo(Cart);
+// export default React.memo(Cart);
+export default Cart;

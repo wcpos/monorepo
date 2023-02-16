@@ -11,9 +11,9 @@ import log from '@wcpos/utils/src/logger';
 import SearchBar from './search-bar';
 import Table from './table';
 import { t } from '../../../../lib/translations';
-import Settings from '../../components/ui-settings';
+import UISettings from '../../components/ui-settings';
 import { ProductsProvider } from '../../contexts/products';
-import useUI from '../../contexts/ui';
+import useUI from '../../contexts/ui-settings';
 
 // import BarcodeScanner from './barcode-scanner';
 
@@ -22,14 +22,17 @@ import useUI from '../../contexts/ui';
  */
 const POSProducts = ({ isColumn = false }) => {
 	const theme = useTheme();
-	const { ui } = useUI('pos.products');
-	const initialQuery = React.useMemo(() => ({ sortBy: 'name', sortDirection: 'asc' }), []);
+	const { uiSettings } = useUI('pos.products');
+	const initialQuery = React.useMemo(
+		() => ({ sortBy: uiSettings.get('sortBy'), sortDirection: uiSettings.get('sortDirection') }),
+		[uiSettings]
+	);
 	log.debug('render POSProducts');
 
-	useWhyDidYouUpdate('POSProducts', { isColumn, theme, ui, initialQuery });
+	useWhyDidYouUpdate('POSProducts', { isColumn, theme, uiSettings, initialQuery });
 
 	return (
-		<ProductsProvider initialQuery={initialQuery} ui={ui}>
+		<ProductsProvider initialQuery={initialQuery} uiSettings={uiSettings}>
 			<Box padding="small" paddingRight={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
 				<Box
 					raised
@@ -54,13 +57,16 @@ const POSProducts = ({ isColumn = false }) => {
 							<SearchBar />
 						</ErrorBoundary>
 						<ErrorBoundary>
-							<Settings ui={ui} title={t('Product Settings', { _tags: 'core' })} />
+							<UISettings
+								uiSettings={uiSettings}
+								title={t('Product Settings', { _tags: 'core' })}
+							/>
 						</ErrorBoundary>
 					</Box>
 					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 						<ErrorBoundary>
 							<React.Suspense fallback={<Text>Loading products...</Text>}>
-								<Table ui={ui} />
+								<Table uiSettings={uiSettings} />
 							</React.Suspense>
 						</ErrorBoundary>
 					</Box>
@@ -70,4 +76,5 @@ const POSProducts = ({ isColumn = false }) => {
 	);
 };
 
-export default React.memo(POSProducts);
+// export default React.memo(POSProducts); // caches translations
+export default POSProducts;

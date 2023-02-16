@@ -13,7 +13,7 @@ const Splash = () => {
 
 	return (
 		<Styled.Container>
-			<Logo />
+			<Logo width={150} height={150} />
 		</Styled.Container>
 	);
 };

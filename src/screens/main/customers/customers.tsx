@@ -12,13 +12,13 @@ import { t } from '../../../lib/translations';
 import AddNewCustomer from '../components/add-new-customer';
 import UiSettings from '../components/ui-settings';
 import { CustomersProvider } from '../contexts/customers';
-import useUI from '../contexts/ui';
+import useUI from '../contexts/ui-settings';
 
 /**
  *
  */
 const Customers = () => {
-	const { ui } = useUI('customers');
+	const { uiSettings } = useUI('customers');
 	const theme = useTheme();
 
 	return (
@@ -42,12 +42,12 @@ const Customers = () => {
 					>
 						<SearchBar />
 						<AddNewCustomer />
-						<UiSettings ui={ui} title={t('Customer Settings', { _tags: 'core' })} />
+						<UiSettings uiSettings={uiSettings} title={t('Customer Settings', { _tags: 'core' })} />
 					</Box>
 					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 						<ErrorBoundary>
 							<React.Suspense fallback={<Text>Loading Customers Table</Text>}>
-								<Table ui={ui} />
+								<Table uiSettings={uiSettings} />
 							</React.Suspense>
 						</ErrorBoundary>
 					</Box>

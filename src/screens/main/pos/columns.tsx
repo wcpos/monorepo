@@ -16,7 +16,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import OpenOrders from './cart';
 import Products from './products';
-import useUI from '../contexts/ui';
+import useUI from '../contexts/ui-settings';
 
 /**
  *
@@ -31,11 +31,11 @@ const clamp = (value: number, lowerBound: number, upperBound: number) => {
  *
  */
 const ResizableColumns = () => {
-	const { ui } = useUI('pos.products');
-	const columnWidth = useSharedValue(ui.get('width'));
+	const { uiSettings } = useUI('pos.products');
+	const columnWidth = useSharedValue(uiSettings.get('width'));
 	const isActivePanGesture = useSharedValue(false);
 	const containerWidth = useSharedValue(800);
-	ui.get$('width').subscribe((width) => {
+	uiSettings.get$('width').subscribe((width) => {
 		columnWidth.value = width;
 	});
 
@@ -61,9 +61,9 @@ const ResizableColumns = () => {
 	 */
 	const saveColumnWidth = React.useCallback(
 		(width: number) => {
-			ui.incrementalPatch({ width });
+			uiSettings.incrementalPatch({ width });
 		},
-		[ui]
+		[uiSettings]
 	);
 
 	/**
@@ -91,7 +91,7 @@ const ResizableColumns = () => {
 	});
 
 	useWhyDidYouUpdate('ResizableColumns', {
-		ui,
+		uiSettings,
 		// columnWidth,
 		// isActivePanGesture,
 		// containerWidth,

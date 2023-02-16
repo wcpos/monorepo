@@ -11,6 +11,7 @@ export interface QueryState {
 	sortBy: string;
 	sortDirection: SortDirection;
 	filters?: Record<string, unknown>;
+	selector?: import('rxdb').MangoQuery['selector'];
 }
 
 export type QueryObservable = BehaviorSubject<QueryState>;

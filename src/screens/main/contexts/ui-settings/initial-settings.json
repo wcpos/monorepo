@@ -4,6 +4,7 @@
 		"sortDirection": "asc",
 		"width": 60,
 		"showOutOfStock": false,
+		"position": "left",
 		"columns": [
 			{
 				"key": "image",
