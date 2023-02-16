@@ -150,14 +150,15 @@ const populatePlugin: RxPlugin = {
 			/** */
 			proto.toPopulatedJSON = function (this: RxDocument) {
 				const childrenProps = getPropsWithRef(this.collection.schema.jsonSchema.properties);
+				const latestDoc = this.getLatest();
 
 				// if there are no children, return plain json
-				if (isEmpty(childrenProps)) return Promise.resolve(this.toJSON());
+				if (isEmpty(childrenProps)) return Promise.resolve(latestDoc.toJSON());
 
 				// get json and populate children
-				const json = this.toMutableJSON();
+				const json = latestDoc.toMutableJSON();
 				const childrenPromises = map(childrenProps, async (object, path) => {
-					const childDocs = await this.populate(path);
+					const childDocs = await latestDoc.populate(path);
 					const childPromises = childDocs.map(async (doc) => {
 						return await doc.toPopulatedJSON();
 					});
