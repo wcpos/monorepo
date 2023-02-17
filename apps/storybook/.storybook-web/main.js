@@ -12,7 +12,7 @@ module.exports = {
 	],
 
 	typescript: {
-		// @TODO remove this https://github.com/styleguidist/react-docgen-typescript/issues/356
+		// TODO remove this https://github.com/styleguidist/react-docgen-typescript/issues/356
 		// reactDocgen: 'none',
 	},
 
@@ -25,7 +25,7 @@ module.exports = {
 		// 	console.log(data);
 		// });
 		// console.log(config.module.rules[3].oneOf[2]);
-		/** @TODO create less fragile way to remove svg from default config */
+		/** TODO create less fragile way to remove svg from default config */
 		config.module.rules[2] = {
 			test: /\.(ico|jpg|jpeg|png|gif|eot|otf|webp|ttf|woff|woff2|cur|ani|pdf)(\?.*)?$/,
 			loader: '/Users/kilbot/Projects/wcpos-client/node_modules/file-loader/dist/cjs.js',

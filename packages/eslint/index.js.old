@@ -69,10 +69,10 @@ module.exports = {
 		// 'no-underscore-dangle': ['error', { allowAfterThis: true }],
 		'no-underscore-dangle': 0,
 		'no-nested-ternary': 0,
-		// @TODO - fix this when updated https://github.com/benmosher/eslint-plugin-import/issues/1174
+		// TODO - fix this when updated https://github.com/benmosher/eslint-plugin-import/issues/1174
 		'import/no-extraneous-dependencies': 0,
 		'no-restricted-exports': 'warn',
-		// @TODO - fix this when updated - eslint has a bug with this rule
+		// TODO - fix this when updated - eslint has a bug with this rule
 		'@typescript-eslint/no-explicit-any': 'off',
 	},
 	settings: {
