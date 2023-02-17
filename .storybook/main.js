@@ -3,9 +3,9 @@ const webpack = require('webpack');
 
 module.exports = {
 	core: {
-    builder: 'webpack5',
+		builder: 'webpack5',
 	},
-	
+
 	stories: ['src/**/*.stories.tsx'],
 
 	addons: [
@@ -18,20 +18,20 @@ module.exports = {
 	framework: '@storybook/react',
 
 	typescript: {
-		// @TODO remove this https://github.com/styleguidist/react-docgen-typescript/issues/356
+		// TODO remove this https://github.com/styleguidist/react-docgen-typescript/issues/356
 		// reactDocgen: 'none',
 	},
 
 	babel: async (options) => ({
-    // Update your babel configuration here
-    ...options,
-  }),
+		// Update your babel configuration here
+		...options,
+	}),
 
 	webpackFinal: async (config, { configType }) => {
-    // Make whatever fine-grained changes you need
-    // Return the altered config
+		// Make whatever fine-grained changes you need
+		// Return the altered config
 		console.log(config);
 		console.log(config.module.rules[2].oneOf[9].type);
-    return config;
+		return config;
 	},
 };

@@ -21,7 +21,7 @@ type AxiosError = import('axios').AxiosError;
  * - axios.create is synchronous for web, but async for electron
  * - axios.create creates more pain than it's worth
  *
- * @TODO - how best to cancel requests
+ * TODO - how best to cancel requests
  */
 export const useHttpClient = () => {
 	const errorResponseHandler = useHttpErrorHandler();
@@ -36,15 +36,17 @@ export const useHttpClient = () => {
 	// 		controller.abort();
 	// 	};
 	// }, [controller]);
+	const retryDelay = 10000; // 10 second
 
 	/**
 	 *
 	 */
 	const httpWrapper = React.useMemo(() => {
 		let _defaultConfig = {};
+		let retryCount = 0;
 
 		/**
-		 * @TODO - merge config with default?
+		 * TODO - merge config with default?
 		 */
 		const request = async (config: AxiosRequestConfig = {}) => {
 			const _config = defaults(config, _defaultConfig);
@@ -76,7 +78,7 @@ export const useHttpClient = () => {
 				 * WordPress REST API check for:
 				 * HTTP_X_HTTP_METHOD_OVERRIDE (header)
 				 * _method (get param)
-				 * @TODO - check if I should use this instead
+				 * TODO - check if I should use this instead
 				 */
 				set(_config, ['params', 'wcpos_http_method'], 'head');
 			}
@@ -93,21 +95,14 @@ export const useHttpClient = () => {
 			 */
 			try {
 				const response = await http.request(_config);
+				retryCount = 0;
 				return response;
 			} catch (error) {
 				log.error(error);
 				errorResponseHandler(error as AxiosError);
+				retryCount++;
+				return new Promise((resolve) => setTimeout(resolve, retryDelay * Math.pow(2, retryCount)));
 			}
-
-			// if (!response) {
-			// 	log.error('no response at all', config);
-			// 	throw Error('Network Error');
-			// }
-
-			/**
-			 * A response should only return is status is ok
-			 */
-			// return response;
 		};
 
 		/**

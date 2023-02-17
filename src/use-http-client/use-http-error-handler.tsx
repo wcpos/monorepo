@@ -30,7 +30,7 @@ const useHttpErrorHandler = () => {
 					/**
 					 * This can happen for self-signed certificates, eg: development servers
 					 * The solution for web is to go to the site and manually trust the certificate
-					 * @TODO - what happens on desktop and mobile?
+					 * TODO - what happens on desktop and mobile?
 					 *
 					 * status = 0
 					 */
@@ -43,7 +43,7 @@ const useHttpErrorHandler = () => {
 				case 403:
 					if (res.data) {
 						/**
-						 * @TODO - Errors may be better in a global Dialog component, like Snackbar?
+						 * TODO - Errors may be better in a global Dialog component, like Snackbar?
 						 */
 						addSnackbar({
 							message: `Recieved "${res.data.message}" when trying to access endpoint: ${res.config.url}`,
