@@ -50,7 +50,7 @@ const CartTabs = ({ currentOrder }: CartTabsProps) => {
 	const handleTabChange = React.useCallback(
 		(idx: number) => {
 			/**
-			 * @TODO - setParams updates the currentOrder without refreshing the products,
+			 * TODO - setParams updates the currentOrder without refreshing the products,
 			 * this is great!, but I lose the back button. Push keeps the old order in the stack.
 			 */
 			navigation.setParams({ orderID: routes[idx].key });

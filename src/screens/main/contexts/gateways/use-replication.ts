@@ -78,7 +78,7 @@ export const useReplication = ({ collection }) => {
 				async handler() {
 					try {
 						/**
-						 * @TODO - getting the localIds returns stale data so we need to wait
+						 * TODO - getting the localIds returns stale data so we need to wait
 						 * Need to find a better way to do this
 						 * Is the collection not updated yet? or is find() being cached?
 						 */

@@ -21,7 +21,7 @@ export const Price = ({ item: product, column }: Props) => {
 	const { display } = column;
 
 	/**
-	 * @TODO - move this into the ui as a helper function
+	 * TODO - move this into the ui as a helper function
 	 */
 	const show = React.useCallback(
 		(key: string): boolean => {

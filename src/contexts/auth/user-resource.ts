@@ -14,12 +14,12 @@ const user$ = userDB$.pipe(
 		userDB.getLocal$('current').pipe(
 			switchMap((current) => (current ? current?.get$('userID') : of(null))),
 			switchMap(async (userID) => {
-				/** @NOTE - findOne returns an RxDocument if userID is null | undefined */
+				/** NOTE - findOne returns an RxDocument if userID is null | undefined */
 				const user = await userDB.users.findOneFix(userID).exec();
 				if (!user) {
 					/**
 					 * Init with Global User
-					 * @TODO - what if edge cases, like no current userID but there is a User in the DB?
+					 * TODO - what if edge cases, like no current userID but there is a User in the DB?
 					 */
 					userDB.users.insert({ first_name: 'Global', last_name: 'User' }).then((defaultUser) => {
 						return userDB.upsertLocal('current', { userID: defaultUser.uuid });

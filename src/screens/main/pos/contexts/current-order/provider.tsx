@@ -28,7 +28,7 @@ interface CurrentOrderContextProviderProps {
  * If no orderID is provided, active order will be a new order (mock Order class)
  * Current order should be set by route only
  *
- * @TODO - need a way to currency symbol from store document
+ * TODO - need a way to currency symbol from store document
  */
 const CurrentOrderProvider = ({ children }: CurrentOrderContextProviderProps) => {
 	const { store } = useAuth();
@@ -44,7 +44,7 @@ const CurrentOrderProvider = ({ children }: CurrentOrderContextProviderProps) =>
 		(inputs$) =>
 			inputs$.pipe(
 				/**
-				 * @NOTE - we need to observe the query result because otherwise the currentOrder is stale
+				 * NOTE - we need to observe the query result because otherwise the currentOrder is stale
 				 * This causes problems when trying to update the currentOrder
 				 */
 				// switchMap(([uuid]) => collection.findOneFix(uuid).$),

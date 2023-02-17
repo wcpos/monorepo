@@ -15,7 +15,7 @@ interface Props {
 }
 
 /**
- * @NOTE popover is in portal outside of VariationsProvider
+ * NOTE popover is in portal outside of VariationsProvider
  * An inline popover cannot overflow the parent FlashList
  * I could wrap VariationsSelect in VariationsProvider, but that seems messy
  */

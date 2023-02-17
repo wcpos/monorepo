@@ -1,13 +1,11 @@
 import * as React from 'react';
+import type { TextInput as RNTextInput } from 'react-native';
 
-import { useNavigation, StackActions } from '@react-navigation/native';
-import get from 'lodash/get';
+import { useNavigation } from '@react-navigation/native';
 
-import Backdrop from '@wcpos/components/src/backdrop';
 import Box from '@wcpos/components/src/box';
-import Modal from '@wcpos/components/src/modal';
-import Text from '@wcpos/components/src/text';
-import TextInput from '@wcpos/components/src/textinput';
+import { useModal } from '@wcpos/components/src/modal';
+import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
@@ -15,71 +13,44 @@ import useAuth from '../../contexts/auth';
 import { t } from '../../lib/translations';
 
 const Login = () => {
-	// const siteID = get(route, ['params', 'siteID']);
-	// const navigation = useNavigation();
-	const [username, setUsername] = React.useState('');
-	const [password, setPassword] = React.useState('');
-	// const { site: _site, wpCredentials, userDB } = useAuth();
-	// const http = useHttpClient();
+	const { site, wpCredentials } = useAuth();
+	const usernameRef = React.useRef<RNTextInput>(null);
+	const passwordRef = React.useRef<RNTextInput>(null);
+	const { onPrimaryAction } = useModal();
+	const http = useHttpClient();
+	const navigation = useNavigation();
 
-	// const handleLogin = async () => {
-	// 	let success = false;
-	// 	let site = _site;
+	/**
+	 * TODO: It might be better to do a JWT refresh instead of login?
+	 */
+	onPrimaryAction(async () => {
+		try {
+			const { data } = await http.get(`${site?.wc_api_auth_url}/authorize`, {
+				auth: {
+					username: usernameRef.current?.value,
+					password: passwordRef.current?.value,
+				},
+			});
+			wpCredentials.patch(data);
+		} catch (err) {
+			log.error(err);
+		}
 
-	// 	if (!site) {
-	// 		// get site from siteID
-	// 		site = await userDB.sites
-	// 			.findOne({ selector: { localID: siteID } })
-	// 			.exec()
-	// 			.catch((error) => {
-	// 				log.error(error);
-	// 			});
-	// 	}
-
-	// 	if (!site) {
-	// 		log.error('Site not found');
-	// 		return;
-	// 	}
-
-	// 	/** @TODO - use generic http with error handling */
-	// 	const response = await http
-	// 		.get(`${site?.wc_api_auth_url}/authorize`, {
-	// 			auth: {
-	// 				username,
-	// 				password,
-	// 			},
-	// 		})
-	// 		.catch((err) => {
-	// 			log.error(err);
-	// 		});
-
-	// 	if (response) {
-	// 		if (wpCredentials) {
-	// 			success = await wpCredentials.atomicPatch(response.data);
-	// 		} else {
-	// 			success = await site?.addWpCredentials(response.data);
-	// 		}
-	// 	}
-
-	// 	if (success) {
-	// 		navigation.goBack();
-	// 	}
-	// };
+		navigation.goBack();
+	});
 
 	return (
 		<Box space="medium">
-			<TextInput
+			<TextInputWithLabel
+				ref={usernameRef}
 				label={t('Username', { _tags: 'core' })}
-				placeholder="username"
-				value={username}
-				onChange={setUsername}
+				// placeholder="username"
 				type="username"
 			/>
-			<TextInput
+			<TextInputWithLabel
+				ref={passwordRef}
 				label={t('Password', { _tags: 'core' })}
-				placeholder="password"
-				value={password}
-				onChange={setPassword}
+				// placeholder="password"
 				type="password"
 			/>
 		</Box>

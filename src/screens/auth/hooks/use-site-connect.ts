@@ -78,7 +78,7 @@ const useSiteConnect = () => {
 			const link = get(response, ['headers', 'link']);
 			if (!link) {
 				/**
-				 * @TODO
+				 * TODO
 				 *
 				 * For CORS requests only a few headers are allowed by default.
 				 *  Access-Control-Expose-Headers: Link is needed on the server side to get the link header

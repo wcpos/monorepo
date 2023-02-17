@@ -22,7 +22,7 @@ const GatewayTabs = () => {
 	}, [gateways]);
 
 	/**
-	 * @TODO - what if no gateways?
+	 * TODO - what if no gateways?
 	 */
 	if (gateways.length === 0) {
 		return null;

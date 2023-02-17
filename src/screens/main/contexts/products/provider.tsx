@@ -58,7 +58,7 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 
 	/**
 	 * Clear all docs
-	 * @TODO - I thought it would be better to use the collection.remove() method
+	 * TODO - I thought it would be better to use the collection.remove() method
 	 * but it seems to make the app hang. Need to investigate later.
 	 * // await collection.remove();
 	 * // return storeDB?.addCollections({ products });

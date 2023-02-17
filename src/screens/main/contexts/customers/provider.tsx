@@ -94,7 +94,7 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 					// 	const array = Array.isArray(result) ? result : [];
 					// 	const productSorter = (product: any) => {
 					// 		if (q.sortBy === 'name') {
-					// 			// @TODO - this doens't work
+					// 			// TODO - this doens't work
 					// 			return product[q.sortBy].toLowerCase();
 					// 		}
 					// 		return product[q.sortBy];

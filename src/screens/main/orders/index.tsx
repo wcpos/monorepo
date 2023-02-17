@@ -39,7 +39,7 @@ const OrdersNavigator = () => {
 				<Stack.Screen name="EditOrder">
 					{({ route }) => {
 						const { orderID } = route.params;
-						/** @TODO - findOne */
+						/** TODO - findOne */
 						return (
 							<OrdersProvider initialQuery={{ filters: { uuid: orderID } }}>
 								<ModalLayout>
@@ -54,7 +54,7 @@ const OrdersNavigator = () => {
 				<Stack.Screen name="Receipt">
 					{({ route }) => {
 						const { orderID } = route.params;
-						/** @TODO - findOne */
+						/** TODO - findOne */
 						return (
 							<OrdersProvider initialQuery={{ filters: { uuid: orderID } }}>
 								<ModalLayout

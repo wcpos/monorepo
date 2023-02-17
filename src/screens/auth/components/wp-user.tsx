@@ -30,7 +30,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 		}
 
 		/**
-		 * @TODO - show a popover to select the store
+		 * TODO - show a popover to select the store
 		 * what if there are no stores?
 		 */
 	}, [login, site.uuid, wpUser]);

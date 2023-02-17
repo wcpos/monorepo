@@ -35,7 +35,7 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 	);
 
 	/**
-	 * @TODO - don't we just want to set the status to cancelled?
+	 * TODO - don't we just want to set the status to cancelled?
 	 */
 	const handleRemove = React.useCallback(async () => {
 		const orderJson = await order.toPopulatedJSON();

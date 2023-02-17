@@ -17,7 +17,7 @@ interface Props {
 }
 
 /**
- * @TODO - this needs to be in a Product provider, because products may not be downlaoded yet
+ * TODO - this needs to be in a Product provider, because products may not be downlaoded yet
  */
 const GroupedNames = ({ groupedResource }) => {
 	const grouped = useObservableSuspense(groupedResource);

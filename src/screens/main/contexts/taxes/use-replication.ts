@@ -35,11 +35,11 @@ export const useReplication = ({ collection }) => {
 				async handler(lastCheckpoint, batchSize) {
 					try {
 						/**
-						 * @TODO - getting the localIds returns stale data so we need to wait
+						 * TODO - getting the localIds returns stale data so we need to wait
 						 * Need to find a better way to do this
 						 * Is the collection not updated yet? or is find() being cached?
 						 *
-						 * @NOTE - this is similar to gateways, but we need pagination
+						 * NOTE - this is similar to gateways, but we need pagination
 						 */
 						await wait(1000);
 						const [{ data }, localIds] = await Promise.all([
@@ -51,7 +51,7 @@ export const useReplication = ({ collection }) => {
 						]);
 
 						// compare local and server ids
-						// @NOTE - rest api ids are integers, local ids are strings
+						// NOTE - rest api ids are integers, local ids are strings
 						const add = data
 							.filter((d) => !localIds.includes(String(d.id)))
 							.map((d) => ({ ...d, _deleted: false }));

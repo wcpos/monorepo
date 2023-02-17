@@ -49,7 +49,7 @@ export const useReplication = ({ collection, parent }) => {
 			}
 
 			/**
-			 * @TODO - transform arrays to strings in axios?
+			 * TODO - transform arrays to strings in axios?
 			 */
 			const params = {
 				include: include.join(','),

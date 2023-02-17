@@ -44,7 +44,7 @@ const CustomersNavigator = () => {
 			<Stack.Screen name="EditCustomer" options={{ presentation: 'transparentModal' }}>
 				{({ route }) => {
 					const { customerID } = route.params;
-					/** @TODO - findOne */
+					/** TODO - findOne */
 					return (
 						<CustomersProvider initialQuery={{ filters: { uuid: customerID } }}>
 							<ModalLayout>

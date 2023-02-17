@@ -19,7 +19,7 @@ export const VariablePrice = ({ item: product, column }: Props) => {
 	const { display } = column;
 
 	/**
-	 * @TODO - abstract this
+	 * TODO - abstract this
 	 */
 	const show = React.useCallback(
 		(key: string): boolean => {

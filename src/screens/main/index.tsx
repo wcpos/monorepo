@@ -43,7 +43,7 @@ const Drawer = createDrawerNavigator<DrawerParamList>();
 /**
  *
  */
-const MainNavigator = () => {
+const MainNavigator = ({ navigation }) => {
 	const { site } = useAuth();
 	const wpAPIURL = useObservableState(site.wp_api_url$, site.wp_api_url);
 	const dimensions = useWindowDimensions();
@@ -52,7 +52,7 @@ const MainNavigator = () => {
 	return (
 		<UISettingsProvider>
 			<OnlineStatusProvider wpAPIURL={wpAPIURL}>
-				{/** @NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
+				{/** NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
 				<Portal.Provider>
 					<Stack.Navigator screenOptions={{ headerShown: false }}>
 						<Stack.Screen name="MainDrawer">
@@ -133,7 +133,13 @@ const MainNavigator = () => {
 							</Stack.Screen>
 							<Stack.Screen name="Login">
 								{() => (
-									<ModalLayout title={t('Login', { _tags: 'core' })}>
+									<ModalLayout
+										title={t('Login', { _tags: 'core' })}
+										primaryAction={{ label: t('Login', { _tags: 'core' }) }}
+										secondaryActions={[
+											{ label: t('Cancel', { _tags: 'core' }), action: () => navigation.goBack() },
+										]}
+									>
 										<Login />
 									</ModalLayout>
 								)}

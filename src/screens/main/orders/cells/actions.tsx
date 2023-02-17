@@ -58,9 +58,9 @@ const Actions = ({ item: order }: Props) => {
 		}
 
 		/**
-		 * @TODO - close the modal?
-		 * @TODO - show a success message?
-		 * @TODO - BUG: form refreshes with old data
+		 * TODO - close the modal?
+		 * TODO - show a success message?
+		 * TODO - BUG: form refreshes with old data
 		 */
 	}, [http, order]);
 

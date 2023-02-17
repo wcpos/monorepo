@@ -92,7 +92,7 @@ export const useReplication = ({ collection }) => {
 			const documents = await collection.auditRestApiIds(response?.data);
 			runAudit.current = false;
 
-			/** @TODO - hack */
+			/** TODO - hack */
 			if (documents.length === 0) {
 				return replicate(null, 10);
 			}

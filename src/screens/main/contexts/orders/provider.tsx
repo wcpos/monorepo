@@ -86,7 +86,7 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 				}
 
 				/**
-				 * @TODO - hack for find by uuid
+				 * TODO - hack for find by uuid
 				 */
 				if (_get(q, 'filters.uuid')) {
 					return collection.findOneFix(q.filters.uuid).$;

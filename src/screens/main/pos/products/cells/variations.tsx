@@ -30,7 +30,7 @@ interface Props {
 }
 
 /**
- * @TODO: this is kind of messy, needs a refactor
+ * TODO: this is kind of messy, needs a refactor
  * - it may be better to search via the VariationsProvider
  */
 export const Variations = ({ variations, attributes, addToCart, setPrimaryAction }: Props) => {

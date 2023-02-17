@@ -43,7 +43,7 @@ const userDB$ = from(userDBPromise());
 
 // 				if (!userID) {
 // 					/**
-// 					 * @TODO - what if current userID but there is a User in the DB?
+// 					 * TODO - what if current userID but there is a User in the DB?
 // 					 */
 // 					userDB.users
 // 						.insert({
@@ -70,7 +70,7 @@ const userDB$ = from(userDBPromise());
 
 // 				// userDB.users.findOne({ selector: { localID: current.get('userID') } }).exec();
 // 				/**
-// 				 * @TODO - this will always return a user, I think it is a bug in rxdb
+// 				 * TODO - this will always return a user, I think it is a bug in rxdb
 // 				 * but handy here because it will return the first UserDocument found if no userID is found
 // 				 */
 // 				return userDB.users.findOne(userID).exec();
@@ -82,7 +82,7 @@ const userDB$ = from(userDBPromise());
 // 			filter((user) => {
 // 				log.silly('user', user);
 // 				if (!user) {
-// 					// @TODO - what if no user?
+// 					// TODO - what if no user?
 // 					// delete and start again?
 // 					userDB.upsertLocal('current', null);
 // 				}
@@ -108,7 +108,7 @@ const selected$ = userDB$.pipe(
 			filter((current) => !!current),
 
 			/**
-			 * @TODO - findOne(undefined|null|'') will match the first record, I think it is a bug in rxdb
+			 * TODO - findOne(undefined|null|'') will match the first record, I think it is a bug in rxdb
 			 * I use '_' here which should not match a record, empty string will match the first record
 			 */
 			switchMap((current) => {
@@ -130,7 +130,7 @@ const selected$ = userDB$.pipe(
 	}),
 
 	/**
-	 * @TODO - do sanity check: store should be in wpCredentials, creds in site, site in user
+	 * TODO - do sanity check: store should be in wpCredentials, creds in site, site in user
 	 */
 	map(([site, wpCredentials, store]) => {
 		if (!site || !wpCredentials || !store) {

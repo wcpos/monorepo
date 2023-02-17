@@ -37,7 +37,7 @@ const PayButton = ({ order }: PayModalProps) => {
 	// 	});
 
 	// 	if (result.status === 201 || result.status === 200) {
-	// 		// @TODO - this should be part of the parseRestResponse
+	// 		// TODO - this should be part of the parseRestResponse
 	// 		await order.collection.upsertChildren(result.data);
 	// 		return order.atomicPatch(result.data);
 	// 		// if (order.id) {

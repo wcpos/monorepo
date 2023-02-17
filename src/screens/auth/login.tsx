@@ -53,13 +53,13 @@ const Login = ({ route }) => {
 				<TextInputWithLabel
 					ref={usernameRef}
 					label={t('Username', { _tags: 'core' })}
-					placeholder="username"
+					// placeholder="username"
 					type="username"
 				/>
 				<TextInputWithLabel
 					ref={passwordRef}
 					label={t('Password', { _tags: 'core' })}
-					placeholder="password"
+					// placeholder="password"
 					type="password"
 				/>
 			</Box>

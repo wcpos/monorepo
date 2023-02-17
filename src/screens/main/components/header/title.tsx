@@ -6,7 +6,7 @@ import { HeaderTitleProps } from '@react-navigation/elements';
 import Text from '@wcpos/components/src/text';
 
 /**
- * @TODO - text trucation doesn't trigger when screen size changes
+ * TODO - text trucation doesn't trigger when screen size changes
  */
 const HeaderTitle = ({ children }: HeaderTitleProps) => {
 	// useWindowDimensions();
