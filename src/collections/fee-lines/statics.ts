@@ -16,7 +16,7 @@ export default {
 	async bulkUpsert(this: FeeLineCollection, items: Record<string, unknown>[]) {
 		const promises: Promise<FeeLineDocument>[] = [];
 
-		// @TODO - data is coming in straight from REST API, need to parse first?
+		// TODO - data is coming in straight from REST API, need to parse first?
 		forEach(items, (item) => {
 			// @ts-ignore
 			const localID = get(find(item.meta_data, { key: '_pos' }), 'value');

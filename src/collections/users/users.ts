@@ -55,7 +55,7 @@ const methods: UserMethods = {
 	},
 
 	/**
-	 * @TODO - $pull is not implemented yet, PR to RxDB?
+	 * TODO - $pull is not implemented yet, PR to RxDB?
 	 */
 	async removeSite(this: UserDocument, site: SiteDocument) {
 		// await this.update({ $pull: { sites: site.localID } });

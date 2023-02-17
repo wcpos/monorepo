@@ -13,7 +13,7 @@ import type { RxCollection, RxJsonSchema, RxPlugin } from 'rxdb';
  */
 export function pruneProperties(schema: RxJsonSchema<any>, json: Record<string, any>) {
 	/**
-	 * @TODO - WC REST API returns _links, which is forbidden by rxdb
+	 * TODO - WC REST API returns _links, which is forbidden by rxdb
 	 * Not sure whether to swap _links -> links here or on the serverside PHP
 	 */
 	if (json._links) {
@@ -86,7 +86,7 @@ export function coerceData(
 			return Number(data);
 		}
 		if (schema.type === 'string') {
-			/** @NOTE - Special case for ref collections */
+			/** NOTE - Special case for ref collections */
 			if (collection && parentSchema && parentSchema.ref) {
 				const refCollection = collection.database.collections[parentSchema.ref];
 				return coerceData(refCollection.schema.jsonSchema, data, refCollection);
@@ -94,7 +94,7 @@ export function coerceData(
 			return String(data || '');
 		}
 		if (schema.type === 'boolean') {
-			/** @TODO - perhaps shouldn't do this, effective makes default false? */
+			/** TODO - perhaps shouldn't do this, effective makes default false? */
 			return typeof data === 'string' ? data === 'true' : Boolean(data);
 		}
 		if (schema.type === 'null') {
@@ -107,7 +107,7 @@ export function coerceData(
 }
 
 /**
- * @NOTE - this mutates original json
+ * NOTE - this mutates original json
  * update this to return a new object?
  */
 export function parseRestResponse(this: RxCollection, json: Record<string, any>) {

@@ -42,7 +42,7 @@ const woocommercePlugin: RxPlugin = {
 		 * add a foo-property to each document. You can then call myDocument.foo (='bar')
 		 */
 		createRxDocument(doc: RxDocument) {
-			console.log('@TODO - remove this');
+			console.log('TODO - remove this');
 			// @ts-ignore
 			doc.foo = 'bar';
 		},

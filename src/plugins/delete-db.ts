@@ -40,7 +40,7 @@ const deleteDBPlugin: RxPlugin = {
 	 */
 	hooks: {
 		/**
-		 * @TODO - this doesn't work, the storage is recreated
+		 * TODO - this doesn't work, the storage is recreated
 		 * I need to write a separate script which does clean up
 		 */
 		postRemoveRxDatabase: {

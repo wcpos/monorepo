@@ -56,7 +56,7 @@ formatsPlugin.get = (name: FormatName, mode: FormatMode = 'full'): Format => {
 function addFormats(ajv: Ajv, list: FormatName[], fs: DefinedFormats, exportName: Name): void {
 	/**
 	 * Logical nullish assignment
-	 * @TODO - add this transform to babel?
+	 * TODO - add this transform to babel?
 	 */
 	// ajv.opts.code.formats ??= _`require("ajv-formats/dist/formats").${exportName}`;
 	if (ajv.opts.code.formats == null || ajv.opts.code.formats === undefined) {
