@@ -1,14 +1,13 @@
 import * as React from 'react';
 
 import flatten from 'lodash/flatten';
-import isEqual from 'lodash/isEqual';
-import { ObservableResource } from 'observable-hooks';
-import { combineLatest, distinctUntilChanged } from 'rxjs';
-import { switchMap, tap, map, shareReplay } from 'rxjs/operators';
+import { ObservableResource, useSubscription } from 'observable-hooks';
+import { combineLatest, iif, of } from 'rxjs';
+import { switchMap, map, catchError, filter } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import { useCalcTotals } from './use-calc-totals';
+import useTaxes from '../taxes';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
@@ -31,6 +30,8 @@ interface CartContextProps {
  *
  */
 const CartProvider = ({ children, order }: CartContextProps) => {
+	const { calcLineItemTotals, calcOrderTotals } = useTaxes();
+
 	/**
 	 *
 	 */
@@ -47,8 +48,92 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 				line_items,
 				fee_lines,
 				shipping_lines,
-			})),
-			shareReplay(1) // cart$ is subscribed to in multiple places to calculate totals
+			}))
+		);
+
+		/**
+		 *
+		 */
+		const lineItemTotals$ = order.populate$('line_items').pipe(
+			switchMap((items) =>
+				iif(
+					() => items.length === 0,
+					of([]),
+					combineLatest(
+						items.map((item) =>
+							combineLatest([item.quantity$, item.price$, item.tax_class$]).pipe(
+								map(([qty, price, taxClass]) => {
+									const totals = calcLineItemTotals(qty, price, taxClass);
+									item.incrementalPatch(totals);
+									return totals;
+								})
+							)
+						)
+					)
+				)
+			)
+		);
+
+		/**
+		 *
+		 */
+		const feeLineTotals$ = order.populate$('fee_lines').pipe(
+			switchMap((items) =>
+				iif(
+					() => items.length === 0,
+					of([]),
+					combineLatest(
+						items.map((item) => {
+							return combineLatest([item.total$, item.tax_class$, item.tax_status$]).pipe(
+								map(([price, taxClass, taxStatus]) => {
+									const totals = calcLineItemTotals(1, price, taxClass);
+									item.incrementalPatch(totals);
+									return totals;
+								})
+							);
+						})
+					)
+				)
+			)
+		);
+
+		/**
+		 *
+		 */
+		const shippingLineTotals$ = order.populate$('shipping_lines').pipe(
+			switchMap((items) =>
+				iif(
+					() => items.length === 0,
+					of([]),
+					combineLatest(
+						items.map((item) => {
+							return combineLatest([item.total$]).pipe(
+								map(([price]) => {
+									const totals = calcLineItemTotals(1, price, 'shipping');
+									item.incrementalPatch(totals);
+									return totals;
+								})
+							);
+						})
+					)
+				)
+			)
+		);
+
+		/**
+		 *
+		 */
+		const cartTotals$ = combineLatest([lineItemTotals$, feeLineTotals$, shippingLineTotals$]).pipe(
+			map((totals) => flatten(totals)),
+			filter((totals) => totals.length > 0),
+			map((cartTotals) => {
+				const totals = calcOrderTotals(cartTotals);
+				order.incrementalPatch(totals);
+				return totals;
+			}),
+			catchError((err) => {
+				log.error(err);
+			})
 		);
 
 		/**
@@ -57,13 +142,15 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 		return {
 			cart$,
 			cartResource: new ObservableResource(cart$),
+			cartTotals$,
 		};
-	}, [order]);
+	}, [calcLineItemTotals, calcOrderTotals, order]);
 
 	/**
 	 * Calc totals
+	 * NOTE - want to subscribe here? maybe its better to subscribe in the component?
 	 */
-	useCalcTotals(value.cart$, order);
+	useSubscription(value.cartTotals$);
 
 	/**
 	 *
