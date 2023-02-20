@@ -41,7 +41,12 @@ export interface WooCommerceProductSchema {
   total_sales?: number;
   virtual?: boolean;
   downloadable?: boolean;
-  downloads?: any[];
+  downloads?: {
+    id?: string;
+    name?: string;
+    file?: string;
+    [k: string]: any;
+  }[];
   download_limit?: number;
   download_expiry?: number;
   external_url?: string;
@@ -114,7 +119,7 @@ export interface WooCommerceProductSchema {
     option?: string;
     [k: string]: any;
   }[];
-  variations?: string[];
+  variations?: number[];
   grouped_products?: number[];
   menu_order?: number;
   meta_data?: {
@@ -134,6 +139,5 @@ export interface WooCommerceProductSchema {
     }[];
     [k: string]: any;
   };
-  thumbnail?: string;
   [k: string]: any;
 }

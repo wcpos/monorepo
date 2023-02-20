@@ -10,10 +10,9 @@
  */
 export interface WooCommerceTaxRateSchema {
   /**
-   * Unique identifier for the resource.
+   * Not a UUID! This is the WC REST API ID but coerced to a string
    */
-  uuid?: string;
-  id?: number;
+  id?: string;
   country?:
     | "AX"
     | "AF"

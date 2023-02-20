@@ -12,7 +12,6 @@ export interface WooCommercePaymentGatewaySchema {
   /**
    * Unique identifier for the resource.
    */
-  uuid?: string;
   id?: string;
   description?: string;
   order?: number;
