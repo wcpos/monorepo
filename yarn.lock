@@ -7232,9 +7232,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@testing-library/dom@npm:^8.5.0":
-  version: 8.20.0
-  resolution: "@testing-library/dom@npm:8.20.0"
+"@testing-library/dom@npm:^9.0.0":
+  version: 9.0.0
+  resolution: "@testing-library/dom@npm:9.0.0"
   dependencies:
     "@babel/code-frame": ^7.10.4
     "@babel/runtime": ^7.12.5
@@ -7244,7 +7244,7 @@ __metadata:
     dom-accessibility-api: ^0.5.9
     lz-string: ^1.4.4
     pretty-format: ^27.0.2
-  checksum: 1e599129a2fe91959ce80900a0a4897232b89e2a8e22c1f5950c36d39c97629ea86b4986b60b173b5525a05de33fde1e35836ea597b03de78cc51b122835c6f0
+  checksum: 5381bf9438f0ee35f795e7f9b203564aa455e7cd838b6677084c82dd56396779c38cc49ddffed4e57a8bcc3c62b4bc96ea684bb4b24d13655152db745327b2cd
   languageName: node
   linkType: hard
 
@@ -7287,17 +7287,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@testing-library/react@npm:^13.4.0":
-  version: 13.4.0
-  resolution: "@testing-library/react@npm:13.4.0"
+"@testing-library/react@npm:^14.0.0":
+  version: 14.0.0
+  resolution: "@testing-library/react@npm:14.0.0"
   dependencies:
     "@babel/runtime": ^7.12.5
-    "@testing-library/dom": ^8.5.0
+    "@testing-library/dom": ^9.0.0
     "@types/react-dom": ^18.0.0
   peerDependencies:
     react: ^18.0.0
     react-dom: ^18.0.0
-  checksum: 51ec548c1fdb1271089a5c63e0908f0166f2c7fcd9cacd3108ebbe0ce64cb4351812d885892020dc37608418cfb15698514856502b3cab0e5cc58d6cc1bd4a3e
+  checksum: 4a54c8f56cc4a39b50803205f84f06280bb76521d6d5d4b3b36651d760c7c7752ef142d857d52aaf4fad4848ed7a8be49afc793a5dda105955d2f8bef24901ac
   languageName: node
   linkType: hard
 
@@ -8676,7 +8676,7 @@ __metadata:
     "@sentry/electron": ^4.2.0
     "@teamsupercell/typings-for-css-modules-loader": ^2.5.2
     "@testing-library/jest-dom": ^5.16.5
-    "@testing-library/react": ^13.4.0
+    "@testing-library/react": ^14.0.0
     "@types/fs-extra": ^11.0.1
     "@types/jest": ^29.4.0
     "@types/node": 18.13.0
@@ -8703,7 +8703,7 @@ __metadata:
     electron-builder: 23.6.0
     electron-debug: ^3.2.0
     electron-devtools-installer: ^3.2.0
-    electron-log: ^5.0.0-beta.16
+    electron-log: ^5.0.0-beta.19
     electron-notarize: ^1.2.2
     electron-rebuild: ^3.2.9
     electron-store: ^8.1.0
@@ -8723,10 +8723,10 @@ __metadata:
     react-native-reanimated: 2.14.4
     react-native-web: ~0.18.12
     react-refresh: ^0.14.0
-    react-refresh-typescript: ^2.0.7
+    react-refresh-typescript: ^2.0.8
     react-test-renderer: ^18.2.0
     rimraf: ^3.0.2
-    sass: ^1.58.1
+    sass: ^1.58.2
     sass-loader: ^13.2.0
     style-loader: ^3.3.1
     terser-webpack-plugin: ^5.3.6
@@ -8777,14 +8777,14 @@ __metadata:
     react: 18.2.0
     react-devtools-core: 4.27.2
     react-dom: 18.2.0
-    react-native: 0.71.2
+    react-native: 0.71.3
     react-native-device-info: 10.3.0
-    react-native-flipper: 0.179.0
+    react-native-flipper: 0.182.0
     react-native-gesture-handler: ~2.9.0
     react-native-get-random-values: ~1.8.0
     react-native-reanimated: 2.14.4
     react-native-safe-area-context: 4.5.0
-    react-native-screens: ~3.19.0
+    react-native-screens: ~3.20.0
     react-native-svg: 13.4.0
     react-native-webview: 11.26.1
     typescript: ^4.6.3
@@ -8818,7 +8818,7 @@ __metadata:
     "@storybook/react": 6.5.16
     "@svgr/cli": ^6.5.1
     "@testing-library/jest-dom": 5.16.5
-    "@testing-library/react": ^13.4.0
+    "@testing-library/react": ^14.0.0
     "@testing-library/react-hooks": 8.0.1
     "@types/jest": ^29.4.0
     "@types/lodash": 4.14.191
@@ -8845,11 +8845,11 @@ __metadata:
     react: 18.2.0
     react-dom: 18.2.0
     react-error-boundary: 3.1.4
-    react-native: 0.71.2
+    react-native: 0.71.3
     react-native-gesture-handler: ~2.9.0
     react-native-reanimated: 2.14.4
     react-native-safe-area-context: 4.5.0
-    react-native-screens: ~3.19.0
+    react-native-screens: ~3.20.0
     react-native-svg: 13.4.0
     react-native-web: ~0.18.12
     react-native-webview: 11.26.1
@@ -8875,7 +8875,7 @@ __metadata:
     "@react-navigation/stack": 6.3.14
     "@shelf/fast-natural-order-by": ^1.1.0
     "@testing-library/jest-dom": 5.16.5
-    "@testing-library/react": ^13.4.0
+    "@testing-library/react": ^14.0.0
     "@testing-library/react-hooks": 8.0.1
     "@transifex/native": ^5.0.6
     "@transifex/react": ^5.0.6
@@ -8908,14 +8908,14 @@ __metadata:
     react: 18.2.0
     react-dom: 18.2.0
     react-error-boundary: 3.1.4
-    react-native: 0.71.2
+    react-native: 0.71.3
     react-native-builder-bob: 0.20.3
     react-native-device-info: 10.3.0
     react-native-gesture-handler: ~2.9.0
     react-native-linear-gradient: 2.6.2
     react-native-reanimated: 2.14.4
     react-native-safe-area-context: 4.5.0
-    react-native-screens: ~3.19.0
+    react-native-screens: ~3.20.0
     react-native-svg: 13.4.0
     react-native-url-polyfill: ^1.3.0
     react-native-web: ~0.18.12
@@ -8923,11 +8923,11 @@ __metadata:
     react-native-webview: 11.26.1
     react-test-renderer: 18.2.0
     react-thermal-printer: ^0.11.0
-    react-to-print: ^2.14.11
+    react-to-print: ^2.14.12
     rxjs: 7.8.0
     styled-components: 5.3.6
     ts-jest: ^29.0.5
-    tsup: ^6.6.2
+    tsup: ^6.6.3
     typescript: ^4.6.3
   languageName: unknown
   linkType: soft
@@ -8948,7 +8948,7 @@ __metadata:
     jsonschema-to-interface: 1.0.5
     observable-hooks: 4.2.1
     react: 18.2.0
-    rxdb: ^14.0.3
+    rxdb: ^14.0.4
     rxjs: 7.8.0
     ts-jest: ^29.0.5
     typescript: ^4.6.3
@@ -8988,7 +8988,7 @@ __metadata:
     "@wcpos/eslint-config": "*"
     "@wcpos/tsconfig": "*"
     react-native-builder-bob: 0.20.3
-    tsup: ^6.6.2
+    tsup: ^6.6.3
     typescript: ^4.6.3
   languageName: unknown
   linkType: soft
@@ -9010,7 +9010,7 @@ __metadata:
     "@storybook/preset-create-react-app": 4.1.2
     "@storybook/react": 6.5.16
     "@testing-library/jest-dom": 5.16.5
-    "@testing-library/react": ^13.4.0
+    "@testing-library/react": ^14.0.0
     "@testing-library/react-hooks": 8.0.1
     "@types/jest": ^29.4.0
     "@types/lodash": 4.14.191
@@ -9028,7 +9028,7 @@ __metadata:
     observable-hooks: 4.2.1
     react: 18.2.0
     react-dom: 18.2.0
-    react-native: 0.71.2
+    react-native: 0.71.3
     react-native-reanimated: 2.14.4
     react-native-storybook-loader: 2.0.5
     react-native-web: ~0.18.12
@@ -9079,13 +9079,13 @@ __metadata:
     postinstall-postinstall: ^2.1.0
     react: 18.2.0
     react-dom: 18.2.0
-    react-native: 0.71.2
+    react-native: 0.71.3
     react-native-device-info: 10.3.0
     react-native-gesture-handler: ~2.9.0
     react-native-get-random-values: ~1.8.0
     react-native-reanimated: 2.14.4
     react-native-safe-area-context: 4.5.0
-    react-native-screens: ~3.19.0
+    react-native-screens: ~3.20.0
     react-native-svg: 13.4.0
     react-native-web: ~0.18.12
     react-native-webview: 11.26.1
@@ -9128,7 +9128,7 @@ __metadata:
     "@storybook/preset-create-react-app": 4.1.2
     "@storybook/react": 6.5.16
     "@testing-library/jest-dom": 5.16.5
-    "@testing-library/react": ^13.4.0
+    "@testing-library/react": ^14.0.0
     "@testing-library/react-hooks": 8.0.1
     "@types/jest": ^29.4.0
     "@types/lodash": 4.14.191
@@ -9149,7 +9149,7 @@ __metadata:
     react: 18.2.0
     react-dom: 18.2.0
     react-is: 18.2.0
-    react-native: 0.71.2
+    react-native: 0.71.3
     react-native-reanimated: 2.14.4
     react-native-storybook-loader: 2.0.5
     react-native-web: ~0.18.12
@@ -9189,7 +9189,7 @@ __metadata:
     expo: 48.0.1
     react: 18.2.0
     react-dom: 18.2.0
-    react-native: 0.71.2
+    react-native: 0.71.3
     react-native-storybook-loader: 2.0.5
     react-scripts: 5.0.1
     storybook-addon-mock: ^3.2.0
@@ -9214,7 +9214,7 @@ __metadata:
     "@storybook/preset-create-react-app": 4.1.2
     "@storybook/react": 6.5.16
     "@testing-library/jest-dom": 5.16.5
-    "@testing-library/react": ^13.4.0
+    "@testing-library/react": ^14.0.0
     "@testing-library/react-hooks": 8.0.1
     "@types/jest": ^29.4.0
     "@types/lodash": 4.14.191
@@ -9231,7 +9231,7 @@ __metadata:
     polished: 4.2.2
     react: 18.2.0
     react-dom: 18.2.0
-    react-native: 0.71.2
+    react-native: 0.71.3
     react-native-web: ~0.18.12
     react-scripts: 5.0.1
     react-test-renderer: 18.2.0
@@ -14694,10 +14694,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron-log@npm:^5.0.0-beta.16":
-  version: 5.0.0-beta.16
-  resolution: "electron-log@npm:5.0.0-beta.16"
-  checksum: 669cedf5056068879c85fc236818a5a11a99e9c5d3f26a931e0b2547ddfbeb2926d082d62173dd89a5af71a1f21e9ffbf3f471b42a3bac8ec5a1d3c6c55e9d9a
+"electron-log@npm:^5.0.0-beta.19":
+  version: 5.0.0-beta.19
+  resolution: "electron-log@npm:5.0.0-beta.19"
+  checksum: 31b45d0ce1f9d634db6d275304ffa170c0352bb61a41fa98ae301f19cc80b4a7e807e174ac9a9de90b96d1360365c3f84164ff9ecbba59ddd06b8b1958054ffe
   languageName: node
   linkType: hard
 
@@ -21295,10 +21295,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jsc-android@npm:^250230.2.1":
-  version: 250230.2.1
-  resolution: "jsc-android@npm:250230.2.1"
-  checksum: 11b7c41a0a9192ea4697e61f72a65341afd143550159bbc951cfe8e08eaee4fb119a7f4b9241de15b7156a873f0faef677f6ee72c243ace013e537bfc819dd6d
+"jsc-android@npm:^250231.0.0":
+  version: 250231.0.0
+  resolution: "jsc-android@npm:250231.0.0"
+  checksum: 6c3f0f6f02fa37a19935b2fbe651e9d6ecc370eb30f2ecee76379337bbf084abb568a1ef1133fe622c5b76f43cf54bb7716f92a94dca010985da38edc48841e2
   languageName: node
   linkType: hard
 
@@ -26865,15 +26865,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-codegen@npm:^0.71.3":
-  version: 0.71.3
-  resolution: "react-native-codegen@npm:0.71.3"
+"react-native-codegen@npm:^0.71.5":
+  version: 0.71.5
+  resolution: "react-native-codegen@npm:0.71.5"
   dependencies:
     "@babel/parser": ^7.14.0
     flow-parser: ^0.185.0
     jscodeshift: ^0.13.1
     nullthrows: ^1.1.1
-  checksum: 3cb65d0ed56b8b01e97ad202061a50ee3c5bd0deb5af19c99d3207eaca237c1316bbaec47299e220db7396724175dadb87f7573d1630b6d93c81d64c4884948c
+  checksum: d3a40b557d4b3a0d51664070eb8388b0dde247a0518025ff5a815d3573c98ff16f616df8236e827ee16625f685169931db5c966dd144d860ad5aed437b65b28c
   languageName: node
   linkType: hard
 
@@ -26886,13 +26886,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-flipper@npm:0.179.0":
-  version: 0.179.0
-  resolution: "react-native-flipper@npm:0.179.0"
+"react-native-flipper@npm:0.182.0":
+  version: 0.182.0
+  resolution: "react-native-flipper@npm:0.182.0"
   peerDependencies:
     react: ^16.8.0 || ^17.0.0 || ^18.0.0
     react-native: ">0.62.0"
-  checksum: 4c0deed2f6e9fdfcbe2a2a06f446b5cf517ae37d622639e44889e043b343d36e74d6b85cd66d01d7b0e4bd4bdff38eb70485bc39d1b9263bbffd91e2fa2f99a9
+  checksum: a425ade423e388a40862784d50acf64c9849ec886224c211f7c0e86a554ef232ced3918488bc2dfb28121cb9c03f8aeaacfaf0152f463305034efac889c878a6
   languageName: node
   linkType: hard
 
@@ -26923,10 +26923,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-gradle-plugin@npm:^0.71.14":
-  version: 0.71.14
-  resolution: "react-native-gradle-plugin@npm:0.71.14"
-  checksum: fc2599cdc6b64f09cdd1ad9b0aa6b45265b5905d13ab69174f46134d7a42b324459e169b0aaef67e075b5b65fe93704980718fd2c26245ef2b1d5fd29e391813
+"react-native-gradle-plugin@npm:^0.71.15":
+  version: 0.71.15
+  resolution: "react-native-gradle-plugin@npm:0.71.15"
+  checksum: e1c1714568324405fbca4ca841a0ab62cd8b90c65b3320183825161358f2bdb5226c8b22153b3007c2455dc7535d839d07d43148e6cba7952ae948636154f2b6
   languageName: node
   linkType: hard
 
@@ -27020,16 +27020,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-screens@npm:~3.19.0":
-  version: 3.19.0
-  resolution: "react-native-screens@npm:3.19.0"
+"react-native-screens@npm:~3.20.0":
+  version: 3.20.0
+  resolution: "react-native-screens@npm:3.20.0"
   dependencies:
     react-freeze: ^1.0.0
     warn-once: ^0.1.0
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: 3a0116bf0628a735bdb87d7e4648f4bbac278152599a2bdd973e4dec92f87cb2c805dd7adb844d01236c7c92bab017ea8de59bea44d9f58397fddb6f9f3077c5
+  checksum: 94ab21378ee82765d329ccb8c92f5ca7cb15df916496fac7ce9a03c45e22579715000dae9c16f0a7d734a8fc1c2d0569fd82ecb71119a0b56046b5ea7533e7c2
   languageName: node
   linkType: hard
 
@@ -27118,9 +27118,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native@npm:0.71.2":
-  version: 0.71.2
-  resolution: "react-native@npm:0.71.2"
+"react-native@npm:0.71.3":
+  version: 0.71.3
+  resolution: "react-native@npm:0.71.3"
   dependencies:
     "@jest/create-cache-key-function": ^29.2.1
     "@react-native-community/cli": 10.1.3
@@ -27136,7 +27136,7 @@ __metadata:
     event-target-shim: ^5.0.1
     invariant: ^2.2.4
     jest-environment-node: ^29.2.1
-    jsc-android: ^250230.2.1
+    jsc-android: ^250231.0.0
     memoize-one: ^5.0.0
     metro-react-native-babel-transformer: 0.73.7
     metro-runtime: 0.73.7
@@ -27146,8 +27146,8 @@ __metadata:
     pretty-format: ^26.5.2
     promise: ^8.3.0
     react-devtools-core: ^4.26.1
-    react-native-codegen: ^0.71.3
-    react-native-gradle-plugin: ^0.71.14
+    react-native-codegen: ^0.71.5
+    react-native-gradle-plugin: ^0.71.15
     react-refresh: ^0.4.0
     react-shallow-renderer: ^16.15.0
     regenerator-runtime: ^0.13.2
@@ -27160,17 +27160,17 @@ __metadata:
     react: 18.2.0
   bin:
     react-native: cli.js
-  checksum: c95bceaf75875aa612591b4de4f53918296aa8af1097ad8a75409fcae5292059db1a2da2dd97d791f02aa4397ad4da3ac21d91e2e3cc529c6a7de17a14358fe3
+  checksum: 1f6cee37352db4981eadee3e07b04f19d4ad3eeebf2ede7e8d98d42c87ea6041ec3e5703038349c650148fadb1bfab3db0c52121620fd946d9cf4a47b130b715
   languageName: node
   linkType: hard
 
-"react-refresh-typescript@npm:^2.0.7":
-  version: 2.0.7
-  resolution: "react-refresh-typescript@npm:2.0.7"
+"react-refresh-typescript@npm:^2.0.8":
+  version: 2.0.8
+  resolution: "react-refresh-typescript@npm:2.0.8"
   peerDependencies:
     react-refresh: 0.10.x || 0.11.x || 0.12.x || 0.13.x || 0.14.x
-    typescript: ^4
-  checksum: a95a44f7e72b7b1de001d400c004b3d1adf22ca72cd335efeda13a0a7e154e476cd113105fbbd7413122147ce4f7fff0e4308b0c19ea13947a3665a4314fd629
+    typescript: ^4.8 || ^5.0
+  checksum: 6c08146e52b03616aa5597bbd03fdaaeddfee18e9edcd635e32704cf816300b4737ab77e5760a2fdc69a816e4827f1d1535fc9d852dba5b3965db6ba1aaa7646
   languageName: node
   linkType: hard
 
@@ -27319,15 +27319,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-to-print@npm:^2.14.11":
-  version: 2.14.11
-  resolution: "react-to-print@npm:2.14.11"
+"react-to-print@npm:^2.14.12":
+  version: 2.14.12
+  resolution: "react-to-print@npm:2.14.12"
   dependencies:
     prop-types: ^15.8.1
   peerDependencies:
     react: ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0
     react-dom: ^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0
-  checksum: c38c17092b92dc5ad33011635892ee4cede68aba29c0691d33274e236034dd9138cc432b902d0a2ee769a783f1e412ee42f8a5155231285a38c82200ab48f035
+  checksum: d88e93121fc95ae95ca3ad9a8b2bc1b305d6270d1330f0222d4843527a7925182d6f1e96b7a1df0403d2d6820d116c85f4a7c122956fe2dbc81dbbb09970efe2
   languageName: node
   linkType: hard
 
@@ -28275,9 +28275,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rxdb@npm:^14.0.3":
-  version: 14.0.3
-  resolution: "rxdb@npm:14.0.3"
+"rxdb@npm:^14.0.4":
+  version: 14.0.4
+  resolution: "rxdb@npm:14.0.4"
   dependencies:
     "@babel/runtime": 7.20.13
     "@types/clone": 2.1.1
@@ -28317,7 +28317,7 @@ __metadata:
     z-schema: 5.0.5
   peerDependencies:
     rxjs: ^7.8.0
-  checksum: b324a5f5526237a58c3a0e380f0e178f801afda6fbc0c6cfa29221ec7b04a64fcbf82dd7f8d7365267dae0f3b7f0f5c65d632825e619841c0e36ea3ca6e2e4ce
+  checksum: d1f93343ad0a9ea2cc093d519250648bdddf69b67b1708797dde1ab9a63023947a07d41b9972435e519cc590998fade19e205028182a4f67e300006836385b93
   languageName: node
   linkType: hard
 
@@ -28486,16 +28486,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"sass@npm:^1.58.1":
-  version: 1.58.1
-  resolution: "sass@npm:1.58.1"
+"sass@npm:^1.58.2":
+  version: 1.58.2
+  resolution: "sass@npm:1.58.2"
   dependencies:
     chokidar: ">=3.0.0 <4.0.0"
     immutable: ^4.0.0
     source-map-js: ">=0.6.2 <2.0.0"
   bin:
     sass: sass.js
-  checksum: ff079887d906b5c0dde99084d14ac36336d238c0c07935ff6381bad68f05de212c1ff12657ac1e8a0533523cd7a393126facdc2508d758e7d5700344a0e6ea51
+  checksum: e0febe4d274af7b9490b9207ff7f05762d60df6b2ad307f7a823432cb4e1604eced6784ae635a6b80e4a6177c047f5a9623c53a15aaec3b9bf981ea86e8937a9
   languageName: node
   linkType: hard
 
@@ -30896,9 +30896,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tsup@npm:^6.6.2":
-  version: 6.6.2
-  resolution: "tsup@npm:6.6.2"
+"tsup@npm:^6.6.3":
+  version: 6.6.3
+  resolution: "tsup@npm:6.6.3"
   dependencies:
     bundle-require: ^4.0.0
     cac: ^6.7.12
@@ -30928,7 +30928,7 @@ __metadata:
   bin:
     tsup: dist/cli-default.js
     tsup-node: dist/cli-node.js
-  checksum: 80d52608f187d0cda8b8029acca52ed9da5f1152915f8e8b2c23efe1fb309a90229098005740596a6e30a91b3f270b39b3d81437d5a9b7b3d3e9ff8fc0aa98e6
+  checksum: 4fa45fd7493971e5bf1f142a2590eabc1de536dc251d4b90bfce7dfaf1d7f40e19ef04ee541f9d2ab6a55841b72d265b7ddd3ea70c6371d746b5aed782f08094
   languageName: node
   linkType: hard
 
