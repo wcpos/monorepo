@@ -59,7 +59,7 @@ const Status = ({ item: order }: Props) => {
 	 *
 	 */
 	const handlePress = React.useCallback(() => {
-		setQuery('filters.status', status);
+		setQuery('selector.status', status);
 	}, [setQuery, status]);
 
 	/**

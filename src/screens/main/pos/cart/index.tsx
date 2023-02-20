@@ -20,7 +20,7 @@ const OpenOrders = ({ isColumn = false }) => {
 		() => ({
 			sortBy: 'date_created_gmt',
 			sortDirection: 'desc',
-			filters: { status: 'pos-open' },
+			selector: { status: 'pos-open' },
 		}),
 		[]
 	);
