@@ -6,6 +6,8 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
+import ItemizedTaxes from './itemized-taxes';
+import useAuth from '../../../../contexts/auth';
 import { t } from '../../../../lib/translations';
 import useCurrencyFormat from '../../hooks/use-currency-format';
 
@@ -16,13 +18,17 @@ interface Props {
 }
 
 const Totals = ({ order }: Props) => {
+	const { store } = useAuth();
 	const total = useObservableState(order.total$, order.total);
 	const totalTax = useObservableState(order.total_tax$, order.total_tax);
+	const taxTotalDisplay = useObservableState(store.tax_total_display$, store.tax_total_display);
 	const { format } = useCurrencyFormat();
 	const theme = useTheme();
 
 	return (
 		<Box
+			padding="small"
+			space="small"
 			border
 			style={{
 				borderLeftWidth: 0,
@@ -32,19 +38,22 @@ const Totals = ({ order }: Props) => {
 			}}
 		>
 			<Box horizontal>
-				<Box fill padding="small">
+				<Box fill>
 					<Text>{t('Subtotal', { _tags: 'core' })}:</Text>
 				</Box>
-				<Box padding="small">
+				<Box>
 					<Text>{format(total - totalTax || 0)}</Text>
 				</Box>
 			</Box>
-			<Box horizontal>
-				<Box fill padding="small">
-					<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
-				</Box>
-				<Box padding="small">
-					<Text>{format(totalTax || 0)}</Text>
+			<Box space="xxSmall">
+				{taxTotalDisplay === 'itemized' && <ItemizedTaxes tax_lines={order.tax_lines} />}
+				<Box horizontal>
+					<Box fill>
+						<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
+					</Box>
+					<Box>
+						<Text>{format(totalTax || 0)}</Text>
+					</Box>
 				</Box>
 			</Box>
 		</Box>

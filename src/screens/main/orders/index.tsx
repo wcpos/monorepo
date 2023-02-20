@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { createStackNavigator } from '@react-navigation/stack';
+import get from 'lodash/get';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
@@ -38,11 +39,10 @@ const OrdersNavigator = () => {
 			<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
 				<Stack.Screen name="EditOrder">
 					{({ route }) => {
-						const { orderID } = route.params;
-						/** TODO - findOne */
+						const orderID = get(route, ['params', 'orderID']);
 						return (
-							<OrdersProvider initialQuery={{ filters: { uuid: orderID } }}>
-								<ModalLayout>
+							<OrdersProvider initialQuery={{ selector: { uuid: orderID }, limit: 1 }}>
+								<ModalLayout title={t('Edit Order', { _tags: 'core' })}>
 									<React.Suspense fallback={<Text>Loading order</Text>}>
 										<EditOrder />
 									</React.Suspense>
@@ -53,10 +53,9 @@ const OrdersNavigator = () => {
 				</Stack.Screen>
 				<Stack.Screen name="Receipt">
 					{({ route }) => {
-						const { orderID } = route.params;
-						/** TODO - findOne */
+						const orderID = get(route, ['params', 'orderID']);
 						return (
-							<OrdersProvider initialQuery={{ filters: { uuid: orderID } }}>
+							<OrdersProvider initialQuery={{ selector: { uuid: orderID }, limit: 1 }}>
 								<ModalLayout
 									title={t('Receipt', { _tags: 'core' })}
 									primaryAction={{

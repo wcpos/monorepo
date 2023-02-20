@@ -4,6 +4,7 @@ import Tabs from '@wcpos/components/src/tabs';
 
 import { GeneralSettings } from './general';
 import { TaxSettings } from './tax';
+import { t } from '../../../lib/translations';
 
 /**
  *
@@ -16,8 +17,12 @@ export const SettingsTabs = () => {
 			navigationState={{
 				index,
 				routes: [
-					{ key: 'general', title: 'General Settings', Component: GeneralSettings },
-					{ key: 'tax', title: 'Tax Settings', Component: TaxSettings },
+					{
+						key: 'general',
+						title: t('General Settings', { _tags: 'core' }),
+						Component: GeneralSettings,
+					},
+					{ key: 'tax', title: t('Tax Settings', { _tags: 'core' }), Component: TaxSettings },
 				],
 			}}
 			renderScene={({ route }) => <route.Component />}

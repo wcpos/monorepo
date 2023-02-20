@@ -10,8 +10,9 @@ export interface QueryState {
 	search?: string;
 	sortBy: string;
 	sortDirection: SortDirection;
-	filters?: Record<string, unknown>;
+	// filters?: Record<string, unknown>;
 	selector?: import('rxdb').MangoQuery['selector'];
+	limit?: number;
 }
 
 export type QueryObservable = BehaviorSubject<QueryState>;

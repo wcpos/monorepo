@@ -14,16 +14,20 @@ import useOrders from '../../contexts/orders';
  *
  */
 const Checkout = () => {
-	const { data: order } = useOrders();
+	const {
+		data: [order],
+	} = useOrders();
+	if (!order) {
+		throw new Error(t('Order not found', { _tags: 'core' }));
+	}
+
 	const number = useObservableState(order.number$, order.number);
 	const { setTitle } = useModal();
 
-	if (!order) {
-		throw new Error('Order not found');
-	}
-
 	React.useEffect(() => {
-		setTitle(() => t('Checkout Order #{number}', { _tags: 'core', number }));
+		setTitle(() =>
+			t('Checkout Order #{number}', { _tags: 'core', number, _context: 'Checkout Order title' })
+		);
 	}, [number, setTitle]);
 
 	/**

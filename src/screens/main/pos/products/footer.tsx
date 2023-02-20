@@ -6,6 +6,7 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
+import useAuth from '../../../../contexts/auth';
 import useStore from '../../../../contexts/store';
 import { t } from '../../../../lib/translations';
 import SyncButton from '../../components/sync-button';
@@ -20,15 +21,14 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
 	const { sync, clear } = useProducts();
+	const { store } = useAuth();
+	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
 
 	return (
 		<Box
 			horizontal
-			padding="small"
-			space="xSmall"
-			align="center"
-			distribution="end"
 			style={{
+				width: '100%',
 				backgroundColor: theme.colors.lightGrey,
 				borderBottomLeftRadius: theme.rounding.medium,
 				borderBottomRightRadius: theme.rounding.medium,
@@ -36,8 +36,15 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 				borderTopColor: theme.colors.grey,
 			}}
 		>
-			<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
-			<SyncButton sync={sync} clear={clear} />
+			<Box fill padding="small" space="xSmall">
+				<Text size="small">
+					{t('Tax based on', { _tags: 'core' })}: {taxBasedOn}
+				</Text>
+			</Box>
+			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">
+				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
+				<SyncButton sync={sync} clear={clear} />
+			</Box>
 		</Box>
 	);
 };

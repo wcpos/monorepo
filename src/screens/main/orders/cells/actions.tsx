@@ -9,6 +9,7 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 import log from '@wcpos/utils/src/logger';
 
+import { t } from '../../../../lib/translations';
 import EditForm from '../../components/edit-form';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
@@ -92,18 +93,27 @@ const Actions = ({ item: order }: Props) => {
 	const menuItems = React.useMemo(() => {
 		const menu = [
 			{
-				label: 'Edit',
+				label: t('Edit', { _tags: 'core' }),
 				action: () => navigation.navigate('EditOrder', { orderID: order.uuid }),
 				icon: 'penToSquare',
 			},
-			{ label: 'Re-open', action: handleOpen, icon: 'cartShopping' },
-			{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
+			{
+				label: t('Re-open', { _tags: 'core', _context: 'Re-open completed order' }),
+				action: handleOpen,
+				icon: 'cartShopping',
+			},
+			{ label: t('Sync', { _tags: 'core' }), action: handleSync, icon: 'arrowRotateRight' },
 			{ label: '__' },
-			{ label: 'Delete', action: order.remove, icon: 'trash', type: 'critical' },
+			{
+				label: t('Delete', { _tags: 'core' }),
+				action: order.remove,
+				icon: 'trash',
+				type: 'critical',
+			},
 		];
 		if (status === 'completed') {
 			menu.splice(1, 0, {
-				label: 'Receipt',
+				label: t('Receipt', { _tags: 'core' }),
 				icon: 'receipt',
 				action: () => navigation.navigate('Receipt', { orderID: order.uuid }),
 			});

@@ -1,8 +1,6 @@
 import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
-import get from 'lodash/get';
-import _isEmpty from 'lodash/isEmpty';
 import set from 'lodash/set';
 import { ObservableResource, useObservableState } from 'observable-hooks';
 import { switchMap, map } from 'rxjs/operators';

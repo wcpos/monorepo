@@ -7,8 +7,10 @@ import Text from '@wcpos/components/src/text';
 
 import EditProduct from './edit-product';
 import Products from './products';
+import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { ProductsProvider } from '../contexts/products';
+import useUISettings from '../contexts/ui-settings';
 
 export type ProductsStackParamList = {
 	Products: undefined;
@@ -21,6 +23,8 @@ const Stack = createStackNavigator<ProductsStackParamList>();
  *
  */
 const ProductsNavigator = () => {
+	const { uiSettings } = useUISettings('products');
+
 	return (
 		<Stack.Navigator screenOptions={{ headerShown: false }}>
 			<Stack.Screen name="Products">
@@ -36,8 +40,11 @@ const ProductsNavigator = () => {
 				{({ route }) => {
 					const { productID } = route.params;
 					return (
-						<ProductsProvider initialQuery={{ filters: { uuid: productID } }}>
-							<ModalLayout>
+						<ProductsProvider
+							initialQuery={{ selector: { uuid: productID }, limit: 1 }}
+							uiSettings={uiSettings}
+						>
+							<ModalLayout title={t('Edit', { _tags: 'core' })}>
 								<React.Suspense fallback={<Text>Loading product</Text>}>
 									<EditProduct />
 								</React.Suspense>

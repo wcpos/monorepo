@@ -8,6 +8,7 @@ import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
 import log from '@wcpos/utils/src/logger';
 
+import { t } from '../../../../../lib/translations';
 import useRestHttpClient from '../../../hooks/use-rest-http-client';
 
 type Props = {
@@ -64,14 +65,14 @@ const Actions = ({ item: product }: Props) => {
 				placement="bottom-end"
 				items={[
 					{
-						label: 'Edit',
+						label: t('Edit', { _tags: 'core' }),
 						action: () => navigation.navigate('EditProduct', { productID: product.uuid }),
 						icon: 'penToSquare',
 					},
-					{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
+					{ label: t('Sync', { _tags: 'core' }), action: handleSync, icon: 'arrowRotateRight' },
 					{ label: '__' },
 					{
-						label: 'Delete',
+						label: t('Delete', { _tags: 'core' }),
 						action: () => setDeleteDialogOpened(true),
 						icon: 'trash',
 						type: 'critical',
@@ -85,7 +86,7 @@ const Actions = ({ item: product }: Props) => {
 				opened={deleteDialogOpened}
 				onAccept={() => product.remove()}
 				onClose={() => setDeleteDialogOpened(false)}
-				children={`You are about to delete ${product.name}`}
+				children={t('You are about to delete {product}', { _tags: 'core', product: product.name })}
 			/>
 		</>
 	);

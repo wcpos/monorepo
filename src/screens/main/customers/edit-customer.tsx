@@ -2,11 +2,17 @@ import * as React from 'react';
 
 import pick from 'lodash/pick';
 
+import { t } from '../../../lib/translations';
 import EditForm from '../components/edit-form';
 import { useCustomers } from '../contexts/customers/use-customers';
 
 const EditCustomer = () => {
-	const { data: customer } = useCustomers();
+	const { data } = useCustomers();
+	const customer = data.length === 1 && data[0];
+
+	if (!customer) {
+		throw new Error(t('Customer not found', { _tags: 'core' }));
+	}
 
 	/**
 	 *

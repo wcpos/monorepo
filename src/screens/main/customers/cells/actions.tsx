@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
 
+import { t } from '../../../../lib/translations';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 type Props = {
@@ -47,14 +48,14 @@ const Actions = ({ item: customer }: Props) => {
 				placement="bottom-end"
 				items={[
 					{
-						label: 'Edit',
+						label: t('Edit', { _tags: 'core' }),
 						action: () => navigation.navigate('EditCustomer', { customerID: customer.uuid }),
 						icon: 'penToSquare',
 					},
-					{ label: 'Sync', action: handleSync, icon: 'arrowRotateRight' },
+					{ label: t('Sync', { _tags: 'core' }), action: handleSync, icon: 'arrowRotateRight' },
 					{ label: '__' },
 					{
-						label: 'Delete',
+						label: t('Delete', { _tags: 'core' }),
 						action: () => {
 							console.log('delete');
 						},

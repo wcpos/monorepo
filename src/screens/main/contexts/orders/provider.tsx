@@ -1,11 +1,8 @@
 import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
-import _get from 'lodash/get';
-import isEqual from 'lodash/isEqual';
-import _set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
-import { switchMap, map, debounceTime, tap, distinctUntilChanged } from 'rxjs/operators';
+import { switchMap, map } from 'rxjs/operators';
 
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
@@ -67,54 +64,22 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 	 *
 	 */
 	const value = React.useMemo(() => {
-		const orders$ = query$.pipe(
-			// debounce hits to the local db
-			// debounceTime(100),
-			// switchMap to the collection query
-			switchMap((q) => {
-				const selector = {};
-
-				// search
-				// _set(selector, ['number', '$regex'], new RegExp(escape(_get(q, 'search', '')), 'i'));
-
-				if (_get(q, 'filters.status')) {
-					_set(selector, ['status'], _get(q, 'filters.status'));
-				}
-
-				if (_get(q, 'filters._id')) {
-					_set(selector, ['_id'], _get(q, 'filters._id'));
-				}
-
-				/**
-				 * TODO - hack for find by uuid
-				 */
-				if (_get(q, 'filters.uuid')) {
-					return collection.findOneFix(q.filters.uuid).$;
-				}
+		const resource$ = query$.pipe(
+			switchMap((query) => {
+				const { search, selector = {}, sortBy, sortDirection } = query;
 
 				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$.pipe(
-					// query will update for any change to orders, eg: totals
-					// distinctUntilChanged((prev, curr) => {
-					// 	return isEqual(
-					// 		prev.map((doc) => doc.uuid),
-					// 		curr.map((doc) => doc.uuid)
-					// 	);
-					// }),
-					// sort the results
 					map((result) => {
-						return orderBy(result, [q.sortBy], [q.sortDirection]);
-					}),
-					tap((res) => {
-						log.silly(res);
+						return orderBy(result, [sortBy], [sortDirection]);
 					})
 				);
 			})
 		);
 
 		return {
-			resource: new ObservableResource(orders$),
+			resource: new ObservableResource(resource$),
 		};
 	}, [collection, query$]);
 

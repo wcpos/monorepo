@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { createStackNavigator } from '@react-navigation/stack';
+import get from 'lodash/get';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
@@ -8,6 +9,7 @@ import Text from '@wcpos/components/src/text';
 import AddCustomer from './add-customer';
 import Customers from './customers';
 import EditCustomer from './edit-customer';
+import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { CustomersProvider } from '../contexts/customers';
 
@@ -36,18 +38,17 @@ const CustomersNavigator = () => {
 			</Stack.Screen>
 			<Stack.Screen name="AddCustomer" options={{ presentation: 'transparentModal' }}>
 				{() => (
-					<ModalLayout>
+					<ModalLayout title={t('Add Customer', { _tags: 'core' })}>
 						<AddCustomer />
 					</ModalLayout>
 				)}
 			</Stack.Screen>
 			<Stack.Screen name="EditCustomer" options={{ presentation: 'transparentModal' }}>
 				{({ route }) => {
-					const { customerID } = route.params;
-					/** TODO - findOne */
+					const customerID = get(route, ['params', 'customerID']);
 					return (
-						<CustomersProvider initialQuery={{ filters: { uuid: customerID } }}>
-							<ModalLayout>
+						<CustomersProvider initialQuery={{ selector: { uuid: customerID }, limit: 1 }}>
+							<ModalLayout title={t('Edit Customer', { _tags: 'core' })}>
 								<React.Suspense fallback={<Text>Loading customer</Text>}>
 									<EditCustomer />
 								</React.Suspense>

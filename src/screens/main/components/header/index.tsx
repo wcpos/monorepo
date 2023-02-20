@@ -13,7 +13,7 @@ import Right from './right';
 import HeaderTitle from './title';
 import useAuth from '../../../../contexts/auth';
 
-const Header = ({ route }: DrawerHeaderProps) => {
+const Header = ({ navigation, route, options }: DrawerHeaderProps) => {
 	const insets = useSafeAreaInsets();
 	const { store } = useAuth();
 	const storeName = useObservableState(store.name$, store.name);
@@ -25,8 +25,7 @@ const Header = ({ route }: DrawerHeaderProps) => {
 	return (
 		<View nativeID="titlebar">
 			<ReactNavigationHeader
-				// title={`${route.name} - ${storeName}`}
-				title={storeName}
+				title={`${options.title} - ${storeName}`}
 				headerTitle={(props) => <HeaderTitle {...props} />}
 				headerTitleAlign="center"
 				headerStyle={{

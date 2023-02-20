@@ -1,13 +1,32 @@
 import * as React from 'react';
 
 import pick from 'lodash/pick';
+import { useObservableState } from 'observable-hooks';
+
+import { useModal } from '@wcpos/components/src/modal';
 
 import { t } from '../../../lib/translations';
 import EditModal from '../components/edit-form';
-import useOrder from '../contexts/orders';
+import useOrders from '../contexts/orders';
 
 const EditOrder = () => {
-	const { data: order } = useOrder();
+	const { data } = useOrders();
+	const order = data.length === 1 && data[0];
+
+	if (!order) {
+		throw new Error(t('Order not found', { _tags: 'core' }));
+	}
+
+	const { setTitle } = useModal();
+	const number = useObservableState(order.number$, order.number);
+
+	React.useEffect(() => {
+		setTitle(() =>
+			number
+				? t('Edit Order #{number}', { _tags: 'core', number, _context: 'Checkout Order title' })
+				: t('Edit Order', { _tags: 'core' })
+		);
+	}, [number, setTitle]);
 
 	/**
 	 *  filter schema for edit form

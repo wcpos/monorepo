@@ -8,13 +8,19 @@ import Modal, { useModal } from '@wcpos/components/src/modal';
 import { EmailModal } from './components/email';
 import { ReceiptTemplate } from './components/template-webview';
 import { t } from '../../../lib/translations';
-import useOrder from '../contexts/orders';
+import useOrders from '../contexts/orders';
 import useRestHttpClient from '../hooks/use-rest-http-client';
 
 export const ReceiptModal = () => {
+	const { data } = useOrders();
+	const order = data.length === 1 && data[0];
+
+	if (!order) {
+		throw new Error(t('Order not found', { _tags: 'core' }));
+	}
+
 	const [showEmailModal, setShowEmailModal] = React.useState(false);
 	const { onSecondaryAction } = useModal();
-	const { data: order } = useOrder();
 	const id = useObservableState(order.id$, order.id);
 	const http = useRestHttpClient();
 	const emailFieldRef = React.useRef('');
@@ -49,7 +55,7 @@ export const ReceiptModal = () => {
 	 */
 	return (
 		<View style={{ height: '100%' }}>
-			<ReceiptTemplate />
+			<ReceiptTemplate order={order} />
 
 			<Modal
 				opened={showEmailModal}

@@ -4,6 +4,7 @@ import { NavigationContainer, LinkingOptions, getStateFromPath } from '@react-na
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
 import get from 'lodash/get';
+import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Text from '@wcpos/components/src/text';
@@ -11,7 +12,9 @@ import log from '@wcpos/utils/src/logger';
 
 import AuthNavigator from './auth';
 import MainNavigator from './main';
+import useAuth from '../contexts/auth';
 import useStore from '../contexts/store';
+import { t } from '../lib/translations';
 import { URL } from '../lib/url';
 
 // import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
@@ -28,9 +31,11 @@ const Stack = createStackNavigator<RootStackParamList>();
  *
  */
 const RootNavigator = ({ initialProps }) => {
+	const { store } = useAuth();
 	const { storeDB } = useStore();
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
+	const storeName = useObservableState(store.name$, store.name);
 
 	/**
 	 * Pathname eg: 'pos' for default web app
@@ -114,12 +119,12 @@ const RootNavigator = ({ initialProps }) => {
 					notification: 'rgb(255, 69, 58)',
 				},
 			}}
-			/**
-			 * Nested navigators require some fenessing
-			 */
 			documentTitle={{
+				/**
+				 * Nested navigators produce weird results, keep the title simple
+				 */
 				formatter: (options, route) => {
-					return options.title ?? route.name;
+					return `${t('POS', { _tags: 'core' })} - ${storeName}`;
 				},
 			}}
 		>

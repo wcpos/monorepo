@@ -120,10 +120,20 @@ export const useTaxes = () => {
 				lines.map((line) => line.taxes ?? []),
 				taxRoundAtSubtotal
 			);
-			const taxLines = itemizedTaxes.map((tax) => ({
-				id: tax.id,
-				tax_total: String(tax.total),
-			}));
+
+			/**
+			 * line_item.taxes don't have label, we need to add back it here
+			 */
+			const taxLines = itemizedTaxes.map((tax) => {
+				const taxRate = rates.find((rate) => rate.id === String(tax.id));
+				return {
+					rate_id: tax.id,
+					// rate_code: ??,
+					label: taxRate?.name,
+					compound: taxRate?.compound,
+					tax_total: String(tax.total),
+				};
+			});
 
 			return {
 				total: totalWithTaxString,
@@ -131,7 +141,7 @@ export const useTaxes = () => {
 				tax_lines: taxLines,
 			};
 		},
-		[taxRoundAtSubtotal]
+		[taxRoundAtSubtotal, rates]
 	);
 
 	return { ...context, rates, getDisplayValues, calcLineItemTotals, calcOrderTotals };

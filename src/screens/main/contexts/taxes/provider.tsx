@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { ObservableResource } from 'observable-hooks';
-import { tap, switchMap, map, debounceTime } from 'rxjs/operators';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { switchMap, map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
@@ -24,10 +24,11 @@ interface TaxesProviderProps {
 	uiSettings: import('../ui-settings').UISettingsDocument;
 }
 
-const TaxesProvider = ({ children, initialQuery, ui }: TaxesProviderProps) => {
+const TaxesProvider = ({ children, initialQueryResource, ui }: TaxesProviderProps) => {
 	log.debug('render tax provider');
 	const { storeDB } = useStore();
 	const collection = storeDB.collections.taxes;
+	const initialQuery = useObservableSuspense(initialQueryResource);
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplication({ collection });
 
@@ -47,14 +48,19 @@ const TaxesProvider = ({ children, initialQuery, ui }: TaxesProviderProps) => {
 	 */
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
-			// debounce hits to the local db
-			debounceTime(100),
-			// switchMap to the collection query
 			switchMap((q) => {
 				const selector = {
-					country: {
-						$eq: q.country,
-					},
+					$and: [
+						{
+							$or: [{ country: q.country }, { country: '*' }, { country: '' }],
+						},
+						{
+							$or: [{ state: 'AL' }, { state: '*' }, { state: '' }],
+						},
+						{
+							$or: [{ city: q.city }, { city: '*' }, { city: '' }],
+						},
+					],
 				};
 
 				const RxQuery = collection.find({ selector });

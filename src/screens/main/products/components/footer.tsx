@@ -1,16 +1,13 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
-import useHttpClient from '@wcpos/hooks/src/use-http-client';
-import log from '@wcpos/utils/src/logger';
 
-import useAuth from '../../../../contexts/auth';
 import useStore from '../../../../contexts/store';
+import { t } from '../../../../lib/translations';
 import SyncButton from '../../components/sync-button';
 import useProducts from '../../contexts/products';
 
@@ -25,31 +22,13 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { storeDB } = useStore();
 	const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
-	const http = useHttpClient();
-	const { site, wpCredentials } = useAuth();
-	const navigation = useNavigation();
 	const { sync, clear } = useProducts();
 
-	/**
-	 *
-	 */
-	const handleJWT = React.useCallback(() => {
-		http.get(`${site.wc_api_auth_url}/refresh`).then((res) => {
-			log.debug(res);
-		});
-	}, [http, site.wc_api_auth_url]);
-
-	/**
-	 *
-	 */
 	return (
 		<Box
 			horizontal
-			padding="small"
-			space="xSmall"
-			align="center"
-			distribution="end"
 			style={{
+				width: '100%',
 				backgroundColor: theme.colors.lightGrey,
 				borderBottomLeftRadius: theme.rounding.medium,
 				borderBottomRightRadius: theme.rounding.medium,
@@ -57,10 +36,15 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 				borderTopColor: theme.colors.grey,
 			}}
 		>
-			<Text size="small">
-				Showing {count} of {total}
-			</Text>
-			<SyncButton sync={sync} clear={clear} />
+			<Box fill padding="small" space="xSmall">
+				<Text size="small">
+					{t('Tax based on', { _tags: 'core' })}: {t('Shop base address', { _tags: 'core' })}
+				</Text>
+			</Box>
+			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">
+				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
+				<SyncButton sync={sync} clear={clear} />
+			</Box>
 		</Box>
 	);
 };

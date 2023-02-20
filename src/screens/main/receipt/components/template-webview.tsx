@@ -7,14 +7,10 @@ import { map } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import { useModal } from '@wcpos/components/src/modal';
-import Text from '@wcpos/components/src/text';
 import WebView from '@wcpos/components/src/webview';
 import log from '@wcpos/utils/src/logger';
 
-import useOrders from '../../contexts/orders';
-
-export const ReceiptTemplate = () => {
-	const { data: order } = useOrders();
+export const ReceiptTemplate = ({ order }) => {
 	const { onPrimaryAction } = useModal();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
 

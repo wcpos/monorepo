@@ -163,7 +163,8 @@
 			},
 			{
 				"key": "stock_quantity",
-				"show": true
+				"show": true,
+				"align": "center"
 			},
 			{
 				"key": "categories",

@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { useRoute } from '@react-navigation/native';
 import get from 'lodash/get';
 import { ObservableResource, useObservable } from 'observable-hooks';
 import { map, tap, switchMap } from 'rxjs/operators';
@@ -21,6 +20,7 @@ export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
+	orderID?: string;
 }
 
 /**
@@ -30,12 +30,10 @@ interface CurrentOrderContextProviderProps {
  *
  * TODO - need a way to currency symbol from store document
  */
-const CurrentOrderProvider = ({ children }: CurrentOrderContextProviderProps) => {
+const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProviderProps) => {
 	const { store } = useAuth();
 	const { storeDB } = useStore();
 	const collection = storeDB?.collections.orders;
-	const route = useRoute();
-	const orderID = get(route, ['params', 'orderID']);
 
 	/**
 	 * Subscribe to the route orderID
