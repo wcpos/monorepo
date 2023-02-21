@@ -5,8 +5,7 @@ import { ObservableResource, useObservable } from 'observable-hooks';
 import { map, tap, switchMap } from 'rxjs/operators';
 
 import NewOrder from './new-order';
-import useAuth from '../../../../../contexts/auth';
-import useStore from '../../../../../contexts/store';
+import useLocalData from '../../../../../contexts/local-data';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -31,8 +30,7 @@ interface CurrentOrderContextProviderProps {
  * TODO - need a way to currency symbol from store document
  */
 const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProviderProps) => {
-	const { store } = useAuth();
-	const { storeDB } = useStore();
+	const { store, storeDB } = useLocalData();
 	const collection = storeDB?.collections.orders;
 
 	/**

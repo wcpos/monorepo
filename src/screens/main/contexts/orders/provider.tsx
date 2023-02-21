@@ -8,7 +8,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import { useReplication } from './use-replication';
-import useStore from '../../../../contexts/store';
+import useLocalData from '../../../../contexts/local-data';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type OrderDocument = import('@wcpos/database/src/collections/orders').OrderDocument;
@@ -29,7 +29,7 @@ interface OrdersProviderProps {
 
 const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderProps) => {
 	log.debug('render order provider');
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 	const collection = storeDB.collections.orders;
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplication({ collection });

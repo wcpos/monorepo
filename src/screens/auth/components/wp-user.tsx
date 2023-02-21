@@ -3,7 +3,7 @@ import * as React from 'react';
 import Dialog from '@wcpos/components/src/dialog';
 import Pill from '@wcpos/components/src/pill';
 
-import useAuth from '../../../contexts/auth';
+import useLogin from '../../../hooks/use-login';
 import { t } from '../../../lib/translations';
 
 interface Props {
@@ -12,7 +12,7 @@ interface Props {
 }
 
 const WpUser = ({ site, wpUser }: Props) => {
-	const { login } = useAuth();
+	const login = useLogin();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 
 	/**

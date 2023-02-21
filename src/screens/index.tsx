@@ -1,19 +1,15 @@
 import * as React from 'react';
 
-import { NavigationContainer, LinkingOptions, getStateFromPath } from '@react-navigation/native';
+import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import Text from '@wcpos/components/src/text';
-import log from '@wcpos/utils/src/logger';
-
 import AuthNavigator from './auth';
 import MainNavigator from './main';
-import useAuth from '../contexts/auth';
-import useStore from '../contexts/store';
+import useLocalData from '../contexts/local-data';
 import { t } from '../lib/translations';
 import { URL } from '../lib/url';
 
@@ -31,11 +27,10 @@ const Stack = createStackNavigator<RootStackParamList>();
  *
  */
 const RootNavigator = ({ initialProps }) => {
-	const { store } = useAuth();
-	const { storeDB } = useStore();
+	const { store, storeDB } = useLocalData();
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
-	const storeName = useObservableState(store.name$, store.name);
+	// const storeName = useObservableState(store.name$, store.name);
 
 	/**
 	 * Pathname eg: 'pos' for default web app
@@ -124,7 +119,8 @@ const RootNavigator = ({ initialProps }) => {
 				 * Nested navigators produce weird results, keep the title simple
 				 */
 				formatter: (options, route) => {
-					return `${t('POS', { _tags: 'core' })} - ${storeName}`;
+					// return `${t('POS', { _tags: 'core' })} - ${storeName}`;
+					return t('POS', { _tags: 'core' });
 				},
 			}}
 		>

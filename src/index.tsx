@@ -10,9 +10,7 @@ import Portal from '@wcpos/components/src/portal';
 import { SnackbarProvider } from '@wcpos/components/src/snackbar';
 import getTheme from '@wcpos/themes';
 
-import { AuthProvider } from './contexts/auth';
-import { LanguageProvider } from './contexts/language';
-import { StoreProvider } from './contexts/store';
+import { LocalDataProvider } from './contexts/local-data';
 import RootError from './root-error';
 import RootNavigator from './screens';
 import Splash from './screens/splash';
@@ -37,36 +35,32 @@ const App = () => {
 		[]
 	);
 
+	/**
+	 * NOTE:
+	 * The first ErrorBoundary is a catchall, it should use only pure React Native,
+	 * ie: it is not dependent on theme or custom components
+	 * The second ErrorBoundary uses the theme and custom components
+	 */
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
-			<React.Suspense fallback={<Splash />}>
-				<GestureHandlerRootView style={{ flex: 1 }}>
-					<AuthProvider initialProps={initialProps}>
-						<React.Suspense fallback={<Splash />}>
-							<LanguageProvider>
-								<React.Suspense fallback={<Splash />}>
-									<StoreProvider>
-										<ThemeProvider theme={theme}>
-											<ErrorBoundary>
-												<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-													<SnackbarProvider>
-														<Portal.Provider>
-															<React.Suspense fallback={<Splash />}>
-																<RootNavigator initialProps={initialProps} />
-															</React.Suspense>
-															<Portal.Manager />
-														</Portal.Provider>
-													</SnackbarProvider>
-												</SafeAreaProviderCompat>
-											</ErrorBoundary>
-										</ThemeProvider>
-									</StoreProvider>
-								</React.Suspense>
-							</LanguageProvider>
-						</React.Suspense>
-					</AuthProvider>
-				</GestureHandlerRootView>
-			</React.Suspense>
+			<GestureHandlerRootView style={{ flex: 1 }}>
+				<LocalDataProvider initialProps={initialProps}>
+					<ThemeProvider theme={theme}>
+						<ErrorBoundary>
+							<React.Suspense fallback={<Splash />}>
+								<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
+									<SnackbarProvider>
+										<Portal.Provider>
+											<RootNavigator initialProps={initialProps} />
+											<Portal.Manager />
+										</Portal.Provider>
+									</SnackbarProvider>
+								</SafeAreaProviderCompat>
+							</React.Suspense>
+						</ErrorBoundary>
+					</ThemeProvider>
+				</LocalDataProvider>
+			</GestureHandlerRootView>
 		</ErrorBoundary>
 	);
 };

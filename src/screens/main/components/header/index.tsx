@@ -11,11 +11,11 @@ import { useTheme } from 'styled-components/native';
 import Left from './left';
 import Right from './right';
 import HeaderTitle from './title';
-import useAuth from '../../../../contexts/auth';
+import useLocalData from '../../../../contexts/local-data';
 
 const Header = ({ navigation, route, options }: DrawerHeaderProps) => {
 	const insets = useSafeAreaInsets();
-	const { store } = useAuth();
+	const { store } = useLocalData();
 	const storeName = useObservableState(store.name$, store.name);
 	const theme = useTheme();
 

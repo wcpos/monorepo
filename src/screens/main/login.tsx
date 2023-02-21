@@ -9,11 +9,11 @@ import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
-import useAuth from '../../contexts/auth';
+import useLocalData from '../../contexts/local-data';
 import { t } from '../../lib/translations';
 
 const Login = () => {
-	const { site, wpCredentials } = useAuth();
+	const { site, wpCredentials } = useLocalData();
 	const usernameRef = React.useRef<RNTextInput>(null);
 	const passwordRef = React.useRef<RNTextInput>(null);
 	const { onPrimaryAction } = useModal();

@@ -9,7 +9,7 @@ import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
-import useAuth from '../../contexts/auth';
+import useLocalData from '../../contexts/local-data';
 import useModalRefreshFix from '../../hooks/use-modal-refresh-fix';
 import { t } from '../../lib/translations';
 
@@ -18,7 +18,7 @@ const Login = ({ route }) => {
 	const navigation = useNavigation();
 	const usernameRef = React.useRef<RNTextInput>(null);
 	const passwordRef = React.useRef<RNTextInput>(null);
-	const { userDB } = useAuth();
+	const { userDB } = useLocalData();
 	const http = useHttpClient();
 	useModalRefreshFix();
 

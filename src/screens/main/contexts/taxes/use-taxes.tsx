@@ -6,7 +6,7 @@ import { useObservableSuspense, useObservableState } from 'observable-hooks';
 
 import { TaxesContext } from './provider';
 import { calcTaxes, sumItemizedTaxes, sumTaxes } from './utils';
-import useAuth from '../../../../contexts/auth';
+import useLocalData from '../../../../contexts/local-data';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
@@ -26,7 +26,7 @@ export const useTaxes = () => {
 	}
 
 	const rates = useObservableSuspense(context.resource);
-	const { store } = useAuth();
+	const { store } = useLocalData();
 	const _calcTaxes = useObservableState(store?.calc_taxes$, store?.calc_taxes);
 	const pricesIncludeTax = useObservableState(
 		store?.prices_include_tax$,

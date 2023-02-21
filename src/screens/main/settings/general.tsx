@@ -7,12 +7,12 @@ import { map } from 'rxjs/operators';
 
 import Form from '@wcpos/react-native-jsonschema-form';
 
-import useAuth from '../../../contexts/auth';
+import useLocalData from '../../../contexts/local-data';
 
 const uiSchema = {};
 
 export const GeneralSettings = () => {
-	const { store } = useAuth();
+	const { store } = useLocalData();
 	const formData = store.toJSON();
 
 	/**

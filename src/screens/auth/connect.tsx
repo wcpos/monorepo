@@ -11,11 +11,11 @@ import Logo from '@wcpos/components/src/logo';
 import DemoButton from './components/demo-button';
 import SitesList from './components/sites-list';
 import UrlInput from './components/url-input';
-import useAuth from '../../contexts/auth';
+import useLocalData from '../../contexts/local-data';
 import Platform from '../../utils/platform';
 
 const Connect = () => {
-	const { user } = useAuth();
+	const { user } = useLocalData();
 	const sitesResource = React.useMemo(
 		() => new ObservableResource(user.populate$('sites')),
 		[user]

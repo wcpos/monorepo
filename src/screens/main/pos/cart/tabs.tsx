@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, StackActions } from '@react-navigation/native';
 
 import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
@@ -52,6 +52,7 @@ const CartTabs = ({ currentOrder }: CartTabsProps) => {
 			/**
 			 * TODO - setParams updates the currentOrder without refreshing the products,
 			 * this is great!, but I lose the back button. Push keeps the old order in the stack.
+			 * I need to add the new order to the history without the rerender.
 			 */
 			navigation.setParams({ orderID: routes[idx].key });
 			// navigation.dispatch(StackActions.push('POS', { orderID: orders[idx].uuid }));

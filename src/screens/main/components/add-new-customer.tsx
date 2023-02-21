@@ -14,7 +14,7 @@ import Tree from '@wcpos/components/src/tree';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Form from '@wcpos/react-native-jsonschema-form';
 
-import useStore from '../../../contexts/store';
+import useLocalData from '../../../contexts/local-data';
 import useRestHttpClient from '../hooks/use-rest-http-client';
 
 /**
@@ -24,7 +24,7 @@ const AddNewCustomer = () => {
 	const [opened, setOpened] = React.useState(false);
 	const [index, setIndex] = React.useState(0);
 	const [customerData, setCustomerData] = React.useState({});
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 	const customerCollection = storeDB.collections.customers;
 	const http = useRestHttpClient();
 	const [extraErrors, setExtraErrors] = React.useState();

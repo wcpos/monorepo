@@ -6,7 +6,7 @@ import { switchMap } from 'rxjs/operators';
 import log from '@wcpos/utils/src/logger';
 
 import { useReplication } from './use-replication';
-import useStore from '../../../../contexts/store';
+import useLocalData from '../../../../contexts/local-data';
 import { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type ProductVariationDocument =
@@ -34,7 +34,7 @@ const VariationsProvider = ({
 	uiSettings,
 }: VariationsProviderProps) => {
 	log.debug('render variations provider');
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 	const collection = storeDB.collections.variations;
 	const replicationState = useReplication({ collection, parent });
 

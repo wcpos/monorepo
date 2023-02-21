@@ -5,13 +5,13 @@ import { useObservableState } from 'observable-hooks';
 
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 
-import useAuth from '../../../../contexts/auth';
+import useLocalData from '../../../../contexts/local-data';
 
 /**
  *
  */
 export const useRestHttpClient = () => {
-	const { site, wpCredentials } = useAuth();
+	const { site, wpCredentials } = useLocalData();
 	const httpClient = useHttpClient();
 	const baseURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);

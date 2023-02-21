@@ -6,8 +6,7 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import useAuth from '../../../../contexts/auth';
-import useStore from '../../../../contexts/store';
+import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import SyncButton from '../../components/sync-button';
 import useProducts from '../../contexts/products';
@@ -17,11 +16,10 @@ interface ProductFooterProps {
 }
 
 const ProductsFooter = ({ count }: ProductFooterProps) => {
-	const { storeDB } = useStore();
+	const { store, storeDB } = useLocalData();
 	const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
 	const { sync, clear } = useProducts();
-	const { store } = useAuth();
 	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
 
 	return (

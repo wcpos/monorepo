@@ -6,7 +6,7 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import useStore from '../../../../contexts/store';
+import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import SyncButton from '../../components/sync-button';
 import useProducts from '../../contexts/products';
@@ -19,7 +19,7 @@ interface ProductFooterProps {
  *
  */
 const ProductsFooter = ({ count }: ProductFooterProps) => {
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 	const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
 	const { sync, clear } = useProducts();

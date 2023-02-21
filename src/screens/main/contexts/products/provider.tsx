@@ -10,7 +10,7 @@ import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import { useReplication } from './use-replication';
-import useStore from '../../../../contexts/store';
+import useLocalData from '../../../../contexts/local-data';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type ProductDocument = import('@wcpos/database/src/collections/products').ProductDocument;
@@ -34,7 +34,7 @@ interface ProductsProviderProps {
  */
 const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProviderProps) => {
 	log.debug('render product provider');
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 	const collection = storeDB.collections.products;
 	const showOutOfStock = useObservableState(
 		uiSettings.get$('showOutOfStock'),

@@ -13,7 +13,7 @@ import Text from '@wcpos/components/src/text';
 import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 import log from '@wcpos/utils/src/logger';
 
-import useStore from '../../../../contexts/store';
+import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 import useCurrentOrder from '../contexts/current-order';
@@ -30,7 +30,7 @@ interface AddShippingProps {
 const ShippingSelect = ({ shippingResource, selectedMethod, onSelect }) => {
 	const options = useObservableSuspense(shippingResource, (val) => !!val);
 	const http = useRestHttpClient();
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 
 	React.useEffect(() => {
 		async function fetchShippingMethods() {
@@ -58,7 +58,7 @@ const AddShipping = ({ order }: AddShippingProps) => {
 	const shippingAmountRef = React.useRef<TextInput>(null);
 	const { addShipping } = useCurrentOrder();
 	const [shippingMethod, setShippingMethod] = React.useState('local_pickup');
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 
 	/**
 	 * Create observable shipping resource

@@ -6,7 +6,7 @@ import { isRxDocument } from 'rxdb';
 import { BehaviorSubject } from 'rxjs';
 
 import { CurrentOrderContext } from './provider';
-import { useStore } from '../../../../../contexts/store/use-store';
+import useLocalData from '../../../../../contexts/local-data';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -36,7 +36,7 @@ export const useCurrentOrder = () => {
 		throw new Error(`useCurrentOrder must be called within CurrentOrderProvider`);
 	}
 
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 	const ordersCollection = storeDB?.collections.orders;
 	const { currentOrderResource } = React.useContext(CurrentOrderContext);
 	const currentOrder = useObservableSuspense(currentOrderResource);

@@ -8,7 +8,7 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import Customer from './customer';
-import useStore from '../../../../contexts/store';
+import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import AddCustomer from '../../components/add-new-customer';
 import CustomerSelect from '../../components/customer-select';
@@ -29,7 +29,7 @@ interface CartHeaderProps {
 const CartHeader = ({ order }: CartHeaderProps) => {
 	const { uiSettings } = useUI('pos.cart');
 	const theme = useTheme();
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 	const customerID = useObservableState(order.customer_id$, order.customer_id);
 	const { addCustomer } = useCurrentOrder();
 

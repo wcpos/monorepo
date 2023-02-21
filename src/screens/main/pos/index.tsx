@@ -35,13 +35,13 @@ const POSStackNavigator = () => {
 						{({ route }) => {
 							const orderID = get(route, ['params', 'orderID']);
 							return (
-								<ErrorBoundary>
-									<React.Suspense fallback={<Text>Loading POS...</Text>}>
-										<CurrentOrderProvider orderID={orderID}>
+								<CurrentOrderProvider orderID={orderID}>
+									<ErrorBoundary>
+										<React.Suspense fallback={<Text>Loading POS...</Text>}>
 											<POS />
-										</CurrentOrderProvider>
-									</React.Suspense>
-								</ErrorBoundary>
+										</React.Suspense>
+									</ErrorBoundary>
+								</CurrentOrderProvider>
 							);
 						}}
 					</Stack.Screen>

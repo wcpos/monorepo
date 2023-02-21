@@ -8,7 +8,7 @@ import { switchMap, map } from 'rxjs/operators';
 import log from '@wcpos/utils/src/logger';
 
 import { useReplication } from './use-replication';
-import useStore from '../../../../contexts/store';
+import useLocalData from '../../../../contexts/local-data';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type CustomerDocument = import('@wcpos/database/src/collections/customers').CustomerDocument;
@@ -29,7 +29,7 @@ interface CustomersProviderProps {
 
 const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProviderProps) => {
 	log.debug('render customer provider');
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 	const collection = storeDB.collections.customers;
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplication({ collection });

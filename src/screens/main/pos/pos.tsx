@@ -6,12 +6,14 @@ import { combineLatest, iif } from 'rxjs';
 import { tap, switchMap, map, catchError } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import POSColumns from './columns';
 import useCurrentOrder from './contexts/current-order';
 import POSTabs from './tabs';
-import useAuth from '../../../contexts/auth';
+import useLocalData from '../../../contexts/local-data';
 import { TaxesProvider } from '../contexts/taxes';
 
 /**
@@ -20,7 +22,7 @@ import { TaxesProvider } from '../contexts/taxes';
 const POS = () => {
 	const theme = useTheme();
 	const dimensions = useWindowDimensions();
-	const { store } = useAuth();
+	const { store } = useLocalData();
 	const { currentOrder } = useCurrentOrder();
 
 	const initialQueryResource = React.useMemo(() => {
@@ -68,7 +70,11 @@ const POS = () => {
 
 	return (
 		<TaxesProvider initialQueryResource={initialQueryResource}>
-			{dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />}
+			<ErrorBoundary>
+				<React.Suspense fallback={<Text>Loading POS UI...</Text>}>
+					{dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />}
+				</React.Suspense>
+			</ErrorBoundary>
 		</TaxesProvider>
 	);
 };

@@ -8,14 +8,14 @@ import Table from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
-import useAuth from '../../../../../contexts/auth';
+import useLocalData from '../../../../../contexts/local-data';
 
 interface UserSettingsProps {
 	onClose: () => void;
 }
 
 const UserSettings = ({ onClose }: UserSettingsProps) => {
-	const { storeDB } = useAuth();
+	const { storeDB } = useLocalData();
 	const [country, setCountry] = React.useState('GB');
 
 	const taxRates$ = useObservable(

@@ -5,7 +5,7 @@ import { replicateRxCollection } from 'rxdb/plugins/replication';
 
 import log from '@wcpos/utils/src/logger';
 
-import useAuth from '../../../../contexts/auth';
+import useLocalData from '../../../../contexts/local-data';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 /**
@@ -19,7 +19,7 @@ const runAudit = true;
 
 export const useReplication = ({ collection }) => {
 	const http = useRestHttpClient();
-	const { site } = useAuth();
+	const { site } = useLocalData();
 	const runAudit = React.useRef(true);
 
 	const replicationStatePromise = React.useMemo(() => {

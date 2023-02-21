@@ -4,7 +4,7 @@ import { ObservableResource } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import useRestHttpClient from '../../screens/main/hooks/use-rest-http-client';
-import useStore from '../use-store';
+import useLocalData from '../use-store';
 
 interface State {
 	code: string;
@@ -22,7 +22,7 @@ export interface Country {
  */
 export const useCountryResource = (): ObservableResource<Country[]> => {
 	const http = useRestHttpClient();
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 
 	const fetchAndSaveCountries = React.useCallback(async () => {
 		const { data } = await http.get('data/countries');

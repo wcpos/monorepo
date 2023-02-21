@@ -19,7 +19,7 @@ import OrdersNavigator from './orders';
 import POSNavigator from './pos';
 import ProductsNavigator from './products';
 import Settings from './settings';
-import useAuth from '../../contexts/auth';
+import useLocalData from '../../contexts/local-data';
 import { t } from '../../lib/translations';
 import { ModalLayout } from '../components/modal-layout';
 
@@ -44,7 +44,7 @@ const Drawer = createDrawerNavigator<DrawerParamList>();
  *
  */
 const MainNavigator = ({ navigation }) => {
-	const { site } = useAuth();
+	const { site } = useLocalData();
 	const wpAPIURL = useObservableState(site.wp_api_url$, site.wp_api_url);
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();

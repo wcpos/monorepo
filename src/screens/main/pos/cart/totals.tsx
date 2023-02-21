@@ -7,7 +7,7 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
 import ItemizedTaxes from './itemized-taxes';
-import useAuth from '../../../../contexts/auth';
+import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import useCurrencyFormat from '../../hooks/use-currency-format';
 
@@ -18,7 +18,7 @@ interface Props {
 }
 
 const Totals = ({ order }: Props) => {
-	const { store } = useAuth();
+	const { store } = useLocalData();
 	const total = useObservableState(order.total$, order.total);
 	const totalTax = useObservableState(order.total_tax$, order.total_tax);
 	const taxTotalDisplay = useObservableState(store.tax_total_display$, store.tax_total_display);
@@ -46,7 +46,7 @@ const Totals = ({ order }: Props) => {
 				</Box>
 			</Box>
 			<Box space="xxSmall">
-				{taxTotalDisplay === 'itemized' && <ItemizedTaxes tax_lines={order.tax_lines} />}
+				{taxTotalDisplay === 'itemized' && <ItemizedTaxes order={order} />}
 				<Box horizontal>
 					<Box fill>
 						<Text>{t('Total Tax', { _tags: 'core' })}:</Text>

@@ -4,12 +4,12 @@ import pick from 'lodash/pick';
 
 import Form from '@wcpos/react-native-jsonschema-form';
 
-import useAuth from '../../../contexts/auth';
+import useLocalData from '../../../contexts/local-data';
 
 const uiSchema = {};
 
 export const TaxSettings = () => {
-	const { store } = useAuth();
+	const { store } = useLocalData();
 
 	const schema = React.useMemo(() => {
 		const _schema = {

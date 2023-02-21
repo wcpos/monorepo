@@ -6,7 +6,7 @@ import get from 'lodash/get';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
-import useAuth from '../../../contexts/auth';
+import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 import { parseLinkHeader } from '../../../lib/url';
 
@@ -28,7 +28,7 @@ interface WpJsonResponse {
 }
 
 const useSiteConnect = () => {
-	const { user, userDB } = useAuth();
+	const { user, userDB } = useLocalData();
 	const [loading, setLoading] = React.useState(false);
 	const [error, setError] = React.useState(false);
 	const http = useHttpClient();

@@ -6,7 +6,7 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import Tooltip from '@wcpos/components/src/tooltip';
 
-import useAuth from '../../../../contexts/auth';
+import useLocalData from '../../../../contexts/local-data';
 import useTaxes from '../../contexts/taxes';
 import useCurrencyFormat from '../../hooks/use-currency-format';
 
@@ -19,7 +19,7 @@ interface Props {
 
 export const Price = ({ price, taxStatus, taxClass, taxDisplay = 'tooltip' }: Props) => {
 	const { format } = useCurrencyFormat();
-	const { store } = useAuth();
+	const { store } = useLocalData();
 	const taxDisplayShop = useObservableState(store?.tax_display_shop$, store?.tax_display_shop);
 	const calcTaxes = useObservableState(store?.calc_taxes$, store?.calc_taxes);
 	const taxable = taxStatus === 'taxable' && calcTaxes === 'yes';

@@ -6,7 +6,7 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import useStore from '../../../contexts/store';
+import useLocalData from '../../../contexts/local-data';
 import SyncButton from '../components/sync-button';
 import useOrders from '../contexts/orders';
 
@@ -15,7 +15,7 @@ interface OrderFooterProps {
 }
 
 const OrdersFooter = ({ count }: OrderFooterProps) => {
-	const { storeDB } = useStore();
+	const { storeDB } = useLocalData();
 	const total = useObservableState(storeDB.orders.count().$, 0);
 	const theme = useTheme();
 	const { sync, clear } = useOrders();

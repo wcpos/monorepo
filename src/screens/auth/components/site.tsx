@@ -11,7 +11,7 @@ import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
 
 import WPUsersList from './wp-users-list';
-import useAuth from '../../../contexts/auth';
+import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 
 type SiteDocument = import('@wcpos/database').SiteDocument;
@@ -24,7 +24,7 @@ interface SiteProps {
 }
 
 const Site = ({ site, first }: SiteProps) => {
-	const { user } = useAuth();
+	const { user } = useLocalData();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const wpUsersResource = React.useMemo(
 		() => new ObservableResource(site.populate$('wp_credentials')),

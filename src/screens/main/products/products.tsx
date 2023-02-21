@@ -12,7 +12,7 @@ import log from '@wcpos/utils/src/logger';
 
 import SearchBar from './components/search-bar';
 import Table from './components/table';
-import useAuth from '../../../contexts/auth';
+import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 import UiSettings from '../components/ui-settings';
 import { ProductsProvider } from '../contexts/products';
@@ -25,7 +25,7 @@ import useUI from '../contexts/ui-settings';
 const Products = () => {
 	const { uiSettings } = useUI('products');
 	const theme = useTheme();
-	const { store } = useAuth();
+	const { store } = useLocalData();
 
 	const initialQueryResource = React.useMemo(() => {
 		return new ObservableResource(

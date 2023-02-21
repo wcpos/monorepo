@@ -5,7 +5,7 @@ import { replicateRxCollection } from 'rxdb/plugins/replication';
 
 import log from '@wcpos/utils/src/logger';
 
-import useAuth from '../../../../contexts/auth';
+import useLocalData from '../../../../contexts/local-data';
 import { parseLinkHeader } from '../../../../lib/url';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
@@ -21,7 +21,7 @@ function wait(milliseconds: number) {
  */
 export const useReplication = ({ collection }) => {
 	const http = useRestHttpClient();
-	const { site } = useAuth();
+	const { site } = useLocalData();
 
 	/**
 	 *
