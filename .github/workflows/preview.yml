@@ -23,7 +23,7 @@ jobs:
         id: maybe-release
         if: ${{ success() && steps.maybe-tag.outputs.tag }}
         uses: softprops/action-gh-release@v1
-        with: 
+        with:
           name: ${{ steps.maybe-tag.outputs.tag }}
           tag_name: ${{ steps.maybe-tag.outputs.tag }}
           draft: true
@@ -38,53 +38,25 @@ jobs:
     env:
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }} # Required for apps/with-sentry
     steps:
-      - name: 🚀 Setup repo
+      - name: 🏗 Setup repo
         uses: actions/checkout@v3
-      - name: 🚀 Setup Node
-        uses: actions/setup-node@v3.5.1
+
+      - name: 🏗 Setup Node
+        uses: actions/setup-node@v3
         with:
-          node-version: 16.x
-      - name: 🚀 Setup Expo
-        uses: expo/expo-github-action@v7
+          node-version: 18.x
+          cache: yarn
+
+      - name: 🏗 Setup EAS
+        uses: expo/expo-github-action@v8
         with:
           expo-version: latest
-          expo-cache: true
           token: ${{ secrets.EXPO_TOKEN }}
-      - name: 🔎 Find cache
-        id: yarn-cache-dir-path
-        run: echo "::set-output name=dir::$(yarn cache dir)"
-      - name: ♻️ Restore cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
-      - name: 📋 Install dependencies
-        run: YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn install
-      - name: 👷 Build packages
-        run: yarn build
-      - name: 📢 Publish to Expo
-        run: expo publish --release-channel=pr-${{ needs.tag-new-versions.outputs.tag }}
-      - name: 💬 Comment deployment link
-        uses: actions/github-script@v6
-        with:
-          script: |
-            // Load manifest to fetch project info
-            const tag = `${{ needs.tag-new-versions.outputs.tag }}`;
-            const manifest = require(`./app.json`);
 
-            // Get the app information and build links
-            const { owner, slug } = manifest.expo;
-            const project = `@${owner}/${slug}?release-channel=pr-${tag}`;
-            const projectLink = `https://expo.dev/${project}`;
-            const projectQR = `exp://exp.host/${project}`;
+      - name: 📦 Install dependencies
+        run: yarn install
 
-            // Add the comment
-            github.rest.issues.create({
-              title: `Preview ${tag}`,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              labels: ['preview'],
-              body: `You can preview [${tag} here](${projectLink}).<br><br><a href="${projectLink}"><img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${projectQR}" height="200px" width="200px"></a>`
-            });
+      - name: 🚀 Create preview
+        uses: expo/expo-github-action/preview@v8
+        with:
+          command: eas update --auto
