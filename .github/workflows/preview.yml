@@ -54,7 +54,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: 📦 Install dependencies
-        run: yarn install
+        run: YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn install
 
       - name: 🚀 Create preview
         uses: expo/expo-github-action/preview@v8
