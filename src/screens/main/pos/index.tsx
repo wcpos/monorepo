@@ -50,8 +50,8 @@ const POSStackNavigator = () => {
 							{({ route }) => {
 								const orderID = get(route, ['params', 'orderID']);
 								return (
-									<OrdersProvider initialQuery={{ filters: { uuid: orderID } }}>
-										<GatewaysProvider initialQuery={{ filters: { enabled: true } }}>
+									<OrdersProvider initialQuery={{ selector: { uuid: orderID }, limit: 1 }}>
+										<GatewaysProvider initialQuery={{ selector: { enabled: true } }}>
 											<ModalLayout
 												size="xLarge"
 												title={t('Checkout', { _tags: 'core' })}
@@ -72,7 +72,7 @@ const POSStackNavigator = () => {
 							{({ route }) => {
 								const orderID = get(route, ['params', 'orderID']);
 								return (
-									<OrdersProvider initialQuery={{ filters: { uuid: orderID } }}>
+									<OrdersProvider initialQuery={{ selector: { uuid: orderID }, limit: 1 }}>
 										<ModalLayout
 											title={t('Receipt', { _tags: 'core' })}
 											primaryAction={{

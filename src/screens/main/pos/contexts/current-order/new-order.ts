@@ -1,5 +1,5 @@
 // import * as React from 'react';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 
 import log from '@wcpos/utils/src/logger';
 
@@ -36,6 +36,9 @@ export default class NewOrder {
 		this.billing$ = new BehaviorSubject({});
 		this.shipping = {};
 		this.shipping$ = new BehaviorSubject({});
+		this.line_items$ = of([]);
+		this.fee_lines$ = of([]);
+		this.shipping_lines$ = of([]);
 		this.currency_symbol = currency_symbol;
 	}
 

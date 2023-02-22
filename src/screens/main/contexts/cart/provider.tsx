@@ -125,7 +125,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 		 */
 		const cartTotals$ = combineLatest([lineItemTotals$, feeLineTotals$, shippingLineTotals$]).pipe(
 			map((totals) => flatten(totals)),
-			filter((totals) => totals.length > 0),
+			// filter((totals) => totals.length > 0),
 			map((cartTotals) => {
 				const totals = calcOrderTotals(cartTotals);
 				order.incrementalPatch(totals);

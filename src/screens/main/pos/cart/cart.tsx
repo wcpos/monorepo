@@ -1,5 +1,9 @@
 import * as React from 'react';
 
+import flatten from 'lodash/flatten';
+import { useLayoutObservableState } from 'observable-hooks';
+import { combineLatest } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -23,10 +27,8 @@ export interface CartProps {
 	currentOrder: import('@wcpos/database').OrderDocument;
 }
 
-const Cart = (props: CartProps) => {
+const Cart = ({ currentOrder }: CartProps) => {
 	const theme = useTheme();
-	const currentOrder = React.useDeferredValue(props.currentOrder);
-
 	const hasItems =
 		currentOrder.line_items.length > 0 ||
 		currentOrder.fee_lines.length > 0 ||
@@ -47,11 +49,11 @@ const Cart = (props: CartProps) => {
 
 			{hasItems && (
 				// show cart only if cart not empty
-				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+				<Box fill>
 					<CartProvider order={currentOrder}>
 						<ErrorBoundary>
 							<React.Suspense fallback={<Text>loading cart items...</Text>}>
-								<Table order={currentOrder} />
+								<Table />
 							</React.Suspense>
 						</ErrorBoundary>
 					</CartProvider>

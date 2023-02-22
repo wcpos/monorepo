@@ -22,7 +22,9 @@ export interface PaymentWebviewProps {
 
 const PaymentWebview = ({ gatewayID }: PaymentWebviewProps) => {
 	const [loading, setLoading] = React.useState(true);
-	const { data: order } = useOrders();
+	const {
+		data: [order],
+	} = useOrders();
 	const addSnackbar = useSnackbar();
 	const { onPrimaryAction } = useModal();
 	const iframeRef = React.useRef<HTMLIFrameElement>();

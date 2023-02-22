@@ -50,8 +50,10 @@ const GatewaysProvider = ({ children, initialQuery }: GatewaysProviderProviderPr
 	 */
 	const value = React.useMemo(() => {
 		const gateways$ = query$.pipe(
-			switchMap((q) => {
-				const RxQuery = collection.find({ selector: q.filters });
+			switchMap((query) => {
+				const { search, selector = {}, sortBy, sortDirection } = query;
+
+				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$;
 			})

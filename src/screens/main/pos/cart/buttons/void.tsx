@@ -39,7 +39,8 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 	 */
 	const handleRemove = React.useCallback(async () => {
 		const orderJson = await order.toPopulatedJSON();
-		await order.remove();
+		const latest = order.getLatest();
+		await latest.remove();
 		navigation.setParams({ orderID: '' });
 		addSnackbar({
 			message: t('Order removed', { _tags: 'core' }),
