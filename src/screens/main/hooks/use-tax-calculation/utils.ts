@@ -1,12 +1,12 @@
+import flatten from 'lodash/flatten';
 import forEach from 'lodash/forEach';
+import groupBy from 'lodash/groupBy';
+import map from 'lodash/map';
 import reverse from 'lodash/reverse';
+import round from 'lodash/round';
+import sortBy from 'lodash/sortBy';
 import sum from 'lodash/sum';
 import sumBy from 'lodash/sumBy';
-import sortBy from 'lodash/sortBy';
-import round from 'lodash/round';
-import map from 'lodash/map';
-import flatten from 'lodash/flatten';
-import groupBy from 'lodash/groupBy';
 
 type TaxRateSchema = import('@wcpos/database').TaxRateSchema;
 interface Taxes {

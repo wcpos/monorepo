@@ -31,6 +31,7 @@ const Avatar = ({ item: customer }: AvatarProps) => {
 				source={avatar_url}
 				style={{ width: measurements.width, height: measurements.width, aspectRatio: 1 }}
 				border="rounded"
+				recyclingKey={customer.uuid}
 				// placeholder={<Img source={require('assets/placeholder.png')} />}
 			/>
 		</View>

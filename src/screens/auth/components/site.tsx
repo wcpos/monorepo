@@ -23,6 +23,13 @@ interface SiteProps {
 	first: boolean;
 }
 
+/**
+ *
+ */
+function getUrlWithoutProtocol(url: string) {
+	return url?.replace(/^.*:\/{2,}|\s|\/+$/g, '') || '';
+}
+
 const Site = ({ site, first }: SiteProps) => {
 	const { user } = useLocalData();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
@@ -47,6 +54,9 @@ const Site = ({ site, first }: SiteProps) => {
 		}
 	}, [user, site]);
 
+	/**
+	 *
+	 */
 	return (
 		<>
 			<Box
@@ -57,7 +67,7 @@ const Site = ({ site, first }: SiteProps) => {
 				style={{ borderTopWidth: first ? 0 : 1 }}
 			>
 				<Box>
-					<Avatar source={`https://icon.horse/icon/${site.getUrlWithoutProtocol()}`} />
+					<Avatar source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url)}`} />
 				</Box>
 				<Box fill space="medium">
 					<Box>

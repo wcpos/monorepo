@@ -1,31 +1,25 @@
 import * as React from 'react';
 
-import map from 'lodash/map';
 import sumBy from 'lodash/sumBy';
-import { useObservableSuspense, useObservableState } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 
-import { TaxesContext } from './provider';
 import { calcTaxes, sumItemizedTaxes, sumTaxes } from './utils';
 import useLocalData from '../../../../contexts/local-data';
+import useTaxRates from '../../contexts/tax-rates';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
 type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
 type Cart = CartItem[];
-type TaxRateSchema = import('@wcpos/database').TaxRateSchema;
-interface Taxes {
-	id: number;
-	total: string;
-}
+// type TaxRateSchema = import('@wcpos/database').TaxRateSchema;
+// interface Taxes {
+// 	id: number;
+// 	total: string;
+// }
 
-export const useTaxes = () => {
-	const context = React.useContext(TaxesContext);
-	if (!context) {
-		throw new Error(`useTaxes must be called within TaxesContext`);
-	}
-
-	const rates = useObservableSuspense(context.resource);
+const useTaxCalculation = () => {
+	const { data: rates } = useTaxRates();
 	const { store } = useLocalData();
 	const _calcTaxes = useObservableState(store?.calc_taxes$, store?.calc_taxes);
 	const pricesIncludeTax = useObservableState(
@@ -85,7 +79,7 @@ export const useTaxes = () => {
 			const itemizedTotalTaxes = sumItemizedTaxes(totalTaxes, taxRoundAtSubtotal);
 			// itemizedSubTotalTaxes & itemizedTotalTaxes should be same size
 			// is there a case where they are not?
-			const taxes = map(itemizedSubTotalTaxes, (obj) => {
+			const taxes = itemizedSubTotalTaxes.map((obj) => {
 				const index = itemizedTotalTaxes.findIndex((el) => el.id === obj.id);
 				const totalTax = index !== -1 ? itemizedTotalTaxes[index] : { total: 0 };
 				return {
@@ -144,5 +138,11 @@ export const useTaxes = () => {
 		[taxRoundAtSubtotal, rates]
 	);
 
-	return { ...context, rates, getDisplayValues, calcLineItemTotals, calcOrderTotals };
+	return {
+		getDisplayValues,
+		calcLineItemTotals,
+		calcOrderTotals,
+	};
 };
+
+export default useTaxCalculation;

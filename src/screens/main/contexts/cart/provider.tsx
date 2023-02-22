@@ -7,7 +7,7 @@ import { switchMap, map, catchError, filter } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import useTaxes from '../taxes';
+import useTaxCalculation from '../../hooks/use-tax-calculation';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
@@ -30,7 +30,7 @@ interface CartContextProps {
  *
  */
 const CartProvider = ({ children, order }: CartContextProps) => {
-	const { calcLineItemTotals, calcOrderTotals } = useTaxes();
+	const { calcLineItemTotals, calcOrderTotals } = useTaxCalculation();
 
 	/**
 	 *
@@ -149,6 +149,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 	/**
 	 * Calc totals
 	 * NOTE - want to subscribe here? maybe its better to subscribe in the component?
+	 * Do I ever want to use the cart without updating the totals?
 	 */
 	useSubscription(value.cartTotals$);
 

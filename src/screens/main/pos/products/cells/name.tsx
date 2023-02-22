@@ -7,8 +7,8 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
 import Categories from '../../../components/product/categories';
-import Tags from '../../../components/product/tags';
 import StockQuantity from '../../../components/product/stock-quantity';
+import Tags from '../../../components/product/tags';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;

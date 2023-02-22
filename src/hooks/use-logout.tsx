@@ -7,7 +7,7 @@ const useLogout = () => {
 
 	const logout = React.useCallback(async () => {
 		const current = await userDB.getLocal('current');
-		return userDB.upsertLocal('current', {
+		userDB.upsertLocal('current', {
 			userID: current && current.get('userID'),
 		});
 	}, [userDB]);

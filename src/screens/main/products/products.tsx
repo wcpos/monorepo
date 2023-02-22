@@ -1,8 +1,6 @@
 import * as React from 'react';
 
-import { ObservableResource } from 'observable-hooks';
-import { combineLatest } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -16,7 +14,7 @@ import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 import UiSettings from '../components/ui-settings';
 import { ProductsProvider } from '../contexts/products';
-import { TaxesProvider } from '../contexts/taxes';
+import { TaxRateProvider } from '../contexts/tax-rates';
 import useUI from '../contexts/ui-settings';
 
 /**
@@ -26,23 +24,25 @@ const Products = () => {
 	const { uiSettings } = useUI('products');
 	const theme = useTheme();
 	const { store } = useLocalData();
+	const storeCity = useObservableState(store.store_city$, store?.store_city);
+	const storeCountry = useObservableState(store.default_country$, store?.default_country);
+	const storePostcode = useObservableState(store.store_postcode$, store?.store_postcode);
 
-	const initialQueryResource = React.useMemo(() => {
-		return new ObservableResource(
-			combineLatest([store.store_city$, store.default_country$, store.store_postcode$]).pipe(
-				map(([city = '', defaultCountry = '', postcode = '']) => {
-					/**
-					 * default_country has a weird format, eg: US:CA
-					 */
-					const [country, state] = defaultCountry.split(':');
-					return { city, country, state, postcode };
-				})
-			)
-		);
-	}, [store.default_country$, store.store_city$, store.store_postcode$]);
+	const initialQuery = React.useMemo(() => {
+		/**
+		 * default_country has a weird format, eg: US:CA
+		 */
+		const [country, state] = (storeCountry || '').split(':');
+		return {
+			city: storeCity,
+			country,
+			state,
+			postcode: storePostcode,
+		};
+	}, [storeCity, storeCountry, storePostcode]);
 
 	return (
-		<TaxesProvider initialQueryResource={initialQueryResource}>
+		<TaxRateProvider initialQuery={initialQuery}>
 			<ProductsProvider
 				initialQuery={{
 					sortBy: uiSettings.get('sortBy'),
@@ -81,7 +81,7 @@ const Products = () => {
 					</Box>
 				</Box>
 			</ProductsProvider>
-		</TaxesProvider>
+		</TaxRateProvider>
 	);
 };
 

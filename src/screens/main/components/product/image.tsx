@@ -34,6 +34,7 @@ export const ProductImage = ({ item: product }: Props) => {
 				source={source}
 				style={{ width: measurements.width, height: measurements.width, aspectRatio: 1 }}
 				border="rounded"
+				recyclingKey={product.uuid}
 				// placeholder={<Img source={require('assets/placeholder.png')} />}
 			/>
 		</View>

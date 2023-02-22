@@ -18,7 +18,7 @@ const POSTabs = () => {
 
 	return (
 		<View style={{ flex: 1 }}>
-			<Box style={{ flex: 1 }}>{activeTab === 'products' ? <Products /> : <Cart />}</Box>
+			<Box fill>{activeTab === 'products' ? <Products /> : <Cart />}</Box>
 			<Box horizontal style={{ backgroundColor: '#FFFFFF', borderTopColor: theme.colors.border }}>
 				<Button.Group background="clear" fill>
 					<Button onPress={() => setActiveTab('products')}>

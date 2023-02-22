@@ -80,7 +80,7 @@ export const ProductName = ({ item, column }: Props) => {
 	 */
 	return (
 		<Box horizontal space="xSmall" style={{ width: '100%' }}>
-			<Box fill space="xSmall" style={{ flex: 1 }}>
+			<Box fill space="xSmall">
 				<Text>{name}</Text>
 				{show('sku') && <Text size="small">{item.sku}</Text>}
 

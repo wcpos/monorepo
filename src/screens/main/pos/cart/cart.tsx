@@ -23,8 +23,9 @@ export interface CartProps {
 	currentOrder: import('@wcpos/database').OrderDocument;
 }
 
-const Cart = ({ currentOrder }: CartProps) => {
+const Cart = (props: CartProps) => {
 	const theme = useTheme();
+	const currentOrder = React.useDeferredValue(props.currentOrder);
 
 	const hasItems =
 		currentOrder.line_items.length > 0 ||

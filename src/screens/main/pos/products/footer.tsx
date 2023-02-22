@@ -22,6 +22,20 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { sync, clear } = useProducts();
 	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
 
+	/**
+	 * FIXME: this is a temporary hack, need to get the label from the API
+	 */
+	const taxBasedOnLabel = React.useMemo(() => {
+		switch (taxBasedOn) {
+			case 'shipping':
+				return t('Customer shipping address', { _tags: 'core' });
+			case 'billing':
+				return t('Customer billing address', { _tags: 'core' });
+			default:
+				return t('Shop base address', { _tags: 'core' });
+		}
+	}, [taxBasedOn]);
+
 	return (
 		<Box
 			horizontal
@@ -36,7 +50,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 		>
 			<Box fill padding="small" space="xSmall">
 				<Text size="small">
-					{t('Tax based on', { _tags: 'core' })}: {taxBasedOn}
+					{t('Tax based on', { _tags: 'core' })}: {taxBasedOnLabel}
 				</Text>
 			</Box>
 			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">

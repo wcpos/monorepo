@@ -22,7 +22,7 @@ export const UserMenu = () => {
 	const dimensions = useWindowDimensions();
 
 	const items = React.useMemo(() => {
-		if (isWebApp) {
+		if (isWebApp && initialProps) {
 			return [
 				{
 					icon: 'gear',
@@ -58,7 +58,7 @@ export const UserMenu = () => {
 				},
 			];
 		}
-	}, []);
+	}, [initialProps, isWebApp, logout, navigation]);
 
 	return (
 		<Dropdown placement="bottom-end" items={items}>
