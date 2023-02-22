@@ -28,7 +28,7 @@ export type {
 	ShippingLineSchema,
 } from './collections/shipping-lines';
 export type { CustomerCollection, CustomerDocument, CustomerSchema } from './collections/customers';
-export type { TaxRateCollection, TaxRateDocument, TaxRateSchema } from './collections/taxes';
+export type { TaxRateCollection, TaxRateDocument, TaxRateSchema } from './collections/tax-rates';
 export type {
 	ProductVariationCollection,
 	ProductVariationDocument,

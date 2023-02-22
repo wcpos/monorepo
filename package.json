@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.66",
+	"version": "1.0.67",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",

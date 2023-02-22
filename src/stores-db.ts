@@ -9,7 +9,7 @@ export type StoreDatabaseCollections = {
 	fee_lines: import('./collections/fee-lines').FeeLineCollection;
 	shipping_lines: import('./collections/shipping-lines').ShippingLineCollection;
 	customers: import('./collections/customers').CustomerCollection;
-	taxes: import('./collections/taxes').TaxRateCollection;
+	taxes: import('./collections/tax-rates').TaxRateCollection;
 	payment_gateways: import('./collections/payment-gateways').PaymentGatewayCollection;
 };
 export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;

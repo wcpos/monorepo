@@ -9,7 +9,6 @@ import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 
 import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';
-import middlewaresPlugin from './middlewares';
 import parseRestResponsePlugin from './parse-rest-response';
 import populatePlugin from './populate';
 
@@ -39,7 +38,6 @@ addRxPlugin(RxDBMigrationPlugin);
 addRxPlugin(RxDBJsonDumpPlugin);
 
 // custom plugins
-addRxPlugin(middlewaresPlugin);
 addRxPlugin(RxDBGenerateIdPlugin); // should run before populate and parseRestResponse
 addRxPlugin(populatePlugin);
 addRxPlugin(findOneFixPlugin);

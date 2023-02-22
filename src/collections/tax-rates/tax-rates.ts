@@ -14,7 +14,7 @@ export type TaxRateCollection = import('rxdb').RxCollection<TaxRateDocument>;
  */
 // export const methods: TaxRateMethods = {};
 
-export const taxes = {
+export const taxRates = {
 	schema,
 	// statics: {},
 	// methods,

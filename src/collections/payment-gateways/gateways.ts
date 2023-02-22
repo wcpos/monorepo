@@ -20,14 +20,4 @@ type PaymentGatewayMethods = Record<string, never>;
  */
 export const gateways = {
 	schema,
-	// statics,
-	// methods,
-	// attachments: {},
-	// options: {
-	// 	middlewares: {
-	// 	},
-	// },
-	// migrationStrategies: {},
-	// autoMigrate: true,
-	// cacheReplacementPolicy() {},
 };

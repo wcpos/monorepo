@@ -8,23 +8,9 @@ export type CustomerCollection = import('rxdb').RxCollection<
 	CustomerStatics
 >;
 
-// interface CustomerMethods {}
-
 type CustomerStatics = Record<string, never>;
 type CustomerMethods = Record<string, never>;
 
-// /**
-//  *
-//  */
-// export const methods: CustomerMethods = {};
-
 export const customers = {
 	schema,
-	// statics: {},
-	// methods: {},
-	// attachments: {},
-	// options: {},
-	// migrationStrategies: {},
-	// autoMigrate: true,
-	// cacheReplacementPolicy() {},
 };

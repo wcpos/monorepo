@@ -8,7 +8,7 @@ import products from './products';
 import shipping_lines from './shipping-lines';
 import sites from './sites';
 import stores from './stores';
-import taxes from './taxes';
+import taxes from './tax-rates';
 import users from './users';
 import variations from './variations';
 import wp_credentials from './wp-credentials';
@@ -22,6 +22,6 @@ export const storeCollections = {
 	fee_lines,
 	shipping_lines,
 	customers,
-	taxes,
+	taxes, // NOTE: WC REST API uses 'taxes', not 'tax_rates', going against all other endpoints.
 	payment_gateways,
 };
