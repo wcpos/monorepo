@@ -30,7 +30,7 @@ export const UserMenu = () => {
 					action: () => navigation.navigate('Settings'),
 				},
 				{
-					icon: 'gear',
+					icon: 'download',
 					label: t('Desktop App', { _tags: 'core' }),
 					action: () => Linking.openURL('https://github.com/wcpos/electron/releases'),
 				},

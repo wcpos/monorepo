@@ -51,7 +51,7 @@ export const VariableActions = ({ item: product }: Props) => {
 			<Popover.Target>
 				<Icon
 					name="circleChevronRight"
-					size="xLarge"
+					size="xxLarge"
 					type="success"
 					onPress={() => setOpened(true)}
 				/>

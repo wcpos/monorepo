@@ -156,6 +156,7 @@ const AddNewCustomer = () => {
 	return (
 		<>
 			<Icon
+				size="medium"
 				name="userPlus"
 				onPress={() => {
 					setOpened(true);

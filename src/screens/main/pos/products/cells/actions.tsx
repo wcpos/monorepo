@@ -24,7 +24,7 @@ export const Actions = ({ item: product }: Props) => {
 	 */
 	return (
 		<View style={{ position: 'relative', zIndex: 1000 }}>
-			<Icon name="circlePlus" size="xLarge" onPress={() => addProduct(product)} type="success" />
+			<Icon name="circlePlus" size="xxLarge" onPress={() => addProduct(product)} type="success" />
 		</View>
 	);
 };

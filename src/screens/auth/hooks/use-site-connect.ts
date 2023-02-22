@@ -98,6 +98,7 @@ const useSiteConnect = () => {
 	 */
 	const onConnect = React.useCallback(
 		async (url: string): Promise<SiteDocument | undefined> => {
+			if (url === '') return;
 			setLoading(true);
 
 			try {
