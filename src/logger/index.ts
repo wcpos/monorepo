@@ -27,8 +27,8 @@ const defaultConfig = {
 
 const log = logger.createLogger<'silly' | 'debug' | 'info' | 'warn' | 'error'>(defaultConfig);
 
-log.debug('Debug message');
-log.info({ message: 'hi!' });
-log.silly('Silly message');
+// TODO: Add version info
+log.info({ message: 'TODO: Add version info :)' });
+log.silly('Silly mode enabled! You get everything');
 
 export default log;
