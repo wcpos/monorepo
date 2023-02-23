@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/core",
-	"version": "1.0.94",
+	"version": "1.0.95",
 	"description": "The core WooCommerce POS app",
 	"author": "kilbot <paul@kilbot.com>",
 	"license": "MIT",
@@ -23,8 +23,8 @@
 		"@react-navigation/native": "6.1.4",
 		"@react-navigation/stack": "6.3.14",
 		"@shelf/fast-natural-order-by": "^1.1.0",
-		"@transifex/native": "^5.0.7",
-		"@transifex/react": "^5.0.7",
+		"@transifex/native": "^5.1.0",
+		"@transifex/react": "^5.1.0",
 		"@wcpos/components": "*",
 		"@wcpos/database": "*",
 		"@wcpos/hooks": "*",

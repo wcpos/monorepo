@@ -44,7 +44,7 @@ const Site = ({ site, first }: SiteProps) => {
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
 			await site.remove();
-			await user.update({
+			await user.incrementalUpdate({
 				$pullAll: {
 					sites: [site.uuid],
 				},
@@ -69,8 +69,8 @@ const Site = ({ site, first }: SiteProps) => {
 				<Box>
 					<Avatar source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url)}`} />
 				</Box>
-				<Box fill space="medium">
-					<Box>
+				<Box fill space="small">
+					<Box space="xSmall">
 						<Text weight="bold">{site.name}</Text>
 						<Text size="small" type="secondary">
 							{site.url}

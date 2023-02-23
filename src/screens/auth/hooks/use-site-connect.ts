@@ -108,7 +108,7 @@ const useSiteConnect = () => {
 				}
 
 				const siteData = await getSiteData(wpApiUrl);
-				await user.update({ $push: { sites: siteData } });
+				await user.incrementalUpdate({ $push: { sites: siteData } });
 				return await userDB.sites.findOneFix(siteData.uuid).exec();
 			} catch (err) {
 				setError(err.message);

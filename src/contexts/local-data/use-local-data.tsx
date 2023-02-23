@@ -10,7 +10,7 @@ export const useLocalData = () => {
 		throw new Error(`useLocalData must be called within LocalDataProvider`);
 	}
 
-	const data = useObservableSuspense(context.localResources);
+	const data = useObservableSuspense(context.resources);
 	return React.useDeferredValue(data);
 	// return data;
 };

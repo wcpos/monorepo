@@ -3,7 +3,7 @@ import * as React from 'react';
 import { ObservableResource } from 'observable-hooks';
 import { tap, map } from 'rxjs/operators';
 
-import { combined$ } from './observables';
+import { current$ } from './observables';
 
 type UserDocument = import('@wcpos/database').UserDocument;
 type UserDatabase = import('@wcpos/database').UserDatabase;
@@ -23,7 +23,7 @@ export interface LocalData {
 }
 
 export const LocalDataContext = React.createContext<{
-	localResources: ObservableResource<LocalData>;
+	resources: ObservableResource<LocalData>;
 }>(null);
 
 interface LocalDataProviderProps {
@@ -43,25 +43,15 @@ let count = 0;
  */
 export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderProps) => {
 	/**
-	 * Web app hydration
-	 */
-
-	/**
 	 *
 	 */
 	const value = React.useMemo(() => {
 		const isWebApp = !!(initialProps && initialProps.site);
 
-		const allLocalResources$ = combined$.pipe(
-			map(([userDB, user, site, wpCredentials, store, storeDB, locale]) => {
+		const hydratedResources$ = current$.pipe(
+			map((current) => {
 				return {
-					userDB,
-					user,
-					site,
-					wpCredentials,
-					store,
-					storeDB,
-					locale,
+					...current,
 					isWebApp,
 					initialProps,
 				};
@@ -69,11 +59,15 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 			tap(async ({ user, userDB, storeDB }) => {
 				/**
 				 * Hydrate initialProps for web app
-				 * TODO - This is a bit hacky, probably can be improved
+				 * FIXME: This is a bit hacky, probably can be improved
 				 */
 				if (user && isWebApp && count === 0) {
 					count++;
 					const { site, wp_credentials, store } = initialProps;
+
+					/**
+					 * FIXME: refeshing the webapp will wipe any settings that were changed, eg: store name
+					 */
 					await user.update({
 						$push: {
 							sites: {
@@ -94,15 +88,10 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 		);
 
 		/**
-		 * localResources should emit
-		 * - userDB
-		 * - user (global POS user, not the store user)
-		 * - logged in details (site, wpCredentials, store)
-		 * - storeDB
-		 * - translations (just the locale will do)
+		 *
 		 */
 		return {
-			localResources: new ObservableResource(allLocalResources$),
+			resources: new ObservableResource(hydratedResources$),
 		};
 	}, [initialProps]);
 

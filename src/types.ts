@@ -1,4 +1,5 @@
 export type InitialSiteProps = {
+	uuid: string;
 	description: string;
 	gmt_offset: string;
 	home: string;
@@ -16,6 +17,7 @@ export type InitialStoresProps = {
 };
 
 export type InitialWpCredentialsProps = {
+	uuid: string;
 	display_name: string;
 	email: string;
 	firstN_nme: string;

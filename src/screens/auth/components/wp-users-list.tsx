@@ -20,7 +20,7 @@ const WPUsersList = ({ wpUsersResource, site }: WpUserProps) => {
 	const navigation = useNavigation();
 
 	return (
-		<>
+		<Box space="xSmall">
 			<Box horizontal align="center" space="medium">
 				<Text>{t('Logged in users', { _tags: 'core' })}</Text>
 				<Button
@@ -38,7 +38,7 @@ const WPUsersList = ({ wpUsersResource, site }: WpUserProps) => {
 					</React.Suspense>
 				</ErrorBoundary>
 			))}
-		</>
+		</Box>
 	);
 };
 
