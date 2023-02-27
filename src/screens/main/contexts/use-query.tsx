@@ -19,6 +19,20 @@ export type QueryObservable = BehaviorSubject<QueryState>;
 
 export type SetQuery = (path: import('lodash').PropertyPath, value: any) => void;
 
+function removeNulls(obj) {
+	for (const prop in obj) {
+		if (obj[prop] === null) {
+			delete obj[prop];
+		} else if (typeof obj[prop] === 'object') {
+			obj[prop] = removeNulls(obj[prop]);
+			if (Object.keys(obj[prop]).length === 0) {
+				delete obj[prop];
+			}
+		}
+	}
+	return obj;
+}
+
 /**
  *
  */
@@ -29,12 +43,14 @@ const useQuery = (initialQuery: QueryState) => {
 	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
 
 	/**
-	 *
+	 * Normalize selector, for example:
+	 * { selector: { categories: null, tags: { $elemMatch: { id: '123' } } } }
+	 * should be { selector: { tags: { $elemMatch: { id: '123' } } } }
 	 */
 	const setQuery: SetQuery = React.useCallback(
 		(path, value) => {
 			const prev = cloneDeep(query$.getValue()); // query needs to be immutable
-			const next = set(prev, path, value);
+			const next = removeNulls(set(prev, path, value));
 			query$.next(next);
 		},
 		[query$]
