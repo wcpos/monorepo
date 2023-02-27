@@ -31,8 +31,6 @@ interface LocalDataProviderProps {
 	initialProps: import('../../types').InitialProps;
 }
 
-let count = 0;
-
 /**
  * The Local Data Provider composes all bunch of local resource observables
  * Ideally, this should only emit once on start up, and then for rare events such as
@@ -59,24 +57,33 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 			tap(async ({ user, userDB, storeDB }) => {
 				/**
 				 * Hydrate initialProps for web app
-				 * FIXME: This is a bit hacky, probably can be improved
 				 */
-				if (user && isWebApp && count === 0) {
-					count++;
+				if (user && isWebApp && !storeDB) {
 					const { site, wp_credentials, store } = initialProps;
+					let siteDoc = await userDB.sites.findOneFix(site.uuid).exec();
+					let wpCredentialsDoc = await userDB.wp_credentials.findOneFix(wp_credentials.uuid).exec();
+					let storeDoc = await userDB.stores.findOne({ selector: { id: store.id } }).exec();
+
+					if (!siteDoc) {
+						siteDoc = await userDB.sites.insert(site);
+					}
 
 					/**
-					 * FIXME: refeshing the webapp will wipe any settings that were changed, eg: store name
+					 * Update nonce for REST requests on each refresh
+					 * FIXME: this should be done proactively, ie: check cookie timeout
 					 */
-					await user.update({
-						$push: {
-							sites: {
-								...site,
-								wp_credentials: [{ ...wp_credentials, stores: [store] }],
-							},
-						},
-					});
-					const storeDoc = await userDB.stores.findOneFix({ selector: { id: store.id } }).exec();
+					if (wpCredentialsDoc) {
+						await wpCredentialsDoc.patch({ wp_nonce: wp_credentials.wp_nonce });
+					}
+
+					if (!wpCredentialsDoc) {
+						wpCredentialsDoc = await userDB.wp_credentials.insert(wp_credentials);
+					}
+
+					if (!storeDoc) {
+						storeDoc = await userDB.stores.insert(store);
+					}
+
 					userDB.upsertLocal('current', {
 						userID: user.uuid,
 						siteID: site.uuid,

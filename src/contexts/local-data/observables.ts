@@ -53,7 +53,7 @@ const handleFirstUser = async (userDB: UserDatabase) => {
 /**
  *
  */
-export const current$ = from(userDBPromise()).pipe(
+export const current$: Observable<LocalData> = from(userDBPromise()).pipe(
 	switchMap((userDB) =>
 		userDB.getLocal$('current').pipe(
 			map((current) => ({
@@ -78,12 +78,14 @@ export const current$ = from(userDBPromise()).pipe(
 					 * NOTE: I don't actually use global users at the moment, but might in the future
 					 * if user = null, either find the first one or create a new one
 					 */
-					tap(async (obj) => {
+					filter((obj: LocalData) => {
 						if (!isRxDocument(obj.user)) {
-							await handleFirstUser(userDB);
+							handleFirstUser(userDB);
+							return false;
+						} else {
+							return true;
 						}
 					}),
-					filter((obj) => isRxDocument(obj.user)),
 					/**
 					 * Here we add in the locale from the store
 					 * The locale set in the store is loaded preferentially, then user locale
@@ -91,21 +93,24 @@ export const current$ = from(userDBPromise()).pipe(
 					switchMap((obj) => {
 						const locale$ = obj.store ? obj.store.locale$ : obj.user.locale$;
 						return locale$.pipe(
-							map((locale) => {
-								obj.locale = locale || systemLocale;
-								return obj;
-							})
+							map((locale) => Object.assign(obj, { locale: locale || systemLocale }))
 						);
 					}),
-					switchMap((obj) =>
+					switchMap((obj: LocalData) =>
 						userDB.getLocal$(obj.locale).pipe(
-							map((doc) => {
+							switchMap((doc) => {
 								const translations = isRxDocument(doc) ? doc.toJSON().data : {};
 								tx.cache.update(obj.locale, translations, true);
-								tx.setCurrentLocale(obj.locale);
-								obj.userDB = userDB; // add userDB to the final object
-								return obj;
-							})
+								/**
+								 * setCurrentLocale is async, it doesn't update tx.currentLocale immediately
+								 * so, we need to wait here for it to finish
+								 */
+								return tx.setCurrentLocale(obj.locale);
+							}),
+							/**
+							 * We need to add the userDB to the object and return here
+							 */
+							map(() => Object.assign(obj, { userDB }))
 						)
 					)
 				)
