@@ -3,7 +3,9 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 
-import Search from '@wcpos/components/src/search';
+import Box from '@wcpos/components/src/box';
+import Pill from '@wcpos/components/src/pill';
+import TextInput from '@wcpos/components/src/textinput';
 
 import { t } from '../../../../lib/translations';
 import useProducts from '../../contexts/products';
@@ -26,35 +28,29 @@ const SearchBar = () => {
 	 *
 	 */
 	const filters = React.useMemo(() => {
-		const f = [];
-		if (get(query, 'filters.category')) {
-			f.push({
-				label: get(query, 'filters.category.name'),
-				onRemove: () => {
-					setQuery('filters.category', null);
-				},
-			});
+		const categoryID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
+		if (categoryID) {
+			return (
+				<Box paddingLeft="small">
+					<Pill
+						removable
+						onRemove={() => setQuery('selector.categories', null)}
+					>{`Cat ${categoryID}`}</Pill>
+				</Box>
+			);
 		}
-		if (get(query, 'filters.tag')) {
-			f.push({
-				label: get(query, 'filters.tag.name'),
-				onRemove: () => {
-					setQuery('filters.tag', null);
-				},
-			});
-		}
-		return f;
 	}, [query, setQuery]);
 
 	/**
 	 *
 	 */
 	return (
-		<Search
+		<TextInput
 			placeholder={t('Search Products', { _tags: 'core' })}
-			value={query.search || ''}
-			onSearch={onSearch}
-			filters={filters}
+			value={query.search}
+			onChangeText={onSearch}
+			leftAccessory={filters}
+			containerStyle={{ flex: 1 }}
 		/>
 	);
 };

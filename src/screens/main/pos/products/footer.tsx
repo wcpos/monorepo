@@ -53,7 +53,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 					{t('Tax based on', { _tags: 'core' })}: {taxBasedOnLabel}
 				</Text>
 			</Box>
-			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">
+			<Box horizontal padding="small" space="xSmall" align="center" distribution="end">
 				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
 				<SyncButton sync={sync} clear={clear} />
 			</Box>

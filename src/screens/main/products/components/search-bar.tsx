@@ -6,6 +6,7 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Pill from '@wcpos/components/src/pill';
 import TextInput from '@wcpos/components/src/textinput';
+import { useDetectBarcode } from '@wcpos/hooks/src/use-hotkeys';
 
 import { t } from '../../../../lib/translations';
 import useProducts from '../../contexts/products';
@@ -13,6 +14,9 @@ import useProducts from '../../contexts/products';
 const SearchBar = () => {
 	const { query$, setQuery } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
+	useDetectBarcode((barcode) => {
+		setQuery('barcode', barcode);
+	});
 
 	/**
 	 *
@@ -39,6 +43,18 @@ const SearchBar = () => {
 				</Box>
 			);
 		}
+
+		const barcode = get(query, ['barcode']);
+		if (barcode) {
+			return (
+				<Box paddingLeft="small">
+					<Pill removable onRemove={() => setQuery('barcode', null)}>{`Barcode ${barcode}`}</Pill>
+					{/* <Pill removable onRemove={() => setQuery('barcode', null)}>
+						<Icon name="barcode" /> {barcode}
+					</Pill> */}
+				</Box>
+			);
+		}
 	}, [query, setQuery]);
 
 	/**
@@ -51,6 +67,7 @@ const SearchBar = () => {
 			onChangeText={onSearch}
 			leftAccessory={filters}
 			containerStyle={{ flex: 1 }}
+			clearable
 		/>
 	);
 };

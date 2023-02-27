@@ -79,10 +79,14 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			switchMap((query) => {
-				const { search, selector = {}, sortBy, sortDirection } = query;
+				const { search, selector = {}, sortBy, sortDirection, barcode } = query;
 
 				if (search) {
 					set(selector, ['name', '$regex'], new RegExp(escape(search), 'i'));
+				}
+
+				if (barcode) {
+					set(selector, ['sku'], barcode);
 				}
 
 				const RxQuery = collection.find({ selector });
