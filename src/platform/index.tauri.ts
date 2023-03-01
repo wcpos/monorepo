@@ -11,7 +11,7 @@ const Platform: PlatformType = {
 	...RNPlatform,
 	isElectron: false,
 	isNative: false,
-	isTauri: !!window.__TAURI__,
+	isTauri: true,
 	isStandalone: (window.navigator as any).standalone,
 };
 
