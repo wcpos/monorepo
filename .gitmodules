@@ -28,3 +28,6 @@
 [submodule "apps/with-flipper"]
 	path = apps/with-flipper
 	url = https://github.com/wcpos/app-with-flipper
+[submodule "apps/tauri"]
+	path = apps/tauri
+	url = https://github.com/wcpos/tauri
