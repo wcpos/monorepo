@@ -80,16 +80,31 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 		const resource$ = query$.pipe(
 			switchMap((query) => {
 				const { search, selector = {}, sortBy, sortDirection, barcode } = query;
+				let searchSelector;
 
 				if (search) {
-					set(selector, ['name', '$regex'], new RegExp(escape(search), 'i'));
+					searchSelector = {
+						$or: [
+							{
+								name: {
+									$regex: new RegExp(escape(search), 'i'),
+								},
+							},
+							{
+								sku: {
+									$regex: new RegExp(escape(search), 'i'),
+								},
+							},
+							{
+								barcode: {
+									$regex: new RegExp(escape(search), 'i'),
+								},
+							},
+						],
+					};
 				}
 
-				if (barcode) {
-					set(selector, ['sku'], barcode);
-				}
-
-				const RxQuery = collection.find({ selector });
+				const RxQuery = collection.find({ selector: searchSelector });
 
 				return RxQuery.$.pipe(
 					map((result) => {

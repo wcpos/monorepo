@@ -13,6 +13,7 @@ import Table from './components/table';
 import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 import UiSettings from '../components/ui-settings';
+import { ProductCategoriesProvider } from '../contexts/categories';
 import { ProductsProvider } from '../contexts/products';
 import { TaxRateProvider } from '../contexts/tax-rates';
 import useUI from '../contexts/ui-settings';
@@ -67,7 +68,9 @@ const Products = () => {
 								borderTopRightRadius: theme.rounding.medium,
 							}}
 						>
-							<SearchBar />
+							<ProductCategoriesProvider initialQuery={{}}>
+								<SearchBar />
+							</ProductCategoriesProvider>
 							<UiSettings
 								uiSettings={uiSettings}
 								title={t('Product Settings', { _tags: 'core' })}

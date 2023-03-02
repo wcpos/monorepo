@@ -9,6 +9,7 @@ import TextInput from '@wcpos/components/src/textinput';
 import { useDetectBarcode } from '@wcpos/hooks/src/use-hotkeys';
 
 import { t } from '../../../../lib/translations';
+import useProductCategories from '../../contexts/categories';
 import useProducts from '../../contexts/products';
 
 const SearchBar = () => {
@@ -17,6 +18,7 @@ const SearchBar = () => {
 	useDetectBarcode((barcode) => {
 		setQuery('barcode', barcode);
 	});
+	const { data: categories } = useProductCategories();
 
 	/**
 	 *
@@ -33,13 +35,14 @@ const SearchBar = () => {
 	 */
 	const filters = React.useMemo(() => {
 		const categoryID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
-		if (categoryID) {
+		const category = categories.find((c) => c.id === categoryID);
+		if (category) {
 			return (
 				<Box paddingLeft="small">
 					<Pill
 						removable
 						onRemove={() => setQuery('selector.categories', null)}
-					>{`Cat ${categoryID}`}</Pill>
+					>{`Cat ${category.name}`}</Pill>
 				</Box>
 			);
 		}
@@ -55,7 +58,7 @@ const SearchBar = () => {
 				</Box>
 			);
 		}
-	}, [query, setQuery]);
+	}, [categories, query, setQuery]);
 
 	/**
 	 *

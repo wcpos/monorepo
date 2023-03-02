@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/core",
-	"version": "1.0.96",
+	"version": "1.0.97",
 	"description": "The core WooCommerce POS app",
 	"author": "kilbot <paul@kilbot.com>",
 	"license": "MIT",
@@ -61,7 +61,7 @@
 		"react-thermal-printer": "^0.11.0",
 		"react-to-print": "^2.14.12",
 		"rxjs": "7.8.0",
-		"styled-components": "5.3.6"
+		"styled-components": "5.3.8"
 	},
 	"devDependencies": {
 		"@testing-library/jest-dom": "5.16.5",
