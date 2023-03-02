@@ -28,6 +28,7 @@ export interface WooCommerceProductSchema {
   description?: string;
   short_description?: string;
   sku?: string;
+  barcode?: string;
   price?: string;
   regular_price?: string;
   sale_price?: string;

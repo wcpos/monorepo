@@ -21,6 +21,7 @@ export interface WooCommerceProductVariationSchema {
   description?: string;
   permalink?: string;
   sku?: string;
+  barcode?: string;
   price?: string;
   regular_price?: string;
   sale_price?: string;

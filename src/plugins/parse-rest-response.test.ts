@@ -164,6 +164,29 @@ describe('coerceData', () => {
 			arrayProp: [123, 456, 789],
 		});
 	});
+
+	it('FIX: should coerce null object to {}', () => {
+		const schema = {
+			type: 'object',
+			properties: {
+				objProp: {
+					type: 'object',
+					properties: {
+						numberProp: { type: 'number' },
+						stringProp: { type: 'string' },
+					},
+				},
+			},
+		};
+
+		const data = {
+			objProp: null,
+		};
+		const coercedData = coerceData(schema, data);
+		expect(coercedData).toEqual({
+			objProp: {},
+		});
+	});
 });
 
 describe('parseRestResponse', () => {

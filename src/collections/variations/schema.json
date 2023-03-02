@@ -35,6 +35,9 @@
 		"sku": {
 			"type": "string"
 		},
+		"barcode": {
+			"type": "string"
+		},
 		"price": {
 			"type": "string"
 		},

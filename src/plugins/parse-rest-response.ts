@@ -63,7 +63,7 @@ export function coerceData(
 					continue;
 				}
 
-				if (data.hasOwnProperty(prop)) {
+				if ((data || {}).hasOwnProperty(prop)) {
 					coercedData[prop] = traverse(schema.properties[prop], data[prop], schema);
 				} else if (schema.properties[prop].hasOwnProperty('default')) {
 					coercedData[prop] = schema.properties[prop].default;

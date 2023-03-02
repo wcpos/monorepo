@@ -1,6 +1,6 @@
 {
 	"name": "@wcpos/database",
-	"version": "1.0.69",
+	"version": "1.0.70",
 	"description": "Local database for @wcpos/core",
 	"author": "kilbot <paul@kilbot.com>",
 	"homepage": "https://github.com/wcpos/database#readme",
@@ -26,7 +26,7 @@
 		"fast-text-encoding": "^1.0.6",
 		"observable-hooks": "4.2.1",
 		"react": "18.2.0",
-		"rxdb": "^14.1.2",
+		"rxdb": "^14.1.5",
 		"rxjs": "7.8.0",
 		"tauri-plugin-sql-api": "github:tauri-apps/tauri-plugin-sql",
 		"uuid": "3.4.0"

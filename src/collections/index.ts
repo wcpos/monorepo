@@ -1,3 +1,4 @@
+import categories from './categories';
 import customers from './customers';
 import fee_lines from './fee-lines';
 import line_items from './line-items';
@@ -14,6 +15,7 @@ import variations from './variations';
 import wp_credentials from './wp-credentials';
 
 export const userCollections = { logs, users, sites, wp_credentials, stores };
+
 export const storeCollections = {
 	products,
 	variations,
@@ -24,4 +26,5 @@ export const storeCollections = {
 	customers,
 	taxes, // NOTE: WC REST API uses 'taxes', not 'tax_rates', going against all other endpoints.
 	payment_gateways,
+	'products/categories': categories, // NOTE: WC REST API uses 'products/categories' endpoint
 };
