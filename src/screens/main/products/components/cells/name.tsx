@@ -1,9 +1,11 @@
 import * as React from 'react';
 import type { TextInput as TextInputType } from 'react-native';
 
+import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
 import TextInput from '@wcpos/components/src/textinput';
 
 import ProductAttributes from '../../../components/product/attributes';
@@ -14,16 +16,34 @@ import usePushDocument from '../../../contexts/use-push-document';
 
 type Props = {
 	item: import('@wcpos/database').ProductDocument;
+	column: import('@wcpos/components/src/table').ColumnProps<
+		import('@wcpos/database').ProductDocument
+	>;
 };
 
-const Name = ({ item: product }: Props) => {
+/**
+ *
+ */
+const Name = ({ item: product, column }: Props) => {
 	const name = useObservableState(product.name$, product.name);
+	const [newName, setNewName] = React.useState(name);
 	const attributes = useObservableState(product.attributes$, product.attributes);
 	const grouped = useObservableState(product.grouped_products$, product.grouped_products);
 	const groupedQuery = React.useMemo(() => ({ selector: { id: { $in: grouped } } }), [grouped]);
 	const pushDocument = usePushDocument();
-	const textInputRef = React.useRef<TextInputType>(null);
 	const { uiSettings } = useUISettings('products');
+	const { display } = column;
+
+	/**
+	 *
+	 */
+	const show = React.useCallback(
+		(key: string): boolean => {
+			const d = find(display, { key });
+			return !!(d && d.show);
+		},
+		[display]
+	);
 
 	/**
 	 *
@@ -31,14 +51,14 @@ const Name = ({ item: product }: Props) => {
 	return (
 		<Box space="small" style={{ width: '100%' }}>
 			<TextInput
-				ref={textInputRef}
-				value={name}
+				value={newName}
+				onChangeText={setNewName}
 				onBlur={async () => {
-					const latest = product.getLatest();
-					await latest.patch({ name: textInputRef.current.value });
-					pushDocument(latest);
+					await product.patch({ name: newName });
+					pushDocument(product);
 				}}
 			/>
+			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{product.type === 'variable' && <ProductAttributes attributes={attributes} />}
 			{product.type === 'grouped' && (
 				<ProductsProvider initialQuery={groupedQuery} uiSettings={uiSettings}>

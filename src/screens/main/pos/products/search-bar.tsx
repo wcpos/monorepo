@@ -6,13 +6,19 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Pill from '@wcpos/components/src/pill';
 import TextInput from '@wcpos/components/src/textinput';
+import { useDetectBarcode } from '@wcpos/hooks/src/use-hotkeys';
 
 import { t } from '../../../../lib/translations';
+import useProductCategories from '../../contexts/categories';
 import useProducts from '../../contexts/products';
 
 const SearchBar = () => {
 	const { query$, setQuery } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
+	useDetectBarcode((barcode) => {
+		console.log(barcode);
+	});
+	const { data: categories } = useProductCategories();
 
 	/**
 	 *
@@ -29,17 +35,28 @@ const SearchBar = () => {
 	 */
 	const filters = React.useMemo(() => {
 		const categoryID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
-		if (categoryID) {
+		const category = categories.find((c) => c.id === categoryID);
+		if (category) {
 			return (
 				<Box paddingLeft="small">
-					<Pill
-						removable
-						onRemove={() => setQuery('selector.categories', null)}
-					>{`Cat ${categoryID}`}</Pill>
+					<Pill removable onRemove={() => setQuery('selector.categories', null)} icon="folders">
+						{category.name}
+					</Pill>
 				</Box>
 			);
 		}
-	}, [query, setQuery]);
+
+		const barcode = get(query, ['barcode']);
+		if (barcode) {
+			return (
+				<Box paddingLeft="small">
+					<Pill removable onRemove={() => setQuery('barcode', null)} icon="barcode">
+						{barcode}
+					</Pill>
+				</Box>
+			);
+		}
+	}, [categories, query, setQuery]);
 
 	/**
 	 *

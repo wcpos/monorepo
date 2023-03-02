@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
-import set from 'lodash/set';
+import isEmpty from 'lodash/isEmpty';
 import { ObservableResource, useObservableState } from 'observable-hooks';
 import { switchMap, map } from 'rxjs/operators';
 
@@ -79,32 +79,21 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			switchMap((query) => {
-				const { search, selector = {}, sortBy, sortDirection, barcode } = query;
-				let searchSelector;
+				const { search, selector: querySelector, sortBy, sortDirection } = query;
 
-				if (search) {
-					searchSelector = {
-						$or: [
-							{
-								name: {
-									$regex: new RegExp(escape(search), 'i'),
-								},
-							},
-							{
-								sku: {
-									$regex: new RegExp(escape(search), 'i'),
-								},
-							},
-							{
-								barcode: {
-									$regex: new RegExp(escape(search), 'i'),
-								},
-							},
-						],
-					};
-				}
+				const searchSelector = search
+					? {
+							$or: [
+								{ name: { $regex: new RegExp(escape(search), 'i') } },
+								{ sku: { $regex: new RegExp(escape(search), 'i') } },
+								{ barcode: { $regex: new RegExp(escape(search), 'i') } },
+							],
+					  }
+					: {};
 
-				const RxQuery = collection.find({ selector: searchSelector });
+				const selector = querySelector ? { $and: [querySelector, searchSelector] } : searchSelector;
+
+				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$.pipe(
 					map((result) => {

@@ -1,6 +1,5 @@
 import Actions from './actions';
 import DateCreated from './date-created';
-// import GroupedName from './grouped-name';
 import Name from './name';
 import Price from './price';
 import RegularPrice from './regular-price';

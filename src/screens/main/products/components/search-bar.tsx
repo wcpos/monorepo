@@ -39,10 +39,9 @@ const SearchBar = () => {
 		if (category) {
 			return (
 				<Box paddingLeft="small">
-					<Pill
-						removable
-						onRemove={() => setQuery('selector.categories', null)}
-					>{`Cat ${category.name}`}</Pill>
+					<Pill removable onRemove={() => setQuery('selector.categories', null)} icon="folders">
+						{category.name}
+					</Pill>
 				</Box>
 			);
 		}
@@ -51,10 +50,9 @@ const SearchBar = () => {
 		if (barcode) {
 			return (
 				<Box paddingLeft="small">
-					<Pill removable onRemove={() => setQuery('barcode', null)}>{`Barcode ${barcode}`}</Pill>
-					{/* <Pill removable onRemove={() => setQuery('barcode', null)}>
-						<Icon name="barcode" /> {barcode}
-					</Pill> */}
+					<Pill removable onRemove={() => setQuery('barcode', null)} icon="barcode">
+						{barcode}
+					</Pill>
 				</Box>
 			);
 		}

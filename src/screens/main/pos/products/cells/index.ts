@@ -1,5 +1,4 @@
 import { Actions } from './actions';
-import { GroupedName } from './grouped-name';
 import { Name } from './name';
 import { Price } from './price';
 import { SKU } from './sku';
@@ -26,8 +25,6 @@ const variable = {
 	stock_quantity: StockQuantity,
 };
 
-const grouped = {
-	name: GroupedName,
-};
+const grouped = {};
 
 export default { simple, variable, grouped };
