@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import set from 'lodash/set';
-
 import Pill from '@wcpos/components/src/pill';
 
 import useProducts from '../../contexts/products';
@@ -19,7 +17,7 @@ const ProductTags = ({ item: product }: ProductTagsProps) => {
 	 */
 	const handleSelectTag = React.useCallback(
 		(tag: any) => {
-			setQuery('filters.tag', tag);
+			setQuery('selector.tags.$elemMatch.id', tag.id);
 		},
 		[setQuery]
 	);
@@ -43,7 +41,7 @@ const ProductTags = ({ item: product }: ProductTagsProps) => {
 	/**
 	 *
 	 */
-	return tags ? <Pill.Group pills={tagsArray} /> : <Pill.Group.Skeleton number={2} />;
+	return <Pill.Group pills={tagsArray} size="small" color="darkestGrey" />;
 };
 
 export default ProductTags;

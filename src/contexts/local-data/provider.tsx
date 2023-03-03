@@ -58,7 +58,7 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 				/**
 				 * Hydrate initialProps for web app
 				 */
-				if (user && isWebApp && !storeDB) {
+				if (user && isWebApp) {
 					const { site, wp_credentials, store } = initialProps;
 					let siteDoc = await userDB.sites.findOneFix(site.uuid).exec();
 					let wpCredentialsDoc = await userDB.wp_credentials.findOneFix(wp_credentials.uuid).exec();

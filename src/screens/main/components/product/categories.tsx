@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import set from 'lodash/set';
-
 import Pill from '@wcpos/components/src/pill';
 
 import useProducts from '../../contexts/products';
@@ -43,11 +41,7 @@ const ProductCategories = ({ item: product }: ProductCategoriesProps) => {
 	/**
 	 *
 	 */
-	return categories ? (
-		<Pill.Group pills={catArray} size="small" color="secondary" />
-	) : (
-		<Pill.Group.Skeleton number={2} size="small" />
-	);
+	return <Pill.Group pills={catArray} size="small" color="secondary" />;
 };
 
 export default ProductCategories;

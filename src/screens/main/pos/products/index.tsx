@@ -14,6 +14,7 @@ import { t } from '../../../../lib/translations';
 import UISettings from '../../components/ui-settings';
 import { ProductCategoriesProvider } from '../../contexts/categories';
 import { ProductsProvider } from '../../contexts/products';
+import { ProductTagsProvider } from '../../contexts/tags';
 import useUI from '../../contexts/ui-settings';
 
 // import BarcodeScanner from './barcode-scanner';
@@ -56,7 +57,9 @@ const POSProducts = ({ isColumn = false }) => {
 						</ErrorBoundary> */}
 						<ErrorBoundary>
 							<ProductCategoriesProvider initialQuery={{}}>
-								<SearchBar />
+								<ProductTagsProvider initialQuery={{}}>
+									<SearchBar />
+								</ProductTagsProvider>
 							</ProductCategoriesProvider>
 						</ErrorBoundary>
 						<ErrorBoundary>
