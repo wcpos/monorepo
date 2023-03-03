@@ -75,5 +75,16 @@ export interface WooCommerceProductCategorySchema {
    * Number of published products for the resource.
    */
   count?: number;
+  links?: {
+    collection?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    self?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    [k: string]: any;
+  };
   [k: string]: any;
 }

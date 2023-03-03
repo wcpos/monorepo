@@ -9,6 +9,7 @@ import products from './products';
 import shipping_lines from './shipping-lines';
 import sites from './sites';
 import stores from './stores';
+import tags from './tags';
 import taxes from './tax-rates';
 import users from './users';
 import variations from './variations';
@@ -27,4 +28,5 @@ export const storeCollections = {
 	taxes, // NOTE: WC REST API uses 'taxes', not 'tax_rates', going against all other endpoints.
 	payment_gateways,
 	'products/categories': categories, // NOTE: WC REST API uses 'products/categories' endpoint
+	'products/tags': tags, // NOTE: WC REST API uses 'products/tags' endpoint
 };

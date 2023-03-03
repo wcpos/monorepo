@@ -12,6 +12,7 @@ export type StoreDatabaseCollections = {
 	taxes: import('./collections/tax-rates').TaxRateCollection;
 	payment_gateways: import('./collections/payment-gateways').PaymentGatewayCollection;
 	'products/categories': import('./collections/categories').ProductCategoryCollection;
+	'products/tags': import('./collections/tags').ProductTagCollection;
 };
 export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
 
