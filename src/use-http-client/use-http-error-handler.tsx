@@ -40,6 +40,20 @@ const useHttpErrorHandler = () => {
 					addSnackbar({ message: res.data.message });
 					break;
 				case 401:
+					if (res.data) {
+						/**
+						 * TODO - Errors may be better in a global Dialog component, like Snackbar?
+						 */
+						addSnackbar({
+							message: `Recieved "${res.data.message}" when trying to access endpoint: ${res.config.url}`,
+							// type: 'critical',
+						});
+					}
+					/**
+					 * Show login modal
+					 */
+					navigation.navigate('Login');
+					break;
 				case 403:
 					if (res.data) {
 						/**
@@ -49,9 +63,11 @@ const useHttpErrorHandler = () => {
 							message: `Recieved "${res.data.message}" when trying to access endpoint: ${res.config.url}`,
 							// type: 'critical',
 						});
-						navigation.navigate('Login');
 					} else {
-						navigation.navigate('Login');
+						addSnackbar({
+							message: `Recieved "Forbidden" when trying to access endpoint: ${res.config.url}`,
+							// type: 'critical',
+						});
 					}
 					break;
 				case 404:
