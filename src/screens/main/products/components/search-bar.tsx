@@ -11,6 +11,7 @@ import { useDetectBarcode } from '@wcpos/hooks/src/use-hotkeys';
 import { t } from '../../../../lib/translations';
 import useProductCategories from '../../contexts/categories';
 import useProducts from '../../contexts/products';
+import useProductTags from '../../contexts/tags';
 
 const SearchBar = () => {
 	const { query$, setQuery } = useProducts();
@@ -19,6 +20,7 @@ const SearchBar = () => {
 		setQuery('barcode', barcode);
 	});
 	const { data: categories } = useProductCategories();
+	const { data: tags } = useProductTags();
 
 	/**
 	 *
@@ -46,6 +48,18 @@ const SearchBar = () => {
 			);
 		}
 
+		const tagID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
+		const tag = tags.find((t) => t.id === tagID);
+		if (tag) {
+			return (
+				<Box paddingLeft="small">
+					<Pill removable onRemove={() => setQuery('selector.tags', null)} icon="tag">
+						{tag.name}
+					</Pill>
+				</Box>
+			);
+		}
+
 		const barcode = get(query, ['barcode']);
 		if (barcode) {
 			return (
@@ -56,7 +70,7 @@ const SearchBar = () => {
 				</Box>
 			);
 		}
-	}, [categories, query, setQuery]);
+	}, [categories, query, setQuery, tags]);
 
 	/**
 	 *

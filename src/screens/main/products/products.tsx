@@ -15,6 +15,7 @@ import { t } from '../../../lib/translations';
 import UiSettings from '../components/ui-settings';
 import { ProductCategoriesProvider } from '../contexts/categories';
 import { ProductsProvider } from '../contexts/products';
+import { ProductTagsProvider } from '../contexts/tags';
 import { TaxRateProvider } from '../contexts/tax-rates';
 import useUI from '../contexts/ui-settings';
 
@@ -69,7 +70,9 @@ const Products = () => {
 							}}
 						>
 							<ProductCategoriesProvider initialQuery={{}}>
-								<SearchBar />
+								<ProductTagsProvider initialQuery={{}}>
+									<SearchBar />
+								</ProductTagsProvider>
 							</ProductCategoriesProvider>
 							<UiSettings
 								uiSettings={uiSettings}

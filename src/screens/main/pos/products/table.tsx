@@ -43,9 +43,11 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 
 			if (Cell) {
 				return (
-					<React.Suspense fallback={<Text>loading cell...</Text>}>
-						<Cell item={item} column={column} index={index} />
-					</React.Suspense>
+					<ErrorBoundary>
+						<React.Suspense fallback={<Text>loading cell...</Text>}>
+							<Cell item={item} column={column} index={index} />
+						</React.Suspense>
+					</ErrorBoundary>
 				);
 			}
 

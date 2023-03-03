@@ -34,7 +34,7 @@ const ProductCategoriesProvider = ({
 	const { storeDB } = useLocalData();
 	const collection = storeDB.collections['products/categories'];
 	const { query$, setQuery } = useQuery(initialQuery);
-	const replicationState = useReplication({ collection });
+	const { replicationState, pullDocument, pushDocument } = useReplication({ collection });
 
 	/**
 	 * Only run the replication when the Provider is mounted
@@ -75,7 +75,9 @@ const ProductCategoriesProvider = ({
 	}, [query$, setQuery, replicationState, collection]);
 
 	return (
-		<ProductCategoriesContext.Provider value={value}>{children}</ProductCategoriesContext.Provider>
+		<ProductCategoriesContext.Provider value={{ ...value, pullDocument, pushDocument }}>
+			{children}
+		</ProductCategoriesContext.Provider>
 	);
 };
 

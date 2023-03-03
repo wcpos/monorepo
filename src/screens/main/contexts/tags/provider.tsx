@@ -29,7 +29,7 @@ const ProductTagsProvider = ({ children, initialQuery, ui }: ProductTagsProvider
 	const { storeDB } = useLocalData();
 	const collection = storeDB.collections['products/tags'];
 	const { query$, setQuery } = useQuery(initialQuery);
-	const replicationState = useReplication({ collection });
+	const { replicationState, pullDocument, pushDocument } = useReplication({ collection });
 
 	/**
 	 * Only run the replication when the Provider is mounted
@@ -69,7 +69,11 @@ const ProductTagsProvider = ({ children, initialQuery, ui }: ProductTagsProvider
 		};
 	}, [query$, setQuery, replicationState, collection]);
 
-	return <ProductTagsContext.Provider value={value}>{children}</ProductTagsContext.Provider>;
+	return (
+		<ProductTagsContext.Provider value={{ ...value, pullDocument, pushDocument }}>
+			{children}
+		</ProductTagsContext.Provider>
+	);
 };
 
 export default ProductTagsProvider;

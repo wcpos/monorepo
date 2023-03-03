@@ -80,6 +80,7 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 		const resource$ = query$.pipe(
 			switchMap((query) => {
 				const { search, selector: querySelector, sortBy, sortDirection } = query;
+				let selector;
 
 				const searchSelector = search
 					? {
@@ -89,9 +90,15 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 								{ barcode: { $regex: new RegExp(escape(search), 'i') } },
 							],
 					  }
-					: {};
+					: null;
 
-				const selector = querySelector ? { $and: [querySelector, searchSelector] } : searchSelector;
+				if (querySelector && searchSelector) {
+					selector = {
+						$and: [querySelector, searchSelector],
+					};
+				} else {
+					selector = querySelector || searchSelector || {};
+				}
 
 				const RxQuery = collection.find({ selector });
 

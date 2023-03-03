@@ -1,5 +1,5 @@
 import { tx, t } from '@transifex/native';
-import { T } from '@transifex/react';
+import { T, useT } from '@transifex/react';
 
 import CustomCache from './cache';
 
@@ -9,4 +9,4 @@ tx.init({
 	filterTags: 'core',
 });
 
-export { tx, t, T };
+export { tx, t, T, useT };

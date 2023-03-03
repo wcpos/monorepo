@@ -12,6 +12,7 @@ import { t } from '../../../../lib/translations';
 import useProductCategories from '../../contexts/categories';
 import useProducts from '../../contexts/products';
 import useProductTags from '../../contexts/tags';
+import usePullDocument from '../../contexts/use-pull-document';
 
 const SearchBar = () => {
 	const { query$, setQuery } = useProducts();
@@ -19,8 +20,8 @@ const SearchBar = () => {
 	useDetectBarcode((barcode) => {
 		console.log(barcode);
 	});
-	const { data: categories } = useProductCategories();
-	const { data: tags } = useProductTags();
+	const { data: categories, pullDocument: pullCategory } = useProductCategories();
+	const { data: tags, pullDocument: pullTag } = useProductTags();
 
 	/**
 	 *
@@ -36,10 +37,11 @@ const SearchBar = () => {
 	 *
 	 */
 	const filters = React.useMemo(() => {
+		const array = [];
 		const categoryID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
 		const category = categories.find((c) => c.id === categoryID);
 		if (category) {
-			return (
+			array.push(
 				<Box paddingLeft="small">
 					<Pill removable onRemove={() => setQuery('selector.categories', null)} icon="folders">
 						{category.name}
@@ -48,10 +50,15 @@ const SearchBar = () => {
 			);
 		}
 
+		// special case for prioritised fetching
+		if (categoryID && !category) {
+			pullCategory(categoryID);
+		}
+
 		const tagID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
 		const tag = tags.find((t) => t.id === tagID);
 		if (tag) {
-			return (
+			array.push(
 				<Box paddingLeft="small">
 					<Pill removable onRemove={() => setQuery('selector.tags', null)} icon="tag">
 						{tag.name}
@@ -60,9 +67,14 @@ const SearchBar = () => {
 			);
 		}
 
+		// special case for prioritised fetching
+		if (tagID && !tag) {
+			pullTag(tagID);
+		}
+
 		const barcode = get(query, ['barcode']);
 		if (barcode) {
-			return (
+			array.push(
 				<Box paddingLeft="small">
 					<Pill removable onRemove={() => setQuery('barcode', null)} icon="barcode">
 						{barcode}
@@ -70,7 +82,9 @@ const SearchBar = () => {
 				</Box>
 			);
 		}
-	}, [categories, query, setQuery, tags]);
+
+		return array;
+	}, [categories, pullCategory, pullTag, query, setQuery, tags]);
 
 	/**
 	 *

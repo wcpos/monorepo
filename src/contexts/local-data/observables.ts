@@ -105,7 +105,10 @@ export const current$: Observable<LocalData> = from(userDBPromise()).pipe(
 								 * setCurrentLocale is async, it doesn't update tx.currentLocale immediately
 								 * so, we need to wait here for it to finish
 								 */
-								return tx.setCurrentLocale(obj.locale);
+								return tx.setCurrentLocale(obj.locale).catch((err) => {
+									// NOTE: catch error silently here so network errors don't break the app
+									log.error(err);
+								});
 							}),
 							/**
 							 * We need to add the userDB to the object and return here

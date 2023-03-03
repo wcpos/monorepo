@@ -31,13 +31,14 @@ const Login = ({ route }) => {
 					password: passwordRef.current?.value,
 				},
 			});
-			site.update({ $push: { wp_credentials: data } });
+			const parsedData = userDB.wp_credentials.parseRestResponse(data);
+			site.update({ $push: { wp_credentials: parsedData } });
 		} catch (err) {
 			log.error(err);
 		}
 
 		navigation.goBack();
-	}, [http, navigation, siteID, userDB.sites]);
+	}, [http, navigation, siteID, userDB.sites, userDB.wp_credentials]);
 
 	return (
 		<Modal

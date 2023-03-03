@@ -65,8 +65,8 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 		return {
 			columns: columns.filter((column) => column.show),
 			sort: ({ sortBy, sortDirection }) => {
-				setQuery('sort.sortBy', sortBy);
-				setQuery('sort.sortDirection', sortDirection);
+				setQuery('sortBy', sortBy);
+				setQuery('sortDirection', sortDirection);
 			},
 			sortBy: query.sortBy,
 			sortDirection: query.sortDirection,

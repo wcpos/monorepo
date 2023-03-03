@@ -21,6 +21,51 @@ export const useReplication = ({ collection }) => {
 	const http = useRestHttpClient();
 	const { site } = useLocalData();
 
+	/**
+	 *
+	 */
+	const pushDocument = React.useCallback(
+		async (doc) => {
+			let endpoint = collection.name;
+			if (doc.id) {
+				endpoint += `/${doc.id}`;
+			}
+			try {
+				const { data } = await http.post(endpoint, {
+					data: await doc.toPopulatedJSON(),
+				});
+				//
+				const parsedData = doc.collection.parseRestResponse(data);
+				await collection.upsertRefs(parsedData);
+				const latestDoc = doc.getLatest();
+				await latestDoc.update(parsedData);
+			} catch (err) {
+				log.error(err);
+			}
+		},
+		[collection, http]
+	);
+
+	/**
+	 *
+	 */
+	const pullDocument = React.useCallback(
+		async (id) => {
+			let endpoint = collection.name;
+			try {
+				const { data } = await http.get((endpoint += `/${id}`));
+				const parsedData = collection.parseRestResponse(data);
+				await collection.upsert(parsedData);
+			} catch (err) {
+				log.error(err);
+			}
+		},
+		[collection, http]
+	);
+
+	/**
+	 *
+	 */
 	const replicationState = React.useMemo(() => {
 		/**
 		 *
@@ -61,5 +106,5 @@ export const useReplication = ({ collection }) => {
 		return state;
 	}, [collection, http, site.wc_api_url]);
 
-	return replicationState;
+	return { replicationState, pushDocument, pullDocument };
 };

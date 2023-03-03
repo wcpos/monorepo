@@ -6,7 +6,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
-import TextInput from '@wcpos/components/src/textinput';
+import TextInput, { TextInputContainer } from '@wcpos/components/src/textinput';
 
 import ProductAttributes from '../../../components/product/attributes';
 import GroupedNames from '../../../components/product/grouped-names';
@@ -24,9 +24,31 @@ type Props = {
 /**
  *
  */
+const EdittableText = ({ name }) => {
+	// const [newName, setNewName] = React.useState(name);
+	const [isEditting, setIsEditting] = React.useState(false);
+
+	return isEditting ? (
+		<TextInput
+			value={name}
+			// onChangeText={setNewName}
+			// onBlur={async () => {
+			// 	await product.patch({ name: newName });
+			// 	pushDocument(product);
+			// }}
+			focused
+		/>
+	) : (
+		<TextInputContainer onPress={() => setIsEditting(true)}>{name}</TextInputContainer>
+	);
+};
+
+/**
+ *
+ */
 const Name = ({ item: product, column }: Props) => {
 	const name = useObservableState(product.name$, product.name);
-	const [newName, setNewName] = React.useState(name);
+	// const [newName, setNewName] = React.useState(name);
 	const attributes = useObservableState(product.attributes$, product.attributes);
 	const grouped = useObservableState(product.grouped_products$, product.grouped_products);
 	const groupedQuery = React.useMemo(() => ({ selector: { id: { $in: grouped } } }), [grouped]);
@@ -50,14 +72,7 @@ const Name = ({ item: product, column }: Props) => {
 	 */
 	return (
 		<Box space="small" style={{ width: '100%' }}>
-			<TextInput
-				value={newName}
-				onChangeText={setNewName}
-				onBlur={async () => {
-					await product.patch({ name: newName });
-					pushDocument(product);
-				}}
-			/>
+			<EdittableText name={name} />
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{product.type === 'variable' && <ProductAttributes attributes={attributes} />}
 			{product.type === 'grouped' && (

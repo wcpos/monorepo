@@ -10,7 +10,7 @@ import VariableRegularPrice from './variable-regular-price';
 import VariableSalePrice from './variable-sale-price';
 import Categories from '../../../components/product/categories';
 import { ProductImage } from '../../../components/product/image';
-import Tag from '../../../components/product/tags';
+import Tags from '../../../components/product/tags';
 
 const simple = {
 	actions: Actions,
@@ -22,7 +22,7 @@ const simple = {
 	sale_price: SalePrice,
 	date_created: DateCreated,
 	stock_quantity: StockQuanity,
-	tag: Tag,
+	tags: Tags,
 };
 
 const variable = {
