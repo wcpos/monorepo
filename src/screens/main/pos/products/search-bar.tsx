@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
+import isEmpty from 'lodash/isEmpty';
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
@@ -13,15 +14,28 @@ import useProductCategories from '../../contexts/categories';
 import useProducts from '../../contexts/products';
 import useProductTags from '../../contexts/tags';
 import usePullDocument from '../../contexts/use-pull-document';
+import useCurrentOrder from '../contexts/current-order';
 
 const SearchBar = () => {
-	const { query$, setQuery } = useProducts();
+	const { query$, setQuery, data: products } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
-	useDetectBarcode((barcode) => {
-		console.log(barcode);
-	});
 	const { data: categories, pullDocument: pullCategory } = useProductCategories();
 	const { data: tags, pullDocument: pullTag } = useProductTags();
+	const { addProduct } = useCurrentOrder();
+	useDetectBarcode((barcode) => {
+		setQuery('selector.barcode', barcode);
+	});
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		const barcode = get(query, ['selector', 'barcode']);
+		if (barcode && isEmpty(query.search) && products.length === 1) {
+			addProduct(products[0]);
+			setQuery('selector.barcode', null);
+		}
+	}, [query, products, addProduct, setQuery]);
 
 	/**
 	 *
@@ -72,11 +86,11 @@ const SearchBar = () => {
 			pullTag(tagID);
 		}
 
-		const barcode = get(query, ['barcode']);
+		const barcode = get(query, ['selector', 'barcode']);
 		if (barcode) {
 			array.push(
 				<Box paddingLeft="small">
-					<Pill removable onRemove={() => setQuery('barcode', null)} icon="barcode">
+					<Pill removable onRemove={() => setQuery('selector.barcode', null)} icon="barcode">
 						{barcode}
 					</Pill>
 				</Box>
