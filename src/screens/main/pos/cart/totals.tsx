@@ -22,6 +22,7 @@ const Totals = ({ order }: Props) => {
 	const total = useObservableState(order.total$, order.total);
 	const totalTax = useObservableState(order.total_tax$, order.total_tax);
 	const taxTotalDisplay = useObservableState(store.tax_total_display$, store.tax_total_display);
+	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const { format } = useCurrencyFormat();
 	const theme = useTheme();
 
@@ -45,17 +46,19 @@ const Totals = ({ order }: Props) => {
 					<Text>{format(total - totalTax || 0)}</Text>
 				</Box>
 			</Box>
-			<Box space="xxSmall">
-				{taxTotalDisplay === 'itemized' && <ItemizedTaxes order={order} />}
-				<Box horizontal>
-					<Box fill>
-						<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
-					</Box>
-					<Box>
-						<Text>{format(totalTax || 0)}</Text>
+			{calcTaxes === 'yes' && (
+				<Box space="xxSmall">
+					{taxTotalDisplay === 'itemized' && <ItemizedTaxes order={order} />}
+					<Box horizontal>
+						<Box fill>
+							<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
+						</Box>
+						<Box>
+							<Text>{format(totalTax || 0)}</Text>
+						</Box>
 					</Box>
 				</Box>
-			</Box>
+			)}
 		</Box>
 	);
 };

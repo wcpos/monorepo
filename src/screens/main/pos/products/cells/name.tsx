@@ -43,7 +43,7 @@ export const Name = ({ item: product, column }: Props) => {
 	 */
 
 	return (
-		<Box space="xSmall">
+		<Box space="xSmall" style={{ width: '100%' }}>
 			<Text weight="bold">{product.name}</Text>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{show('stock_quantity') && <StockQuantity product={product} size="small" />}

@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
+import isEmpty from 'lodash/isEmpty';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { BehaviorSubject } from 'rxjs';
@@ -28,6 +29,9 @@ const increaseQuantity = async (lineItem) =>
 // filter meta data starting with underscore
 const filteredMetaData = (metaData) => (metaData || []).filter((md) => !md.key.startsWith('_'));
 
+// price string to number
+const priceToNumber = (price?: string) => parseFloat(isEmpty(price) ? '0' : price);
+
 /**
  *
  */
@@ -51,7 +55,7 @@ export const useCurrentOrder = () => {
 				product_id: product.id,
 				name: product.name,
 				quantity: 1,
-				price: parseFloat(product.price || ''),
+				price: priceToNumber(product.price),
 				sku: product.sku,
 				tax_class: product.tax_class,
 				meta_data: filteredMetaData(product.meta_data),
@@ -87,7 +91,7 @@ export const useCurrentOrder = () => {
 				name: parent.name,
 				variation_id: variation.id,
 				quantity: 1,
-				price: parseFloat(variation.price || ''),
+				price: priceToNumber(variation.price),
 				sku: variation.sku,
 				tax_class: variation.tax_class,
 				meta_data: filteredMetaData(parent.meta_data).concat(metaData),

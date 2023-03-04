@@ -21,6 +21,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const theme = useTheme();
 	const { sync, clear } = useProducts();
 	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
+	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 
 	/**
 	 * FIXME: this is a temporary hack, need to get the label from the API
@@ -48,11 +49,15 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 				borderTopColor: theme.colors.grey,
 			}}
 		>
-			<Box fill padding="small" space="xSmall">
-				<Text size="small">
-					{t('Tax based on', { _tags: 'core' })}: {taxBasedOnLabel}
-				</Text>
-			</Box>
+			{calcTaxes === 'yes' ? (
+				<Box fill padding="small" space="xSmall">
+					<Text size="small">
+						{t('Tax based on', { _tags: 'core' })}: {taxBasedOnLabel}
+					</Text>
+				</Box>
+			) : (
+				<Box fill />
+			)}
 			<Box horizontal padding="small" space="xSmall" align="center" distribution="end">
 				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
 				<SyncButton sync={sync} clear={clear} />

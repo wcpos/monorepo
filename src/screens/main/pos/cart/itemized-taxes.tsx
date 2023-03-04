@@ -14,7 +14,7 @@ const ItemizedTaxes = ({ order }) => {
 	const { format } = useCurrencyFormat();
 	const taxLines = useObservableState(order.tax_lines$, order.tax_lines);
 
-	return taxLines.map((tax) => (
+	return (taxLines || []).map((tax) => (
 		<Box key={tax.rate_id} horizontal>
 			<Box fill>
 				<Text size="small">{tax.label}</Text>

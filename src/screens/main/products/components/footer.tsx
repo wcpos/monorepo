@@ -19,10 +19,11 @@ interface ProductFooterProps {
  *
  */
 const ProductsFooter = ({ count }: ProductFooterProps) => {
-	const { storeDB } = useLocalData();
+	const { storeDB, store } = useLocalData();
 	const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
 	const { sync, clear } = useProducts();
+	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 
 	return (
 		<Box
@@ -36,11 +37,15 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 				borderTopColor: theme.colors.grey,
 			}}
 		>
-			<Box fill padding="small" space="xSmall">
-				<Text size="small">
-					{t('Tax based on', { _tags: 'core' })}: {t('Shop base address', { _tags: 'core' })}
-				</Text>
-			</Box>
+			{calcTaxes === 'yes' ? (
+				<Box fill padding="small" space="xSmall">
+					<Text size="small">
+						{t('Tax based on', { _tags: 'core' })}: {t('Shop base address', { _tags: 'core' })}
+					</Text>
+				</Box>
+			) : (
+				<Box fill />
+			)}
 			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">
 				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
 				<SyncButton sync={sync} clear={clear} />

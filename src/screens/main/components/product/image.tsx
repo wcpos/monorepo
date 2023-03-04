@@ -17,8 +17,8 @@ export const ProductImage = ({ item: product }: Props) => {
 	const source = get(images, [0, 'src'], undefined);
 
 	const [measurements, onMeasure] = React.useState({
-		width: 50,
-		height: 50,
+		width: 0,
+		height: 0,
 		pageX: 0,
 		pageY: 0,
 		x: 0,
@@ -28,15 +28,18 @@ export const ProductImage = ({ item: product }: Props) => {
 	const ref = React.useRef<View>(null);
 	const { onLayout } = useMeasure({ onMeasure, ref });
 
-	return (
+	return source ? (
 		<View ref={ref} onLayout={onLayout} style={{ width: '100%' }}>
 			<Image
 				source={source}
 				style={{ width: measurements.width, height: measurements.width, aspectRatio: 1 }}
 				border="rounded"
 				recyclingKey={product.uuid}
-				// placeholder={<Img source={require('assets/placeholder.png')} />}
+				// transition={1000}
+				// placeholder={<Skeleton width={measurements.width} height={measurements.height} />}
 			/>
 		</View>
+	) : (
+		<Skeleton width={measurements.width} height={measurements.height} />
 	);
 };

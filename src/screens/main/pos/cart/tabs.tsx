@@ -23,6 +23,16 @@ const CartTabs = ({ currentOrder }: CartTabsProps) => {
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
 	/**
+	 * This is a bit hacky, but it works.
+	 * This updates the cart to new order after the order is paid
+	 */
+	React.useEffect(() => {
+		if (focusedIndex === -1 && currentOrder.uuid) {
+			navigation.setParams({ orderID: '' });
+		}
+	}, [currentOrder, focusedIndex, navigation]);
+
+	/**
 	 *
 	 */
 	const routes = React.useMemo(() => {
