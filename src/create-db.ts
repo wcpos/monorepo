@@ -3,7 +3,10 @@
 import { createRxDatabase, removeRxDatabase } from 'rxdb';
 
 import config from './adapter';
+import { disableVersionCheck } from './adapter/shared/version-check';
+
 import './plugins';
+disableVersionCheck();
 
 /**
  * creates the generic database
