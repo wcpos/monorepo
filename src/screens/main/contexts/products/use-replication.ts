@@ -61,23 +61,38 @@ export const useReplication = ({ collection }) => {
 			replicationIdentifier: `wc-rest-replication-to-${site.wc_api_url}/${collection.name}`,
 			// retryTime: 1000000000,
 			pull: {
-				async handler(lastCheckpoint = {}, batchSize) {
+				async handler(lastCheckpoint = { date_modified_gmt: 0 }, batchSize) {
 					try {
+						// const count = await collection.count({ selector: { id: { $exists: true } } }).exec();
+						// debugger;
 						const params = {
 							order: 'asc',
 							orderby: 'title',
 							page: lastCheckpoint.nextPage ? lastCheckpoint.nextPage : 1,
 							per_page: batchSize,
+							after: lastCheckpoint.date_modified_gmt,
 						};
 						const response = await http.get(collection.name, { params });
 						const data = get(response, 'data', []);
 						const link = get(response, ['headers', 'link']);
+						const remoteTotal = get(response, ['headers', 'x-wp-total']);
+						const totalPages = get(response, ['headers', 'x-wp-totalpages']);
 						const parsedHeaders = parseLinkHeader(link);
 						const nextPage = get(parsedHeaders, ['next', 'page']);
+
+						const mostRecent = data.reduce((prev, current) => {
+							const prevDate = new Date(prev.date_modified_gmt);
+							const currentDate = new Date(current.date_modified_gmt);
+							return prevDate > currentDate ? prev : current;
+						}, lastCheckpoint);
+
 						return {
 							documents: data,
 							checkpoint: {
+								remoteTotal,
+								totalPages,
 								nextPage,
+								date_modified_gmt: mostRecent.date_modified_gmt,
 							},
 						};
 					} catch (error) {

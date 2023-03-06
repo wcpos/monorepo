@@ -79,6 +79,7 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	 *
 	 */
 	const renderItem = ({ item, index, extraData, target }: ListRenderItemInfo<ProductDocument>) => {
+		console.log('ProductsTable renderItem', item.id);
 		if (item.type === 'variable') {
 			return (
 				<ErrorBoundary>
@@ -110,6 +111,7 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 			estimatedItemSize={150}
 			extraData={context}
 			renderItem={renderItem}
+			// getItemType={(item) => item.type}
 		/>
 	);
 };

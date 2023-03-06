@@ -11,11 +11,7 @@ import log from '@wcpos/utils/src/logger';
 import SearchBar from './components/search-bar';
 import Table from './components/table';
 import useLocalData from '../../../contexts/local-data';
-import { t } from '../../../lib/translations';
-import UiSettings from '../components/ui-settings';
-import { ProductCategoriesProvider } from '../contexts/categories';
 import { ProductsProvider } from '../contexts/products';
-import { ProductTagsProvider } from '../contexts/tags';
 import { TaxRateProvider } from '../contexts/tax-rates';
 import useUI from '../contexts/ui-settings';
 
@@ -69,15 +65,9 @@ const Products = () => {
 								borderTopRightRadius: theme.rounding.medium,
 							}}
 						>
-							<ProductCategoriesProvider initialQuery={{}}>
-								<ProductTagsProvider initialQuery={{}}>
-									<SearchBar />
-								</ProductTagsProvider>
-							</ProductCategoriesProvider>
-							<UiSettings
-								uiSettings={uiSettings}
-								title={t('Product Settings', { _tags: 'core' })}
-							/>
+							<ErrorBoundary>
+								<SearchBar />
+							</ErrorBoundary>
 						</Box>
 						<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 							<React.Suspense fallback={<Text>Loading products table...</Text>}>

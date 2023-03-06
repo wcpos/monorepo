@@ -10,11 +10,7 @@ import log from '@wcpos/utils/src/logger';
 
 import SearchBar from './search-bar';
 import Table from './table';
-import { t } from '../../../../lib/translations';
-import UISettings from '../../components/ui-settings';
-import { ProductCategoriesProvider } from '../../contexts/categories';
 import { ProductsProvider } from '../../contexts/products';
-import { ProductTagsProvider } from '../../contexts/tags';
 import useUI from '../../contexts/ui-settings';
 
 // import BarcodeScanner from './barcode-scanner';
@@ -52,21 +48,8 @@ const POSProducts = ({ isColumn = false }) => {
 							borderTopRightRadius: theme.rounding.medium,
 						}}
 					>
-						{/* <ErrorBoundary>
-							<BarcodeScanner />
-						</ErrorBoundary> */}
 						<ErrorBoundary>
-							<ProductCategoriesProvider initialQuery={{}}>
-								<ProductTagsProvider initialQuery={{}}>
-									<SearchBar />
-								</ProductTagsProvider>
-							</ProductCategoriesProvider>
-						</ErrorBoundary>
-						<ErrorBoundary>
-							<UISettings
-								uiSettings={uiSettings}
-								title={t('Product Settings', { _tags: 'core' })}
-							/>
+							<SearchBar />
 						</ErrorBoundary>
 					</Box>
 					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>

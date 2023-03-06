@@ -82,7 +82,7 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 	 */
 	const renderItem = React.useCallback(
 		({ item, index, extraData, target }: ListRenderItemInfo<ProductDocument>) => {
-			console.log(`render item ${item.id}`);
+			console.log(`render  POS Product item ${item.id}`);
 			if (item.type === 'variable') {
 				return (
 					<ErrorBoundary>
