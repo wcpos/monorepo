@@ -5,7 +5,7 @@ import { useHotkeys } from 'react-hotkeys-hook';
 
 import { isAlphaNumeric } from './validate';
 
-const DEBOUNCE = 20;
+const DEBOUNCE = 5;
 const CHARCOUNT = 8;
 
 export const useDetectBarcode = (callback: (barcode: string) => void) => {
