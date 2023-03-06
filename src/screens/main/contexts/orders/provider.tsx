@@ -7,7 +7,6 @@ import { switchMap, map } from 'rxjs/operators';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
-import { useReplication } from './use-replication';
 import useLocalData from '../../../../contexts/local-data';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
@@ -32,33 +31,6 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 	const { storeDB } = useLocalData();
 	const collection = storeDB.collections.orders;
 	const { query$, setQuery } = useQuery(initialQuery);
-	const replicationState = useReplication({ collection });
-
-	/**
-	 * Only run the replication when the Provider is mounted
-	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, [replicationState]);
-
-	/**
-	 * Clear
-	 */
-	const clear = React.useCallback(async () => {
-		const query = collection.find();
-		return query.remove();
-	}, [collection]);
-
-	/**
-	 * Sync
-	 */
-	const sync = React.useCallback(() => {
-		replicationState.reSync();
-	}, [replicationState]);
 
 	/**
 	 *
@@ -84,7 +56,7 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 	}, [collection, query$]);
 
 	return (
-		<OrdersContext.Provider value={{ ...value, sync, clear, query$, setQuery, replicationState }}>
+		<OrdersContext.Provider value={{ ...value, query$, setQuery }}>
 			{children}
 		</OrdersContext.Provider>
 	);
