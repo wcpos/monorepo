@@ -5,18 +5,20 @@ import { useHotkeys } from 'react-hotkeys-hook';
 
 import { isAlphaNumeric } from './validate';
 
-const DEBOUNCE = 5;
+const DEBOUNCE = 10;
 const CHARCOUNT = 8;
 
 export const useDetectBarcode = (callback: (barcode: string) => void) => {
 	const barcode = React.useRef('');
 
+	/**
+	 *
+	 */
 	const handleBarcode = debounce(() => {
 		if (barcode.current.length >= CHARCOUNT) {
 			callback && callback(barcode.current);
-		} else {
-			barcode.current = '';
 		}
+		barcode.current = '';
 	}, DEBOUNCE);
 
 	/**
