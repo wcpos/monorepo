@@ -3,20 +3,12 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { defaultHashSha256 } from 'rxdb';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
-// import { interval } from 'rxjs';
 
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../contexts/local-data';
 import { parseLinkHeader } from '../../../lib/url';
 import useRestHttpClient from '../hooks/use-rest-http-client';
-
-/**
- * Hack, I want the replication to wait before looping to allow counts to be updated
- */
-function wait(milliseconds: number) {
-	return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
 
 interface Props {
 	params?: Record<string, any>;

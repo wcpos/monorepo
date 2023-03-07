@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
-import isEmpty from 'lodash/isEmpty';
 import { ObservableResource, useObservableState } from 'observable-hooks';
 import { switchMap, map } from 'rxjs/operators';
 
@@ -9,7 +8,6 @@ import { switchMap, map } from 'rxjs/operators';
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
-import { useReplication } from './use-replication';
 import useLocalData from '../../../../contexts/local-data';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
@@ -19,8 +17,6 @@ export const ProductsContext = React.createContext<{
 	query$: QueryObservable;
 	setQuery: SetQuery;
 	resource: ObservableResource<ProductDocument[]>;
-	sync: () => void;
-	clear: () => Promise<any>;
 }>(null);
 
 interface ProductsProviderProps {
@@ -40,38 +36,7 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
 	);
-	const { query$, setQuery } = useQuery(initialQuery);
-	const { replicationState } = useReplication({ collection });
-
-	/**
-	 * Only run the replication when the Provider is mounted
-	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, [replicationState]);
-
-	/**
-	 * Clear all docs
-	 * TODO - I thought it would be better to use the collection.remove() method
-	 * but it seems to make the app hang. Need to investigate later.
-	 * // await collection.remove();
-	 * // return storeDB?.addCollections({ products });
-	 */
-	const clear = React.useCallback(async () => {
-		const query = collection.find();
-		return query.remove();
-	}, [collection]);
-
-	/**
-	 * Sync
-	 */
-	const sync = React.useCallback(() => {
-		replicationState.reSync();
-	}, [replicationState]);
+	const { query$, setQuery, nextPage } = useQuery(initialQuery);
 
 	/**
 	 *
@@ -79,7 +44,7 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			switchMap((query) => {
-				const { search, selector: querySelector, sortBy, sortDirection } = query;
+				const { search, selector: querySelector, sortBy, sortDirection, limit, skip } = query;
 				let selector;
 
 				const searchSelector = search
@@ -125,12 +90,11 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 		showOutOfStock,
 		query$,
 		setQuery,
-		replicationState,
 		// sync,
 	});
 
 	return (
-		<ProductsContext.Provider value={{ ...value, sync, clear, setQuery, query$, replicationState }}>
+		<ProductsContext.Provider value={{ ...value, setQuery, query$, nextPage }}>
 			{children}
 		</ProductsContext.Provider>
 	);

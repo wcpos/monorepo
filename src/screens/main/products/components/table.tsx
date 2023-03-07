@@ -13,6 +13,7 @@ import cells from './cells';
 import Footer from './footer';
 import TextCell from '../../components/text-cell';
 import useProducts from '../../contexts/products';
+import useProductReplication from '../../contexts/use-product-replication';
 import { VariationsProvider } from '../../contexts/variations';
 
 import type { ListRenderItemInfo } from '@shopify/flash-list';
@@ -25,16 +26,32 @@ interface ProductsTableProps {
 }
 
 /**
- *
+ * NOTE: not sure if this is the best spot for replication, but we need acces to the query
  */
 const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
-	const { query$, setQuery, data: products } = useProducts();
+	const { query$, setQuery, data: products, nextPage } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
 	log.debug('render products table');
+
+	/**
+	 *
+	 */
+	const { replicationState } = useProductReplication();
+
+	/**
+	 * Only run the replication when the Provider is mounted
+	 */
+	// React.useEffect(() => {
+	// 	replicationState.start();
+	// 	return () => {
+	// 		// this is async, should we wait?
+	// 		replicationState.cancel();
+	// 	};
+	// }, []);
 
 	/**
 	 *
@@ -112,6 +129,9 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 			extraData={context}
 			renderItem={renderItem}
 			// getItemType={(item) => item.type}
+			// onEndReached={() => {
+			// 	nextPage();
+			// }}
 		/>
 	);
 };

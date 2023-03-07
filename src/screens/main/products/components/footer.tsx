@@ -9,7 +9,7 @@ import Text from '@wcpos/components/src/text';
 import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import SyncButton from '../../components/sync-button';
-import useProducts from '../../contexts/products';
+import useProductReplication from '../../contexts/use-product-replication';
 
 interface ProductFooterProps {
 	count: number;
@@ -22,7 +22,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { storeDB, store } = useLocalData();
 	const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
-	const { sync, clear } = useProducts();
+	const { sync, clear } = useProductReplication();
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 
 	return (

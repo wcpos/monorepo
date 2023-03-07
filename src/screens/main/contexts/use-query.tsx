@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import cloneDeep from 'lodash/cloneDeep';
+import defaults from 'lodash/defaults';
 import set from 'lodash/set';
 import { BehaviorSubject } from 'rxjs';
 
@@ -13,6 +14,7 @@ export interface QueryState {
 	// filters?: Record<string, unknown>;
 	selector?: import('rxdb').MangoQuery['selector'];
 	limit?: number;
+	skip?: number;
 }
 
 export type QueryObservable = BehaviorSubject<QueryState>;
@@ -40,7 +42,19 @@ const useQuery = (initialQuery: QueryState) => {
 	/**
 	 *
 	 */
-	const query$ = React.useMemo(() => new BehaviorSubject(initialQuery), [initialQuery]);
+	const query$ = React.useMemo(
+		() => new BehaviorSubject(defaults(initialQuery, { limit: 10, skip: 0 })),
+		[initialQuery]
+	);
+
+	/**
+	 *
+	 */
+	const nextPage = React.useCallback(() => {
+		const prev = query$.getValue();
+		const next = { ...prev, skip: prev.skip + prev.limit };
+		query$.next(next);
+	}, [query$]);
 
 	/**
 	 * Normalize selector, for example:
@@ -56,7 +70,7 @@ const useQuery = (initialQuery: QueryState) => {
 		[query$]
 	);
 
-	return { query$, setQuery };
+	return { query$, setQuery, nextPage };
 };
 
 export default useQuery;

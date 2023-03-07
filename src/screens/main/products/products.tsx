@@ -25,6 +25,8 @@ const Products = () => {
 	const storeCity = useObservableState(store.store_city$, store?.store_city);
 	const storeCountry = useObservableState(store.default_country$, store?.default_country);
 	const storePostcode = useObservableState(store.store_postcode$, store?.store_postcode);
+	const sortBy = uiSettings.get('sortBy');
+	const sortDirection = uiSettings.get('sortDirection');
 
 	const initialQuery = React.useMemo(() => {
 		/**
@@ -39,15 +41,12 @@ const Products = () => {
 		};
 	}, [storeCity, storeCountry, storePostcode]);
 
+	/**
+	 *
+	 */
 	return (
 		<TaxRateProvider initialQuery={initialQuery}>
-			<ProductsProvider
-				initialQuery={{
-					sortBy: uiSettings.get('sortBy'),
-					sortDirection: uiSettings.get('sortDirection'),
-				}}
-				uiSettings={uiSettings}
-			>
+			<ProductsProvider initialQuery={{ sortBy, sortDirection }} uiSettings={uiSettings}>
 				<Box padding="small" style={{ height: '100%' }}>
 					<Box
 						raised
