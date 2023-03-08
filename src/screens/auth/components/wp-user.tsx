@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import Dialog from '@wcpos/components/src/dialog';
 import Pill from '@wcpos/components/src/pill';

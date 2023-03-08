@@ -1,7 +1,9 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { tap, map } from 'rxjs/operators';
+import { tap, map, switchMap } from 'rxjs/operators';
+
+import { storeDBPromise } from '@wcpos/database/src/stores-db';
 
 import { current$ } from './observables';
 
@@ -46,59 +48,62 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 	const value = React.useMemo(() => {
 		const isWebApp = !!(initialProps && initialProps.site);
 
-		const hydratedResources$ = current$.pipe(
-			map((current) => {
-				return {
-					...current,
-					isWebApp,
-					initialProps,
-				};
-			}),
-			tap(async ({ user, userDB, storeDB }) => {
-				/**
-				 * Hydrate initialProps for web app
-				 */
-				if (user && isWebApp) {
-					const { site, wp_credentials, store } = initialProps;
-					let siteDoc = await userDB.sites.findOneFix(site.uuid).exec();
-					let wpCredentialsDoc = await userDB.wp_credentials.findOneFix(wp_credentials.uuid).exec();
-					let storeDoc = await userDB.stores.findOne({ selector: { id: store.id } }).exec();
+		/**
+		 * If web app, we hydrate from initial props
+		 * FIXME: this feels a but messy, it probably could be improved
+		 * FIXME: change in store locale will not trigger a change to language
+		 */
+		const hydratedResources$ = isWebApp
+			? current$.pipe(
+					switchMap(async ({ user, userDB }) => {
+						const { site, wp_credentials, store } = initialProps;
+						let siteDoc = await userDB.sites.findOneFix(site.uuid).exec();
+						let wpCredentialsDoc = await userDB.wp_credentials
+							.findOneFix(wp_credentials.uuid)
+							.exec();
+						let storeDoc = await userDB.stores.findOne({ selector: { id: store.id } }).exec();
 
-					if (!siteDoc) {
-						siteDoc = await userDB.sites.insert(site);
-					}
+						if (!siteDoc) {
+							siteDoc = await userDB.sites.insert(site);
+						}
 
-					/**
-					 * Update nonce for REST requests on each refresh
-					 * FIXME: this should be done proactively, ie: check cookie timeout
-					 */
-					if (wpCredentialsDoc) {
-						await wpCredentialsDoc.patch({ wp_nonce: wp_credentials.wp_nonce });
-					}
+						/**
+						 * Update nonce for REST requests on each refresh
+						 * FIXME: this should be done proactively, ie: check cookie timeout
+						 */
+						if (wpCredentialsDoc) {
+							await wpCredentialsDoc.patch({ wp_nonce: wp_credentials.wp_nonce });
+						}
 
-					if (!wpCredentialsDoc) {
-						wpCredentialsDoc = await userDB.wp_credentials.insert(wp_credentials);
-					}
+						if (!wpCredentialsDoc) {
+							wpCredentialsDoc = await userDB.wp_credentials.insert(wp_credentials);
+						}
 
-					if (!storeDoc) {
-						storeDoc = await userDB.stores.insert(store);
-					}
+						if (!storeDoc) {
+							storeDoc = await userDB.stores.insert(store);
+						}
 
-					userDB.upsertLocal('current', {
-						userID: user.uuid,
-						siteID: site.uuid,
-						wpCredentialsID: wp_credentials.uuid,
-						storeID: storeDoc.localID,
-					});
-				}
-			})
-		);
+						const storeDB = await storeDBPromise(storeDoc.localID);
+
+						return {
+							user,
+							userDB,
+							site: siteDoc,
+							wpCredentials: wpCredentialsDoc,
+							store: storeDoc,
+							storeDB,
+						};
+					})
+			  )
+			: current$;
 
 		/**
 		 *
 		 */
 		return {
 			resources: new ObservableResource(hydratedResources$),
+			isWebApp,
+			initialProps,
 		};
 	}, [initialProps]);
 

@@ -6,6 +6,7 @@ import { useObservableSuspense } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Pill from '@wcpos/components/src/pill';
 import Text from '@wcpos/components/src/text';
 
 import WPUser from './wp-user';
@@ -31,13 +32,15 @@ const WPUsersList = ({ wpUsersResource, site }: WpUserProps) => {
 					onPress={() => navigation.navigate('Login', { siteID: site.uuid })}
 				/>
 			</Box>
-			{wpCreds.map((wpCred) => (
-				<ErrorBoundary key={wpCred.uuid}>
-					<React.Suspense>
-						<WPUser wpUser={wpCred} site={site} />
-					</React.Suspense>
-				</ErrorBoundary>
-			))}
+			<Pill.Group>
+				{wpCreds.map((wpCred) => (
+					<ErrorBoundary key={wpCred.uuid}>
+						<React.Suspense>
+							<WPUser wpUser={wpCred} site={site} />
+						</React.Suspense>
+					</ErrorBoundary>
+				))}
+			</Pill.Group>
 		</Box>
 	);
 };

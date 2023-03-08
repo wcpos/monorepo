@@ -11,6 +11,6 @@ export const useLocalData = () => {
 	}
 
 	const data = useObservableSuspense(context.resources);
-	return React.useDeferredValue(data);
-	// return data;
+	const hydratedData = React.useDeferredValue(data);
+	return { ...context, ...hydratedData };
 };
