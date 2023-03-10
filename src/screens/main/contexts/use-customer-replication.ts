@@ -8,7 +8,7 @@ import { replicateRxCollection } from 'rxdb/plugins/replication';
 
 import log from '@wcpos/utils/src/logger';
 
-import useProducts from './products';
+import useCustomers from './customers';
 import useLocalData from '../../../contexts/local-data';
 import { parseLinkHeader } from '../../../lib/url';
 import useRestHttpClient from '../hooks/use-rest-http-client';
@@ -20,13 +20,7 @@ interface Props {
 const registry = new Map();
 
 function mapKeyToParam(key) {
-	if (key === 'categories') {
-		return 'category';
-	} else if (key === 'tags') {
-		return 'tag';
-	} else {
-		return key;
-	}
+	return key;
 }
 
 function mangoToRestQuery(mangoSelector) {
@@ -48,11 +42,11 @@ function mangoToRestQuery(mangoSelector) {
 /**
  *
  */
-const useProductReplication = () => {
+const useCustomerReplication = () => {
 	const http = useRestHttpClient();
 	const { site, storeDB } = useLocalData();
-	const collection = storeDB.collections.products;
-	const { query$ } = useProducts();
+	const collection = storeDB.collections.customers;
+	const { query$ } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
 
 	/**
@@ -91,8 +85,8 @@ const useProductReplication = () => {
 						const emptyRestQuery = isEmpty(selector);
 						const params = Object.assign(selector, {
 							order: query.sortDirection,
-							// WC REST API doesn't use the name property, it uses 'title', because of course it does
-							orderby: query.sortBy === 'name' ? 'title' : query.sortBy,
+							// TODO: I need to add orderby to the WC REST API
+							orderby: query.sortBy === 'last_name' ? 'name' : query.sortBy,
 							page: checkpoint.nextPage || 1,
 							per_page: 10,
 							after: status.fullInitialSync ? status.lastModified : null,
@@ -195,4 +189,4 @@ const useProductReplication = () => {
 	return { replicationState, clear, sync };
 };
 
-export default useProductReplication;
+export default useCustomerReplication;

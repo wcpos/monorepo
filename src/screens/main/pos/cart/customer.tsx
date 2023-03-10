@@ -3,6 +3,7 @@ import * as React from 'react';
 import compact from 'lodash/compact';
 import pick from 'lodash/pick';
 import { useObservableState } from 'observable-hooks';
+import { tap, distinctUntilChanged } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
@@ -12,7 +13,7 @@ import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
 import EditForm from '../../components/edit-form';
-import { useCurrentOrder } from '../contexts/current-order/use-current-order';
+import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -26,10 +27,8 @@ interface CustomerProps {
 const Customer = ({ order }: CustomerProps) => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
 	const { removeCustomer } = useCurrentOrder();
-	// const billing = useObservableState(order.billing$, order.billing);
-	// const shipping = useObservableState(order.shipping$, order.shipping);
-	const billing = order.billing;
-	const shipping = order.shipping;
+	const billing = useObservableState(order.billing$, order.billing);
+	const shipping = useObservableState(order.shipping$, order.shipping);
 
 	/**
 	 *
@@ -82,13 +81,7 @@ const Customer = ({ order }: CustomerProps) => {
 	return (
 		<Box horizontal align="center" space="small">
 			<Text weight="bold">{t('Customer', { _tags: 'core' })}:</Text>
-			<Pill
-				removable
-				onRemove={removeCustomer}
-				onPress={() => {
-					setEditModalOpened(true);
-				}}
-			>
+			<Pill removable onRemove={removeCustomer} onPress={() => setEditModalOpened(true)}>
 				{label}
 			</Pill>
 

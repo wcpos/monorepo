@@ -48,7 +48,9 @@ const CartHeader = ({ order }: CartHeaderProps) => {
 				billing: {
 					...(customerJSON.billing || {}),
 					email: customerJSON?.billing?.email || customerJSON?.email,
-					first_name: customerJSON?.billing?.first_name || customerJSON?.username,
+					first_name:
+						customerJSON?.billing?.first_name || customerJSON.first_name || customerJSON?.username,
+					last_name: customerJSON?.billing?.last_name || customerJSON.last_name,
 				},
 				shipping: customerJSON.shipping,
 			});

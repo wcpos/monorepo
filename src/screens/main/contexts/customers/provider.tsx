@@ -32,33 +32,6 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 	const { storeDB } = useLocalData();
 	const collection = storeDB.collections.customers;
 	const { query$, setQuery } = useQuery(initialQuery);
-	const replicationState = useReplication({ collection });
-
-	/**
-	 * Only run the replication when the Provider is mounted
-	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, [replicationState]);
-
-	/**
-	 * Clear
-	 */
-	const clear = React.useCallback(async () => {
-		const query = collection.find();
-		return query.remove();
-	}, [collection]);
-
-	/**
-	 * Sync
-	 */
-	const sync = React.useCallback(() => {
-		replicationState.reSync();
-	}, [replicationState]);
 
 	/**
 	 *
@@ -66,10 +39,26 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			switchMap((query) => {
-				const { search, selector = {}, sortBy, sortDirection } = query;
+				const { search, selector: querySelector, sortBy, sortDirection, limit, skip } = query;
+				let selector;
 
-				if (search) {
-					set(selector, ['username', '$regex'], new RegExp(escape(search), 'i'));
+				const searchSelector = search
+					? {
+							$or: [
+								{ first_name: { $regex: new RegExp(escape(search), 'i') } },
+								{ last_name: { $regex: new RegExp(escape(search), 'i') } },
+								{ email: { $regex: new RegExp(escape(search), 'i') } },
+								{ username: { $regex: new RegExp(escape(search), 'i') } },
+							],
+					  }
+					: null;
+
+				if (querySelector && searchSelector) {
+					selector = {
+						$and: [querySelector, searchSelector],
+					};
+				} else {
+					selector = querySelector || searchSelector || {};
 				}
 
 				const RxQuery = collection.find({ selector });
@@ -88,7 +77,7 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 	}, [query$, collection]);
 
 	return (
-		<CustomersContext.Provider value={{ ...value, sync, clear, query$, setQuery }}>
+		<CustomersContext.Provider value={{ ...value, query$, setQuery }}>
 			{children}
 		</CustomersContext.Provider>
 	);
