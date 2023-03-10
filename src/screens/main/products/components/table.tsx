@@ -116,7 +116,18 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	/**
 	 *
 	 */
-	useWhyDidYouUpdate('Table', { products, uiSettings });
+	useWhyDidYouUpdate('Table', {
+		products,
+		uiSettings,
+		context,
+		replicationState,
+		query,
+		columns,
+		renderItem,
+		cellRenderer,
+		setQuery,
+		nextPage,
+	});
 
 	/**
 	 *

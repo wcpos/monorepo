@@ -13,7 +13,7 @@ import useUI from '../../contexts/ui-settings';
 
 const SearchBar = () => {
 	const { setQuery } = useProducts();
-	const { uiSettings } = useUI('pos.products');
+	const { uiSettings } = useUI('products');
 
 	/**
 	 *

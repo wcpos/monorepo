@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
+// import Tooltip from '@wcpos/components/src/tooltip';
 
 import { t } from '../../../../../lib/translations';
 import EditForm, { EditModalProps } from '../../../components/edit-form';

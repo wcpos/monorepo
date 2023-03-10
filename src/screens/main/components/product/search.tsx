@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
+import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Pill from '@wcpos/components/src/pill';
@@ -17,6 +18,7 @@ const ProductSearch = () => {
 	const query = useObservableState(query$, query$.getValue());
 	const { data: categories, pullDocument: pullCategory } = useProductCategories();
 	const { data: tags, pullDocument: pullTag } = useProductTags();
+	const theme = useTheme();
 
 	/**
 	 *
@@ -37,11 +39,14 @@ const ProductSearch = () => {
 		const category = categories.find((c) => c.id === categoryID);
 		if (category) {
 			array.push(
-				<Box paddingLeft="small">
-					<Pill removable onRemove={() => setQuery('selector.categories', null)} icon="folders">
-						{category.name}
-					</Pill>
-				</Box>
+				<Pill
+					key="category"
+					removable
+					onRemove={() => setQuery('selector.categories', null)}
+					icon="folders"
+				>
+					{category.name}
+				</Pill>
 			);
 		}
 
@@ -54,11 +59,9 @@ const ProductSearch = () => {
 		const tag = tags.find((t) => t.id === tagID);
 		if (tag) {
 			array.push(
-				<Box paddingLeft="small">
-					<Pill removable onRemove={() => setQuery('selector.tags', null)} icon="tag">
-						{tag.name}
-					</Pill>
-				</Box>
+				<Pill key="tag" removable onRemove={() => setQuery('selector.tags', null)} icon="tag">
+					{tag.name}
+				</Pill>
 			);
 		}
 
@@ -70,16 +73,21 @@ const ProductSearch = () => {
 		const barcode = get(query, ['selector', 'barcode']);
 		if (barcode) {
 			array.push(
-				<Box paddingLeft="small">
-					<Pill removable onRemove={() => setQuery('selector.barcode', null)} icon="barcode">
-						{barcode}
-					</Pill>
-				</Box>
+				<Pill
+					key="barcode"
+					removable
+					onRemove={() => setQuery('selector.barcode', null)}
+					icon="barcode"
+				>
+					{barcode}
+				</Pill>
 			);
 		}
 
-		return array;
-	}, [categories, pullCategory, pullTag, query, setQuery, tags]);
+		return array.length !== 0 ? (
+			<Pill.Group style={{ paddingLeft: theme.spacing.small }}>{array}</Pill.Group>
+		) : undefined;
+	}, [categories, pullCategory, pullTag, query, setQuery, tags, theme.spacing.small]);
 
 	/**
 	 *

@@ -3,22 +3,27 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
-import Text from '@wcpos/components/src/text';
-
-import PriceWithTax from '../../../components/product/price';
+import NumberInput from '../../../components/number-input';
+import usePushDocument from '../../../contexts/use-push-document';
 
 type Props = {
-	item: import('@wcpos/database').CustomerDocument;
+	item: import('@wcpos/database').ProductDocument;
 	column: import('@wcpos/components/src/table').ColumnProps<
 		import('@wcpos/database').ProductDocument
 	>;
 };
 
 const SalePrice = ({ item: product, column }: Props) => {
-	const price = useObservableState(product.sale_price$, product.sale_price);
-	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
-	const taxClass = useObservableState(product.tax_class$, product.tax_class);
 	const { display } = column;
+	const pushDocument = usePushDocument();
+
+	const handleUpdate = React.useCallback(
+		async (sale_price) => {
+			const p = await product.patch({ sale_price });
+			pushDocument(p);
+		},
+		[product, pushDocument]
+	);
 
 	/**
 	 *
@@ -32,21 +37,14 @@ const SalePrice = ({ item: product, column }: Props) => {
 	);
 
 	/**
-	 * Early exit, no price!
-	 */
-	if (!price) {
-		return null;
-	}
-
-	/**
 	 *
 	 */
 	return (
-		<PriceWithTax
-			price={price}
-			taxStatus={taxStatus}
-			taxClass={taxClass}
-			taxDisplay={show('tax') ? 'text' : 'tooltip'}
+		<NumberInput
+			value={product.sale_price || '0'}
+			onChange={handleUpdate}
+			disabled={!product.on_sale}
+			showDecimals
 		/>
 	);
 };
