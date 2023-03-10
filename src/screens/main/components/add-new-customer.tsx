@@ -11,7 +11,6 @@ import Modal from '@wcpos/components/src/modal';
 import Tabs from '@wcpos/components/src/tabs';
 import Tree from '@wcpos/components/src/tree';
 // import useCountries from '@wcpos/hooks/src/use-countries';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import Form from '@wcpos/react-native-jsonschema-form';
 
 import useLocalData from '../../../contexts/local-data';
@@ -142,16 +141,6 @@ const AddNewCustomer = () => {
 		{ key: 'form', title: 'Form' },
 		{ key: 'json', title: 'JSON' },
 	];
-
-	useWhyDidYouUpdate('AddEditCustomer', {
-		customerData,
-		index,
-		routes,
-		handleSave,
-		handleChange,
-		renderScene,
-		setIndex,
-	});
 
 	return (
 		<>

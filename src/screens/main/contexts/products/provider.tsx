@@ -5,7 +5,6 @@ import { ObservableResource, useObservableState } from 'observable-hooks';
 import { switchMap, map } from 'rxjs/operators';
 
 // import products from '@wcpos/database/src/collections/products';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
@@ -79,19 +78,6 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 			resource: new ObservableResource(resource$),
 		};
 	}, [collection, query$]);
-
-	useWhyDidYouUpdate('ProductsProvider', {
-		value,
-		children,
-		initialQuery,
-		uiSettings,
-		storeDB,
-		collection,
-		showOutOfStock,
-		query$,
-		setQuery,
-		// sync,
-	});
 
 	return (
 		<ProductsContext.Provider value={{ ...value, setQuery, query$, nextPage }}>

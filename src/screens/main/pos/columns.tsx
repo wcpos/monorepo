@@ -12,7 +12,6 @@ import Animated, {
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Gutter from '@wcpos/components/src/gutter';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import OpenOrders from './cart';
 import Products from './products';
@@ -88,17 +87,6 @@ const ResizableColumns = () => {
 			isActivePanGesture.value = false;
 			runOnJS(saveColumnWidth)(columnWidth.value);
 		},
-	});
-
-	useWhyDidYouUpdate('ResizableColumns', {
-		uiSettings,
-		// columnWidth,
-		// isActivePanGesture,
-		// containerWidth,
-		// onContainerLayout,
-		// columnStyle,
-		// panGestureHandler,
-		// saveColumnWidth,
 	});
 
 	/**

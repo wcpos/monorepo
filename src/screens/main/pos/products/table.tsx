@@ -6,7 +6,6 @@ import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import cells from './cells';
 import Footer from './footer';
@@ -82,7 +81,6 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 	 */
 	const renderItem = React.useCallback(
 		({ item, index, extraData, target }: ListRenderItemInfo<ProductDocument>) => {
-			console.log(`render  POS Product item ${item.id}`);
 			if (item.type === 'variable') {
 				return (
 					<ErrorBoundary>
@@ -100,20 +98,6 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 		},
 		[uiSettings]
 	);
-
-	/**
-	 *
-	 */
-	useWhyDidYouUpdate('ProductsTable', {
-		t,
-		query$,
-		setQuery,
-		uiSettings,
-		data,
-		columns,
-		query,
-		context,
-	});
 
 	/**
 	 *

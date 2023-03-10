@@ -13,7 +13,6 @@ import useLocalData from '../contexts/local-data';
 import { t } from '../lib/translations';
 import { URL } from '../lib/url';
 
-// import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 // const MainNavigator = React.lazy(() => import('./main'));
 
 export type RootStackParamList = {

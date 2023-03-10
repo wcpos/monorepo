@@ -9,7 +9,6 @@ import { useTheme } from 'styled-components/native';
 import Icon from '@wcpos/components/src/icon';
 import Portal from '@wcpos/components/src/portal';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
@@ -49,9 +48,6 @@ const MainNavigator = ({ navigation }) => {
 	const wpAPIURL = useObservableState(site.wp_api_url$, site.wp_api_url);
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
-
-	console.log('render MainNavigator');
-	useWhyDidYouUpdate('MainNavigator', { navigation, site, wpAPIURL, dimensions, theme });
 
 	return (
 		<UISettingsProvider>

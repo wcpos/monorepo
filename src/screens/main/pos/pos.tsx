@@ -6,7 +6,6 @@ import { useTheme } from 'styled-components/native';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import POSColumns from './columns';
@@ -76,20 +75,6 @@ const POS = () => {
 		billing?.state,
 		billing?.postcode,
 	]);
-
-	useWhyDidYouUpdate('POS', {
-		initialQuery,
-		taxBasedOn,
-		billing,
-		shipping,
-		store,
-		storeCity,
-		storeCountry,
-		storePostcode,
-		currentOrder,
-		dimensions,
-		theme,
-	});
 
 	return (
 		<TaxRateProvider initialQuery={initialQuery}>

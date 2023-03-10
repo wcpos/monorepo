@@ -4,7 +4,6 @@ import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import cells from './cells';
 import Footer from './footer';
@@ -57,8 +56,6 @@ const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
 		};
 	}, [columns, query.sortBy, query.sortDirection, cellRenderer, setQuery, uiSettings]);
-
-	useWhyDidYouUpdate('Table', { customers });
 
 	return (
 		<Table<CustomerDocument>

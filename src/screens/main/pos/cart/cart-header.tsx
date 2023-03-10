@@ -5,7 +5,6 @@ import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import Customer from './customer';
 import useLocalData from '../../../../contexts/local-data';
@@ -56,11 +55,6 @@ const CartHeader = ({ order }: CartHeaderProps) => {
 		},
 		[addCustomer]
 	);
-
-	/**
-	 *
-	 */
-	useWhyDidYouUpdate('Cart Header', { order, theme, storeDB });
 
 	/**
 	 *

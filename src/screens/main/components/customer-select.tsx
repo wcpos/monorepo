@@ -4,7 +4,6 @@ import { useObservableState } from 'observable-hooks';
 
 import Combobox from '@wcpos/components/src/combobox';
 import Text from '@wcpos/components/src/text';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import { t } from '../../../lib/translations';
 import useCustomers, { CustomersProvider } from '../contexts/customers';
@@ -55,19 +54,6 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 		opts.unshift({ key: 0, label: 'Guest', value: { id: 0 } });
 		return opts;
 	}, [customers, displayCustomerNameOrUsername]);
-
-	/**
-	 *
-	 */
-	useWhyDidYouUpdate('Customer Select', {
-		selectedCustomer,
-		onSelectCustomer,
-		customers,
-		onSearch,
-		query,
-		setQuery,
-		options,
-	});
 
 	/**
 	 *

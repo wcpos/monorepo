@@ -66,7 +66,6 @@ export const UISettingsContext = React.createContext<{
  */
 export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 	const { storeDB, locale } = useLocalData();
-	console.log('render UISettingsProvider');
 
 	/**
 	 *

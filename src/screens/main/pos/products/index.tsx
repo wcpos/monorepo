@@ -5,7 +5,6 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import SearchBar from './search-bar';
@@ -25,9 +24,6 @@ const POSProducts = ({ isColumn = false }) => {
 		() => ({ sortBy: uiSettings.get('sortBy'), sortDirection: uiSettings.get('sortDirection') }),
 		[uiSettings]
 	);
-	log.debug('render POSProducts');
-
-	useWhyDidYouUpdate('POSProducts', { isColumn, theme, uiSettings, initialQuery });
 
 	return (
 		<ProductsProvider initialQuery={initialQuery} uiSettings={uiSettings}>

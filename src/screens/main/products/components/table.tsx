@@ -6,7 +6,6 @@ import { useObservableState } from 'observable-hooks';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import cells from './cells';
@@ -96,7 +95,6 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	 *
 	 */
 	const renderItem = ({ item, index, extraData, target }: ListRenderItemInfo<ProductDocument>) => {
-		console.log('ProductsTable renderItem', item.id);
 		if (item.type === 'variable') {
 			return (
 				<ErrorBoundary>
@@ -112,22 +110,6 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 			</ErrorBoundary>
 		);
 	};
-
-	/**
-	 *
-	 */
-	useWhyDidYouUpdate('Table', {
-		products,
-		uiSettings,
-		context,
-		replicationState,
-		query,
-		columns,
-		renderItem,
-		cellRenderer,
-		setQuery,
-		nextPage,
-	});
 
 	/**
 	 *

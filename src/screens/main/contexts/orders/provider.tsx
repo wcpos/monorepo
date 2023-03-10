@@ -4,7 +4,6 @@ import { orderBy } from '@shelf/fast-natural-order-by';
 import { ObservableResource } from 'observable-hooks';
 import { switchMap, map } from 'rxjs/operators';
 
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';

@@ -9,7 +9,6 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import AddFee from './add-fee';
 import AddShipping from './add-shipping';
@@ -49,8 +48,6 @@ const Cart = ({ currentOrder }: CartProps) => {
 			replicationState.cancel();
 		};
 	}, []);
-
-	useWhyDidYouUpdate('Cart', { currentOrder, theme });
 
 	return (
 		<Box

@@ -5,7 +5,6 @@ import { useObservableState } from 'observable-hooks';
 
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import Actions from './cells/actions';
 import Address from './cells/address';
@@ -72,8 +71,6 @@ const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
 		};
 	}, [columns, query.sortBy, query.sortDirection, cellRenderer, setQuery, uiSettings]);
-
-	useWhyDidYouUpdate('Table', { orders, context });
 
 	return (
 		<Table<OrderDocument>

@@ -6,7 +6,6 @@ import { useObservableState } from 'observable-hooks';
 
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import * as cells from './cells';
 import { t } from '../../../../lib/translations';
@@ -69,11 +68,6 @@ const CartTable = () => {
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
 		};
 	}, [columns, cellRenderer, uiSettings]);
-
-	/**
-	 *
-	 */
-	useWhyDidYouUpdate('CartTable', { uiSettings, columns, items, cart, t, context });
 
 	/**
 	 *
