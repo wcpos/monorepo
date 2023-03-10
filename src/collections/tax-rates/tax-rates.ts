@@ -16,6 +16,8 @@ export type TaxRateCollection = import('rxdb').RxCollection<TaxRateDocument>;
 
 export const taxRates = {
 	schema,
+	localDocuments: true, // needed for custom checkpoint
+
 	// statics: {},
 	// methods,
 	// attachments: {},

@@ -15,6 +15,8 @@ type ProductVariationStatics = Record<string, never>;
 
 export const productVariations = {
 	schema,
+	localDocuments: true, // needed for custom checkpoint
+
 	// statics: {},
 	// methods: {},
 	// attachments: {},

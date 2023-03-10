@@ -13,4 +13,5 @@ type CustomerMethods = Record<string, never>;
 
 export const customers = {
 	schema,
+	localDocuments: true, // needed for custom checkpoint
 };

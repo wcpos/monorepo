@@ -16,4 +16,5 @@ type OrderStatics = Record<string, never>;
  */
 export const orders = {
 	schema,
+	localDocuments: true, // needed for custom checkpoint
 };
