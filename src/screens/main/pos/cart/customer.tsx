@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import compact from 'lodash/compact';
 import pick from 'lodash/pick';
-import { useObservableState } from 'observable-hooks';
-import { tap, distinctUntilChanged } from 'rxjs/operators';
+import { useObservableState, useObservable } from 'observable-hooks';
+import { tap, distinctUntilChanged, catchError } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
@@ -27,8 +27,14 @@ interface CustomerProps {
 const Customer = ({ order }: CustomerProps) => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
 	const { removeCustomer } = useCurrentOrder();
-	const billing = useObservableState(order.billing$, order.billing);
-	const shipping = useObservableState(order.shipping$, order.shipping);
+
+	/**
+	 * FIXME: https://github.com/crimx/observable-hooks/discussions/55
+	 */
+	const billing$ = useObservable(() => order.billing$);
+	const shipping$ = useObservable(() => order.shipping$);
+	const billing = useObservableState(billing$, order.billing);
+	const shipping = useObservableState(shipping$, order.shipping);
 
 	/**
 	 *

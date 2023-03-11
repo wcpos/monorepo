@@ -71,16 +71,16 @@ const CartHeader = ({ order }: CartHeaderProps) => {
 				backgroundColor: theme.colors.grey,
 				borderTopLeftRadius: theme.rounding.medium,
 				borderTopRightRadius: theme.rounding.medium,
-				height: 51,
+				height: 48,
 				zIndex: 1, // this makes sure the customer select is on top of the cart
 			}}
 		>
 			<Box fill>
 				<ErrorBoundary>
-					{customerID !== -1 ? (
-						<Customer order={order} />
-					) : (
+					{customerID === -1 ? (
 						<CustomerSelect onSelectCustomer={handleCustomerSelect} />
+					) : (
+						<Customer order={order} />
 					)}
 				</ErrorBoundary>
 			</Box>
