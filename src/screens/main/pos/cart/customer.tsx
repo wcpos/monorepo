@@ -27,14 +27,8 @@ interface CustomerProps {
 const Customer = ({ order }: CustomerProps) => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
 	const { removeCustomer } = useCurrentOrder();
-
-	/**
-	 * FIXME: https://github.com/crimx/observable-hooks/discussions/55
-	 */
-	const billing$ = useObservable(() => order.billing$);
-	const shipping$ = useObservable(() => order.shipping$);
-	const billing = useObservableState(billing$, order.billing);
-	const shipping = useObservableState(shipping$, order.shipping);
+	const billing = useObservableState(order.billing$, order.billing);
+	const shipping = useObservableState(order.shipping$, order.shipping);
 
 	/**
 	 *
@@ -53,14 +47,7 @@ const Customer = ({ order }: CustomerProps) => {
 			return billing.email;
 		}
 		return 'No name?';
-	}, [
-		billing?.email,
-		billing?.first_name,
-		billing?.last_name,
-		order?.customer_id,
-		shipping?.first_name,
-		shipping?.last_name,
-	]);
+	}, [billing, order, shipping]);
 
 	/**
 	 *

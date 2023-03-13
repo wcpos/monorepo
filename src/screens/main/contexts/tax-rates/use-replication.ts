@@ -1,26 +1,29 @@
 import * as React from 'react';
 
 import { find } from 'lodash';
+import get from 'lodash/get';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
+import { parseLinkHeader } from '../../../../lib/url';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 /**
- * Hack, I want the replication to wait before looping to allow counts to be updated
+ * Tax Rates replication works a bit differently to other collections
+ * Tax Rates are not created locally, so we don't need to use uuids
+ * Additionally, tax rates don't have a 'modified' date, so we can't use the
+ * modified date to determine if we need to update the local collection.
+ *
+ * Instead, we download all the tax rates from the server and compare the ids.
+ * We set a checkpoint once the replication is complete, but we need to do periodic
+ * replications to ensure we have the latest tax rates. There also needs to be an
+ * easy way to clear the checkpoint and re-download all tax rates.
  */
-function wait(milliseconds: number) {
-	return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-const runAudit = true;
-
 export const useReplication = ({ collection }) => {
 	const http = useRestHttpClient();
 	const { site } = useLocalData();
-	const runAudit = React.useRef(true);
 
 	const replicationStatePromise = React.useMemo(() => {
 		/**
@@ -30,41 +33,54 @@ export const useReplication = ({ collection }) => {
 			collection,
 			autoStart: false,
 			replicationIdentifier: `wc-rest-replication-to-${site.wc_api_url}/${collection.name}`,
-			// retryTime: 1000000000,
 			pull: {
 				async handler(lastCheckpoint, batchSize) {
 					try {
 						/**
-						 * TODO - getting the localIds returns stale data so we need to wait
-						 * Need to find a better way to do this
-						 * Is the collection not updated yet? or is find() being cached?
-						 *
-						 * NOTE - this is similar to gateways, but we need pagination
+						 * Get custom checkpoint
+						 * NOTE - we get all tax rates, so we don't need different checkpoints
+						 * for different queries
 						 */
-						await wait(1000);
-						const [{ data }, localIds] = await Promise.all([
-							http.get(collection.name),
-							collection
-								.find()
-								.exec()
-								.then((docs) => docs.map((d) => d.id)),
-						]);
+						const checkpoint = await collection
+							.getLocal('checkpoint')
+							.then((doc) => doc?.toJSON().data || {});
 
-						// compare local and server ids
-						// NOTE - rest api ids are integers, local ids are strings
-						const add = data
-							.filter((d) => !localIds.includes(String(d.id)))
-							.map((d) => ({ ...d, _deleted: false }));
+						if (checkpoint.fullInitialSync) {
+							// if fullInitialSync is done we need to audit, not replicate
+							// 	collection
+							// 		.find()
+							// 		.exec()
+							// 		.then((docs) => docs.map((d) => d.id))
+							return {
+								documents: [],
+								checkpoint: null,
+							};
+						}
 
-						const remove = localIds
-							.filter((id) => !find(data, { id: Number(id) }))
-							.map((d) => ({ ...d.toJSON(), _deleted: true }));
+						const params = {
+							per_page: batchSize,
+							page: checkpoint ? checkpoint.nextPage : 1,
+						};
+						const response = await http.get(collection.name, { params });
+						const data = get(response, 'data', []);
+						const link = get(response, ['headers', 'link']);
+						const remoteTotal = get(response, ['headers', 'x-wp-total']);
+						const totalPages = get(response, ['headers', 'x-wp-totalpages']);
+						const parsedHeaders = parseLinkHeader(link);
+						const nextPage = get(parsedHeaders, ['next', 'page']);
 
-						//
-						const documents = add.concat(remove);
+						/**
+						 * Set next checkpoint, using my own custom checkpoint
+						 */
+						await collection.upsertLocal('checkpoint', {
+							remoteTotal,
+							totalPages,
+							nextPage,
+							fullInitialSync: !nextPage,
+						});
 
 						return {
-							documents,
+							documents: data,
 							checkpoint: null,
 						};
 					} catch (err) {

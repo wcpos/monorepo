@@ -54,7 +54,7 @@ const TaxRateProvider = ({ children, initialQuery, ui }: TaxRateProviderProps) =
 							$or: [{ country: q.country }, { country: '*' }, { country: '' }],
 						},
 						{
-							$or: [{ state: 'AL' }, { state: '*' }, { state: '' }],
+							$or: [{ state: q.state }, { state: '*' }, { state: '' }],
 						},
 						{
 							$or: [{ city: q.city }, { city: '*' }, { city: '' }],
