@@ -63,8 +63,12 @@ const OnlineStatusProvider = ({ children, wpAPIURL }: Props) => {
 			});
 		});
 
-		// Unsubscribe
-		return unsubscribe;
+		/**
+		 * FIXME: Even though this unsubscribes, the fetch request is still running on logout
+		 */
+		return () => {
+			unsubscribe();
+		};
 	}, [addSnackbar, wpAPIURL]);
 
 	return <OnlineStatusContext.Provider value={status}>{children}</OnlineStatusContext.Provider>;
