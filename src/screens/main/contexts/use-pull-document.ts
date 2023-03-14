@@ -15,7 +15,7 @@ const usePullDocument = () => {
 			try {
 				const { data } = await http.get((endpoint += `/${id}`));
 				const parsedData = collection.parseRestResponse(data);
-				await collection.upsert(parsedData);
+				return collection.upsert(parsedData);
 			} catch (err) {
 				log.error(err);
 			}

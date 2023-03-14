@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, StackActions } from '@react-navigation/native';
 
 import Modal, { ModalProps } from '@wcpos/components/src/modal';
 
@@ -16,7 +16,13 @@ export const ModalLayout = ({ children, ...props }: ModalLayoutProps) => {
 	useModalRefreshFix();
 
 	return (
-		<Modal size="large" {...props} withPortal={false} opened onClose={() => navigation.goBack()}>
+		<Modal
+			size="large"
+			{...props}
+			withPortal={false}
+			opened
+			onClose={() => navigation.dispatch(StackActions.pop(1))}
+		>
 			{children}
 		</Modal>
 	);

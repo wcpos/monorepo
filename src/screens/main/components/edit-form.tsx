@@ -1,25 +1,22 @@
 import * as React from 'react';
 
+import Box from '@wcpos/components/src/box';
 import Tabs from '@wcpos/components/src/tabs';
 import Tree from '@wcpos/components/src/tree';
 import Form from '@wcpos/react-native-jsonschema-form';
 
 export interface EditModalProps {
-	item:
-		| import('@wcpos/database').ProductDocument
-		| import('@wcpos/database').OrderDocument
-		| import('@wcpos/database').CustomerDocument
-		| import('@wcpos/database').LineItemDocument
-		| import('@wcpos/database').FeeLineDocument
-		| import('@wcpos/database').ShippingLineDocument;
+	data: Record<string, any>;
 	schema: import('json-schema').JSONSchema7;
 	uiSchema: Record<string, any>;
+	onChange: (data: Record<string, any>) => void;
 }
 
 /**
  *
  */
-const EditForm = ({ schema, uiSchema, item }: EditModalProps) => {
+const EditForm = ({ data, schema, uiSchema, onChange }: EditModalProps) => {
+	const [formData, setFormData] = React.useState(data);
 	const [index, setIndex] = React.useState(0);
 
 	/**
@@ -27,10 +24,10 @@ const EditForm = ({ schema, uiSchema, item }: EditModalProps) => {
 	 */
 	const handleChange = React.useCallback(
 		(newData) => {
-			const latest = item.getLatest();
-			latest.patch(newData);
+			setFormData(newData);
+			onChange && onChange(newData);
 		},
-		[item]
+		[onChange]
 	);
 
 	/**
@@ -38,12 +35,17 @@ const EditForm = ({ schema, uiSchema, item }: EditModalProps) => {
 	 */
 	const renderScene = React.useCallback(
 		({ route }) => {
-			const latest = item.getLatest();
-			const data = latest.toMutableJSON();
 			switch (route.key) {
 				case 'form':
 					return (
-						<Form schema={schema} formData={data} uiSchema={uiSchema} onChange={handleChange} />
+						<Box padding="small">
+							<Form
+								schema={schema}
+								formData={formData}
+								uiSchema={uiSchema}
+								onChange={handleChange}
+							/>
+						</Box>
 					);
 				case 'json':
 					return <Tree data={data} />;
@@ -51,7 +53,7 @@ const EditForm = ({ schema, uiSchema, item }: EditModalProps) => {
 					return null;
 			}
 		},
-		[handleChange, item, schema, uiSchema]
+		[data, formData, handleChange, schema, uiSchema]
 	);
 
 	/**

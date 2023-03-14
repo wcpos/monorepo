@@ -1,32 +1,40 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
+import { isRxDocument } from 'rxdb';
 
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
+import useSnackbar from '@wcpos/components/src/snackbar';
+import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
-import useRestHttpClient from '../../hooks/use-rest-http-client';
+import usePullDocument from '../../contexts/use-pull-document';
 
 type Props = {
 	item: import('@wcpos/database').CustomerDocument;
 };
 
 const Actions = ({ item: customer }: Props) => {
-	const http = useRestHttpClient();
 	const navigation = useNavigation();
 	const [menuOpened, setMenuOpened] = React.useState(false);
+	const pullDocument = usePullDocument();
+	const addSnackbar = useSnackbar();
 
 	/**
 	 *
 	 */
 	const handleSync = async () => {
-		// push
-		const result = await http.post(`customers/${customer.id}`, customer.toJSON());
-		if (result && result.data) {
-			// parse raw data
-			const data = customer.collection.parseRestResponse(result.data);
-			customer.atomicPatch(data);
+		try {
+			const success = await pullDocument(customer.id, customer.collection);
+			if (isRxDocument(success)) {
+				addSnackbar({
+					message: t('Customer {id} synced', { _tags: 'core', id: success.id }),
+					// type: 'success',
+				});
+			}
+		} catch (error) {
+			log.error(error);
 		}
 	};
 

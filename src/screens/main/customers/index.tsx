@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useNavigation, StackActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
 
@@ -25,6 +26,8 @@ const Stack = createStackNavigator<CustomersStackParamList>();
  *
  */
 const CustomersNavigator = () => {
+	const navigation = useNavigation();
+
 	return (
 		<Stack.Navigator screenOptions={{ headerShown: false }}>
 			<Stack.Screen name="Customers">
@@ -48,7 +51,16 @@ const CustomersNavigator = () => {
 					const customerID = get(route, ['params', 'customerID']);
 					return (
 						<CustomersProvider initialQuery={{ selector: { uuid: customerID }, limit: 1 }}>
-							<ModalLayout title={t('Edit Customer', { _tags: 'core' })}>
+							<ModalLayout
+								title={t('Edit Customer', { _tags: 'core' })}
+								primaryAction={{ label: t('Sync to Server', { _tags: 'core' }) }}
+								secondaryActions={[
+									{
+										label: t('Cancel', { _tags: 'core' }),
+										action: () => navigation.dispatch(StackActions.pop(1)),
+									},
+								]}
+							>
 								<React.Suspense fallback={<Text>Loading customer</Text>}>
 									<EditCustomer />
 								</React.Suspense>
