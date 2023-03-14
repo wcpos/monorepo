@@ -11,6 +11,9 @@ export const useLocalData = () => {
 	}
 
 	const data = useObservableSuspense(context.resources);
-	const hydratedData = React.useDeferredValue(data);
-	return { ...context, ...hydratedData };
+	/**
+	 * NOTE - Do not use deferred data value, the app needs the storeDB immediately
+	 * eg: DO NOT use React.useDeferredValue(data);
+	 */
+	return { ...context, ...data };
 };

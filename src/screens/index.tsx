@@ -7,6 +7,8 @@ import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
+import Text from '@wcpos/components/src/text';
+
 import AuthNavigator from './auth';
 import MainNavigator from './main';
 import useLocalData from '../contexts/local-data';
@@ -29,6 +31,11 @@ const RootNavigator = ({ initialProps }) => {
 	const { store, storeDB } = useLocalData();
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
+
+	/**
+	 * store can be null, so we create an observable
+	 */
+
 	// const storeName = useObservableState(store.name$, store.name);
 
 	/**
@@ -118,6 +125,9 @@ const RootNavigator = ({ initialProps }) => {
 				 * Nested navigators produce weird results, keep the title simple
 				 */
 				formatter: (options, route) => {
+					if (!store) {
+						return t('WooCommerce POS', { _tags: 'core' });
+					}
 					// return `${t('POS', { _tags: 'core' })} - ${storeName}`;
 					return t('POS', { _tags: 'core' });
 				},
@@ -125,7 +135,19 @@ const RootNavigator = ({ initialProps }) => {
 		>
 			<Stack.Navigator screenOptions={{ headerShown: false }}>
 				{storeDB ? (
-					<Stack.Screen name="MainStack" component={MainNavigator} />
+					<Stack.Screen name="MainStack">
+						{() => {
+							return (
+								/**
+								 * FIXME - this catches the site = null problem when logging out
+								 * There needs to be a better way to handle this
+								 */
+								<React.Suspense fallback={<Text>logout</Text>}>
+									<MainNavigator />
+								</React.Suspense>
+							);
+						}}
+					</Stack.Screen>
 				) : (
 					<Stack.Screen
 						name="AuthStack"

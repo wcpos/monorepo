@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useWindowDimensions } from 'react-native';
 
 import { createDrawerNavigator } from '@react-navigation/drawer';
+import { useNavigation } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
@@ -43,11 +44,19 @@ const Drawer = createDrawerNavigator<DrawerParamList>();
 /**
  *
  */
-const MainNavigator = ({ navigation }) => {
+const MainNavigator = () => {
 	const { site } = useLocalData();
+	if (!site) {
+		/**
+		 * FIXME - this is a hack to avoid the app crashing when site is null
+		 * We need to find a better way to handle this
+		 */
+		throw new Promise(() => {});
+	}
 	const wpAPIURL = useObservableState(site.wp_api_url$, site.wp_api_url);
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
+	const navigation = useNavigation();
 
 	return (
 		<UISettingsProvider>
