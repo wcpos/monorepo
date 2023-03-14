@@ -7,7 +7,6 @@ import { switchMap, map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import { useReplication } from './use-replication';
 import useLocalData from '../../../../contexts/local-data';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 

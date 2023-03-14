@@ -5,6 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
 import Text from '@wcpos/components/src/text';
@@ -35,8 +36,7 @@ const RootNavigator = ({ initialProps }) => {
 	/**
 	 * store can be null, so we create an observable
 	 */
-
-	// const storeName = useObservableState(store.name$, store.name);
+	const storeName = useObservableState(store?.name$ ?? of(''), store?.name ?? '');
 
 	/**
 	 * Pathname eg: 'pos' for default web app
@@ -128,8 +128,7 @@ const RootNavigator = ({ initialProps }) => {
 					if (!store) {
 						return t('WooCommerce POS', { _tags: 'core' });
 					}
-					// return `${t('POS', { _tags: 'core' })} - ${storeName}`;
-					return t('POS', { _tags: 'core' });
+					return `${t('POS', { _tags: 'core' })} - ${storeName}`;
 				},
 			}}
 		>

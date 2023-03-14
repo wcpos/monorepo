@@ -90,6 +90,7 @@ const useCustomerReplication = () => {
 							page: checkpoint.nextPage || 1,
 							per_page: 10,
 							after: status.fullInitialSync ? status.lastModified : null,
+							role: 'all',
 						});
 						const response = await http.get(collection.name, { params });
 						const data = get(response, 'data', []);
