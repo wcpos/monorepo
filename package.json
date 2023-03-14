@@ -8,6 +8,7 @@
     "core": "yarn workspace @wcpos/core",
     "database": "yarn workspace @wcpos/database",
     "electron": "yarn workspace @wcpos/app-electron",
+    "tauri": "yarn workspace @wcpos/tauri-app",
     "expo": "expo",
     "form": "yarn workspace @wcpos/react-native-jsonschema-form",
     "hooks": "yarn workspace @wcpos/hooks",
@@ -28,10 +29,10 @@
     "uuid": "3.4.0"
   },
   "devDependencies": {
-    "@transifex/cli": "^5.0.6",
-    "@types/jest": "^29.4.0",
+    "@transifex/cli": "^5.1.1",
+    "@types/jest": "^29.4.1",
     "@wcpos/eslint-config": "*",
-    "jest": "^29.4.3",
+    "jest": "^29.5.0",
     "patch-package": "^6.5.1",
     "postinstall-postinstall": "^2.1.0",
     "prettier": "2.8.4",
