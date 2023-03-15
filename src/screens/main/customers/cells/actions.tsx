@@ -49,9 +49,7 @@ const Actions = ({ item: customer }: Props) => {
 		<>
 			<Dropdown
 				opened={menuOpened}
-				onClose={() => {
-					setMenuOpened(false);
-				}}
+				onClose={() => setMenuOpened(false)}
 				withinPortal={true}
 				placement="bottom-end"
 				items={[
@@ -72,12 +70,7 @@ const Actions = ({ item: customer }: Props) => {
 					},
 				]}
 			>
-				<Icon
-					name="ellipsisVertical"
-					onPress={() => {
-						setMenuOpened(true);
-					}}
-				/>
+				<Icon name="ellipsisVertical" onPress={() => setMenuOpened(true)} />
 			</Dropdown>
 		</>
 	);

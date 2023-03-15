@@ -202,7 +202,7 @@ const EditCustomer = () => {
 	 */
 	return (
 		<EditForm
-			data={customer.toMutableJSON()}
+			formData={customer.toMutableJSON()}
 			schema={schema}
 			uiSchema={uiSchema}
 			onChange={handleChange}

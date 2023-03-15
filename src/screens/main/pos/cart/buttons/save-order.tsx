@@ -17,7 +17,7 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 
 	return (
 		<Button
-			title={t('Save Order', { _tags: 'core' })}
+			title={t('Save to Server', { _tags: 'core' })}
 			background="outline"
 			onPress={async () => {
 				setLoading(true);

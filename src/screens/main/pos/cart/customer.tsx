@@ -2,8 +2,7 @@ import * as React from 'react';
 
 import compact from 'lodash/compact';
 import pick from 'lodash/pick';
-import { useObservableState, useObservable } from 'observable-hooks';
-import { tap, distinctUntilChanged, catchError } from 'rxjs/operators';
+import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
@@ -52,9 +51,16 @@ const Customer = ({ order }: CustomerProps) => {
 	/**
 	 *
 	 */
-	const handleSaveCustomer = React.useCallback(() => {
-		log.debug('save');
-	}, []);
+	const handleSaveCustomer = React.useCallback(
+		async (newData) => {
+			try {
+				await order.incrementalPatch(newData);
+			} catch (error) {
+				log.error(error);
+			}
+		},
+		[order]
+	);
 
 	/**
 	 *
@@ -71,6 +77,113 @@ const Customer = ({ order }: CustomerProps) => {
 	/**
 	 *
 	 */
+	/**
+	 *
+	 */
+	const uiSchema = React.useMemo(() => {
+		return {
+			'ui:title': null,
+			'ui:description': null,
+			billing: {
+				'ui:title': t('Billing Address', { _tags: 'core' }),
+				'ui:description': null,
+				'ui:collapsible': 'opened',
+				'ui:order': [
+					'first_name',
+					'last_name',
+					'company',
+					'address_1',
+					'address_2',
+					'city',
+					'postcode',
+					'state',
+					'country',
+					'email',
+					'phone',
+				],
+				first_name: {
+					'ui:label': t('First Name', { _tags: 'core' }),
+				},
+				last_name: {
+					'ui:label': t('Last Name', { _tags: 'core' }),
+				},
+				email: {
+					'ui:label': t('Email', { _tags: 'core' }),
+				},
+				address_1: {
+					'ui:label': t('Address 1', { _tags: 'core' }),
+				},
+				address_2: {
+					'ui:label': t('Address 2', { _tags: 'core' }),
+				},
+				city: {
+					'ui:label': t('City', { _tags: 'core' }),
+				},
+				state: {
+					'ui:label': t('State', { _tags: 'core' }),
+				},
+				postcode: {
+					'ui:label': t('Postcode', { _tags: 'core' }),
+				},
+				country: {
+					'ui:label': t('Country', { _tags: 'core' }),
+				},
+				company: {
+					'ui:label': t('Company', { _tags: 'core' }),
+				},
+				phone: {
+					'ui:label': t('Phone', { _tags: 'core' }),
+				},
+			},
+			shipping: {
+				'ui:title': t('Shipping Address', { _tags: 'core' }),
+				'ui:description': null,
+				'ui:collapsible': 'closed',
+				'ui:order': [
+					'first_name',
+					'last_name',
+					'company',
+					'address_1',
+					'address_2',
+					'city',
+					'postcode',
+					'state',
+					'country',
+				],
+				first_name: {
+					'ui:label': t('First Name', { _tags: 'core' }),
+				},
+				last_name: {
+					'ui:label': t('Last Name', { _tags: 'core' }),
+				},
+				address_1: {
+					'ui:label': t('Address 1', { _tags: 'core' }),
+				},
+				address_2: {
+					'ui:label': t('Address 2', { _tags: 'core' }),
+				},
+				city: {
+					'ui:label': t('City', { _tags: 'core' }),
+				},
+				state: {
+					'ui:label': t('State', { _tags: 'core' }),
+				},
+				postcode: {
+					'ui:label': t('Postcode', { _tags: 'core' }),
+				},
+				country: {
+					'ui:label': t('Country', { _tags: 'core' }),
+				},
+				company: {
+					'ui:label': t('Company', { _tags: 'core' }),
+				},
+			},
+		};
+	}, []);
+
+	/**
+	 *
+	 */
 	return (
 		<Box horizontal align="center" space="small">
 			<Text weight="bold">{t('Customer', { _tags: 'core' })}:</Text>
@@ -82,17 +195,17 @@ const Customer = ({ order }: CustomerProps) => {
 				size="large"
 				opened={editModalOpened}
 				onClose={() => setEditModalOpened(false)}
-				title={t('Edit Customer Addresses', { _tags: 'core' })}
-				primaryAction={{ label: t('Edit Customer', { _tags: 'core' }), action: handleSaveCustomer }}
-				secondaryActions={[
-					{ label: t('Cancel', { _tags: 'core' }), action: () => setEditModalOpened(false) },
-				]}
+				title={t('Edit Customer Address', { _tags: 'core' })}
+				// primaryAction={{ label: t('Edit Customer', { _tags: 'core' }), action: handleSaveCustomer }}
+				// secondaryActions={[
+				// 	{ label: t('Cancel', { _tags: 'core' }), action: () => setEditModalOpened(false) },
+				// ]}
 			>
 				<EditForm
-					// formData={{ billing: order.billing, shipping: order.shipping }}
-					item={order}
+					formData={pick(order.toMutableJSON(), ['billing', 'shipping'])}
 					schema={schema}
-					uiSchema={{}}
+					uiSchema={uiSchema}
+					onChange={handleSaveCustomer}
 				/>
 			</Modal>
 		</Box>

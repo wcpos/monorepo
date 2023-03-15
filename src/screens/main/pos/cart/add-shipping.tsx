@@ -11,6 +11,7 @@ import Modal from '@wcpos/components/src/modal';
 import Select from '@wcpos/components/src/select';
 import Text from '@wcpos/components/src/text';
 import { TextInputWithLabel } from '@wcpos/components/src/textinput';
+import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
@@ -55,38 +56,82 @@ const ShippingSelect = ({ shippingResource, selectedMethod, onSelect }) => {
  */
 const AddShipping = ({ order }: AddShippingProps) => {
 	const [opened, setOpened] = React.useState(false);
-	const shippingAmountRef = React.useRef<TextInput>(null);
 	const { addShipping } = useCurrentOrder();
-	const [shippingMethod, setShippingMethod] = React.useState('local_pickup');
-	const { storeDB } = useLocalData();
+	const [data, setData] = React.useState({
+		method_title: 'Shipping',
+		method_id: 'local_pickup',
+		total: '',
+	});
 
 	/**
 	 * Create observable shipping resource
 	 */
-	const shippingResource = React.useMemo(() => {
-		return new ObservableResource(
-			storeDB?.getLocal$('shipping').pipe(
-				map((localDoc) => {
-					const methods = localDoc?.get('methods') || [];
-					return methods.map((method) => ({
-						label: method.title,
-						value: method.id,
-					}));
-				})
-			)
-		);
-	}, [storeDB]);
+	// const shippingResource = React.useMemo(() => {
+	// 	return new ObservableResource(
+	// 		storeDB?.getLocal$('shipping').pipe(
+	// 			map((localDoc) => {
+	// 				const methods = localDoc?.get('methods') || [];
+	// 				return methods.map((method) => ({
+	// 					label: method.title,
+	// 					value: method.id,
+	// 				}));
+	// 			})
+	// 		)
+	// 	);
+	// }, [storeDB]);
+
+	/**
+	 *
+	 */
+	const handleChange = React.useCallback(
+		(newData) => {
+			setData((prev) => ({ ...prev, ...newData }));
+		},
+		[setData]
+	);
 
 	const handleAddShipping = () => {
-		const total = shippingAmountRef.current?.value;
-		addShipping({
-			method_title: 'Shipping',
-			method_id: shippingMethod,
-			total,
-		});
-		setOpened(false);
+		try {
+			const { method_title, method_id, total } = data;
+			addShipping({
+				method_title,
+				method_id,
+				total,
+			});
+			setOpened(false);
+		} catch (error) {
+			log.error(error);
+		}
 	};
 
+	/**
+	 *
+	 */
+	const schema = React.useMemo(
+		() => ({
+			type: 'object',
+			properties: {
+				method_title: { type: 'string', title: t('Shipping Method Title', { _tags: 'core' }) },
+				method_id: { type: 'string', title: t('Total', { _tags: 'core' }) },
+				total: { type: 'string', title: t('Total', { _tags: 'core' }) },
+			},
+		}),
+		[]
+	);
+
+	/**
+	 *
+	 */
+	const uiSchema = React.useMemo(
+		() => ({
+			total: { 'ui:options': { prefix: order.currency_symbol } },
+		}),
+		[order.currency_symbol]
+	);
+
+	/**
+	 *
+	 */
 	return (
 		<>
 			<Box horizontal space="small" padding="small" align="center">
@@ -110,17 +155,7 @@ const AddShipping = ({ order }: AddShippingProps) => {
 				]}
 			>
 				<Box space="small">
-					<ShippingSelect
-						shippingResource={shippingResource}
-						selectedMethod={shippingMethod}
-						onSelect={setShippingMethod}
-					/>
-					<TextInputWithLabel
-						ref={shippingAmountRef}
-						label={t('Amount', { _tags: 'core' })}
-						prefix={order.currency_symbol}
-					/>
-					{/* <Checkbox value={true} label={t('Taxable')} /> */}
+					<Form formData={data} schema={schema} uiSchema={uiSchema} onChange={handleChange} />
 				</Box>
 			</Modal>
 		</>

@@ -44,7 +44,16 @@ const ProductsNavigator = () => {
 							initialQuery={{ selector: { uuid: productID }, limit: 1 }}
 							uiSettings={uiSettings}
 						>
-							<ModalLayout title={t('Edit', { _tags: 'core' })}>
+							<ModalLayout
+								title={t('Edit', { _tags: 'core' })}
+								primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
+								secondaryActions={[
+									{
+										label: t('Cancel', { _tags: 'core' }),
+										action: () => navigation.dispatch(StackActions.pop(1)),
+									},
+								]}
+							>
 								<React.Suspense fallback={<Text>Loading product</Text>}>
 									<EditProduct />
 								</React.Suspense>

@@ -1,12 +1,11 @@
 import * as React from 'react';
-import { TextInput } from 'react-native';
 
 import Box from '@wcpos/components/src/box';
-import Checkbox from '@wcpos/components/src/checkbox';
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
-import { TextInputWithLabel } from '@wcpos/components/src/textinput';
+import Form from '@wcpos/react-native-jsonschema-form';
+import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
 import useCurrentOrder from '../contexts/current-order';
@@ -17,22 +16,75 @@ interface AddFeeProps {
 	order: OrderDocument;
 }
 
+/**
+ * TODO: tax_status = taxable by default, perhaps put this as setting?
+ */
 const AddFee = ({ order }: AddFeeProps) => {
 	const [opened, setOpened] = React.useState(false);
-	const feeNameRef = React.useRef<TextInput>(null);
-	const feeTotalRef = React.useRef<TextInput>(null);
 	const { addFee } = useCurrentOrder();
+	const [data, setData] = React.useState({
+		name: '',
+		total: '',
+		taxable: true,
+	});
 
+	/**
+	 *
+	 */
+	const handleChange = React.useCallback(
+		(newData) => {
+			setData((prev) => ({ ...prev, ...newData }));
+		},
+		[setData]
+	);
+
+	/**
+	 *
+	 */
 	const handleAddFee = React.useCallback(() => {
-		const name = feeNameRef.current?.value;
-		const total = feeTotalRef.current?.value;
-		addFee({
-			name,
-			total,
-		});
-		setOpened(false);
-	}, [addFee]);
+		try {
+			const { name, total, taxable } = data;
+			addFee({
+				name,
+				total,
+				tax_status: taxable ? 'taxable' : 'none',
+			});
+			setOpened(false);
+		} catch (error) {
+			log.error(error);
+		}
+	}, [addFee, data]);
 
+	/**
+	 *
+	 */
+	const schema = React.useMemo(
+		() => ({
+			type: 'object',
+			properties: {
+				name: { type: 'string', title: t('Fee Name', { _tags: 'core' }) },
+				total: { type: 'string', title: t('Total', { _tags: 'core' }) },
+				taxable: { type: 'boolean', title: t('Taxable', { _tags: 'core' }) },
+			},
+		}),
+		[]
+	);
+
+	/**
+	 *
+	 */
+	const uiSchema = React.useMemo(
+		() => ({
+			total: {
+				'ui:options': { prefix: order.currency_symbol },
+			},
+		}),
+		[order.currency_symbol]
+	);
+
+	/**
+	 *
+	 */
 	return (
 		<>
 			<Box horizontal space="small" padding="small" align="center">
@@ -56,13 +108,7 @@ const AddFee = ({ order }: AddFeeProps) => {
 				]}
 			>
 				<Box space="small">
-					<TextInputWithLabel ref={feeNameRef} label={t('Fee Name', { _tags: 'core' })} />
-					<TextInputWithLabel
-						ref={feeTotalRef}
-						label={t('Amount', { _tags: 'core' })}
-						prefix={order.currency_symbol}
-					/>
-					{/* <Checkbox value={true} label={t('Taxable')} /> */}
+					<Form formData={data} schema={schema} uiSchema={uiSchema} onChange={handleChange} />
 				</Box>
 			</Modal>
 		</>

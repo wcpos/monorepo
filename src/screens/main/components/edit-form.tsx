@@ -6,7 +6,7 @@ import Tree from '@wcpos/components/src/tree';
 import Form from '@wcpos/react-native-jsonschema-form';
 
 export interface EditModalProps {
-	data: Record<string, any>;
+	formData: Record<string, any>;
 	schema: import('json-schema').JSONSchema7;
 	uiSchema: Record<string, any>;
 	onChange: (data: Record<string, any>) => void;
@@ -15,8 +15,8 @@ export interface EditModalProps {
 /**
  *
  */
-const EditForm = ({ data, schema, uiSchema, onChange }: EditModalProps) => {
-	const [formData, setFormData] = React.useState(data);
+const EditForm = ({ schema, uiSchema, onChange, ...props }: EditModalProps) => {
+	const [formData, setFormData] = React.useState(props.formData);
 	const [index, setIndex] = React.useState(0);
 
 	/**
@@ -48,12 +48,12 @@ const EditForm = ({ data, schema, uiSchema, onChange }: EditModalProps) => {
 						</Box>
 					);
 				case 'json':
-					return <Tree data={data} />;
+					return <Tree data={formData} />;
 				default:
 					return null;
 			}
 		},
-		[data, formData, handleChange, schema, uiSchema]
+		[formData, handleChange, schema, uiSchema]
 	);
 
 	/**

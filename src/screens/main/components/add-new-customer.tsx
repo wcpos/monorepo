@@ -14,6 +14,7 @@ import Tree from '@wcpos/components/src/tree';
 import Form from '@wcpos/react-native-jsonschema-form';
 
 import useLocalData from '../../../contexts/local-data';
+import { t } from '../../../lib/translations';
 import useRestHttpClient from '../hooks/use-rest-http-client';
 
 /**
@@ -113,6 +114,126 @@ const AddNewCustomer = () => {
 		return _schema;
 	}, [countries, customerCollection.schema.jsonSchema, customerData]);
 
+	/**
+	 *
+	 */
+	const uiSchema = React.useMemo(() => {
+		return {
+			first_name: {
+				'ui:label': t('First Name', { _tags: 'core' }),
+			},
+			last_name: {
+				'ui:label': t('Last Name', { _tags: 'core' }),
+			},
+			email: {
+				'ui:label': t('Email', { _tags: 'core' }),
+			},
+			role: {
+				'ui:label': t('Role', { _tags: 'core' }),
+			},
+			username: {
+				'ui:label': t('Username', { _tags: 'core' }),
+			},
+			password: {
+				'ui:label': t('Password', { _tags: 'core' }),
+			},
+			billing: {
+				'ui:title': t('Billing Address', { _tags: 'core' }),
+				'ui:description': null,
+				'ui:collapsible': 'closed',
+				'ui:order': [
+					'first_name',
+					'last_name',
+					'company',
+					'address_1',
+					'address_2',
+					'city',
+					'postcode',
+					'state',
+					'country',
+					'email',
+					'phone',
+				],
+				first_name: {
+					'ui:label': t('First Name', { _tags: 'core' }),
+				},
+				last_name: {
+					'ui:label': t('Last Name', { _tags: 'core' }),
+				},
+				email: {
+					'ui:label': t('Email', { _tags: 'core' }),
+				},
+				address_1: {
+					'ui:label': t('Address 1', { _tags: 'core' }),
+				},
+				address_2: {
+					'ui:label': t('Address 2', { _tags: 'core' }),
+				},
+				city: {
+					'ui:label': t('City', { _tags: 'core' }),
+				},
+				state: {
+					'ui:label': t('State', { _tags: 'core' }),
+				},
+				postcode: {
+					'ui:label': t('Postcode', { _tags: 'core' }),
+				},
+				country: {
+					'ui:label': t('Country', { _tags: 'core' }),
+				},
+				company: {
+					'ui:label': t('Company', { _tags: 'core' }),
+				},
+				phone: {
+					'ui:label': t('Phone', { _tags: 'core' }),
+				},
+			},
+			shipping: {
+				'ui:title': t('Shipping Address', { _tags: 'core' }),
+				'ui:description': null,
+				'ui:collapsible': 'closed',
+				'ui:order': [
+					'first_name',
+					'last_name',
+					'company',
+					'address_1',
+					'address_2',
+					'city',
+					'postcode',
+					'state',
+					'country',
+				],
+				first_name: {
+					'ui:label': t('First Name', { _tags: 'core' }),
+				},
+				last_name: {
+					'ui:label': t('Last Name', { _tags: 'core' }),
+				},
+				address_1: {
+					'ui:label': t('Address 1', { _tags: 'core' }),
+				},
+				address_2: {
+					'ui:label': t('Address 2', { _tags: 'core' }),
+				},
+				city: {
+					'ui:label': t('City', { _tags: 'core' }),
+				},
+				state: {
+					'ui:label': t('State', { _tags: 'core' }),
+				},
+				postcode: {
+					'ui:label': t('Postcode', { _tags: 'core' }),
+				},
+				country: {
+					'ui:label': t('Country', { _tags: 'core' }),
+				},
+				company: {
+					'ui:label': t('Company', { _tags: 'core' }),
+				},
+			},
+		};
+	}, []);
+
 	const renderScene = ({ route }) => {
 		switch (route.key) {
 			case 'form':
@@ -122,12 +243,7 @@ const AddNewCustomer = () => {
 						formData={customerData}
 						onChange={handleChange}
 						extraErrors={extraErrors}
-						uiSchema={{
-							id: { 'ui:readonly': true },
-							billing: { 'ui:collapsible': 'closed', 'ui:title': 'Billing Address' },
-							shipping: { 'ui:collapsible': 'closed', 'ui:title': 'Shipping Address' },
-							meta_data: { 'ui:collapsible': 'closed', 'ui:title': 'Meta Data' },
-						}}
+						uiSchema={uiSchema}
 					/>
 				);
 			case 'json':
@@ -144,14 +260,7 @@ const AddNewCustomer = () => {
 
 	return (
 		<>
-			<Icon
-				size="medium"
-				name="userPlus"
-				onPress={() => {
-					setOpened(true);
-				}}
-				tooltip="Add new customer"
-			/>
+			<Icon name="userPlus" onPress={() => setOpened(true)} tooltip="Add new customer" />
 
 			<Modal
 				size="large"

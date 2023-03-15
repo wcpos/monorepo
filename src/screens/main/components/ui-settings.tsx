@@ -79,7 +79,6 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 	return (
 		<>
 			<Icon
-				size="medium"
 				name="sliders"
 				onPress={() => {
 					setOpened(true);

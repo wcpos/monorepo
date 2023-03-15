@@ -65,4 +65,8 @@ export default class NewOrder {
 			currency_symbol,
 		};
 	}
+
+	toMutableJSON() {
+		return this.toJSON();
+	}
 }

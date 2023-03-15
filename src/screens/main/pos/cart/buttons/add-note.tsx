@@ -33,25 +33,19 @@ const AddNoteButton = ({ order }: AddNoteButtonProps) => {
 			<Button
 				title={t('Order Note', { _tags: 'core' })}
 				background="outline"
-				onPress={() => {
-					setOpened(true);
-				}}
+				onPress={() => setOpened(true)}
 				style={{ flex: 1 }}
 			/>
 
 			<Modal
 				opened={opened}
-				onClose={() => {
-					setOpened(false);
-				}}
+				onClose={() => setOpened(false)}
 				title={t('Order Note', { _tags: 'core' })}
 				primaryAction={{ label: t('Add Note', { _tags: 'core' }), action: handleSaveNote }}
 				secondaryActions={[
 					{
 						label: t('Cancel', { _tags: 'core' }),
-						action: () => {
-							setOpened(false);
-						},
+						action: () => setOpened(false),
 					},
 				]}
 			>

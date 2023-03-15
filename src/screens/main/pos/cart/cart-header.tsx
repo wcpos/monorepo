@@ -71,7 +71,7 @@ const CartHeader = ({ order }: CartHeaderProps) => {
 				backgroundColor: theme.colors.grey,
 				borderTopLeftRadius: theme.rounding.medium,
 				borderTopRightRadius: theme.rounding.medium,
-				height: 48,
+				height: 50,
 				zIndex: 1, // this makes sure the customer select is on top of the cart
 			}}
 		>

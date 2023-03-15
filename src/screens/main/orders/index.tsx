@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useNavigation, StackActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
 
@@ -25,6 +26,8 @@ const Stack = createStackNavigator<OrdersStackParamList>();
  *
  */
 const OrdersNavigator = () => {
+	const navigation = useNavigation();
+
 	return (
 		<Stack.Navigator screenOptions={{ headerShown: false }}>
 			<Stack.Screen name="Orders">
@@ -42,7 +45,16 @@ const OrdersNavigator = () => {
 						const orderID = get(route, ['params', 'orderID']);
 						return (
 							<OrdersProvider initialQuery={{ selector: { uuid: orderID }, limit: 1 }}>
-								<ModalLayout title={t('Edit Order', { _tags: 'core' })}>
+								<ModalLayout
+									title={t('Edit Order', { _tags: 'core' })}
+									primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
+									secondaryActions={[
+										{
+											label: t('Cancel', { _tags: 'core' }),
+											action: () => navigation.dispatch(StackActions.pop(1)),
+										},
+									]}
+								>
 									<React.Suspense fallback={<Text>Loading order</Text>}>
 										<EditOrder />
 									</React.Suspense>

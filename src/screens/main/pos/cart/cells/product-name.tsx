@@ -1,14 +1,12 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
-import pick from 'lodash/pick';
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import { EditButton } from './edit-button';
-import { t } from '../../../../../lib/translations';
+import EditLineItemButton from './edit-line-item';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
 interface Props {
@@ -43,39 +41,6 @@ export const ProductName = ({ item, column }: Props) => {
 	});
 
 	/**
-	 *  filter schema for edit form
-	 */
-	const schema = React.useMemo(() => {
-		return {
-			...item.collection.schema.jsonSchema,
-			properties: pick(item.collection.schema.jsonSchema.properties, [
-				'name',
-				'sku',
-				'price',
-				'quantity',
-				'tax_class',
-				'subtotal',
-				'subtotal_tax',
-				'total',
-				'total_tax',
-				'taxes',
-				'meta_data',
-			]),
-		};
-	}, [item.collection.schema.jsonSchema]);
-
-	/**
-	 *  uiSchema
-	 */
-	const uiSchema = React.useMemo(
-		() => ({
-			taxes: { 'ui:collapsible': 'closed', 'ui:title': t('Taxes', { _tags: 'core' }) },
-			meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data', { _tags: 'core' }) },
-		}),
-		[]
-	);
-
-	/**
 	 *
 	 */
 	return (
@@ -94,7 +59,7 @@ export const ProductName = ({ item, column }: Props) => {
 				})}
 			</Box>
 			<Box distribution="center">
-				<EditButton schema={schema} uiSchema={uiSchema} item={item} />
+				<EditLineItemButton item={item} />
 			</Box>
 		</Box>
 	);

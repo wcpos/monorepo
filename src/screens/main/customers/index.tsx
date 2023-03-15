@@ -41,7 +41,16 @@ const CustomersNavigator = () => {
 			</Stack.Screen>
 			<Stack.Screen name="AddCustomer" options={{ presentation: 'transparentModal' }}>
 				{() => (
-					<ModalLayout title={t('Add Customer', { _tags: 'core' })}>
+					<ModalLayout
+						title={t('Add Customer', { _tags: 'core' })}
+						primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
+						secondaryActions={[
+							{
+								label: t('Cancel', { _tags: 'core' }),
+								action: () => navigation.dispatch(StackActions.pop(1)),
+							},
+						]}
+					>
 						<AddCustomer />
 					</ModalLayout>
 				)}
@@ -53,7 +62,7 @@ const CustomersNavigator = () => {
 						<CustomersProvider initialQuery={{ selector: { uuid: customerID }, limit: 1 }}>
 							<ModalLayout
 								title={t('Edit Customer', { _tags: 'core' })}
-								primaryAction={{ label: t('Sync to Server', { _tags: 'core' }) }}
+								primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
 								secondaryActions={[
 									{
 										label: t('Cancel', { _tags: 'core' }),

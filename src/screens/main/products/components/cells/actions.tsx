@@ -39,23 +39,6 @@ const Actions = ({ item: product }: Props) => {
 	/**
 	 *
 	 */
-	const schema = React.useMemo(() => {
-		return {
-			...product.collection.schema.jsonSchema,
-			properties: pick(product.collection.schema.jsonSchema.properties, [
-				'name',
-				'sku',
-				'stock_quantity',
-				'manage_stock',
-				'tax_status',
-				'tax_class',
-			]),
-		};
-	}, [product.collection.schema.jsonSchema]);
-
-	/**
-	 *
-	 */
 	return (
 		<>
 			<Dropdown
