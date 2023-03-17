@@ -8,7 +8,18 @@ import map from 'lodash/map';
 import pickBy from 'lodash/pickBy';
 import uniq from 'lodash/uniq';
 import { isRxCollection, RxPlugin, RxCollection, RxDocument } from 'rxdb';
-import { switchMap, tap, distinctUntilChanged } from 'rxjs/operators';
+import { combineLatest, forkJoin } from 'rxjs';
+import {
+	switchMap,
+	tap,
+	distinctUntilChanged,
+	map as rxMap,
+	filter,
+	mergeMap,
+	pluck,
+	toArray,
+	startWith,
+} from 'rxjs/operators';
 
 /**
  * Get children props from the schema
@@ -130,20 +141,39 @@ const populatePlugin: RxPlugin = {
 			proto.removeRefs = removeRefs;
 		},
 		RxDocument: (proto: any) => {
-			/** */
+			/**
+			 * This custom populate$ will emit every time the ids array changes, AND
+			 * when the child docuent is deleted/restored.
+			 * Deleted documents are filtered out of the end result, but we watch all deleted$ 👀
+			 */
 			proto.populate$ = function (this: RxDocument, key: string) {
 				const refCollection = getRefCollection(this.collection, key);
 				return this.get$(key).pipe(
 					distinctUntilChanged(isEqual),
-					switchMap((ids: string[]) =>
-						refCollection
-							.findByIds(ids)
-							.exec()
-							.then((res) => {
-								const valuesIterator = res.values();
-								return Array.from(valuesIterator) as any;
+					switchMap((ids: string[]) => {
+						return refCollection.storageInstance
+							.findDocumentsById(ids, true)
+							.then((newResultData) => {
+								const docs = Object.values(newResultData).map((docData) =>
+									refCollection._docCache.getCachedRxDocument(docData)
+								);
+								return docs;
+							});
+					}),
+					switchMap((docs: any[]) => {
+						// Map each lineItem to an observable of its deleted$ property
+						const deletedObservables = docs.map((doc) => doc.deleted$);
+
+						// Combine the observables into a single observable emitting an array of deleted statuses
+						return combineLatest(deletedObservables).pipe(
+							startWith(docs.map((doc) => doc.deleted)),
+							distinctUntilChanged(isEqual),
+							rxMap((deletedArray) => {
+								// Filter lineItems based on the deletedArray
+								return docs.filter((_, index) => !deletedArray[index]);
 							})
-					)
+						);
+					})
 				);
 			};
 

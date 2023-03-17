@@ -26,6 +26,10 @@ export interface WooCommerceProductTagSchema {
    */
   slug?: string;
   /**
+   * HTML description of the resource.
+   */
+  description?: string;
+  /**
    * Number of published products for the resource.
    */
   count?: number;
