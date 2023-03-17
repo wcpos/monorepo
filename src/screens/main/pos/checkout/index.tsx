@@ -14,9 +14,9 @@ import useOrders from '../../contexts/orders';
  *
  */
 const Checkout = () => {
-	const {
-		data: [order],
-	} = useOrders();
+	const { data } = useOrders();
+	const order = data.length === 1 && data[0];
+
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));
 	}

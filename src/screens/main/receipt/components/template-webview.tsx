@@ -19,15 +19,19 @@ export const ReceiptTemplate = ({ order }) => {
 		get(order, ['links', 'receipt', 0, 'href'])
 	);
 
-	const handlePrint = useReactToPrint({
-		content: () => iframeRef.current,
-		pageStyle: 'html, body { height: 100%; width: 100%; }',
-	});
+	// const handlePrint = useReactToPrint({
+	// 	content: () => iframeRef.current,
+	// 	pageStyle: 'html, body { height: 100%; width: 100%; }',
+	// });
 
 	/**
 	 *
 	 */
-	onPrimaryAction(handlePrint);
+	onPrimaryAction(() => {
+		if (iframeRef.current && iframeRef.current.contentWindow) {
+			iframeRef.current.contentWindow.postMessage({ action: 'wcpos-print-receipt' }, '*');
+		}
+	});
 
 	return (
 		<ErrorBoundary>

@@ -36,14 +36,14 @@ export const ReceiptModal = () => {
 	 */
 	const sendEmail = React.useCallback(async () => {
 		try {
-			const { success } = await http.post(`/orders/${id}/email`, {
+			const { data } = await http.post(`/orders/${id}/email`, {
 				data: {
 					email: emailFieldRef.current.value,
 					save_to: saveCheckboxRef.current.value ? 'billing' : '',
 				},
 			});
-			if (success) {
-				// refresh order because it might have email added to it
+			if (data && data.success) {
+				setShowEmailModal(false);
 			}
 		} catch (error) {
 			console.log(error);
