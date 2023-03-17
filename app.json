@@ -19,9 +19,7 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "bundleIdentifier": "com.wcpos.client.managed",
       "buildNumber": "1.0.0.1",
@@ -43,20 +41,17 @@
       "favicon": "./assets/square-icon-512x512.png",
       "backgroundColor": "#F0F4F8"
     },
-    "plugins": [
-      "sentry-expo"
-    ],
+    "plugins": ["sentry-expo"],
     "hooks": {
       "postPublish": [
         {
           "file": "sentry-expo/upload-sourcemaps",
           "config": {
             "organization": "wcpos",
-            "project": "woocommerce-pos",
-            "authToken": "8bc79357b8af4bf88549574408df55deafbcf10642444795b2308e1d6471d6c5"
+            "project": "woocommerce-pos"
           }
         }
-      ],
+      ]
     },
     "extra": {
       "eas": {
