@@ -1,7 +1,10 @@
 import * as React from 'react';
 
+import { isRxDocument } from 'rxdb';
+
 import Button from '@wcpos/components/src/button';
 import { useSnackbar } from '@wcpos/components/src/snackbar/use-snackbar';
+import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../../lib/translations';
 import usePushDocument from '../../../contexts/use-push-document';
@@ -23,9 +26,14 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 				setLoading(true);
 				await pushDocument(order)
 					.then((savedDoc) => {
-						addSnackbar({
-							message: t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
-						});
+						/**
+						 * TODO; move this geenric sanckbar to the pushDocument hook
+						 */
+						if (isRxDocument(savedDoc)) {
+							addSnackbar({
+								message: t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
+							});
+						}
 					})
 					.finally(() => setLoading(false));
 			}}

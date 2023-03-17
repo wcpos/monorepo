@@ -1,13 +1,18 @@
 import * as React from 'react';
 
+import isEmpty from 'lodash/isEmpty';
+
+import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
+import { t } from '../../../lib/translations';
 import useRestHttpClient from '../hooks/use-rest-http-client';
 
 type RxDocument = import('rxdb').RxDocument;
 
 const usePushDocument = () => {
 	const http = useRestHttpClient();
+	const addSnackbar = useSnackbar();
 
 	/**
 	 * TODO - I'm confused about when to use incrementalPatch v patch
@@ -24,9 +29,25 @@ const usePushDocument = () => {
 				endpoint += `/${latestDoc.id}`;
 			}
 			try {
+				/**
+				 * FIXME: this is a hack to customise the data sent to the server for orders
+				 * It's not ideal, but it works for now
+				 */
+				const populatedData =
+					latestDoc.collection.name === 'orders'
+						? await latestDoc.toPopulatedOrderJSON()
+						: await latestDoc.toPopulatedJSON();
+
 				const { data } = await http.post(endpoint, {
-					data: await latestDoc.toPopulatedJSON(),
+					data: populatedData,
 				});
+				/**
+				 * It's possible for the WC REST API server to retrun a 200 response but with data = ""
+				 * Do a check here to see if the data is empty and if so, throw an error
+				 */
+				if (isEmpty(data)) {
+					throw new Error('Empty response from server');
+				}
 				//
 				const parsedData = latestDoc.collection.parseRestResponse(data);
 				await collection.upsertRefs(parsedData);
@@ -34,9 +55,13 @@ const usePushDocument = () => {
 				// return latestDoc.patch(parsedData);
 			} catch (err) {
 				log.error(err);
+				addSnackbar({
+					message: t('There was an error: {error}', { _tags: 'core', error: err.message }),
+					type: 'critical',
+				});
 			}
 		},
-		[http]
+		[addSnackbar, http]
 	);
 };
 

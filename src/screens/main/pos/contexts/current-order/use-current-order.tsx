@@ -117,7 +117,7 @@ export const useCurrentOrder = () => {
 	);
 
 	/**
-	 *
+	 * TODO - remove this, children uuids need to stay on the parent until sync is completed
 	 */
 	const removeItem = React.useCallback(
 		async (item) => {

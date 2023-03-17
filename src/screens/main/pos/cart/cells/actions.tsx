@@ -33,7 +33,8 @@ export const Actions = ({ item }: ActionProps) => {
 	 */
 	const handleRemove = React.useCallback(async () => {
 		const name = item.name || item.method_title;
-		await removeItem(item);
+		await item.incrementalRemove();
+		// await removeItem(item);
 
 		// await currentOrder?.removeCartLine(item);
 
@@ -42,7 +43,7 @@ export const Actions = ({ item }: ActionProps) => {
 			dismissable: true,
 			action: { label: t('Undo', { _tags: 'core' }), action: undoRemove },
 		});
-	}, [addSnackbar, item, removeItem, undoRemove]);
+	}, [addSnackbar, item, undoRemove]);
 
 	/**
 	 *
