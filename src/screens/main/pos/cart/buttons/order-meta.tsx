@@ -76,6 +76,7 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 			...order.collection.schema.jsonSchema,
 			properties: pick(order.collection.schema.jsonSchema.properties, [
 				'number',
+				'status',
 				'discount_total',
 				'discount_tax',
 				'shipping_total',
@@ -107,6 +108,9 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 		() => ({
 			number: {
 				'ui:label': t('Order Number', { _tags: 'core' }),
+			},
+			status: {
+				'ui:label': t('Status', { _tags: 'core' }),
 			},
 			discount_total: {
 				'ui:label': t('Discount Total', { _tags: 'core' }),

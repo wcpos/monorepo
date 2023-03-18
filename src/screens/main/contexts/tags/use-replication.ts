@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import uniq from 'lodash/uniq';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 
 import log from '@wcpos/utils/src/logger';
@@ -8,60 +9,11 @@ import useLocalData from '../../../../contexts/local-data';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 /**
- * Hack, I want the replication to wait before looping to allow counts to be updated
- */
-function wait(milliseconds: number) {
-	return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-/**
  *
  */
 export const useReplication = ({ collection }) => {
 	const http = useRestHttpClient();
 	const { site } = useLocalData();
-
-	/**
-	 *
-	 */
-	const pushDocument = React.useCallback(
-		async (doc) => {
-			let endpoint = collection.name;
-			if (doc.id) {
-				endpoint += `/${doc.id}`;
-			}
-			try {
-				const { data } = await http.post(endpoint, {
-					data: await doc.toPopulatedJSON(),
-				});
-				//
-				const parsedData = doc.collection.parseRestResponse(data);
-				await collection.upsertRefs(parsedData);
-				const latestDoc = doc.getLatest();
-				await latestDoc.update(parsedData);
-			} catch (err) {
-				log.error(err);
-			}
-		},
-		[collection, http]
-	);
-
-	/**
-	 *
-	 */
-	const pullDocument = React.useCallback(
-		async (id) => {
-			let endpoint = collection.name;
-			try {
-				const { data } = await http.get((endpoint += `/${id}`));
-				const parsedData = collection.parseRestResponse(data);
-				await collection.upsert(parsedData);
-			} catch (err) {
-				log.error(err);
-			}
-		},
-		[collection, http]
-	);
 
 	/**
 	 *
@@ -77,17 +29,26 @@ export const useReplication = ({ collection }) => {
 			// retryTime: 1000000000,
 			pull: {
 				async handler(lastCheckpoint, batchSize) {
+					const status = await collection
+						.getLocal('status')
+						.then((doc) => doc?.toJSON().data || {});
+
+					/**
+					 * Tags has a page count, but not a modified date, so we will exclude existing ids instead
+					 */
 					const params = {
-						// order: 'desc',
-						// orderby: 'date',
+						exclude: (status.ids || []).join(','),
 					};
+
 					const { data } = await http.get(collection.name, { params });
 
-					if (lastCheckpoint) {
-						return {
-							documents: [],
-						};
-					}
+					/**
+					 * Set next checkpoint, using my own custom checkpoint
+					 */
+					const newIds = data.map((item) => item.id);
+					await collection.upsertLocal('status', {
+						ids: uniq([...(status.ids || []), ...newIds]),
+					});
 
 					return {
 						documents: data,
@@ -106,5 +67,5 @@ export const useReplication = ({ collection }) => {
 		return state;
 	}, [collection, http, site.wc_api_url]);
 
-	return { replicationState, pushDocument, pullDocument };
+	return { replicationState };
 };

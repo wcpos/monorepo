@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import defaults from 'lodash/defaults';
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
@@ -28,7 +29,7 @@ interface CartHeaderProps {
 const CartHeader = ({ order }: CartHeaderProps) => {
 	const { uiSettings } = useUI('pos.cart');
 	const theme = useTheme();
-	const { storeDB } = useLocalData();
+	// const { storeDB } = useLocalData();
 	const customerID = useObservableState(order.customer_id$, order.customer_id);
 	const { addCustomer } = useCurrentOrder();
 
@@ -42,7 +43,7 @@ const CartHeader = ({ order }: CartHeaderProps) => {
 				return addCustomer({ customer_id: 0, billing: {}, shipping: {} });
 			}
 
-			const customerJSON = selectedCustomer.toJSON();
+			const customerJSON = selectedCustomer.toMutableJSON();
 			return addCustomer({
 				customer_id: customerJSON.id,
 				billing: {

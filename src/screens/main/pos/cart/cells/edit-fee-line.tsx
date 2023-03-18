@@ -19,6 +19,7 @@ interface EditFeelLineProps {
  */
 const EditButton = ({ item }: EditFeelLineProps) => {
 	const [opened, setOpened] = React.useState(false);
+	const formData = item.getLatest().toMutableJSON();
 
 	/**
 	 * Handle change in form data
@@ -96,25 +97,16 @@ const EditButton = ({ item }: EditFeelLineProps) => {
 		<>
 			<Icon
 				name="ellipsisVertical"
-				onPress={() => {
-					setOpened(true);
-				}}
+				onPress={() => setOpened(true)}
 				tooltip={t('Edit', { _tags: 'core' })}
 			/>
 			<Modal
 				title={t('Edit {name}', { _tags: 'core', name: item.name })}
 				size="large"
 				opened={opened}
-				onClose={() => {
-					setOpened(false);
-				}}
+				onClose={() => setOpened(false)}
 			>
-				<EditForm
-					formData={item.toMutableJSON()}
-					schema={schema}
-					uiSchema={uiSchema}
-					onChange={handleChange}
-				/>
+				<EditForm formData={formData} schema={schema} uiSchema={uiSchema} onChange={handleChange} />
 			</Modal>
 		</>
 	);

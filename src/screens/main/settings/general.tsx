@@ -9,8 +9,6 @@ import Form from '@wcpos/react-native-jsonschema-form';
 
 import useLocalData from '../../../contexts/local-data';
 
-const uiSchema = {};
-
 export const GeneralSettings = () => {
 	const { store } = useLocalData();
 	const formData = store.toJSON();
@@ -44,6 +42,17 @@ export const GeneralSettings = () => {
 
 		return _schema;
 	}, [store?.collection.schema.jsonSchema]);
+
+	/**
+	 *
+	 */
+	const uiSchema = React.useMemo(
+		() => ({
+			'ui:title': null,
+			'ui:description': null,
+		}),
+		[]
+	);
 
 	/**
 	 *

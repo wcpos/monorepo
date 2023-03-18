@@ -6,8 +6,6 @@ import Form from '@wcpos/react-native-jsonschema-form';
 
 import useLocalData from '../../../contexts/local-data';
 
-const uiSchema = {};
-
 export const TaxSettings = () => {
 	const { store } = useLocalData();
 
@@ -29,6 +27,17 @@ export const TaxSettings = () => {
 
 		return _schema;
 	}, [store?.collection.schema.jsonSchema]);
+
+	/**
+	 *
+	 */
+	const uiSchema = React.useMemo(
+		() => ({
+			'ui:title': null,
+			'ui:description': null,
+		}),
+		[]
+	);
 
 	/**
 	 *

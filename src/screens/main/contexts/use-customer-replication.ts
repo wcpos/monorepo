@@ -121,9 +121,13 @@ const useCustomerReplication = () => {
 						 * Set flag on initial full sync
 						 */
 						if (emptyRestQuery && !nextPage) {
+							// NOTE: make sure lastModified is set, otherwise it will loop forever
+							const lastModified =
+								mostRecent.date_modified_gmt || new Date(Date.now()).toISOString().split('.')[0];
+
 							await collection.upsertLocal('status', {
 								fullInitialSync: true,
-								lastModified: mostRecent.date_modified_gmt,
+								lastModified,
 							});
 						}
 

@@ -16,7 +16,7 @@ import { userDBPromise } from '@wcpos/database/src/users-db';
 import log from '@wcpos/utils/src/logger';
 
 import { tx } from '../../lib/translations';
-import locales from '../../lib/translations/locales';
+import locales from '../../lib/translations/locales.json';
 
 export type LocalData = {
 	userDB: UserDatabase;

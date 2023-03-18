@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import Box from '@wcpos/components/src/box';
 import Tabs from '@wcpos/components/src/tabs';
 
 import { GeneralSettings } from './general';
@@ -25,7 +26,11 @@ export const SettingsTabs = () => {
 					{ key: 'tax', title: t('Tax Settings', { _tags: 'core' }), Component: TaxSettings },
 				],
 			}}
-			renderScene={({ route }) => <route.Component />}
+			renderScene={({ route }) => (
+				<Box paddingTop="small">
+					<route.Component />
+				</Box>
+			)}
 			onIndexChange={setIndex}
 		/>
 	);

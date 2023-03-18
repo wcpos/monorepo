@@ -18,6 +18,22 @@ interface EditShippingLineProps {
  */
 const EditButton = ({ item }: EditShippingLineProps) => {
 	const [opened, setOpened] = React.useState(false);
+	const formData = item.getLatest().toMutableJSON();
+
+	/**
+	 * Handle change in form data
+	 */
+	const handleChange = React.useCallback(
+		async (newData) => {
+			try {
+				const latest = item.getLatest();
+				await latest.patch(newData);
+			} catch (error) {
+				log.error(error);
+			}
+		},
+		[item]
+	);
 
 	/**
 	 *  filter schema for edit form
@@ -84,11 +100,9 @@ const EditButton = ({ item }: EditShippingLineProps) => {
 				title={t('Edit {name}', { _tags: 'core', name: item.method_title })}
 				size="large"
 				opened={opened}
-				onClose={() => {
-					setOpened(false);
-				}}
+				onClose={() => setOpened(false)}
 			>
-				<EditForm formData={item.toMutableJSON()} schema={schema} uiSchema={uiSchema} />
+				<EditForm formData={formData} schema={schema} uiSchema={uiSchema} onChange={handleChange} />
 			</Modal>
 		</>
 	);

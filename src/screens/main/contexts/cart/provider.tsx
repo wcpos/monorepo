@@ -86,7 +86,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 						items.map((item) => {
 							return combineLatest([item.total$, item.tax_class$, item.tax_status$]).pipe(
 								map(([price, taxClass, taxStatus]) => {
-									const totals = calcLineItemTotals(1, price, taxClass);
+									const totals = calcLineItemTotals(1, price, taxClass, taxStatus);
 									item.incrementalPatch(totals);
 									return totals;
 								})

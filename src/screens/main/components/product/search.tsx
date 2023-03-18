@@ -12,13 +12,15 @@ import { t } from '../../../../lib/translations';
 import useProductCategories from '../../contexts/categories';
 import useProducts from '../../contexts/products';
 import useProductTags from '../../contexts/tags';
+import usePullDocument from '../../contexts/use-pull-document';
 
 const ProductSearch = () => {
 	const { query$, setQuery } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
-	const { data: categories, pullDocument: pullCategory } = useProductCategories();
-	const { data: tags, pullDocument: pullTag } = useProductTags();
+	const { data: categories, collection: catCollection } = useProductCategories();
+	const { data: tags, collection: tagCollection } = useProductTags();
 	const theme = useTheme();
+	const pullDocument = usePullDocument();
 
 	/**
 	 *
@@ -52,7 +54,7 @@ const ProductSearch = () => {
 
 		// special case for prioritised fetching
 		if (categoryID && !category) {
-			pullCategory(categoryID);
+			pullDocument(categoryID, catCollection);
 		}
 
 		const tagID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
@@ -67,7 +69,7 @@ const ProductSearch = () => {
 
 		// special case for prioritised fetching
 		if (tagID && !tag) {
-			pullTag(tagID);
+			pullDocument(tagID, tagCollection);
 		}
 
 		const barcode = get(query, ['selector', 'barcode']);
@@ -87,7 +89,16 @@ const ProductSearch = () => {
 		return array.length !== 0 ? (
 			<Pill.Group style={{ paddingLeft: theme.spacing.small }}>{array}</Pill.Group>
 		) : undefined;
-	}, [categories, pullCategory, pullTag, query, setQuery, tags, theme.spacing.small]);
+	}, [
+		catCollection,
+		categories,
+		pullDocument,
+		query,
+		setQuery,
+		tagCollection,
+		tags,
+		theme.spacing.small,
+	]);
 
 	/**
 	 *

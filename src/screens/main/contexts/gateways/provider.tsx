@@ -53,7 +53,7 @@ const GatewaysProvider = ({ children, initialQuery }: GatewaysProviderProviderPr
 			switchMap((query) => {
 				const { search, selector = {}, sortBy, sortDirection } = query;
 
-				const RxQuery = collection.find({ selector });
+				const RxQuery = collection.find({ selector, sort: [{ order: 'asc' }] });
 
 				return RxQuery.$;
 			})

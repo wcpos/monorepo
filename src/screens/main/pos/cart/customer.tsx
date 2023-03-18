@@ -28,12 +28,13 @@ const Customer = ({ order }: CustomerProps) => {
 	const { removeCustomer } = useCurrentOrder();
 	const billing = useObservableState(order.billing$, order.billing);
 	const shipping = useObservableState(order.shipping$, order.shipping);
+	const customer_id = useObservableState(order.customer_id$, order.customer_id);
 
 	/**
 	 *
 	 */
 	const label = React.useMemo(() => {
-		if (order.customer_id === 0) {
+		if (customer_id === 0) {
 			return 'Guest';
 		}
 		if (billing?.first_name || billing?.last_name) {
@@ -46,7 +47,14 @@ const Customer = ({ order }: CustomerProps) => {
 			return billing.email;
 		}
 		return 'No name?';
-	}, [billing, order, shipping]);
+	}, [
+		billing.email,
+		billing.first_name,
+		billing.last_name,
+		customer_id,
+		shipping.first_name,
+		shipping.last_name,
+	]);
 
 	/**
 	 *

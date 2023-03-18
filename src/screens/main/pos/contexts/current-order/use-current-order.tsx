@@ -157,10 +157,14 @@ export const useCurrentOrder = () => {
 				const order = currentOrder.getLatest();
 				return order.patch(data);
 			}
+			// We need to update the cart header with the customer data, even for new orders
+			// FIXME - there must be a better way to do this
 			currentOrder.customer_id = data.customer_id;
 			currentOrder.billing = data.billing;
 			currentOrder.shipping = data.shipping;
 			currentOrder.customer_id$.next(data.customer_id);
+			currentOrder.billing$.next(data.billing);
+			currentOrder.shipping$.next(data.shipping);
 		},
 		[currentOrder]
 	);
