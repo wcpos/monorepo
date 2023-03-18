@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/database",
-  "version": "1.0.78",
+  "version": "1.0.79",
   "description": "Local database for @wcpos/core",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/database#readme",
@@ -26,14 +26,14 @@
     "fast-text-encoding": "^1.0.6",
     "observable-hooks": "4.2.1",
     "react": "18.2.0",
-    "rxdb": "^14.3.6",
+    "rxdb": "^14.3.7",
     "rxjs": "7.8.0",
     "tauri-plugin-sql-api": "github:tauri-apps/tauri-plugin-sql",
     "uuid": "3.4.0"
   },
   "devDependencies": {
     "@faker-js/faker": "^7.6.0",
-    "@types/jest": "^29.4.2",
+    "@types/jest": "^29.5.0",
     "@types/lodash": "4.14.191",
     "@types/uuid": "3.4.10",
     "@wcpos/eslint-config": "*",
