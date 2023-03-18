@@ -1,3 +1,7 @@
+/**
+ * TODO - add transport methods for web and native
+ *
+ */
 import { logger, consoleTransport } from 'react-native-logs';
 
 const defaultConfig = {
