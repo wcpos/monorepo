@@ -75,7 +75,7 @@ type Props = {
 /**
  *
  */
-const DrawItem = ({ label, icon, focused, onPress, drawerType, ...rest }: Props) => {
+const DrawItem = ({ label, icon, focused, onPress, drawerType, style, ...rest }: Props) => {
 	const theme = useTheme();
 
 	const iconNode = icon ? icon({ focused }) : null;
@@ -116,7 +116,7 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, ...rest }: Props)
 	);
 
 	return (
-		<View>
+		<View style={style}>
 			{drawerType === 'permanent' ? (
 				<Tooltip content={label} placement="right" withinPortal>
 					{buttonNode}

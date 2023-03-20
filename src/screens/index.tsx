@@ -96,6 +96,9 @@ const RootNavigator = ({ initialProps }) => {
 										EditCustomer: 'edit/:customerID',
 									},
 								},
+								SupportStack: {
+									path: 'support',
+								},
 							},
 						},
 						Settings: 'settings',

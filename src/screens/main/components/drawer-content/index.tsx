@@ -17,7 +17,12 @@ const Drawer = (props: DrawerContentComponentProps) => {
 	return (
 		<DrawerContentScrollView
 			{...props}
-			contentContainerStyle={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+			contentContainerStyle={{
+				paddingTop: insets.top,
+				paddingBottom: insets.bottom,
+				justifyContent: 'flex-start',
+				height: '100%',
+			}}
 		>
 			<DrawerItemList {...props} />
 			{/* <DrawerItem label="Help" onPress={() => Linking.openURL('https://mywebsite.com/help')} /> */}

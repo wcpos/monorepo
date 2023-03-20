@@ -20,6 +20,7 @@ import OrdersNavigator from './orders';
 import POSNavigator from './pos';
 import ProductsNavigator from './products';
 import Settings from './settings';
+import Support from './support';
 import useLocalData from '../../contexts/local-data';
 import { t } from '../../lib/translations';
 import { ModalLayout } from '../components/modal-layout';
@@ -37,6 +38,7 @@ export type DrawerParamList = {
 	ProductsStack: undefined;
 	OrdersStack: undefined;
 	CustomersStack: undefined;
+	SupportStack: undefined;
 };
 
 const Drawer = createDrawerNavigator<DrawerParamList>();
@@ -127,6 +129,18 @@ const MainNavigator = () => {
 											drawerIcon: ({ focused }) => (
 												<Icon name="users" type={focused ? 'primary' : 'inverse'} size="large" />
 											),
+										}}
+									/>
+									<Drawer.Screen
+										name="SupportStack"
+										component={Support}
+										options={{
+											title: t('Support', { _tags: 'core' }),
+											drawerLabel: t('Support', { _tags: 'core' }),
+											drawerIcon: ({ focused }) => (
+												<Icon name="lifeRing" type={focused ? 'primary' : 'inverse'} size="large" />
+											),
+											drawerItemStyle: { marginTop: 'auto' },
 										}}
 									/>
 								</Drawer.Navigator>
