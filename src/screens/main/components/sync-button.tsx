@@ -1,24 +1,30 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
+import { Observable } from 'rxjs';
+
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
+import Loader from '@wcpos/components/src/loader';
 
 import { t } from '../../../lib/translations';
 
 interface SyncButtonProps {
 	sync: () => Promise<null>;
 	clear: () => Promise<null>;
+	active$: Observable<boolean>;
 }
 
-const SyncButton = ({ sync, clear }: SyncButtonProps) => {
+const SyncButton = ({ sync, clear, active$ }: SyncButtonProps) => {
 	const [openMenu, setOpenMenu] = React.useState(false);
+	const syncing = useObservableState(active$);
 
-	return (
+	return syncing ? (
+		<Loader size="small" />
+	) : (
 		<Dropdown
 			opened={openMenu}
-			onClose={() => {
-				setOpenMenu(false);
-			}}
+			onClose={() => setOpenMenu(false)}
 			placement="top-end"
 			items={[
 				{
@@ -42,9 +48,7 @@ const SyncButton = ({ sync, clear }: SyncButtonProps) => {
 				name="arrowRotateRight"
 				size="small"
 				onPress={sync}
-				onLongPress={() => {
-					setOpenMenu(true);
-				}}
+				onLongPress={() => setOpenMenu(true)}
 				tooltip={t('Press to sync, long press for more options', { _tags: 'core' })}
 				tooltipPlacement="top-end"
 			/>

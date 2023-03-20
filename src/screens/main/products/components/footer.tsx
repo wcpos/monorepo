@@ -22,7 +22,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { storeDB, store } = useLocalData();
 	const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
-	const { sync, clear } = useProductReplication();
+	const { sync, clear, replicationState } = useProductReplication();
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 
 	return (
@@ -48,7 +48,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 			)}
 			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">
 				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
-				<SyncButton sync={sync} clear={clear} />
+				<SyncButton sync={sync} clear={clear} active$={replicationState.active$} />
 			</Box>
 		</Box>
 	);

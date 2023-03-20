@@ -18,7 +18,7 @@ const OrdersFooter = ({ count }: OrderFooterProps) => {
 	const { storeDB } = useLocalData();
 	const total = useObservableState(storeDB.orders.count().$, 0);
 	const theme = useTheme();
-	const { sync, clear } = useOrderReplication();
+	const { sync, clear, replicationState } = useOrderReplication();
 
 	return (
 		<Box
@@ -36,7 +36,7 @@ const OrdersFooter = ({ count }: OrderFooterProps) => {
 			<Text size="small">
 				Showing {count} of {total}
 			</Text>
-			<SyncButton sync={sync} clear={clear} />
+			<SyncButton sync={sync} clear={clear} active$={replicationState.active$} />
 		</Box>
 	);
 };
