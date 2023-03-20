@@ -59,6 +59,9 @@ const useProductReplication = () => {
 	 *
 	 */
 	const replicationState = React.useMemo(() => {
+		/**
+		 * TODO: instead of using the registry, I should use the replicationIdentifier
+		 */
 		const hash = defaultHashSha256(JSON.stringify(query));
 		if (registry.has(hash)) {
 			return registry.get(hash);

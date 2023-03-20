@@ -36,7 +36,7 @@ const VariationsProvider = ({
 	log.debug('render variations provider');
 	const { storeDB } = useLocalData();
 	const collection = storeDB.collections.variations;
-	const replicationState = useReplication({ collection, parent });
+	const replicationState = useReplication({ parent });
 
 	/**
 	 * Only run the replication when the Provider is mounted
@@ -63,9 +63,8 @@ const VariationsProvider = ({
 			// query$,
 			// setQuery,
 			resource: new ObservableResource(variations$),
-			replicationState,
 		};
-	}, [collection, parent.variations$, replicationState]);
+	}, [collection, parent.variations$]);
 
 	return <VariationsContext.Provider value={value}>{children}</VariationsContext.Provider>;
 };

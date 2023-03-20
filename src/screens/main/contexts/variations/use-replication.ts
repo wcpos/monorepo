@@ -1,107 +1,156 @@
 import * as React from 'react';
 
-import intersection from 'lodash/intersection';
+import get from 'lodash/get';
+import { defaultHashSha256 } from 'rxdb';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
+import { parseLinkHeader } from '../../../../lib/url';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
-/**
- * Hack, I want the replication to wait before looping to allow counts to be updated
- */
-function wait(milliseconds: number) {
-	return new Promise((resolve) => setTimeout(resolve, milliseconds));
+const registry = new Map();
+
+function mapKeyToParam(key) {
+	if (key === 'categories') {
+		return 'category';
+	} else if (key === 'tags') {
+		return 'tag';
+	} else {
+		return key;
+	}
 }
 
-export const useReplication = ({ collection, parent }) => {
+function mangoToRestQuery(mangoSelector) {
+	const restQuery = {};
+	if (!mangoSelector.selector) {
+		return restQuery;
+	}
+	for (const [key, value] of Object.entries(mangoSelector.selector)) {
+		const param = mapKeyToParam(key);
+		if (typeof value === 'object' && '$elemMatch' in value) {
+			restQuery[param] = value.$elemMatch.id;
+		} else {
+			restQuery[param] = value;
+		}
+	}
+	return restQuery;
+}
+
+export const useReplication = ({ parent }) => {
 	const http = useRestHttpClient();
-	const { site } = useLocalData();
+	const { site, storeDB } = useLocalData();
+	const collection = storeDB.collections.variations;
+	// const { query$ } = useVariations();
+	// const query = useObservableState(query$, query$.getValue());
 
 	const replicationStatePromise = React.useMemo(() => {
 		/**
-		 *
+		 * TODO: instead of using the registry, I should use the replicationIdentifier
 		 */
-		const audit = async () => {
-			log.silly('audit');
-		};
+		const hash = defaultHashSha256(
+			JSON.stringify({
+				parentID: parent.id,
+			})
+		);
+		if (registry.has(hash)) {
+			return registry.get(hash);
+		}
 
 		/**
 		 *
 		 */
-		const replicate = async (lastCheckpoint, batchSize) => {
-			/**
-			 * This is the data replication
-			 * we need to delay for a little while to allow the collection count to be updated
-			 */
-			await wait(1000);
-			const pullRemoteIds = collection.pullRemoteIds$.getValue();
-			const syncedDocs = collection.syncedIds$.getValue();
-			const variationIds = parent.variations.map((id) => +id);
-			const include = intersection(pullRemoteIds, variationIds);
-
-			if (include.length === 0) {
-				return {
-					documents: [],
-					checkpoint: { audit: false },
-				};
-			}
-
-			/**
-			 * TODO - transform arrays to strings in axios?
-			 */
-			const params = {
-				include: include.join(','),
-			};
-
-			const response = await http
-				.get(`products/${parent.id}/${collection.name}`, { params })
-				.catch((error) => {
-					log.error(error);
-				});
-
-			/**
-			 * What to do when server is unreachable?
-			 */
-			if (!response?.data) {
-				throw Error('No response from server');
-			}
-
-			return {
-				documents: response?.data || [],
-				checkpoint: { audit: false },
-			};
-		};
-
-		/**
-		 *
-		 */
-		return replicateRxCollection({
+		const state = replicateRxCollection({
 			collection,
 			autoStart: false,
 			replicationIdentifier: `wc-rest-replication-to-${site.wc_api_url}/products/${parent.id}/${collection.name}`,
 			// retryTime: 1000000000,
 			pull: {
-				async handler(lastCheckpoint, batchSize) {
+				async handler() {
 					try {
-						const { data } = await http.get(`products/${parent.id}/${collection.name}`);
+						const checkpoint = await collection
+							.getLocal(hash)
+							.then((doc) => doc?.toJSON().data || {});
+						const status = await collection
+							.getLocal('status')
+							.then((doc) => doc?.toJSON().data || {});
+
+						// const selector = mangoToRestQuery(query);
+						// const emptyRestQuery = isEmpty(selector);
+						const selector = {};
+						const params = Object.assign(selector, {
+							// order: query.sortDirection,
+							// WC REST API doesn't use the name property, it uses 'title', because of course it does
+							// orderby: query.sortBy === 'name' ? 'title' : query.sortBy,
+							page: checkpoint.nextPage || 1,
+							per_page: 10,
+							after: status.fullInitialSync ? status.lastModified : null,
+						});
+						const response = await http.get(`products/${parent.id}/${collection.name}`, { params });
+						const data = get(response, 'data', []);
+						const link = get(response, ['headers', 'link']);
+						const remoteTotal = get(response, ['headers', 'x-wp-total']);
+						const totalPages = get(response, ['headers', 'x-wp-totalpages']);
+						const parsedHeaders = parseLinkHeader(link);
+						const nextPage = get(parsedHeaders, ['next', 'page']);
+
+						//
+						const mostRecent = data.reduce((prev, current) => {
+							const prevDate = new Date(prev.date_modified_gmt);
+							const currentDate = new Date(current.date_modified_gmt);
+							return prevDate > currentDate ? prev : current;
+						}, checkpoint);
+
+						/**
+						 * Set next checkpoint, using my own custom checkpoint
+						 */
+						await collection.upsertLocal(hash, {
+							remoteTotal,
+							totalPages,
+							nextPage,
+							date_modified_gmt: mostRecent.date_modified_gmt,
+						});
+
+						/**
+						 * Set flag on initial full sync
+						 */
+						if (!nextPage) {
+							// NOTE: make sure lastModified is set, otherwise it will loop forever
+							const lastModified =
+								mostRecent.date_modified_gmt || new Date(Date.now()).toISOString().split('.')[0];
+
+							await collection.upsertLocal('status', {
+								fullInitialSync: true,
+								lastModified,
+							});
+						}
+
+						/**
+						 * If no more pages, then use date_modified_gmt
+						 * or, if total records is same as local count
+						 */
 						return {
 							documents: data,
-							checkpoint: true,
 						};
-					} catch (err) {
-						throw new Error(err);
+					} catch (error) {
+						log.error(error);
+						throw error;
 					}
 				},
 				batchSize: 10,
 				modifier: async (doc) => {
-					return collection.parseRestResponse(doc);
+					const parsedData = collection.parseRestResponse(doc);
+					await collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+					return parsedData;
 				},
 				// stream$: timedObservable(1000),
 			},
 		});
-	}, [collection, http, parent.id, parent.variations, site.wc_api_url]);
+
+		registry.set(hash, state);
+		return state;
+	}, [collection, http, parent.id, site.wc_api_url]);
 
 	return replicationStatePromise;
 };
