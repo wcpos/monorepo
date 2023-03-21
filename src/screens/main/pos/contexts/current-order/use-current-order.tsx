@@ -42,8 +42,7 @@ export const useCurrentOrder = () => {
 
 	const { storeDB } = useLocalData();
 	const ordersCollection = storeDB?.collections.orders;
-	const { currentOrderResource } = React.useContext(CurrentOrderContext);
-	const currentOrder = useObservableSuspense(currentOrderResource);
+	const { currentOrder, setCurrentOrder } = React.useContext(CurrentOrderContext);
 	const navigation = useNavigation();
 
 	/**
@@ -207,6 +206,7 @@ export const useCurrentOrder = () => {
 
 	return {
 		currentOrder,
+		setCurrentOrder,
 		addProduct,
 		addVariation,
 		removeItem,

@@ -7,6 +7,12 @@ import log from '@wcpos/utils/src/logger';
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type OrderCollection = import('@wcpos/database').OrderCollection;
 
+interface Props {
+	collection: OrderCollection;
+	currency_symbol: string;
+	currency: string;
+}
+
 /**
  * RxDB removed Temporary Documents in v13
  * see: https://github.com/pubkey/rxdb/pull/3777#issuecomment-1120669088
@@ -26,8 +32,9 @@ export default class NewOrder {
 	public fee_lines = [];
 	public shipping_lines = [];
 	public currency_symbol: string;
+	public currency: string;
 
-	constructor(collection: OrderCollection, currency_symbol: string) {
+	constructor({ collection, currency_symbol, currency }: Props) {
 		this.collection = collection;
 
 		this.customer_id = 0;
@@ -40,6 +47,7 @@ export default class NewOrder {
 		this.fee_lines$ = of([]);
 		this.shipping_lines$ = of([]);
 		this.currency_symbol = currency_symbol;
+		this.currency = currency;
 	}
 
 	toJSON() {
@@ -51,6 +59,7 @@ export default class NewOrder {
 			fee_lines,
 			shipping_lines,
 			currency_symbol,
+			currency,
 		} = this;
 
 		return {
@@ -63,6 +72,7 @@ export default class NewOrder {
 			fee_lines,
 			shipping_lines,
 			currency_symbol,
+			currency,
 		};
 	}
 

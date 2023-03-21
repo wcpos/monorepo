@@ -12,7 +12,7 @@ import { OrdersProvider } from '../../contexts/orders';
 import useCurrentOrder from '../contexts/current-order';
 
 const OpenOrders = ({ isColumn = false }) => {
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrder, setCurrentOrder } = useCurrentOrder();
 
 	/**
 	 *
@@ -51,7 +51,7 @@ const OpenOrders = ({ isColumn = false }) => {
 							/>
 						}
 					>
-						<OpenOrderTabs currentOrder={currentOrder} />
+						<OpenOrderTabs currentOrder={currentOrder} setCurrentOrder={setCurrentOrder} />
 					</React.Suspense>
 				</OrdersProvider>
 			</ErrorBoundary>

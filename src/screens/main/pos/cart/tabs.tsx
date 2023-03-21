@@ -12,12 +12,13 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CartTabsProps {
 	currentOrder: OrderDocument;
+	setCurrentOrder: (order?: OrderDocument) => void;
 }
 
 /**
  *
  */
-const CartTabs = ({ currentOrder }: CartTabsProps) => {
+const CartTabs = ({ currentOrder, setCurrentOrder }: CartTabsProps) => {
 	const navigation = useNavigation();
 	const { data: orders } = useOrders();
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
@@ -28,9 +29,9 @@ const CartTabs = ({ currentOrder }: CartTabsProps) => {
 	 */
 	React.useEffect(() => {
 		if (focusedIndex === -1 && currentOrder.uuid) {
-			navigation.setParams({ orderID: '' });
+			setCurrentOrder(null);
 		}
-	}, [currentOrder, focusedIndex, navigation]);
+	}, [currentOrder, focusedIndex, setCurrentOrder]);
 
 	/**
 	 *
@@ -59,15 +60,16 @@ const CartTabs = ({ currentOrder }: CartTabsProps) => {
 	 */
 	const handleTabChange = React.useCallback(
 		(idx: number) => {
-			/**
-			 * TODO - setParams updates the currentOrder without refreshing the products,
-			 * this is great!, but I lose the back button. Push keeps the old order in the stack.
-			 * I need to add the new order to the history without the rerender.
-			 */
-			navigation.setParams({ orderID: routes[idx].key });
-			// navigation.dispatch(StackActions.push('POS', { orderID: orders[idx].uuid }));
+			setCurrentOrder(orders[idx] || null);
+			// /**
+			//  * TODO - setParams updates the currentOrder without refreshing the products,
+			//  * this is great!, but I lose the back button. Push keeps the old order in the stack.
+			//  * I need to add the new order to the history without the rerender.
+			//  */
+			// navigation.setParams({ orderID: routes[idx].key });
+			// // navigation.dispatch(StackActions.push('POS', { orderID: orders[idx].uuid }));
 		},
-		[navigation, routes]
+		[orders, setCurrentOrder]
 	);
 
 	/**

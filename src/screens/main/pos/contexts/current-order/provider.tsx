@@ -1,7 +1,9 @@
 import * as React from 'react';
 
+import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
-import { ObservableResource, useObservable } from 'observable-hooks';
+import { ObservableResource, useObservable, useObservableSuspense } from 'observable-hooks';
+import { Observable } from 'rxjs';
 import { map, tap, switchMap } from 'rxjs/operators';
 
 import NewOrder from './new-order';
@@ -10,8 +12,8 @@ import useLocalData from '../../../../../contexts/local-data';
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CurrentOrderContextProps {
-	currentOrderResource: ObservableResource<OrderDocument | typeof NewOrder>;
-	// setCurrentOrder: React.Dispatch<React.SetStateAction<OrderDocument | undefined>>;
+	currentOrder: OrderDocument | typeof NewOrder;
+	setCurrentOrder: React.Dispatch<React.SetStateAction<OrderDocument | null>>;
 	// newOrder: typeof NewOrder;
 }
 
@@ -19,47 +21,61 @@ export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
-	orderID?: string;
+	currentOrderResource?: ObservableResource<OrderDocument | null>;
 }
 
 /**
  * Providers the active order by uuid
  * If no orderID is provided, active order will be a new order (mock Order class)
- * Current order should be set by route only
  *
  * TODO - need a way to currency symbol from store document
  */
-const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProviderProps) => {
+const CurrentOrderProvider = ({
+	children,
+	currentOrderResource,
+}: CurrentOrderContextProviderProps) => {
+	// const navigation = useNavigation();
 	const { store, storeDB } = useLocalData();
 	const collection = storeDB?.collections.orders;
-
-	/**
-	 * Subscribe to the route orderID
-	 */
-	const currentOrder$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				/**
-				 * NOTE - we need to observe the query result because otherwise the currentOrder is stale
-				 * This causes problems when trying to update the currentOrder
-				 */
-				// switchMap(([uuid]) => collection.findOneFix(uuid).$),
-				switchMap(([uuid]) => collection.findOneFix(uuid).exec()),
-				map((order) => (order ? order : new NewOrder(collection, store.currency)))
-			),
-		[orderID]
-	);
+	const storedOrder = useObservableSuspense(currentOrderResource);
+	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | null>(storedOrder);
 
 	/**
 	 *
 	 */
-	const value = React.useMemo(() => {
-		return {
-			currentOrderResource: new ObservableResource(currentOrder$, (val) => !!val),
-		};
-	}, [currentOrder$]);
+	const newOrder = React.useMemo(() => {
+		return new NewOrder({
+			collection,
+			currency: store?.currency,
+			currency_symbol: store?.currency_symbol,
+		});
+	}, [collection, store?.currency, store?.currency_symbol]);
 
-	return <CurrentOrderContext.Provider value={value}>{children}</CurrentOrderContext.Provider>;
+	/**
+	 *
+	 */
+	const handleSetCurrentOrder = React.useCallback((order: OrderDocument | null) => {
+		/**
+		 * FIXME: I want to change the location bar and set navigation history, but not cause render
+		 * I could do it manually with window.history.pushState, but I want to use react-navigation
+		 */
+		// navigation.setParams({ orderID: order?.uuid || '' });
+		setCurrentOrder(order);
+	}, []);
+
+	/**
+	 *
+	 */
+	return (
+		<CurrentOrderContext.Provider
+			value={{
+				currentOrder: currentOrder ? currentOrder : newOrder,
+				setCurrentOrder: handleSetCurrentOrder,
+			}}
+		>
+			{children}
+		</CurrentOrderContext.Provider>
+	);
 };
 
 export default CurrentOrderProvider;
