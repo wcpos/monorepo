@@ -8,6 +8,7 @@ import Text from '@wcpos/components/src/text';
 import { t } from '../../../lib/translations';
 import useCustomers, { CustomersProvider } from '../contexts/customers';
 import useCustomerReplication from '../contexts/use-customer-replication';
+import useCustomerNameFormat from '../hooks/use-customer-name-format';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type StoreDatabase = import('@wcpos/database').StoreDatabase;
@@ -24,14 +25,7 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 	const { query$, setQuery, data: customers } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
 	const { replicationState } = useCustomerReplication();
-
-	/**
-	 *
-	 */
-	const displayCustomerNameOrUsername = React.useCallback((customer: CustomerDocument) => {
-		if (!customer.first_name && !customer.last_name) return customer.username;
-		return `${customer.first_name} ${customer.last_name}`;
-	}, []);
+	const { format } = useCustomerNameFormat();
 
 	/**
 	 *
@@ -48,14 +42,14 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 	 */
 	const options = React.useMemo(() => {
 		const opts = customers.map((customer) => ({
-			label: displayCustomerNameOrUsername(customer),
+			label: format(customer),
 			value: customer,
 			key: customer.id,
 		}));
 
-		opts.unshift({ key: 0, label: 'Guest', value: { id: 0 } });
+		opts.unshift({ key: 0, label: t('Guest', { _tags: 'core' }), value: { id: 0 } });
 		return opts;
-	}, [customers, displayCustomerNameOrUsername]);
+	}, [customers, format]);
 
 	/**
 	 *
@@ -64,7 +58,7 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 		<Combobox
 			options={options}
 			placeholder={t('Search Customers', { _tags: 'core' })}
-			selected={selectedCustomer ? displayCustomerNameOrUsername(selectedCustomer) : ''}
+			selected={selectedCustomer ? format(selectedCustomer) : ''}
 			onSearch={onSearch}
 			searchValue={query.search}
 			onChange={onSelectCustomer}

@@ -86,7 +86,7 @@ const CartHeader = ({ order }: CartHeaderProps) => {
 				</ErrorBoundary>
 			</Box>
 			<ErrorBoundary>
-				<AddCustomer />
+				<AddCustomer onAdd={handleCustomerSelect} />
 			</ErrorBoundary>
 			<ErrorBoundary>
 				<UISettings uiSettings={uiSettings} title={t('Cart Settings', { _tags: 'core' })} />

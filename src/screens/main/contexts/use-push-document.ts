@@ -10,6 +10,9 @@ import useRestHttpClient from '../hooks/use-rest-http-client';
 
 type RxDocument = import('rxdb').RxDocument;
 
+/**
+ *
+ */
 const usePushDocument = () => {
 	const http = useRestHttpClient();
 	const addSnackbar = useSnackbar();

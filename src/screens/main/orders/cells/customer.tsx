@@ -6,6 +6,7 @@ import Pill from '@wcpos/components/src/pill';
 import Text from '@wcpos/components/src/text';
 
 import useOrders from '../../contexts/orders';
+import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
 type Props = {
 	item: import('@wcpos/database').OrderDocument;
@@ -13,26 +14,7 @@ type Props = {
 
 const Customer = ({ item: order }: Props) => {
 	const { setQuery } = useOrders();
-	// const customerId = useObservableState(order.customer_id$, order.customer_id);
-	// const billing = useObservableState(order.billing$, order.billing);
-
-	// const customerName = React.useMemo(() => {
-	// 	let name = '';
-
-	// 	if (billing?.first_name || billing?.last_name) {
-	// 		name = `${billing?.first_name || ''} ${billing?.last_name || ''}`;
-	// 	}
-
-	// 	if (customerId === 0) {
-	// 		name = 'Guest';
-	// 	}
-
-	// 	if (name.trim() === '') {
-	// 		return String(customerId);
-	// 	}
-
-	// 	return name;
-	// }, [billing?.first_name, billing?.last_name, customerId]);
+	const { format } = useCustomerNameFormat();
 
 	return (
 		<Pill
@@ -40,7 +22,7 @@ const Customer = ({ item: order }: Props) => {
 				setQuery('selector.customer_id', order.customer_id);
 			}}
 		>
-			{String(order.customer_id)}
+			{format({ billing: order.billing, shipping: order.shipping, id: order.customer_id })}
 		</Pill>
 	);
 };

@@ -12,6 +12,7 @@ import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
 import EditForm from '../../components/edit-form';
+import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -29,32 +30,8 @@ const Customer = ({ order }: CustomerProps) => {
 	const billing = useObservableState(order.billing$, order.billing);
 	const shipping = useObservableState(order.shipping$, order.shipping);
 	const customer_id = useObservableState(order.customer_id$, order.customer_id);
-
-	/**
-	 *
-	 */
-	const label = React.useMemo(() => {
-		if (customer_id === 0) {
-			return 'Guest';
-		}
-		if (billing?.first_name || billing?.last_name) {
-			return compact([billing.first_name, billing.last_name]).join(' ');
-		}
-		if (shipping?.first_name || shipping?.last_name) {
-			return compact([shipping.first_name, shipping.last_name]).join(' ');
-		}
-		if (billing?.email) {
-			return billing.email;
-		}
-		return 'No name?';
-	}, [
-		billing.email,
-		billing.first_name,
-		billing.last_name,
-		customer_id,
-		shipping.first_name,
-		shipping.last_name,
-	]);
+	const { format } = useCustomerNameFormat();
+	const name = format({ billing, shipping, id: customer_id });
 
 	/**
 	 *
@@ -99,15 +76,15 @@ const Customer = ({ order }: CustomerProps) => {
 				'ui:order': [
 					'first_name',
 					'last_name',
+					'email',
 					'company',
+					'phone',
 					'address_1',
 					'address_2',
 					'city',
 					'postcode',
 					'state',
 					'country',
-					'email',
-					'phone',
 				],
 				first_name: {
 					'ui:label': t('First Name', { _tags: 'core' }),
@@ -196,7 +173,7 @@ const Customer = ({ order }: CustomerProps) => {
 		<Box horizontal align="center" space="small">
 			<Text weight="bold">{t('Customer', { _tags: 'core' })}:</Text>
 			<Pill removable onRemove={removeCustomer} onPress={() => setEditModalOpened(true)}>
-				{label}
+				{name}
 			</Pill>
 
 			<Modal

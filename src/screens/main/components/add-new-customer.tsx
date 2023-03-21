@@ -5,59 +5,59 @@ import get from 'lodash/get';
 import map from 'lodash/map';
 import pick from 'lodash/pick';
 import set from 'lodash/set';
+import { isRxDocument } from 'rxdb';
 
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
-import Tabs from '@wcpos/components/src/tabs';
-import Tree from '@wcpos/components/src/tree';
-// import useCountries from '@wcpos/hooks/src/use-countries';
-import Form from '@wcpos/react-native-jsonschema-form';
+import useSnackbar from '@wcpos/components/src/snackbar';
+import log from '@wcpos/utils/src/logger';
 
+import EditForm from './edit-form';
 import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
-import useRestHttpClient from '../hooks/use-rest-http-client';
+import usePushDocument from '../contexts/use-push-document';
+
+interface AddNewCustomerProps {
+	onAdd?: (doc: import('@wcpos/database').CustomerDocument) => void;
+}
 
 /**
  *
  */
-const AddNewCustomer = () => {
+const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 	const [opened, setOpened] = React.useState(false);
-	const [index, setIndex] = React.useState(0);
 	const [customerData, setCustomerData] = React.useState({});
 	const { storeDB } = useLocalData();
 	const customerCollection = storeDB.collections.customers;
-	const http = useRestHttpClient();
-	const [extraErrors, setExtraErrors] = React.useState();
+	// const [extraErrors, setExtraErrors] = React.useState();
 	// const { resource } = useCountries();
 	const countries = {};
+	const pushDocument = usePushDocument();
+	const addSnackbar = useSnackbar();
 
-	const handleSave = async () => {
-		const result = await http.post('customers', { data: customerData }).catch((error) => {
-			if (error.response) {
-				const { data } = error.response;
-				const { data: d, code, message } = data;
-				if (d.params) {
-					const param = d.params[0];
-					setExtraErrors({
-						[param]: {
-							__errors: [message],
-						},
-					});
-				} else {
-					setExtraErrors({
-						__errors: [message],
-					});
-				}
+	/**
+	 *
+	 */
+	const handleSave = React.useCallback(async () => {
+		try {
+			const doc = await customerCollection.insert(customerData);
+			const success = await pushDocument(doc);
+			if (onAdd) {
+				onAdd(doc);
 			}
-		});
-
-		if (result?.status === 201 || result?.status === 200) {
-			const newCustomer = await customerCollection.insert(result.data);
-			if (newCustomer) {
-				setOpened(false);
+			if (isRxDocument(success)) {
+				addSnackbar({
+					message: t('Customer {id} saved', { _tags: 'core', id: success.id }),
+				});
 			}
+			setOpened(false);
+		} catch (error) {
+			log.error(error);
+			addSnackbar({
+				message: t('There was an error: {message}', { _tags: 'core', message: error.message }),
+			});
 		}
-	};
+	}, [addSnackbar, customerCollection, customerData, onAdd, pushDocument]);
 
 	/**
 	 *
@@ -119,6 +119,9 @@ const AddNewCustomer = () => {
 	 */
 	const uiSchema = React.useMemo(() => {
 		return {
+			'ui:title': null,
+			'ui:description': null,
+			'ui:order': ['first_name', 'last_name', 'email', '*'],
 			first_name: {
 				'ui:label': t('First Name', { _tags: 'core' }),
 			},
@@ -144,15 +147,15 @@ const AddNewCustomer = () => {
 				'ui:order': [
 					'first_name',
 					'last_name',
+					'email',
 					'company',
+					'phone',
 					'address_1',
 					'address_2',
 					'city',
 					'postcode',
 					'state',
 					'country',
-					'email',
-					'phone',
 				],
 				first_name: {
 					'ui:label': t('First Name', { _tags: 'core' }),
@@ -231,32 +234,13 @@ const AddNewCustomer = () => {
 					'ui:label': t('Company', { _tags: 'core' }),
 				},
 			},
+			meta_data: {
+				'ui:title': t('Meta Data', { _tags: 'core' }),
+				'ui:description': null,
+				'ui:collapsible': 'closed',
+			},
 		};
 	}, []);
-
-	const renderScene = ({ route }) => {
-		switch (route.key) {
-			case 'form':
-				return (
-					<Form
-						schema={schema}
-						formData={customerData}
-						onChange={handleChange}
-						extraErrors={extraErrors}
-						uiSchema={uiSchema}
-					/>
-				);
-			case 'json':
-				return <Tree data={customerData} />;
-			default:
-				return null;
-		}
-	};
-
-	const routes = [
-		{ key: 'form', title: 'Form' },
-		{ key: 'json', title: 'JSON' },
-	];
 
 	return (
 		<>
@@ -270,10 +254,12 @@ const AddNewCustomer = () => {
 				primaryAction={{ label: 'Add Customer', action: handleSave }}
 				secondaryActions={[{ label: 'Cancel', action: () => setOpened(false) }]}
 			>
-				<Tabs<(typeof routes)[number]>
-					navigationState={{ index, routes }}
-					renderScene={renderScene}
-					onIndexChange={setIndex}
+				<EditForm
+					schema={schema}
+					formData={customerData}
+					onChange={handleChange}
+					// extraErrors={extraErrors}
+					uiSchema={uiSchema}
 				/>
 			</Modal>
 		</>
