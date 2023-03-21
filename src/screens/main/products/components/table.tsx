@@ -2,17 +2,20 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import useSnackbar from '@wcpos/components/src/snackbar';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import cells from './cells';
 import Footer from './footer';
+import { t } from '../../../../lib/translations';
 import TextCell from '../../components/text-cell';
 import useProducts from '../../contexts/products';
-import useProductReplication from '../../contexts/use-product-replication';
+import usePushDocument from '../../contexts/use-push-document';
 import { VariationsProvider } from '../../contexts/variations';
 
 import type { ListRenderItemInfo } from '@shopify/flash-list';
@@ -30,6 +33,8 @@ interface ProductsTableProps {
 const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	const { query$, setQuery, data: products, nextPage } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
+	const addSnackbar = useSnackbar();
+	const pushDocument = usePushDocument();
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
@@ -39,18 +44,25 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	/**
 	 *
 	 */
-	const { replicationState } = useProductReplication();
-
-	/**
-	 * Only run the replication when the Provider is mounted
-	 */
-	// React.useEffect(() => {
-	// 	replicationState.start();
-	// 	return () => {
-	// 		// this is async, should we wait?
-	// 		replicationState.cancel();
-	// 	};
-	// }, []);
+	const handleChange = React.useCallback(
+		async (product: ProductDocument, data: Record<string, unknown>) => {
+			try {
+				const doc = await product.patch(data);
+				const success = await pushDocument(doc);
+				if (isRxDocument(success)) {
+					addSnackbar({
+						message: t('Product {id} saved', { _tags: 'core', id: success.id }),
+					});
+				}
+			} catch (error) {
+				log.error(error);
+				addSnackbar({
+					message: t('There was an error: {message}', { _tags: 'core', message: error.message }),
+				});
+			}
+		},
+		[addSnackbar, pushDocument]
+	);
 
 	/**
 	 *
@@ -63,7 +75,7 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 				return (
 					<ErrorBoundary>
 						<React.Suspense fallback={<Text>Loading...</Text>}>
-							<Cell item={item} column={column} index={index} />
+							<Cell item={item} column={column} index={index} onChange={handleChange} />
 						</React.Suspense>
 					</ErrorBoundary>
 				);

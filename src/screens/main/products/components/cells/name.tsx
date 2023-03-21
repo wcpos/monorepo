@@ -12,47 +12,47 @@ import ProductAttributes from '../../../components/product/attributes';
 import GroupedNames from '../../../components/product/grouped-names';
 import { ProductsProvider } from '../../../contexts/products';
 import { useUISettings } from '../../../contexts/ui-settings/use-ui-settings';
-import usePushDocument from '../../../contexts/use-push-document';
+
+type ProductDocument = import('@wcpos/database').ProductDocument;
 
 type Props = {
-	item: import('@wcpos/database').ProductDocument;
-	column: import('@wcpos/components/src/table').ColumnProps<
-		import('@wcpos/database').ProductDocument
-	>;
+	item: ProductDocument;
+	column: import('@wcpos/components/src/table').ColumnProps<ProductDocument>;
+	onChange: (product: ProductDocument, data: Record<string, unknown>) => void;
 };
 
 /**
  *
  */
-const EdittableText = ({ name }) => {
-	// const [newName, setNewName] = React.useState(name);
+const EdittableText = ({ name, onChange }) => {
+	const [value, setValue] = React.useState(name);
 	const [isEditting, setIsEditting] = React.useState(false);
 
 	return isEditting ? (
 		<TextInput
-			value={name}
-			// onChangeText={setNewName}
-			// onBlur={async () => {
-			// 	await product.patch({ name: newName });
-			// 	pushDocument(product);
-			// }}
-			focused
+			value={value}
+			onChangeText={setValue}
+			onBlur={() => {
+				setIsEditting(false);
+				onChange(value);
+			}}
+			blurOnSubmit
+			autoFocus
 		/>
 	) : (
-		<TextInputContainer onPress={() => setIsEditting(true)}>{name}</TextInputContainer>
+		<TextInputContainer onPress={() => setIsEditting(true)}>{value}</TextInputContainer>
 	);
 };
 
 /**
  *
  */
-const Name = ({ item: product, column }: Props) => {
+const Name = ({ item: product, column, onChange }: Props) => {
 	const name = useObservableState(product.name$, product.name);
 	// const [newName, setNewName] = React.useState(name);
 	const attributes = useObservableState(product.attributes$, product.attributes);
 	const grouped = useObservableState(product.grouped_products$, product.grouped_products);
 	const groupedQuery = React.useMemo(() => ({ selector: { id: { $in: grouped } } }), [grouped]);
-	const pushDocument = usePushDocument();
 	const { uiSettings } = useUISettings('products');
 	const { display } = column;
 
@@ -72,7 +72,7 @@ const Name = ({ item: product, column }: Props) => {
 	 */
 	return (
 		<Box space="small" style={{ width: '100%' }}>
-			<EdittableText name={name} />
+			<EdittableText name={name} onChange={(name: string) => onChange(product, { name })} />
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{product.type === 'variable' && <ProductAttributes attributes={attributes} />}
 			{product.type === 'grouped' && (

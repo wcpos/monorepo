@@ -48,6 +48,7 @@ const EditProduct = () => {
 	 * Handle save button click
 	 */
 	onPrimaryAction(async () => {
+		console.log('FIXME: this triggers twice!');
 		try {
 			const success = await pushDocument(product);
 			if (isRxDocument(success)) {

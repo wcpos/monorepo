@@ -77,7 +77,7 @@ const useTaxCalculation = () => {
 			}
 			const discounts = 0;
 			const subtotal = qty * price;
-			const subtotalTaxes = calcTaxes(subtotal, rates);
+			const subtotalTaxes = calcTaxes(subtotal, appliedRates);
 			const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes, taxRoundAtSubtotal);
 			const total = subtotal - discounts;
 			const totalTaxes = calcTaxes(subtotal, appliedRates, pricesIncludeTax === 'yes');

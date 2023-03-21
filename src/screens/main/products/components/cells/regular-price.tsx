@@ -7,30 +7,21 @@ import Text from '@wcpos/components/src/text';
 
 import NumberInput from '../../../components/number-input';
 import PriceWithTax from '../../../components/product/price';
-import usePushDocument from '../../../contexts/use-push-document';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 
+type ProductDocument = import('@wcpos/database').ProductDocument;
+
 type Props = {
-	item: import('@wcpos/database').ProductDocument;
-	column: import('@wcpos/components/src/table').ColumnProps<
-		import('@wcpos/database').ProductDocument
-	>;
+	item: ProductDocument;
+	column: import('@wcpos/components/src/table').ColumnProps<ProductDocument>;
+	onChange: (product: ProductDocument, data: Record<string, unknown>) => void;
 };
 
-const RegularPrice = ({ item: product, column }: Props) => {
+const RegularPrice = ({ item: product, column, onChange }: Props) => {
 	// const regular_price = useObservableState(product.regular_price$, product.regular_price);
 	// const taxStatus = useObservableState(product.tax_status$, product.tax_status);
 	// const taxClass = useObservableState(product.tax_class$, product.tax_class);
 	const { display } = column;
-	const pushDocument = usePushDocument();
-
-	const handleUpdate = React.useCallback(
-		async (regular_price) => {
-			const p = await product.patch({ regular_price });
-			pushDocument(p);
-		},
-		[product, pushDocument]
-	);
 
 	/**
 	 *
@@ -46,7 +37,13 @@ const RegularPrice = ({ item: product, column }: Props) => {
 	/**
 	 *
 	 */
-	return <NumberInput value={product.regular_price || '0'} onChange={handleUpdate} showDecimals />;
+	return (
+		<NumberInput
+			value={product.regular_price || '0'}
+			onChange={(regular_price) => onChange(product, { regular_price })}
+			showDecimals
+		/>
+	);
 };
 
 export default RegularPrice;

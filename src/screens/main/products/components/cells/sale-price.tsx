@@ -4,26 +4,17 @@ import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
 import NumberInput from '../../../components/number-input';
-import usePushDocument from '../../../contexts/use-push-document';
+
+type ProductDocument = import('@wcpos/database').ProductDocument;
 
 type Props = {
-	item: import('@wcpos/database').ProductDocument;
-	column: import('@wcpos/components/src/table').ColumnProps<
-		import('@wcpos/database').ProductDocument
-	>;
+	item: ProductDocument;
+	column: import('@wcpos/components/src/table').ColumnProps<ProductDocument>;
+	onChange: (product: ProductDocument, data: Record<string, unknown>) => void;
 };
 
-const SalePrice = ({ item: product, column }: Props) => {
+const SalePrice = ({ item: product, column, onChange }: Props) => {
 	const { display } = column;
-	const pushDocument = usePushDocument();
-
-	const handleUpdate = React.useCallback(
-		async (sale_price) => {
-			const p = await product.patch({ sale_price });
-			pushDocument(p);
-		},
-		[product, pushDocument]
-	);
 
 	/**
 	 *
@@ -42,7 +33,7 @@ const SalePrice = ({ item: product, column }: Props) => {
 	return (
 		<NumberInput
 			value={product.sale_price || '0'}
-			onChange={handleUpdate}
+			onChange={(sale_price) => onChange(product, { sale_price })}
 			disabled={!product.on_sale}
 			showDecimals
 		/>
