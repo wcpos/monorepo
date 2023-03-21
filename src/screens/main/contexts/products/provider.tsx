@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
 import { ObservableResource, useObservableState } from 'observable-hooks';
-import { switchMap, map } from 'rxjs/operators';
+import { switchMap, map, tap } from 'rxjs/operators';
 
 // import products from '@wcpos/database/src/collections/products';
 import log from '@wcpos/utils/src/logger';

@@ -6,6 +6,7 @@ import { useObservableState } from 'observable-hooks';
 import { defaultHashSha256 } from 'rxdb';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 
+import { storeCollections } from '@wcpos/database/src/collections';
 import log from '@wcpos/utils/src/logger';
 
 import useProducts from './products';
@@ -178,16 +179,23 @@ const useProductReplication = () => {
 
 	/**
 	 * Clear
+	 * TODO - it should clear the variations collection too
 	 */
 	const clear = React.useCallback(async () => {
-		await collection.remove();
+		// remove local checkpoints
 		const promises = [];
 		registry.forEach((value, key) => {
 			promises.push(collection.upsertLocal(key, {}));
 		});
 		promises.push(collection.upsertLocal('status', {}));
-		return Promise.all(promises);
-	}, [collection]);
+		await Promise.all(promises);
+
+		// remove collection
+		await collection.remove();
+
+		// add collection again
+		storeDB.addCollections({ products: storeCollections.products });
+	}, [collection, storeDB]);
 
 	/**
 	 * Sync

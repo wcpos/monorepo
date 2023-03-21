@@ -48,6 +48,11 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 								{ last_name: { $regex: new RegExp(escape(search), 'i') } },
 								{ email: { $regex: new RegExp(escape(search), 'i') } },
 								{ username: { $regex: new RegExp(escape(search), 'i') } },
+								{ 'billing.first_name': { $regex: new RegExp(escape(search), 'i') } },
+								{ 'billing.last_name': { $regex: new RegExp(escape(search), 'i') } },
+								{ 'billing.email': { $regex: new RegExp(escape(search), 'i') } },
+								{ 'billing.company': { $regex: new RegExp(escape(search), 'i') } },
+								{ 'billing.phone': { $regex: new RegExp(escape(search), 'i') } },
 							],
 					  }
 					: null;
