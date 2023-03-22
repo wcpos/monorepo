@@ -33,7 +33,9 @@ const CartTable = () => {
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
 	const cart = useCart();
+	// const deferredCart = React.useDeferredValue(cart);
 	const items = React.useMemo(() => flatten(Object.values(cart)), [cart]); // TODO - add sorting
+	// const items = React.useDeferredValue(flatten(Object.values(cart)));
 
 	/**
 	 *
@@ -72,7 +74,13 @@ const CartTable = () => {
 	/**
 	 *
 	 */
-	return <Table<CartItem> data={items} estimatedItemSize={46} extraData={context} />;
+	return (
+		<Table<CartItem>
+			data={items} // estimatedItemSize={46}
+			extraData={context}
+		/>
+	);
 };
 
+// export default React.memo(CartTable);
 export default CartTable;

@@ -7,8 +7,8 @@ import { switchMap, map, tap, distinctUntilChanged } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
+import useOrderReplication from './use-order-replication';
 import useLocalData from '../../../../contexts/local-data';
-import useOrderReplication from '../use-order-replication';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type OrderDocument = import('@wcpos/database/src/collections/orders').OrderDocument;
@@ -28,11 +28,11 @@ interface OrdersProviderProps {
 }
 
 const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderProps) => {
-	log.debug('render order provider');
+	log.debug('render open order provider');
 	const { storeDB } = useLocalData();
 	const collection = storeDB.collections.orders;
 	const { query$, setQuery } = useQuery(initialQuery);
-	const { replicationState } = useOrderReplication({ params: initialQuery });
+	const { replicationState } = useOrderReplication(query$);
 
 	/**
 	 * Only run the replication when the Provider is mounted

@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
+import { useObservableState } from 'observable-hooks';
 import { defaultHashSha256 } from 'rxdb';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 
@@ -46,16 +47,17 @@ function mangoToRestQuery(mangoSelector) {
 /**
  *
  */
-const useOrderReplication = (props?: Props = { params: { order: 'desc', orderby: 'date' } }) => {
+const useOrderReplication = (query$) => {
 	const http = useRestHttpClient();
 	const { site, storeDB } = useLocalData();
 	const collection = storeDB.collections.orders;
+	const query = useObservableState(query$, query$.getValue());
 
 	/**
 	 *
 	 */
 	const replicationState = React.useMemo(() => {
-		const hash = defaultHashSha256(JSON.stringify(props.params));
+		const hash = defaultHashSha256(JSON.stringify(query));
 		if (registry.has(hash)) {
 			return registry.get(hash);
 		}
@@ -71,23 +73,25 @@ const useOrderReplication = (props?: Props = { params: { order: 'desc', orderby:
 			pull: {
 				async handler(lastCheckpoint = {}, batchSize) {
 					try {
-						const checkpoint = get(lastCheckpoint, hash, {});
-						const selector = mangoToRestQuery(props.params);
+						const checkpoint = await collection
+							.getLocal(hash)
+							.then((doc) => doc?.toJSON().data || {});
+						const status = await collection
+							.getLocal('status')
+							.then((doc) => doc?.toJSON().data || {});
+
+						const selector = mangoToRestQuery(query);
 						const emptyRestQuery = isEmpty(selector);
 
 						const params = Object.assign(selector, {
 							order: query.sortDirection,
-							orderby: query.sortBy,
+							// date_modified_gmt is not a valid param for orders
+							orderby: query.sortBy === 'date_created_gmt' ? 'date' : query.sortBy,
 							page: checkpoint.nextPage || 1,
 							per_page: 10,
 							after: status.fullInitialSync ? status.lastModified : null,
 						});
-						debugger;
-						// const params = Object.assign(props.params, {
-						// 	page: checkpoint.nextPage ? checkpoint.nextPage : 1,
-						// 	per_page: batchSize,
-						// 	after: checkpoint.date_modified_gmt,
-						// });
+
 						const response = await http.get(collection.name, { params });
 						const data = get(response, 'data', []);
 						const link = get(response, ['headers', 'link']);
@@ -96,22 +100,43 @@ const useOrderReplication = (props?: Props = { params: { order: 'desc', orderby:
 						const parsedHeaders = parseLinkHeader(link);
 						const nextPage = get(parsedHeaders, ['next', 'page']);
 
+						//
 						const mostRecent = data.reduce((prev, current) => {
 							const prevDate = new Date(prev.date_modified_gmt);
 							const currentDate = new Date(current.date_modified_gmt);
 							return prevDate > currentDate ? prev : current;
-						}, lastCheckpoint);
+						}, checkpoint);
 
+						/**
+						 * Set next checkpoint, using my own custom checkpoint
+						 */
+						await collection.upsertLocal(hash, {
+							remoteTotal,
+							totalPages,
+							nextPage,
+							date_modified_gmt: mostRecent.date_modified_gmt,
+						});
+
+						/**
+						 * Set flag on initial full sync
+						 */
+						if (emptyRestQuery && !nextPage) {
+							// NOTE: make sure lastModified is set, otherwise it will loop forever
+							const lastModified =
+								mostRecent.date_modified_gmt || new Date(Date.now()).toISOString().split('.')[0];
+
+							await collection.upsertLocal('status', {
+								fullInitialSync: true,
+								lastModified,
+							});
+						}
+
+						/**
+						 * If no more pages, then use date_modified_gmt
+						 * or, if total records is same as local count
+						 */
 						return {
 							documents: data,
-							checkpoint: {
-								[hash]: {
-									remoteTotal,
-									totalPages,
-									nextPage,
-									date_modified_gmt: mostRecent.date_modified_gmt,
-								},
-							},
 						};
 					} catch (error) {
 						log.error(error);
@@ -130,7 +155,7 @@ const useOrderReplication = (props?: Props = { params: { order: 'desc', orderby:
 
 		registry.set(hash, state);
 		return state;
-	}, [collection, http, props.params, site.wc_api_url]);
+	}, [collection, http, query, site.wc_api_url]);
 
 	/**
 	 *

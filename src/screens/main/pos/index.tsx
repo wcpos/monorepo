@@ -14,7 +14,8 @@ import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { GatewaysProvider } from '../contexts/gateways';
-import { OrdersProvider } from '../contexts/open-orders';
+import { OrdersProvider as OpenOrdersProvider } from '../contexts/open-orders';
+import { OrdersProvider } from '../contexts/orders';
 import Receipt from '../receipt';
 
 export type POSStackParamList = {
@@ -24,6 +25,13 @@ export type POSStackParamList = {
 };
 
 const Stack = createStackNavigator<POSStackParamList>();
+
+// queries should always be memoised, otherwise they will cause a re-render
+const initialQuery = {
+	sortBy: 'date_created_gmt',
+	sortDirection: 'desc',
+	selector: { status: 'pos-open' },
+};
 
 /**
  *
@@ -37,19 +45,13 @@ const POSStackNavigator = () => {
 						{({ route }) => {
 							const orderID = get(route, ['params', 'orderID']);
 							return (
-								<OrdersProvider
-									initialQuery={{
-										sortBy: 'date_created_gmt',
-										sortDirection: 'desc',
-										selector: { status: 'pos-open' },
-									}}
-								>
-									<CurrentOrderProvider orderID={orderID}>
-										<React.Suspense fallback={<Text>Loading POS...</Text>}>
+								<OpenOrdersProvider initialQuery={initialQuery}>
+									<React.Suspense fallback={<Text>Loading POS...</Text>}>
+										<CurrentOrderProvider orderID={orderID}>
 											<POS />
-										</React.Suspense>
-									</CurrentOrderProvider>
-								</OrdersProvider>
+										</CurrentOrderProvider>
+									</React.Suspense>
+								</OpenOrdersProvider>
 							);
 						}}
 					</Stack.Screen>
