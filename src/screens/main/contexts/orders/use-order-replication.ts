@@ -6,13 +6,11 @@ import { useObservableState } from 'observable-hooks';
 import { defaultHashSha256 } from 'rxdb';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 
-import { storeCollections } from '@wcpos/database/src/collections';
 import log from '@wcpos/utils/src/logger';
 
-import useProducts from './products';
-import useLocalData from '../../../contexts/local-data';
-import { parseLinkHeader } from '../../../lib/url';
-import useRestHttpClient from '../hooks/use-rest-http-client';
+import useLocalData from '../../../../contexts/local-data';
+import { parseLinkHeader } from '../../../../lib/url';
+import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 interface Props {
 	params?: Record<string, any>;
@@ -49,20 +47,16 @@ function mangoToRestQuery(mangoSelector) {
 /**
  *
  */
-const useProductReplication = () => {
+const useOrderReplication = (query$) => {
 	const http = useRestHttpClient();
 	const { site, storeDB } = useLocalData();
-	const collection = storeDB.collections.products;
-	const { query$ } = useProducts();
+	const collection = storeDB.collections.orders;
 	const query = useObservableState(query$, query$.getValue());
 
 	/**
 	 *
 	 */
 	const replicationState = React.useMemo(() => {
-		/**
-		 * TODO: instead of using the registry, I should use the replicationIdentifier
-		 */
 		const hash = defaultHashSha256(JSON.stringify(query));
 		if (registry.has(hash)) {
 			return registry.get(hash);
@@ -73,16 +67,11 @@ const useProductReplication = () => {
 		 */
 		const state = replicateRxCollection({
 			collection,
-			// autoStart: false,
+			autoStart: false,
 			replicationIdentifier: `wc-rest-replication-to-${site.wc_api_url}/${collection.name}`,
 			// retryTime: 1000000000,
 			pull: {
-				// initialCheckpoint,
-				/**
-				 * TODO: Checkpoint is not working as expected
-				 * I will keep my own checkpoint in the local db
-				 */
-				async handler() {
+				async handler(lastCheckpoint = {}, batchSize) {
 					try {
 						const checkpoint = await collection
 							.getLocal(hash)
@@ -93,14 +82,16 @@ const useProductReplication = () => {
 
 						const selector = mangoToRestQuery(query);
 						const emptyRestQuery = isEmpty(selector);
+
 						const params = Object.assign(selector, {
 							order: query.sortDirection,
-							// WC REST API doesn't use the name property, it uses 'title', because of course it does
-							orderby: query.sortBy === 'name' ? 'title' : query.sortBy,
+							// date_modified_gmt is not a valid param for orders
+							orderby: query.sortBy === 'date_created_gmt' ? 'date' : query.sortBy,
 							page: checkpoint.nextPage || 1,
 							per_page: 10,
 							after: status.fullInitialSync ? status.lastModified : null,
 						});
+
 						const response = await http.get(collection.name, { params });
 						const data = get(response, 'data', []);
 						const link = get(response, ['headers', 'link']);
@@ -167,35 +158,12 @@ const useProductReplication = () => {
 	}, [collection, http, query, site.wc_api_url]);
 
 	/**
-	 *
-	 */
-	// React.useEffect(() => {
-	// 	replicationState.start();
-	// 	return () => {
-	// 		// this is async, should we wait?
-	// 		replicationState.cancel();
-	// 	};
-	// }, [replicationState]);
-
-	/**
 	 * Clear
-	 * TODO - it should clear the variations collection too
 	 */
 	const clear = React.useCallback(async () => {
-		// remove local checkpoints
-		const promises = [];
-		registry.forEach((value, key) => {
-			promises.push(collection.upsertLocal(key, {}));
-		});
-		promises.push(collection.upsertLocal('status', {}));
-		await Promise.all(promises);
-
-		// remove collection
-		await collection.remove();
-
-		// add collection again
-		storeDB.addCollections({ products: storeCollections.products });
-	}, [collection, storeDB]);
+		const query = collection.find();
+		return query.remove();
+	}, [collection]);
 
 	/**
 	 * Sync
@@ -210,4 +178,4 @@ const useProductReplication = () => {
 	return { replicationState, clear, sync };
 };
 
-export default useProductReplication;
+export default useOrderReplication;

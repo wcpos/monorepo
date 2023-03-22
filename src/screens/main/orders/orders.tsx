@@ -13,7 +13,6 @@ import { t } from '../../../lib/translations';
 import UiSettings from '../components/ui-settings';
 import { OrdersProvider } from '../contexts/orders';
 import useUI from '../contexts/ui-settings';
-import useOrderReplication from '../contexts/use-order-replication';
 
 /**
  *
@@ -26,21 +25,6 @@ const Orders = () => {
 		() => ({ sortBy: 'date_created_gmt', sortDirection: 'desc' }),
 		[]
 	);
-
-	const { replicationState } = useOrderReplication({
-		params: { order: 'desc', orderby: 'date' },
-	});
-
-	/**
-	 * Only run the replication when the Provider is mounted
-	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, []);
 
 	return (
 		<OrdersProvider initialQuery={initialQuery}>

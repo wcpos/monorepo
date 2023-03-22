@@ -8,7 +8,7 @@ import Text from '@wcpos/components/src/text';
 
 import useLocalData from '../../../contexts/local-data';
 import SyncButton from '../components/sync-button';
-import useOrderReplication from '../contexts/use-order-replication';
+import useOrders from '../contexts/orders';
 
 interface OrderFooterProps {
 	count: number;
@@ -18,7 +18,7 @@ const OrdersFooter = ({ count }: OrderFooterProps) => {
 	const { storeDB } = useLocalData();
 	const total = useObservableState(storeDB.orders.count().$, 0);
 	const theme = useTheme();
-	const { sync, clear, replicationState } = useOrderReplication();
+	const { sync, clear, replicationState } = useOrders();
 
 	return (
 		<Box

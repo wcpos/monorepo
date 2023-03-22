@@ -6,6 +6,7 @@ import { useObservableState } from 'observable-hooks';
 import { defaultHashSha256 } from 'rxdb';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 
+import { storeCollections } from '@wcpos/database/src/collections';
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
@@ -47,16 +48,19 @@ function mangoToRestQuery(mangoSelector) {
 /**
  *
  */
-const useOrderReplication = (query$) => {
+const useProductReplication = (query$) => {
 	const http = useRestHttpClient();
 	const { site, storeDB } = useLocalData();
-	const collection = storeDB.collections.orders;
+	const collection = storeDB.collections.products;
 	const query = useObservableState(query$, query$.getValue());
 
 	/**
 	 *
 	 */
 	const replicationState = React.useMemo(() => {
+		/**
+		 * TODO: instead of using the registry, I should use the replicationIdentifier
+		 */
 		const hash = defaultHashSha256(JSON.stringify(query));
 		if (registry.has(hash)) {
 			return registry.get(hash);
@@ -67,11 +71,16 @@ const useOrderReplication = (query$) => {
 		 */
 		const state = replicateRxCollection({
 			collection,
-			autoStart: false,
+			// autoStart: false,
 			replicationIdentifier: `wc-rest-replication-to-${site.wc_api_url}/${collection.name}`,
 			// retryTime: 1000000000,
 			pull: {
-				async handler(lastCheckpoint = {}, batchSize) {
+				// initialCheckpoint,
+				/**
+				 * TODO: Checkpoint is not working as expected
+				 * I will keep my own checkpoint in the local db
+				 */
+				async handler() {
 					try {
 						const checkpoint = await collection
 							.getLocal(hash)
@@ -82,16 +91,14 @@ const useOrderReplication = (query$) => {
 
 						const selector = mangoToRestQuery(query);
 						const emptyRestQuery = isEmpty(selector);
-
 						const params = Object.assign(selector, {
 							order: query.sortDirection,
-							// date_modified_gmt is not a valid param for orders
-							orderby: query.sortBy === 'date_created_gmt' ? 'date' : query.sortBy,
+							// WC REST API doesn't use the name property, it uses 'title', because of course it does
+							orderby: query.sortBy === 'name' ? 'title' : query.sortBy,
 							page: checkpoint.nextPage || 1,
 							per_page: 10,
 							after: status.fullInitialSync ? status.lastModified : null,
 						});
-
 						const response = await http.get(collection.name, { params });
 						const data = get(response, 'data', []);
 						const link = get(response, ['headers', 'link']);
@@ -159,11 +166,23 @@ const useOrderReplication = (query$) => {
 
 	/**
 	 * Clear
+	 * TODO - it should clear the variations collection too
 	 */
 	const clear = React.useCallback(async () => {
-		const query = collection.find();
-		return query.remove();
-	}, [collection]);
+		// remove local checkpoints
+		const promises = [];
+		registry.forEach((value, key) => {
+			promises.push(collection.upsertLocal(key, {}));
+		});
+		promises.push(collection.upsertLocal('status', {}));
+		await Promise.all(promises);
+
+		// remove collection
+		await collection.remove();
+
+		// add collection again
+		storeDB.addCollections({ products: storeCollections.products });
+	}, [collection, storeDB]);
 
 	/**
 	 * Sync
@@ -178,4 +197,4 @@ const useOrderReplication = (query$) => {
 	return { replicationState, clear, sync };
 };
 
-export default useOrderReplication;
+export default useProductReplication;

@@ -7,11 +7,9 @@ import Text from '@wcpos/components/src/text';
 
 import { t } from '../../../lib/translations';
 import useCustomers, { CustomersProvider } from '../contexts/customers';
-import useCustomerReplication from '../contexts/use-customer-replication';
 import useCustomerNameFormat from '../hooks/use-customer-name-format';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
-type StoreDatabase = import('@wcpos/database').StoreDatabase;
 
 interface CustomerSelectProps {
 	selectedCustomer?: CustomerDocument;
@@ -24,7 +22,6 @@ interface CustomerSelectProps {
 const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectProps) => {
 	const { query$, setQuery, data: customers } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
-	const { replicationState } = useCustomerReplication();
 	const { format } = useCustomerNameFormat();
 
 	/**

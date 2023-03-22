@@ -7,6 +7,7 @@ import { switchMap, map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
+import useCustomerReplication from './use-customer-replication';
 import useLocalData from '../../../../contexts/local-data';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
@@ -31,6 +32,18 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 	const { storeDB } = useLocalData();
 	const collection = storeDB.collections.customers;
 	const { query$, setQuery } = useQuery(initialQuery);
+	const { replicationState, clear, sync } = useCustomerReplication(query$);
+
+	/**
+	 * Only run the replication when the Provider is mounted
+	 */
+	React.useEffect(() => {
+		replicationState.start();
+		return () => {
+			// this is async, should we wait?
+			replicationState.cancel();
+		};
+	}, []);
 
 	/**
 	 *
@@ -81,7 +94,7 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 	}, [query$, collection]);
 
 	return (
-		<CustomersContext.Provider value={{ ...value, query$, setQuery }}>
+		<CustomersContext.Provider value={{ ...value, query$, setQuery, clear, sync }}>
 			{children}
 		</CustomersContext.Provider>
 	);

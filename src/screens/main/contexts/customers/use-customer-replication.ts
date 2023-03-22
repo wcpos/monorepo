@@ -8,10 +8,9 @@ import { replicateRxCollection } from 'rxdb/plugins/replication';
 
 import log from '@wcpos/utils/src/logger';
 
-import useCustomers from './customers';
-import useLocalData from '../../../contexts/local-data';
-import { parseLinkHeader } from '../../../lib/url';
-import useRestHttpClient from '../hooks/use-rest-http-client';
+import useLocalData from '../../../../contexts/local-data';
+import { parseLinkHeader } from '../../../../lib/url';
+import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 interface Props {
 	params?: Record<string, any>;
@@ -42,11 +41,10 @@ function mangoToRestQuery(mangoSelector) {
 /**
  *
  */
-const useCustomerReplication = () => {
+const useCustomerReplication = (query$) => {
 	const http = useRestHttpClient();
 	const { site, storeDB } = useLocalData();
 	const collection = storeDB.collections.customers;
-	const { query$ } = useCustomers();
 	const query = useObservableState(query$, query$.getValue());
 
 	/**
@@ -156,17 +154,6 @@ const useCustomerReplication = () => {
 		registry.set(hash, state);
 		return state;
 	}, [collection, http, query, site.wc_api_url]);
-
-	/**
-	 *
-	 */
-	// React.useEffect(() => {
-	// 	replicationState.start();
-	// 	return () => {
-	// 		// this is async, should we wait?
-	// 		replicationState.cancel();
-	// 	};
-	// }, [replicationState]);
 
 	/**
 	 * Clear

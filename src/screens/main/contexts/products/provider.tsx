@@ -7,6 +7,7 @@ import { switchMap, map, tap } from 'rxjs/operators';
 // import products from '@wcpos/database/src/collections/products';
 import log from '@wcpos/utils/src/logger';
 
+import useProductReplication from './use-product-replication';
 import useLocalData from '../../../../contexts/local-data';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
@@ -36,6 +37,18 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 		uiSettings.get('showOutOfStock')
 	);
 	const { query$, setQuery, nextPage } = useQuery(initialQuery);
+	const { replicationState, clear, sync } = useProductReplication(query$);
+
+	/**
+	 * Only run the replication when the Provider is mounted
+	 */
+	React.useEffect(() => {
+		replicationState.start();
+		return () => {
+			// this is async, should we wait?
+			replicationState.cancel();
+		};
+	}, []);
 
 	/**
 	 *
@@ -80,7 +93,9 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 	}, [collection, query$]);
 
 	return (
-		<ProductsContext.Provider value={{ ...value, setQuery, query$, nextPage }}>
+		<ProductsContext.Provider
+			value={{ ...value, setQuery, query$, nextPage, replicationState, clear, sync }}
+		>
 			{children}
 		</ProductsContext.Provider>
 	);
