@@ -39,7 +39,7 @@
     "@sentry/react-native": "4.15.0",
     "@shopify/flash-list": "1.4.2",
     "@wcpos/core": "*",
-    "expo": "48.0.8",
+    "expo": "48.0.9",
     "expo-application": "~5.1.1",
     "expo-barcode-scanner": "~12.3.2",
     "expo-constants": "~14.2.1",
