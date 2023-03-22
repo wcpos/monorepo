@@ -8,23 +8,10 @@ import Text from '@wcpos/components/src/text';
 
 import Cart from './cart';
 import OpenOrderTabs from './tabs';
-import { OrdersProvider } from '../../contexts/orders';
 import useCurrentOrder from '../contexts/current-order';
 
 const OpenOrders = ({ isColumn = false }) => {
 	const { currentOrder, setCurrentOrder } = useCurrentOrder();
-
-	/**
-	 *
-	 */
-	const initialQuery = React.useMemo(
-		() => ({
-			sortBy: 'date_created_gmt',
-			sortDirection: 'desc',
-			selector: { status: 'pos-open' },
-		}),
-		[]
-	);
 
 	/**
 	 *
@@ -39,21 +26,19 @@ const OpenOrders = ({ isColumn = false }) => {
 				</ErrorBoundary>
 			</Box>
 			<ErrorBoundary>
-				<OrdersProvider initialQuery={initialQuery}>
-					<React.Suspense
-						fallback={
-							// Fallback is the 'new cart' button
-							<Tabs.TabBarSkeleton
-								numberOfTabs={1}
-								paddingLeft="none"
-								paddingBottom="none"
-								buttonText={<Icon name="plus" type="inverse" />}
-							/>
-						}
-					>
-						<OpenOrderTabs currentOrder={currentOrder} setCurrentOrder={setCurrentOrder} />
-					</React.Suspense>
-				</OrdersProvider>
+				<React.Suspense
+					fallback={
+						// Fallback is the 'new cart' button
+						<Tabs.TabBarSkeleton
+							numberOfTabs={1}
+							paddingLeft="none"
+							paddingBottom="none"
+							buttonText={<Icon name="plus" type="inverse" />}
+						/>
+					}
+				>
+					<OpenOrderTabs currentOrder={currentOrder} />
+				</React.Suspense>
 			</ErrorBoundary>
 		</Box>
 	);

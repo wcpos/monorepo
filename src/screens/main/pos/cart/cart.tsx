@@ -21,7 +21,6 @@ import CartHeader from './cart-header';
 import Table from './table';
 import Totals from './totals';
 import { CartProvider } from '../../contexts/cart';
-import useOrderReplication from '../../contexts/use-order-replication';
 
 export interface CartProps {
 	currentOrder: import('@wcpos/database').OrderDocument;
@@ -34,21 +33,6 @@ const Cart = ({ currentOrder }: CartProps) => {
 		currentOrder.line_items.length > 0 ||
 		currentOrder.fee_lines.length > 0 ||
 		currentOrder.shipping_lines.length > 0;
-
-	const { replicationState } = useOrderReplication({
-		params: { order: 'desc', orderby: 'date', status: 'pos-open' },
-	});
-
-	/**
-	 * Only run the replication when the Provider is mounted
-	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, []);
 
 	return (
 		<Box

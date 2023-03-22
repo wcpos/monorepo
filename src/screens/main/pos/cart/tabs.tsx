@@ -6,7 +6,7 @@ import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
 
 import CartTabTitle from './tab-title';
-import useOrders from '../../contexts/orders';
+import useOrders from '../../contexts/open-orders';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -18,7 +18,7 @@ interface CartTabsProps {
 /**
  *
  */
-const CartTabs = ({ currentOrder, setCurrentOrder }: CartTabsProps) => {
+const CartTabs = ({ currentOrder }: CartTabsProps) => {
 	const navigation = useNavigation();
 	const { data: orders } = useOrders();
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
@@ -27,11 +27,11 @@ const CartTabs = ({ currentOrder, setCurrentOrder }: CartTabsProps) => {
 	 * This is a bit hacky, but it works.
 	 * This updates the cart to new order after the order is paid
 	 */
-	React.useEffect(() => {
-		if (focusedIndex === -1 && currentOrder.uuid) {
-			setCurrentOrder(null);
-		}
-	}, [currentOrder, focusedIndex, setCurrentOrder]);
+	// React.useEffect(() => {
+	// 	if (focusedIndex === -1 && currentOrder.uuid) {
+	// 		setCurrentOrder(null);
+	// 	}
+	// }, [currentOrder, focusedIndex, setCurrentOrder]);
 
 	/**
 	 *
@@ -60,16 +60,15 @@ const CartTabs = ({ currentOrder, setCurrentOrder }: CartTabsProps) => {
 	 */
 	const handleTabChange = React.useCallback(
 		(idx: number) => {
-			setCurrentOrder(orders[idx] || null);
 			// /**
 			//  * TODO - setParams updates the currentOrder without refreshing the products,
 			//  * this is great!, but I lose the back button. Push keeps the old order in the stack.
 			//  * I need to add the new order to the history without the rerender.
 			//  */
-			// navigation.setParams({ orderID: routes[idx].key });
-			// // navigation.dispatch(StackActions.push('POS', { orderID: orders[idx].uuid }));
+			navigation.setParams({ orderID: routes[idx].key });
+			// navigation.dispatch(StackActions.push('POS', { orderID: orders[idx].uuid }));
 		},
-		[orders, setCurrentOrder]
+		[navigation, routes]
 	);
 
 	/**
@@ -85,5 +84,5 @@ const CartTabs = ({ currentOrder, setCurrentOrder }: CartTabsProps) => {
 	);
 };
 
-// export default CartTabs;
-export default React.memo(CartTabs);
+export default CartTabs;
+// export default React.memo(CartTabs);

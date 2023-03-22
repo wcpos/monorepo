@@ -64,7 +64,10 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 							combineLatest([item.quantity$, item.price$, item.tax_class$]).pipe(
 								map(([qty, price, taxClass]) => {
 									const totals = calcLineItemTotals(qty, price, taxClass);
-									item.incrementalPatch(totals);
+									const merged = Object.assign(item.toMutableJSON(), totals);
+									if (JSON.stringify(merged) !== JSON.stringify(item.toJSON())) {
+										item.incrementalPatch(totals);
+									}
 									return totals;
 								})
 							)
@@ -87,7 +90,10 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 							return combineLatest([item.total$, item.tax_class$, item.tax_status$]).pipe(
 								map(([price, taxClass, taxStatus]) => {
 									const totals = calcLineItemTotals(1, price, taxClass, taxStatus);
-									item.incrementalPatch(totals);
+									const merged = Object.assign(item.toMutableJSON(), totals);
+									if (JSON.stringify(merged) !== JSON.stringify(item.toJSON())) {
+										item.incrementalPatch(totals);
+									}
 									return totals;
 								})
 							);
@@ -110,7 +116,10 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 							return combineLatest([item.total$]).pipe(
 								map(([price]) => {
 									const totals = calcLineItemTotals(1, price, 'shipping');
-									item.incrementalPatch(totals);
+									const merged = Object.assign(item.toMutableJSON(), totals);
+									if (JSON.stringify(merged) !== JSON.stringify(item.toJSON())) {
+										item.incrementalPatch(totals);
+									}
 									return totals;
 								})
 							);
@@ -128,7 +137,10 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 			// filter((totals) => totals.length > 0),
 			map((cartTotals) => {
 				const totals = calcOrderTotals(cartTotals);
-				order.incrementalPatch(totals);
+				const merged = Object.assign(order.toMutableJSON(), totals);
+				if (JSON.stringify(merged) !== JSON.stringify(order.toJSON())) {
+					order.incrementalPatch(totals);
+				}
 				return totals;
 			}),
 			catchError((err) => {

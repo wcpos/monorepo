@@ -8,13 +8,13 @@ import { map, tap, switchMap } from 'rxjs/operators';
 
 import NewOrder from './new-order';
 import useLocalData from '../../../../../contexts/local-data';
+import useOrders from '../../../contexts/open-orders';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CurrentOrderContextProps {
 	currentOrder: OrderDocument | typeof NewOrder;
-	setCurrentOrder: React.Dispatch<React.SetStateAction<OrderDocument | null>>;
-	// newOrder: typeof NewOrder;
+	orderID?: string;
 }
 
 export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>(null);
@@ -30,15 +30,12 @@ interface CurrentOrderContextProviderProps {
  *
  * TODO - need a way to currency symbol from store document
  */
-const CurrentOrderProvider = ({
-	children,
-	currentOrderResource,
-}: CurrentOrderContextProviderProps) => {
+const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProviderProps) => {
 	// const navigation = useNavigation();
 	const { store, storeDB } = useLocalData();
 	const collection = storeDB?.collections.orders;
-	const storedOrder = useObservableSuspense(currentOrderResource);
-	const [currentOrder, setCurrentOrder] = React.useState<OrderDocument | null>(storedOrder);
+	const { data: orders } = useOrders();
+	const currentOrder = orders.find((order) => order.uuid === orderID);
 
 	/**
 	 *
@@ -47,21 +44,9 @@ const CurrentOrderProvider = ({
 		return new NewOrder({
 			collection,
 			currency: store?.currency,
-			currency_symbol: store?.currency_symbol,
+			// currency_symbol: store?.currency_symbol,
 		});
-	}, [collection, store?.currency, store?.currency_symbol]);
-
-	/**
-	 *
-	 */
-	const handleSetCurrentOrder = React.useCallback((order: OrderDocument | null) => {
-		/**
-		 * FIXME: I want to change the location bar and set navigation history, but not cause render
-		 * I could do it manually with window.history.pushState, but I want to use react-navigation
-		 */
-		// navigation.setParams({ orderID: order?.uuid || '' });
-		setCurrentOrder(order);
-	}, []);
+	}, [collection, store?.currency]);
 
 	/**
 	 *
@@ -70,7 +55,6 @@ const CurrentOrderProvider = ({
 		<CurrentOrderContext.Provider
 			value={{
 				currentOrder: currentOrder ? currentOrder : newOrder,
-				setCurrentOrder: handleSetCurrentOrder,
 			}}
 		>
 			{children}

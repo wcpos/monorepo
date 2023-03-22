@@ -43,11 +43,12 @@ const AddFee = ({ order }: AddFeeProps) => {
 	 */
 	const handleAddFee = React.useCallback(() => {
 		try {
-			const { name, total, taxable } = data;
+			const { name, total, taxable, tax_class } = data;
 			addFee({
 				name,
 				total,
 				tax_status: taxable ? 'taxable' : 'none',
+				tax_class,
 			});
 			setOpened(false);
 		} catch (error) {
@@ -65,6 +66,7 @@ const AddFee = ({ order }: AddFeeProps) => {
 				name: { type: 'string', title: t('Fee Name', { _tags: 'core' }) },
 				total: { type: 'string', title: t('Total', { _tags: 'core' }) },
 				taxable: { type: 'boolean', title: t('Taxable', { _tags: 'core' }) },
+				tax_class: { type: 'string', title: t('Tax Class', { _tags: 'core' }) },
 			},
 		}),
 		[]
