@@ -21,8 +21,21 @@ const Customers = () => {
 	const { uiSettings } = useUI('customers');
 	const theme = useTheme();
 
+	/**
+	 *
+	 */
+	const initialQuery = React.useMemo(() => {
+		return {
+			sortBy: uiSettings.get('sortBy'),
+			sortDirection: uiSettings.get('sortDirection'),
+		};
+	}, [uiSettings]);
+
+	/**
+	 *
+	 */
 	return (
-		<CustomersProvider initialQuery={{ sortBy: 'last_name', sortDirection: 'asc' }}>
+		<CustomersProvider initialQuery={initialQuery}>
 			<Box padding="small" style={{ height: '100%' }}>
 				<Box
 					raised

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation, StackActions } from '@react-navigation/native';
+import { StackActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
 
@@ -14,6 +14,8 @@ import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { CustomersProvider } from '../contexts/customers';
 
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
 export type CustomersStackParamList = {
 	Customers: undefined;
 	AddCustomer: undefined;
@@ -25,59 +27,86 @@ const Stack = createStackNavigator<CustomersStackParamList>();
 /**
  *
  */
-const CustomersNavigator = () => {
-	const navigation = useNavigation();
+const CustomersWithProviders = () => {
+	return (
+		<ErrorBoundary>
+			<React.Suspense fallback={<Text>Loading customers</Text>}>
+				<Customers />
+			</React.Suspense>
+		</ErrorBoundary>
+	);
+};
+
+/**
+ *
+ */
+const AddCustomerWithProviders = ({
+	navigation,
+}: NativeStackScreenProps<CustomersStackParamList, 'AddCustomer'>) => {
+	return (
+		<ModalLayout
+			title={t('Add Customer', { _tags: 'core' })}
+			primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
+			secondaryActions={[
+				{
+					label: t('Cancel', { _tags: 'core' }),
+					action: () => navigation.dispatch(StackActions.pop(1)),
+				},
+			]}
+		>
+			<AddCustomer />
+		</ModalLayout>
+	);
+};
+
+/**
+ *
+ */
+const EditCustomerWithProviders = ({
+	route,
+	navigation,
+}: NativeStackScreenProps<CustomersStackParamList, 'EditCustomer'>) => {
+	const customerID = get(route, ['params', 'customerID']);
+
+	const initialQuery = React.useMemo(
+		() => ({
+			selector: { uuid: customerID },
+			limit: 1,
+		}),
+		[customerID]
+	);
 
 	return (
+		<CustomersProvider initialQuery={initialQuery}>
+			<ModalLayout
+				title={t('Edit Customer', { _tags: 'core' })}
+				primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
+				secondaryActions={[
+					{
+						label: t('Cancel', { _tags: 'core' }),
+						action: () => navigation.dispatch(StackActions.pop(1)),
+					},
+				]}
+			>
+				<React.Suspense fallback={<Text>Loading customer</Text>}>
+					<EditCustomer />
+				</React.Suspense>
+			</ModalLayout>
+		</CustomersProvider>
+	);
+};
+
+/**
+ *
+ */
+const CustomersNavigator = () => {
+	return (
 		<Stack.Navigator screenOptions={{ headerShown: false }}>
-			<Stack.Screen name="Customers">
-				{() => (
-					<ErrorBoundary>
-						<React.Suspense fallback={<Text>Loading customers</Text>}>
-							<Customers />
-						</React.Suspense>
-					</ErrorBoundary>
-				)}
-			</Stack.Screen>
-			<Stack.Screen name="AddCustomer" options={{ presentation: 'transparentModal' }}>
-				{() => (
-					<ModalLayout
-						title={t('Add Customer', { _tags: 'core' })}
-						primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
-						secondaryActions={[
-							{
-								label: t('Cancel', { _tags: 'core' }),
-								action: () => navigation.dispatch(StackActions.pop(1)),
-							},
-						]}
-					>
-						<AddCustomer />
-					</ModalLayout>
-				)}
-			</Stack.Screen>
-			<Stack.Screen name="EditCustomer" options={{ presentation: 'transparentModal' }}>
-				{({ route }) => {
-					const customerID = get(route, ['params', 'customerID']);
-					return (
-						<CustomersProvider initialQuery={{ selector: { uuid: customerID }, limit: 1 }}>
-							<ModalLayout
-								title={t('Edit Customer', { _tags: 'core' })}
-								primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
-								secondaryActions={[
-									{
-										label: t('Cancel', { _tags: 'core' }),
-										action: () => navigation.dispatch(StackActions.pop(1)),
-									},
-								]}
-							>
-								<React.Suspense fallback={<Text>Loading customer</Text>}>
-									<EditCustomer />
-								</React.Suspense>
-							</ModalLayout>
-						</CustomersProvider>
-					);
-				}}
-			</Stack.Screen>
+			<Stack.Screen name="Customers" component={CustomersWithProviders} />
+			<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
+				<Stack.Screen name="AddCustomer" component={AddCustomerWithProviders} />
+				<Stack.Screen name="EditCustomer" component={EditCustomerWithProviders} />
+			</Stack.Group>
 		</Stack.Navigator>
 	);
 };

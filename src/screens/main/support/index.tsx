@@ -22,6 +22,7 @@ const Support = () => {
 				channel="711884517081612301"
 				style={{ height: '100%', width: '100%', border: '0px' }}
 				onAPI={(api) => {
+					window.discordApi = api;
 					discordRef.current = api;
 				}}
 			/>

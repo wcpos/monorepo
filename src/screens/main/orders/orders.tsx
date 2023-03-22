@@ -21,11 +21,17 @@ const Orders = () => {
 	const { uiSettings } = useUI('orders');
 	const theme = useTheme();
 
+	/**
+	 *
+	 */
 	const initialQuery = React.useMemo(
-		() => ({ sortBy: 'date_created_gmt', sortDirection: 'desc' }),
-		[]
+		() => ({ sortBy: uiSettings.get('sortBy'), sortDirection: uiSettings.get('sortDirection') }),
+		[uiSettings]
 	);
 
+	/**
+	 *
+	 */
 	return (
 		<OrdersProvider initialQuery={initialQuery}>
 			<Box padding="small" style={{ height: '100%' }}>

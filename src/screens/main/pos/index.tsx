@@ -18,6 +18,8 @@ import { OrdersProvider as OpenOrdersProvider } from '../contexts/open-orders';
 import { OrdersProvider } from '../contexts/orders';
 import Receipt from '../receipt';
 
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
 export type POSStackParamList = {
 	POS: { orderID?: string };
 	Checkout: { orderID: string };
@@ -26,83 +28,110 @@ export type POSStackParamList = {
 
 const Stack = createStackNavigator<POSStackParamList>();
 
-// queries should always be memoised, otherwise they will cause a re-render
-const initialQuery = {
-	sortBy: 'date_created_gmt',
-	sortDirection: 'desc',
-	selector: { status: 'pos-open' },
+/**
+ * Memoised initial query for open orders, prevents re-rendering
+ */
+const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'POS'>) => {
+	const orderID = get(route, ['params', 'orderID']);
+
+	const initialQuery = React.useMemo(
+		() => ({
+			sortBy: 'date_created_gmt',
+			sortDirection: 'desc',
+			selector: { status: 'pos-open' },
+		}),
+		[]
+	);
+
+	return (
+		<OpenOrdersProvider initialQuery={initialQuery}>
+			<React.Suspense fallback={<Text>Loading POS...</Text>}>
+				<CurrentOrderProvider orderID={orderID}>
+					<POS />
+				</CurrentOrderProvider>
+			</React.Suspense>
+		</OpenOrdersProvider>
+	);
+};
+
+/**
+ * Memoise initial query for orders and gateways
+ */
+const CheckoutWithProviders = ({
+	route,
+}: NativeStackScreenProps<POSStackParamList, 'Checkout'>) => {
+	const orderID = get(route, ['params', 'orderID']);
+
+	const initialOrdersQuery = React.useMemo(
+		() => ({ selector: { uuid: orderID }, limit: 1 }),
+		[orderID]
+	);
+	const initialGatewaysQuery = React.useMemo(() => ({ selector: { enabled: true } }), []);
+
+	return (
+		<OrdersProvider initialQuery={initialOrdersQuery}>
+			<GatewaysProvider initialQuery={initialGatewaysQuery}>
+				<ModalLayout
+					size="xLarge"
+					title={t('Checkout', { _tags: 'core' })}
+					primaryAction={{
+						label: t('Process Payment', { _tags: 'core' }),
+					}}
+				>
+					<React.Suspense fallback={<Text>Loading Checkout...</Text>}>
+						<Checkout />
+					</React.Suspense>
+				</ModalLayout>
+			</GatewaysProvider>
+		</OrdersProvider>
+	);
 };
 
 /**
  *
+ */
+const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'Receipt'>) => {
+	const orderID = get(route, ['params', 'orderID']);
+
+	const initialOrdersQuery = React.useMemo(
+		() => ({ selector: { uuid: orderID }, limit: 1 }),
+		[orderID]
+	);
+
+	return (
+		<OrdersProvider initialQuery={initialOrdersQuery}>
+			<ModalLayout
+				title={t('Receipt', { _tags: 'core' })}
+				primaryAction={{
+					label: t('Print Receipt', { _tags: 'core' }),
+				}}
+				secondaryActions={[
+					{
+						label: t('Email Receipt', { _tags: 'core' }),
+					},
+				]}
+				style={{ height: '100%' }}
+			>
+				<React.Suspense fallback={<Text>Loading Receipt...</Text>}>
+					<Receipt />
+				</React.Suspense>
+			</ModalLayout>
+		</OrdersProvider>
+	);
+};
+
+/**
+ * The actual navigator
  */
 const POSStackNavigator = () => {
 	return (
 		<ErrorBoundary>
 			<React.Suspense fallback={<Text>Loading POSStackNavigator...</Text>}>
 				<Stack.Navigator screenOptions={{ headerShown: false }}>
-					<Stack.Screen name="POS">
-						{({ route }) => {
-							const orderID = get(route, ['params', 'orderID']);
-							return (
-								<OpenOrdersProvider initialQuery={initialQuery}>
-									<React.Suspense fallback={<Text>Loading POS...</Text>}>
-										<CurrentOrderProvider orderID={orderID}>
-											<POS />
-										</CurrentOrderProvider>
-									</React.Suspense>
-								</OpenOrdersProvider>
-							);
-						}}
-					</Stack.Screen>
+					<Stack.Screen name="POS" component={POSWithProviders} />
 					<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-						<Stack.Screen name="Checkout">
-							{({ route }) => {
-								const orderID = get(route, ['params', 'orderID']);
-								return (
-									<OrdersProvider initialQuery={{ selector: { uuid: orderID }, limit: 1 }}>
-										<GatewaysProvider initialQuery={{ selector: { enabled: true } }}>
-											<ModalLayout
-												size="xLarge"
-												title={t('Checkout', { _tags: 'core' })}
-												primaryAction={{
-													label: t('Process Payment', { _tags: 'core' }),
-												}}
-											>
-												<React.Suspense fallback={<Text>Loading Checkout...</Text>}>
-													<Checkout />
-												</React.Suspense>
-											</ModalLayout>
-										</GatewaysProvider>
-									</OrdersProvider>
-								);
-							}}
-						</Stack.Screen>
-						<Stack.Screen name="Receipt">
-							{({ route }) => {
-								const orderID = get(route, ['params', 'orderID']);
-								return (
-									<OrdersProvider initialQuery={{ selector: { uuid: orderID }, limit: 1 }}>
-										<ModalLayout
-											title={t('Receipt', { _tags: 'core' })}
-											primaryAction={{
-												label: t('Print Receipt', { _tags: 'core' }),
-											}}
-											secondaryActions={[
-												{
-													label: t('Email Receipt', { _tags: 'core' }),
-												},
-											]}
-											style={{ height: '100%' }}
-										>
-											<React.Suspense fallback={<Text>Loading Receipt...</Text>}>
-												<Receipt />
-											</React.Suspense>
-										</ModalLayout>
-									</OrdersProvider>
-								);
-							}}
-						</Stack.Screen>
+						<Stack.Screen name="Checkout" component={CheckoutWithProviders} />
+						<Stack.Screen name="Receipt" component={ReceiptWithProviders} />
 					</Stack.Group>
 				</Stack.Navigator>
 			</React.Suspense>

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation, StackActions } from '@react-navigation/native';
+import { StackActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
 
@@ -14,6 +14,8 @@ import { ModalLayout } from '../../components/modal-layout';
 import { OrdersProvider } from '../contexts/orders';
 import Receipt from '../receipt';
 
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
 export type OrdersStackParamList = {
 	Orders: undefined;
 	EditOrder: { orderID: string };
@@ -25,69 +27,101 @@ const Stack = createStackNavigator<OrdersStackParamList>();
 /**
  *
  */
-const OrdersNavigator = () => {
-	const navigation = useNavigation();
+const OrdersWithProviders = () => {
+	return (
+		<ErrorBoundary>
+			<React.Suspense fallback={<Text>Loading orders</Text>}>
+				<Orders />
+			</React.Suspense>
+		</ErrorBoundary>
+	);
+};
+
+/**
+ *
+ */
+const EditOrderWithProviders = ({
+	route,
+	navigation,
+}: NativeStackScreenProps<OrdersStackParamList, 'EditOrder'>) => {
+	const orderID = get(route, ['params', 'orderID']);
+
+	const initialQuery = React.useMemo(
+		() => ({
+			selector: { uuid: orderID },
+			limit: 1,
+		}),
+		[orderID]
+	);
 
 	return (
+		<OrdersProvider initialQuery={initialQuery}>
+			<ModalLayout
+				title={t('Edit Order', { _tags: 'core' })}
+				primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
+				secondaryActions={[
+					{
+						label: t('Cancel', { _tags: 'core' }),
+						action: () => navigation.dispatch(StackActions.pop(1)),
+					},
+				]}
+			>
+				<React.Suspense fallback={<Text>Loading order</Text>}>
+					<EditOrder />
+				</React.Suspense>
+			</ModalLayout>
+		</OrdersProvider>
+	);
+};
+
+/**
+ *
+ */
+const ReceiptWithProviders = ({
+	route,
+}: NativeStackScreenProps<OrdersStackParamList, 'Receipt'>) => {
+	const orderID = get(route, ['params', 'orderID']);
+
+	const initialQuery = React.useMemo(
+		() => ({
+			selector: { uuid: orderID },
+			limit: 1,
+		}),
+		[orderID]
+	);
+
+	return (
+		<OrdersProvider initialQuery={initialQuery}>
+			<ModalLayout
+				title={t('Receipt', { _tags: 'core' })}
+				primaryAction={{
+					label: t('Print Receipt', { _tags: 'core' }),
+				}}
+				secondaryActions={[
+					{
+						label: t('Email Receipt', { _tags: 'core' }),
+					},
+				]}
+				style={{ height: '100%' }}
+			>
+				<React.Suspense fallback={<Text>Loading order</Text>}>
+					<Receipt />
+				</React.Suspense>
+			</ModalLayout>
+		</OrdersProvider>
+	);
+};
+
+/**
+ *
+ */
+const OrdersNavigator = () => {
+	return (
 		<Stack.Navigator screenOptions={{ headerShown: false }}>
-			<Stack.Screen name="Orders">
-				{() => (
-					<ErrorBoundary>
-						<React.Suspense fallback={<Text>Loading orders</Text>}>
-							<Orders />
-						</React.Suspense>
-					</ErrorBoundary>
-				)}
-			</Stack.Screen>
+			<Stack.Screen name="Orders" component={OrdersWithProviders} />
 			<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-				<Stack.Screen name="EditOrder">
-					{({ route }) => {
-						const orderID = get(route, ['params', 'orderID']);
-						return (
-							<OrdersProvider initialQuery={{ selector: { uuid: orderID }, limit: 1 }}>
-								<ModalLayout
-									title={t('Edit Order', { _tags: 'core' })}
-									primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
-									secondaryActions={[
-										{
-											label: t('Cancel', { _tags: 'core' }),
-											action: () => navigation.dispatch(StackActions.pop(1)),
-										},
-									]}
-								>
-									<React.Suspense fallback={<Text>Loading order</Text>}>
-										<EditOrder />
-									</React.Suspense>
-								</ModalLayout>
-							</OrdersProvider>
-						);
-					}}
-				</Stack.Screen>
-				<Stack.Screen name="Receipt">
-					{({ route }) => {
-						const orderID = get(route, ['params', 'orderID']);
-						return (
-							<OrdersProvider initialQuery={{ selector: { uuid: orderID }, limit: 1 }}>
-								<ModalLayout
-									title={t('Receipt', { _tags: 'core' })}
-									primaryAction={{
-										label: t('Print Receipt', { _tags: 'core' }),
-									}}
-									secondaryActions={[
-										{
-											label: t('Email Receipt', { _tags: 'core' }),
-										},
-									]}
-									style={{ height: '100%' }}
-								>
-									<React.Suspense fallback={<Text>Loading order</Text>}>
-										<Receipt />
-									</React.Suspense>
-								</ModalLayout>
-							</OrdersProvider>
-						);
-					}}
-				</Stack.Screen>
+				<Stack.Screen name="EditOrder" component={EditOrderWithProviders} />
+				<Stack.Screen name="Receipt" component={ReceiptWithProviders} />
 			</Stack.Group>
 		</Stack.Navigator>
 	);

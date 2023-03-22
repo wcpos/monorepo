@@ -28,7 +28,7 @@ const Products = () => {
 	const sortBy = uiSettings.get('sortBy');
 	const sortDirection = uiSettings.get('sortDirection');
 
-	const initialQuery = React.useMemo(() => {
+	const initialTaxQuery = React.useMemo(() => {
 		/**
 		 * default_country has a weird format, eg: US:CA
 		 */
@@ -44,9 +44,17 @@ const Products = () => {
 	/**
 	 *
 	 */
+	const initialProductsQuery = React.useMemo(
+		() => ({ sortBy, sortDirection }),
+		[sortBy, sortDirection]
+	);
+
+	/**
+	 *
+	 */
 	return (
-		<TaxRateProvider initialQuery={initialQuery}>
-			<ProductsProvider initialQuery={{ sortBy, sortDirection }} uiSettings={uiSettings}>
+		<TaxRateProvider initialQuery={initialTaxQuery}>
+			<ProductsProvider initialQuery={initialProductsQuery} uiSettings={uiSettings}>
 				<Box padding="small" style={{ height: '100%' }}>
 					<Box
 						raised

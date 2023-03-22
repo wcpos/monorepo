@@ -11,7 +11,7 @@ import OpenOrderTabs from './tabs';
 import useCurrentOrder from '../contexts/current-order';
 
 const OpenOrders = ({ isColumn = false }) => {
-	const { currentOrder, setCurrentOrder } = useCurrentOrder();
+	const { currentOrder } = useCurrentOrder();
 
 	/**
 	 *

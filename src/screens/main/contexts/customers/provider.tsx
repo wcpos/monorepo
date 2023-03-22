@@ -94,7 +94,9 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 	}, [query$, collection]);
 
 	return (
-		<CustomersContext.Provider value={{ ...value, query$, setQuery, clear, sync }}>
+		<CustomersContext.Provider
+			value={{ ...value, query$, setQuery, clear, sync, replicationState }}
+		>
 			{children}
 		</CustomersContext.Provider>
 	);

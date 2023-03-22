@@ -39,11 +39,17 @@ const SearchBar = () => {
 	/**
 	 *
 	 */
+	const initialCategoriesQuery = React.useMemo(() => ({}), []);
+	const initialTagsQuery = React.useMemo(() => ({}), []);
+
+	/**
+	 *
+	 */
 	return (
 		<>
 			<ErrorBoundary>
-				<ProductCategoriesProvider initialQuery={{}}>
-					<ProductTagsProvider initialQuery={{}}>
+				<ProductCategoriesProvider initialQuery={initialCategoriesQuery}>
+					<ProductTagsProvider initialQuery={initialTagsQuery}>
 						<Search />
 					</ProductTagsProvider>
 				</ProductCategoriesProvider>
