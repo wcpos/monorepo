@@ -70,6 +70,25 @@ function toPopulatedOrderJSON(this: OrderDocument) {
 					data.code = null;
 				}
 			}
+
+			/**
+			 * This is another hack for deleted meta data:
+			 * 1. we make the key = '_deleted', this will hide it in the POS
+			 * 2. we set the value to null, this will delete it in the WC REST API
+			 */
+			if (Array.isArray(data.meta_data) && data.meta_data.length > 0) {
+				data.meta_data = data.meta_data.map((meta) => {
+					if (meta.id && meta.key === '_deleted') {
+						// meta is frozen so we need to clone it
+						meta = { ...meta, value: null };
+					}
+					return meta;
+				});
+			}
+
+			/**
+			 * Matches rxdb toJSON() behaviour
+			 */
 			delete (data as any)._rev;
 			delete (data as any)._attachments;
 			delete (data as any)._deleted;
