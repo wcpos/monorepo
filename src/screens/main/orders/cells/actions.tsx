@@ -1,16 +1,13 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
-import pick from 'lodash/pick';
 import { useObservableState } from 'observable-hooks';
 
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
-import Modal from '@wcpos/components/src/modal';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
-import EditForm from '../../components/edit-form';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 interface Props {
@@ -21,7 +18,6 @@ const Actions = ({ item: order }: Props) => {
 	const navigation = useNavigation();
 	const http = useRestHttpClient();
 	const [menuOpened, setMenuOpened] = React.useState(false);
-	const [editModalOpened, setEditModalOpened] = React.useState(false);
 	const status = useObservableState(order.status$, order.status);
 
 	/**
@@ -71,7 +67,7 @@ const Actions = ({ item: order }: Props) => {
 				type: 'critical',
 			},
 		];
-		if (status === 'completed') {
+		if (status === 'completed' || status === 'pos-partial') {
 			menu.splice(1, 0, {
 				label: t('Receipt', { _tags: 'core' }),
 				icon: 'receipt',

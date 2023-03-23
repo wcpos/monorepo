@@ -44,6 +44,10 @@ const iconMap = {
 		name: 'cartShopping',
 		type: 'primary',
 	},
+	'pos-partial': {
+		name: 'circleDollar',
+		type: 'primary',
+	},
 };
 
 /**

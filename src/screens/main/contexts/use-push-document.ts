@@ -24,8 +24,8 @@ const usePushDocument = () => {
 	 */
 	return React.useCallback(
 		async (doc: RxDocument) => {
-			// const latestDoc = doc.getLatest();
-			const latestDoc = doc;
+			const latestDoc = doc.getLatest();
+			// const latestDoc = doc;
 			const collection = doc.collection;
 			let endpoint = collection.name;
 			if (latestDoc.id) {
@@ -53,6 +53,9 @@ const usePushDocument = () => {
 				}
 				//
 				const parsedData = latestDoc.collection.parseRestResponse(data);
+
+				// FIXME: I think this is done automaticallu by the patch, ie: preSave?
+				// I need tests so I can be sure
 				await collection.upsertRefs(parsedData);
 				return latestDoc.incrementalPatch(parsedData);
 				// return latestDoc.patch(parsedData);
