@@ -17,14 +17,11 @@ import useOrders from '../../../contexts/orders';
 import useRestHttpClient from '../../../hooks/use-rest-http-client';
 
 export interface PaymentWebviewProps {
-	gatewayID: string;
+	order: import('@wcpos/database').OrderDocument;
 }
 
-const PaymentWebview = ({ gatewayID }: PaymentWebviewProps) => {
+const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 	const [loading, setLoading] = React.useState(true);
-	const {
-		data: [order],
-	} = useOrders();
 	const addSnackbar = useSnackbar();
 	const { onPrimaryAction } = useModal();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
@@ -61,7 +58,7 @@ const PaymentWebview = ({ gatewayID }: PaymentWebviewProps) => {
 	/**
 	 *
 	 */
-	React.useEffect(() => setLoading(true), [gatewayID]);
+	// React.useEffect(() => setLoading(true), []);
 
 	/**
 	 *
@@ -120,7 +117,7 @@ const PaymentWebview = ({ gatewayID }: PaymentWebviewProps) => {
 				{paymentURL ? (
 					<WebView
 						ref={iframeRef}
-						src={`${paymentURL}&wcpos=1&gateway=${gatewayID}`}
+						src={paymentURL}
 						onLoad={() => {
 							setLoading(false);
 						}}

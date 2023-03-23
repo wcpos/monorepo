@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
@@ -6,6 +7,7 @@ import Box from '@wcpos/components/src/box';
 import { useModal } from '@wcpos/components/src/modal';
 
 import GatewayTabs from './components/gateway-tabs';
+import PaymentWebview from './components/payment-webview';
 import CheckoutTitle from './components/title';
 import { t } from '../../../../lib/translations';
 import useOrders from '../../contexts/orders';
@@ -36,7 +38,9 @@ const Checkout = () => {
 	return (
 		<Box space="small">
 			<CheckoutTitle order={order} />
-			<GatewayTabs order={order} />
+			<View style={{ minHeight: 500 }}>
+				<PaymentWebview order={order} />
+			</View>
 		</Box>
 	);
 };

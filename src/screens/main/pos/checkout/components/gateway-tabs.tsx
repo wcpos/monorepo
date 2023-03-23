@@ -37,7 +37,7 @@ const GatewayTabs = () => {
 			navigationState={{ index, routes }}
 			renderScene={({ route }) => <PaymentWebview gatewayID={route.key} />}
 			tabBarPosition="left"
-			style={{ minHeight: 400 }}
+			style={{ minHeight: 500 }}
 		/>
 	);
 };
