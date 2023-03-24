@@ -7,7 +7,6 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Loader from '@wcpos/components/src/loader';
 import { useModal } from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import WebView from '@wcpos/components/src/webview';
@@ -21,7 +20,6 @@ export interface PaymentWebviewProps {
 }
 
 const PaymentWebview = ({ order }: PaymentWebviewProps) => {
-	const [loading, setLoading] = React.useState(true);
 	const addSnackbar = useSnackbar();
 	const { onPrimaryAction } = useModal();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
@@ -88,7 +86,6 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 	 */
 	onPrimaryAction(() => {
 		if (iframeRef.current && iframeRef.current.contentWindow) {
-			setLoading(true);
 			iframeRef.current.contentWindow.postMessage({ action: 'wcpos-process-payment' }, '*');
 		}
 	});
@@ -97,29 +94,14 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 	 *
 	 */
 	return (
-		<View style={{ position: 'relative', height: '100%', paddingLeft: 10 }}>
-			{loading ? (
-				<View
-					style={[
-						StyleSheet.absoluteFill,
-						{
-							position: 'absolute',
-							backgroundColor: '#FFF',
-							alignItems: 'center',
-							justifyContent: 'center',
-						},
-					]}
-				>
-					<Loader size="large" type="secondary" />
-				</View>
-			) : null}
+		<View style={{ flex: 1 }}>
 			<ErrorBoundary>
 				{paymentURL ? (
 					<WebView
 						ref={iframeRef}
 						src={paymentURL}
 						onLoad={() => {
-							setLoading(false);
+							// setLoading(false);
 						}}
 						onMessage={(event) => {
 							if (event?.data?.payload?.data) {

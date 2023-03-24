@@ -36,11 +36,9 @@ const Checkout = () => {
 	 *
 	 */
 	return (
-		<Box space="small">
+		<Box fill space="small">
 			<CheckoutTitle order={order} />
-			<View style={{ minHeight: 500 }}>
-				<PaymentWebview order={order} />
-			</View>
+			<PaymentWebview order={order} />
 		</Box>
 	);
 };

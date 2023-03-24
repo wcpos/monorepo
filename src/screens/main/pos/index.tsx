@@ -77,6 +77,7 @@ const CheckoutWithProviders = ({
 					primaryAction={{
 						label: t('Process Payment', { _tags: 'core' }),
 					}}
+					style={{ minHeight: '80%' }}
 				>
 					<React.Suspense fallback={<Text>Loading Checkout...</Text>}>
 						<Checkout />

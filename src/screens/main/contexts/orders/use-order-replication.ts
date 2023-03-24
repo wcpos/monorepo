@@ -92,6 +92,11 @@ const useOrderReplication = (query$) => {
 							after: status.fullInitialSync ? status.lastModified : null,
 						});
 
+						//  FIXME - how to deal with single queries?
+						if (selector.uuid) {
+							return [];
+						}
+
 						const response = await http.get(collection.name, { params });
 						const data = get(response, 'data', []);
 						const link = get(response, ['headers', 'link']);
