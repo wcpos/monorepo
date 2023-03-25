@@ -97,6 +97,14 @@ const useOrderReplication = (query$) => {
 							return [];
 						}
 
+						// FIXME: this is a hack, need to do a proper audit of order options
+						if (query.sortBy === 'date_modified_gmt') {
+							params.orderby = 'date';
+						}
+						if (query.sortBy === 'number') {
+							params.orderby = 'id';
+						}
+
 						const response = await http.get(collection.name, { params });
 						const data = get(response, 'data', []);
 						const link = get(response, ['headers', 'link']);
@@ -127,8 +135,10 @@ const useOrderReplication = (query$) => {
 						 */
 						if (emptyRestQuery && !nextPage) {
 							// NOTE: make sure lastModified is set, otherwise it will loop forever
-							const lastModified =
-								mostRecent.date_modified_gmt || new Date(Date.now()).toISOString().split('.')[0];
+							// FIXME: this is wrong, emptyRestQuery && !nextPage can pass with no mostRecent
+							// const lastModified =
+							// 	mostRecent.date_modified_gmt || new Date(Date.now()).toISOString().split('.')[0];
+							const lastModified = mostRecent.date_modified_gmt;
 
 							await collection.upsertLocal('status', {
 								fullInitialSync: true,

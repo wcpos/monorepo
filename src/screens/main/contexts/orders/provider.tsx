@@ -50,7 +50,25 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			switchMap((query) => {
-				const { search, selector = {}, sortBy, sortDirection } = query;
+				const { search, selector: querySelector, sortBy, sortDirection, limit, skip } = query;
+				let selector;
+
+				const searchSelector = search
+					? {
+							$or: [
+								{ id: { $regex: new RegExp(escape(search), 'i') } },
+								{ number: { $regex: new RegExp(escape(search), 'i') } },
+							],
+					  }
+					: null;
+
+				if (querySelector && searchSelector) {
+					selector = {
+						$and: [querySelector, searchSelector],
+					};
+				} else {
+					selector = querySelector || searchSelector || {};
+				}
 
 				const RxQuery = collection.find({ selector });
 

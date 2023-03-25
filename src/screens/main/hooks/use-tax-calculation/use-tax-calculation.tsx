@@ -12,11 +12,6 @@ type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
 type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
 type Cart = CartItem[];
-// type TaxRateSchema = import('@wcpos/database').TaxRateSchema;
-// interface Taxes {
-// 	id: number;
-// 	total: string;
-// }
 
 const useTaxCalculation = () => {
 	const { data: rates } = useTaxRates();
