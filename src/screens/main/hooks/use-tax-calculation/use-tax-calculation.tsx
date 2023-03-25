@@ -65,7 +65,7 @@ const useTaxCalculation = () => {
 	 * Calculate line item totals
 	 */
 	const calcLineItemTotals = React.useCallback(
-		(qty = 1, price = 0, taxClass = '', taxStatus: string) => {
+		(qty = 1, price = '0', taxClass = '', taxStatus: string) => {
 			const _taxClass = taxClass === '' ? 'standard' : taxClass; // default to standard
 			let appliedRates = rates.filter((rate) => rate.class === _taxClass);
 			if (taxStatus === 'none') {
@@ -75,7 +75,7 @@ const useTaxCalculation = () => {
 				appliedRates = [];
 			}
 			const discounts = 0;
-			const subtotal = qty * price;
+			const subtotal = qty * parseFloat(price);
 			const subtotalTaxes = calcTaxes(subtotal, appliedRates);
 			const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes, taxRoundAtSubtotal === 'yes');
 			const total = subtotal - discounts;

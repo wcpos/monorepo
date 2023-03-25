@@ -26,6 +26,7 @@ export interface LocalData {
 
 export const LocalDataContext = React.createContext<{
 	resources: ObservableResource<LocalData>;
+	// @ts-ignore
 }>(null);
 
 interface LocalDataProviderProps {
@@ -57,13 +58,16 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 			? current$.pipe(
 					switchMap(async ({ user, userDB }) => {
 						const { site, wp_credentials, store } = initialProps;
+						// @ts-ignore
 						let siteDoc = await userDB.sites.findOneFix(site.uuid).exec();
 						let wpCredentialsDoc = await userDB.wp_credentials
+							// @ts-ignore
 							.findOneFix(wp_credentials.uuid)
 							.exec();
 						let storeDoc = await userDB.stores.findOne({ selector: { id: store.id } }).exec();
 
 						if (!siteDoc) {
+							// @ts-ignore
 							siteDoc = await userDB.sites.insert(site);
 						}
 
@@ -72,14 +76,17 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 						 * FIXME: this should be done proactively, ie: check cookie timeout
 						 */
 						if (wpCredentialsDoc) {
+							// @ts-ignore
 							await wpCredentialsDoc.patch({ wp_nonce: wp_credentials.wp_nonce });
 						}
 
 						if (!wpCredentialsDoc) {
+							// @ts-ignore
 							wpCredentialsDoc = await userDB.wp_credentials.insert(wp_credentials);
 						}
 
 						if (!storeDoc) {
+							// @ts-ignore
 							storeDoc = await userDB.stores.insert(store);
 						}
 
@@ -101,6 +108,7 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 		 *
 		 */
 		return {
+			// @ts-ignore
 			resources: new ObservableResource(hydratedResources$),
 			isWebApp,
 			initialProps,

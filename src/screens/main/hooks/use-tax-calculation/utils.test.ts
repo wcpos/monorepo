@@ -6,7 +6,7 @@ import { calcTaxes, sumTaxes, sumItemizedTaxes } from './utils';
 describe('Calculate Taxes', () => {
 	it('should calculate the inclusive and exclusive tax', () => {
 		const taxRate = {
-			id: 72,
+			id: '72',
 			country: 'GB',
 			rate: '20.0000',
 			name: 'VAT',
@@ -27,7 +27,7 @@ describe('Calculate Taxes', () => {
 	it('should calculate the compound tax', () => {
 		const taxRates = [
 			{
-				id: 72,
+				id: '72',
 				country: 'CA',
 				rate: '5.0000',
 				name: 'GST',
@@ -38,7 +38,7 @@ describe('Calculate Taxes', () => {
 				class: '',
 			},
 			{
-				id: 17,
+				id: '17',
 				country: 'CA',
 				state: 'QC',
 				rate: '8.5000',
@@ -54,8 +54,8 @@ describe('Calculate Taxes', () => {
 		// prices exclusive of tax.
 		const exclusiveTaxes = calcTaxes(100, taxRates, false);
 		expect(exclusiveTaxes).toEqual([
-			{ id: 72, total: '5' },
-			{ id: 17, total: '8.925' },
+			{ id: '72', total: '5' },
+			{ id: '17', total: '8.925' },
 		]);
 
 		// prices inclusive of tax.
@@ -68,32 +68,32 @@ describe('Calculate Taxes', () => {
 		 * 92.1659 - ( 92.1659 / 1.05 ) = 4.38885.
 		 */
 		expect(inclusiveTaxes).toEqual([
-			{ id: 17, total: '7.8341' },
-			{ id: 72, total: '4.3889' },
+			{ id: '17', total: '7.8341' },
+			{ id: '72', total: '4.3889' },
 		]);
 	});
 
 	it('should sum taxes', () => {
 		const taxes = [
-			{ id: 1, total: 1.665 },
-			{ id: 2, total: 2 },
+			{ id: '1', total: '1.665' },
+			{ id: '2', total: '2' },
 		];
 		expect(sumTaxes(taxes)).toEqual(3.665);
 	});
 
 	it('should sum itemized taxes', () => {
 		const taxes1 = [
-			{ id: 1, total: 1.665 },
-			{ id: 2, total: 2 },
+			{ id: '1', total: '1.665' },
+			{ id: '2', total: '2' },
 		];
 		const taxes2 = [
-			{ id: 1, total: 1 },
-			{ id: 2, total: 2 },
+			{ id: '1', total: '1' },
+			{ id: '2', total: '2' },
 		];
 
 		expect(sumItemizedTaxes([taxes1, taxes2])).toEqual([
-			{ id: 1, total: '2.665' },
-			{ id: 2, total: '4' },
+			{ id: '1', total: '2.665' },
+			{ id: '2', total: '4' },
 		]);
 	});
 });

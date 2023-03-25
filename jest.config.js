@@ -7,13 +7,10 @@ const TEST_REGEX = '(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|js?|tsx?|ts?)$';
 
 module.exports = {
 	roots: ['<rootDir>/src'],
-	name: '@wcpos/core',
 	displayName: '@wcpos/core',
 	preset: 'ts-jest',
-	// roots: ['<rootDir>/src'],
 	transform: {
-		'^.+\\.ts$': 'ts-jest',
-		'^.+\\.tsx$': 'ts-jest',
+		'^.+\\.(ts|tsx)$': 'ts-jest',
 	},
 	testRegex: TEST_REGEX,
 	moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
@@ -23,7 +20,6 @@ module.exports = {
 	globals: {
 		'ts-jest': {
 			tsconfig: 'tsconfig.json',
-			diagnostics: true,
 		},
 	},
 };
