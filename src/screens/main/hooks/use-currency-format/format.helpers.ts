@@ -113,6 +113,14 @@ export function splitDecimal(numStr: string, allowNegative = true) {
 }
 
 /**
+ *
+ */
+export function roundHalfUp(number, decimalPlaces) {
+	const multiplier = Math.pow(10, decimalPlaces);
+	return Math.round(number * multiplier) / multiplier;
+}
+
+/**
  * This method is required to round prop value to given scale.
  * Not used .round or .fixedTo because that will break with big numbers
  */
@@ -123,8 +131,8 @@ export function roundToPrecision(numStr: string, scale: number, fixedDecimalScal
 	const shoudHaveDecimalSeparator = numStr.indexOf('.') !== -1 && scale;
 	const { beforeDecimal, afterDecimal, hasNagation } = splitDecimal(numStr);
 	const floatValue = parseFloat(`0.${afterDecimal || '0'}`);
-	const floatValueStr =
-		afterDecimal.length <= scale ? `0.${afterDecimal}` : floatValue.toFixed(scale);
+	const floatValueRounded = roundHalfUp(floatValue, scale);
+	const floatValueStr = floatValueRounded.toFixed(scale);
 	const roundedDecimalParts = floatValueStr.split('.');
 	const intPart = beforeDecimal
 		.split('')

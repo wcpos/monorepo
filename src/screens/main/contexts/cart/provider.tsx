@@ -30,7 +30,7 @@ interface CartContextProps {
  *
  */
 const CartProvider = ({ children, order }: CartContextProps) => {
-	const { calcLineItemTotals, calcOrderTotals } = useTaxCalculation();
+	const { calcLineItemTotals, calcOrderTotals, calcShippingLineTotals } = useTaxCalculation();
 
 	/**
 	 *
@@ -114,8 +114,8 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 					combineLatest(
 						items.map((item) => {
 							return combineLatest([item.total$]).pipe(
-								map(([price]) => {
-									const totals = calcLineItemTotals(1, price, 'shipping');
+								map(([total]) => {
+									const totals = calcShippingLineTotals(total);
 									const merged = Object.assign(item.toMutableJSON(), totals);
 									if (JSON.stringify(merged) !== JSON.stringify(item.toJSON())) {
 										item.incrementalPatch(totals);

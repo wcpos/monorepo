@@ -91,6 +91,37 @@ const useTaxCalculation = () => {
 	);
 
 	/**
+	 * TODO - what tax class should be used for shipping?
+	 */
+	const calcShippingLineTotals = React.useCallback(
+		(total = '0') => {
+			// const _taxClass = taxClass === '' ? 'standard' : taxClass; // default to standard
+			const appliedRates = rates.filter((rate) => rate.shipping === true);
+
+			// early return if no taxes
+			if (!calcTaxes || appliedRates.length === 0) {
+				const subtotal = total;
+				return {
+					subtotal,
+					subtotal_tax: '0',
+					total: subtotal,
+					total_tax: '0',
+					taxes: [],
+				};
+			}
+
+			return calculateLineItemTotals({
+				qty: 1,
+				price: total,
+				rates: appliedRates,
+				pricesIncludeTax,
+				taxRoundAtSubtotal,
+			});
+		},
+		[calcTaxes, pricesIncludeTax, rates, taxRoundAtSubtotal]
+	);
+
+	/**
 	 * Calculate order totals
 	 * */
 	const calcOrderTotals = React.useCallback(
@@ -108,6 +139,7 @@ const useTaxCalculation = () => {
 		getDisplayValues,
 		calcLineItemTotals,
 		calcOrderTotals,
+		calcShippingLineTotals,
 	};
 };
 
