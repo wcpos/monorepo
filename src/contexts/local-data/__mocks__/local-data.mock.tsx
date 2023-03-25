@@ -1,7 +1,7 @@
 const useLocalData = jest.fn(() => ({
 	store: {
 		calc_taxes: 'yes',
-		prices_include_tax: 'yes',
+		prices_include_tax: 'no',
 		tax_round_at_subtotal: true,
 	},
 }));

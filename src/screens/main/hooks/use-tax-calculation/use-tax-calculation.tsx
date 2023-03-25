@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import round from 'lodash/round';
 import sumBy from 'lodash/sumBy';
 import { useObservableState } from 'observable-hooks';
 
@@ -43,18 +44,22 @@ const useTaxCalculation = () => {
 			const taxTotal = sumTaxes(itemizedTaxTotals);
 			let displayPrice = price;
 
-			// pricesIncludeTax taxDisplayShop
+			/**
+			 * _price - taxTotal can end up with weird results
+			 * 100 - 16.6667 = 83.33330000000001
+			 * I am rounding to 4 decimal places here
+			 */
 			if (pricesIncludeTax === 'yes' && taxDisplayShop === 'excl') {
-				displayPrice = String(+_price - taxTotal);
+				displayPrice = String(round(_price - taxTotal, 4));
 			}
 
 			if (pricesIncludeTax === 'no' && taxDisplayShop === 'incl') {
-				displayPrice = String(+_price + taxTotal);
+				displayPrice = String(round(_price + taxTotal, 4));
 			}
 
 			return {
 				displayPrice,
-				taxTotal,
+				taxTotal: String(taxTotal),
 				taxDisplayShop,
 			};
 		},

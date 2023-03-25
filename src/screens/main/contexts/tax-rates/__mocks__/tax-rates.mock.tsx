@@ -1,27 +1,15 @@
 const useTaxRates = jest.fn(() => ({
 	data: [
 		{
-			id: 72,
-			country: 'CA',
-			rate: '5.0000',
-			name: 'GST',
+			id: '72',
+			country: 'GB',
+			rate: '20.0000',
+			name: 'VAT',
 			priority: 1,
 			compound: false,
 			shipping: true,
 			order: 1,
-			class: '',
-		},
-		{
-			id: 17,
-			country: 'CA',
-			state: 'QC',
-			rate: '8.5000',
-			name: 'PST',
-			priority: 2,
-			compound: true,
-			shipping: true,
-			order: 2,
-			class: '',
+			class: 'standard',
 		},
 	],
 }));
