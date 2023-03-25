@@ -16,6 +16,9 @@ type Cart = CartItem[];
 const useTaxCalculation = () => {
 	const { data: rates } = useTaxRates();
 	const { store } = useLocalData();
+	if (!store) {
+		throw new Error('Store is not defined');
+	}
 	const _calcTaxes = useObservableState(store?.calc_taxes$, store?.calc_taxes);
 	const pricesIncludeTax = useObservableState(
 		store?.prices_include_tax$,
@@ -31,21 +34,22 @@ const useTaxCalculation = () => {
 	 */
 	const getDisplayValues = React.useCallback(
 		(price: string | undefined, taxClass: string, taxDisplayShop: 'incl' | 'excl') => {
+			const _price = price ? parseFloat(price) : 0;
 			const _taxClass = taxClass === '' ? 'standard' : taxClass; // default to standard
 			const appliedRates =
 				_calcTaxes === 'yes' ? rates.filter((rate) => rate.class === _taxClass) : [];
-			const taxes = calcTaxes(price, appliedRates, pricesIncludeTax === 'yes');
-			const itemizedTaxTotals = sumItemizedTaxes(taxes, taxRoundAtSubtotal);
+			const taxes = calcTaxes(_price, appliedRates, pricesIncludeTax === 'yes');
+			const itemizedTaxTotals = sumItemizedTaxes(taxes, taxRoundAtSubtotal === 'yes');
 			const taxTotal = sumTaxes(itemizedTaxTotals);
 			let displayPrice = price;
 
 			// pricesIncludeTax taxDisplayShop
 			if (pricesIncludeTax === 'yes' && taxDisplayShop === 'excl') {
-				displayPrice = +price - taxTotal;
+				displayPrice = String(+_price - taxTotal);
 			}
 
 			if (pricesIncludeTax === 'no' && taxDisplayShop === 'incl') {
-				displayPrice = +price + taxTotal;
+				displayPrice = String(+_price + taxTotal);
 			}
 
 			return {
@@ -61,7 +65,7 @@ const useTaxCalculation = () => {
 	 * Calculate line item totals
 	 */
 	const calcLineItemTotals = React.useCallback(
-		(qty = 1, price = 0, taxClass, taxStatus) => {
+		(qty = 1, price = 0, taxClass = '', taxStatus: string) => {
 			const _taxClass = taxClass === '' ? 'standard' : taxClass; // default to standard
 			let appliedRates = rates.filter((rate) => rate.class === _taxClass);
 			if (taxStatus === 'none') {
@@ -73,10 +77,10 @@ const useTaxCalculation = () => {
 			const discounts = 0;
 			const subtotal = qty * price;
 			const subtotalTaxes = calcTaxes(subtotal, appliedRates);
-			const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes, taxRoundAtSubtotal);
+			const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes, taxRoundAtSubtotal === 'yes');
 			const total = subtotal - discounts;
 			const totalTaxes = calcTaxes(subtotal, appliedRates, pricesIncludeTax === 'yes');
-			const itemizedTotalTaxes = sumItemizedTaxes(totalTaxes, taxRoundAtSubtotal);
+			const itemizedTotalTaxes = sumItemizedTaxes(totalTaxes, taxRoundAtSubtotal === 'yes');
 			// itemizedSubTotalTaxes & itemizedTotalTaxes should be same size
 			// is there a case where they are not?
 			const taxes = itemizedSubTotalTaxes.map((obj) => {
@@ -91,9 +95,9 @@ const useTaxCalculation = () => {
 
 			return {
 				subtotal: String(subtotal),
-				subtotal_tax: String(sumTaxes(subtotalTaxes, taxRoundAtSubtotal)),
+				subtotal_tax: String(sumTaxes(subtotalTaxes, taxRoundAtSubtotal === 'yes')),
 				total: String(total),
-				total_tax: String(sumTaxes(totalTaxes, taxRoundAtSubtotal)),
+				total_tax: String(sumTaxes(totalTaxes, taxRoundAtSubtotal === 'yes')),
 				taxes,
 			};
 		},
@@ -111,6 +115,7 @@ const useTaxCalculation = () => {
 			const totalTaxString = String(totalTax);
 			const totalWithTaxString = String(totalWithTax);
 			const itemizedTaxes = sumItemizedTaxes(
+				// @ts-ignore
 				lines.map((line) => line.taxes ?? []),
 				taxRoundAtSubtotal
 			);

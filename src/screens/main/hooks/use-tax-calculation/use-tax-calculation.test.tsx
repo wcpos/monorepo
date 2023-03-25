@@ -3,70 +3,86 @@ import { useObservableState } from 'observable-hooks';
 
 import useTaxCalculation from './use-tax-calculation';
 import * as localData from '../../../../contexts/local-data';
-// import useTaxRates from '../../contexts/tax-rates';
+import * as taxRates from '../../contexts/tax-rates';
 
-jest.mock('observable-hooks');
-jest.mock('../../../../contexts/local-data');
+/**
+ * Mock the useLocalData hook
+ */
+jest.mock('../../../../contexts/local-data', () => {
+	const originalModule = jest.requireActual('../../../../contexts/local-data');
 
-const mockStore = {
-	calc_taxes: 'yes',
-	prices_include_tax: 'yes',
-	tax_round_at_subtotal: true,
-};
+	return {
+		...originalModule,
+		useLocalData: jest.fn(),
+		LocalDataProvider: jest.fn(({ children }) => <>{children}</>),
+	};
+});
 
-(localData.useLocalData as jest.Mock).mockImplementation(() => ({
-	store: mockStore,
+(localData.default as jest.Mock).mockImplementation(() => ({
+	store: {
+		calc_taxes: 'yes',
+		prices_include_tax: 'yes',
+		tax_round_at_subtotal: true,
+	},
 }));
 
-// Mock the LocalDataProvider (or other exports) if necessary
-localData.LocalDataProvider = jest.fn(({ children }) => <>{children}</>);
+/**
+ * Mock the useRates hook
+ */
+jest.mock('../../contexts/tax-rates', () => {
+	const originalModule = jest.requireActual('../../contexts/tax-rates');
 
-// Set up some test data and mock functions
-const mockCalcTaxes = 'yes';
-const mockPricesIncludeTax = 'yes';
-const mockTaxRoundAtSubtotal = true;
-const mockRates = [
-	{
-		id: 72,
-		country: 'CA',
-		rate: '5.0000',
-		name: 'GST',
-		priority: 1,
-		compound: false,
-		shipping: true,
-		order: 1,
-		class: '',
-	},
-	{
-		id: 17,
-		country: 'CA',
-		state: 'QC',
-		rate: '8.5000',
-		name: 'PST',
-		priority: 2,
-		compound: true,
-		shipping: true,
-		order: 2,
-		class: '',
-	},
-];
+	return {
+		...originalModule,
+		useTaxRates: jest.fn(),
+		TaxRateProvider: jest.fn(({ children }) => <>{children}</>),
+	};
+});
 
-// Mock the useObservableState hook
-// (useObservableState as jest.Mock).mockImplementation((_, initialValue) => initialValue);
-// (useLocalData as jest.Mock).mockImplementation(() => {});
+(taxRates.default as jest.Mock).mockImplementation(() => ({
+	data: [
+		{
+			id: 72,
+			country: 'CA',
+			rate: '5.0000',
+			name: 'GST',
+			priority: 1,
+			compound: false,
+			shipping: true,
+			order: 1,
+			class: '',
+		},
+		{
+			id: 17,
+			country: 'CA',
+			state: 'QC',
+			rate: '8.5000',
+			name: 'PST',
+			priority: 2,
+			compound: true,
+			shipping: true,
+			order: 2,
+			class: '',
+		},
+	],
+}));
+
+/**
+ * Mock the useObservableState hook
+ */
+jest.mock('observable-hooks');
+(useObservableState as jest.Mock).mockImplementation((_, initialValue) => initialValue);
 
 describe('useTaxCalculation', () => {
 	beforeEach(() => {
-		(useObservableState as jest.Mock).mockImplementation((_, initialValue) => initialValue);
-		(useLocalData as jest.Mock).mockImplementation(() => ({
-			store: mockStore,
-		}));
+		// (useObservableState as jest.Mock).mockImplementation((_, initialValue) => initialValue);
+		// (localData.default as jest.Mock).mockImplementation(() => ({
+		// 	store: mockStore,
+		// }));
 	});
 
 	test('getDisplayValues', () => {
-		const { result } = renderHook(() =>
-			useTaxCalculation(mockCalcTaxes, mockPricesIncludeTax, mockTaxRoundAtSubtotal, mockRates)
-		);
+		const { result } = renderHook(() => useTaxCalculation());
 
 		const { getDisplayValues } = result.current;
 
@@ -84,9 +100,7 @@ describe('useTaxCalculation', () => {
 	});
 
 	test('calcLineItemTotals', () => {
-		const { result } = renderHook(() =>
-			useTaxCalculation(mockCalcTaxes, mockPricesIncludeTax, mockTaxRoundAtSubtotal, mockRates)
-		);
+		const { result } = renderHook(() => useTaxCalculation());
 
 		const { calcLineItemTotals } = result.current;
 
@@ -108,9 +122,7 @@ describe('useTaxCalculation', () => {
 	});
 
 	test('calcOrderTotals', () => {
-		const { result } = renderHook(() =>
-			useTaxCalculation(mockCalcTaxes, mockPricesIncludeTax, mockTaxRoundAtSubtotal, mockRates)
-		);
+		const { result } = renderHook(() => useTaxCalculation());
 
 		const { calcOrderTotals } = result.current;
 
@@ -135,6 +147,7 @@ describe('useTaxCalculation', () => {
 			},
 		];
 
+		/* @ts-ignore */
 		const orderTotals = calcOrderTotals(cartItems);
 		expect(orderTotals.total).toBe('180');
 		expect(orderTotals.total_tax).toBe('30');

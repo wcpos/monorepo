@@ -75,6 +75,7 @@
     "@types/react": "^18.0.29",
     "@types/styled-components": "^5.1.26",
     "@types/styled-components-react-native": "^5.2.1",
+    "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
     "jest": "^29.5.0",
@@ -85,5 +86,6 @@
   },
   "eslintConfig": {
     "extends": "@wcpos/eslint-config"
-  }
+  },
+  "packageManager": "yarn@3.5.0"
 }

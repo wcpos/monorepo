@@ -135,14 +135,14 @@ export function calcTaxes(price: number, rates: TaxRateSchema[], pricesIncludeTa
 /**
  *
  */
-export function sumTaxes(taxes: Taxes[]) {
+export function sumTaxes(taxes: Taxes[], round = true) {
 	return sumBy(taxes, (tax) => +tax.total);
 }
 
 /**
  *
  */
-export function sumItemizedTaxes(taxes: Taxes[]) {
+export function sumItemizedTaxes(taxes: Taxes[], round = true) {
 	// group taxes by id
 	const groupedTaxes = groupBy(flatten(taxes), 'id');
 	return map(groupedTaxes, (itemized, id) => ({
