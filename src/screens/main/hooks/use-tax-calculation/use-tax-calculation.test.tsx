@@ -105,6 +105,84 @@ describe('useTaxCalculation', () => {
 	});
 
 	describe('calcOrderTotals', () => {
+		test('calcOrderTotals with tax', () => {
+			// @ts-ignore
+			useTaxRates.mockReturnValueOnce({
+				data: [
+					{
+						id: '72',
+						country: 'CA',
+						rate: '5.0000',
+						name: 'GST',
+						priority: 1,
+						compound: false,
+						shipping: true,
+						order: 1,
+						class: 'standard',
+					},
+					{
+						id: '17',
+						country: 'CA',
+						state: 'QC',
+						rate: '8.5000',
+						name: 'PST',
+						priority: 2,
+						compound: true,
+						shipping: true,
+						order: 2,
+						class: 'standard',
+					},
+				],
+			});
+			const { result } = renderHook(() => useTaxCalculation());
+
+			const { calcOrderTotals } = result.current;
+
+			const cartItems = [
+				{
+					id: '1',
+					subtotal: '100',
+					subtotal_tax: '20',
+					total: '100',
+					total_tax: '20',
+					taxes: [
+						{ id: '72', total: '10', subtotal: '10' },
+						{ id: '17', total: '10', subtotal: '10' },
+					],
+				},
+				{
+					id: '2',
+					subtotal: '50',
+					subtotal_tax: '10',
+					total: '50',
+					total_tax: '10',
+					taxes: [
+						{ id: '72', total: '5', subtotal: '5' },
+						{ id: '17', total: '5', subtotal: '5' },
+					],
+				},
+			];
+
+			// TODO - do we need to honor the order?
+			// @ts-ignore
+			const orderTotals = calcOrderTotals(cartItems);
+			expect(orderTotals.total).toBe('180');
+			expect(orderTotals.total_tax).toBe('30');
+			expect(orderTotals.tax_lines).toHaveLength(2);
+			expect(orderTotals.tax_lines[0]).toEqual({
+				rate_id: '17',
+				label: 'PST',
+				compound: true,
+				tax_total: '15',
+			});
+			expect(orderTotals.tax_lines[1]).toEqual({
+				rate_id: '72',
+				label: 'GST',
+				compound: false,
+				tax_total: '15',
+			});
+		});
+
 		test('calcOrderTotals with no tax', () => {
 			const { result } = renderHook(() => useTaxCalculation());
 
@@ -125,79 +203,6 @@ describe('useTaxCalculation', () => {
 			expect(orderTotals.total).toBe('150');
 			expect(orderTotals.total_tax).toBe('0');
 			expect(orderTotals.tax_lines).toHaveLength(0);
-		});
-
-		test('calcOrderTotals with tax', () => {
-			// @ts-ignore
-			useTaxRates.mockReturnValueOnce({
-				data: [
-					{
-						id: 72,
-						country: 'CA',
-						rate: '5.0000',
-						name: 'GST',
-						priority: 1,
-						compound: false,
-						shipping: true,
-						order: 1,
-						class: 'standard',
-					},
-					{
-						id: 17,
-						country: 'CA',
-						state: 'QC',
-						rate: '8.5000',
-						name: 'PST',
-						priority: 2,
-						compound: true,
-						shipping: true,
-						order: 2,
-						class: 'standard',
-					},
-				],
-			});
-			const { result } = renderHook(() => useTaxCalculation());
-
-			const { calcOrderTotals } = result.current;
-
-			const cartItems = [
-				{
-					id: '1',
-					total: '100',
-					total_tax: '20',
-					taxes: [
-						{ id: '72', total: '10' },
-						{ id: '17', total: '10' },
-					],
-				},
-				{
-					id: '2',
-					total: '50',
-					total_tax: '10',
-					taxes: [
-						{ id: '72', total: '5' },
-						{ id: '17', total: '5' },
-					],
-				},
-			];
-
-			// @ts-ignore
-			const orderTotals = calcOrderTotals(cartItems);
-			expect(orderTotals.total).toBe('180');
-			expect(orderTotals.total_tax).toBe('30');
-			expect(orderTotals.tax_lines).toHaveLength(2);
-			expect(orderTotals.tax_lines[0]).toEqual({
-				rate_id: '72',
-				label: 'GST',
-				compound: false,
-				tax_total: '15',
-			});
-			expect(orderTotals.tax_lines[1]).toEqual({
-				rate_id: '17',
-				label: 'PST',
-				compound: true,
-				tax_total: '15',
-			});
 		});
 
 		test('calcOrderTotals with no items', () => {
