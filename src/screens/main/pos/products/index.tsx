@@ -50,7 +50,7 @@ const POSProducts = ({ isColumn = false }) => {
 					</Box>
 					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 						<ErrorBoundary>
-							<React.Suspense fallback={<Text>Loading products...</Text>}>
+							<React.Suspense>
 								<Table uiSettings={uiSettings} />
 							</React.Suspense>
 						</ErrorBoundary>

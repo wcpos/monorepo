@@ -27,9 +27,15 @@ const Checkout = () => {
 	const { setTitle } = useModal();
 
 	React.useEffect(() => {
-		setTitle(() =>
-			t('Checkout Order #{number}', { _tags: 'core', number, _context: 'Checkout Order title' })
-		);
+		let title = t('Checkout', { _tags: 'core' });
+		if (number) {
+			title = t('Checkout Order #{number}', {
+				_tags: 'core',
+				number,
+				_context: 'Checkout Order title',
+			});
+		}
+		setTitle(() => title);
 	}, [number, setTitle]);
 
 	/**

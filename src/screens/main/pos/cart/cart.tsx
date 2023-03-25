@@ -1,14 +1,9 @@
 import * as React from 'react';
 
-import flatten from 'lodash/flatten';
-import { useLayoutObservableState } from 'observable-hooks';
-import { combineLatest } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Text from '@wcpos/components/src/text';
 
 import AddFee from './add-fee';
 import AddShipping from './add-shipping';
@@ -47,10 +42,11 @@ const Cart = ({ currentOrder }: CartProps) => {
 
 			{hasItems && (
 				// show cart only if cart not empty
+				// TODO - how to defer this to prevent empty table from rendering?
 				<Box fill>
 					<CartProvider order={currentOrder}>
 						<ErrorBoundary>
-							<React.Suspense fallback={<Text>loading cart items...</Text>}>
+							<React.Suspense>
 								<Table />
 							</React.Suspense>
 						</ErrorBoundary>

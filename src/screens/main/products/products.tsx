@@ -77,7 +77,7 @@ const Products = () => {
 							</ErrorBoundary>
 						</Box>
 						<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-							<React.Suspense fallback={<Text>Loading products table...</Text>}>
+							<React.Suspense>
 								<Table uiSettings={uiSettings} />
 							</React.Suspense>
 						</Box>

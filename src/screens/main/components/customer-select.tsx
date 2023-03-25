@@ -78,7 +78,7 @@ export default (props: CustomerSelectProps) => {
 
 	return (
 		<CustomersProvider initialQuery={initialQuery}>
-			<React.Suspense fallback={<Text>Loading Customer Select</Text>}>
+			<React.Suspense>
 				<CustomerSelect {...props} />
 			</React.Suspense>
 		</CustomersProvider>

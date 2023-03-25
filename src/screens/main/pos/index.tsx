@@ -45,7 +45,7 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 
 	return (
 		<OpenOrdersProvider initialQuery={initialQuery}>
-			<React.Suspense fallback={<Text>Loading POS...</Text>}>
+			<React.Suspense>
 				<CurrentOrderProvider orderID={orderID}>
 					<POS />
 				</CurrentOrderProvider>
@@ -79,7 +79,7 @@ const CheckoutWithProviders = ({
 					}}
 					style={{ minHeight: '80%' }}
 				>
-					<React.Suspense fallback={<Text>Loading Checkout...</Text>}>
+					<React.Suspense>
 						<Checkout />
 					</React.Suspense>
 				</ModalLayout>
@@ -113,7 +113,7 @@ const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamLis
 				]}
 				style={{ height: '100%' }}
 			>
-				<React.Suspense fallback={<Text>Loading Receipt...</Text>}>
+				<React.Suspense>
 					<Receipt />
 				</React.Suspense>
 			</ModalLayout>
@@ -127,7 +127,7 @@ const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamLis
 const POSStackNavigator = () => {
 	return (
 		<ErrorBoundary>
-			<React.Suspense fallback={<Text>Loading POSStackNavigator...</Text>}>
+			<React.Suspense>
 				<Stack.Navigator screenOptions={{ headerShown: false }}>
 					<Stack.Screen name="POS" component={POSWithProviders} />
 					<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>

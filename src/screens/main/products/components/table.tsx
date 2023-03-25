@@ -74,7 +74,7 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 			if (Cell) {
 				return (
 					<ErrorBoundary>
-						<React.Suspense fallback={<Text>Loading...</Text>}>
+						<React.Suspense>
 							<Cell item={item} column={column} index={index} onChange={handleChange} />
 						</React.Suspense>
 					</ErrorBoundary>

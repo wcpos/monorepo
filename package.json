@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/core",
-  "version": "1.0.121",
+  "version": "1.0.122",
   "description": "The core WooCommerce POS app",
   "author": "kilbot <paul@kilbot.com>",
   "license": "MIT",
@@ -72,7 +72,7 @@
     "@types/core-js": "^2.5.5",
     "@types/jest": "^29.5.0",
     "@types/lodash": "4.14.191",
-    "@types/react": "^18.0.28",
+    "@types/react": "^18.0.29",
     "@types/styled-components": "^5.1.26",
     "@types/styled-components-react-native": "^5.2.1",
     "@wcpos/eslint-config": "*",

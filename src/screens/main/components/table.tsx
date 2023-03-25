@@ -37,7 +37,7 @@ const TableContainer = ({ uiSettings }) => {
 			</Box>
 			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<ErrorBoundary>
-					<React.Suspense fallback={<Text>Loading data...</Text>}>
+					<React.Suspense>
 						<Table uiSettings={uiSettings} />
 					</React.Suspense>
 				</ErrorBoundary>

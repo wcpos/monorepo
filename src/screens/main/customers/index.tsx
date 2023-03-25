@@ -30,7 +30,7 @@ const Stack = createStackNavigator<CustomersStackParamList>();
 const CustomersWithProviders = () => {
 	return (
 		<ErrorBoundary>
-			<React.Suspense fallback={<Text>Loading customers</Text>}>
+			<React.Suspense>
 				<Customers />
 			</React.Suspense>
 		</ErrorBoundary>
@@ -88,7 +88,7 @@ const EditCustomerWithProviders = ({
 					},
 				]}
 			>
-				<React.Suspense fallback={<Text>Loading customer</Text>}>
+				<React.Suspense>
 					<EditCustomer />
 				</React.Suspense>
 			</ModalLayout>

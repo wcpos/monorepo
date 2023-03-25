@@ -30,7 +30,7 @@ const Stack = createStackNavigator<OrdersStackParamList>();
 const OrdersWithProviders = () => {
 	return (
 		<ErrorBoundary>
-			<React.Suspense fallback={<Text>Loading orders</Text>}>
+			<React.Suspense>
 				<Orders />
 			</React.Suspense>
 		</ErrorBoundary>
@@ -66,7 +66,7 @@ const EditOrderWithProviders = ({
 					},
 				]}
 			>
-				<React.Suspense fallback={<Text>Loading order</Text>}>
+				<React.Suspense>
 					<EditOrder />
 				</React.Suspense>
 			</ModalLayout>
@@ -104,7 +104,7 @@ const ReceiptWithProviders = ({
 				]}
 				style={{ height: '100%' }}
 			>
-				<React.Suspense fallback={<Text>Loading order</Text>}>
+				<React.Suspense>
 					<Receipt />
 				</React.Suspense>
 			</ModalLayout>

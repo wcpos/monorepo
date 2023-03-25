@@ -30,7 +30,7 @@ const ProductsWithProviders = ({
 }: NativeStackScreenProps<ProductsStackParamList, 'Products'>) => {
 	return (
 		<ErrorBoundary>
-			<React.Suspense fallback={<Text>Loading products</Text>}>
+			<React.Suspense>
 				<Products />
 			</React.Suspense>
 		</ErrorBoundary>
@@ -67,7 +67,7 @@ const EditProductWithProviders = ({
 					},
 				]}
 			>
-				<React.Suspense fallback={<Text>Loading product</Text>}>
+				<React.Suspense>
 					<EditProduct />
 				</React.Suspense>
 			</ModalLayout>

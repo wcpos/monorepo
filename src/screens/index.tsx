@@ -148,7 +148,7 @@ const RootNavigator = ({ initialProps }) => {
 								 * FIXME - this catches the site = null problem when logging out
 								 * There needs to be a better way to handle this
 								 */
-								<React.Suspense fallback={<Text>logout</Text>}>
+								<React.Suspense>
 									<MainNavigator />
 								</React.Suspense>
 							);

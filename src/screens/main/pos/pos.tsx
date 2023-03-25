@@ -79,7 +79,7 @@ const POS = () => {
 	return (
 		<TaxRateProvider initialQuery={initialQuery}>
 			<ErrorBoundary>
-				<React.Suspense fallback={<Text>Loading POS UI...</Text>}>
+				<React.Suspense>
 					{dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />}
 				</React.Suspense>
 			</ErrorBoundary>

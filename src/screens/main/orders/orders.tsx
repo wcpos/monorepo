@@ -60,7 +60,7 @@ const Orders = () => {
 					</Box>
 					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 						<ErrorBoundary>
-							<React.Suspense fallback={<Text>Loading orders table...</Text>}>
+							<React.Suspense>
 								<Table uiSettings={uiSettings} />
 							</React.Suspense>
 						</ErrorBoundary>

@@ -20,7 +20,7 @@ const OpenOrders = ({ isColumn = false }) => {
 		<Box padding="small" paddingLeft={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
 			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<ErrorBoundary>
-					<React.Suspense fallback={<Text>Loading Cart</Text>}>
+					<React.Suspense>
 						<Cart currentOrder={currentOrder} />
 					</React.Suspense>
 				</ErrorBoundary>
