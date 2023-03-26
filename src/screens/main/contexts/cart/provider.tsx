@@ -156,7 +156,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 			cartResource: new ObservableResource(cart$),
 			cartTotals$,
 		};
-	}, [calcLineItemTotals, calcOrderTotals, order]);
+	}, [calcLineItemTotals, calcOrderTotals, calcShippingLineTotals, order]);
 
 	/**
 	 * Calc totals

@@ -18,6 +18,8 @@ const useTaxCalculation = () => {
 		throw new Error('Store is not defined');
 	}
 
+	const shippingTaxClass = useObservableState(store.shipping_tax_class$, store.shipping_tax_class);
+
 	/**
 	 * Convert WooCommerce settings into sensible primatives
 	 */
@@ -60,7 +62,7 @@ const useTaxCalculation = () => {
 	);
 
 	/**
-	 * Calculate line item totals
+	 * Calculate line item totals, line items and fee lines, shipping lines are different
 	 */
 	const calcLineItemTotals = React.useCallback(
 		(qty = 1, price = '0', taxClass = '', taxStatus: string) => {
@@ -91,12 +93,23 @@ const useTaxCalculation = () => {
 	);
 
 	/**
-	 * TODO - what tax class should be used for shipping?
+	 * TODO - I need to test this against WC unit tests to make sure it's correct
+	 * see the WC_Tax::get_shipping_tax_rates() method for more details
+	 *
+	 * Here we are using any tax rate that has the shipping flag set to true
+	 * unless the shipping tax class is set, in which case we use that.
+	 * If no tax rates are found, we use the standard tax class.
 	 */
 	const calcShippingLineTotals = React.useCallback(
 		(total = '0') => {
-			// const _taxClass = taxClass === '' ? 'standard' : taxClass; // default to standard
-			const appliedRates = rates.filter((rate) => rate.shipping === true);
+			let appliedRates = rates.filter((rate) => rate.shipping === true);
+			if (shippingTaxClass) {
+				appliedRates = rates.filter((rate) => rate.class === shippingTaxClass);
+			}
+
+			if (appliedRates.length === 0) {
+				appliedRates = rates.filter((rate) => rate.class === 'standard');
+			}
 
 			// early return if no taxes
 			if (!calcTaxes || appliedRates.length === 0) {
@@ -114,11 +127,11 @@ const useTaxCalculation = () => {
 				qty: 1,
 				price: total,
 				rates: appliedRates,
-				pricesIncludeTax,
+				pricesIncludeTax: false, // shipping is always exclusive
 				taxRoundAtSubtotal,
 			});
 		},
-		[calcTaxes, pricesIncludeTax, rates, taxRoundAtSubtotal]
+		[calcTaxes, rates, shippingTaxClass, taxRoundAtSubtotal]
 	);
 
 	/**
