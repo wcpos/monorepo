@@ -36,7 +36,7 @@
 		"rxjs": "7.8.0"
 	},
 	"devDependencies": {
-		"@babel/core": "^7.21.0",
+		"@babel/core": "^7.21.3",
 		"@storybook/addon-actions": "6.5.16",
 		"@storybook/addon-controls": "6.5.16",
 		"@storybook/addon-essentials": "6.5.16",
@@ -49,9 +49,9 @@
 		"@testing-library/jest-dom": "5.16.5",
 		"@testing-library/react": "^14.0.0",
 		"@testing-library/react-hooks": "8.0.1",
-		"@types/jest": "^29.4.1",
+		"@types/jest": "^29.5.0",
 		"@types/lodash": "4.14.191",
-		"@types/react": "^18.0.28",
+		"@types/react": "^18.0.29",
 		"@wcpos/eslint-config": "*",
 		"@wcpos/tsconfig": "*",
 		"babel-loader": "9.1.2",
