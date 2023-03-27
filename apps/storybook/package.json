@@ -12,9 +12,9 @@
     "storybook-watcher": "sb-rn-watcher"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "~1.17.11",
-    "@react-native-community/datetimepicker": "6.2.0",
-    "@react-native-community/slider": "4.3.3",
+    "@react-native-async-storage/async-storage": "~1.17.12",
+    "@react-native-community/datetimepicker": "6.7.5",
+    "@react-native-community/slider": "4.4.2",
     "@storybook/addon-actions": "6.5.16",
     "@storybook/addon-controls": "6.5.16",
     "@storybook/addon-essentials": "6.5.16",
@@ -27,14 +27,14 @@
     "@storybook/preset-create-react-app": "4.1.2",
     "@storybook/react": "6.5.16",
     "@storybook/react-native": "6.0.1-canary.3",
-    "expo": "48.0.6",
+    "expo": "48.0.9",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-native": "0.71.4",
     "storybook-addon-mock": "^3.2.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.21.0",
+    "@babel/core": "^7.21.3",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
