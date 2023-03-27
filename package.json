@@ -71,7 +71,7 @@
   "devDependencies": {
     "@babel/core": "^7.21.3",
     "@expo/webpack-config": "^18.0.1",
-    "@types/react": "~18.0.28",
+    "@types/react": "~18.0.29",
     "@types/react-dom": "~18.0.11",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
