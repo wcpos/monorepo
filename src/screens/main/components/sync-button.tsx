@@ -19,6 +19,17 @@ const SyncButton = ({ sync, clear, active$ }: SyncButtonProps) => {
 	const [openMenu, setOpenMenu] = React.useState(false);
 	const syncing = useObservableState(active$);
 
+	/**
+	 *
+	 */
+	const handleClearAndSync = React.useCallback(async () => {
+		await clear();
+		await sync();
+	}, [clear, sync]);
+
+	/**
+	 *
+	 */
 	return syncing ? (
 		<Loader size="small" />
 	) : (
@@ -35,9 +46,7 @@ const SyncButton = ({ sync, clear, active$ }: SyncButtonProps) => {
 				{ label: '__' },
 				{
 					label: t('Clear and Refresh', { _tags: 'core' }),
-					action: () => {
-						clear().then(sync);
-					},
+					action: handleClearAndSync,
 					type: 'critical',
 					icon: 'trash',
 				},

@@ -3,14 +3,15 @@ import * as React from 'react';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 import { useObservableState } from 'observable-hooks';
-import { defaultHashSha256 } from 'rxdb';
+import { defaultHashSha256, removeCollectionStorages } from 'rxdb';
 import { replicateRxCollection } from 'rxdb/plugins/replication';
 
-import { storeCollections } from '@wcpos/database/src/collections';
+import { addStoreDBCollection } from '@wcpos/database';
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
 import { parseLinkHeader } from '../../../../lib/url';
+import useProductsCollection from '../../hooks/use-products-collection';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 interface Props {
@@ -50,8 +51,8 @@ function mangoToRestQuery(mangoSelector) {
  */
 const useProductReplication = (query$) => {
 	const http = useRestHttpClient();
-	const { site, storeDB } = useLocalData();
-	const collection = storeDB.collections.products;
+	const { site, store } = useLocalData();
+	const collection = useProductsCollection();
 	const query = useObservableState(query$, query$.getValue());
 
 	/**
@@ -169,20 +170,44 @@ const useProductReplication = (query$) => {
 	 * TODO - it should clear the variations collection too
 	 */
 	const clear = React.useCallback(async () => {
-		// remove local checkpoints
-		const promises = [];
-		registry.forEach((value, key) => {
-			promises.push(collection.upsertLocal(key, {}));
-		});
-		promises.push(collection.upsertLocal('status', {}));
-		await Promise.all(promises);
+		async function removeWithTimeout(retryTimeout, maxRetries) {
+			let retries = 0;
 
-		// remove collection
-		await collection.remove();
+			while (retries < maxRetries) {
+				try {
+					// Race between the destroy() function and a timeout promise
+					collection.destroyed = false;
+					const result = await Promise.race([
+						collection.remove(),
+						new Promise((_, reject) =>
+							setTimeout(() => reject(new Error('Timeout')), retryTimeout)
+						),
+					]);
 
-		// add collection again
-		storeDB.addCollections({ products: storeCollections.products });
-	}, [collection, storeDB]);
+					// If destroy() resolved before the timeout, return the result
+					return result;
+				} catch (error) {
+					if (error.message === 'Timeout') {
+						console.warn(`Attempt ${retries + 1} timed out, retrying...`);
+						retries++;
+					} else {
+						// If an error other than timeout occurs, throw the error
+						throw error;
+					}
+				}
+			}
+
+			throw new Error(`Failed after ${maxRetries} attempts`);
+		}
+
+		try {
+			await removeWithTimeout(200, 5);
+		} catch (error) {
+			log.error(error);
+		}
+
+		return addStoreDBCollection(store.localID, 'products');
+	}, [collection, store.localID]);
 
 	/**
 	 * Sync

@@ -30,7 +30,6 @@ export const FeeAndShippingPrice = ({ item }: Props) => {
 	 */
 	return (
 		<Popover
-			withinPortal
 			primaryAction={{
 				label: 'Done',
 				action: handleUpdate,

@@ -118,7 +118,7 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, style, ...rest }:
 	return (
 		<View style={style}>
 			{drawerType === 'permanent' ? (
-				<Tooltip content={label} placement="right" withinPortal>
+				<Tooltip content={label} placement="right">
 					{buttonNode}
 				</Tooltip>
 			) : (

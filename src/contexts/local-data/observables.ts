@@ -11,8 +11,8 @@ import type {
 	StoreDocument,
 	StoreDatabase,
 } from '@wcpos/database';
-import { storeDBPromise } from '@wcpos/database/src/stores-db';
-import { userDBPromise } from '@wcpos/database/src/users-db';
+import { createStoreDB } from '@wcpos/database/src/stores-db';
+import { createUserDB } from '@wcpos/database/src/users-db';
 import log from '@wcpos/utils/src/logger';
 
 import { tx } from '../../lib/translations';
@@ -53,7 +53,7 @@ const handleFirstUser = async (userDB: UserDatabase) => {
 /**
  *
  */
-export const current$: Observable<LocalData> = from(userDBPromise()).pipe(
+export const current$: Observable<LocalData> = from(createUserDB()).pipe(
 	switchMap((userDB) =>
 		userDB.getLocal$('current').pipe(
 			map((current) => ({
@@ -71,7 +71,7 @@ export const current$: Observable<LocalData> = from(userDBPromise()).pipe(
 					site: userDB.sites.findOneFix(siteID).exec(),
 					wpCredentials: userDB.wp_credentials.findOneFix(wpCredentialsID).exec(),
 					store: userDB.stores.findOneFix(storeID).exec(),
-					storeDB: storeID ? storeDBPromise(storeID) : Promise.resolve(null),
+					storeDB: storeID ? createStoreDB(storeID) : Promise.resolve(null),
 				}).pipe(
 					/**
 					 * There should always be a global user

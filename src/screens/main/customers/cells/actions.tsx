@@ -50,7 +50,6 @@ const Actions = ({ item: customer }: Props) => {
 			<Dropdown
 				opened={menuOpened}
 				onClose={() => setMenuOpened(false)}
-				withinPortal={true}
 				placement="bottom-end"
 				items={[
 					{

@@ -3,7 +3,7 @@ import * as React from 'react';
 import { ObservableResource } from 'observable-hooks';
 import { tap, map, switchMap } from 'rxjs/operators';
 
-import { storeDBPromise } from '@wcpos/database/src/stores-db';
+import { createStoreDB } from '@wcpos/database/src/stores-db';
 
 import { current$ } from './observables';
 
@@ -90,7 +90,7 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 							storeDoc = await userDB.stores.insert(store);
 						}
 
-						const storeDB = await storeDBPromise(storeDoc.localID);
+						const storeDB = await createStoreDB(storeDoc.localID);
 
 						return {
 							user,

@@ -8,7 +8,7 @@ import { switchMap, map, tap } from 'rxjs/operators';
 import log from '@wcpos/utils/src/logger';
 
 import useProductReplication from './use-product-replication';
-import useLocalData from '../../../../contexts/local-data';
+import useProductsCollection from '../../hooks/use-products-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type ProductDocument = import('@wcpos/database/src/collections/products').ProductDocument;
@@ -30,8 +30,7 @@ interface ProductsProviderProps {
  */
 const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProviderProps) => {
 	log.debug('render product provider');
-	const { storeDB } = useLocalData();
-	const collection = storeDB.collections.products;
+	const collection = useProductsCollection();
 	const showOutOfStock = useObservableState(
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
@@ -94,7 +93,7 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 
 	return (
 		<ProductsContext.Provider
-			value={{ ...value, setQuery, query$, nextPage, replicationState, clear, sync }}
+			value={{ ...value, setQuery, query$, nextPage, replicationState, clear, sync, collection }}
 		>
 			{children}
 		</ProductsContext.Provider>

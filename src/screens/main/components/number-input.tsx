@@ -47,7 +47,6 @@ const NumberInput = ({
 		</View>
 	) : (
 		<Popover
-			withinPortal
 			primaryAction={{
 				label: 'Done',
 				action: () => onChange(valueRef.current),

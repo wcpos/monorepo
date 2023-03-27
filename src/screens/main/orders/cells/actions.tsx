@@ -86,7 +86,6 @@ const Actions = ({ item: order }: Props) => {
 			<Dropdown
 				opened={menuOpened}
 				onClose={() => setMenuOpened(false)}
-				withinPortal={true}
 				placement="bottom-end"
 				items={menuItems}
 			>

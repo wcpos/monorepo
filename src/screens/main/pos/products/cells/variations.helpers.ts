@@ -1,206 +1,80 @@
-import cloneDeep from 'lodash/cloneDeep';
-import differenceWith from 'lodash/differenceWith';
-import find from 'lodash/find';
-import forEach from 'lodash/forEach';
-import map from 'lodash/map';
-
+type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
-export type ProductAttribute = {
-	id: number;
-	name: string;
-	position: number;
-	visible: boolean;
-	variation: boolean;
-	options: string[];
-};
+type ProductAttributes = NonNullable<ProductDocument['attributes']>;
+type ProductVariationAttributes = NonNullable<ProductVariationDocument['attributes']>;
 
-type StateAttributesOptions = {
+export type StateAttributeOption = {
 	label: string;
 	value: string;
-	selected: boolean;
-	disabled: boolean;
+	selected?: boolean;
+	disabled?: boolean;
 };
 
-type StateAttributes = Omit<ProductAttribute, 'options'> & {
-	options: StateAttributesOptions[];
+export type StateAttribute = Omit<ProductAttributes[number], 'options'> & {
+	options: StateAttributeOption[];
 	characterCount: number;
 };
 
-type State = {
-	attributes: StateAttributes[];
-	selectedVariationId: number | null;
-};
-
-type PossibleVariation = {
-	id: number;
-	attributes: NonNullable<ProductVariationDocument['attributes']>;
-};
+export type SelectionState = StateAttribute[];
 
 /**
  *
  */
-export const init = (initialAttributes: ProductAttribute[]): State => {
-	const attributes =
-		initialAttributes &&
-		initialAttributes.map((attribute) => {
-			const options = attribute.options?.map((option) => {
+export const getSelectedState = (
+	attributes: ProductDocument['attributes'],
+	allMatch: { name: string; option: string }[]
+): SelectionState => {
+	return (attributes || [])
+		.filter((attribute) => attribute.variation)
+		.sort((a, b) => (a.position || 0) - (b.position || 0))
+		.map((attribute) => {
+			const options = (attribute.options || []).map((option) => {
+				const selected = allMatch.some((match) => {
+					return match.name === attribute.name && match.option === option;
+				});
 				return {
 					label: option,
 					value: option,
-					selected: false,
+					selected,
 					disabled: false,
 				};
 			});
 
-			const characterCount = attribute.options?.join('').length;
+			const characterCount = (attribute.options || []).join('').length;
 
 			return { ...attribute, options, characterCount };
 		});
-
-	return {
-		attributes,
-		selectedVariationId: null,
-	};
 };
 
 /**
  *
  */
-export const expandPossibleVariations = (
-	variations: ProductVariationDocument[],
-	attributes: ProductAttribute[]
+export const makeNewQuery = (
+	name: string,
+	option: string,
+	allMatch: { name: string; option: string }[]
 ) => {
-	const possibilities = [] as PossibleVariation[];
-
-	variations.forEach((variation) => {
-		// compare variation.attributes to attributes
-		const anyOptions = differenceWith(
-			attributes,
-			map(variation.attributes, (attribute) => ({
-				id: attribute.id,
-				name: attribute.name,
-			})),
-			(a, b) => a.id === b.id && a.name === b.name
-		);
-
-		if (anyOptions.length > 0) {
-			// we need to expand the 'any' variations
-			forEach(anyOptions, (any) => {
-				forEach(any.options, (option) => {
-					const attrs = variation.attributes.concat({
-						id: any.id,
-						name: any.name,
-						option,
-					});
-					possibilities.push({
-						id: variation.id,
-						attributes: attrs,
-					});
-				});
-			});
+	return [{ name, option }].reduce((result, objectToMerge) => {
+		const index = result.findIndex((match) => match.name === objectToMerge.name);
+		if (index >= 0) {
+			result[index] = objectToMerge;
 		} else {
-			possibilities.push({
-				id: variation.id,
-				attributes: variation.attributes,
-			});
+			result.push(objectToMerge);
 		}
-	});
-
-	return possibilities;
+		return result;
+	}, allMatch);
 };
 
 /**
  *
  */
-export const getSelectedFromAttributes = (attributes: StateAttributes[]) => {
-	const result = [];
-	attributes.forEach(({ id, name, options }) => {
-		const selected = options.find(({ selected }) => selected);
-		if (selected) {
-			result.push({ id, name, value: selected.value });
-		}
+export const extractSelectedMetaData = (selectionState: SelectionState) => {
+	return selectionState.map((attribute) => {
+		const selectedOption = attribute.options.find((option) => option.selected);
+		return {
+			attr_id: attribute.id,
+			display_key: attribute.name,
+			display_value: selectedOption ? selectedOption.value : null,
+		};
 	});
-	return result;
-};
-
-/**
- *
- */
-export const getSelectedVariations = (possibleVariations, selected) => {
-	return possibleVariations.filter((poss) => {
-		return (
-			selected.length === 0 ||
-			selected.every(({ name, value }) => {
-				return !!poss.attributes.find(({ name: attrName, option: attrValue }) => {
-					return attrName === name && attrValue === value;
-				});
-			})
-		);
-	});
-};
-
-/**
- *
- */
-export const updateState = (
-	prev: State,
-	attribute: ProductAttribute,
-	selectedOption: StateAttributesOptions,
-	possibleVariations: PossibleVariation[]
-) => {
-	const newState = cloneDeep(prev);
-	const attr = find(newState.attributes, { name: attribute.name });
-	if (!attr) {
-		return newState;
-	}
-
-	// update the selected option
-	forEach(attr.options, (opt) => {
-		if (opt.value === selectedOption.value) {
-			opt.selected = !opt.selected;
-		} else {
-			opt.selected = false;
-		}
-	});
-
-	const selected = getSelectedFromAttributes(newState.attributes);
-
-	const selectedVariations = getSelectedVariations(possibleVariations, selected);
-	if (selectedVariations.length === 1) {
-		// only one possible variation found
-		// auto-select options
-		newState.attributes.forEach((attr) => {
-			selectedVariations[0].attributes.forEach((a) => {
-				if (attr.id === a.id && attr.name === a.name) {
-					attr.options.forEach((opt) => {
-						if (opt.value === a.option && opt.value !== selectedOption.value) {
-							opt.selected = true;
-						}
-					});
-				}
-			});
-		});
-
-		// set id
-		newState.selectedVariationId = selectedVariations[0].id;
-	} else {
-		newState.selectedVariationId = null;
-	}
-
-	// loop through other attributes and do a mock selection
-	newState.attributes
-		.filter((attr) => attr.name !== attribute.name)
-		.forEach((attr) => {
-			attr.options.forEach((option) => {
-				const mockSelect = selected
-					.filter((s) => attr.id !== s.id && attr.name !== s.name)
-					.concat({ name: attr.name, value: option.value });
-
-				const validOption = getSelectedVariations(possibleVariations, mockSelect);
-
-				option.disabled = validOption.length === 0;
-			});
-		});
-
-	return newState;
 };

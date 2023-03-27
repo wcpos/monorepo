@@ -1,4 +1,4 @@
-import { init, updateState, expandPossibleVariations } from './variations.helpers';
+import { getSelectedState, makeNewQuery } from './variations.helpers';
 
 const initialAttributes = [
 	{
@@ -59,234 +59,182 @@ const variations = [
 	},
 ];
 
-const initialState = {
-	attributes: [
-		{
-			id: 1,
-			name: 'Color',
-			options: [
-				{
-					label: 'Blue',
-					value: 'Blue',
-					selected: false,
-					disabled: false,
-				},
-				{
-					label: 'Green',
-					value: 'Green',
-					selected: false,
-					disabled: false,
-				},
-				{
-					label: 'Red',
-					value: 'Red',
-					selected: false,
-					disabled: false,
-				},
-			],
-			position: 0,
-			variation: true,
-			visible: true,
-			characterCount: 12,
-		},
-		{
-			id: 0,
-			name: 'Logo',
-			options: [
-				{
-					label: 'Yes',
-					value: 'Yes',
-					selected: false,
-					disabled: false,
-				},
-				{
-					label: 'No',
-					value: 'No',
-					selected: false,
-					disabled: false,
-				},
-			],
-			position: 1,
-			variation: true,
-			visible: true,
-			characterCount: 5,
-		},
-		{
-			id: 0,
-			name: 'Cool Animals',
-			options: [
-				{
-					label: 'Large Fish',
-					value: 'Large Fish',
-					selected: false,
-					disabled: false,
-				},
-				{
-					label: 'Boney-spider',
-					value: 'Boney-spider',
-					selected: false,
-					disabled: false,
-				},
-				{
-					label: 'Bløk Buñy',
-					value: 'Bløk Buñy',
-					selected: false,
-					disabled: false,
-				},
-				{
-					label: 'George',
-					value: 'George',
-					selected: false,
-					disabled: false,
-				},
-			],
-			position: 2,
-			variation: true,
-			visible: true,
-			characterCount: 37,
-		},
-	],
-	selectedVariationId: null,
-};
-
-const expandedVariations = expandPossibleVariations(variations, initialAttributes);
-
-describe('Variations Helpers', () => {
-	it('should initialise the state', () => {
-		const state = init(initialAttributes);
-		expect(state).toEqual(initialState);
-	});
-
-	it('should update the selected option', () => {
-		const selectBlue = updateState(
-			initialState,
-			initialAttributes[0],
+const initialState = [
+	{
+		id: 1,
+		name: 'Color',
+		options: [
 			{
 				label: 'Blue',
 				value: 'Blue',
 				selected: false,
 				disabled: false,
 			},
-			expandedVariations
-		);
-
-		expect(selectBlue.attributes[0].options[0].selected).toBe(true);
-		expect(selectBlue.attributes[0].options[1].selected).toBe(false);
-		expect(selectBlue.attributes[0].options[2].selected).toBe(false);
-
-		const selectRed = updateState(
-			initialState,
-			initialAttributes[0],
+			{
+				label: 'Green',
+				value: 'Green',
+				selected: false,
+				disabled: false,
+			},
 			{
 				label: 'Red',
 				value: 'Red',
 				selected: false,
 				disabled: false,
 			},
-			expandedVariations
-		);
-
-		expect(selectRed.attributes[0].options[0].selected).toBe(false);
-		expect(selectRed.attributes[0].options[1].selected).toBe(false);
-		expect(selectRed.attributes[0].options[2].selected).toBe(true);
-	});
-
-	it('should disable options if not available with selection', () => {
-		const selectLogo = updateState(
-			initialState,
-			initialAttributes[1],
+		],
+		position: 0,
+		variation: true,
+		visible: true,
+		characterCount: 12,
+	},
+	{
+		id: 0,
+		name: 'Logo',
+		options: [
 			{
-				label: 'Logo',
+				label: 'Yes',
 				value: 'Yes',
 				selected: false,
 				disabled: false,
 			},
-			expandedVariations
-		);
-
-		// Logo options
-		expect(selectLogo.attributes[1].options[0].selected).toBe(true);
-		expect(selectLogo.attributes[1].options[1].selected).toBe(false);
-
-		// Color options
-		expect(selectLogo.attributes[0].options[0].disabled).toBe(false);
-		expect(selectLogo.attributes[0].options[1].disabled).toBe(true);
-		expect(selectLogo.attributes[0].options[2].disabled).toBe(true);
-
-		// Cool Animals options
-		expect(selectLogo.attributes[2].options[0].disabled).toBe(false);
-		expect(selectLogo.attributes[2].options[1].disabled).toBe(false);
-		expect(selectLogo.attributes[2].options[2].disabled).toBe(false);
-		expect(selectLogo.attributes[2].options[3].disabled).toBe(false);
-	});
-
-	it('should handle special case for any options', () => {
-		const selectColor = updateState(
-			initialState,
-			initialAttributes[0],
 			{
-				label: 'Color',
-				value: 'Blue',
-				selected: false,
-				disabled: false,
-			},
-			expandedVariations
-		);
-
-		const selectLogo = updateState(
-			selectColor,
-			initialAttributes[1],
-			{
-				label: 'Logo',
+				label: 'No',
 				value: 'No',
 				selected: false,
 				disabled: false,
 			},
-			variations
-		);
+		],
+		position: 1,
+		variation: true,
+		visible: true,
+		characterCount: 5,
+	},
+	{
+		id: 0,
+		name: 'Cool Animals',
+		options: [
+			{
+				label: 'Large Fish',
+				value: 'Large Fish',
+				selected: false,
+				disabled: false,
+			},
+			{
+				label: 'Boney-spider',
+				value: 'Boney-spider',
+				selected: false,
+				disabled: false,
+			},
+			{
+				label: 'Bløk Buñy',
+				value: 'Bløk Buñy',
+				selected: false,
+				disabled: false,
+			},
+			{
+				label: 'George',
+				value: 'George',
+				selected: false,
+				disabled: false,
+			},
+		],
+		position: 2,
+		variation: true,
+		visible: true,
+		characterCount: 37,
+	},
+];
 
-		// Color options
-		expect(selectLogo.attributes[0].options[0].selected).toBe(true);
+describe('Variations Helpers', () => {
+	describe('getSelectedState', () => {
+		it('should initialise the state', () => {
+			const state = getSelectedState(initialAttributes, []);
+			expect(state).toEqual(initialState);
+		});
 
-		// Logo option
-		expect(selectLogo.attributes[1].options[1].selected).toBe(true);
+		it('should update the selected option', () => {
+			const selectBlue = getSelectedState(initialAttributes, [{ name: 'Color', option: 'Blue' }]);
+			expect(selectBlue[0].options[0].selected).toBe(true);
+			expect(selectBlue[0].options[1].selected).toBe(false);
+			expect(selectBlue[0].options[2].selected).toBe(false);
+			const selectRed = getSelectedState(initialAttributes, [{ name: 'Color', option: 'Red' }]);
+			expect(selectRed[0].options[0].selected).toBe(false);
+			expect(selectRed[0].options[1].selected).toBe(false);
+			expect(selectRed[0].options[2].selected).toBe(true);
+		});
 
-		// Cool Animals options
-		expect(selectLogo.attributes[2].options[0].disabled).toBe(true);
-		expect(selectLogo.attributes[2].options[1].disabled).toBe(true);
-		expect(selectLogo.attributes[2].options[2].disabled).toBe(true);
-		expect(selectLogo.attributes[2].options[3].disabled).toBe(false);
-		expect(selectLogo.attributes[2].options[3].selected).toBe(true);
+		it('should update multiple selected options', () => {
+			const state = getSelectedState(initialAttributes, [
+				{ name: 'Color', option: 'Blue' },
+				{ name: 'Logo', option: 'Yes' },
+			]);
+			expect(state[0].options[0].selected).toBe(true);
+			expect(state[0].options[1].selected).toBe(false);
+			expect(state[0].options[2].selected).toBe(false);
+			expect(state[1].options[0].selected).toBe(true);
+			expect(state[1].options[1].selected).toBe(false);
+		});
 	});
 
-	it('should allow deselection', () => {
-		const colorState = updateState(
-			initialState,
-			initialAttributes[0],
-			{
-				label: 'Color',
-				value: 'Blue',
-				selected: false,
-				disabled: false,
-			},
-			expandedVariations
-		);
+	describe('makeNewQuery', () => {
+		it('should add a new attribute-option pair if attribute name not in allMatch', () => {
+			const attribute = { name: 'color', value: 'red' };
+			const option = { name: 'color', value: 'blue' };
+			const allMatch = [{ name: 'size', option: 'large' }];
 
-		// Color options
-		expect(colorState.attributes[0].options[0].selected).toBe(true);
+			// @ts-ignore
+			const result = makeNewQuery(attribute, option, allMatch);
+			const expectedResult = [
+				{ name: 'size', option: 'large' },
+				{ name: 'color', option: 'blue' },
+			];
 
-		const colorStateAgain = updateState(
-			colorState,
-			initialAttributes[0],
-			{
-				label: 'Color',
-				value: 'Blue',
-				selected: false,
-				disabled: false,
-			},
-			expandedVariations
-		);
+			expect(result).toEqual(expectedResult);
+		});
 
-		expect(colorStateAgain.attributes[0].options[0].selected).toBe(false);
+		it('should update an existing attribute-option pair if attribute name in allMatch', () => {
+			const attribute = { name: 'color', value: 'red' };
+			const option = { name: 'color', value: 'blue' };
+			const allMatch = [
+				{ name: 'size', option: 'large' },
+				{ name: 'color', option: 'red' },
+			];
+
+			// @ts-ignore
+			const result = makeNewQuery(attribute, option, allMatch);
+			const expectedResult = [
+				{ name: 'size', option: 'large' },
+				{ name: 'color', option: 'blue' },
+			];
+
+			expect(result).toEqual(expectedResult);
+		});
+
+		// test('should not modify the original allMatch array', () => {
+		// 	const attribute = { name: 'color', value: 'red' };
+		// 	const option = { name: 'color', value: 'blue' };
+		// 	const allMatch = [
+		// 		{ name: 'size', option: 'large' },
+		// 		{ name: 'color', option: 'red' },
+		// 	];
+		// 	const allMatchCopy = [...allMatch];
+		// 	// @ts-ignore
+		// 	makeNewQuery(attribute, option, allMatch);
+
+		// 	expect(allMatch).toEqual(allMatchCopy);
+		// });
+
+		it('should handle empty allMatch array', () => {
+			const attribute = { name: 'color', value: 'red' };
+			const option = { name: 'color', value: 'blue' };
+			// @ts-ignore
+			const allMatch = [];
+			// @ts-ignore
+			const result = makeNewQuery(attribute, option, allMatch);
+			const expectedResult = [{ name: 'color', option: 'blue' }];
+
+			expect(result).toEqual(expectedResult);
+		});
 	});
 });

@@ -1,6 +1,6 @@
 import { isRxDocument } from 'rxdb';
 
-import { userDBPromise } from '@wcpos/database/src/users-db';
+import { createUserDB } from '@wcpos/database/src/users-db';
 
 export default class CustomCache {
 	constructor() {
@@ -19,7 +19,7 @@ export default class CustomCache {
 			/**
 			 * if updated translations are different from local storage, update local storage
 			 */
-			const userDB = await userDBPromise();
+			const userDB = await createUserDB();
 			const localDoc = await userDB.getLocal(localeCode);
 			const localTranslations = isRxDocument(localDoc) ? localDoc.toJSON().data : {};
 			if (JSON.stringify(localTranslations) !== JSON.stringify(translations)) {
