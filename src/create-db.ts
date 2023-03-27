@@ -1,6 +1,6 @@
-// import Platform from '@wcpos/core/src/lib/platform';
-// import set from 'lodash/set';
 import { createRxDatabase, removeRxDatabase } from 'rxdb';
+
+import log from '@wcpos/utils/src/logger';
 
 import config from './adapter';
 import { disableVersionCheck } from './adapter/shared/version-check';
@@ -11,23 +11,17 @@ disableVersionCheck();
 /**
  * creates the generic database
  */
-export function createDB<T>(name: string) {
-	return createRxDatabase<T>({
-		name,
-		...config,
-		password: 'posInstanceId',
-		localDocuments: true,
-	});
-
-	// add to window for debugging
-	// if (Platform.OS === 'web') {
-	// 	if (!(window as any).dbs) {
-	// 		set(window, 'dbs', {});
-	// 	}
-	// 	(window as any).dbs[name] = db;
-	// }
-
-	// return db;
+export async function createDB<T>(name: string) {
+	try {
+		return createRxDatabase<T>({
+			name,
+			...config,
+			password: 'posInstanceId',
+			localDocuments: true,
+		});
+	} catch (error) {
+		log.error(error);
+	}
 }
 
 /**

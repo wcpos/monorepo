@@ -38,6 +38,6 @@ export type {
 export type { UserDatabase, UserDatabaseCollections } from './users-db';
 export type { StoreDatabase, StoreDatabaseCollections } from './stores-db';
 
-export { userDBPromise } from './users-db';
-export { storeDBPromise, removeStoreDB } from './stores-db';
+export { createUserDB, removeUserDB, addUserDBCollection } from './users-db';
+export { createStoreDB, removeStoreDB, addStoreDBCollection } from './stores-db';
 export { removeDB } from './create-db';

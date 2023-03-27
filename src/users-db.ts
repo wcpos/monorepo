@@ -1,3 +1,5 @@
+import log from '@wcpos/utils/src/logger';
+
 import { userCollections } from './collections';
 import { createDB, removeDB } from './create-db';
 
@@ -13,29 +15,44 @@ export type UserDatabase = import('rxdb').RxDatabase<UserDatabaseCollections>;
 /**
  *
  */
-let userDB: Promise<UserDatabase>;
+let userDB: Promise<UserDatabase | undefined>;
 
 /**
  * This could be called more than once, so we need to make sure we only create the DB once.
  */
-export function userDBPromise() {
-	if (userDB) {
-		return userDB;
+export async function createUserDB() {
+	if (!userDB) {
+		try {
+			const db = await createDB<UserDatabaseCollections>('wcposusers');
+			const collections = await db?.addCollections(userCollections);
+			userDB = Promise.resolve(db);
+		} catch (error) {
+			log.error(error);
+			removeDB('wcposusers');
+		}
 	}
 
-	userDB = createDB<UserDatabaseCollections>('wcposusers')
-		.then(async (db) => {
-			await db.addCollections(userCollections).catch((error) => {
-				console.error(error);
-			});
-			return db;
-		})
-		.catch((error) => {
-			console.error(error);
-			if (process.env.NODE_ENV === 'development') {
-				return removeDB('wcposusers');
-			}
-		});
-
 	return userDB;
+}
+
+/**
+ * Helper function to add the collectioms individually, ie: after collection.remove()
+ */
+export async function addUserDBCollection(key: keyof UserDatabaseCollections) {
+	try {
+		const db = await createUserDB();
+		const collection = await db.addCollections({
+			[key]: userCollections[key],
+		});
+		return collection;
+	} catch (error) {
+		log.error(error);
+	}
+}
+
+/**
+ *
+ */
+export async function removeUserDB() {
+	return removeDB('wcposusers');
 }

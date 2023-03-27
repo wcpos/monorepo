@@ -1,3 +1,7 @@
+import { Subject } from 'rxjs';
+
+import log from '@wcpos/utils/src/logger';
+
 import { storeCollections } from './collections';
 import { createDB, removeDB } from './create-db';
 
@@ -26,39 +30,57 @@ function sanitizeStoreName(id: string) {
 /**
  *
  */
-const storeDBMap = new Map<string, Promise<StoreDatabase>>();
+const registry = new Map<string, Promise<StoreDatabase | undefined>>();
+
+/**
+ * Create a subject which emits one of the storeCollections
+ */
+const addCollectionsSubject = new Subject();
 
 /**
  * creates the Store database
  */
-export function storeDBPromise(id: string) {
-	if (storeDBMap.has(id)) {
-		return storeDBMap.get(id);
+export async function createStoreDB(id: string) {
+	if (!registry.has(id)) {
+		const name = sanitizeStoreName(id);
+		try {
+			const db = await createDB<StoreDatabaseCollections>(name);
+			if (db) {
+				const collections = await db?.addCollections(storeCollections);
+				Object.assign(db, { addCollections$: addCollectionsSubject.asObservable() });
+				registry.set(id, Promise.resolve(db));
+			}
+		} catch (error) {
+			log.error(error);
+			removeDB(name);
+		}
 	}
 
-	const name = sanitizeStoreName(id);
-
-	const db = createDB<StoreDatabaseCollections>(name)
-		.then(async (db) => {
-			await db.addCollections(storeCollections);
-			return db;
-		})
-		.catch((error) => {
-			console.error(error);
-			if (process.env.NODE_ENV === 'development') {
-				return removeDB(name);
-			}
-		});
-
-	storeDBMap.set(id, db);
-
-	return db;
+	return registry.get(id);
 }
 
 /**
- * creates the Store database
+ * Helper function to add the collectioms individually, ie: after collection.remove()
  */
-export function removeStoreDB(id: string) {
+export async function addStoreDBCollection(id: string, key: keyof StoreDatabaseCollections) {
+	try {
+		const db = await createStoreDB(id);
+		if (db) {
+			const result = await db.addCollections({
+				[key]: storeCollections[key],
+			});
+			addCollectionsSubject.next(result);
+			return result;
+		}
+	} catch (error) {
+		log.error(error);
+	}
+}
+
+/**
+ * removes the Store database by name
+ */
+export async function removeStoreDB(id: string) {
 	const name = sanitizeStoreName(id);
 	return removeDB(name);
 }
