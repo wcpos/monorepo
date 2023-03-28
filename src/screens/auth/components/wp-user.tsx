@@ -36,6 +36,25 @@ const WpUser = ({ site, wpUser }: Props) => {
 		 */
 	}, [login, site.uuid, wpUser]);
 
+	/**
+	 * Remove user
+	 */
+	const handleRemoveWpUser = React.useCallback(async () => {
+		try {
+			await wpUser.remove();
+			await site.incrementalUpdate({
+				$pullAll: {
+					wp_credentials: [wpUser.uuid],
+				},
+			});
+		} catch (err) {
+			throw err;
+		}
+	}, [wpUser, site]);
+
+	/**
+	 *
+	 */
 	return (
 		<>
 			<Pill removable onPress={handleStoreSelect} onRemove={() => setDeleteDialogOpened(true)}>
@@ -44,7 +63,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 
 			<Dialog
 				opened={deleteDialogOpened}
-				onAccept={() => site.removeWpCredentials(wpUser)}
+				onAccept={handleRemoveWpUser}
 				onClose={() => setDeleteDialogOpened(false)}
 			>
 				{t('Remove user?', { _tags: 'core' })}
