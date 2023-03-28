@@ -20,7 +20,11 @@ enableFreeze(true);
 
 type InitialProps = import('./types').InitialProps;
 
-let initialProps = {};
+/**
+ * FIXME: initalProps is empty for non web apps
+ * I need a better solution for type checking
+ */
+let initialProps = {} as InitialProps;
 if (window) {
 	initialProps = window.initialProps as InitialProps;
 }

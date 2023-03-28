@@ -24,14 +24,18 @@ export interface LocalData {
 	locale: string;
 }
 
+type InitialProps = import('../../types').InitialProps;
+
 export const LocalDataContext = React.createContext<{
 	resources: ObservableResource<LocalData>;
+	isWebApp: boolean;
+	initialProps: InitialProps;
 	// @ts-ignore
 }>(null);
 
 interface LocalDataProviderProps {
 	children: React.ReactNode;
-	initialProps: import('../../types').InitialProps;
+	initialProps: InitialProps;
 }
 
 /**
