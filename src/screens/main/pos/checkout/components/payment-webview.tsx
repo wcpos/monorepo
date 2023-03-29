@@ -18,20 +18,18 @@ import useRestHttpClient from '../../../hooks/use-rest-http-client';
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 export interface PaymentWebviewProps {
-	orderResource: ObservableResource<OrderDocument>;
+	order: OrderDocument;
 }
 
-const PaymentWebview = ({ orderResource }: PaymentWebviewProps) => {
+const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 	const addSnackbar = useSnackbar();
 	const { onPrimaryAction } = useModal();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
 	const navigation = useNavigation();
-	const order = useObservableSuspense(orderResource);
-	const paymentURL = get(order, ['links', 'payment', 0, 'href']);
-	// const paymentURL = useObservableState(
-	// 	order.links$.pipe(map((links) => get(links, ['payment', 0, 'href']))),
-	// 	get(order, ['links', 'payment', 0, 'href'])
-	// );
+	const paymentURL = useObservableState(
+		order.links$.pipe(map((links) => get(links, ['payment', 0, 'href']))),
+		get(order, ['links', 'payment', 0, 'href'])
+	);
 
 	/**
 	 * We need to save the order before we can process the payment to make sure we have the latest data

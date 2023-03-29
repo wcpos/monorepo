@@ -28,17 +28,14 @@ export const useCustomerNameFormat = () => {
 	const format = React.useCallback((json: Props) => {
 		const customerID = json.id !== undefined ? json.id : null;
 
-		// early return for Guest
-		if (customerID === 0) {
-			return t('Guest', { _tags: 'core' });
-		}
-
 		// try full name first
 		const firstName = json.first_name || json.billing?.first_name || json.shipping?.first_name;
 		const lastName = json.last_name || json.billing?.last_name || json.shipping?.last_name;
 
-		if (firstName || lastName) {
+		if (firstName && lastName) {
 			return `${firstName} ${lastName}`;
+		} else if (firstName || lastName) {
+			return firstName || lastName;
 		}
 
 		// try username
@@ -53,6 +50,11 @@ export const useCustomerNameFormat = () => {
 
 		if (email) {
 			return email;
+		}
+
+		// fallback to Guest
+		if (customerID === 0) {
+			return t('Guest', { _tags: 'core' });
 		}
 
 		// this should never happen

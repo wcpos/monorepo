@@ -3,6 +3,7 @@ import * as React from 'react';
 import compact from 'lodash/compact';
 import pick from 'lodash/pick';
 import { useObservableState } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
 
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
@@ -26,7 +27,7 @@ interface CustomerProps {
  */
 const Customer = ({ order }: CustomerProps) => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
-	const { removeCustomer } = useCurrentOrder();
+	const { removeCustomer, addCustomer } = useCurrentOrder();
 	const billing = useObservableState(order.billing$, order.billing);
 	const shipping = useObservableState(order.shipping$, order.shipping);
 	const customer_id = useObservableState(order.customer_id$, order.customer_id);
@@ -38,13 +39,19 @@ const Customer = ({ order }: CustomerProps) => {
 	 */
 	const handleSaveCustomer = React.useCallback(
 		async (newData) => {
+			// if newOrder we need to add the customer, but not patch the order
+			if (!isRxDocument(order)) {
+				addCustomer(newData);
+				return;
+			}
+			// try patching the order
 			try {
 				await order.incrementalPatch(newData);
 			} catch (error) {
 				log.error(error);
 			}
 		},
-		[order]
+		[addCustomer, order]
 	);
 
 	/**

@@ -20,6 +20,7 @@ const Checkout = () => {
 	const { data } = useOrders();
 	const order = data.length === 1 && data[0];
 	const pushDocument = usePushDocument();
+	const [isPushed, setIsPushed] = React.useState(false);
 
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));
@@ -47,11 +48,19 @@ const Checkout = () => {
 	 * This is a bit of a hack to suspend the webview until the order is saved
 	 *
 	 */
-	const orderResource = React.useMemo(
-		() => new ObservableResource(from(pushDocument(order))),
-		// I can't put order in the deps array because it will cause an infinite loop
-		[pushDocument]
-	);
+	React.useEffect(() => {
+		if (!isPushed) {
+			// Wrap the async function in an IIFE (Immediately Invoked Function Expression)
+			(async () => {
+				try {
+					const result = await pushDocument(order);
+					setIsPushed(true);
+				} catch (error) {
+					console.error('Error pushing document:', error);
+				}
+			})();
+		}
+	}, []);
 
 	/**
 	 *
@@ -59,9 +68,7 @@ const Checkout = () => {
 	return (
 		<Box fill space="small">
 			<CheckoutTitle order={order} />
-			<React.Suspense>
-				<PaymentWebview orderResource={orderResource} />
-			</React.Suspense>
+			{isPushed && <PaymentWebview order={order} />}
 		</Box>
 	);
 };

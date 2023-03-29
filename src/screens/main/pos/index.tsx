@@ -66,24 +66,24 @@ const CheckoutWithProviders = ({
 		() => ({ selector: { uuid: orderID }, limit: 1 }),
 		[orderID]
 	);
-	const initialGatewaysQuery = React.useMemo(() => ({ selector: { enabled: true } }), []);
+	// const initialGatewaysQuery = React.useMemo(() => ({ selector: { enabled: true } }), []);
 
 	return (
 		<OrdersProvider initialQuery={initialOrdersQuery}>
-			<GatewaysProvider initialQuery={initialGatewaysQuery}>
-				<ModalLayout
-					size="xLarge"
-					title={t('Checkout', { _tags: 'core' })}
-					primaryAction={{
-						label: t('Process Payment', { _tags: 'core' }),
-					}}
-					style={{ minHeight: '80%' }}
-				>
-					<React.Suspense>
-						<Checkout />
-					</React.Suspense>
-				</ModalLayout>
-			</GatewaysProvider>
+			{/* <GatewaysProvider initialQuery={initialGatewaysQuery}> */}
+			<ModalLayout
+				size="xLarge"
+				title={t('Checkout', { _tags: 'core' })}
+				primaryAction={{
+					label: t('Process Payment', { _tags: 'core' }),
+				}}
+				style={{ minHeight: '80%' }}
+			>
+				<React.Suspense>
+					<Checkout />
+				</React.Suspense>
+			</ModalLayout>
+			{/* </GatewaysProvider> */}
 		</OrdersProvider>
 	);
 };
