@@ -42,6 +42,11 @@ const useKeyboardShortcuts = () => {
 	useHotkeys('shift+c', (event, handler) => {
 		navigation.navigate('CustomersStack');
 	});
+
+	/** Support */
+	useHotkeys('shift+q', (event, handler) => {
+		navigation.navigate('SupportStack');
+	});
 };
 
 export default useKeyboardShortcuts;

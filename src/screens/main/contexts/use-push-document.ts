@@ -54,7 +54,7 @@ const usePushDocument = () => {
 				//
 				const parsedData = latestDoc.collection.parseRestResponse(data);
 
-				// FIXME: I think this is done automaticallu by the patch, ie: preSave?
+				// FIXME: I think this is done automatically by the patch, ie: preSave?
 				// I need tests so I can be sure
 				await collection.upsertRefs(parsedData);
 				return latestDoc.incrementalPatch(parsedData);

@@ -30,6 +30,11 @@ export const UserMenu = () => {
 					action: () => navigation.navigate('Settings'),
 				},
 				{
+					icon: 'circleQuestion',
+					label: t('Help', { _tags: 'core' }),
+					action: () => navigation.navigate('Help'),
+				},
+				{
 					icon: 'download',
 					label: t('Desktop App', { _tags: 'core' }),
 					action: () => Linking.openURL('https://github.com/wcpos/electron/releases'),
@@ -48,6 +53,11 @@ export const UserMenu = () => {
 					icon: 'gear',
 					label: t('Settings', { _tags: 'core' }),
 					action: () => navigation.navigate('Settings'),
+				},
+				{
+					icon: 'circleQuestion',
+					label: t('Help', { _tags: 'core' }),
+					action: () => navigation.navigate('Help'),
 				},
 				{ label: '__' },
 				{

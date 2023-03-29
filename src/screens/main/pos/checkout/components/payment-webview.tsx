@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 
 import { useNavigation, StackActions } from '@react-navigation/native';
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
@@ -15,43 +15,45 @@ import log from '@wcpos/utils/src/logger';
 import useOrders from '../../../contexts/orders';
 import useRestHttpClient from '../../../hooks/use-rest-http-client';
 
+type OrderDocument = import('@wcpos/database').OrderDocument;
+
 export interface PaymentWebviewProps {
-	order: import('@wcpos/database').OrderDocument;
+	orderResource: ObservableResource<OrderDocument>;
 }
 
-const PaymentWebview = ({ order }: PaymentWebviewProps) => {
+const PaymentWebview = ({ orderResource }: PaymentWebviewProps) => {
 	const addSnackbar = useSnackbar();
 	const { onPrimaryAction } = useModal();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
-	const http = useRestHttpClient();
 	const navigation = useNavigation();
-
-	const paymentURL = useObservableState(
-		order.links$.pipe(map((links) => get(links, ['payment', 0, 'href']))),
-		get(order, ['links', 'payment', 0, 'href'])
-	);
+	const order = useObservableSuspense(orderResource);
+	const paymentURL = get(order, ['links', 'payment', 0, 'href']);
+	// const paymentURL = useObservableState(
+	// 	order.links$.pipe(map((links) => get(links, ['payment', 0, 'href']))),
+	// 	get(order, ['links', 'payment', 0, 'href'])
+	// );
 
 	/**
-	 *
+	 * We need to save the order before we can process the payment to make sure we have the latest data
 	 */
-	React.useEffect(() => {
-		async function saveOrder() {
-			try {
-				const { data } = await http.post('orders', {
-					data: await order.toPopulatedJSON(),
-				});
-				//
-				const parsedData = order.collection.parseRestResponse(data);
-				await order.update(parsedData);
-			} catch (err) {
-				log.error(err);
-			}
-		}
+	// React.useEffect(() => {
+	// 	async function saveOrder() {
+	// 		try {
+	// 			const { data } = await http.post('orders', {
+	// 				data: await order.toPopulatedJSON(),
+	// 			});
+	// 			//
+	// 			const parsedData = order.collection.parseRestResponse(data);
+	// 			await order.update(parsedData);
+	// 		} catch (err) {
+	// 			log.error(err);
+	// 		}
+	// 	}
 
-		if (!paymentURL) {
-			saveOrder();
-		}
-	}, [http, order, paymentURL]);
+	// 	if (!paymentURL) {
+	// 		saveOrder();
+	// 	}
+	// }, [http, order, paymentURL]);
 
 	/**
 	 *

@@ -101,6 +101,19 @@ const Help = () => {
 					style={{ backgroundColor: theme.colors.lightGrey }}
 				>
 					<Text weight="bold" style={{ fontFamily: 'monospace' }}>
+						shift + q
+					</Text>
+				</Box>
+				<Text style={{ alignSelf: 'center' }}>{t('Support', { _tags: 'core' })}</Text>
+			</Box>
+			<Box horizontal space="small">
+				<Box
+					border
+					rounding="small"
+					padding="xSmall"
+					style={{ backgroundColor: theme.colors.lightGrey }}
+				>
+					<Text weight="bold" style={{ fontFamily: 'monospace' }}>
 						shift + l
 					</Text>
 				</Box>
