@@ -72,7 +72,8 @@ const Name = ({ item: product, column, onChange }: Props) => {
 	 */
 	return (
 		<Box space="small" style={{ width: '100%' }}>
-			<EdittableText name={name} onChange={(name: string) => onChange(product, { name })} />
+			<Text weight="bold">{name}</Text>
+			{/* <EdittableText name={name} onChange={(name: string) => onChange(product, { name })} /> */}
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{product.type === 'variable' && <ProductAttributes attributes={attributes} />}
 			{product.type === 'grouped' && (

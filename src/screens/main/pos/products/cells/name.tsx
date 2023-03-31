@@ -22,6 +22,7 @@ interface Props {
 }
 
 export const Name = ({ item: product, column }: Props) => {
+	const name = useObservableState(product.name$, product.name);
 	const grouped = useObservableState(product.grouped_products$, product.grouped_products);
 	const groupedQuery = React.useMemo(() => ({ selector: { id: { $in: grouped } } }), [grouped]);
 	const { uiSettings } = useUISettings('products');
@@ -44,7 +45,7 @@ export const Name = ({ item: product, column }: Props) => {
 
 	return (
 		<Box space="xSmall" style={{ width: '100%' }}>
-			<Text weight="bold">{product.name}</Text>
+			<Text weight="bold">{name}</Text>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{show('stock_quantity') && <StockQuantity product={product} size="small" />}
 			{show('categories') && <Categories item={product} />}
