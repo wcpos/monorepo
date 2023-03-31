@@ -42,7 +42,7 @@ function mangoToRestQuery(mangoSelector) {
 
 export const useReplication = ({ parent, query$ }) => {
 	const http = useRestHttpClient();
-	const { site, storeDB } = useLocalData();
+	const { site, storeDB, store } = useLocalData();
 	const collection = storeDB.collections.variations;
 	const query = useObservableState(query$, query$.getValue());
 
@@ -56,6 +56,7 @@ export const useReplication = ({ parent, query$ }) => {
 				// TODO: I need to take a good look at the 'slug' option for REST resquests
 				// ...query, // NOTE: I've taken this out because there no sensible filters for the REST API, it gets all variations
 				parentID: parent.id,
+				storeID: store.localID,
 			})
 		);
 		if (registry.has(hash)) {
@@ -149,7 +150,7 @@ export const useReplication = ({ parent, query$ }) => {
 
 		registry.set(hash, state);
 		return state;
-	}, [collection, http, parent.id, query, site.wc_api_url]);
+	}, [collection, http, parent.id, query, site.wc_api_url, store.localID]);
 
 	return replicationStatePromise;
 };

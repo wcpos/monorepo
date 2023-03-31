@@ -49,7 +49,7 @@ function mangoToRestQuery(mangoSelector) {
  */
 const useOrderReplication = (query$) => {
 	const http = useRestHttpClient();
-	const { site, storeDB } = useLocalData();
+	const { site, storeDB, store } = useLocalData();
 	const collection = storeDB.collections.orders;
 	const query = useObservableState(query$, query$.getValue());
 
@@ -57,7 +57,7 @@ const useOrderReplication = (query$) => {
 	 *
 	 */
 	const replicationState = React.useMemo(() => {
-		const hash = defaultHashSha256(JSON.stringify(query));
+		const hash = defaultHashSha256(JSON.stringify({ storeID: store.localID, query }));
 		if (registry.has(hash)) {
 			return registry.get(hash);
 		}
@@ -170,7 +170,7 @@ const useOrderReplication = (query$) => {
 
 		registry.set(hash, state);
 		return state;
-	}, [collection, http, query, site.wc_api_url]);
+	}, [collection, http, query, site.wc_api_url, store.localID]);
 
 	/**
 	 * Clear

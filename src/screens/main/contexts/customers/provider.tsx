@@ -1,15 +1,16 @@
 import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
-import set from 'lodash/set';
 import { ObservableResource } from 'observable-hooks';
 import { switchMap, map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import useCustomerReplication from './use-customer-replication';
 import useLocalData from '../../../../contexts/local-data';
+import clearCollection from '../clear-collection';
+import syncCollection from '../sync-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
+import useReplicationState from '../use-replication-state';
 
 type CustomerDocument = import('@wcpos/database/src/collections/customers').CustomerDocument;
 
@@ -19,6 +20,7 @@ export const CustomersContext = React.createContext<{
 	resource: ObservableResource<CustomerDocument[]>;
 	sync: () => void;
 	clear: () => Promise<any>;
+	replicationState: import('../use-replication-state').ReplicationState;
 }>(null);
 
 interface CustomersProviderProps {
@@ -27,28 +29,69 @@ interface CustomersProviderProps {
 	uiSettings: import('../ui-settings').UISettingsDocument;
 }
 
-const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProviderProps) => {
-	log.debug('render customer provider');
-	const { storeDB } = useLocalData();
-	const collection = storeDB.collections.customers;
-	const { query$, setQuery } = useQuery(initialQuery);
-	const { replicationState, clear, sync } = useCustomerReplication(query$);
+interface APIQueryParams {
+	context?: 'view' | 'edit';
+	page?: number;
+	per_page?: number;
+	search?: string;
+	exclude?: number[];
+	include?: number[];
+	offset?: number;
+	order?: 'asc' | 'desc';
+	orderby?: 'id' | 'include' | 'name' | 'registered_date';
+	email?: string;
+	role?:
+		| 'all'
+		| 'administrator'
+		| 'editor'
+		| 'author'
+		| 'contributor'
+		| 'subscriber'
+		| 'customer'
+		| 'shop_manager';
+}
+
+/**
+ *
+ */
+const prepareQueryParams = (
+	params: APIQueryParams,
+	query: QueryState,
+	checkpoint,
+	batchSize
+): APIQueryParams => {
+	let orderby;
 
 	/**
-	 * Only run the replication when the Provider is mounted
+	 * @TODO - I need to account for all the different query options and map them properly to the API
 	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, []);
+	if (query.sortBy === 'first_name' || query.sortBy === 'last_name') {
+		orderby = 'name';
+	} else {
+		orderby = 'id';
+	}
+
+	return {
+		...params,
+		role: 'all',
+		orderby,
+	};
+};
+
+/**
+ *
+ */
+const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProviderProps) => {
+	log.debug('render customer provider');
+	const { storeDB, store } = useLocalData();
+	const collection = storeDB.collections.customers;
+	const { query$, setQuery } = useQuery(initialQuery);
+	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
 	/**
 	 *
 	 */
-	const value = React.useMemo(() => {
+	const resource = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			switchMap((query) => {
 				const { search, selector: querySelector, sortBy, sortDirection, limit, skip } = query;
@@ -88,14 +131,22 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 			})
 		);
 
-		return {
-			resource: new ObservableResource(resource$),
-		};
+		return new ObservableResource(resource$);
 	}, [query$, collection]);
 
+	/**
+	 *
+	 */
 	return (
 		<CustomersContext.Provider
-			value={{ ...value, query$, setQuery, clear, sync, replicationState }}
+			value={{
+				resource,
+				query$,
+				setQuery,
+				clear: () => clearCollection(store.localID, collection),
+				sync: () => syncCollection(replicationState),
+				replicationState,
+			}}
 		>
 			{children}
 		</CustomersContext.Provider>

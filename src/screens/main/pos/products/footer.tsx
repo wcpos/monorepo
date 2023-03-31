@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -22,6 +23,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { sync, clear, replicationState } = useProducts();
 	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
+	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
 
 	/**
 	 * FIXME: this is a temporary hack, need to get the label from the API
@@ -60,7 +62,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 			)}
 			<Box horizontal padding="small" space="xSmall" align="center" distribution="end">
 				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
-				<SyncButton sync={sync} clear={clear} active$={replicationState.active$} />
+				<SyncButton sync={sync} clear={clear} active={active} />
 			</Box>
 		</Box>
 	);

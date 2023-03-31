@@ -10,6 +10,7 @@ import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
 import { parseLinkHeader } from '../../../../lib/url';
+import useCollection from '../../hooks/use-collection';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 interface Props {
@@ -43,15 +44,15 @@ function mangoToRestQuery(mangoSelector) {
  */
 const useCustomerReplication = (query$) => {
 	const http = useRestHttpClient();
-	const { site, storeDB } = useLocalData();
-	const collection = storeDB.collections.customers;
+	const { site, store } = useLocalData();
+	const collection = useCollection('customers');
 	const query = useObservableState(query$, query$.getValue());
 
 	/**
 	 *
 	 */
 	const replicationState = React.useMemo(() => {
-		const hash = defaultHashSha256(JSON.stringify(query));
+		const hash = defaultHashSha256(JSON.stringify({ storeID: store.localID, query }));
 		if (registry.has(hash)) {
 			return registry.get(hash);
 		}
@@ -153,20 +154,7 @@ const useCustomerReplication = (query$) => {
 
 		registry.set(hash, state);
 		return state;
-	}, [collection, http, query, site.wc_api_url]);
-
-	/**
-	 * Clear
-	 */
-	const clear = React.useCallback(async () => {
-		await collection.remove();
-		const promises = [];
-		registry.forEach((value, key) => {
-			promises.push(collection.upsertLocal(key, {}));
-		});
-		promises.push(collection.upsertLocal('status', {}));
-		return Promise.all(promises);
-	}, [collection]);
+	}, [collection, http, query, site.wc_api_url, store.localID]);
 
 	/**
 	 * Sync
@@ -178,7 +166,7 @@ const useCustomerReplication = (query$) => {
 	/**
 	 *
 	 */
-	return { replicationState, clear, sync };
+	return { replicationState, sync };
 };
 
 export default useCustomerReplication;

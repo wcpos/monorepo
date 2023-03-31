@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -19,6 +20,7 @@ const OrdersFooter = ({ count }: OrderFooterProps) => {
 	const total = useObservableState(storeDB.orders.count().$, 0);
 	const theme = useTheme();
 	const { sync, clear, replicationState } = useOrders();
+	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
 
 	return (
 		<Box
@@ -36,7 +38,7 @@ const OrdersFooter = ({ count }: OrderFooterProps) => {
 			<Text size="small">
 				Showing {count} of {total}
 			</Text>
-			<SyncButton sync={sync} clear={clear} active$={replicationState.active$} />
+			<SyncButton sync={sync} clear={clear} active={active} />
 		</Box>
 	);
 };

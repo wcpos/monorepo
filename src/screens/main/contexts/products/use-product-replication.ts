@@ -18,6 +18,10 @@ interface Props {
 	params?: Record<string, any>;
 }
 
+/**
+ * NOTE: This registry will hang around for the life of the app!!
+ * ie: if you switch wpUsers or stores etc ... do I want this?
+ */
 const registry = new Map();
 
 function mapKeyToParam(key) {
@@ -62,7 +66,7 @@ const useProductReplication = (query$) => {
 		/**
 		 * TODO: instead of using the registry, I should use the replicationIdentifier
 		 */
-		const hash = defaultHashSha256(JSON.stringify(query));
+		const hash = defaultHashSha256(JSON.stringify({ storeID: store.localID, query }));
 		if (registry.has(hash)) {
 			return registry.get(hash);
 		}
@@ -163,7 +167,7 @@ const useProductReplication = (query$) => {
 
 		registry.set(hash, state);
 		return state;
-	}, [collection, http, query, site.wc_api_url]);
+	}, [collection, http, query, site.wc_api_url, store.localID]);
 
 	/**
 	 * Clear

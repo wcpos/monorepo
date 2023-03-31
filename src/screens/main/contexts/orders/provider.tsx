@@ -6,9 +6,11 @@ import { switchMap, map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import useOrderReplication from './use-order-replication';
 import useLocalData from '../../../../contexts/local-data';
+import clearCollection from '../clear-collection';
+import syncCollection from '../sync-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
+import useReplicationState from '../use-replication-state';
 
 type OrderDocument = import('@wcpos/database/src/collections/orders').OrderDocument;
 
@@ -18,6 +20,7 @@ export const OrdersContext = React.createContext<{
 	resource: ObservableResource<OrderDocument[]>;
 	sync: () => void;
 	clear: () => Promise<any>;
+	replicationState: import('../use-replication-state').ReplicationState;
 }>(null);
 
 interface OrdersProviderProps {
@@ -26,28 +29,77 @@ interface OrdersProviderProps {
 	uiSettings: import('../ui-settings').UISettingsDocument;
 }
 
+interface APIQueryParams {
+	context?: 'view' | 'edit';
+	page?: number;
+	per_page?: number;
+	search?: string;
+	after?: string;
+	before?: string;
+	modified_after?: string;
+	modified_before?: string;
+	dates_are_gmt?: boolean;
+	exclude?: number[];
+	include?: number[];
+	offset?: number;
+	order?: 'asc' | 'desc';
+	orderby?: 'date' | 'id' | 'include' | 'title' | 'slug';
+	parent?: number[];
+	parent_exclude?: number[];
+	status?:
+		| 'any'
+		| 'pending'
+		| 'processing'
+		| 'on-hold'
+		| 'completed'
+		| 'cancelled'
+		| 'refunded'
+		| 'failed'
+		| 'trash';
+	customer?: number;
+	product?: number;
+	dp?: number;
+}
+
+/**
+ *
+ */
+const prepareQueryParams = (
+	params: APIQueryParams,
+	query: QueryState,
+	checkpoint,
+	batchSize
+): APIQueryParams => {
+	let orderby = params.orderby;
+
+	if (query.sortBy === 'date_modified_gmt') {
+		orderby = 'date';
+	}
+
+	if (query.sortBy === 'number') {
+		orderby = 'id';
+	}
+
+	return {
+		...params,
+		orderby,
+	};
+};
+
+/**
+ *
+ */
 const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderProps) => {
 	log.debug('render order provider');
-	const { storeDB } = useLocalData();
+	const { storeDB, store } = useLocalData();
 	const collection = storeDB.collections.orders;
 	const { query$, setQuery } = useQuery(initialQuery);
-	const { replicationState, clear, sync } = useOrderReplication(query$);
-
-	/**
-	 * Only run the replication when the Provider is mounted
-	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, []);
+	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
 	/**
 	 *
 	 */
-	const value = React.useMemo(() => {
+	const resource = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			switchMap((query) => {
 				const { search, selector: querySelector, sortBy, sortDirection, limit, skip } = query;
@@ -80,13 +132,20 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 			})
 		);
 
-		return {
-			resource: new ObservableResource(resource$),
-		};
+		return new ObservableResource(resource$);
 	}, [collection, query$]);
 
 	return (
-		<OrdersContext.Provider value={{ ...value, query$, setQuery, replicationState, clear, sync }}>
+		<OrdersContext.Provider
+			value={{
+				resource,
+				query$,
+				setQuery,
+				clear: () => clearCollection(store.localID, collection),
+				sync: () => syncCollection(replicationState),
+				replicationState,
+			}}
+		>
 			{children}
 		</OrdersContext.Provider>
 	);

@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-import { Observable } from 'rxjs';
-
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
 import Loader from '@wcpos/components/src/loader';
@@ -12,12 +9,11 @@ import { t } from '../../../lib/translations';
 interface SyncButtonProps {
 	sync: () => Promise<null>;
 	clear: () => Promise<null>;
-	active$: Observable<boolean>;
+	active: boolean;
 }
 
-const SyncButton = ({ sync, clear, active$ }: SyncButtonProps) => {
+const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 	const [openMenu, setOpenMenu] = React.useState(false);
-	const syncing = useObservableState(active$);
 
 	/**
 	 *
@@ -30,7 +26,7 @@ const SyncButton = ({ sync, clear, active$ }: SyncButtonProps) => {
 	/**
 	 *
 	 */
-	return syncing ? (
+	return active ? (
 		<Loader size="small" />
 	) : (
 		<Dropdown
