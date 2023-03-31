@@ -1,16 +1,13 @@
 import * as React from 'react';
-import { TextInput } from 'react-native';
 
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import isEmpty from 'lodash/isEmpty';
+import { useObservableSuspense } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
-import Checkbox from '@wcpos/components/src/checkbox';
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 import Select from '@wcpos/components/src/select';
 import Text from '@wcpos/components/src/text';
-import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
@@ -29,7 +26,7 @@ interface AddShippingProps {
  *
  */
 const ShippingSelect = ({ shippingResource, selectedMethod, onSelect }) => {
-	const options = useObservableSuspense(shippingResource, (val) => !!val);
+	const options = useObservableSuspense(shippingResource);
 	const http = useRestHttpClient();
 	const { storeDB } = useLocalData();
 
@@ -58,8 +55,8 @@ const AddShipping = ({ order }: AddShippingProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const { addShipping } = useCurrentOrder();
 	const [data, setData] = React.useState({
-		method_title: 'Shipping',
-		method_id: 'local_pickup',
+		method_title: '',
+		method_id: '',
 		total: '',
 	});
 
@@ -94,9 +91,9 @@ const AddShipping = ({ order }: AddShippingProps) => {
 		try {
 			const { method_title, method_id, total } = data;
 			addShipping({
-				method_title,
-				method_id,
-				total,
+				method_title: isEmpty(method_title) ? t('Shipping', { _tags: 'core' }) : method_title,
+				method_id: isEmpty(method_id) ? 'local_pickup' : method_id,
+				total: isEmpty(total) ? '0' : total,
 			});
 			setOpened(false);
 		} catch (error) {
@@ -124,7 +121,16 @@ const AddShipping = ({ order }: AddShippingProps) => {
 	 */
 	const uiSchema = React.useMemo(
 		() => ({
-			total: { 'ui:options': { prefix: order.currency_symbol } },
+			total: {
+				'ui:options': { prefix: order.currency_symbol },
+				'ui:placeholder': '0',
+			},
+			method_title: {
+				'ui:placeholder': t('Shipping', { _tags: 'core' }),
+			},
+			method_id: {
+				'ui:placeholder': 'local_pickup',
+			},
 		}),
 		[order.currency_symbol]
 	);

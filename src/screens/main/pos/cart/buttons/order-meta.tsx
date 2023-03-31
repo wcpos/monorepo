@@ -106,6 +106,8 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 	 */
 	const uiSchema = React.useMemo(
 		() => ({
+			'ui:title': null,
+			'ui:description': null,
 			number: {
 				'ui:label': t('Order Number', { _tags: 'core' }),
 			},

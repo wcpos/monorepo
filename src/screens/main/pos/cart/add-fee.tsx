@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import isEmpty from 'lodash/isEmpty';
+
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
@@ -26,6 +28,7 @@ const AddFee = ({ order }: AddFeeProps) => {
 		name: '',
 		total: '',
 		taxable: true,
+		tax_class: '',
 	});
 
 	/**
@@ -45,8 +48,8 @@ const AddFee = ({ order }: AddFeeProps) => {
 		try {
 			const { name, total, taxable, tax_class } = data;
 			addFee({
-				name,
-				total,
+				name: isEmpty(name) ? t('Fee', { _tags: 'core' }) : name,
+				total: isEmpty(total) ? '0' : total,
 				tax_status: taxable ? 'taxable' : 'none',
 				tax_class,
 			});
@@ -79,6 +82,10 @@ const AddFee = ({ order }: AddFeeProps) => {
 		() => ({
 			total: {
 				'ui:options': { prefix: order.currency_symbol },
+				'ui:placeholder': '0',
+			},
+			name: {
+				'ui:placeholder': t('Fee', { _tags: 'core' }),
 			},
 		}),
 		[order.currency_symbol]
