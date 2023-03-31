@@ -68,6 +68,7 @@ export const getTranslatedLabels = () => ({
 		shipping: t('Shipping Address', { _tags: 'core' }),
 		role: t('Role', { _tags: 'core' }),
 		username: t('Username', { _tags: 'core' }),
+		date_created: t('Date created', { _tags: 'core' }),
 		actions: t('Actions', { _tags: 'core' }),
 	},
 });

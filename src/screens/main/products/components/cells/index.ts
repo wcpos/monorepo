@@ -1,5 +1,5 @@
 import Actions from './actions';
-import DateCreated from './date-created';
+import DateCreated from '../../../components/date';
 import Name from './name';
 import Price from './price';
 import RegularPrice from './regular-price';
@@ -21,6 +21,7 @@ const simple = {
 	regular_price: RegularPrice,
 	sale_price: SalePrice,
 	date_created: DateCreated,
+	date_modified: DateCreated,
 	stock_quantity: StockQuanity,
 	tags: Tags,
 };

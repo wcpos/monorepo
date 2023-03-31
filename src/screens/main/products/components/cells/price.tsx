@@ -8,7 +8,7 @@ import Text from '@wcpos/components/src/text';
 import PriceWithTax from '../../../components/product/price';
 
 type Props = {
-	item: import('@wcpos/database').CustomerDocument;
+	item: import('@wcpos/database').ProductDocument;
 	column: import('@wcpos/components/src/table').ColumnProps<
 		import('@wcpos/database').ProductDocument
 	>;

@@ -4,18 +4,16 @@ import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
-import Text from '@wcpos/components/src/text';
 
 import Actions from './cells/actions';
 import Address from './cells/address';
 import Customer from './cells/customer';
-import DateCreated from './cells/date-created';
+import Date from '../components/date';
 import CustomerNote from './cells/note';
 import PaymentMethod from './cells/payment-method';
 import Status from './cells/status';
 import Total from './cells/total';
 import Footer from './footer';
-import { t } from '../../../lib/translations';
 import TextCell from '../components/text-cell';
 import useOrders from '../contexts/orders';
 
@@ -34,7 +32,9 @@ const cells = {
 	customer_note: CustomerNote,
 	status: Status,
 	total: Total,
-	date_created: DateCreated,
+	date_created: Date,
+	date_modified: Date,
+	date_completed: Date,
 	payment_method: PaymentMethod,
 };
 

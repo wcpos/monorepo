@@ -312,8 +312,12 @@
       },
       {
         "key": "shipping",
-        "show": true,
+        "show": false,
         "flex": 2
+      },
+      {
+        "key": "date_created",
+        "show": true
       },
       {
         "key": "actions",
