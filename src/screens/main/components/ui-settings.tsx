@@ -17,14 +17,14 @@ interface UiSettingsProps {
 const schema = {
 	type: 'object',
 	properties: {
-		sortBy: {
-			type: 'string',
-		},
-		sortDirection: {
-			type: 'string',
-			enum: ['asc', 'desc'],
-			enumNames: ['Ascending', 'Descending'],
-		},
+		// sortBy: {
+		// 	type: 'string',
+		// },
+		// sortDirection: {
+		// 	type: 'string',
+		// 	enum: ['asc', 'desc'],
+		// 	enumNames: ['Ascending', 'Descending'],
+		// },
 
 		columns: {
 			// uniqueItems: false,
@@ -76,6 +76,23 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 	const formData = uiSettings.toJSON().data;
 	const [opened, setOpened] = React.useState(false);
 
+	/**
+	 * Hack to add out-of-stock to Products
+	 * TODO: I need to create a Column Class that can be extended
+	 */
+	const _schema =
+		uiSettings.id === 'pos.products'
+			? {
+					...schema,
+					properties: {
+						showOutOfStock: {
+							type: 'boolean',
+						},
+						...schema.properties,
+					},
+			  }
+			: schema;
+
 	return (
 		<>
 			<Icon
@@ -97,7 +114,7 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 				}}
 			>
 				<Form
-					schema={schema}
+					schema={_schema}
 					uiSchema={uiSchema}
 					formData={formData}
 					onChange={(value) => {
