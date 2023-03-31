@@ -1,15 +1,15 @@
 import * as React from 'react';
 
-import useLocalData from '../../../contexts/local-data';
 import EditForm from '../components/edit-form';
+import useCollection from '../hooks/use-collection';
 
 const AddCustomer = () => {
-	const { storeDB } = useLocalData();
+	const collection = useCollection('customers');
 
 	return (
 		<EditForm
 			item={{}}
-			schema={storeDB.collections.customers.schema.jsonSchema}
+			schema={collection.schema.jsonSchema}
 			// uiSchema={}
 		/>
 	);

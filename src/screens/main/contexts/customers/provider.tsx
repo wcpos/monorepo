@@ -1,13 +1,15 @@
 import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
+import isEqual from 'lodash/isEqual';
 import { ObservableResource } from 'observable-hooks';
-import { switchMap, map } from 'rxjs/operators';
+import { switchMap, map, distinctUntilChanged } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
-import clearCollection from '../clear-collection';
+import useCollection from '../../hooks/use-collection';
+import { clearCollection } from '../clear-collection';
 import syncCollection from '../sync-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import useReplicationState from '../use-replication-state';
@@ -84,7 +86,7 @@ const prepareQueryParams = (
 const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProviderProps) => {
 	log.debug('render customer provider');
 	const { storeDB, store } = useLocalData();
-	const collection = storeDB.collections.customers;
+	const collection = useCollection('customers');
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
@@ -126,6 +128,13 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 				return RxQuery.$.pipe(
 					map((result) => {
 						return orderBy(result, [sortBy], [sortDirection]);
+					}),
+					distinctUntilChanged((prev, next) => {
+						// only emit when the uuids change
+						return isEqual(
+							prev.map((doc) => doc.uuid),
+							next.map((doc) => doc.uuid)
+						);
 					})
 				);
 			})

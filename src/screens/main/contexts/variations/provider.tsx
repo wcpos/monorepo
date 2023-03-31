@@ -1,16 +1,17 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState, ObservableResource } from 'observable-hooks';
+import isEqual from 'lodash/isEqual';
+import { ObservableResource } from 'observable-hooks';
 import { combineLatest } from 'rxjs';
-import { switchMap, map } from 'rxjs/operators';
+import { switchMap, map, distinctUntilChanged } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
 import { filterVariationsByAttributes } from './query.helpers';
-import { useReplication } from './use-replication';
-import useLocalData from '../../../../contexts/local-data';
+import useCollection from '../../hooks/use-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
+import useReplicationState from '../use-replication-state';
 
 type ProductVariationDocument =
 	import('@wcpos/database/src/collections/variations').ProductVariationDocument;
@@ -30,6 +31,54 @@ interface VariationsProviderProps {
 	uiSettings?: import('../ui-settings').UISettingsDocument;
 }
 
+interface APIQueryParams {
+	context?: 'view' | 'edit';
+	page?: number;
+	per_page?: number;
+	search?: string;
+	after?: string;
+	before?: string;
+	exclude?: number[];
+	include?: number[];
+	offset?: number;
+	order?: 'asc' | 'desc';
+	orderby?: 'date' | 'id' | 'include' | 'title' | 'slug';
+	parent?: number[];
+	parent_exclude?: number[];
+	slug?: string;
+	status?: 'any' | 'draft' | 'pending' | 'private' | 'publish';
+	sku?: string;
+	tax_class?: 'standard' | 'reduced-rate' | 'zero-rate';
+	on_sale?: boolean;
+	min_price?: string;
+	max_price?: string;
+	stock_status?: 'instock' | 'outofstock' | 'onbackorder';
+}
+
+/**
+ *
+ */
+const prepareQueryParams = (
+	params: APIQueryParams,
+	query: QueryState,
+	checkpoint,
+	batchSize
+): APIQueryParams => {
+	let orderby = params.orderby;
+
+	if (query.sortBy === 'name') {
+		orderby = 'title';
+	}
+
+	return {
+		...params,
+		orderby,
+	};
+};
+
+/**
+ *
+ */
 const VariationsProvider = ({
 	children,
 	initialQuery,
@@ -37,26 +86,20 @@ const VariationsProvider = ({
 	uiSettings,
 }: VariationsProviderProps) => {
 	log.debug('render variations provider');
-	const { storeDB } = useLocalData();
-	const collection = storeDB.collections.variations;
+	const collection = useCollection('variations');
 	const { query$, setQuery } = useQuery(initialQuery);
-	const replicationState = useReplication({ parent, query$ });
-
-	/**
-	 * Only run the replication when the Provider is mounted
-	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, [replicationState]);
+	// const replicationState = useReplication({ parent, query$ });
+	const replicationState = useReplicationState({
+		collection,
+		query$,
+		prepareQueryParams,
+		apiEndpoint: `products/${parent.id}/variations`,
+	});
 
 	/**
 	 *
 	 */
-	const value = React.useMemo(() => {
+	const resource = React.useMemo(() => {
 		const variations$ = combineLatest([query$, parent.variations$]).pipe(
 			switchMap(([query, variationIDs]) => {
 				const selector = { id: { $in: variationIDs } };
@@ -70,20 +113,23 @@ const VariationsProvider = ({
 						const allMatch = get(query, 'selector.attributes.$allMatch', null);
 						const filteredResult = filterVariationsByAttributes(result, allMatch);
 						return filteredResult;
+					}),
+					distinctUntilChanged((prev, next) => {
+						// only emit when the uuids change
+						return isEqual(
+							prev.map((doc) => doc.uuid),
+							next.map((doc) => doc.uuid)
+						);
 					})
 				);
 			})
 		);
 
-		return {
-			// query$,
-			// setQuery,
-			resource: new ObservableResource(variations$),
-		};
+		return new ObservableResource(variations$);
 	}, [collection, parent.variations$, query$]);
 
 	return (
-		<VariationsContext.Provider value={{ ...value, setQuery, query$ }}>
+		<VariationsContext.Provider value={{ resource, setQuery, query$ }}>
 			{children}
 		</VariationsContext.Provider>
 	);

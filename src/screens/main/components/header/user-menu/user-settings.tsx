@@ -9,6 +9,7 @@ import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../../contexts/local-data';
+import useCollection from '../../../hooks/use-collection';
 
 interface UserSettingsProps {
 	onClose: () => void;
@@ -17,12 +18,13 @@ interface UserSettingsProps {
 const UserSettings = ({ onClose }: UserSettingsProps) => {
 	const { storeDB } = useLocalData();
 	const [country, setCountry] = React.useState('GB');
+	const collection = useCollection('taxes');
 
 	const taxRates$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap((q) => {
-					const RxQuery = storeDB?.collections.taxes.find().where('country').eq(country);
+					const RxQuery = collection.find().where('country').eq(country);
 					// @ts-ignore
 					return RxQuery.$;
 				})

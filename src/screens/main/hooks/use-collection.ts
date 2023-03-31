@@ -3,6 +3,8 @@ import { filter, map, tap, debounceTime } from 'rxjs/operators';
 
 import useLocalData from '../../../contexts/local-data/';
 
+type StoreDatabaseCollections = import('@wcpos/database').StoreDatabaseCollections;
+
 /**
  * A helper method to get the latest collection, ie:
  * const collection = useCollection('products');
@@ -10,7 +12,7 @@ import useLocalData from '../../../contexts/local-data/';
  * After a clear & sync, the collection will be stale otherwise
  * NOTE: addCollections$ is a custom observable which emits during clear and sync
  */
-const useCollection = (key: string) => {
+const useCollection = <K extends keyof StoreDatabaseCollections>(key: K) => {
 	const { storeDB } = useLocalData();
 	const collection = useObservableState(
 		storeDB.addCollections$.pipe(

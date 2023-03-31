@@ -7,7 +7,7 @@ import { isRxDocument } from 'rxdb';
 import { BehaviorSubject } from 'rxjs';
 
 import { CurrentOrderContext } from './provider';
-import useLocalData from '../../../../../contexts/local-data';
+import useCollection from '../../../hooks/use-collection';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -40,8 +40,7 @@ export const useCurrentOrder = () => {
 		throw new Error(`useCurrentOrder must be called within CurrentOrderProvider`);
 	}
 
-	const { storeDB } = useLocalData();
-	const ordersCollection = storeDB?.collections.orders;
+	const ordersCollection = useCollection('orders');
 	const { currentOrder } = React.useContext(CurrentOrderContext);
 	const navigation = useNavigation();
 

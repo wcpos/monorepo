@@ -6,7 +6,7 @@ import { switchMap, map } from 'rxjs/operators';
 import log from '@wcpos/utils/src/logger';
 
 import { useReplication } from './use-replication';
-import useLocalData from '../../../../contexts/local-data';
+import useCollection from '../../hooks/use-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type TaxRateDocument = import('@wcpos/database/src/collections/tax-rates').TaxRateDocument;
@@ -26,8 +26,7 @@ interface TaxRateProviderProps {
 
 const TaxRateProvider = ({ children, initialQuery, ui }: TaxRateProviderProps) => {
 	log.debug('render tax provider');
-	const { storeDB } = useLocalData();
-	const collection = storeDB.collections.taxes;
+	const collection = useCollection('taxes');
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplication({ collection });
 

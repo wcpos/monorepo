@@ -4,17 +4,12 @@ import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Text from '@wcpos/components/src/text';
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 
 import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
-import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
-import { GatewaysProvider } from '../contexts/gateways';
-import { OrdersProvider as OpenOrdersProvider } from '../contexts/open-orders';
 import { OrdersProvider } from '../contexts/orders';
 import Receipt from '../receipt';
 
@@ -33,7 +28,6 @@ const Stack = createStackNavigator<POSStackParamList>();
  */
 const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'POS'>) => {
 	const orderID = get(route, ['params', 'orderID']);
-
 	const initialQuery = React.useMemo(
 		() => ({
 			sortBy: 'date_created_gmt',
@@ -44,13 +38,13 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 	);
 
 	return (
-		<OpenOrdersProvider initialQuery={initialQuery}>
+		<OrdersProvider initialQuery={initialQuery}>
 			<React.Suspense>
 				<CurrentOrderProvider orderID={orderID}>
 					<POS />
 				</CurrentOrderProvider>
 			</React.Suspense>
-		</OpenOrdersProvider>
+		</OrdersProvider>
 	);
 };
 

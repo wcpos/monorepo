@@ -53,7 +53,26 @@ async function clearCollection(storeID: string, collection: RxCollection) {
 		log.error(error);
 	}
 
-	return addStoreDBCollection(storeID, 'customers');
+	return addStoreDBCollection(storeID, collection.name);
 }
 
-export default clearCollection;
+/**
+ * Clear all the collections in the given array and return a promise for all collections.
+ */
+async function clearCollections(storeID: string, collections: RxCollection[]) {
+	try {
+		// Clear all collections in the array
+		const clearedCollectionsPromises = collections.map((collection) =>
+			clearCollection(storeID, collection)
+		);
+
+		// Wait for all collections to be cleared
+		const clearedCollections = await Promise.all(clearedCollectionsPromises);
+		return clearedCollections;
+	} catch (error) {
+		log.error(error);
+		// throw error;
+	}
+}
+
+export { clearCollection, clearCollections };

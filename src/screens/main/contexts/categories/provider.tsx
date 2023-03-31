@@ -7,6 +7,7 @@ import log from '@wcpos/utils/src/logger';
 
 import { useReplication } from './use-replication';
 import useLocalData from '../../../../contexts/local-data';
+import useCollection from '../../hooks/use-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type ProductCategoryDocument =
@@ -32,7 +33,7 @@ const ProductCategoriesProvider = ({
 }: ProductCategoriesProviderProps) => {
 	log.debug('render categories provider');
 	const { storeDB } = useLocalData();
-	const collection = storeDB.collections['products/categories'];
+	const collection = useCollection('products/categories');
 	const { query$, setQuery } = useQuery(initialQuery);
 	const { replicationState } = useReplication({ collection });
 
@@ -53,7 +54,7 @@ const ProductCategoriesProvider = ({
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			switchMap((query) => {
-				const { search, selector = {}, sortBy, sortDirection, barcode } = query;
+				const { search, selector = {}, sortBy, sortDirection } = query;
 
 				const RxQuery = collection.find({ selector });
 

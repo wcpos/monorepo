@@ -6,10 +6,10 @@ import { switchMap, map } from 'rxjs/operators';
 import log from '@wcpos/utils/src/logger';
 
 import { useReplication } from './use-replication';
-import useLocalData from '../../../../contexts/local-data';
+import useCollection from '../../hooks/use-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
-type ProductTagDocument = import('@wcpos/database/src/collections/categories').ProductTagDocument;
+type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
 
 export const ProductTagsContext = React.createContext<{
 	query$: QueryObservable;
@@ -26,8 +26,7 @@ interface ProductTagsProviderProps {
 
 const ProductTagsProvider = ({ children, initialQuery, ui }: ProductTagsProviderProps) => {
 	log.debug('render categories provider');
-	const { storeDB } = useLocalData();
-	const collection = storeDB.collections['products/tags'];
+	const collection = useCollection('products/tags');
 	const { query$, setQuery } = useQuery(initialQuery);
 	const { replicationState } = useReplication({ collection });
 

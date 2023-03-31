@@ -47,7 +47,8 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	const handleChange = React.useCallback(
 		async (product: ProductDocument, data: Record<string, unknown>) => {
 			try {
-				const doc = await product.patch(data);
+				const latest = product.getLatest();
+				const doc = await latest.patch(data);
 				const success = await pushDocument(doc);
 				if (isRxDocument(success)) {
 					addSnackbar({

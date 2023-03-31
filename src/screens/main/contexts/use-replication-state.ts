@@ -2,14 +2,18 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
-import { defaultHashSha256, RxDocument } from 'rxdb';
+import { defaultHashSha256, RxDocument, RxCollection } from 'rxdb';
 import { replicateRxCollection, RxReplicationState } from 'rxdb/plugins/replication';
+import { interval } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../contexts/local-data';
 import { parseLinkHeader } from '../../../lib/url';
 import useRestHttpClient from '../hooks/use-rest-http-client';
+
+import type { QueryState, QueryObservable } from './use-query';
 
 export type ReplicationState = RxReplicationState<RxDocument, object>;
 
@@ -35,49 +39,82 @@ const replicationStateRegistry = new Map();
 /**
  *
  */
-const defaultPrepareQueryParams = (query, checkpoint, batchSize) => {
+interface Checkpoint extends ReturnType<typeof parseHeaders> {
+	lastModified: string;
+	completeIntitalSync: boolean;
+}
+
+/**
+ *
+ */
+const defaultPrepareQueryParams = (
+	query: QueryState,
+	checkpoint: Checkpoint,
+	batchSize: number
+) => {
 	return {
 		order: query.sortDirection,
 		orderby: query.sortBy,
 		page: checkpoint.nextPage || 1,
 		per_page: batchSize,
-		after: checkpoint.lastModified,
+		/**
+		 * FIXME:
+		 */
+		after: checkpoint.completeIntitalSync ? checkpoint.lastModified : null,
 	};
 };
+
+interface Props {
+	collection: RxCollection;
+	query$: QueryObservable;
+	prepareQueryParams?: (
+		params: ReturnType<typeof defaultPrepareQueryParams>
+	) => Record<string, string>;
+	pollingTime?: number;
+	apiEndpoint?: string;
+}
 
 /**
  *
  */
-const useReplicationState = ({ collection, query$, prepareQueryParams }) => {
+const useReplicationState = ({
+	collection,
+	query$,
+	prepareQueryParams,
+	pollingTime = 600000,
+	apiEndpoint,
+}: Props) => {
 	const [replicationState, setReplicationState] = React.useState<ReplicationState | null>(null);
 	const query = useObservableState(query$, query$.getValue());
 	const { site, store } = useLocalData();
 	const apiURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const http = useRestHttpClient();
 	const hashRef = React.useRef(null);
+	const endpoint = apiEndpoint || collection.name;
 
 	/**
 	 *
 	 */
 	React.useEffect(() => {
 		// storeID is required because cashiers can switch stores
-		const hash = defaultHashSha256(JSON.stringify({ storeID: store.localID, query }));
+		// endpoint is required for variations
+		const hash = defaultHashSha256(JSON.stringify({ storeID: store.localID, endpoint, query }));
 		hashRef.current = hash;
 
 		if (!replicationStateRegistry.has(hash)) {
 			// Cancel the previous replicationState if it exists
 			if (replicationState) {
 				replicationState.cancel();
-				replicationState.abortController.abort();
+				// replicationState.abortController.abort();
 			}
 
 			// create a new AbortController for each request
-			const controller = new AbortController();
+			// const controller = new AbortController();
 
 			// Create a new replicationState instance and start it
 			const newReplicationState = replicateRxCollection({
 				collection,
-				replicationIdentifier: `wc-rest-replication-to-${apiURL}/${collection.name}`,
+				replicationIdentifier: `replication-to-${apiURL}/${endpoint}`,
 				pull: {
 					handler: async (rxdbCheckpoint, batchSize) => {
 						try {
@@ -90,8 +127,8 @@ const useReplicationState = ({ collection, query$, prepareQueryParams }) => {
 								? prepareQueryParams(defaultParams, query, checkpoint, batchSize)
 								: defaultParams;
 
-							const response = await http.get(collection.name, {
-								signal: controller.signal,
+							const response = await http.get(endpoint, {
+								// signal: controller.signal,
 								params,
 							});
 							const data = get(response, 'data', []);
@@ -113,6 +150,7 @@ const useReplicationState = ({ collection, query$, prepareQueryParams }) => {
 							await collection.upsertLocal(hash, {
 								...headers,
 								lastModified: mostRecent.date_modified_gmt,
+								completeIntitalSync: headers.nextPage === undefined,
 							});
 
 							return {
@@ -129,10 +167,11 @@ const useReplicationState = ({ collection, query$, prepareQueryParams }) => {
 						await collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
 						return parsedData;
 					},
+					stream$: interval(pollingTime).pipe(map(() => 'RESYNC')),
 				},
 			});
 
-			newReplicationState.abortController = controller;
+			// newReplicationState.abortController = controller;
 			replicationStateRegistry.set(hash, newReplicationState);
 		}
 
@@ -144,7 +183,7 @@ const useReplicationState = ({ collection, query$, prepareQueryParams }) => {
 
 			if (currentReplicationState) {
 				currentReplicationState.cancel();
-				currentReplicationState.abortController.abort();
+				// currentReplicationState.abortController.abort();
 				replicationStateRegistry.delete(hashRef.current);
 			}
 		};
@@ -154,6 +193,7 @@ const useReplicationState = ({ collection, query$, prepareQueryParams }) => {
 		query,
 		apiURL,
 		http,
+		pollingTime,
 	]);
 
 	return replicationState;

@@ -19,15 +19,13 @@ type Props = {
  *
  */
 const StockQuantity = ({ item: product, onChange }: Props) => {
-	// const stockQuantity = useObservableState(product.stock_quantity$, product.stock_quantity);
-	// const manageStock = useObservableState(product.manage_stock$, product.manage_stock);
-	const stockQuantity = product.stock_quantity || 0;
-	const manageStock = product.manage_stock;
+	const stockQuantity = useObservableState(product.stock_quantity$, product.stock_quantity);
+	const manageStock = useObservableState(product.manage_stock$, product.manage_stock);
 
 	return (
 		<Box space="small">
 			<NumberInput
-				value={String(stockQuantity)}
+				value={String(stockQuantity || 0)}
 				onChange={(stock_quantity) => onChange(product, { stock_quantity })}
 				disabled={!manageStock}
 			/>

@@ -130,6 +130,7 @@
   "products": {
     "sortBy": "name",
     "sortDirection": "asc",
+    "showOutOfStock": true,
     "columns": [
       {
         "key": "image",

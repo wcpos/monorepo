@@ -1,14 +1,12 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
-import get from 'lodash/get';
-import { ObservableResource, useObservable, useObservableSuspense } from 'observable-hooks';
-import { Observable } from 'rxjs';
-import { map, tap, switchMap } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
 
 import NewOrder from './new-order';
 import useLocalData from '../../../../../contexts/local-data';
-import useOrders from '../../../contexts/open-orders';
+import useOrders from '../../../contexts/orders';
+import useCollection from '../../../hooks/use-collection';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -33,7 +31,7 @@ interface CurrentOrderContextProviderProps {
 const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProviderProps) => {
 	// const navigation = useNavigation();
 	const { store, storeDB } = useLocalData();
-	const collection = storeDB?.collections.orders;
+	const collection = useCollection('orders');
 	const { data: orders } = useOrders();
 	const currentOrder = orders.find((order) => order.uuid === orderID);
 

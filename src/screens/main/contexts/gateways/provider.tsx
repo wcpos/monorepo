@@ -8,7 +8,7 @@ import { switchMap, map, debounceTime, tap, distinctUntilChanged } from 'rxjs/op
 import log from '@wcpos/utils/src/logger';
 
 import { useReplication } from './use-replication';
-import useLocalData from '../../../../contexts/local-data';
+import useCollection from '../../hooks/use-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 
 type PaymentGatewayDocument =
@@ -29,8 +29,7 @@ interface GatewaysProviderProviderProps {
 
 const GatewaysProvider = ({ children, initialQuery }: GatewaysProviderProviderProps) => {
 	log.debug('render gateways provider');
-	const { storeDB } = useLocalData();
-	const collection = storeDB.collections.payment_gateways;
+	const collection = useCollection('payment_gateways');
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplication({ collection });
 

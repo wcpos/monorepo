@@ -1,14 +1,16 @@
 import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
+import isEqual from 'lodash/isEqual';
 import { ObservableResource, useObservableState } from 'observable-hooks';
-import { switchMap, map, tap } from 'rxjs/operators';
+import { switchMap, map, distinctUntilChanged } from 'rxjs/operators';
 
 // import products from '@wcpos/database/src/collections/products';
 import log from '@wcpos/utils/src/logger';
 
-import useProductsCollection from '../../hooks/use-products-collection';
-import clearCollection from '../clear-collection';
+import useLocalData from '../../../../contexts/local-data';
+import useCollection from '../../hooks/use-collection';
+import { clearCollections } from '../clear-collection';
 import syncCollection from '../sync-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import useReplicationState from '../use-replication-state';
@@ -90,7 +92,9 @@ const prepareQueryParams = (
  */
 const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProviderProps) => {
 	log.debug('render product provider');
-	const collection = useProductsCollection();
+	const { store } = useLocalData();
+	const collection = useCollection('products');
+	const variationsCollection = useCollection('variations');
 	const showOutOfStock = useObservableState(
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
@@ -105,24 +109,29 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 		const resource$ = query$.pipe(
 			switchMap((query) => {
 				const { search, selector: querySelector, sortBy, sortDirection, limit, skip } = query;
-				let selector;
+				const selector = { $and: [] };
 
-				const searchSelector = search
-					? {
-							$or: [
-								{ name: { $regex: new RegExp(escape(search), 'i') } },
-								{ sku: { $regex: new RegExp(escape(search), 'i') } },
-								{ barcode: { $regex: new RegExp(escape(search), 'i') } },
-							],
-					  }
-					: null;
+				if (search) {
+					selector.$and.push({
+						$or: [
+							{ name: { $regex: new RegExp(escape(search), 'i') } },
+							{ sku: { $regex: new RegExp(escape(search), 'i') } },
+							{ barcode: { $regex: new RegExp(escape(search), 'i') } },
+						],
+					});
+				}
 
-				if (querySelector && searchSelector) {
-					selector = {
-						$and: [querySelector, searchSelector],
-					};
-				} else {
-					selector = querySelector || searchSelector || {};
+				if (querySelector) {
+					selector.$and.push(querySelector);
+				}
+
+				if (!showOutOfStock) {
+					selector.$and.push({
+						$or: [
+							{ manage_stock: false },
+							{ $and: [{ manage_stock: true }, { stock_quantity: { $gt: 0 } }] },
+						],
+					});
 				}
 
 				const RxQuery = collection.find({ selector });
@@ -130,21 +139,31 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 				return RxQuery.$.pipe(
 					map((result) => {
 						return orderBy(result, [sortBy], [sortDirection]);
+					}),
+					distinctUntilChanged((prev, next) => {
+						// only emit when the uuids change
+						return isEqual(
+							prev.map((doc) => doc.uuid),
+							next.map((doc) => doc.uuid)
+						);
 					})
 				);
 			})
 		);
 
 		return new ObservableResource(resource$);
-	}, [collection, query$]);
+	}, [collection, query$, showOutOfStock]);
 
+	/**
+	 *
+	 */
 	return (
 		<ProductsContext.Provider
 			value={{
 				resource,
 				query$,
 				setQuery,
-				clear: () => clearCollection(store.localID, collection),
+				clear: () => clearCollections(store.localID, [collection, variationsCollection]),
 				sync: () => syncCollection(replicationState),
 				replicationState,
 			}}

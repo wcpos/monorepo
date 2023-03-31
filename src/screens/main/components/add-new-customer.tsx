@@ -16,6 +16,7 @@ import EditForm from './edit-form';
 import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 import usePushDocument from '../contexts/use-push-document';
+import useCollection from '../hooks/use-collection';
 
 interface AddNewCustomerProps {
 	onAdd?: (doc: import('@wcpos/database').CustomerDocument) => void;
@@ -28,7 +29,7 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const [customerData, setCustomerData] = React.useState({});
 	const { storeDB } = useLocalData();
-	const customerCollection = storeDB.collections.customers;
+	const customerCollection = useCollection('customers');
 	// const [extraErrors, setExtraErrors] = React.useState();
 	// const { resource } = useCountries();
 	const countries = {};

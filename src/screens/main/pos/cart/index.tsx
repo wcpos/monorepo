@@ -4,7 +4,6 @@ import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
-import Text from '@wcpos/components/src/text';
 
 import Cart from './cart';
 import OpenOrderTabs from './tabs';

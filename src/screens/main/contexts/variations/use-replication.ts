@@ -10,6 +10,7 @@ import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
 import { parseLinkHeader } from '../../../../lib/url';
+import useCollection from '../../hooks/use-collection';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 const registry = new Map();
@@ -42,8 +43,8 @@ function mangoToRestQuery(mangoSelector) {
 
 export const useReplication = ({ parent, query$ }) => {
 	const http = useRestHttpClient();
-	const { site, storeDB, store } = useLocalData();
-	const collection = storeDB.collections.variations;
+	const { site, store } = useLocalData();
+	const collection = useCollection('variations');
 	const query = useObservableState(query$, query$.getValue());
 
 	const replicationStatePromise = React.useMemo(() => {
