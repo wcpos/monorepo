@@ -7,8 +7,8 @@ import Text from '@wcpos/components/src/text';
 import useDateFormat from '../../hooks/use-date-format';
 
 const DateCreated = ({ item: order }) => {
-	const dateCreated = useObservableState(order.date_created$, order.date_created);
-	const dateFormatted = useDateFormat(dateCreated, 'MMMM Do YYYY, h:mm:ss a');
+	const dateCreatedGmt = useObservableState(order.date_created_gmt$, order.date_created_gmt);
+	const dateFormatted = useDateFormat(dateCreatedGmt);
 
 	return <Text>{dateFormatted}</Text>;
 };

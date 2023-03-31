@@ -11,6 +11,7 @@ import Address from './cells/address';
 import Customer from './cells/customer';
 import DateCreated from './cells/date-created';
 import CustomerNote from './cells/note';
+import PaymentMethod from './cells/payment-method';
 import Status from './cells/status';
 import Total from './cells/total';
 import Footer from './footer';
@@ -34,6 +35,7 @@ const cells = {
 	status: Status,
 	total: Total,
 	date_created: DateCreated,
+	payment_method: PaymentMethod,
 };
 
 /**

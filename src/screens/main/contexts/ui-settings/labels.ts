@@ -54,6 +54,8 @@ export const getTranslatedLabels = () => ({
 		customer_note: t('Customer Note', { _tags: 'core' }),
 		date_created: t('Date created', { _tags: 'core' }),
 		date_modified: t('Date modified', { _tags: 'core' }),
+		date_completed: t('Date completed', { _tags: 'core' }),
+		payment_method: t('Payment Method', { _tags: 'core' }),
 		total: t('Total', { _tags: 'core' }),
 		actions: t('Actions', { _tags: 'core' }),
 	},
