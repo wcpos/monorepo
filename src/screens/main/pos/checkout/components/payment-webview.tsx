@@ -1,9 +1,9 @@
 import * as React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 
 import { useNavigation, StackActions } from '@react-navigation/native';
 import get from 'lodash/get';
-import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
@@ -11,9 +11,6 @@ import { useModal } from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import WebView from '@wcpos/components/src/webview';
 import log from '@wcpos/utils/src/logger';
-
-import useOrders from '../../../contexts/orders';
-import useRestHttpClient from '../../../hooks/use-rest-http-client';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -32,33 +29,6 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 	);
 
 	/**
-	 * We need to save the order before we can process the payment to make sure we have the latest data
-	 */
-	// React.useEffect(() => {
-	// 	async function saveOrder() {
-	// 		try {
-	// 			const { data } = await http.post('orders', {
-	// 				data: await order.toPopulatedJSON(),
-	// 			});
-	// 			//
-	// 			const parsedData = order.collection.parseRestResponse(data);
-	// 			await order.update(parsedData);
-	// 		} catch (err) {
-	// 			log.error(err);
-	// 		}
-	// 	}
-
-	// 	if (!paymentURL) {
-	// 		saveOrder();
-	// 	}
-	// }, [http, order, paymentURL]);
-
-	/**
-	 *
-	 */
-	// React.useEffect(() => setLoading(true), []);
-
-	/**
 	 *
 	 */
 	const handlePaymentReceived = React.useCallback(
@@ -67,7 +37,7 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 				try {
 					const { payload } = event.data;
 					const parsedData = order.collection.parseRestResponse(payload);
-					await order.update(parsedData);
+					await order.incrementalPatch(parsedData);
 					navigation.dispatch(
 						StackActions.replace('Receipt', {
 							orderID: order.uuid,

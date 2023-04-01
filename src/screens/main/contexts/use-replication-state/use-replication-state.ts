@@ -9,66 +9,28 @@ import { map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import useLocalData from '../../../contexts/local-data';
-import { parseLinkHeader } from '../../../lib/url';
-import useRestHttpClient from '../hooks/use-rest-http-client';
+import { defaultPrepareQueryParams, parseHeaders, Checkpoint } from './replication.helpers';
+import useAudit from './use-audit';
+import useLocalData from '../../../../contexts/local-data';
+import useRestHttpClient from '../../hooks/use-rest-http-client';
 
-import type { QueryState, QueryObservable } from './use-query';
+import type { QueryObservable, QueryState } from '../use-query';
 
 export type ReplicationState = RxReplicationState<RxDocument, object>;
-
-const parseHeaders = (response) => {
-	const link = get(response, ['headers', 'link']);
-	const parsedHeaders = parseLinkHeader(link);
-	const remoteTotal = get(response, ['headers', 'x-wp-total']);
-	const totalPages = get(response, ['headers', 'x-wp-totalpages']);
-	const nextPage = get(parsedHeaders, ['next', 'page']);
-
-	return {
-		remoteTotal,
-		totalPages,
-		nextPage,
-	};
-};
 
 /**
  *
  */
 const replicationStateRegistry = new Map();
 
-/**
- *
- */
-interface Checkpoint extends ReturnType<typeof parseHeaders> {
-	lastModified: string;
-	completeIntitalSync: boolean;
-}
-
-/**
- *
- */
-const defaultPrepareQueryParams = (
-	query: QueryState,
-	checkpoint: Checkpoint,
-	batchSize: number
-) => {
-	return {
-		order: query.sortDirection,
-		orderby: query.sortBy,
-		page: checkpoint.nextPage || 1,
-		per_page: batchSize,
-		/**
-		 * FIXME:
-		 */
-		after: checkpoint.completeIntitalSync ? checkpoint.lastModified : null,
-	};
-};
-
 interface Props {
 	collection: RxCollection;
 	query$: QueryObservable;
 	prepareQueryParams?: (
-		params: ReturnType<typeof defaultPrepareQueryParams>
+		params: ReturnType<typeof defaultPrepareQueryParams>,
+		query: QueryState,
+		checkpoint: Checkpoint,
+		batchSize: number
 	) => Record<string, string>;
 	pollingTime?: number;
 	apiEndpoint?: string;
@@ -77,7 +39,7 @@ interface Props {
 /**
  *
  */
-const useReplicationState = ({
+export const useReplicationState = ({
 	collection,
 	query$,
 	prepareQueryParams,
@@ -91,6 +53,8 @@ const useReplicationState = ({
 	const http = useRestHttpClient();
 	const hashRef = React.useRef(null);
 	const endpoint = apiEndpoint || collection.name;
+	// const audit = useAudit({ collection });
+	// audit.run();
 
 	/**
 	 *
@@ -115,6 +79,9 @@ const useReplicationState = ({
 			const newReplicationState = replicateRxCollection({
 				collection,
 				replicationIdentifier: `replication-to-${apiURL}/${endpoint}`,
+				push: {
+					handler: async () => Promise.resolve([]),
+				},
 				pull: {
 					handler: async (rxdbCheckpoint, batchSize) => {
 						try {
@@ -122,10 +89,19 @@ const useReplicationState = ({
 								.getLocal(hash)
 								.then((doc) => doc?.toJSON().data || {});
 
+							// get the local IDs here for auditting
+
 							const defaultParams = defaultPrepareQueryParams(query, checkpoint, batchSize);
 							const params = prepareQueryParams
 								? prepareQueryParams(defaultParams, query, checkpoint, batchSize)
 								: defaultParams;
+
+							// hack to stop the API from returning all docs, how to search by uuid?
+							if ('uuid' in params) {
+								return {
+									documents: [],
+								};
+							}
 
 							const response = await http.get(endpoint, {
 								// signal: controller.signal,
@@ -198,5 +174,3 @@ const useReplicationState = ({
 
 	return replicationState;
 };
-
-export default useReplicationState;

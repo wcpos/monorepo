@@ -22,6 +22,8 @@ interface Props {
  */
 export default class NewOrder {
 	public collection;
+	public status: string;
+	public status$: BehaviorSubject<string>;
 	public customer_id: number;
 	public customer_id$: BehaviorSubject<number>;
 	public billing: any;
@@ -37,6 +39,8 @@ export default class NewOrder {
 	constructor({ collection, currency_symbol, currency }: Props) {
 		this.collection = collection;
 
+		this.status = 'pos-open';
+		this.status$ = new BehaviorSubject('pos-open');
 		this.customer_id = 0;
 		this.customer_id$ = new BehaviorSubject(0);
 		this.billing = {};
@@ -52,6 +56,7 @@ export default class NewOrder {
 
 	toJSON() {
 		const {
+			status,
 			customer_id,
 			billing,
 			shipping,
@@ -63,7 +68,7 @@ export default class NewOrder {
 		} = this;
 
 		return {
-			status: 'pos-open',
+			status,
 			date_created_gmt: new Date(Date.now()).toISOString().split('.')[0],
 			customer_id,
 			billing,

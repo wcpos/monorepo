@@ -12,6 +12,7 @@ type Props = {
 export const StockQuantity = ({ item: product }: Props) => {
 	const stockQuantity = useObservableState(product.stock_quantity$, product.stock_quantity);
 	const manageStock = useObservableState(product.manage_stock$, product.manage_stock);
+	debugger;
 
 	return manageStock && isFinite(stockQuantity) ? <Text>{stockQuantity}</Text> : null;
 };

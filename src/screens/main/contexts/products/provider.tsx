@@ -157,14 +157,28 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 	/**
 	 *
 	 */
+	const clear = React.useCallback(() => {
+		return clearCollections(store.localID, [collection, variationsCollection]);
+	}, [collection, variationsCollection, store.localID]);
+
+	/**
+	 *
+	 */
+	const sync = React.useCallback(() => {
+		syncCollection(replicationState);
+	}, [replicationState]);
+
+	/**
+	 *
+	 */
 	return (
 		<ProductsContext.Provider
 			value={{
 				resource,
 				query$,
 				setQuery,
-				clear: () => clearCollections(store.localID, [collection, variationsCollection]),
-				sync: () => syncCollection(replicationState),
+				clear,
+				sync,
 				replicationState,
 			}}
 		>
