@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import { useObservableState, ObservableResource } from 'observable-hooks';
-import { from } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
+import Loader from '@wcpos/components/src/loader';
 import { useModal } from '@wcpos/components/src/modal';
 
 import PaymentWebview from './components/payment-webview';
@@ -60,7 +59,7 @@ const Checkout = () => {
 				}
 			})();
 		}
-	}, []);
+	}, [isPushed, order, pushDocument]);
 
 	/**
 	 *
@@ -68,7 +67,7 @@ const Checkout = () => {
 	return (
 		<Box fill space="small">
 			<CheckoutTitle order={order} />
-			{isPushed && <PaymentWebview order={order} />}
+			{isPushed ? <PaymentWebview order={order} /> : <Loader />}
 		</Box>
 	);
 };

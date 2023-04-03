@@ -71,7 +71,8 @@ export interface Checkpoint extends ReturnType<typeof parseHeaders> {
 export const defaultPrepareQueryParams = (
 	query: QueryState,
 	checkpoint: Checkpoint,
-	batchSize: number
+	batchSize: number,
+	completeIntitalSync: boolean
 ) => {
 	const params = transformMangoSelector(query.selector);
 	return Object.assign(params, {
@@ -82,7 +83,52 @@ export const defaultPrepareQueryParams = (
 		/**
 		 * FIXME: this is for products and variations only
 		 */
-		modified_after: checkpoint.completeIntitalSync ? checkpoint.lastModified : null,
+		modified_after: completeIntitalSync ? checkpoint.lastModified : null,
 		dates_are_gmt: true,
 	});
+};
+
+/**
+ *
+ */
+export const getLocalIDs = async (collection, endpoint = '') => {
+	// special case for variations
+	const regex = /^products\/(\d+)\/variations/;
+	const match = endpoint.match(regex);
+	await collection.database.requestIdlePromise();
+
+	if (match) {
+		const parentID = parseInt(match[1], 10);
+		const parentDocs = await collection.database.collections.products
+			.find({ selector: { id: parentID } })
+			.exec();
+		if (Array.isArray(parentDocs) && parentDocs.length === 1) {
+			const { variations } = parentDocs[0];
+			return collection
+				.find({
+					selector: { id: { $in: variations } },
+					// fields: ['id'],
+				})
+				.exec()
+				.then((res) => {
+					return res.map((doc) => {
+						return doc.id;
+					});
+				});
+		} else {
+			return Promise.resolve([]);
+		}
+	} else {
+		return collection
+			.find({
+				selector: { id: { $exists: true } },
+				// fields: ['id'],
+			})
+			.exec()
+			.then((res) => {
+				return res.map((doc) => {
+					return doc.id;
+				});
+			});
+	}
 };

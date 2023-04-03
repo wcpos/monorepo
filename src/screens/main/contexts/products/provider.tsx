@@ -84,6 +84,7 @@ const prepareQueryParams = (
 	return {
 		...params,
 		orderby,
+		status: 'publish',
 	};
 };
 

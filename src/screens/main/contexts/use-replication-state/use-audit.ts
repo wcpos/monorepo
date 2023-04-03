@@ -1,69 +1,68 @@
 import * as React from 'react';
 
+import { timer } from 'rxjs';
+
 import log from '@wcpos/utils/src/logger';
 
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
-const useAudit = ({ collection }) => {
+const runningAudits = new Map();
+
+/**
+ *
+ */
+const useAudit = ({ collection, endpoint, auditTime = 600000 }) => {
 	const http = useRestHttpClient();
-	const [localIDs, setLocalIDs] = React.useState([]);
-	const [remoteIDs, setRemoteIDs] = React.useState([]);
-	const [initialSyncDone, setInitialSyncDone] = React.useState(false);
-	const initialSyncResolver = React.useRef(null);
 
 	/**
 	 *
 	 */
-	const initialSync = new Promise((resolve) => {
-		initialSyncResolver.current = resolve;
-	});
-
 	const run = React.useCallback(async () => {
-		//
-		function fetchLocalIDs() {
-			return collection
-				.find({
-					selector: { id: { $exists: true } },
-					// fields: ['id'],
-				})
-				.exec()
-				.then((res) => {
-					return res.map((doc) => doc.id);
-				});
-		}
-
-		function fetchRemoteIDs() {
-			return http
-				.get(collection.name, {
+		try {
+			// Get array of all remote IDs
+			const remoteIDs = await http
+				.get(endpoint, {
 					params: { fields: ['id'], posts_per_page: -1 },
 				})
 				.then(({ data }) => {
 					return data.map((doc) => doc.id);
 				});
-		}
 
-		try {
-			const [localIDs, remoteIDs] = await Promise.all([fetchLocalIDs(), fetchRemoteIDs()]);
+			// Save to local storage
+			collection.upsertLocal('remote-' + endpoint, {
+				remoteIDs,
+			});
 
-			setLocalIDs(localIDs);
-			setRemoteIDs(remoteIDs);
-
-			if (!initialSyncDone) {
-				setInitialSyncDone(true);
-				if (initialSyncResolver.current) {
-					initialSyncResolver.current(true);
-					initialSyncResolver.current = null;
-				}
-			}
-
-			return { localIDs, remoteIDs };
+			return remoteIDs;
 		} catch (error) {
-			log.error('Error auditing ' + collection.name, error);
-			throw error;
+			log.error(`Error auditing ${collection.name}:`, error);
 		}
-	}, [collection, http, initialSyncDone]);
+	}, [collection, endpoint, http]);
 
-	return { run, initialSync, localIDs, remoteIDs };
+	/**
+	 * Set up a timer to run every 10 minutes (600000 ms)
+	 */
+	React.useEffect(() => {
+		if (!runningAudits.has(endpoint)) {
+			run();
+
+			const auditTimer = timer(auditTime, auditTime).subscribe(() => {
+				run();
+			});
+
+			runningAudits.set(endpoint, auditTimer);
+		}
+
+		return () => {
+			const auditTimer = runningAudits.get(endpoint);
+			if (auditTimer) {
+				auditTimer.unsubscribe();
+				runningAudits.delete(endpoint);
+			}
+		};
+	}, [auditTime, endpoint, run]);
+
+	return { run };
 };
 
 export default useAudit;
@@ -72,5 +71,5 @@ export default useAudit;
 // const add = data.filter((d) => !find(docs, { id: d.id })).map((d) => ({ ...d, _deleted: false }));
 
 // const remove = docs
-// 	.filter((d) => !find(data, { id: d.id }))
-// 	.map((d) => ({ ...d, _deleted: true }));
+//  .filter((d) => !find(data, { id: d.id }))
+//  .map((d) => ({ ...d, _deleted: true }));

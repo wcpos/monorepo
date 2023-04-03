@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import difference from 'lodash/difference';
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { defaultHashSha256, RxDocument, RxCollection } from 'rxdb';
@@ -9,7 +10,12 @@ import { map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import { defaultPrepareQueryParams, parseHeaders, Checkpoint } from './replication.helpers';
+import {
+	defaultPrepareQueryParams,
+	parseHeaders,
+	Checkpoint,
+	getLocalIDs,
+} from './replication.helpers';
 import useAudit from './use-audit';
 import useLocalData from '../../../../contexts/local-data';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
@@ -53,8 +59,7 @@ export const useReplicationState = ({
 	const http = useRestHttpClient();
 	const hashRef = React.useRef(null);
 	const endpoint = apiEndpoint || collection.name;
-	// const audit = useAudit({ collection });
-	// audit.run();
+	const audit = useAudit({ collection, endpoint });
 
 	/**
 	 *
@@ -89,9 +94,44 @@ export const useReplicationState = ({
 								.getLocal(hash)
 								.then((doc) => doc?.toJSON().data || {});
 
-							// get the local IDs here for auditting
+							if (checkpoint.count && checkpoint.count === 5) {
+								await collection.upsertLocal(hash, {
+									...checkpoint,
+									count: 0,
+								});
+								return {
+									documents: [],
+								};
+							}
 
-							const defaultParams = defaultPrepareQueryParams(query, checkpoint, batchSize);
+							const remote = await collection
+								.getLocal('remote-' + endpoint)
+								.then((doc) => doc?.toJSON().data || {});
+
+							let remoteIDs = remote.remoteIDs;
+							if (!remoteIDs) {
+								remoteIDs = await audit.run();
+							}
+
+							// get the local IDs here for auditting
+							const localIDs = await getLocalIDs(collection, endpoint);
+
+							// compare the two arrays
+							const add = difference(remoteIDs, localIDs);
+							const remove = difference(localIDs, remoteIDs);
+							const completeIntitalSync = add.length === 0;
+
+							if (remove.length > 0) {
+								const docs = await collection.find({ selector: { id: { $in: remove } } }).exec();
+								await collection.bulkRemove(docs.map((doc) => doc.uuid));
+							}
+
+							const defaultParams = defaultPrepareQueryParams(
+								query,
+								checkpoint,
+								batchSize,
+								completeIntitalSync
+							);
 							const params = prepareQueryParams
 								? prepareQueryParams(defaultParams, query, checkpoint, batchSize)
 								: defaultParams;
@@ -101,6 +141,11 @@ export const useReplicationState = ({
 								return {
 									documents: [],
 								};
+							}
+
+							// special case for includes
+							if ('include' in params) {
+								// include should check if they are all in the local db
 							}
 
 							const response = await http.get(endpoint, {
@@ -127,6 +172,7 @@ export const useReplicationState = ({
 								...headers,
 								lastModified: mostRecent.date_modified_gmt,
 								completeIntitalSync: headers.nextPage === undefined,
+								count: (checkpoint.count || 0) + 1,
 							});
 
 							return {
@@ -172,5 +218,5 @@ export const useReplicationState = ({
 		pollingTime,
 	]);
 
-	return replicationState;
+	return replicationState ? Object.assign(replicationState, { audit }) : null;
 };
