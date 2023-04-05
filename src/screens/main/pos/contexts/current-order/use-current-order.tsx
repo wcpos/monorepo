@@ -56,7 +56,7 @@ export const useCurrentOrder = () => {
 				price: priceToNumber(product.price),
 				sku: product.sku,
 				tax_class: product.tax_class,
-				meta_data: filteredMetaData(product.meta_data),
+				// meta_data: filteredMetaData(product.meta_data),
 			};
 
 			if (isRxDocument(currentOrder)) {
@@ -92,7 +92,8 @@ export const useCurrentOrder = () => {
 				price: priceToNumber(variation.price),
 				sku: variation.sku,
 				tax_class: variation.tax_class,
-				meta_data: filteredMetaData(parent.meta_data).concat(metaData),
+				// meta_data: filteredMetaData(parent.meta_data).concat(metaData),
+				meta_data: metaData,
 			};
 
 			if (isRxDocument(currentOrder)) {

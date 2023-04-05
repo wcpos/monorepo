@@ -74,7 +74,7 @@
     "@types/core-js": "^2.5.5",
     "@types/jest": "^29.5.0",
     "@types/lodash": "4.14.192",
-    "@types/react": "^18.0.32",
+    "@types/react": "^18.0.33",
     "@types/styled-components": "^5.1.26",
     "@types/styled-components-react-native": "^5.2.1",
     "@wcpos/babel-preset-expo": "*",
