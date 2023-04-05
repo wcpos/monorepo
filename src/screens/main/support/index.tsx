@@ -6,7 +6,7 @@ import Box from '@wcpos/components/src/box';
 // import Button from '@wcpos/components/src/button';
 
 const Support = () => {
-	const discordRef = React.useRef(null);
+	// const discordRef = React.useRef(null);
 
 	// const handleSubmit = () => {
 	// 	if (discordRef) {
@@ -19,12 +19,12 @@ const Support = () => {
 			{/* <Button onPress={handleSubmit} title="Submit" /> */}
 			<WidgetBot
 				server="711884517081612298"
-				channel="711884517081612301"
+				channel="1093100746372829254"
 				style={{ height: '100%', width: '100%', border: '0px' }}
-				onAPI={(api) => {
-					window.discordApi = api;
-					discordRef.current = api;
-				}}
+				// onAPI={(api) => {
+				// 	window.discordApi = api;
+				// 	discordRef.current = api;
+				// }}
 			/>
 		</Box>
 	);
