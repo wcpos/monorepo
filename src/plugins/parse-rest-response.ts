@@ -113,7 +113,8 @@ export function coerceData(
 export function parseRestResponse(this: RxCollection, json: Record<string, any>) {
 	const collection = this;
 	const schema = collection.schema.jsonSchema;
-	if (isPlainObject(json)) {
+	// NOTE: in the audit we sometimes set _deleted to true, we don't want to prune/coerce that
+	if (isPlainObject(json) && json._deleted !== true) {
 		pruneProperties(schema, json); // mutates json
 		return coerceData(schema, json, collection); // return json
 	}
