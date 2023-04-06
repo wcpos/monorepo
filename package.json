@@ -23,11 +23,11 @@
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
-    "@types/lodash": "4.14.191",
+    "@types/lodash": "4.14.192",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
     "jest": "^29.5.0",
-    "ts-jest": "^29.0.5",
+    "ts-jest": "^29.1.0",
     "typescript": "^4.6.3"
   },
   "eslintConfig": {
