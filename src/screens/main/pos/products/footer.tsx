@@ -20,6 +20,7 @@ interface ProductFooterProps {
 
 const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const theme = useTheme();
+	const { store } = useLocalData();
 	const { sync, clear, replicationState } = useProducts();
 	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
