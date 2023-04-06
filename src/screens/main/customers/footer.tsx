@@ -2,25 +2,34 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import useLocalData from '../../../contexts/local-data';
 import SyncButton from '../components/sync-button';
 import useCustomers from '../contexts/customers';
+import useCollection from '../hooks/use-collection';
 
 interface CustomersFooterProps {
 	count: number;
 }
 
 const CustomersFooter = ({ count }: CustomersFooterProps) => {
-	const { storeDB } = useLocalData();
-	const total = useObservableState(storeDB.customers.count().$, 0);
 	const theme = useTheme();
 	const { sync, clear, replicationState } = useCustomers();
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
+	const collection = useCollection('customers');
+	const total = useObservableState(
+		collection.getLocal$('audit-customers').pipe(
+			map((result) => {
+				const data = result?.toJSON().data;
+				return data?.remoteIDs ? data.remoteIDs.length : 0;
+			})
+		),
+		0
+	);
 
 	return (
 		<Box

@@ -1,3 +1,4 @@
+import difference from 'lodash/difference';
 import get from 'lodash/get';
 
 import { parseLinkHeader } from '../../../../lib/url';
@@ -44,7 +45,7 @@ export function transformMangoSelector(selector) {
 	}
 	for (const [key, value] of Object.entries(selector)) {
 		if (key === 'id' && typeof value === 'object' && '$in' in value) {
-			restQuery.includes = value.$in;
+			restQuery.include = value.$in;
 		} else {
 			const param = mapKeyToParam(key);
 			if (typeof value === 'object' && '$elemMatch' in value) {
@@ -68,22 +69,31 @@ export interface Checkpoint extends ReturnType<typeof parseHeaders> {
 /**
  *
  */
-export const defaultPrepareQueryParams = (
-	query: QueryState,
-	checkpoint: Checkpoint,
-	batchSize: number,
-	completeIntitalSync: boolean
-) => {
+export const defaultPrepareQueryParams = (query: QueryState, status: any, batchSize: number) => {
 	const params = transformMangoSelector(query.selector);
+	const hasIncludeQuery = Array.isArray(params.include) && params.include.length > 0;
+
+	// special case for includes
+	if (hasIncludeQuery) {
+		status.completeIntitalSync = difference(params.include, status.remoteIDs).length === 0;
+	}
+
+	if (status.completeIntitalSync) {
+		/**
+		 * FIXME: which collections have a modified_after field?
+		 */
+		params.modified_after = status.lastModified;
+	}
+
+	if (!status.completeIntitalSync && !hasIncludeQuery) {
+		params.include = status.include;
+	}
+
 	return Object.assign(params, {
 		order: query.sortDirection,
 		orderby: query.sortBy,
-		page: checkpoint.nextPage || 1,
+		// page: checkpoint.nextPage || 1,
 		per_page: batchSize,
-		/**
-		 * FIXME: this is for products and variations only
-		 */
-		modified_after: completeIntitalSync ? checkpoint.lastModified : null,
 		dates_are_gmt: true,
 	});
 };
@@ -91,44 +101,20 @@ export const defaultPrepareQueryParams = (
 /**
  *
  */
-export const getLocalIDs = async (collection, endpoint = '') => {
-	// special case for variations
-	const regex = /^products\/(\d+)\/variations/;
-	const match = endpoint.match(regex);
-	await collection.database.requestIdlePromise();
-
-	if (match) {
-		const parentID = parseInt(match[1], 10);
-		const parentDocs = await collection.database.collections.products
-			.find({ selector: { id: parentID } })
-			.exec();
-		if (Array.isArray(parentDocs) && parentDocs.length === 1) {
-			const { variations } = parentDocs[0];
-			return collection
-				.find({
-					selector: { id: { $in: variations } },
-					// fields: ['id'],
-				})
-				.exec()
-				.then((res) => {
-					return res.map((doc) => {
-						return doc.id;
-					});
-				});
-		} else {
-			return Promise.resolve([]);
+export const retryWithExponentialBackoff = async (fn, retries = 5, delay = 1000) => {
+	for (let i = 0; i < retries; i++) {
+		try {
+			return await fn();
+		} catch (error) {
+			if (error.response && error.response.status === 503) {
+				// If it's a 503 error, wait for an increasing amount of time and try again
+				await new Promise((resolve) => setTimeout(resolve, delay * 2 ** i));
+			} else {
+				// If it's not a 503 error, re-throw the error
+				throw error;
+			}
 		}
-	} else {
-		return collection
-			.find({
-				selector: { id: { $exists: true } },
-				// fields: ['id'],
-			})
-			.exec()
-			.then((res) => {
-				return res.map((doc) => {
-					return doc.id;
-				});
-			});
 	}
+
+	throw new Error('Max retries reached');
 };

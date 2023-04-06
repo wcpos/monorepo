@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -11,6 +12,7 @@ import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import SyncButton from '../../components/sync-button';
 import useProducts from '../../contexts/products';
+import useCollection from '../../hooks/use-collection';
 
 interface ProductFooterProps {
 	count: number;
@@ -21,11 +23,21 @@ interface ProductFooterProps {
  */
 const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { storeDB, store } = useLocalData();
-	const total = useObservableState(storeDB.products.count().$, 0);
+	// const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
 	const { sync, clear, replicationState } = useProducts();
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
+	const collection = useCollection('products');
+	const total = useObservableState(
+		collection.getLocal$('audit-products').pipe(
+			map((result) => {
+				const data = result?.toJSON().data;
+				return data?.remoteIDs ? data.remoteIDs.length : 0;
+			})
+		),
+		0
+	);
 
 	return (
 		<Box

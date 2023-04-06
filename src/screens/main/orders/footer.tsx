@@ -19,10 +19,10 @@ interface OrderFooterProps {
 const OrdersFooter = ({ count }: OrderFooterProps) => {
 	const collection = useCollection('orders');
 	const total = useObservableState(
-		collection.getLocal$('remote-orders').pipe(
+		collection.getLocal$('audit-orders').pipe(
 			map((result) => {
 				const data = result?.toJSON().data;
-				return data.remoteIDs ? data.remoteIDs.length : 0;
+				return data?.remoteIDs ? data.remoteIDs.length : 0;
 			})
 		),
 		0

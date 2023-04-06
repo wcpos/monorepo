@@ -72,7 +72,7 @@ interface APIQueryParams {
 const prepareQueryParams = (
 	params: APIQueryParams,
 	query: QueryState,
-	checkpoint,
+	status,
 	batchSize
 ): APIQueryParams => {
 	let orderby = params.orderby;

@@ -13,6 +13,8 @@ import useCollection from '../../hooks/use-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import useReplicationState from '../use-replication-state';
 
+import type { AuditStatus } from '../use-replication-state/use-audit';
+
 type ProductVariationDocument =
 	import('@wcpos/database/src/collections/variations').ProductVariationDocument;
 type ProductDocument = import('@wcpos/database/src/collections/products').ProductDocument;
@@ -61,8 +63,8 @@ interface APIQueryParams {
 const prepareQueryParams = (
 	params: APIQueryParams,
 	query: QueryState,
-	checkpoint,
-	batchSize
+	status: AuditStatus,
+	batchSize: number
 ): APIQueryParams => {
 	let orderby = params.orderby;
 

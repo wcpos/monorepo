@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -11,19 +12,28 @@ import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import SyncButton from '../../components/sync-button';
 import useProducts from '../../contexts/products';
+import useCollection from '../../hooks/use-collection';
 
 interface ProductFooterProps {
 	count: number;
 }
 
 const ProductsFooter = ({ count }: ProductFooterProps) => {
-	const { store, storeDB } = useLocalData();
-	const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
 	const { sync, clear, replicationState } = useProducts();
 	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
+	const collection = useCollection('products');
+	const total = useObservableState(
+		collection.getLocal$('audit-products').pipe(
+			map((result) => {
+				const data = result?.toJSON().data;
+				return data?.remoteIDs ? data.remoteIDs.length : 0;
+			})
+		),
+		0
+	);
 
 	/**
 	 * FIXME: this is a temporary hack, need to get the label from the API

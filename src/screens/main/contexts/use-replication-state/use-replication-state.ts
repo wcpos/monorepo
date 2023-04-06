@@ -10,12 +10,7 @@ import { map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import {
-	defaultPrepareQueryParams,
-	parseHeaders,
-	Checkpoint,
-	getLocalIDs,
-} from './replication.helpers';
+import { defaultPrepareQueryParams, retryWithExponentialBackoff } from './replication.helpers';
 import useAudit from './use-audit';
 import useLocalData from '../../../../contexts/local-data';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
@@ -35,7 +30,7 @@ interface Props {
 	prepareQueryParams?: (
 		params: ReturnType<typeof defaultPrepareQueryParams>,
 		query: QueryState,
-		checkpoint: Checkpoint,
+		status: any,
 		batchSize: number
 	) => Record<string, string>;
 	pollingTime?: number;
@@ -62,7 +57,7 @@ export const useReplicationState = ({
 	const audit = useAudit({ collection, endpoint });
 
 	/**
-	 *
+	 * TODO - if initialFullSync is true, maybe I should debounce the query to stop flooding the server
 	 */
 	React.useEffect(() => {
 		// storeID is required because cashiers can switch stores
@@ -84,104 +79,46 @@ export const useReplicationState = ({
 			const newReplicationState = replicateRxCollection({
 				collection,
 				replicationIdentifier: `replication-to-${apiURL}/${endpoint}`,
-				push: {
-					handler: async () => Promise.resolve([]),
-				},
+				// push: {
+				// 	handler: async () => Promise.resolve([]),
+				// },
 				pull: {
 					handler: async (rxdbCheckpoint, batchSize) => {
-						try {
-							const checkpoint = await collection
-								.getLocal(hash)
-								.then((doc) => doc?.toJSON().data || {});
+						return retryWithExponentialBackoff(async () => {
+							try {
+								const status = await audit.run();
 
-							if (checkpoint.count && checkpoint.count === 5) {
-								await collection.upsertLocal(hash, {
-									...checkpoint,
-									count: 0,
+								const defaultParams = defaultPrepareQueryParams(query, status, batchSize);
+								const params = prepareQueryParams
+									? prepareQueryParams(defaultParams, query, status, batchSize)
+									: defaultParams;
+
+								// hack to stop the API from returning all docs, how to search by uuid?
+								if ('uuid' in params) {
+									return {
+										documents: [],
+									};
+								}
+
+								// special case for includes
+								if ('include' in params) {
+									// include should check if they are all in the local db
+								}
+
+								const response = await http.get(endpoint, {
+									// signal: controller.signal,
+									params,
 								});
+								const data = get(response, 'data', []);
+
 								return {
-									documents: [],
+									documents: data.concat(status.remove),
 								};
+							} catch (error) {
+								log.error(error);
+								throw error;
 							}
-
-							const remote = await collection
-								.getLocal('remote-' + endpoint)
-								.then((doc) => doc?.toJSON().data || {});
-
-							let remoteIDs = remote.remoteIDs;
-							if (!remoteIDs) {
-								remoteIDs = await audit.run();
-							}
-
-							// get the local IDs here for auditting
-							const localIDs = await getLocalIDs(collection, endpoint);
-
-							// compare the two arrays
-							const add = difference(remoteIDs, localIDs);
-							const remove = difference(localIDs, remoteIDs);
-							const completeIntitalSync = add.length === 0;
-
-							if (remove.length > 0) {
-								const docs = await collection.find({ selector: { id: { $in: remove } } }).exec();
-								await collection.bulkRemove(docs.map((doc) => doc.uuid));
-							}
-
-							const defaultParams = defaultPrepareQueryParams(
-								query,
-								checkpoint,
-								batchSize,
-								completeIntitalSync
-							);
-							const params = prepareQueryParams
-								? prepareQueryParams(defaultParams, query, checkpoint, batchSize)
-								: defaultParams;
-
-							// hack to stop the API from returning all docs, how to search by uuid?
-							if ('uuid' in params) {
-								return {
-									documents: [],
-								};
-							}
-
-							// special case for includes
-							if ('include' in params) {
-								// include should check if they are all in the local db
-							}
-
-							const response = await http.get(endpoint, {
-								// signal: controller.signal,
-								params,
-							});
-							const data = get(response, 'data', []);
-							const headers = parseHeaders(response);
-
-							// get most recent record
-							const mostRecent = data.reduce(
-								(prev, current) => {
-									const prevDate = new Date(prev.date_modified_gmt);
-									const currentDate = new Date(current.date_modified_gmt);
-									return prevDate > currentDate ? prev : current;
-								},
-								{ date_modified_gmt: checkpoint.lastModified }
-							);
-
-							/**
-							 * Set next checkpoint, using my own custom checkpoint
-							 */
-							await collection.upsertLocal(hash, {
-								...headers,
-								lastModified: mostRecent.date_modified_gmt,
-								completeIntitalSync: headers.nextPage === undefined,
-								count: (checkpoint.count || 0) + 1,
-							});
-
-							return {
-								documents: data,
-							};
-						} catch (error) {
-							log.error(error);
-							throw error;
-						}
+						});
 					},
 					batchSize: 10,
 					modifier: async (doc) => {

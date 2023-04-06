@@ -37,7 +37,7 @@ const useTaxCalculation = () => {
 	 * Get the display values for a price with or without taxes
 	 */
 	const getDisplayValues = React.useCallback(
-		(price: string | undefined, taxClass: string, taxDisplayShop: 'incl' | 'excl') => {
+		(price: string = '0', taxClass: string, taxDisplayShop: 'incl' | 'excl') => {
 			const _taxClass = taxClass === '' ? 'standard' : taxClass; // default to standard
 			const appliedRates = rates.filter((rate) => rate.class === _taxClass);
 
