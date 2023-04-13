@@ -105,6 +105,15 @@ export const useReplicationState = ({
 									// include should check if they are all in the local db
 								}
 
+								// convert includes and excludes to comma separated string
+								if ('include' in params && Array.isArray(params.include)) {
+									params.include = params.include.join(',');
+								}
+
+								if ('exclude' in params && Array.isArray(params.exclude)) {
+									params.exclude = params.exclude.join(',');
+								}
+
 								const response = await http.get(endpoint, {
 									// signal: controller.signal,
 									params,

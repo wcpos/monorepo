@@ -85,8 +85,16 @@ export const defaultPrepareQueryParams = (query: QueryState, status: any, batchS
 		params.modified_after = status.lastModified;
 	}
 
-	if (!status.completeIntitalSync && !hasIncludeQuery) {
-		params.include = status.include;
+	// handle the audit status
+	if (!status.completeIntitalSync) {
+		// if there are no params, we need to add the audit status
+		// we should add include or exclude depending on which one is shorter
+		if (status.include.length < status.exclude.length) {
+			params.include = status.include;
+		}
+		if (status.exclude.length < status.include.length) {
+			params.exclude = status.exclude;
+		}
 	}
 
 	return Object.assign(params, {
