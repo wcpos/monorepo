@@ -37,6 +37,8 @@ interface Props {
 	apiEndpoint?: string;
 }
 
+const maxRequests = 5;
+
 /**
  *
  */
@@ -55,6 +57,7 @@ export const useReplicationState = ({
 	const hashRef = React.useRef(null);
 	const endpoint = apiEndpoint || collection.name;
 	const audit = useAudit({ collection, endpoint });
+	const requestCountRef = React.useRef(0);
 
 	/**
 	 * TODO - if initialFullSync is true, maybe I should debounce the query to stop flooding the server
@@ -84,6 +87,14 @@ export const useReplicationState = ({
 				// },
 				pull: {
 					handler: async (rxdbCheckpoint, batchSize) => {
+						if (requestCountRef.current >= maxRequests) {
+							requestCountRef.current = 0;
+							return {
+								documents: [],
+							};
+						}
+						requestCountRef.current += 1;
+
 						return retryWithExponentialBackoff(async () => {
 							try {
 								const status = await audit.run();
@@ -155,6 +166,7 @@ export const useReplicationState = ({
 				replicationStateRegistry.delete(hashRef.current);
 			}
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		// no replicationState
 		collection,
@@ -162,6 +174,7 @@ export const useReplicationState = ({
 		apiURL,
 		http,
 		pollingTime,
+		requestCountRef,
 	]);
 
 	return replicationState ? Object.assign(replicationState, { audit }) : null;
