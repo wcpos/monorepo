@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import isEqual from 'lodash/isEqual';
-import { ObservableResource } from 'observable-hooks';
+import set from 'lodash/set';
+import { ObservableResource, useObservableState } from 'observable-hooks';
 import { combineLatest } from 'rxjs';
 import { switchMap, map, distinctUntilChanged } from 'rxjs/operators';
 
@@ -83,13 +84,15 @@ const prepareQueryParams = (
  */
 const VariationsProvider = ({
 	children,
-	initialQuery,
+	initialQuery = {},
 	parent,
 	uiSettings,
 }: VariationsProviderProps) => {
 	log.debug('render variations provider');
 	const collection = useCollection('variations');
-	const { query$, setQuery } = useQuery(initialQuery);
+	const variationIDs = useObservableState(parent.variations$, parent.variations);
+	const mergedInitialQuery = set(initialQuery, 'selector.id.$in', variationIDs);
+	const { query$, setQuery } = useQuery(mergedInitialQuery);
 	// const replicationState = useReplication({ parent, query$ });
 	const replicationState = useReplicationState({
 		collection,

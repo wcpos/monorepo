@@ -85,7 +85,7 @@ const prepareQueryParams = (
  */
 const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProviderProps) => {
 	log.debug('render customer provider');
-	const { storeDB, store } = useLocalData();
+	const { store } = useLocalData();
 	const collection = useCollection('customers');
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
@@ -97,30 +97,28 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 		const resource$ = query$.pipe(
 			switchMap((query) => {
 				const { search, selector: querySelector, sortBy, sortDirection, limit, skip } = query;
-				let selector;
+				const selector = { $and: [] };
 
-				const searchSelector = search
-					? {
-							$or: [
-								{ first_name: { $regex: new RegExp(escape(search), 'i') } },
-								{ last_name: { $regex: new RegExp(escape(search), 'i') } },
-								{ email: { $regex: new RegExp(escape(search), 'i') } },
-								{ username: { $regex: new RegExp(escape(search), 'i') } },
-								{ 'billing.first_name': { $regex: new RegExp(escape(search), 'i') } },
-								{ 'billing.last_name': { $regex: new RegExp(escape(search), 'i') } },
-								{ 'billing.email': { $regex: new RegExp(escape(search), 'i') } },
-								{ 'billing.company': { $regex: new RegExp(escape(search), 'i') } },
-								{ 'billing.phone': { $regex: new RegExp(escape(search), 'i') } },
-							],
-					  }
-					: null;
+				if (search) {
+					selector.$and.push({
+						$or: [
+							{ uuid: search },
+							{ id: { $regex: new RegExp(escape(search), 'i') } },
+							{ first_name: { $regex: new RegExp(escape(search), 'i') } },
+							{ last_name: { $regex: new RegExp(escape(search), 'i') } },
+							{ email: { $regex: new RegExp(escape(search), 'i') } },
+							{ username: { $regex: new RegExp(escape(search), 'i') } },
+							{ 'billing.first_name': { $regex: new RegExp(escape(search), 'i') } },
+							{ 'billing.last_name': { $regex: new RegExp(escape(search), 'i') } },
+							{ 'billing.email': { $regex: new RegExp(escape(search), 'i') } },
+							{ 'billing.company': { $regex: new RegExp(escape(search), 'i') } },
+							{ 'billing.phone': { $regex: new RegExp(escape(search), 'i') } },
+						],
+					});
+				}
 
-				if (querySelector && searchSelector) {
-					selector = {
-						$and: [querySelector, searchSelector],
-					};
-				} else {
-					selector = querySelector || searchSelector || {};
+				if (querySelector) {
+					selector.$and.push(querySelector);
 				}
 
 				const RxQuery = collection.find({ selector });

@@ -115,6 +115,8 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 				if (search) {
 					selector.$and.push({
 						$or: [
+							{ uuid: search },
+							{ id: { $regex: new RegExp(escape(search), 'i') } },
 							{ name: { $regex: new RegExp(escape(search), 'i') } },
 							{ sku: { $regex: new RegExp(escape(search), 'i') } },
 							{ barcode: { $regex: new RegExp(escape(search), 'i') } },

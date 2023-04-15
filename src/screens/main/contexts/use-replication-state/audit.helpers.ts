@@ -17,10 +17,8 @@ export const getlocalDocsWithIDs = async (collection, endpoint = '') => {
 			return collection
 				.find({
 					selector: { id: { $in: variations } },
-					// fields: ['id'],
 					sort: [{ date_modified_gmt: 'desc' }],
 				})
-				.sort()
 				.exec();
 		} else {
 			return Promise.resolve([]);
@@ -29,7 +27,6 @@ export const getlocalDocsWithIDs = async (collection, endpoint = '') => {
 		return collection
 			.find({
 				selector: { id: { $exists: true } },
-				// fields: ['id'],
 				sort: [{ date_modified_gmt: 'desc' }],
 			})
 			.exec();
