@@ -50,16 +50,17 @@ const queryMap = new Map();
 /**
  *
  */
-const useQuery = (initialQuery: QueryState) => {
+const useQuery = (initialQuery: QueryState, queryKey: string) => {
 	// Generate a deterministic string representation of the initialQuery
-	const queryKey = stringifyQuery(initialQuery);
+	// const queryKey = stringifyQuery(initialQuery);
 
 	// Check if the queryMap already has a query$ associated with the queryKey
 	let query$ = queryMap.get(queryKey);
 
 	// If there's no query$ in the queryMap, create a new one and store it in the map
 	if (!query$) {
-		query$ = new BehaviorSubject(defaults(initialQuery, { limit: 10, skip: 0 }));
+		// query$ = new BehaviorSubject(defaults(initialQuery, { limit: 10, skip: 0 }));
+		query$ = new BehaviorSubject(defaults(initialQuery, {})); // are there any defaults?
 		queryMap.set(queryKey, query$);
 	}
 

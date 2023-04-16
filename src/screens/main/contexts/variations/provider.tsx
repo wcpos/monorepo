@@ -32,6 +32,7 @@ interface VariationsProviderProps {
 	initialQuery?: QueryState;
 	parent: ProductDocument;
 	uiSettings?: import('../ui-settings').UISettingsDocument;
+	queryKey?: string;
 }
 
 interface APIQueryParams {
@@ -87,18 +88,20 @@ const VariationsProvider = ({
 	initialQuery = {},
 	parent,
 	uiSettings,
+	queryKey,
 }: VariationsProviderProps) => {
 	log.debug('render variations provider');
 	const collection = useCollection('variations');
+	const apiEndpoint = `products/${parent.id}/variations`;
 	const variationIDs = useObservableState(parent.variations$, parent.variations);
 	const mergedInitialQuery = set(initialQuery, 'selector.id.$in', variationIDs);
-	const { query$, setQuery } = useQuery(mergedInitialQuery);
+	const { query$, setQuery } = useQuery(mergedInitialQuery, queryKey ? queryKey : apiEndpoint);
 	// const replicationState = useReplication({ parent, query$ });
 	const replicationState = useReplicationState({
 		collection,
 		query$,
 		prepareQueryParams,
-		apiEndpoint: `products/${parent.id}/variations`,
+		apiEndpoint,
 	});
 
 	/**

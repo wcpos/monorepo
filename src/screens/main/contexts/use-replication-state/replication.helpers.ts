@@ -73,6 +73,11 @@ export const defaultPrepareQueryParams = (query: QueryState, status: any, batchS
 	const params = transformMangoSelector(query.selector);
 	const hasIncludeQuery = Array.isArray(params.include) && params.include.length > 0;
 
+	// search
+	if (query.search) {
+		params.search = query.search;
+	}
+
 	// special case for includes
 	if (hasIncludeQuery) {
 		status.completeIntitalSync = difference(params.include, status.remoteIDs).length === 0;

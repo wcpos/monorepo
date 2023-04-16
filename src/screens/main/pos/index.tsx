@@ -38,7 +38,7 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 	);
 
 	return (
-		<OrdersProvider initialQuery={initialQuery}>
+		<OrdersProvider initialQuery={initialQuery} queryKey="cart.orders">
 			<React.Suspense>
 				<CurrentOrderProvider orderID={orderID}>
 					<POS />
@@ -63,7 +63,7 @@ const CheckoutWithProviders = ({
 	// const initialGatewaysQuery = React.useMemo(() => ({ selector: { enabled: true } }), []);
 
 	return (
-		<OrdersProvider initialQuery={initialOrdersQuery}>
+		<OrdersProvider initialQuery={initialOrdersQuery} queryKey="checkout.order">
 			{/* <GatewaysProvider initialQuery={initialGatewaysQuery}> */}
 			<ModalLayout
 				size="xLarge"
@@ -94,7 +94,7 @@ const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamLis
 	);
 
 	return (
-		<OrdersProvider initialQuery={initialOrdersQuery}>
+		<OrdersProvider initialQuery={initialOrdersQuery} queryKey="receipt.order">
 			<ModalLayout
 				title={t('Receipt', { _tags: 'core' })}
 				primaryAction={{

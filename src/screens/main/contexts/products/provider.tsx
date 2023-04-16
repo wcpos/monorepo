@@ -30,6 +30,7 @@ interface ProductsProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
 	uiSettings: import('../ui-settings').UISettingsDocument;
+	queryKey?: string;
 }
 
 interface APIQueryParams {
@@ -91,7 +92,12 @@ const prepareQueryParams = (
 /**
  *
  */
-const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProviderProps) => {
+const ProductsProvider = ({
+	children,
+	initialQuery,
+	uiSettings,
+	queryKey = 'products',
+}: ProductsProviderProps) => {
 	log.debug('render product provider');
 	const { store } = useLocalData();
 	const collection = useCollection('products');
@@ -100,7 +106,7 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
 	);
-	const { query$, setQuery } = useQuery(initialQuery);
+	const { query$, setQuery } = useQuery(initialQuery, queryKey);
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
 	/**

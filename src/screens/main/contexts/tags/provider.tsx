@@ -27,7 +27,7 @@ interface ProductTagsProviderProps {
 const ProductTagsProvider = ({ children, initialQuery, ui }: ProductTagsProviderProps) => {
 	log.debug('render categories provider');
 	const collection = useCollection('products/tags');
-	const { query$, setQuery } = useQuery(initialQuery);
+	const { query$, setQuery } = useQuery(initialQuery, 'products/tags');
 	const { replicationState } = useReplication({ collection });
 
 	/**

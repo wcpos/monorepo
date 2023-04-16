@@ -34,7 +34,7 @@ const ProductCategoriesProvider = ({
 	log.debug('render categories provider');
 	const { storeDB } = useLocalData();
 	const collection = useCollection('products/categories');
-	const { query$, setQuery } = useQuery(initialQuery);
+	const { query$, setQuery } = useQuery(initialQuery, 'products/categories');
 	const { replicationState } = useReplication({ collection });
 
 	/**
