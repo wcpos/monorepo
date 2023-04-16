@@ -98,7 +98,6 @@ const OrdersProvider = ({
 	uiSettings,
 	queryKey = 'orders',
 }: OrdersProviderProps) => {
-	log.debug('render order provider');
 	const { store } = useLocalData();
 	const collection = useCollection('orders');
 	const lineItemsCollection = useCollection('line_items');

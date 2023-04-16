@@ -82,6 +82,10 @@ const prepareQueryParams = (
 		orderby = 'title';
 	}
 
+	if (query.sortBy === 'date_created') {
+		orderby = 'date';
+	}
+
 	return {
 		...params,
 		orderby,
@@ -98,7 +102,6 @@ const ProductsProvider = ({
 	uiSettings,
 	queryKey = 'products',
 }: ProductsProviderProps) => {
-	log.debug('render product provider');
 	const { store } = useLocalData();
 	const collection = useCollection('products');
 	const variationsCollection = useCollection('variations');

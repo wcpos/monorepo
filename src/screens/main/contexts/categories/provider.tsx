@@ -31,7 +31,6 @@ const ProductCategoriesProvider = ({
 	initialQuery,
 	ui,
 }: ProductCategoriesProviderProps) => {
-	log.debug('render categories provider');
 	const { storeDB } = useLocalData();
 	const collection = useCollection('products/categories');
 	const { query$, setQuery } = useQuery(initialQuery, 'products/categories');

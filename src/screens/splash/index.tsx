@@ -9,8 +9,6 @@ import * as Styled from './styles';
  *
  */
 const Splash = () => {
-	log.debug('splash render');
-
 	return (
 		<Styled.Container>
 			<Logo width={150} height={150} />

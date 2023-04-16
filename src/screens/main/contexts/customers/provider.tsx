@@ -90,7 +90,6 @@ const CustomersProvider = ({
 	uiSettings,
 	queryKey = 'customers',
 }: CustomersProviderProps) => {
-	log.debug('render customer provider');
 	const { store } = useLocalData();
 	const collection = useCollection('customers');
 	const { query$, setQuery } = useQuery(initialQuery, queryKey);

@@ -90,7 +90,6 @@ const VariationsProvider = ({
 	uiSettings,
 	queryKey,
 }: VariationsProviderProps) => {
-	log.debug('render variations provider');
 	const collection = useCollection('variations');
 	const apiEndpoint = `products/${parent.id}/variations`;
 	const variationIDs = useObservableState(parent.variations$, parent.variations);

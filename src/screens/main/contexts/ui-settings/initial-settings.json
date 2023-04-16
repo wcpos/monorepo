@@ -37,11 +37,13 @@
       },
       {
         "key": "sku",
-        "show": false
+        "show": false,
+        "disableSort": true
       },
       {
         "key": "type",
-        "show": false
+        "show": false,
+        "disableSort": true
       },
       {
         "key": "stock_quantity",
@@ -156,11 +158,13 @@
       },
       {
         "key": "type",
-        "show": false
+        "show": false,
+        "disableSort": true
       },
       {
         "key": "sku",
-        "show": false
+        "show": false,
+        "disableSort": true
       },
       {
         "key": "stock_quantity",
@@ -185,12 +189,14 @@
       {
         "key": "regular_price",
         "show": true,
-        "align": "right"
+        "align": "right",
+        "disableSort": true
       },
       {
         "key": "sale_price",
         "show": true,
-        "align": "right"
+        "align": "right",
+        "disableSort": true
       },
       {
         "key": "date_created",
@@ -198,7 +204,8 @@
       },
       {
         "key": "date_modified",
-        "show": false
+        "show": false,
+        "disableSort": true
       },
       {
         "key": "actions",

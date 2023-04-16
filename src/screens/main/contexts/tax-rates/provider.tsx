@@ -31,7 +31,6 @@ const TaxRateProvider = ({
 	ui,
 	queryKey = 'taxes',
 }: TaxRateProviderProps) => {
-	log.debug('render tax provider');
 	const collection = useCollection('taxes');
 	const { query$, setQuery } = useQuery(initialQuery, queryKey);
 	const replicationState = useReplication({ collection });

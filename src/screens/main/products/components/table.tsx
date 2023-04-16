@@ -39,7 +39,6 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
-	log.debug('render products table');
 
 	/**
 	 *
