@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import debounce from 'lodash/debounce';
 import get from 'lodash/get';
-import { useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState, useLayoutObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -80,7 +80,8 @@ const TagPill = ({ tagID, onRemove }) => {
  */
 const ProductSearch = () => {
 	const { query$, setQuery } = useProducts();
-	const query = useObservableEagerState(query$);
+	// const query = useObservableEagerState(query$);
+	const query = useLayoutObservableState(query$, query$.getValue());
 	const theme = useTheme();
 	const [search, setSearch] = React.useState(query.search);
 
