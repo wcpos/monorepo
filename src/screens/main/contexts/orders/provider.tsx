@@ -29,7 +29,6 @@ interface OrdersProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
 	uiSettings: import('../ui-settings').UISettingsDocument;
-	queryKey?: string;
 }
 
 interface APIQueryParams {
@@ -92,18 +91,13 @@ const prepareQueryParams = (
 /**
  *
  */
-const OrdersProvider = ({
-	children,
-	initialQuery,
-	uiSettings,
-	queryKey = 'orders',
-}: OrdersProviderProps) => {
+const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderProps) => {
 	const { store } = useLocalData();
 	const collection = useCollection('orders');
 	const lineItemsCollection = useCollection('line_items');
 	const feeLinesCollection = useCollection('fee_lines');
 	const shippingLinesCollection = useCollection('shipping_lines');
-	const { query$, setQuery } = useQuery(initialQuery, queryKey);
+	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
 	/**

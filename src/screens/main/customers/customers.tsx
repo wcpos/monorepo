@@ -35,7 +35,7 @@ const Customers = () => {
 	 *
 	 */
 	return (
-		<CustomersProvider initialQuery={initialQuery} queryKey="customers">
+		<CustomersProvider initialQuery={initialQuery}>
 			<Box padding="small" style={{ height: '100%' }}>
 				<Box
 					raised

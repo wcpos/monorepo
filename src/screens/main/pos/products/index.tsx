@@ -26,7 +26,7 @@ const POSProducts = ({ isColumn = false }) => {
 	);
 
 	return (
-		<ProductsProvider initialQuery={initialQuery} uiSettings={uiSettings} queryKey="pos.products">
+		<ProductsProvider initialQuery={initialQuery} uiSettings={uiSettings}>
 			<Box padding="small" paddingRight={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
 				<Box
 					raised

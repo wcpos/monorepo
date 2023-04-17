@@ -77,7 +77,7 @@ const EditCustomerWithProviders = ({
 	);
 
 	return (
-		<CustomersProvider initialQuery={initialQuery} queryKey="edit.customer">
+		<CustomersProvider initialQuery={initialQuery}>
 			<ModalLayout
 				title={t('Edit Customer', { _tags: 'core' })}
 				primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}

@@ -29,7 +29,6 @@ interface CustomersProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
 	uiSettings: import('../ui-settings').UISettingsDocument;
-	queryKey?: string;
 }
 
 interface APIQueryParams {
@@ -84,15 +83,10 @@ const prepareQueryParams = (
 /**
  *
  */
-const CustomersProvider = ({
-	children,
-	initialQuery,
-	uiSettings,
-	queryKey = 'customers',
-}: CustomersProviderProps) => {
+const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProviderProps) => {
 	const { store } = useLocalData();
 	const collection = useCollection('customers');
-	const { query$, setQuery } = useQuery(initialQuery, queryKey);
+	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
 	/**

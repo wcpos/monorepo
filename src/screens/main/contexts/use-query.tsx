@@ -35,34 +35,12 @@ function removeNulls(obj) {
 	return obj;
 }
 
-function stringifyQuery(query: QueryState): string {
-	const sortedKeys = Object.keys(query).sort();
-	return JSON.stringify(
-		sortedKeys.reduce((sortedQuery, key) => {
-			sortedQuery[key] = query[key];
-			return sortedQuery;
-		}, {})
-	);
-}
-
-const queryMap = new Map();
-
 /**
  *
  */
-const useQuery = (initialQuery: QueryState, queryKey: string) => {
-	// Generate a deterministic string representation of the initialQuery
-	// const queryKey = stringifyQuery(initialQuery);
-
-	// Check if the queryMap already has a query$ associated with the queryKey
-	let query$ = queryMap.get(queryKey);
-
-	// If there's no query$ in the queryMap, create a new one and store it in the map
-	if (!query$) {
-		// query$ = new BehaviorSubject(defaults(initialQuery, { limit: 10, skip: 0 }));
-		query$ = new BehaviorSubject(defaults(initialQuery, {})); // are there any defaults?
-		queryMap.set(queryKey, query$);
-	}
+const useQuery = (initialQuery: QueryState) => {
+	// // are there any defaults?
+	const [query$] = React.useState(() => new BehaviorSubject(defaults(initialQuery, {})));
 
 	/**
 	 * Not currently used, but maybe I should only be getting a limit from the DB?

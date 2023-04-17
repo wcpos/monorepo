@@ -77,7 +77,7 @@ export default (props: CustomerSelectProps) => {
 	);
 
 	return (
-		<CustomersProvider initialQuery={initialQuery} queryKey="cart.customers">
+		<CustomersProvider initialQuery={initialQuery}>
 			<React.Suspense>
 				<CustomerSelect {...props} />
 			</React.Suspense>

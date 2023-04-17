@@ -22,17 +22,11 @@ interface TaxRateProviderProps {
 	children: React.ReactNode;
 	initialQuery?: QueryState;
 	uiSettings: import('../ui-settings').UISettingsDocument;
-	queryKey?: string;
 }
 
-const TaxRateProvider = ({
-	children,
-	initialQuery,
-	ui,
-	queryKey = 'taxes',
-}: TaxRateProviderProps) => {
+const TaxRateProvider = ({ children, initialQuery, ui }: TaxRateProviderProps) => {
 	const collection = useCollection('taxes');
-	const { query$, setQuery } = useQuery(initialQuery, queryKey);
+	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplication({ collection });
 
 	/**

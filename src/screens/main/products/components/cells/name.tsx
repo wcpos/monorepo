@@ -77,11 +77,7 @@ const Name = ({ item: product, column, onChange }: Props) => {
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{product.type === 'variable' && <ProductAttributes attributes={attributes} />}
 			{product.type === 'grouped' && (
-				<ProductsProvider
-					initialQuery={groupedQuery}
-					uiSettings={uiSettings}
-					queryKey="grouped.products"
-				>
+				<ProductsProvider initialQuery={groupedQuery} uiSettings={uiSettings}>
 					<GroupedNames />
 				</ProductsProvider>
 			)}
