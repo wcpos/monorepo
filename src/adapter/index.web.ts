@@ -34,7 +34,7 @@ const config = {
 		 *
 		 * (optional)
 		 */
-		keepIndexesOnParent: true,
+		keepIndexesOnParent: false,
 
 		/**
 		 * After a write, await until the return value of this method resolves
