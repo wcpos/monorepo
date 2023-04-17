@@ -56,7 +56,7 @@ const EditProductWithProviders = ({
 	);
 
 	return (
-		<ProductsProvider initialQuery={initialQuery} uiSettings={uiSettings}>
+		<ProductsProvider initialQuery={initialQuery} uiSettings={uiSettings} queryKey="edit.products">
 			<ModalLayout
 				title={t('Edit', { _tags: 'core' })}
 				primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}

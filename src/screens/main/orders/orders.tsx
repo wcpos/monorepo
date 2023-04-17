@@ -33,7 +33,7 @@ const Orders = () => {
 	 *
 	 */
 	return (
-		<OrdersProvider initialQuery={initialQuery}>
+		<OrdersProvider initialQuery={initialQuery} queryKey="orders">
 			<Box padding="small" style={{ height: '100%' }}>
 				<Box
 					raised

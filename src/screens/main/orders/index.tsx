@@ -55,7 +55,7 @@ const EditOrderWithProviders = ({
 	);
 
 	return (
-		<OrdersProvider initialQuery={initialQuery}>
+		<OrdersProvider initialQuery={initialQuery} queryKey="edit.order">
 			<ModalLayout
 				title={t('Edit Order', { _tags: 'core' })}
 				primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
@@ -91,7 +91,7 @@ const ReceiptWithProviders = ({
 	);
 
 	return (
-		<OrdersProvider initialQuery={initialQuery}>
+		<OrdersProvider initialQuery={initialQuery} queryKey="receipt.order">
 			<ModalLayout
 				title={t('Receipt', { _tags: 'core' })}
 				primaryAction={{

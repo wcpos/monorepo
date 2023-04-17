@@ -65,7 +65,7 @@ const useQuery = (initialQuery: QueryState, queryKey: string) => {
 	}
 
 	/**
-	 *
+	 * Not currently used, but maybe I should only be getting a limit from the DB?
 	 */
 	const nextPage = React.useCallback(() => {
 		const prev = query$.getValue();

@@ -77,7 +77,7 @@ const POS = () => {
 	]);
 
 	return (
-		<TaxRateProvider initialQuery={initialQuery}>
+		<TaxRateProvider initialQuery={initialQuery} queryKey="pos.taxes">
 			<ErrorBoundary>
 				<React.Suspense>
 					{dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />}
