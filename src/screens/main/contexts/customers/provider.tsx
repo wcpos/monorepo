@@ -62,15 +62,10 @@ const prepareQueryParams = (
 	checkpoint,
 	batchSize
 ): APIQueryParams => {
-	let orderby;
+	let orderby = params.orderby;
 
-	/**
-	 * @TODO - I need to account for all the different query options and map them properly to the API
-	 */
-	if (query.sortBy === 'first_name' || query.sortBy === 'last_name') {
-		orderby = 'name';
-	} else {
-		orderby = 'id';
+	if (query.sortBy === 'date_created') {
+		orderby = 'registered_date';
 	}
 
 	return {

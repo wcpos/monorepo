@@ -61,6 +61,7 @@ export const getTranslatedLabels = () => ({
 	},
 	customers: {
 		avatar_url: t('Image', { _tags: 'core' }),
+		id: t('ID', { _tags: 'core' }),
 		first_name: t('First Name', { _tags: 'core' }),
 		last_name: t('Last Name', { _tags: 'core' }),
 		email: t('Email', { _tags: 'core' }),

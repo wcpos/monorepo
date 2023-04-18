@@ -298,6 +298,10 @@
         "show": true
       },
       {
+        "key": "id",
+        "show": false
+      },
+      {
         "key": "first_name",
         "show": true
       },
@@ -321,12 +325,14 @@
       {
         "key": "billing",
         "show": true,
-        "flex": 2
+        "flex": 2,
+        "disableSort": true
       },
       {
         "key": "shipping",
         "show": false,
-        "flex": 2
+        "flex": 2,
+        "disableSort": true
       },
       {
         "key": "date_created",
