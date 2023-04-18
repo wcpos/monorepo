@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import cloneDeep from 'lodash/cloneDeep';
+import debounce from 'lodash/debounce';
 import defaults from 'lodash/defaults';
 import set from 'lodash/set';
 import { BehaviorSubject } from 'rxjs';
@@ -19,7 +20,11 @@ export interface QueryState {
 
 export type QueryObservable = BehaviorSubject<QueryState>;
 
-export type SetQuery = (path: import('lodash').PropertyPath, value: any) => void;
+export type SetQuery = (
+	path: import('lodash').PropertyPath,
+	value: any,
+	debounce?: boolean
+) => void;
 
 function removeNulls(obj) {
 	for (const prop in obj) {
@@ -57,10 +62,18 @@ const useQuery = (initialQuery: QueryState) => {
 	 * should be { selector: { tags: { $elemMatch: { id: '123' } } } }
 	 */
 	const setQuery: SetQuery = React.useCallback(
-		(path, value) => {
-			const prev = cloneDeep(query$.getValue()); // query needs to be immutable
-			const next = removeNulls(set(prev, path, value));
-			query$.next(next);
+		(path, value, debounceFlag = false) => {
+			const updateQuery = (path, value) => {
+				const prev = cloneDeep(query$.getValue());
+				const next = removeNulls(set(prev, path, value));
+				query$.next(next);
+			};
+
+			if (debounceFlag) {
+				debounce(updateQuery, 300)(path, value);
+			} else {
+				updateQuery(path, value);
+			}
 		},
 		[query$]
 	);

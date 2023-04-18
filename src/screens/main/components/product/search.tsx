@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import debounce from 'lodash/debounce';
 import get from 'lodash/get';
 import { useObservableEagerState, useLayoutObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
@@ -91,17 +90,13 @@ const ProductSearch = () => {
 
 	const hasFilters = categoryID || tagID || barcode;
 
-	const debouncedSetQuery = React.useCallback(
-		debounce((query, search) => {
-			setQuery(query, search);
-		}, 300),
-		[]
+	const onSearch = React.useCallback(
+		(search) => {
+			setSearch(search);
+			setQuery('search', search, true);
+		},
+		[setQuery]
 	);
-
-	const onSearch = React.useCallback((search) => {
-		setSearch(search);
-		debouncedSetQuery('search', search);
-	}, []);
 
 	/**
 	 *

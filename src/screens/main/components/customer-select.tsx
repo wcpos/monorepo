@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useLayoutObservableState } from 'observable-hooks';
 
 import Combobox from '@wcpos/components/src/combobox';
 import Text from '@wcpos/components/src/text';
@@ -21,15 +21,17 @@ interface CustomerSelectProps {
  */
 const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectProps) => {
 	const { query$, setQuery, data: customers } = useCustomers();
-	const query = useObservableState(query$, query$.getValue());
+	const query = useLayoutObservableState(query$, query$.getValue());
 	const { format } = useCustomerNameFormat();
+	const [search, setSearch] = React.useState(query.search);
 
 	/**
 	 *
 	 */
 	const onSearch = React.useCallback(
-		(search: string) => {
-			setQuery('search', search);
+		(search) => {
+			setSearch(search);
+			setQuery('search', search, true);
 		},
 		[setQuery]
 	);
@@ -57,7 +59,7 @@ const CustomerSelect = ({ selectedCustomer, onSelectCustomer }: CustomerSelectPr
 			placeholder={t('Search Customers', { _tags: 'core' })}
 			selected={selectedCustomer ? format(selectedCustomer) : ''}
 			onSearch={onSearch}
-			searchValue={query.search}
+			searchValue={search}
 			onChange={onSelectCustomer}
 		/>
 	);
