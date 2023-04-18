@@ -3,17 +3,18 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 
 import Actions from './cells/actions';
 import Address from './cells/address';
 import Customer from './cells/customer';
-import Date from '../components/date';
 import CustomerNote from './cells/note';
 import PaymentMethod from './cells/payment-method';
 import Status from './cells/status';
 import Total from './cells/total';
 import Footer from './footer';
+import Date from '../components/date';
 import TextCell from '../components/text-cell';
 import useOrders from '../contexts/orders';
 
@@ -28,7 +29,7 @@ const cells = {
 	actions: Actions,
 	billing: Address,
 	shipping: Address,
-	customer: Customer,
+	customer_id: Customer,
 	customer_note: CustomerNote,
 	status: Status,
 	total: Total,
@@ -53,8 +54,19 @@ const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
 	 *
 	 */
 	const cellRenderer = React.useCallback<CellRenderer<OrderDocument>>(({ item, column, index }) => {
-		const Cell = get(cells, column.key, TextCell);
-		return <Cell item={item} column={column} index={index} />;
+		const Cell = get(cells, [column.key]);
+
+		if (Cell) {
+			return (
+				<ErrorBoundary>
+					<React.Suspense>
+						<Cell item={item} column={column} index={index} />
+					</React.Suspense>
+				</ErrorBoundary>
+			);
+		}
+
+		return <TextCell item={item} column={column} />;
 	}, []);
 
 	/**

@@ -234,23 +234,26 @@
         "show": true
       },
       {
-        "key": "customer",
+        "key": "customer_id",
         "show": true
       },
       {
         "key": "billing",
         "show": true,
-        "flex": 2
+        "flex": 2,
+        "disableSort": true
       },
       {
         "key": "shipping",
         "show": false,
-        "flex": 2
+        "flex": 2,
+        "disableSort": true
       },
       {
         "key": "customer_note",
         "width": 38,
-        "show": true
+        "show": true,
+        "disableSort": true
       },
       {
         "key": "date_created",
@@ -258,11 +261,13 @@
       },
       {
         "key": "date_modified",
-        "show": false
+        "show": false,
+        "disableSort": true
       },
       {
         "key": "date_completed",
-        "show": false
+        "show": false,
+        "disableSort": true
       },
       {
         "key": "payment_method",

@@ -97,7 +97,8 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 			const resource$ = storeDB.getLocal$(id).pipe(
 				tap((localDoc) => {
 					if (!localDoc) {
-						reset(id);
+						const initial = get(initialSettings, id);
+						storeDB.insertLocal(id, initial);
 					} else {
 						// add helper functions
 						Object.assign(localDoc, {

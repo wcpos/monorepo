@@ -47,7 +47,7 @@ export const getTranslatedLabels = () => ({
 	orders: {
 		status: t('Status', { _tags: 'core' }),
 		number: t('Order Number', { _tags: 'core' }),
-		customer: t('Customer', { _tags: 'core' }),
+		customer_id: t('Customer', { _tags: 'core' }),
 		billing: t('Billing Address', { _tags: 'core' }),
 		shipping: t('Shipping Address', { _tags: 'core' }),
 		products: t('Products', { _tags: 'core' }),

@@ -74,7 +74,7 @@ const prepareQueryParams = (
 ): APIQueryParams => {
 	let orderby = params.orderby;
 
-	if (query.sortBy === 'date_modified_gmt' || query.sortBy === 'date_created_gmt') {
+	if (query.sortBy === 'date_created' || query.sortBy === 'date_created_gmt') {
 		orderby = 'date';
 	}
 
