@@ -25,7 +25,7 @@ export type LocalData = {
 	wpCredentials?: WPCredentialsDocument;
 	store?: StoreDocument;
 	storeDB?: StoreDatabase;
-	locale: string;
+	// locale: string;
 };
 
 /**
@@ -86,36 +86,9 @@ export const current$: Observable<LocalData> = from(createUserDB()).pipe(
 							return true;
 						}
 					}),
-					/**
-					 * Here we add in the locale from the store
-					 * The locale set in the store is loaded preferentially, then user locale
-					 */
-					switchMap((obj) => {
-						const locale$ = obj.store ? obj.store.locale$ : obj.user.locale$;
-						return locale$.pipe(
-							map((locale) => Object.assign(obj, { locale: locale || systemLocale }))
-						);
-					}),
-					switchMap((obj: LocalData) =>
-						userDB.getLocal$(obj.locale).pipe(
-							switchMap((doc) => {
-								const translations = isRxDocument(doc) ? doc.toJSON().data : {};
-								tx.cache.update(obj.locale, translations, true);
-								/**
-								 * setCurrentLocale is async, it doesn't update tx.currentLocale immediately
-								 * so, we need to wait here for it to finish
-								 */
-								return tx.setCurrentLocale(obj.locale).catch((err) => {
-									// NOTE: catch error silently here so network errors don't break the app
-									log.error(err);
-								});
-							}),
-							/**
-							 * We need to add the userDB to the object and return here
-							 */
-							map(() => Object.assign(obj, { userDB }))
-						)
-					)
+
+					// add userDB to the object and return here
+					map((obj) => Object.assign(obj, { userDB }))
 				)
 			)
 		)
@@ -174,6 +147,32 @@ export const hydrateWebAppData = (site, wp_credentials, store) => {
 				store: storeDoc,
 				storeDB,
 			};
+		})
+	);
+};
+
+/**
+ * The locale set in the store is loaded preferentially, then user locale
+ */
+export const hydrateTranslations = (localeSetting$, userDB) => {
+	return localeSetting$.pipe(
+		switchMap((localeSetting) => {
+			const locale = localeSetting || systemLocale;
+			return userDB.getLocal$(locale).pipe(
+				switchMap((doc) => {
+					const translations = isRxDocument(doc) ? doc.toJSON().data : {};
+					tx.cache.update(locale, translations, true);
+					/**
+					 * setCurrentLocale is async, it doesn't update tx.currentLocale immediately
+					 * so, we need to wait here for it to finish
+					 */
+					return tx.setCurrentLocale(locale).catch((err) => {
+						// NOTE: catch error silently here so network errors don't break the app
+						log.error(err);
+					});
+				}),
+				map(() => locale)
+			);
 		})
 	);
 };

@@ -4,9 +4,7 @@ import pick from 'lodash/pick';
 import { ObservableResource } from 'observable-hooks';
 import { tap, map, switchMap } from 'rxjs/operators';
 
-import { createStoreDB } from '@wcpos/database/src/stores-db';
-
-import { current$, hydrateWebAppData } from './observables';
+import { current$, hydrateWebAppData, hydrateTranslations } from './observables';
 
 type UserDocument = import('@wcpos/database').UserDocument;
 type UserDatabase = import('@wcpos/database').UserDatabase;
@@ -63,11 +61,31 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 		const hydratedResources$ = isWebApp ? hydrateWebAppData(site, wp_credentials, store) : current$;
 
 		/**
+		 * Subscribe to locale changes in the current store and add locale to the local data
+		 */
+		const resources$ = hydratedResources$.pipe(
+			switchMap(({ user, userDB, site, wpCredentials, store, storeDB }) => {
+				const localeSetting$ = store.locale$ || user.locale$;
+				return hydrateTranslations(localeSetting$, userDB).pipe(
+					map((locale) => ({
+						user,
+						userDB,
+						site,
+						wpCredentials,
+						store,
+						storeDB,
+						locale,
+					}))
+				);
+			})
+		);
+
+		/**
 		 *
 		 */
 		return {
 			// @ts-ignore
-			resources: new ObservableResource(hydratedResources$),
+			resources: new ObservableResource(resources$),
 			isWebApp,
 			initialProps,
 		};
