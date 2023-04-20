@@ -65,7 +65,7 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 		 */
 		const resources$ = hydratedResources$.pipe(
 			switchMap(({ user, userDB, site, wpCredentials, store, storeDB }) => {
-				const localeSetting$ = store.locale$ || user.locale$;
+				const localeSetting$ = store?.locale$ || user.locale$;
 				return hydrateTranslations(localeSetting$, userDB).pipe(
 					map((locale) => ({
 						user,

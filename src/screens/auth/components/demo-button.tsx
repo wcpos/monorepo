@@ -17,7 +17,7 @@ const DemoButton = () => {
 	const handleDemoLogin = async () => {
 		setLoading(true);
 		try {
-			const site = await onConnect('https://wcposdev.wpengine.com/');
+			const site = await onConnect('https://demo.wcpos.com/');
 			const { data } = await http.get(`${site?.wc_api_auth_url}/authorize`, {
 				auth: {
 					username: 'demo',

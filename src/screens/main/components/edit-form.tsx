@@ -5,6 +5,8 @@ import Tabs from '@wcpos/components/src/tabs';
 import Tree from '@wcpos/components/src/tree';
 import Form from '@wcpos/react-native-jsonschema-form';
 
+import { t } from '../../../lib/translations';
+
 export interface EditModalProps {
 	formData: Record<string, any>;
 	schema: import('json-schema').JSONSchema7;
@@ -61,8 +63,8 @@ const EditForm = ({ schema, uiSchema, onChange, ...props }: EditModalProps) => {
 	 */
 	const routes = React.useMemo(
 		() => [
-			{ key: 'form', title: 'Form' },
-			{ key: 'json', title: 'JSON' },
+			{ key: 'form', title: t('Form', { _tags: 'core' }) },
+			{ key: 'json', title: t('JSON', { _tags: 'core' }) },
 		],
 		[]
 	);

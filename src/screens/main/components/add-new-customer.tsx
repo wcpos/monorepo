@@ -245,15 +245,21 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 
 	return (
 		<>
-			<Icon name="userPlus" onPress={() => setOpened(true)} tooltip="Add new customer" />
+			<Icon
+				name="userPlus"
+				onPress={() => setOpened(true)}
+				tooltip={t('Add new customer', { _tags: 'core' })}
+			/>
 
 			<Modal
 				size="large"
 				opened={opened}
 				onClose={() => setOpened(false)}
-				title="Add New Customer"
-				primaryAction={{ label: 'Add Customer', action: handleSave }}
-				secondaryActions={[{ label: 'Cancel', action: () => setOpened(false) }]}
+				title={t('Add New Customer', { _tags: 'core' })}
+				primaryAction={{ label: t('Add Customer', { _tags: 'core' }), action: handleSave }}
+				secondaryActions={[
+					{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
+				]}
 			>
 				<EditForm
 					schema={schema}
