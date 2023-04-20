@@ -125,3 +125,55 @@ export const current$: Observable<LocalData> = from(createUserDB()).pipe(
 		throw new Error('Error hydrating current context');
 	})
 );
+
+/**
+ *
+ */
+export const hydrateWebAppData = (site, wp_credentials, store) => {
+	return current$.pipe(
+		switchMap(async ({ user, userDB }) => {
+			// @ts-ignore
+			let siteDoc = await userDB.sites.findOneFix(site.uuid).exec();
+			let wpCredentialsDoc = await userDB.wp_credentials
+				// @ts-ignore
+				.findOneFix(wp_credentials.uuid)
+				.exec();
+			let storeDoc = await userDB.stores.findOne({ selector: { id: store.id } }).exec();
+
+			if (!siteDoc) {
+				// @ts-ignore
+				siteDoc = await userDB.sites.insert(site);
+			}
+
+			/**
+			 * Update nonce for REST requests on each refresh
+			 * FIXME: this should be done proactively, ie: check cookie timeout
+			 */
+			if (wpCredentialsDoc) {
+				// @ts-ignore
+				wpCredentialsDoc = await wpCredentialsDoc.patch({ wp_nonce: wp_credentials.wp_nonce });
+			}
+
+			if (!wpCredentialsDoc) {
+				// @ts-ignore
+				wpCredentialsDoc = await userDB.wp_credentials.insert(wp_credentials);
+			}
+
+			if (!storeDoc) {
+				// @ts-ignore
+				storeDoc = await userDB.stores.insert(store);
+			}
+
+			const storeDB = await createStoreDB(storeDoc.localID);
+
+			return {
+				user,
+				userDB,
+				site: siteDoc,
+				wpCredentials: wpCredentialsDoc,
+				store: storeDoc,
+				storeDB,
+			};
+		})
+	);
+};

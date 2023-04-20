@@ -3,6 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 
 import cells from './cells';
@@ -34,8 +35,19 @@ const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 	 */
 	const cellRenderer = React.useCallback<CellRenderer<CustomerDocument>>(
 		({ item, column, index }) => {
-			const Cell = get(cells, column.key, TextCell);
-			return <Cell item={item} column={column} index={index} />;
+			const Cell = get(cells, [column.key]);
+
+			if (Cell) {
+				return (
+					<ErrorBoundary>
+						<React.Suspense>
+							<Cell item={item} column={column} index={index} />
+						</React.Suspense>
+					</ErrorBoundary>
+				);
+			}
+
+			return <TextCell item={item} column={column} />;
 		},
 		[]
 	);
