@@ -40,4 +40,5 @@ export type { StoreDatabase, StoreDatabaseCollections } from './stores-db';
 
 export { createUserDB, removeUserDB, addUserDBCollection } from './users-db';
 export { createStoreDB, removeStoreDB, addStoreDBCollection } from './stores-db';
+export { createTemporaryDB } from './temporary-db';
 export { removeDB } from './create-db';
