@@ -12,7 +12,7 @@ import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
-import EditForm from '../../components/edit-form';
+import EditForm from '../../components/form-with-json';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import useCurrentOrder from '../contexts/current-order';
 

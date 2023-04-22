@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import pick from 'lodash/pick';
 import { useObservableState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
@@ -9,7 +8,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../lib/translations';
-import EditModal from '../components/edit-form';
+import EditModal from '../components/form-with-json';
 import useProducts from '../contexts/products';
 import usePushDocument from '../contexts/use-push-document';
 
@@ -31,20 +30,6 @@ const EditProduct = () => {
 	}, [name, setTitle]);
 
 	/**
-	 * Handle change in form data
-	 */
-	const handleChange = React.useCallback(
-		async (newData) => {
-			try {
-				await product.patch(newData);
-			} catch (error) {
-				log.error(error);
-			}
-		},
-		[product]
-	);
-
-	/**
 	 * Handle save button click
 	 */
 	onPrimaryAction(async () => {
@@ -61,13 +46,10 @@ const EditProduct = () => {
 		}
 	});
 
-	/**
-	 *  filter schema for edit form
-	 */
-	const schema = React.useMemo(() => {
-		return {
-			...product.collection.schema.jsonSchema,
-			properties: pick(product.collection.schema.jsonSchema.properties, [
+	return (
+		<EditModal
+			document={product}
+			fields={[
 				'name',
 				'status',
 				// 'description',
@@ -90,28 +72,12 @@ const EditProduct = () => {
 				// 'categories',
 				// 'tags',
 				'meta_data',
-			]),
-		};
-	}, [product.collection.schema.jsonSchema]);
-
-	/**
-	 *  uiSchema
-	 */
-	const uiSchema = React.useMemo(
-		() => ({
-			'ui:title': null,
-			'ui:description': null,
-			meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data', { _tags: 'core' }) },
-		}),
-		[]
-	);
-
-	return (
-		<EditModal
-			formData={product.toMutableJSON()}
-			schema={schema}
-			uiSchema={uiSchema}
-			onChange={handleChange}
+			]}
+			uiSchema={{
+				'ui:title': null,
+				'ui:description': null,
+				meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data', { _tags: 'core' }) },
+			}}
 		/>
 	);
 };

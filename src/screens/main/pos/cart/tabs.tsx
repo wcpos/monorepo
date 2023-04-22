@@ -36,24 +36,26 @@ const CartTabs = ({ currentOrder }: CartTabsProps) => {
 	/**
 	 *
 	 */
-	const routes = React.useMemo(() => {
-		const r = orders.map((order) => ({
-			key: order.uuid,
-			title: ({ focused }: { focused: boolean }) => (
-				<CartTabTitle focused={focused} order={order} />
-			),
-		}));
-
-		// add tab for new order
-		r.push({
-			key: '',
-			title: ({ focused }: { focused: boolean }) => (
-				<Icon name="plus" type={focused ? 'inverse' : 'primary'} />
-			),
-		});
-
-		return r;
-	}, [orders]);
+	const routes = React.useMemo(
+		() =>
+			orders.map((order) => {
+				if (order.isNew) {
+					return {
+						key: '',
+						title: ({ focused }: { focused: boolean }) => (
+							<Icon name="plus" type={focused ? 'inverse' : 'primary'} />
+						),
+					};
+				}
+				return {
+					key: order.uuid,
+					title: ({ focused }: { focused: boolean }) => (
+						<CartTabTitle focused={focused} order={order} />
+					),
+				};
+			}),
+		[orders]
+	);
 
 	/**
 	 *

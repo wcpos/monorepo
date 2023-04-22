@@ -7,7 +7,7 @@ import Modal from '@wcpos/components/src/modal';
 // import Tooltip from '@wcpos/components/src/tooltip';
 
 import { t } from '../../../../../lib/translations';
-import EditForm from '../../../components/edit-form';
+import EditForm from '../../../components/form-with-json';
 
 interface EditShippingLineProps {
 	item: import('@wcpos/database').ShippingLineDocument;
@@ -18,73 +18,6 @@ interface EditShippingLineProps {
  */
 const EditButton = ({ item }: EditShippingLineProps) => {
 	const [opened, setOpened] = React.useState(false);
-	const formData = item.getLatest().toMutableJSON();
-
-	/**
-	 * Handle change in form data
-	 */
-	const handleChange = React.useCallback(
-		async (newData) => {
-			try {
-				const latest = item.getLatest();
-				await latest.patch(newData);
-			} catch (error) {
-				log.error(error);
-			}
-		},
-		[item]
-	);
-
-	/**
-	 *  filter schema for edit form
-	 */
-	const schema = React.useMemo(() => {
-		return {
-			...item.collection.schema.jsonSchema,
-			properties: pick(item.collection.schema.jsonSchema.properties, [
-				'method_title',
-				'method_id',
-				// 'instance_id',
-				'total',
-				// 'total_tax',
-				'taxes',
-				'meta_data',
-			]),
-		};
-	}, [item.collection.schema.jsonSchema]);
-
-	/**
-	 *  uiSchema
-	 */
-	const uiSchema = React.useMemo(
-		() => ({
-			'ui:title': null,
-			'ui:description': null,
-			method_title: {
-				'ui:label': t('Shipping Method Title', { _tags: 'core' }),
-			},
-			method_id: {
-				'ui:label': t('Shipping Method ID', { _tags: 'core' }),
-			},
-			// instance_id: {
-			// 	'ui:label': t('ID', { _tags: 'core' }),
-			// },
-			total: {
-				'ui:label': t('Total', { _tags: 'core' }),
-			},
-			taxes: {
-				'ui:collapsible': 'closed',
-				'ui:title': t('Taxes', { _tags: 'core' }),
-				'ui:description': null,
-			},
-			meta_data: {
-				'ui:collapsible': 'closed',
-				'ui:title': t('Meta Data', { _tags: 'core' }),
-				'ui:description': null,
-			},
-		}),
-		[]
-	);
 
 	/**
 	 *
@@ -102,7 +35,44 @@ const EditButton = ({ item }: EditShippingLineProps) => {
 				opened={opened}
 				onClose={() => setOpened(false)}
 			>
-				<EditForm formData={formData} schema={schema} uiSchema={uiSchema} onChange={handleChange} />
+				<EditForm
+					document={item}
+					fields={[
+						'method_title',
+						'method_id',
+						// 'instance_id',
+						'total',
+						// 'total_tax',
+						'taxes',
+						'meta_data',
+					]}
+					uiSchema={{
+						'ui:title': null,
+						'ui:description': null,
+						method_title: {
+							'ui:label': t('Shipping Method Title', { _tags: 'core' }),
+						},
+						method_id: {
+							'ui:label': t('Shipping Method ID', { _tags: 'core' }),
+						},
+						// instance_id: {
+						// 	'ui:label': t('ID', { _tags: 'core' }),
+						// },
+						total: {
+							'ui:label': t('Total', { _tags: 'core' }),
+						},
+						taxes: {
+							'ui:collapsible': 'closed',
+							'ui:title': t('Taxes', { _tags: 'core' }),
+							'ui:description': null,
+						},
+						meta_data: {
+							'ui:collapsible': 'closed',
+							'ui:title': t('Meta Data', { _tags: 'core' }),
+							'ui:description': null,
+						},
+					}}
+				/>
 			</Modal>
 		</>
 	);

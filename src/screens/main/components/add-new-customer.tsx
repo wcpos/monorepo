@@ -12,7 +12,7 @@ import Modal from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import EditForm from './edit-form';
+import EditForm from './form-with-json';
 import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 import usePushDocument from '../contexts/use-push-document';

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import EditForm from '../components/edit-form';
+import EditForm from '../components/form-with-json';
 import useCollection from '../hooks/use-collection';
 
 const AddCustomer = () => {

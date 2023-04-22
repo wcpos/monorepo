@@ -38,8 +38,10 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 	);
 
 	return (
-		<OrdersProvider initialQuery={initialQuery}>
-			<React.Suspense>
+		<OrdersProvider initialQuery={initialQuery} appendNewOrder>
+			<React.Suspense
+			// suspend until orders are loaded
+			>
 				<CurrentOrderProvider orderID={orderID}>
 					<POS />
 				</CurrentOrderProvider>

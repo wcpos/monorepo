@@ -1,25 +1,19 @@
 import * as React from 'react';
 
-import { decode } from 'html-entities';
-import pick from 'lodash/pick';
-import { useObservablePickState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
-
-import Form from '@wcpos/react-native-jsonschema-form';
-
 import useLocalData from '../../../contexts/local-data';
+import Form from '../components/document-form';
 
 export const GeneralSettings = () => {
 	const { store } = useLocalData();
-	const formData = store.toJSON();
 
-	/**
-	 *
-	 */
-	const schema = React.useMemo(() => {
-		const _schema = {
-			...store?.collection.schema.jsonSchema,
-			properties: pick(store?.collection.schema.jsonSchema.properties, [
+	return (
+		<Form
+			document={store}
+			uiSchema={{
+				'ui:title': null,
+				'ui:description': null,
+			}}
+			fields={[
 				'name',
 				'locale',
 				// 'store_address',
@@ -34,38 +28,7 @@ export const GeneralSettings = () => {
 				'price_thousand_sep',
 				'price_decimal_sep',
 				'price_num_decimals',
-			]),
-		};
-
-		// fix html entities for currency
-		// _schema.properties.currency.enumNames = _schema.properties.currency.enumNames.map(decode);
-
-		return _schema;
-	}, [store?.collection.schema.jsonSchema]);
-
-	/**
-	 *
-	 */
-	const uiSchema = React.useMemo(
-		() => ({
-			'ui:title': null,
-			'ui:description': null,
-		}),
-		[]
+			]}
+		/>
 	);
-
-	/**
-	 *
-	 */
-	const handleOnChange = React.useCallback(
-		(data) => {
-			store?.incrementalPatch(data);
-		},
-		[store]
-	);
-
-	/**
-	 *
-	 */
-	return <Form schema={schema} uiSchema={uiSchema} formData={formData} onChange={handleOnChange} />;
 };

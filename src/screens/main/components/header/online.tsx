@@ -3,6 +3,8 @@ import * as React from 'react';
 import Icon from '@wcpos/components/src/icon';
 import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 
+import { t } from '../../../../lib/translations';
+
 type OnlineState = {
 	type: 'success' | 'warning' | 'critical';
 	tooltip: string;
@@ -15,18 +17,18 @@ const Online = () => {
 		if (!isConnected) {
 			return {
 				type: 'critical',
-				tooltip: 'No internet connection',
+				tooltip: t('No internet connection', { _tags: 'core' }),
 			};
 		}
 		if (!isInternetReachable) {
 			return {
 				type: 'warning',
-				tooltip: 'Site not reachable',
+				tooltip: t('Site not reachable', { _tags: 'core' }),
 			};
 		}
 		return {
 			type: 'success',
-			tooltip: 'Online',
+			tooltip: t('Online', { _tags: 'core' }),
 		};
 	}, [isConnected, isInternetReachable]);
 

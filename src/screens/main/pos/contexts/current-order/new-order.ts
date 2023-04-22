@@ -11,6 +11,7 @@ interface Props {
 	collection: OrderCollection;
 	currency_symbol: string;
 	currency: string;
+	prices_include_tax: string;
 }
 
 /**
@@ -35,8 +36,9 @@ export default class NewOrder {
 	public shipping_lines = [];
 	public currency_symbol: string;
 	public currency: string;
+	public prices_include_tax: string;
 
-	constructor({ collection, currency_symbol, currency }: Props) {
+	constructor({ collection, currency_symbol, currency, prices_include_tax }: Props) {
 		this.collection = collection;
 
 		this.status = 'pos-open';
@@ -52,6 +54,7 @@ export default class NewOrder {
 		this.shipping_lines$ = of([]);
 		this.currency_symbol = currency_symbol;
 		this.currency = currency;
+		this.prices_include_tax = prices_include_tax;
 	}
 
 	toJSON() {
@@ -65,6 +68,7 @@ export default class NewOrder {
 			shipping_lines,
 			currency_symbol,
 			currency,
+			prices_include_tax,
 		} = this;
 
 		return {
@@ -78,6 +82,7 @@ export default class NewOrder {
 			shipping_lines,
 			currency_symbol,
 			currency,
+			prices_include_tax,
 		};
 	}
 

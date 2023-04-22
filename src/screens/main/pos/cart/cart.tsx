@@ -23,11 +23,6 @@ export interface CartProps {
 
 const Cart = ({ currentOrder }: CartProps) => {
 	const theme = useTheme();
-	// FIXME: this is not going to work as expected because lines could include deleted ids
-	const hasItems =
-		currentOrder.line_items.length > 0 ||
-		currentOrder.fee_lines.length > 0 ||
-		currentOrder.shipping_lines.length > 0;
 
 	return (
 		<Box
@@ -40,7 +35,7 @@ const Cart = ({ currentOrder }: CartProps) => {
 				<CartHeader order={currentOrder} />
 			</ErrorBoundary>
 
-			{hasItems && (
+			{!currentOrder.isNew && (
 				// show cart only if cart not empty
 				// TODO - how to defer this to prevent empty table from rendering?
 				<Box fill>
@@ -65,7 +60,7 @@ const Cart = ({ currentOrder }: CartProps) => {
 				</ErrorBoundary>
 			</Box>
 
-			{hasItems && (
+			{!currentOrder.isNew && (
 				// show order totals only if cart not empty
 				<>
 					<Box>

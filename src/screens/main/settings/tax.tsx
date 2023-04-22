@@ -1,18 +1,19 @@
 import * as React from 'react';
 
-import pick from 'lodash/pick';
-
-import Form from '@wcpos/react-native-jsonschema-form';
-
 import useLocalData from '../../../contexts/local-data';
+import Form from '../components/document-form';
 
 export const TaxSettings = () => {
 	const { store } = useLocalData();
 
-	const schema = React.useMemo(() => {
-		const _schema = {
-			...store?.collection.schema.jsonSchema,
-			properties: pick(store?.collection.schema.jsonSchema.properties, [
+	return (
+		<Form
+			document={store}
+			uiSchema={{
+				'ui:title': null,
+				'ui:description': null,
+			}}
+			fields={[
 				'calc_taxes',
 				'prices_include_tax',
 				'tax_based_on',
@@ -22,34 +23,7 @@ export const TaxSettings = () => {
 				'tax_display_cart',
 				'price_display_suffix',
 				'tax_total_display',
-			]),
-		};
-
-		return _schema;
-	}, [store?.collection.schema.jsonSchema]);
-
-	/**
-	 *
-	 */
-	const uiSchema = React.useMemo(
-		() => ({
-			'ui:title': null,
-			'ui:description': null,
-		}),
-		[]
-	);
-
-	/**
-	 *
-	 */
-	const handleOnChange = React.useCallback(
-		(data) => {
-			store?.incrementalPatch(data);
-		},
-		[store]
-	);
-
-	return (
-		<Form schema={schema} uiSchema={uiSchema} formData={store.toJSON()} onChange={handleOnChange} />
+			]}
+		/>
 	);
 };

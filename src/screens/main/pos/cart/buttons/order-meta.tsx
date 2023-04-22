@@ -9,7 +9,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../../lib/translations';
-import EditForm from '../../../components/edit-form';
+import EditForm from '../../../components/form-with-json';
 import usePushDocument from '../../../contexts/use-push-document';
 
 interface OrderMetaButtonProps {
@@ -24,33 +24,6 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
-
-	/**
-	 * Get latest data when form is opened
-	 */
-	const data = React.useMemo(
-		() => {
-			const latest = order.getLatest();
-			return latest.toMutableJSON();
-		},
-		// NOTE: leave opened in the deps!!
-		[order, opened]
-	);
-
-	/**
-	 * Handle change in form data
-	 */
-	const handleChange = React.useCallback(
-		async (newData) => {
-			log.debug(newData);
-			try {
-				await order.patch(newData);
-			} catch (error) {
-				log.error(error);
-			}
-		},
-		[order]
-	);
 
 	/**
 	 *
@@ -69,37 +42,35 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 	}, [addSnackbar, order, pushDocument]);
 
 	/**
-	 *  filter schema for edit form
+	 *
 	 */
-	const schema = React.useMemo(() => {
-		return {
-			...order.collection.schema.jsonSchema,
-			properties: pick(order.collection.schema.jsonSchema.properties, [
-				'number',
-				'status',
-				'discount_total',
-				'discount_tax',
-				'shipping_total',
-				'shipping_tax',
-				'cart_tax',
-				'total',
-				'total_tax',
-				'prices_include_tax',
-				// 'customer_id',
-				// 'customer_note',
-				// 'billing',
-				// 'shipping',
-				'payment_method',
-				'payment_method_title',
-				'tax_lines',
-				'coupon_lines',
-				'refunds',
-				'meta_data',
-				'currency',
-				'currency_symbol',
-			]),
-		};
-	}, [order.collection.schema.jsonSchema]);
+	const fields = React.useMemo(
+		() => [
+			'number',
+			'status',
+			'discount_total',
+			'discount_tax',
+			'shipping_total',
+			'shipping_tax',
+			'cart_tax',
+			'total',
+			'total_tax',
+			'prices_include_tax',
+			// 'customer_id',
+			// 'customer_note',
+			// 'billing',
+			// 'shipping',
+			'payment_method',
+			'payment_method_title',
+			'tax_lines',
+			'coupon_lines',
+			'refunds',
+			'meta_data',
+			'currency',
+			'currency_symbol',
+		],
+		[]
+	);
 
 	/**
 	 *  uiSchema
@@ -211,7 +182,7 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 					},
 				]}
 			>
-				<EditForm formData={data} schema={schema} uiSchema={uiSchema} onChange={handleChange} />
+				<EditForm document={order} fields={fields} uiSchema={uiSchema} />
 			</Modal>
 		</>
 	);

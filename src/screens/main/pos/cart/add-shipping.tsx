@@ -109,7 +109,7 @@ const AddShipping = ({ order }: AddShippingProps) => {
 			type: 'object',
 			properties: {
 				method_title: { type: 'string', title: t('Shipping Method Title', { _tags: 'core' }) },
-				method_id: { type: 'string', title: t('Total', { _tags: 'core' }) },
+				method_id: { type: 'string', title: t('Shipping Method ID', { _tags: 'core' }) },
 				total: { type: 'string', title: t('Total', { _tags: 'core' }) },
 			},
 		}),

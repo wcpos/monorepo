@@ -2,9 +2,11 @@ import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
 import isEqual from 'lodash/isEqual';
-import { ObservableResource } from 'observable-hooks';
-import { switchMap, map, distinctUntilChanged } from 'rxjs/operators';
+import { ObservableResource, useObservable } from 'observable-hooks';
+import { combineLatest, from } from 'rxjs';
+import { switchMap, map, distinctUntilChanged, tap, withLatestFrom, filter } from 'rxjs/operators';
 
+import { createTemporaryDB } from '@wcpos/database';
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
@@ -29,6 +31,7 @@ interface OrdersProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
 	uiSettings: import('../ui-settings').UISettingsDocument;
+	appendNewOrder?: boolean;
 }
 
 interface APIQueryParams {
@@ -91,7 +94,12 @@ const prepareQueryParams = (
 /**
  *
  */
-const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderProps) => {
+const OrdersProvider = ({
+	children,
+	initialQuery,
+	uiSettings,
+	appendNewOrder = false,
+}: OrdersProviderProps) => {
 	const { store } = useLocalData();
 	const collection = useCollection('orders');
 	const lineItemsCollection = useCollection('line_items');
@@ -99,6 +107,30 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 	const shippingLinesCollection = useCollection('shipping_lines');
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
+
+	/**
+	 * TODO - need a way to update newOrder on settings change, without emitting new value
+	 */
+	const newOrder$ = React.useMemo(
+		() =>
+			combineLatest([from(createTemporaryDB()), store?.currency$, store?.prices_include_tax$]).pipe(
+				switchMap(([db, currency, prices_include_tax]) =>
+					db.orders.findOne().$.pipe(
+						tap((newOrder) => {
+							if (!newOrder) {
+								db.orders.insert({
+									status: 'pos-open',
+									currency,
+									prices_include_tax,
+								});
+							}
+						})
+					)
+				),
+				filter((newOrder) => !!newOrder)
+			),
+		[store]
+	);
 
 	/**
 	 *
@@ -125,9 +157,16 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 
 				const RxQuery = collection.find({ selector });
 
-				return RxQuery.$.pipe(
-					map((result) => {
-						return orderBy(result, [sortBy], [sortDirection]);
+				return combineLatest([RxQuery.$, newOrder$]).pipe(
+					map(([result, newOrder]) => {
+						const sortedResult = orderBy(result, [sortBy], [sortDirection]);
+
+						// Prepend newOrder if appendNewOrder flag is true
+						if (appendNewOrder) {
+							return [...sortedResult, newOrder];
+						} else {
+							return sortedResult;
+						}
 					}),
 					distinctUntilChanged((prev, next) => {
 						// only emit when the uuids change
@@ -141,7 +180,7 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 		);
 
 		return new ObservableResource(resource$);
-	}, [collection, query$]);
+	}, [appendNewOrder, collection, newOrder$, query$]);
 
 	return (
 		<OrdersContext.Provider
