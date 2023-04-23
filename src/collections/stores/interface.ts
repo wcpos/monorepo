@@ -25,6 +25,8 @@ export type CountryState = string;
  * The postal code, if any, in which your business is located.
  */
 export type PostcodeZIP = string;
+export type DefaultPOSCustomer = number;
+export type DefaultPOSCustomerIsCashier = boolean;
 export type DefaultCustomerLocation = "" | "base" | "geolocation" | "geolocation_ajax";
 /**
  * Enable tax rates and calculations
@@ -443,6 +445,8 @@ export interface WCPOSStoreSchema {
   store_city?: City;
   default_country?: CountryState;
   store_postcode?: PostcodeZIP;
+  default_customer?: DefaultPOSCustomer;
+  default_customer_is_cashier?: DefaultPOSCustomerIsCashier;
   default_customer_address?: DefaultCustomerLocation;
   calc_taxes?: EnableTaxes;
   enable_coupons?: EnableCoupons;

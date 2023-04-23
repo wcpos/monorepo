@@ -96,6 +96,14 @@ export interface WooCommerceOrderLineItemSchema {
      * Meta value.
      */
     value?: string;
+    /**
+     * Display key.
+     */
+    display_key?: string;
+    /**
+     * Display value.
+     */
+    display_value?: string;
     [k: string]: any;
   }[];
   /**
