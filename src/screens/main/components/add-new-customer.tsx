@@ -1,19 +1,17 @@
 import * as React from 'react';
 
-import find from 'lodash/find';
 import get from 'lodash/get';
-import map from 'lodash/map';
 import pick from 'lodash/pick';
-import set from 'lodash/set';
 import { isRxDocument } from 'rxdb';
 
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
+import Text from '@wcpos/components/src/text';
+import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
-import EditForm from './form-with-json';
-import useLocalData from '../../../contexts/local-data';
+import { CountrySelect, StateSelect } from './country-state-select';
 import { t } from '../../../lib/translations';
 import usePushDocument from '../contexts/use-push-document';
 import useCollection from '../hooks/use-collection';
@@ -28,13 +26,10 @@ interface AddNewCustomerProps {
 const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const [customerData, setCustomerData] = React.useState({});
-	const { storeDB } = useLocalData();
 	const customerCollection = useCollection('customers');
-	// const [extraErrors, setExtraErrors] = React.useState();
-	// const { resource } = useCountries();
-	const countries = {};
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
+	const billingCountry = get(customerData, ['billing', 'city'], '');
 
 	/**
 	 *
@@ -88,32 +83,8 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 			]),
 		};
 
-		// billing
-		set(_schema, 'properties.billing.properties.country.enum', map(countries, 'code'));
-		set(_schema, 'properties.billing.properties.country.enumNames', map(countries, 'name'));
-
-		if (get(customerData, 'billing.country')) {
-			const { states } = find(countries, { code: customerData.billing.country });
-			if (states && states.length > 0) {
-				set(_schema, 'properties.billing.properties.state.enum', map(states, 'code'));
-				set(_schema, 'properties.billing.properties.state.enumNames', map(states, 'name'));
-			}
-		}
-
-		// shipping
-		set(_schema, 'properties.shipping.properties.country.enum', map(countries, 'code'));
-		set(_schema, 'properties.shipping.properties.country.enumNames', map(countries, 'name'));
-
-		if (get(customerData, 'shipping.country')) {
-			const { states } = find(countries, { code: customerData.shipping.country });
-			if (states && states.length > 0) {
-				set(_schema, 'properties.shipping.properties.state.enum', map(states, 'code'));
-				set(_schema, 'properties.shipping.properties.state.enumNames', map(states, 'name'));
-			}
-		}
-
 		return _schema;
-	}, [countries, customerCollection.schema.jsonSchema, customerData]);
+	}, [customerCollection.schema.jsonSchema]);
 
 	/**
 	 *
@@ -178,12 +149,14 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 				},
 				state: {
 					'ui:label': t('State', { _tags: 'core' }),
+					'ui:widget': (props) => <StateSelect country={billingCountry} {...props} />,
 				},
 				postcode: {
 					'ui:label': t('Postcode', { _tags: 'core' }),
 				},
 				country: {
 					'ui:label': t('Country', { _tags: 'core' }),
+					'ui:widget': CountrySelect,
 				},
 				company: {
 					'ui:label': t('Company', { _tags: 'core' }),
@@ -241,7 +214,7 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 				'ui:collapsible': 'closed',
 			},
 		};
-	}, []);
+	}, [billingCountry]);
 
 	return (
 		<>
@@ -261,13 +234,7 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 					{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
 				]}
 			>
-				<EditForm
-					schema={schema}
-					formData={customerData}
-					onChange={handleChange}
-					// extraErrors={extraErrors}
-					uiSchema={uiSchema}
-				/>
+				<Form formData={customerData} schema={schema} uiSchema={uiSchema} onChange={handleChange} />
 			</Modal>
 		</>
 	);

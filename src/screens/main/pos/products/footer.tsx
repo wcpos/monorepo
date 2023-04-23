@@ -37,18 +37,15 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	);
 
 	/**
-	 * FIXME: this is a temporary hack, need to get the label from the API
+	 *
 	 */
-	const taxBasedOnLabel = React.useMemo(() => {
-		switch (taxBasedOn) {
-			case 'shipping':
-				return t('Customer shipping address', { _tags: 'core' });
-			case 'billing':
-				return t('Customer billing address', { _tags: 'core' });
-			default:
-				return t('Shop base address', { _tags: 'core' });
-		}
-	}, [taxBasedOn]);
+	let taxBasedOnLabel = t('Shop base address', { _tags: 'core' });
+	if (taxBasedOn === 'billing') {
+		taxBasedOnLabel = t('Customer billing address', { _tags: 'core' });
+	}
+	if (taxBasedOn === 'shipping') {
+		taxBasedOnLabel = t('Customer shipping address', { _tags: 'core' });
+	}
 
 	return (
 		<Box

@@ -1,8 +1,11 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
+import { useObservableSuspense } from 'observable-hooks';
 
 import { priceToNumber, processNewOrder, processExistingOrder, addItem } from './helpers';
+import useNewOrder from './use-new-order';
+import useCustomers from '../../../contexts/customers';
 import useOrders from '../../../contexts/orders';
 import useCollection from '../../../hooks/use-collection';
 
@@ -37,10 +40,11 @@ const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProvider
 	const ordersCollection = useCollection('orders');
 	const navigation = useNavigation();
 	const { data: orders } = useOrders();
+	const newOrder = useNewOrder();
+
 	let currentOrder = orders.find((order) => order.uuid === orderID);
 	if (!currentOrder) {
-		// last order is the new order
-		currentOrder = orders[orders.length - 1];
+		currentOrder = newOrder;
 	}
 
 	/**

@@ -68,6 +68,12 @@ const prepareQueryParams = (
 		orderby = 'registered_date';
 	}
 
+	// HACK: get the deafult_customer, probably a better way to do this
+	if (params.id) {
+		params.include = params.id;
+		params.id = undefined;
+	}
+
 	return {
 		...params,
 		role: 'all',

@@ -7,7 +7,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../lib/translations';
-import EditForm from '../components/form-with-json';
+import EditForm from '../components/edit-form-with-json';
 import { useCustomers } from '../contexts/customers/use-customers';
 import usePushDocument from '../contexts/use-push-document';
 

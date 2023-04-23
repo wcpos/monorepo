@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
 import isEqual from 'lodash/isEqual';
-import { ObservableResource, useObservable } from 'observable-hooks';
-import { combineLatest, from } from 'rxjs';
-import { switchMap, map, distinctUntilChanged, tap, withLatestFrom, filter } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
+import { from } from 'rxjs';
+import { switchMap, map, distinctUntilChanged, filter, first, expand } from 'rxjs/operators';
 
 import { createTemporaryDB } from '@wcpos/database';
 import log from '@wcpos/utils/src/logger';
@@ -25,13 +25,13 @@ export const OrdersContext = React.createContext<{
 	sync: () => void;
 	clear: () => Promise<any>;
 	replicationState: import('../use-replication-state').ReplicationState;
+	newOrderResource: ObservableResource<OrderDocument>;
 }>(null);
 
 interface OrdersProviderProps {
 	children: React.ReactNode;
 	initialQuery: QueryState;
 	uiSettings: import('../ui-settings').UISettingsDocument;
-	appendNewOrder?: boolean;
 }
 
 interface APIQueryParams {
@@ -94,12 +94,7 @@ const prepareQueryParams = (
 /**
  *
  */
-const OrdersProvider = ({
-	children,
-	initialQuery,
-	uiSettings,
-	appendNewOrder = false,
-}: OrdersProviderProps) => {
+const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderProps) => {
 	const { store } = useLocalData();
 	const collection = useCollection('orders');
 	const lineItemsCollection = useCollection('line_items');
@@ -109,28 +104,32 @@ const OrdersProvider = ({
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
 	/**
-	 * TODO - need a way to update newOrder on settings change, without emitting new value
+	 * A observable resource we can suspend in the cart and alway get a new order
+	 * Emits a new order when the current one is deleted
 	 */
-	const newOrder$ = React.useMemo(
-		() =>
-			combineLatest([from(createTemporaryDB()), store?.currency$, store?.prices_include_tax$]).pipe(
-				switchMap(([db, currency, prices_include_tax]) =>
-					db.orders.findOne().$.pipe(
-						tap((newOrder) => {
-							if (!newOrder) {
-								db.orders.insert({
-									status: 'pos-open',
-									currency,
-									prices_include_tax,
-								});
-							}
-						})
-					)
-				),
-				filter((newOrder) => !!newOrder)
-			),
-		[store]
-	);
+	const newOrderResource = React.useMemo(() => {
+		async function getOrCreateNewOrder() {
+			const db = await createTemporaryDB();
+			let order = await db.orders.findOne().exec();
+			if (!order) {
+				order = await db.orders.insert({ status: 'pos-open' });
+			}
+			return order;
+		}
+
+		// get the new order
+		const resource$ = from(getOrCreateNewOrder()).pipe(
+			expand((order) =>
+				order.deleted$.pipe(
+					filter((deleted) => deleted),
+					switchMap(() => from(getOrCreateNewOrder())),
+					first()
+				)
+			)
+		);
+
+		return new ObservableResource(resource$);
+	}, []);
 
 	/**
 	 *
@@ -157,16 +156,9 @@ const OrdersProvider = ({
 
 				const RxQuery = collection.find({ selector });
 
-				return combineLatest([RxQuery.$, newOrder$]).pipe(
-					map(([result, newOrder]) => {
-						const sortedResult = orderBy(result, [sortBy], [sortDirection]);
-
-						// Prepend newOrder if appendNewOrder flag is true
-						if (appendNewOrder) {
-							return [...sortedResult, newOrder];
-						} else {
-							return sortedResult;
-						}
+				return RxQuery.$.pipe(
+					map((result) => {
+						return orderBy(result, [sortBy], [sortDirection]);
 					}),
 					distinctUntilChanged((prev, next) => {
 						// only emit when the uuids change
@@ -180,7 +172,7 @@ const OrdersProvider = ({
 		);
 
 		return new ObservableResource(resource$);
-	}, [appendNewOrder, collection, newOrder$, query$]);
+	}, [collection, query$]);
 
 	return (
 		<OrdersContext.Provider
@@ -197,6 +189,7 @@ const OrdersProvider = ({
 					]),
 				sync: () => syncCollection(replicationState),
 				replicationState,
+				newOrderResource,
 			}}
 		>
 			{children}

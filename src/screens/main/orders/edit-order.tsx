@@ -8,7 +8,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../lib/translations';
-import EditModal from '../components/form-with-json';
+import EditModal from '../components/edit-form-with-json';
 import useOrders from '../contexts/orders';
 import usePushDocument from '../contexts/use-push-document';
 

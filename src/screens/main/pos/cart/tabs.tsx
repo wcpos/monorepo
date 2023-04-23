@@ -24,36 +24,23 @@ const CartTabs = ({ currentOrder }: CartTabsProps) => {
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
 	/**
-	 * This is a bit hacky, but it works.
-	 * This updates the cart to new order after the order is paid
-	 */
-	// React.useEffect(() => {
-	// 	if (focusedIndex === -1 && currentOrder.uuid) {
-	// 		setCurrentOrder(null);
-	// 	}
-	// }, [currentOrder, focusedIndex, setCurrentOrder]);
-
-	/**
-	 *
+	 * Create routes for each order, plus a new order route
 	 */
 	const routes = React.useMemo(
 		() =>
-			orders.map((order) => {
-				if (order.isNew) {
-					return {
-						key: '',
-						title: ({ focused }: { focused: boolean }) => (
-							<Icon name="plus" type={focused ? 'inverse' : 'primary'} />
-						),
-					};
-				}
-				return {
+			orders
+				.map((order) => ({
 					key: order.uuid,
 					title: ({ focused }: { focused: boolean }) => (
 						<CartTabTitle focused={focused} order={order} />
 					),
-				};
-			}),
+				}))
+				.concat({
+					key: '',
+					title: ({ focused }: { focused: boolean }) => (
+						<Icon name="plus" type={focused ? 'inverse' : 'primary'} />
+					),
+				}),
 		[orders]
 	);
 

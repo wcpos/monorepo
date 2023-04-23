@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { CountriesContext } from './countries-provider';
+
+import { CountriesContext } from './provider';
 
 export const useCountries = () => {
 	const context = React.useContext(CountriesContext);

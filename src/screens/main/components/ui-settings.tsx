@@ -28,7 +28,7 @@ const schema = {
 
 		columns: {
 			// uniqueItems: false,
-			title: 'Columns',
+			title: t('Columns', { _tags: 'core' }),
 			type: 'array',
 			items: {
 				type: 'object',
