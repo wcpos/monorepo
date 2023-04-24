@@ -29,7 +29,8 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 	const customerCollection = useCollection('customers');
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
-	const billingCountry = get(customerData, ['billing', 'city'], '');
+	const billingCountry = get(customerData, ['billing', 'country']);
+	const shippingCountry = get(customerData, ['shipping', 'country']);
 
 	/**
 	 *
@@ -78,7 +79,6 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 				'password',
 				'billing',
 				'shipping',
-				'billing',
 				'meta_data',
 			]),
 		};
@@ -197,12 +197,14 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 				},
 				state: {
 					'ui:label': t('State', { _tags: 'core' }),
+					'ui:widget': (props) => <StateSelect country={shippingCountry} {...props} />,
 				},
 				postcode: {
 					'ui:label': t('Postcode', { _tags: 'core' }),
 				},
 				country: {
 					'ui:label': t('Country', { _tags: 'core' }),
+					'ui:widget': CountrySelect,
 				},
 				company: {
 					'ui:label': t('Company', { _tags: 'core' }),
@@ -214,7 +216,7 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 				'ui:collapsible': 'closed',
 			},
 		};
-	}, [billingCountry]);
+	}, [billingCountry, shippingCountry]);
 
 	return (
 		<>

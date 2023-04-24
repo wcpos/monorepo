@@ -1,14 +1,29 @@
 import * as React from 'react';
 
+import { InputWithLabel } from '@wcpos/components/src/form-layout';
+
 import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 import CurrencySelect from '../components/currency-select';
+import CustomerSelect from '../components/customer-select';
 import Form from '../components/document-form';
 import LanguageSelect from '../components/language-select';
 
 export const GeneralSettings = () => {
 	const { store } = useLocalData();
 
+	/**
+	 *
+	 */
+	const handleCustomerSelect = (customer) => {
+		store.incrementalPatch({
+			default_customer: customer.id,
+		});
+	};
+
+	/**
+	 *
+	 */
 	return (
 		<Form
 			document={store}
@@ -21,6 +36,18 @@ export const GeneralSettings = () => {
 				locale: {
 					'ui:label': t('Language', { _tags: 'core' }),
 					'ui:widget': LanguageSelect,
+				},
+				default_customer: {
+					'ui:label': t('Default Customer', { _tags: 'core' }),
+					'ui:widget': ({ label, ...props }) => (
+						// TODO - a label prop should automatically switch to InputWithLabel?
+						<InputWithLabel label={label}>
+							<CustomerSelect {...props} onSelectCustomer={handleCustomerSelect} />
+						</InputWithLabel>
+					),
+				},
+				default_customer_is_cashier: {
+					'ui:label': t('Default Customer is cashier', { _tags: 'core' }),
 				},
 				currency: {
 					'ui:label': t('Currency', { _tags: 'core' }),

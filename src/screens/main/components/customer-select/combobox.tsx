@@ -1,19 +1,19 @@
 import * as React from 'react';
 
-import delay from 'lodash/delay';
+import isInteger from 'lodash/isInteger';
 import { useLayoutObservableState } from 'observable-hooks';
 
-import Combobox from '@wcpos/components/src/combobox';
+import Combobox, { ComboboxProps } from '@wcpos/components/src/combobox';
 
 import { CustomerItem } from './item';
 import { t } from '../../../../lib/translations';
 import useCustomers from '../../contexts/customers';
-// import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type TextInput = import('react-native').TextInput;
 
-export interface CustomerComboboxProps {
+export interface CustomerComboboxProps extends Omit<ComboboxProps, 'options'> {
 	selectedCustomer?: CustomerDocument;
 	onSelectCustomer: (value: CustomerDocument) => void;
 }
@@ -21,12 +21,13 @@ export interface CustomerComboboxProps {
 /**
  *
  */
-export const CustomerCombobox = ({ selectedCustomer, onSelectCustomer }: CustomerComboboxProps) => {
+export const CustomerCombobox = ({ onSelectCustomer, value, ...props }: CustomerComboboxProps) => {
 	const { query$, setQuery, data: customers } = useCustomers();
 	const query = useLayoutObservableState(query$, query$.getValue());
 	// const { format } = useCustomerNameFormat();
 	const [search, setSearch] = React.useState(query.search);
-	const textInputRef = React.useRef<TextInput>(null);
+	const { format } = useCustomerNameFormat();
+	// const name = format({ billing, shipping, id: customer_id });
 
 	/**
 	 *
@@ -53,29 +54,38 @@ export const CustomerCombobox = ({ selectedCustomer, onSelectCustomer }: Custome
 	}, [customers]);
 
 	/**
-	 * FIXME: this is a hack, useEffect is being called before onLayout for the Popover.Target
-	 * which means the width is not set correctly.
+	 *
 	 */
-	React.useEffect(() => {
-		if (textInputRef.current) {
-			delay(() => {
-				textInputRef.current.focus();
-			}, 100);
+	const selectedCustomer = React.useMemo(() => {
+		if (isInteger(value)) {
+			return customers.find((customer) => customer.id === value);
 		}
-	}, []);
+		return props.selectedCustomer;
+	}, [value, props.selectedCustomer, customers]);
+
+	/**
+	 *
+	 */
+	const placeholder = React.useMemo(() => {
+		if (selectedCustomer) {
+			return format(selectedCustomer);
+		}
+
+		return t('Search Customers', { _tags: 'core' });
+	}, [selectedCustomer, format]);
 
 	/**
 	 *
 	 */
 	return (
 		<Combobox
+			{...props}
+			placeholder={placeholder}
 			options={options}
-			placeholder={t('Search Customers', { _tags: 'core' })}
 			onSearch={onSearch}
 			searchValue={search}
 			onChange={onSelectCustomer}
 			renderOption={CustomerItem}
-			textInputRef={textInputRef}
 		/>
 	);
 };

@@ -1,18 +1,18 @@
 import * as React from 'react';
 
-import compact from 'lodash/compact';
+import get from 'lodash/get';
 import pick from 'lodash/pick';
 import { useObservableState } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
 
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
 import Pill from '@wcpos/components/src/pill';
 import Text from '@wcpos/components/src/text';
+import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
-import EditForm from '../../components/edit-form-with-json';
+import { CountrySelect, StateSelect } from '../../components/country-state-select';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import useCurrentOrder from '../contexts/current-order';
 
@@ -27,31 +27,27 @@ interface CustomerProps {
  */
 const Customer = ({ order }: CustomerProps) => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
-	const { removeCustomer, addCustomer } = useCurrentOrder();
+	const { removeCustomer } = useCurrentOrder();
 	const billing = useObservableState(order.billing$, order.billing);
 	const shipping = useObservableState(order.shipping$, order.shipping);
 	const customer_id = useObservableState(order.customer_id$, order.customer_id);
 	const { format } = useCustomerNameFormat();
 	const name = format({ billing, shipping, id: customer_id });
+	const billingCountry = get(billing, ['country']);
+	const shippingCountry = get(shipping, ['country']);
 
 	/**
 	 *
 	 */
 	const handleSaveCustomer = React.useCallback(
 		async (newData) => {
-			// if newOrder we need to add the customer, but not patch the order
-			if (!isRxDocument(order)) {
-				addCustomer(newData);
-				return;
-			}
-			// try patching the order
 			try {
 				await order.incrementalPatch(newData);
 			} catch (error) {
 				log.error(error);
 			}
 		},
-		[addCustomer, order]
+		[order]
 	);
 
 	/**
@@ -66,9 +62,6 @@ const Customer = ({ order }: CustomerProps) => {
 		return _schema;
 	}, [order.collection.schema.jsonSchema]);
 
-	/**
-	 *
-	 */
 	/**
 	 *
 	 */
@@ -113,12 +106,14 @@ const Customer = ({ order }: CustomerProps) => {
 				},
 				state: {
 					'ui:label': t('State', { _tags: 'core' }),
+					'ui:widget': (props) => <StateSelect country={billingCountry} {...props} />,
 				},
 				postcode: {
 					'ui:label': t('Postcode', { _tags: 'core' }),
 				},
 				country: {
 					'ui:label': t('Country', { _tags: 'core' }),
+					'ui:widget': CountrySelect,
 				},
 				company: {
 					'ui:label': t('Company', { _tags: 'core' }),
@@ -159,19 +154,21 @@ const Customer = ({ order }: CustomerProps) => {
 				},
 				state: {
 					'ui:label': t('State', { _tags: 'core' }),
+					'ui:widget': (props) => <StateSelect country={shippingCountry} {...props} />,
 				},
 				postcode: {
 					'ui:label': t('Postcode', { _tags: 'core' }),
 				},
 				country: {
 					'ui:label': t('Country', { _tags: 'core' }),
+					'ui:widget': CountrySelect,
 				},
 				company: {
 					'ui:label': t('Company', { _tags: 'core' }),
 				},
 			},
 		};
-	}, []);
+	}, [billingCountry, shippingCountry]);
 
 	/**
 	 *
@@ -188,13 +185,9 @@ const Customer = ({ order }: CustomerProps) => {
 				opened={editModalOpened}
 				onClose={() => setEditModalOpened(false)}
 				title={t('Edit Customer Address', { _tags: 'core' })}
-				// primaryAction={{ label: t('Edit Customer', { _tags: 'core' }), action: handleSaveCustomer }}
-				// secondaryActions={[
-				// 	{ label: t('Cancel', { _tags: 'core' }), action: () => setEditModalOpened(false) },
-				// ]}
 			>
-				<EditForm
-					formData={pick(order.toMutableJSON(), ['billing', 'shipping'])}
+				<Form
+					formData={{ billing, shipping }}
 					schema={schema}
 					uiSchema={uiSchema}
 					onChange={handleSaveCustomer}

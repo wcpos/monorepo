@@ -4,7 +4,7 @@ import { ComboboxWithLabel } from '@wcpos/components/src/combobox';
 
 import useCountries, { CountriesProvider } from '../../../../contexts/countries';
 
-const CountrySelect = ({ label, value = 'AU', onChange }) => {
+const CountrySelect = ({ label, value, onChange }) => {
 	const allCountries = useCountries();
 	const options = allCountries.map((country) => ({
 		label: country.name,
