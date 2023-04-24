@@ -10,7 +10,7 @@ import Text from '@wcpos/components/src/text';
 
 import SyncButton from '../components/sync-button';
 import useCustomers from '../contexts/customers';
-import useCollection from '../hooks/use-collection';
+import useTotalCount from '../hooks/use-total-count';
 
 interface CustomersFooterProps {
 	count: number;
@@ -20,16 +20,7 @@ const CustomersFooter = ({ count }: CustomersFooterProps) => {
 	const theme = useTheme();
 	const { sync, clear, replicationState } = useCustomers();
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
-	const collection = useCollection('customers');
-	const total = useObservableState(
-		collection.getLocal$('audit-customers').pipe(
-			map((result) => {
-				const data = result?.toJSON().data;
-				return data?.remoteIDs ? data.remoteIDs.length : 0;
-			})
-		),
-		0
-	);
+	const total = useTotalCount('customers');
 
 	return (
 		<Box

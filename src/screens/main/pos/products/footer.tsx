@@ -12,7 +12,7 @@ import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import SyncButton from '../../components/sync-button';
 import useProducts from '../../contexts/products';
-import useCollection from '../../hooks/use-collection';
+import useTotalCount from '../../hooks/use-total-count';
 
 interface ProductFooterProps {
 	count: number;
@@ -25,16 +25,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
-	const collection = useCollection('products');
-	const total = useObservableState(
-		collection.getLocal$('audit-products').pipe(
-			map((result) => {
-				const data = result?.toJSON().data;
-				return data?.remoteIDs ? data.remoteIDs.length : 0;
-			})
-		),
-		0
-	);
+	const total = useTotalCount('products');
 
 	/**
 	 *

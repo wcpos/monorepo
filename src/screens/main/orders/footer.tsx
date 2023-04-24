@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -10,23 +9,14 @@ import Text from '@wcpos/components/src/text';
 
 import SyncButton from '../components/sync-button';
 import useOrders from '../contexts/orders';
-import useCollection from '../hooks/use-collection';
+import useTotalCount from '../hooks/use-total-count';
 
 interface OrderFooterProps {
 	count: number;
 }
 
 const OrdersFooter = ({ count }: OrderFooterProps) => {
-	const collection = useCollection('orders');
-	const total = useObservableState(
-		collection.getLocal$('audit-orders').pipe(
-			map((result) => {
-				const data = result?.toJSON().data;
-				return data?.remoteIDs ? data.remoteIDs.length : 0;
-			})
-		),
-		0
-	);
+	const total = useTotalCount('orders');
 	const theme = useTheme();
 	const { sync, clear, replicationState } = useOrders();
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
