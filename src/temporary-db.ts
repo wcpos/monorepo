@@ -17,10 +17,6 @@ const newOrderSchema = {
 	...orderSchema,
 	properties: {
 		...orderSchema.properties,
-		isNew: {
-			type: 'boolean',
-			default: true,
-		},
 		line_items: {
 			type: 'array',
 			items: {
@@ -61,6 +57,11 @@ export async function createTemporaryDB() {
 				orders: {
 					schema: newOrderSchema,
 				},
+			});
+			collections.orders.postCreate(function (plainData, rxDocument) {
+				Object.defineProperty(rxDocument, 'isNew', {
+					get: () => true,
+				});
 			});
 			temporaryDB = Promise.resolve(db);
 		} catch (error) {
