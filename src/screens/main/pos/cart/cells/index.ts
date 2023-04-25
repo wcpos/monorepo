@@ -5,6 +5,7 @@ import { Price } from './price';
 import { ProductName } from './product-name';
 import { Quantity } from './quantity';
 import { ShippingTitle } from './shipping-title';
+import { Subtotal } from './subtotal';
 import { Total } from './total';
 
 const line_items = {
@@ -12,7 +13,7 @@ const line_items = {
 	name: ProductName,
 	price: Price,
 	quantity: Quantity,
-	subtotal: Total,
+	subtotal: Subtotal,
 	total: Total,
 };
 

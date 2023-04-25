@@ -210,7 +210,7 @@ describe('useTaxCalculation', () => {
 
 			const { calcOrderTotals } = result.current;
 
-			const cartItems = [];
+			const cartItems: any[] = [];
 
 			const orderTotals = calcOrderTotals(cartItems);
 			expect(orderTotals.total).toBe('0');

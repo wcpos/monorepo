@@ -88,6 +88,7 @@ const Actions = ({ item: order }: Props) => {
 				onClose={() => setMenuOpened(false)}
 				placement="bottom-end"
 				items={menuItems}
+				withinPortal
 			>
 				<Icon name="ellipsisVertical" onPress={() => setMenuOpened(true)} />
 			</Dropdown>

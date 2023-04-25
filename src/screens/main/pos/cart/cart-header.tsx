@@ -14,7 +14,7 @@ import AddCustomer from '../../components/add-new-customer';
 import CustomerSelect from '../../components/customer-select';
 import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
-import useCurrentOrder from '../contexts/current-order';
+import useCartHelpers from '../hooks/use-cart-helpers';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -31,7 +31,7 @@ const CartHeader = ({ order }: CartHeaderProps) => {
 	const theme = useTheme();
 	// const { storeDB } = useLocalData();
 	const customerID = useObservableState(order.customer_id$, order.customer_id);
-	const { addCustomer } = useCurrentOrder();
+	const { addCustomer } = useCartHelpers();
 
 	/**
 	 *

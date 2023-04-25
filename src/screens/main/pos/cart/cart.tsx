@@ -35,60 +35,60 @@ const Cart = ({ currentOrder }: CartProps) => {
 				<CartHeader order={currentOrder} />
 			</ErrorBoundary>
 
-			{!currentOrder.isNew && (
-				// show cart only if cart not empty
-				// TODO - how to defer this to prevent empty table from rendering?
-				<Box fill>
-					<CartProvider order={currentOrder}>
-						<ErrorBoundary>
-							<React.Suspense>
+			<CartProvider order={currentOrder}>
+				<ErrorBoundary>
+					<React.Suspense>
+						{!currentOrder.isNew && (
+							// show cart only if cart not empty
+							// TODO - how to defer this to prevent empty table from rendering?
+							<Box fill>
 								<Table />
-							</React.Suspense>
-						</ErrorBoundary>
-					</CartProvider>
-				</Box>
-			)}
+							</Box>
+						)}
 
-			<Box>
-				<ErrorBoundary>
-					<AddFee order={currentOrder} />
-				</ErrorBoundary>
-			</Box>
-			<Box>
-				<ErrorBoundary>
-					<AddShipping order={currentOrder} />
-				</ErrorBoundary>
-			</Box>
+						<Box>
+							<ErrorBoundary>
+								<AddFee order={currentOrder} />
+							</ErrorBoundary>
+						</Box>
+						<Box>
+							<ErrorBoundary>
+								<AddShipping order={currentOrder} />
+							</ErrorBoundary>
+						</Box>
 
-			{!currentOrder.isNew && (
-				// show order totals only if cart not empty
-				<>
-					<Box>
-						<ErrorBoundary>
-							<Totals order={currentOrder} />
-						</ErrorBoundary>
-					</Box>
-					<Box
-						horizontal
-						space="small"
-						padding="small"
-						align="center"
-						style={{ backgroundColor: theme.colors.lightGrey }}
-					>
-						<ErrorBoundary>
-							<AddNoteButton order={currentOrder} />
-							<OrderMetaButton order={currentOrder} />
-							<SaveButton order={currentOrder} />
-						</ErrorBoundary>
-					</Box>
-					<Box horizontal>
-						<ErrorBoundary>
-							<VoidButton order={currentOrder} />
-							<PayButton order={currentOrder} />
-						</ErrorBoundary>
-					</Box>
-				</>
-			)}
+						{!currentOrder.isNew && (
+							// show order totals only if cart not empty
+							<>
+								<Box>
+									<ErrorBoundary>
+										<Totals order={currentOrder} />
+									</ErrorBoundary>
+								</Box>
+								<Box
+									horizontal
+									space="small"
+									padding="small"
+									align="center"
+									style={{ backgroundColor: theme.colors.lightGrey }}
+								>
+									<ErrorBoundary>
+										<AddNoteButton order={currentOrder} />
+										<OrderMetaButton order={currentOrder} />
+										<SaveButton order={currentOrder} />
+									</ErrorBoundary>
+								</Box>
+								<Box horizontal>
+									<ErrorBoundary>
+										<VoidButton order={currentOrder} />
+										<PayButton order={currentOrder} />
+									</ErrorBoundary>
+								</Box>
+							</>
+						)}
+					</React.Suspense>
+				</ErrorBoundary>
+			</CartProvider>
 		</Box>
 	);
 };

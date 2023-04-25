@@ -6,6 +6,7 @@ import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
 
 import Cart from './cart';
+import EmptyCart from './empty-cart';
 import OpenOrderTabs from './tabs';
 import useCurrentOrder from '../contexts/current-order';
 
@@ -20,7 +21,11 @@ const OpenOrders = ({ isColumn = false }) => {
 			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<ErrorBoundary>
 					<React.Suspense>
-						<Cart currentOrder={currentOrder} />
+						{currentOrder.isNew ? (
+							<EmptyCart currentOrder={currentOrder} />
+						) : (
+							<Cart currentOrder={currentOrder} />
+						)}
 					</React.Suspense>
 				</ErrorBoundary>
 			</Box>

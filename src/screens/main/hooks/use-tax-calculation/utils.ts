@@ -34,7 +34,7 @@ type RateArray = Rate[];
 function roundedTaxStrings(taxes: TaxArray) {
 	const roundedTaxes: TaxArray = [];
 	forEach(taxes, (tax) => {
-		roundedTaxes.push({ id: tax.id, total: String(round(parseFloat(tax.total), 4)) });
+		roundedTaxes.push({ id: tax.id, total: String(round(parseFloat(tax.total), 6)) });
 	});
 	return roundedTaxes;
 }
@@ -119,7 +119,7 @@ function calcExclusiveTax(price: number, rates: TaxRateDocument[]) {
  * Takes a price and an array of tax rates, eg: [{ id: 1, rate: '4.0000', order: 1 }]
  * Returns the calculated array of taxes tax, eg: [{ id: 1, total: 1.2345 }]
  */
-export function calcTaxes(price: number, rates: TaxRateDocument[], pricesIncludeTax = false) {
+export function calculateTaxes(price: number, rates: TaxRateDocument[], pricesIncludeTax = false) {
 	const sortedRates = sortBy(rates, 'order');
 
 	return pricesIncludeTax
@@ -163,17 +163,17 @@ export function calculateDisplayValues({
 	taxRoundAtSubtotal: boolean;
 }) {
 	const _price = price ? parseFloat(price) : 0;
-	const taxes = calcTaxes(_price, rates, pricesIncludeTax);
+	const taxes = calculateTaxes(_price, rates, pricesIncludeTax);
 	const itemizedTaxTotals = sumItemizedTaxes(taxes, taxRoundAtSubtotal);
 	const taxTotal = sumTaxes(itemizedTaxTotals);
 	let displayPrice = price;
 
 	if (pricesIncludeTax && taxDisplayShop === 'excl') {
-		displayPrice = String(round(_price - taxTotal, 4));
+		displayPrice = String(round(_price - taxTotal, 6));
 	}
 
 	if (!pricesIncludeTax && taxDisplayShop === 'incl') {
-		displayPrice = String(round(_price + taxTotal, 4));
+		displayPrice = String(round(_price + taxTotal, 6));
 	}
 
 	return {
@@ -187,24 +187,30 @@ export function calculateDisplayValues({
  * Calculate line item totals
  */
 export function calculateLineItemTotals({
-	qty,
+	quantity,
 	price,
+	total,
 	rates,
 	pricesIncludeTax,
 	taxRoundAtSubtotal,
 }: {
-	qty: number;
+	quantity: number;
 	price: string;
+	total: string;
 	rates: TaxRateDocument[];
 	pricesIncludeTax: boolean;
 	taxRoundAtSubtotal: boolean;
+	// discounts?: number;
 }) {
-	const discounts = 0;
-	const subtotal = qty * parseFloat(price);
-	const subtotalTaxes = calcTaxes(subtotal, rates, pricesIncludeTax);
+	debugger;
+	// Subtotal
+	const priceAsFloat = parseFloat(price);
+	const subtotal = quantity * priceAsFloat;
+	const subtotalTaxes = calculateTaxes(subtotal, rates);
 	const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes, taxRoundAtSubtotal);
-	const total = subtotal - discounts;
-	const totalTaxes = calcTaxes(subtotal, rates, pricesIncludeTax);
+
+	// Total
+	const totalTaxes = calculateTaxes(parseFloat(total), rates);
 	const itemizedTotalTaxes = sumItemizedTaxes(totalTaxes, taxRoundAtSubtotal);
 	const taxes = itemizedSubTotalTaxes.map((obj) => {
 		const index = itemizedTotalTaxes.findIndex((el) => el.id === obj.id);
@@ -238,10 +244,11 @@ export function calculateOrderTotals({
 	rates: TaxRateDocument[];
 }) {
 	const total = sumBy(lines, (item) => +(item.total ?? 0));
+	const subtotal = sumBy(lines, (item) => +(item.subtotal ?? 0));
+	const discountTotal = subtotal - total;
 	const totalTax = sumBy(lines, (item) => +(item.total_tax ?? 0));
-	const totalWithTax = total + totalTax;
-	const totalTaxString = String(totalTax);
-	const totalWithTaxString = String(totalWithTax);
+	const subtotalTax = sumBy(lines, (item) => +(item.subtotal_tax ?? 0));
+	const discountTax = subtotalTax - totalTax;
 	const itemizedTaxes = sumItemizedTaxes(
 		// @ts-ignore
 		lines.map((line) => line.taxes ?? []),
@@ -258,8 +265,12 @@ export function calculateOrderTotals({
 	});
 
 	return {
-		total: totalWithTaxString,
-		total_tax: totalTaxString,
+		total: String(total),
+		subtotal: String(subtotal),
+		total_tax: String(totalTax),
+		subtotal_tax: String(subtotalTax),
+		discount_total: String(discountTotal),
+		discount_tax: String(discountTax),
 		tax_lines: taxLines,
 	};
 }

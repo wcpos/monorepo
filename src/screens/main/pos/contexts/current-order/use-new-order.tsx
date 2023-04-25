@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableSuspense, useSubscription } from 'observable-hooks';
+import { useObservableState, useObservableSuspense, useSubscription } from 'observable-hooks';
 import { combineLatest } from 'rxjs';
 
 import useLocalData from '../../../../../contexts/local-data';
@@ -13,6 +13,11 @@ const useNewOrder = () => {
 	const newOrder = useObservableSuspense(newOrderResource);
 	const { data: customers, query$, setQuery } = useCustomers();
 	const defaultCustomer = customers.length ? customers[0] : null;
+	const currency = useObservableState(store.currency$, store.currency);
+	const prices_include_tax = useObservableState(
+		store.prices_include_tax$,
+		store.prices_include_tax
+	);
 
 	/**
 	 *
@@ -29,16 +34,29 @@ const useNewOrder = () => {
 	);
 
 	/**
-	// update new order with default info
-	// currency,
-	// 		prices_include_tax: prices_include_tax === 'yes',
+	 * Update new order with tax settings, currenct
+	 */
+	React.useEffect(() => {
+		newOrder.incrementalPatch({
+			currency,
+			prices_include_tax: prices_include_tax === 'yes',
+		});
+	}, [currency, prices_include_tax, newOrder]);
+
+	/**
+	 * Update new order with default customer
 	 */
 	React.useEffect(() => {
 		if (defaultCustomer) {
 			const data = defaultCustomer.toJSON();
 			newOrder.incrementalPatch({
 				customer_id: data.id,
-				billing: data.billing,
+				billing: {
+					...(data.billing || {}),
+					email: data?.billing?.email || data?.email,
+					first_name: data?.billing?.first_name || data.first_name || data?.username,
+					last_name: data?.billing?.last_name || data.last_name,
+				},
 				shipping: data.shipping,
 			});
 		} else {

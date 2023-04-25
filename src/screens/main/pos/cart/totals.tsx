@@ -9,6 +9,7 @@ import Text from '@wcpos/components/src/text';
 import ItemizedTaxes from './itemized-taxes';
 import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
+import useCart from '../../contexts/cart';
 import useCurrencyFormat from '../../hooks/use-currency-format';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -19,8 +20,13 @@ interface Props {
 
 const Totals = ({ order }: Props) => {
 	const { store } = useLocalData();
-	const total = useObservableState(order.total$, order.total);
-	const totalTax = useObservableState(order.total_tax$, order.total_tax);
+	const { cartTotals$ } = useCart();
+	const cartTotals = useObservableState(cartTotals$, {
+		subtotal: 0,
+		total_tax: 0,
+		discount_total: 0,
+		discount_tax: 0,
+	});
 	const taxTotalDisplay = useObservableState(store.tax_total_display$, store.tax_total_display);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const { format } = useCurrencyFormat();
@@ -43,9 +49,19 @@ const Totals = ({ order }: Props) => {
 					<Text>{t('Subtotal', { _tags: 'core' })}:</Text>
 				</Box>
 				<Box>
-					<Text>{format(total - totalTax || 0)}</Text>
+					<Text>{format(cartTotals.subtotal || 0)}</Text>
 				</Box>
 			</Box>
+			{parseFloat(cartTotals.discount_total) > 0 && (
+				<Box horizontal>
+					<Box fill>
+						<Text>{t('Discount', { _tags: 'core' })}:</Text>
+					</Box>
+					<Box>
+						<Text>{format(cartTotals.discount_total || 0)}</Text>
+					</Box>
+				</Box>
+			)}
 			{calcTaxes === 'yes' && (
 				<Box space="xxSmall">
 					{taxTotalDisplay === 'itemized' && <ItemizedTaxes order={order} />}
@@ -54,7 +70,7 @@ const Totals = ({ order }: Props) => {
 							<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
 						</Box>
 						<Box>
-							<Text>{format(totalTax || 0)}</Text>
+							<Text>{format(cartTotals.total_tax)}</Text>
 						</Box>
 					</Box>
 				</Box>

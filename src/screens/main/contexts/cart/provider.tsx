@@ -1,9 +1,9 @@
 import * as React from 'react';
 
 import flatten from 'lodash/flatten';
-import { ObservableResource, useSubscription } from 'observable-hooks';
-import { combineLatest, iif, of } from 'rxjs';
-import { switchMap, map, catchError, filter } from 'rxjs/operators';
+import { ObservableResource, useSubscription, useObservableState } from 'observable-hooks';
+import { Observable, combineLatest, iif, of } from 'rxjs';
+import { switchMap, map, catchError, filter, distinctUntilChanged } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
@@ -14,10 +14,29 @@ type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
 type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 
 export const CartContext = React.createContext<{
+	cart$: Observable<{
+		line_items: LineItemDocument[];
+		fee_lines: FeeLineDocument[];
+		shipping_lines: ShippingLineDocument[];
+	}>;
 	cartResource: ObservableResource<{
 		line_items: LineItemDocument[];
 		fee_lines: FeeLineDocument[];
 		shipping_lines: ShippingLineDocument[];
+	}>;
+	cartTotals$: Observable<{
+		total: string;
+		subtotal: string;
+		total_tax: string;
+		subtotal_tax: string;
+		discount_total: string;
+		discount_tax: string;
+		tax_lines: {
+			rate_id: string;
+			label: string;
+			compound: boolean;
+			tax_total: string;
+		}[];
 	}>;
 }>(null);
 
@@ -30,7 +49,8 @@ interface CartContextProps {
  *
  */
 const CartProvider = ({ children, order }: CartContextProps) => {
-	const { calcLineItemTotals, calcOrderTotals, calcShippingLineTotals } = useTaxCalculation();
+	const { calcLineItemTotals, calcOrderTotals, calcShippingLineTotals, calculateLineItemTaxes } =
+		useTaxCalculation();
 
 	/**
 	 *
@@ -61,14 +81,16 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 					of([]),
 					combineLatest(
 						items.map((item) =>
-							combineLatest([item.quantity$, item.price$, item.tax_class$]).pipe(
-								map(([qty, price, taxClass]) => {
-									const totals = calcLineItemTotals(qty, price, taxClass);
-									const merged = Object.assign(item.toMutableJSON(), totals);
-									if (JSON.stringify(merged) !== JSON.stringify(item.toJSON())) {
-										item.incrementalPatch(totals);
-									}
-									return totals;
+							combineLatest([item.subtotal$, item.total$, item.tax_class$, item.meta_data$]).pipe(
+								distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
+								map(([subtotal, total, taxClass, metaData = []]) => {
+									// get taxStatus from meta_data
+									const taxStatus = metaData.find(
+										(m) => m.key === '_woocommerce_pos_tax_status'
+									)?.value;
+									const taxes = calculateLineItemTaxes({ subtotal, total, taxClass, taxStatus });
+									item.incrementalPatch({ ...taxes });
+									return { subtotal, total, ...taxes };
 								})
 							)
 						)
@@ -130,17 +152,22 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 		);
 
 		/**
-		 *
+		 * Note: WC REST API order total is total + total_tax
 		 */
 		const cartTotals$ = combineLatest([lineItemTotals$, feeLineTotals$, shippingLineTotals$]).pipe(
 			map((totals) => flatten(totals)),
 			// filter((totals) => totals.length > 0),
 			map((cartTotals) => {
 				const totals = calcOrderTotals(cartTotals);
-				const merged = Object.assign(order.toMutableJSON(), totals);
-				if (JSON.stringify(merged) !== JSON.stringify(order.toJSON())) {
-					order.incrementalPatch(totals);
-				}
+				order.incrementalPatch({
+					discount_tax: totals.discount_tax,
+					discount_total: totals.discount_total,
+					// shipping_tax: totals.shipping_tax,
+					// shipping_total: totals.shipping_total,
+					tax_total: totals.tax_total,
+					total: String(parseFloat(totals.total) + parseFloat(totals.total_tax)),
+					tax_lines: totals.tax_lines,
+				});
 				return totals;
 			}),
 			catchError((err) => {
@@ -156,14 +183,14 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 			cartResource: new ObservableResource(cart$),
 			cartTotals$,
 		};
-	}, [calcLineItemTotals, calcOrderTotals, calcShippingLineTotals, order]);
+	}, [calcLineItemTotals, calcOrderTotals, calcShippingLineTotals, calculateLineItemTaxes, order]);
 
 	/**
 	 * Calc totals
 	 * NOTE - want to subscribe here? maybe its better to subscribe in the component?
 	 * Do I ever want to use the cart without updating the totals?
 	 */
-	useSubscription(value.cartTotals$);
+	// useSubscription(value.cartTotals$);
 
 	/**
 	 *

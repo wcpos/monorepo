@@ -38,8 +38,8 @@ const EditButton = ({ item }: EditLineItemProps) => {
 					fields={[
 						'name',
 						'sku',
-						'price',
-						'quantity',
+						// 'price',
+						// 'quantity',
 						'tax_class',
 						// 'subtotal',
 						// 'subtotal_tax',
@@ -57,12 +57,12 @@ const EditButton = ({ item }: EditLineItemProps) => {
 						sku: {
 							'ui:label': t('SKU', { _tags: 'core' }),
 						},
-						price: {
-							'ui:label': t('Price', { _tags: 'core' }),
-						},
-						quantity: {
-							'ui:label': t('Quantity', { _tags: 'core' }),
-						},
+						// price: {
+						// 	'ui:label': t('Price', { _tags: 'core' }),
+						// },
+						// quantity: {
+						// 	'ui:label': t('Quantity', { _tags: 'core' }),
+						// },
 						tax_class: {
 							'ui:label': t('Tax Class', { _tags: 'core' }),
 						},

@@ -19,7 +19,17 @@ export const Quantity = ({ item }: Props) => {
 	 *
 	 */
 	const handleUpdate = React.useCallback(() => {
-		item.incrementalPatch({ quantity: Number(quantityRef.current) });
+		const current = item.getLatest();
+		const currentQuantity = current.quantity;
+		const currentSubtotal = current.subtotal;
+		const currentTotal = current.total;
+		item.incrementalPatch({
+			quantity: Number(quantityRef.current),
+			subtotal: String(
+				(parseFloat(currentSubtotal) / currentQuantity) * Number(quantityRef.current)
+			),
+			total: String((parseFloat(currentTotal) / currentQuantity) * Number(quantityRef.current)),
+		});
 	}, [item]);
 
 	/**
@@ -27,6 +37,7 @@ export const Quantity = ({ item }: Props) => {
 	 */
 	return (
 		<Popover
+			withinPortal
 			primaryAction={{
 				label: 'Done',
 				action: handleUpdate,

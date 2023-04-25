@@ -1,13 +1,9 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useNavigation } from '@react-navigation/native';
-import { useObservableSuspense } from 'observable-hooks';
-
 import Icon from '@wcpos/components/src/icon';
-import log from '@wcpos/utils/src/logger';
 
-import useCurrentOrder from '../../contexts/current-order';
+import useCartHelpers from '../../hooks/use-cart-helpers';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;
@@ -17,7 +13,7 @@ interface Props {
  *
  */
 export const Actions = ({ item: product }: Props) => {
-	const { addProduct } = useCurrentOrder();
+	const { addProduct } = useCartHelpers();
 
 	/**
 	 *

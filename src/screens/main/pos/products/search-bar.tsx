@@ -16,6 +16,7 @@ import useProducts from '../../contexts/products';
 import { ProductTagsProvider } from '../../contexts/tags';
 import useUI from '../../contexts/ui-settings';
 import useCurrentOrder from '../contexts/current-order';
+import useCartHelpers from '../hooks/use-cart-helpers';
 
 /**
  *
@@ -23,7 +24,8 @@ import useCurrentOrder from '../contexts/current-order';
 const SearchBar = () => {
 	const { query$, setQuery, data: products, sync } = useProducts();
 	const query = useObservableState(query$, query$.getValue());
-	const { addProduct, currentOrder } = useCurrentOrder();
+	const { currentOrder } = useCurrentOrder();
+	const { addProduct } = useCartHelpers();
 	const { uiSettings } = useUI('pos.products');
 	const currentOrderStatus = useObservableState(currentOrder.status$, currentOrder.status);
 

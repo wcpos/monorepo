@@ -10,7 +10,7 @@ import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
-import useCurrentOrder from '../contexts/current-order';
+import useCartHelpers from '../hooks/use-cart-helpers';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -23,7 +23,7 @@ interface AddFeeProps {
  */
 const AddFee = ({ order }: AddFeeProps) => {
 	const [opened, setOpened] = React.useState(false);
-	const { addFee } = useCurrentOrder();
+	const { addFee } = useCartHelpers();
 	const [data, setData] = React.useState({
 		name: '',
 		total: '',

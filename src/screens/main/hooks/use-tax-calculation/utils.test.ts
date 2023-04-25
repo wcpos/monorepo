@@ -158,15 +158,16 @@ describe('Calculate Taxes', () => {
 				taxRoundAtSubtotal: true,
 			});
 
-			expect(result.subtotal).toBe('200');
-			expect(result.subtotal_tax).toBe('33.3333');
-			expect(result.total).toBe('200');
-			expect(result.total_tax).toBe('33.3333');
+			expect(result.price).toBe(83.333333);
+			expect(result.subtotal).toBe('166.666666');
+			expect(result.subtotal_tax).toBe('33.333333');
+			expect(result.total).toBe('166.666666');
+			expect(result.total_tax).toBe('33.333333');
 			expect(result.taxes).toEqual([
 				{
 					id: '72',
-					subtotal: '33.3333',
-					total: '33.3333',
+					subtotal: '33.333333',
+					total: '33.333333',
 				},
 			]);
 		});
@@ -220,6 +221,31 @@ describe('Calculate Taxes', () => {
 			expect(result.total).toBe('200');
 			expect(result.total_tax).toBe('0');
 			expect(result.taxes).toEqual([]);
+		});
+
+		test('Match the REST API output', () => {
+			const result = calculateLineItemTotals({
+				qty: 1,
+				price: '19',
+				rates: [
+					// @ts-ignore
+					{
+						id: '1',
+						label: 'Standard Rate',
+						rate: '10.0000',
+						class: 'standard',
+						priority: 1,
+					},
+				],
+				pricesIncludeTax: true,
+				taxRoundAtSubtotal: true,
+			});
+
+			expect(result.price).toBe(17.272727);
+			expect(result.subtotal).toBe('17.272727');
+			expect(result.subtotal_tax).toBe('1.727273');
+			expect(result.total).toBe('17.272727');
+			expect(result.total_tax).toBe('1.727273');
 		});
 	});
 
@@ -311,7 +337,7 @@ describe('Calculate Taxes', () => {
 		});
 
 		test('Calculates order totals with empty lines', () => {
-			const lines = [];
+			const lines: any[] = [];
 			const result = calculateOrderTotals({
 				lines,
 				taxRoundAtSubtotal: true,

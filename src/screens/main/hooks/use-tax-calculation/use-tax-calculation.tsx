@@ -2,7 +2,13 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import { calculateDisplayValues, calculateLineItemTotals, calculateOrderTotals } from './utils';
+import {
+	calculateDisplayValues,
+	calculateLineItemTotals,
+	calculateOrderTotals,
+	calculateTaxes,
+	sumTaxes,
+} from './utils';
 import useLocalData from '../../../../contexts/local-data';
 import useTaxRates from '../../contexts/tax-rates';
 
@@ -32,6 +38,63 @@ const useTaxCalculation = () => {
 	const calcTaxes = _calcTaxes === 'yes';
 	const pricesIncludeTax = _pricesIncludeTax === 'yes';
 	const taxRoundAtSubtotal = _taxRoundAtSubtotal === 'yes';
+
+	/**
+	 *
+	 */
+	const calculateTaxesFromNumber = React.useCallback(
+		(
+			price = 0,
+			taxClass = '',
+			taxStatus = 'taxable',
+			pricesIncludeTax = _pricesIncludeTax === 'yes'
+		) => {
+			const _taxClass = taxClass === '' ? 'standard' : taxClass; // default to standard
+			const appliedRates = rates.filter((rate) => rate.class === _taxClass);
+
+			// early return if no taxes
+			if (!calcTaxes || taxStatus === 'none' || appliedRates.length === 0) {
+				return {
+					total: 0,
+					taxes: [],
+				};
+			}
+
+			const taxes = calculateTaxes(price, appliedRates, pricesIncludeTax);
+			return {
+				total: sumTaxes(taxes),
+				taxes,
+			};
+		},
+		[_pricesIncludeTax, calcTaxes, rates]
+	);
+
+	/**
+	 * Calculate line item taxes
+	 */
+	const calculateLineItemTaxes = React.useCallback(
+		({ subtotal, total, taxClass, taxStatus }) => {
+			const subtotalTaxes = calculateTaxesFromNumber(subtotal, taxClass, taxStatus, false);
+			const totalTaxes = calculateTaxesFromNumber(total, taxClass, taxStatus, false);
+
+			const taxes = subtotalTaxes.taxes.map((obj) => {
+				const index = totalTaxes.taxes.findIndex((el) => el.id === obj.id);
+				const totalTax = index !== -1 ? totalTaxes.taxes[index] : { total: 0 };
+				return {
+					id: obj.id,
+					subtotal: String(obj.total ?? 0),
+					total: String(totalTax.total ?? 0),
+				};
+			});
+
+			return {
+				subtotal_tax: String(subtotalTaxes.total),
+				total_tax: String(totalTaxes.total),
+				taxes,
+			};
+		},
+		[calculateTaxesFromNumber]
+	);
 
 	/**
 	 * Get the display values for a price with or without taxes
@@ -65,13 +128,20 @@ const useTaxCalculation = () => {
 	 * Calculate line item totals, line items and fee lines, shipping lines are different
 	 */
 	const calcLineItemTotals = React.useCallback(
-		(qty = 1, price = '0', taxClass = '', taxStatus: string) => {
+		({
+			quantity = 1,
+			price = '0',
+			total = '0',
+			taxClass = '',
+			taxStatus = '',
+			pricesIncludeTax = _pricesIncludeTax === 'yes',
+		}) => {
 			const _taxClass = taxClass === '' ? 'standard' : taxClass; // default to standard
 			const appliedRates = rates.filter((rate) => rate.class === _taxClass);
 
 			// early return if no taxes
 			if (!calcTaxes || taxStatus === 'none' || appliedRates.length === 0) {
-				const subtotal = String(qty * parseFloat(price));
+				const subtotal = String(quantity * parseFloat(price));
 				return {
 					subtotal,
 					subtotal_tax: '0',
@@ -82,14 +152,15 @@ const useTaxCalculation = () => {
 			}
 
 			return calculateLineItemTotals({
-				qty,
+				quantity,
 				price,
+				total,
 				rates: appliedRates,
 				pricesIncludeTax,
 				taxRoundAtSubtotal,
 			});
 		},
-		[calcTaxes, pricesIncludeTax, rates, taxRoundAtSubtotal]
+		[_pricesIncludeTax, calcTaxes, rates, taxRoundAtSubtotal]
 	);
 
 	/**
@@ -142,7 +213,7 @@ const useTaxCalculation = () => {
 			return calculateOrderTotals({
 				lines,
 				taxRoundAtSubtotal,
-				rates, // NOTE: rates are onnly used to extract label and compound, not for calculation
+				rates, // NOTE: rates are only used to extract label and compound, not for calculation
 			});
 		},
 		[taxRoundAtSubtotal, rates]
@@ -153,6 +224,8 @@ const useTaxCalculation = () => {
 		calcLineItemTotals,
 		calcOrderTotals,
 		calcShippingLineTotals,
+		calculateTaxesFromNumber,
+		calculateLineItemTaxes,
 	};
 };
 

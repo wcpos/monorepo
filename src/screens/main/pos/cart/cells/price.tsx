@@ -13,16 +13,24 @@ interface Props {
 	item: import('@wcpos/database').LineItemDocument;
 }
 
+/**
+ * The price is not actually the price, because the WC REST API is a piece of shit
+ * - price as returned by REST API is total / quantity which is counter intuitive
+ * - to give users a price field we need to do some gymnastics - subtotal / quantity
+ */
 export const Price = ({ item }: Props) => {
-	const price = useObservableState(item.price$, item.price);
+	const subtotal = useObservableState(item.subtotal$, item.subtotal);
+	const quantity = item.getLatest().quantity;
+	const price = parseFloat(subtotal) / quantity;
 	const { format } = useCurrencyFormat({ withSymbol: false });
 	const priceRef = React.useRef(String(price));
 
 	/**
-	 *
+	 * update subtotal, not price
 	 */
 	const handleUpdate = React.useCallback(() => {
-		item.incrementalPatch({ price: Number(priceRef.current) });
+		const quantity = item.getLatest().quantity;
+		item.incrementalPatch({ subtotal: String(quantity * parseFloat(priceRef.current)) });
 	}, [item]);
 
 	/**
@@ -30,6 +38,7 @@ export const Price = ({ item }: Props) => {
 	 */
 	return (
 		<Popover
+			withinPortal
 			primaryAction={{
 				label: 'Done',
 				action: handleUpdate,

@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
+
 import { InputWithLabel } from '@wcpos/components/src/form-layout';
 
 import useLocalData from '../../../contexts/local-data';
@@ -11,6 +13,9 @@ import LanguageSelect from '../components/language-select';
 
 export const GeneralSettings = () => {
 	const { store } = useLocalData();
+
+	// HACK: to get combobox to update with correct customer
+	const defaultCustomerID = useObservableState(store.default_customer$, store.default_customer);
 
 	/**
 	 *
@@ -42,7 +47,11 @@ export const GeneralSettings = () => {
 					'ui:widget': ({ label, ...props }) => (
 						// TODO - a label prop should automatically switch to InputWithLabel?
 						<InputWithLabel label={label}>
-							<CustomerSelect {...props} onSelectCustomer={handleCustomerSelect} />
+							<CustomerSelect
+								{...props}
+								value={defaultCustomerID}
+								onSelectCustomer={handleCustomerSelect}
+							/>
 						</InputWithLabel>
 					),
 				},

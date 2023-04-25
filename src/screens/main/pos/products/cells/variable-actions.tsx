@@ -11,7 +11,7 @@ import { getSelectedState, makeNewQuery, extractSelectedMetaData } from './varia
 import { t } from '../../../../../lib/translations';
 import useVariations, { VariationsProvider } from '../../../contexts/variations';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
-import { useCurrentOrder } from '../../contexts/current-order/use-current-order';
+import useCartHelpers from '../../hooks/use-cart-helpers';
 
 import type { StateAttribute, StateAttributeOption } from './variations.helpers';
 
@@ -27,7 +27,7 @@ interface Props {
 export const WrappedVariableActions = ({ item: product }: Props) => {
 	const [opened, setOpened] = React.useState(false);
 	const { data: variations, setQuery, query$ } = useVariations();
-	const { addVariation } = useCurrentOrder();
+	const { addVariation } = useCartHelpers();
 	const attributes = useObservableState(product.attributes$, product.attributes);
 	const selectedVariation = variations.length === 1 ? variations[0] : undefined;
 	const { format } = useCurrencyFormat();
@@ -64,6 +64,7 @@ export const WrappedVariableActions = ({ item: product }: Props) => {
 	 */
 	return (
 		<Popover
+			withinPortal
 			opened={opened}
 			onClose={() => setOpened(false)}
 			placement="right"

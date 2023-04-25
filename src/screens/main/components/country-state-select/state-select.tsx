@@ -25,7 +25,7 @@ export const StateSelect = ({ label, value, onChange }) => {
 	 */
 	React.useEffect(() => {
 		const selected = options.find((option) => option.value === value);
-		if (!isEmpty(value) && !isEmpty(options) && !selected) {
+		if (!isEmpty(value) && !selected) {
 			onChange('');
 		}
 	}, [onChange, options, value]);

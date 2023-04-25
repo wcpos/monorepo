@@ -14,7 +14,7 @@ import log from '@wcpos/utils/src/logger';
 import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
-import useCurrentOrder from '../contexts/current-order';
+import useCartHelpers from '../hooks/use-cart-helpers';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -53,7 +53,7 @@ const ShippingSelect = ({ shippingResource, selectedMethod, onSelect }) => {
  */
 const AddShipping = ({ order }: AddShippingProps) => {
 	const [opened, setOpened] = React.useState(false);
-	const { addShipping } = useCurrentOrder();
+	const { addShipping } = useCartHelpers();
 	const [data, setData] = React.useState({
 		method_title: '',
 		method_id: '',

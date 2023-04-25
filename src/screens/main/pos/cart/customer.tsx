@@ -14,7 +14,7 @@ import log from '@wcpos/utils/src/logger';
 import { t } from '../../../../lib/translations';
 import { CountrySelect, StateSelect } from '../../components/country-state-select';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
-import useCurrentOrder from '../contexts/current-order';
+import useCartHelpers from '../hooks/use-cart-helpers';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -27,7 +27,7 @@ interface CustomerProps {
  */
 const Customer = ({ order }: CustomerProps) => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
-	const { removeCustomer } = useCurrentOrder();
+	const { removeCustomer } = useCartHelpers();
 	const billing = useObservableState(order.billing$, order.billing);
 	const shipping = useObservableState(order.shipping$, order.shipping);
 	const customer_id = useObservableState(order.customer_id$, order.customer_id);
