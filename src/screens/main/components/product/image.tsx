@@ -25,11 +25,11 @@ export const ProductImage = ({ item: product }: Props) => {
 		y: 0,
 	});
 
-	const ref = React.useRef<View>(null);
-	const { onLayout } = useMeasure({ onMeasure, ref });
+	// const ref= React.useRef<View>(null);
+	const { MeasureWrapper } = useMeasure({ onMeasure });
 
 	return source ? (
-		<View ref={ref} onLayout={onLayout} style={{ width: '100%' }}>
+		<MeasureWrapper style={{ width: '100%' }}>
 			<Image
 				source={source}
 				style={{ width: measurements.width, height: measurements.width, aspectRatio: 1 }}
@@ -38,7 +38,7 @@ export const ProductImage = ({ item: product }: Props) => {
 				// transition={1000}
 				// placeholder={<Skeleton width={measurements.width} height={measurements.height} />}
 			/>
-		</View>
+		</MeasureWrapper>
 	) : (
 		<Skeleton width={measurements.width} height={measurements.height} />
 	);

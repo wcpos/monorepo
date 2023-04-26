@@ -26,14 +26,12 @@ const POS = () => {
 	const storeCity = useObservableState(store.store_city$, store?.store_city);
 	const storeCountry = useObservableState(store.default_country$, store?.default_country);
 	const storePostcode = useObservableState(store.store_postcode$, store?.store_postcode);
-	// const billing = useObservableState(currentOrder.billing$, currentOrder?.billing);
-	// const shipping = useObservableState(currentOrder.shipping$, currentOrder?.shipping);
-	/**
-	 * FXME: useObservableState causes infinite loop
-	 */
-	const billing = currentOrder?.billing;
-	const shipping = currentOrder?.shipping;
+	const billing = useObservableState(currentOrder.billing$, currentOrder?.billing);
+	const shipping = useObservableState(currentOrder.shipping$, currentOrder?.shipping);
 
+	/**
+	 * TODO: if I change the initialQuery, the tax rate is not updated
+	 */
 	const initialQuery = React.useMemo(() => {
 		if (taxBasedOn === 'base') {
 			/**

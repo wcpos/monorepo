@@ -22,10 +22,10 @@ const Totals = ({ order }: Props) => {
 	const { store } = useLocalData();
 	const { cartTotals$ } = useCart();
 	const cartTotals = useObservableState(cartTotals$, {
-		subtotal: 0,
-		total_tax: 0,
-		discount_total: 0,
-		discount_tax: 0,
+		subtotal: '0', // there is no subtotal in the order schema :(
+		total_tax: order.total_tax,
+		discount_total: order.discount_total,
+		discount_tax: order.discount_tax,
 	});
 	const taxTotalDisplay = useObservableState(store.tax_total_display$, store.tax_total_display);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
@@ -52,7 +52,7 @@ const Totals = ({ order }: Props) => {
 					<Text>{format(cartTotals.subtotal || 0)}</Text>
 				</Box>
 			</Box>
-			{parseFloat(cartTotals.discount_total) > 0 && (
+			{parseFloat(cartTotals.discount_total) !== 0 && (
 				<Box horizontal>
 					<Box fill>
 						<Text>{t('Discount', { _tags: 'core' })}:</Text>

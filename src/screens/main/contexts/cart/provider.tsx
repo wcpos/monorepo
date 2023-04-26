@@ -32,7 +32,7 @@ export const CartContext = React.createContext<{
 		discount_total: string;
 		discount_tax: string;
 		tax_lines: {
-			rate_id: string;
+			rate_id: number;
 			label: string;
 			compound: boolean;
 			tax_total: string;
@@ -164,7 +164,8 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 					discount_total: totals.discount_total,
 					// shipping_tax: totals.shipping_tax,
 					// shipping_total: totals.shipping_total,
-					tax_total: totals.tax_total,
+					cart_tax: totals.cart_tax,
+					total_tax: totals.total_tax,
 					total: String(parseFloat(totals.total) + parseFloat(totals.total_tax)),
 					tax_lines: totals.tax_lines,
 				});

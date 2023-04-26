@@ -74,8 +74,13 @@ const useTaxCalculation = () => {
 	 */
 	const calculateLineItemTaxes = React.useCallback(
 		({ subtotal, total, taxClass, taxStatus }) => {
-			const subtotalTaxes = calculateTaxesFromNumber(subtotal, taxClass, taxStatus, false);
-			const totalTaxes = calculateTaxesFromNumber(total, taxClass, taxStatus, false);
+			const subtotalTaxes = calculateTaxesFromNumber(
+				parseFloat(subtotal),
+				taxClass,
+				taxStatus,
+				false
+			);
+			const totalTaxes = calculateTaxesFromNumber(parseFloat(total), taxClass, taxStatus, false);
 
 			const taxes = subtotalTaxes.taxes.map((obj) => {
 				const index = totalTaxes.taxes.findIndex((el) => el.id === obj.id);

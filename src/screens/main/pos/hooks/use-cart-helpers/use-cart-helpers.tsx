@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 import { useObservableState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import { priceToNumber, processNewOrder, processExistingOrder, addItem } from './helpers';
 import useLocalData from '../../../../../contexts/local-data';
@@ -17,15 +18,23 @@ export const useCartHelpers = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { store } = useLocalData();
 	const { calculateTaxesFromNumber } = useTaxCalculation();
-	const pricesIncludeTax = useObservableState(store.prices_include_tax$, store.prices_include_tax);
+	const pricesIncludeTax = useObservableState(
+		store.prices_include_tax$.pipe(map((val) => val === 'yes')),
+		store.prices_include_tax === 'yes'
+	);
 
 	/**
-	 *
+	 * NOTE: once price, subtotal, total etc go into the cart they are always without tax
 	 */
 	const addProduct = React.useCallback(
 		async (product: ProductDocument) => {
 			let priceWithoutTax = priceToNumber(product.price);
-			const tax = calculateTaxesFromNumber(parseFloat(product.price));
+			const tax = calculateTaxesFromNumber(
+				parseFloat(product.price),
+				product.tax_class,
+				product.tax_status,
+				pricesIncludeTax
+			);
 
 			if (pricesIncludeTax) {
 				priceWithoutTax = priceToNumber(product.price) - tax.total;

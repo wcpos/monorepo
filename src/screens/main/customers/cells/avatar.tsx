@@ -22,11 +22,11 @@ const Avatar = ({ item: customer }: AvatarProps) => {
 		y: 0,
 	});
 
-	const ref = React.useRef<View>(null);
-	const { onLayout } = useMeasure({ onMeasure, ref });
+	// const ref = React.useRef<View>(null);
+	const { MeasureWrapper } = useMeasure({ onMeasure });
 
 	return (
-		<View ref={ref} onLayout={onLayout} style={{ width: '100%' }}>
+		<MeasureWrapper style={{ width: '100%' }}>
 			<Image
 				source={avatar_url}
 				style={{ width: measurements.width, height: measurements.width, aspectRatio: 1 }}
@@ -34,7 +34,7 @@ const Avatar = ({ item: customer }: AvatarProps) => {
 				recyclingKey={customer.uuid}
 				// placeholder={<Img source={require('assets/placeholder.png')} />}
 			/>
-		</View>
+		</MeasureWrapper>
 	);
 };
 

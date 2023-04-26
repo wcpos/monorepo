@@ -130,8 +130,12 @@ export function calculateTaxes(price: number, rates: TaxRateDocument[], pricesIn
 /**
  *
  */
-export function sumTaxes(taxes: TaxArray, round = true) {
-	return sumBy(taxes, (tax) => parseFloat(tax.total));
+export function sumTaxes(taxes: TaxArray, rounding = true) {
+	const sum = sumBy(taxes, (tax) => parseFloat(tax.total));
+	if (rounding) {
+		return round(sum, 6);
+	}
+	return sum;
 }
 
 /**
@@ -245,10 +249,12 @@ export function calculateOrderTotals({
 }) {
 	const total = sumBy(lines, (item) => +(item.total ?? 0));
 	const subtotal = sumBy(lines, (item) => +(item.subtotal ?? 0));
-	const discountTotal = subtotal - total;
+	const discountTotal = round(subtotal - total, 6);
 	const totalTax = sumBy(lines, (item) => +(item.total_tax ?? 0));
 	const subtotalTax = sumBy(lines, (item) => +(item.subtotal_tax ?? 0));
-	const discountTax = subtotalTax - totalTax;
+	const discountTax = round(subtotalTax - totalTax, 6);
+	// TODO: cart_tax is just the line items, I need to get the shipping tax
+	const cartTax = totalTax;
 	const itemizedTaxes = sumItemizedTaxes(
 		// @ts-ignore
 		lines.map((line) => line.taxes ?? []),
@@ -271,6 +277,7 @@ export function calculateOrderTotals({
 		subtotal_tax: String(subtotalTax),
 		discount_total: String(discountTotal),
 		discount_tax: String(discountTax),
+		cart_tax: String(cartTax),
 		tax_lines: taxLines,
 	};
 }

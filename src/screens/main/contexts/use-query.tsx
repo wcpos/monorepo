@@ -5,6 +5,7 @@ import debounce from 'lodash/debounce';
 import defaults from 'lodash/defaults';
 import set from 'lodash/set';
 import { BehaviorSubject } from 'rxjs';
+import useDeepCompareEffect from 'use-deep-compare-effect';
 
 type SortDirection = import('@wcpos/components/src/table').SortDirection;
 
@@ -45,15 +46,21 @@ function removeNulls(obj) {
  */
 const useQuery = (initialQuery: QueryState) => {
 	// // are there any defaults?
-	const [query$] = React.useState(() => new BehaviorSubject(defaults(initialQuery, {})));
+	const query$ = React.useRef(new BehaviorSubject(defaults(initialQuery, {})));
+	// const [query$] = React.useState(() => new BehaviorSubject(defaults(initialQuery, {})));
+
+	// Use useDeepCompareEffect to listen for changes in initialQuery
+	useDeepCompareEffect(() => {
+		query$.current.next(defaults(initialQuery, {}));
+	}, [initialQuery, query$]);
 
 	/**
 	 * Not currently used, but maybe I should only be getting a limit from the DB?
 	 */
 	const nextPage = React.useCallback(() => {
-		const prev = query$.getValue();
+		const prev = query$.current.getValue();
 		const next = { ...prev, skip: prev.skip + prev.limit };
-		query$.next(next);
+		query$.current.next(next);
 	}, [query$]);
 
 	/**
@@ -64,9 +71,9 @@ const useQuery = (initialQuery: QueryState) => {
 	const setQuery: SetQuery = React.useCallback(
 		(path, value, debounceFlag = false) => {
 			const updateQuery = (path, value) => {
-				const prev = cloneDeep(query$.getValue());
+				const prev = cloneDeep(query$.current.getValue());
 				const next = removeNulls(set(prev, path, value));
-				query$.next(next);
+				query$.current.next(next);
 			};
 
 			if (debounceFlag) {
@@ -78,7 +85,7 @@ const useQuery = (initialQuery: QueryState) => {
 		[query$]
 	);
 
-	return { query$, setQuery, nextPage };
+	return { query$: query$.current, setQuery, nextPage };
 };
 
 export default useQuery;
