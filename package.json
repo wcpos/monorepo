@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/hooks",
-  "version": "1.0.69",
+  "version": "1.0.70",
   "description": "Hooks for WooCommerce POS",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/hooks#readme",
@@ -33,14 +33,14 @@
     "react-native-gesture-handler": "^2.9.0",
     "react-native-reanimated": "2.14.4",
     "react-native-web": "~0.18.12",
-    "rxjs": "7.8.0"
+    "rxjs": "7.8.1"
   },
   "devDependencies": {
     "@babel/core": "^7.21.4",
     "@storybook/addon-actions": "7.0.7",
     "@storybook/addon-controls": "7.0.7",
     "@storybook/addon-essentials": "7.0.7",
-    "@storybook/addon-knobs": "7.0.0",
+    "@storybook/addon-knobs": "7.0.2",
     "@storybook/addon-react-native-web": "0.0.20",
     "@storybook/builder-webpack5": "7.0.7",
     "@storybook/manager-webpack5": "6.5.16",
