@@ -20,6 +20,7 @@ export const UserMenu = () => {
 	const navigation = useNavigation();
 	const theme = useTheme();
 	const dimensions = useWindowDimensions();
+	const [opened, setOpened] = React.useState(false);
 
 	const items = React.useMemo(() => {
 		if (isWebApp && initialProps) {
@@ -71,7 +72,13 @@ export const UserMenu = () => {
 	}, [initialProps, isWebApp, logout, navigation]);
 
 	return (
-		<Dropdown placement="bottom-end" items={items}>
+		<Dropdown
+			placement="bottom-end"
+			items={items}
+			opened={opened}
+			onOpen={() => setOpened(true)}
+			onClose={() => setOpened(false)}
+		>
 			<Box horizontal space="xSmall" align="center">
 				<Avatar
 					source={wpCredentials?.avatar_url}

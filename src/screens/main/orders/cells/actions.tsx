@@ -3,12 +3,13 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { useObservableState } from 'observable-hooks';
 
+import Dialog from '@wcpos/components/src/dialog';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
-import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
-import useRestHttpClient from '../../hooks/use-rest-http-client';
+import useDeleteDocument from '../../contexts/use-delete-document';
+import usePullDocument from '../../contexts/use-pull-document';
 
 interface Props {
 	item: import('@wcpos/database').OrderDocument;
@@ -16,24 +17,11 @@ interface Props {
 
 const Actions = ({ item: order }: Props) => {
 	const navigation = useNavigation();
-	const http = useRestHttpClient();
 	const [menuOpened, setMenuOpened] = React.useState(false);
 	const status = useObservableState(order.status$, order.status);
-
-	/**
-	 *
-	 */
-	const handleSync = React.useCallback(async () => {
-		// could use the link url?
-		// this should be done in replication, can get link and parse data there
-		try {
-			const { data } = await http.get(`/orders/${order.id}`);
-			const parsedData = order.collection.parseRestResponse(data);
-			return order.patch(parsedData);
-		} catch (err) {
-			log.error(err);
-		}
-	}, [http, order]);
+	const pullDocument = usePullDocument();
+	const deleteDocument = useDeleteDocument();
+	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 
 	/**
 	 *
@@ -58,11 +46,19 @@ const Actions = ({ item: order }: Props) => {
 				action: handleOpen,
 				icon: 'cartShopping',
 			},
-			{ label: t('Sync', { _tags: 'core' }), action: handleSync, icon: 'arrowRotateRight' },
+			{
+				label: t('Sync', { _tags: 'core' }),
+				action: () => {
+					if (order.id) {
+						pullDocument(order.id, order.collection);
+					}
+				},
+				icon: 'arrowRotateRight',
+			},
 			{ label: '__' },
 			{
 				label: t('Delete', { _tags: 'core' }),
-				action: order.remove,
+				action: () => setDeleteDialogOpened(true),
 				icon: 'trash',
 				type: 'critical',
 			},
@@ -76,7 +72,7 @@ const Actions = ({ item: order }: Props) => {
 		}
 
 		return menu;
-	}, [handleOpen, handleSync, navigation, order, status]);
+	}, [handleOpen, navigation, order.collection, order.id, order.uuid, pullDocument, status]);
 
 	/**
 	 *
@@ -92,6 +88,21 @@ const Actions = ({ item: order }: Props) => {
 			>
 				<Icon name="ellipsisVertical" onPress={() => setMenuOpened(true)} />
 			</Dropdown>
+
+			<Dialog
+				opened={deleteDialogOpened}
+				onAccept={async () => {
+					if (order.id) {
+						await deleteDocument(order.id, order.collection);
+					}
+					await order.remove();
+				}}
+				onClose={() => setDeleteDialogOpened(false)}
+				children={t('You are about to delete order {id}', {
+					_tags: 'core',
+					id: order.id || order.uuid,
+				})}
+			/>
 		</>
 	);
 };

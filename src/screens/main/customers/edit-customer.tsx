@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
@@ -7,6 +8,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../lib/translations';
+import { CountrySelect, StateSelect } from '../components/country-state-select';
 import EditForm from '../components/edit-form-with-json';
 import { useCustomers } from '../contexts/customers/use-customers';
 import usePushDocument from '../contexts/use-push-document';
@@ -17,6 +19,8 @@ const EditCustomer = () => {
 	const { onPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
+	const billingCountry = useObservableState(customer.billing.country$, customer.billing.country);
+	const shippingCountry = useObservableState(customer.shipping.country$, customer.shipping.country);
 
 	if (!customer) {
 		throw new Error(t('Customer not found', { _tags: 'core' }));
@@ -105,12 +109,14 @@ const EditCustomer = () => {
 					},
 					state: {
 						'ui:label': t('State', { _tags: 'core' }),
+						'ui:widget': (props) => <StateSelect country={billingCountry} {...props} />,
 					},
 					postcode: {
 						'ui:label': t('Postcode', { _tags: 'core' }),
 					},
 					country: {
 						'ui:label': t('Country', { _tags: 'core' }),
+						'ui:widget': CountrySelect,
 					},
 					company: {
 						'ui:label': t('Company', { _tags: 'core' }),
@@ -151,12 +157,14 @@ const EditCustomer = () => {
 					},
 					state: {
 						'ui:label': t('State', { _tags: 'core' }),
+						'ui:widget': (props) => <StateSelect country={shippingCountry} {...props} />,
 					},
 					postcode: {
 						'ui:label': t('Postcode', { _tags: 'core' }),
 					},
 					country: {
 						'ui:label': t('Country', { _tags: 'core' }),
+						'ui:widget': CountrySelect,
 					},
 					company: {
 						'ui:label': t('Company', { _tags: 'core' }),

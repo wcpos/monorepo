@@ -2,12 +2,7 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Numpad from '@wcpos/components/src/numpad';
-import Popover from '@wcpos/components/src/popover';
-import Text from '@wcpos/components/src/text';
-
-import useCurrencyFormat from '../../../hooks/use-currency-format';
+import NumberInput from '../../../components/number-input';
 
 interface Props {
 	item: import('@wcpos/database').LineItemDocument;
@@ -22,41 +17,20 @@ export const Price = ({ item }: Props) => {
 	const subtotal = useObservableState(item.subtotal$, item.subtotal);
 	const quantity = item.getLatest().quantity;
 	const price = parseFloat(subtotal) / quantity;
-	const { format } = useCurrencyFormat({ withSymbol: false });
-	const priceRef = React.useRef(String(price));
 
 	/**
 	 * update subtotal, not price
 	 */
-	const handleUpdate = React.useCallback(() => {
-		const quantity = item.getLatest().quantity;
-		item.incrementalPatch({ subtotal: String(quantity * parseFloat(priceRef.current)) });
-	}, [item]);
+	const handleUpdate = React.useCallback(
+		(newValue: string) => {
+			const quantity = item.getLatest().quantity;
+			item.incrementalPatch({ subtotal: String(quantity * parseFloat(newValue)) });
+		},
+		[item]
+	);
 
 	/**
 	 *
 	 */
-	return (
-		<Popover
-			withinPortal
-			primaryAction={{
-				label: 'Done',
-				action: handleUpdate,
-			}}
-		>
-			<Popover.Target>
-				<Box border paddingY="xSmall" paddingX="small" rounding="large">
-					<Text>{format(price)}</Text>
-				</Box>
-			</Popover.Target>
-			<Popover.Content>
-				<Numpad
-					initialValue={String(price)}
-					onChange={(newValue: string) => {
-						priceRef.current = newValue;
-					}}
-				/>
-			</Popover.Content>
-		</Popover>
-	);
+	return <NumberInput value={String(price)} onChange={handleUpdate} showDecimals />;
 };

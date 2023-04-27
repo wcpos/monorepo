@@ -1,14 +1,13 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
-import { isRxDocument } from 'rxdb';
 
+import Dialog from '@wcpos/components/src/dialog';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
-import useSnackbar from '@wcpos/components/src/snackbar';
-import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
+import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
 
 type Props = {
@@ -19,31 +18,8 @@ const Actions = ({ item: customer }: Props) => {
 	const navigation = useNavigation();
 	const [menuOpened, setMenuOpened] = React.useState(false);
 	const pullDocument = usePullDocument();
-	const addSnackbar = useSnackbar();
-
-	/**
-	 *
-	 */
-	const handleSync = async () => {
-		try {
-			const success = await pullDocument(customer.id, customer.collection);
-			if (isRxDocument(success)) {
-				addSnackbar({
-					message: t('Customer {id} synced', { _tags: 'core', id: success.id }),
-					// type: 'success',
-				});
-			}
-		} catch (error) {
-			log.error(error);
-		}
-	};
-
-	/**
-	 *
-	 */
-	const handleDelete = () => {
-		customer.remove();
-	};
+	const deleteDocument = useDeleteDocument();
+	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 
 	return (
 		<>
@@ -58,13 +34,19 @@ const Actions = ({ item: customer }: Props) => {
 						action: () => navigation.navigate('EditCustomer', { customerID: customer.uuid }),
 						icon: 'penToSquare',
 					},
-					{ label: t('Sync', { _tags: 'core' }), action: handleSync, icon: 'arrowRotateRight' },
+					{
+						label: t('Sync', { _tags: 'core' }),
+						action: () => {
+							if (customer.id) {
+								pullDocument(customer.id, customer.collection);
+							}
+						},
+						icon: 'arrowRotateRight',
+					},
 					{ label: '__' },
 					{
 						label: t('Delete', { _tags: 'core' }),
-						action: () => {
-							console.log('delete');
-						},
+						action: () => setDeleteDialogOpened(true),
 						icon: 'trash',
 						type: 'critical',
 					},
@@ -72,6 +54,21 @@ const Actions = ({ item: customer }: Props) => {
 			>
 				<Icon name="ellipsisVertical" onPress={() => setMenuOpened(true)} />
 			</Dropdown>
+
+			<Dialog
+				opened={deleteDialogOpened}
+				onAccept={async () => {
+					if (customer.id) {
+						await deleteDocument(customer.id, customer.collection);
+					}
+					await customer.remove();
+				}}
+				onClose={() => setDeleteDialogOpened(false)}
+				children={t('You are about to delete user {id}', {
+					_tags: 'core',
+					id: customer.id || customer.uuid,
+				})}
+			/>
 		</>
 	);
 };

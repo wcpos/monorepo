@@ -7,6 +7,7 @@ import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 import { TextInputContainer } from '@wcpos/components/src/textinput';
 
+import { t } from '../../../lib/translations';
 import useCurrencyFormat from '../hooks/use-currency-format';
 
 interface NumberInputProps {
@@ -35,6 +36,7 @@ const NumberInput = ({
 	const valueRef = React.useRef(value);
 	const { format } = useCurrencyFormat({ withSymbol: false });
 	const displayValue = showDecimals ? format(value) : value;
+	const [opened, setOpened] = React.useState(false);
 
 	/**
 	 *
@@ -47,8 +49,12 @@ const NumberInput = ({
 		</View>
 	) : (
 		<Popover
+			withinPortal
+			opened={opened}
+			onOpen={() => setOpened(true)}
+			onClose={() => setOpened(false)}
 			primaryAction={{
-				label: 'Done',
+				label: t('Done', { _tags: 'core' }),
 				action: () => onChange(valueRef.current),
 			}}
 		>

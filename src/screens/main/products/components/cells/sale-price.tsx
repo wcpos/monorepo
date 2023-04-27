@@ -14,6 +14,7 @@ type Props = {
 };
 
 const SalePrice = ({ item: product, column, onChange }: Props) => {
+	const sale_price = useObservableState(product.sale_price$, product.sale_price);
 	const { display } = column;
 
 	/**
@@ -32,7 +33,7 @@ const SalePrice = ({ item: product, column, onChange }: Props) => {
 	 */
 	return (
 		<NumberInput
-			value={product.sale_price || '0'}
+			value={sale_price || '0'}
 			onChange={(sale_price) => onChange(product, { sale_price })}
 			disabled={!product.on_sale}
 			showDecimals

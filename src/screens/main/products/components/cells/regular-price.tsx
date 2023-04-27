@@ -18,7 +18,7 @@ type Props = {
 };
 
 const RegularPrice = ({ item: product, column, onChange }: Props) => {
-	// const regular_price = useObservableState(product.regular_price$, product.regular_price);
+	const regular_price = useObservableState(product.regular_price$, product.regular_price);
 	// const taxStatus = useObservableState(product.tax_status$, product.tax_status);
 	// const taxClass = useObservableState(product.tax_class$, product.tax_class);
 	const { display } = column;
@@ -39,7 +39,7 @@ const RegularPrice = ({ item: product, column, onChange }: Props) => {
 	 */
 	return (
 		<NumberInput
-			value={product.regular_price || '0'}
+			value={regular_price || '0'}
 			onChange={(regular_price) => onChange(product, { regular_price })}
 			showDecimals
 		/>

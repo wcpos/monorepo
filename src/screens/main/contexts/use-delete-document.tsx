@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { isRxDocument } from 'rxdb';
-
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
@@ -10,7 +8,7 @@ import useRestHttpClient from '../hooks/use-rest-http-client';
 
 type RxDocument = import('rxdb').RxDocument;
 
-const usePullDocument = () => {
+const useDeleteDocument = () => {
 	const http = useRestHttpClient();
 	const addSnackbar = useSnackbar();
 
@@ -18,15 +16,12 @@ const usePullDocument = () => {
 		async (id, collection) => {
 			let endpoint = collection.name;
 			try {
-				const { data } = await http.get((endpoint += `/${id}`));
-				const parsedData = collection.parseRestResponse(data);
-				const success = await collection.upsert(parsedData);
-				if (isRxDocument(success)) {
+				const { data } = await http.del((endpoint += `/${id}`));
+				if (data.id === id) {
 					addSnackbar({
-						message: t('Item synced', { _tags: 'core' }),
+						message: t('Item deleted', { _tags: 'core' }),
 					});
 				}
-				return success;
 			} catch (err) {
 				log.error(err);
 				addSnackbar({
@@ -39,4 +34,4 @@ const usePullDocument = () => {
 	);
 };
 
-export default usePullDocument;
+export default useDeleteDocument;
