@@ -17,7 +17,7 @@ export const useCartHelpers = () => {
 	const navigation = useNavigation();
 	const { currentOrder } = useCurrentOrder();
 	const { store } = useLocalData();
-	const { calculateTaxesFromNumber } = useTaxCalculation();
+	const { calculateTaxesFromPrice } = useTaxCalculation();
 	const pricesIncludeTax = useObservableState(
 		store.prices_include_tax$.pipe(map((val) => val === 'yes')),
 		store.prices_include_tax === 'yes'
@@ -29,7 +29,7 @@ export const useCartHelpers = () => {
 	const addProduct = React.useCallback(
 		async (product: ProductDocument) => {
 			let priceWithoutTax = priceToNumber(product.price);
-			const tax = calculateTaxesFromNumber(
+			const tax = calculateTaxesFromPrice(
 				parseFloat(product.price),
 				product.tax_class,
 				product.tax_status,
@@ -69,7 +69,7 @@ export const useCartHelpers = () => {
 				await processExistingOrder(order, newLineItem, existing);
 			}
 		},
-		[calculateTaxesFromNumber, currentOrder, navigation, ordersCollection, pricesIncludeTax]
+		[calculateTaxesFromPrice, currentOrder, navigation, ordersCollection, pricesIncludeTax]
 	);
 
 	/**
@@ -150,16 +150,31 @@ export const useCartHelpers = () => {
 	 */
 	const addFee = React.useCallback(
 		async (data) => {
+			const tax = calculateTaxesFromPrice(
+				parseFloat(data.total),
+				data.tax_class,
+				data.tax_status,
+				false
+			);
+
+			const newFeelLine = {
+				...data,
+				total_tax: tax.total,
+				taxes: tax.taxes,
+			};
+
 			const order = currentOrder.getLatest();
 
 			if (order.isNew) {
-				const newOrder = await processNewOrder(order, ordersCollection, { fee_lines: [data] });
+				const newOrder = await processNewOrder(order, ordersCollection, {
+					fee_lines: [newFeelLine],
+				});
 				navigation.setParams({ orderID: newOrder?.uuid });
 			} else {
-				await addItem(order, { fee_lines: data });
+				await addItem(order, { fee_lines: newFeelLine });
 			}
 		},
-		[currentOrder, navigation, ordersCollection]
+		[calculateTaxesFromPrice, currentOrder, navigation, ordersCollection]
 	);
 
 	/**

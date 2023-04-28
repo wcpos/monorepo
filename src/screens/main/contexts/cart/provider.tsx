@@ -49,7 +49,7 @@ interface CartContextProps {
  *
  */
 const CartProvider = ({ children, order }: CartContextProps) => {
-	const { calcLineItemTotals, calcOrderTotals, calcShippingLineTotals, calculateLineItemTaxes } =
+	const { calculateOrderTotals, calculateShippingLineTaxes, calculateLineItemTaxes } =
 		useTaxCalculation();
 
 	/**
@@ -89,7 +89,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 										(m) => m.key === '_woocommerce_pos_tax_status'
 									)?.value;
 									const taxes = calculateLineItemTaxes({ subtotal, total, taxClass, taxStatus });
-									item.incrementalPatch({ ...taxes });
+									item.incrementalPatch(taxes);
 									return { subtotal, total, ...taxes };
 								})
 							)
@@ -110,13 +110,11 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 					combineLatest(
 						items.map((item) => {
 							return combineLatest([item.total$, item.tax_class$, item.tax_status$]).pipe(
-								map(([price, taxClass, taxStatus]) => {
-									const totals = calcLineItemTotals(1, price, taxClass, taxStatus);
-									const merged = Object.assign(item.toMutableJSON(), totals);
-									if (JSON.stringify(merged) !== JSON.stringify(item.toJSON())) {
-										item.incrementalPatch(totals);
-									}
-									return totals;
+								distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
+								map(([total, taxClass, taxStatus]) => {
+									const taxes = calculateLineItemTaxes({ total, taxClass, taxStatus });
+									item.incrementalPatch(taxes);
+									return { subtotal: total, total, ...taxes };
 								})
 							);
 						})
@@ -136,13 +134,11 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 					combineLatest(
 						items.map((item) => {
 							return combineLatest([item.total$]).pipe(
+								distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
 								map(([total]) => {
-									const totals = calcShippingLineTotals(total);
-									const merged = Object.assign(item.toMutableJSON(), totals);
-									if (JSON.stringify(merged) !== JSON.stringify(item.toJSON())) {
-										item.incrementalPatch(totals);
-									}
-									return totals;
+									const taxes = calculateShippingLineTaxes({ total });
+									item.incrementalPatch(taxes);
+									return { subtotal: total, total, ...taxes };
 								})
 							);
 						})
@@ -155,18 +151,16 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 		 * Note: WC REST API order total is total + total_tax
 		 */
 		const cartTotals$ = combineLatest([lineItemTotals$, feeLineTotals$, shippingLineTotals$]).pipe(
-			map((totals) => flatten(totals)),
-			// filter((totals) => totals.length > 0),
-			map((cartTotals) => {
-				const totals = calcOrderTotals(cartTotals);
+			map(([lineItems, feeLines, shippingLines]) => {
+				const totals = calculateOrderTotals({ lineItems, feeLines, shippingLines });
 				order.incrementalPatch({
 					discount_tax: totals.discount_tax,
 					discount_total: totals.discount_total,
-					// shipping_tax: totals.shipping_tax,
-					// shipping_total: totals.shipping_total,
+					shipping_tax: totals.shipping_tax,
+					shipping_total: totals.shipping_total,
 					cart_tax: totals.cart_tax,
 					total_tax: totals.total_tax,
-					total: String(parseFloat(totals.total) + parseFloat(totals.total_tax)),
+					total: totals.total,
 					tax_lines: totals.tax_lines,
 				});
 				return totals;
@@ -184,7 +178,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 			cartResource: new ObservableResource(cart$),
 			cartTotals$,
 		};
-	}, [calcLineItemTotals, calcOrderTotals, calcShippingLineTotals, calculateLineItemTaxes, order]);
+	}, [calculateOrderTotals, calculateShippingLineTaxes, calculateLineItemTaxes, order]);
 
 	/**
 	 * Calc totals

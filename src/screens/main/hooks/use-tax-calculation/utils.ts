@@ -204,9 +204,7 @@ export function calculateLineItemTotals({
 	rates: TaxRateDocument[];
 	pricesIncludeTax: boolean;
 	taxRoundAtSubtotal: boolean;
-	// discounts?: number;
 }) {
-	debugger;
 	// Subtotal
 	const priceAsFloat = parseFloat(price);
 	const subtotal = quantity * priceAsFloat;
@@ -238,46 +236,144 @@ export function calculateLineItemTotals({
 /**
  * Calculate order totals
  */
-export function calculateOrderTotals({
-	lines,
-	rates,
+// export function calculateOrderTotals({
+// 	lines,
+// 	rates,
+// 	taxRoundAtSubtotal,
+// }: {
+// 	lines: Cart;
+// 	taxRoundAtSubtotal: boolean;
+// 	rates: TaxRateDocument[];
+// }) {
+// 	const total = sumBy(lines, (item) => +(item.total ?? 0));
+// 	const subtotal = sumBy(lines, (item) => +(item.subtotal ?? 0));
+// 	// const discountTotal = round(subtotal - total, 6);
+// 	const totalTax = sumBy(lines, (item) => +(item.total_tax ?? 0));
+// 	const subtotalTax = sumBy(lines, (item) => +(item.subtotal_tax ?? 0));
+// 	// const discountTax = round(subtotalTax - totalTax, 6);
+// 	const itemizedTaxes = sumItemizedTaxes(
+// 		// @ts-ignore
+// 		lines.map((line) => line.taxes ?? []),
+// 		taxRoundAtSubtotal
+// 	);
+// 	const taxLines = itemizedTaxes.map((tax) => {
+// 		const taxRate = rates.find((rate) => rate.id === String(tax.id));
+// 		return {
+// 			rate_id: tax.id,
+// 			label: taxRate?.name,
+// 			compound: taxRate?.compound,
+// 			tax_total: String(tax.total),
+// 		};
+// 	});
+
+// 	return {
+// 		total: String(total),
+// 		subtotal: String(subtotal),
+// 		total_tax: String(totalTax),
+// 		subtotal_tax: String(subtotalTax),
+// 		// discount_total: String(discountTotal),
+// 		// discount_tax: String(discountTax),
+// 		tax_lines: taxLines,
+// 	};
+// }
+
+/**
+ *
+ */
+export function calculateOrderTotalsAndTaxes({
+	lineItems,
+	shippingLines,
+	feeLines,
+	taxRates,
 	taxRoundAtSubtotal,
 }: {
-	lines: Cart;
+	lineItems: LineItemDocument[];
+	shippingLines: ShippingLineDocument[];
+	feeLines: FeeLineDocument[];
+	taxRates: TaxRateDocument[];
 	taxRoundAtSubtotal: boolean;
-	rates: TaxRateDocument[];
 }) {
-	const total = sumBy(lines, (item) => +(item.total ?? 0));
-	const subtotal = sumBy(lines, (item) => +(item.subtotal ?? 0));
-	const discountTotal = round(subtotal - total, 6);
-	const totalTax = sumBy(lines, (item) => +(item.total_tax ?? 0));
-	const subtotalTax = sumBy(lines, (item) => +(item.subtotal_tax ?? 0));
-	const discountTax = round(subtotalTax - totalTax, 6);
-	// TODO: cart_tax is just the line items, I need to get the shipping tax
-	const cartTax = totalTax;
-	const itemizedTaxes = sumItemizedTaxes(
-		// @ts-ignore
-		lines.map((line) => line.taxes ?? []),
-		taxRoundAtSubtotal
-	);
-	const taxLines = itemizedTaxes.map((tax) => {
-		const taxRate = rates.find((rate) => rate.id === String(tax.id));
-		return {
-			rate_id: tax.id,
-			label: taxRate?.name,
-			compound: taxRate?.compound,
-			tax_total: String(tax.total),
-		};
+	let discount_total = 0;
+	let discount_tax = 0;
+	let shipping_total = 0;
+	let shipping_tax = 0;
+	let cart_tax = 0;
+	let subtotal = 0;
+	let subtotal_tax = 0;
+	let total = 0;
+	let total_tax = 0;
+
+	const taxLines = taxRates.map((taxRate) => ({
+		rate_id: parseInt(taxRate.id, 10),
+		label: taxRate.name,
+		compound: taxRate.compound,
+		tax_total: 0,
+		shipping_tax_total: 0,
+		rate_percent: parseFloat(taxRate.rate),
+		meta_data: [],
+	}));
+
+	// Calculate line item totals
+	lineItems.forEach((item) => {
+		discount_total += parseFloat(item.subtotal) - parseFloat(item.total);
+		discount_tax += parseFloat(item.subtotal_tax) - parseFloat(item.total_tax);
+		subtotal += parseFloat(item.subtotal);
+		subtotal_tax += parseFloat(item.subtotal_tax);
+		total += parseFloat(item.total);
+		total_tax += parseFloat(item.total_tax);
+
+		item.taxes.forEach((tax) => {
+			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
+			if (taxLine) {
+				taxLine.tax_total += parseFloat(tax.total);
+			}
+		});
+	});
+
+	// Calculate fee totals
+	feeLines.forEach((line) => {
+		total += parseFloat(line.total);
+		total_tax += parseFloat(line.total_tax);
+
+		line.taxes.forEach((tax) => {
+			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
+			if (taxLine) {
+				taxLine.tax_total += parseFloat(tax.total);
+			}
+		});
+	});
+
+	// Calculate shipping totals
+	shippingLines.forEach((line) => {
+		shipping_total += parseFloat(line.total);
+		shipping_tax += parseFloat(line.total_tax);
+		total += parseFloat(line.total);
+		total_tax += parseFloat(line.total_tax);
+
+		line.taxes.forEach((tax) => {
+			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
+			if (taxLine) {
+				taxLine.shipping_tax_total += parseFloat(tax.total);
+			}
+		});
+	});
+
+	taxLines.forEach((taxLine) => {
+		cart_tax += taxLine.tax_total;
+		taxLine.tax_total = String(round(taxLine.tax_total, 6));
+		taxLine.shipping_tax_total = String(round(taxLine.shipping_tax_total, 6));
 	});
 
 	return {
-		total: String(total),
-		subtotal: String(subtotal),
-		total_tax: String(totalTax),
-		subtotal_tax: String(subtotalTax),
-		discount_total: String(discountTotal),
-		discount_tax: String(discountTax),
-		cart_tax: String(cartTax),
+		discount_total: String(round(discount_total, 6)),
+		discount_tax: String(round(discount_tax, 6)),
+		shipping_total: String(round(shipping_total, 6)),
+		shipping_tax: String(round(shipping_tax, 6)),
+		cart_tax: String(round(cart_tax, 6)),
+		subtotal: String(round(subtotal, 6)),
+		subtotal_tax: String(round(subtotal_tax, 6)),
+		total: String(round(total + total_tax, 6)),
+		total_tax: String(round(total_tax, 6)),
 		tax_lines: taxLines,
 	};
 }

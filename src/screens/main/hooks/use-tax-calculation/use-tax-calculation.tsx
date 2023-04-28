@@ -1,11 +1,13 @@
 import * as React from 'react';
 
+import find from 'lodash/find';
+import uniq from 'lodash/uniq';
 import { useObservableState } from 'observable-hooks';
 
 import {
 	calculateDisplayValues,
 	calculateLineItemTotals,
-	calculateOrderTotals,
+	calculateOrderTotalsAndTaxes,
 	calculateTaxes,
 	sumTaxes,
 } from './utils';
@@ -42,7 +44,7 @@ const useTaxCalculation = () => {
 	/**
 	 *
 	 */
-	const calculateTaxesFromNumber = React.useCallback(
+	const calculateTaxesFromPrice = React.useCallback(
 		(
 			price = 0,
 			taxClass = '',
@@ -72,23 +74,29 @@ const useTaxCalculation = () => {
 	/**
 	 * Calculate line item taxes
 	 */
+
 	const calculateLineItemTaxes = React.useCallback(
-		({ subtotal, total, taxClass, taxStatus }) => {
-			const subtotalTaxes = calculateTaxesFromNumber(
+		({ subtotal = '0', total = '0', taxClass, taxStatus }) => {
+			const subtotalTaxes = calculateTaxesFromPrice(
 				parseFloat(subtotal),
 				taxClass,
 				taxStatus,
 				false
 			);
-			const totalTaxes = calculateTaxesFromNumber(parseFloat(total), taxClass, taxStatus, false);
+			const totalTaxes = calculateTaxesFromPrice(parseFloat(total), taxClass, taxStatus, false);
 
-			const taxes = subtotalTaxes.taxes.map((obj) => {
-				const index = totalTaxes.taxes.findIndex((el) => el.id === obj.id);
-				const totalTax = index !== -1 ? totalTaxes.taxes[index] : { total: 0 };
+			const uniqueTaxIds = uniq([
+				...subtotalTaxes.taxes.map((tax) => tax.id),
+				...totalTaxes.taxes.map((tax) => tax.id),
+			]);
+
+			const taxes = uniqueTaxIds.map((id) => {
+				const subtotalTax = find(subtotalTaxes.taxes, { id }) || { total: 0 };
+				const totalTax = find(totalTaxes.taxes, { id }) || { total: 0 };
 				return {
-					id: obj.id,
-					subtotal: String(obj.total ?? 0),
-					total: String(totalTax.total ?? 0),
+					id,
+					subtotal: String(subtotalTax.total),
+					total: String(totalTax.total),
 				};
 			});
 
@@ -98,7 +106,66 @@ const useTaxCalculation = () => {
 				taxes,
 			};
 		},
-		[calculateTaxesFromNumber]
+		[calculateTaxesFromPrice]
+	);
+
+	/**
+	 * TODO - I need to test this against WC unit tests to make sure it's correct
+	 * see the WC_Tax::get_shipping_tax_rates() method for more details
+	 *
+	 * Here we are using any tax rate that has the shipping flag set to true
+	 * unless the shipping tax class is set, in which case we use that.
+	 * If no tax rates are found, we use the standard tax class.
+	 */
+	const calculateShippingLineTaxes = React.useCallback(
+		({ total = '0' }) => {
+			let appliedRates = rates.filter((rate) => rate.shipping === true);
+			if (shippingTaxClass) {
+				appliedRates = rates.filter((rate) => rate.class === shippingTaxClass);
+			}
+
+			if (appliedRates.length === 0) {
+				appliedRates = rates.filter((rate) => rate.class === 'standard');
+			}
+
+			// early return if no taxes
+			if (!calcTaxes || appliedRates.length === 0) {
+				const subtotal = total;
+				return {
+					subtotal,
+					subtotal_tax: '0',
+					total: subtotal,
+					total_tax: '0',
+					taxes: [],
+				};
+			}
+
+			return calculateLineItemTotals({
+				quantity: 1,
+				price: total,
+				total,
+				rates: appliedRates,
+				pricesIncludeTax: false, // shipping is always exclusive
+				taxRoundAtSubtotal,
+			});
+		},
+		[calcTaxes, rates, shippingTaxClass, taxRoundAtSubtotal]
+	);
+
+	/**
+	 * Calculate order totals
+	 * */
+	const calculateOrderTotals = React.useCallback(
+		({ lineItems, feeLines, shippingLines }) => {
+			return calculateOrderTotalsAndTaxes({
+				lineItems,
+				feeLines,
+				shippingLines,
+				taxRates: rates, // NOTE: rates are only used to extract label and compound, not for calculation
+				taxRoundAtSubtotal,
+			});
+		},
+		[taxRoundAtSubtotal, rates]
 	);
 
 	/**
@@ -129,107 +196,11 @@ const useTaxCalculation = () => {
 		[calcTaxes, pricesIncludeTax, rates, taxRoundAtSubtotal]
 	);
 
-	/**
-	 * Calculate line item totals, line items and fee lines, shipping lines are different
-	 */
-	const calcLineItemTotals = React.useCallback(
-		({
-			quantity = 1,
-			price = '0',
-			total = '0',
-			taxClass = '',
-			taxStatus = '',
-			pricesIncludeTax = _pricesIncludeTax === 'yes',
-		}) => {
-			const _taxClass = taxClass === '' ? 'standard' : taxClass; // default to standard
-			const appliedRates = rates.filter((rate) => rate.class === _taxClass);
-
-			// early return if no taxes
-			if (!calcTaxes || taxStatus === 'none' || appliedRates.length === 0) {
-				const subtotal = String(quantity * parseFloat(price));
-				return {
-					subtotal,
-					subtotal_tax: '0',
-					total: subtotal,
-					total_tax: '0',
-					taxes: [],
-				};
-			}
-
-			return calculateLineItemTotals({
-				quantity,
-				price,
-				total,
-				rates: appliedRates,
-				pricesIncludeTax,
-				taxRoundAtSubtotal,
-			});
-		},
-		[_pricesIncludeTax, calcTaxes, rates, taxRoundAtSubtotal]
-	);
-
-	/**
-	 * TODO - I need to test this against WC unit tests to make sure it's correct
-	 * see the WC_Tax::get_shipping_tax_rates() method for more details
-	 *
-	 * Here we are using any tax rate that has the shipping flag set to true
-	 * unless the shipping tax class is set, in which case we use that.
-	 * If no tax rates are found, we use the standard tax class.
-	 */
-	const calcShippingLineTotals = React.useCallback(
-		(total = '0') => {
-			let appliedRates = rates.filter((rate) => rate.shipping === true);
-			if (shippingTaxClass) {
-				appliedRates = rates.filter((rate) => rate.class === shippingTaxClass);
-			}
-
-			if (appliedRates.length === 0) {
-				appliedRates = rates.filter((rate) => rate.class === 'standard');
-			}
-
-			// early return if no taxes
-			if (!calcTaxes || appliedRates.length === 0) {
-				const subtotal = total;
-				return {
-					subtotal,
-					subtotal_tax: '0',
-					total: subtotal,
-					total_tax: '0',
-					taxes: [],
-				};
-			}
-
-			return calculateLineItemTotals({
-				qty: 1,
-				price: total,
-				rates: appliedRates,
-				pricesIncludeTax: false, // shipping is always exclusive
-				taxRoundAtSubtotal,
-			});
-		},
-		[calcTaxes, rates, shippingTaxClass, taxRoundAtSubtotal]
-	);
-
-	/**
-	 * Calculate order totals
-	 * */
-	const calcOrderTotals = React.useCallback(
-		(lines: Cart) => {
-			return calculateOrderTotals({
-				lines,
-				taxRoundAtSubtotal,
-				rates, // NOTE: rates are only used to extract label and compound, not for calculation
-			});
-		},
-		[taxRoundAtSubtotal, rates]
-	);
-
 	return {
 		getDisplayValues,
-		calcLineItemTotals,
-		calcOrderTotals,
-		calcShippingLineTotals,
-		calculateTaxesFromNumber,
+		calculateOrderTotals,
+		calculateShippingLineTaxes,
+		calculateTaxesFromPrice,
 		calculateLineItemTaxes,
 	};
 };
