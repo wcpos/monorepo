@@ -15,14 +15,17 @@ type Props = {
 const Customer = ({ item: order }: Props) => {
 	const { setQuery } = useOrders();
 	const { format } = useCustomerNameFormat();
+	const customerID = useObservableState(order.customer_id$, order.customer_id);
+	const billing = useObservableState(order.billing$, order.billing);
+	const shipping = useObservableState(order.shipping$, order.shipping);
 
 	return (
 		<Pill
 			onPress={() => {
-				setQuery('selector.customer_id', order.customer_id);
+				setQuery('selector.customer_id', customerID);
 			}}
 		>
-			{format({ billing: order.billing, shipping: order.shipping, id: order.customer_id })}
+			{format({ billing, shipping, id: customerID })}
 		</Pill>
 	);
 };

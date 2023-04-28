@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
+
 import Format from '@wcpos/components/src/format';
 
 type Props = {
@@ -8,7 +10,9 @@ type Props = {
 };
 
 const Address = ({ item: customer, column }: Props) => {
-	return <Format.Address address={customer[column.key]} showName={false} />;
+	const address = useObservableState(customer[`${column.key}$`], customer[column.key]);
+
+	return <Format.Address address={address} showName={false} />;
 };
 
 export default Address;

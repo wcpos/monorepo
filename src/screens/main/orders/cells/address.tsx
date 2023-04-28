@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
+
 import Format from '@wcpos/components/src/format';
 import Text from '@wcpos/components/src/text';
 
@@ -9,7 +11,7 @@ type Props = {
 };
 
 const Address = ({ item: order, column }: Props) => {
-	const address = order[column.key];
+	const address = useObservableState(order[`${column.key}$`], order[column.key]);
 
 	return address ? <Format.Address address={address} showName={false} /> : <Text.Skeleton />;
 };
