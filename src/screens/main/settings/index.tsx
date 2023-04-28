@@ -4,6 +4,7 @@ import Box from '@wcpos/components/src/box';
 import Tabs from '@wcpos/components/src/tabs';
 
 import { GeneralSettings } from './general';
+import { KeyboardShortcuts } from './shortcuts';
 import { TaxSettings } from './tax';
 import { t } from '../../../lib/translations';
 
@@ -24,6 +25,11 @@ export const SettingsTabs = () => {
 						Component: GeneralSettings,
 					},
 					{ key: 'tax', title: t('Tax Settings', { _tags: 'core' }), Component: TaxSettings },
+					{
+						key: 'shortcuts',
+						title: t('Keyboard Shortcuts', { _tags: 'core' }),
+						Component: KeyboardShortcuts,
+					},
 				],
 			}}
 			renderScene={({ route }) => (

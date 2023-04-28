@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
+import isEmpty from 'lodash/isEmpty';
 import pick from 'lodash/pick';
 import { isRxDocument } from 'rxdb';
 
@@ -31,18 +32,18 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 	const addSnackbar = useSnackbar();
 	const billingCountry = get(customerData, ['billing', 'country']);
 	const shippingCountry = get(customerData, ['shipping', 'country']);
+	const [loading, setLoading] = React.useState(false);
 
 	/**
 	 *
 	 */
 	const handleSave = React.useCallback(async () => {
 		try {
+			setLoading(true);
 			const doc = await customerCollection.insert(customerData);
 			const success = await pushDocument(doc);
-			if (onAdd) {
-				onAdd(doc);
-			}
 			if (isRxDocument(success)) {
+				onAdd(doc);
 				addSnackbar({
 					message: t('Customer {id} saved', { _tags: 'core', id: success.id }),
 				});
@@ -53,6 +54,8 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 			addSnackbar({
 				message: t('There was an error: {message}', { _tags: 'core', message: error.message }),
 			});
+		} finally {
+			setLoading(false);
 		}
 	}, [addSnackbar, customerCollection, customerData, onAdd, pushDocument]);
 
@@ -231,7 +234,12 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 				opened={opened}
 				onClose={() => setOpened(false)}
 				title={t('Add New Customer', { _tags: 'core' })}
-				primaryAction={{ label: t('Add Customer', { _tags: 'core' }), action: handleSave }}
+				primaryAction={{
+					label: t('Add Customer', { _tags: 'core' }),
+					action: handleSave,
+					loading,
+					disabled: isEmpty(customerData.email),
+				}}
 				secondaryActions={[
 					{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
 				]}

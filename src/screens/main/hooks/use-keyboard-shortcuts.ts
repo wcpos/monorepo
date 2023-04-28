@@ -8,11 +8,6 @@ const useKeyboardShortcuts = () => {
 	const navigation = useNavigation();
 	const logout = useLogout();
 
-	/** Help Modal */
-	useHotkeys('shift+?', (event, handler) => {
-		navigation.navigate('Help');
-	});
-
 	/** Settings Modal */
 	useHotkeys('shift+s', (event, handler) => {
 		navigation.navigate('Settings');
@@ -44,7 +39,7 @@ const useKeyboardShortcuts = () => {
 	});
 
 	/** Support */
-	useHotkeys('shift+q', (event, handler) => {
+	useHotkeys('shift+?', (event, handler) => {
 		navigation.navigate('SupportStack');
 	});
 };

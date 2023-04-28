@@ -15,7 +15,7 @@ import usePushDocument from '../contexts/use-push-document';
 const EditProduct = () => {
 	const { data } = useProducts();
 	const product = data.length === 1 && data[0];
-	const { onPrimaryAction, setTitle } = useModal();
+	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
 
@@ -32,9 +32,14 @@ const EditProduct = () => {
 	/**
 	 * Handle save button click
 	 */
-	onPrimaryAction(async () => {
-		console.log('FIXME: this triggers twice!');
+	const handleSave = React.useCallback(async () => {
 		try {
+			setPrimaryAction((prev) => {
+				return {
+					...prev,
+					loading: true,
+				};
+			});
 			const success = await pushDocument(product);
 			if (isRxDocument(success)) {
 				addSnackbar({
@@ -43,9 +48,29 @@ const EditProduct = () => {
 			}
 		} catch (error) {
 			log.error(error);
+		} finally {
+			setPrimaryAction((prev) => {
+				return {
+					...prev,
+					loading: false,
+				};
+			});
 		}
-	});
+	}, [addSnackbar, product, pushDocument, setPrimaryAction]);
 
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		setPrimaryAction({
+			label: t('Save to Server', { _tags: 'core' }),
+			action: handleSave,
+		});
+	}, [handleSave, setPrimaryAction]);
+
+	/**
+	 *
+	 */
 	return (
 		<EditModal
 			document={product}

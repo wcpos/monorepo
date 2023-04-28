@@ -20,7 +20,7 @@ export interface PaymentWebviewProps {
 
 const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 	const addSnackbar = useSnackbar();
-	const { onPrimaryAction } = useModal();
+	const { setPrimaryAction } = useModal();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
 	const navigation = useNavigation();
 	const paymentURL = useObservableState(
@@ -54,11 +54,25 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 	/**
 	 *
 	 */
-	onPrimaryAction(() => {
+	const handleProcessPayment = React.useCallback(() => {
 		if (iframeRef.current && iframeRef.current.contentWindow) {
 			iframeRef.current.contentWindow.postMessage({ action: 'wcpos-process-payment' }, '*');
 		}
-	});
+		setPrimaryAction((prev) => {
+			return {
+				...prev,
+				loading: true,
+			};
+		});
+	}, [setPrimaryAction]);
+
+	/**
+	 *
+	 */
+	setPrimaryAction((prev) => ({
+		...prev,
+		action: handleProcessPayment,
+	}));
 
 	/**
 	 *

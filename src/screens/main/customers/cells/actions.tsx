@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 
-import Dialog from '@wcpos/components/src/dialog';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
+import Modal from '@wcpos/components/src/modal';
 
+import DeleteDialog from './delete-dialog';
 import { t } from '../../../../lib/translations';
-import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
 
 type Props = {
@@ -18,9 +18,45 @@ const Actions = ({ item: customer }: Props) => {
 	const navigation = useNavigation();
 	const [menuOpened, setMenuOpened] = React.useState(false);
 	const pullDocument = usePullDocument();
-	const deleteDocument = useDeleteDocument();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 
+	/**
+	 *
+	 */
+	const items = React.useMemo(() => {
+		const i = [
+			{
+				label: t('Edit', { _tags: 'core' }),
+				action: () => navigation.navigate('EditCustomer', { customerID: customer.uuid }),
+				icon: 'penToSquare',
+			},
+			{ label: '__' },
+			{
+				label: t('Delete', { _tags: 'core' }),
+				action: () => setDeleteDialogOpened(true),
+				icon: 'trash',
+				type: 'critical',
+			},
+		];
+
+		// if customer has an id, then it can be synced
+		// add as second item in menu
+		if (customer.id) {
+			i.splice(1, 0, {
+				label: t('Sync', { _tags: 'core' }),
+				action: () => {
+					if (customer.id) {
+						pullDocument(customer.id, customer.collection);
+					}
+				},
+				icon: 'arrowRotateRight',
+			});
+		}
+	}, [customer.collection, customer.id, customer.uuid, navigation, pullDocument]);
+
+	/**
+	 *
+	 */
 	return (
 		<>
 			<Dropdown
@@ -55,20 +91,9 @@ const Actions = ({ item: customer }: Props) => {
 				<Icon name="ellipsisVertical" onPress={() => setMenuOpened(true)} />
 			</Dropdown>
 
-			<Dialog
-				opened={deleteDialogOpened}
-				onAccept={async () => {
-					if (customer.id) {
-						await deleteDocument(customer.id, customer.collection);
-					}
-					await customer.remove();
-				}}
-				onClose={() => setDeleteDialogOpened(false)}
-				children={t('You are about to delete user {id}', {
-					_tags: 'core',
-					id: customer.id || customer.uuid,
-				})}
-			/>
+			<Modal opened={deleteDialogOpened} onClose={() => setDeleteDialogOpened(false)}>
+				<DeleteDialog customer={customer} setDeleteDialogOpened={setDeleteDialogOpened} />
+			</Modal>
 		</>
 	);
 };

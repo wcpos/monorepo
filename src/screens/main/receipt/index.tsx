@@ -3,13 +3,12 @@ import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
-import Modal, { useModal } from '@wcpos/components/src/modal';
+import { useModal } from '@wcpos/components/src/modal';
 
 import { EmailModal } from './components/email';
 import { ReceiptTemplate } from './components/template-webview';
 import { t } from '../../../lib/translations';
 import useOrders from '../contexts/orders';
-import useRestHttpClient from '../hooks/use-rest-http-client';
 
 export const ReceiptModal = () => {
 	const { data } = useOrders();
@@ -20,35 +19,25 @@ export const ReceiptModal = () => {
 	}
 
 	const [showEmailModal, setShowEmailModal] = React.useState(false);
-	const { onSecondaryAction } = useModal();
+	const { setSecondaryActions } = useModal();
 	const id = useObservableState(order.id$, order.id);
-	const http = useRestHttpClient();
-	const emailFieldRef = React.useRef('');
-	const saveCheckboxRef = React.useRef(false);
+	const billingEmail = useObservableState(order.billing.email$, order.billing.email);
 
 	/**
 	 *
 	 */
-	onSecondaryAction(() => setShowEmailModal(true));
-
-	/**
-	 *
-	 */
-	const sendEmail = React.useCallback(async () => {
-		try {
-			const { data } = await http.post(`/orders/${id}/email`, {
-				data: {
-					email: emailFieldRef.current.value,
-					save_to: saveCheckboxRef.current.value ? 'billing' : '',
-				},
-			});
-			if (data && data.success) {
-				setShowEmailModal(false);
+	setSecondaryActions((prev) =>
+		prev.map((p, index) => {
+			if (index === 0) {
+				return {
+					...p,
+					action: () => setShowEmailModal(true),
+				};
+			} else {
+				return p;
 			}
-		} catch (error) {
-			console.log(error);
-		}
-	}, [http, id]);
+		})
+	);
 
 	/**
 	 *
@@ -56,20 +45,9 @@ export const ReceiptModal = () => {
 	return (
 		<View style={{ height: '100%' }}>
 			<ReceiptTemplate order={order} />
-
-			<Modal
-				opened={showEmailModal}
-				onClose={() => {
-					setShowEmailModal(false);
-				}}
-				title={t('Email Receipt', { _tags: 'core' })}
-				primaryAction={{
-					label: t('Send', { _tags: 'core' }),
-					action: sendEmail,
-				}}
-			>
-				<EmailModal emailFieldRef={emailFieldRef} saveCheckboxRef={saveCheckboxRef} />
-			</Modal>
+			{showEmailModal && (
+				<EmailModal defaultEmail={billingEmail} id={id} setShowEmailModal={setShowEmailModal} />
+			)}
 		</View>
 	);
 };

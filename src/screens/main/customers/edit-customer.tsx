@@ -12,25 +12,42 @@ import { CountrySelect, StateSelect } from '../components/country-state-select';
 import EditForm from '../components/edit-form-with-json';
 import { useCustomers } from '../contexts/customers/use-customers';
 import usePushDocument from '../contexts/use-push-document';
+import { useCustomerNameFormat } from '../hooks/use-customer-name-format/use-customer-name-format';
 
 const EditCustomer = () => {
 	const { data } = useCustomers();
 	const customer = data.length === 1 && data[0];
-	const { onPrimaryAction, setTitle } = useModal();
+	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
 	const billingCountry = useObservableState(customer.billing.country$, customer.billing.country);
 	const shippingCountry = useObservableState(customer.shipping.country$, customer.shipping.country);
+	const { format } = useCustomerNameFormat();
 
 	if (!customer) {
 		throw new Error(t('Customer not found', { _tags: 'core' }));
 	}
 
 	/**
+	 * Set modal title
+	 */
+	React.useEffect(() => {
+		setTitle(() =>
+			t('Edit {name}', { _tags: 'core', name: format(customer), _context: 'Edit Customer title' })
+		);
+	}, [customer, format, setTitle]);
+
+	/**
 	 * Handle save button click
 	 */
-	onPrimaryAction(async () => {
+	const handleSave = React.useCallback(async () => {
 		try {
+			setPrimaryAction((prev) => {
+				return {
+					...prev,
+					loading: true,
+				};
+			});
 			const success = await pushDocument(customer);
 			if (isRxDocument(success)) {
 				addSnackbar({
@@ -39,15 +56,25 @@ const EditCustomer = () => {
 			}
 		} catch (error) {
 			log.error(error);
+		} finally {
+			setPrimaryAction((prev) => {
+				return {
+					...prev,
+					loading: false,
+				};
+			});
 		}
-	});
+	}, [addSnackbar, customer, pushDocument, setPrimaryAction]);
 
 	/**
-	 * Set modal title
+	 *
 	 */
-	// React.useEffect(() => {
-	// 	setTitle(() => t('Edit {name}', { _tags: 'core', name, _context: 'Edit Product title' }));
-	// }, [name, setTitle]);
+	React.useEffect(() => {
+		setPrimaryAction({
+			label: t('Save to Server', { _tags: 'core' }),
+			action: handleSave,
+		});
+	}, [handleSave, setPrimaryAction]);
 
 	/**
 	 *

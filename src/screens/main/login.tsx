@@ -2,6 +2,7 @@ import * as React from 'react';
 import type { TextInput as RNTextInput } from 'react-native';
 
 import { useNavigation } from '@react-navigation/native';
+import isEmpty from 'lodash/isEmpty';
 
 import Box from '@wcpos/components/src/box';
 import { useModal } from '@wcpos/components/src/modal';
@@ -12,45 +13,80 @@ import log from '@wcpos/utils/src/logger';
 import useLocalData from '../../contexts/local-data';
 import { t } from '../../lib/translations';
 
+/**
+ * TODO: It might be better to do a JWT refresh instead of login?
+ */
 const Login = () => {
 	const { site, wpCredentials } = useLocalData();
-	const usernameRef = React.useRef<RNTextInput>(null);
-	const passwordRef = React.useRef<RNTextInput>(null);
-	const { onPrimaryAction } = useModal();
+	const [username, setUsername] = React.useState('');
+	const [password, setPassword] = React.useState('');
+	const { setPrimaryAction } = useModal();
 	const http = useHttpClient();
 	const navigation = useNavigation();
 
 	/**
-	 * TODO: It might be better to do a JWT refresh instead of login?
+	 *
 	 */
-	onPrimaryAction(async () => {
+	const handleLogin = React.useCallback(async () => {
 		try {
+			setPrimaryAction((prev) => ({
+				...prev,
+				loading: true,
+			}));
 			const { data } = await http.get(`${site?.wc_api_auth_url}/authorize`, {
 				auth: {
-					username: usernameRef.current?.value,
-					password: passwordRef.current?.value,
+					username,
+					password,
 				},
 			});
-			wpCredentials.patch(data);
+			await wpCredentials.patch(data);
+			navigation.goBack();
 		} catch (err) {
 			log.error(err);
+		} finally {
+			setPrimaryAction((prev) => ({
+				...prev,
+				loading: false,
+			}));
 		}
+	}, [
+		setPrimaryAction,
+		http,
+		site?.wc_api_auth_url,
+		username,
+		password,
+		wpCredentials,
+		navigation,
+	]);
 
-		navigation.goBack();
-	});
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		setPrimaryAction((prev) => ({
+			...prev,
+			action: handleLogin,
+			disabled: isEmpty(username) || isEmpty(password),
+		}));
+	}, [handleLogin, password, setPrimaryAction, username]);
 
+	/**
+	 *
+	 */
 	return (
 		<Box space="medium">
 			<TextInputWithLabel
-				ref={usernameRef}
+				value={username}
 				label={t('Username', { _tags: 'core' })}
 				// placeholder="username"
+				onChangeText={setUsername}
 				type="username"
 			/>
 			<TextInputWithLabel
-				ref={passwordRef}
+				value={password}
 				label={t('Password', { _tags: 'core' })}
 				// placeholder="password"
+				onChangeText={setPassword}
 				type="password"
 			/>
 		</Box>

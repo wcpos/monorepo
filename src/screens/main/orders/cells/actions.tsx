@@ -3,10 +3,11 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { useObservableState } from 'observable-hooks';
 
-import Dialog from '@wcpos/components/src/dialog';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
+import Modal from '@wcpos/components/src/modal';
 
+import DeleteDialog from './delete-dialog';
 import { t } from '../../../../lib/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
@@ -20,7 +21,6 @@ const Actions = ({ item: order }: Props) => {
 	const [menuOpened, setMenuOpened] = React.useState(false);
 	const status = useObservableState(order.status$, order.status);
 	const pullDocument = usePullDocument();
-	const deleteDocument = useDeleteDocument();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 
 	/**
@@ -46,15 +46,6 @@ const Actions = ({ item: order }: Props) => {
 				action: handleOpen,
 				icon: 'cartShopping',
 			},
-			{
-				label: t('Sync', { _tags: 'core' }),
-				action: () => {
-					if (order.id) {
-						pullDocument(order.id, order.collection);
-					}
-				},
-				icon: 'arrowRotateRight',
-			},
 			{ label: '__' },
 			{
 				label: t('Delete', { _tags: 'core' }),
@@ -63,6 +54,20 @@ const Actions = ({ item: order }: Props) => {
 				type: 'critical',
 			},
 		];
+
+		// if order has an id, then it can be synced
+		if (order.id) {
+			menu.splice(2, 0, {
+				label: t('Sync', { _tags: 'core' }),
+				action: () => {
+					if (order.id) {
+						pullDocument(order.id, order.collection);
+					}
+				},
+				icon: 'arrowRotateRight',
+			});
+		}
+
 		if (status === 'completed' || status === 'pos-partial') {
 			menu.splice(1, 0, {
 				label: t('Receipt', { _tags: 'core' }),
@@ -89,20 +94,9 @@ const Actions = ({ item: order }: Props) => {
 				<Icon name="ellipsisVertical" onPress={() => setMenuOpened(true)} />
 			</Dropdown>
 
-			<Dialog
-				opened={deleteDialogOpened}
-				onAccept={async () => {
-					if (order.id) {
-						await deleteDocument(order.id, order.collection);
-					}
-					await order.remove();
-				}}
-				onClose={() => setDeleteDialogOpened(false)}
-				children={t('You are about to delete order {id}', {
-					_tags: 'core',
-					id: order.id || order.uuid,
-				})}
-			/>
+			<Modal opened={deleteDialogOpened} onClose={() => setDeleteDialogOpened(false)}>
+				<DeleteDialog order={order} setDeleteDialogOpened={setDeleteDialogOpened} />
+			</Modal>
 		</>
 	);
 };

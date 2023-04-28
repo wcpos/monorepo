@@ -11,7 +11,7 @@ import WebView from '@wcpos/components/src/webview';
 import log from '@wcpos/utils/src/logger';
 
 export const ReceiptTemplate = ({ order }) => {
-	const { onPrimaryAction } = useModal();
+	const { setPrimaryAction } = useModal();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
 
 	const receiptURL = useObservableState(
@@ -24,14 +24,19 @@ export const ReceiptTemplate = ({ order }) => {
 	// 	pageStyle: 'html, body { height: 100%; width: 100%; }',
 	// });
 
-	/**
-	 *
-	 */
-	onPrimaryAction(() => {
+	const handlePrintReceipt = React.useCallback(() => {
 		if (iframeRef.current && iframeRef.current.contentWindow) {
 			iframeRef.current.contentWindow.postMessage({ action: 'wcpos-print-receipt' }, '*');
 		}
-	});
+	}, []);
+
+	/**
+	 *
+	 */
+	setPrimaryAction((prev) => ({
+		...prev,
+		action: handlePrintReceipt,
+	}));
 
 	return (
 		<ErrorBoundary>

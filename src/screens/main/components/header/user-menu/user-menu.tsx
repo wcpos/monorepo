@@ -56,9 +56,9 @@ export const UserMenu = () => {
 					action: () => navigation.navigate('Settings'),
 				},
 				{
-					icon: 'circleQuestion',
-					label: t('Help', { _tags: 'core' }),
-					action: () => navigation.navigate('Help'),
+					icon: 'commentQuestion',
+					label: t('Support', { _tags: 'core' }),
+					action: () => navigation.navigate('SupportStack'),
 				},
 				{ label: '__' },
 				{

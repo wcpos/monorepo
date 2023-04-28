@@ -58,7 +58,7 @@ export const useCustomerNameFormat = () => {
 		}
 
 		// this should never happen
-		return t('Unknown', { _tags: 'core' });
+		return '';
 	}, []);
 
 	return { format };

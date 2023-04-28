@@ -121,7 +121,7 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Support', { _tags: 'core' }),
 					drawerLabel: t('Support', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon name="lifeRing" type={focused ? 'primary' : 'inverse'} size="large" />
+						<Icon name="commentQuestion" type={focused ? 'primary' : 'inverse'} size="large" />
 					),
 					drawerItemStyle: { marginTop: 'auto' },
 				}}

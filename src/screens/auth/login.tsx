@@ -2,6 +2,7 @@ import * as React from 'react';
 import { TextInput as RNTextInput } from 'react-native';
 
 import { useNavigation } from '@react-navigation/native';
+import isEmpty from 'lodash/isEmpty';
 
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
@@ -16,51 +17,80 @@ import { t } from '../../lib/translations';
 const Login = ({ route }) => {
 	const { siteID } = route.params;
 	const navigation = useNavigation();
-	const usernameRef = React.useRef<RNTextInput>(null);
-	const passwordRef = React.useRef<RNTextInput>(null);
+	const [username, setUsername] = React.useState('');
+	const [password, setPassword] = React.useState('');
 	const { userDB } = useLocalData();
 	const http = useHttpClient();
 	useModalRefreshFix();
 
+	/**
+	 *
+	 */
 	const handleLogin = React.useCallback(async () => {
 		try {
+			setPrimaryAction((prev) => ({ ...prev, loading: true }));
 			const site = await userDB.sites.findOne(siteID).exec();
 			const { data } = await http.get(`${site?.wc_api_auth_url}/authorize`, {
 				auth: {
-					username: usernameRef.current?.value,
-					password: passwordRef.current?.value,
+					username,
+					password,
 				},
 			});
 			const parsedData = userDB.wp_credentials.parseRestResponse(data);
-			site.update({ $push: { wp_credentials: parsedData } });
+			await site.update({ $push: { wp_credentials: parsedData } });
+			navigation.goBack();
 		} catch (err) {
 			log.error(err);
+		} finally {
+			setPrimaryAction((prev) => ({ ...prev, loading: false }));
 		}
+	}, [http, navigation, password, siteID, userDB.sites, userDB.wp_credentials, username]);
 
-		navigation.goBack();
-	}, [http, navigation, siteID, userDB.sites, userDB.wp_credentials]);
+	/**
+	 *
+	 */
+	const [primaryAction, setPrimaryAction] = React.useState({
+		label: t('Login', { _tags: 'core' }),
+		disabled: true,
+	});
 
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		if (!isEmpty(username) && !isEmpty(password)) {
+			setPrimaryAction((prev) => ({ ...prev, action: handleLogin, disabled: false }));
+		} else {
+			setPrimaryAction((prev) => ({ ...prev, disabled: true }));
+		}
+	}, [username, password, handleLogin]);
+
+	/**
+	 *
+	 */
 	return (
 		<Modal
 			opened
 			onClose={() => navigation.goBack()}
 			title={t('Login', { _tags: 'core' })}
-			primaryAction={{ label: t('Login', { _tags: 'core' }), action: handleLogin }}
+			primaryAction={primaryAction}
 			secondaryActions={[
 				{ label: t('Cancel', { _tags: 'core' }), action: () => navigation.goBack() },
 			]}
 		>
 			<Box space="medium">
 				<TextInputWithLabel
-					ref={usernameRef}
+					value={username}
 					label={t('Username', { _tags: 'core' })}
 					// placeholder="username"
+					onChangeText={setUsername}
 					type="username"
 				/>
 				<TextInputWithLabel
-					ref={passwordRef}
+					value={password}
 					label={t('Password', { _tags: 'core' })}
 					// placeholder="password"
+					onChangeText={setPassword}
 					type="password"
 				/>
 			</Box>

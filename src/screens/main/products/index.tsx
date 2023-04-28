@@ -59,7 +59,6 @@ const EditProductWithProviders = ({
 		<ProductsProvider initialQuery={initialQuery} uiSettings={uiSettings}>
 			<ModalLayout
 				title={t('Edit', { _tags: 'core' })}
-				primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
 				secondaryActions={[
 					{
 						label: t('Cancel', { _tags: 'core' }),

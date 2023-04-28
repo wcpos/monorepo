@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 
-import Dialog from '@wcpos/components/src/dialog';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
+import Modal from '@wcpos/components/src/modal';
 
+import DeleteDialog from './delete-dialog';
 import { t } from '../../../../../lib/translations';
-import useDeleteDocument from '../../../contexts/use-delete-document';
 import usePullDocument from '../../../contexts/use-pull-document';
 
 type Props = {
@@ -19,7 +19,6 @@ const Actions = ({ item: product }: Props) => {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const navigation = useNavigation();
 	const pullDocument = usePullDocument();
-	const deleteDocument = useDeleteDocument();
 
 	/**
 	 *
@@ -58,17 +57,9 @@ const Actions = ({ item: product }: Props) => {
 				<Icon name="ellipsisVertical" onPress={() => setMenuOpened(true)} />
 			</Dropdown>
 
-			<Dialog
-				opened={deleteDialogOpened}
-				onAccept={async () => {
-					if (product.id) {
-						await deleteDocument(product.id, product.collection);
-					}
-					await product.remove();
-				}}
-				onClose={() => setDeleteDialogOpened(false)}
-				children={t('You are about to delete {product}', { _tags: 'core', product: product.name })}
-			/>
+			<Modal opened={deleteDialogOpened} onClose={() => setDeleteDialogOpened(false)}>
+				<DeleteDialog product={product} setDeleteDialogOpened={setDeleteDialogOpened} />
+			</Modal>
 		</>
 	);
 };

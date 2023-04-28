@@ -15,7 +15,7 @@ import usePushDocument from '../contexts/use-push-document';
 const EditOrder = () => {
 	const { data } = useOrders();
 	const order = data.length === 1 && data[0];
-	const { onPrimaryAction, setTitle } = useModal();
+	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
 
@@ -36,8 +36,14 @@ const EditOrder = () => {
 	/**
 	 * Handle save button click
 	 */
-	onPrimaryAction(async () => {
+	const handleSave = React.useCallback(async () => {
 		try {
+			setPrimaryAction((prev) => {
+				return {
+					...prev,
+					loading: true,
+				};
+			});
 			const success = await pushDocument(order);
 			if (isRxDocument(success)) {
 				addSnackbar({
@@ -46,8 +52,25 @@ const EditOrder = () => {
 			}
 		} catch (error) {
 			log.error(error);
+		} finally {
+			setPrimaryAction((prev) => {
+				return {
+					...prev,
+					loading: false,
+				};
+			});
 		}
-	});
+	}, [addSnackbar, order, pushDocument, setPrimaryAction]);
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		setPrimaryAction({
+			label: t('Save to Server', { _tags: 'core' }),
+			action: handleSave,
+		});
+	}, [handleSave, setPrimaryAction]);
 
 	return (
 		<EditModal

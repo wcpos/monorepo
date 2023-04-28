@@ -6,17 +6,21 @@ import log from '@wcpos/utils/src/logger';
 import { t } from '../../../lib/translations';
 import useRestHttpClient from '../hooks/use-rest-http-client';
 
-type RxDocument = import('rxdb').RxDocument;
+type RxCollection = import('rxdb').RxCollection;
+
+interface DeleteDocumentFunction {
+	(id: number, collection: RxCollection, params?: any): Promise<void>;
+}
 
 const useDeleteDocument = () => {
 	const http = useRestHttpClient();
 	const addSnackbar = useSnackbar();
 
-	return React.useCallback(
-		async (id, collection) => {
+	return React.useCallback<DeleteDocumentFunction>(
+		async (id, collection, params) => {
 			let endpoint = collection.name;
 			try {
-				const { data } = await http.del((endpoint += `/${id}`));
+				const { data } = await http.del((endpoint += `/${id}`), { params });
 				if (data.id === id) {
 					addSnackbar({
 						message: t('Item deleted', { _tags: 'core' }),
