@@ -42,6 +42,13 @@ export const WrappedVariableActions = ({ item: product }: Props) => {
 	/**
 	 *
 	 */
+	React.useEffect(() => {
+		setQuery('selector.attributes.$allMatch', []);
+	}, [opened, setQuery]);
+
+	/**
+	 *
+	 */
 	const handleSelect = React.useCallback(
 		(attribute: StateAttribute, option: StateAttributeOption) => {
 			const newQuery = makeNewQuery(attribute.name, option.value, allMatch);

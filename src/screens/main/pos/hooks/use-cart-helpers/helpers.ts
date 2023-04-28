@@ -11,16 +11,6 @@ export const addItem = async (currentOrder, $push) =>
 /**
  *
  */
-export const increaseQuantity = async (lineItem) =>
-	lineItem.incrementalUpdate({
-		$inc: {
-			quantity: 1,
-		},
-	});
-
-/**
- *
- */
 const filteredMetaData = (metaData) => (metaData || []).filter((md) => !md.key.startsWith('_'));
 
 /**
@@ -57,7 +47,17 @@ export const processNewOrder = async (order, ordersCollection, data) => {
  */
 export const processExistingOrder = async (order, product, existing) => {
 	if (existing.length === 1) {
-		await increaseQuantity(existing[0]);
+		const item = existing[0];
+		const current = item.getLatest();
+		const currentQuantity = current.quantity;
+		const currentSubtotal = current.subtotal;
+		const currentTotal = current.total;
+		const newValue = currentQuantity + 1;
+		item.incrementalPatch({
+			quantity: Number(newValue),
+			subtotal: String((parseFloat(currentSubtotal) / currentQuantity) * Number(newValue)),
+			total: String((parseFloat(currentTotal) / currentQuantity) * Number(newValue)),
+		});
 	} else {
 		await addItem(order, { line_items: product });
 	}

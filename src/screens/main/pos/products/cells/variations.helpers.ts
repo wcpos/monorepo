@@ -74,7 +74,7 @@ export const extractSelectedMetaData = (selectionState: SelectionState) => {
 		return {
 			attr_id: attribute.id,
 			display_key: attribute.name,
-			display_value: selectedOption ? selectedOption.value : null,
+			display_value: selectedOption ? selectedOption.value : '',
 		};
 	});
 };

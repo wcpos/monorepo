@@ -18,18 +18,20 @@ interface AddFeeProps {
 	order: OrderDocument;
 }
 
+const initialData = {
+	name: '',
+	total: '',
+	taxable: true,
+	tax_class: '',
+};
+
 /**
  * TODO: tax_status = taxable by default, perhaps put this as setting?
  */
 const AddFee = ({ order }: AddFeeProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const { addFee } = useCartHelpers();
-	const [data, setData] = React.useState({
-		name: '',
-		total: '',
-		taxable: true,
-		tax_class: '',
-	});
+	const [data, setData] = React.useState(initialData);
 
 	/**
 	 *
@@ -53,6 +55,7 @@ const AddFee = ({ order }: AddFeeProps) => {
 				tax_status: taxable ? 'taxable' : 'none',
 				tax_class,
 			});
+			setData(initialData);
 			setOpened(false);
 		} catch (error) {
 			log.error(error);

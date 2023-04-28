@@ -77,12 +77,29 @@ export const useCartHelpers = () => {
 	 */
 	const addVariation = React.useCallback(
 		async (variation, parent, metaData) => {
+			let priceWithoutTax = priceToNumber(variation.price);
+			const tax = calculateTaxesFromPrice(
+				parseFloat(variation.price),
+				variation.tax_class,
+				variation.tax_status,
+				pricesIncludeTax
+			);
+
+			if (pricesIncludeTax) {
+				priceWithoutTax = priceToNumber(variation.price) - tax.total;
+			}
+
 			const newLineItem = {
+				price: priceWithoutTax,
+				subtotal: String(priceWithoutTax),
+				total: String(priceWithoutTax),
+				subtotal_tax: tax.total,
+				total_tax: tax.total,
+				taxes: tax.taxes,
 				product_id: parent.id,
 				name: parent.name,
 				variation_id: variation.id,
 				quantity: 1,
-				price: priceToNumber(variation.price),
 				sku: variation.sku,
 				tax_class: variation.tax_class,
 				// meta_data: filteredMetaData(parent.meta_data).concat(metaData),
@@ -102,7 +119,7 @@ export const useCartHelpers = () => {
 				await processExistingOrder(order, newLineItem, existing);
 			}
 		},
-		[currentOrder, navigation, ordersCollection]
+		[calculateTaxesFromPrice, currentOrder, navigation, ordersCollection, pricesIncludeTax]
 	);
 
 	/**

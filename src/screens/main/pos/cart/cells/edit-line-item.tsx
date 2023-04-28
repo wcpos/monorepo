@@ -25,7 +25,7 @@ const EditButton = ({ item }: EditLineItemProps) => {
 			<Icon
 				name="ellipsisVertical"
 				onPress={() => setOpened(true)}
-				tooltip={t('Edit', { _tags: 'core' })}
+				// tooltip={t('Edit', { _tags: 'core' })}
 			/>
 			<Modal
 				title={t('Edit {name}', { _tags: 'core', name: item.name })}

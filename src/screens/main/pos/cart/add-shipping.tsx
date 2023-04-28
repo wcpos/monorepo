@@ -48,17 +48,19 @@ const ShippingSelect = ({ shippingResource, selectedMethod, onSelect }) => {
 	return <Select options={options} value={selectedMethod} onChange={onSelect} />;
 };
 
+const initialData = {
+	method_title: '',
+	method_id: '',
+	total: '',
+};
+
 /**
  *
  */
 const AddShipping = ({ order }: AddShippingProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const { addShipping } = useCartHelpers();
-	const [data, setData] = React.useState({
-		method_title: '',
-		method_id: '',
-		total: '',
-	});
+	const [data, setData] = React.useState(initialData);
 
 	/**
 	 * Create observable shipping resource
@@ -95,6 +97,7 @@ const AddShipping = ({ order }: AddShippingProps) => {
 				method_id: isEmpty(method_id) ? 'local_pickup' : method_id,
 				total: isEmpty(total) ? '0' : total,
 			});
+			setData(initialData);
 			setOpened(false);
 		} catch (error) {
 			log.error(error);
