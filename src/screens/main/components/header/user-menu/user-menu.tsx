@@ -15,7 +15,11 @@ import useLocalData from '../../../../../contexts/local-data';
 import useLogout from '../../../../../hooks/use-logout';
 import { t } from '../../../../../lib/translations';
 
-export const UserMenu = () => {
+/**
+ * FIXME: If I don't memo this component the avatar flashes every time the cart is changed
+ * Shouldn't the header components already be memoized?
+ */
+const UserMenu_ = () => {
 	const { wpCredentials, isWebApp, initialProps } = useLocalData();
 	const logout = useLogout();
 	const navigation = useNavigation();
@@ -95,3 +99,5 @@ export const UserMenu = () => {
 		</Dropdown>
 	);
 };
+
+export const UserMenu = React.memo(UserMenu_);
