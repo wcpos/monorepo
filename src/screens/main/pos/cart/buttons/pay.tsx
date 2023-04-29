@@ -8,16 +8,14 @@ import Button from '@wcpos/components/src/button';
 import { t } from '../../../../../lib/translations';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 import useRestHttpClient from '../../../hooks/use-rest-http-client';
-
-interface PayModalProps {
-	order: import('@wcpos/database').OrderDocument;
-}
+import useCurrentOrder from '../../contexts/current-order';
 
 /**
  *
  */
-const PayButton = ({ order }: PayModalProps) => {
-	const total = useObservableState(order.total$, order.total);
+const PayButton = () => {
+	const { currentOrder } = useCurrentOrder();
+	const total = useObservableState(currentOrder.total$, currentOrder.total);
 	const { format } = useCurrencyFormat();
 	const http = useRestHttpClient();
 	const navigation = useNavigation();
@@ -63,14 +61,14 @@ const PayButton = ({ order }: PayModalProps) => {
 	const handlePay = React.useCallback(() => {
 		// saveOrder();
 		// navigation.navigate('Checkout', { orderID: order.uuid });
-		navigation.dispatch(StackActions.push('Checkout', { orderID: order.uuid }));
+		navigation.dispatch(StackActions.push('Checkout', { orderID: currentOrder.uuid }));
 
 		// saveOrder().then((o) => {
 		// 	if (o) {
 		// 		navigation.navigate('Checkout', { _id: o._id });
 		// 	}
 		// });
-	}, [navigation, order.uuid]);
+	}, [navigation, currentOrder.uuid]);
 
 	/**
 	 *

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense, useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
@@ -14,13 +14,8 @@ import log from '@wcpos/utils/src/logger';
 import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
+import useCurrentOrder from '../contexts/current-order';
 import useCartHelpers from '../hooks/use-cart-helpers';
-
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
-interface AddShippingProps {
-	order: OrderDocument;
-}
 
 /**
  *
@@ -57,10 +52,15 @@ const initialData = {
 /**
  *
  */
-const AddShipping = ({ order }: AddShippingProps) => {
+const AddShipping = () => {
 	const [opened, setOpened] = React.useState(false);
 	const { addShipping } = useCartHelpers();
 	const [data, setData] = React.useState(initialData);
+	const { currentOrder } = useCurrentOrder();
+	const currencySymbol = useObservableState(
+		currentOrder.currency_symbol$,
+		currentOrder.currency_symbol
+	);
 
 	/**
 	 * Create observable shipping resource
@@ -125,7 +125,7 @@ const AddShipping = ({ order }: AddShippingProps) => {
 	const uiSchema = React.useMemo(
 		() => ({
 			total: {
-				'ui:options': { prefix: order.currency_symbol },
+				'ui:options': { prefix: currencySymbol },
 				'ui:placeholder': '0',
 			},
 			method_title: {
@@ -135,7 +135,7 @@ const AddShipping = ({ order }: AddShippingProps) => {
 				'ui:placeholder': 'local_pickup',
 			},
 		}),
-		[order.currency_symbol]
+		[currencySymbol]
 	);
 
 	/**

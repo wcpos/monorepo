@@ -8,12 +8,10 @@ import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../../lib/translations';
 import usePushDocument from '../../../contexts/use-push-document';
+import useCurrentOrder from '../../contexts/current-order';
 
-interface SaveButtonProps {
-	order: import('@wcpos/database').OrderDocument;
-}
-
-const SaveButton = ({ order }: SaveButtonProps) => {
+const SaveButton = () => {
+	const { currentOrder } = useCurrentOrder();
 	const pushDocument = usePushDocument();
 	const [loading, setLoading] = React.useState(false);
 	const addSnackbar = useSnackbar();
@@ -24,7 +22,7 @@ const SaveButton = ({ order }: SaveButtonProps) => {
 			background="outline"
 			onPress={async () => {
 				setLoading(true);
-				await pushDocument(order)
+				await pushDocument(currentOrder)
 					.then((savedDoc) => {
 						/**
 						 * TODO; move this geenric sanckbar to the pushDocument hook

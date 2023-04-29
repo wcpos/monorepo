@@ -11,26 +11,24 @@ import log from '@wcpos/utils/src/logger';
 import { t } from '../../../../../lib/translations';
 import EditForm from '../../../components/edit-form-with-json';
 import usePushDocument from '../../../contexts/use-push-document';
-
-interface OrderMetaButtonProps {
-	order: import('@wcpos/database').OrderDocument;
-}
+import useCurrentOrder from '../../contexts/current-order';
 
 /**
  * TODO - I either need to keep form data in sync with order.$, or better,
  * get fresh data everytime the modal is opened
  */
-const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
+const OrderMetaButton = () => {
 	const [opened, setOpened] = React.useState(false);
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
+	const { currentOrder } = useCurrentOrder();
 
 	/**
 	 *
 	 */
 	const handleSyncToServer = React.useCallback(async () => {
 		try {
-			const success = await pushDocument(order);
+			const success = await pushDocument(currentOrder);
 			if (isRxDocument(success)) {
 				addSnackbar({
 					message: t('Order {id} saved', { _tags: 'core', id: success.id }),
@@ -39,7 +37,7 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 		} catch (error) {
 			log.error(error);
 		}
-	}, [addSnackbar, order, pushDocument]);
+	}, [addSnackbar, currentOrder, pushDocument]);
 
 	/**
 	 *
@@ -182,7 +180,7 @@ const OrderMetaButton = ({ order }: OrderMetaButtonProps) => {
 					},
 				]}
 			>
-				<EditForm document={order} fields={fields} uiSchema={uiSchema} />
+				<EditForm document={currentOrder} fields={fields} uiSchema={uiSchema} />
 			</Modal>
 		</>
 	);

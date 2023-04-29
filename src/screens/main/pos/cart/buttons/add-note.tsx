@@ -9,24 +9,22 @@ import TextArea from '@wcpos/components/src/textarea';
 import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
 
 import { t } from '../../../../../lib/translations';
-
-interface AddNoteButtonProps {
-	order: import('@wcpos/database').OrderDocument;
-}
+import useCurrentOrder from '../../contexts/current-order';
 
 /**
  *
  */
-const AddNoteButton = ({ order }: AddNoteButtonProps) => {
+const AddNoteButton = () => {
 	const [opened, setOpened] = React.useState(false);
-	const note = useObservableState(order.customer_note$, order.customer_note);
+	const { currentOrder } = useCurrentOrder();
+	const note = useObservableState(currentOrder.customer_note$, currentOrder.customer_note);
 	const textareaRef = React.useRef<TextInput>(null);
 
 	const handleSaveNote = React.useCallback(() => {
-		const latestDoc = order.getLatest();
+		const latestDoc = currentOrder.getLatest();
 		latestDoc.patch({ customer_note: textareaRef.current?.value });
 		setOpened(false);
-	}, [order, textareaRef]);
+	}, [currentOrder, textareaRef]);
 
 	return (
 		<>

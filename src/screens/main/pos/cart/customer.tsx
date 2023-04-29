@@ -14,23 +14,19 @@ import log from '@wcpos/utils/src/logger';
 import { t } from '../../../../lib/translations';
 import { CountrySelect, StateSelect } from '../../components/country-state-select';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import useCurrentOrder from '../contexts/current-order';
 import useCartHelpers from '../hooks/use-cart-helpers';
-
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
-interface CustomerProps {
-	order: OrderDocument;
-}
 
 /**
  *
  */
-const Customer = ({ order }: CustomerProps) => {
+const Customer = () => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
 	const { removeCustomer } = useCartHelpers();
-	const billing = useObservableState(order.billing$, order.billing);
-	const shipping = useObservableState(order.shipping$, order.shipping);
-	const customer_id = useObservableState(order.customer_id$, order.customer_id);
+	const { currentOrder } = useCurrentOrder();
+	const billing = useObservableState(currentOrder.billing$, currentOrder.billing);
+	const shipping = useObservableState(currentOrder.shipping$, currentOrder.shipping);
+	const customer_id = useObservableState(currentOrder.customer_id$, currentOrder.customer_id);
 	const { format } = useCustomerNameFormat();
 	const name = format({ billing, shipping, id: customer_id });
 	const billingCountry = get(billing, ['country']);
@@ -42,12 +38,12 @@ const Customer = ({ order }: CustomerProps) => {
 	const handleSaveCustomer = React.useCallback(
 		async (newData) => {
 			try {
-				await order.incrementalPatch(newData);
+				await currentOrder.incrementalPatch(newData);
 			} catch (error) {
 				log.error(error);
 			}
 		},
-		[order]
+		[currentOrder]
 	);
 
 	/**
@@ -55,12 +51,15 @@ const Customer = ({ order }: CustomerProps) => {
 	 */
 	const schema = React.useMemo(() => {
 		const _schema = {
-			...order.collection.schema.jsonSchema,
-			properties: pick(order.collection.schema.jsonSchema.properties, ['billing', 'shipping']),
+			...currentOrder.collection.schema.jsonSchema,
+			properties: pick(currentOrder.collection.schema.jsonSchema.properties, [
+				'billing',
+				'shipping',
+			]),
 		};
 
 		return _schema;
-	}, [order.collection.schema.jsonSchema]);
+	}, [currentOrder.collection.schema.jsonSchema]);
 
 	/**
 	 *

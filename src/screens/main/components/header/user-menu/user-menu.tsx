@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useWindowDimensions, Linking } from 'react-native';
 
 import { useNavigation } from '@react-navigation/native';
+import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Avatar from '@wcpos/components/src/avatar';
@@ -21,6 +22,7 @@ export const UserMenu = () => {
 	const theme = useTheme();
 	const dimensions = useWindowDimensions();
 	const [opened, setOpened] = React.useState(false);
+	const avatar_url = useObservableState(wpCredentials?.avatar_url$, wpCredentials?.avatar_url);
 
 	const items = React.useMemo(() => {
 		if (isWebApp && initialProps) {
@@ -81,7 +83,7 @@ export const UserMenu = () => {
 		>
 			<Box horizontal space="xSmall" align="center">
 				<Avatar
-					source={wpCredentials?.avatar_url}
+					source={avatar_url}
 					// placeholder="PK"
 					size="small"
 				/>

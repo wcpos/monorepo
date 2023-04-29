@@ -13,31 +13,36 @@ type LineItemDocument = import('@wcpos/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
 type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 
+interface Cart {
+	line_items: LineItemDocument[];
+	fee_lines: FeeLineDocument[];
+	shipping_lines: ShippingLineDocument[];
+}
+
+interface CartTotals {
+	discount_total: string;
+	discount_tax: string;
+	shipping_total: string;
+	shipping_tax: string;
+	cart_tax: string;
+	subtotal: string;
+	subtotal_tax: string;
+	total: string;
+	total_tax: string;
+	fee_total: string;
+	tax_lines: {
+		rate_id: number;
+		label: string;
+		compound: boolean;
+		tax_total: string;
+	}[];
+}
+
 export const CartContext = React.createContext<{
-	cart$: Observable<{
-		line_items: LineItemDocument[];
-		fee_lines: FeeLineDocument[];
-		shipping_lines: ShippingLineDocument[];
-	}>;
-	cartResource: ObservableResource<{
-		line_items: LineItemDocument[];
-		fee_lines: FeeLineDocument[];
-		shipping_lines: ShippingLineDocument[];
-	}>;
-	cartTotals$: Observable<{
-		total: string;
-		subtotal: string;
-		total_tax: string;
-		subtotal_tax: string;
-		discount_total: string;
-		discount_tax: string;
-		tax_lines: {
-			rate_id: number;
-			label: string;
-			compound: boolean;
-			tax_total: string;
-		}[];
-	}>;
+	cart$: Observable<Cart>;
+	cartResource: ObservableResource<Cart>;
+	cartTotals$: Observable<CartTotals>;
+	cartTotalsResource: ObservableResource<CartTotals>;
 }>(null);
 
 interface CartContextProps {
@@ -114,7 +119,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 								map(([total, taxClass, taxStatus]) => {
 									const taxes = calculateLineItemTaxes({ total, taxClass, taxStatus });
 									item.incrementalPatch(taxes);
-									return { subtotal: total, total, ...taxes };
+									return { total, ...taxes };
 								})
 							);
 						})
@@ -138,7 +143,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 								map(([total]) => {
 									const taxes = calculateShippingLineTaxes({ total });
 									item.incrementalPatch(taxes);
-									return { subtotal: total, total, ...taxes };
+									return { total, ...taxes };
 								})
 							);
 						})
@@ -177,6 +182,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 			cart$,
 			cartResource: new ObservableResource(cart$),
 			cartTotals$,
+			cartTotalsResource: new ObservableResource(cartTotals$),
 		};
 	}, [calculateOrderTotals, calculateShippingLineTaxes, calculateLineItemTaxes, order]);
 
@@ -185,7 +191,7 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 	 * NOTE - want to subscribe here? maybe its better to subscribe in the component?
 	 * Do I ever want to use the cart without updating the totals?
 	 */
-	// useSubscription(value.cartTotals$);
+	// useSubscription(value.cartTotals$); // subscribing instead in the totals component where I need the subtotal
 
 	/**
 	 *

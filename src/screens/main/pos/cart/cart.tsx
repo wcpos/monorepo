@@ -16,13 +16,11 @@ import CartHeader from './cart-header';
 import Table from './table';
 import Totals from './totals';
 import { CartProvider } from '../../contexts/cart';
+import useCurrentOrder from '../contexts/current-order';
 
-export interface CartProps {
-	currentOrder: import('@wcpos/database').OrderDocument;
-}
-
-const Cart = ({ currentOrder }: CartProps) => {
+const Cart = () => {
 	const theme = useTheme();
+	const { currentOrder } = useCurrentOrder();
 
 	return (
 		<Box
@@ -32,60 +30,49 @@ const Cart = ({ currentOrder }: CartProps) => {
 			style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
 		>
 			<ErrorBoundary>
-				<CartHeader order={currentOrder} />
+				<CartHeader />
 			</ErrorBoundary>
 
 			<CartProvider order={currentOrder}>
 				<ErrorBoundary>
 					<React.Suspense>
-						{!currentOrder.isNew && (
-							// show cart only if cart not empty
-							// TODO - how to defer this to prevent empty table from rendering?
-							<Box fill>
-								<Table />
-							</Box>
-						)}
-
+						<Box fill>
+							<Table />
+						</Box>
 						<Box>
 							<ErrorBoundary>
-								<AddFee order={currentOrder} />
+								<AddFee />
 							</ErrorBoundary>
 						</Box>
 						<Box>
 							<ErrorBoundary>
-								<AddShipping order={currentOrder} />
+								<AddShipping />
 							</ErrorBoundary>
 						</Box>
-
-						{!currentOrder.isNew && (
-							// show order totals only if cart not empty
-							<>
-								<Box>
-									<ErrorBoundary>
-										<Totals order={currentOrder} />
-									</ErrorBoundary>
-								</Box>
-								<Box
-									horizontal
-									space="small"
-									padding="small"
-									align="center"
-									style={{ backgroundColor: theme.colors.lightGrey }}
-								>
-									<ErrorBoundary>
-										<AddNoteButton order={currentOrder} />
-										<OrderMetaButton order={currentOrder} />
-										<SaveButton order={currentOrder} />
-									</ErrorBoundary>
-								</Box>
-								<Box horizontal>
-									<ErrorBoundary>
-										<VoidButton order={currentOrder} />
-										<PayButton order={currentOrder} />
-									</ErrorBoundary>
-								</Box>
-							</>
-						)}
+						<Box>
+							<ErrorBoundary>
+								<Totals />
+							</ErrorBoundary>
+						</Box>
+						<Box
+							horizontal
+							space="small"
+							padding="small"
+							align="center"
+							style={{ backgroundColor: theme.colors.lightGrey }}
+						>
+							<ErrorBoundary>
+								<AddNoteButton />
+								<OrderMetaButton />
+								<SaveButton />
+							</ErrorBoundary>
+						</Box>
+						<Box horizontal>
+							<ErrorBoundary>
+								<VoidButton />
+								<PayButton />
+							</ErrorBoundary>
+						</Box>
 					</React.Suspense>
 				</ErrorBoundary>
 			</CartProvider>

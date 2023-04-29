@@ -14,8 +14,6 @@ import {
 import useLocalData from '../../../../contexts/local-data';
 import useTaxRates from '../../contexts/tax-rates';
 
-import type { Cart } from './utils';
-
 /**
  *
  */
@@ -45,12 +43,12 @@ const useTaxCalculation = () => {
 	 *
 	 */
 	const calculateTaxesFromPrice = React.useCallback(
-		(
+		({
 			price = 0,
 			taxClass = '',
 			taxStatus = 'taxable',
-			pricesIncludeTax = _pricesIncludeTax === 'yes'
-		) => {
+			pricesIncludeTax = _pricesIncludeTax === 'yes',
+		}) => {
 			const _taxClass = taxClass === '' ? 'standard' : taxClass; // default to standard
 			const appliedRates = rates.filter((rate) => rate.class === _taxClass);
 
@@ -74,16 +72,36 @@ const useTaxCalculation = () => {
 	/**
 	 * Calculate line item taxes
 	 */
-
 	const calculateLineItemTaxes = React.useCallback(
-		({ subtotal = '0', total = '0', taxClass, taxStatus }) => {
-			const subtotalTaxes = calculateTaxesFromPrice(
-				parseFloat(subtotal),
+		({
+			total,
+			subtotal,
+			taxClass,
+			taxStatus,
+		}: {
+			total: string;
+			subtotal?: string;
+			taxClass?: string;
+			taxStatus?: string;
+		}) => {
+			const noSubtotal = subtotal === undefined;
+			let subtotalTaxes = { total: 0, taxes: [] };
+
+			if (!noSubtotal) {
+				subtotalTaxes = calculateTaxesFromPrice({
+					price: parseFloat(subtotal),
+					taxClass,
+					taxStatus,
+					pricesIncludeTax: false,
+				});
+			}
+
+			const totalTaxes = calculateTaxesFromPrice({
+				price: parseFloat(total),
 				taxClass,
 				taxStatus,
-				false
-			);
-			const totalTaxes = calculateTaxesFromPrice(parseFloat(total), taxClass, taxStatus, false);
+				pricesIncludeTax: false,
+			});
 
 			const uniqueTaxIds = uniq([
 				...subtotalTaxes.taxes.map((tax) => tax.id),
@@ -95,16 +113,21 @@ const useTaxCalculation = () => {
 				const totalTax = find(totalTaxes.taxes, { id }) || { total: 0 };
 				return {
 					id,
-					subtotal: String(subtotalTax.total),
+					subtotal: noSubtotal ? '' : String(subtotalTax.total),
 					total: String(totalTax.total),
 				};
 			});
 
-			return {
-				subtotal_tax: String(subtotalTaxes.total),
+			const result = {
 				total_tax: String(totalTaxes.total),
 				taxes,
 			};
+
+			if (!noSubtotal) {
+				result.subtotal_tax = String(subtotalTaxes.total);
+			}
+
+			return result;
 		},
 		[calculateTaxesFromPrice]
 	);
@@ -118,7 +141,7 @@ const useTaxCalculation = () => {
 	 * If no tax rates are found, we use the standard tax class.
 	 */
 	const calculateShippingLineTaxes = React.useCallback(
-		({ total = '0' }) => {
+		({ total }) => {
 			let appliedRates = rates.filter((rate) => rate.shipping === true);
 			if (shippingTaxClass) {
 				appliedRates = rates.filter((rate) => rate.class === shippingTaxClass);
@@ -130,17 +153,14 @@ const useTaxCalculation = () => {
 
 			// early return if no taxes
 			if (!calcTaxes || appliedRates.length === 0) {
-				const subtotal = total;
 				return {
-					subtotal,
-					subtotal_tax: '0',
-					total: subtotal,
+					total,
 					total_tax: '0',
 					taxes: [],
 				};
 			}
 
-			return calculateLineItemTotals({
+			const shippingLineTotals = calculateLineItemTotals({
 				quantity: 1,
 				price: total,
 				total,
@@ -148,6 +168,18 @@ const useTaxCalculation = () => {
 				pricesIncludeTax: false, // shipping is always exclusive
 				taxRoundAtSubtotal,
 			});
+
+			// shipping (like fee) has subtotal set to '' in the WC REST API
+			const updatedTaxes = shippingLineTotals.taxes.map((tax) => ({
+				...tax,
+				subtotal: '',
+			}));
+
+			return {
+				total: shippingLineTotals.total,
+				total_tax: shippingLineTotals.total_tax,
+				taxes: updatedTaxes,
+			};
 		},
 		[calcTaxes, rates, shippingTaxClass, taxRoundAtSubtotal]
 	);

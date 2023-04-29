@@ -3,10 +3,14 @@ import * as React from 'react';
 import { useObservableState, useObservableSuspense, useSubscription } from 'observable-hooks';
 import { combineLatest } from 'rxjs';
 
+import allCurrencies from '../../../../../contexts/currencies/currencies.json';
 import useLocalData from '../../../../../contexts/local-data';
 import useCustomers from '../../../contexts/customers';
 import useOrders from '../../../contexts/orders';
 
+/**
+ * FIXME: I'm using the direct json from the currencies provider, I need to use a currency provider
+ */
 const useNewOrder = () => {
 	const { store, wpCredentials } = useLocalData();
 	const { newOrderResource } = useOrders();
@@ -39,6 +43,7 @@ const useNewOrder = () => {
 	React.useEffect(() => {
 		newOrder.incrementalPatch({
 			currency,
+			currency_symbol: allCurrencies.find((c) => c.code === currency).symbol || '',
 			prices_include_tax: prices_include_tax === 'yes',
 		});
 	}, [currency, prices_include_tax, newOrder]);

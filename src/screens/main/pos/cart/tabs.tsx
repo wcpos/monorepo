@@ -7,19 +7,16 @@ import Tabs from '@wcpos/components/src/tabs';
 
 import CartTabTitle from './tab-title';
 import useOrders from '../../contexts/orders';
+import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
-
-interface CartTabsProps {
-	currentOrder: OrderDocument;
-	setCurrentOrder: (order?: OrderDocument) => void;
-}
 
 /**
  *
  */
-const CartTabs = ({ currentOrder }: CartTabsProps) => {
+const CartTabs = () => {
 	const navigation = useNavigation();
+	const { currentOrder } = useCurrentOrder();
 	const { data: orders } = useOrders();
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
@@ -54,10 +51,13 @@ const CartTabs = ({ currentOrder }: CartTabsProps) => {
 			//  * this is great!, but I lose the back button. Push keeps the old order in the stack.
 			//  * I need to add the new order to the history without the rerender.
 			//  */
-			navigation.setParams({ orderID: routes[idx].key });
+			const orderID = routes[idx].key;
+			if (orderID !== currentOrder.uuid) {
+				navigation.setParams({ orderID });
+			}
 			// navigation.dispatch(StackActions.push('POS', { orderID: orders[idx].uuid }));
 		},
-		[navigation, routes]
+		[currentOrder.uuid, navigation, routes]
 	);
 
 	/**

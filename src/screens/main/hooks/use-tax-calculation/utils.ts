@@ -234,50 +234,6 @@ export function calculateLineItemTotals({
 }
 
 /**
- * Calculate order totals
- */
-// export function calculateOrderTotals({
-// 	lines,
-// 	rates,
-// 	taxRoundAtSubtotal,
-// }: {
-// 	lines: Cart;
-// 	taxRoundAtSubtotal: boolean;
-// 	rates: TaxRateDocument[];
-// }) {
-// 	const total = sumBy(lines, (item) => +(item.total ?? 0));
-// 	const subtotal = sumBy(lines, (item) => +(item.subtotal ?? 0));
-// 	// const discountTotal = round(subtotal - total, 6);
-// 	const totalTax = sumBy(lines, (item) => +(item.total_tax ?? 0));
-// 	const subtotalTax = sumBy(lines, (item) => +(item.subtotal_tax ?? 0));
-// 	// const discountTax = round(subtotalTax - totalTax, 6);
-// 	const itemizedTaxes = sumItemizedTaxes(
-// 		// @ts-ignore
-// 		lines.map((line) => line.taxes ?? []),
-// 		taxRoundAtSubtotal
-// 	);
-// 	const taxLines = itemizedTaxes.map((tax) => {
-// 		const taxRate = rates.find((rate) => rate.id === String(tax.id));
-// 		return {
-// 			rate_id: tax.id,
-// 			label: taxRate?.name,
-// 			compound: taxRate?.compound,
-// 			tax_total: String(tax.total),
-// 		};
-// 	});
-
-// 	return {
-// 		total: String(total),
-// 		subtotal: String(subtotal),
-// 		total_tax: String(totalTax),
-// 		subtotal_tax: String(subtotalTax),
-// 		// discount_total: String(discountTotal),
-// 		// discount_tax: String(discountTax),
-// 		tax_lines: taxLines,
-// 	};
-// }
-
-/**
  *
  */
 export function calculateOrderTotalsAndTaxes({
@@ -302,6 +258,7 @@ export function calculateOrderTotalsAndTaxes({
 	let subtotal_tax = 0;
 	let total = 0;
 	let total_tax = 0;
+	let fee_total = 0;
 
 	const taxLines = taxRates.map((taxRate) => ({
 		rate_id: parseInt(taxRate.id, 10),
@@ -332,6 +289,7 @@ export function calculateOrderTotalsAndTaxes({
 
 	// Calculate fee totals
 	feeLines.forEach((line) => {
+		fee_total += parseFloat(line.total);
 		total += parseFloat(line.total);
 		total_tax += parseFloat(line.total_tax);
 
@@ -375,5 +333,9 @@ export function calculateOrderTotalsAndTaxes({
 		total: String(round(total + total_tax, 6)),
 		total_tax: String(round(total_tax, 6)),
 		tax_lines: taxLines,
+		/**
+		 * Need to add fee_total to display in the cart, to match the WC Admin display
+		 */
+		fee_total: String(round(fee_total, 6)),
 	};
 }

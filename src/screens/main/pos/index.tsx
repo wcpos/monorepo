@@ -56,8 +56,13 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 		? wpCredentials.id
 		: store.default_customer;
 
+	const initialCustomerQuery = React.useMemo(
+		() => ({ selector: { id: defaultCustomerID } }),
+		[defaultCustomerID]
+	);
+
 	return (
-		<CustomersProvider initialQuery={{ selector: { id: defaultCustomerID } }}>
+		<CustomersProvider initialQuery={initialCustomerQuery}>
 			<OrdersProvider initialQuery={initialQuery}>
 				<React.Suspense
 				// suspend until orders and default customer are loaded

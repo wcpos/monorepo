@@ -14,23 +14,21 @@ import AddCustomer from '../../components/add-new-customer';
 import CustomerSelect from '../../components/customer-select';
 import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
+import useCurrentOrder from '../contexts/current-order';
 import useCartHelpers from '../hooks/use-cart-helpers';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
-interface CartHeaderProps {
-	order: OrderDocument;
-}
-
 /**
  *
  */
-const CartHeader = ({ order }: CartHeaderProps) => {
+const CartHeader = () => {
 	const { uiSettings } = useUI('pos.cart');
 	const theme = useTheme();
 	// const { storeDB } = useLocalData();
-	const customerID = useObservableState(order.customer_id$, order.customer_id);
+	const { currentOrder } = useCurrentOrder();
+	const customerID = useObservableState(currentOrder.customer_id$, currentOrder.customer_id);
 	const { addCustomer } = useCartHelpers();
 
 	/**
@@ -81,7 +79,7 @@ const CartHeader = ({ order }: CartHeaderProps) => {
 					{customerID === -1 ? (
 						<CustomerSelect onSelectCustomer={handleCustomerSelect} autofocus />
 					) : (
-						<Customer order={order} />
+						<Customer />
 					)}
 				</ErrorBoundary>
 			</Box>

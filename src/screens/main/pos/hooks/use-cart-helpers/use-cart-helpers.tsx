@@ -29,12 +29,12 @@ export const useCartHelpers = () => {
 	const addProduct = React.useCallback(
 		async (product: ProductDocument) => {
 			let priceWithoutTax = priceToNumber(product.price);
-			const tax = calculateTaxesFromPrice(
-				parseFloat(product.price),
-				product.tax_class,
-				product.tax_status,
-				pricesIncludeTax
-			);
+			const tax = calculateTaxesFromPrice({
+				price: parseFloat(product.price),
+				taxClass: product.tax_class,
+				taxStatus: product.tax_status,
+				pricesIncludeTax,
+			});
 
 			if (pricesIncludeTax) {
 				priceWithoutTax = priceToNumber(product.price) - tax.total;
@@ -78,12 +78,12 @@ export const useCartHelpers = () => {
 	const addVariation = React.useCallback(
 		async (variation, parent, metaData) => {
 			let priceWithoutTax = priceToNumber(variation.price);
-			const tax = calculateTaxesFromPrice(
-				parseFloat(variation.price),
-				variation.tax_class,
-				variation.tax_status,
-				pricesIncludeTax
-			);
+			const tax = calculateTaxesFromPrice({
+				price: parseFloat(variation.price),
+				taxClass: variation.tax_class,
+				taxStatus: variation.tax_status,
+				pricesIncludeTax,
+			});
 
 			if (pricesIncludeTax) {
 				priceWithoutTax = priceToNumber(variation.price) - tax.total;
@@ -167,12 +167,12 @@ export const useCartHelpers = () => {
 	 */
 	const addFee = React.useCallback(
 		async (data) => {
-			const tax = calculateTaxesFromPrice(
-				parseFloat(data.total),
-				data.tax_class,
-				data.tax_status,
-				false
-			);
+			const tax = calculateTaxesFromPrice({
+				price: parseFloat(data.total),
+				taxClass: data.tax_class,
+				taxStatus: data.tax_status,
+				pricesIncludeTax: false,
+			});
 
 			const newFeelLine = {
 				...data,

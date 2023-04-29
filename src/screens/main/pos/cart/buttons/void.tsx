@@ -7,15 +7,13 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../../lib/translations';
-
-interface VoidButtonProps {
-	order: import('@wcpos/database').OrderDocument;
-}
+import useCurrentOrder from '../../contexts/current-order';
 
 /**
  *
  */
-const VoidButton = ({ order }: VoidButtonProps) => {
+const VoidButton = () => {
+	const { currentOrder } = useCurrentOrder();
 	const addSnackbar = useSnackbar();
 	const navigation = useNavigation();
 
@@ -25,21 +23,21 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 	const undoRemove = React.useCallback(
 		async (orderJson) => {
 			try {
-				await order.collection.insert(orderJson);
+				await currentOrder.collection.insert(orderJson);
 				navigation.setParams({ orderID: orderJson.uuid });
 			} catch (err) {
 				log.error(err);
 			}
 		},
-		[navigation, order.collection]
+		[navigation, currentOrder.collection]
 	);
 
 	/**
 	 * TODO - don't we just want to set the status to cancelled?
 	 */
 	const handleRemove = React.useCallback(async () => {
-		const orderJson = await order.toPopulatedJSON();
-		const latest = order.getLatest();
+		const orderJson = await currentOrder.toPopulatedJSON();
+		const latest = currentOrder.getLatest();
 		await latest.remove();
 		navigation.setParams({ orderID: '' });
 		addSnackbar({
@@ -47,7 +45,7 @@ const VoidButton = ({ order }: VoidButtonProps) => {
 			dismissable: true,
 			action: { label: t('Undo', { _tags: 'core' }), action: () => undoRemove(orderJson) },
 		});
-	}, [addSnackbar, navigation, order, undoRemove]);
+	}, [addSnackbar, navigation, currentOrder, undoRemove]);
 
 	/**
 	 *

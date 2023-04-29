@@ -13,7 +13,7 @@ import Right from './right';
 import HeaderTitle from './title';
 import useLocalData from '../../../../contexts/local-data';
 
-const Header = ({ navigation, route, options }: DrawerHeaderProps) => {
+const Header = ({ options }: DrawerHeaderProps) => {
 	const insets = useSafeAreaInsets();
 	const { store } = useLocalData();
 	const storeName = useObservableState(store.name$, store.name);
@@ -37,8 +37,8 @@ const Header = ({ navigation, route, options }: DrawerHeaderProps) => {
 					 * WebkitAppRegion: 'drag'
 					 */
 				}}
-				headerLeft={() => <Left />}
-				headerRight={() => <Right />}
+				headerLeft={Left}
+				headerRight={Right}
 			/>
 			<StatusBar style="light" />
 		</View>

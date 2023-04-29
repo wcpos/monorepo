@@ -20,17 +20,17 @@ const EmptyCart = ({ currentOrder }: CartProps) => {
 			style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
 		>
 			<ErrorBoundary>
-				<CartHeader order={currentOrder} />
+				<CartHeader />
 			</ErrorBoundary>
 
 			<Box>
 				<ErrorBoundary>
-					<AddFee order={currentOrder} />
+					<AddFee />
 				</ErrorBoundary>
 			</Box>
 			<Box>
 				<ErrorBoundary>
-					<AddShipping order={currentOrder} />
+					<AddShipping />
 				</ErrorBoundary>
 			</Box>
 		</Box>

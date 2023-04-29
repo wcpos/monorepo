@@ -41,7 +41,7 @@ const OpenOrders = ({ isColumn = false }) => {
 						/>
 					}
 				>
-					<OpenOrderTabs currentOrder={currentOrder} />
+					<OpenOrderTabs />
 				</React.Suspense>
 			</ErrorBoundary>
 		</Box>

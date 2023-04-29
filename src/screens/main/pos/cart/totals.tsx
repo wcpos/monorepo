@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -9,26 +9,16 @@ import Text from '@wcpos/components/src/text';
 import ItemizedTaxes from './itemized-taxes';
 import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
-import useCart from '../../contexts/cart';
+import { useCart } from '../../contexts/cart';
 import useCurrencyFormat from '../../hooks/use-currency-format';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
-interface Props {
-	order: OrderDocument;
-}
-
-const Totals = ({ order }: Props) => {
+const Totals = () => {
 	const { store } = useLocalData();
-	const { cartTotals$ } = useCart();
-	const cartTotals = useObservableState(cartTotals$, {
-		subtotal: '0', // there is no subtotal in the order schema :(
-		total_tax: order.total_tax,
-		discount_total: order.discount_total,
-		discount_tax: order.discount_tax,
-	});
 	const taxTotalDisplay = useObservableState(store.tax_total_display$, store.tax_total_display);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
+	const { cartTotalsResource } = useCart();
+	const { discount_total, shipping_total, tax_lines, total_tax, subtotal, fee_total } =
+		useObservableSuspense(cartTotalsResource);
 	const { format } = useCurrencyFormat();
 	const theme = useTheme();
 
@@ -49,32 +39,62 @@ const Totals = ({ order }: Props) => {
 					<Text>{t('Subtotal', { _tags: 'core' })}:</Text>
 				</Box>
 				<Box>
-					<Text>{format(cartTotals.subtotal || 0)}</Text>
+					<Text>{format(subtotal)}</Text>
 				</Box>
 			</Box>
-			{parseFloat(cartTotals.discount_total) !== 0 && (
-				<Box horizontal>
-					<Box fill>
-						<Text>{t('Discount', { _tags: 'core' })}:</Text>
+			{
+				// Discounts
+				parseFloat(discount_total) !== 0 && (
+					<Box horizontal>
+						<Box fill>
+							<Text>{t('Discount', { _tags: 'core' })}:</Text>
+						</Box>
+						<Box>
+							<Text>{format(`-${discount_total}`)}</Text>
+						</Box>
 					</Box>
-					<Box>
-						<Text>{format(cartTotals.discount_total || 0)}</Text>
+				)
+			}
+			{
+				// Fees
+				parseFloat(fee_total) !== 0 && (
+					<Box horizontal>
+						<Box fill>
+							<Text>{t('Fees', { _tags: 'core' })}:</Text>
+						</Box>
+						<Box>
+							<Text>{format(fee_total)}</Text>
+						</Box>
 					</Box>
-				</Box>
-			)}
-			{calcTaxes === 'yes' && (
-				<Box space="xxSmall">
-					{taxTotalDisplay === 'itemized' && <ItemizedTaxes order={order} />}
+				)
+			}
+			{
+				// Shipping
+				parseFloat(shipping_total) !== 0 && (
+					<Box horizontal>
+						<Box fill>
+							<Text>{t('Shipping', { _tags: 'core' })}:</Text>
+						</Box>
+						<Box>
+							<Text>{format(shipping_total)}</Text>
+						</Box>
+					</Box>
+				)
+			}
+			{calcTaxes === 'yes' ? (
+				taxTotalDisplay === 'itemized' ? (
+					<ItemizedTaxes taxLines={tax_lines} />
+				) : (
 					<Box horizontal>
 						<Box fill>
 							<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
 						</Box>
 						<Box>
-							<Text>{format(cartTotals.total_tax)}</Text>
+							<Text>{format(total_tax)}</Text>
 						</Box>
 					</Box>
-				</Box>
-			)}
+				)
+			) : null}
 		</Box>
 	);
 };

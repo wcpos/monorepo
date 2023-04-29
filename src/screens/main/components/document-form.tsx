@@ -16,7 +16,8 @@ export const DocumentForm = ({ document, fields, uiSchema }: DocumentFormProps) 
 	// Note: just observe the fields we need
 	const data = useObservablePickState(
 		document.$,
-		() => pick(document.getLatest().toJSON(), fields),
+		// () => pick(document.getLatest().toJSON(), fields),
+		() => document.getLatest().toJSON(),
 		...fields
 	);
 

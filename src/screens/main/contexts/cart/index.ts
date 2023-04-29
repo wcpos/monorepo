@@ -1,4 +1,4 @@
 import CartProvider from './provider';
 
 export { CartProvider };
-export { useCart as default } from './use-cart';
+export { useCart, useSuspenedCart } from './use-cart';

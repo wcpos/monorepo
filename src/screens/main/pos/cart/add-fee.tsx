@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
+import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
@@ -10,13 +11,8 @@ import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
+import useCurrentOrder from '../contexts/current-order';
 import useCartHelpers from '../hooks/use-cart-helpers';
-
-type OrderDocument = import('@wcpos/database').OrderDocument;
-
-interface AddFeeProps {
-	order: OrderDocument;
-}
 
 const initialData = {
 	name: '',
@@ -28,10 +24,15 @@ const initialData = {
 /**
  * TODO: tax_status = taxable by default, perhaps put this as setting?
  */
-const AddFee = ({ order }: AddFeeProps) => {
+const AddFee = () => {
 	const [opened, setOpened] = React.useState(false);
 	const { addFee } = useCartHelpers();
 	const [data, setData] = React.useState(initialData);
+	const { currentOrder } = useCurrentOrder();
+	const currencySymbol = useObservableState(
+		currentOrder.currency_symbol$,
+		currentOrder.currency_symbol
+	);
 
 	/**
 	 *
@@ -84,14 +85,14 @@ const AddFee = ({ order }: AddFeeProps) => {
 	const uiSchema = React.useMemo(
 		() => ({
 			total: {
-				'ui:options': { prefix: order.currency_symbol },
+				'ui:options': { prefix: currencySymbol },
 				'ui:placeholder': '0',
 			},
 			name: {
 				'ui:placeholder': t('Fee', { _tags: 'core' }),
 			},
 		}),
-		[order.currency_symbol]
+		[currencySymbol]
 	);
 
 	/**

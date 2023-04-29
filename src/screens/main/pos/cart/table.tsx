@@ -9,7 +9,7 @@ import Text from '@wcpos/components/src/text';
 
 import * as cells from './cells';
 import { t } from '../../../../lib/translations';
-import useCart from '../../contexts/cart';
+import { useSuspenedCart } from '../../contexts/cart';
 import useUI from '../../contexts/ui-settings';
 
 type ColumnProps = import('@wcpos/components/src/table').ColumnProps;
@@ -32,7 +32,7 @@ const CartTable = () => {
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
-	const { data: cart } = useCart();
+	const { data: cart } = useSuspenedCart();
 	// const deferredCart = React.useDeferredValue(cart);
 	const items = React.useMemo(() => flatten(Object.values(cart)), [cart]); // TODO - add sorting
 	// const items = React.useDeferredValue(flatten(Object.values(cart)));

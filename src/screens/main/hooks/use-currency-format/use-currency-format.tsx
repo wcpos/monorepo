@@ -79,7 +79,7 @@ export const useCurrencyFormat = (options?: CurrencyFormatProps) => {
 			}
 
 			// restore negation sign
-			if (addNegation) beforeDecimal = `-${beforeDecimal}`;
+			if (addNegation) beforeDecimal = `- ${beforeDecimal}`;
 
 			return beforeDecimal + ((hasDecimalSeparator && decimalSeparator) || '') + afterDecimal;
 		},
