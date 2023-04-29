@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/hooks",
-  "version": "1.0.70",
+  "version": "1.0.71",
   "description": "Hooks for WooCommerce POS",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/hooks#readme",
@@ -36,7 +36,7 @@
     "rxjs": "7.8.1"
   },
   "devDependencies": {
-    "@babel/core": "^7.21.4",
+    "@babel/core": "^7.21.5",
     "@storybook/addon-actions": "7.0.7",
     "@storybook/addon-controls": "7.0.7",
     "@storybook/addon-essentials": "7.0.7",
