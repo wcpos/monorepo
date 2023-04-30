@@ -10,6 +10,7 @@ import Text from '@wcpos/components/src/text';
 import cells from './cells';
 import Footer from './footer';
 import { t } from '../../../../lib/translations';
+import EmptyTableRow from '../../components/empty-table-row';
 import useProducts from '../../contexts/products';
 import { VariationsProvider } from '../../contexts/variations';
 
@@ -110,6 +111,7 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 			getItemType={(item) => item.type}
 			renderItem={renderItem}
 			extraData={context}
+			ListEmptyComponent={<EmptyTableRow message={t('No products found', { _tags: 'core' })} />}
 		/>
 	);
 };

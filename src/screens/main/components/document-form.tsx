@@ -1,29 +1,30 @@
 import * as React from 'react';
 
 import pick from 'lodash/pick';
-import { useObservablePickState } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
-export interface DocumentFormProps {
+// TypeScript types for props
+interface DocumentFormProps {
 	document: import('rxdb').RxDocument;
 	fields: string[];
 	uiSchema?: Record<string, any>;
 }
 
-export const DocumentForm = ({ document, fields, uiSchema }: DocumentFormProps) => {
-	// Note: just observe the fields we need
-	const data = useObservablePickState(
-		document.$,
-		// () => pick(document.getLatest().toJSON(), fields),
-		() => document.getLatest().toJSON(),
-		...fields
+const DocumentForm = ({ document, fields, uiSchema }: DocumentFormProps) => {
+	// Subscribe to document changes and get the latest document data as JSON
+	const [allData] = useObservableState(
+		() => document.$.pipe(map((doc) => doc.toJSON())),
+		document.toJSON()
 	);
 
-	/**
-	 * Handle change in form data
-	 */
+	// Pick only the required fields from the document data
+	const data = pick(allData, fields);
+
+	// Handle changes in the form data and apply incremental patch to the document
 	const handleChange = React.useCallback(
 		async (newData) => {
 			try {
@@ -35,9 +36,7 @@ export const DocumentForm = ({ document, fields, uiSchema }: DocumentFormProps) 
 		[document]
 	);
 
-	/**
-	 *
-	 */
+	// Create a schema based on the document's collection schema and the required fields
 	const schema = React.useMemo(() => {
 		return {
 			...document?.collection.schema.jsonSchema,
@@ -47,9 +46,7 @@ export const DocumentForm = ({ document, fields, uiSchema }: DocumentFormProps) 
 		};
 	}, [document?.collection.schema.jsonSchema, fields]);
 
-	/**
-	 *
-	 */
+	// Render the form with the derived schema, UI schema, and form data
 	return <Form schema={schema} uiSchema={uiSchema} formData={data} onChange={handleChange} />;
 };
 

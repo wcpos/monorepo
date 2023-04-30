@@ -9,6 +9,7 @@ import Text from '@wcpos/components/src/text';
 
 import * as cells from './cells';
 import { t } from '../../../../lib/translations';
+import EmptyTableRow from '../../components/empty-table-row';
 import { useSuspenedCart } from '../../contexts/cart';
 import useUI from '../../contexts/ui-settings';
 
@@ -78,6 +79,7 @@ const CartTable = () => {
 		<Table<CartItem>
 			data={items} // estimatedItemSize={46}
 			extraData={context}
+			ListEmptyComponent={<EmptyTableRow message={t('Cart is empty', { _tags: 'core' })} />}
 		/>
 	);
 };

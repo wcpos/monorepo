@@ -14,7 +14,9 @@ import PaymentMethod from './cells/payment-method';
 import Status from './cells/status';
 import Total from './cells/total';
 import Footer from './footer';
+import { t } from '../../../lib/translations';
 import Date from '../components/date';
+import EmptyTableRow from '../components/empty-table-row';
 import TextCell from '../components/text-cell';
 import useOrders from '../contexts/orders';
 
@@ -92,6 +94,7 @@ const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
 			footer={<Footer count={orders.length} />}
 			estimatedItemSize={100}
 			extraData={context}
+			ListEmptyComponent={<EmptyTableRow message={t('No orders found', { _tags: 'core' })} />}
 		/>
 	);
 };

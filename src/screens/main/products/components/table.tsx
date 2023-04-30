@@ -13,6 +13,7 @@ import log from '@wcpos/utils/src/logger';
 import cells from './cells';
 import Footer from './footer';
 import { t } from '../../../../lib/translations';
+import EmptyTableRow from '../../components/empty-table-row';
 import TextCell from '../../components/text-cell';
 import useProducts from '../../contexts/products';
 import usePushDocument from '../../contexts/use-push-document';
@@ -133,6 +134,7 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 			estimatedItemSize={150}
 			extraData={context}
 			renderItem={renderItem}
+			ListEmptyComponent={<EmptyTableRow message={t('No products found', { _tags: 'core' })} />}
 			// getItemType={(item) => item.type}
 			// onEndReached={() => {
 			// 	nextPage();

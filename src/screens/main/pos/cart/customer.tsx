@@ -15,7 +15,7 @@ import { t } from '../../../../lib/translations';
 import { CountrySelect, StateSelect } from '../../components/country-state-select';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import useCurrentOrder from '../contexts/current-order';
-import useCartHelpers from '../hooks/use-cart-helpers';
+import useCartHelpers from '../../hooks/use-cart-helpers';
 
 /**
  *

@@ -11,7 +11,7 @@ import { getSelectedState, makeNewQuery, extractSelectedMetaData } from './varia
 import { t } from '../../../../../lib/translations';
 import useVariations, { VariationsProvider } from '../../../contexts/variations';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
-import useCartHelpers from '../../hooks/use-cart-helpers';
+import useCartHelpers from '../../../hooks/use-cart-helpers';
 
 import type { StateAttribute, StateAttributeOption } from './variations.helpers';
 

@@ -49,7 +49,6 @@ const EdittableText = ({ name, onChange }) => {
  */
 const Name = ({ item: product, column, onChange }: Props) => {
 	const name = useObservableState(product.name$, product.name);
-	// const [newName, setNewName] = React.useState(name);
 	const attributes = useObservableState(product.attributes$, product.attributes);
 	const grouped = useObservableState(product.grouped_products$, product.grouped_products);
 	const groupedQuery = React.useMemo(() => ({ selector: { id: { $in: grouped } } }), [grouped]);

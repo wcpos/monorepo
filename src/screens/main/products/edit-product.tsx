@@ -24,6 +24,7 @@ const EditProduct = () => {
 	}
 
 	const name = useObservableState(product.name$, product.name);
+	const manageStock = useObservableState(product.manage_stock$, product.manage_stock);
 
 	React.useEffect(() => {
 		setTitle(() => t('Edit {name}', { _tags: 'core', name, _context: 'Edit Product title' }));
@@ -101,6 +102,44 @@ const EditProduct = () => {
 			uiSchema={{
 				'ui:title': null,
 				'ui:description': null,
+				name: {
+					'ui:label': t('Name', { _tags: 'core' }),
+				},
+				status: {
+					'ui:label': t('Status', { _tags: 'core' }),
+				},
+				sku: {
+					'ui:label': t('SKU', { _tags: 'core' }),
+				},
+				barcode: {
+					'ui:label': t('Barcode', { _tags: 'core' }),
+				},
+				price: {
+					'ui:label': t('Price', { _tags: 'core' }),
+				},
+				regular_price: {
+					'ui:label': t('Regular Price', { _tags: 'core' }),
+				},
+				sale_price: {
+					'ui:label': t('Sale Price', { _tags: 'core' }),
+				},
+				on_sale: {
+					'ui:label': t('On Sale', { _tags: 'core' }),
+				},
+				tax_status: {
+					'ui:label': t('Tax Status', { _tags: 'core' }),
+				},
+				tax_class: {
+					'ui:label': t('Tax Class', { _tags: 'core' }),
+				},
+				manage_stock: {
+					'ui:label': t('Manage Stock', { _tags: 'core' }),
+				},
+				stock_quantity: {
+					'ui:label': t('Stock Quantity', { _tags: 'core' }),
+					// TODO: only show if manage_stock is true
+					'ui:disabled': !manageStock,
+				},
 				meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data', { _tags: 'core' }) },
 			}}
 		/>

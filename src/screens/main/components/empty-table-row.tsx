@@ -1,0 +1,20 @@
+import * as React from 'react';
+
+import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
+
+import { t } from '../../../lib/translations';
+
+interface EmptyTableRowProps {
+	message?: string;
+}
+
+const EmptyTableRow = ({ message }: EmptyTableRowProps) => {
+	return (
+		<Box padding="small">
+			<Text>{message || t('No results found', { _tags: 'core' })}</Text>
+		</Box>
+	);
+};
+
+export default EmptyTableRow;

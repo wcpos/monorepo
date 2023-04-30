@@ -5,7 +5,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 
 import { t } from '../../../../../lib/translations';
 import useCurrentOrder from '../../contexts/current-order';
-import useCartHelpers from '../../hooks/use-cart-helpers';
+import useCartHelpers from '../../../hooks/use-cart-helpers';
 
 interface ActionProps {
 	item:

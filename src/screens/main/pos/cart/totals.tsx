@@ -81,7 +81,7 @@ const Totals = () => {
 					</Box>
 				)
 			}
-			{calcTaxes === 'yes' ? (
+			{calcTaxes === 'yes' && parseFloat(total_tax) !== 0 ? (
 				taxTotalDisplay === 'itemized' ? (
 					<ItemizedTaxes taxLines={tax_lines} />
 				) : (

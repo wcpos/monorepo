@@ -167,6 +167,11 @@
         "disableSort": true
       },
       {
+        "key": "barcode",
+        "show": false,
+        "disableSort": true
+      },
+      {
         "key": "stock_quantity",
         "show": true,
         "align": "center"

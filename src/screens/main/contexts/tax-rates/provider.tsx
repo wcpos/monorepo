@@ -1,10 +1,11 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { switchMap, map } from 'rxjs/operators';
+import { switchMap, map, tap } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
+import { filterTaxRates } from './helpers';
 import { useReplication } from './use-replication';
 import useCollection from '../../hooks/use-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
@@ -46,6 +47,7 @@ const TaxRateProvider = ({ children, initialQuery, ui }: TaxRateProviderProps) =
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			switchMap((q) => {
+				// first match on country and state, we will check postcodes and cities later
 				const selector = {
 					$and: [
 						{
@@ -54,19 +56,13 @@ const TaxRateProvider = ({ children, initialQuery, ui }: TaxRateProviderProps) =
 						{
 							$or: [{ state: q.state }, { state: '*' }, { state: '' }],
 						},
-						{
-							$or: [{ city: q.city }, { city: '*' }, { city: '' }],
-						},
 					],
 				};
 
 				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$.pipe(
-					map((result) => result)
-					// tap((res) => {
-					// 	debugger;
-					// })
+					map((result) => filterTaxRates(result, q.country, q.state, q.postcode, q.city))
 				);
 			})
 		);

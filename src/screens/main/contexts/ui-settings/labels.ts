@@ -33,6 +33,7 @@ export const getTranslatedLabels = () => ({
 		name: t('Product', { _tags: 'core' }),
 		stock_quantity: t('Stock', { _tags: 'core' }),
 		sku: t('SKU', { _tags: 'core' }),
+		barcode: t('Barcode', { _tags: 'core' }),
 		categories: t('Categories', { _tags: 'core' }),
 		tags: t('Tags', { _tags: 'core' }),
 		type: t('Type', { _tags: 'core' }),

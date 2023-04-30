@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableEagerState, useLayoutObservableState } from 'observable-hooks';
+import { useLayoutObservableState, useSubscription } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -13,6 +13,7 @@ import useProductCategories from '../../contexts/categories';
 import useProducts from '../../contexts/products';
 import useProductTags from '../../contexts/tags';
 import usePullDocument from '../../contexts/use-pull-document';
+import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
 
 /**
  * Category Pill
@@ -77,16 +78,17 @@ const TagPill = ({ tagID, onRemove }) => {
 /**
  * Search field
  */
-const ProductSearch = () => {
+const ProductSearch = ({ addProduct }) => {
 	const { query$, setQuery } = useProducts();
 	// const query = useObservableEagerState(query$);
 	const query = useLayoutObservableState(query$, query$.getValue());
 	const theme = useTheme();
 	const [search, setSearch] = React.useState(query.search);
-
 	const categoryID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
 	const tagID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
+	const { barcode$, onKeyboardEvent } = useBarcodeDetection();
 	const barcode = get(query, ['selector', 'barcode']);
+	const { barcodeSearch } = useBarcodeSearch();
 
 	const hasFilters = categoryID || tagID || barcode;
 
@@ -97,6 +99,16 @@ const ProductSearch = () => {
 		},
 		[setQuery]
 	);
+
+	/**
+	 * Subscribe to barcode$ and add product to cart if found, or update query
+	 */
+	useSubscription(barcode$, async (barcode) => {
+		const result = await barcodeSearch(barcode);
+		if (Array.isArray(result) && result.length > 0) {
+			addProduct && addProduct(result[0]);
+		}
+	});
 
 	/**
 	 *
@@ -121,6 +133,7 @@ const ProductSearch = () => {
 			}
 			containerStyle={{ flex: 1 }}
 			clearable
+			onKeyPress={onKeyboardEvent}
 		/>
 	);
 };

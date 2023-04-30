@@ -9,6 +9,7 @@ import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/
 import cells from './cells';
 import Footer from './footer';
 import { t } from '../../../lib/translations';
+import EmptyTableRow from '../components/empty-table-row';
 import TextCell from '../components/text-cell';
 import useCustomers from '../contexts/customers';
 
@@ -75,6 +76,7 @@ const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 			footer={<Footer count={customers.length} />}
 			estimatedItemSize={100}
 			extraData={context}
+			ListEmptyComponent={<EmptyTableRow message={t('No customers found', { _tags: 'core' })} />}
 		/>
 	);
 };

@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import Icon from '@wcpos/components/src/icon';
 
-import useCartHelpers from '../../hooks/use-cart-helpers';
+import useCartHelpers from '../../../hooks/use-cart-helpers';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;

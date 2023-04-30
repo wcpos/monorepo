@@ -15,7 +15,7 @@ import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 import useCurrentOrder from '../contexts/current-order';
-import useCartHelpers from '../hooks/use-cart-helpers';
+import useCartHelpers from '../../hooks/use-cart-helpers';
 
 /**
  *

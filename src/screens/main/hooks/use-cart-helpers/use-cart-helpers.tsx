@@ -5,10 +5,10 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { priceToNumber, processNewOrder, processExistingOrder, addItem } from './helpers';
-import useLocalData from '../../../../../contexts/local-data';
-import useCollection from '../../../hooks/use-collection';
-import useTaxCalculation from '../../../hooks/use-tax-calculation';
-import useCurrentOrder from '../../contexts/current-order';
+import useLocalData from '../../../../contexts/local-data';
+import useCollection from '../use-collection';
+import useTaxCalculation from '../use-tax-calculation';
+import useCurrentOrder from '../../pos/contexts/current-order';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
