@@ -51,7 +51,6 @@ function postcodeLocationMatcher(postcode: string, postcodes: string[]): boolean
 
 /**
  * Filter tax rates based on the provided country, state, postcode, and city.
- * Prioritizes more specific matches (postcode, city) over broader matches (state).
  */
 export function filterTaxRates(
 	taxRates: TaxRate[],
@@ -60,7 +59,7 @@ export function filterTaxRates(
 	postcode: string,
 	city: string = ''
 ): TaxRate[] {
-	const rates = filter(taxRates, (rate) => {
+	return filter(taxRates, (rate) => {
 		const countryMatch = rate.country === country;
 		const stateMatch = rate.state === state || rate.state === '';
 		const postcodeMatch =
@@ -69,17 +68,39 @@ export function filterTaxRates(
 
 		return countryMatch && stateMatch && postcodeMatch && cityMatch;
 	});
-
-	const hasPostcodeSpecificRate = some(rates, (rate) => !isEmpty(rate.postcodes));
-	const hasCitySpecificRate = some(rates, (rate) => !isEmpty(rate.cities));
-
-	if (hasPostcodeSpecificRate || hasCitySpecificRate) {
-		return filter(rates, (rate) => {
-			const postcodeMatch = hasPostcodeSpecificRate ? !isEmpty(rate.postcodes) : true;
-			const cityMatch = hasCitySpecificRate ? !isEmpty(rate.cities) : true;
-			return postcodeMatch && cityMatch;
-		});
-	}
-
-	return rates;
 }
+
+/**
+ * Filter tax rates based on the provided country, state, postcode, and city.
+ * Prioritizes more specific matches (postcode, city) over broader matches (state).
+ */
+// export function filterTaxRates(
+// 	taxRates: TaxRate[],
+// 	country: string,
+// 	state: string,
+// 	postcode: string,
+// 	city: string = ''
+// ): TaxRate[] {
+// 	const rates = filter(taxRates, (rate) => {
+// 		const countryMatch = rate.country === country;
+// 		const stateMatch = rate.state === state || rate.state === '';
+// 		const postcodeMatch =
+// 			isEmpty(rate.postcodes) || postcodeLocationMatcher(postcode, rate.postcodes);
+// 		const cityMatch = isEmpty(rate.cities) || includes(rate.cities, city);
+
+// 		return countryMatch && stateMatch && postcodeMatch && cityMatch;
+// 	});
+
+// 	const hasPostcodeSpecificRate = some(rates, (rate) => !isEmpty(rate.postcodes));
+// 	const hasCitySpecificRate = some(rates, (rate) => !isEmpty(rate.cities));
+
+// 	if (hasPostcodeSpecificRate || hasCitySpecificRate) {
+// 		return filter(rates, (rate) => {
+// 			const postcodeMatch = hasPostcodeSpecificRate ? !isEmpty(rate.postcodes) : true;
+// 			const cityMatch = hasCitySpecificRate ? !isEmpty(rate.cities) : true;
+// 			return postcodeMatch && cityMatch;
+// 		});
+// 	}
+
+// 	return rates;
+// }

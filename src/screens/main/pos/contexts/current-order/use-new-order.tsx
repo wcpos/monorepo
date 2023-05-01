@@ -22,6 +22,7 @@ const useNewOrder = () => {
 		store.prices_include_tax$,
 		store.prices_include_tax
 	);
+	const tax_based_on = useObservableState(store.tax_based_on$, store.tax_based_on);
 
 	/**
 	 *
@@ -45,8 +46,14 @@ const useNewOrder = () => {
 			currency,
 			currency_symbol: allCurrencies.find((c) => c.code === currency).symbol || '',
 			prices_include_tax: prices_include_tax === 'yes',
+			meta_data: [
+				{
+					key: '_woocommerce_pos_tax_based_on',
+					value: tax_based_on,
+				},
+			],
 		});
-	}, [currency, prices_include_tax, newOrder]);
+	}, [currency, prices_include_tax, newOrder, tax_based_on]);
 
 	/**
 	 * Update new order with default customer

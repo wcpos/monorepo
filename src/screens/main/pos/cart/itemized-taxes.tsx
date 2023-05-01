@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
@@ -19,17 +17,19 @@ const ItemizedTaxes = ({ taxLines }) => {
 			<Box>
 				<Text>{t('Taxes', { _tags: 'core' })}:</Text>
 			</Box>
-			<Box fill>
+			<Box fill space="xxSmall">
 				{taxLines.map((tax) => {
 					// tax_total and shipping_tax_total are separate, but we will display together
 					const displayTax = parseFloat(tax.tax_total) + parseFloat(tax.shipping_tax_total);
 					return (
-						<Box key={tax.rate_id} horizontal space="normal">
-							<Box fill align="end">
-								<Text>{tax.label}</Text>
-							</Box>
-							<Box>
-								<Text>{format(displayTax || 0)}</Text>
+						<Box key={tax.rate_id}>
+							<Box horizontal space="normal">
+								<Box fill align="end">
+									<Text>{tax.label}</Text>
+								</Box>
+								<Box>
+									<Text>{format(displayTax || 0)}</Text>
+								</Box>
 							</Box>
 						</Box>
 					);
