@@ -13,6 +13,8 @@ export const getTranslatedLabels = () => ({
 		categories: t('Categories', { _tags: 'core' }),
 		tags: t('Tags', { _tags: 'core' }),
 		type: t('Type', { _tags: 'core' }),
+		regular_price: t('Regular price', { _tags: 'core' }),
+		on_sale: t('On sale', { _tags: 'core' }),
 		price: t('Price', { _tags: 'core' }),
 		tax: t('Tax', { _tags: 'core' }),
 		actions: t('Actions', { _tags: 'core' }),

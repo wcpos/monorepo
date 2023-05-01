@@ -16,6 +16,7 @@ export const CustomerItem = (customer: CustomerDocument, index: number) => {
 					<Avatar
 						size="small"
 						source="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
+						recyclingKey="guest"
 					/>
 				</Box>
 				<Box space="xSmall" fill>
@@ -28,7 +29,7 @@ export const CustomerItem = (customer: CustomerDocument, index: number) => {
 	return (
 		<Box horizontal space="small">
 			<Box>
-				<Avatar source={customer.avatar_url} size="small" />
+				<Avatar source={customer.avatar_url} size="small" recyclingKey={customer.uuid} />
 			</Box>
 			<Box space="xSmall" fill>
 				<Box horizontal>

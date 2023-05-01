@@ -3,7 +3,7 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
-import Text from '@wcpos/components/src/text';
+import Box from '@wcpos/components/src/box';
 
 import PriceWithTax from '../../../components/product/price';
 
@@ -16,6 +16,7 @@ interface Props {
 
 export const Price = ({ item: product, column }: Props) => {
 	const price = useObservableState(product.price$, product.price);
+	const regular_price = useObservableState(product.regular_price$, product.regular_price);
 	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
 	const taxClass = useObservableState(product.tax_class$, product.tax_class);
 	const { display } = column;
@@ -31,10 +32,28 @@ export const Price = ({ item: product, column }: Props) => {
 		[display]
 	);
 
+	const showRegularPrice = show('on_sale') && parseFloat(price) !== parseFloat(regular_price);
+
 	/**
 	 *
 	 */
-	return (
+	return showRegularPrice ? (
+		<Box space="xSmall" align="end">
+			<PriceWithTax
+				price={regular_price}
+				taxStatus={taxStatus}
+				taxClass={taxClass}
+				taxDisplay={show('tax') ? 'text' : 'tooltip'}
+				strikethrough
+			/>
+			<PriceWithTax
+				price={price}
+				taxStatus={taxStatus}
+				taxClass={taxClass}
+				taxDisplay={show('tax') ? 'text' : 'tooltip'}
+			/>
+		</Box>
+	) : (
 		<PriceWithTax
 			price={price}
 			taxStatus={taxStatus}

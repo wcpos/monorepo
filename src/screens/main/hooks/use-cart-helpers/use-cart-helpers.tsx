@@ -39,13 +39,22 @@ export const useCartHelpers = () => {
 				pricesIncludeTax,
 			});
 
+			let regularPriceWithoutTax = priceToNumber(product.regular_price);
+			const regularTax = calculateTaxesFromPrice({
+				price: parseFloat(product.regular_price),
+				taxClass: product.tax_class,
+				taxStatus: product.tax_status,
+				pricesIncludeTax,
+			});
+
 			if (pricesIncludeTax) {
 				priceWithoutTax = priceToNumber(product.price) - tax.total;
+				regularPriceWithoutTax = priceToNumber(product.regular_price) - regularTax.total;
 			}
 
 			const newLineItem = {
 				price: priceWithoutTax,
-				subtotal: String(priceWithoutTax),
+				subtotal: String(regularPriceWithoutTax),
 				total: String(priceWithoutTax),
 				subtotal_tax: tax.total,
 				total_tax: tax.total,
@@ -97,13 +106,22 @@ export const useCartHelpers = () => {
 				pricesIncludeTax,
 			});
 
+			let regularPriceWithoutTax = priceToNumber(variation.regular_price);
+			const regularTax = calculateTaxesFromPrice({
+				price: parseFloat(variation.regular_price),
+				taxClass: variation.tax_class,
+				taxStatus: variation.tax_status,
+				pricesIncludeTax,
+			});
+
 			if (pricesIncludeTax) {
 				priceWithoutTax = priceToNumber(variation.price) - tax.total;
+				regularPriceWithoutTax = priceToNumber(variation.regular_price) - regularTax.total;
 			}
 
 			const newLineItem = {
 				price: priceWithoutTax,
-				subtotal: String(priceWithoutTax),
+				subtotal: String(regularPriceWithoutTax),
 				total: String(priceWithoutTax),
 				subtotal_tax: tax.total,
 				total_tax: tax.total,

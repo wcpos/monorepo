@@ -15,9 +15,16 @@ interface Props {
 	taxStatus: string;
 	taxClass: string;
 	taxDisplay: 'text' | 'tooltip' | 'none';
+	strikethrough?: boolean;
 }
 
-export const Price = ({ price, taxStatus, taxClass, taxDisplay = 'tooltip' }: Props) => {
+export const Price = ({
+	price,
+	taxStatus,
+	taxClass,
+	taxDisplay = 'tooltip',
+	strikethrough,
+}: Props) => {
 	const { format } = useCurrencyFormat();
 	const { store } = useLocalData();
 	const taxDisplayShop = useObservableState(store?.tax_display_shop$, store?.tax_display_shop);
@@ -40,7 +47,16 @@ export const Price = ({ price, taxStatus, taxClass, taxDisplay = 'tooltip' }: Pr
 	if (taxDisplay === 'tooltip' && taxable) {
 		return (
 			<Tooltip content={`${taxDisplayShop === 'incl' ? 'incl.' : 'excl.'} ${format(taxTotal)} tax`}>
-				<Text>{format(displayPrice)}</Text>
+				<Text
+					style={
+						strikethrough
+							? { textDecorationLine: 'line-through', textDecorationStyle: 'solid' }
+							: {}
+					}
+					type={strikethrough ? 'secondary' : undefined}
+				>
+					{format(displayPrice)}
+				</Text>
 			</Tooltip>
 		);
 	}
@@ -51,7 +67,16 @@ export const Price = ({ price, taxStatus, taxClass, taxDisplay = 'tooltip' }: Pr
 	if (taxDisplay === 'text' && taxable) {
 		return (
 			<Box space="xSmall" align="end">
-				<Text>{format(displayPrice)}</Text>
+				<Text
+					style={
+						strikethrough
+							? { textDecorationLine: 'line-through', textDecorationStyle: 'solid' }
+							: {}
+					}
+					type={strikethrough ? 'textMuted' : undefined}
+				>
+					{format(displayPrice)}
+				</Text>
 				<Text type="textMuted" size="small">
 					{`${taxDisplayShop === 'incl' ? 'incl.' : 'excl.'} ${format(taxTotal)} tax`}
 				</Text>

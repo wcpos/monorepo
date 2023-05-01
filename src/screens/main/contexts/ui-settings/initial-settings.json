@@ -58,6 +58,10 @@
           {
             "key": "tax",
             "show": false
+          },
+          {
+            "key": "on_sale",
+            "show": true
           }
         ]
       },
@@ -117,6 +121,10 @@
         "display": [
           {
             "key": "tax",
+            "show": false
+          },
+          {
+            "key": "on_sale",
             "show": false
           }
         ]
