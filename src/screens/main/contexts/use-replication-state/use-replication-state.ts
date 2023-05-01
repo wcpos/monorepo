@@ -10,6 +10,7 @@ import { map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
+import { getAndPatchRecentlyModified } from './audit.helpers';
 import { defaultPrepareQueryParams, retryWithExponentialBackoff } from './replication.helpers';
 import useAudit from './use-audit';
 import useLocalData from '../../../../contexts/local-data';
@@ -123,6 +124,21 @@ export const useReplicationState = ({
 
 								if ('exclude' in params && Array.isArray(params.exclude)) {
 									params.exclude = params.exclude.join(',');
+								}
+
+								/**
+								 * FIXME: Hack to fix the issue with rxdb silently dropping lastModified data
+								 */
+								if (params.modified_after) {
+									await getAndPatchRecentlyModified(
+										params.modified_after,
+										collection,
+										endpoint,
+										http
+									);
+									return {
+										documents: [],
+									};
 								}
 
 								const response = await http.get(endpoint, {

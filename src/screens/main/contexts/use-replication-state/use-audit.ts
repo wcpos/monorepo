@@ -5,7 +5,10 @@ import { timer } from 'rxjs';
 
 import log from '@wcpos/utils/src/logger';
 
-import { getlocalDocsWithIDs } from './audit.helpers';
+import {
+	getlocalDocsWithIDsOrderedByLastModified,
+	getAndPatchRecentlyModified,
+} from './audit.helpers';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 const runningAudits = new Map();
@@ -92,7 +95,10 @@ const useAudit = ({ collection, endpoint, auditTime = 600000 }) => {
 					remoteIDs = await fetchRemoteIDs();
 				}
 
-				const localDocsWithID = await getlocalDocsWithIDs(collection, endpoint);
+				const localDocsWithID = await getlocalDocsWithIDsOrderedByLastModified(
+					collection,
+					endpoint
+				);
 
 				// compare local and server ids
 				const localIDs = localDocsWithID.map((doc) => doc.id);
@@ -104,6 +110,17 @@ const useAudit = ({ collection, endpoint, auditTime = 600000 }) => {
 				const completeIntitalSync = include.length === 0;
 				const lastModified =
 					localDocsWithID.length > 0 ? localDocsWithID[0].date_modified_gmt : null;
+				/**
+				 * FIXME: this is a bit of a hack. If a collection is not synced, we will not get updates from
+				 * the server in a timely manner. eg: say you 100,000 orders. You will never get updates because the
+				 * old orders are being synced and the lastModified is not used.
+				 *
+				 * So, if there is a lastModified, we do a cheeky fetch here. This also gets around an issue I'm having
+				 * with rxdb silently dropping changes in the pull replication.
+				 */
+				if (!completeIntitalSync && lastModified) {
+					await getAndPatchRecentlyModified(lastModified, collection, endpoint, http);
+				}
 
 				return {
 					include,
@@ -117,7 +134,7 @@ const useAudit = ({ collection, endpoint, auditTime = 600000 }) => {
 				log.error(`Error auditing ${collection.name}:`, error);
 			}
 		},
-		[collection, endpoint, fetchRemoteIDs]
+		[collection, endpoint, fetchRemoteIDs, http]
 	);
 
 	/**

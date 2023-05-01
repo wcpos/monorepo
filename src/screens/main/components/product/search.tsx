@@ -151,6 +151,7 @@ const ProductSearch = ({
 	});
 
 	// FIXME: hack to only get barcode events on POS Products
+	// Doesn't work :(
 	React.useEffect(() => {
 		if (addProduct) {
 			setEnabled(true);
