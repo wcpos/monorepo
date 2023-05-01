@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/eslint-config",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "description": "Eslint configuration for React Native",
   "author": "kilbot <paul@kilbot.com>",
   "license": "MIT",
@@ -12,10 +12,10 @@
   },
   "dependencies": {
     "@rushstack/eslint-patch": "^1.2.0",
-    "@typescript-eslint/eslint-plugin": "^5.56.0",
-    "@typescript-eslint/parser": "5.56.0",
+    "@typescript-eslint/eslint-plugin": "^5.59.1",
+    "@typescript-eslint/parser": "5.59.1",
     "@wcpos/tsconfig": "*",
-    "eslint": "8.36.0",
+    "eslint": "8.39.0",
     "eslint-config-airbnb": "19.0.4",
     "eslint-config-prettier": "8.8.0",
     "eslint-config-universe": "^11.2.0",
@@ -26,7 +26,7 @@
     "eslint-plugin-react": "7.32.2",
     "eslint-plugin-react-hooks": "4.6.0",
     "eslint-plugin-react-native": "4.0.0",
-    "prettier": "2.8.7",
-    "typescript": "^4.6.3"
+    "prettier": "2.8.8",
+    "typescript": "^5.0.4"
   }
 }
