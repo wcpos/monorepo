@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import pick from 'lodash/pick';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import Form from '@wcpos/react-native-jsonschema-form';
@@ -16,6 +16,7 @@ interface DocumentFormProps {
 
 const DocumentForm = ({ document, fields, uiSchema }: DocumentFormProps) => {
 	// Subscribe to document changes and get the latest document data as JSON
+	// FIXME: why does subscribing to document.$ directly cause a re-render loop?
 	const [allData] = useObservableState(
 		() => document.$.pipe(map((doc) => doc.toJSON())),
 		document.toJSON()

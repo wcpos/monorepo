@@ -15,7 +15,7 @@ import useCartHelpers from '../../hooks/use-cart-helpers';
  */
 const SearchBar = () => {
 	const { uiSettings } = useUI('pos.products');
-	const { addProduct } = useCartHelpers();
+	const { addProduct, addVariation } = useCartHelpers();
 
 	/**
 	 *
@@ -31,7 +31,7 @@ const SearchBar = () => {
 			<ErrorBoundary>
 				<ProductCategoriesProvider initialQuery={initialCategoriesQuery}>
 					<ProductTagsProvider initialQuery={initialTagsQuery}>
-						<Search addProduct={addProduct} />
+						<Search addProduct={addProduct} addVariation={addVariation} />
 					</ProductTagsProvider>
 				</ProductCategoriesProvider>
 			</ErrorBoundary>

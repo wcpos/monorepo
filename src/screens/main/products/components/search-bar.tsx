@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import { useDetectBarcode } from '@wcpos/hooks/src/use-hotkeys';
 
 import { t } from '../../../../lib/translations';
 import Search from '../../components/product/search';
@@ -10,6 +9,7 @@ import { ProductCategoriesProvider } from '../../contexts/categories';
 import useProducts from '../../contexts/products';
 import { ProductTagsProvider } from '../../contexts/tags';
 import useUI from '../../contexts/ui-settings';
+// import { useBarcodeDetection } from '../../hooks/barcodes';
 
 const SearchBar = () => {
 	const { setQuery } = useProducts();
@@ -18,9 +18,9 @@ const SearchBar = () => {
 	/**
 	 *
 	 */
-	useDetectBarcode((barcode) => {
-		setQuery('selector.barcode', barcode);
-	});
+	// useBarcodeDetection((barcode) => {
+	// 	setQuery('selector.barcode', barcode);
+	// });
 
 	/**
 	 *

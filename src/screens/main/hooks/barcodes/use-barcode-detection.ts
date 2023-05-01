@@ -2,7 +2,18 @@ import * as React from 'react';
 import type { NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
 
 import { useHotkeys } from 'react-hotkeys-hook';
-import { Subject } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
+
+import useSnackbar from '@wcpos/components/src/snackbar';
+
+import { t } from '../../../../lib/translations';
+
+type BarcodeDetectionHook = {
+	onKeyboardEvent: (
+		event: KeyboardEvent | NativeSyntheticEvent<TextInputKeyPressEventData>
+	) => void;
+	barcode$: Observable<string>;
+};
 
 // Constants
 const TIMEOUT = 50;
@@ -45,17 +56,30 @@ function getKeyFromEvent(
  * @returns {object} - An object containing the `onKeyboardEvent` function to be used as an event handler,
  * and the `barcode$` observable that emits detected barcodes.
  */
-export const useBarcodeDetection = (
-	callback?: (barcode: string) => void
-): {
-	onKeyboardEvent: (
-		event: KeyboardEvent | NativeSyntheticEvent<TextInputKeyPressEventData>
-	) => void;
-	barcode$: ReturnType<typeof barcodeSubject.asObservable>;
-} => {
+export const useBarcodeDetection = ({
+	callback,
+	options = {
+		enabled: false,
+	},
+}: {
+	callback?: (barcode: string) => void;
+	options?: {
+		enabled?: boolean;
+	}; // Define the options type as needed
+}): BarcodeDetectionHook => {
 	const barcode = React.useRef<string>('');
 	const timer = React.useRef<NodeJS.Timeout | null>(null);
+	const addSnackbar = useSnackbar();
 
+	/**
+	 * onKeyboardEvent is a custom event handler function that processes keyboard events and native synthetic events
+	 * to detect alphanumeric barcode inputs. It listens for alphanumeric characters and builds a barcode string.
+	 * If a TAB keypress is detected at the end of a barcode, it prevents the default behavior for keyboard events
+	 * and stops propagation for native synthetic events. When a barcode meets the minimum length specified by CHARCOUNT,
+	 * the callback function is called with the detected barcode, and the barcode is emitted to the barcode$ observable.
+	 *
+	 * @param event - The keyboard event or native synthetic event.
+	 */
 	const onKeyboardEvent = React.useCallback(
 		(event: KeyboardEvent | NativeSyntheticEvent<TextInputKeyPressEventData>) => {
 			const key = getKeyFromEvent(event);
@@ -70,15 +94,28 @@ export const useBarcodeDetection = (
 					if (barcode.current.length >= CHARCOUNT) {
 						callback && callback(barcode.current);
 						barcodeSubject.next(barcode.current);
+						addSnackbar({
+							message: t('Barcode scanned: {barcode}', {
+								_tags: 'core',
+								barcode: barcode.current,
+							}),
+						});
 						barcode.current = '';
 					}
 				}, TIMEOUT);
+			} else if (key === 'Tab' && barcode.current.length >= CHARCOUNT) {
+				// Prevent default behavior if the key is a TAB character at the end of a barcode
+				if (event instanceof KeyboardEvent) {
+					event.preventDefault();
+				} else if ('nativeEvent' in event && 'key' in event.nativeEvent) {
+					event.stopPropagation();
+				}
 			}
 		},
-		[callback]
+		[addSnackbar, callback]
 	);
 
-	useHotkeys('*', onKeyboardEvent);
+	useHotkeys('*', onKeyboardEvent, { enabled: options.enabled });
 
 	return {
 		onKeyboardEvent,

@@ -14,6 +14,10 @@ import useProducts from '../../contexts/products';
 import useProductTags from '../../contexts/tags';
 import usePullDocument from '../../contexts/use-pull-document';
 import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
+import useCollection from '../../hooks/use-collection';
+
+type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
 /**
  * Category Pill
@@ -78,7 +82,17 @@ const TagPill = ({ tagID, onRemove }) => {
 /**
  * Search field
  */
-const ProductSearch = ({ addProduct }) => {
+const ProductSearch = ({
+	addProduct,
+	addVariation,
+}: {
+	addProduct?: (product: ProductDocument) => Promise<void>;
+	addVariation?: (
+		variation: ProductVariationDocument,
+		parent: ProductDocument,
+		metaData: any
+	) => Promise<void>;
+}) => {
 	const { query$, setQuery } = useProducts();
 	// const query = useObservableEagerState(query$);
 	const query = useLayoutObservableState(query$, query$.getValue());
@@ -86,9 +100,11 @@ const ProductSearch = ({ addProduct }) => {
 	const [search, setSearch] = React.useState(query.search);
 	const categoryID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
 	const tagID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
-	const { barcode$, onKeyboardEvent } = useBarcodeDetection();
+	const [enabled, setEnabled] = React.useState(false);
+	const { barcode$, onKeyboardEvent } = useBarcodeDetection({ options: { enabled } });
 	const barcode = get(query, ['selector', 'barcode']);
 	const { barcodeSearch } = useBarcodeSearch();
+	const productsCollection = useCollection('products');
 
 	const hasFilters = categoryID || tagID || barcode;
 
@@ -104,10 +120,44 @@ const ProductSearch = ({ addProduct }) => {
 	 * Subscribe to barcode$ and add product to cart if found, or update query
 	 */
 	useSubscription(barcode$, async (barcode) => {
-		const result = await barcodeSearch(barcode);
-		if (Array.isArray(result) && result.length > 0) {
-			addProduct && addProduct(result[0]);
+		if (addProduct && enabled) {
+			const result = await barcodeSearch(barcode);
+			if (Array.isArray(result) && result.length > 0) {
+				if (result[0].collection.name === 'variations') {
+					// if it's a variation, we need to get the parent product
+					// TODO: perhaps it's better to have a look up table for variations/parents?
+					const parent = await productsCollection
+						.findOne({
+							selector: {
+								variations: {
+									$in: [result[0].id],
+								},
+							},
+						})
+						.exec();
+					const metaData = result[0].attributes.map((attribute) => {
+						return {
+							attr_id: attribute.id,
+							display_key: attribute.name,
+							display_value: attribute.option,
+						};
+					});
+					addVariation(result[0], parent, metaData);
+				} else {
+					addProduct(result[0]);
+				}
+			}
 		}
+	});
+
+	// FIXME: hack to only get barcode events on POS Products
+	React.useEffect(() => {
+		if (addProduct) {
+			setEnabled(true);
+		}
+		return () => {
+			setEnabled(false);
+		};
 	});
 
 	/**

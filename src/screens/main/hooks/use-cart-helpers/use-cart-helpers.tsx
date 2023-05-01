@@ -4,11 +4,13 @@ import { useNavigation } from '@react-navigation/native';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
+import useSnackbar from '@wcpos/components/src/snackbar';
+
 import { priceToNumber, processNewOrder, processExistingOrder, addItem } from './helpers';
 import useLocalData from '../../../../contexts/local-data';
+import useCurrentOrder from '../../pos/contexts/current-order';
 import useCollection from '../use-collection';
 import useTaxCalculation from '../use-tax-calculation';
-import useCurrentOrder from '../../pos/contexts/current-order';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -22,6 +24,7 @@ export const useCartHelpers = () => {
 		store.prices_include_tax$.pipe(map((val) => val === 'yes')),
 		store.prices_include_tax === 'yes'
 	);
+	const addSnackbar = useSnackbar();
 
 	/**
 	 * NOTE: once price, subtotal, total etc go into the cart they are always without tax
@@ -68,8 +71,17 @@ export const useCartHelpers = () => {
 				const existing = populatedLineItems.filter((li) => li.product_id === product.id);
 				await processExistingOrder(order, newLineItem, existing);
 			}
+
+			addSnackbar({ message: `${product.name} added to cart`, type: 'success' });
 		},
-		[calculateTaxesFromPrice, currentOrder, navigation, ordersCollection, pricesIncludeTax]
+		[
+			addSnackbar,
+			calculateTaxesFromPrice,
+			currentOrder,
+			navigation,
+			ordersCollection,
+			pricesIncludeTax,
+		]
 	);
 
 	/**
@@ -118,8 +130,17 @@ export const useCartHelpers = () => {
 				const existing = populatedLineItems.filter((li) => li.variation_id === variation.id);
 				await processExistingOrder(order, newLineItem, existing);
 			}
+
+			addSnackbar({ message: `${parent.name} added to cart`, type: 'success' });
 		},
-		[calculateTaxesFromPrice, currentOrder, navigation, ordersCollection, pricesIncludeTax]
+		[
+			addSnackbar,
+			calculateTaxesFromPrice,
+			currentOrder,
+			navigation,
+			ordersCollection,
+			pricesIncludeTax,
+		]
 	);
 
 	/**

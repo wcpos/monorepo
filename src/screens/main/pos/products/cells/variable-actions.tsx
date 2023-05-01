@@ -10,8 +10,8 @@ import { Variations } from './variations';
 import { getSelectedState, makeNewQuery, extractSelectedMetaData } from './variations.helpers';
 import { t } from '../../../../../lib/translations';
 import useVariations, { VariationsProvider } from '../../../contexts/variations';
-import useCurrencyFormat from '../../../hooks/use-currency-format';
 import useCartHelpers from '../../../hooks/use-cart-helpers';
+import useCurrencyFormat from '../../../hooks/use-currency-format';
 
 import type { StateAttribute, StateAttributeOption } from './variations.helpers';
 
