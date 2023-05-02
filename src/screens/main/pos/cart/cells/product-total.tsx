@@ -38,7 +38,7 @@ export const ProductTotal = ({ item, column }: Props) => {
 	);
 
 	return (
-		<Box space="xSmall">
+		<Box space="xSmall" align="end">
 			<Text>{format(displayTotal || 0)}</Text>
 			{show('tax') && (
 				<Text type="textMuted" size="small">

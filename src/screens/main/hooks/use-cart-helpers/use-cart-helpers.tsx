@@ -133,7 +133,10 @@ export const useCartHelpers = () => {
 				sku: variation.sku,
 				tax_class: variation.tax_class,
 				// meta_data: filteredMetaData(parent.meta_data).concat(metaData),
-				meta_data: metaData,
+				meta_data: [
+					...metaData,
+					{ key: '_woocommerce_pos_tax_status', value: variation.tax_status },
+				],
 			};
 
 			const order = currentOrder.getLatest();

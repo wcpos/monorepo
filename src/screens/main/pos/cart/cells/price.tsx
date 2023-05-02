@@ -11,6 +11,14 @@ interface Props {
 	item: import('@wcpos/database').LineItemDocument;
 }
 
+const getTaxStatus = (meta_data) => {
+	if (!Array.isArray(meta_data)) return undefined;
+
+	const meta = meta_data.find((meta) => meta && meta.key === '_woocommerce_pos_tax_status');
+
+	return meta ? meta.value : undefined;
+};
+
 /**
  *
  */
@@ -19,10 +27,8 @@ export const Price = ({ item }: Props) => {
 	const taxClass = useObservableState(item.tax_class$, item.tax_class);
 	// find meta data value when key = _woocommerce_pos_tax_status
 	const _taxStatus = useObservableState(
-		item.meta_data$.pipe(
-			map((meta) => meta.find((meta) => meta.key === '_woocommerce_pos_tax_status').value)
-		),
-		item.meta_data.find((meta) => meta.key === '_woocommerce_pos_tax_status').value
+		item.meta_data$.pipe(map((meta_data) => getTaxStatus(meta_data))),
+		getTaxStatus(item.meta_data)
 	);
 	const taxStatus = _taxStatus ?? 'taxable';
 	const { store } = useLocalData();
