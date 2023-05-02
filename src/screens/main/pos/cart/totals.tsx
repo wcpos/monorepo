@@ -26,6 +26,9 @@ const Totals = () => {
 		subtotal,
 		subtotal_tax,
 		fee_total,
+		shipping_tax,
+		fee_tax,
+		discount_tax,
 	} = useObservableSuspense(cartTotalsResource);
 	const { format } = useCurrencyFormat();
 	const theme = useTheme();
@@ -39,6 +42,16 @@ const Totals = () => {
 
 	const displaySubtotal =
 		taxDisplayCart === 'incl' ? parseFloat(subtotal) + parseFloat(subtotal_tax) : subtotal;
+	const displayDiscountTotal =
+		taxDisplayCart === 'incl'
+			? parseFloat(discount_total) + parseFloat(discount_tax)
+			: discount_total;
+	const displayFeeTotal =
+		taxDisplayCart === 'incl' ? parseFloat(fee_total) + parseFloat(fee_tax) : fee_total;
+	const displayShippingTotal =
+		taxDisplayCart === 'incl'
+			? parseFloat(shipping_total) + parseFloat(shipping_tax)
+			: shipping_total;
 
 	return hasTotals ? (
 		<Box
@@ -68,7 +81,7 @@ const Totals = () => {
 							<Text>{t('Discount', { _tags: 'core' })}:</Text>
 						</Box>
 						<Box>
-							<Text>{format(`-${discount_total}`)}</Text>
+							<Text>{format(`-${displayDiscountTotal}`)}</Text>
 						</Box>
 					</Box>
 				)
@@ -81,7 +94,7 @@ const Totals = () => {
 							<Text>{t('Fees', { _tags: 'core' })}:</Text>
 						</Box>
 						<Box>
-							<Text>{format(fee_total)}</Text>
+							<Text>{format(displayFeeTotal)}</Text>
 						</Box>
 					</Box>
 				)
@@ -94,21 +107,26 @@ const Totals = () => {
 							<Text>{t('Shipping', { _tags: 'core' })}:</Text>
 						</Box>
 						<Box>
-							<Text>{format(shipping_total)}</Text>
+							<Text>{format(displayShippingTotal)}</Text>
 						</Box>
 					</Box>
 				)
 			}
 			{calcTaxes === 'yes' && hasTax ? (
 				taxTotalDisplay === 'itemized' ? (
-					<ItemizedTaxes taxLines={tax_lines} />
+					<ItemizedTaxes taxLines={tax_lines} taxDisplayCart={taxDisplayCart} />
 				) : (
 					<Box horizontal>
 						<Box fill>
 							<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
 						</Box>
-						<Box>
-							<Text>{format(total_tax)}</Text>
+						<Box horizontal space="normal">
+							<Box fill align="end">
+								<Text>{taxDisplayCart}.</Text>
+							</Box>
+							<Box>
+								<Text>{format(total_tax || 0)}</Text>
+							</Box>
 						</Box>
 					</Box>
 				)

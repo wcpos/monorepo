@@ -259,6 +259,7 @@ export function calculateOrderTotalsAndTaxes({
 	let total = 0;
 	let total_tax = 0;
 	let fee_total = 0;
+	let fee_tax = 0;
 
 	const taxLines = taxRates.map((taxRate) => ({
 		rate_id: parseInt(taxRate.id, 10),
@@ -290,6 +291,7 @@ export function calculateOrderTotalsAndTaxes({
 	// Calculate fee totals
 	feeLines.forEach((line) => {
 		fee_total += parseFloat(line.total);
+		fee_tax += parseFloat(line.total_tax);
 		total += parseFloat(line.total);
 		total_tax += parseFloat(line.total_tax);
 
@@ -340,5 +342,6 @@ export function calculateOrderTotalsAndTaxes({
 		 * Need to add fee_total to display in the cart, to match the WC Admin display
 		 */
 		fee_total: String(round(fee_total, 6)),
+		fee_tax: String(round(fee_tax, 6)),
 	};
 }

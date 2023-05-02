@@ -9,7 +9,7 @@ import useCurrencyFormat from '../../hooks/use-currency-format';
 /**
  *
  */
-const ItemizedTaxes = ({ taxLines }) => {
+const ItemizedTaxes = ({ taxLines, taxDisplayCart }) => {
 	const { format } = useCurrencyFormat();
 
 	return (
@@ -25,7 +25,9 @@ const ItemizedTaxes = ({ taxLines }) => {
 						<Box key={tax.rate_id}>
 							<Box horizontal space="normal">
 								<Box fill align="end">
-									<Text>{tax.label}</Text>
+									<Text>
+										{taxDisplayCart}. {tax.label}
+									</Text>
 								</Box>
 								<Box>
 									<Text>{format(displayTax || 0)}</Text>

@@ -30,6 +30,7 @@ interface CartTotals {
 	total: string;
 	total_tax: string;
 	fee_total: string;
+	fee_tax: string;
 	tax_lines: {
 		rate_id: number;
 		label: string;
