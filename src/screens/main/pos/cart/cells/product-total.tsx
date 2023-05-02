@@ -6,34 +6,28 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import NumberInput from '../../../components/number-input';
+import useLocalData from '../../../../../contexts/local-data';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 
 interface Props {
-	item: import('@wcpos/database').LineItemDocument;
+	item:
+		| import('@wcpos/database').LineItemDocument
+		| import('@wcpos/database').FeeLineDocument
+		| import('@wcpos/database').ShippingLineDocument;
 }
 
-/**
- * Changing the total actually updates the price, because the WC REST API makes no sense
- */
-export const FeeAndShippingTotal = ({ item, column }: Props) => {
+export const ProductTotal = ({ item, column }: Props) => {
 	const total = useObservableState(item.total$, item.total);
 	const total_tax = useObservableState(item.total_tax$, item.total_tax);
 	const { format } = useCurrencyFormat();
 	const { display } = column;
+	const { store } = useLocalData();
+	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
+	const displayTotal =
+		taxDisplayCart === 'incl' ? parseFloat(total) + parseFloat(total_tax) : total;
 
 	/**
-	 *
-	 */
-	const handleUpdate = React.useCallback(
-		(total) => {
-			item.incrementalPatch({ total });
-		},
-		[item]
-	);
-
-	/**
-	 *
+	 * TODO - move this into the ui as a helper function
 	 */
 	const show = React.useCallback(
 		(key: string): boolean => {
@@ -43,15 +37,12 @@ export const FeeAndShippingTotal = ({ item, column }: Props) => {
 		[display]
 	);
 
-	/**
-	 *
-	 */
 	return (
-		<Box space="xSmall" align="end">
-			<NumberInput value={total} onChange={handleUpdate} showDecimals />
+		<Box space="xSmall">
+			<Text>{format(displayTotal || 0)}</Text>
 			{show('tax') && (
 				<Text type="textMuted" size="small">
-					{`excl. ${format(total_tax) || 0} tax`}
+					{`${taxDisplayCart}. ${format(total_tax) || 0} tax`}
 				</Text>
 			)}
 		</Box>

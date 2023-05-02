@@ -1,8 +1,10 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
+
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
-// import Tooltip from '@wcpos/components/src/tooltip';
+import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 
 import { t } from '../../../../../lib/translations';
 import EditForm from '../../../components/edit-form-with-json';
@@ -38,10 +40,10 @@ const EditButton = ({ item }: EditLineItemProps) => {
 					fields={[
 						'name',
 						'sku',
-						// 'price',
-						// 'quantity',
+						'price',
+						'quantity',
 						'tax_class',
-						// 'subtotal',
+						'subtotal',
 						// 'subtotal_tax',
 						// 'total',
 						// 'total_tax',
@@ -57,14 +59,17 @@ const EditButton = ({ item }: EditLineItemProps) => {
 						sku: {
 							'ui:label': t('SKU', { _tags: 'core' }),
 						},
-						// price: {
-						// 	'ui:label': t('Price', { _tags: 'core' }),
-						// },
-						// quantity: {
-						// 	'ui:label': t('Quantity', { _tags: 'core' }),
-						// },
+						price: {
+							'ui:label': t('Price', { _tags: 'core' }),
+						},
+						quantity: {
+							'ui:label': t('Quantity', { _tags: 'core' }),
+						},
 						tax_class: {
 							'ui:label': t('Tax Class', { _tags: 'core' }),
+						},
+						subtootal: {
+							'ui:label': t('Subtotal', { _tags: 'core' }),
 						},
 						taxes: {
 							'ui:collapsible': 'closed',

@@ -53,6 +53,8 @@ export const getAndPatchRecentlyModified = async (modified_after, collection, en
 				const localDoc = await collection.findOne(parsedData.uuid).exec();
 				if (localDoc) {
 					await localDoc.incrementalPatch(parsedData);
+				} else {
+					await collection.insert(parsedData);
 				}
 			})
 		);

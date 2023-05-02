@@ -9,16 +9,10 @@ interface Props {
 }
 
 /**
- * The price is not actually the price, because the WC REST API is a piece of shit
- * - price as returned by REST API is total / quantity which is counter intuitive
- * - to give users a price field we need to do some gymnastics - subtotal / quantity
+ *
  */
 export const Price = ({ item }: Props) => {
-	const subtotal = useObservableState(item.subtotal$, item.subtotal);
-	const total = useObservableState(item.total$, item.total);
-	const quantity = item.getLatest().quantity;
-	const price = parseFloat(subtotal) / quantity;
-	const onSale = parseFloat(subtotal) !== parseFloat(total);
+	const price = useObservableState(item.price$, item.price);
 
 	/**
 	 * update subtotal, not price
@@ -26,10 +20,10 @@ export const Price = ({ item }: Props) => {
 	const handleUpdate = React.useCallback(
 		(newValue: string) => {
 			const quantity = item.getLatest().quantity;
-			const newSubtotal = String(quantity * parseFloat(newValue));
-			item.incrementalPatch({ subtotal: newSubtotal, total: onSale ? total : newSubtotal });
+			const newTotal = String(quantity * parseFloat(newValue));
+			item.incrementalPatch({ price: parseFloat(newValue), total: newTotal });
 		},
-		[item, onSale, total]
+		[item]
 	);
 
 	/**

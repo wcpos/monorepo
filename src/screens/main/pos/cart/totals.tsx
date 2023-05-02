@@ -15,10 +15,18 @@ import useCurrencyFormat from '../../hooks/use-currency-format';
 const Totals = () => {
 	const { store } = useLocalData();
 	const taxTotalDisplay = useObservableState(store.tax_total_display$, store.tax_total_display);
+	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const { cartTotalsResource } = useCart();
-	const { discount_total, shipping_total, tax_lines, total_tax, subtotal, fee_total } =
-		useObservableSuspense(cartTotalsResource);
+	const {
+		discount_total,
+		shipping_total,
+		tax_lines,
+		total_tax,
+		subtotal,
+		subtotal_tax,
+		fee_total,
+	} = useObservableSuspense(cartTotalsResource);
 	const { format } = useCurrencyFormat();
 	const theme = useTheme();
 
@@ -28,6 +36,9 @@ const Totals = () => {
 	const hasFee = parseFloat(fee_total) !== 0;
 	const hasTax = parseFloat(total_tax) !== 0;
 	const hasTotals = hasSubtotal || hasDiscount || hasShipping || hasFee || hasTax;
+
+	const displaySubtotal =
+		taxDisplayCart === 'incl' ? parseFloat(subtotal) + parseFloat(subtotal_tax) : subtotal;
 
 	return hasTotals ? (
 		<Box
@@ -46,7 +57,7 @@ const Totals = () => {
 					<Text>{t('Subtotal', { _tags: 'core' })}:</Text>
 				</Box>
 				<Box>
-					<Text>{format(subtotal)}</Text>
+					<Text>{format(displaySubtotal)}</Text>
 				</Box>
 			</Box>
 			{

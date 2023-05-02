@@ -6,15 +6,16 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
+import NumberInput from '../../../components/number-input';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 
 interface Props {
-	item:
-		| import('@wcpos/database').LineItemDocument
-		| import('@wcpos/database').FeeLineDocument
-		| import('@wcpos/database').ShippingLineDocument;
+	item: import('@wcpos/database').LineItemDocument;
 }
 
+/**
+ *
+ */
 export const Subtotal = ({ item, column }: Props) => {
 	const subtotal = useObservableState(item.subtotal$, item.subtotal);
 	const subtotal_tax = useObservableState(item.subtotal_tax$, item.subtotal_tax);
@@ -22,7 +23,17 @@ export const Subtotal = ({ item, column }: Props) => {
 	const { display } = column;
 
 	/**
-	 * TODO - move this into the ui as a helper function
+	 *
+	 */
+	const handleUpdate = React.useCallback(
+		(subtotal) => {
+			item.incrementalPatch({ subtotal });
+		},
+		[item]
+	);
+
+	/**
+	 *
 	 */
 	const show = React.useCallback(
 		(key: string): boolean => {
@@ -32,9 +43,12 @@ export const Subtotal = ({ item, column }: Props) => {
 		[display]
 	);
 
+	/**
+	 *
+	 */
 	return (
-		<Box space="xSmall">
-			<Text>{format(subtotal || 0)}</Text>
+		<Box space="xSmall" align="end">
+			<NumberInput value={subtotal} onChange={handleUpdate} showDecimals />
 			{show('tax') && (
 				<Text type="textMuted" size="small">
 					{`excl. ${format(subtotal_tax) || 0} tax`}
