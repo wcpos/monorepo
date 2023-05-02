@@ -226,7 +226,7 @@
     ]
   },
   "orders": {
-    "sortBy": "number",
+    "sortBy": "date_created",
     "sortDirection": "desc",
     "columns": [
       {

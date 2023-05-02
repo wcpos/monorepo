@@ -20,7 +20,7 @@ import { t } from '../../../../../lib/translations';
  * Shouldn't the header components already be memoized?
  */
 const UserMenu_ = () => {
-	const { wpCredentials, isWebApp, initialProps } = useLocalData();
+	const { wpCredentials, isWebApp, initialProps, site } = useLocalData();
 	const logout = useLogout();
 	const navigation = useNavigation();
 	const theme = useTheme();
@@ -37,9 +37,9 @@ const UserMenu_ = () => {
 					action: () => navigation.navigate('Settings'),
 				},
 				{
-					icon: 'circleQuestion',
-					label: t('Help', { _tags: 'core' }),
-					action: () => navigation.navigate('Help'),
+					icon: 'commentQuestion',
+					label: t('Support', { _tags: 'core' }),
+					action: () => navigation.navigate('SupportStack'),
 				},
 				{
 					icon: 'download',
@@ -47,6 +47,11 @@ const UserMenu_ = () => {
 					action: () => Linking.openURL('https://github.com/wcpos/electron/releases'),
 				},
 				{ label: '__' },
+				{
+					icon: 'wordpress',
+					label: t('WordPress Admin', { _tags: 'core' }),
+					action: () => Linking.openURL(`${site.home}/wp-admin`),
+				},
 				{
 					icon: 'arrowRightFromBracket',
 					label: t('Logout', { _tags: 'core' }),
