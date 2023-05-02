@@ -22,7 +22,14 @@ const Totals = () => {
 	const { format } = useCurrencyFormat();
 	const theme = useTheme();
 
-	return (
+	const hasSubtotal = parseFloat(subtotal) !== 0;
+	const hasDiscount = parseFloat(discount_total) !== 0;
+	const hasShipping = parseFloat(shipping_total) !== 0;
+	const hasFee = parseFloat(fee_total) !== 0;
+	const hasTax = parseFloat(total_tax) !== 0;
+	const hasTotals = hasSubtotal || hasDiscount || hasShipping || hasFee || hasTax;
+
+	return hasTotals ? (
 		<Box
 			padding="small"
 			space="small"
@@ -44,7 +51,7 @@ const Totals = () => {
 			</Box>
 			{
 				// Discounts
-				parseFloat(discount_total) !== 0 && (
+				hasDiscount && (
 					<Box horizontal>
 						<Box fill>
 							<Text>{t('Discount', { _tags: 'core' })}:</Text>
@@ -57,7 +64,7 @@ const Totals = () => {
 			}
 			{
 				// Fees
-				parseFloat(fee_total) !== 0 && (
+				hasFee && (
 					<Box horizontal>
 						<Box fill>
 							<Text>{t('Fees', { _tags: 'core' })}:</Text>
@@ -70,7 +77,7 @@ const Totals = () => {
 			}
 			{
 				// Shipping
-				parseFloat(shipping_total) !== 0 && (
+				hasShipping && (
 					<Box horizontal>
 						<Box fill>
 							<Text>{t('Shipping', { _tags: 'core' })}:</Text>
@@ -81,7 +88,7 @@ const Totals = () => {
 					</Box>
 				)
 			}
-			{calcTaxes === 'yes' && parseFloat(total_tax) !== 0 ? (
+			{calcTaxes === 'yes' && hasTax ? (
 				taxTotalDisplay === 'itemized' ? (
 					<ItemizedTaxes taxLines={tax_lines} />
 				) : (
@@ -96,7 +103,7 @@ const Totals = () => {
 				)
 			) : null}
 		</Box>
-	);
+	) : null;
 };
 
 export default Totals;

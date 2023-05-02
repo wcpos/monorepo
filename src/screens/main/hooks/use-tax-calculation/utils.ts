@@ -322,6 +322,9 @@ export function calculateOrderTotalsAndTaxes({
 		taxLine.shipping_tax_total = String(round(taxLine.shipping_tax_total, 6));
 	});
 
+	// Remove tax lines with 0 tax total
+	const filteredTaxLines = taxLines.filter((taxLine) => parseFloat(taxLine.tax_total) !== 0);
+
 	return {
 		discount_total: String(round(discount_total, 6)),
 		discount_tax: String(round(discount_tax, 6)),
@@ -332,7 +335,7 @@ export function calculateOrderTotalsAndTaxes({
 		subtotal_tax: String(round(subtotal_tax, 6)),
 		total: String(round(total + total_tax, 6)),
 		total_tax: String(round(total_tax, 6)),
-		tax_lines: taxLines,
+		tax_lines: filteredTaxLines,
 		/**
 		 * Need to add fee_total to display in the cart, to match the WC Admin display
 		 */
