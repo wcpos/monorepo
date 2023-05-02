@@ -16,7 +16,7 @@ type BarcodeDetectionHook = {
 };
 
 // Constants
-const TIMEOUT = 50;
+const TIMEOUT = 250;
 const CHARCOUNT = 8;
 const barcodeSubject = new Subject<string>();
 
@@ -83,39 +83,48 @@ export const useBarcodeDetection = ({
 	const onKeyboardEvent = React.useCallback(
 		(event: KeyboardEvent | NativeSyntheticEvent<TextInputKeyPressEventData>) => {
 			const key = getKeyFromEvent(event);
-			if (key && isAlphaNumeric(key)) {
-				barcode.current = barcode.current + key;
 
-				if (timer.current) {
-					clearTimeout(timer.current);
+			if (key && isAlphaNumeric(key)) {
+				// Start the timer if it's not already running
+				if (!timer.current) {
+					timer.current = setTimeout(() => {
+						if (barcode.current.length >= CHARCOUNT) {
+							callback && callback(barcode.current);
+							barcodeSubject.next(barcode.current);
+							addSnackbar({
+								message: t('Barcode scanned: {barcode}', {
+									_tags: 'core',
+									barcode: barcode.current,
+								}),
+							});
+						}
+						barcode.current = '';
+						timer.current = null;
+					}, TIMEOUT);
 				}
 
-				timer.current = setTimeout(() => {
-					if (barcode.current.length >= CHARCOUNT) {
-						callback && callback(barcode.current);
-						barcodeSubject.next(barcode.current);
-						addSnackbar({
-							message: t('Barcode scanned: {barcode}', {
-								_tags: 'core',
-								barcode: barcode.current,
-							}),
-						});
-						barcode.current = '';
-					}
-				}, TIMEOUT);
+				barcode.current = barcode.current + key;
 			} else if (key === 'Tab' && barcode.current.length >= CHARCOUNT) {
-				// Prevent default behavior if the key is a TAB character at the end of a barcode
 				if (event instanceof KeyboardEvent) {
 					event.preventDefault();
 				} else if ('nativeEvent' in event && 'key' in event.nativeEvent) {
 					event.stopPropagation();
+				}
+			} else {
+				// Reset the barcode and timer if a non-alphanumeric key is pressed
+				barcode.current = '';
+				if (timer.current) {
+					clearTimeout(timer.current);
+					timer.current = null;
 				}
 			}
 		},
 		[addSnackbar, callback]
 	);
 
-	useHotkeys('*', onKeyboardEvent, { enabled: options.enabled });
+	useHotkeys('*', onKeyboardEvent, {
+		// enabled: options.enabled
+	});
 
 	return {
 		onKeyboardEvent,

@@ -100,8 +100,9 @@ const ProductSearch = ({
 	const [search, setSearch] = React.useState(query.search);
 	const categoryID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
 	const tagID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
-	const [enabled, setEnabled] = React.useState(false);
-	const { barcode$, onKeyboardEvent } = useBarcodeDetection({ options: { enabled } });
+	// const [enabled, setEnabled] = React.useState(false);
+	// const { barcode$, onKeyboardEvent } = useBarcodeDetection({ options: { enabled } });
+	const { barcode$, onKeyboardEvent } = useBarcodeDetection({});
 	const barcode = get(query, ['selector', 'barcode']);
 	const { barcodeSearch } = useBarcodeSearch();
 	const productsCollection = useCollection('products');
@@ -120,7 +121,7 @@ const ProductSearch = ({
 	 * Subscribe to barcode$ and add product to cart if found, or update query
 	 */
 	useSubscription(barcode$, async (barcode) => {
-		if (addProduct && enabled) {
+		if (addProduct && addVariation) {
 			const result = await barcodeSearch(barcode);
 			if (Array.isArray(result) && result.length > 0) {
 				if (result[0].collection.name === 'variations') {
@@ -152,14 +153,14 @@ const ProductSearch = ({
 
 	// FIXME: hack to only get barcode events on POS Products
 	// Doesn't work :(
-	React.useEffect(() => {
-		if (addProduct) {
-			setEnabled(true);
-		}
-		return () => {
-			setEnabled(false);
-		};
-	});
+	// React.useEffect(() => {
+	// 	if (addProduct) {
+	// 		setEnabled(true);
+	// 	}
+	// 	return () => {
+	// 		setEnabled(false);
+	// 	};
+	// });
 
 	/**
 	 *
