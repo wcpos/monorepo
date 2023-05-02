@@ -15,8 +15,10 @@ interface Props {
  */
 export const Price = ({ item }: Props) => {
 	const subtotal = useObservableState(item.subtotal$, item.subtotal);
+	const total = useObservableState(item.total$, item.total);
 	const quantity = item.getLatest().quantity;
 	const price = parseFloat(subtotal) / quantity;
+	const onSale = parseFloat(subtotal) !== parseFloat(total);
 
 	/**
 	 * update subtotal, not price
@@ -24,9 +26,10 @@ export const Price = ({ item }: Props) => {
 	const handleUpdate = React.useCallback(
 		(newValue: string) => {
 			const quantity = item.getLatest().quantity;
-			item.incrementalPatch({ subtotal: String(quantity * parseFloat(newValue)) });
+			const newSubtotal = String(quantity * parseFloat(newValue));
+			item.incrementalPatch({ subtotal: newSubtotal, total: onSale ? total : newSubtotal });
 		},
-		[item]
+		[item, onSale, total]
 	);
 
 	/**
