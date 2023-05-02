@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
+import TaxBasedOn from './tax-based-on';
 import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import SyncButton from '../../components/sync-button';
@@ -22,21 +22,9 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const theme = useTheme();
 	const { store } = useLocalData();
 	const { sync, clear, replicationState } = useProducts();
-	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
 	const total = useTotalCount('products');
-
-	/**
-	 *
-	 */
-	let taxBasedOnLabel = t('Shop base address', { _tags: 'core' });
-	if (taxBasedOn === 'billing') {
-		taxBasedOnLabel = t('Customer billing address', { _tags: 'core' });
-	}
-	if (taxBasedOn === 'shipping') {
-		taxBasedOnLabel = t('Customer shipping address', { _tags: 'core' });
-	}
 
 	return (
 		<Box
@@ -52,9 +40,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 		>
 			{calcTaxes === 'yes' ? (
 				<Box fill padding="small" space="xSmall">
-					<Text size="small">
-						{t('Tax based on', { _tags: 'core' })}: {taxBasedOnLabel}
-					</Text>
+					<TaxBasedOn />
 				</Box>
 			) : (
 				<Box fill />
