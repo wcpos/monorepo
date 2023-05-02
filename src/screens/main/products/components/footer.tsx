@@ -10,6 +10,7 @@ import Text from '@wcpos/components/src/text';
 
 import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
+import TaxBasedOn from '../../components/product/tax-based-on';
 import SyncButton from '../../components/sync-button';
 import useProducts from '../../contexts/products';
 import useTotalCount from '../../hooks/use-total-count';
@@ -43,10 +44,8 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 			}}
 		>
 			{calcTaxes === 'yes' ? (
-				<Box fill padding="small" space="xSmall">
-					<Text size="small">
-						{t('Tax based on', { _tags: 'core' })}: {t('Shop base address', { _tags: 'core' })}
-					</Text>
+				<Box fill padding="small" space="xSmall" horizontal>
+					<TaxBasedOn taxBasedOn={'base'} />
 				</Box>
 			) : (
 				<Box fill />

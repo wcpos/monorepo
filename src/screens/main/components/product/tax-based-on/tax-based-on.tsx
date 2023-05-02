@@ -3,24 +3,27 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 
 import Popover from '@wcpos/components/src/popover';
-import Pressable from '@wcpos/components/src/pressable';
 import Text from '@wcpos/components/src/text';
 
 import DisplayCurrentTaxRates from './display-current-tax-rates';
-import useLocalData from '../../../../contexts/local-data';
-import { t } from '../../../../lib/translations';
-import { TaxRateProvider } from '../../contexts/tax-rates';
-import useCurrentOrder from '../contexts/current-order';
+import useLocalData from '../../../../../contexts/local-data';
+import { t } from '../../../../../lib/translations';
+import { TaxRateProvider } from '../../../contexts/tax-rates';
 
-const TaxBasedOn = () => {
+interface TaxBasedOnProps {
+	taxBasedOn: import('@wcpos/database').StoreDocument['tax_based_on'];
+	billing?: import('@wcpos/database').OrderDocument['billing'];
+	shipping?: import('@wcpos/database').OrderDocument['shipping'];
+}
+
+/**
+ *
+ */
+const TaxBasedOn = ({ taxBasedOn, billing, shipping }: TaxBasedOnProps) => {
 	const { store } = useLocalData();
-	const { currentOrder } = useCurrentOrder();
-	const taxBasedOn = useObservableState(store.tax_based_on$, store?.tax_based_on);
 	const storeCity = useObservableState(store.store_city$, store?.store_city);
 	const storeCountry = useObservableState(store.default_country$, store?.default_country);
 	const storePostcode = useObservableState(store.store_postcode$, store?.store_postcode);
-	const billing = useObservableState(currentOrder.billing$, currentOrder?.billing);
-	const shipping = useObservableState(currentOrder.shipping$, currentOrder?.shipping);
 	const [opened, setOpened] = React.useState(false);
 
 	/**
@@ -34,6 +37,9 @@ const TaxBasedOn = () => {
 		taxBasedOnLabel = t('Customer shipping address', { _tags: 'core' });
 	}
 
+	/**
+	 *
+	 */
 	const initialQuery = React.useMemo(() => {
 		if (taxBasedOn === 'base') {
 			/**
@@ -77,13 +83,16 @@ const TaxBasedOn = () => {
 	]);
 
 	return (
-		<Popover opened={opened} onClose={() => setOpened(false)} placement="top-start">
+		<Popover
+			opened={opened}
+			onClose={() => setOpened(false)}
+			onOpen={() => setOpened(true)}
+			placement="top-start"
+		>
 			<Popover.Target>
-				<Pressable onPress={() => setOpened(true)}>
-					<Text size="small">
-						{t('Tax based on', { _tags: 'core' })}: {taxBasedOnLabel}
-					</Text>
-				</Pressable>
+				<Text size="small">
+					{t('Tax based on', { _tags: 'core' })}: {taxBasedOnLabel}
+				</Text>
 			</Popover.Target>
 			<Popover.Content>
 				<TaxRateProvider initialQuery={initialQuery}>

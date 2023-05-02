@@ -5,7 +5,8 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import useTaxRates from '../../contexts/tax-rates';
+import { t } from '../../../../../lib/translations';
+import useTaxRates from '../../../contexts/tax-rates';
 
 const DisplayCurrentTaxRates = () => {
 	const { data: rates, query$ } = useTaxRates();
@@ -16,32 +17,32 @@ const DisplayCurrentTaxRates = () => {
 			<Box horizontal space="normal">
 				<Box>
 					<Text uppercase size="small" type="secondary">
-						Country
+						{t('Country', { _tags: 'core' })}
 					</Text>
 					<Text>{query.country}</Text>
 				</Box>
 				<Box>
 					<Text uppercase size="small" type="secondary">
-						State
+						{t('State', { _tags: 'core' })}
 					</Text>
 					<Text>{query.state}</Text>
 				</Box>
 				<Box>
 					<Text uppercase size="small" type="secondary">
-						City
+						{t('City', { _tags: 'core' })}
 					</Text>
 					<Text>{query.city}</Text>
 				</Box>
 				<Box>
 					<Text uppercase size="small" type="secondary">
-						Postcode
+						{t('Postcode', { _tags: 'core' })}
 					</Text>
 					<Text>{query.postcode}</Text>
 				</Box>
 			</Box>
 			<Box>
 				<Text uppercase size="small" type="secondary">
-					Matched Rates
+					{t('Matched Rates', { _tags: 'core' })}
 				</Text>
 				{rates.map((rate) => {
 					return (
