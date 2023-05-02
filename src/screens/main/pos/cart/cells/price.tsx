@@ -1,8 +1,11 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
+import useLocalData from '../../../../../contexts/local-data';
 import NumberInput from '../../../components/number-input';
+import useTaxCalculation from '../../../hooks/use-tax-calculation';
 
 interface Props {
 	item: import('@wcpos/database').LineItemDocument;
@@ -13,21 +16,45 @@ interface Props {
  */
 export const Price = ({ item }: Props) => {
 	const price = useObservableState(item.price$, item.price);
+	const taxClass = useObservableState(item.tax_class$, item.tax_class);
+	// find meta data value when key = _woocommerce_pos_tax_status
+	const _taxStatus = useObservableState(
+		item.meta_data$.pipe(
+			map((meta) => meta.find((meta) => meta.key === '_woocommerce_pos_tax_status').value)
+		),
+		item.meta_data.find((meta) => meta.key === '_woocommerce_pos_tax_status').value
+	);
+	const taxStatus = _taxStatus ?? 'taxable';
+	const { store } = useLocalData();
+	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
+	const { calculateTaxesFromPrice } = useTaxCalculation();
+	const taxes = calculateTaxesFromPrice({ price, taxClass, taxStatus, pricesIncludeTax: false });
+	const displayPrice = taxDisplayCart === 'incl' ? price + taxes.total : price;
 
 	/**
 	 * update subtotal, not price
 	 */
 	const handleUpdate = React.useCallback(
 		(newValue: string) => {
+			let newPrice = parseFloat(newValue);
+			if (taxDisplayCart === 'incl') {
+				const taxes = calculateTaxesFromPrice({
+					price: newPrice,
+					taxClass,
+					taxStatus,
+					pricesIncludeTax: true,
+				});
+				newPrice = parseFloat(newValue) - taxes.total;
+			}
 			const quantity = item.getLatest().quantity;
-			const newTotal = String(quantity * parseFloat(newValue));
-			item.incrementalPatch({ price: parseFloat(newValue), total: newTotal });
+			const newTotal = String(quantity * newPrice);
+			item.incrementalPatch({ price: newPrice, total: newTotal });
 		},
-		[item]
+		[calculateTaxesFromPrice, item, taxClass, taxDisplayCart, taxStatus]
 	);
 
 	/**
 	 *
 	 */
-	return <NumberInput value={String(price)} onChange={handleUpdate} showDecimals />;
+	return <NumberInput value={String(displayPrice)} onChange={handleUpdate} showDecimals />;
 };

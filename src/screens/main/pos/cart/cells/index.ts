@@ -1,12 +1,12 @@
 import { Actions } from './actions';
-import { FeeAndShippingPrice } from './fee-and-shipping-price';
-import { FeeAndShippingTotal } from './fee-and-shipping-total';
 import { FeeName } from './fee-name';
+import { FeeTotal } from './fee-total';
 import { Price } from './price';
 import { ProductName } from './product-name';
 import { ProductTotal } from './product-total';
 import { Quantity } from './quantity';
 import { ShippingTitle } from './shipping-title';
+import { ShippingTotal } from './shipping-total';
 import { Subtotal } from './subtotal';
 
 const line_items = {
@@ -23,7 +23,7 @@ const fee_lines = {
 	name: FeeName,
 	price: () => null,
 	subtotal: () => null,
-	total: FeeAndShippingTotal,
+	total: FeeTotal,
 };
 
 const shipping_lines = {
@@ -31,7 +31,7 @@ const shipping_lines = {
 	name: ShippingTitle,
 	price: () => null,
 	subtotal: () => null,
-	total: FeeAndShippingTotal,
+	total: ShippingTotal,
 };
 
 export { line_items, fee_lines, shipping_lines };

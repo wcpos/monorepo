@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
@@ -13,57 +12,47 @@ import useCurrencyFormat from '../../../hooks/use-currency-format';
 import useTaxCalculation from '../../../hooks/use-tax-calculation';
 
 interface Props {
-	item: import('@wcpos/database').LineItemDocument;
+	item: import('@wcpos/database').FeeLineDocument;
 }
 
 /**
- *
+ * Changing the total actually updates the price, because the WC REST API makes no sense
  */
-export const Subtotal = ({ item, column }: Props) => {
-	const _subtotal = useObservableState(item.subtotal$, item.subtotal);
-	const subtotal = parseFloat(_subtotal);
-	const subtotal_tax = useObservableState(item.subtotal_tax$, item.subtotal_tax);
+export const ShippingTotal = ({ item, column }: Props) => {
+	const _total = useObservableState(item.total$, item.total);
+	const total = parseFloat(_total);
+	const total_tax = useObservableState(item.total_tax$, item.total_tax);
 	const { format } = useCurrencyFormat();
 	const { display } = column;
-
-	const taxClass = useObservableState(item.tax_class$, item.tax_class);
-	// find meta data value when key = _woocommerce_pos_tax_status
-	const _taxStatus = useObservableState(
-		item.meta_data$.pipe(
-			map((meta) => meta.find((meta) => meta.key === '_woocommerce_pos_tax_status').value)
-		),
-		item.meta_data.find((meta) => meta.key === '_woocommerce_pos_tax_status').value
-	);
-	const taxStatus = _taxStatus ?? 'taxable';
 	const { store } = useLocalData();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
 	const { calculateTaxesFromPrice } = useTaxCalculation();
 	const taxes = calculateTaxesFromPrice({
-		price: subtotal,
-		taxClass,
-		taxStatus,
+		price: total,
+		taxClass: 'standard', // TODO: what to put here?
+		taxStatus: 'taxable', // TODO: what to put here?
 		pricesIncludeTax: false,
 	});
-	const displaySubtotal = taxDisplayCart === 'incl' ? subtotal + taxes.total : subtotal;
+	const displayTotal = taxDisplayCart === 'incl' ? total + taxes.total : total;
 
 	/**
 	 *
 	 */
 	const handleUpdate = React.useCallback(
 		(newValue) => {
-			let newSubtotal = parseFloat(newValue);
+			let total = parseFloat(newValue);
 			if (taxDisplayCart === 'incl') {
 				const taxes = calculateTaxesFromPrice({
-					price: newSubtotal,
-					taxClass,
-					taxStatus,
+					price: total,
+					taxClass: 'standard', // TODO: what to put here?
+					taxStatus: 'taxable', // TODO: what to put here?
 					pricesIncludeTax: true,
 				});
-				newSubtotal = parseFloat(newValue) - taxes.total;
+				total = parseFloat(newValue) - taxes.total;
 			}
-			item.incrementalPatch({ subtotal: String(newSubtotal) });
+			item.incrementalPatch({ total: String(total) });
 		},
-		[calculateTaxesFromPrice, item, taxClass, taxDisplayCart, taxStatus]
+		[calculateTaxesFromPrice, item, taxDisplayCart]
 	);
 
 	/**
@@ -82,10 +71,10 @@ export const Subtotal = ({ item, column }: Props) => {
 	 */
 	return (
 		<Box space="xSmall" align="end">
-			<NumberInput value={String(displaySubtotal)} onChange={handleUpdate} showDecimals />
+			<NumberInput value={String(displayTotal)} onChange={handleUpdate} showDecimals />
 			{show('tax') && (
 				<Text type="textMuted" size="small">
-					{`${taxDisplayCart}. ${format(subtotal_tax) || 0} tax`}
+					{`${taxDisplayCart}. ${format(total_tax) || 0} tax`}
 				</Text>
 			)}
 		</Box>
