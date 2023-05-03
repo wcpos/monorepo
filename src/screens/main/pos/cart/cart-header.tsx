@@ -14,8 +14,8 @@ import AddCustomer from '../../components/add-new-customer';
 import CustomerSelect from '../../components/customer-select';
 import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
-import useCurrentOrder from '../contexts/current-order';
 import useCartHelpers from '../../hooks/use-cart-helpers';
+import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -38,7 +38,33 @@ const CartHeader = () => {
 		(selectedCustomer: CustomerDocument) => {
 			/** Special case for Guest */
 			if (selectedCustomer.id === 0) {
-				return addCustomer({ customer_id: 0, billing: {}, shipping: {} });
+				return addCustomer({
+					customer_id: 0,
+					billing: {
+						first_name: '',
+						last_name: '',
+						company: '',
+						address_1: '',
+						address_2: '',
+						city: '',
+						postcode: '',
+						country: '',
+						state: '',
+						email: '',
+						phone: '',
+					},
+					shipping: {
+						first_name: '',
+						last_name: '',
+						company: '',
+						address_1: '',
+						address_2: '',
+						city: '',
+						postcode: '',
+						country: '',
+						state: '',
+					},
+				});
 			}
 
 			const customerJSON = selectedCustomer.toMutableJSON();
