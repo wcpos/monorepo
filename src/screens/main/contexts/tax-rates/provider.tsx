@@ -62,7 +62,13 @@ const TaxRateProvider = ({ children, initialQuery, ui }: TaxRateProviderProps) =
 				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$.pipe(
+					// tap((result) => {
+					// 	debugger;
+					// }),
 					map((result) => filterTaxRates(result, q.country, q.state, q.postcode, q.city))
+					// tap((result) => {
+					// 	debugger;
+					// })
 				);
 			})
 		);

@@ -147,6 +147,8 @@ const ProductSearch = ({
 				} else {
 					addProduct(result[0]);
 				}
+			} else {
+				// no result in local db, so do a search via REST API?
 			}
 		}
 	});

@@ -1,58 +1,25 @@
 import * as React from 'react';
 
+import { extractNameFromJSON, JSON } from './helpers';
 import { t } from '../../../../lib/translations';
-
-interface Props {
-	id?: number;
-	customer_id?: number;
-	first_name?: string;
-	last_name?: string;
-	username?: string;
-	email?: string;
-	billing?: {
-		first_name?: string;
-		last_name?: string;
-		username?: string;
-		email?: string;
-	};
-	shipping?: {
-		first_name?: string;
-		last_name?: string;
-	};
-}
 
 /**
  *
  */
 export const useCustomerNameFormat = () => {
-	const format = React.useCallback((json: Props) => {
-		const customerID = json.id !== undefined ? json.id : null;
+	/**
+	 *
+	 */
+	const format = React.useCallback((json: JSON) => {
+		const name = extractNameFromJSON(json);
 
-		// try full name first
-		const firstName = json.first_name || json.billing?.first_name || json.shipping?.first_name;
-		const lastName = json.last_name || json.billing?.last_name || json.shipping?.last_name;
-
-		if (firstName && lastName) {
-			return `${firstName} ${lastName}`;
-		} else if (firstName || lastName) {
-			return firstName || lastName;
-		}
-
-		// try username
-		const username = json.username || json.billing?.username;
-
-		if (username) {
-			return username;
-		}
-
-		// try email
-		const email = json.email || json.billing?.email;
-
-		if (email) {
-			return email;
+		if (name) {
+			return name;
 		}
 
 		// fallback to Guest
+		const customerID = json.id ?? json.customer_id;
+
 		if (customerID === 0) {
 			return t('Guest', { _tags: 'core' });
 		}

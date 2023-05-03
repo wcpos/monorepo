@@ -26,10 +26,6 @@ const EditProduct = () => {
 	const name = useObservableState(product.name$, product.name);
 	const manageStock = useObservableState(product.manage_stock$, product.manage_stock);
 
-	React.useEffect(() => {
-		setTitle(() => t('Edit {name}', { _tags: 'core', name, _context: 'Edit Product title' }));
-	}, [name, setTitle]);
-
 	/**
 	 * Handle save button click
 	 */
@@ -63,11 +59,12 @@ const EditProduct = () => {
 	 *
 	 */
 	React.useEffect(() => {
+		setTitle(() => t('Edit {name}', { _tags: 'core', name, _context: 'Edit Product title' }));
 		setPrimaryAction({
 			label: t('Save to Server', { _tags: 'core' }),
 			action: handleSave,
 		});
-	}, [handleSave, setPrimaryAction]);
+	}, [handleSave, name, setPrimaryAction, setTitle]);
 
 	/**
 	 *

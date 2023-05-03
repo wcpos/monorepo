@@ -60,13 +60,14 @@ export function filterTaxRates(
 	city: string = ''
 ): TaxRate[] {
 	return filter(taxRates, (rate) => {
-		const countryMatch = rate.country === country;
-		const stateMatch = rate.state === state || rate.state === '';
+		// we don't need to match country and state because it's done in the query
+		// const countryMatch = rate.country === country;
+		// const stateMatch = rate.state === state || rate.state === '';
 		const postcodeMatch =
 			isEmpty(rate.postcodes) || postcodeLocationMatcher(postcode, rate.postcodes);
 		const cityMatch = isEmpty(rate.cities) || includes(rate.cities, city);
 
-		return countryMatch && stateMatch && postcodeMatch && cityMatch;
+		return postcodeMatch && cityMatch;
 	});
 }
 
