@@ -213,7 +213,10 @@ export const hydrateWebAppData = (site, wp_credentials, stores, store_id) => {
 					savedStores.push(...newStoreDocs);
 					wpCredentials.incrementalPatch({ stores: savedStores.map((s) => s.localID) });
 				}
-				return savedStores.find((s) => s.id === parseInt(store_id, 10));
+				const test = savedStores.find((s) => s.id === parseInt(store_id, 10));
+				if (!test) {
+					return savedStores[savedStores.length - 1];
+				}
 			}
 			return null;
 		}),
