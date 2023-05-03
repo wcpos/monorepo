@@ -18,7 +18,7 @@ export interface LocalData {
 	user: UserDocument;
 	site?: SiteDocument;
 	wpCredentials?: WPCredentialsDocument;
-	store?: StoreDocument;
+	stores?: StoreDocument;
 	storeDB?: StoreDatabase;
 	locale: string;
 }
@@ -50,15 +50,27 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 	 *
 	 */
 	const value = React.useMemo(() => {
-		const { site, wp_credentials, store } = pick(initialProps, ['site', 'wp_credentials', 'store']);
-		const isWebApp = Boolean(site && wp_credentials && store);
+		const { site, wp_credentials, stores, store, store_id } = pick(initialProps, [
+			'site',
+			'wp_credentials',
+			'stores',
+			'store',
+			'store_id',
+		]);
+		/**
+		 * Hack fix for backwards compatibility, remove after v1 release
+		 */
+		const _stores = stores || [store];
+		const isWebApp = Boolean(site && wp_credentials && _stores);
 
 		/**
 		 * If web app, we hydrate from initial props
 		 * FIXME: this feels a but messy, it probably could be improved
 		 * FIXME: change in store locale will not trigger a change to language
 		 */
-		const hydratedResources$ = isWebApp ? hydrateWebAppData(site, wp_credentials, store) : current$;
+		const hydratedResources$ = isWebApp
+			? hydrateWebAppData(site, wp_credentials, _stores, store_id)
+			: current$;
 
 		/**
 		 * Subscribe to locale changes in the current store and add locale to the local data

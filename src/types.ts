@@ -32,7 +32,9 @@ export type InitialProps = {
 	homepage: string;
 	manifest: string;
 	site: InitialSiteProps;
-	store: InitialStoresProps;
+	store?: InitialStoresProps;
+	stores: InitialStoresProps[];
 	version: string;
 	wp_credentials: InitialWpCredentialsProps;
+	store_id?: string;
 };

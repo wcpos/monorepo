@@ -82,7 +82,7 @@ export const useReplicationState = ({
 			// Create a new replicationState instance and start it
 			const newReplicationState = replicateRxCollection({
 				collection,
-				replicationIdentifier: `replication-to-${apiURL}/${endpoint}`,
+				replicationIdentifier: `store-${store.localID}-replication-to-${apiURL}/${endpoint}`,
 				// push: {
 				// 	handler: async () => Promise.resolve([]),
 				// },

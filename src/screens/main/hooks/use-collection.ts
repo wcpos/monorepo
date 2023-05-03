@@ -1,5 +1,14 @@
-import { useObservableState } from 'observable-hooks';
-import { filter, map } from 'rxjs/operators';
+import { useObservableState, useObservable } from 'observable-hooks';
+import { of } from 'rxjs';
+import {
+	filter,
+	map,
+	tap,
+	switchMap,
+	startWith,
+	mergeWith,
+	distinctUntilChanged,
+} from 'rxjs/operators';
 
 import useLocalData from '../../../contexts/local-data/';
 
@@ -15,14 +24,24 @@ type StoreDatabaseCollections = import('@wcpos/database').StoreDatabaseCollectio
 const useCollection = <K extends keyof StoreDatabaseCollections>(key: K) => {
 	const { storeDB } = useLocalData();
 
-	const collection = useObservableState(
-		storeDB.addCollections$.pipe(
-			// debounceTime(100),
-			filter((obj) => Object.keys(obj).includes(key)),
-			map((obj) => obj[key])
-		),
-		storeDB.collections[key]
+	const collection$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(([currentStoreDB]) => {
+					return of(currentStoreDB.collections[key]).pipe(
+						mergeWith(
+							currentStoreDB.addCollections$.pipe(
+								filter((obj) => Object.keys(obj).includes(key)),
+								map((obj) => obj[key])
+							)
+						)
+					);
+				})
+			),
+		[storeDB]
 	);
+
+	const collection = useObservableState(collection$, storeDB.collections[key]);
 
 	return collection;
 };

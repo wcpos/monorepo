@@ -1,7 +1,17 @@
 import { getLocales } from 'expo-localization';
 import { isRxDocument } from 'rxdb';
-import { from, forkJoin, Observable } from 'rxjs';
-import { catchError, switchMap, filter, map, tap } from 'rxjs/operators';
+import { from, forkJoin, Observable, combineLatest, of } from 'rxjs';
+import {
+	catchError,
+	switchMap,
+	filter,
+	map,
+	tap,
+	distinctUntilChanged,
+	startWith,
+	skip,
+	shareReplay,
+} from 'rxjs/operators';
 
 import type {
 	UserDatabase,
@@ -51,48 +61,101 @@ const handleFirstUser = async (userDB: UserDatabase) => {
 };
 
 /**
- *
+ * make sure userDB comes preloaded with the a Global User (for now)
  */
-export const current$: Observable<LocalData> = from(createUserDB()).pipe(
-	switchMap((userDB) =>
-		userDB.getLocal$('current').pipe(
-			map((current) => ({
-				userID: current?.get('userID'),
-				siteID: current?.get('siteID'),
-				wpCredentialsID: current?.get('wpCredentialsID'),
-				storeID: current?.get('storeID'),
-			})),
-			switchMap(({ userID, siteID, wpCredentialsID, storeID }) =>
-				/**
-				 * ForkJoin is like a Promise.all, so we fetch all the RxDocs and storeDB in parallel
-				 */
-				forkJoin({
-					user: userDB.users.findOneFix(userID).exec(),
-					site: userDB.sites.findOneFix(siteID).exec(),
-					wpCredentials: userDB.wp_credentials.findOneFix(wpCredentialsID).exec(),
-					store: userDB.stores.findOneFix(storeID).exec(),
-					storeDB: storeID ? createStoreDB(storeID) : Promise.resolve(null),
-				}).pipe(
-					/**
-					 * There should always be a global user
-					 * NOTE: I don't actually use global users at the moment, but might in the future
-					 * if user = null, either find the first one or create a new one
-					 */
-					filter((obj: LocalData) => {
-						if (!isRxDocument(obj.user)) {
-							handleFirstUser(userDB);
-							return false;
-						} else {
-							return true;
-						}
-					}),
+const userDB$ = from(createUserDB()).pipe(
+	switchMap((userDB) => {
+		return userDB
+			.getLocal$('current')
+			.pipe(
+				switchMap((current) => userDB.users.findOneFix(current?.get('userID')).exec()),
+				filter((user) => {
+					if (!isRxDocument(user)) {
+						handleFirstUser(userDB);
+						return false;
+					} else {
+						return true;
+					}
+				})
+			)
+			.pipe(map(() => userDB));
+	}),
+	distinctUntilChanged(),
+	shareReplay(1)
+);
 
-					// add userDB to the object and return here
-					map((obj) => Object.assign(obj, { userDB }))
+const user$ = userDB$.pipe(
+	switchMap((userDB) =>
+		userDB
+			.getLocal$('current')
+			.pipe(switchMap((current) => userDB.users.findOneFix(current?.get('userID')).exec()))
+	),
+	distinctUntilChanged(),
+	shareReplay(1)
+);
+
+const site$ = userDB$.pipe(
+	switchMap((userDB) =>
+		userDB
+			.getLocal$('current')
+			.pipe(switchMap((current) => userDB.sites.findOneFix(current?.get('siteID')).exec()))
+	),
+	distinctUntilChanged(),
+	shareReplay(1)
+);
+
+const wpCredentials$ = userDB$.pipe(
+	switchMap((userDB) =>
+		userDB
+			.getLocal$('current')
+			.pipe(
+				switchMap((current) =>
+					userDB.wp_credentials.findOneFix(current?.get('wpCredentialsID')).exec()
 				)
 			)
-		)
 	),
+	distinctUntilChanged(),
+	shareReplay(1)
+);
+
+const store$ = userDB$.pipe(
+	switchMap((userDB) =>
+		userDB
+			.getLocal$('current')
+			.pipe(switchMap((current) => userDB.stores.findOneFix(current?.get('storeID')).exec()))
+	),
+	distinctUntilChanged(),
+	shareReplay(1)
+);
+
+const storeDB$ = store$.pipe(
+	switchMap((store) => (store ? createStoreDB(store.localID) : Promise.resolve(null))),
+	distinctUntilChanged(),
+	shareReplay(1)
+);
+
+/**
+ *
+ */
+export const current$ = combineLatest([
+	userDB$,
+	user$,
+	site$,
+	wpCredentials$,
+	store$,
+	storeDB$,
+]).pipe(
+	map(([userDB, user, site, wpCredentials, store, storeDB]) => ({
+		userDB,
+		user,
+		site,
+		wpCredentials,
+		store,
+		storeDB,
+	})),
+	// tap((data) => {
+	// 	debugger;
+	// }),
 	catchError((err) => {
 		log.error(err);
 		throw new Error('Error hydrating current context');
@@ -100,53 +163,85 @@ export const current$: Observable<LocalData> = from(createUserDB()).pipe(
 );
 
 /**
- *
+ * FIXME: this is ugly as hell
  */
-export const hydrateWebAppData = (site, wp_credentials, store) => {
-	return current$.pipe(
-		switchMap(async ({ user, userDB }) => {
-			// @ts-ignore
-			let siteDoc = await userDB.sites.findOneFix(site.uuid).exec();
-			let wpCredentialsDoc = await userDB.wp_credentials
-				// @ts-ignore
-				.findOneFix(wp_credentials.uuid)
-				.exec();
-			let storeDoc = await userDB.stores.findOne({ selector: { id: store.id } }).exec();
-
-			if (!siteDoc) {
-				// @ts-ignore
-				siteDoc = await userDB.sites.insert(site);
+export const hydrateWebAppData = (site, wp_credentials, stores, store_id) => {
+	const webSite$ = userDB$.pipe(
+		switchMap(async (userDB) => {
+			let savedSite = await userDB.sites.findOneFix(site.uuid).exec();
+			if (!savedSite) {
+				savedSite = await userDB.sites.insert(site);
 			}
+			return savedSite;
+		}),
+		distinctUntilChanged(),
+		shareReplay(1)
+	);
 
-			/**
-			 * Update nonce for REST requests on each refresh
-			 * FIXME: this should be done proactively, ie: check cookie timeout
-			 */
-			if (wpCredentialsDoc) {
-				// @ts-ignore
-				wpCredentialsDoc = await wpCredentialsDoc.patch({ wp_nonce: wp_credentials.wp_nonce });
+	const webCredentials$ = userDB$.pipe(
+		switchMap(async (userDB) => {
+			let savedCredentials = await userDB.wp_credentials.findOneFix(wp_credentials.uuid).exec();
+			if (savedCredentials) {
+				// always update the nonce
+				savedCredentials.incrementalPatch({ wp_nonce: wp_credentials.wp_nonce });
 			}
-
-			if (!wpCredentialsDoc) {
-				// @ts-ignore
-				wpCredentialsDoc = await userDB.wp_credentials.insert(wp_credentials);
+			if (!savedCredentials) {
+				savedCredentials = await userDB.wp_credentials.insert(wp_credentials);
 			}
+			return savedCredentials;
+		}),
+		distinctUntilChanged(),
+		shareReplay(1)
+	);
 
-			if (!storeDoc) {
-				// @ts-ignore
-				storeDoc = await userDB.stores.insert(store);
+	const webStore$ = combineLatest([
+		userDB$,
+		webCredentials$,
+		store$.pipe(skip(1), startWith(null)),
+	]).pipe(
+		switchMap(async ([userDB, wpCredentials, store]) => {
+			if (store) {
+				return store;
 			}
+			if (wpCredentials) {
+				const savedStores = await wpCredentials.populate('stores');
+				const newStores = stores.filter((s) => {
+					return !savedStores.find((ss) => ss.id === parseInt(s.id, 10));
+				});
+				if (newStores.length > 0) {
+					const { success: newStoreDocs } = await userDB.stores.bulkInsert(newStores);
+					savedStores.push(...newStoreDocs);
+					wpCredentials.incrementalPatch({ stores: savedStores.map((s) => s.localID) });
+				}
+				return savedStores.find((s) => s.id === parseInt(store_id, 10));
+			}
+			return null;
+		}),
+		distinctUntilChanged(),
+		shareReplay(1)
+	);
 
-			const storeDB = await createStoreDB(storeDoc.localID);
+	const webStoreDB$ = webStore$.pipe(
+		switchMap((store) => (store ? createStoreDB(store.localID) : Promise.resolve(null))),
+		distinctUntilChanged(),
+		shareReplay(1)
+	);
 
-			return {
-				user,
-				userDB,
-				site: siteDoc,
-				wpCredentials: wpCredentialsDoc,
-				store: storeDoc,
-				storeDB,
-			};
+	return combineLatest([userDB$, user$, webSite$, webCredentials$, webStore$, webStoreDB$]).pipe(
+		map(([userDB, user, site, wpCredentials, store, storeDB]) => ({
+			userDB,
+			user,
+			site,
+			wpCredentials,
+			store,
+			storeDB,
+		})),
+		// tap((data) => {
+		// 	debugger;
+		// }),
+		catchError((err) => {
+			log.error(err);
+			throw new Error('Error hydrating current context');
 		})
 	);
 };
