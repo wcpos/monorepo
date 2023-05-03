@@ -224,6 +224,7 @@ export const hydrateWebAppData = (site, wp_credentials, stores, store_id) => {
 	const webStoreDB$ = webStore$.pipe(
 		switchMap((store) => (store ? createStoreDB(store.localID) : Promise.resolve(null))),
 		distinctUntilChanged(),
+		filter((storeDB) => !!storeDB),
 		shareReplay(1)
 	);
 
