@@ -25,6 +25,7 @@ import { createStoreDB } from '@wcpos/database/src/stores-db';
 import { createUserDB } from '@wcpos/database/src/users-db';
 import log from '@wcpos/utils/src/logger';
 
+import { getOrInsertSite, getOrInsertStore, getOrInsertWPCredentials } from './helpers';
 import { tx } from '../../lib/translations';
 import locales from '../../lib/translations/locales.json';
 
@@ -167,29 +168,13 @@ export const current$ = combineLatest([
  */
 export const hydrateWebAppData = (site, wp_credentials, stores, store_id) => {
 	const webSite$ = userDB$.pipe(
-		switchMap(async (userDB) => {
-			let savedSite = await userDB.sites.findOneFix(site.uuid).exec();
-			if (!savedSite) {
-				savedSite = await userDB.sites.insert(site);
-			}
-			return savedSite;
-		}),
+		switchMap(async (userDB) => getOrInsertSite(userDB, site)),
 		distinctUntilChanged(),
 		shareReplay(1)
 	);
 
 	const webCredentials$ = userDB$.pipe(
-		switchMap(async (userDB) => {
-			let savedCredentials = await userDB.wp_credentials.findOneFix(wp_credentials.uuid).exec();
-			if (savedCredentials) {
-				// always update the nonce
-				savedCredentials.incrementalPatch({ wp_nonce: wp_credentials.wp_nonce });
-			}
-			if (!savedCredentials) {
-				savedCredentials = await userDB.wp_credentials.insert(wp_credentials);
-			}
-			return savedCredentials;
-		}),
+		switchMap(async (userDB) => getOrInsertWPCredentials(userDB, wp_credentials)),
 		distinctUntilChanged(),
 		shareReplay(1)
 	);
@@ -203,22 +188,7 @@ export const hydrateWebAppData = (site, wp_credentials, stores, store_id) => {
 			if (store) {
 				return store;
 			}
-			if (wpCredentials) {
-				const savedStores = await wpCredentials.populate('stores');
-				const newStores = stores.filter((s) => {
-					return !savedStores.find((ss) => ss.id === parseInt(s.id, 10));
-				});
-				if (newStores.length > 0) {
-					const { success: newStoreDocs } = await userDB.stores.bulkInsert(newStores);
-					savedStores.push(...newStoreDocs);
-					wpCredentials.incrementalPatch({ stores: savedStores.map((s) => s.localID) });
-				}
-				const test = savedStores.find((s) => s.id === parseInt(store_id, 10));
-				if (!test) {
-					return savedStores[savedStores.length - 1];
-				}
-			}
-			return null;
+			return getOrInsertStore(userDB, wpCredentials, stores, store_id);
 		}),
 		distinctUntilChanged(),
 		shareReplay(1)
@@ -227,7 +197,7 @@ export const hydrateWebAppData = (site, wp_credentials, stores, store_id) => {
 	const webStoreDB$ = webStore$.pipe(
 		switchMap((store) => (store ? createStoreDB(store.localID) : Promise.resolve(null))),
 		distinctUntilChanged(),
-		filter((storeDB) => !!storeDB),
+		// filter((storeDB) => !!storeDB), there should always be a storeDB
 		shareReplay(1)
 	);
 
@@ -240,9 +210,6 @@ export const hydrateWebAppData = (site, wp_credentials, stores, store_id) => {
 			store,
 			storeDB,
 		})),
-		// tap((data) => {
-		// 	debugger;
-		// }),
 		catchError((err) => {
 			log.error(err);
 			throw new Error('Error hydrating current context');
