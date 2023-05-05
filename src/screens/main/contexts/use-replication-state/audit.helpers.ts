@@ -1,3 +1,5 @@
+import { getPriority } from './replication.helpers';
+
 /**
  * NOTE: make sure it is sorted by date_modified_gmt, this is important
  */
@@ -36,10 +38,20 @@ export const getlocalDocsWithIDsOrderedByLastModified = async (collection, endpo
 /**
  *
  */
-export const getAndPatchRecentlyModified = async (modified_after, collection, endpoint, http) => {
-	const response = await http.get(endpoint, {
-		params: { modified_after },
-	});
+export const getAndPatchRecentlyModified = async (
+	modified_after,
+	collection,
+	endpoint,
+	queuedHttp
+) => {
+	const response = await queuedHttp.get(
+		endpoint,
+		{
+			params: { modified_after },
+		},
+		getPriority(endpoint, { params: { modified_after } }),
+		endpoint + '-' + modified_after
+	);
 
 	if (Array.isArray(response?.data)) {
 		await Promise.all(

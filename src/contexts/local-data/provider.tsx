@@ -18,7 +18,7 @@ export interface LocalData {
 	user: UserDocument;
 	site?: SiteDocument;
 	wpCredentials?: WPCredentialsDocument;
-	stores?: StoreDocument;
+	store?: StoreDocument;
 	storeDB?: StoreDatabase;
 	locale: string;
 }

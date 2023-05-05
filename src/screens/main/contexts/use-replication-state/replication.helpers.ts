@@ -131,3 +131,61 @@ export const retryWithExponentialBackoff = async (fn, retries = 5, delay = 1000)
 
 	throw new Error('Max retries reached');
 };
+
+/**
+ * Priorities
+ *
+ * 10 - Tax
+ * 20 - Product
+ * 30 - Customer
+ * 40 - Order
+ * 50 - Product Search
+ * 60 - Customer Search
+ * 70 - Order Search
+ * 80 - Variations
+ * 90 - Variation Search
+ * 100 - Product Category
+ * 110 - Product Tag
+ */
+export const getPriority = (endpoint: string, params?: object) => {
+	let type = endpoint;
+
+	if (!params) {
+		type += '-audit';
+	}
+
+	switch (type) {
+		case 'taxes':
+			return 10;
+		case 'products-audit':
+			return 20;
+		case 'customers-audit':
+			return 30;
+		case 'orders-audit':
+			return 40;
+		case 'products':
+			return 50;
+		case 'customers':
+			return 60;
+		case 'orders':
+			return 70;
+		case 'products-search':
+			return 80;
+		case 'customers-search':
+			return 90;
+		case 'orders-search':
+			return 100;
+		case 'variation-audit':
+			return 110;
+		case 'variation':
+			return 120;
+		case 'variations-search':
+			return 130;
+		case 'products/categories':
+			return 140;
+		case 'products/tags':
+			return 150;
+		default:
+			return 200;
+	}
+};

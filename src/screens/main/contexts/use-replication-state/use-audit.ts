@@ -9,7 +9,8 @@ import {
 	getlocalDocsWithIDsOrderedByLastModified,
 	getAndPatchRecentlyModified,
 } from './audit.helpers';
-import useRestHttpClient from '../../hooks/use-rest-http-client';
+import { getPriority } from './replication.helpers';
+import useQueuedRestRequest from '../../hooks/use-queued-rest-request';
 
 const runningAudits = new Map();
 
@@ -35,47 +36,37 @@ export interface AuditStatus {
  *
  */
 const useAudit = ({ collection, endpoint, auditTime = 600000 }) => {
-	const http = useRestHttpClient();
-	// Create a ref to store the ongoing fetchRemoteIDs promise
-	const fetchRemoteIDsPromiseRef = React.useRef(null);
+	const queuedHttp = useQueuedRestRequest();
 
 	/**
 	 * Fetch remote IDs
 	 */
 	const fetchRemoteIDs = React.useCallback(async () => {
-		// If there's an ongoing fetchRemoteIDs promise, return it
-		if (fetchRemoteIDsPromiseRef.current) {
-			return fetchRemoteIDsPromiseRef.current;
-		}
-
-		// Create a new fetchRemoteIDs promise and store it in the ref
-		fetchRemoteIDsPromiseRef.current = (async () => {
-			try {
-				// Get array of all remote IDs
-				const remoteIDs = await http
-					.get(endpoint, {
+		try {
+			// Get array of all remote IDs
+			const remoteIDs = await queuedHttp
+				.get(
+					endpoint,
+					{
 						params: { fields: ['id'], posts_per_page: -1 },
-					})
-					.then(({ data }) => {
-						return data.map((doc) => doc.id);
-					});
-
-				// Save to local storage
-				collection.upsertLocal('audit-' + endpoint, {
-					remoteIDs,
+					},
+					getPriority(endpoint),
+					endpoint + '-audit'
+				)
+				.then(({ data }) => {
+					return data.map((doc) => doc.id);
 				});
 
-				return remoteIDs;
-			} catch (error) {
-				log.error(`Error auditing ${collection.name}:`, error);
-			} finally {
-				// Clear the ref when the promise is resolved or rejected
-				fetchRemoteIDsPromiseRef.current = null;
-			}
-		})();
+			// Save to local storage
+			collection.upsertLocal('audit-' + endpoint, {
+				remoteIDs,
+			});
 
-		return fetchRemoteIDsPromiseRef.current;
-	}, [collection, endpoint, http]);
+			return remoteIDs;
+		} catch (error) {
+			log.error(`Error auditing ${collection.name}:`, error);
+		}
+	}, [collection, endpoint, queuedHttp]);
 
 	/**
 	 * Perform the audit
@@ -83,7 +74,6 @@ const useAudit = ({ collection, endpoint, auditTime = 600000 }) => {
 	const run = React.useCallback(
 		async (options?: AuditRunOptions): Promise<AuditStatus> => {
 			const { force = false } = options ?? {};
-
 			try {
 				// needs to be endoint specific for variations
 				const remote = await collection
@@ -119,7 +109,7 @@ const useAudit = ({ collection, endpoint, auditTime = 600000 }) => {
 				 * with rxdb silently dropping changes in the pull replication.
 				 */
 				if (!completeIntitalSync && lastModified) {
-					await getAndPatchRecentlyModified(lastModified, collection, endpoint, http);
+					await getAndPatchRecentlyModified(lastModified, collection, endpoint, queuedHttp);
 				}
 
 				return {
@@ -134,7 +124,7 @@ const useAudit = ({ collection, endpoint, auditTime = 600000 }) => {
 				log.error(`Error auditing ${collection.name}:`, error);
 			}
 		},
-		[collection, endpoint, fetchRemoteIDs, http]
+		[collection, endpoint, fetchRemoteIDs, queuedHttp]
 	);
 
 	/**

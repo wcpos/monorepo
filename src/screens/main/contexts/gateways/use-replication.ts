@@ -46,7 +46,6 @@ export const useReplication = ({ collection }) => {
 			}
 
 			const data = response.data;
-			debugger;
 
 			// compare local and server ids
 			const add = data

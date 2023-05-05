@@ -2,7 +2,7 @@
  *
  */
 async function syncCollection(replicationState) {
-	await replicationState.audit.run();
+	await replicationState.audit.run({ force: true });
 	replicationState.reSync();
 }
 
