@@ -18,14 +18,27 @@ const AddNoteButton = () => {
 	const [opened, setOpened] = React.useState(false);
 	const { currentOrder } = useCurrentOrder();
 	const note = useObservableState(currentOrder.customer_note$, currentOrder.customer_note);
-	const textareaRef = React.useRef<TextInput>(null);
+	const [value, setValue] = React.useState(note);
 
+	/**
+	 * Keep textarea value insync with the order.customer_note
+	 */
+	React.useEffect(() => {
+		setValue(note);
+	}, [note]);
+
+	/**
+	 *
+	 */
 	const handleSaveNote = React.useCallback(() => {
 		const latestDoc = currentOrder.getLatest();
-		latestDoc.patch({ customer_note: textareaRef.current?.value });
+		latestDoc.patch({ customer_note: value });
 		setOpened(false);
-	}, [currentOrder, textareaRef]);
+	}, [currentOrder, value]);
 
+	/**
+	 *
+	 */
 	return (
 		<>
 			<Button
@@ -47,7 +60,7 @@ const AddNoteButton = () => {
 					},
 				]}
 			>
-				<TextArea ref={textareaRef} value={note} />
+				<TextArea value={value} onChangeText={setValue} />
 			</Modal>
 		</>
 	);

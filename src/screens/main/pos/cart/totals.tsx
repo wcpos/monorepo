@@ -1,22 +1,27 @@
 import * as React from 'react';
 
+import isEmpty from 'lodash/isEmpty';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
+import CustomerNote from './customer-note';
 import ItemizedTaxes from './itemized-taxes';
 import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import { useCart } from '../../contexts/cart';
 import useCurrencyFormat from '../../hooks/use-currency-format';
+import useCurrentOrder from '../contexts/current-order';
 
 const Totals = () => {
+	const { currentOrder } = useCurrentOrder();
 	const { store } = useLocalData();
 	const taxTotalDisplay = useObservableState(store.tax_total_display$, store.tax_total_display);
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
+	const customerNote = useObservableState(currentOrder.customer_note$, currentOrder.customer_note);
 	const { cartTotalsResource } = useCart();
 	const {
 		discount_total,
@@ -53,86 +58,106 @@ const Totals = () => {
 			? parseFloat(shipping_total) + parseFloat(shipping_tax)
 			: shipping_total;
 
-	return hasTotals ? (
-		<Box
-			padding="small"
-			space="small"
-			border
-			style={{
-				borderLeftWidth: 0,
-				borderRightWidth: 0,
-				borderColor: theme.colors.lightGrey,
-				backgroundColor: theme.colors.lightestGrey,
-			}}
-		>
-			<Box horizontal>
-				<Box fill>
-					<Text>{t('Subtotal', { _tags: 'core' })}:</Text>
-				</Box>
-				<Box>
-					<Text>{format(displaySubtotal)}</Text>
-				</Box>
-			</Box>
-			{
-				// Discounts
-				hasDiscount && (
+	return (
+		<>
+			{' '}
+			{hasTotals ? (
+				<Box
+					padding="small"
+					space="small"
+					border
+					style={{
+						borderLeftWidth: 0,
+						borderRightWidth: 0,
+						borderColor: theme.colors.lightGrey,
+						backgroundColor: theme.colors.lightestGrey,
+					}}
+				>
 					<Box horizontal>
 						<Box fill>
-							<Text>{t('Discount', { _tags: 'core' })}:</Text>
+							<Text>{t('Subtotal', { _tags: 'core' })}:</Text>
 						</Box>
 						<Box>
-							<Text>{format(`-${displayDiscountTotal}`)}</Text>
+							<Text>{format(displaySubtotal)}</Text>
 						</Box>
 					</Box>
-				)
-			}
-			{
-				// Fees
-				hasFee && (
-					<Box horizontal>
-						<Box fill>
-							<Text>{t('Fees', { _tags: 'core' })}:</Text>
-						</Box>
-						<Box>
-							<Text>{format(displayFeeTotal)}</Text>
-						</Box>
-					</Box>
-				)
-			}
-			{
-				// Shipping
-				hasShipping && (
-					<Box horizontal>
-						<Box fill>
-							<Text>{t('Shipping', { _tags: 'core' })}:</Text>
-						</Box>
-						<Box>
-							<Text>{format(displayShippingTotal)}</Text>
-						</Box>
-					</Box>
-				)
-			}
-			{calcTaxes === 'yes' && hasTax ? (
-				taxTotalDisplay === 'itemized' ? (
-					<ItemizedTaxes taxLines={tax_lines} taxDisplayCart={taxDisplayCart} />
-				) : (
-					<Box horizontal>
-						<Box fill>
-							<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
-						</Box>
-						<Box horizontal space="normal">
-							<Box fill align="end">
-								<Text>{taxDisplayCart}.</Text>
+					{
+						// Discounts
+						hasDiscount && (
+							<Box horizontal>
+								<Box fill>
+									<Text>{t('Discount', { _tags: 'core' })}:</Text>
+								</Box>
+								<Box>
+									<Text>{format(`-${displayDiscountTotal}`)}</Text>
+								</Box>
 							</Box>
-							<Box>
-								<Text>{format(total_tax || 0)}</Text>
+						)
+					}
+					{
+						// Fees
+						hasFee && (
+							<Box horizontal>
+								<Box fill>
+									<Text>{t('Fees', { _tags: 'core' })}:</Text>
+								</Box>
+								<Box>
+									<Text>{format(displayFeeTotal)}</Text>
+								</Box>
 							</Box>
-						</Box>
-					</Box>
-				)
+						)
+					}
+					{
+						// Shipping
+						hasShipping && (
+							<Box horizontal>
+								<Box fill>
+									<Text>{t('Shipping', { _tags: 'core' })}:</Text>
+								</Box>
+								<Box>
+									<Text>{format(displayShippingTotal)}</Text>
+								</Box>
+							</Box>
+						)
+					}
+					{calcTaxes === 'yes' && hasTax ? (
+						taxTotalDisplay === 'itemized' ? (
+							<ItemizedTaxes taxLines={tax_lines} taxDisplayCart={taxDisplayCart} />
+						) : (
+							<Box horizontal>
+								<Box fill>
+									<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
+								</Box>
+								<Box horizontal space="normal">
+									<Box fill align="end">
+										<Text>{taxDisplayCart}.</Text>
+									</Box>
+									<Box>
+										<Text>{format(total_tax || 0)}</Text>
+									</Box>
+								</Box>
+							</Box>
+						)
+					) : null}
+				</Box>
 			) : null}
-		</Box>
-	) : null;
+			{!isEmpty(customerNote) && (
+				<Box
+					padding="small"
+					space="small"
+					border
+					style={{
+						borderLeftWidth: 0,
+						borderRightWidth: 0,
+						borderColor: theme.colors.lightGrey,
+						backgroundColor: theme.colors.lightestGrey,
+					}}
+				>
+					<CustomerNote note={customerNote} order={currentOrder} />
+				</Box>
+			)}
+		</>
+	);
 };
 
 export default Totals;
