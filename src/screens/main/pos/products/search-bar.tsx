@@ -3,8 +3,10 @@ import * as React from 'react';
 import { useNavigationState } from '@react-navigation/native';
 import get from 'lodash/get';
 
+import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 
+import FilterBar from './filter-bar';
 import { t } from '../../../../lib/translations';
 import Search from '../../components/product/search';
 import UISettings from '../../components/ui-settings';
@@ -45,18 +47,25 @@ const SearchBar = () => {
 	 *
 	 */
 	return (
-		<>
-			<ErrorBoundary>
-				<ProductCategoriesProvider initialQuery={initialCategoriesQuery}>
-					<ProductTagsProvider initialQuery={initialTagsQuery}>
-						<Search addProduct={addProduct} addVariation={addVariation} />
-					</ProductTagsProvider>
-				</ProductCategoriesProvider>
-			</ErrorBoundary>
-			<ErrorBoundary>
-				<UISettings uiSettings={uiSettings} title={t('Product Settings', { _tags: 'core' })} />
-			</ErrorBoundary>
-		</>
+		<Box fill space="small">
+			<Box horizontal align="center" padding="small" paddingBottom="none" space="small">
+				<ErrorBoundary>
+					<ProductCategoriesProvider initialQuery={initialCategoriesQuery}>
+						<ProductTagsProvider initialQuery={initialTagsQuery}>
+							<Search addProduct={addProduct} addVariation={addVariation} />
+						</ProductTagsProvider>
+					</ProductCategoriesProvider>
+				</ErrorBoundary>
+				<ErrorBoundary>
+					<UISettings uiSettings={uiSettings} title={t('Product Settings', { _tags: 'core' })} />
+				</ErrorBoundary>
+			</Box>
+			<Box horizontal padding="small" paddingTop="none">
+				<ErrorBoundary>
+					<FilterBar />
+				</ErrorBoundary>
+			</Box>
+		</Box>
 	);
 };
 

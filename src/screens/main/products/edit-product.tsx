@@ -75,6 +75,7 @@ const EditProduct = () => {
 			fields={[
 				'name',
 				'status',
+				'featured',
 				// 'description',
 				// 'short_description',
 				'sku',
@@ -104,6 +105,9 @@ const EditProduct = () => {
 				},
 				status: {
 					'ui:label': t('Status', { _tags: 'core' }),
+				},
+				featured: {
+					'ui:label': t('Featured', { _tags: 'core' }),
 				},
 				sku: {
 					'ui:label': t('SKU', { _tags: 'core' }),

@@ -8,6 +8,7 @@ import useRestHttpClient from '../use-rest-http-client';
 const minQueue = new MinQueue(1000);
 const requestMap = {};
 let keyCounter = 0;
+let processing = false;
 
 /**
  * Priorities
@@ -29,7 +30,6 @@ export const useQueuedRestRequest = () => {
 	const http = useRestHttpClient();
 	const queue = React.useRef(minQueue);
 	const [queueState, setQueueState] = React.useState(queue.current);
-	const [processing, setProcessing] = React.useState(false);
 	const [batchSize, setBatchSize] = React.useState(5); // Initial batch size
 	const [trigger, setTrigger] = React.useState(false); // Add this line
 
@@ -63,14 +63,14 @@ export const useQueuedRestRequest = () => {
 		);
 
 		// Continue processing the next batch
-		setProcessing(false);
+		processing = false;
 		processNextRequest();
 	};
 
 	// Process the next batch of requests in the queue
 	const processNextRequest = async () => {
 		if (queue.current.size !== 0 && !processing) {
-			setProcessing(true);
+			processing = true;
 
 			const startTime = Date.now();
 			await processBatch();
