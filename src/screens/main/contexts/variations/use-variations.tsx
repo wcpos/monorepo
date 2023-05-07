@@ -1,5 +1,7 @@
 import * as React from 'react';
+
 import { useObservableSuspense } from 'observable-hooks';
+
 import { VariationsContext } from './provider';
 
 export const useVariations = () => {

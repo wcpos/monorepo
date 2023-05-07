@@ -12,6 +12,7 @@ import log from '@wcpos/utils/src/logger';
 
 import cells from './cells';
 import Footer from './footer';
+import ProductTableRow from './table-row';
 import { t } from '../../../../lib/translations';
 import EmptyTableRow from '../../components/empty-table-row';
 import TextCell from '../../components/text-cell';
@@ -40,6 +41,7 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
+	const [shownItems, setShownItems] = React.useState<Record<string, boolean>>({});
 
 	/**
 	 *
@@ -101,28 +103,33 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 			sortDirection: query.sortDirection,
 			cellRenderer,
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
+			shownItems,
 		};
-	}, [columns, query.sortBy, query.sortDirection, cellRenderer, setQuery, uiSettings]);
+	}, [columns, query.sortBy, query.sortDirection, cellRenderer, shownItems, setQuery, uiSettings]);
 
 	/**
 	 *
 	 */
-	const renderItem = ({ item, index, extraData, target }: ListRenderItemInfo<ProductDocument>) => {
-		if (item.type === 'variable') {
-			return (
-				<ErrorBoundary>
-					<VariationsProvider parent={item} uiSettings={uiSettings}>
-						<Table.Row item={item} index={index} extraData={extraData} target={target} />
-					</VariationsProvider>
-				</ErrorBoundary>
-			);
-		}
-		return (
-			<ErrorBoundary>
-				<Table.Row item={item} index={index} extraData={extraData} target={target} />
-			</ErrorBoundary>
-		);
-	};
+	const handleViewableItemsChanged = React.useCallback(
+		({ viewableItems }) => {
+			setShownItems((prevShownItems) => {
+				const newShownItems: Record<string, boolean> = {};
+
+				viewableItems.forEach(({ item }) => {
+					if (!prevShownItems[item.uuid]) {
+						newShownItems[item.uuid] = true;
+					}
+				});
+
+				if (Object.keys(newShownItems).length > 0) {
+					return { ...prevShownItems, ...newShownItems };
+				} else {
+					return prevShownItems;
+				}
+			});
+		},
+		[] // Remove shownItems from the dependency array
+	);
 
 	/**
 	 *
@@ -133,12 +140,17 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 			footer={<Footer count={products.length} />}
 			estimatedItemSize={150}
 			extraData={context}
-			renderItem={renderItem}
+			renderItem={(props) => (
+				<ErrorBoundary>
+					<ProductTableRow {...props} />
+				</ErrorBoundary>
+			)}
 			ListEmptyComponent={<EmptyTableRow message={t('No products found', { _tags: 'core' })} />}
-			// getItemType={(item) => item.type}
-			// onEndReached={() => {
-			// 	nextPage();
-			// }}
+			onViewableItemsChanged={handleViewableItemsChanged}
+			viewabilityConfig={{
+				viewAreaCoveragePercentThreshold: 50,
+				minimumViewTime: 500,
+			}}
 		/>
 	);
 };

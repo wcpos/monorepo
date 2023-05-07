@@ -4,6 +4,7 @@ import find from 'lodash/find';
 
 import Text from '@wcpos/components/src/text';
 
+import { LoadingVariablePrice } from './loading-variations-price';
 import VariablePriceWithTax from '../../../components/product/variable-price';
 import useVariations from '../../../contexts/variations';
 
@@ -28,6 +29,14 @@ export const VariablePrice = ({ item: product, column }: Props) => {
 		},
 		[display]
 	);
+
+	/**
+	 * TODO: I need to check whether all the variations have loaded
+	 * NOTE: variations length can change here due to the variation query
+	 */
+	if (!Array.isArray(data) || data.length === 0) {
+		return <LoadingVariablePrice />;
+	}
 
 	return <VariablePriceWithTax variations={data} taxDisplay={show('tax') ? 'text' : 'tooltip'} />;
 };

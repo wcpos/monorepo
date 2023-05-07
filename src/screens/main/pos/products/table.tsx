@@ -3,12 +3,13 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
+import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 
-import cells from './cells';
 import Footer from './footer';
+import ProductTableRow from './table-row';
 import { t } from '../../../../lib/translations';
 import EmptyTableRow from '../../components/empty-table-row';
 import useProducts from '../../contexts/products';
@@ -33,32 +34,8 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
-
-	/**
-	 *
-	 */
-	const cellRenderer = React.useCallback<CellRenderer<ProductDocument>>(
-		({ item, column, index }) => {
-			const Cell = get(cells, [item.type, column.key], cells.simple[column.key]);
-
-			if (Cell) {
-				return (
-					<ErrorBoundary>
-						<React.Suspense>
-							<Cell item={item} column={column} index={index} />
-						</React.Suspense>
-					</ErrorBoundary>
-				);
-			}
-
-			if (item[column.key]) {
-				return <Text>{String(item[column.key])}</Text>;
-			}
-
-			return null;
-		},
-		[]
-	);
+	const [shownItems, setShownItems] = React.useState<Record<string, boolean>>({});
+	// const shownItems = React.useRef<Record<string, boolean>>({});
 
 	/**
 	 *
@@ -72,32 +49,33 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 			},
 			sortBy: query.sortBy,
 			sortDirection: query.sortDirection,
-			cellRenderer,
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
+			shownItems,
 		};
-	}, [columns, query.sortBy, query.sortDirection, cellRenderer, setQuery, uiSettings]);
+	}, [columns, query.sortBy, query.sortDirection, setQuery, uiSettings, shownItems]);
 
 	/**
 	 *
 	 */
-	const renderItem = React.useCallback(
-		({ item, index, extraData, target }: ListRenderItemInfo<ProductDocument>) => {
-			if (item.type === 'variable') {
-				return (
-					<ErrorBoundary>
-						<VariationsProvider parent={item} uiSettings={uiSettings}>
-							<Table.Row item={item} index={index} extraData={extraData} target={target} />
-						</VariationsProvider>
-					</ErrorBoundary>
-				);
-			}
-			return (
-				<ErrorBoundary>
-					<Table.Row item={item} index={index} extraData={extraData} target={target} />
-				</ErrorBoundary>
-			);
+	const handleViewableItemsChanged = React.useCallback(
+		({ viewableItems }) => {
+			setShownItems((prevShownItems) => {
+				const newShownItems: Record<string, boolean> = {};
+
+				viewableItems.forEach(({ item }) => {
+					if (!prevShownItems[item.uuid]) {
+						newShownItems[item.uuid] = true;
+					}
+				});
+
+				if (Object.keys(newShownItems).length > 0) {
+					return { ...prevShownItems, ...newShownItems };
+				} else {
+					return prevShownItems;
+				}
+			});
 		},
-		[uiSettings]
+		[] // Remove shownItems from the dependency array
 	);
 
 	/**
@@ -108,10 +86,19 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 			data={data}
 			footer={<Footer count={data.length} />}
 			estimatedItemSize={150}
-			getItemType={(item) => item.type}
-			renderItem={renderItem}
+			// getItemType={(item) => (shownItems[item.uuid] ? 'shown' : 'hidden')}
+			renderItem={(props) => (
+				<ErrorBoundary>
+					<ProductTableRow {...props} />
+				</ErrorBoundary>
+			)}
 			extraData={context}
 			ListEmptyComponent={<EmptyTableRow message={t('No products found', { _tags: 'core' })} />}
+			onViewableItemsChanged={handleViewableItemsChanged}
+			viewabilityConfig={{
+				viewAreaCoveragePercentThreshold: 50,
+				minimumViewTime: 500,
+			}}
 		/>
 	);
 };

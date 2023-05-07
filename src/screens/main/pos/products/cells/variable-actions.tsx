@@ -2,10 +2,13 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
+import { takeWhile } from 'rxjs/operators';
 
 import Icon from '@wcpos/components/src/icon';
 import Popover from '@wcpos/components/src/popover';
 
+import { LoadingVariableActions } from './loading-variations-action';
 import { Variations } from './variations';
 import { getSelectedState, makeNewQuery, extractSelectedMetaData } from './variations.helpers';
 import { t } from '../../../../../lib/translations';
@@ -26,7 +29,7 @@ interface Props {
  */
 export const WrappedVariableActions = ({ item: product }: Props) => {
 	const [opened, setOpened] = React.useState(false);
-	const { data: variations, setQuery, query$ } = useVariations();
+	const { data: variations, setQuery, query$, replicationState } = useVariations();
 	const { addVariation } = useCartHelpers();
 	const attributes = useObservableState(product.attributes$, product.attributes);
 	const selectedVariation = variations.length === 1 ? variations[0] : undefined;
@@ -38,6 +41,20 @@ export const WrappedVariableActions = ({ item: product }: Props) => {
 		allMatch
 		// variations.map((variation) => variation.attributes)
 	);
+
+	/**
+	 * HACK: I just want to show when the variations are loading for the first time
+	 */
+	// const [active, setActive] = React.useState(false);
+	// React.useEffect(() => {
+	// 	if (replicationState) {
+	// 		replicationState.active$
+	// 			.pipe(takeWhile((value) => value === true, true))
+	// 			.subscribe((value) => {
+	// 				setActive(value);
+	// 			});
+	// 	}
+	// }, [active, replicationState]);
 
 	/**
 	 *
@@ -65,6 +82,14 @@ export const WrappedVariableActions = ({ item: product }: Props) => {
 		addVariation(selectedVariation, product, metaData);
 		setOpened(false);
 	}, [selectionState, addVariation, selectedVariation, product]);
+
+	/**
+	 * TODO: I need to check whether all the variations have loaded
+	 * NOTE: variations length can change here due to the variation query
+	 */
+	if (!Array.isArray(variations) || variations.length === 0) {
+		return <LoadingVariableActions />;
+	}
 
 	/**
 	 *

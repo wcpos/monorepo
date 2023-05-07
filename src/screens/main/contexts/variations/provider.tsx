@@ -25,6 +25,7 @@ export const VariationsContext = React.createContext<{
 	setQuery: SetQuery;
 	resource: ObservableResource<ProductVariationDocument[]>;
 	sync: () => void;
+	replicationState: import('../use-replication-state').ReplicationState;
 }>(null);
 
 interface VariationsProviderProps {
@@ -134,7 +135,7 @@ const VariationsProvider = ({
 	}, [collection, parent.variations$, query$]);
 
 	return (
-		<VariationsContext.Provider value={{ resource, setQuery, query$ }}>
+		<VariationsContext.Provider value={{ resource, setQuery, query$, replicationState }}>
 			{children}
 		</VariationsContext.Provider>
 	);
