@@ -59,7 +59,7 @@ export function filterTaxRates(
 	city: string = ''
 ): TaxRate[] {
 	// Sort tax rates by priority
-	const sortedTaxRates = sortBy(taxRates, ['tax_rate_priority', 'tax_rate_id']);
+	const sortedTaxRates = sortBy(taxRates, ['priority', 'id']);
 
 	const cityUpperCase = city.toUpperCase();
 
@@ -74,7 +74,7 @@ export function filterTaxRates(
 			);
 
 		// Check if the current tax rate has the same priority as the previous tax rate
-		if (index > 0 && sortedTaxRates[index - 1].tax_rate_priority === rate.tax_rate_priority) {
+		if (index > 0 && sortedTaxRates[index - 1].priority === rate.priority) {
 			return false;
 		}
 

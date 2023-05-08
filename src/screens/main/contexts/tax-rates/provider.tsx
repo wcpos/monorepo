@@ -65,9 +65,6 @@ const TaxRateProvider = ({ children, initialQuery, ui }: TaxRateProviderProps) =
 				return RxQuery.$.pipe(
 					map((result) => filterTaxRates(result, q.postcode, q.city)),
 					map((result) => sortBy(result, 'order'))
-					// tap((result) => {
-					// 	debugger;
-					// })
 				);
 			})
 		);
