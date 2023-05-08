@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import sortBy from 'lodash/sortBy';
 import { ObservableResource } from 'observable-hooks';
 import { switchMap, map, tap } from 'rxjs/operators';
 
@@ -62,10 +63,8 @@ const TaxRateProvider = ({ children, initialQuery, ui }: TaxRateProviderProps) =
 				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$.pipe(
-					// tap((result) => {
-					// 	debugger;
-					// }),
-					map((result) => filterTaxRates(result, q.country, q.state, q.postcode, q.city))
+					map((result) => filterTaxRates(result, q.postcode, q.city)),
+					map((result) => sortBy(result, 'order'))
 					// tap((result) => {
 					// 	debugger;
 					// })

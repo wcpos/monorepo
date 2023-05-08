@@ -4,6 +4,7 @@ import isEmpty from 'lodash/isEmpty';
 import map from 'lodash/map';
 import replace from 'lodash/replace';
 import some from 'lodash/some';
+import sortBy from 'lodash/sortBy';
 import uniq from 'lodash/uniq';
 
 type TaxRate = import('@wcpos/database').TaxRateDocument;
@@ -54,54 +55,29 @@ function postcodeLocationMatcher(postcode: string, postcodes: string[]): boolean
  */
 export function filterTaxRates(
 	taxRates: TaxRate[],
-	country: string,
-	state: string,
-	postcode: string,
+	postcode: string = '',
 	city: string = ''
 ): TaxRate[] {
-	return filter(taxRates, (rate) => {
-		// we don't need to match country and state because it's done in the query
-		// const countryMatch = rate.country === country;
-		// const stateMatch = rate.state === state || rate.state === '';
+	// Sort tax rates by priority
+	const sortedTaxRates = sortBy(taxRates, ['tax_rate_priority', 'tax_rate_id']);
+
+	const cityUpperCase = city.toUpperCase();
+
+	return filter(sortedTaxRates, (rate, index) => {
 		const postcodeMatch =
 			isEmpty(rate.postcodes) || postcodeLocationMatcher(postcode, rate.postcodes);
-		const cityMatch = isEmpty(rate.cities) || includes(rate.cities, city);
+		const cityMatch =
+			isEmpty(rate.cities) ||
+			includes(
+				map(rate.cities, (city) => city.toUpperCase()),
+				cityUpperCase
+			);
+
+		// Check if the current tax rate has the same priority as the previous tax rate
+		if (index > 0 && sortedTaxRates[index - 1].tax_rate_priority === rate.tax_rate_priority) {
+			return false;
+		}
 
 		return postcodeMatch && cityMatch;
 	});
 }
-
-/**
- * Filter tax rates based on the provided country, state, postcode, and city.
- * Prioritizes more specific matches (postcode, city) over broader matches (state).
- */
-// export function filterTaxRates(
-// 	taxRates: TaxRate[],
-// 	country: string,
-// 	state: string,
-// 	postcode: string,
-// 	city: string = ''
-// ): TaxRate[] {
-// 	const rates = filter(taxRates, (rate) => {
-// 		const countryMatch = rate.country === country;
-// 		const stateMatch = rate.state === state || rate.state === '';
-// 		const postcodeMatch =
-// 			isEmpty(rate.postcodes) || postcodeLocationMatcher(postcode, rate.postcodes);
-// 		const cityMatch = isEmpty(rate.cities) || includes(rate.cities, city);
-
-// 		return countryMatch && stateMatch && postcodeMatch && cityMatch;
-// 	});
-
-// 	const hasPostcodeSpecificRate = some(rates, (rate) => !isEmpty(rate.postcodes));
-// 	const hasCitySpecificRate = some(rates, (rate) => !isEmpty(rate.cities));
-
-// 	if (hasPostcodeSpecificRate || hasCitySpecificRate) {
-// 		return filter(rates, (rate) => {
-// 			const postcodeMatch = hasPostcodeSpecificRate ? !isEmpty(rate.postcodes) : true;
-// 			const cityMatch = hasCitySpecificRate ? !isEmpty(rate.cities) : true;
-// 			return postcodeMatch && cityMatch;
-// 		});
-// 	}
-
-// 	return rates;
-// }
