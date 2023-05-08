@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
-
 import { ProductsContext } from './provider';
 
 export const useProducts = () => {
@@ -10,7 +8,5 @@ export const useProducts = () => {
 		throw new Error(`useProducts must be called within ProductsContext`);
 	}
 
-	const data = useObservableSuspense(context.resource);
-
-	return { ...context, data };
+	return context;
 };

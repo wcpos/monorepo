@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
+import { useObservableSuspense } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
@@ -15,7 +16,8 @@ interface Props {
 }
 
 const VariablePrice = ({ item: product, column }: Props) => {
-	const { data } = useVariations();
+	const { resource } = useVariations();
+	const data = useObservableSuspense(resource);
 	const { display } = column;
 
 	/**

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { of } from 'rxjs';
 import { takeWhile } from 'rxjs/operators';
 
@@ -29,7 +29,8 @@ interface Props {
  */
 export const WrappedVariableActions = ({ item: product }: Props) => {
 	const [opened, setOpened] = React.useState(false);
-	const { data: variations, setQuery, query$, replicationState } = useVariations();
+	const { resource, setQuery, query$, replicationState } = useVariations();
+	const variations = useObservableSuspense(resource);
 	const { addVariation } = useCartHelpers();
 	const attributes = useObservableState(product.attributes$, product.attributes);
 	const selectedVariation = variations.length === 1 ? variations[0] : undefined;

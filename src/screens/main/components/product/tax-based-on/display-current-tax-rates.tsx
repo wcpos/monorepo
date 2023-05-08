@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
@@ -9,7 +9,8 @@ import { t } from '../../../../../lib/translations';
 import useTaxRates from '../../../contexts/tax-rates';
 
 const DisplayCurrentTaxRates = () => {
-	const { data: rates, query$ } = useTaxRates();
+	const { resource, query$ } = useTaxRates();
+	const rates = useObservableSuspense(resource);
 	const query = useObservableState(query$, query$.value);
 
 	return (

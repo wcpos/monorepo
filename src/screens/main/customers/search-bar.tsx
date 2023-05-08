@@ -11,14 +11,13 @@ import { t } from '../../../lib/translations';
 import useCustomers from '../contexts/customers';
 
 const SearchBar = () => {
-	const { query$, setQuery } = useCustomers();
-	const query = useLayoutObservableState(query$, query$.getValue());
-	const [search, setSearch] = React.useState(query.search);
+	const { setQuery } = useCustomers();
+	const [search, setSearch] = React.useState();
 
 	const onSearch = React.useCallback(
 		(search) => {
 			setSearch(search);
-			setQuery('search', search, true);
+			React.startTransition(() => setQuery('search', search, true));
 		},
 		[setQuery]
 	);

@@ -121,7 +121,7 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 					selector.$and.push(querySelector);
 				}
 
-				const RxQuery = collection.find({ selector });
+				const RxQuery = collection.find({ selector, limit, skip });
 
 				return RxQuery.$.pipe(
 					map((result) => {
@@ -153,6 +153,7 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 				clear: () => clearCollection(store.localID, collection),
 				sync: () => syncCollection(replicationState),
 				replicationState,
+				collection,
 			}}
 		>
 			{children}

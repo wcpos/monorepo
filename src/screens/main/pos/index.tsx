@@ -41,38 +41,17 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 		}),
 		[]
 	);
-	const { store, wpCredentials } = useLocalData();
-
-	// useQuery instead
-	// const defaultCustomerID = useObservableState(
-	// 	combineLatest([store.default_customer$, store.default_customer_is_cashier$]).pipe(
-	// 		map(([default_customer, default_customer_is_cashier]) => {
-	// 			return default_customer_is_cashier ? wpCredentials.id : default_customer;
-	// 		})
-	// 	),
-	// 	store.default_customer_is_cashier ? wpCredentials.id : store.default_customer
-	// );
-	const defaultCustomerID = store.default_customer_is_cashier
-		? wpCredentials.id
-		: store.default_customer;
-
-	const initialCustomerQuery = React.useMemo(
-		() => ({ selector: { id: defaultCustomerID } }),
-		[defaultCustomerID]
-	);
 
 	return (
-		<CustomersProvider initialQuery={initialCustomerQuery}>
-			<OrdersProvider initialQuery={initialQuery}>
-				<React.Suspense
-				// suspend until orders and default customer are loaded
-				>
-					<CurrentOrderProvider orderID={orderID}>
-						<POS />
-					</CurrentOrderProvider>
-				</React.Suspense>
-			</OrdersProvider>
-		</CustomersProvider>
+		<OrdersProvider initialQuery={initialQuery}>
+			<React.Suspense
+			// suspend until orders and default customer are loaded
+			>
+				<CurrentOrderProvider orderID={orderID}>
+					<POS />
+				</CurrentOrderProvider>
+			</React.Suspense>
+		</OrdersProvider>
 	);
 };
 

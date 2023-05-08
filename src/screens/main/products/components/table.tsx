@@ -1,7 +1,8 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
@@ -33,7 +34,8 @@ interface ProductsTableProps {
  * NOTE: not sure if this is the best spot for replication, but we need acces to the query
  */
 const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
-	const { query$, setQuery, data: products, nextPage } = useProducts();
+	const { query$, setQuery, resource, nextPage } = useProducts();
+	const products = useObservableSuspense(resource);
 	const query = useObservableState(query$, query$.getValue());
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();

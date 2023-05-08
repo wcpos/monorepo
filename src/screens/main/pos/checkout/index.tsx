@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Loader from '@wcpos/components/src/loader';
@@ -16,7 +16,8 @@ import usePushDocument from '../../contexts/use-push-document';
  *
  */
 const Checkout = () => {
-	const { data } = useOrders();
+	const { resource } = useOrders();
+	const data = useObservableSuspense(resource);
 	const order = data.length === 1 && data[0];
 	const pushDocument = usePushDocument();
 	const [isPushed, setIsPushed] = React.useState(false);

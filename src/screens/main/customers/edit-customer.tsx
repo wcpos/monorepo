@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
@@ -15,7 +15,8 @@ import usePushDocument from '../contexts/use-push-document';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format/use-customer-name-format';
 
 const EditCustomer = () => {
-	const { data } = useCustomers();
+	const { resource } = useCustomers();
+	const data = useObservableSuspense(resource);
 	const customer = data.length === 1 && data[0];
 	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();

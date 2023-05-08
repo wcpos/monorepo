@@ -8,10 +8,14 @@ import { t } from '../../../../lib/translations';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
-export const CustomerItem = (customer: CustomerDocument, index: number) => {
+interface CustomerSelectItemProps {
+	customer: CustomerDocument;
+}
+
+const CustomerSelectItem = ({ customer }: CustomerSelectItemProps) => {
 	if (customer.id === 0) {
 		return (
-			<Box horizontal space="small">
+			<Box horizontal space="small" fill>
 				<Box>
 					<Avatar
 						size="small"
@@ -27,7 +31,7 @@ export const CustomerItem = (customer: CustomerDocument, index: number) => {
 	}
 
 	return (
-		<Box horizontal space="small">
+		<Box horizontal space="small" fill>
 			<Box>
 				<Avatar source={customer.avatar_url} size="small" recyclingKey={customer.uuid} />
 			</Box>
@@ -53,3 +57,5 @@ export const CustomerItem = (customer: CustomerDocument, index: number) => {
 		</Box>
 	);
 };
+
+export default CustomerSelectItem;

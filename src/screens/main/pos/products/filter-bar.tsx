@@ -24,7 +24,11 @@ const FilterBar = () => {
 			<Button
 				title={
 					<>
-						<Checkbox value={!!featured} />
+						<Checkbox
+							value={!!featured}
+							// HACK: the checkbox is not clickable when it's inside a button
+							pointerEvents="none"
+						/>
 						<Text size="small" type={featured ? 'inverse' : undefined}>
 							{t('Featured', { _tags: 'core' })}
 						</Text>
@@ -38,7 +42,11 @@ const FilterBar = () => {
 			<Button
 				title={
 					<>
-						<Checkbox value={!!onSale} />
+						<Checkbox
+							value={!!onSale}
+							// HACK: the checkbox is not clickable when it's inside a button
+							pointerEvents="none"
+						/>
 						<Text size="small" type={onSale ? 'inverse' : undefined}>
 							{t('On Sale', { _tags: 'core' })}
 						</Text>

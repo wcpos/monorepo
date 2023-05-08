@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
@@ -27,6 +28,7 @@ const Products = () => {
 	const storePostcode = useObservableState(store.store_postcode$, store?.store_postcode);
 	const sortBy = uiSettings.get('sortBy');
 	const sortDirection = uiSettings.get('sortDirection');
+	const [tableLayout, setTableLayout] = React.useState({ width: 0, height: 0 });
 
 	const initialTaxQuery = React.useMemo(() => {
 		/**

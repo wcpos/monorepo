@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useObservableSuspense } from 'observable-hooks';
+
 import useNewOrder from './use-new-order';
 import useOrders from '../../../contexts/orders';
 
@@ -20,8 +22,13 @@ interface CurrentOrderContextProviderProps {
  * Provider the active order by uuid, or a new order
  */
 const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProviderProps) => {
-	const { data: orders } = useOrders();
+	const { resource } = useOrders();
+	const orders = useObservableSuspense(resource);
 	const newOrder = useNewOrder();
+
+	// const defaultCustomerID = store.default_customer_is_cashier
+	// 	? wpCredentials.id
+	// 	: store.default_customer;
 
 	let currentOrder = orders.find((order) => order.uuid === orderID);
 	if (!currentOrder) {

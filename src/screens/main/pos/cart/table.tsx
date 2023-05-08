@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import flatten from 'lodash/flatten';
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
@@ -10,7 +10,7 @@ import Text from '@wcpos/components/src/text';
 import * as cells from './cells';
 import { t } from '../../../../lib/translations';
 import EmptyTableRow from '../../components/empty-table-row';
-import { useSuspenedCart } from '../../contexts/cart';
+import { useCart } from '../../contexts/cart';
 import useUI from '../../contexts/ui-settings';
 
 type ColumnProps = import('@wcpos/components/src/table').ColumnProps;
@@ -33,7 +33,8 @@ const CartTable = () => {
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
-	const { data: cart } = useSuspenedCart();
+	const { cartResource } = useCart();
+	const cart = useObservableSuspense(cartResource);
 	// const deferredCart = React.useDeferredValue(cart);
 	const items = React.useMemo(() => flatten(Object.values(cart)), [cart]); // TODO - add sorting
 	// const items = React.useDeferredValue(flatten(Object.values(cart)));

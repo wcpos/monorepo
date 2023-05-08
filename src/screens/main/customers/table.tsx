@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
@@ -24,7 +24,8 @@ interface CustomersTableProps {
  *
  */
 const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
-	const { query$, setQuery, data: customers } = useCustomers();
+	const { query$, setQuery, resource } = useCustomers();
+	const customers = useObservableSuspense(resource);
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
@@ -70,6 +71,9 @@ const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 		};
 	}, [columns, query.sortBy, query.sortDirection, cellRenderer, setQuery, uiSettings]);
 
+	/**
+	 *
+	 */
 	return (
 		<Table<CustomerDocument>
 			data={customers}

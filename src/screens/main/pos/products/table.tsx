@@ -28,7 +28,8 @@ interface POSProductsTableProps {
  *
  */
 const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
-	const { query$, setQuery, data } = useProducts();
+	const { query$, setQuery, resource } = useProducts();
+	const data = useObservableSuspense(resource);
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
@@ -96,7 +97,7 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 			ListEmptyComponent={<EmptyTableRow message={t('No products found', { _tags: 'core' })} />}
 			onViewableItemsChanged={handleViewableItemsChanged}
 			viewabilityConfig={{
-				viewAreaCoveragePercentThreshold: 50,
+				viewAreaCoveragePercentThreshold: 0,
 				minimumViewTime: 500,
 			}}
 		/>

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
@@ -13,7 +13,8 @@ import useOrders from '../contexts/orders';
 import usePushDocument from '../contexts/use-push-document';
 
 const EditOrder = () => {
-	const { data } = useOrders();
+	const { resource } = useOrders();
+	const data = useObservableSuspense(resource);
 	const order = data.length === 1 && data[0];
 	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();

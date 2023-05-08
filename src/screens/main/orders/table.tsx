@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
@@ -45,7 +45,8 @@ const cells = {
  *
  */
 const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
-	const { query$, setQuery, data: orders } = useOrders();
+	const { query$, setQuery, resource } = useOrders();
+	const orders = useObservableSuspense(resource);
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(
 		uiSettings.get$('columns'),

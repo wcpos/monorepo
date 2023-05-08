@@ -103,7 +103,7 @@ const CartHeader = () => {
 			<Box fill>
 				<ErrorBoundary>
 					{customerID === -1 ? (
-						<CustomerSelect onSelectCustomer={handleCustomerSelect} autofocus />
+						<CustomerSelect onSelectCustomer={handleCustomerSelect} autoFocus />
 					) : (
 						<Customer />
 					)}

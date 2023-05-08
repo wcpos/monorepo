@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import find from 'lodash/find';
 import uniq from 'lodash/uniq';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import {
 	calculateDisplayValues,
@@ -18,7 +18,9 @@ import useTaxRates from '../../contexts/tax-rates';
  *
  */
 const useTaxCalculation = () => {
-	const { data: rates } = useTaxRates();
+	const { resource } = useTaxRates();
+	const rates = useObservableSuspense(resource);
+
 	const { store } = useLocalData();
 	if (!store) {
 		throw new Error('Store is not defined');

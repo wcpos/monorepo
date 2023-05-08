@@ -1,12 +1,16 @@
 import * as React from 'react';
 
-import { useObservableState, useObservableSuspense, useSubscription } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { combineLatest } from 'rxjs';
+import { map } from 'rxjs/operators';
+
+import log from '@wcpos/utils/src/logger';
 
 import allCurrencies from '../../../../../contexts/currencies/currencies.json';
 import useLocalData from '../../../../../contexts/local-data';
-import useCustomers from '../../../contexts/customers';
 import useOrders from '../../../contexts/orders';
+import usePullDocument from '../../../contexts/use-pull-document';
+import useCollection from '../../../hooks/use-collection';
 
 /**
  * FIXME: I'm using the direct json from the currencies provider, I need to use a currency provider
@@ -15,28 +19,22 @@ const useNewOrder = () => {
 	const { store, wpCredentials } = useLocalData();
 	const { newOrderResource } = useOrders();
 	const newOrder = useObservableSuspense(newOrderResource);
-	const { data: customers, query$, setQuery } = useCustomers();
-	const defaultCustomer = customers.length ? customers[0] : null;
 	const currency = useObservableState(store.currency$, store.currency);
 	const prices_include_tax = useObservableState(
 		store.prices_include_tax$,
 		store.prices_include_tax
 	);
 	const tax_based_on = useObservableState(store.tax_based_on$, store.tax_based_on);
-
-	/**
-	 *
-	 */
-	useSubscription(
-		combineLatest([store.default_customer$, store.default_customer_is_cashier$]),
-		([default_customer, default_customer_is_cashier]) => {
-			const defaultCustomerID = default_customer_is_cashier ? wpCredentials.id : default_customer;
-			const query = query$.getValue();
-			if (query.selector.id !== defaultCustomerID) {
-				setQuery('selector', { id: defaultCustomerID });
-			}
-		}
+	const defaultCustomerID = useObservableState(
+		combineLatest([store.default_customer$, store.default_customer_is_cashier$]).pipe(
+			map(([default_customer, default_customer_is_cashier]) =>
+				default_customer_is_cashier ? wpCredentials.id : default_customer
+			)
+		),
+		0
 	);
+	const customerCollection = useCollection('customers');
+	const pullDocument = usePullDocument();
 
 	/**
 	 * Update new order with tax settings, currenct
@@ -56,21 +54,35 @@ const useNewOrder = () => {
 	}, [currency, prices_include_tax, newOrder, tax_based_on]);
 
 	/**
-	 * Update new order with default customer
+	 * HACK: Update new order with default customer
 	 */
 	React.useEffect(() => {
-		if (defaultCustomer) {
-			const data = defaultCustomer.toJSON();
-			newOrder.incrementalPatch({
-				customer_id: data.id,
-				billing: {
-					...(data.billing || {}),
-					email: data?.billing?.email || data?.email,
-					first_name: data?.billing?.first_name || data.first_name || data?.username,
-					last_name: data?.billing?.last_name || data.last_name,
-				},
-				shipping: data.shipping,
-			});
+		async function getCustomer() {
+			try {
+				let defaultCustomer = await customerCollection
+					.findOneFix({ selector: { id: defaultCustomerID } })
+					.exec();
+				if (!defaultCustomer) {
+					defaultCustomer = await pullDocument(defaultCustomerID, customerCollection);
+				}
+				const data = defaultCustomer.toJSON();
+				newOrder.incrementalPatch({
+					customer_id: data.id,
+					billing: {
+						...(data.billing || {}),
+						email: data?.billing?.email || data?.email,
+						first_name: data?.billing?.first_name || data.first_name || data?.username,
+						last_name: data?.billing?.last_name || data.last_name,
+					},
+					shipping: data.shipping,
+				});
+			} catch (error) {
+				log.error(error);
+			}
+		}
+
+		if (defaultCustomerID) {
+			getCustomer();
 		} else {
 			newOrder.incrementalPatch({
 				customer_id: 0,
@@ -78,7 +90,7 @@ const useNewOrder = () => {
 				shipping: {},
 			});
 		}
-	}, [defaultCustomer, newOrder]);
+	}, [customerCollection, defaultCustomerID, newOrder, pullDocument]);
 
 	return newOrder;
 };

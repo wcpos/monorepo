@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useNavigation, StackActions } from '@react-navigation/native';
+import { useObservableSuspense } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
@@ -17,7 +18,8 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 const CartTabs = () => {
 	const navigation = useNavigation();
 	const { currentOrder } = useCurrentOrder();
-	const { data: orders } = useOrders();
+	const { resource } = useOrders();
+	const orders = useObservableSuspense(resource);
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
 	/**

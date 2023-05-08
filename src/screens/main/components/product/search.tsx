@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useLayoutObservableState, useSubscription } from 'observable-hooks';
+import { useLayoutObservableState, useSubscription, useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -23,7 +23,8 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
  * Category Pill
  */
 const CategoryPill = ({ categoryID, onRemove }) => {
-	const { data, collection } = useProductCategories();
+	const { resource, collection } = useProductCategories();
+	const data = useObservableSuspense(resource);
 	const category = data.find((c) => c.id === categoryID);
 	const pullDocument = usePullDocument();
 
@@ -44,7 +45,8 @@ const CategoryPill = ({ categoryID, onRemove }) => {
  * Tag Pill
  */
 const TagPill = ({ tagID, onRemove }) => {
-	const { data, collection } = useProductTags();
+	const { resource, collection } = useProductTags();
+	const data = useObservableSuspense(resource);
 	const tag = data.find((t) => t.id === tagID);
 	const pullDocument = usePullDocument();
 

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import { useModal } from '@wcpos/components/src/modal';
 
@@ -11,7 +11,8 @@ import { t } from '../../../lib/translations';
 import useOrders from '../contexts/orders';
 
 export const ReceiptModal = () => {
-	const { data } = useOrders();
+	const { resource } = useOrders();
+	const data = useObservableSuspense(resource);
 	const order = data.length === 1 && data[0];
 
 	if (!order) {

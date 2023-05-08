@@ -1,7 +1,9 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
+import Animated, { useSharedValue } from 'react-native-reanimated';
 
+import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
@@ -130,13 +132,18 @@ const ProductTableRow = ({
 	if (item.type === 'variable') {
 		return (
 			<VariationsProvider parent={item} uiSettings={extraData.uiSettings}>
-				<Table.Row
-					item={item}
-					index={index}
-					extraData={extraData}
-					target={target}
-					cellRenderer={simpleProductCellRenderer}
-				/>
+				<Box>
+					<Table.Row
+						item={item}
+						index={index}
+						extraData={extraData}
+						target={target}
+						cellRenderer={simpleProductCellRenderer}
+					/>
+					{/* <Box padding="xxLarge" style={{ borderLeftColor: 'grey', borderLeftWidth: 10 }}>
+						<Text>hi</Text>
+					</Box> */}
+				</Box>
 			</VariationsProvider>
 		);
 	}
