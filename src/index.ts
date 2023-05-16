@@ -34,6 +34,16 @@ export type {
 	ProductVariationDocument,
 	ProductVariationSchema,
 } from './collections/variations';
+export type {
+	ProductCategoryCollection,
+	ProductCategoryDocument,
+	ProductCategorySchema,
+} from './collections/categories';
+export type {
+	ProductTagCollection,
+	ProductTagDocument,
+	ProductTagSchema,
+} from './collections/tags';
 
 export type { UserDatabase, UserDatabaseCollections } from './users-db';
 export type { StoreDatabase, StoreDatabaseCollections } from './stores-db';
