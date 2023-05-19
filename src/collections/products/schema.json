@@ -1,6 +1,6 @@
 {
   "title": "WooCommerce Product schema",
-  "version": 0,
+  "version": 1,
   "description": "WooCommerce Product schema",
   "type": "object",
   "primaryKey": "uuid",

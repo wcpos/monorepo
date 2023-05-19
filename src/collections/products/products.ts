@@ -17,4 +17,9 @@ type ProductMethods = Record<string, never>;
 export const products = {
 	schema,
 	localDocuments: true, // needed for custom checkpoint
+	migrationStrategies: {
+		1: (oldDoc: any) => {
+			return null; // nuke old data
+		},
+	},
 };
