@@ -5,9 +5,9 @@ import { switchMap, map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import { useReplication } from './use-replication';
 import useCollection from '../../hooks/use-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
+import useReplicationState from '../use-replication-state';
 
 type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
 
@@ -24,21 +24,43 @@ interface ProductTagsProviderProps {
 	uiSettings: import('../ui-settings').UISettingsDocument;
 }
 
+interface APIQueryParams {
+	context?: 'view' | 'edit';
+	page?: number;
+	per_page?: number;
+	search?: string;
+	exclude?: number[];
+	include?: number[];
+	offset?: number;
+	order?: 'asc' | 'desc';
+	orderby?: 'id' | 'include' | 'name' | 'slug' | 'term_group' | 'description' | 'count';
+	hide_empty?: boolean;
+	product?: number;
+	slug?: string;
+}
+
+/**
+ *
+ */
+const prepareQueryParams = (
+	params: APIQueryParams,
+	query: QueryState,
+	status,
+	batchSize
+): APIQueryParams => {
+	/**
+	 * FIXME: category has no modified after and will keep fetching over and over
+	 */
+	if (params.modified_after) {
+		params.earlyReturn = true;
+	}
+	return params;
+};
+
 const ProductTagsProvider = ({ children, initialQuery, ui }: ProductTagsProviderProps) => {
 	const collection = useCollection('products/tags');
 	const { query$, setQuery } = useQuery(initialQuery, 'products/tags');
-	const { replicationState } = useReplication({ collection });
-
-	/**
-	 * Only run the replication when the Provider is mounted
-	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, [replicationState]);
+	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
 	/**
 	 *

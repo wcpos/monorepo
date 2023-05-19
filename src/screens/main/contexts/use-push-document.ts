@@ -23,11 +23,15 @@ const usePushDocument = () => {
 	 * "Document update conflict. When changing a document you must work on the previous revision"
 	 */
 	return React.useCallback(
-		async (doc: RxDocument) => {
+		async (doc: RxDocument, parent: RxDocument) => {
 			const latestDoc = doc.getLatest();
 			// const latestDoc = doc;
 			const collection = doc.collection;
 			let endpoint = collection.name;
+			if (parent) {
+				// TODO: make more general, are there other cases?
+				endpoint = `products/${parent.id}/variations`;
+			}
 			if (latestDoc.id) {
 				endpoint += `/${latestDoc.id}`;
 			}

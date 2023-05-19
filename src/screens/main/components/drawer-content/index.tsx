@@ -10,8 +10,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // import Icon from '@wcpos/components/src/icon';
 import DrawerItemList from './drawer-item-list';
+import Version from './version';
 
-const Drawer = (props: DrawerContentComponentProps) => {
+const Drawer = (props: DrawerContentComponentProps & { largeScreen: boolean }) => {
 	const insets = useSafeAreaInsets();
 
 	return (
@@ -26,6 +27,7 @@ const Drawer = (props: DrawerContentComponentProps) => {
 		>
 			<DrawerItemList {...props} />
 			{/* <DrawerItem label="Help" onPress={() => Linking.openURL('https://mywebsite.com/help')} /> */}
+			<Version largeScreen={props.largeScreen} />
 		</DrawerContentScrollView>
 	);
 };

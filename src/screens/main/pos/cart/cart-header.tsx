@@ -21,6 +21,11 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
 /**
+ * HACK: store previous customer, what's a better way to do this?
+ */
+let previousCustomerID = 0;
+
+/**
  *
  */
 const CartHeader = () => {
@@ -29,6 +34,7 @@ const CartHeader = () => {
 	// const { storeDB } = useLocalData();
 	const { currentOrder } = useCurrentOrder();
 	const customerID = useObservableState(currentOrder.customer_id$, currentOrder.customer_id);
+	previousCustomerID = customerID !== -1 ? customerID : previousCustomerID;
 	const { addCustomer } = useCartHelpers();
 
 	/**
@@ -103,7 +109,11 @@ const CartHeader = () => {
 			<Box fill>
 				<ErrorBoundary>
 					{customerID === -1 ? (
-						<CustomerSelect onSelectCustomer={handleCustomerSelect} autoFocus />
+						<CustomerSelect
+							onSelectCustomer={handleCustomerSelect}
+							autoFocus
+							value={previousCustomerID}
+						/>
 					) : (
 						<Customer />
 					)}

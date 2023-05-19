@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { set } from 'lodash';
 import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
@@ -14,6 +15,7 @@ import Text from '@wcpos/components/src/text';
 import GuestCustomerSelectItem from './guest-item';
 import CustomerSelectItem from './item';
 import { t } from '../../../../lib/translations';
+import useCustomers from '../../contexts/customers';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
@@ -39,95 +41,101 @@ const convertHexToRGBA = (hexCode, opacity = 1) => {
 	return `rgba(${r},${g},${b},${opacity})`;
 };
 
+interface CustomerSelectMenuHandles {
+	onSearch: (query: string) => void;
+}
+
+interface CustomerSelectMenuProps {
+	onChange: (item: CustomerDocument) => void;
+}
+
 /**
  *
  */
-const CustomerSelectMenu = ({ onChange, customersResource }) => {
-	const theme = useTheme();
-	const customers = useObservableSuspense(customersResource);
-	const { targetMeasurements } = usePopover();
+const CustomerSelectMenu = React.forwardRef<CustomerSelectMenuHandles, CustomerSelectMenuProps>(
+	({ onChange }, ref) => {
+		const theme = useTheme();
+		const { resource, setQuery } = useCustomers();
+		const customers = useObservableSuspense(resource);
+		const { targetMeasurements, contentMeasurements } = usePopover();
 
-	/**
-	 *
-	 */
-	// const items = React.useMemo(() => {
-	// 	const opts = customers.map((customer) => ({
-	// 		value: customer,
-	// 		key: customer.uuid,
-	// 	}));
+		/**
+		 * Use useImperativeHandle to expose setQuery function
+		 */
+		React.useImperativeHandle(ref, () => ({
+			onSearch: (search) => {
+				React.startTransition(() => setQuery('search', search, true));
+			},
+		}));
 
-	// 	// make sure Guest is always first
-	// 	opts.unshift({ key: 0, value: { id: 0 } });
-	// 	return opts;
-	// }, [customers]);
+		/**
+		 *
+		 */
+		const calculatedStyled = React.useCallback(
+			({ hovered }) => {
+				const hoverBackgroundColor = convertHexToRGBA(theme.colors['primary'], 0.1);
+				return [
+					{
+						padding: theme.spacing.small,
+						flex: 1,
+						flexDirection: 'row',
+						backgroundColor: hovered ? hoverBackgroundColor : 'transparent',
+					},
+				];
+			},
+			[theme]
+		);
 
-	/**
-	 *
-	 */
-	const calculatedStyled = React.useCallback(
-		({ hovered }) => {
-			const hoverBackgroundColor = convertHexToRGBA(theme.colors['primary'], 0.1);
-			return [
-				{
-					padding: theme.spacing.small,
-					flex: 1,
-					flexDirection: 'row',
-					backgroundColor: hovered ? hoverBackgroundColor : 'transparent',
-				},
-			];
-		},
-		[theme]
-	);
+		/**
+		 *
+		 */
+		const renderItem = React.useCallback(
+			({ item }) => {
+				return (
+					<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
+						<CustomerSelectItem customer={item} />
+					</Pressable>
+				);
+			},
+			[calculatedStyled, onChange]
+		);
 
-	/**
-	 *
-	 */
-	const renderItem = React.useCallback(
-		({ item }) => {
+		/**
+		 *
+		 */
+		const renderGuestItem = React.useMemo(() => {
 			return (
-				<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
-					<CustomerSelectItem customer={item} />
+				<Pressable onPress={() => onChange({ id: 0 })} style={calculatedStyled}>
+					<Box horizontal space="small" fill>
+						<Box>
+							<Avatar
+								size="small"
+								source="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
+								recyclingKey="guest"
+							/>
+						</Box>
+						<Box space="xSmall" fill>
+							<Text>{t('Guest', { _tags: 'core' })}</Text>
+						</Box>
+					</Box>
 				</Pressable>
 			);
-		},
-		[calculatedStyled, onChange]
-	);
+		}, [calculatedStyled, onChange]);
 
-	/**
-	 *
-	 */
-	const renderGuestItem = React.useMemo(() => {
+		/**
+		 *
+		 */
 		return (
-			<Pressable onPress={() => onChange({ id: 0 })} style={calculatedStyled}>
-				<Box horizontal space="small" fill>
-					<Box>
-						<Avatar
-							size="small"
-							source="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
-							recyclingKey="guest"
-						/>
-					</Box>
-					<Box space="xSmall" fill>
-						<Text>{t('Guest', { _tags: 'core' })}</Text>
-					</Box>
-				</Box>
-			</Pressable>
+			<View style={{ width: targetMeasurements.value.width, maxHeight: 292 }}>
+				<FlashList<CustomerDocument>
+					data={customers}
+					renderItem={renderItem}
+					estimatedItemSize={50}
+					ListHeaderComponent={renderGuestItem}
+				/>
+			</View>
 		);
-	}, [calculatedStyled, onChange]);
-
-	/**
-	 *
-	 */
-	return (
-		<View style={{ width: targetMeasurements.value.width, height: 292 }}>
-			<FlashList<CustomerDocument>
-				data={customers}
-				renderItem={renderItem}
-				estimatedItemSize={50}
-				ListHeaderComponent={renderGuestItem}
-			/>
-		</View>
-	);
-};
+	}
+);
 
 export default React.memo(CustomerSelectMenu);

@@ -161,4 +161,4 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 	);
 };
 
-export default CustomersProvider;
+export default React.memo(CustomersProvider);

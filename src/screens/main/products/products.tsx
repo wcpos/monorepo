@@ -65,9 +65,6 @@ const Products = () => {
 					>
 						<Box
 							horizontal
-							space="small"
-							padding="small"
-							align="center"
 							style={{
 								backgroundColor: theme.colors.grey,
 								borderTopLeftRadius: theme.rounding.medium,

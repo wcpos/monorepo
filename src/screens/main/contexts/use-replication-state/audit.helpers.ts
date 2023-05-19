@@ -9,6 +9,32 @@ export const getlocalDocsWithIDsOrderedByLastModified = async (collection, endpo
 	const match = endpoint.match(regex);
 	await collection.database.requestIdlePromise();
 
+	/**
+	 * HACK: if categories or tags, return get last modified from the audit
+	 * This could be optimised, we should probably return uuid, id and date modified instead of records?
+	 */
+	if (endpoint === 'products/categories' || endpoint === 'products/tags') {
+		const audit = await collection
+			.getLocal('audit-' + endpoint)
+			.then((doc) => doc?.toJSON().data || {});
+		const result = await collection
+			.find({
+				selector: { id: { $exists: true } },
+			})
+			.exec()
+			.then((docs) => {
+				return docs.map((doc) => {
+					return {
+						id: doc.id,
+						uuid: doc.uuid,
+						date_modified_gmt: audit?.lastAudit,
+					};
+				});
+			});
+
+		return result;
+	}
+
 	if (match) {
 		const parentID = parseInt(match[1], 10);
 		const parentDocs = await collection.database.collections.products

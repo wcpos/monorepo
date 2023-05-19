@@ -1,18 +1,15 @@
 import * as React from 'react';
 
+import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 
 import { t } from '../../../../lib/translations';
+import FilterBar from '../../components/product/filter-bar';
 import Search from '../../components/product/search';
 import UISettings from '../../components/ui-settings';
-import { ProductCategoriesProvider } from '../../contexts/categories';
-import useProducts from '../../contexts/products';
-import { ProductTagsProvider } from '../../contexts/tags';
 import useUI from '../../contexts/ui-settings';
-// import { useBarcodeDetection } from '../../hooks/barcodes';
 
 const SearchBar = () => {
-	const { setQuery } = useProducts();
 	const { uiSettings } = useUI('products');
 
 	/**
@@ -26,18 +23,21 @@ const SearchBar = () => {
 	 *
 	 */
 	return (
-		<>
-			<ErrorBoundary>
-				<ProductCategoriesProvider initialQuery={{}}>
-					<ProductTagsProvider initialQuery={{}}>
-						<Search />
-					</ProductTagsProvider>
-				</ProductCategoriesProvider>
-			</ErrorBoundary>
-			<ErrorBoundary>
-				<UISettings uiSettings={uiSettings} title={t('Product Settings', { _tags: 'core' })} />
-			</ErrorBoundary>
-		</>
+		<Box fill space="small">
+			<Box horizontal align="center" padding="small" paddingBottom="none" space="small">
+				<ErrorBoundary>
+					<Search />
+				</ErrorBoundary>
+				<ErrorBoundary>
+					<UISettings uiSettings={uiSettings} title={t('Product Settings', { _tags: 'core' })} />
+				</ErrorBoundary>
+			</Box>
+			<Box horizontal padding="small" paddingTop="none">
+				<ErrorBoundary>
+					<FilterBar />
+				</ErrorBoundary>
+			</Box>
+		</Box>
 	);
 };
 

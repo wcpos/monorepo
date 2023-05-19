@@ -32,7 +32,7 @@ interface VariationsProviderProps {
 	children: React.ReactNode;
 	initialQuery?: QueryState;
 	parent: ProductDocument;
-	uiSettings?: import('../ui-settings').UISettingsDocument;
+	// uiSettings?: import('../ui-settings').UISettingsDocument;
 }
 
 interface APIQueryParams {
@@ -85,15 +85,13 @@ const prepareQueryParams = (
  */
 const VariationsProvider = ({
 	children,
-	initialQuery = {},
+	initialQuery,
 	parent,
-	uiSettings,
-}: VariationsProviderProps) => {
+}: // uiSettings,
+VariationsProviderProps) => {
 	const collection = useCollection('variations');
 	const apiEndpoint = `products/${parent.id}/variations`;
-	const variationIDs = useObservableState(parent.variations$, parent.variations);
-	const mergedInitialQuery = set(initialQuery, 'selector.id.$in', variationIDs);
-	const { query$, setQuery } = useQuery(mergedInitialQuery);
+	const { query$, setQuery } = useQuery(initialQuery);
 	// const replicationState = useReplication({ parent, query$ });
 	const replicationState = useReplicationState({
 		collection,
@@ -106,9 +104,20 @@ const VariationsProvider = ({
 	 *
 	 */
 	const resource = React.useMemo(() => {
-		const variations$ = combineLatest([query$, parent.variations$]).pipe(
+		const resource$ = combineLatest([query$, parent.variations$]).pipe(
 			switchMap(([query, variationIDs]) => {
-				const selector = { id: { $in: variationIDs } };
+				const { search, selector: querySelector, sortBy, sortDirection, limit, skip } = query;
+				const selector = { $and: [{ id: { $in: variationIDs } }] };
+
+				/**
+				 *  $allMatch is not supported so I will have to filter the results
+				 */
+				const allMatch = get(querySelector, 'attributes.$allMatch', null);
+
+				if (querySelector && !allMatch) {
+					selector.$and.push(querySelector);
+				}
+
 				const RxQuery = collection.find({ selector });
 
 				/**
@@ -116,9 +125,10 @@ const VariationsProvider = ({
 				 */
 				return RxQuery.$.pipe(
 					map((result) => {
-						const allMatch = get(query, 'selector.attributes.$allMatch', null);
-						const filteredResult = filterVariationsByAttributes(result, allMatch);
-						return filteredResult;
+						if (allMatch) {
+							return filterVariationsByAttributes(result, allMatch);
+						}
+						return result;
 					}),
 					distinctUntilChanged((prev, next) => {
 						// only emit when the uuids change
@@ -131,7 +141,7 @@ const VariationsProvider = ({
 			})
 		);
 
-		return new ObservableResource(variations$);
+		return new ObservableResource(resource$);
 	}, [collection, parent.variations$, query$]);
 
 	return (
@@ -141,4 +151,4 @@ const VariationsProvider = ({
 	);
 };
 
-export default VariationsProvider;
+export default React.memo(VariationsProvider);

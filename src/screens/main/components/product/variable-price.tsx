@@ -1,48 +1,56 @@
 import * as React from 'react';
 
+import find from 'lodash/find';
+import { useObservableState } from 'observable-hooks';
+
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
 import PriceWithTax from './price';
 
 interface Props {
-	variations: import('@wcpos/database').ProductVariationDocument[];
-	taxDisplay: 'text' | 'tooltip' | 'none';
-	propertyName: 'price' | 'regular_price' | 'sale_price';
+	item: import('@wcpos/database').ProductDocument;
+	column: import('@wcpos/components/src/table').ColumnProps<
+		import('@wcpos/database').ProductDocument
+	>;
 }
 
-/**
- * Price range for variable products is slightly tricky to calculate
- * Tax Status can be set at the variation level, so it may be possible that
- * the lowest price is not the actual lowest price with taxes
- *
- * I think for most cases it is just to deal with the price property and disregard
- * taxes, but this may change based on user feedback
- *
- * Also, prices should react to changes in variation properties, I'm not sure if
- * that will happen in this case
- */
-const VariablePrice = ({ variations, taxDisplay, propertyName = 'price' }: Props) => {
-	// order variations by price, don't nutate the original array
-	const sortedVariations = [...variations]
-		.filter((doc) => !!doc[propertyName])
-		.sort((a, b) => a[propertyName] - b[propertyName]);
-	const min = sortedVariations[0];
-	const max = sortedVariations[sortedVariations.length - 1];
+const VariablePrice = ({ item: product, column }: Props) => {
+	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
+	const taxClass = useObservableState(product.tax_class$, product.tax_class);
+	const { display } = column;
 
-	// propertyName is undefined for all variations
-	if (sortedVariations.length === 0) {
+	const metaData = useObservableState(product.meta_data$, product.meta_data);
+	const variablePrices = JSON.parse(
+		metaData?.find((m) => m.key === '_woocommerce_pos_variable_prices')?.value
+	);
+
+	/**
+	 * TODO - abstract this
+	 */
+	const show = React.useCallback(
+		(key: string): boolean => {
+			const d = find(display, { key });
+			return !!(d && d.show);
+		},
+		[display]
+	);
+
+	/**
+	 * No variable prices found?!
+	 */
+	if (variablePrices && !variablePrices[column.key]) {
 		return null;
 	}
 
 	// min and max exist by are equal
-	if (min[propertyName] === max[propertyName]) {
+	if (variablePrices[column.key].min === variablePrices[column.key].max) {
 		return (
 			<PriceWithTax
-				price={max[propertyName]}
-				taxStatus={max.tax_status}
-				taxClass={max.tax_class}
-				taxDisplay={taxDisplay}
+				price={variablePrices[column.key].max}
+				taxStatus={taxStatus}
+				taxClass={taxClass}
+				taxDisplay={show('tax') ? 'text' : 'tooltip'}
 			/>
 		);
 	}
@@ -51,17 +59,17 @@ const VariablePrice = ({ variations, taxDisplay, propertyName = 'price' }: Props
 	return (
 		<Box align="end">
 			<PriceWithTax
-				price={min[propertyName]}
-				taxStatus={min.tax_status}
-				taxClass={min.tax_class}
-				taxDisplay={taxDisplay}
+				price={variablePrices[column.key].min}
+				taxStatus={taxStatus}
+				taxClass={taxClass}
+				taxDisplay={show('tax') ? 'text' : 'tooltip'}
 			/>
 			<Text> - </Text>
 			<PriceWithTax
-				price={max[propertyName]}
-				taxStatus={max.tax_status}
-				taxClass={max.tax_class}
-				taxDisplay={taxDisplay}
+				price={variablePrices[column.key].max}
+				taxStatus={taxStatus}
+				taxClass={taxClass}
+				taxDisplay={show('tax') ? 'text' : 'tooltip'}
 			/>
 		</Box>
 	);

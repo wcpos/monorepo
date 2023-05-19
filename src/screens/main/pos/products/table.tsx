@@ -1,19 +1,15 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
-import Text from '@wcpos/components/src/text';
+import Table, { TableExtraDataProps } from '@wcpos/components/src/table';
 
 import Footer from './footer';
 import ProductTableRow from './table-row';
 import { t } from '../../../../lib/translations';
 import EmptyTableRow from '../../components/empty-table-row';
 import useProducts from '../../contexts/products';
-import { VariationsProvider } from '../../contexts/variations';
 
 import type { ListRenderItemInfo } from '@shopify/flash-list';
 
@@ -35,7 +31,7 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
-	const [shownItems, setShownItems] = React.useState<Record<string, boolean>>({});
+	// const [shownItems, setShownItems] = React.useState<Record<string, boolean>>({});
 	// const shownItems = React.useRef<Record<string, boolean>>({});
 
 	/**
@@ -51,33 +47,33 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 			sortBy: query.sortBy,
 			sortDirection: query.sortDirection,
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
-			shownItems,
+			// shownItems,
 		};
-	}, [columns, query.sortBy, query.sortDirection, setQuery, uiSettings, shownItems]);
+	}, [columns, query.sortBy, query.sortDirection, setQuery, uiSettings]);
 
 	/**
 	 *
 	 */
-	const handleViewableItemsChanged = React.useCallback(
-		({ viewableItems }) => {
-			setShownItems((prevShownItems) => {
-				const newShownItems: Record<string, boolean> = {};
+	// const handleViewableItemsChanged = React.useCallback(
+	// 	({ viewableItems }) => {
+	// 		setShownItems((prevShownItems) => {
+	// 			const newShownItems: Record<string, boolean> = {};
 
-				viewableItems.forEach(({ item }) => {
-					if (!prevShownItems[item.uuid]) {
-						newShownItems[item.uuid] = true;
-					}
-				});
+	// 			viewableItems.forEach(({ item }) => {
+	// 				if (!prevShownItems[item.uuid]) {
+	// 					newShownItems[item.uuid] = true;
+	// 				}
+	// 			});
 
-				if (Object.keys(newShownItems).length > 0) {
-					return { ...prevShownItems, ...newShownItems };
-				} else {
-					return prevShownItems;
-				}
-			});
-		},
-		[] // Remove shownItems from the dependency array
-	);
+	// 			if (Object.keys(newShownItems).length > 0) {
+	// 				return { ...prevShownItems, ...newShownItems };
+	// 			} else {
+	// 				return prevShownItems;
+	// 			}
+	// 		});
+	// 	},
+	// 	[] // Remove shownItems from the dependency array
+	// );
 
 	/**
 	 *
@@ -95,11 +91,11 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 			)}
 			extraData={context}
 			ListEmptyComponent={<EmptyTableRow message={t('No products found', { _tags: 'core' })} />}
-			onViewableItemsChanged={handleViewableItemsChanged}
-			viewabilityConfig={{
-				viewAreaCoveragePercentThreshold: 0,
-				minimumViewTime: 500,
-			}}
+			// onViewableItemsChanged={handleViewableItemsChanged}
+			// viewabilityConfig={{
+			// 	viewAreaCoveragePercentThreshold: 0,
+			// 	minimumViewTime: 500,
+			// }}
 		/>
 	);
 };

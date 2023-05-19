@@ -8,11 +8,12 @@ type StoreDatabaseCollections = import('@wcpos/database').StoreDatabaseCollectio
 /**
  *
  */
-const useTotalCount = <K extends keyof StoreDatabaseCollections>(key: K) => {
-	const collection = useCollection(key);
+const useTotalCount = <K extends keyof StoreDatabaseCollections>(name: K, endpoint: string) => {
+	const collection = useCollection(name);
+	const ep = endpoint ? endpoint : name;
 	const remote = useObservableState(
 		// TODO - should make the key consistent
-		collection.getLocal$('audit-' + key).pipe(
+		collection.getLocal$('audit-' + ep).pipe(
 			map((result) => {
 				const data = result?.toJSON().data;
 				return data?.remoteIDs ? data.remoteIDs.length : 0;

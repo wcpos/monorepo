@@ -78,6 +78,7 @@ const RootNavigator = ({ initialProps }) => {
 									screens: {
 										Products: '',
 										EditProduct: 'edit/:productID',
+										EditVariation: 'edit/:parentID/:variationID',
 									},
 								},
 								OrdersStack: {

@@ -5,7 +5,7 @@ import get from 'lodash/get';
 import { useObservableState, useObservableEagerState } from 'observable-hooks';
 import { RxDocument, RxCollection } from 'rxdb';
 import { replicateRxCollection, RxReplicationState } from 'rxdb/plugins/replication';
-import { interval } from 'rxjs';
+import { interval, debounceTime } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
@@ -94,7 +94,7 @@ export const useReplicationState = ({
 							: defaultParams;
 
 						// hack to stop the API from returning all docs, how to search by uuid?
-						if ('uuid' in params) {
+						if ('uuid' in params || 'earlyReturn' in params) {
 							return {
 								documents: [],
 								// checkpoint: null,

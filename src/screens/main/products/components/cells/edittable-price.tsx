@@ -6,15 +6,16 @@ import { useObservableState } from 'observable-hooks';
 import NumberInput from '../../../components/number-input';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
 type Props = {
-	item: ProductDocument;
+	item: ProductDocument | ProductVariationDocument;
 	column: import('@wcpos/components/src/table').ColumnProps<ProductDocument>;
 	onChange: (product: ProductDocument, data: Record<string, unknown>) => void;
 };
 
-const SalePrice = ({ item: product, column, onChange }: Props) => {
-	const sale_price = useObservableState(product.sale_price$, product.sale_price);
+const EdittablePrice = ({ item, column, onChange }: Props) => {
+	const price = useObservableState(item[`${column.key}$`], item[column.key]);
 	const { display } = column;
 
 	/**
@@ -33,12 +34,12 @@ const SalePrice = ({ item: product, column, onChange }: Props) => {
 	 */
 	return (
 		<NumberInput
-			value={sale_price || '0'}
-			onChange={(sale_price) => onChange(product, { sale_price })}
-			disabled={!product.on_sale}
+			value={price || '0'}
+			onChange={(price) => onChange(item, { [column.key]: price })}
+			disabled={column.key === 'sale_price' && !item.on_sale}
 			showDecimals
 		/>
 	);
 };
 
-export default SalePrice;
+export default EdittablePrice;

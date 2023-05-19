@@ -67,8 +67,14 @@ export interface Checkpoint extends ReturnType<typeof parseHeaders> {
 }
 
 /**
+ * NOTE: some servers are returning errors if the query string is too long
+ * Each server has a different limit, but as a rule of thumb, we'll limit to around 2000 characters
+ * https://stackoverflow.com/questions/417142/what-is-the-maximum-length-of-a-url-in-different-browsers
  *
+ * If we limit the include array to 100, that should be safe for all cases
  */
+const maxItems = 100;
+
 export const defaultPrepareQueryParams = (query: QueryState, status: any, batchSize: number) => {
 	const params = transformMangoSelector(query.selector);
 	const hasIncludeQuery = Array.isArray(params.include) && params.include.length > 0;
@@ -92,13 +98,18 @@ export const defaultPrepareQueryParams = (query: QueryState, status: any, batchS
 
 	// handle the audit status
 	if (!status.completeIntitalSync) {
-		// if there are no params, we need to add the audit status
-		// we should add include or exclude depending on which one is shorter
-		if (status.include.length < status.exclude.length) {
-			params.include = status.include;
+		// both empty, what to do?
+		if (status.include.length === 0 && status.exclude.length === 0) {
+			debugger;
 		}
-		if (status.exclude.length < status.include.length) {
+
+		if (status.include.length < status.exclude.length && status.include.length <= maxItems) {
+			params.include = status.include;
+		} else if (status.exclude.length < status.include.length && status.exclude.length <= maxItems) {
 			params.exclude = status.exclude;
+		} else {
+			// if both are more than maxItems, take the first maxItems from include
+			params.include = status.include.slice(0, maxItems);
 		}
 	}
 

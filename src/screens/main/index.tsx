@@ -54,21 +54,23 @@ const DrawerNavigator = ({ navigation }) => {
 	const theme = useTheme();
 	useKeyboardShortcuts(); // allows navigation by hotkeys
 
+	const largeScreen = dimensions.width >= theme.screens.medium;
+
 	return (
 		<Drawer.Navigator
 			initialRouteName="POSStack"
 			screenOptions={{
 				header: (props) => <Header {...props} />,
-				drawerType: dimensions.width >= theme.screens.medium ? 'permanent' : 'front',
+				drawerType: largeScreen ? 'permanent' : 'front',
 				drawerStyle: {
 					backgroundColor: theme.colors.headerBackground,
-					width: dimensions.width >= theme.screens.medium ? 'auto' : undefined,
+					width: largeScreen ? 'auto' : undefined,
 					borderRightColor: 'rgba(0, 0, 0, 0.2)',
 					// borderRightWidth: 0,
 				},
 				sceneContainerStyle: { height: '100%' }, // important to set height to 100% to avoid scrolling
 			}}
-			drawerContent={(props) => <DrawerContent {...props} />}
+			drawerContent={(props) => <DrawerContent {...props} largeScreen={largeScreen} />}
 		>
 			<Drawer.Screen
 				name="POSStack"

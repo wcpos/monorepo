@@ -36,14 +36,14 @@ const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 	 *
 	 */
 	const cellRenderer = React.useCallback<CellRenderer<CustomerDocument>>(
-		({ item, column, index }) => {
+		({ item, column, index, cellWidth }) => {
 			const Cell = get(cells, [column.key]);
 
 			if (Cell) {
 				return (
 					<ErrorBoundary>
 						<React.Suspense>
-							<Cell item={item} column={column} index={index} />
+							<Cell item={item} column={column} index={index} cellWidth={cellWidth} />
 						</React.Suspense>
 					</ErrorBoundary>
 				);

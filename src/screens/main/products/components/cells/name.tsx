@@ -47,7 +47,7 @@ const EdittableText = ({ name, onChange }) => {
 /**
  *
  */
-const Name = ({ item: product, column, onChange }: Props) => {
+const Name = ({ item: product, column, onChange, toggleVariations }: Props) => {
 	const name = useObservableState(product.name$, product.name);
 	const attributes = useObservableState(product.attributes$, product.attributes);
 	const grouped = useObservableState(product.grouped_products$, product.grouped_products);
@@ -74,7 +74,9 @@ const Name = ({ item: product, column, onChange }: Props) => {
 			<Text weight="bold">{name}</Text>
 			{/* <EdittableText name={name} onChange={(name: string) => onChange(product, { name })} /> */}
 			{show('sku') && <Text size="small">{product.sku}</Text>}
-			{product.type === 'variable' && <ProductAttributes attributes={attributes} />}
+			{product.type === 'variable' && (
+				<ProductAttributes attributes={attributes} toggleVariations={toggleVariations} />
+			)}
 			{product.type === 'grouped' && (
 				<ProductsProvider initialQuery={groupedQuery} uiSettings={uiSettings}>
 					<GroupedNames />

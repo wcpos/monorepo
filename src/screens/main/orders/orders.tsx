@@ -7,6 +7,7 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
+import FilterBar from './filter-bar';
 import SearchBar from './search-bar';
 import Table from './table';
 import { t } from '../../../lib/translations';
@@ -42,21 +43,34 @@ const Orders = () => {
 				>
 					<Box
 						horizontal
-						space="small"
-						padding="small"
-						align="center"
 						style={{
 							backgroundColor: theme.colors.grey,
 							borderTopLeftRadius: theme.rounding.medium,
 							borderTopRightRadius: theme.rounding.medium,
 						}}
 					>
-						<ErrorBoundary>
-							<SearchBar />
-						</ErrorBoundary>
-						<ErrorBoundary>
-							<UiSettings uiSettings={uiSettings} title={t('Order Settings', { _tags: 'core' })} />
-						</ErrorBoundary>
+						<Box fill space="small">
+							<Box
+								horizontal
+								align="center"
+								padding="small"
+								//paddingBottom="none"
+								space="small"
+							>
+								<ErrorBoundary>
+									<SearchBar />
+								</ErrorBoundary>
+								<ErrorBoundary>
+									<UiSettings
+										uiSettings={uiSettings}
+										title={t('Order Settings', { _tags: 'core' })}
+									/>
+								</ErrorBoundary>
+							</Box>
+							{/* <Box horizontal padding="small" paddingTop="none">
+								<FilterBar />
+							</Box> */}
+						</Box>
 					</Box>
 					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 						<ErrorBoundary>

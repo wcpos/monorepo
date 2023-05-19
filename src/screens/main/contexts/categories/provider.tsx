@@ -1,14 +1,16 @@
 import * as React from 'react';
 
+import { orderBy } from '@shelf/fast-natural-order-by';
+import isEqual from 'lodash/isEqual';
 import { ObservableResource } from 'observable-hooks';
-import { switchMap, map } from 'rxjs/operators';
+import { switchMap, map, distinctUntilChanged, tap } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import { useReplication } from './use-replication';
 import useLocalData from '../../../../contexts/local-data';
 import useCollection from '../../hooks/use-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
+import useReplicationState from '../use-replication-state';
 
 type ProductCategoryDocument =
 	import('@wcpos/database/src/collections/categories').ProductCategoryDocument;
@@ -26,6 +28,39 @@ interface ProductCategoriesProviderProps {
 	uiSettings: import('../ui-settings').UISettingsDocument;
 }
 
+interface APIQueryParams {
+	context?: 'view' | 'edit';
+	page?: number;
+	per_page?: number;
+	search?: string;
+	exclude?: number[];
+	include?: number[];
+	order?: 'asc' | 'desc';
+	orderby?: 'id' | 'include' | 'name' | 'slug' | 'term_group' | 'description' | 'count';
+	hide_empty?: boolean;
+	parent?: number;
+	product?: number;
+	slug?: string;
+}
+
+/**
+ *
+ */
+const prepareQueryParams = (
+	params: APIQueryParams,
+	query: QueryState,
+	status,
+	batchSize
+): APIQueryParams => {
+	/**
+	 * FIXME: category has no modified after and will keep fetching over and over
+	 */
+	if (params.modified_after) {
+		params.earlyReturn = true;
+	}
+	return params;
+};
+
 const ProductCategoriesProvider = ({
 	children,
 	initialQuery,
@@ -34,18 +69,7 @@ const ProductCategoriesProvider = ({
 	const { storeDB } = useLocalData();
 	const collection = useCollection('products/categories');
 	const { query$, setQuery } = useQuery(initialQuery, 'products/categories');
-	const { replicationState } = useReplication({ collection });
-
-	/**
-	 * Only run the replication when the Provider is mounted
-	 */
-	React.useEffect(() => {
-		replicationState.start();
-		return () => {
-			// this is async, should we wait?
-			replicationState.cancel();
-		};
-	}, [replicationState]);
+	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
 	/**
 	 *
@@ -53,15 +77,36 @@ const ProductCategoriesProvider = ({
 	const value = React.useMemo(() => {
 		const resource$ = query$.pipe(
 			switchMap((query) => {
-				const { search, selector = {}, sortBy, sortDirection } = query;
+				const { search, selector: querySelector, sortBy, sortDirection } = query;
+				const selector = { $and: [] };
+
+				if (search) {
+					selector.$and.push({
+						$or: [
+							{ uuid: search },
+							{ id: { $regex: new RegExp(escape(search), 'i') } },
+							{ name: { $regex: new RegExp(escape(search), 'i') } },
+						],
+					});
+				}
+
+				if (querySelector) {
+					selector.$and.push(querySelector);
+				}
 
 				const RxQuery = collection.find({ selector });
 
 				return RxQuery.$.pipe(
-					map((result) => result)
-					// tap((res) => {
-					// 	debugger;
-					// })
+					map((result) => {
+						return orderBy(result, [sortBy], [sortDirection]);
+					}),
+					distinctUntilChanged((prev, next) => {
+						// only emit when the uuids change
+						return isEqual(
+							prev.map((doc) => doc.uuid),
+							next.map((doc) => doc.uuid)
+						);
+					})
 				);
 			})
 		);

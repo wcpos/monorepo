@@ -5,8 +5,11 @@ import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
+import Link from '@wcpos/components/src/link';
 import Text from '@wcpos/components/src/text';
 
+import { t } from '../../../../../lib/translations';
+import Attributes from '../../../components/product/attributes';
 import Categories from '../../../components/product/categories';
 import GroupedNames from '../../../components/product/grouped-names';
 import StockQuantity from '../../../components/product/stock-quantity';
@@ -19,6 +22,7 @@ interface Props {
 	column: import('@wcpos/components/src/table').ColumnProps<
 		import('@wcpos/database').ProductDocument
 	>;
+	expandVariations?: () => void;
 }
 
 export const Name = ({ item: product, column }: Props) => {
@@ -51,18 +55,7 @@ export const Name = ({ item: product, column }: Props) => {
 			{show('categories') && <Categories item={product} />}
 			{show('tags') && <Tags item={product} />}
 
-			{product.type === 'variable' && (
-				<View>
-					{product.attributes
-						.filter((attr: any) => attr.variation)
-						.map((attr: any) => (
-							<Text key={`${attr.name}-${attr.id}`}>
-								<Text size="small" type="secondary">{`${attr.name}: `}</Text>
-								<Text size="small">{attr.options.join(', ')}</Text>
-							</Text>
-						))}
-				</View>
-			)}
+			{product.type === 'variable' && <Attributes attributes={product.attributes} />}
 
 			{product.type === 'grouped' && (
 				<ProductsProvider initialQuery={groupedQuery} uiSettings={uiSettings}>
