@@ -72,8 +72,11 @@ export interface Checkpoint extends ReturnType<typeof parseHeaders> {
  * https://stackoverflow.com/questions/417142/what-is-the-maximum-length-of-a-url-in-different-browsers
  *
  * If we limit the include array to 100, that should be safe for all cases
+ *
+ * @TODO - this should be smarter and do a character count instead of an item count
+ * 350 character limit might be good
  */
-const maxItems = 100;
+const maxItems = 50;
 
 export const defaultPrepareQueryParams = (query: QueryState, status: any, batchSize: number) => {
 	const params = transformMangoSelector(query.selector);
