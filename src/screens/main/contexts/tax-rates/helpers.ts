@@ -1,4 +1,6 @@
 import filter from 'lodash/filter';
+import flatten from 'lodash/flatten';
+import groupBy from 'lodash/groupBy';
 import includes from 'lodash/includes';
 import isEmpty from 'lodash/isEmpty';
 import map from 'lodash/map';
@@ -58,26 +60,35 @@ export function filterTaxRates(
 	postcode: string = '',
 	city: string = ''
 ): TaxRate[] {
-	// Sort tax rates by priority
-	const sortedTaxRates = sortBy(taxRates, ['priority', 'id']);
+	// Group tax rates by class
+	const taxRatesByClass = groupBy(taxRates, 'class');
 
-	const cityUpperCase = city.toUpperCase();
+	// Filter tax rates within each class
+	const filteredTaxRatesByClass = map(taxRatesByClass, (taxRatesInClass) => {
+		// Sort tax rates by priority
+		const sortedTaxRates = sortBy(taxRatesInClass, ['priority', 'id']);
 
-	return filter(sortedTaxRates, (rate, index) => {
-		const postcodeMatch =
-			isEmpty(rate.postcodes) || postcodeLocationMatcher(postcode, rate.postcodes);
-		const cityMatch =
-			isEmpty(rate.cities) ||
-			includes(
-				map(rate.cities, (city) => city.toUpperCase()),
-				cityUpperCase
-			);
+		const cityUpperCase = city.toUpperCase();
 
-		// Check if the current tax rate has the same priority as the previous tax rate
-		if (index > 0 && sortedTaxRates[index - 1].priority === rate.priority) {
-			return false;
-		}
+		return filter(sortedTaxRates, (rate, index) => {
+			const postcodeMatch =
+				isEmpty(rate.postcodes) || postcodeLocationMatcher(postcode, rate.postcodes);
+			const cityMatch =
+				isEmpty(rate.cities) ||
+				includes(
+					map(rate.cities, (city) => city.toUpperCase()),
+					cityUpperCase
+				);
 
-		return postcodeMatch && cityMatch;
+			// Check if the current tax rate has the same priority as the previous tax rate
+			if (index > 0 && sortedTaxRates[index - 1].priority === rate.priority) {
+				return false;
+			}
+
+			return postcodeMatch && cityMatch;
+		});
 	});
+
+	// Flatten the array of tax rates
+	return flatten(filteredTaxRatesByClass);
 }
