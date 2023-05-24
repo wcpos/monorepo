@@ -1,5 +1,6 @@
 import difference from 'lodash/difference';
 import get from 'lodash/get';
+import sampleSize from 'lodash/sampleSize';
 
 import { parseLinkHeader } from '../../../../lib/url';
 
@@ -112,7 +113,7 @@ export const defaultPrepareQueryParams = (query: QueryState, status: any, batchS
 			params.exclude = status.exclude;
 		} else {
 			// if both are more than maxItems, take the first maxItems from include
-			params.include = status.include.slice(0, maxItems);
+			params.include = sampleSize(status.include, maxItems);
 		}
 	}
 
