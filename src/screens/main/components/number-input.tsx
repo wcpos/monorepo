@@ -1,12 +1,14 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { useObservableState } from 'observable-hooks';
+
 import Box from '@wcpos/components/src/box';
 import Numpad from '@wcpos/components/src/numpad';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
-import { TextInputContainer } from '@wcpos/components/src/textinput';
 
+import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 import useCurrencyFormat from '../hooks/use-currency-format';
 
@@ -25,7 +27,7 @@ interface NumberInputProps {
 }
 
 /**
- *
+ * Note: value comes in as decimalSeparator = '.' we need to convert it to the correct decimal separator
  */
 const NumberInput = ({
 	value = '0',
@@ -33,10 +35,20 @@ const NumberInput = ({
 	disabled,
 	showDecimals = false,
 }: NumberInputProps) => {
-	const valueRef = React.useRef(value);
+	const { store } = useLocalData();
+	const decimalSeparator = useObservableState(store.price_decimal_sep$, store.price_decimal_sep);
 	const { format } = useCurrencyFormat({ withSymbol: false });
 	const displayValue = showDecimals ? format(value) : value;
 	const [opened, setOpened] = React.useState(false);
+	const valueRef = React.useRef(displayValue);
+
+	/**
+	 *
+	 */
+	const handleSubmit = React.useCallback(() => {
+		onChange(valueRef.current.replace(decimalSeparator, '.'));
+		setOpened(false);
+	}, [decimalSeparator, onChange]);
 
 	/**
 	 *
@@ -55,7 +67,7 @@ const NumberInput = ({
 			onClose={() => setOpened(false)}
 			primaryAction={{
 				label: t('Done', { _tags: 'core' }),
-				action: () => onChange(valueRef.current),
+				action: handleSubmit,
 			}}
 		>
 			<Popover.Target>
@@ -66,10 +78,14 @@ const NumberInput = ({
 			</Popover.Target>
 			<Popover.Content>
 				<Numpad
-					initialValue={String(value)}
+					initialValue={displayValue}
 					onChange={(newValue: string) => {
 						valueRef.current = newValue;
 					}}
+					onSubmitEditing={() => {
+						handleSubmit();
+					}}
+					decimalSeparator={decimalSeparator}
 				/>
 			</Popover.Content>
 		</Popover>
