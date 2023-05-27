@@ -13,7 +13,6 @@ import TaxBasedOn from '../../components/product/tax-based-on';
 import SyncButton from '../../components/sync-button';
 import useProducts from '../../contexts/products';
 import useTotalCount from '../../hooks/use-total-count';
-import useCurrentOrder from '../contexts/current-order';
 
 interface ProductFooterProps {
 	count: number;
@@ -26,10 +25,6 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
 	const total = useTotalCount('products');
-	const taxBasedOn = useObservableState(store.tax_based_on$, store?.tax_based_on);
-	const { currentOrder } = useCurrentOrder();
-	const billing = useObservableState(currentOrder.billing$, currentOrder?.billing);
-	const shipping = useObservableState(currentOrder.shipping$, currentOrder?.shipping);
 
 	return (
 		<Box
@@ -45,7 +40,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 		>
 			{calcTaxes === 'yes' ? (
 				<Box fill padding="small" space="xSmall" horizontal>
-					<TaxBasedOn taxBasedOn={taxBasedOn} billing={billing} shipping={shipping} />
+					<TaxBasedOn />
 				</Box>
 			) : (
 				<Box fill />

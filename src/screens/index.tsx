@@ -104,6 +104,7 @@ const RootNavigator = ({ initialProps }) => {
 						},
 						Settings: 'settings',
 						Login: 'login',
+						TaxRates: 'tax-rates',
 					},
 				},
 			},

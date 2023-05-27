@@ -67,6 +67,9 @@ const useQuery = (initialQuery: QueryState) => {
 	 * Normalize selector, for example:
 	 * { selector: { categories: null, tags: { $elemMatch: { id: '123' } } } }
 	 * should be { selector: { tags: { $elemMatch: { id: '123' } } } }
+	 *
+	 * TODO - fix the setQuery .. maybe have a setQueryPath? or setQueryValue?
+	 * This should not be different to initialQuery argument
 	 */
 	const setQuery: SetQuery = React.useCallback(
 		(path, value, debounceFlag = false) => {

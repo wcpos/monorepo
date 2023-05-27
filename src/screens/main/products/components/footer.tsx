@@ -45,7 +45,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 		>
 			{calcTaxes === 'yes' ? (
 				<Box fill padding="small" space="xSmall" horizontal>
-					<TaxBasedOn taxBasedOn={'base'} />
+					<TaxBasedOn />
 				</Box>
 			) : (
 				<Box fill />

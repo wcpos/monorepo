@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -11,10 +10,10 @@ import log from '@wcpos/utils/src/logger';
 
 import SearchBar from './components/search-bar';
 import Table from './components/table';
-import useLocalData from '../../../contexts/local-data';
 import { ProductsProvider } from '../contexts/products';
 import { TaxRateProvider } from '../contexts/tax-rates';
 import useUI from '../contexts/ui-settings';
+import useBaseTaxLocation from '../hooks/use-base-tax-location';
 
 /**
  *
@@ -22,26 +21,17 @@ import useUI from '../contexts/ui-settings';
 const Products = () => {
 	const { uiSettings } = useUI('products');
 	const theme = useTheme();
-	const { store } = useLocalData();
-	const storeCity = useObservableState(store.store_city$, store?.store_city);
-	const storeCountry = useObservableState(store.default_country$, store?.default_country);
-	const storePostcode = useObservableState(store.store_postcode$, store?.store_postcode);
+	const location = useBaseTaxLocation();
 	const sortBy = uiSettings.get('sortBy');
 	const sortDirection = uiSettings.get('sortDirection');
-	const [tableLayout, setTableLayout] = React.useState({ width: 0, height: 0 });
+	// const [tableLayout, setTableLayout] = React.useState({ width: 0, height: 0 });
 
-	const initialTaxQuery = React.useMemo(() => {
-		/**
-		 * default_country has a weird format, eg: US:CA
-		 */
-		const [country, state] = (storeCountry || '').split(':');
-		return {
-			city: storeCity,
-			country,
-			state,
-			postcode: storePostcode,
-		};
-	}, [storeCity, storeCountry, storePostcode]);
+	const initialTaxQuery = React.useMemo(
+		() => ({
+			location,
+		}),
+		[location]
+	);
 
 	/**
 	 *

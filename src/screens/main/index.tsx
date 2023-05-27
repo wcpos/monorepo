@@ -23,6 +23,7 @@ import POSNavigator from './pos';
 import ProductsNavigator from './products';
 import Settings from './settings';
 import Support from './support';
+import TaxRates from './tax-rates';
 import useLocalData from '../../contexts/local-data';
 import { t } from '../../lib/translations';
 import { ModalLayout } from '../components/modal-layout';
@@ -32,6 +33,7 @@ export type MainStackParamList = {
 	Settings: undefined;
 	Help: undefined;
 	Login: undefined;
+	TaxRates: undefined;
 };
 
 const Stack = createStackNavigator<MainStackParamList>();
@@ -176,6 +178,17 @@ const LoginScreen = () => {
 /**
  *
  */
+const TaxRatesScreen = () => {
+	return (
+		<ModalLayout title={t('Tax Rates', { _tags: 'core' })} size="xxLarge">
+			<TaxRates />
+		</ModalLayout>
+	);
+};
+
+/**
+ *
+ */
 const MainNavigator = () => {
 	const { site } = useLocalData();
 	if (!site) {
@@ -200,6 +213,7 @@ const MainNavigator = () => {
 							<Stack.Screen name="Settings" component={SettingsScreen} />
 							<Stack.Screen name="Help" component={HelpScreen} />
 							<Stack.Screen name="Login" component={LoginScreen} />
+							<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
 						</Stack.Group>
 					</Stack.Navigator>
 					<Portal.Manager />

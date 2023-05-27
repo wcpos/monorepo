@@ -8,7 +8,7 @@ type StoreDatabaseCollections = import('@wcpos/database').StoreDatabaseCollectio
 /**
  *
  */
-const useTotalCount = <K extends keyof StoreDatabaseCollections>(name: K, endpoint: string) => {
+const useTotalCount = <K extends keyof StoreDatabaseCollections>(name: K, endpoint?: string) => {
 	const collection = useCollection(name);
 	const ep = endpoint ? endpoint : name;
 	const remote = useObservableState(

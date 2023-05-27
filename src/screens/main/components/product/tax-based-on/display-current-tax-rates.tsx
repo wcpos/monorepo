@@ -1,65 +1,88 @@
 import * as React from 'react';
 
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useNavigation } from '@react-navigation/native';
+import isEmpty from 'lodash/isEmpty';
 
 import Box from '@wcpos/components/src/box';
+import Button from '@wcpos/components/src/button';
+import InlineError from '@wcpos/components/src/inline-error';
+import SimpleTable from '@wcpos/components/src/simple-table';
 import Text from '@wcpos/components/src/text';
+import { TaxRateDocument } from '@wcpos/database';
 
 import { t } from '../../../../../lib/translations';
-import useTaxRates from '../../../contexts/tax-rates';
 
-const DisplayCurrentTaxRates = () => {
-	const { resource, query$ } = useTaxRates();
-	const rates = useObservableSuspense(resource);
-	const query = useObservableState(query$, query$.value);
+interface DisplayCurrentTaxRatesProps {
+	rates: TaxRateDocument[];
+	country: string;
+	state: string;
+	city: string;
+	postcode: string;
+	setOpened: React.Dispatch<React.SetStateAction<boolean>>;
+}
 
+/**
+ *
+ */
+const DisplayCurrentTaxRates = ({
+	rates,
+	country,
+	state,
+	city,
+	postcode,
+	setOpened,
+}: DisplayCurrentTaxRatesProps) => {
+	const navigation = useNavigation();
+
+	/**
+	 *
+	 */
 	return (
 		<Box space="normal" padding="small">
-			<Box horizontal space="normal">
-				<Box>
-					<Text uppercase size="small" type="secondary">
-						{t('Country', { _tags: 'core' })}
-					</Text>
-					<Text>{query.country}</Text>
-				</Box>
-				<Box>
-					<Text uppercase size="small" type="secondary">
-						{t('State', { _tags: 'core' })}
-					</Text>
-					<Text>{query.state}</Text>
-				</Box>
-				<Box>
-					<Text uppercase size="small" type="secondary">
-						{t('City', { _tags: 'core' })}
-					</Text>
-					<Text>{query.city}</Text>
-				</Box>
-				<Box>
-					<Text uppercase size="small" type="secondary">
-						{t('Postcode', { _tags: 'core' })}
-					</Text>
-					<Text>{query.postcode}</Text>
-				</Box>
+			<Box space="xSmall" style={{ width: '100%' }}>
+				<Text weight="bold">{t('Calculate tax based on', { _tags: 'core' })}:</Text>
+				<SimpleTable
+					columns={[
+						{ key: 'country', label: t('Country', { _tags: 'core' }) },
+						{ key: 'state', label: t('State', { _tags: 'core' }) },
+						{ key: 'city', label: t('City', { _tags: 'core' }) },
+						{ key: 'postcode', label: t('Postcode', { _tags: 'core' }) },
+					]}
+					data={[
+						{
+							country: country || '-',
+							state: state || '-',
+							city: city || '-',
+							postcode: postcode || '-',
+						},
+					]}
+				/>
 			</Box>
-			<Box>
-				<Text uppercase size="small" type="secondary">
-					{t('Matched Rates', { _tags: 'core' })}
-				</Text>
-				{rates.map((rate) => {
-					return (
-						<Box key={rate.id} horizontal space="normal" style={{ width: '100%' }}>
-							<Box style={{ flex: 1 }}>
-								<Text>{rate.name}</Text>
-							</Box>
-							<Box style={{ flex: 1 }}>
-								<Text>{rate.rate}</Text>
-							</Box>
-							<Box style={{ flex: 1 }}>
-								<Text>{rate.class}</Text>
-							</Box>
-						</Box>
-					);
-				})}
+			<Box space="xSmall" style={{ width: '100%' }}>
+				<Text weight="bold">{t('Matched rates', { _tags: 'core' })}:</Text>
+				{Array.isArray(rates) && rates.length > 0 ? (
+					<SimpleTable
+						columns={[
+							{ key: 'name', label: t('Name', { _tags: 'core' }) },
+							{ key: 'rate', label: t('Rate', { _tags: 'core' }) },
+							{ key: 'class', label: t('Class', { _tags: 'core', _context: 'tax class' }) },
+						]}
+						data={rates}
+					/>
+				) : (
+					<InlineError message={t('No rates matched', { _tags: 'core' })} />
+				)}
+			</Box>
+			<Box horizontal>
+				<Button
+					type="secondary"
+					size="small"
+					title={t('View all tax rates', { _tags: 'core' })}
+					onPress={() => {
+						setOpened(false);
+						navigation.navigate('TaxRates');
+					}}
+				/>
 			</Box>
 		</Box>
 	);
