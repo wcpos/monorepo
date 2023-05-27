@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "@wcpos/managed-expo",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "main": "index.js",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://wcpos.github.io/managed-expo",
@@ -71,7 +71,7 @@
   "devDependencies": {
     "@babel/core": "^7.21.8",
     "@expo/webpack-config": "^18.0.4",
-    "@types/react": "~18.2.6",
+    "@types/react": "~18.2.7",
     "@types/react-dom": "~18.2.4",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
