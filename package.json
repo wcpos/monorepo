@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/database",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Local database for @wcpos/core",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/database#readme",
@@ -31,9 +31,9 @@
     "uuid": "3.4.0"
   },
   "devDependencies": {
-    "@faker-js/faker": "^7.6.0",
+    "@faker-js/faker": "^8.0.1",
     "@types/jest": "^29.5.1",
-    "@types/lodash": "4.14.194",
+    "@types/lodash": "4.14.195",
     "@types/uuid": "3.4.10",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
