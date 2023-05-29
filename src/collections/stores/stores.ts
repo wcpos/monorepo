@@ -12,4 +12,9 @@ type StoreStatics = Record<string, never>;
 
 export const stores = {
 	schema,
+	migrationStrategies: {
+		1: (oldDoc: any) => {
+			return oldDoc; // keep old data
+		},
+	},
 };

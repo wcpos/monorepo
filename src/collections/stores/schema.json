@@ -1,6 +1,6 @@
 {
   "title": "WCPOS Store schema",
-  "version": 0,
+  "version": 1,
   "description": "WooCommerce POS Store",
   "type": "object",
   "primaryKey": "localID",
@@ -549,6 +549,24 @@
         "yor",
         "zul"
       ]
+    },
+    "barcode_scanning_buffer": {
+      "title": "Barcode scanning buffer",
+      "type": "integer",
+      "default": 500
+    },
+    "barcode_scanning_min_chars": {
+      "title": "Barcode minimum length",
+      "type": "integer",
+      "default": 8
+    },
+    "barcode_scanning_prefix": {
+      "title": "Barcode scanner prefix",
+      "type": "string"
+    },
+    "barcode_scanning_suffix": {
+      "title": "Barcode scanner suffix",
+      "type": "string"
     }
   }
 }

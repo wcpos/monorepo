@@ -429,6 +429,10 @@ export type Language =
   | "xho"
   | "yor"
   | "zul";
+export type BarcodeScanningBuffer = number;
+export type BarcodeMinimumLength = number;
+export type BarcodeScannerPrefix = string;
+export type BarcodeScannerSuffix = string;
 
 /**
  * WooCommerce POS Store
@@ -468,5 +472,9 @@ export interface WCPOSStoreSchema {
   price_display_suffix?: PriceDisplaySuffix;
   tax_total_display?: DisplayTaxTotals;
   locale?: Language;
+  barcode_scanning_buffer?: BarcodeScanningBuffer;
+  barcode_scanning_min_chars?: BarcodeMinimumLength;
+  barcode_scanning_prefix?: BarcodeScannerPrefix;
+  barcode_scanning_suffix?: BarcodeScannerSuffix;
   [k: string]: any;
 }
