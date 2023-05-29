@@ -48,12 +48,9 @@ const ProductSearch = ({
 	) => Promise<void>;
 }) => {
 	const { query$, setQuery } = useProducts();
-	// const query = useObservableEagerState(query$);
 	const query = useLayoutObservableState(query$, query$.getValue());
 	const [search, setSearch] = React.useState(query.search);
-	// const [enabled, setEnabled] = React.useState(false);
-	// const { barcode$, onKeyboardEvent } = useBarcodeDetection({ options: { enabled } });
-	const { barcode$, onKeyboardEvent } = useBarcodeDetection({});
+	const { barcode$ } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
 	const productsCollection = useCollection('products');
 
@@ -122,7 +119,7 @@ const ProductSearch = ({
 			onChangeText={onSearch}
 			containerStyle={{ flex: 1 }}
 			clearable
-			onKeyPress={onKeyboardEvent}
+			// onKeyPress={onKeyboardEvent}
 		/>
 	);
 };

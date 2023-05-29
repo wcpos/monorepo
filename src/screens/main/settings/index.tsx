@@ -3,6 +3,7 @@ import * as React from 'react';
 import Box from '@wcpos/components/src/box';
 import Tabs from '@wcpos/components/src/tabs';
 
+import BarcodeScanning from './barcode-scanning';
 import { GeneralSettings } from './general';
 import { KeyboardShortcuts } from './shortcuts';
 import { TaxSettings } from './tax';
@@ -25,6 +26,11 @@ export const SettingsTabs = () => {
 						Component: GeneralSettings,
 					},
 					{ key: 'tax', title: t('Tax Settings', { _tags: 'core' }), Component: TaxSettings },
+					{
+						key: 'barcode',
+						title: t('Barcode Scanning', { _tags: 'core' }),
+						Component: BarcodeScanning,
+					},
 					{
 						key: 'shortcuts',
 						title: t('Keyboard Shortcuts', { _tags: 'core' }),
