@@ -11,6 +11,7 @@ import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';
 import parseRestResponsePlugin from './parse-rest-response';
 import populatePlugin from './populate';
+import { resetCollectionPlugin } from './reset-collection';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -42,3 +43,4 @@ addRxPlugin(RxDBGenerateIdPlugin); // should run before populate and parseRestRe
 addRxPlugin(populatePlugin);
 addRxPlugin(findOneFixPlugin);
 addRxPlugin(parseRestResponsePlugin);
+addRxPlugin(resetCollectionPlugin);

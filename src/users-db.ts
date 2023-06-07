@@ -36,21 +36,6 @@ export async function createUserDB() {
 }
 
 /**
- * Helper function to add the collectioms individually, ie: after collection.remove()
- */
-export async function addUserDBCollection(key: keyof UserDatabaseCollections) {
-	try {
-		const db = await createUserDB();
-		const collection = await db.addCollections({
-			[key]: userCollections[key],
-		});
-		return collection;
-	} catch (error) {
-		log.error(error);
-	}
-}
-
-/**
  *
  */
 export async function removeUserDB() {

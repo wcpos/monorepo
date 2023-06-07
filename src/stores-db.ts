@@ -33,11 +33,6 @@ function sanitizeStoreName(id: string) {
 const registry = new Map<string, Promise<StoreDatabase | undefined>>();
 
 /**
- * Create a subject which emits one of the storeCollections
- */
-const addCollectionsSubject = new Subject();
-
-/**
  * creates the Store database
  */
 export async function createStoreDB(id: string) {
@@ -47,7 +42,6 @@ export async function createStoreDB(id: string) {
 			const db = await createDB<StoreDatabaseCollections>(name);
 			if (db) {
 				const collections = await db?.addCollections(storeCollections);
-				Object.assign(db, { addCollections$: addCollectionsSubject.asObservable() });
 				registry.set(id, Promise.resolve(db));
 			}
 		} catch (error) {
@@ -57,24 +51,6 @@ export async function createStoreDB(id: string) {
 	}
 
 	return registry.get(id);
-}
-
-/**
- * Helper function to add the collectioms individually, ie: after collection.remove()
- */
-export async function addStoreDBCollection(id: string, key: keyof StoreDatabaseCollections) {
-	try {
-		const db = await createStoreDB(id);
-		if (db) {
-			const result = await db.addCollections({
-				[key]: storeCollections[key],
-			});
-			addCollectionsSubject.next(result);
-			return result;
-		}
-	} catch (error) {
-		log.error(error);
-	}
 }
 
 /**
