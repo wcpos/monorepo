@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import defaults from 'lodash/defaults';
+import merge from 'lodash/merge';
 import set from 'lodash/set';
 
 import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
@@ -42,14 +42,14 @@ export const useHttpClient = () => {
 	 *
 	 */
 	const httpWrapper = React.useMemo(() => {
-		let _defaultConfig = {};
-		let retryCount = 0;
+		let instanceConfig = {};
+		const retryCount = 0;
 
 		/**
 		 * TODO - merge config with default?
 		 */
 		const request = async (config: AxiosRequestConfig = {}) => {
-			const _config = defaults(config, _defaultConfig);
+			const _config = merge({}, instanceConfig, config); // NOTE: do not mutate instanceConfig
 
 			/**
 			 * Add X-WCPOS header to every request
@@ -80,7 +80,7 @@ export const useHttpClient = () => {
 				 * _method (get param)
 				 * TODO - check if I should use this instead
 				 */
-				set(_config, ['params', 'wcpos_http_method'], 'head');
+				set(_config, ['params', '_method'], 'HEAD');
 			}
 
 			/**
@@ -91,17 +91,17 @@ export const useHttpClient = () => {
 			}
 
 			/**
-			 *
+			 * TODO - do we really need a retry? perhaps better to fail fast and handle the error
 			 */
 			try {
 				const response = await http.request(_config);
-				retryCount = 0;
+				// retryCount = 0;
 				return response;
 			} catch (error) {
 				log.error(error);
 				errorResponseHandler(error as AxiosError);
-				retryCount++;
-				return new Promise((resolve) => setTimeout(resolve, retryDelay * Math.pow(2, retryCount)));
+				// retryCount++;
+				// return new Promise((resolve) => setTimeout(resolve, retryDelay * Math.pow(2, retryCount)));
 			}
 		};
 
@@ -184,7 +184,7 @@ export const useHttpClient = () => {
 		 */
 		return {
 			create: (config: AxiosRequestConfig = {}) => {
-				_defaultConfig = config;
+				instanceConfig = config;
 				return api;
 			},
 			...api,
