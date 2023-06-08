@@ -1,3 +1,4 @@
+import { CPromise } from 'c-promise2';
 import { addRxPlugin } from 'rxdb';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { PROMISE_RESOLVE_TRUE, flatClone } from 'rxdb/plugins/utils';
@@ -61,6 +62,8 @@ class RxReplicationState<RxDocType, CheckpointType> {
 	public remoteEvents$: Subject<RxReplicationPullStreamItem<RxDocType, CheckpointType>> =
 		new Subject();
 
+	private currentPull: CPromise<void> | null = null;
+
 	constructor(
 		/**
 		 * hash of the identifier, used to flag revisions
@@ -107,6 +110,14 @@ class RxReplicationState<RxDocType, CheckpointType> {
 				next: (ev) => {
 					if (ev === 'RESYNC') {
 						this.start();
+					}
+					if (ev === 'QUERY') {
+						// Cancel the current pull operation if there is one
+						if (this.currentPull) {
+							this.currentPull.cancel();
+							this.currentPull = null;
+						}
+						this.start({ fetchRemoteIDs: false });
 					}
 				},
 			})
@@ -203,7 +214,7 @@ class RxReplicationState<RxDocType, CheckpointType> {
 	/**
 	 *
 	 */
-	async start(): Promise<void> {
+	async start(options = { fetchRemoteIDs: true }): Promise<void> {
 		if (this.isStopped()) {
 			return;
 		}
@@ -216,14 +227,31 @@ class RxReplicationState<RxDocType, CheckpointType> {
 			const batchSize = this.pull.batchSize || 10;
 
 			// get remoteIDs
-			await this.fetchAndSaveRemoteIDs();
+			if (options.fetchRemoteIDs) {
+				await this.fetchAndSaveRemoteIDs();
+			}
 
 			let count = 0;
 			let resultLength = batchSize;
 			while (!this.isStopped() && resultLength === batchSize && count < 5) {
-				const result = await this.runPull(count, batchSize);
+				// Wrap runPull in a CPromise
+				const pullOp = new CPromise((resolve, reject, { onCancel }) => {
+					onCancel(() => {
+						// Logic to stop ongoing pull operation
+						// Possibly: resolve with a specific value or reject
+					});
+
+					this.runPull(count, batchSize).then(resolve).catch(reject);
+				});
+
+				// Store the operation so that we can cancel it later
+				this.currentPull = pullOp;
+
+				const result = await pullOp;
 				resultLength = result.documents.length;
 				count++;
+
+				this.currentPull = null;
 			}
 		} catch (err) {
 			console.error(err);
