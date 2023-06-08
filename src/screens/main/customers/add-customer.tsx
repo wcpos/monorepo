@@ -5,7 +5,7 @@ import Form from '@wcpos/react-native-jsonschema-form';
 import useCollection from '../hooks/use-collection';
 
 const AddCustomer = () => {
-	const collection = useCollection('customers');
+	const { collection } = useCollection('customers');
 
 	return (
 		<Form

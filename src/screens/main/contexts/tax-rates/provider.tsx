@@ -9,8 +9,6 @@ import log from '@wcpos/utils/src/logger';
 import { filterTaxRates } from './helpers';
 import useLocalData from '../../../../contexts/local-data';
 import useCollection from '../../hooks/use-collection';
-import { clearCollection } from '../clear-collection';
-import syncCollection from '../sync-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import useReplicationState from '../use-replication-state';
 
@@ -44,12 +42,7 @@ interface APIQueryParams {
 /**
  *
  */
-const prepareQueryParams = (
-	params: APIQueryParams,
-	query: QueryState,
-	status,
-	batchSize
-): APIQueryParams => {
+const prepareQueryParams = (params: APIQueryParams, query: QueryState): APIQueryParams => {
 	/**
 	 * FIXME: tax has no modified after and will keep fetching over and over
 	 */
@@ -67,8 +60,8 @@ const prepareQueryParams = (
 };
 
 const TaxRateProvider = ({ children, initialQuery, ui }: TaxRateProviderProps) => {
-	const { store } = useLocalData();
-	const collection = useCollection('taxes');
+	const { storeDB } = useLocalData();
+	const { collection } = useCollection('taxes');
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
@@ -118,15 +111,17 @@ const TaxRateProvider = ({ children, initialQuery, ui }: TaxRateProviderProps) =
 	/**
 	 *
 	 */
-	const clear = React.useCallback(() => {
-		return clearCollection(store.localID, collection);
-	}, [collection, store.localID]);
+	const clear = React.useCallback(async () => {
+		// we need to cancel any replications before clearing the collections
+		replicationState.cancel();
+		await storeDB.reset(['taxes']);
+	}, [replicationState, storeDB]);
 
 	/**
 	 *
 	 */
 	const sync = React.useCallback(() => {
-		syncCollection(replicationState);
+		replicationState.reSync();
 	}, [replicationState]);
 
 	/**

@@ -27,7 +27,7 @@ interface AddNewCustomerProps {
 const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const [customerData, setCustomerData] = React.useState({});
-	const customerCollection = useCollection('customers');
+	const { collection } = useCollection('customers');
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
 	const billingCountry = get(customerData, ['billing', 'country']);
@@ -40,7 +40,7 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 	const handleSave = React.useCallback(async () => {
 		try {
 			setLoading(true);
-			const doc = await customerCollection.insert(customerData);
+			const doc = await collection.insert(customerData);
 			const success = await pushDocument(doc);
 			if (isRxDocument(success)) {
 				onAdd(doc);
@@ -57,7 +57,7 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 		} finally {
 			setLoading(false);
 		}
-	}, [addSnackbar, customerCollection, customerData, onAdd, pushDocument]);
+	}, [addSnackbar, collection, customerData, onAdd, pushDocument]);
 
 	/**
 	 *
@@ -71,8 +71,8 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 	 */
 	const schema = React.useMemo(() => {
 		const _schema = {
-			...customerCollection.schema.jsonSchema,
-			properties: pick(customerCollection.schema.jsonSchema.properties, [
+			...collection.schema.jsonSchema,
+			properties: pick(collection.schema.jsonSchema.properties, [
 				// 'id',
 				'email',
 				'first_name',
@@ -87,7 +87,7 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 		};
 
 		return _schema;
-	}, [customerCollection.schema.jsonSchema]);
+	}, [collection.schema.jsonSchema]);
 
 	/**
 	 *

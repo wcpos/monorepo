@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
@@ -9,13 +9,17 @@ import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../lib/translations';
 import EditModal from '../components/edit-form-with-json';
-import useProducts from '../contexts/products';
 import usePushDocument from '../contexts/use-push-document';
 
-const EditProduct = () => {
-	const { resource } = useProducts();
-	const data = useObservableSuspense(resource);
-	const product = data.length === 1 && data[0];
+interface Props {
+	resource: ObservableResource<import('@wcpos/database').ProductDocument>;
+}
+
+/**
+ *
+ */
+const EditProduct = ({ resource }: Props) => {
+	const product = useObservableSuspense(resource);
 	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();

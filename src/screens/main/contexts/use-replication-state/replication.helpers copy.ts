@@ -68,15 +68,54 @@ export interface Checkpoint extends ReturnType<typeof parseHeaders> {
 }
 
 /**
+ * NOTE: some servers are returning errors if the query string is too long
+ * Each server has a different limit, but as a rule of thumb, we'll limit to around 2000 characters
+ * https://stackoverflow.com/questions/417142/what-is-the-maximum-length-of-a-url-in-different-browsers
  *
+ * If we limit the include array to 100, that should be safe for all cases
+ *
+ * @TODO - this should be smarter and do a character count instead of an item count
+ * 350 character limit might be good
  */
-export const defaultPrepareQueryParams = (query: QueryState, batchSize: number) => {
+const maxItems = 50;
+
+export const defaultPrepareQueryParams = (query: QueryState, status: any, batchSize: number) => {
 	const params = transformMangoSelector(query.selector);
+	const hasIncludeQuery = Array.isArray(params.include) && params.include.length > 0;
 
 	// search
 	if (query.search) {
 		params.search = query.search;
 	}
+
+	// special case for includes
+	if (hasIncludeQuery) {
+		status.completeIntitalSync = difference(params.include, status.remoteIDs).length === 0;
+	}
+
+	if (status.completeIntitalSync) {
+		/**
+		 * FIXME: which collections have a modified_after field?
+		 */
+		params.modified_after = status.lastModified;
+	}
+
+	// handle the audit status
+	// if (!status.completeIntitalSync) {
+	// 	// both empty, what to do?
+	// 	if (status.include.length === 0 && status.exclude.length === 0) {
+	// 		debugger;
+	// 	}
+
+	// 	if (status.include.length < status.exclude.length && status.include.length <= maxItems) {
+	// 		params.include = status.include;
+	// 	} else if (status.exclude.length < status.include.length && status.exclude.length <= maxItems) {
+	// 		params.exclude = status.exclude;
+	// 	} else {
+	// 		// if both are more than maxItems, take the first maxItems from include
+	// 		params.include = sampleSize(status.include, maxItems);
+	// 	}
+	// }
 
 	return Object.assign(params, {
 		order: query.sortDirection,

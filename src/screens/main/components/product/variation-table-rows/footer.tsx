@@ -26,8 +26,8 @@ const VariationsFooter = ({ count, parent }: VariationsFooterProps) => {
 	// const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
 	const { replicationState } = useVariations();
-	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
-	const total = useTotalCount('variations', `products/${parent.id}/variations`);
+	const active = useObservableState(replicationState.active$, false);
+	const total = useTotalCount('variations', replicationState);
 
 	return (
 		<Box

@@ -3,6 +3,8 @@ import * as React from 'react';
 import { StackActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
+import { ObservableResource } from 'observable-hooks';
+import { from } from 'rxjs';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
@@ -12,7 +14,7 @@ import Customers from './customers';
 import EditCustomer from './edit-customer';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
-import { CustomersProvider } from '../contexts/customers';
+import useCollection from '../hooks/use-collection';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -67,32 +69,28 @@ const EditCustomerWithProviders = ({
 	navigation,
 }: NativeStackScreenProps<CustomersStackParamList, 'EditCustomer'>) => {
 	const customerID = get(route, ['params', 'customerID']);
+	const { collection } = useCollection('customers');
 
-	const initialQuery = React.useMemo(
-		() => ({
-			selector: { uuid: customerID },
-			limit: 1,
-		}),
-		[customerID]
+	const resource = React.useMemo(
+		() => new ObservableResource(from(collection.findOneFix(customerID).exec())),
+		[collection, customerID]
 	);
 
 	return (
-		<CustomersProvider initialQuery={initialQuery}>
-			<ModalLayout
-				title={t('Edit Customer', { _tags: 'core' })}
-				primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
-				secondaryActions={[
-					{
-						label: t('Cancel', { _tags: 'core' }),
-						action: () => navigation.dispatch(StackActions.pop(1)),
-					},
-				]}
-			>
-				<React.Suspense>
-					<EditCustomer />
-				</React.Suspense>
-			</ModalLayout>
-		</CustomersProvider>
+		<ModalLayout
+			title={t('Edit Customer', { _tags: 'core' })}
+			primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
+			secondaryActions={[
+				{
+					label: t('Cancel', { _tags: 'core' }),
+					action: () => navigation.dispatch(StackActions.pop(1)),
+				},
+			]}
+		>
+			<React.Suspense>
+				<EditCustomer resource={resource} />
+			</React.Suspense>
+		</ModalLayout>
 	);
 };
 

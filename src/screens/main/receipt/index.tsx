@@ -1,19 +1,23 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
 
 import { useModal } from '@wcpos/components/src/modal';
 
 import { EmailModal } from './components/email';
 import { ReceiptTemplate } from './components/template-webview';
 import { t } from '../../../lib/translations';
-import useOrders from '../contexts/orders';
 
-export const ReceiptModal = () => {
-	const { resource } = useOrders();
-	const data = useObservableSuspense(resource);
-	const order = data.length === 1 && data[0];
+interface Props {
+	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
+}
+
+/**
+ *
+ */
+export const ReceiptModal = ({ resource }: Props) => {
+	const order = useObservableSuspense(resource);
 
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));

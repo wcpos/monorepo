@@ -1,203 +1,163 @@
 import * as React from 'react';
 
-// import difference from 'lodash/difference';
 import get from 'lodash/get';
-import { useObservableState, useObservableEagerState } from 'observable-hooks';
-import { RxDocument, RxCollection } from 'rxdb';
-import { replicateRxCollection, RxReplicationState } from 'rxdb/plugins/replication';
-import { interval, debounceTime } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { useObservableState, useSubscription } from 'observable-hooks';
+import { interval, merge } from 'rxjs';
+import { map, debounceTime, filter, tap, skip } from 'rxjs/operators';
 
+import { replicateRxCollection } from '@wcpos/database/src/plugins/wc-rest-api-replication';
 import log from '@wcpos/utils/src/logger';
 
-import { getAndPatchRecentlyModified } from './audit.helpers';
 import {
 	defaultPrepareQueryParams,
 	getPriority,
 	// retryWithExponentialBackoff,
 } from './replication.helpers';
-import useAudit from './use-audit';
 import useLocalData from '../../../../contexts/local-data';
-import useQueuedRestRequest from '../../hooks/use-queued-rest-request';
+import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 import type { QueryObservable, QueryState } from '../use-query';
-
-export type ReplicationState = RxReplicationState<RxDocument, object>;
-
-/**
- *
- */
-// const replicationRefRegistry = new Map();
+import type { RxCollection } from 'rxdb';
 
 interface Props {
 	collection: RxCollection;
+	apiEndpoint?: string;
 	query$: QueryObservable;
 	prepareQueryParams?: (
 		params: ReturnType<typeof defaultPrepareQueryParams>,
 		query: QueryState,
-		status: any,
+		checkpoint: any,
 		batchSize: number
 	) => Record<string, string>;
 	pollingTime?: number;
-	apiEndpoint?: string;
+	tag?: string;
 }
-
-const maxRequests = 5;
 
 /**
  *
  */
 export const useReplicationState = ({
 	collection,
+	apiEndpoint,
 	query$,
 	prepareQueryParams,
 	pollingTime = 600000,
-	apiEndpoint,
 }: Props) => {
-	const query = useObservableEagerState(query$);
 	const { site } = useLocalData();
 	const apiURL = useObservableState(site.wc_api_url$, site.wc_api_url);
-	const queuedHttp = useQueuedRestRequest();
 	const endpoint = apiEndpoint || collection.name;
-	const audit = useAudit({ collection, endpoint });
-	const replicationRef = React.useRef();
-	const [replicationState, setReplicationState] = React.useState();
-	const requestCountRef = React.useRef(0);
+	const http = useRestHttpClient();
 
 	/**
 	 *
 	 */
-	React.useMemo(() => {
-		const newReplicationState = replicateRxCollection({
+	return React.useMemo(() => {
+		const queryDebounced$ = query$.pipe(
+			skip(1), // skip initial query
+			filter((q) => !q.uuid), // HACK: ignore uuid queries
+			debounceTime(500),
+			map(() => 'QUERY')
+		);
+
+		const resync$ = interval(pollingTime).pipe(map(() => 'RESYNC'));
+
+		const combinedStream$ = merge(queryDebounced$, resync$);
+
+		/**
+		 * HACK: ideally each endpoint would have it's own replication state
+		 * but it means the query$ used in the handler is always from the first Provider to mount
+		 * so we need to make sure each unique starting query has it's own replication state
+		 *
+		 * TODO: is there a way to update the query$ in the handler?
+		 */
+		const query = query$.getValue();
+		const queryHash = JSON.stringify(query);
+
+		const replicationState = replicateRxCollection({
 			collection,
-			replicationIdentifier: `replication-to-${apiURL}/${endpoint}`,
-			autoStart: false,
-			// push: {
-			// 	handler: async () => Promise.resolve([]),
-			// },
+			replicationIdentifier: `replication-to-${apiURL}/${endpoint}?${queryHash}`,
 			pull: {
-				handler: async (rxdbCheckpoint, batchSize) => {
-					if (requestCountRef.current >= maxRequests) {
-						requestCountRef.current = 0;
-						return {
-							documents: [],
-						};
-					}
-					requestCountRef.current += 1;
-
+				fetchRemoteIDs: async () => {
+					/**
+					 * TODO: if variation, this should just return the parent.variations
+					 */
 					try {
-						const status = await audit.run();
+						const response = await http.get(endpoint, {
+							params: { fields: ['id'], posts_per_page: -1 },
+						});
+						const data = get(response, 'data', []);
+						return data.map((doc) => doc.id);
+					} catch (err) {
+						log.error(err);
+					}
+				},
+				fetchLocalDocs: async () => {
+					/**
+					 * TODO: if variation, search by id includes parent.variations
+					 */
+					try {
+						const localDocs = await collection
+							.find({
+								selector: { id: { $exists: true } },
+							})
+							.exec();
 
-						const defaultParams = defaultPrepareQueryParams(query, status, batchSize);
-						const params = prepareQueryParams
-							? prepareQueryParams(defaultParams, query, status, batchSize)
-							: defaultParams;
+						return localDocs;
+					} catch (err) {
+						log.error(err);
+					}
+				},
+				handler: async (checkpoint, batchSize) => {
+					try {
+						const query = query$.getValue();
+						const defaultParams = defaultPrepareQueryParams(query, batchSize);
+						const params = prepareQueryParams(defaultParams, query, checkpoint, batchSize);
+						let response;
 
-						// hack to stop the API from returning all docs, how to search by uuid?
-						if ('uuid' in params || 'earlyReturn' in params) {
-							return {
-								documents: [],
-								// checkpoint: null,
-							};
-						}
-
-						// special case for includes
-						if ('include' in params) {
-							// include should check if they are all in the local db
-						}
-
-						// convert includes and excludes to comma separated string
-						if ('include' in params && Array.isArray(params.include)) {
-							params.include = params.include.join(',');
-						}
-
-						if ('exclude' in params && Array.isArray(params.exclude)) {
-							params.exclude = params.exclude.join(',');
-						}
-
-						/**
-						 * FIXME: Hack to fix the issue with rxdb silently dropping lastModified data
-						 */
-						if (params.modified_after) {
-							await getAndPatchRecentlyModified(
-								params.modified_after,
-								collection,
-								endpoint,
-								queuedHttp
-							);
-						}
-
-						const response = await queuedHttp.get(
-							endpoint,
-							{
+						if (checkpoint.completeIntitalSync) {
+							response = await http.get(endpoint, {
+								// signal: controller.signal,
+								params: {
+									...params,
+									modified_after: checkpoint.lastModified,
+								},
+							});
+						} else {
+							response = await http.post(endpoint, {
 								// signal: controller.signal,
 								params,
-							},
-							getPriority(endpoint, params),
-							endpoint
-						);
-						const data = get(response, 'data', []);
+								data: {
+									include: checkpoint.include,
+									exclude: checkpoint.exclude,
+								},
+								headers: {
+									'X-HTTP-Method-Override': 'GET',
+								},
+							});
+						}
 
 						return {
-							documents: data.concat(status.remove),
-							// checkpoint: null,
+							documents: get(response, 'data', []),
+							checkpoint,
 						};
-					} catch (error) {
-						log.error(error);
-						throw error;
+					} catch (err) {
+						log.error(err);
 					}
 				},
 				batchSize: 10,
 				modifier: async (doc) => {
-					const parsedData = collection.parseRestResponse(doc);
-					await collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
-					return parsedData;
+					try {
+						const parsedData = collection.parseRestResponse(doc);
+						await collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+						return parsedData;
+					} catch (err) {
+						log.error(err);
+					}
 				},
-				stream$: interval(pollingTime).pipe(map(() => 'RESYNC')),
+				stream$: combinedStream$,
 			},
 		});
 
-		replicationRef.current = newReplicationState;
-		replicationRef.current.audit = audit;
-	}, [apiURL, audit, collection, endpoint, pollingTime, prepareQueryParams, query, queuedHttp]);
-
-	/**
-	 *
-	 */
-	React.useEffect(() => {
-		if (replicationRef.current) {
-			setReplicationState((prev) => {
-				if (prev) {
-					prev.cancel();
-				}
-				replicationRef.current.start();
-				return replicationRef.current;
-			});
-		}
-	}, [query, collection]);
-
-	/**
-	 *
-	 */
-	// React.useEffect(() => {
-	// 	if (replicationRef.current) {
-	// 		setReplicationState((prev) => {
-	// 			if (prev) {
-	// 				prev.cancel();
-	// 			}
-	// 			replicationRef.current.start();
-	// 			return replicationRef.current;
-	// 		});
-	// 	}
-	// 	return () => {
-	// 		if (replicationRef.current) {
-	// 			replicationRef.current.cancel();
-	// 		}
-	// 	};
-	// }, []);
-
-	/**
-	 *
-	 */
-	return replicationState;
+		return replicationState;
+	}, [apiURL, collection, endpoint, http, pollingTime, prepareQueryParams, query$]);
 };

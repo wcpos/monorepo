@@ -2,20 +2,18 @@ import * as React from 'react';
 
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
-import { combineLatest } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
+import { from } from 'rxjs';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 
 import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
-import useLocalData from '../../../contexts/local-data';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
-import { CustomersProvider } from '../contexts/customers';
 import { OrdersProvider } from '../contexts/orders';
+import useCollection from '../hooks/use-collection';
 import Receipt from '../receipt';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -62,30 +60,26 @@ const CheckoutWithProviders = ({
 	route,
 }: NativeStackScreenProps<POSStackParamList, 'Checkout'>) => {
 	const orderID = get(route, ['params', 'orderID']);
+	const { collection } = useCollection('orders');
 
-	const initialOrdersQuery = React.useMemo(
-		() => ({ selector: { uuid: orderID }, limit: 1 }),
-		[orderID]
+	const resource = React.useMemo(
+		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
+		[collection, orderID]
 	);
-	// const initialGatewaysQuery = React.useMemo(() => ({ selector: { enabled: true } }), []);
 
 	return (
-		<OrdersProvider initialQuery={initialOrdersQuery}>
-			{/* <GatewaysProvider initialQuery={initialGatewaysQuery}> */}
-			<ModalLayout
-				size="xLarge"
-				title={t('Checkout', { _tags: 'core' })}
-				primaryAction={{
-					label: t('Process Payment', { _tags: 'core' }),
-				}}
-				style={{ minHeight: '80%' }}
-			>
-				<React.Suspense>
-					<Checkout />
-				</React.Suspense>
-			</ModalLayout>
-			{/* </GatewaysProvider> */}
-		</OrdersProvider>
+		<ModalLayout
+			size="xLarge"
+			title={t('Checkout', { _tags: 'core' })}
+			primaryAction={{
+				label: t('Process Payment', { _tags: 'core' }),
+			}}
+			style={{ minHeight: '80%' }}
+		>
+			<React.Suspense>
+				<Checkout resource={resource} />
+			</React.Suspense>
+		</ModalLayout>
 	);
 };
 
@@ -94,31 +88,30 @@ const CheckoutWithProviders = ({
  */
 const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'Receipt'>) => {
 	const orderID = get(route, ['params', 'orderID']);
+	const { collection } = useCollection('orders');
 
-	const initialOrdersQuery = React.useMemo(
-		() => ({ selector: { uuid: orderID }, limit: 1 }),
-		[orderID]
+	const resource = React.useMemo(
+		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
+		[collection, orderID]
 	);
 
 	return (
-		<OrdersProvider initialQuery={initialOrdersQuery}>
-			<ModalLayout
-				title={t('Receipt', { _tags: 'core' })}
-				primaryAction={{
-					label: t('Print Receipt', { _tags: 'core' }),
-				}}
-				secondaryActions={[
-					{
-						label: t('Email Receipt', { _tags: 'core' }),
-					},
-				]}
-				style={{ height: '100%' }}
-			>
-				<React.Suspense>
-					<Receipt />
-				</React.Suspense>
-			</ModalLayout>
-		</OrdersProvider>
+		<ModalLayout
+			title={t('Receipt', { _tags: 'core' })}
+			primaryAction={{
+				label: t('Print Receipt', { _tags: 'core' }),
+			}}
+			secondaryActions={[
+				{
+					label: t('Email Receipt', { _tags: 'core' }),
+				},
+			]}
+			style={{ height: '100%' }}
+		>
+			<React.Suspense>
+				<Receipt resource={resource} />
+			</React.Suspense>
+		</ModalLayout>
 	);
 };
 

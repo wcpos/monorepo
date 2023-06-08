@@ -9,8 +9,6 @@ import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
 import useCollection from '../../hooks/use-collection';
-import { clearCollection } from '../clear-collection';
-import syncCollection from '../sync-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import useReplicationState from '../use-replication-state';
 
@@ -85,8 +83,8 @@ const prepareQueryParams = (
  *
  */
 const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProviderProps) => {
-	const { store } = useLocalData();
-	const collection = useCollection('customers');
+	const { storeDB } = useLocalData();
+	const { collection } = useCollection('customers');
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
@@ -144,16 +142,31 @@ const CustomersProvider = ({ children, initialQuery, uiSettings }: CustomersProv
 	/**
 	 *
 	 */
+	const clear = React.useCallback(async () => {
+		// we need to cancel any replications before clearing the collections
+		replicationState.cancel();
+		await storeDB.reset(['customers']);
+	}, [replicationState, storeDB]);
+
+	/**
+	 *
+	 */
+	const sync = React.useCallback(() => {
+		replicationState.reSync();
+	}, [replicationState]);
+
+	/**
+	 *
+	 */
 	return (
 		<CustomersContext.Provider
 			value={{
 				resource,
 				query$,
 				setQuery,
-				clear: () => clearCollection(store.localID, collection),
-				sync: () => syncCollection(replicationState),
+				clear,
+				sync,
 				replicationState,
-				collection,
 			}}
 		>
 			{children}

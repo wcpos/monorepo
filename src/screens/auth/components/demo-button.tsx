@@ -18,6 +18,11 @@ const DemoButton = () => {
 		setLoading(true);
 		try {
 			const site = await onConnect('https://demo.wcpos.com/');
+
+			if (!site) {
+				throw new Error('Could not connect to demo site');
+			}
+
 			const { data } = await http.get(`${site?.wc_api_auth_url}/authorize`, {
 				auth: {
 					username: 'demo',

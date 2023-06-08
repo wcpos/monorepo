@@ -33,7 +33,7 @@ const useNewOrder = () => {
 		),
 		0
 	);
-	const customerCollection = useCollection('customers');
+	const { collection: customerCollection } = useCollection('customers');
 	const pullDocument = usePullDocument();
 
 	/**

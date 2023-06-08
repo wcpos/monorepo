@@ -28,7 +28,7 @@ interface GatewaysProviderProviderProps {
 }
 
 const GatewaysProvider = ({ children, initialQuery }: GatewaysProviderProviderProps) => {
-	const collection = useCollection('payment_gateways');
+	const { collection } = useCollection('payment_gateways');
 	const { query$, setQuery } = useQuery(initialQuery, 'payment_gateways');
 	const replicationState = useReplication({ collection });
 

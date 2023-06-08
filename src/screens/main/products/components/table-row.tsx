@@ -1,8 +1,11 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
+import { useObservableState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
+import { map } from 'rxjs/operators';
 
+import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import Table, { CellRenderer } from '@wcpos/components/src/table';
@@ -61,9 +64,14 @@ const ProductTableRow = ({
 	index,
 	extraData,
 	target,
+	shownItems$,
 }: ListRenderItemInfo<ProductDocument>) => {
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();
+	// const shown = useObservableState(
+	// 	shownItems$.pipe(map((shownItems) => shownItems[item.uuid])),
+	// 	false
+	// );
 
 	/**
 	 *

@@ -52,7 +52,7 @@ const ProductSearch = ({
 	const [search, setSearch] = React.useState(query.search);
 	const { barcode$ } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
-	const productsCollection = useCollection('products');
+	const { collection } = useCollection('products');
 
 	const onSearch = React.useCallback(
 		(search) => {
@@ -72,7 +72,7 @@ const ProductSearch = ({
 				if (result[0].collection.name === 'variations') {
 					// if it's a variation, we need to get the parent product
 					// TODO: perhaps it's better to have a look up table for variations/parents?
-					const parent = await productsCollection
+					const parent = await collection
 						.findOne({
 							selector: {
 								variations: {

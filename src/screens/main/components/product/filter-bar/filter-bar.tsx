@@ -21,8 +21,8 @@ const FilterBar = () => {
 	const onSaleFilterActive = get(query, 'selector.on_sale', false);
 	const categoryFilterID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
 	const tagFilterID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
-	const categoryCollection = useCollection('products/categories');
-	const tagCollection = useCollection('products/tags');
+	const { collection: categoryCollection } = useCollection('products/categories');
+	const { collection: tagCollection } = useCollection('products/tags');
 	// const pullDocument = usePullDocument();
 
 	/**

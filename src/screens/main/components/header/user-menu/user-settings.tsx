@@ -18,7 +18,7 @@ interface UserSettingsProps {
 const UserSettings = ({ onClose }: UserSettingsProps) => {
 	const { storeDB } = useLocalData();
 	const [country, setCountry] = React.useState('GB');
-	const collection = useCollection('taxes');
+	const { collection } = useCollection('taxes');
 
 	const taxRates$ = useObservable(
 		(inputs$) =>

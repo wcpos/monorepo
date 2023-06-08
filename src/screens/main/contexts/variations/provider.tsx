@@ -89,7 +89,7 @@ const VariationsProvider = ({
 	parent,
 }: // uiSettings,
 VariationsProviderProps) => {
-	const collection = useCollection('variations');
+	const { collection } = useCollection('variations');
 	const apiEndpoint = `products/${parent.id}/variations`;
 	const { query$, setQuery } = useQuery(initialQuery);
 	// const replicationState = useReplication({ parent, query$ });

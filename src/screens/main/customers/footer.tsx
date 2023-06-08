@@ -20,7 +20,7 @@ const CustomersFooter = ({ count }: CustomersFooterProps) => {
 	const theme = useTheme();
 	const { sync, clear, replicationState } = useCustomers();
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
-	const total = useTotalCount('customers');
+	const total = useTotalCount('customers', replicationState);
 
 	return (
 		<Box

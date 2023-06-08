@@ -23,13 +23,12 @@ interface ProductFooterProps {
  *
  */
 const ProductsFooter = ({ count }: ProductFooterProps) => {
-	const { storeDB, store } = useLocalData();
-	// const total = useObservableState(storeDB.products.count().$, 0);
+	const { store } = useLocalData();
 	const theme = useTheme();
 	const { sync, clear, replicationState } = useProducts();
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
-	const total = useTotalCount('products');
+	const total = useTotalCount('products', replicationState);
 
 	return (
 		<Box

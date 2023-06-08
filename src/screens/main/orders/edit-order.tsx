@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
@@ -12,10 +12,15 @@ import EditModal from '../components/edit-form-with-json';
 import useOrders from '../contexts/orders';
 import usePushDocument from '../contexts/use-push-document';
 
-const EditOrder = () => {
-	const { resource } = useOrders();
-	const data = useObservableSuspense(resource);
-	const order = data.length === 1 && data[0];
+interface Props {
+	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
+}
+
+/**
+ *
+ */
+const EditOrder = ({ resource }: Props) => {
+	const order = useObservableSuspense(resource);
 	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
@@ -10,14 +10,18 @@ import log from '@wcpos/utils/src/logger';
 import { t } from '../../../lib/translations';
 import { CountrySelect, StateSelect } from '../components/country-state-select';
 import EditForm from '../components/edit-form-with-json';
-import { useCustomers } from '../contexts/customers/use-customers';
 import usePushDocument from '../contexts/use-push-document';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format/use-customer-name-format';
 
-const EditCustomer = () => {
-	const { resource } = useCustomers();
-	const data = useObservableSuspense(resource);
-	const customer = data.length === 1 && data[0];
+interface Props {
+	resource: ObservableResource<import('@wcpos/database').CustomerDocument>;
+}
+
+/**
+ *
+ */
+const EditCustomer = ({ resource }: Props) => {
+	const customer = useObservableSuspense(resource);
 	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();

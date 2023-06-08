@@ -24,7 +24,8 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 	const { sync, clear, replicationState } = useProducts();
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
-	const total = useTotalCount('products');
+	const remoteIDs = useObservableState(replicationState.remoteIDs$, []);
+	const total = remoteIDs.length;
 
 	return (
 		<Box

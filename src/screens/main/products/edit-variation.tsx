@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
@@ -10,12 +10,16 @@ import log from '@wcpos/utils/src/logger';
 import { t } from '../../../lib/translations';
 import EditModal from '../components/edit-form-with-json';
 import usePushDocument from '../contexts/use-push-document';
-import { useVariations } from '../contexts/variations/use-variations';
 
-const EditVariation = () => {
-	const { resource } = useVariations();
-	const data = useObservableSuspense(resource);
-	const variation = data.length === 1 && data[0];
+interface Props {
+	resource: ObservableResource<import('@wcpos/database').ProductVariationDocument>;
+}
+
+/**
+ *
+ */
+const EditVariation = ({ resource }: Props) => {
+	const variation = useObservableSuspense(resource);
 	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();

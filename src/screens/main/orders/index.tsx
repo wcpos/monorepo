@@ -3,6 +3,8 @@ import * as React from 'react';
 import { StackActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
+import { ObservableResource } from 'observable-hooks';
+import { from } from 'rxjs';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
@@ -12,6 +14,7 @@ import Orders from './orders';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { OrdersProvider } from '../contexts/orders';
+import useCollection from '../hooks/use-collection';
 import Receipt from '../receipt';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -45,32 +48,28 @@ const EditOrderWithProviders = ({
 	navigation,
 }: NativeStackScreenProps<OrdersStackParamList, 'EditOrder'>) => {
 	const orderID = get(route, ['params', 'orderID']);
+	const { collection } = useCollection('orders');
 
-	const initialQuery = React.useMemo(
-		() => ({
-			selector: { uuid: orderID },
-			limit: 1,
-		}),
-		[orderID]
+	const resource = React.useMemo(
+		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
+		[collection, orderID]
 	);
 
 	return (
-		<OrdersProvider initialQuery={initialQuery}>
-			<ModalLayout
-				title={t('Edit Order', { _tags: 'core' })}
-				primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
-				secondaryActions={[
-					{
-						label: t('Cancel', { _tags: 'core' }),
-						action: () => navigation.dispatch(StackActions.pop(1)),
-					},
-				]}
-			>
-				<React.Suspense>
-					<EditOrder />
-				</React.Suspense>
-			</ModalLayout>
-		</OrdersProvider>
+		<ModalLayout
+			title={t('Edit Order', { _tags: 'core' })}
+			primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
+			secondaryActions={[
+				{
+					label: t('Cancel', { _tags: 'core' }),
+					action: () => navigation.dispatch(StackActions.pop(1)),
+				},
+			]}
+		>
+			<React.Suspense>
+				<EditOrder resource={resource} />
+			</React.Suspense>
+		</ModalLayout>
 	);
 };
 
@@ -81,34 +80,30 @@ const ReceiptWithProviders = ({
 	route,
 }: NativeStackScreenProps<OrdersStackParamList, 'Receipt'>) => {
 	const orderID = get(route, ['params', 'orderID']);
+	const { collection } = useCollection('orders');
 
-	const initialQuery = React.useMemo(
-		() => ({
-			selector: { uuid: orderID },
-			limit: 1,
-		}),
-		[orderID]
+	const resource = React.useMemo(
+		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
+		[collection, orderID]
 	);
 
 	return (
-		<OrdersProvider initialQuery={initialQuery}>
-			<ModalLayout
-				title={t('Receipt', { _tags: 'core' })}
-				primaryAction={{
-					label: t('Print Receipt', { _tags: 'core' }),
-				}}
-				secondaryActions={[
-					{
-						label: t('Email Receipt', { _tags: 'core' }),
-					},
-				]}
-				style={{ height: '100%' }}
-			>
-				<React.Suspense>
-					<Receipt />
-				</React.Suspense>
-			</ModalLayout>
-		</OrdersProvider>
+		<ModalLayout
+			title={t('Receipt', { _tags: 'core' })}
+			primaryAction={{
+				label: t('Print Receipt', { _tags: 'core' }),
+			}}
+			secondaryActions={[
+				{
+					label: t('Email Receipt', { _tags: 'core' }),
+				},
+			]}
+			style={{ height: '100%' }}
+		>
+			<React.Suspense>
+				<Receipt resource={resource} />
+			</React.Suspense>
+		</ModalLayout>
 	);
 };
 

@@ -23,7 +23,7 @@ const CustomerSelectSearch = ({ onSelectCustomer, autoFocus = false, value }) =>
 	const customerSelectMenuRef = React.useRef(null);
 	const [selectedCustomer, setSelectedCustomer] = React.useState({ id: 0 });
 	const pullDocument = usePullDocument();
-	const collection = useCollection('customers');
+	const { collection } = useCollection('customers');
 
 	/**
 	 *

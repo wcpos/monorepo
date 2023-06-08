@@ -67,7 +67,7 @@ const ProductCategoriesProvider = ({
 	ui,
 }: ProductCategoriesProviderProps) => {
 	const { storeDB } = useLocalData();
-	const collection = useCollection('products/categories');
+	const { collection } = useCollection('products/categories');
 	const { query$, setQuery } = useQuery(initialQuery, 'products/categories');
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 

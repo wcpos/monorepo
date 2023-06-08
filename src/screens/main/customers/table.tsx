@@ -77,6 +77,7 @@ const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 	return (
 		<Table<CustomerDocument>
 			data={customers}
+			// data={customers.slice(0, 10)}
 			footer={<Footer count={customers.length} />}
 			estimatedItemSize={100}
 			extraData={context}

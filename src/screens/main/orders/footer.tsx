@@ -9,6 +9,7 @@ import Text from '@wcpos/components/src/text';
 
 import SyncButton from '../components/sync-button';
 import useOrders from '../contexts/orders';
+import useResetOrders from '../contexts/orders/use-reset-orders';
 import useTotalCount from '../hooks/use-total-count';
 
 interface OrderFooterProps {
@@ -16,10 +17,14 @@ interface OrderFooterProps {
 }
 
 const OrdersFooter = ({ count }: OrderFooterProps) => {
-	const total = useTotalCount('orders');
 	const theme = useTheme();
-	const { sync, clear, replicationState } = useOrders();
+	const { replicationState, clear, sync } = useOrders();
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
+	const total = useTotalCount('orders', replicationState);
+
+	/**
+	 *
+	 */
 
 	return (
 		<Box

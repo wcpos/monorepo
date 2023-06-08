@@ -15,7 +15,7 @@ import useTaxCalculation from '../use-tax-calculation';
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
 export const useCartHelpers = () => {
-	const ordersCollection = useCollection('orders');
+	const { collection } = useCollection('orders');
 	const navigation = useNavigation();
 	const { currentOrder } = useCurrentOrder();
 	const { store } = useLocalData();
@@ -71,7 +71,7 @@ export const useCartHelpers = () => {
 			const order = currentOrder.getLatest();
 
 			if (order.isNew) {
-				const newOrder = await processNewOrder(order, ordersCollection, {
+				const newOrder = await processNewOrder(order, collection, {
 					line_items: [newLineItem],
 				});
 				navigation.setParams({ orderID: newOrder?.uuid });
@@ -83,14 +83,7 @@ export const useCartHelpers = () => {
 
 			addSnackbar({ message: `${product.name} added to cart`, type: 'success' });
 		},
-		[
-			addSnackbar,
-			calculateTaxesFromPrice,
-			currentOrder,
-			navigation,
-			ordersCollection,
-			pricesIncludeTax,
-		]
+		[addSnackbar, calculateTaxesFromPrice, currentOrder, navigation, collection, pricesIncludeTax]
 	);
 
 	/**
@@ -142,7 +135,7 @@ export const useCartHelpers = () => {
 			const order = currentOrder.getLatest();
 
 			if (order.isNew) {
-				const newOrder = await processNewOrder(order, ordersCollection, {
+				const newOrder = await processNewOrder(order, collection, {
 					line_items: [newLineItem],
 				});
 				navigation.setParams({ orderID: newOrder?.uuid });
@@ -154,14 +147,7 @@ export const useCartHelpers = () => {
 
 			addSnackbar({ message: `${parent.name} added to cart`, type: 'success' });
 		},
-		[
-			addSnackbar,
-			calculateTaxesFromPrice,
-			currentOrder,
-			navigation,
-			ordersCollection,
-			pricesIncludeTax,
-		]
+		[addSnackbar, calculateTaxesFromPrice, currentOrder, navigation, collection, pricesIncludeTax]
 	);
 
 	/**
@@ -225,7 +211,7 @@ export const useCartHelpers = () => {
 			const order = currentOrder.getLatest();
 
 			if (order.isNew) {
-				const newOrder = await processNewOrder(order, ordersCollection, {
+				const newOrder = await processNewOrder(order, collection, {
 					fee_lines: [newFeelLine],
 				});
 				navigation.setParams({ orderID: newOrder?.uuid });
@@ -233,7 +219,7 @@ export const useCartHelpers = () => {
 				await addItem(order, { fee_lines: newFeelLine });
 			}
 		},
-		[calculateTaxesFromPrice, currentOrder, navigation, ordersCollection]
+		[calculateTaxesFromPrice, currentOrder, navigation, collection]
 	);
 
 	/**
@@ -244,13 +230,13 @@ export const useCartHelpers = () => {
 			const order = currentOrder.getLatest();
 
 			if (order.isNew) {
-				const newOrder = await processNewOrder(order, ordersCollection, { shipping_lines: [data] });
+				const newOrder = await processNewOrder(order, collection, { shipping_lines: [data] });
 				navigation.setParams({ orderID: newOrder?.uuid });
 			} else {
 				await addItem(order, { shipping_lines: data });
 			}
 		},
-		[currentOrder, navigation, ordersCollection]
+		[currentOrder, navigation, collection]
 	);
 
 	return { addProduct, addVariation, removeItem, removeCustomer, addCustomer, addFee, addShipping };

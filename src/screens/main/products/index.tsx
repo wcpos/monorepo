@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import { StackActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import { ObservableResource } from 'observable-hooks';
+import { from } from 'rxjs';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
@@ -11,9 +13,7 @@ import EditVariation from './edit-variation';
 import Products from './products';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
-import { ProductsProvider } from '../contexts/products';
 import useUISettings from '../contexts/ui-settings';
-import { VariationsProvider } from '../contexts/variations';
 import useCollection from '../hooks/use-collection';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -50,31 +50,27 @@ const EditProductWithProviders = ({
 }: NativeStackScreenProps<ProductsStackParamList, 'EditProduct'>) => {
 	const { productID } = route.params;
 	const { uiSettings } = useUISettings('products');
+	const { collection } = useCollection('products');
 
-	const initialQuery = React.useMemo(
-		() => ({
-			selector: { uuid: productID },
-			limit: 1,
-		}),
-		[productID]
+	const resource = React.useMemo(
+		() => new ObservableResource(from(collection.findOneFix(productID).exec())),
+		[collection, productID]
 	);
 
 	return (
-		<ProductsProvider initialQuery={initialQuery} uiSettings={uiSettings}>
-			<ModalLayout
-				title={t('Edit', { _tags: 'core' })}
-				secondaryActions={[
-					{
-						label: t('Cancel', { _tags: 'core' }),
-						action: () => navigation.dispatch(StackActions.pop(1)),
-					},
-				]}
-			>
-				<React.Suspense>
-					<EditProduct />
-				</React.Suspense>
-			</ModalLayout>
-		</ProductsProvider>
+		<ModalLayout
+			title={t('Edit', { _tags: 'core' })}
+			secondaryActions={[
+				{
+					label: t('Cancel', { _tags: 'core' }),
+					action: () => navigation.dispatch(StackActions.pop(1)),
+				},
+			]}
+		>
+			<React.Suspense>
+				<EditProduct resource={resource} />
+			</React.Suspense>
+		</ModalLayout>
 	);
 };
 
@@ -87,58 +83,30 @@ const EditVariationWithProviders = ({
 }: NativeStackScreenProps<ProductsStackParamList, 'EditVariation'>) => {
 	const { variationID, parentID } = route.params;
 	const { uiSettings } = useUISettings('products');
-	const productCollection = useCollection('products');
-	const [parent, setParent] = React.useState<import('@wcpos/database').ProductDocument>();
+	const { collection } = useCollection('variations');
 
-	/**
-	 * I need to get the parent product here, so I can pass it to the variations provider
-	 */
-	React.useEffect(() => {
-		productCollection
-			.findOneFix({ selector: { id: parseInt(parentID, 10) } })
-			.exec()
-			.then((doc) => {
-				setParent(doc);
-			});
-	}, [parentID, productCollection]);
-
-	/**
-	 *
-	 */
-	const initialQuery = React.useMemo(
-		() => ({
-			selector: { uuid: variationID },
-			limit: 1,
-		}),
-		[variationID]
+	const resource = React.useMemo(
+		() => new ObservableResource(from(collection.findOneFix(variationID).exec())),
+		[collection, variationID]
 	);
 
 	/**
 	 *
 	 */
-	if (!parent) {
-		return <Text>Loading...</Text>;
-	}
-
-	/**
-	 *
-	 */
 	return (
-		<VariationsProvider initialQuery={initialQuery} parent={parent} uiSettings={uiSettings}>
-			<ModalLayout
-				title={t('Edit Variation', { _tags: 'core' })}
-				secondaryActions={[
-					{
-						label: t('Cancel', { _tags: 'core' }),
-						action: () => navigation.dispatch(StackActions.pop(1)),
-					},
-				]}
-			>
-				<React.Suspense>
-					<EditVariation />
-				</React.Suspense>
-			</ModalLayout>
-		</VariationsProvider>
+		<ModalLayout
+			title={t('Edit Variation', { _tags: 'core' })}
+			secondaryActions={[
+				{
+					label: t('Cancel', { _tags: 'core' }),
+					action: () => navigation.dispatch(StackActions.pop(1)),
+				},
+			]}
+		>
+			<React.Suspense>
+				<EditVariation resource={resource} />
+			</React.Suspense>
+		</ModalLayout>
 	);
 };
 

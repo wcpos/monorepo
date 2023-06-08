@@ -3,15 +3,13 @@ import * as React from 'react';
 import { orderBy } from '@shelf/fast-natural-order-by';
 import isEqual from 'lodash/isEqual';
 import { ObservableResource, useObservableState } from 'observable-hooks';
-import { switchMap, map, distinctUntilChanged } from 'rxjs/operators';
+import { switchMap, map, distinctUntilChanged, tap } from 'rxjs/operators';
 
 // import products from '@wcpos/database/src/collections/products';
 import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
 import useCollection from '../../hooks/use-collection';
-import { clearCollections } from '../clear-collection';
-import syncCollection from '../sync-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import useReplicationState from '../use-replication-state';
 
@@ -96,9 +94,8 @@ const prepareQueryParams = (
  *
  */
 const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProviderProps) => {
-	const { store } = useLocalData();
-	const collection = useCollection('products');
-	const variationsCollection = useCollection('variations');
+	const { storeDB } = useLocalData();
+	const { collection } = useCollection('products');
 	const showOutOfStock = useObservableState(
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
@@ -163,15 +160,17 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 	/**
 	 *
 	 */
-	const clear = React.useCallback(() => {
-		return clearCollections(store.localID, [collection, variationsCollection]);
-	}, [collection, variationsCollection, store.localID]);
+	const clear = React.useCallback(async () => {
+		// we need to cancel any replications before clearing the collections
+		replicationState.cancel();
+		await storeDB.reset(['products', 'variations']);
+	}, [replicationState, storeDB]);
 
 	/**
 	 *
 	 */
 	const sync = React.useCallback(() => {
-		syncCollection(replicationState);
+		replicationState.reSync();
 	}, [replicationState]);
 
 	/**

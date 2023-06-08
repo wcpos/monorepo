@@ -9,8 +9,8 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 
 export const useBarcodeSearch = () => {
 	// Get the RxDB collections for products and variations
-	const productCollection = useCollection('products');
-	const variationsCollection = useCollection('variations');
+	const { collection: productCollection } = useCollection('products');
+	const { collection: variationsCollection } = useCollection('variations');
 
 	/**
 	 * Searches for a barcode in the product and variation collections.

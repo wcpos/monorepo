@@ -11,8 +11,6 @@ import log from '@wcpos/utils/src/logger';
 
 import useLocalData from '../../../../contexts/local-data';
 import useCollection from '../../hooks/use-collection';
-import { clearCollections } from '../clear-collection';
-import syncCollection from '../sync-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import useReplicationState from '../use-replication-state';
 
@@ -95,11 +93,8 @@ const prepareQueryParams = (
  *
  */
 const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderProps) => {
-	const { store } = useLocalData();
-	const collection = useCollection('orders');
-	const lineItemsCollection = useCollection('line_items');
-	const feeLinesCollection = useCollection('fee_lines');
-	const shippingLinesCollection = useCollection('shipping_lines');
+	const { storeDB } = useLocalData();
+	const { collection } = useCollection('orders');
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 
@@ -174,22 +169,35 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 		return new ObservableResource(resource$);
 	}, [collection, query$]);
 
+	/**
+	 *
+	 */
+	const clear = React.useCallback(async () => {
+		// we need to cancel any replications before clearing the collections
+		replicationState.cancel();
+		await storeDB.reset(['orders', 'line_items', 'fee_lines', 'shipping_lines']);
+	}, [replicationState, storeDB]);
+
+	/**
+	 *
+	 */
+	const sync = React.useCallback(() => {
+		replicationState.reSync();
+	}, [replicationState]);
+
+	/**
+	 *
+	 */
 	return (
 		<OrdersContext.Provider
 			value={{
 				resource,
 				query$,
 				setQuery,
-				clear: () =>
-					clearCollections(store.localID, [
-						collection,
-						lineItemsCollection,
-						feeLinesCollection,
-						shippingLinesCollection,
-					]),
-				sync: () => syncCollection(replicationState),
 				replicationState,
 				newOrderResource,
+				clear,
+				sync,
 			}}
 		>
 			{children}

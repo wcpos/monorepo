@@ -14,7 +14,7 @@ import useTotalCount from '../hooks/use-total-count';
 const TaxRatesFooter = ({ count }) => {
 	const { sync, clear, replicationState } = useTaxRates();
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
-	const total = useTotalCount('taxes');
+	const total = useTotalCount('taxes', replicationState);
 
 	return (
 		<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">

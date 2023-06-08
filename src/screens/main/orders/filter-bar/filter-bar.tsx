@@ -15,7 +15,7 @@ import useCollection from '../../hooks/use-collection';
 const FilterBar = () => {
 	const { query$, setQuery } = useOrders();
 	const query = useObservableState(query$, query$.getValue());
-	const customersCollection = useCollection('customers');
+	const { collection } = useCollection('customers');
 	const customerID = get(query, ['selector', 'customer_id']);
 	const statusFilterActive = get(query, ['selector', 'status']);
 
@@ -28,7 +28,7 @@ const FilterBar = () => {
 		(input$) =>
 			input$.pipe(
 				switchMap(([catID]) =>
-					catID ? customersCollection.findOne({ selector: { id: catID } }).$ : of(undefined)
+					catID ? collection.findOne({ selector: { id: catID } }).$ : of(undefined)
 				)
 			),
 		[customerID]

@@ -38,7 +38,7 @@ export const getAttributesWithCharacterCount = (attributes: ProductDocument['att
 const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	const [allMatch, setAllMatch] = React.useState([]);
 	const { setPrimaryAction } = usePopover();
-	const collection = useCollection('variations');
+	const { collection } = useCollection('variations');
 	const allVariations = useObservableState(
 		parent.variations$.pipe(
 			switchMap((variationIDs) =>

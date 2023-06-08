@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Loader from '@wcpos/components/src/loader';
@@ -9,16 +9,17 @@ import { useModal } from '@wcpos/components/src/modal';
 import PaymentWebview from './components/payment-webview';
 import CheckoutTitle from './components/title';
 import { t } from '../../../../lib/translations';
-import useOrders from '../../contexts/orders';
 import usePushDocument from '../../contexts/use-push-document';
+
+interface Props {
+	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
+}
 
 /**
  *
  */
-const Checkout = () => {
-	const { resource } = useOrders();
-	const data = useObservableSuspense(resource);
-	const order = data.length === 1 && data[0];
+const Checkout = ({ resource }: Props) => {
+	const order = useObservableSuspense(resource);
 	const pushDocument = usePushDocument();
 	const [isPushed, setIsPushed] = React.useState(false);
 

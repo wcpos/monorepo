@@ -58,7 +58,7 @@ const prepareQueryParams = (
 };
 
 const ProductTagsProvider = ({ children, initialQuery, ui }: ProductTagsProviderProps) => {
-	const collection = useCollection('products/tags');
+	const { collection } = useCollection('products/tags');
 	const { query$, setQuery } = useQuery(initialQuery, 'products/tags');
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 

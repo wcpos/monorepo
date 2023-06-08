@@ -1,49 +1,35 @@
-import { useObservableState, useObservable } from 'observable-hooks';
-import { of } from 'rxjs';
-import {
-	filter,
-	map,
-	tap,
-	switchMap,
-	startWith,
-	mergeWith,
-	distinctUntilChanged,
-} from 'rxjs/operators';
+import * as React from 'react';
+
+import { useObservableState } from 'observable-hooks';
+import { filter } from 'rxjs/operators';
+
+import { storeCollections } from '@wcpos/database';
+import type { StoreDatabaseCollections } from '@wcpos/database';
 
 import useLocalData from '../../../contexts/local-data/';
 
-type StoreDatabaseCollections = import('@wcpos/database').StoreDatabaseCollections;
+type CollectionKey = keyof typeof storeCollections;
 
 /**
  * A helper method to get the latest collection, ie:
- * const collection = useCollection('products');
+ * const { collection } = useCollection('products');
  *
- * After a clear & sync, the collection will be stale otherwise
- * NOTE: addCollections$ is a custom observable which emits during clear and sync
+ * Note: the reset$ will emit each time a collection is reset
+ * This is a custom rxdb plugin
+ *
+ * This allows us to do a 'clear and sync' and update components
+ * that are using the collection.
  */
-const useCollection = <K extends keyof StoreDatabaseCollections>(key: K) => {
+const useCollection = <K extends CollectionKey>(
+	key: K
+): { collection: StoreDatabaseCollections[K] } => {
 	const { storeDB } = useLocalData();
-
-	const collection$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([currentStoreDB]) => {
-					return of(currentStoreDB.collections[key]).pipe(
-						mergeWith(
-							currentStoreDB.addCollections$.pipe(
-								filter((obj) => Object.keys(obj).includes(key)),
-								map((obj) => obj[key])
-							)
-						)
-					);
-				})
-			),
-		[storeDB]
+	const collection = useObservableState(
+		storeDB.reset$.pipe(filter((collection) => collection.name === key)),
+		storeDB.collections[key]
 	);
 
-	const collection = useObservableState(collection$, storeDB.collections[key]);
-
-	return collection;
+	return { collection };
 };
 
 export default useCollection;
