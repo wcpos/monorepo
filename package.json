@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/utils",
-  "version": "1.0.20",
+  "version": "1.2.0",
   "description": "Shared utils for WooCommerce POS",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/utils#readme",
@@ -22,7 +22,7 @@
     "react-native-web": "~0.18.12"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.1",
+    "@types/jest": "^29.5.2",
     "@types/lodash": "4.14.195",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
