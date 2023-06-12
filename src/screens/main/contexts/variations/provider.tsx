@@ -10,6 +10,7 @@ import { switchMap, map, distinctUntilChanged } from 'rxjs/operators';
 import log from '@wcpos/utils/src/logger';
 
 import { filterVariationsByAttributes } from './query.helpers';
+import useLocalData from '../../../../contexts/local-data';
 import useCollection from '../../hooks/use-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
 import useReplicationState from '../use-replication-state';
@@ -25,6 +26,7 @@ export const VariationsContext = React.createContext<{
 	setQuery: SetQuery;
 	resource: ObservableResource<ProductVariationDocument[]>;
 	sync: () => void;
+	clear: () => void;
 	replicationState: import('../use-replication-state').ReplicationState;
 }>(null);
 
@@ -89,6 +91,7 @@ const VariationsProvider = ({
 	parent,
 }: // uiSettings,
 VariationsProviderProps) => {
+	const { storeDB } = useLocalData();
 	const { collection } = useCollection('variations');
 	const apiEndpoint = `products/${parent.id}/variations`;
 	const { query$, setQuery } = useQuery(initialQuery);
@@ -144,8 +147,33 @@ VariationsProviderProps) => {
 		return new ObservableResource(resource$);
 	}, [collection, parent.variations$, query$]);
 
+	/**
+	 *
+	 */
+	const clear = React.useCallback(async () => {
+		// we need to cancel any replications before clearing the collections
+		replicationState.cancel();
+		await storeDB.reset(['variations']);
+	}, [replicationState, storeDB]);
+
+	/**
+	 *
+	 */
+	const sync = React.useCallback(() => {
+		replicationState.reSync();
+	}, [replicationState]);
+
 	return (
-		<VariationsContext.Provider value={{ resource, setQuery, query$, replicationState }}>
+		<VariationsContext.Provider
+			value={{
+				resource,
+				query$,
+				setQuery,
+				clear,
+				sync,
+				replicationState,
+			}}
+		>
 			{children}
 		</VariationsContext.Provider>
 	);

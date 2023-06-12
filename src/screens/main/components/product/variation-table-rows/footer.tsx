@@ -12,6 +12,7 @@ import useLocalData from '../../../../../contexts/local-data';
 import { t } from '../../../../../lib/translations';
 import useVariations from '../../../contexts/variations';
 import useTotalCount from '../../../hooks/use-total-count';
+import SyncButton from '../../sync-button';
 
 interface VariationsFooterProps {
 	count: number;
@@ -25,7 +26,7 @@ const VariationsFooter = ({ count, parent }: VariationsFooterProps) => {
 	// const { storeDB, store } = useLocalData();
 	// const total = useObservableState(storeDB.products.count().$, 0);
 	const theme = useTheme();
-	const { replicationState } = useVariations();
+	const { replicationState, sync, clear } = useVariations();
 	const active = useObservableState(replicationState.active$, false);
 	const total = useTotalCount('variations', replicationState);
 
@@ -43,6 +44,7 @@ const VariationsFooter = ({ count, parent }: VariationsFooterProps) => {
 		>
 			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">
 				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
+				<SyncButton sync={sync} clear={clear} active={active} />
 			</Box>
 		</Box>
 	);
