@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { View, Text } from 'react-native';
 
 import { SafeAreaProviderCompat } from '@react-navigation/elements';
+import get from 'lodash/get';
 import {
 	GestureHandlerRootView,
 	GestureDetector,
@@ -9,6 +10,7 @@ import {
 	enableExperimentalWebImplementation,
 } from 'react-native-gesture-handler';
 import { enableFreeze } from 'react-native-screens';
+import semverGt from 'semver/functions/gt';
 import { ThemeProvider } from 'styled-components/native';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
@@ -21,6 +23,7 @@ import { LocalDataProvider } from './contexts/local-data';
 import RootError from './root-error';
 import RootNavigator from './screens';
 import Splash from './screens/splash';
+import WarningMessage from './warning-message';
 
 // import polyfills
 import 'setimmediate'; // https://github.com/software-mansion/react-native-reanimated/issues/4140
@@ -44,6 +47,8 @@ if (window) {
  *
  */
 const App = () => {
+	const version = get(initialProps, 'version');
+
 	const theme = React.useMemo(
 		() =>
 			getTheme({
@@ -52,6 +57,17 @@ const App = () => {
 			}),
 		[]
 	);
+
+	/**
+	 * PHP plugin update messsage
+	 */
+	if (semverGt('1.2.0', version)) {
+		return (
+			<WarningMessage>
+				Please update your WooCommerce POS plugin to version 1.2.0 or higher
+			</WarningMessage>
+		);
+	}
 
 	/**
 	 * NOTE:

@@ -21,11 +21,11 @@ const usePullDocument = () => {
 				const { data } = await http.get((endpoint += `/${id}`));
 				const parsedData = collection.parseRestResponse(data);
 				const success = await collection.upsert(parsedData);
-				if (isRxDocument(success)) {
-					addSnackbar({
-						message: t('Item synced', { _tags: 'core' }),
-					});
-				}
+				// if (isRxDocument(success)) {
+				// 	addSnackbar({
+				// 		message: t('Item synced', { _tags: 'core' }),
+				// 	});
+				// }
 				return success;
 			} catch (err) {
 				log.error(err);

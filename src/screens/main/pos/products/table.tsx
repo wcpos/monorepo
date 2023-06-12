@@ -24,8 +24,9 @@ interface POSProductsTableProps {
  *
  */
 const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
-	const { query$, setQuery, resource } = useProducts();
-	const data = useObservableSuspense(resource);
+	const { query$, setQuery, resource, replicationState, loadNextPage } = useProducts();
+	const { data, count, hasMore } = useObservableSuspense(resource);
+	const loading = useObservableState(replicationState.active$, false);
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
@@ -54,26 +55,11 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 	/**
 	 *
 	 */
-	// const handleViewableItemsChanged = React.useCallback(
-	// 	({ viewableItems }) => {
-	// 		setShownItems((prevShownItems) => {
-	// 			const newShownItems: Record<string, boolean> = {};
-
-	// 			viewableItems.forEach(({ item }) => {
-	// 				if (!prevShownItems[item.uuid]) {
-	// 					newShownItems[item.uuid] = true;
-	// 				}
-	// 			});
-
-	// 			if (Object.keys(newShownItems).length > 0) {
-	// 				return { ...prevShownItems, ...newShownItems };
-	// 			} else {
-	// 				return prevShownItems;
-	// 			}
-	// 		});
-	// 	},
-	// 	[] // Remove shownItems from the dependency array
-	// );
+	const onEndReached = React.useCallback(() => {
+		if (hasMore) {
+			loadNextPage();
+		}
+	}, [hasMore, loadNextPage]);
 
 	/**
 	 *
@@ -81,9 +67,8 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 	return (
 		<Table<ProductDocument>
 			data={data}
-			footer={<Footer count={data.length} />}
+			footer={<Footer count={count} />}
 			estimatedItemSize={150}
-			// getItemType={(item) => (shownItems[item.uuid] ? 'shown' : 'hidden')}
 			renderItem={(props) => (
 				<ErrorBoundary>
 					<ProductTableRow {...props} />
@@ -91,11 +76,8 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 			)}
 			extraData={context}
 			ListEmptyComponent={<EmptyTableRow message={t('No products found', { _tags: 'core' })} />}
-			// onViewableItemsChanged={handleViewableItemsChanged}
-			// viewabilityConfig={{
-			// 	viewAreaCoveragePercentThreshold: 0,
-			// 	minimumViewTime: 500,
-			// }}
+			onEndReached={onEndReached}
+			loading={loading}
 		/>
 	);
 };

@@ -49,6 +49,14 @@ export const useReplicationState = ({
 	const http = useRestHttpClient();
 
 	/**
+	 * test
+	 */
+	const getLatestQuery = React.useCallback(() => {
+		const query = query$.getValue();
+		return query;
+	}, [query$]);
+
+	/**
 	 *
 	 */
 	return React.useMemo(() => {
@@ -109,7 +117,7 @@ export const useReplicationState = ({
 				},
 				handler: async (checkpoint, batchSize) => {
 					try {
-						const query = query$.getValue();
+						const query = getLatestQuery();
 						const defaultParams = defaultPrepareQueryParams(query, batchSize);
 						const params = prepareQueryParams(defaultParams, query, checkpoint, batchSize);
 						let response;
@@ -159,5 +167,5 @@ export const useReplicationState = ({
 		});
 
 		return replicationState;
-	}, [apiURL, collection, endpoint, http, pollingTime, prepareQueryParams, query$]);
+	}, [apiURL, collection, endpoint, http, pollingTime, prepareQueryParams, query$, getLatestQuery]);
 };

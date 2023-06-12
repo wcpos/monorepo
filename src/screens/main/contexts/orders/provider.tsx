@@ -2,9 +2,21 @@ import * as React from 'react';
 
 import { orderBy } from '@shelf/fast-natural-order-by';
 import isEqual from 'lodash/isEqual';
-import { ObservableResource } from 'observable-hooks';
-import { from } from 'rxjs';
-import { switchMap, map, distinctUntilChanged, filter, first, expand } from 'rxjs/operators';
+import { ObservableResource, useObservableState, useObservableRef } from 'observable-hooks';
+import { from, combineLatest, merge, of } from 'rxjs';
+import {
+	switchMap,
+	map,
+	distinctUntilChanged,
+	filter,
+	first,
+	expand,
+	catchError,
+	tap,
+	debounceTime,
+	skip,
+	take,
+} from 'rxjs/operators';
 
 import { createTemporaryDB } from '@wcpos/database';
 import log from '@wcpos/utils/src/logger';
@@ -19,11 +31,12 @@ type OrderDocument = import('@wcpos/database/src/collections/orders').OrderDocum
 export const OrdersContext = React.createContext<{
 	query$: QueryObservable;
 	setQuery: SetQuery;
-	resource: ObservableResource<OrderDocument[]>;
+	resource: ObservableResource<{ data: OrderDocument[]; count: number; hasMore: boolean }>;
 	sync: () => void;
 	clear: () => Promise<any>;
 	replicationState: import('../use-replication-state').ReplicationState;
 	newOrderResource: ObservableResource<OrderDocument>;
+	loadNextPage: () => void;
 }>(null);
 
 interface OrdersProviderProps {
@@ -97,6 +110,8 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 	const { collection } = useCollection('orders');
 	const { query$, setQuery } = useQuery(initialQuery);
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
+	const pageNumberRef = React.useRef(1);
+	const [loadMoreRef, loadMore$] = useObservableRef(Date.now());
 
 	/**
 	 * A observable resource we can suspend in the cart and alway get a new order
@@ -131,17 +146,35 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 	 */
 	const resource = React.useMemo(() => {
 		const resource$ = query$.pipe(
+			// reset the page number when the query changes
+			tap(() => {
+				pageNumberRef.current = 1;
+			}),
+			//
 			switchMap((query) => {
-				const { search, selector: querySelector, sortBy, sortDirection, limit, skip } = query;
+				const { search } = query;
+
+				if (search) {
+					// Return a new observable that emits searchIds
+					return collection.search$(search).pipe(
+						map(({ hits }) => hits.map((obj) => obj.id)),
+						// Combine the searchIds with the original query
+						map((searchIds) => ({ ...query, searchIds }))
+					);
+				}
+
+				// If there is no search value, return an observable of the original query with an empty array for searchIds
+				return of({ ...query, searchIds: [] });
+			}),
+			//
+			switchMap(({ searchIds, search, selector: querySelector, sortBy, sortDirection }) => {
 				const selector = { $and: [] };
 
 				if (search) {
 					selector.$and.push({
-						$or: [
-							{ uuid: search },
-							{ id: { $regex: new RegExp(escape(search), 'i') } },
-							{ number: { $regex: new RegExp(escape(search), 'i') } },
-						],
+						uuid: {
+							$in: searchIds,
+						},
 					});
 				}
 
@@ -166,8 +199,34 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 			})
 		);
 
-		return new ObservableResource(resource$);
-	}, [collection, query$]);
+		/**
+		 *
+		 */
+		const debouncedLoadMore$ = merge(
+			loadMore$.pipe(take(1)),
+			loadMore$.pipe(skip(1), debounceTime(250))
+		);
+
+		/**
+		 *
+		 */
+		const paginatedResource$ = combineLatest([resource$, debouncedLoadMore$]).pipe(
+			map(([docs, trigger]) => {
+				const count = docs.length;
+				const pageSize = 10;
+				const page = pageNumberRef.current;
+				const result = {
+					data: docs.slice(0, page * pageSize),
+					count,
+					hasMore: count > page * pageSize,
+				};
+				pageNumberRef.current += 1;
+				return result;
+			})
+		);
+
+		return new ObservableResource(paginatedResource$);
+	}, [collection, loadMore$, query$]);
 
 	/**
 	 *
@@ -188,6 +247,13 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 	/**
 	 *
 	 */
+	const loadNextPage = React.useCallback(() => {
+		loadMoreRef.current = Date.now();
+	}, [loadMoreRef]);
+
+	/**
+	 *
+	 */
 	return (
 		<OrdersContext.Provider
 			value={{
@@ -198,6 +264,7 @@ const OrdersProvider = ({ children, initialQuery, uiSettings }: OrdersProviderPr
 				newOrderResource,
 				clear,
 				sync,
+				loadNextPage,
 			}}
 		>
 			{children}

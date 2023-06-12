@@ -2,8 +2,9 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState, ObservableResource, useObservable } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
 import { of } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { switchMap, tap } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 
@@ -12,6 +13,7 @@ import FeaturedPill from './featured-pill';
 import OnSalePill from './on-sale-pill';
 import TagPill from './tag-pill';
 import useProducts from '../../../contexts/products';
+import usePullDocument from '../../../contexts/use-pull-document';
 import useCollection from '../../../hooks/use-collection';
 
 const FilterBar = () => {
@@ -23,7 +25,7 @@ const FilterBar = () => {
 	const tagFilterID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
 	const { collection: categoryCollection } = useCollection('products/categories');
 	const { collection: tagCollection } = useCollection('products/tags');
-	// const pullDocument = usePullDocument();
+	const pullDocument = usePullDocument();
 
 	/**
 	 *
@@ -32,7 +34,15 @@ const FilterBar = () => {
 		(input$) =>
 			input$.pipe(
 				switchMap(([catID]) =>
-					catID ? categoryCollection.findOne({ selector: { id: catID } }).$ : of(undefined)
+					catID
+						? categoryCollection.findOne({ selector: { id: catID } }).$.pipe(
+								tap((doc) => {
+									if (!isRxDocument(doc)) {
+										pullDocument(catID, categoryCollection);
+									}
+								})
+						  )
+						: of(undefined)
 				)
 			),
 		[categoryFilterID]
@@ -52,7 +62,15 @@ const FilterBar = () => {
 		(input$) =>
 			input$.pipe(
 				switchMap(([tagID]) =>
-					tagID ? tagCollection.findOne({ selector: { id: tagID } }).$ : of(undefined)
+					tagID
+						? tagCollection.findOne({ selector: { id: tagID } }).$.pipe(
+								tap((doc) => {
+									if (!isRxDocument(doc)) {
+										pullDocument(tagID, tagCollection);
+									}
+								})
+						  )
+						: of(undefined)
 				)
 			),
 		[tagFilterID]

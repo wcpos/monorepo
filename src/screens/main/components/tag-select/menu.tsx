@@ -1,15 +1,17 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import { FlashList } from '@wcpos/components/src/flash-list';
+import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 
 import TagSelectItem, { EmptyTableRow } from './item';
 import { useProductTags } from '../../contexts/tags/use-product-tags';
+import useTotalCount from '../../hooks/use-total-count';
 
 type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
 
@@ -49,8 +51,10 @@ interface TagSelectMenuProps {
 const TagSelectMenu = React.forwardRef<TagSelectMenuHandles, TagSelectMenuProps>(
 	({ onChange }, ref) => {
 		const theme = useTheme();
-		const { resource, setQuery } = useProductTags();
-		const tags = useObservableSuspense(resource);
+		const { resource, setQuery, replicationState, loadNextPage } = useProductTags();
+		const { data: tags, count, hasMore } = useObservableSuspense(resource);
+		const loading = useObservableState(replicationState.active$, false);
+		const total = useTotalCount('products/categories', replicationState);
 		const { targetMeasurements } = usePopover();
 
 		/**
@@ -97,6 +101,17 @@ const TagSelectMenu = React.forwardRef<TagSelectMenuHandles, TagSelectMenuProps>
 		/**
 		 *
 		 */
+		const onEndReached = React.useCallback(() => {
+			if (hasMore) {
+				loadNextPage();
+			} else if (!loading && total > count) {
+				replicationState.start({ fetchRemoteIDs: false });
+			}
+		}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+
+		/**
+		 *
+		 */
 		return (
 			<View style={{ width: targetMeasurements.value.width, maxHeight: 292, minHeight: 30 }}>
 				<FlashList<ProductTagDocument>
@@ -104,6 +119,8 @@ const TagSelectMenu = React.forwardRef<TagSelectMenuHandles, TagSelectMenuProps>
 					renderItem={renderItem}
 					estimatedItemSize={32}
 					ListEmptyComponent={<EmptyTableRow />}
+					onEndReached={onEndReached}
+					ListFooterComponent={loading ? Loader : null}
 				/>
 			</View>
 		);

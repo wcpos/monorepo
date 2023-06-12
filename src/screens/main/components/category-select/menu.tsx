@@ -1,19 +1,20 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import { Avatar } from '@wcpos/components/src/avatar/avatar';
 import Box from '@wcpos/components/src/box';
 import { FlashList } from '@wcpos/components/src/flash-list';
+import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
-import Text from '@wcpos/components/src/text';
 
 import CategorySelectItem, { EmptyTableRow } from './item';
 import { t } from '../../../../lib/translations';
 import { useProductCategories } from '../../contexts/categories/use-product-categories';
+import useTotalCount from '../../hooks/use-total-count';
 
 type ProductCategoryDocument = import('@wcpos/database').ProductCategoryDocument;
 
@@ -53,8 +54,10 @@ interface CategorySelectMenuProps {
 const CategorySelectMenu = React.forwardRef<CategorySelectMenuHandles, CategorySelectMenuProps>(
 	({ onChange }, ref) => {
 		const theme = useTheme();
-		const { resource, setQuery } = useProductCategories();
-		const categories = useObservableSuspense(resource);
+		const { resource, setQuery, replicationState, loadNextPage } = useProductCategories();
+		const { data: categories, count, hasMore } = useObservableSuspense(resource);
+		const loading = useObservableState(replicationState.active$, false);
+		const total = useTotalCount('products/categories', replicationState);
 		const { targetMeasurements } = usePopover();
 
 		/**
@@ -101,6 +104,17 @@ const CategorySelectMenu = React.forwardRef<CategorySelectMenuHandles, CategoryS
 		/**
 		 *
 		 */
+		const onEndReached = React.useCallback(() => {
+			if (hasMore) {
+				loadNextPage();
+			} else if (!loading && total > count) {
+				replicationState.start({ fetchRemoteIDs: false });
+			}
+		}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+
+		/**
+		 *
+		 */
 		return (
 			<View style={{ width: targetMeasurements.value.width, maxHeight: 292, minHeight: 30 }}>
 				<FlashList<ProductCategoryDocument>
@@ -108,6 +122,8 @@ const CategorySelectMenu = React.forwardRef<CategorySelectMenuHandles, CategoryS
 					renderItem={renderItem}
 					estimatedItemSize={32}
 					ListEmptyComponent={<EmptyTableRow />}
+					onEndReached={onEndReached}
+					ListFooterComponent={loading ? Loader : null}
 				/>
 			</View>
 		);

@@ -1,8 +1,6 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -13,22 +11,21 @@ import { t } from '../../../../lib/translations';
 import TaxBasedOn from '../../components/product/tax-based-on';
 import SyncButton from '../../components/sync-button';
 import useProducts from '../../contexts/products';
-import useTotalCount from '../../hooks/use-total-count';
 
 interface ProductFooterProps {
 	count: number;
+	total: number;
+	loading: boolean;
 }
 
 /**
  *
  */
-const ProductsFooter = ({ count }: ProductFooterProps) => {
+const ProductsFooter = ({ count, total, loading }: ProductFooterProps) => {
 	const { store } = useLocalData();
 	const theme = useTheme();
-	const { sync, clear, replicationState } = useProducts();
+	const { sync, clear } = useProducts();
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
-	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
-	const total = useTotalCount('products', replicationState);
 
 	return (
 		<Box
@@ -51,7 +48,7 @@ const ProductsFooter = ({ count }: ProductFooterProps) => {
 			)}
 			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">
 				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
-				<SyncButton sync={sync} clear={clear} active={active} />
+				<SyncButton sync={sync} clear={clear} active={loading} />
 			</Box>
 		</Box>
 	);

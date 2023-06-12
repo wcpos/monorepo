@@ -19,7 +19,7 @@ const CartTabs = () => {
 	const navigation = useNavigation();
 	const { currentOrder } = useCurrentOrder();
 	const { resource } = useOrders();
-	const orders = useObservableSuspense(resource);
+	const { data: orders } = useObservableSuspense(resource);
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
 	/**

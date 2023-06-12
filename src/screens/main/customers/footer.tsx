@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -10,17 +7,16 @@ import Text from '@wcpos/components/src/text';
 
 import SyncButton from '../components/sync-button';
 import useCustomers from '../contexts/customers';
-import useTotalCount from '../hooks/use-total-count';
 
 interface CustomersFooterProps {
 	count: number;
+	total: number;
+	loading: boolean;
 }
 
-const CustomersFooter = ({ count }: CustomersFooterProps) => {
+const CustomersFooter = ({ count, total, loading }: CustomersFooterProps) => {
 	const theme = useTheme();
-	const { sync, clear, replicationState } = useCustomers();
-	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
-	const total = useTotalCount('customers', replicationState);
+	const { sync, clear } = useCustomers();
 
 	return (
 		<Box
@@ -38,7 +34,7 @@ const CustomersFooter = ({ count }: CustomersFooterProps) => {
 			<Text size="small">
 				Showing {count} of {total}
 			</Text>
-			<SyncButton sync={sync} clear={clear} active={active} />
+			<SyncButton sync={sync} clear={clear} active={loading} />
 		</Box>
 	);
 };

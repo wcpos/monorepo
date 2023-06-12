@@ -12,6 +12,7 @@ import { t } from '../../../lib/translations';
 import EmptyTableRow from '../components/empty-table-row';
 import TextCell from '../components/text-cell';
 import useCustomers from '../contexts/customers';
+import useTotalCount from '../hooks/use-total-count';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 type UISettingsColumn = import('../contexts/ui-settings').UISettingsColumn;
@@ -24,9 +25,11 @@ interface CustomersTableProps {
  *
  */
 const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
-	const { query$, setQuery, resource } = useCustomers();
-	const customers = useObservableSuspense(resource);
+	const { query$, setQuery, resource, replicationState, loadNextPage } = useCustomers();
+	const { data, count, hasMore } = useObservableSuspense(resource);
+	const loading = useObservableState(replicationState.active$, false);
 	const query = useObservableState(query$, query$.getValue());
+	const total = useTotalCount('customers', replicationState);
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
@@ -74,14 +77,26 @@ const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 	/**
 	 *
 	 */
+	const onEndReached = React.useCallback(() => {
+		if (hasMore) {
+			loadNextPage();
+		} else if (!loading && total > count) {
+			replicationState.start({ fetchRemoteIDs: false });
+		}
+	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+
+	/**
+	 *
+	 */
 	return (
 		<Table<CustomerDocument>
-			data={customers}
-			// data={customers.slice(0, 10)}
-			footer={<Footer count={customers.length} />}
+			data={data}
+			footer={<Footer count={count} total={total} loading={loading} />}
 			estimatedItemSize={100}
 			extraData={context}
 			ListEmptyComponent={<EmptyTableRow message={t('No customers found', { _tags: 'core' })} />}
+			onEndReached={onEndReached}
+			loading={loading}
 		/>
 	);
 };

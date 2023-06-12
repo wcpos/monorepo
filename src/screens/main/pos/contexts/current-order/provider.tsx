@@ -23,7 +23,7 @@ interface CurrentOrderContextProviderProps {
  */
 const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProviderProps) => {
 	const { resource } = useOrders();
-	const orders = useObservableSuspense(resource);
+	const { data: orders } = useObservableSuspense(resource);
 	const newOrder = useNewOrder();
 
 	// const defaultCustomerID = store.default_customer_is_cashier

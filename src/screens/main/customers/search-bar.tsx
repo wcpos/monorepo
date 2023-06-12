@@ -1,9 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
-
-import debounce from 'lodash/debounce';
-import get from 'lodash/get';
-import { useLayoutObservableState } from 'observable-hooks';
 
 import TextInput from '@wcpos/components/src/textinput';
 
@@ -17,14 +12,14 @@ const SearchBar = () => {
 	const onSearch = React.useCallback(
 		(search) => {
 			setSearch(search);
-			React.startTransition(() => setQuery('search', search, true));
+			setQuery('search', search, true);
 		},
 		[setQuery]
 	);
 
 	return (
 		<TextInput
-			placeholder={t('Search Products', { _tags: 'core' })}
+			placeholder={t('Search Customers', { _tags: 'core' })}
 			value={search}
 			onChangeText={onSearch}
 			containerStyle={{ flex: 1 }}

@@ -64,15 +64,9 @@ const ProductTableRow = ({
 	index,
 	extraData,
 	target,
-	shownItems$,
 }: ListRenderItemInfo<ProductDocument>) => {
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();
-	// const shown = useObservableState(
-	// 	shownItems$.pipe(map((shownItems) => shownItems[item.uuid])),
-	// 	false
-	// );
-
 	/**
 	 *
 	 */

@@ -4,16 +4,14 @@ import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
+import Table, { TableExtraDataProps } from '@wcpos/components/src/table';
 
 import Footer from './footer';
 import ProductTableRow from './table-row';
 import { t } from '../../../../lib/translations';
 import EmptyTableRow from '../../components/empty-table-row';
-import TextCell from '../../components/text-cell';
 import useProducts from '../../contexts/products';
-
-import type { ListRenderItemInfo } from '@shopify/flash-list';
+import useTotalCount from '../../hooks/use-total-count';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type UISettingsColumn = import('../../contexts/ui-settings').UISettingsColumn;
@@ -26,14 +24,15 @@ interface ProductsTableProps {
  * NOTE: not sure if this is the best spot for replication, but we need acces to the query
  */
 const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
-	const { query$, setQuery, resource, nextPage } = useProducts();
-	const products = useObservableSuspense(resource);
+	const { query$, setQuery, resource, replicationState, loadNextPage } = useProducts();
+	const { data, count, hasMore } = useObservableSuspense(resource);
+	const loading = useObservableState(replicationState.active$, false);
+	const total = useTotalCount('products', replicationState);
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
-	// const [shownItems, setShownItems] = React.useState<Record<string, boolean>>({});
 
 	/**
 	 *
@@ -48,43 +47,27 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 			sortBy: query.sortBy,
 			sortDirection: query.sortDirection,
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
-			// shownItems,
 		};
 	}, [columns, query.sortBy, query.sortDirection, setQuery, uiSettings]);
 
 	/**
 	 *
 	 */
-	// const handleViewableItemsChanged = React.useCallback(
-	// 	({ viewableItems }) => {
-	// 		setShownItems((prevShownItems) => {
-	// 			const newShownItems: Record<string, boolean> = {};
-
-	// 			viewableItems.forEach(({ item }) => {
-	// 				if (!prevShownItems[item.uuid]) {
-	// 					newShownItems[item.uuid] = true;
-	// 				}
-	// 			});
-
-	// 			if (Object.keys(newShownItems).length > 0) {
-	// 				return { ...prevShownItems, ...newShownItems };
-	// 			} else {
-	// 				return prevShownItems;
-	// 			}
-	// 		});
-	// 	},
-	// 	[] // Remove shownItems from the dependency array
-	// );
+	const onEndReached = React.useCallback(() => {
+		if (hasMore) {
+			loadNextPage();
+		} else if (!loading && total > count) {
+			replicationState.start({ fetchRemoteIDs: false });
+		}
+	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
 
 	/**
 	 *
 	 */
 	return (
 		<Table<ProductDocument>
-			// take first 10 items
-			// data={products.slice(0, 10)}
-			data={products}
-			footer={<Footer count={products.length} />}
+			data={data}
+			footer={<Footer count={count} total={total} loading={loading} />}
 			estimatedItemSize={150}
 			extraData={context}
 			getItemType={(item) => item.type}
@@ -94,11 +77,8 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 				</ErrorBoundary>
 			)}
 			ListEmptyComponent={<EmptyTableRow message={t('No products found', { _tags: 'core' })} />}
-			// onViewableItemsChanged={handleViewableItemsChanged}
-			// viewabilityConfig={{
-			// 	viewAreaCoveragePercentThreshold: 50,
-			// 	minimumViewTime: 500,
-			// }}
+			onEndReached={onEndReached}
+			loading={loading}
 		/>
 	);
 };

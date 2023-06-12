@@ -19,6 +19,7 @@ import Date from '../components/date';
 import EmptyTableRow from '../components/empty-table-row';
 import TextCell from '../components/text-cell';
 import useOrders from '../contexts/orders';
+import useTotalCount from '../hooks/use-total-count';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type UISettingsColumn = import('../contexts/ui-settings').UISettingsColumn;
@@ -45,9 +46,11 @@ const cells = {
  *
  */
 const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
-	const { query$, setQuery, resource } = useOrders();
-	const orders = useObservableSuspense(resource);
+	const { query$, setQuery, resource, replicationState, loadNextPage } = useOrders();
+	const { data, count, hasMore } = useObservableSuspense(resource);
+	const loading = useObservableState(replicationState.active$, false);
 	const query = useObservableState(query$, query$.getValue());
+	const total = useTotalCount('customers', replicationState);
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
@@ -89,13 +92,26 @@ const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
 		};
 	}, [columns, query.sortBy, query.sortDirection, cellRenderer, setQuery, uiSettings]);
 
+	/**
+	 *
+	 */
+	const onEndReached = React.useCallback(() => {
+		if (hasMore) {
+			loadNextPage();
+		} else if (!loading && total > count) {
+			replicationState.start({ fetchRemoteIDs: false });
+		}
+	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+
 	return (
 		<Table<OrderDocument>
-			data={orders}
-			footer={<Footer count={orders.length} />}
+			data={data}
+			footer={<Footer count={count} total={total} loading={loading} />}
 			estimatedItemSize={100}
 			extraData={context}
 			ListEmptyComponent={<EmptyTableRow message={t('No orders found', { _tags: 'core' })} />}
+			onEndReached={onEndReached}
+			loading={loading}
 		/>
 	);
 };

@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
 import pick from 'lodash/pick';
 import { ObservableResource } from 'observable-hooks';
 import { tap, map, switchMap } from 'rxjs/operators';
@@ -57,6 +58,7 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 			'store',
 			'store_id',
 		]);
+
 		/**
 		 * Hack fix for backwards compatibility, remove after v1 release
 		 */

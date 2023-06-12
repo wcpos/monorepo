@@ -71,21 +71,26 @@ const useQuery = (initialQuery: QueryState) => {
 	 * TODO - fix the setQuery .. maybe have a setQueryPath? or setQueryValue?
 	 * This should not be different to initialQuery argument
 	 */
+	const updateQuery = React.useCallback(
+		(path, value) => {
+			const prev = cloneDeep(query$.current.getValue());
+			const next = removeNulls(set(prev, path, value));
+			query$.current.next(next);
+		},
+		[query$]
+	);
+
+	const debouncedUpdateQuery = React.useMemo(() => debounce(updateQuery, 250), [updateQuery]);
+
 	const setQuery: SetQuery = React.useCallback(
 		(path, value, debounceFlag = false) => {
-			const updateQuery = (path, value) => {
-				const prev = cloneDeep(query$.current.getValue());
-				const next = removeNulls(set(prev, path, value));
-				query$.current.next(next);
-			};
-
 			if (debounceFlag) {
-				debounce(updateQuery, 300)(path, value);
+				debouncedUpdateQuery(path, value);
 			} else {
 				updateQuery(path, value);
 			}
 		},
-		[query$]
+		[updateQuery, debouncedUpdateQuery]
 	);
 
 	return { query$: query$.current, setQuery, nextPage };

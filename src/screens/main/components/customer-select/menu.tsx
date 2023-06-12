@@ -2,12 +2,13 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { set } from 'lodash';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import { Avatar } from '@wcpos/components/src/avatar/avatar';
 import Box from '@wcpos/components/src/box';
 import { FlashList } from '@wcpos/components/src/flash-list';
+import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 import Text from '@wcpos/components/src/text';
@@ -16,6 +17,7 @@ import GuestCustomerSelectItem from './guest-item';
 import CustomerSelectItem from './item';
 import { t } from '../../../../lib/translations';
 import useCustomers from '../../contexts/customers';
+import useTotalCount from '../../hooks/use-total-count';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
@@ -55,8 +57,10 @@ interface CustomerSelectMenuProps {
 const CustomerSelectMenu = React.forwardRef<CustomerSelectMenuHandles, CustomerSelectMenuProps>(
 	({ onChange }, ref) => {
 		const theme = useTheme();
-		const { resource, setQuery } = useCustomers();
-		const customers = useObservableSuspense(resource);
+		const { resource, setQuery, replicationState, loadNextPage } = useCustomers();
+		const { data: customers, count, hasMore } = useObservableSuspense(resource);
+		const loading = useObservableState(replicationState.active$, false);
+		const total = useTotalCount('customers', replicationState);
 		const { targetMeasurements, contentMeasurements } = usePopover();
 
 		/**
@@ -125,6 +129,17 @@ const CustomerSelectMenu = React.forwardRef<CustomerSelectMenuHandles, CustomerS
 		/**
 		 *
 		 */
+		const onEndReached = React.useCallback(() => {
+			if (hasMore) {
+				loadNextPage();
+			} else if (!loading && total > count) {
+				replicationState.start({ fetchRemoteIDs: false });
+			}
+		}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+
+		/**
+		 *
+		 */
 		return (
 			<View style={{ width: targetMeasurements.value.width, maxHeight: 292 }}>
 				<FlashList<CustomerDocument>
@@ -132,6 +147,8 @@ const CustomerSelectMenu = React.forwardRef<CustomerSelectMenuHandles, CustomerS
 					renderItem={renderItem}
 					estimatedItemSize={50}
 					ListHeaderComponent={renderGuestItem}
+					onEndReached={onEndReached}
+					ListFooterComponent={loading ? Loader : null}
 				/>
 			</View>
 		);
