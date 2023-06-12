@@ -8,7 +8,7 @@ import useProducts from '../../contexts/products';
 
 const GroupedNames = () => {
 	const { resource } = useProducts();
-	const data = useObservableSuspense(resource);
+	const { data } = useObservableSuspense(resource);
 	const names = data.map((doc) => doc.name);
 
 	return (
