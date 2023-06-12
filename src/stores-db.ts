@@ -24,7 +24,7 @@ export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
  * Database name needs to start with a letter, id is a short uuid
  */
 function sanitizeStoreName(id: string) {
-	return `store-${id}`;
+	return `store_${id}`;
 }
 
 /**

@@ -14,4 +14,17 @@ type CustomerMethods = Record<string, never>;
 export const customers = {
 	schema,
 	localDocuments: true, // needed for custom checkpoint
+	options: {
+		searchFields: [
+			'first_name',
+			'last_name',
+			'email',
+			'username',
+			'billing.first_name',
+			'billing.last_name',
+			'billing.email',
+			'billing.company',
+			'billing.phone',
+		],
+	},
 };

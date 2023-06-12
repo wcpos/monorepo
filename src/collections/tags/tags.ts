@@ -14,4 +14,7 @@ type ProductTagMethods = Record<string, never>;
 export const tags = {
 	schema,
 	localDocuments: true, // needed for custom checkpoint
+	options: {
+		searchFields: ['name'],
+	},
 };

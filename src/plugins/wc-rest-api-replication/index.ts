@@ -152,7 +152,7 @@ class RxReplicationState<RxDocType, CheckpointType> {
 	/**
 	 *
 	 */
-	async runPull(count, batchSize): Promise<{ documents: any[]; checkpoint: any }> {
+	async runPull(batchSize, count): Promise<{ documents: any[]; checkpoint: any }> {
 		const pullModifier =
 			this.pull && this.pull.modifier ? this.pull.modifier : (d: any) => Promise.resolve(d);
 
@@ -231,6 +231,21 @@ class RxReplicationState<RxDocType, CheckpointType> {
 				await this.fetchAndSaveRemoteIDs();
 			}
 
+			// // Wrap runPull in a CPromise
+			// const pullOp = new CPromise((resolve, reject, { onCancel }) => {
+			// 	onCancel(() => {
+			// 		// Logic to stop ongoing pull operation
+			// 		// Possibly: resolve with a specific value or reject
+			// 	});
+
+			// 	this.runPull(batchSize).then(resolve).catch(reject);
+			// });
+
+			// // Store the operation so that we can cancel it later
+			// this.currentPull = pullOp;
+			// await pullOp;
+			// this.currentPull = null;
+
 			let count = 0;
 			let resultLength = batchSize;
 			while (!this.isStopped() && resultLength === batchSize && count < 5) {
@@ -241,7 +256,7 @@ class RxReplicationState<RxDocType, CheckpointType> {
 						// Possibly: resolve with a specific value or reject
 					});
 
-					this.runPull(count, batchSize).then(resolve).catch(reject);
+					this.runPull(batchSize, count).then(resolve).catch(reject);
 				});
 
 				// Store the operation so that we can cancel it later

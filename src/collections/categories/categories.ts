@@ -17,4 +17,7 @@ type ProductCategoryMethods = Record<string, never>;
 export const categories = {
 	schema,
 	localDocuments: true, // needed for custom checkpoint
+	options: {
+		searchFields: ['name'],
+	},
 };

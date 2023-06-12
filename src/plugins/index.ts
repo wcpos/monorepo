@@ -12,6 +12,7 @@ import { RxDBGenerateIdPlugin } from './generate-id';
 import parseRestResponsePlugin from './parse-rest-response';
 import populatePlugin from './populate';
 import { resetCollectionPlugin } from './reset-collection';
+import { searchPlugin } from './search';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -44,3 +45,4 @@ addRxPlugin(populatePlugin);
 addRxPlugin(findOneFixPlugin);
 addRxPlugin(parseRestResponsePlugin);
 addRxPlugin(resetCollectionPlugin);
+addRxPlugin(searchPlugin);

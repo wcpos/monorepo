@@ -115,4 +115,7 @@ export const orders = {
 	methods: {
 		toPopulatedOrderJSON,
 	},
+	options: {
+		searchFields: ['number', 'billing.first_name', 'billing.last_name', 'billing.email'],
+	},
 };
