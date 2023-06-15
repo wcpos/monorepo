@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import defaults from 'lodash/defaults';
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
@@ -8,13 +7,13 @@ import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 
 import Customer from './customer';
-import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import AddCustomer from '../../components/add-new-customer';
 import CustomerSelect from '../../components/customer-select';
 import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
 import useCartHelpers from '../../hooks/use-cart-helpers';
+import useGuestCustomer from '../../hooks/use-guest-customer';
 import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -36,6 +35,7 @@ const CartHeader = () => {
 	const customerID = useObservableState(currentOrder.customer_id$, currentOrder.customer_id);
 	previousCustomerID = customerID !== -1 ? customerID : previousCustomerID;
 	const { addCustomer } = useCartHelpers();
+	const guestCustomer = useGuestCustomer();
 
 	/**
 	 *
@@ -44,33 +44,7 @@ const CartHeader = () => {
 		(selectedCustomer: CustomerDocument) => {
 			/** Special case for Guest */
 			if (selectedCustomer.id === 0) {
-				return addCustomer({
-					customer_id: 0,
-					billing: {
-						first_name: '',
-						last_name: '',
-						company: '',
-						address_1: '',
-						address_2: '',
-						city: '',
-						postcode: '',
-						country: '',
-						state: '',
-						email: '',
-						phone: '',
-					},
-					shipping: {
-						first_name: '',
-						last_name: '',
-						company: '',
-						address_1: '',
-						address_2: '',
-						city: '',
-						postcode: '',
-						country: '',
-						state: '',
-					},
-				});
+				return addCustomer(guestCustomer);
 			}
 
 			const customerJSON = selectedCustomer.toMutableJSON();
@@ -86,7 +60,7 @@ const CartHeader = () => {
 				shipping: customerJSON.shipping,
 			});
 		},
-		[addCustomer]
+		[addCustomer, guestCustomer]
 	);
 
 	/**

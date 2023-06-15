@@ -11,6 +11,7 @@ import useLocalData from '../../../../../contexts/local-data';
 import useOrders from '../../../contexts/orders';
 import usePullDocument from '../../../contexts/use-pull-document';
 import useCollection from '../../../hooks/use-collection';
+import useGuestCustomer from '../../../hooks/use-guest-customer';
 
 /**
  * FIXME: I'm using the direct json from the currencies provider, I need to use a currency provider
@@ -35,6 +36,7 @@ const useNewOrder = () => {
 	);
 	const { collection: customerCollection } = useCollection('customers');
 	const pullDocument = usePullDocument();
+	const guestCustomer = useGuestCustomer();
 
 	/**
 	 * Update new order with tax settings, currenct
@@ -84,13 +86,9 @@ const useNewOrder = () => {
 		if (defaultCustomerID) {
 			getCustomer();
 		} else {
-			newOrder.incrementalPatch({
-				customer_id: 0,
-				billing: {},
-				shipping: {},
-			});
+			newOrder.incrementalPatch(guestCustomer);
 		}
-	}, [customerCollection, defaultCustomerID, newOrder, pullDocument]);
+	}, [customerCollection, defaultCustomerID, guestCustomer, newOrder, pullDocument]);
 
 	return newOrder;
 };

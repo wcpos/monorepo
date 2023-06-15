@@ -1,11 +1,6 @@
 import * as React from 'react';
-import { View } from 'react-native';
-
-import delay from 'lodash/delay';
 
 import Popover from '@wcpos/components/src/popover';
-import ScrollView from '@wcpos/components/src/scrollview';
-import TextInput from '@wcpos/components/src/textinput';
 import log from '@wcpos/utils/src/logger';
 
 import CustomerSelectMenu from './menu';
@@ -41,10 +36,12 @@ const CustomerSelectSearch = ({ onSelectCustomer, autoFocus = false, value }) =>
 		async function getCustomer() {
 			try {
 				let selectedCustomer = await collection.findOneFix({ selector: { id: value } }).exec();
-				if (!selectedCustomer) {
+				if (!selectedCustomer && value !== 0) {
 					selectedCustomer = await pullDocument(value, collection);
 				}
-				setSelectedCustomer(selectedCustomer);
+				if (selectedCustomer) {
+					setSelectedCustomer(selectedCustomer);
+				}
 			} catch (error) {
 				log.error(error);
 			}
