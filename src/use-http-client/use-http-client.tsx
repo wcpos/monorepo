@@ -109,6 +109,8 @@ export const useHttpClient = () => {
 		 * API
 		 */
 		const api = {
+			axios: http, // expose axios instance, this won't work for electron
+
 			/**
 			 *
 			 */
