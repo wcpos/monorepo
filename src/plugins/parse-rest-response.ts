@@ -91,6 +91,9 @@ export function coerceData(
 				const refCollection = collection.database.collections[parentSchema.ref];
 				return coerceData(refCollection.schema.jsonSchema, data, refCollection);
 			}
+			if (isPlainObject(data)) {
+				return JSON.stringify(data);
+			}
 			return String(data || '');
 		}
 		if (schema.type === 'boolean') {
