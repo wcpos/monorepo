@@ -5,6 +5,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
+import log from '@wcpos/utils/src/logger';
 
 import PriceWithTax from './price';
 
@@ -15,15 +16,41 @@ interface Props {
 	>;
 }
 
+/**
+ *
+ */
+function getVariablePrices(metaData) {
+	if (!metaData) {
+		log.error('metaData is not defined');
+		return null;
+	}
+
+	const metaDataEntry = metaData.find((m) => m.key === '_woocommerce_pos_variable_prices');
+
+	if (!metaDataEntry) {
+		log.error("No '_woocommerce_pos_variable_prices' key found in metaData");
+		return null;
+	}
+
+	try {
+		const variablePrices = JSON.parse(metaDataEntry.value);
+		return variablePrices;
+	} catch (error) {
+		log.error("Unable to parse '_woocommerce_pos_variable_prices' value into JSON:", error);
+		return null;
+	}
+}
+
+/**
+ *
+ */
 const VariablePrice = ({ item: product, column }: Props) => {
 	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
 	const taxClass = useObservableState(product.tax_class$, product.tax_class);
 	const { display } = column;
 
 	const metaData = useObservableState(product.meta_data$, product.meta_data);
-	const variablePrices = JSON.parse(
-		metaData?.find((m) => m.key === '_woocommerce_pos_variable_prices')?.value
-	);
+	const variablePrices = getVariablePrices(metaData);
 
 	/**
 	 * TODO - abstract this
