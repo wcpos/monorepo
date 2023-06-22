@@ -22,6 +22,27 @@ export function pruneProperties(schema: RxJsonSchema<any>, json: Record<string, 
 	}
 
 	/**
+	 * BUGFIX: I just saw a product that has 1800+ meta_data entries with the key '_alg_wc_cog_cost_archive'
+	 * all objects as value, when the WC REST API says to expect a string - FFS.
+	 *
+	 * Order line items need to have meta data, but probably not private meta data
+	 *
+	 * Temporary remove any meta data with key starting with '_' except meta_data beginning with::
+	 * - _woocommerce_pos
+	 * - _pos
+	 */
+	if (Array.isArray(json.meta_data)) {
+		const whitelist = ['_woocommerce_pos', '_pos'];
+
+		json.meta_data = json.meta_data.filter((meta: any) => {
+			if (meta.key.startsWith('_') && !whitelist.some((prefix) => meta.key.startsWith(prefix))) {
+				return false;
+			}
+			return true;
+		});
+	}
+
+	/**
 	 * There are some properties in the data that are really not needed, such as payment gateway properties
 	 */
 	const topLevelFields = Object.keys(schema.properties);
