@@ -17,6 +17,11 @@ const usePullDocument = () => {
 	return React.useCallback(
 		async (id, collection) => {
 			let endpoint = collection.name;
+			// quick hack to stop the Guest customer error
+			const num = Number(id);
+			if (!(Number.isInteger(num) && num > 0)) {
+				return;
+			}
 			try {
 				const { data } = await http.get((endpoint += `/${id}`));
 				const parsedData = collection.parseRestResponse(data);

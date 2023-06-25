@@ -11,8 +11,8 @@ import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
-import useCurrentOrder from '../contexts/current-order';
 import useCartHelpers from '../../hooks/use-cart-helpers';
+import useCurrentOrder from '../contexts/current-order';
 
 const initialData = {
 	name: '',

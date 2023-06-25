@@ -8,6 +8,7 @@ import { from } from 'rxjs';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
 
+import AddProduct from './add-product';
 import EditProduct from './edit-product';
 import EditVariation from './edit-variation';
 import Products from './products';
@@ -20,6 +21,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 export type ProductsStackParamList = {
 	Products: undefined;
+	AddProduct: undefined;
 	EditProduct: { productID: string };
 	EditVariation: { parentID: string; variationID: string };
 };
@@ -38,6 +40,28 @@ const ProductsWithProviders = ({
 				<Products />
 			</React.Suspense>
 		</ErrorBoundary>
+	);
+};
+
+/**
+ *
+ */
+const AddProductModal = ({
+	navigation,
+}: NativeStackScreenProps<ProductsStackParamList, 'AddProduct'>) => {
+	return (
+		<ModalLayout
+			title={t('Add Product', { _tags: 'core' })}
+			primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
+			secondaryActions={[
+				{
+					label: t('Cancel', { _tags: 'core' }),
+					action: () => navigation.dispatch(StackActions.pop(1)),
+				},
+			]}
+		>
+			<AddProduct />
+		</ModalLayout>
 	);
 };
 
@@ -118,6 +142,7 @@ const ProductsNavigator = () => {
 		<Stack.Navigator screenOptions={{ headerShown: false }}>
 			<Stack.Screen name="Products" component={ProductsWithProviders} />
 			<Stack.Group screenOptions={{ presentation: 'modal' }}>
+				<Stack.Screen name="AddProduct" component={AddProductModal} />
 				<Stack.Screen name="EditProduct" component={EditProductWithProviders} />
 				<Stack.Screen name="EditVariation" component={EditVariationWithProviders} />
 			</Stack.Group>

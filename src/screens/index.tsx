@@ -77,6 +77,7 @@ const RootNavigator = ({ initialProps }) => {
 									path: 'products',
 									screens: {
 										Products: '',
+										AddProduct: 'add',
 										EditProduct: 'edit/:productID',
 										EditVariation: 'edit/:parentID/:variationID',
 									},

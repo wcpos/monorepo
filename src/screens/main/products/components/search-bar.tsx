@@ -1,7 +1,10 @@
 import * as React from 'react';
 
+import { useNavigation } from '@react-navigation/native';
+
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Icon from '@wcpos/components/src/icon';
 
 import { t } from '../../../../lib/translations';
 import FilterBar from '../../components/product/filter-bar';
@@ -11,6 +14,7 @@ import useUI from '../../contexts/ui-settings';
 
 const SearchBar = () => {
 	const { uiSettings } = useUI('products');
+	const navigation = useNavigation();
 
 	/**
 	 *
@@ -29,6 +33,11 @@ const SearchBar = () => {
 					<Search />
 				</ErrorBoundary>
 				<ErrorBoundary>
+					<Icon
+						name="plus"
+						onPress={() => navigation.navigate('AddProduct')}
+						tooltip={t('Add new customer', { _tags: 'core' })}
+					/>
 					<UISettings uiSettings={uiSettings} title={t('Product Settings', { _tags: 'core' })} />
 				</ErrorBoundary>
 			</Box>
