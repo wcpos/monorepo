@@ -160,17 +160,18 @@ const HelpScreen = () => {
  *
  */
 const LoginScreen = () => {
-	const navigation = useNavigation();
+	const { site, wpCredentials } = useLocalData();
+	// TODO - need to add a login url to the site object
 
 	return (
 		<ModalLayout
 			title={t('Login', { _tags: 'core' })}
-			primaryAction={{ label: t('Login', { _tags: 'core' }) }}
-			secondaryActions={[
-				{ label: t('Cancel', { _tags: 'core' }), action: () => navigation.goBack() },
-			]}
+			// primaryAction={{ label: t('Login', { _tags: 'core' }) }}
+			// secondaryActions={[
+			// 	{ label: t('Cancel', { _tags: 'core' }), action: () => navigation.goBack() },
+			// ]}
 		>
-			<Login />
+			<Login loginUrl={`${site.home}/pos?modal=1`} wpCredentials={wpCredentials} />
 		</ModalLayout>
 	);
 };
