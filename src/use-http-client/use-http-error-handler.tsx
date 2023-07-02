@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useNavigation } from '@react-navigation/native';
+import { isCancel } from 'axios';
 import get from 'lodash/get';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
@@ -13,7 +13,6 @@ type AxiosError = import('axios').AxiosError;
  *
  */
 const useHttpErrorHandler = () => {
-	const navigation = useNavigation();
 	const addSnackbar = useSnackbar();
 
 	/**
@@ -52,7 +51,7 @@ const useHttpErrorHandler = () => {
 					/**
 					 * Show login modal
 					 */
-					navigation.navigate('Login');
+					// navigation.navigate('Login');
 					break;
 				case 403:
 					if (res.data) {
@@ -80,7 +79,7 @@ const useHttpErrorHandler = () => {
 					log.error('Unknown error', res);
 			}
 		},
-		[addSnackbar, navigation]
+		[addSnackbar]
 	);
 
 	/**
@@ -98,6 +97,9 @@ const useHttpErrorHandler = () => {
 				// client never received a response, or request never left
 				log.error(request);
 				addSnackbar({ message: 'Server is unavailable' });
+			} else if (isCancel(error)) {
+				// handle cancel
+				log.info('Request canceled');
 			} else {
 				// anything else
 				log.error(error);
