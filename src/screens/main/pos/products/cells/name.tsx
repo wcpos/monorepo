@@ -55,7 +55,7 @@ export const Name = ({ item: product, column }: Props) => {
 			{show('categories') && <Categories item={product} />}
 			{show('tags') && <Tags item={product} />}
 
-			{product.type === 'variable' && <Attributes attributes={product.attributes} />}
+			{product.type === 'variable' && <Attributes product={product} />}
 
 			{product.type === 'grouped' && (
 				<ProductsProvider initialQuery={groupedQuery} uiSettings={uiSettings}>

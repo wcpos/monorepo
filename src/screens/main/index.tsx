@@ -171,7 +171,7 @@ const LoginScreen = () => {
 			// 	{ label: t('Cancel', { _tags: 'core' }), action: () => navigation.goBack() },
 			// ]}
 		>
-			<Login loginUrl={`${site.home}/pos?modal=1`} wpCredentials={wpCredentials} />
+			<Login loginUrl={`${site.home}/wcpos-login`} wpCredentials={wpCredentials} />
 		</ModalLayout>
 	);
 };

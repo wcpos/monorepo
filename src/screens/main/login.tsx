@@ -23,6 +23,7 @@ const Login = ({ loginUrl, wpCredentials }: LoginProps) => {
 		async (payload) => {
 			const uuid = get(payload, 'uuid');
 			const jwt = get(payload, 'jwt');
+			debugger;
 			if (wpCredentials.uuid === uuid) {
 				console.log(jwt);
 				await wpCredentials.incrementalPatch({

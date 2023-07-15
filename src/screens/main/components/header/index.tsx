@@ -23,7 +23,7 @@ const Header = ({ options }: DrawerHeaderProps) => {
 	 *
 	 */
 	return (
-		<View nativeID="titlebar">
+		<View id="titlebar">
 			<ReactNavigationHeader
 				title={`${options.title} - ${storeName}`}
 				headerTitle={(props) => <HeaderTitle {...props} />}

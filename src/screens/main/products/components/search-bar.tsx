@@ -14,7 +14,7 @@ import useUI from '../../contexts/ui-settings';
 
 const SearchBar = () => {
 	const { uiSettings } = useUI('products');
-	const navigation = useNavigation();
+	// const navigation = useNavigation();
 
 	/**
 	 *
@@ -33,11 +33,11 @@ const SearchBar = () => {
 					<Search />
 				</ErrorBoundary>
 				<ErrorBoundary>
-					<Icon
+					{/* <Icon
 						name="plus"
 						onPress={() => navigation.navigate('AddProduct')}
 						tooltip={t('Add new customer', { _tags: 'core' })}
-					/>
+					/> */}
 					<UISettings uiSettings={uiSettings} title={t('Product Settings', { _tags: 'core' })} />
 				</ErrorBoundary>
 			</Box>

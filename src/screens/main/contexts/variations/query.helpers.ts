@@ -1,10 +1,36 @@
 import isEmpty from 'lodash/isEmpty';
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
+/**
+ *
+ */
+export const normalizeVariationAttributes = (
+	attributes: {
+		name: string;
+		option: string;
+	}[]
+) => {
+	if (!Array.isArray(attributes)) {
+		return [];
+	}
+
+	return attributes.filter((item) => {
+		if (!item.hasOwnProperty('name') || !item.hasOwnProperty('option')) return false;
+		if (typeof item.name !== 'string' || typeof item.option !== 'string') return false;
+		return true;
+	});
+};
+
+/**
+ *
+ */
 export const filterVariationsByAttributes = (
 	result: ProductVariationDocument[],
 	allMatch: { name: string; option: string }[]
 ) => {
+	// normalize attributes
+	allMatch = normalizeVariationAttributes(allMatch);
+
 	// early return if there are no attributes to match
 	if (isEmpty(allMatch)) {
 		return result;

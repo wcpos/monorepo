@@ -4,6 +4,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
+import { t } from '../../../../../lib/translations';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 
 interface CheckoutTitleProps {
@@ -20,7 +21,8 @@ const CheckoutTitle = ({ order }: CheckoutTitleProps) => {
 
 	return (
 		<Text size="large" align="center" weight="bold">
-			{`Amount to Pay: ${format(total || 0)}`}
+			{t('Amount to Pay', { _tags: 'core ' })}
+			{`: ${format(total || 0)}`}
 		</Text>
 	);
 };

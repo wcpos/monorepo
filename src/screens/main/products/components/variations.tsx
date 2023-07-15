@@ -18,6 +18,7 @@ import Price from './cells/price';
 import StockQuanity from './cells/stock-quantity';
 import Actions from './cells/variation-actions';
 import { t } from '../../../../lib/translations';
+import EmptyTableRow from '../../components/empty-table-row';
 import { ProductVariationImage } from '../../components/product/variation-image';
 import { ProductVariationName } from '../../components/product/variation-name';
 import FilterBar from '../../components/product/variation-table-rows/filter-bar';
@@ -115,20 +116,21 @@ const Variations = ({ extraData, parent, parentIndex }: VariationsProps) => {
 	 *
 	 */
 	return (
-		<Box style={{ borderLeftWidth: 2 }}>
+		<Box style={{ borderLeftWidth: 2, maxHeight: 300 }}>
 			<FilterBar parent={parent} />
-			{variations.map((variation, index) => {
-				return (
-					<Table.Row
-						key={variation.uuid}
-						item={variation}
-						extraData={extraData}
-						cellRenderer={cellRenderer}
-						index={parentIndex + 1 + index}
-					/>
-				);
-			})}
-			<Footer count={variations.length} parent={parent} />
+			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+				<Table<ProductVariationDocument>
+					data={variations}
+					footer={<Footer count={variations.length} parent={parent} />}
+					estimatedItemSize={150}
+					extraData={{ ...extraData, cellRenderer }}
+					ListEmptyComponent={
+						<EmptyTableRow message={t('No variations found', { _tags: 'core' })} />
+					}
+					// onEndReached={onEndReached}
+					// loading={loading}
+				/>
+			</Box>
 		</Box>
 	);
 };

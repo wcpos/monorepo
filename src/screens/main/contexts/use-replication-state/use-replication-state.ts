@@ -108,7 +108,10 @@ export const useReplicationState = ({
 							.find({
 								selector: { id: { $exists: true } },
 							})
-							.exec();
+							.exec()
+							.catch((err) => {
+								debugger;
+							});
 
 						return localDocs;
 					} catch (err) {

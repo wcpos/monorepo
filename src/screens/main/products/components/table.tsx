@@ -7,7 +7,9 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableExtraDataProps } from '@wcpos/components/src/table';
 
 import Footer from './footer';
-import ProductTableRow from './table-row';
+import SimpleProductTableRow from './rows/simple';
+import VariableProductTableRow from './rows/variable';
+import VariationsTableRow from './rows/variations';
 import { t } from '../../../../lib/translations';
 import EmptyTableRow from '../../components/empty-table-row';
 import useProducts from '../../contexts/products';
@@ -20,12 +22,21 @@ interface ProductsTableProps {
 	uiSettings: import('../../contexts/ui-settings').UISettingsDocument;
 }
 
+// Table Rows
+const TABLE_ROW_COMPONENTS = {
+	simple: SimpleProductTableRow,
+	variable: VariableProductTableRow,
+	variations: VariationsTableRow,
+};
+
 /**
  * NOTE: not sure if this is the best spot for replication, but we need acces to the query
  */
 const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
-	const { query$, setQuery, resource, replicationState, loadNextPage } = useProducts();
+	const { query$, setQuery, resource, replicationState, loadNextPage, shownVariations$ } =
+		useProducts();
 	const { data, count, hasMore } = useObservableSuspense(resource);
+	const shownVariations = useObservableState(shownVariations$, {});
 	const loading = useObservableState(replicationState.active$, false);
 	const total = useTotalCount('products', replicationState);
 	const query = useObservableState(query$, query$.getValue());
@@ -33,6 +44,23 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
+
+	/**
+	 *
+	 */
+	const productsAndVariations = React.useMemo(() => {
+		const result = [];
+
+		data.forEach((record) => {
+			result.push(record);
+
+			if (shownVariations[record.uuid]) {
+				result.push({ type: 'variations', parent: record });
+			}
+		});
+
+		return result;
+	}, [data, shownVariations]);
 
 	/**
 	 *
@@ -64,21 +92,37 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	/**
 	 *
 	 */
+	const renderItem = React.useCallback((props) => {
+		let Component = TABLE_ROW_COMPONENTS[props.item.type];
+
+		// If we still didn't find a component, use SimpleProductTableRow as a fallback
+		// eg: Grouped products
+		if (!Component) {
+			Component = SimpleProductTableRow;
+		}
+
+		return (
+			<ErrorBoundary>
+				<Component {...props} />
+			</ErrorBoundary>
+		);
+	}, []);
+
+	/**
+	 *
+	 */
 	return (
 		<Table<ProductDocument>
-			data={data}
+			data={productsAndVariations}
 			footer={<Footer count={count} total={total} loading={loading} />}
 			estimatedItemSize={150}
 			extraData={context}
 			getItemType={(item) => item.type}
-			renderItem={(props) => (
-				<ErrorBoundary>
-					<ProductTableRow {...props} />
-				</ErrorBoundary>
-			)}
+			renderItem={renderItem}
 			ListEmptyComponent={<EmptyTableRow message={t('No products found', { _tags: 'core' })} />}
 			onEndReached={onEndReached}
 			loading={loading}
+			nestedScrollEnabled={true}
 		/>
 	);
 };

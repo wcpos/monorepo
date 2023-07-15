@@ -32,7 +32,7 @@ export const useRestHttpClient = () => {
 	 *
 	 */
 	const responseModifier = React.useCallback((response) => {
-		console.log(response);
+		// console.log(response);
 		return response;
 	}, []);
 

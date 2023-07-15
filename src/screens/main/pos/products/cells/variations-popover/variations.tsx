@@ -36,23 +36,10 @@ export const getAttributesWithCharacterCount = (attributes: ProductDocument['att
  *
  */
 const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
-	const [allMatch, setAllMatch] = React.useState([]);
 	const { setPrimaryAction } = usePopover();
 	const { collection } = useCollection('variations');
-	const allVariations = useObservableState(
-		parent.variations$.pipe(
-			switchMap((variationIDs) =>
-				collection.find({ selector: { id: { $in: variationIDs } } }).$.pipe(
-					tap((result) => {
-						console.log(variationIDs);
-						debugger;
-					})
-				)
-			)
-		),
-		[]
-	);
-	// const { format } = useCurrencyFormat();
+	const { resource } = useVariations();
+	const variations = useObservableSuspense(resource);
 
 	/**
 	 *
@@ -65,18 +52,18 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	/**
 	 *
 	 */
-	const handleSelect = React.useCallback(
-		(attribute, option) => {
-			const newAllMatch = allMatch.filter((match) => match.name !== attribute.name);
-			newAllMatch.push({
-				name: attribute.name,
-				option,
-			});
-			// setAllMatch('selector.attributes.$allMatch', newAllMatch);
-			setAllMatch(newAllMatch);
-		},
-		[allMatch, setAllMatch]
-	);
+	// const handleSelect = React.useCallback(
+	// 	(attribute, option) => {
+	// 		const newAllMatch = allMatch.filter((match) => match.name !== attribute.name);
+	// 		newAllMatch.push({
+	// 			name: attribute.name,
+	// 			option,
+	// 		});
+	// 		// setAllMatch('selector.attributes.$allMatch', newAllMatch);
+	// 		setAllMatch(newAllMatch);
+	// 	},
+	// 	[allMatch, setAllMatch]
+	// );
 
 	/**
 	 *
@@ -85,13 +72,13 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	/**
 	 *
 	 */
-	React.useEffect(() => {
-		async function search() {
-			const result = await collection.findOne({ selector: {} }).exec();
-		}
+	// React.useEffect(() => {
+	// 	async function search() {
+	// 		const result = await collection.findOne({ selector: {} }).exec();
+	// 	}
 
-		search();
-	}, [allMatch]);
+	// 	search();
+	// }, [allMatch]);
 
 	/**
 	 *
@@ -99,8 +86,8 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	return (
 		<Box space="xSmall">
 			{attributes.map((attribute) => {
-				const matched = allMatch.find((match) => match.name === attribute.name);
-				const selectedOption = matched?.option;
+				// const matched = allMatch.find((match) => match.name === attribute.name);
+				const selectedOption = undefined;
 
 				return (
 					<Box key={attribute.name} space="xSmall">
@@ -108,14 +95,14 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 						{attribute.characterCount < 15 ? (
 							<VariationButtons
 								attribute={attribute}
-								onSelect={handleSelect}
-								selectedOption={selectedOption}
+								// onSelect={handleSelect}
+								// selectedOption={selectedOption}
 							/>
 						) : (
 							<VariationSelect
 								attribute={attribute}
-								onSelect={handleSelect}
-								selectedOption={selectedOption}
+								// onSelect={handleSelect}
+								// selectedOption={selectedOption}
 							/>
 						)}
 					</Box>

@@ -7,46 +7,45 @@ import Pill from '@wcpos/components/src/pill';
 import Select from '@wcpos/components/src/select';
 
 import { t } from '../../../../../lib/translations';
-import useVariations from '../../../contexts/variations';
 
-const VariationAttributePill = ({ attribute }) => {
+const VariationAttributePill = ({ attribute, onSelect, ...props }) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
-	const { setQuery, query$ } = useVariations();
-	const query = useObservableState(query$, query$.getValue());
-	const allMatch = get(query, 'selector.attributes.$allMatch', []);
-	const thisMatch = allMatch.find((match) => match.name === attribute.name);
+	const [selected, setSelected] = React.useState(props.selected);
+
+	/**
+	 * @TODO - this works, but it's ugly as hell, need to choose controlled or uncontrolled
+	 */
+	React.useEffect(() => {
+		setSelected(props.selected);
+	}, [props.selected]);
 
 	/**
 	 *
 	 */
 	const handleSelect = React.useCallback(
 		(option) => {
-			const newAllMatch = allMatch.filter((match) => match.name !== attribute.name);
-			newAllMatch.push({
-				name: attribute.name,
-				option,
-			});
-			setQuery('selector.attributes.$allMatch', newAllMatch);
+			setSelected(option);
+			onSelect && onSelect({ name: attribute.name, option });
 		},
-		[allMatch, attribute.name, setQuery]
+		[attribute.name, onSelect]
 	);
 
 	/**
 	 *
 	 */
 	const handleRemove = React.useCallback(() => {
-		const newAllMatch = allMatch.filter((match) => match.name !== attribute.name);
-		setQuery('selector.attributes.$allMatch', newAllMatch);
+		setSelected(null);
 		setOpenSelect(false);
-	}, [allMatch, attribute.name, setQuery]);
+		onSelect && onSelect({ name: attribute.name, option: null });
+	}, [attribute.name, onSelect]);
 
 	/**
 	 *
 	 */
-	if (thisMatch) {
+	if (selected) {
 		return (
 			<Pill size="small" removable onRemove={handleRemove} icon="check">
-				{`${thisMatch.name}: ${thisMatch.option}`}
+				{`${attribute.name}: ${selected}`}
 			</Pill>
 		);
 	}

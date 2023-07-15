@@ -25,6 +25,7 @@ import Categories from '../../components/product/categories';
 import { ProductImage } from '../../components/product/image';
 import Tags from '../../components/product/tags';
 import VariablePrice from '../../components/product/variable-price';
+import { VariableProductRowProvider } from '../../components/product/variable-row-provider';
 import VariableTableRow from '../../components/product/variable-table-row';
 import usePushDocument from '../../contexts/use-push-document';
 
@@ -67,6 +68,7 @@ const ProductTableRow = ({
 }: ListRenderItemInfo<ProductDocument>) => {
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();
+
 	/**
 	 *
 	 */
@@ -126,23 +128,35 @@ const ProductTableRow = ({
 	/**
 	 *
 	 */
+	const row = (
+		<Table.Row
+			item={item}
+			index={index}
+			extraData={extraData}
+			target={target}
+			cellRenderer={cellRenderer}
+		/>
+	);
+
+	/**
+	 * Wrap variable products in a provider
+	 */
 	if (item.type === 'variable') {
 		return (
-			<VariableTableRow
-				item={item}
-				index={index}
-				extraData={extraData}
-				target={target}
-				cellRenderer={cellRenderer}
-			>
-				<Variations parent={item} parentIndex={index} extraData={extraData} />
-			</VariableTableRow>
+			<VariableProductRowProvider parent={item}>
+				<VariableTableRow
+					item={item}
+					index={index}
+					extraData={extraData}
+					target={target}
+					cellRenderer={cellRenderer}
+				>
+					<Variations parent={item} parentIndex={index} extraData={extraData} />
+				</VariableTableRow>
+			</VariableProductRowProvider>
 		);
 	}
 
-	/**
-	 *
-	 */
 	return (
 		<Table.Row
 			item={item}

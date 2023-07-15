@@ -3,9 +3,18 @@ import * as React from 'react';
 import get from 'lodash/get';
 import isEqual from 'lodash/isEqual';
 import set from 'lodash/set';
-import { ObservableResource, useObservableState } from 'observable-hooks';
-import { combineLatest } from 'rxjs';
-import { switchMap, map, distinctUntilChanged } from 'rxjs/operators';
+import { ObservableResource, useObservableRef } from 'observable-hooks';
+import { combineLatest, merge, of } from 'rxjs';
+import {
+	switchMap,
+	map,
+	distinctUntilChanged,
+	catchError,
+	tap,
+	debounceTime,
+	skip,
+	take,
+} from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
@@ -95,6 +104,9 @@ VariationsProviderProps) => {
 	const { collection } = useCollection('variations');
 	const apiEndpoint = `products/${parent.id}/variations`;
 	const { query$, setQuery } = useQuery(initialQuery);
+	const pageNumberRef = React.useRef(1);
+	const [loadMoreRef, loadMore$] = useObservableRef(Date.now());
+
 	// const replicationState = useReplication({ parent, query$ });
 	const replicationState = useReplicationState({
 		collection,
@@ -108,7 +120,12 @@ VariationsProviderProps) => {
 	 */
 	const resource = React.useMemo(() => {
 		const resource$ = combineLatest([query$, parent.variations$]).pipe(
+			// reset the page number when the query changes
+			tap(() => {
+				pageNumberRef.current = 1;
+			}),
 			switchMap(([query, variationIDs]) => {
+				console.log(query);
 				const { search, selector: querySelector, sortBy, sortDirection, limit, skip } = query;
 				const selector = { $and: [{ id: { $in: variationIDs } }] };
 
@@ -144,8 +161,34 @@ VariationsProviderProps) => {
 			})
 		);
 
-		return new ObservableResource(resource$);
-	}, [collection, parent.variations$, query$]);
+		/**
+		 *
+		 */
+		const debouncedLoadMore$ = merge(
+			loadMore$.pipe(take(1)),
+			loadMore$.pipe(skip(1), debounceTime(250))
+		);
+
+		/**
+		 *
+		 */
+		const paginatedResource$ = combineLatest([resource$, debouncedLoadMore$]).pipe(
+			map(([docs, trigger]) => {
+				const count = docs.length;
+				const pageSize = 10;
+				const page = pageNumberRef.current;
+				const result = {
+					data: docs.slice(0, page * pageSize),
+					count,
+					hasMore: count > page * pageSize,
+				};
+				pageNumberRef.current += 1;
+				return result;
+			})
+		);
+
+		return new ObservableResource(paginatedResource$);
+	}, [collection, loadMore$, parent.variations$, query$]);
 
 	/**
 	 *
@@ -163,6 +206,16 @@ VariationsProviderProps) => {
 		replicationState.reSync();
 	}, [replicationState]);
 
+	/**
+	 *
+	 */
+	const loadNextPage = React.useCallback(() => {
+		loadMoreRef.current = Date.now();
+	}, [loadMoreRef]);
+
+	/**
+	 *
+	 */
 	return (
 		<VariationsContext.Provider
 			value={{
@@ -172,6 +225,7 @@ VariationsProviderProps) => {
 				clear,
 				sync,
 				replicationState,
+				loadNextPage,
 			}}
 		>
 			{children}

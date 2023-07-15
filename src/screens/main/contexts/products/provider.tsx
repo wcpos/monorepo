@@ -18,6 +18,7 @@ import {
 // import products from '@wcpos/database/src/collections/products';
 import log from '@wcpos/utils/src/logger';
 
+import useVariationsQuery from './use-variation-query';
 import useLocalData from '../../../../contexts/local-data';
 import useCollection from '../../hooks/use-collection';
 import useQuery, { QueryObservable, QueryState, SetQuery } from '../use-query';
@@ -115,6 +116,7 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 	const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
 	const pageNumberRef = React.useRef(1);
 	const [loadMoreRef, loadMore$] = useObservableRef(Date.now());
+	const { shownVariations$, setVariationsQuery } = useVariationsQuery();
 
 	/**
 	 *
@@ -248,6 +250,8 @@ const ProductsProvider = ({ children, initialQuery, uiSettings }: ProductsProvid
 				sync,
 				replicationState,
 				loadNextPage,
+				shownVariations$,
+				setVariationsQuery,
 			}}
 		>
 			{children}

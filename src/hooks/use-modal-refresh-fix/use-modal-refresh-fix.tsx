@@ -10,7 +10,6 @@ import { useNavigation, CommonActions } from '@react-navigation/native';
 export const useModalRefreshFix = () => {
 	const navigation = useNavigation();
 	const dimensions = useWindowDimensions();
-
 	React.useEffect(() => {
 		const state = navigation.getState();
 		if (state.routes.length === 1) {

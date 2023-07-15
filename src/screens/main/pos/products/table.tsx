@@ -1,17 +1,18 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableExtraDataProps } from '@wcpos/components/src/table';
 
 import Footer from './footer';
-import ProductTableRow from './table-row';
+import SimpleProductTableRow from './rows/simple';
+import VariableProductTableRow from './rows/variable';
+import VariationsTableRow from './rows/variations';
 import { t } from '../../../../lib/translations';
 import EmptyTableRow from '../../components/empty-table-row';
 import useProducts from '../../contexts/products';
-
-import type { ListRenderItemInfo } from '@shopify/flash-list';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type UISettingsColumn = import('../../contexts/ui-settings').UISettingsColumn;
@@ -20,12 +21,21 @@ interface POSProductsTableProps {
 	uiSettings: import('../../contexts/ui-settings').UISettingsDocument;
 }
 
+// Table Rows
+const TABLE_ROW_COMPONENTS = {
+	simple: SimpleProductTableRow,
+	variable: VariableProductTableRow,
+	variations: VariationsTableRow,
+};
+
 /**
  *
  */
 const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
-	const { query$, setQuery, resource, replicationState, loadNextPage } = useProducts();
+	const { query$, setQuery, resource, replicationState, loadNextPage, shownVariations$ } =
+		useProducts();
 	const { data, count, hasMore } = useObservableSuspense(resource);
+	const shownVariations = useObservableState(shownVariations$, {});
 	const loading = useObservableState(replicationState.active$, false);
 	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(
@@ -34,6 +44,23 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 	) as UISettingsColumn[];
 	// const [shownItems, setShownItems] = React.useState<Record<string, boolean>>({});
 	// const shownItems = React.useRef<Record<string, boolean>>({});
+
+	/**
+	 *
+	 */
+	const productsAndVariations = React.useMemo(() => {
+		const result = [];
+
+		data.forEach((record) => {
+			result.push(record);
+
+			if (shownVariations[record.uuid]) {
+				result.push({ type: 'variations', parent: record });
+			}
+		});
+
+		return result;
+	}, [data, shownVariations]);
 
 	/**
 	 *
@@ -64,16 +91,31 @@ const POSProductsTable = ({ uiSettings }: POSProductsTableProps) => {
 	/**
 	 *
 	 */
+	const renderItem = React.useCallback((props) => {
+		let Component = TABLE_ROW_COMPONENTS[props.item.type];
+
+		// If we still didn't find a component, use SimpleProductTableRow as a fallback
+		// eg: Grouped products
+		if (!Component) {
+			Component = SimpleProductTableRow;
+		}
+
+		return (
+			<ErrorBoundary>
+				<Component {...props} />
+			</ErrorBoundary>
+		);
+	}, []);
+
+	/**
+	 *
+	 */
 	return (
 		<Table<ProductDocument>
-			data={data}
+			data={productsAndVariations}
 			footer={<Footer count={count} />}
 			estimatedItemSize={150}
-			renderItem={(props) => (
-				<ErrorBoundary>
-					<ProductTableRow {...props} />
-				</ErrorBoundary>
-			)}
+			renderItem={renderItem}
 			extraData={context}
 			ListEmptyComponent={<EmptyTableRow message={t('No products found', { _tags: 'core' })} />}
 			onEndReached={onEndReached}
