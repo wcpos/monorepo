@@ -1,5 +1,6 @@
-import schema from './schema.json';
+import { RxConflictHandler, RxConflictHandlerInput } from 'rxdb';
 
+import schema from './schema.json';
 type RxCollectionCreator = import('rxdb').RxCollectionCreator;
 
 export type ProductSchema = import('./interface').WooCommerceProductSchema;
@@ -27,4 +28,5 @@ export const products: RxCollectionCreator = {
 	options: {
 		searchFields: ['name', 'sku', 'barcode'],
 	},
+	// conflictHandler,
 };

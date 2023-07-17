@@ -1,4 +1,17 @@
-import { search, create, insert, update, remove, Orama, insertMultiple, count } from '@orama/orama';
+/**
+ * @TODO - the new expo/metro config seems to have a problem with the orama package imports field
+ * This is a temporary hack to directly import the module
+ */
+import {
+	search,
+	create,
+	insert,
+	update,
+	remove,
+	Orama,
+	insertMultiple,
+	count,
+} from '@orama/orama/dist';
 // import { restore, persist } from '@orama/plugin-data-persistence';
 import defaults from 'lodash/defaults';
 import mapValues from 'lodash/mapValues';
@@ -6,6 +19,8 @@ import pick from 'lodash/pick';
 import { RxCollection, RxPlugin } from 'rxdb';
 import { BehaviorSubject } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
+
+import log from '@wcpos/utils/src/logger';
 
 import type { Results } from '@orama/orama';
 
@@ -43,44 +58,52 @@ export const searchPlugin: RxPlugin = {
 				 * TODO: it should be possible to use rxdb as the document store:
 				 * https://docs.oramasearch.com/internals/components#documentsstore
 				 */
-				collection.searchDB = await create({
-					id: collection.name,
-					schema,
-					sortBy: {
-						enabled: false,
-					},
-					components: {
-						tokenizer: { language: 'english', stemming: false, stopWords: false },
-						getDocumentIndexId(doc) {
-							return doc[primaryPath];
+				try {
+					collection.searchDB = await create({
+						id: collection.name,
+						schema,
+						sortBy: {
+							enabled: false,
 						},
-						afterInsert(args) {
-							collection.searchTrigger.next(args);
+						components: {
+							tokenizer: { language: 'english', stemming: false, stopWords: false },
+							getDocumentIndexId(doc) {
+								return doc[primaryPath];
+							},
+							afterInsert(args) {
+								collection.searchTrigger.next(args);
+							},
+							afterRemove(args) {
+								collection.searchTrigger.next(args);
+							},
+							afterUpdate(args) {
+								collection.searchTrigger.next(args);
+							},
+							afterMultipleInsert(args) {
+								collection.searchTrigger.next(args);
+							},
+							afterMultipleRemove(args) {
+								collection.searchTrigger.next(args);
+							},
+							afterMultipleUpdate(args) {
+								collection.searchTrigger.next(args);
+							},
 						},
-						afterRemove(args) {
-							collection.searchTrigger.next(args);
-						},
-						afterUpdate(args) {
-							collection.searchTrigger.next(args);
-						},
-						afterMultipleInsert(args) {
-							collection.searchTrigger.next(args);
-						},
-						afterMultipleRemove(args) {
-							collection.searchTrigger.next(args);
-						},
-						afterMultipleUpdate(args) {
-							collection.searchTrigger.next(args);
-						},
-					},
-				});
+					});
+				} catch (err) {
+					log.error(err);
+				}
 
 				// get all docs and insert into search db
-				const docs = await collection.find().exec();
-				await insertMultiple(
-					collection.searchDB,
-					docs.map((doc) => pick(doc.toJSON(), searchFieldPlusPrimaryPath))
-				);
+				try {
+					const docs = await collection.find().exec();
+					await insertMultiple(
+						collection.searchDB,
+						docs.map((doc) => pick(doc.toJSON(), searchFieldPlusPrimaryPath))
+					);
+				} catch (err) {
+					log.error(err);
+				}
 			};
 
 			/**
@@ -134,9 +157,10 @@ export const searchPlugin: RxPlugin = {
 				collection.searchTrigger = new BehaviorSubject(null);
 				collection.searchTrigger$ = collection.searchTrigger.asObservable();
 
-				// Create Lunr index
-				collection.createSearchDB();
-
+				// Create search index
+				collection.createSearchDB().catch((err) => {
+					log.error(err);
+				});
 				/**
 				 *
 				 */
