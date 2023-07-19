@@ -3,7 +3,6 @@ import * as React from 'react';
 import merge from 'lodash/merge';
 import set from 'lodash/set';
 
-import useWhyDidYouUpdate from '@wcpos/hooks/src/use-why-did-you-update';
 import log from '@wcpos/utils/src/logger';
 
 import http from './http';
@@ -13,188 +12,82 @@ import useOnlineStatus from '../use-online-status';
 type AxiosRequestConfig = import('axios').AxiosRequestConfig;
 type AxiosError = import('axios').AxiosError;
 
+export type RequestConfig = AxiosRequestConfig;
+
+interface HttpClientOptions {
+	errorHandler?: (error: unknown) => unknown;
+}
+
 /**
  * Http Client provides a standard API for all platforms
  * also wraps request to provide a common error handler
  *
- * NOTE: this hook makes axios.create unnecessary
- * - axios.create is synchronous for web, but async for electron
- * - axios.create creates more pain than it's worth
- *
  * TODO - how best to cancel requests
  */
-export const useHttpClient = () => {
-	const errorResponseHandler = useHttpErrorHandler();
+export const useHttpClient = (options?: HttpClientOptions) => {
+	const defaultErrorHandler = useHttpErrorHandler();
 	const { isInternetReachable } = useOnlineStatus();
-	// const controller = React.useMemo(() => new AbortController(), []);
 
-	/**
-	 * Abort the current request on unmount
-	 */
-	// React.useEffect(() => {
-	// 	return () => {
-	// 		controller.abort();
-	// 	};
-	// }, [controller]);
-	const retryDelay = 10000; // 10 second
-
-	/**
-	 *
-	 */
 	const httpWrapper = React.useMemo(() => {
-		let instanceConfig = {};
-		const retryCount = 0;
+		const instanceConfig = {}; // Set default config here
 
-		/**
-		 * TODO - merge config with default?
-		 */
 		const request = async (config: AxiosRequestConfig = {}) => {
-			const _config = merge({}, instanceConfig, config); // NOTE: do not mutate instanceConfig
+			const _config = merge({}, instanceConfig, config);
 
-			/**
-			 * Add X-WCPOS header to every request
-			 */
 			if (_config.method?.toLowerCase() !== 'head') {
 				set(_config, ['headers', 'X-WCPOS'], 1);
 			}
 
-			/**
-			 * HTTP HEAD Requests
-			 *
-			 * 1. Set decompress to false
-			 * Fix a bug in windows - see https://github.com/axios/axios/issues/1658
-			 * I get an "unexpected end of file" error on HEAD requests because body is empty
-			 *
-			 * 2. Remove Cookie (probably not needed)
-			 *
-			 * 3. Set query param http_method to HEAD
-			 * Some servers convert HEAD requests to GET requests, eg: WPengine
-			 * I don't know why, but it causes problems with CORS settings in the PHP plugin
-			 */
 			if (_config.method?.toLowerCase() === 'head') {
 				set(_config, 'decompress', false);
-				// set(_config, ['headers', 'Cookie'], undefined);
-				/**
-				 * WordPress REST API check for:
-				 * HTTP_X_HTTP_METHOD_OVERRIDE (header)
-				 * _method (get param)
-				 * TODO - check if I should use this instead
-				 */
 				set(_config, ['params', '_method'], 'HEAD');
 			}
 
-			/**
-			 * XDEBUG for development
-			 */
 			if (process.env.NODE_ENV === 'development') {
 				set(_config, ['params', 'XDEBUG_SESSION'], 'start');
 			}
 
-			/**
-			 * TODO - do we really need a retry? perhaps better to fail fast and handle the error
-			 */
 			try {
 				const response = await http.request(_config);
-				// retryCount = 0;
 				return response;
 			} catch (error) {
 				log.error(error);
-				errorResponseHandler(error as AxiosError);
-				// retryCount++;
-				// return new Promise((resolve) => setTimeout(resolve, retryDelay * Math.pow(2, retryCount)));
+				/**
+				 * Run custom error handler first, then passthrough to default
+				 * This allows us to override the default error handler, eg: detecting 401 and showing login modal
+				 */
+				let err = error;
+				if (typeof options?.errorHandler === 'function') {
+					err = options.errorHandler(err);
+				}
+				if (err) {
+					defaultErrorHandler(err);
+				}
 			}
 		};
 
-		/**
-		 * API
-		 */
-		const api = {
-			axios: http, // expose axios instance, this won't work for electron
-
-			/**
-			 *
-			 */
-			get(url: string, config: AxiosRequestConfig = {}) {
-				return request({
-					...config,
-					method: 'GET',
-					url,
-					data: (config || {}).data,
-				});
-			},
-
-			/**
-			 *
-			 */
-			post(url: string, config: AxiosRequestConfig = {}) {
-				return request({
-					...config,
-					method: 'POST',
-					url,
-					data: (config || {}).data,
-				});
-			},
-
-			put(url: string, config: AxiosRequestConfig = {}) {
-				return request({
-					...config,
-					method: 'PUT',
-					url,
-					data: (config || {}).data,
-				});
-			},
-
-			/**
-			 *
-			 */
-			patch(url: string, config: AxiosRequestConfig = {}) {
-				return request({
-					...config,
-					method: 'PATCH',
-					url,
-					data: (config || {}).data,
-				});
-			},
-
-			/**
-			 *
-			 */
-			del(url: string, config: AxiosRequestConfig = {}) {
-				return request({
-					...config,
-					method: 'DELETE',
-					url,
-					data: (config || {}).data,
-				});
-			},
-
-			/**
-			 *
-			 */
-			head(url: string, config: AxiosRequestConfig = {}) {
-				return request({
-					...config,
-					method: 'HEAD',
-					url,
-					data: (config || {}).data,
-				});
-			},
-		};
-
-		/**
-		 * Exposed API
-		 */
 		return {
-			create: (config: AxiosRequestConfig = {}) => {
-				instanceConfig = config;
-				return api;
+			request,
+			get(url: string, config: AxiosRequestConfig = {}) {
+				return request({ ...config, method: 'GET', url });
 			},
-			...api,
+			post(url: string, data: any, config: AxiosRequestConfig = {}) {
+				return request({ ...config, method: 'POST', url, data });
+			},
+			put(url: string, data: any, config: AxiosRequestConfig = {}) {
+				return request({ ...config, method: 'PUT', url, data });
+			},
+			patch(url: string, data: any, config: AxiosRequestConfig = {}) {
+				return request({ ...config, method: 'PATCH', url, data });
+			},
+			delete(url: string, config: AxiosRequestConfig = {}) {
+				return request({ ...config, method: 'DELETE', url });
+			},
+			head(url: string, config: AxiosRequestConfig = {}) {
+				return request({ ...config, method: 'HEAD', url });
+			},
 		};
-	}, [errorResponseHandler]);
+	}, [defaultErrorHandler, options]);
 
-	/**
-	 *
-	 */
 	return httpWrapper;
 };

@@ -86,7 +86,7 @@ const useHttpErrorHandler = () => {
 	 *
 	 */
 	const errorHandler = React.useCallback(
-		(error: AxiosError | Error | undefined) => {
+		(error: unknown) => {
 			const response = get(error, 'response');
 			const request = get(error, 'request');
 
