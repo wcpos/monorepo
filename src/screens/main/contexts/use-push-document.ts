@@ -45,9 +45,7 @@ const usePushDocument = () => {
 						? await latestDoc.toPopulatedOrderJSON()
 						: await latestDoc.toPopulatedJSON();
 
-				const { data } = await http.post(endpoint, {
-					data: populatedData,
-				});
+				const { data } = await http.post(endpoint, populatedData);
 				/**
 				 * It's possible for the WC REST API server to retrun a 200 response but with data = ""
 				 * Do a check here to see if the data is empty and if so, throw an error

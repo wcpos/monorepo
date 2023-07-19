@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
 
 import WebView from '@wcpos/components/src/webview';
+import log from '@wcpos/utils/src/logger';
 
 interface LoginProps {
 	loginUrl: string;
@@ -23,12 +24,16 @@ const Login = ({ loginUrl, wpCredentials }: LoginProps) => {
 		async (payload) => {
 			const uuid = get(payload, 'uuid');
 			const jwt = get(payload, 'jwt');
-			debugger;
-			if (wpCredentials.uuid === uuid) {
-				console.log(jwt);
-				await wpCredentials.incrementalPatch({
-					jwt,
-				});
+
+			try {
+				if (wpCredentials.uuid === uuid) {
+					await wpCredentials.incrementalPatch({
+						jwt,
+					});
+				}
+			} catch (err) {
+				log.error(err);
+			} finally {
 				navigation.goBack();
 			}
 		},

@@ -12,6 +12,7 @@ import VariationButtons from './buttons';
 import VariationSelect from './select';
 import { t } from '../../../../../../lib/translations';
 import useVariations from '../../../../contexts/variations';
+import useCartHelpers from '../../../../hooks/use-cart-helpers';
 import useCollection from '../../../../hooks/use-collection';
 import useCurrencyFormat from '../../../../hooks/use-currency-format';
 
@@ -38,8 +39,8 @@ export const getAttributesWithCharacterCount = (attributes: ProductDocument['att
 const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	const { setPrimaryAction } = usePopover();
 	const { collection } = useCollection('variations');
-	const { resource } = useVariations();
-	const variations = useObservableSuspense(resource);
+	const { resource, setQuery } = useVariations();
+	const { data: variations } = useObservableSuspense(resource);
 
 	/**
 	 *
@@ -52,18 +53,30 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	/**
 	 *
 	 */
-	// const handleSelect = React.useCallback(
-	// 	(attribute, option) => {
-	// 		const newAllMatch = allMatch.filter((match) => match.name !== attribute.name);
-	// 		newAllMatch.push({
-	// 			name: attribute.name,
-	// 			option,
-	// 		});
-	// 		// setAllMatch('selector.attributes.$allMatch', newAllMatch);
-	// 		setAllMatch(newAllMatch);
-	// 	},
-	// 	[allMatch, setAllMatch]
-	// );
+	const handleSelect = React.useCallback(
+		(attribute, option) => {
+			setQuery((prev) => {
+				// add attribute to query
+				const attributes = prev?.selector?.attributes || {};
+				attributes.$allMatch = attributes.$allMatch || [];
+				// add or replace attribute
+				const index = attributes.$allMatch.findIndex((a) => a.name === attribute.name);
+				if (index > -1) {
+					attributes.$allMatch[index] = { name: attribute.name, option };
+				} else {
+					attributes.$allMatch.push({ name: attribute.name, option });
+				}
+				return {
+					...prev,
+					selector: {
+						...prev.selector,
+						attributes,
+					},
+				};
+			});
+		},
+		[setQuery]
+	);
 
 	/**
 	 *
@@ -72,13 +85,17 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	/**
 	 *
 	 */
-	// React.useEffect(() => {
-	// 	async function search() {
-	// 		const result = await collection.findOne({ selector: {} }).exec();
-	// 	}
-
-	// 	search();
-	// }, [allMatch]);
+	React.useEffect(() => {
+		console.log(variations);
+		if (variations.length === 1) {
+			setPrimaryAction({
+				label: t('Add to Cart'),
+				onPress: () => addToCart(variations[0]),
+			});
+		} else {
+			setPrimaryAction(undefined);
+		}
+	}, [addToCart, parent, setPrimaryAction, variations]);
 
 	/**
 	 *
@@ -95,13 +112,13 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 						{attribute.characterCount < 15 ? (
 							<VariationButtons
 								attribute={attribute}
-								// onSelect={handleSelect}
+								onSelect={handleSelect}
 								// selectedOption={selectedOption}
 							/>
 						) : (
 							<VariationSelect
 								attribute={attribute}
-								// onSelect={handleSelect}
+								onSelect={handleSelect}
 								// selectedOption={selectedOption}
 							/>
 						)}

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { AppState } from 'react-native';
 
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -141,6 +142,9 @@ const RootNavigator = ({ initialProps }) => {
 					return `${t('POS', { _tags: 'core' })} - ${storeName}`;
 				},
 			}}
+			// onStateChange={(state) => {
+			// 	console.log('state', state);
+			// }}
 		>
 			<Stack.Navigator screenOptions={{ headerShown: false }}>
 				{storeDB ? (

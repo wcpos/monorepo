@@ -87,7 +87,13 @@ const VariationsTable = ({ extraData, parent }) => {
 				return (
 					<ErrorBoundary>
 						<React.Suspense>
-							<Cell item={item} column={column} index={index} cellWidth={cellWidth} />
+							<Cell
+								item={item}
+								column={column}
+								index={index}
+								cellWidth={cellWidth}
+								parent={parent}
+							/>
 						</React.Suspense>
 					</ErrorBoundary>
 				);

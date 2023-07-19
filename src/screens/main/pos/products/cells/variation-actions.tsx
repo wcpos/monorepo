@@ -7,6 +7,7 @@ import useCartHelpers from '../../../hooks/use-cart-helpers';
 
 interface Props {
 	item: import('@wcpos/database').ProductVariationDocument;
+	parent: import('@wcpos/database').ProductDocument;
 }
 
 /**

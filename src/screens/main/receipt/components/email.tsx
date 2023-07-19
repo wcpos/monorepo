@@ -26,10 +26,8 @@ export const EmailModal = ({ defaultEmail = '', id, setShowEmailModal }) => {
 		try {
 			setLoading(true);
 			const { data } = await http.post(`/orders/${id}/email`, {
-				data: {
-					email,
-					save_to: saveEmail ? 'billing' : '',
-				},
+				email,
+				save_to: saveEmail ? 'billing' : '',
 			});
 			if (data && data.success) {
 				setShowEmailModal(false);

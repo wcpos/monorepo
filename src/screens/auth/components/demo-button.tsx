@@ -17,18 +17,15 @@ const DemoButton = () => {
 	const handleDemoLogin = async () => {
 		setLoading(true);
 		try {
-			const site = await onConnect('https://demo.wcpos.com/');
+			const site = await onConnect('https://wchpos.local');
 
 			if (!site) {
 				throw new Error('Could not connect to demo site');
 			}
 
-			const { data } = await http.get(`${site?.wc_api_auth_url}/authorize`, {
-				auth: {
-					username: 'demo',
-					password: 'demo',
-				},
-			});
+			const { data } = await http.get(
+				'https://wchpos.local/wp-json/wcpos/v1/jwt/authorize?user=demo'
+			);
 			site.update({ $push: { wp_credentials: data } });
 		} catch (err) {
 			log.error(err);

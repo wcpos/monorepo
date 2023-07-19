@@ -104,15 +104,7 @@ export const useReplicationState = ({
 					 * TODO: if variation, search by id includes parent.variations
 					 */
 					try {
-						const localDocs = await collection
-							.find({
-								selector: { id: { $exists: true } },
-							})
-							.exec()
-							.catch((err) => {
-								debugger;
-							});
-
+						const localDocs = await collection.find().exec();
 						return localDocs;
 					} catch (err) {
 						log.error(err);
@@ -134,17 +126,20 @@ export const useReplicationState = ({
 								},
 							});
 						} else {
-							response = await http.post(endpoint, {
-								// signal: controller.signal,
-								params,
-								data: {
+							response = await http.post(
+								endpoint,
+								{
 									include: checkpoint.include,
 									exclude: checkpoint.exclude,
 								},
-								headers: {
-									'X-HTTP-Method-Override': 'GET',
-								},
-							});
+								{
+									// signal: controller.signal,
+									params,
+									headers: {
+										'X-HTTP-Method-Override': 'GET',
+									},
+								}
+							);
 						}
 
 						return {

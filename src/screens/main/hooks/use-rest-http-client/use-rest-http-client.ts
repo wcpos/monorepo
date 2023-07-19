@@ -1,10 +1,11 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
+import merge from 'lodash/merge';
 import set from 'lodash/set';
 import { useObservableState } from 'observable-hooks';
 
-import useHttpClient from '@wcpos/hooks/src/use-http-client';
+import useHttpClient, { RequestConfig } from '@wcpos/hooks/src/use-http-client';
 import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 
 import useLocalData from '../../../../contexts/local-data';
@@ -14,7 +15,6 @@ import useLocalData from '../../../../contexts/local-data';
  */
 export const useRestHttpClient = () => {
 	const { site, wpCredentials } = useLocalData();
-	const httpClient = useHttpClient();
 	const baseURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
 	const { isInternetReachable } = useOnlineStatus();
@@ -29,23 +29,16 @@ export const useRestHttpClient = () => {
 	}, [jwt]);
 
 	/**
-	 *
+	 * Intercept errors and check for 401
 	 */
-	const responseModifier = React.useCallback((response) => {
-		// console.log(response);
-		return response;
-	}, []);
-
-	/**
-	 *
-	 */
-	const errorModifier = React.useCallback(
+	const errorHandler = React.useCallback(
 		(error) => {
 			if (error.response && error.response.status === 401) {
 				setIsAuth(false);
 				navigation.navigate('Login');
+				return null; // prevent snackbars from showing
 			}
-			return Promise.reject(error);
+			return error;
 		},
 		[navigation]
 	);
@@ -53,29 +46,50 @@ export const useRestHttpClient = () => {
 	/**
 	 *
 	 */
-	const http = React.useMemo(() => {
-		const controller = new AbortController();
+	const httpClient = useHttpClient({
+		errorHandler,
+	});
 
-		const config = {
-			baseURL,
-			signal: controller.signal,
+	/**
+	 * AbortController doesn't work on electron
+	 */
+	const http = React.useMemo(() => {
+		const request = async (config = {}) => {
+			const _config = merge(
+				{},
+				{
+					baseURL,
+					headers: {
+						Authorization: `Bearer ${jwt}`,
+					},
+				},
+				config
+			);
+
+			return httpClient.request(_config);
 		};
 
-		if (isInternetReachable === false || !isAuth) {
-			controller.abort();
-		}
-
-		if (jwt) {
-			set(config, ['headers', 'Authorization'], `Bearer ${jwt}`);
-		}
-
-		const instance = httpClient.create(config);
-
-		// add interceptors
-		instance.axios.interceptors.response.use(responseModifier, errorModifier);
-
-		return instance;
-	}, [baseURL, errorModifier, httpClient, isAuth, isInternetReachable, jwt, responseModifier]);
+		return {
+			get(url: string, config: RequestConfig = {}) {
+				return request({ ...config, method: 'GET', url });
+			},
+			post(url: string, data: any, config: RequestConfig = {}) {
+				return request({ ...config, method: 'POST', url, data });
+			},
+			put(url: string, data: any, config: RequestConfig = {}) {
+				return request({ ...config, method: 'PUT', url, data });
+			},
+			patch(url: string, data: any, config: RequestConfig = {}) {
+				return request({ ...config, method: 'PATCH', url, data });
+			},
+			delete(url: string, config: RequestConfig = {}) {
+				return request({ ...config, method: 'DELETE', url });
+			},
+			head(url: string, config: RequestConfig = {}) {
+				return request({ ...config, method: 'HEAD', url });
+			},
+		};
+	}, [baseURL, httpClient, jwt]);
 
 	/**
 	 *

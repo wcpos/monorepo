@@ -24,8 +24,8 @@ const VariableActions = ({ item: parent }: VariableActionsProps) => {
 	//  *
 	//  */
 	const addToCart = React.useCallback(
-		(variation) => {
-			addVariation(variation, parent, []);
+		(variation, metaData) => {
+			addVariation(variation, parent, metaData);
 			// setOpened(false);
 		},
 		[addVariation, parent]

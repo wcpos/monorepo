@@ -21,6 +21,7 @@ import { ModalLayout } from '../components/modal-layout';
 const Login = ({ resource }) => {
 	const site = useObservableSuspense(resource);
 	const { userDB } = useLocalData();
+	const navigation = useNavigation();
 
 	/**
 	 *
@@ -30,17 +31,23 @@ const Login = ({ resource }) => {
 			const uuid = get(payload, 'uuid');
 			const jwt = get(payload, 'jwt');
 
-			const wpCredentials = await userDB.wp_credentials.findOneFix(uuid).exec();
-			debugger;
+			try {
+				const wpCredentials = await userDB.wp_credentials.findOneFix(uuid).exec();
 
-			if (wpCredentials) {
-				await wpCredentials.patch({ jwt });
-			} else {
-				await userDB.wp_credentials.insert(payload);
-				await site.patch({ wp_credentials: [uuid] });
+				if (wpCredentials) {
+					await wpCredentials.patch({ jwt });
+				} else {
+					await userDB.wp_credentials.insert(payload);
+					await site.patch({ wp_credentials: [uuid] });
+				}
+			} catch (err) {
+				log.error(err);
+			} finally {
+				// navigate back
+				navigation.goBack();
 			}
 		},
-		[site, userDB.wp_credentials]
+		[navigation, site, userDB.wp_credentials]
 	);
 
 	/**
