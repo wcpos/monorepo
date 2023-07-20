@@ -14,41 +14,38 @@ type AxiosError = import('axios').AxiosError;
 
 export type RequestConfig = AxiosRequestConfig;
 
-interface HttpClientOptions {
-	errorHandler?: (error: unknown) => unknown;
-}
-
 /**
  * Http Client provides a standard API for all platforms
  * also wraps request to provide a common error handler
  *
  * TODO - how best to cancel requests
+ * TODO - becareful to use useOnlineStatus because it emits a lot of events
  */
-export const useHttpClient = (options?: HttpClientOptions) => {
+export const useHttpClient = (errorHandler?: (error: unknown) => unknown) => {
 	const defaultErrorHandler = useHttpErrorHandler();
-	const { isInternetReachable } = useOnlineStatus();
 
-	const httpWrapper = React.useMemo(() => {
-		const instanceConfig = {}; // Set default config here
+	/**
+	 *
+	 */
+	const request = React.useCallback(
+		async (reqConfig: AxiosRequestConfig = {}) => {
+			const config = { ...reqConfig };
 
-		const request = async (config: AxiosRequestConfig = {}) => {
-			const _config = merge({}, instanceConfig, config);
-
-			if (_config.method?.toLowerCase() !== 'head') {
-				set(_config, ['headers', 'X-WCPOS'], 1);
+			if (config.method?.toLowerCase() !== 'head') {
+				set(config, ['headers', 'X-WCPOS'], 1);
 			}
 
-			if (_config.method?.toLowerCase() === 'head') {
-				set(_config, 'decompress', false);
-				set(_config, ['params', '_method'], 'HEAD');
+			if (config.method?.toLowerCase() === 'head') {
+				set(config, 'decompress', false);
+				set(config, ['params', '_method'], 'HEAD');
 			}
 
 			if (process.env.NODE_ENV === 'development') {
-				set(_config, ['params', 'XDEBUG_SESSION'], 'start');
+				set(config, ['params', 'XDEBUG_SESSION'], 'start');
 			}
 
 			try {
-				const response = await http.request(_config);
+				const response = await http.request(config);
 				return response;
 			} catch (error) {
 				log.error(error);
@@ -57,16 +54,22 @@ export const useHttpClient = (options?: HttpClientOptions) => {
 				 * This allows us to override the default error handler, eg: detecting 401 and showing login modal
 				 */
 				let err = error;
-				if (typeof options?.errorHandler === 'function') {
-					err = options.errorHandler(err);
+				if (typeof errorHandler === 'function') {
+					err = errorHandler(err);
 				}
 				if (err) {
 					defaultErrorHandler(err);
 				}
 			}
-		};
+		},
+		[defaultErrorHandler, errorHandler]
+	);
 
-		return {
+	/**
+	 *
+	 */
+	return React.useMemo(
+		() => ({
 			request,
 			get(url: string, config: AxiosRequestConfig = {}) {
 				return request({ ...config, method: 'GET', url });
@@ -86,8 +89,7 @@ export const useHttpClient = (options?: HttpClientOptions) => {
 			head(url: string, config: AxiosRequestConfig = {}) {
 				return request({ ...config, method: 'HEAD', url });
 			},
-		};
-	}, [defaultErrorHandler, options]);
-
-	return httpWrapper;
+		}),
+		[request]
+	);
 };
