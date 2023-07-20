@@ -5,11 +5,13 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 
 import Table from './table';
 import VariationsFilterBar from '../../../../components/product/variation-table-rows/filter-bar';
-import useProducts from '../../../../contexts/products';
+import { useProducts } from '../../../../contexts/products';
 import { VariationsProvider } from '../../../../contexts/variations';
 
-const Variations = ({ item, extraData }) => {
-	const { parent } = item;
+/**
+ *
+ */
+const Variations = ({ parent, variationQuery }) => {
 	const { query$ } = useProducts();
 
 	/**
@@ -23,6 +25,9 @@ const Variations = ({ item, extraData }) => {
 		};
 	}, [query$]);
 
+	/**
+	 *
+	 */
 	return (
 		<VariationsProvider parent={parent} initialQuery={initialQuery}>
 			<Box style={{ height: 500 }}>
@@ -31,7 +36,7 @@ const Variations = ({ item, extraData }) => {
 				</ErrorBoundary>
 				<Box style={{ flexGrow: 1, flexShrink: 0, flexBasis: '0%' }}>
 					<React.Suspense>
-						<Table extraData={extraData} parent={parent} />
+						<Table parent={parent} />
 					</React.Suspense>
 				</Box>
 			</Box>

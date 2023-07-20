@@ -25,7 +25,7 @@ interface Props {
 	expandVariations?: () => void;
 }
 
-export const Name = ({ item: product, column }: Props) => {
+export const Name = ({ item: product, column, variationQuery, setVariationQuery }: Props) => {
 	const name = useObservableState(product.name$, product.name);
 	const grouped = useObservableState(product.grouped_products$, product.grouped_products);
 	const groupedQuery = React.useMemo(() => ({ selector: { id: { $in: grouped } } }), [grouped]);
@@ -55,7 +55,13 @@ export const Name = ({ item: product, column }: Props) => {
 			{show('categories') && <Categories item={product} />}
 			{show('tags') && <Tags item={product} />}
 
-			{product.type === 'variable' && <Attributes product={product} />}
+			{product.type === 'variable' && (
+				<Attributes
+					product={product}
+					variationQuery={variationQuery}
+					setVariationQuery={setVariationQuery}
+				/>
+			)}
 
 			{product.type === 'grouped' && (
 				<ProductsProvider initialQuery={groupedQuery} uiSettings={uiSettings}>

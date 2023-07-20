@@ -28,12 +28,7 @@ const cells = {
 /**
  *
  */
-const SimpleProductTableRow = ({
-	item,
-	index,
-	extraData,
-	target,
-}: ListRenderItemInfo<ProductDocument>) => {
+const SimpleProductTableRow = ({ item, index, target }: ListRenderItemInfo<ProductDocument>) => {
 	/**
 	 *
 	 */
@@ -60,15 +55,7 @@ const SimpleProductTableRow = ({
 		[]
 	);
 
-	return (
-		<Table.Row
-			item={item}
-			index={index}
-			extraData={extraData}
-			target={target}
-			cellRenderer={cellRenderer}
-		/>
-	);
+	return <Table.Row item={item} index={index} target={target} cellRenderer={cellRenderer} />;
 };
 
 export default SimpleProductTableRow;

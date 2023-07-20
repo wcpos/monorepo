@@ -9,7 +9,7 @@ import Text from '@wcpos/components/src/text';
 import DisplayCurrentTaxRates from './display-current-tax-rates';
 import useLocalData from '../../../../../contexts/local-data';
 import { t } from '../../../../../lib/translations';
-import useTaxRates from '../../../contexts/tax-rates';
+import { useTaxRates } from '../../../contexts/tax-rates';
 
 /**
  * NOTE: this must be used within a TaxRatesProvider
@@ -21,7 +21,7 @@ const TaxBasedOn = () => {
 	const { resource, query$ } = useTaxRates();
 	const rates = useObservableSuspense(resource);
 	const query = useObservableState(query$, query$.getValue());
-	const { country, state, city, postcode } = query?.location || {};
+	const { country, state, city, postcode } = query?.search || {};
 
 	/**
 	 *

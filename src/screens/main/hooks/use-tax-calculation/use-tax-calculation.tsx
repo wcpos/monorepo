@@ -12,7 +12,7 @@ import {
 	sumTaxes,
 } from './utils';
 import useLocalData from '../../../../contexts/local-data';
-import useTaxRates from '../../contexts/tax-rates';
+import { useTaxRates } from '../../contexts/tax-rates';
 
 /**
  *

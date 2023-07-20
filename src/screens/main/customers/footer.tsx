@@ -6,7 +6,7 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
 import SyncButton from '../components/sync-button';
-import useCustomers from '../contexts/customers';
+import { useCustomers } from '../contexts/customers';
 
 interface CustomersFooterProps {
 	count: number;

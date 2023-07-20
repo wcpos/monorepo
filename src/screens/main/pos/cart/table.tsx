@@ -4,7 +4,7 @@ import flatten from 'lodash/flatten';
 import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
-import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
+import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 
 import * as cells from './cells';
@@ -59,7 +59,7 @@ const CartTable = () => {
 	/**
 	 *
 	 */
-	const context = React.useMemo<TableExtraDataProps<CartItem>>(() => {
+	const context = React.useMemo<TableContextProps<CartItem>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
 			// sort: ({ sortBy, sortDirection }) => {
@@ -79,7 +79,7 @@ const CartTable = () => {
 	return (
 		<Table<CartItem>
 			data={items} // estimatedItemSize={46}
-			extraData={context}
+			context={context}
 			ListEmptyComponent={<EmptyTableRow message={t('Cart is empty', { _tags: 'core' })} />}
 		/>
 	);

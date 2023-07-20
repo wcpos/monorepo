@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 
 import useNewOrder from './use-new-order';
-import useOrders from '../../../contexts/orders';
+import { useOrders } from '../../../contexts/orders';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -23,7 +23,7 @@ interface CurrentOrderContextProviderProps {
  */
 const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProviderProps) => {
 	const { resource } = useOrders();
-	const { data: orders } = useObservableSuspense(resource);
+	const orders = useObservableSuspense(resource);
 	const newOrder = useNewOrder();
 
 	// const defaultCustomerID = store.default_customer_is_cashier

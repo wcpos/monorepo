@@ -6,7 +6,7 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
 import SyncButton from '../components/sync-button';
-import useOrders from '../contexts/orders';
+import { useOrders } from '../contexts/orders';
 
 interface OrderFooterProps {
 	count: number;

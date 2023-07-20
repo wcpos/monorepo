@@ -8,7 +8,7 @@ import log from '@wcpos/utils/src/logger';
 
 import allCurrencies from '../../../../../contexts/currencies/currencies.json';
 import useLocalData from '../../../../../contexts/local-data';
-import useOrders from '../../../contexts/orders';
+import { newOrderResource } from '../../../contexts/orders';
 import usePullDocument from '../../../contexts/use-pull-document';
 import useCollection from '../../../hooks/use-collection';
 import useGuestCustomer from '../../../hooks/use-guest-customer';
@@ -18,7 +18,6 @@ import useGuestCustomer from '../../../hooks/use-guest-customer';
  */
 const useNewOrder = () => {
 	const { store, wpCredentials } = useLocalData();
-	const { newOrderResource } = useOrders();
 	const newOrder = useObservableSuspense(newOrderResource);
 	const currency = useObservableState(store.currency$, store.currency);
 	const prices_include_tax = useObservableState(

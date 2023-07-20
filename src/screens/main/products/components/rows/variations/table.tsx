@@ -46,7 +46,7 @@ const cells = {
 /**
  *
  */
-const VariationsTable = ({ extraData, parent }) => {
+const VariationsTable = ({ parent }) => {
 	const { resource, replicationState, loadNextPage, setQuery } = useVariations();
 	const { data, count, hasMore } = useObservableSuspense(resource);
 	const addSnackbar = useSnackbar();
@@ -54,6 +54,7 @@ const VariationsTable = ({ extraData, parent }) => {
 	const loading = useObservableState(replicationState.active$, false);
 	const total = parent.variations.length;
 	const { query$, shownVariations$ } = useProducts();
+	const context = useProducts(); // get context from parent product, ie: columns
 
 	/**
 	 * Detect change in product query and variations query
@@ -162,7 +163,7 @@ const VariationsTable = ({ extraData, parent }) => {
 			data={data}
 			footer={<Footer count={count} total={total} loading={loading} />}
 			estimatedItemSize={100}
-			extraData={{ ...extraData, cellRenderer }}
+			context={{ ...context, cellRenderer }}
 			ListEmptyComponent={<EmptyTableRow message={t('No variations found', { _tags: 'core' })} />}
 			onEndReached={onEndReached}
 			loading={loading}

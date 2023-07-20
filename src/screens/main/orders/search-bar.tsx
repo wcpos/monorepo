@@ -8,13 +8,13 @@ import Pill from '@wcpos/components/src/pill';
 import TextInput from '@wcpos/components/src/textinput';
 
 import { t } from '../../../lib/translations';
-import useOrders from '../contexts/orders';
+import { useOrders } from '../contexts/orders';
 
 /**
  *
  */
 const SearchBar = () => {
-	const { query$, setQuery } = useOrders();
+	const { query$, setDebouncedQuery } = useOrders();
 	const query = useLayoutObservableState(query$, query$.getValue());
 	const theme = useTheme();
 	const [search, setSearch] = React.useState(query.search);
@@ -28,9 +28,9 @@ const SearchBar = () => {
 	const onSearch = React.useCallback(
 		(search) => {
 			setSearch(search);
-			setQuery('search', search, true);
+			setDebouncedQuery('search', search);
 		},
-		[setQuery]
+		[setDebouncedQuery]
 	);
 
 	/**

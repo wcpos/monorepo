@@ -8,7 +8,7 @@ import Tabs from '@wcpos/components/src/tabs';
 
 import TaxRatesFooter from './footer';
 import TaxRateTable from './rate-table';
-import useTaxRates from '../contexts/tax-rates';
+import { useTaxRates } from '../contexts/tax-rates';
 
 /**
  *

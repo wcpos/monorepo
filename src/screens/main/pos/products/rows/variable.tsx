@@ -6,6 +6,7 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 
+import Variations from './variations';
 import { ProductImage } from '../../../components/product/image';
 import VariablePrice from '../../../components/product/variable-price';
 import { Name } from '../cells/name';
@@ -28,18 +29,32 @@ const cells = {
 /**
  *
  */
-const VariableProductTableRow = ({
-	item,
-	index,
-	extraData,
-	target,
-}: ListRenderItemInfo<ProductDocument>) => {
+const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
+	const [variationQuery, setVariationQuery] = React.useState(null);
+
 	/**
 	 *
 	 */
 	const cellRenderer = React.useCallback<CellRenderer<ProductDocument>>(
 		({ item, column, index, cellWidth }) => {
 			const Cell = get(cells, column.key);
+
+			if (column.key === 'name') {
+				return (
+					<ErrorBoundary>
+						<React.Suspense>
+							<Cell
+								item={item}
+								column={column}
+								index={index}
+								cellWidth={cellWidth}
+								variationQuery={variationQuery}
+								setVariationQuery={setVariationQuery}
+							/>
+						</React.Suspense>
+					</ErrorBoundary>
+				);
+			}
 
 			if (Cell) {
 				return (
@@ -57,17 +72,14 @@ const VariableProductTableRow = ({
 
 			return null;
 		},
-		[]
+		[variationQuery]
 	);
 
 	return (
-		<Table.Row
-			item={item}
-			index={index}
-			extraData={extraData}
-			target={target}
-			cellRenderer={cellRenderer}
-		/>
+		<>
+			<Table.Row item={item} index={index} cellRenderer={cellRenderer} />
+			{!!variationQuery && <Variations parent={item} variationQuery={variationQuery} />}
+		</>
 	);
 };
 

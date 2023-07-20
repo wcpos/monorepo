@@ -1,23 +1,24 @@
 import * as React from 'react';
 
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
 import Pill from '@wcpos/components/src/pill';
 
 import { t } from '../../../../../lib/translations';
-import CategorySelect from '../../../components/category-select';
+import { useProducts } from '../../../contexts/products';
+import CategorySelect from '../category-select';
 
 interface CategoryPillProps {
-	selectedCategoryResource: ObservableResource<any>;
-	setQuery: any;
+	resource: ObservableResource<import('@wcpos/database').ProductTagDocument>;
 }
 
 /**
  *
  */
-const CategoryPill = ({ selectedCategoryResource, setQuery }: CategoryPillProps) => {
+const CategoryPill = ({ resource }: CategoryPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
-	const category = useObservableSuspense(selectedCategoryResource);
+	const { setQuery } = useProducts();
+	const category = useObservableSuspense(resource);
 
 	/**
 	 *

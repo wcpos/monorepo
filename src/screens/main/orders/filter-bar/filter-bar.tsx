@@ -9,7 +9,7 @@ import Box from '@wcpos/components/src/box';
 
 import CustomerPill from './customer-pill';
 import StatusPill from './status-pill';
-import useOrders from '../../contexts/orders';
+import { useOrders } from '../../contexts/orders';
 import useCollection from '../../hooks/use-collection';
 
 const FilterBar = () => {

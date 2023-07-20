@@ -60,12 +60,7 @@ const cells = {
  * @param param0
  * @returns
  */
-const ProductTableRow = ({
-	item,
-	index,
-	extraData,
-	target,
-}: ListRenderItemInfo<ProductDocument>) => {
+const ProductTableRow = ({ item, index, target }: ListRenderItemInfo<ProductDocument>) => {
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();
 
@@ -126,46 +121,19 @@ const ProductTableRow = ({
 	);
 
 	/**
-	 *
-	 */
-	const row = (
-		<Table.Row
-			item={item}
-			index={index}
-			extraData={extraData}
-			target={target}
-			cellRenderer={cellRenderer}
-		/>
-	);
-
-	/**
 	 * Wrap variable products in a provider
 	 */
 	if (item.type === 'variable') {
 		return (
 			<VariableProductRowProvider parent={item}>
-				<VariableTableRow
-					item={item}
-					index={index}
-					extraData={extraData}
-					target={target}
-					cellRenderer={cellRenderer}
-				>
+				<VariableTableRow item={item} index={index} target={target} cellRenderer={cellRenderer}>
 					<Variations parent={item} parentIndex={index} extraData={extraData} />
 				</VariableTableRow>
 			</VariableProductRowProvider>
 		);
 	}
 
-	return (
-		<Table.Row
-			item={item}
-			index={index}
-			extraData={extraData}
-			target={target}
-			cellRenderer={cellRenderer}
-		/>
-	);
+	return <Table.Row item={item} index={index} target={target} cellRenderer={cellRenderer} />;
 };
 
 export default ProductTableRow;

@@ -4,7 +4,7 @@ import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
+import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 
 import Actions from './cells/actions';
 import Address from './cells/address';
@@ -18,7 +18,7 @@ import { t } from '../../../lib/translations';
 import Date from '../components/date';
 import EmptyTableRow from '../components/empty-table-row';
 import TextCell from '../components/text-cell';
-import useOrders from '../contexts/orders';
+import { useOrders } from '../contexts/orders';
 import useTotalCount from '../hooks/use-total-count';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -46,11 +46,11 @@ const cells = {
  *
  */
 const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
-	const { query$, setQuery, resource, replicationState, loadNextPage } = useOrders();
-	const { data, count, hasMore } = useObservableSuspense(resource);
+	const { query$, setQuery, replicationState, loadNextPage, paginatedResource } = useOrders();
+	const { data, count, hasMore } = useObservableSuspense(paginatedResource);
 	const loading = useObservableState(replicationState.active$, false);
 	const query = useObservableState(query$, query$.getValue());
-	const total = useTotalCount('customers', replicationState);
+	const total = useTotalCount('orders', replicationState);
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
@@ -78,7 +78,7 @@ const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
 	/**
 	 *
 	 */
-	const context = React.useMemo<TableExtraDataProps<OrderDocument>>(() => {
+	const context = React.useMemo<TableContextProps<OrderDocument>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
 			sort: ({ sortBy, sortDirection }) => {
@@ -108,7 +108,7 @@ const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
 			data={data}
 			footer={<Footer count={count} total={total} loading={loading} />}
 			estimatedItemSize={100}
-			extraData={context}
+			context={context}
 			ListEmptyComponent={<EmptyTableRow message={t('No orders found', { _tags: 'core' })} />}
 			onEndReached={onEndReached}
 			loading={loading}

@@ -8,7 +8,7 @@ import type { StoreDatabaseCollections } from '@wcpos/database';
 
 import useLocalData from '../../../contexts/local-data/';
 
-type CollectionKey = keyof typeof storeCollections;
+export type CollectionKey = keyof typeof storeCollections;
 
 /**
  * A helper method to get the latest collection, ie:

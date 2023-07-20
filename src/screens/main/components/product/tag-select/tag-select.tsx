@@ -1,41 +1,38 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import Popover from '@wcpos/components/src/popover';
 import log from '@wcpos/utils/src/logger';
 
-import CategorySelectMenu from './menu';
+import TagSelectMenu from './menu';
 import SearchInput from './search-input';
-import { t } from '../../../../lib/translations';
-import { ProductCategoriesProvider } from '../../contexts/categories';
-import useProducts from '../../contexts/products';
+import { useProducts } from '../../../contexts/products';
+import { ProductTagsProvider } from '../../../contexts/tags';
 
-type ProductCategoryDocument = import('@wcpos/database').ProductCategoryDocument;
+type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
 
 /**
  *
- * @returns
  */
-const CategorySelectSearch = ({ onBlur }) => {
+const TagSelectSearch = ({ onBlur }) => {
 	const [opened, setOpened] = React.useState(false);
 	const { setQuery: setProductsQuery } = useProducts();
-	const categorySelectMenuRef = React.useRef(null);
+	const tagSelectMenuRef = React.useRef(null);
 
 	/**
 	 *
 	 */
 	const onSearch = React.useCallback((search) => {
-		if (categorySelectMenuRef.current) {
-			categorySelectMenuRef.current.onSearch(search);
+		if (tagSelectMenuRef.current) {
+			tagSelectMenuRef.current.onSearch(search);
 		}
 	}, []);
 
 	/**
 	 *
 	 */
-	const onSelectCategory = React.useCallback(
-		(category: ProductCategoryDocument) => {
-			setProductsQuery('selector.categories.$elemMatch.id', category.id);
+	const onSelectTag = React.useCallback(
+		(tag: ProductTagDocument) => {
+			setProductsQuery('selector.tags.$elemMatch.id', tag.id);
 		},
 		[setProductsQuery]
 	);
@@ -44,12 +41,12 @@ const CategorySelectSearch = ({ onBlur }) => {
 	 *
 	 */
 	// const placeholder = React.useMemo(() => {
-	// 	if (selectedCategory) {
+	// 	if (selectedTag) {
 	// 		debugger;
 	// 	}
 
-	// 	return t('Search Categories', { _tags: 'core' });
-	// }, [selectedCategory]);
+	// 	return t('Search Tags', { _tags: 'core' });
+	// }, [selectedTag]);
 
 	/**
 	 *
@@ -80,14 +77,14 @@ const CategorySelectSearch = ({ onBlur }) => {
 				<SearchInput setOpened={setOpened} onSearch={onSearch} onBlur={onBlur} />
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
-				<ProductCategoriesProvider initialQuery={initialQuery}>
+				<ProductTagsProvider initialQuery={initialQuery}>
 					<React.Suspense>
-						<CategorySelectMenu ref={categorySelectMenuRef} onChange={onSelectCategory} />
+						<TagSelectMenu ref={tagSelectMenuRef} onChange={onSelectTag} />
 					</React.Suspense>
-				</ProductCategoriesProvider>
+				</ProductTagsProvider>
 			</Popover.Content>
 		</Popover>
 	);
 };
 
-export default CategorySelectSearch;
+export default TagSelectSearch;

@@ -42,12 +42,7 @@ const cells = {
 /**
  *
  */
-const VariableProductTableRow = ({
-	item,
-	index,
-	extraData,
-	target,
-}: ListRenderItemInfo<ProductDocument>) => {
+const VariableProductTableRow = ({ item, index, target }: ListRenderItemInfo<ProductDocument>) => {
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();
 
@@ -108,15 +103,7 @@ const VariableProductTableRow = ({
 		[handleChange]
 	);
 
-	return (
-		<Table.Row
-			item={item}
-			index={index}
-			extraData={extraData}
-			target={target}
-			cellRenderer={cellRenderer}
-		/>
-	);
+	return <Table.Row item={item} index={index} target={target} cellRenderer={cellRenderer} />;
 };
 
 export default VariableProductTableRow;

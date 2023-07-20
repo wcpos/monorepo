@@ -23,7 +23,14 @@ const POS = () => {
 	/**
 	 *
 	 */
-	const initialQuery = React.useMemo(() => ({ location }), [location]);
+	const initialQuery = React.useMemo(
+		() => ({
+			search: location,
+			sortBy: 'id',
+			sortDirection: 'asc',
+		}),
+		[location]
+	);
 
 	return (
 		<TaxRateProvider initialQuery={initialQuery}>

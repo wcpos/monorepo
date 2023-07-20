@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import Pill from '@wcpos/components/src/pill';
 
-import useProducts from '../../contexts/products';
+import { useProducts } from '../../contexts/products';
 
 interface ProductCategoriesProps {
 	item: import('@wcpos/database').ProductDocument;

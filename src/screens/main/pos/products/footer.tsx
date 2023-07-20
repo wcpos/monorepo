@@ -11,7 +11,7 @@ import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import TaxBasedOn from '../../components/product/tax-based-on';
 import SyncButton from '../../components/sync-button';
-import useProducts from '../../contexts/products';
+import { useProducts } from '../../contexts/products';
 import useTotalCount from '../../hooks/use-total-count';
 
 interface ProductFooterProps {

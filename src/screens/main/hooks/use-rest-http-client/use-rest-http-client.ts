@@ -11,13 +11,12 @@ import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 import useLocalData from '../../../../contexts/local-data';
 
 /**
- *
+ * TODO - becareful to use useOnlineStatus because it emits a lot of events
  */
 export const useRestHttpClient = () => {
 	const { site, wpCredentials } = useLocalData();
 	const baseURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
-	const { isInternetReachable } = useOnlineStatus();
 	const [isAuth, setIsAuth] = React.useState(true); // asume true until proven otherwise
 	const navigation = useNavigation();
 
@@ -46,16 +45,14 @@ export const useRestHttpClient = () => {
 	/**
 	 *
 	 */
-	const httpClient = useHttpClient({
-		errorHandler,
-	});
+	const httpClient = useHttpClient(errorHandler);
 
 	/**
-	 * AbortController doesn't work on electron
+	 *
 	 */
-	const http = React.useMemo(() => {
-		const request = async (config = {}) => {
-			const _config = merge(
+	const request = React.useCallback(
+		async (reqConfig: RequestConfig = {}) => {
+			const config = merge(
 				{},
 				{
 					baseURL,
@@ -63,13 +60,20 @@ export const useRestHttpClient = () => {
 						Authorization: `Bearer ${jwt}`,
 					},
 				},
-				config
+				reqConfig
 			);
 
-			return httpClient.request(_config);
-		};
+			return httpClient.request(config);
+		},
+		[baseURL, httpClient, jwt]
+	);
 
-		return {
+	/**
+	 *
+	 */
+	return React.useMemo(
+		() => ({
+			request,
 			get(url: string, config: RequestConfig = {}) {
 				return request({ ...config, method: 'GET', url });
 			},
@@ -88,11 +92,7 @@ export const useRestHttpClient = () => {
 			head(url: string, config: RequestConfig = {}) {
 				return request({ ...config, method: 'HEAD', url });
 			},
-		};
-	}, [baseURL, httpClient, jwt]);
-
-	/**
-	 *
-	 */
-	return http;
+		}),
+		[request]
+	);
 };

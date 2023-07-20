@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState, ObservableResource, useObservable } from 'observable-hooks';
+import { ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { of } from 'rxjs';
 import { switchMap, tap } from 'rxjs/operators';
@@ -12,17 +12,12 @@ import CategoryPill from './category-pill';
 import FeaturedPill from './featured-pill';
 import OnSalePill from './on-sale-pill';
 import TagPill from './tag-pill';
-import useProducts from '../../../contexts/products';
+import { useProducts } from '../../../contexts/products';
 import usePullDocument from '../../../contexts/use-pull-document';
 import useCollection from '../../../hooks/use-collection';
 
 const FilterBar = () => {
-	const { query$, setQuery } = useProducts();
-	const query = useObservableState(query$, query$.getValue());
-	const featuredFilterActive = get(query, 'selector.featured', false);
-	const onSaleFilterActive = get(query, 'selector.on_sale', false);
-	const categoryFilterID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
-	const tagFilterID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
+	const { query$ } = useProducts();
 	const { collection: categoryCollection } = useCollection('products/categories');
 	const { collection: tagCollection } = useCollection('products/tags');
 	const pullDocument = usePullDocument();
@@ -30,71 +25,61 @@ const FilterBar = () => {
 	/**
 	 *
 	 */
-	const selectedCategory$ = useObservable(
-		(input$) =>
-			input$.pipe(
-				switchMap(([catID]) =>
-					catID
-						? categoryCollection.findOne({ selector: { id: catID } }).$.pipe(
-								tap((doc) => {
-									if (!isRxDocument(doc)) {
-										pullDocument(catID, categoryCollection);
-									}
-								})
-						  )
-						: of(undefined)
-				)
-			),
-		[categoryFilterID]
-	);
-
-	/**
-	 *
-	 */
 	const selectedCategoryResource = React.useMemo(() => {
-		return new ObservableResource(selectedCategory$);
-	}, [selectedCategory$]);
+		const selectedCategory$ = query$.pipe(
+			switchMap((query) => {
+				const categoryFilterID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
+				if (categoryFilterID) {
+					return categoryCollection.findOne({ selector: { id: categoryFilterID } }).$.pipe(
+						tap((doc) => {
+							if (!isRxDocument(doc)) {
+								pullDocument(categoryFilterID, categoryCollection);
+							}
+						})
+					);
+				}
+				return of(undefined);
+			})
+		);
 
-	/**
-	 *
-	 */
-	const selectedTag$ = useObservable(
-		(input$) =>
-			input$.pipe(
-				switchMap(([tagID]) =>
-					tagID
-						? tagCollection.findOne({ selector: { id: tagID } }).$.pipe(
-								tap((doc) => {
-									if (!isRxDocument(doc)) {
-										pullDocument(tagID, tagCollection);
-									}
-								})
-						  )
-						: of(undefined)
-				)
-			),
-		[tagFilterID]
-	);
+		return new ObservableResource(selectedCategory$);
+	}, [categoryCollection, pullDocument, query$]);
 
 	/**
 	 *
 	 */
 	const selectedTagResource = React.useMemo(() => {
+		const selectedTag$ = query$.pipe(
+			switchMap((query) => {
+				const tagFilterID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
+				if (tagFilterID) {
+					return tagCollection.findOne({ selector: { id: tagFilterID } }).$.pipe(
+						tap((doc) => {
+							if (!isRxDocument(doc)) {
+								pullDocument(tagFilterID, tagCollection);
+							}
+						})
+					);
+				}
+				return of(undefined);
+			})
+		);
+
 		return new ObservableResource(selectedTag$);
-	}, [selectedTag$]);
+	}, [pullDocument, query$, tagCollection]);
 
 	/**
 	 *
 	 */
 	return (
 		<Box space="small" horizontal>
-			<FeaturedPill active={featuredFilterActive} setQuery={setQuery} />
-			<OnSalePill active={onSaleFilterActive} setQuery={setQuery} />
+			<FeaturedPill />
+			<OnSalePill />
 			<React.Suspense>
-				<CategoryPill selectedCategoryResource={selectedCategoryResource} setQuery={setQuery} />
+				<CategoryPill resource={selectedCategoryResource} />
 			</React.Suspense>
 			<React.Suspense>
-				<TagPill selectedTagResource={selectedTagResource} setQuery={setQuery} />
+				<TagPill resource={selectedTagResource} />
 			</React.Suspense>
 		</Box>
 	);

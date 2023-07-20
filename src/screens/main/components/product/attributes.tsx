@@ -1,26 +1,19 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 import Link from '@wcpos/components/src/link';
 import Text from '@wcpos/components/src/text';
 
 import { t } from '../../../../lib/translations';
-import useProducts from '../../contexts/products';
 
 type Props = {
 	product: import('@wcpos/database').ProductDocument;
 };
 
-const ProductAttributes = ({ product }: Props) => {
+const ProductAttributes = ({ product, variationQuery, setVariationQuery }: Props) => {
 	const attributes = useObservableState(product.attributes$, product.attributes);
-	const { shownVariations$, setVariationsQuery } = useProducts();
-	const expanded = useObservableState(
-		shownVariations$.pipe(map((q) => q && q[product.uuid])),
-		false
-	);
 
 	/**
 	 *
@@ -37,7 +30,7 @@ const ProductAttributes = ({ product }: Props) => {
 								<Link
 									size="small"
 									onPress={() => {
-										setVariationsQuery(product, { name: attr.name, option });
+										setVariationQuery({ name: attr.name, option });
 									}}
 								>
 									{option}
@@ -47,13 +40,8 @@ const ProductAttributes = ({ product }: Props) => {
 						))}
 					</Text>
 				))}
-			<Link
-				size="small"
-				onPress={() => {
-					setVariationsQuery(product, expanded ? undefined : {});
-				}}
-			>
-				{expanded ? t('Collapse', { _tags: 'core' }) : t('Expand', { _tags: 'core' })}
+			<Link size="small" onPress={() => setVariationQuery(variationQuery ? null : {})}>
+				{variationQuery ? t('Collapse', { _tags: 'core' }) : t('Expand', { _tags: 'core' })}
 			</Link>
 		</Box>
 	);

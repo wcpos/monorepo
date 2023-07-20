@@ -1,22 +1,28 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
+import { useObservableState } from 'observable-hooks';
+
 import Pill from '@wcpos/components/src/pill';
 
 import { t } from '../../../../../lib/translations';
+import { useProducts } from '../../../contexts/products';
 
-interface FeaturedPillProps {
-	active: boolean;
-	setQuery: (key: string, value: boolean) => void;
-}
+/**
+ *
+ */
+const FeaturedPill = () => {
+	const { query$, setQuery } = useProducts();
+	const query = useObservableState(query$, query$.getValue());
+	const isActive = get(query, 'selector.featured', false);
 
-const FeaturedPill = ({ active, setQuery }: FeaturedPillProps) => {
 	return (
 		<Pill
 			icon="star"
 			size="small"
-			color={active ? 'primary' : 'lightGrey'}
-			onPress={() => setQuery('selector.featured', active ? null : true)}
-			removable={active}
+			color={isActive ? 'primary' : 'lightGrey'}
+			onPress={() => setQuery('selector.featured', isActive ? null : true)}
+			removable={isActive}
 			onRemove={() => setQuery('selector.featured', null)}
 		>
 			{t('Featured', { _tags: 'core' })}

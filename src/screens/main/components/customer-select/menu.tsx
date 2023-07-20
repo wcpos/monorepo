@@ -16,7 +16,7 @@ import Text from '@wcpos/components/src/text';
 import GuestCustomerSelectItem from './guest-item';
 import CustomerSelectItem from './item';
 import { t } from '../../../../lib/translations';
-import useCustomers from '../../contexts/customers';
+import { useCustomers } from '../../contexts/customers';
 import useTotalCount from '../../hooks/use-total-count';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -57,8 +57,8 @@ interface CustomerSelectMenuProps {
 const CustomerSelectMenu = React.forwardRef<CustomerSelectMenuHandles, CustomerSelectMenuProps>(
 	({ onChange }, ref) => {
 		const theme = useTheme();
-		const { resource, setQuery, replicationState, loadNextPage } = useCustomers();
-		const { data: customers, count, hasMore } = useObservableSuspense(resource);
+		const { paginatedResource, setQuery, replicationState, loadNextPage } = useCustomers();
+		const { data: customers, count, hasMore } = useObservableSuspense(paginatedResource);
 		const loading = useObservableState(replicationState.active$, false);
 		const total = useTotalCount('customers', replicationState);
 		const { targetMeasurements, contentMeasurements } = usePopover();

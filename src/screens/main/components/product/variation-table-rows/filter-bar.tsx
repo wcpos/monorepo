@@ -9,8 +9,7 @@ import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
 
 import AttributePill from './attribute-pill';
-import useProducts from '../../../contexts/products';
-import useVariations from '../../../contexts/variations';
+import { useVariations } from '../../../contexts/variations';
 
 /**
  *
@@ -18,17 +17,16 @@ import useVariations from '../../../contexts/variations';
 const VariationsFilterBar = ({ parent }) => {
 	const theme = useTheme();
 	const { setQuery } = useVariations();
-	const { shownVariations$, setVariationsQuery } = useProducts();
-	const allMatch = useObservableState(
-		shownVariations$.pipe(
-			map((q) => get(q, [parent.uuid, 'query', 'selector', 'attributes', '$allMatch'], []))
-		),
-		get(
-			shownVariations$.getValue(),
-			[parent.uuid, 'query', 'selector', 'attributes', '$allMatch'],
-			[]
-		)
-	);
+	// const allMatch = useObservableState(
+	// 	shownVariations$.pipe(
+	// 		map((q) => get(q, [parent.uuid, 'query', 'selector', 'attributes', '$allMatch'], []))
+	// 	),
+	// 	get(
+	// 		shownVariations$.getValue(),
+	// 		[parent.uuid, 'query', 'selector', 'attributes', '$allMatch'],
+	// 		[]
+	// 	)
+	// );
 
 	/**
 	 * Handle attribute selection
@@ -92,13 +90,13 @@ const VariationsFilterBar = ({ parent }) => {
 					.sort((a, b) => (a.position || 0) - (b.position || 0))
 					.map((attribute, index) => {
 						// check if attribute is selected
-						const selected = allMatch.find((a) => a.name === attribute.name);
+						// const selected = allMatch.find((a) => a.name === attribute.name);
 						return (
 							<AttributePill
 								key={`${index}-${attribute.name}`}
 								attribute={attribute}
 								onSelect={handleSelect}
-								selected={selected?.option}
+								// selected={selected?.option}
 							/>
 						);
 					})}

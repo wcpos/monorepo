@@ -4,7 +4,7 @@ import { Avatar } from '@wcpos/components/src/avatar/avatar';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../lib/translations';
+import { t } from '../../../../../lib/translations';
 
 type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
 

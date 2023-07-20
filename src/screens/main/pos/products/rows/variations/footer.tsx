@@ -7,7 +7,7 @@ import Text from '@wcpos/components/src/text';
 
 import { t } from '../../../../../../lib/translations';
 import SyncButton from '../../../../components/sync-button';
-import useVariations from '../../../../contexts/variations';
+import { useVariations } from '../../../../contexts/variations';
 
 const VariationFooterTableRow = ({ count, total, loading }) => {
 	const theme = useTheme();

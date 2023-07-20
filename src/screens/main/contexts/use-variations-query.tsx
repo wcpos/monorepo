@@ -4,6 +4,9 @@ import { useObservableRef } from 'observable-hooks';
 
 type ProductDocument = import('@wcpos/database/src/collections/products').ProductDocument;
 
+/**
+ *
+ */
 const useVariationsQuery = () => {
 	const [shownVariations, shownVariations$] = useObservableRef({});
 

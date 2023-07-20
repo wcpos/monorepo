@@ -4,7 +4,7 @@ import get from 'lodash/get';
 import { useObservableSuspense, useObservableState, useSubscription } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Table, { CellRenderer } from '@wcpos/components/src/table';
+import Table, { CellRenderer, useTable } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
@@ -13,8 +13,9 @@ import { t } from '../../../../../../lib/translations';
 import EmptyTableRow from '../../../../components/empty-table-row';
 import { ProductVariationImage } from '../../../../components/product/variation-image';
 import { ProductVariationName } from '../../../../components/product/variation-name';
-import useProducts from '../../../../contexts/products';
-import useVariations from '../../../../contexts/variations';
+import { useProducts } from '../../../../contexts/products';
+import useVariationsQuery from '../../../../contexts/use-variations-query';
+import { useVariations } from '../../../../contexts/variations';
 import { Price } from '../../cells/price';
 import { SKU } from '../../cells/sku';
 import { StockQuantity } from '../../cells/stock-quantity';
@@ -37,12 +38,14 @@ const cells = {
 /**
  *
  */
-const VariationsTable = ({ extraData, parent }) => {
-	const { resource, replicationState, loadNextPage, setQuery } = useVariations();
-	const { data, count, hasMore } = useObservableSuspense(resource);
+const VariationsTable = ({ parent }) => {
+	const { paginatedResource, replicationState, loadNextPage, setQuery } = useVariations();
+	const { data, count, hasMore } = useObservableSuspense(paginatedResource);
 	const loading = useObservableState(replicationState.active$, false);
 	const total = parent.variations.length;
-	const { query$, shownVariations$ } = useProducts();
+	const { query$ } = useProducts();
+	const { shownVariations$ } = useVariationsQuery();
+	const context = useTable(); // get context from parent product, ie: columns
 
 	/**
 	 * Detect change in product query and variations query
@@ -105,7 +108,7 @@ const VariationsTable = ({ extraData, parent }) => {
 
 			return null;
 		},
-		[]
+		[parent]
 	);
 
 	/**
@@ -127,7 +130,7 @@ const VariationsTable = ({ extraData, parent }) => {
 			data={data}
 			footer={<Footer count={count} total={total} loading={loading} />}
 			estimatedItemSize={100}
-			extraData={{ ...extraData, cellRenderer }}
+			context={{ ...context, cellRenderer }}
 			ListEmptyComponent={<EmptyTableRow message={t('No variations found', { _tags: 'core' })} />}
 			onEndReached={onEndReached}
 			loading={loading}

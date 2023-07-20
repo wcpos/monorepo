@@ -8,7 +8,7 @@ import Text from '@wcpos/components/src/text';
 
 import { t } from '../../../lib/translations';
 import SyncButton from '../components/sync-button';
-import useTaxRates from '../contexts/tax-rates';
+import { useTaxRates } from '../contexts/tax-rates';
 import useTotalCount from '../hooks/use-total-count';
 
 const TaxRatesFooter = ({ count }) => {

@@ -4,7 +4,7 @@ import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Table, { TableExtraDataProps } from '@wcpos/components/src/table';
+import Table, { TableContextProps } from '@wcpos/components/src/table';
 
 import Footer from './footer';
 import SimpleProductTableRow from './rows/simple';
@@ -12,7 +12,7 @@ import VariableProductTableRow from './rows/variable';
 import VariationsTableRow from './rows/variations';
 import { t } from '../../../../lib/translations';
 import EmptyTableRow from '../../components/empty-table-row';
-import useProducts from '../../contexts/products';
+import { useProducts } from '../../contexts/products';
 import useTotalCount from '../../hooks/use-total-count';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -33,10 +33,10 @@ const TABLE_ROW_COMPONENTS = {
  * NOTE: not sure if this is the best spot for replication, but we need acces to the query
  */
 const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
-	const { query$, setQuery, resource, replicationState, loadNextPage, shownVariations$ } =
-		useProducts();
-	const { data, count, hasMore } = useObservableSuspense(resource);
-	const shownVariations = useObservableState(shownVariations$, {});
+	const { query$, setQuery, paginatedResource, replicationState, loadNextPage } = useProducts();
+	const { data, count, hasMore } = useObservableSuspense(paginatedResource);
+	// const shownVariations = useObservableState(shownVariations$, {});
+	const shownVariations = {};
 	const loading = useObservableState(replicationState.active$, false);
 	const total = useTotalCount('products', replicationState);
 	const query = useObservableState(query$, query$.getValue());
@@ -65,7 +65,7 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	/**
 	 *
 	 */
-	const context = React.useMemo<TableExtraDataProps<ProductDocument>>(() => {
+	const context = React.useMemo<TableContextProps<ProductDocument>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
 			sort: ({ sortBy, sortDirection }) => {
@@ -116,7 +116,7 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 			data={productsAndVariations}
 			footer={<Footer count={count} total={total} loading={loading} />}
 			estimatedItemSize={150}
-			extraData={context}
+			context={context}
 			getItemType={(item) => item.type}
 			renderItem={renderItem}
 			ListEmptyComponent={<EmptyTableRow message={t('No products found', { _tags: 'core' })} />}

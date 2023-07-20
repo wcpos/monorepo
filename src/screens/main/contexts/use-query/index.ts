@@ -5,24 +5,25 @@ import isEqual from 'lodash/isEqual';
 import set from 'lodash/set';
 import { useObservableRef } from 'observable-hooks';
 
+import type { BehaviorSubject } from 'rxjs';
+
 type SortDirection = import('@wcpos/components/src/table').SortDirection;
 
 export interface QueryState {
-	search?: string;
+	search?: string | Record<string, any>;
 	sortBy: string;
 	sortDirection: SortDirection;
-	// filters?: Record<string, unknown>;
 	selector?: import('rxdb').MangoQuery['selector'];
-	limit?: number;
-	skip?: number;
+	// limit?: number;
+	// skip?: number;
 }
+
+export type QueryObservable = BehaviorSubject<QueryState>;
+export type SetQuery = (path: ((prev: QueryState) => QueryState) | string, value?: any) => void;
 
 /**
  * Recursively removes all properties with `null` values from an object.
  * Modifies the input object directly.
- *
- * @param {Object} obj The input object.
- * @returns {QueryState} The input object without `null` properties.
  */
 function removeNulls(obj: any): QueryState {
 	for (const prop in obj) {
@@ -39,9 +40,6 @@ function removeNulls(obj: any): QueryState {
  * Custom React hook to manage query state for a collection context.
  * The query state is stored in a ref to avoid causing re-renders when the query changes.
  * The hook returns an object with properties `query`, `query$`, `setQuery`, and `setDebouncedQuery`.
- *
- * @param {Object} initialQuery Initial query state.
- * @returns {Object} The query state and query setter functions.
  */
 const useQuery = (initialQuery: QueryState) => {
 	const [query, query$] = useObservableRef<QueryState>(initialQuery);
@@ -65,10 +63,6 @@ const useQuery = (initialQuery: QueryState) => {
 	/**
 	 * Sets the query state. Accepts either a callback function that receives the current query state
 	 * and returns the new state, or a path and value to set a specific property of the query state.
-	 *
-	 * @callback
-	 * @param {string | Function} path The path of the property to set or a function that returns the new state.
-	 * @param {*} value The new value. Not used if `path` is a function.
 	 */
 	const setQuery = React.useCallback(
 		(path: ((prev: QueryState) => QueryState) | string, value?: any) => {
@@ -90,8 +84,6 @@ const useQuery = (initialQuery: QueryState) => {
 
 	/**
 	 * Debounced version of `setQuery`. Debounces calls to `setQuery` by 250ms.
-	 *
-	 * @callback
 	 */
 	const setDebouncedQuery = React.useCallback(
 		debounce(
@@ -101,7 +93,7 @@ const useQuery = (initialQuery: QueryState) => {
 		[setQuery]
 	);
 
-	return { query, query$, setQuery, setDebouncedQuery };
+	return { query$, setQuery, setDebouncedQuery };
 };
 
 export default useQuery;

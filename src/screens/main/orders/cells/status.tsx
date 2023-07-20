@@ -5,7 +5,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
 
-import useOrders from '../../contexts/orders';
+import { useOrders } from '../../contexts/orders';
 
 type Props = {
 	item: import('@wcpos/database').OrderDocument;

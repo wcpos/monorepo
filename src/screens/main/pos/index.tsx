@@ -46,7 +46,11 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 			// suspend until orders and default customer are loaded
 			>
 				<CurrentOrderProvider orderID={orderID}>
-					<POS />
+					<React.Suspense
+					// suspend until tax rates are loaded
+					>
+						<POS />
+					</React.Suspense>
 				</CurrentOrderProvider>
 			</React.Suspense>
 		</OrdersProvider>

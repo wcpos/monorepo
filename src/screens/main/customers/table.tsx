@@ -4,14 +4,14 @@ import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Table, { TableExtraDataProps, CellRenderer } from '@wcpos/components/src/table';
+import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 
 import cells from './cells';
 import Footer from './footer';
 import { t } from '../../../lib/translations';
 import EmptyTableRow from '../components/empty-table-row';
 import TextCell from '../components/text-cell';
-import useCustomers from '../contexts/customers';
+import { useCustomers } from '../contexts/customers';
 import useTotalCount from '../hooks/use-total-count';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -25,8 +25,8 @@ interface CustomersTableProps {
  *
  */
 const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
-	const { query$, setQuery, resource, replicationState, loadNextPage } = useCustomers();
-	const { data, count, hasMore } = useObservableSuspense(resource);
+	const { query$, setQuery, paginatedResource, replicationState, loadNextPage } = useCustomers();
+	const { data, count, hasMore } = useObservableSuspense(paginatedResource);
 	const loading = useObservableState(replicationState.active$, false);
 	const query = useObservableState(query$, query$.getValue());
 	const total = useTotalCount('customers', replicationState);
@@ -60,7 +60,7 @@ const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 	/**
 	 *
 	 */
-	const context = React.useMemo<TableExtraDataProps<CustomerDocument>>(() => {
+	const context = React.useMemo<TableContextProps<CustomerDocument>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
 			sort: ({ sortBy, sortDirection }) => {
@@ -93,7 +93,7 @@ const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 			data={data}
 			footer={<Footer count={count} total={total} loading={loading} />}
 			estimatedItemSize={100}
-			extraData={context}
+			context={context}
 			ListEmptyComponent={<EmptyTableRow message={t('No customers found', { _tags: 'core' })} />}
 			onEndReached={onEndReached}
 			loading={loading}

@@ -7,7 +7,7 @@ import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
 
 import CartTabTitle from './tab-title';
-import useOrders from '../../contexts/orders';
+import { useOrders } from '../../contexts/orders';
 import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -19,7 +19,7 @@ const CartTabs = () => {
 	const navigation = useNavigation();
 	const { currentOrder } = useCurrentOrder();
 	const { resource } = useOrders();
-	const { data: orders } = useObservableSuspense(resource);
+	const orders = useObservableSuspense(resource);
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
 	/**

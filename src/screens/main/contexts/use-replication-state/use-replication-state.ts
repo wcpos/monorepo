@@ -1,16 +1,15 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState, useSubscription } from 'observable-hooks';
-import { interval, merge } from 'rxjs';
-import { map, debounceTime, filter, tap, skip } from 'rxjs/operators';
+import { useObservableState, useObservable } from 'observable-hooks';
+import { interval } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 import { replicateRxCollection } from '@wcpos/database/src/plugins/wc-rest-api-replication';
 import log from '@wcpos/utils/src/logger';
 
 import {
 	defaultPrepareQueryParams,
-	getPriority,
 	// retryWithExponentialBackoff,
 } from './replication.helpers';
 import useLocalData from '../../../../contexts/local-data';
@@ -49,41 +48,17 @@ export const useReplicationState = ({
 	const http = useRestHttpClient();
 
 	/**
-	 * test
+	 * Create a long polling stream
 	 */
-	const getLatestQuery = React.useCallback(() => {
-		const query = query$.getValue();
-		return query;
-	}, [query$]);
+	const poll$ = useObservable(() => interval(pollingTime).pipe(map(() => 'RESYNC')));
 
 	/**
 	 *
 	 */
-	return React.useMemo(() => {
-		const queryDebounced$ = query$.pipe(
-			skip(1), // skip initial query
-			filter((q) => !q.uuid), // HACK: ignore uuid queries
-			debounceTime(500),
-			map(() => 'QUERY')
-		);
-
-		const resync$ = interval(pollingTime).pipe(map(() => 'RESYNC'));
-
-		const combinedStream$ = merge(queryDebounced$, resync$);
-
-		/**
-		 * HACK: ideally each endpoint would have it's own replication state
-		 * but it means the query$ used in the handler is always from the first Provider to mount
-		 * so we need to make sure each unique starting query has it's own replication state
-		 *
-		 * TODO: is there a way to update the query$ in the handler?
-		 */
-		const query = query$.getValue();
-		const queryHash = JSON.stringify(query);
-
-		const replicationState = replicateRxCollection({
+	const replicationState = React.useMemo(() => {
+		return replicateRxCollection({
 			collection,
-			replicationIdentifier: `replication-to-${apiURL}/${endpoint}?${queryHash}`,
+			replicationIdentifier: `replication-to-${apiURL}/${endpoint}`,
 			pull: {
 				fetchRemoteIDs: async () => {
 					/**
@@ -112,7 +87,7 @@ export const useReplicationState = ({
 				},
 				handler: async (checkpoint, batchSize) => {
 					try {
-						const query = getLatestQuery();
+						const query = query$.getValue();
 						const defaultParams = defaultPrepareQueryParams(query, batchSize);
 						const params = prepareQueryParams(defaultParams, query, checkpoint, batchSize);
 						let response;
@@ -160,10 +135,10 @@ export const useReplicationState = ({
 						log.error(err);
 					}
 				},
-				stream$: combinedStream$,
+				stream$: poll$,
 			},
 		});
+	}, [apiURL, collection, endpoint, http, poll$, prepareQueryParams, query$]);
 
-		return replicationState;
-	}, [apiURL, collection, endpoint, http, pollingTime, prepareQueryParams, query$, getLatestQuery]);
+	return replicationState;
 };

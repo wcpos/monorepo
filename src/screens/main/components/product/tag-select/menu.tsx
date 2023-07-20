@@ -4,19 +4,16 @@ import { View } from 'react-native';
 import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import { Avatar } from '@wcpos/components/src/avatar/avatar';
-import Box from '@wcpos/components/src/box';
 import { FlashList } from '@wcpos/components/src/flash-list';
 import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 
-import CategorySelectItem, { EmptyTableRow } from './item';
-import { t } from '../../../../lib/translations';
-import { useProductCategories } from '../../contexts/categories/use-product-categories';
-import useTotalCount from '../../hooks/use-total-count';
+import TagSelectItem, { EmptyTableRow } from './item';
+import { useProductTags } from '../../../contexts/tags';
+import useTotalCount from '../../../hooks/use-total-count';
 
-type ProductCategoryDocument = import('@wcpos/database').ProductCategoryDocument;
+type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
 
 /**
  * TODO - this is taken from the menu component, should be moved to a shared location
@@ -40,22 +37,23 @@ const convertHexToRGBA = (hexCode, opacity = 1) => {
 	return `rgba(${r},${g},${b},${opacity})`;
 };
 
-interface CategorySelectMenuHandles {
+interface TagSelectMenuHandles {
 	onSearch: (query: string) => void;
 }
 
-interface CategorySelectMenuProps {
-	onChange: (item: ProductCategoryDocument) => void;
+interface TagSelectMenuProps {
+	onChange: (item: ProductTagDocument) => void;
 }
 
 /**
  *
  */
-const CategorySelectMenu = React.forwardRef<CategorySelectMenuHandles, CategorySelectMenuProps>(
+const TagSelectMenu = React.forwardRef<TagSelectMenuHandles, TagSelectMenuProps>(
 	({ onChange }, ref) => {
 		const theme = useTheme();
-		const { resource, setQuery, replicationState, loadNextPage } = useProductCategories();
-		const { data: categories, count, hasMore } = useObservableSuspense(resource);
+		const { paginatedResource, setDebouncedQuery, replicationState, loadNextPage } =
+			useProductTags();
+		const { data: tags, count, hasMore } = useObservableSuspense(paginatedResource);
 		const loading = useObservableState(replicationState.active$, false);
 		const total = useTotalCount('products/categories', replicationState);
 		const { targetMeasurements } = usePopover();
@@ -65,7 +63,7 @@ const CategorySelectMenu = React.forwardRef<CategorySelectMenuHandles, CategoryS
 		 */
 		React.useImperativeHandle(ref, () => ({
 			onSearch: (search) => {
-				React.startTransition(() => setQuery('search', search, true));
+				setDebouncedQuery('search', search);
 			},
 		}));
 
@@ -94,7 +92,7 @@ const CategorySelectMenu = React.forwardRef<CategorySelectMenuHandles, CategoryS
 			({ item }) => {
 				return (
 					<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
-						<CategorySelectItem category={item} />
+						<TagSelectItem tag={item} />
 					</Pressable>
 				);
 			},
@@ -117,8 +115,8 @@ const CategorySelectMenu = React.forwardRef<CategorySelectMenuHandles, CategoryS
 		 */
 		return (
 			<View style={{ width: targetMeasurements.value.width, maxHeight: 292, minHeight: 30 }}>
-				<FlashList<ProductCategoryDocument>
-					data={categories}
+				<FlashList<ProductTagDocument>
+					data={tags}
 					renderItem={renderItem}
 					estimatedItemSize={32}
 					ListEmptyComponent={<EmptyTableRow />}
@@ -130,4 +128,4 @@ const CategorySelectMenu = React.forwardRef<CategorySelectMenuHandles, CategoryS
 	}
 );
 
-export default React.memo(CategorySelectMenu);
+export default React.memo(TagSelectMenu);

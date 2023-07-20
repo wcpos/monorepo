@@ -10,7 +10,7 @@ import { t } from '../../../../lib/translations';
 import FilterBar from '../../components/product/filter-bar';
 import Search from '../../components/product/search';
 import UISettings from '../../components/ui-settings';
-import useProducts from '../../contexts/products';
+import { useProducts } from '../../contexts/products';
 import useUI from '../../contexts/ui-settings';
 import useCartHelpers from '../../hooks/use-cart-helpers';
 

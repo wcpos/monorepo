@@ -8,7 +8,7 @@ import Pill from '@wcpos/components/src/pill';
 import TextInput from '@wcpos/components/src/textinput';
 
 import { t } from '../../../../lib/translations';
-import useProducts from '../../contexts/products';
+import { useProducts } from '../../contexts/products';
 import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
 import useCollection from '../../hooks/use-collection';
 
@@ -47,7 +47,7 @@ const ProductSearch = ({
 		metaData: any
 	) => Promise<void>;
 }) => {
-	const { query$, setQuery } = useProducts();
+	const { query$, setDebouncedQuery } = useProducts();
 	const query = useLayoutObservableState(query$, query$.getValue());
 	const [search, setSearch] = React.useState(query.search);
 	const { barcode$ } = useBarcodeDetection();
@@ -57,9 +57,9 @@ const ProductSearch = ({
 	const onSearch = React.useCallback(
 		(search) => {
 			setSearch(search);
-			setQuery('search', search, true);
+			setDebouncedQuery('search', search);
 		},
-		[setQuery]
+		[setDebouncedQuery]
 	);
 
 	/**
