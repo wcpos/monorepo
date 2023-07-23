@@ -48,10 +48,6 @@ const useHttpErrorHandler = () => {
 							// type: 'critical',
 						});
 					}
-					/**
-					 * Show login modal
-					 */
-					// navigation.navigate('Login');
 					break;
 				case 403:
 					if (res.data) {
@@ -70,6 +66,12 @@ const useHttpErrorHandler = () => {
 					}
 					break;
 				case 404:
+					if (res.data) {
+						addSnackbar({
+							message: res.data.message,
+							// type: 'critical',
+						});
+					}
 					log.error('404 error', res);
 					break;
 				case 500:
