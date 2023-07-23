@@ -10,19 +10,19 @@ import useReplicationState from './use-replication-state';
 import useLocalData from '../../../contexts/local-data';
 import useCollection, { CollectionKey } from '../hooks/use-collection';
 
+import type { Query } from './query';
+import type { RxCollection } from 'rxdb';
 import type { Observable } from 'rxjs';
 
 interface DataProviderProps {
 	children: React.ReactNode;
-	initialQuery?: QueryState;
+	query: Query<RxCollection>;
 	apiEndpoint?: string;
 	remoteIDs?: number[];
 }
 
 interface DataContextValue<TDocument> {
-	query$: QueryObservable;
-	setQuery: SetQuery;
-	setDebouncedQuery: SetQuery;
+	query: Query<RxCollection>;
 	resource: ObservableResource<TDocument[]>;
 	paginatedResource: ObservableResource<{
 		data: TDocument[];
@@ -69,39 +69,37 @@ const createDataProvider = <TDocument, TQueryParams>({
 	/**
 	 *
 	 */
-	const DataProvider = ({ children, initialQuery, apiEndpoint, remoteIDs }: DataProviderProps) => {
+	const DataProvider = ({ children, query, apiEndpoint, remoteIDs }: DataProviderProps) => {
 		const { storeDB } = useLocalData();
 		const { collection } = useCollection(collectionName);
-		const { query$, setQuery, setDebouncedQuery } = useQuery(initialQuery);
+		query.collection(collection);
+		// const { query$, setQuery, setDebouncedQuery } = useQuery(initialQuery);
 		const replicationState = useReplicationState({
 			collection,
-			query$,
+			query,
 			prepareQueryParams,
 			apiEndpoint,
 			remoteIDs,
 		});
-		const filteredQuery$ = filterQuery ? filterQuery(query$) : query$;
-		const { queryData$ } = useLocalDataQuery({ collection, query$: filteredQuery$ });
-		const filteredQueryData$ = filterQueryData ? filterQueryData(queryData$, query$) : queryData$;
-		const { paginatedData$, loadNextPage } = usePagination({ data$: filteredQueryData$ });
+		// const filteredQuery$ = filterQuery ? filterQuery(query$) : query$;
+		// const { queryData$ } = useLocalDataQuery({ collection, query$: filteredQuery$ });
+		// const filteredQueryData$ = filterQueryData ? filterQueryData(queryData$, query$) : queryData$;
+		const { paginatedData$, loadNextPage } = usePagination({ data$: query.$ });
 
 		/**
 		 *
 		 */
-		React.useEffect(() => {
-			replicationState.start();
-			return () => {
-				replicationState.cancel();
-			};
-		}, [replicationState]);
+		// React.useEffect(() => {
+		// 	replicationState.start();
+		// 	return () => {
+		// 		replicationState.cancel();
+		// 	};
+		// }, [replicationState]);
 
 		/**
 		 *
 		 */
-		const resource = React.useMemo(
-			() => new ObservableResource(filteredQueryData$),
-			[filteredQueryData$]
-		);
+		const resource = React.useMemo(() => new ObservableResource(query.$), [query.$]);
 		const paginatedResource = React.useMemo(
 			() => new ObservableResource(paginatedData$),
 			[paginatedData$]
@@ -130,9 +128,10 @@ const createDataProvider = <TDocument, TQueryParams>({
 				value={{
 					resource,
 					paginatedResource,
-					query$,
-					setQuery,
-					setDebouncedQuery,
+					query,
+					// query$,
+					// setQuery,
+					// setDebouncedQuery,
 					clear,
 					sync,
 					replicationState,

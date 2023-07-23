@@ -12,6 +12,7 @@ import { t } from '../../../lib/translations';
 import AddNewCustomer from '../components/add-new-customer';
 import UiSettings from '../components/ui-settings';
 import { CustomersProvider } from '../contexts/customers';
+import { Query } from '../contexts/query';
 import useUI from '../contexts/ui-settings';
 
 /**
@@ -24,18 +25,20 @@ const Customers = () => {
 	/**
 	 *
 	 */
-	const initialQuery = React.useMemo(() => {
-		return {
-			sortBy: uiSettings.get('sortBy'),
-			sortDirection: uiSettings.get('sortDirection'),
-		};
-	}, [uiSettings]);
+	const query = React.useMemo(
+		() =>
+			new Query({
+				sortBy: uiSettings.get('sortBy'),
+				sortDirection: uiSettings.get('sortDirection'),
+			}),
+		[uiSettings]
+	);
 
 	/**
 	 *
 	 */
 	return (
-		<CustomersProvider initialQuery={initialQuery}>
+		<CustomersProvider query={query}>
 			<Box padding="small" style={{ height: '100%' }}>
 				<Box
 					raised

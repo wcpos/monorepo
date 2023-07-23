@@ -14,10 +14,9 @@ import { useOrders } from '../contexts/orders';
  *
  */
 const SearchBar = () => {
-	const { query$, setDebouncedQuery } = useOrders();
-	const query = useLayoutObservableState(query$, query$.getValue());
+	const { query } = useOrders();
 	const theme = useTheme();
-	const [search, setSearch] = React.useState(query.search);
+	const [search, setSearch] = React.useState('');
 	const status = get(query, ['selector', 'status']);
 	const customerID = get(query, ['selector', 'customer_id']);
 	const hasFilters = status || customerID || customerID === 0;
@@ -28,9 +27,9 @@ const SearchBar = () => {
 	const onSearch = React.useCallback(
 		(search) => {
 			setSearch(search);
-			setDebouncedQuery('search', search);
+			query.debouncedSearch(search);
 		},
-		[setDebouncedQuery]
+		[query]
 	);
 
 	/**

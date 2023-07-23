@@ -46,15 +46,15 @@ const cells = {
  *
  */
 const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
-	const { query$, setQuery, replicationState, loadNextPage, paginatedResource } = useOrders();
+	const { query, replicationState, loadNextPage, paginatedResource } = useOrders();
 	const { data, count, hasMore } = useObservableSuspense(paginatedResource);
 	const loading = useObservableState(replicationState.active$, false);
-	const query = useObservableState(query$, query$.getValue());
 	const total = useTotalCount('orders', replicationState);
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
+	const { sortBy, sortDirection } = useObservableState(query.state$, query.currentState);
 
 	/**
 	 *
@@ -81,16 +81,13 @@ const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
 	const context = React.useMemo<TableContextProps<OrderDocument>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
-			sort: ({ sortBy, sortDirection }) => {
-				setQuery('sortBy', sortBy);
-				setQuery('sortDirection', sortDirection);
-			},
-			sortBy: query.sortBy,
-			sortDirection: query.sortDirection,
+			sort: ({ sortBy, sortDirection }) => query.sort(sortBy, sortDirection),
+			sortBy,
+			sortDirection,
 			cellRenderer,
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
 		};
-	}, [columns, query.sortBy, query.sortDirection, cellRenderer, setQuery, uiSettings]);
+	}, [columns, sortBy, sortDirection, cellRenderer, query, uiSettings]);
 
 	/**
 	 *

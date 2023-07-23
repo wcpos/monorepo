@@ -15,13 +15,14 @@ import {
 import useLocalData from '../../../../contexts/local-data';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
+import type { Query } from './query';
 import type { QueryObservable, QueryState } from '../use-query';
 import type { RxCollection } from 'rxdb';
 
 interface Props {
 	collection: RxCollection;
 	apiEndpoint?: string;
-	query$: QueryObservable;
+	query: Query<RxCollection>;
 	prepareQueryParams?: (
 		params: ReturnType<typeof defaultPrepareQueryParams>,
 		query: QueryState,
@@ -38,7 +39,7 @@ interface Props {
 export const useReplicationState = ({
 	collection,
 	apiEndpoint,
-	query$,
+	query,
 	prepareQueryParams,
 	pollingTime = 600000,
 	remoteIDs,
@@ -91,9 +92,10 @@ export const useReplicationState = ({
 				},
 				handler: async (checkpoint, batchSize) => {
 					try {
-						const query = query$.getValue();
-						const defaultParams = defaultPrepareQueryParams(query, batchSize);
-						const params = prepareQueryParams(defaultParams, query, checkpoint, batchSize);
+						const params = query.getApiQueryParams();
+						console.log('params', params);
+						// const defaultParams = defaultPrepareQueryParams(query, batchSize);
+						// const params = prepareQueryParams(defaultParams, query, checkpoint, batchSize);
 						let response;
 
 						if (checkpoint.completeIntitalSync) {
@@ -142,7 +144,7 @@ export const useReplicationState = ({
 				stream$: poll$,
 			},
 		});
-	}, [apiURL, collection, endpoint, http, poll$, prepareQueryParams, query$]);
+	}, [apiURL, collection, endpoint, http, poll$, query, remoteIDs]);
 
 	return replicationState;
 };

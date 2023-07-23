@@ -48,84 +48,72 @@ interface TagSelectMenuProps {
 /**
  *
  */
-const TagSelectMenu = React.forwardRef<TagSelectMenuHandles, TagSelectMenuProps>(
-	({ onChange }, ref) => {
-		const theme = useTheme();
-		const { paginatedResource, setDebouncedQuery, replicationState, loadNextPage } =
-			useProductTags();
-		const { data: tags, count, hasMore } = useObservableSuspense(paginatedResource);
-		const loading = useObservableState(replicationState.active$, false);
-		const total = useTotalCount('products/categories', replicationState);
-		const { targetMeasurements } = usePopover();
+const TagSelectMenu = ({ onChange }) => {
+	const theme = useTheme();
+	const { paginatedResource, replicationState, loadNextPage } = useProductTags();
+	const { data: tags, count, hasMore } = useObservableSuspense(paginatedResource);
+	const loading = useObservableState(replicationState.active$, false);
+	const total = useTotalCount('products/categories', replicationState);
+	const { targetMeasurements } = usePopover();
 
-		/**
-		 * Use useImperativeHandle to expose setQuery function
-		 */
-		React.useImperativeHandle(ref, () => ({
-			onSearch: (search) => {
-				setDebouncedQuery('search', search);
-			},
-		}));
+	/**
+	 *
+	 */
+	const calculatedStyled = React.useCallback(
+		({ hovered }) => {
+			const hoverBackgroundColor = convertHexToRGBA(theme.colors['primary'], 0.1);
+			return [
+				{
+					padding: theme.spacing.small,
+					flex: 1,
+					flexDirection: 'row',
+					backgroundColor: hovered ? hoverBackgroundColor : 'transparent',
+				},
+			];
+		},
+		[theme]
+	);
 
-		/**
-		 *
-		 */
-		const calculatedStyled = React.useCallback(
-			({ hovered }) => {
-				const hoverBackgroundColor = convertHexToRGBA(theme.colors['primary'], 0.1);
-				return [
-					{
-						padding: theme.spacing.small,
-						flex: 1,
-						flexDirection: 'row',
-						backgroundColor: hovered ? hoverBackgroundColor : 'transparent',
-					},
-				];
-			},
-			[theme]
-		);
+	/**
+	 *
+	 */
+	const renderItem = React.useCallback(
+		({ item }) => {
+			return (
+				<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
+					<TagSelectItem tag={item} />
+				</Pressable>
+			);
+		},
+		[calculatedStyled, onChange]
+	);
 
-		/**
-		 *
-		 */
-		const renderItem = React.useCallback(
-			({ item }) => {
-				return (
-					<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
-						<TagSelectItem tag={item} />
-					</Pressable>
-				);
-			},
-			[calculatedStyled, onChange]
-		);
+	/**
+	 *
+	 */
+	const onEndReached = React.useCallback(() => {
+		if (hasMore) {
+			loadNextPage();
+		} else if (!loading && total > count) {
+			replicationState.start({ fetchRemoteIDs: false });
+		}
+	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
 
-		/**
-		 *
-		 */
-		const onEndReached = React.useCallback(() => {
-			if (hasMore) {
-				loadNextPage();
-			} else if (!loading && total > count) {
-				replicationState.start({ fetchRemoteIDs: false });
-			}
-		}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+	/**
+	 *
+	 */
+	return (
+		<View style={{ width: targetMeasurements.value.width, maxHeight: 292, minHeight: 30 }}>
+			<FlashList<ProductTagDocument>
+				data={tags}
+				renderItem={renderItem}
+				estimatedItemSize={32}
+				ListEmptyComponent={<EmptyTableRow />}
+				onEndReached={onEndReached}
+				ListFooterComponent={loading ? Loader : null}
+			/>
+		</View>
+	);
+};
 
-		/**
-		 *
-		 */
-		return (
-			<View style={{ width: targetMeasurements.value.width, maxHeight: 292, minHeight: 30 }}>
-				<FlashList<ProductTagDocument>
-					data={tags}
-					renderItem={renderItem}
-					estimatedItemSize={32}
-					ListEmptyComponent={<EmptyTableRow />}
-					onEndReached={onEndReached}
-					ListFooterComponent={loading ? Loader : null}
-				/>
-			</View>
-		);
-	}
-);
-
-export default React.memo(TagSelectMenu);
+export default TagSelectMenu;

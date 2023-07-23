@@ -17,7 +17,7 @@ import usePullDocument from '../../../contexts/use-pull-document';
 import useCollection from '../../../hooks/use-collection';
 
 const FilterBar = () => {
-	const { query$ } = useProducts();
+	const { query } = useProducts();
 	const { collection: categoryCollection } = useCollection('products/categories');
 	const { collection: tagCollection } = useCollection('products/tags');
 	const pullDocument = usePullDocument();
@@ -26,7 +26,7 @@ const FilterBar = () => {
 	 *
 	 */
 	const selectedCategoryResource = React.useMemo(() => {
-		const selectedCategory$ = query$.pipe(
+		const selectedCategory$ = query.state$.pipe(
 			switchMap((query) => {
 				const categoryFilterID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
 				if (categoryFilterID) {
@@ -43,13 +43,13 @@ const FilterBar = () => {
 		);
 
 		return new ObservableResource(selectedCategory$);
-	}, [categoryCollection, pullDocument, query$]);
+	}, [categoryCollection, pullDocument, query.state$]);
 
 	/**
 	 *
 	 */
 	const selectedTagResource = React.useMemo(() => {
-		const selectedTag$ = query$.pipe(
+		const selectedTag$ = query.state$.pipe(
 			switchMap((query) => {
 				const tagFilterID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
 				if (tagFilterID) {
@@ -66,7 +66,7 @@ const FilterBar = () => {
 		);
 
 		return new ObservableResource(selectedTag$);
-	}, [pullDocument, query$, tagCollection]);
+	}, [pullDocument, query.state$, tagCollection]);
 
 	/**
 	 *

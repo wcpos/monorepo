@@ -13,6 +13,7 @@ import POS from './pos';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { OrdersProvider } from '../contexts/orders';
+import { Query } from '../contexts/query';
 import useCollection from '../hooks/use-collection';
 import Receipt from '../receipt';
 
@@ -26,22 +27,20 @@ export type POSStackParamList = {
 
 const Stack = createStackNavigator<POSStackParamList>();
 
+const openOrderQuery = new Query({
+	sortBy: 'date_created_gmt',
+	sortDirection: 'desc',
+	selector: { status: 'pos-open' },
+});
+
 /**
- * Memoised initial query for open orders, prevents re-rendering
+ *
  */
 const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'POS'>) => {
 	const orderID = get(route, ['params', 'orderID']);
-	const initialQuery = React.useMemo(
-		() => ({
-			sortBy: 'date_created_gmt',
-			sortDirection: 'desc',
-			selector: { status: 'pos-open' },
-		}),
-		[]
-	);
 
 	return (
-		<OrdersProvider initialQuery={initialQuery}>
+		<OrdersProvider query={openOrderQuery}>
 			<React.Suspense
 			// suspend until orders and default customer are loaded
 			>

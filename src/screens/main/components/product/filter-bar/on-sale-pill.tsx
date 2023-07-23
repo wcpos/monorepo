@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import Pill from '@wcpos/components/src/pill';
 
@@ -9,18 +10,20 @@ import { t } from '../../../../../lib/translations';
 import { useProducts } from '../../../contexts/products';
 
 const OnSalePill = () => {
-	const { query$, setQuery } = useProducts();
-	const query = useObservableState(query$, query$.getValue());
-	const isActive = get(query, 'selector.on_sale', false);
+	const { query } = useProducts();
+	const isActive = useObservableState(
+		query.state$.pipe(map((query) => get(query, ['selector', 'on_sale']))),
+		get(query, ['currentState', 'selector', 'on_sale'])
+	);
 
 	return (
 		<Pill
 			icon="badgeDollar"
 			size="small"
 			color={isActive ? 'primary' : 'lightGrey'}
-			onPress={() => setQuery('selector.on_sale', isActive ? null : true)}
+			onPress={() => query.where('on_sale', isActive ? null : true)}
 			removable={isActive}
-			onRemove={() => setQuery('selector.on_sale', null)}
+			onRemove={() => query.where('on_sale', null)}
 		>
 			{t('On Sale', { _tags: 'core' })}
 		</Pill>

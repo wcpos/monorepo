@@ -17,15 +17,15 @@ interface CategoryPillProps {
  */
 const CategoryPill = ({ resource }: CategoryPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
-	const { setQuery } = useProducts();
+	const { query } = useProducts();
 	const category = useObservableSuspense(resource);
 
 	/**
 	 *
 	 */
 	const handleRemove = React.useCallback(() => {
-		setQuery('selector.categories', null);
-	}, [setQuery]);
+		query.where('categories', null);
+	}, [query]);
 
 	/**
 	 *

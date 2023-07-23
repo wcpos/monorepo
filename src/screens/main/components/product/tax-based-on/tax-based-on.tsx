@@ -18,9 +18,8 @@ const TaxBasedOn = () => {
 	const { store } = useLocalData();
 	const taxBasedOn = useObservableState(store.tax_based_on$, store?.tax_based_on);
 	const [opened, setOpened] = React.useState(false);
-	const { resource, query$ } = useTaxRates();
+	const { resource, query } = useTaxRates();
 	const rates = useObservableSuspense(resource);
-	const query = useObservableState(query$, query$.getValue());
 	const { country, state, city, postcode } = query?.search || {};
 
 	/**

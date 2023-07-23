@@ -6,15 +6,15 @@ import { t } from '../../../lib/translations';
 import { useCustomers } from '../contexts/customers';
 
 const SearchBar = () => {
-	const { setDebouncedQuery } = useCustomers();
+	const { query } = useCustomers();
 	const [search, setSearch] = React.useState();
 
 	const onSearch = React.useCallback(
 		(search) => {
 			setSearch(search);
-			setDebouncedQuery('search', search);
+			query.debouncedSearch(search);
 		},
-		[setDebouncedQuery]
+		[query]
 	);
 
 	return (

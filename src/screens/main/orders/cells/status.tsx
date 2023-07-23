@@ -57,14 +57,7 @@ const Status = ({ item: order }: Props) => {
 	const status = useObservableState(order.status$, order.status);
 	const iconName = get(iconMap, [status, 'name'], 'circleQuestion');
 	const iconType = get(iconMap, [status, 'type'], 'disabled');
-	const { setQuery } = useOrders();
-
-	/**
-	 *
-	 */
-	const handlePress = React.useCallback(() => {
-		setQuery('selector.status', status);
-	}, [setQuery, status]);
+	const { query } = useOrders();
 
 	/**
 	 *
@@ -75,7 +68,7 @@ const Status = ({ item: order }: Props) => {
 			type={iconType}
 			tooltip={status}
 			tooltipPlacement="right"
-			onPress={handlePress}
+			onPress={() => query.where('status', status)}
 		/>
 	);
 };

@@ -17,15 +17,15 @@ interface TagPillProps {
  */
 const TagPill = ({ resource }: TagPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
-	const { setQuery } = useProducts();
+	const { query } = useProducts();
 	const tag = useObservableSuspense(resource);
 
 	/**
 	 *
 	 */
 	const handleRemove = React.useCallback(() => {
-		setQuery('selector.tags', null);
-	}, [setQuery]);
+		query.where('tags', null);
+	}, [query]);
 
 	/**
 	 *

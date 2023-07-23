@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { map, tap } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
@@ -25,15 +26,15 @@ interface CustomersTableProps {
  *
  */
 const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
-	const { query$, setQuery, paginatedResource, replicationState, loadNextPage } = useCustomers();
+	const { query, paginatedResource, replicationState, loadNextPage } = useCustomers();
 	const { data, count, hasMore } = useObservableSuspense(paginatedResource);
 	const loading = useObservableState(replicationState.active$, false);
-	const query = useObservableState(query$, query$.getValue());
 	const total = useTotalCount('customers', replicationState);
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
+	const { sortBy, sortDirection } = useObservableState(query.state$, query.currentState);
 
 	/**
 	 *
@@ -63,16 +64,13 @@ const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 	const context = React.useMemo<TableContextProps<CustomerDocument>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
-			sort: ({ sortBy, sortDirection }) => {
-				setQuery('sortBy', sortBy);
-				setQuery('sortDirection', sortDirection);
-			},
-			sortBy: query.sortBy,
-			sortDirection: query.sortDirection,
+			sort: ({ sortBy, sortDirection }) => query.sort(sortBy, sortDirection),
+			sortBy,
+			sortDirection,
 			cellRenderer,
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
 		};
-	}, [columns, query.sortBy, query.sortDirection, cellRenderer, setQuery, uiSettings]);
+	}, [columns, sortBy, sortDirection, cellRenderer, query, uiSettings]);
 
 	/**
 	 *

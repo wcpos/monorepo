@@ -9,6 +9,7 @@ import SearchInput from './search-input';
 import { t } from '../../../../../lib/translations';
 import { ProductCategoriesProvider } from '../../../contexts/categories';
 import { useProducts } from '../../../contexts/products';
+import { Query } from '../../../contexts/query';
 
 type ProductCategoryDocument = import('@wcpos/database').ProductCategoryDocument;
 
@@ -18,26 +19,40 @@ type ProductCategoryDocument = import('@wcpos/database').ProductCategoryDocument
  */
 const CategorySelectSearch = ({ onBlur }) => {
 	const [opened, setOpened] = React.useState(false);
-	const { setQuery: setProductsQuery } = useProducts();
-	const categorySelectMenuRef = React.useRef(null);
+	const { query: productQuery } = useProducts();
 
 	/**
 	 *
 	 */
-	const onSearch = React.useCallback((search) => {
-		if (categorySelectMenuRef.current) {
-			categorySelectMenuRef.current.onSearch(search);
-		}
-	}, []);
+	const categoryQuery = React.useMemo(
+		() =>
+			new Query({
+				// search: '',
+				sortBy: 'name',
+				sortDirection: 'asc',
+				// limit: 10,
+			}),
+		[]
+	);
+
+	/**
+	 *
+	 */
+	const onSearch = React.useCallback(
+		(search) => {
+			categoryQuery.debouncedSearch(search);
+		},
+		[categoryQuery]
+	);
 
 	/**
 	 *
 	 */
 	const onSelectCategory = React.useCallback(
 		(category: ProductCategoryDocument) => {
-			setProductsQuery('selector.categories.$elemMatch.id', category.id);
+			productQuery.where('categories', { $elemMatch: { id: category.id } });
 		},
-		[setProductsQuery]
+		[productQuery]
 	);
 
 	/**
@@ -50,19 +65,6 @@ const CategorySelectSearch = ({ onBlur }) => {
 
 	// 	return t('Search Categories', { _tags: 'core' });
 	// }, [selectedCategory]);
-
-	/**
-	 *
-	 */
-	const initialQuery = React.useMemo(
-		() => ({
-			// search: '',
-			sortBy: 'name',
-			sortDirection: 'asc',
-			// limit: 10,
-		}),
-		[]
-	);
 
 	/**
 	 *
@@ -80,9 +82,9 @@ const CategorySelectSearch = ({ onBlur }) => {
 				<SearchInput setOpened={setOpened} onSearch={onSearch} onBlur={onBlur} />
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
-				<ProductCategoriesProvider initialQuery={initialQuery}>
+				<ProductCategoriesProvider query={categoryQuery}>
 					<React.Suspense>
-						<CategorySelectMenu ref={categorySelectMenuRef} onChange={onSelectCategory} />
+						<CategorySelectMenu onChange={onSelectCategory} />
 					</React.Suspense>
 				</ProductCategoriesProvider>
 			</Popover.Content>

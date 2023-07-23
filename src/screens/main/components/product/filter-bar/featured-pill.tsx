@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import Pill from '@wcpos/components/src/pill';
 
@@ -12,18 +13,20 @@ import { useProducts } from '../../../contexts/products';
  *
  */
 const FeaturedPill = () => {
-	const { query$, setQuery } = useProducts();
-	const query = useObservableState(query$, query$.getValue());
-	const isActive = get(query, 'selector.featured', false);
+	const { query } = useProducts();
+	const isActive = useObservableState(
+		query.state$.pipe(map((state) => get(state, ['selector', 'featured']))),
+		get(query, ['currentState', 'selector', 'featured'])
+	);
 
 	return (
 		<Pill
 			icon="star"
 			size="small"
 			color={isActive ? 'primary' : 'lightGrey'}
-			onPress={() => setQuery('selector.featured', isActive ? null : true)}
+			onPress={() => query.where('featured', isActive ? null : true)}
 			removable={isActive}
-			onRemove={() => setQuery('selector.featured', null)}
+			onRemove={() => query.where('featured', null)}
 		>
 			{t('Featured', { _tags: 'core' })}
 		</Pill>

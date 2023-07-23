@@ -47,9 +47,8 @@ const ProductSearch = ({
 		metaData: any
 	) => Promise<void>;
 }) => {
-	const { query$, setDebouncedQuery } = useProducts();
-	const query = useLayoutObservableState(query$, query$.getValue());
-	const [search, setSearch] = React.useState(query.search);
+	const { query } = useProducts();
+	const [search, setSearch] = React.useState('');
 	const { barcode$ } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
 	const { collection } = useCollection('products');
@@ -57,9 +56,9 @@ const ProductSearch = ({
 	const onSearch = React.useCallback(
 		(search) => {
 			setSearch(search);
-			setDebouncedQuery('search', search);
+			query.debouncedSearch(search);
 		},
-		[setDebouncedQuery]
+		[query]
 	);
 
 	/**

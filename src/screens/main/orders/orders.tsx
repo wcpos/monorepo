@@ -13,7 +13,10 @@ import Table from './table';
 import { t } from '../../../lib/translations';
 import UiSettings from '../components/ui-settings';
 import { OrdersProvider } from '../contexts/orders';
+import { Query } from '../contexts/query';
 import useUI from '../contexts/ui-settings';
+
+type OrderCollection = import('@wcpos/database').OrderCollection;
 
 /**
  *
@@ -25,8 +28,12 @@ const Orders = () => {
 	/**
 	 *
 	 */
-	const initialQuery = React.useMemo(
-		() => ({ sortBy: uiSettings.get('sortBy'), sortDirection: uiSettings.get('sortDirection') }),
+	const query = React.useMemo(
+		() =>
+			new Query<OrderCollection>({
+				sortBy: uiSettings.get('sortBy'),
+				sortDirection: uiSettings.get('sortDirection'),
+			}),
 		[uiSettings]
 	);
 
@@ -34,7 +41,7 @@ const Orders = () => {
 	 *
 	 */
 	return (
-		<OrdersProvider initialQuery={initialQuery} uiSettings={uiSettings}>
+		<OrdersProvider query={query}>
 			<Box padding="small" style={{ height: '100%' }}>
 				<Box
 					raised

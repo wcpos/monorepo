@@ -10,6 +10,7 @@ import log from '@wcpos/utils/src/logger';
 import POSColumns from './columns';
 import POSTabs from './tabs';
 import useTaxLocation from './use-tax-location';
+import { Query } from '../contexts/query';
 import { TaxRateProvider } from '../contexts/tax-rates';
 
 /**
@@ -23,17 +24,18 @@ const POS = () => {
 	/**
 	 *
 	 */
-	const initialQuery = React.useMemo(
-		() => ({
-			search: location,
-			sortBy: 'id',
-			sortDirection: 'asc',
-		}),
+	const query = React.useMemo(
+		() =>
+			new Query({
+				search: location,
+				sortBy: 'id',
+				sortDirection: 'asc',
+			}),
 		[location]
 	);
 
 	return (
-		<TaxRateProvider initialQuery={initialQuery}>
+		<TaxRateProvider query={query}>
 			<ErrorBoundary>
 				<React.Suspense>
 					{dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />}

@@ -1,16 +1,17 @@
 import * as React from 'react';
 
 import TaxRatesTabs from './tabs';
+import { Query } from '../contexts/query';
 import { TaxRateProvider } from '../contexts/tax-rates';
 
-const initialQuery = {};
+const query = new Query({});
 
 /**
  *
  */
 export const TaxRatesWithProvider = () => {
 	return (
-		<TaxRateProvider initialQuery={initialQuery}>
+		<TaxRateProvider query={query}>
 			<TaxRatesTabs />
 		</TaxRateProvider>
 	);

@@ -1,37 +1,43 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
+
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 
 import VariationsFilterBar from './filter-bar';
 import Table from './table';
 import { useProducts } from '../../../contexts/products';
+import { Query } from '../../../contexts/query';
 import { VariationsProvider } from '../../../contexts/variations';
 
 /**
  *
  */
 const Variations = ({ parent }) => {
-	const { query$ } = useProducts();
+	const { query: productQuery } = useProducts();
+	const { sortBy, sortDirection } = useObservableState(
+		productQuery.state$,
+		productQuery.currentState
+	);
 
 	/**
 	 *
 	 */
-	const initialQuery = React.useMemo(() => {
-		const query = query$.getValue();
-		return {
+	const variationsQuery = React.useMemo(() => {
+		return new Query({
 			selector: { $and: [{ id: { $in: parent.variations } }] },
-			sortBy: query.sortBy === 'name' ? 'id' : query.sortBy,
-			sortDirection: query.sortDirection,
-		};
-	}, [parent.variations, query$]);
+			sortBy: sortBy === 'name' ? 'id' : sortBy,
+			sortDirection,
+		});
+	}, [parent.variations, sortBy, sortDirection]);
 
 	/**
 	 *
 	 */
 	return (
 		<VariationsProvider
-			initialQuery={initialQuery}
+			query={variationsQuery}
 			apiEndpoint={`products/${parent.id}/variations`}
 			remoteIDs={parent.variations}
 		>

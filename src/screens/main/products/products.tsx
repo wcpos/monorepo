@@ -11,9 +11,13 @@ import log from '@wcpos/utils/src/logger';
 import SearchBar from './components/search-bar';
 import Table from './components/table';
 import { ProductsProvider } from '../contexts/products';
+import { Query } from '../contexts/query';
 import { TaxRateProvider } from '../contexts/tax-rates';
 import useUI from '../contexts/ui-settings';
 import useBaseTaxLocation from '../hooks/use-base-tax-location';
+
+type ProductCollection = import('@wcpos/database').ProductCollection;
+type TaxRateCollection = import('@wcpos/database').TaxRateCollection;
 
 /**
  *
@@ -22,31 +26,33 @@ const Products = () => {
 	const { uiSettings } = useUI('products');
 	const theme = useTheme();
 	const location = useBaseTaxLocation();
-	const sortBy = uiSettings.get('sortBy');
-	const sortDirection = uiSettings.get('sortDirection');
-	// const [tableLayout, setTableLayout] = React.useState({ width: 0, height: 0 });
 
-	const initialTaxQuery = React.useMemo(
-		() => ({
-			location,
-		}),
+	const taxQuery = React.useMemo(
+		() =>
+			new Query<TaxRateCollection>({
+				search: { ...location },
+			}),
 		[location]
 	);
 
 	/**
 	 *
 	 */
-	const initialProductsQuery = React.useMemo(
-		() => ({ sortBy, sortDirection }),
-		[sortBy, sortDirection]
+	const productsQuery = React.useMemo(
+		() =>
+			new Query<ProductCollection>({
+				sortBy: uiSettings.get('sortBy'),
+				sortDirection: uiSettings.get('sortDirection'),
+			}),
+		[uiSettings]
 	);
 
 	/**
 	 *
 	 */
 	return (
-		<TaxRateProvider initialQuery={initialTaxQuery}>
-			<ProductsProvider initialQuery={initialProductsQuery} uiSettings={uiSettings}>
+		<TaxRateProvider query={taxQuery}>
+			<ProductsProvider query={productsQuery}>
 				<Box padding="small" style={{ height: '100%' }}>
 					<Box
 						raised
@@ -66,9 +72,11 @@ const Products = () => {
 							</ErrorBoundary>
 						</Box>
 						<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-							<React.Suspense>
-								<Table uiSettings={uiSettings} />
-							</React.Suspense>
+							<ErrorBoundary>
+								<React.Suspense>
+									<Table uiSettings={uiSettings} />
+								</React.Suspense>
+							</ErrorBoundary>
 						</Box>
 					</Box>
 				</Box>

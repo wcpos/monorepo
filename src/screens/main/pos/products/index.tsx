@@ -11,7 +11,10 @@ import log from '@wcpos/utils/src/logger';
 import SearchBar from './search-bar';
 import Table from './table';
 import { ProductsProvider } from '../../contexts/products';
+import { Query } from '../../contexts/query';
 import useUI from '../../contexts/ui-settings';
+
+type ProductCollection = import('@wcpos/database').ProductCollection;
 
 // import BarcodeScanner from './barcode-scanner';
 
@@ -21,35 +24,35 @@ import useUI from '../../contexts/ui-settings';
 const POSProducts = ({ isColumn = false }) => {
 	const theme = useTheme();
 	const { uiSettings } = useUI('pos.products');
-	const sortBy = useObservableState(uiSettings.get$('sortBy'), uiSettings.get('sortBy'));
-	const sortDirection = useObservableState(
-		uiSettings.get$('sortDirection'),
-		uiSettings.get('sortDirection')
-	);
 	const showOutOfStock = useObservableState(
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
 	);
 
-	const initialQuery = React.useMemo(() => {
-		const q = {
-			selector: { $and: [] },
-			sortBy,
-			sortDirection,
-		};
+	/**
+	 *
+	 */
+	const query = React.useMemo(() => {
+		const q = new Query<ProductCollection>({
+			sortBy: uiSettings.get('sortBy'),
+			sortDirection: uiSettings.get('sortDirection'),
+		});
+
 		if (!showOutOfStock) {
-			q.selector.$and.push({
-				$or: [
-					{ manage_stock: false },
-					{ $and: [{ manage_stock: true }, { stock_quantity: { $gt: 0 } }] },
-				],
-			});
+			// query.where...
+			// q.selector.$and.push({
+			// 	$or: [
+			// 		{ manage_stock: false },
+			// 		{ $and: [{ manage_stock: true }, { stock_quantity: { $gt: 0 } }] },
+			// 	],
+			// });
 		}
+
 		return q;
-	}, [showOutOfStock, sortBy, sortDirection]);
+	}, [showOutOfStock, uiSettings]);
 
 	return (
-		<ProductsProvider initialQuery={initialQuery}>
+		<ProductsProvider query={query}>
 			<Box padding="small" paddingRight={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
 				<Box
 					raised

@@ -1,12 +1,11 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { View, FlatList } from 'react-native';
 
 import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import { Avatar } from '@wcpos/components/src/avatar/avatar';
 import Box from '@wcpos/components/src/box';
-import { FlashList } from '@wcpos/components/src/flash-list';
 import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
@@ -51,84 +50,72 @@ interface CategorySelectMenuProps {
 /**
  *
  */
-const CategorySelectMenu = React.forwardRef<CategorySelectMenuHandles, CategorySelectMenuProps>(
-	({ onChange }, ref) => {
-		const theme = useTheme();
-		const { paginatedResource, setDebouncedQuery, replicationState, loadNextPage } =
-			useProductCategories();
-		const { data: categories, count, hasMore } = useObservableSuspense(paginatedResource);
-		const loading = useObservableState(replicationState.active$, false);
-		const total = useTotalCount('products/categories', replicationState);
-		const { targetMeasurements } = usePopover();
+const CategorySelectMenu = ({ onChange }) => {
+	const theme = useTheme();
+	const { paginatedResource, replicationState, loadNextPage } = useProductCategories();
+	const { data: categories, count, hasMore } = useObservableSuspense(paginatedResource);
+	const loading = useObservableState(replicationState.active$, false);
+	const total = useTotalCount('products/categories', replicationState);
+	const { targetMeasurements } = usePopover();
 
-		/**
-		 * Use useImperativeHandle to expose setQuery function
-		 */
-		React.useImperativeHandle(ref, () => ({
-			onSearch: (search) => {
-				setDebouncedQuery('search', search);
-			},
-		}));
+	/**
+	 *
+	 */
+	const calculatedStyled = React.useCallback(
+		({ hovered }) => {
+			const hoverBackgroundColor = convertHexToRGBA(theme.colors['primary'], 0.1);
+			return [
+				{
+					padding: theme.spacing.small,
+					flex: 1,
+					flexDirection: 'row',
+					backgroundColor: hovered ? hoverBackgroundColor : 'transparent',
+				},
+			];
+		},
+		[theme]
+	);
 
-		/**
-		 *
-		 */
-		const calculatedStyled = React.useCallback(
-			({ hovered }) => {
-				const hoverBackgroundColor = convertHexToRGBA(theme.colors['primary'], 0.1);
-				return [
-					{
-						padding: theme.spacing.small,
-						flex: 1,
-						flexDirection: 'row',
-						backgroundColor: hovered ? hoverBackgroundColor : 'transparent',
-					},
-				];
-			},
-			[theme]
-		);
+	/**
+	 *
+	 */
+	const renderItem = React.useCallback(
+		({ item }) => {
+			return (
+				<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
+					<CategorySelectItem category={item} />
+				</Pressable>
+			);
+		},
+		[calculatedStyled, onChange]
+	);
 
-		/**
-		 *
-		 */
-		const renderItem = React.useCallback(
-			({ item }) => {
-				return (
-					<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
-						<CategorySelectItem category={item} />
-					</Pressable>
-				);
-			},
-			[calculatedStyled, onChange]
-		);
+	/**
+	 *
+	 */
+	const onEndReached = React.useCallback(() => {
+		if (hasMore) {
+			loadNextPage();
+		} else if (!loading && total > count) {
+			replicationState.start({ fetchRemoteIDs: false });
+		}
+	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
 
-		/**
-		 *
-		 */
-		const onEndReached = React.useCallback(() => {
-			if (hasMore) {
-				loadNextPage();
-			} else if (!loading && total > count) {
-				replicationState.start({ fetchRemoteIDs: false });
-			}
-		}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+	/**
+	 *
+	 */
+	return (
+		<View style={{ width: targetMeasurements.value.width, maxHeight: 292, minHeight: 30 }}>
+			<FlatList<ProductCategoryDocument>
+				data={categories}
+				renderItem={renderItem}
+				// estimatedItemSize={32}
+				ListEmptyComponent={<EmptyTableRow />}
+				onEndReached={onEndReached}
+				ListFooterComponent={loading ? Loader : null}
+			/>
+		</View>
+	);
+};
 
-		/**
-		 *
-		 */
-		return (
-			<View style={{ width: targetMeasurements.value.width, maxHeight: 292, minHeight: 30 }}>
-				<FlashList<ProductCategoryDocument>
-					data={categories}
-					renderItem={renderItem}
-					estimatedItemSize={32}
-					ListEmptyComponent={<EmptyTableRow />}
-					onEndReached={onEndReached}
-					ListFooterComponent={loading ? Loader : null}
-				/>
-			</View>
-		);
-	}
-);
-
-export default React.memo(CategorySelectMenu);
+export default CategorySelectMenu;

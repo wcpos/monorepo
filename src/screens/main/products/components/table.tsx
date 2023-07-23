@@ -31,15 +31,15 @@ const TABLE_ROW_COMPONENTS = {
  * NOTE: not sure if this is the best spot for replication, but we need acces to the query
  */
 const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
-	const { query$, setQuery, paginatedResource, replicationState, loadNextPage } = useProducts();
+	const { query, paginatedResource, replicationState, loadNextPage } = useProducts();
 	const { data, count, hasMore } = useObservableSuspense(paginatedResource);
 	const loading = useObservableState(replicationState.active$, false);
 	const total = useTotalCount('products', replicationState);
-	const query = useObservableState(query$, query$.getValue());
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
+	const { sortBy, sortDirection } = useObservableState(query.state$, query.currentState);
 
 	/**
 	 *
@@ -47,15 +47,12 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	const context = React.useMemo<TableContextProps<ProductDocument>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
-			sort: ({ sortBy, sortDirection }) => {
-				setQuery('sortBy', sortBy);
-				setQuery('sortDirection', sortDirection);
-			},
-			sortBy: query.sortBy,
-			sortDirection: query.sortDirection,
+			sort: ({ sortBy, sortDirection }) => query.sort(sortBy, sortDirection),
+			sortBy,
+			sortDirection,
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
 		};
-	}, [columns, query.sortBy, query.sortDirection, setQuery, uiSettings]);
+	}, [columns, sortBy, sortDirection, query, uiSettings]);
 
 	/**
 	 *

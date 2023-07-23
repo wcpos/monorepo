@@ -6,6 +6,7 @@ import log from '@wcpos/utils/src/logger';
 import TagSelectMenu from './menu';
 import SearchInput from './search-input';
 import { useProducts } from '../../../contexts/products';
+import { Query } from '../../../contexts/query';
 import { ProductTagsProvider } from '../../../contexts/tags';
 
 type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
@@ -15,26 +16,40 @@ type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
  */
 const TagSelectSearch = ({ onBlur }) => {
 	const [opened, setOpened] = React.useState(false);
-	const { setQuery: setProductsQuery } = useProducts();
-	const tagSelectMenuRef = React.useRef(null);
+	const { query: productQuery } = useProducts();
 
 	/**
 	 *
 	 */
-	const onSearch = React.useCallback((search) => {
-		if (tagSelectMenuRef.current) {
-			tagSelectMenuRef.current.onSearch(search);
-		}
-	}, []);
+	const tagQuery = React.useMemo(
+		() =>
+			new Query({
+				// search: '',
+				sortBy: 'name',
+				sortDirection: 'asc',
+				// limit: 10,
+			}),
+		[]
+	);
+
+	/**
+	 *
+	 */
+	const onSearch = React.useCallback(
+		(search) => {
+			tagQuery.debouncedSearch(search);
+		},
+		[tagQuery]
+	);
 
 	/**
 	 *
 	 */
 	const onSelectTag = React.useCallback(
 		(tag: ProductTagDocument) => {
-			setProductsQuery('selector.tags.$elemMatch.id', tag.id);
+			productQuery.where('tags', { $elemMatch: { id: tag.id } });
 		},
-		[setProductsQuery]
+		[productQuery]
 	);
 
 	/**
@@ -47,19 +62,6 @@ const TagSelectSearch = ({ onBlur }) => {
 
 	// 	return t('Search Tags', { _tags: 'core' });
 	// }, [selectedTag]);
-
-	/**
-	 *
-	 */
-	const initialQuery = React.useMemo(
-		() => ({
-			// search: '',
-			sortBy: 'name',
-			sortDirection: 'asc',
-			// limit: 10,
-		}),
-		[]
-	);
 
 	/**
 	 *
@@ -77,9 +79,9 @@ const TagSelectSearch = ({ onBlur }) => {
 				<SearchInput setOpened={setOpened} onSearch={onSearch} onBlur={onBlur} />
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
-				<ProductTagsProvider initialQuery={initialQuery}>
+				<ProductTagsProvider query={tagQuery}>
 					<React.Suspense>
-						<TagSelectMenu ref={tagSelectMenuRef} onChange={onSelectTag} />
+						<TagSelectMenu onChange={onSelectTag} />
 					</React.Suspense>
 				</ProductTagsProvider>
 			</Popover.Content>
