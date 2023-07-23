@@ -63,6 +63,7 @@ class RxReplicationState<RxDocType, CheckpointType> {
 		new Subject();
 
 	private currentPull: CPromise<void> | null = null;
+	private started = false;
 
 	constructor(
 		/**
@@ -109,7 +110,10 @@ class RxReplicationState<RxDocType, CheckpointType> {
 			this.remoteEvents$.subscribe({
 				next: (ev) => {
 					if (ev === 'RESYNC') {
-						this.start();
+						/**
+						 * TODO: set remote ids lastAudit to null to force a remoteID fetch?
+						 */
+						this.start({ resync: true });
 					}
 					if (ev === 'QUERY') {
 						// Cancel the current pull operation if there is one
@@ -117,7 +121,7 @@ class RxReplicationState<RxDocType, CheckpointType> {
 							this.currentPull.cancel();
 							this.currentPull = null;
 						}
-						this.start({ fetchRemoteIDs: false });
+						this.start({ resync: true });
 					}
 				},
 			})
@@ -141,11 +145,23 @@ class RxReplicationState<RxDocType, CheckpointType> {
 	async fetchAndSaveRemoteIDs(): Promise<void> {
 		const fetchRemoteIDs = this.pull && this.pull.fetchRemoteIDs;
 		if (fetchRemoteIDs) {
-			const remoteIDs = await fetchRemoteIDs();
-			this.collection.upsertLocal(this.replicationIdentifierHash, {
-				remoteIDs,
-				lastAudit: new Date().toISOString(),
-			});
+			// get remoteIDs from local storage
+			let result = await this.collection.getLocal(this.replicationIdentifierHash);
+			// if not found, or if lastAudit is more than 10 minutes ago
+			if (!result || new Date(result.get('lastAudit')).getTime() < new Date().getTime() - 1000 * 60 * 10) {
+				// fetch remoteIDs
+				const remoteIDs = await fetchRemoteIDs();
+				// save remoteIDs to local storage
+				result = await this.collection.upsertLocal(this.replicationIdentifierHash, {
+					remoteIDs,
+					lastAudit: new Date().toISOString(),
+				});
+			}
+
+			// return remoteIDs
+			return result.get('remoteIDs');
+		} else {
+			throw new Error('fetchRemoteIDs is not defined');
 		}
 	}
 
@@ -156,26 +172,27 @@ class RxReplicationState<RxDocType, CheckpointType> {
 		const pullModifier =
 			this.pull && this.pull.modifier ? this.pull.modifier : (d: any) => Promise.resolve(d);
 
-		// get last remoteIDs
-		const remoteIDs = this.subjects.remoteIDs.getValue();
+		// get remoteIDs
+		const remoteIDs = await this.fetchAndSaveRemoteIDs();
 
-		// get all local docs with id
+		// get all local docs
 		const localDocs = await this.pull.fetchLocalDocs();
 
-		// get an array of ids as integers
-		const localIDs = localDocs.map((doc) => parseInt(doc.id, 10));
+		let localIDs = [];
+		let dates = [];
 
-		// get an array of date_modified_gmt as Date objects
-		const dates = localDocs
-			.map((doc) => doc.date_modified_gmt)
-			.filter((date) => date !== null && date !== undefined) // removes null or undefined values
-			.sort();
+		localDocs.forEach(doc => {
+			if (doc.id) {
+				localIDs.push(parseInt(doc.id, 10));
+		
+				if (doc.date_modified_gmt) {
+					dates.push(doc.date_modified_gmt);
+				}
+			}
+		});
 
-		// get the latest date_modified_gmt
-		let lastModified = null;
-		if (dates.length > 0) {
-			lastModified = dates[dates.length - 1];
-		}
+		// Sort the dates array in ascending order, then take the last one (the latest date)
+		const lastModified = dates.sort()[dates.length - 1];
 
 		// audit the remoteIDs and localIDs
 		const include = remoteIDs.filter((id) => !localIDs.includes(id)); // elements in remoteIDs but not in localIDs
@@ -214,10 +231,16 @@ class RxReplicationState<RxDocType, CheckpointType> {
 	/**
 	 *
 	 */
-	async start(options = { fetchRemoteIDs: true }): Promise<void> {
+	async start(options = { resync: false }): Promise<void> {
 		if (this.isStopped()) {
 			return;
 		}
+
+		// started flag to prevent multiple start() calls on re-renders
+		if(this.started && !options.resync) {
+			return;
+		}
+		this.started = true;
 
 		// Emit active event
 		this.subjects.active.next(true);
@@ -225,26 +248,6 @@ class RxReplicationState<RxDocType, CheckpointType> {
 		//
 		try {
 			const batchSize = this.pull.batchSize || 10;
-
-			// get remoteIDs
-			if (options.fetchRemoteIDs) {
-				await this.fetchAndSaveRemoteIDs();
-			}
-
-			// // Wrap runPull in a CPromise
-			// const pullOp = new CPromise((resolve, reject, { onCancel }) => {
-			// 	onCancel(() => {
-			// 		// Logic to stop ongoing pull operation
-			// 		// Possibly: resolve with a specific value or reject
-			// 	});
-
-			// 	this.runPull(batchSize).then(resolve).catch(reject);
-			// });
-
-			// // Store the operation so that we can cancel it later
-			// this.currentPull = pullOp;
-			// await pullOp;
-			// this.currentPull = null;
 
 			let count = 0;
 			let resultLength = batchSize;
@@ -277,6 +280,10 @@ class RxReplicationState<RxDocType, CheckpointType> {
 
 	isStopped(): boolean {
 		return this.subjects.canceled.getValue();
+	}
+
+	isStarted(): boolean {
+		return !this.isStopped() && this.started;
 	}
 
 	async awaitInitialReplication(): Promise<void> {
@@ -326,7 +333,7 @@ export function replicateRxCollection<RxDocType, CheckpointType>({
 	live = true,
 	retryTime = 1000 * 5,
 	waitForLeadership = true,
-	autoStart = true,
+	autoStart = false,
 }: WcRestApiReplicationOptions<RxDocType, CheckpointType>): RxReplicationState<
 	RxDocType,
 	CheckpointType
@@ -336,20 +343,6 @@ export function replicateRxCollection<RxDocType, CheckpointType>({
 	const replicationIdentifierHash = collection.database.hashFunction(
 		[collection.database.name, collection.name, replicationIdentifier].join('|')
 	);
-
-	/**
-	 * This is a bit of a hack
-	 * We only want one instance of a replication running for each endpoint
-	 * But, a collection can be destroyed and recreated, so if it's destroyed,
-	 * we need to create a new instance
-	 */
-	const oldReplicationState = replicationStates.get(replicationIdentifierHash);
-
-	if (oldReplicationState) {
-		if (oldReplicationState.collection.destroyed === collection.destroyed) {
-			return oldReplicationState;
-		}
-	}
 
 	const replicationState = new RxReplicationState<RxDocType, CheckpointType>(
 		replicationIdentifierHash,
@@ -361,9 +354,6 @@ export function replicateRxCollection<RxDocType, CheckpointType>({
 		retryTime,
 		autoStart
 	);
-
-	// set new instance to replicationStates
-	replicationStates.set(replicationIdentifierHash, replicationState);
 
 	startReplicationOnLeaderShip(waitForLeadership, replicationState);
 	return replicationState as any;

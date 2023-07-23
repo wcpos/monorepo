@@ -1,9 +1,9 @@
 import { RxPlugin } from 'rxdb';
 import { Subject } from 'rxjs';
 
-import { storeCollections } from '../';
+import { storeCollections } from '../collections';
 
-import type { StoreDatabaseCollections } from '../';
+import type { StoreDatabaseCollections } from '../stores-db';
 
 type CollectionKey = keyof typeof storeCollections;
 

@@ -4,7 +4,7 @@ import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration';
-import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
+// import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 
 import { findOneFixPlugin } from './find-one-fix';
@@ -33,7 +33,7 @@ if (process.env.NODE_ENV === 'development') {
 
 // default plugins
 addRxPlugin(RxDBLocalDocumentsPlugin);
-addRxPlugin(RxDBQueryBuilderPlugin);
+// addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBLeaderElectionPlugin);
 addRxPlugin(RxDBMigrationPlugin);
