@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { set } from 'lodash';
 import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
@@ -9,7 +10,8 @@ import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
 
 import AttributePill from './attribute-pill';
-import { useVariations } from '../../../contexts/variations';
+import { useVariationTable } from './context';
+import { useVariations, updateVariationQueryState } from '../../../contexts/variations';
 
 /**
  *
@@ -17,6 +19,8 @@ import { useVariations } from '../../../contexts/variations';
 const VariationsFilterBar = ({ parent }) => {
 	const theme = useTheme();
 	const { setQuery } = useVariations();
+	const { setVariationQuery } = useVariationTable();
+
 	// const allMatch = useObservableState(
 	// 	shownVariations$.pipe(
 	// 		map((q) => get(q, [parent.uuid, 'query', 'selector', 'attributes', '$allMatch'], []))
@@ -29,46 +33,10 @@ const VariationsFilterBar = ({ parent }) => {
 	// );
 
 	/**
-	 * Handle attribute selection
-	 * Attributes queries have the form:
-	 * {
-	 * 	selector: {
-	 * 		attributes: {
-	 * 			$allMatch: [
-	 * 				{
-	 * 					name: 'Color',
-	 * 					option: 'Blue',
-	 * 				},
-	 * 			],
-	 * 		},
-	 * 	}
 	 *
-	 * Note: $allMatch is an array so we need to check if it exists and add/remove to it
-	 *
-	 * @TODO - this sets VariationsProvider but not the parent shownVariations, so now we have two sources of truth
 	 */
 	const handleSelect = React.useCallback(
-		(attribute) => {
-			setQuery((prev) => {
-				// add attribute to query
-				const attributes = prev?.selector?.attributes || {};
-				attributes.$allMatch = attributes.$allMatch || [];
-				// add or replace attribute
-				const index = attributes.$allMatch.findIndex((a) => a.name === attribute.name);
-				if (index > -1) {
-					attributes.$allMatch[index] = attribute;
-				} else {
-					attributes.$allMatch.push(attribute);
-				}
-				return {
-					...prev,
-					selector: {
-						...prev.selector,
-						attributes,
-					},
-				};
-			});
-		},
+		(attribute) => setQuery((prev) => updateVariationQueryState(prev, attribute)),
 		[setQuery]
 	);
 
@@ -102,7 +70,7 @@ const VariationsFilterBar = ({ parent }) => {
 					})}
 			</Box>
 			<Box>
-				<Icon name="chevronUp" size="small" onPress={() => setVariationsQuery(parent, undefined)} />
+				<Icon name="chevronUp" size="small" onPress={() => setVariationQuery(null)} />
 			</Box>
 		</Box>
 	);

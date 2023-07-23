@@ -9,14 +9,15 @@ import { t } from '../../../lib/translations';
 import useRestHttpClient from '../hooks/use-rest-http-client';
 
 type RxDocument = import('rxdb').RxDocument;
+type RxCollection = import('rxdb').RxCollection;
 
 const usePullDocument = () => {
 	const http = useRestHttpClient();
 	const addSnackbar = useSnackbar();
 
 	return React.useCallback(
-		async (id, collection) => {
-			let endpoint = collection.name;
+		async (id: number, collection: RxCollection, apiEndpoint?: string) => {
+			let endpoint = apiEndpoint || collection.name;
 			// quick hack to stop the Guest customer error
 			const num = Number(id);
 			if (!(Number.isInteger(num) && num > 0)) {

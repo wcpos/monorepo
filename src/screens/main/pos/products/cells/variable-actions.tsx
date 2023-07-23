@@ -20,6 +20,16 @@ const VariableActions = ({ item: parent }: VariableActionsProps) => {
 	const { addVariation } = useCartHelpers();
 	// const { format } = useCurrencyFormat();
 
+	/**
+	 *
+	 */
+	const initialQuery = React.useMemo(
+		() => ({
+			selector: { id: { $in: parent.variations } },
+		}),
+		[parent.variations]
+	);
+
 	// /**
 	//  *
 	//  */
@@ -45,7 +55,11 @@ const VariableActions = ({ item: parent }: VariableActionsProps) => {
 				/>
 			</Popover.Target>
 			<Popover.Content>
-				<VariationsProvider parent={parent} initialQuery={{}}>
+				<VariationsProvider
+					initialQuery={initialQuery}
+					apiEndpoint={`products/${parent.id}/variations`}
+					remoteIDs={parent.variations}
+				>
 					<VariationsPopover parent={parent} addToCart={addToCart} />
 				</VariationsProvider>
 			</Popover.Content>

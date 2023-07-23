@@ -1,34 +1,17 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import useLocalData from '../../../../../contexts/local-data';
 import { t } from '../../../../../lib/translations';
-import useVariations from '../../../contexts/variations';
-import useTotalCount from '../../../hooks/use-total-count';
+import { useVariations } from '../../../contexts/variations';
 import SyncButton from '../../sync-button';
 
-interface VariationsFooterProps {
-	count: number;
-	parent: import('@wcpos/database').ProductDocument;
-}
-
-/**
- *
- */
-const VariationsFooter = ({ count, parent }: VariationsFooterProps) => {
-	// const { storeDB, store } = useLocalData();
-	// const total = useObservableState(storeDB.products.count().$, 0);
+const VariationFooterTableRow = ({ count, total, loading }) => {
 	const theme = useTheme();
-	const { replicationState, sync, clear } = useVariations();
-	const active = useObservableState(replicationState.active$, false);
-	const total = useTotalCount('variations', replicationState);
+	const { sync, clear } = useVariations();
 
 	return (
 		<Box
@@ -44,10 +27,10 @@ const VariationsFooter = ({ count, parent }: VariationsFooterProps) => {
 		>
 			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">
 				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
-				<SyncButton sync={sync} clear={clear} active={active} />
+				<SyncButton sync={sync} clear={clear} active={loading} />
 			</Box>
 		</Box>
 	);
 };
 
-export default VariationsFooter;
+export default VariationFooterTableRow;

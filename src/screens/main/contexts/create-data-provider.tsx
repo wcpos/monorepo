@@ -15,7 +15,8 @@ import type { Observable } from 'rxjs';
 interface DataProviderProps {
 	children: React.ReactNode;
 	initialQuery?: QueryState;
-	uiSettings?: import('./ui-settings').UISettingsDocument;
+	apiEndpoint?: string;
+	remoteIDs?: number[];
 }
 
 interface DataContextValue<TDocument> {
@@ -68,11 +69,17 @@ const createDataProvider = <TDocument, TQueryParams>({
 	/**
 	 *
 	 */
-	const DataProvider = ({ children, initialQuery, uiSettings }: DataProviderProps) => {
+	const DataProvider = ({ children, initialQuery, apiEndpoint, remoteIDs }: DataProviderProps) => {
 		const { storeDB } = useLocalData();
 		const { collection } = useCollection(collectionName);
 		const { query$, setQuery, setDebouncedQuery } = useQuery(initialQuery);
-		const replicationState = useReplicationState({ collection, query$, prepareQueryParams });
+		const replicationState = useReplicationState({
+			collection,
+			query$,
+			prepareQueryParams,
+			apiEndpoint,
+			remoteIDs,
+		});
 		const filteredQuery$ = filterQuery ? filterQuery(query$) : query$;
 		const { queryData$ } = useLocalDataQuery({ collection, query$: filteredQuery$ });
 		const filteredQueryData$ = filterQueryData ? filterQueryData(queryData$, query$) : queryData$;

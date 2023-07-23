@@ -6,13 +6,16 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 
-import Variations from './variations';
 import { ProductImage } from '../../../components/product/image';
 import VariablePrice from '../../../components/product/variable-price';
+import Variations from '../../../components/product/variation-table-rows';
+import { VariationTableContext } from '../../../components/product/variation-table-rows/context';
 import { Name } from '../cells/name';
+import { Price } from '../cells/price';
 import { SKU } from '../cells/sku';
 import { StockQuantity } from '../cells/stock-quantity';
 import VariableActions from '../cells/variable-actions';
+import { ProductVariationActions } from '../cells/variation-actions';
 
 import type { ListRenderItemInfo } from '@shopify/flash-list';
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -22,8 +25,15 @@ const cells = {
 	image: ProductImage,
 	name: Name,
 	price: VariablePrice,
-	sku: SKU,
 	stock_quantity: StockQuantity,
+	sku: SKU,
+};
+
+const variationCells = {
+	actions: ProductVariationActions,
+	stock_quantity: StockQuantity,
+	price: Price,
+	sku: SKU,
 };
 
 /**
@@ -38,23 +48,6 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	const cellRenderer = React.useCallback<CellRenderer<ProductDocument>>(
 		({ item, column, index, cellWidth }) => {
 			const Cell = get(cells, column.key);
-
-			if (column.key === 'name') {
-				return (
-					<ErrorBoundary>
-						<React.Suspense>
-							<Cell
-								item={item}
-								column={column}
-								index={index}
-								cellWidth={cellWidth}
-								variationQuery={variationQuery}
-								setVariationQuery={setVariationQuery}
-							/>
-						</React.Suspense>
-					</ErrorBoundary>
-				);
-			}
 
 			if (Cell) {
 				return (
@@ -72,14 +65,28 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 
 			return null;
 		},
-		[variationQuery]
+		[]
 	);
 
+	/**
+	 *
+	 */
+	const variationQueryContext = React.useMemo(() => {
+		return {
+			variationQuery,
+			setVariationQuery,
+			cells: variationCells,
+		};
+	}, [variationQuery]);
+
+	/**
+	 *
+	 */
 	return (
-		<>
+		<VariationTableContext.Provider value={variationQueryContext}>
 			<Table.Row item={item} index={index} cellRenderer={cellRenderer} />
-			{!!variationQuery && <Variations parent={item} variationQuery={variationQuery} />}
-		</>
+			{!!variationQuery && <Variations parent={item} />}
+		</VariationTableContext.Provider>
 	);
 };
 

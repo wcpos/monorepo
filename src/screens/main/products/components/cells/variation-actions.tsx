@@ -48,7 +48,11 @@ const Actions = ({ item: variation, parent }: Props) => {
 						label: t('Sync', { _tags: 'core' }),
 						action: () => {
 							if (variation.id) {
-								pullDocument(variation.id, variation.collection);
+								pullDocument(
+									variation.id,
+									variation.collection,
+									`products/${parent.id}/variations`
+								);
 							}
 						},
 						icon: 'arrowRotateRight',

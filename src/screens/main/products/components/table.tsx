@@ -9,7 +9,6 @@ import Table, { TableContextProps } from '@wcpos/components/src/table';
 import Footer from './footer';
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
-import VariationsTableRow from './rows/variations';
 import { t } from '../../../../lib/translations';
 import EmptyTableRow from '../../components/empty-table-row';
 import { useProducts } from '../../contexts/products';
@@ -26,7 +25,6 @@ interface ProductsTableProps {
 const TABLE_ROW_COMPONENTS = {
 	simple: SimpleProductTableRow,
 	variable: VariableProductTableRow,
-	variations: VariationsTableRow,
 };
 
 /**
@@ -35,8 +33,6 @@ const TABLE_ROW_COMPONENTS = {
 const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	const { query$, setQuery, paginatedResource, replicationState, loadNextPage } = useProducts();
 	const { data, count, hasMore } = useObservableSuspense(paginatedResource);
-	// const shownVariations = useObservableState(shownVariations$, {});
-	const shownVariations = {};
 	const loading = useObservableState(replicationState.active$, false);
 	const total = useTotalCount('products', replicationState);
 	const query = useObservableState(query$, query$.getValue());
@@ -44,23 +40,6 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
-
-	/**
-	 *
-	 */
-	const productsAndVariations = React.useMemo(() => {
-		const result = [];
-
-		data.forEach((record) => {
-			result.push(record);
-
-			if (shownVariations[record.uuid]) {
-				result.push({ type: 'variations', parent: record });
-			}
-		});
-
-		return result;
-	}, [data, shownVariations]);
 
 	/**
 	 *
@@ -113,7 +92,7 @@ const ProductsTable = ({ uiSettings }: ProductsTableProps) => {
 	 */
 	return (
 		<Table<ProductDocument>
-			data={productsAndVariations}
+			data={data}
 			footer={<Footer count={count} total={total} loading={loading} />}
 			estimatedItemSize={150}
 			context={context}

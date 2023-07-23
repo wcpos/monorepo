@@ -29,7 +29,7 @@ interface Props {
 		batchSize: number
 	) => Record<string, string>;
 	pollingTime?: number;
-	tag?: string;
+	remoteIDs?: number[];
 }
 
 /**
@@ -41,6 +41,7 @@ export const useReplicationState = ({
 	query$,
 	prepareQueryParams,
 	pollingTime = 600000,
+	remoteIDs,
 }: Props) => {
 	const { site } = useLocalData();
 	const apiURL = useObservableState(site.wc_api_url$, site.wc_api_url);
@@ -61,9 +62,12 @@ export const useReplicationState = ({
 			replicationIdentifier: `replication-to-${apiURL}/${endpoint}`,
 			pull: {
 				fetchRemoteIDs: async () => {
-					/**
-					 * TODO: if variation, this should just return the parent.variations
-					 */
+					// if remoteIDs are passed in, use those
+					if (remoteIDs) {
+						return remoteIDs;
+					}
+
+					// otherwise, fetch from API
 					try {
 						const response = await http.get(endpoint, {
 							params: { fields: ['id'], posts_per_page: -1 },

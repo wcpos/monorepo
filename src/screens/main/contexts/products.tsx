@@ -1,3 +1,5 @@
+import { map } from 'rxjs/operators';
+
 import createDataProvider from './create-data-provider';
 
 type ProductDocument = import('@wcpos/database/src').ProductDocument;

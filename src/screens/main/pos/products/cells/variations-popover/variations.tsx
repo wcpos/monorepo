@@ -11,7 +11,7 @@ import Text from '@wcpos/components/src/text';
 import VariationButtons from './buttons';
 import VariationSelect from './select';
 import { t } from '../../../../../../lib/translations';
-import useVariations from '../../../../contexts/variations';
+import { useVariations, updateVariationQueryState } from '../../../../contexts/variations';
 import useCartHelpers from '../../../../hooks/use-cart-helpers';
 import useCollection from '../../../../hooks/use-collection';
 import useCurrencyFormat from '../../../../hooks/use-currency-format';
@@ -40,7 +40,7 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	const { setPrimaryAction } = usePopover();
 	const { collection } = useCollection('variations');
 	const { resource, setQuery } = useVariations();
-	const { data: variations } = useObservableSuspense(resource);
+	const variations = useObservableSuspense(resource);
 
 	/**
 	 *
@@ -54,26 +54,8 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	 *
 	 */
 	const handleSelect = React.useCallback(
-		(attribute, option) => {
-			setQuery((prev) => {
-				// add attribute to query
-				const attributes = prev?.selector?.attributes || {};
-				attributes.$allMatch = attributes.$allMatch || [];
-				// add or replace attribute
-				const index = attributes.$allMatch.findIndex((a) => a.name === attribute.name);
-				if (index > -1) {
-					attributes.$allMatch[index] = { name: attribute.name, option };
-				} else {
-					attributes.$allMatch.push({ name: attribute.name, option });
-				}
-				return {
-					...prev,
-					selector: {
-						...prev.selector,
-						attributes,
-					},
-				};
-			});
+		(attribute, option: string) => {
+			setQuery((prev) => updateVariationQueryState(prev, { name: attribute.name, option }));
 		},
 		[setQuery]
 	);

@@ -8,8 +8,10 @@ import VariationsFilterBar from '../../../../components/product/variation-table-
 import { useProducts } from '../../../../contexts/products';
 import { VariationsProvider } from '../../../../contexts/variations';
 
-const Variations = ({ item }) => {
-	const { parent } = item;
+/**
+ *
+ */
+const Variations = ({ parent }) => {
 	const { query$ } = useProducts();
 
 	/**
@@ -28,7 +30,7 @@ const Variations = ({ item }) => {
 	 */
 	return (
 		<VariationsProvider parent={parent} initialQuery={initialQuery}>
-			<Box style={{ height: 500 }}>
+			<Box>
 				<ErrorBoundary>
 					<VariationsFilterBar parent={parent} />
 				</ErrorBoundary>

@@ -6,14 +6,16 @@ import Box from '@wcpos/components/src/box';
 import Link from '@wcpos/components/src/link';
 import Text from '@wcpos/components/src/text';
 
+import { useVariationTable } from './variation-table-rows/context';
 import { t } from '../../../../lib/translations';
 
 type Props = {
 	product: import('@wcpos/database').ProductDocument;
 };
 
-const ProductAttributes = ({ product, variationQuery, setVariationQuery }: Props) => {
+const ProductAttributes = ({ product }: Props) => {
 	const attributes = useObservableState(product.attributes$, product.attributes);
+	const { variationQuery, setVariationQuery } = useVariationTable();
 
 	/**
 	 *
