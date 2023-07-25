@@ -1,6 +1,8 @@
 import * as React from 'react';
 
+import { is } from 'core-js/core/object';
 import get from 'lodash/get';
+import { useObservableState } from 'observable-hooks';
 import Animated, { useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { isRxDocument } from 'rxdb';
 
@@ -18,8 +20,8 @@ import Tags from '../../../components/product/tags';
 import VariablePrice from '../../../components/product/variable-price';
 import Variations from '../../../components/product/variation-table-rows';
 import { VariationTableContext } from '../../../components/product/variation-table-rows/context';
+import { Query } from '../../../contexts/query';
 import usePushDocument from '../../../contexts/use-push-document';
-import { updateVariationQueryState } from '../../../contexts/variations';
 import Actions from '../cells/actions';
 import Barcode from '../cells/barcode';
 import EdittablePrice from '../cells/edittable-price';
@@ -59,17 +61,11 @@ const variationCells = {
 /**
  *
  */
-const VariableProductTableRow = ({ item, index, target }: ListRenderItemInfo<ProductDocument>) => {
+const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();
-	const [variationQuery, _setVariationQuery] = React.useState(null);
-
-	/**
-	 *
-	 */
-	const setVariationQuery = React.useCallback((attribute) => {
-		_setVariationQuery((prev) => updateVariationQueryState(prev, attribute));
-	}, []);
+	const variationIDs = useObservableState(item.variations$, item.variations);
+	const [expanded, setExpanded] = React.useState(false);
 
 	/**
 	 *
@@ -129,31 +125,47 @@ const VariableProductTableRow = ({ item, index, target }: ListRenderItemInfo<Pro
 	);
 
 	/**
+	 * Create a new query for variations on:
+	 * - change to variationIDs
+	 * - change to expanded
 	 *
+	 * @TODO - sync sorting with parent product
+	 * @TODO - fix hack for attribute click
 	 */
 	const variationTableContext = React.useMemo(() => {
+		const query = new Query({
+			selector: { id: { $in: variationIDs } },
+			sortBy: 'id',
+			sortDirection: 'asc',
+		});
+
+		if (typeof expanded === 'object') {
+			query.search({ attributes: [expanded] });
+		}
+
 		return {
-			variationQuery,
-			setVariationQuery,
+			query,
+			expanded: !!expanded,
+			setExpanded,
 			cells: variationCells,
 		};
-	}, [setVariationQuery, variationQuery]);
+	}, [expanded, variationIDs]);
 
 	/**
 	 *
 	 */
-	const animatedStyle = useAnimatedStyle(() => {
-		return {
-			height: withTiming(
-				variationQuery ? 500 : 100,
-				{
-					duration: 500,
-					easing: Easing.out(Easing.exp),
-				},
-				() => {}
-			),
-		};
-	});
+	// const animatedStyle = useAnimatedStyle(() => {
+	// 	return {
+	// 		height: withTiming(
+	// 			expanded ? 500 : 100,
+	// 			{
+	// 				duration: 500,
+	// 				easing: Easing.out(Easing.exp),
+	// 			},
+	// 			() => {}
+	// 		),
+	// 	};
+	// });
 
 	/**
 	 *
@@ -161,10 +173,10 @@ const VariableProductTableRow = ({ item, index, target }: ListRenderItemInfo<Pro
 	return (
 		<VariationTableContext.Provider value={variationTableContext}>
 			<Table.Row item={item} index={index} cellRenderer={cellRenderer} />
-			{!!variationQuery && (
-				<Animated.View style={animatedStyle}>
-					<Variations parent={item} />
-				</Animated.View>
+			{!!expanded && (
+				// <Animated.View style={animatedStyle}>
+				<Variations parent={item} />
+				// </Animated.View>
 			)}
 		</VariationTableContext.Provider>
 	);

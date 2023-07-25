@@ -10,16 +10,16 @@ type ProductTagsProps = {
 
 const ProductTags = ({ item: product }: ProductTagsProps) => {
 	const { tags } = product;
-	const { setQuery } = useProducts();
+	const { query } = useProducts();
 
 	/**
 	 *
 	 */
 	const handleSelectTag = React.useCallback(
 		(tag: any) => {
-			setQuery('selector.tags.$elemMatch.id', tag.id);
+			query.where('tags', { $elemMatch: { id: tag.id } });
 		},
-		[setQuery]
+		[query]
 	);
 
 	/**

@@ -10,16 +10,16 @@ interface ProductCategoriesProps {
 
 const ProductCategories = ({ item: product }: ProductCategoriesProps) => {
 	const { categories } = product;
-	const { setQuery } = useProducts();
+	const { query } = useProducts();
 
 	/**
 	 *
 	 */
 	const handleSelectCategory = React.useCallback(
 		(category: any) => {
-			setQuery('selector.categories.$elemMatch.id', category.id);
+			query.where('categories', { $elemMatch: { id: category.id } });
 		},
-		[setQuery]
+		[query]
 	);
 
 	/**

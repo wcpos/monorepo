@@ -8,6 +8,7 @@ import Text from '@wcpos/components/src/text';
 
 import { useVariationTable } from './variation-table-rows/context';
 import { t } from '../../../../lib/translations';
+import { updateVariationAttributeSearch } from '../../contexts/variations.helpers';
 
 type Props = {
 	product: import('@wcpos/database').ProductDocument;
@@ -15,7 +16,7 @@ type Props = {
 
 const ProductAttributes = ({ product }: Props) => {
 	const attributes = useObservableState(product.attributes$, product.attributes);
-	const { variationQuery, setVariationQuery } = useVariationTable();
+	const { query, expanded, setExpanded } = useVariationTable();
 
 	/**
 	 *
@@ -32,7 +33,20 @@ const ProductAttributes = ({ product }: Props) => {
 								<Link
 									size="small"
 									onPress={() => {
-										setVariationQuery({ name: attr.name, option });
+										if (!expanded) {
+											// @TODO - find a better way to do this
+											// I need to expand the table, then update the query
+											setExpanded({
+												name: attr.name,
+												option,
+											});
+										} else {
+											const newState = updateVariationAttributeSearch(query.currentState.search, {
+												name: attr.name,
+												option,
+											});
+											query.search(newState);
+										}
 									}}
 								>
 									{option}
@@ -42,8 +56,8 @@ const ProductAttributes = ({ product }: Props) => {
 						))}
 					</Text>
 				))}
-			<Link size="small" onPress={() => setVariationQuery(variationQuery ? null : {})}>
-				{variationQuery ? t('Collapse', { _tags: 'core' }) : t('Expand', { _tags: 'core' })}
+			<Link size="small" onPress={() => setExpanded(!expanded)}>
+				{expanded ? t('Collapse', { _tags: 'core' }) : t('Expand', { _tags: 'core' })}
 			</Link>
 		</Box>
 	);

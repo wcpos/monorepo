@@ -4,7 +4,7 @@ import get from 'lodash/get';
 import { ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { of } from 'rxjs';
-import { switchMap, tap } from 'rxjs/operators';
+import { startWith, switchMap, tap } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 
@@ -23,10 +23,11 @@ const FilterBar = () => {
 	const pullDocument = usePullDocument();
 
 	/**
-	 *
+	 * TODO - this is a bit of a hack, but it works for now.
 	 */
 	const selectedCategoryResource = React.useMemo(() => {
 		const selectedCategory$ = query.state$.pipe(
+			startWith(get(query, ['currentState', 'selector', 'categories', '$elemMatch', 'id'])),
 			switchMap((query) => {
 				const categoryFilterID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
 				if (categoryFilterID) {
@@ -43,13 +44,14 @@ const FilterBar = () => {
 		);
 
 		return new ObservableResource(selectedCategory$);
-	}, [categoryCollection, pullDocument, query.state$]);
+	}, [categoryCollection, pullDocument, query]);
 
 	/**
 	 *
 	 */
 	const selectedTagResource = React.useMemo(() => {
 		const selectedTag$ = query.state$.pipe(
+			startWith(get(query, ['currentState', 'selector', 'tags', '$elemMatch', 'id'])),
 			switchMap((query) => {
 				const tagFilterID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
 				if (tagFilterID) {
@@ -66,7 +68,7 @@ const FilterBar = () => {
 		);
 
 		return new ObservableResource(selectedTag$);
-	}, [pullDocument, query.state$, tagCollection]);
+	}, [pullDocument, query, tagCollection]);
 
 	/**
 	 *

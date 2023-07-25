@@ -15,8 +15,7 @@ import {
 import useLocalData from '../../../../contexts/local-data';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
-import type { Query } from './query';
-import type { QueryObservable, QueryState } from '../use-query';
+import type { Query, QueryState } from '../query';
 import type { RxCollection } from 'rxdb';
 
 interface Props {
@@ -31,6 +30,7 @@ interface Props {
 	) => Record<string, string>;
 	pollingTime?: number;
 	remoteIDs?: number[];
+	hooks?: any;
 }
 
 /**
@@ -43,6 +43,7 @@ export const useReplicationState = ({
 	prepareQueryParams,
 	pollingTime = 600000,
 	remoteIDs,
+	hooks,
 }: Props) => {
 	const { site } = useLocalData();
 	const apiURL = useObservableState(site.wc_api_url$, site.wc_api_url);
@@ -73,10 +74,18 @@ export const useReplicationState = ({
 						const response = await http.get(endpoint, {
 							params: { fields: ['id'], posts_per_page: -1 },
 						});
-						const data = get(response, 'data', []);
-						return data.map((doc) => doc.id);
+
+						const data = get(response, 'data');
+
+						// Check if data is an array and its items have a property 'id' of type number
+						if (Array.isArray(data) && data.every((item) => typeof item.id === 'number')) {
+							return data.map((doc) => doc.id);
+						}
+
+						throw new Error('Fetch remote IDs failed');
 					} catch (err) {
 						log.error(err);
+						throw err;
 					}
 				},
 				fetchLocalDocs: async () => {
@@ -90,12 +99,31 @@ export const useReplicationState = ({
 						log.error(err);
 					}
 				},
+				audit: async ({ include, exclude, remove }) => {
+					if (remove.length > 0 && collection.name !== 'variations') {
+						// deletion should be rare, only when an item is deleted from the server
+						log.warn('removing', remove, 'from', collection.name);
+						await collection.bulkRemove(remove);
+					}
+				},
 				handler: async (checkpoint, batchSize) => {
 					try {
-						const params = query.getApiQueryParams();
+						let params = query.getApiQueryParams();
+						if (hooks.filterApiQueryParams) {
+							params = hooks.filterApiQueryParams(params, checkpoint, batchSize);
+						}
+
+						/**
+						 * If params hook returns false, don't fetch
+						 */
 						console.log('params', params);
-						// const defaultParams = defaultPrepareQueryParams(query, batchSize);
-						// const params = prepareQueryParams(defaultParams, query, checkpoint, batchSize);
+						if (!params) {
+							return {
+								documents: [],
+								checkpoint,
+							};
+						}
+
 						let response;
 
 						if (checkpoint.completeIntitalSync) {
@@ -144,7 +172,7 @@ export const useReplicationState = ({
 				stream$: poll$,
 			},
 		});
-	}, [apiURL, collection, endpoint, http, poll$, query, remoteIDs]);
+	}, [apiURL, collection, endpoint, hooks, http, poll$, query, remoteIDs]);
 
 	return replicationState;
 };

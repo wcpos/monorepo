@@ -35,7 +35,7 @@ const VariationsTable = ({ parent }) => {
 	const { data, count, hasMore } = useObservableSuspense(paginatedResource);
 	const loading = useObservableState(replicationState.active$, false);
 	const total = parent.variations.length;
-	const { query$ } = useProducts();
+	// const { query } = useProducts();
 	const context = useTable(); // get context from parent product, ie: columns
 	const { cells } = useVariationTable();
 

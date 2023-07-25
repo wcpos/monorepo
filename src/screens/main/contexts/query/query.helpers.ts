@@ -14,3 +14,16 @@ export function removeNulls(obj: any): QueryState {
 	}
 	return obj as QueryState;
 }
+
+/**
+ *
+ */
+export function stringifyWithSortedKeys(obj: any): string {
+	if (obj !== null && typeof obj === 'object') {
+		const sortedKeys = Object.keys(obj).sort();
+		return `{${sortedKeys
+			.map((key) => `"${key}":${stringifyWithSortedKeys(obj[key])}`)
+			.join(',')}}`;
+	}
+	return JSON.stringify(obj);
+}

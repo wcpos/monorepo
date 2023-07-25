@@ -14,6 +14,10 @@ const useTaxLocation = () => {
 	const billing = useObservableState(currentOrder.billing$, currentOrder?.billing);
 	const shipping = useObservableState(currentOrder.shipping$, currentOrder?.shipping);
 
+	// React.useEffect(() => {
+	// 	console.log(currentOrder);
+	// }, [currentOrder]);
+
 	return React.useMemo(() => {
 		if (taxBasedOn === 'base') {
 			return baseLocation;

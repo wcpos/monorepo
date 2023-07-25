@@ -3,12 +3,12 @@ import debounce from 'lodash/debounce';
 import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
 import { RxCollection, RxDocument } from 'rxdb';
-import { BehaviorSubject, Observable, of } from 'rxjs';
-import { switchMap, map, distinctUntilChanged, shareReplay } from 'rxjs/operators';
+import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
+import { switchMap, map, distinctUntilChanged, shareReplay, tap, skip } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import { removeNulls } from './query.helpers';
+import { removeNulls, stringifyWithSortedKeys } from './query.helpers';
 
 type SortDirection = import('@wcpos/components/src/table').SortDirection;
 
@@ -21,6 +21,16 @@ export interface QueryState {
 	skip?: number;
 }
 
+export type HookTypes = {
+	preQuerySelector: (selector: any, queryState: QueryState) => any;
+	postQueryResult: (result: any, queryState: QueryState) => any;
+	// anotherHookType: (arg1: Type1, arg2: Type2) => ReturnType;
+	// Add other hook types as needed...
+};
+export type Hooks = {
+	[K in keyof HookTypes]?: HookTypes[K];
+};
+
 type WhereClause = { field: string; value: any };
 
 /**
@@ -30,18 +40,28 @@ class Query<T> {
 	private _whereClauses: WhereClause[] = [];
 	private _collection: RxCollection<any, object, object> | undefined;
 	private _queryState$ = new BehaviorSubject<QueryState | undefined>(undefined);
+	private _hooks: Hooks = {};
 
 	constructor(private queryState: QueryState) {
+		if (queryState.selector) {
+			for (const field in queryState.selector) {
+				this._whereClauses.push({ field, value: queryState.selector[field] });
+			}
+		}
 		this.updateState(queryState);
-	}
-
-	private updateState(newState: QueryState) {
-		this._queryState$.next(removeNulls(newState));
 	}
 
 	collection<T>(collection: RxCollection<T, object, object>): this {
 		this._collection = collection;
 		return this;
+	}
+
+	addHook(type: keyof HookTypes, fn: any) {
+		this._hooks[type] = fn;
+	}
+
+	updateState(newState: QueryState) {
+		this._queryState$.next(removeNulls(newState));
 	}
 
 	where(field: string, value: any): this {
@@ -89,8 +109,9 @@ class Query<T> {
 			if (query.trim() === '') {
 				this._whereClauses = this._whereClauses.filter((clause) => clause.field !== 'uuid');
 			} else {
+				// @ts-ignore
 				const { hits } = await this._collection.search(query);
-				const uuids = hits.map((hit) => hit.id);
+				const uuids = hits.map((hit: any) => hit.id);
 				this._whereClauses.push({ field: 'uuid', value: { $in: uuids } });
 			}
 		}
@@ -123,25 +144,45 @@ class Query<T> {
 	}
 
 	get state$(): Observable<QueryState | undefined> {
-		return this._queryState$.asObservable();
+		return this._queryState$.pipe(
+			skip(1),
+			distinctUntilChanged((x, y) => stringifyWithSortedKeys(x) === stringifyWithSortedKeys(y))
+		);
 	}
 
 	get $() {
 		return this._queryState$.pipe(
 			switchMap((queryState) => {
-				if (!this._collection || !queryState) return [];
-				const selector = queryState.selector || {};
+				if (!this._collection || !queryState) {
+					throw new Error('Collection or queryState is not set');
+				}
 
-				return this._collection
-					.find({ selector })
-					.$.pipe(map((result) => ({ result, queryState })));
+				let selector = queryState.selector || {};
+				if (this._hooks.preQuerySelector) {
+					selector = this._hooks.preQuerySelector(selector, queryState);
+				}
+
+				return this._collection.find({ selector }).$.pipe(
+					// tap((res) => console.log(res)),
+					map((result) => ({ result, queryState }))
+				);
 			}),
 			/**
 			 * NoSQL sorting wasn't working for string numbers, so I'm handling sorting here
 			 */
 			map(({ result, queryState }) => {
+				// Call the hook function if it's registered
+				if (this._hooks.postQueryResult) {
+					result = this._hooks.postQueryResult(result, queryState);
+				}
 				const { sortBy, sortDirection } = queryState;
-				return orderBy(result, [sortBy], [sortDirection]);
+				let sortedResult = result;
+
+				if (sortBy && sortDirection) {
+					sortedResult = orderBy(result, [sortBy], [sortDirection]);
+				}
+
+				return sortedResult;
 			}),
 			/**
 			 * We're only interested in insert/delete documents and order changes

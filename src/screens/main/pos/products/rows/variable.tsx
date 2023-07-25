@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
+import { useObservableState } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { CellRenderer } from '@wcpos/components/src/table';
@@ -10,6 +11,7 @@ import { ProductImage } from '../../../components/product/image';
 import VariablePrice from '../../../components/product/variable-price';
 import Variations from '../../../components/product/variation-table-rows';
 import { VariationTableContext } from '../../../components/product/variation-table-rows/context';
+import { Query } from '../../../contexts/query';
 import { Name } from '../cells/name';
 import { Price } from '../cells/price';
 import { SKU } from '../cells/sku';
@@ -40,7 +42,8 @@ const variationCells = {
  *
  */
 const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
-	const [variationQuery, setVariationQuery] = React.useState(null);
+	const variationIDs = useObservableState(item.variations$, item.variations);
+	const [expanded, setExpanded] = React.useState(false);
 
 	/**
 	 *
@@ -69,23 +72,39 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	);
 
 	/**
+	 * Create a new query for variations on:
+	 * - change to variationIDs
+	 * - change to expanded
 	 *
+	 * @TODO - sync sorting with parent product
+	 * @TODO - fix hack for attribute click
 	 */
-	const variationQueryContext = React.useMemo(() => {
+	const variationTableContext = React.useMemo(() => {
+		const query = new Query({
+			selector: { id: { $in: variationIDs } },
+			sortBy: 'id',
+			sortDirection: 'asc',
+		});
+
+		if (typeof expanded === 'object') {
+			query.search({ attributes: [expanded] });
+		}
+
 		return {
-			variationQuery,
-			setVariationQuery,
+			query,
+			expanded: !!expanded,
+			setExpanded,
 			cells: variationCells,
 		};
-	}, [variationQuery]);
+	}, [expanded, variationIDs]);
 
 	/**
 	 *
 	 */
 	return (
-		<VariationTableContext.Provider value={variationQueryContext}>
+		<VariationTableContext.Provider value={variationTableContext}>
 			<Table.Row item={item} index={index} cellRenderer={cellRenderer} />
-			{!!variationQuery && <Variations parent={item} />}
+			{!!expanded && <Variations parent={item} />}
 		</VariationTableContext.Provider>
 	);
 };

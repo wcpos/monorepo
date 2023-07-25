@@ -43,10 +43,6 @@ const convertHexToRGBA = (hexCode, opacity = 1) => {
 	return `rgba(${r},${g},${b},${opacity})`;
 };
 
-interface CustomerSelectMenuHandles {
-	onSearch: (query: string) => void;
-}
-
 interface CustomerSelectMenuProps {
 	onChange: (item: CustomerDocument) => void;
 }
@@ -54,105 +50,94 @@ interface CustomerSelectMenuProps {
 /**
  *
  */
-const CustomerSelectMenu = React.forwardRef<CustomerSelectMenuHandles, CustomerSelectMenuProps>(
-	({ onChange }, ref) => {
-		const theme = useTheme();
-		const { paginatedResource, setQuery, replicationState, loadNextPage } = useCustomers();
-		const { data: customers, count, hasMore } = useObservableSuspense(paginatedResource);
-		const loading = useObservableState(replicationState.active$, false);
-		const total = useTotalCount('customers', replicationState);
-		const { targetMeasurements, contentMeasurements } = usePopover();
+const CustomerSelectMenu = ({ onChange }: CustomerSelectMenuProps) => {
+	const theme = useTheme();
+	const { paginatedResource, replicationState, loadNextPage } = useCustomers();
+	const { data: customers, count, hasMore } = useObservableSuspense(paginatedResource);
+	const loading = useObservableState(replicationState.active$, false);
+	const total = useTotalCount('customers', replicationState);
+	const { targetMeasurements, contentMeasurements } = usePopover();
 
-		/**
-		 * Use useImperativeHandle to expose setQuery function
-		 */
-		React.useImperativeHandle(ref, () => ({
-			onSearch: (search) => {
-				React.startTransition(() => setQuery('search', search, true));
-			},
-		}));
+	/**
+	 *
+	 */
+	const calculatedStyled = React.useCallback(
+		({ hovered }) => {
+			const hoverBackgroundColor = convertHexToRGBA(theme.colors['primary'], 0.1);
+			return [
+				{
+					padding: theme.spacing.small,
+					flex: 1,
+					flexDirection: 'row',
+					backgroundColor: hovered ? hoverBackgroundColor : 'transparent',
+				},
+			];
+		},
+		[theme]
+	);
 
-		/**
-		 *
-		 */
-		const calculatedStyled = React.useCallback(
-			({ hovered }) => {
-				const hoverBackgroundColor = convertHexToRGBA(theme.colors['primary'], 0.1);
-				return [
-					{
-						padding: theme.spacing.small,
-						flex: 1,
-						flexDirection: 'row',
-						backgroundColor: hovered ? hoverBackgroundColor : 'transparent',
-					},
-				];
-			},
-			[theme]
-		);
-
-		/**
-		 *
-		 */
-		const renderItem = React.useCallback(
-			({ item }) => {
-				return (
-					<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
-						<CustomerSelectItem customer={item} />
-					</Pressable>
-				);
-			},
-			[calculatedStyled, onChange]
-		);
-
-		/**
-		 *
-		 */
-		const renderGuestItem = React.useMemo(() => {
+	/**
+	 *
+	 */
+	const renderItem = React.useCallback(
+		({ item }) => {
 			return (
-				<Pressable onPress={() => onChange({ id: 0 })} style={calculatedStyled}>
-					<Box horizontal space="small" fill>
-						<Box>
-							<Avatar
-								size="small"
-								source="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
-								recyclingKey="guest"
-							/>
-						</Box>
-						<Box space="xSmall" fill>
-							<Text>{t('Guest', { _tags: 'core' })}</Text>
-						</Box>
-					</Box>
+				<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
+					<CustomerSelectItem customer={item} />
 				</Pressable>
 			);
-		}, [calculatedStyled, onChange]);
+		},
+		[calculatedStyled, onChange]
+	);
 
-		/**
-		 *
-		 */
-		const onEndReached = React.useCallback(() => {
-			if (hasMore) {
-				loadNextPage();
-			} else if (!loading && total > count) {
-				replicationState.start({ fetchRemoteIDs: false });
-			}
-		}, [count, hasMore, loadNextPage, loading, replicationState, total]);
-
-		/**
-		 *
-		 */
+	/**
+	 *
+	 */
+	const renderGuestItem = React.useMemo(() => {
 		return (
-			<View style={{ width: targetMeasurements.value.width, maxHeight: 292 }}>
-				<FlashList<CustomerDocument>
-					data={customers}
-					renderItem={renderItem}
-					estimatedItemSize={50}
-					ListHeaderComponent={renderGuestItem}
-					onEndReached={onEndReached}
-					ListFooterComponent={loading ? Loader : null}
-				/>
-			</View>
+			<Pressable onPress={() => onChange({ id: 0 })} style={calculatedStyled}>
+				<Box horizontal space="small" fill>
+					<Box>
+						<Avatar
+							size="small"
+							source="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
+							recyclingKey="guest"
+						/>
+					</Box>
+					<Box space="xSmall" fill>
+						<Text>{t('Guest', { _tags: 'core' })}</Text>
+					</Box>
+				</Box>
+			</Pressable>
 		);
-	}
-);
+	}, [calculatedStyled, onChange]);
 
-export default React.memo(CustomerSelectMenu);
+	/**
+	 *
+	 */
+	const onEndReached = React.useCallback(() => {
+		if (hasMore) {
+			loadNextPage();
+		} else if (!loading && total > count) {
+			replicationState.start({ fetchRemoteIDs: false });
+		}
+	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+
+	/**
+	 *
+	 */
+	return (
+		<View style={{ width: targetMeasurements.value.width, maxHeight: 292 }}>
+			<FlashList<CustomerDocument>
+				data={customers}
+				renderItem={renderItem}
+				estimatedItemSize={50}
+				ListHeaderComponent={renderGuestItem}
+				onEndReached={onEndReached}
+				ListFooterComponent={loading ? Loader : null}
+			/>
+		</View>
+	);
+};
+
+export default CustomerSelectMenu;

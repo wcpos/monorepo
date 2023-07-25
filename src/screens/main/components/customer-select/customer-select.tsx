@@ -7,6 +7,7 @@ import CustomerSelectMenu from './menu';
 import SearchInput from './search-input';
 import { t } from '../../../../lib/translations';
 import { CustomersProvider } from '../../contexts/customers';
+import { Query } from '../../contexts/query';
 import usePullDocument from '../../contexts/use-pull-document';
 import useCollection from '../../hooks/use-collection';
 
@@ -15,7 +16,6 @@ import useCollection from '../../hooks/use-collection';
  */
 const CustomerSelectSearch = ({ onSelectCustomer, autoFocus = false, value }) => {
 	const [opened, setOpened] = React.useState(false);
-	const customerSelectMenuRef = React.useRef(null);
 	const [selectedCustomer, setSelectedCustomer] = React.useState({ id: 0 });
 	const pullDocument = usePullDocument();
 	const { collection } = useCollection('customers');
@@ -23,11 +23,24 @@ const CustomerSelectSearch = ({ onSelectCustomer, autoFocus = false, value }) =>
 	/**
 	 *
 	 */
-	const onSearch = React.useCallback((search) => {
-		if (customerSelectMenuRef.current) {
-			customerSelectMenuRef.current.onSearch(search);
-		}
-	}, []);
+	const query = React.useMemo(
+		() =>
+			new Query({
+				sortBy: 'last_name',
+				sortDirection: 'asc',
+			}),
+		[]
+	);
+
+	/**
+	 *
+	 */
+	const onSearch = React.useCallback(
+		(search) => {
+			query.debouncedSearch(search);
+		},
+		[query]
+	);
 
 	/**
 	 * HACK: get the selected customer from value and set it as selectedCustomer
@@ -51,19 +64,6 @@ const CustomerSelectSearch = ({ onSelectCustomer, autoFocus = false, value }) =>
 			getCustomer();
 		}
 	}, [collection, pullDocument, value]);
-
-	/**
-	 *
-	 */
-	const initialQuery = React.useMemo(
-		() => ({
-			// search: '',
-			sortBy: 'last_name',
-			sortDirection: 'asc',
-			// limit: 10,
-		}),
-		[]
-	);
 
 	/**
 	 *
@@ -93,9 +93,9 @@ const CustomerSelectSearch = ({ onSelectCustomer, autoFocus = false, value }) =>
 				/>
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
-				<CustomersProvider initialQuery={initialQuery}>
+				<CustomersProvider query={query}>
 					<React.Suspense>
-						<CustomerSelectMenu ref={customerSelectMenuRef} onChange={onSelectCustomer} />
+						<CustomerSelectMenu onChange={onSelectCustomer} />
 					</React.Suspense>
 				</CustomersProvider>
 			</Popover.Content>

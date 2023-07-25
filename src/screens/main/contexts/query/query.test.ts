@@ -115,4 +115,42 @@ describe('Query', () => {
 			expect(spy).toHaveBeenCalledWith('foo');
 		});
 	});
+
+	test('should create and update the query state correctly', () => {
+		const query = new Query({
+			selector: { id: { $in: [1, 2, 3] } },
+			sortBy: 'id',
+			sortDirection: 'asc',
+		});
+
+		// Test the initial state
+		expect(query.currentState).toEqual({
+			selector: { id: { $in: [1, 2, 3] } },
+			sortBy: 'id',
+			sortDirection: 'asc',
+		});
+
+		// Test the updated state
+		query.where('featured', true);
+		expect(query.currentState).toEqual({
+			selector: {
+				id: { $in: [1, 2, 3] },
+				featured: true,
+			},
+			sortBy: 'id',
+			sortDirection: 'asc',
+		});
+
+		// Test the final state
+		query.search({ attributes: [{ name: 'Color', option: 'Blue' }] });
+		expect(query.currentState).toEqual({
+			search: { attributes: [{ name: 'Color', option: 'Blue' }] },
+			selector: {
+				id: { $in: [1, 2, 3] },
+				featured: true,
+			},
+			sortBy: 'id',
+			sortDirection: 'asc',
+		});
+	});
 });

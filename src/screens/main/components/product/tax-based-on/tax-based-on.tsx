@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import { InlineError } from '@wcpos/components/src/inline-error/inline-error';
@@ -20,7 +21,7 @@ const TaxBasedOn = () => {
 	const [opened, setOpened] = React.useState(false);
 	const { resource, query } = useTaxRates();
 	const rates = useObservableSuspense(resource);
-	const { country, state, city, postcode } = query?.search || {};
+	const { country, state, city, postcode } = get(query, ['currentState', 'search'], {});
 
 	/**
 	 *

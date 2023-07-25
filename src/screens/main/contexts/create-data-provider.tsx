@@ -1,18 +1,14 @@
 import * as React from 'react';
 
-import { filter } from 'lodash';
 import { ObservableResource } from 'observable-hooks';
 
-import useLocalDataQuery from './use-local-data-query';
 import usePagination from './use-pagination';
-import useQuery, { QueryObservable, QueryState, SetQuery } from './use-query';
 import useReplicationState from './use-replication-state';
 import useLocalData from '../../../contexts/local-data';
 import useCollection, { CollectionKey } from '../hooks/use-collection';
 
-import type { Query } from './query';
+import type { Query, QueryState } from './query';
 import type { RxCollection } from 'rxdb';
-import type { Observable } from 'rxjs';
 
 interface DataProviderProps {
 	children: React.ReactNode;
@@ -40,29 +36,34 @@ type DataProviderReturnType<TDocument, TQueryParams> = [
 	() => DataContextValue<TDocument>,
 ];
 
+export type HookTypes = {
+	preQuerySelector: (selector: any, queryState: QueryState) => any;
+	postQueryResult: (result: any, queryState: QueryState) => any;
+	filterApiQueryParams: (params: any, checkpoint: any, batchSize: number) => any;
+	// anotherHookType: (arg1: Type1, arg2: Type2) => ReturnType;
+	// Add other hook types as needed...
+};
+
+export type Hooks = {
+	[K in keyof HookTypes]?: HookTypes[K];
+};
+
 /**
  *
  */
 const createDataProvider = <TDocument, TQueryParams>({
 	collectionName,
-	initialQuery,
 	prepareQueryParams,
-	filterQuery,
-	filterQueryData,
+	hooks = {},
 }: {
 	collectionName: CollectionKey;
-	initialQuery: QueryState;
 	prepareQueryParams?: (
 		params: TQueryParams,
 		query: QueryState,
 		checkpoint: any,
 		batchSize: number
 	) => TQueryParams;
-	filterQuery?: (query$: QueryObservable) => QueryObservable;
-	filterQueryData?: (
-		data$: Observable<TDocument[]>,
-		query$: QueryObservable
-	) => Observable<TDocument[]>;
+	hooks?: Hooks;
 }): DataProviderReturnType<TDocument, TQueryParams> => {
 	const DataContext = React.createContext<DataContextValue<TDocument>>(null);
 
@@ -72,29 +73,40 @@ const createDataProvider = <TDocument, TQueryParams>({
 	const DataProvider = ({ children, query, apiEndpoint, remoteIDs }: DataProviderProps) => {
 		const { storeDB } = useLocalData();
 		const { collection } = useCollection(collectionName);
+
+		/**
+		 * Complete query instance setup
+		 * - add the collection
+		 * - add hooks
+		 */
 		query.collection(collection);
-		// const { query$, setQuery, setDebouncedQuery } = useQuery(initialQuery);
+		Object.entries(hooks).forEach(([hookName, hookFunction]) => {
+			query.addHook(hookName, hookFunction);
+		});
+
+		/**
+		 *
+		 */
 		const replicationState = useReplicationState({
 			collection,
 			query,
 			prepareQueryParams,
 			apiEndpoint,
 			remoteIDs,
+			hooks,
 		});
-		// const filteredQuery$ = filterQuery ? filterQuery(query$) : query$;
-		// const { queryData$ } = useLocalDataQuery({ collection, query$: filteredQuery$ });
-		// const filteredQueryData$ = filterQueryData ? filterQueryData(queryData$, query$) : queryData$;
+
 		const { paginatedData$, loadNextPage } = usePagination({ data$: query.$ });
 
 		/**
 		 *
 		 */
-		// React.useEffect(() => {
-		// 	replicationState.start();
-		// 	return () => {
-		// 		replicationState.cancel();
-		// 	};
-		// }, [replicationState]);
+		React.useEffect(() => {
+			replicationState.start();
+			return () => {
+				replicationState.cancel();
+			};
+		}, [replicationState]);
 
 		/**
 		 *
@@ -129,9 +141,6 @@ const createDataProvider = <TDocument, TQueryParams>({
 					resource,
 					paginatedResource,
 					query,
-					// query$,
-					// setQuery,
-					// setDebouncedQuery,
 					clear,
 					sync,
 					replicationState,

@@ -21,23 +21,23 @@ import type { QueryState } from './use-query';
  *
  * Note: $allMatch is an array so we need to check if it exists and add/remove to it
  */
-export function updateVariationQueryState(
-	prev: QueryState | null,
+export function updateVariationAttributeSearch(
+	search: QueryState['search'] | null,
 	attribute: { name: string; value: string }
 ) {
 	// if null, remove the attribute search
 	if (attribute === null) {
-		return set({ ...prev }, ['search', 'attributes'], null);
+		return { attributes: null };
 	}
 	// add attribute to query
-	const $allMatch = get(prev, ['search', 'attributes'], []);
+	const $allMatch = get(search, 'attributes', []);
 	const index = $allMatch.findIndex((a) => a.name === attribute.name);
 	if (index > -1) {
 		$allMatch[index] = attribute;
 	} else {
 		$allMatch.push(attribute);
 	}
-	return set({ ...prev }, ['search', 'attributes'], $allMatch);
+	return { attributes: $allMatch };
 }
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 

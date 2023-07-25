@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
-
 import Pill from '@wcpos/components/src/pill';
 import Select from '@wcpos/components/src/select';
 

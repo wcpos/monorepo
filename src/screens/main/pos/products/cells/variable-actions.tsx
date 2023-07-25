@@ -4,9 +4,9 @@ import Icon from '@wcpos/components/src/icon';
 import Popover from '@wcpos/components/src/popover';
 
 import VariationsPopover from './variations-popover';
+import { Query } from '../../../contexts/query';
 import { VariationsProvider } from '../../../contexts/variations';
 import useCartHelpers from '../../../hooks/use-cart-helpers';
-import useCurrencyFormat from '../../../hooks/use-currency-format';
 
 interface VariableActionsProps {
 	item: import('@wcpos/database').ProductDocument;
@@ -18,16 +18,19 @@ interface VariableActionsProps {
 const VariableActions = ({ item: parent }: VariableActionsProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const { addVariation } = useCartHelpers();
-	// const { format } = useCurrencyFormat();
 
 	/**
 	 *
 	 */
-	const initialQuery = React.useMemo(
-		() => ({
-			selector: { id: { $in: parent.variations } },
-		}),
-		[parent.variations]
+	const query = React.useMemo(
+		() =>
+			new Query({
+				selector: { id: { $in: parent.variations } },
+			}),
+		[
+			parent.variations,
+			opened, // reset query when popover is closed
+		]
 	);
 
 	// /**
@@ -56,7 +59,7 @@ const VariableActions = ({ item: parent }: VariableActionsProps) => {
 			</Popover.Target>
 			<Popover.Content>
 				<VariationsProvider
-					initialQuery={initialQuery}
+					query={query}
 					apiEndpoint={`products/${parent.id}/variations`}
 					remoteIDs={parent.variations}
 				>

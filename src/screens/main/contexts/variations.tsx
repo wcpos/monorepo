@@ -1,8 +1,7 @@
 import get from 'lodash/get';
-import { map } from 'rxjs/operators';
 
 import createDataProvider from './create-data-provider';
-import { updateVariationQueryState, filterVariationsByAttributes } from './variations.helpers';
+import { updateVariationAttributeSearch, filterVariationsByAttributes } from './variations.helpers';
 
 type ProductVariationDocument = import('@wcpos/database/src').ProductVariationDocument;
 
@@ -38,7 +37,6 @@ const [VariationsProvider, useVariations] = createDataProvider<
 	APIQueryParams
 >({
 	collectionName: 'variations',
-	initialQuery: { sortBy: 'id', sortDirection: 'asc' }, // Default query, will be overridden by prop
 	prepareQueryParams: (params, query, checkpoint, batchSize) => {
 		let orderby = params.orderby;
 
@@ -51,21 +49,16 @@ const [VariationsProvider, useVariations] = createDataProvider<
 			orderby,
 		};
 	},
-	/**
-	 * RxDB doesn't have $allMatch, so we filter manually using the search query
-	 */
-	filterQueryData(data$, query$) {
-		return data$.pipe(
-			map((data) => {
-				const allMatch = get(query$.getValue(), ['search', 'attributes']);
-				console.log('allMatch', allMatch);
-				if (allMatch) {
-					return filterVariationsByAttributes(data, allMatch);
-				}
-				return data;
-			})
-		);
+	hooks: {
+		postQueryResult: (result, queryState) => {
+			const allMatch = get(queryState, ['search', 'attributes']);
+			console.log('allMatch', allMatch);
+			if (allMatch) {
+				return filterVariationsByAttributes(result, allMatch);
+			}
+			return result;
+		},
 	},
 });
 
-export { VariationsProvider, useVariations, updateVariationQueryState };
+export { VariationsProvider, useVariations, updateVariationAttributeSearch };

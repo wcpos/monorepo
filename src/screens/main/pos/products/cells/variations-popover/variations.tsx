@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableSuspense, useObservableState } from 'observable-hooks';
-import { switchMap, tap } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 import { usePopover } from '@wcpos/components/src/popover';
@@ -11,18 +11,20 @@ import Text from '@wcpos/components/src/text';
 import VariationButtons from './buttons';
 import VariationSelect from './select';
 import { t } from '../../../../../../lib/translations';
-import { useVariations, updateVariationQueryState } from '../../../../contexts/variations';
-import useCartHelpers from '../../../../hooks/use-cart-helpers';
-import useCollection from '../../../../hooks/use-collection';
+import { useVariations, updateVariationAttributeSearch } from '../../../../contexts/variations';
 import useCurrencyFormat from '../../../../hooks/use-currency-format';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
+type LineItemDocument = import('@wcpos/database').LineItemDocument;
 
 interface VariationPopoverProps {
 	parent: import('@wcpos/database').ProductDocument;
-	addToCart: (variation: ProductDocument) => void;
+	addToCart: (variation: ProductDocument, metaData: LineItemDocument['meta_data']) => void;
 }
 
+/**
+ *
+ */
 export const getAttributesWithCharacterCount = (attributes: ProductDocument['attributes']) => {
 	return (attributes || [])
 		.filter((attribute) => attribute.variation)
@@ -38,9 +40,14 @@ export const getAttributesWithCharacterCount = (attributes: ProductDocument['att
  */
 const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	const { setPrimaryAction } = usePopover();
-	const { collection } = useCollection('variations');
-	const { resource, setQuery } = useVariations();
+	const { resource, query } = useVariations();
 	const variations = useObservableSuspense(resource);
+	const selectedAttributes = useObservableState(
+		query.state$.pipe(map((q) => get(q, ['search', 'attributes'], []))),
+		get(query, ['currentState', 'search', 'attributes'], [])
+	);
+	const selectedVariation = variations.length === 1 && variations[0];
+	const { format } = useCurrencyFormat();
 
 	/**
 	 *
@@ -54,39 +61,43 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	 *
 	 */
 	const handleSelect = React.useCallback(
-		(attribute, option: string) => {
-			setQuery((prev) => updateVariationQueryState(prev, { name: attribute.name, option }));
+		(attribute, option) => {
+			const newState = updateVariationAttributeSearch(query.currentState.search, {
+				name: attribute.name,
+				option,
+			});
+			query.search(newState);
 		},
-		[setQuery]
+		[query]
 	);
 
 	/**
 	 *
 	 */
-
-	/**
-	 *
-	 */
 	React.useEffect(() => {
-		console.log(variations);
-		if (variations.length === 1) {
+		if (selectedVariation) {
+			// convert attributes to meta_data
+			const selectedAttributesMetaData = selectedAttributes.map((a) => ({
+				key: a.name,
+				value: a.option,
+			}));
 			setPrimaryAction({
-				label: t('Add to Cart'),
-				onPress: () => addToCart(variations[0]),
+				label: t('Add to Cart') + ': ' + format(selectedVariation.price),
+				action: () => addToCart(selectedVariation, selectedAttributesMetaData),
 			});
 		} else {
 			setPrimaryAction(undefined);
 		}
-	}, [addToCart, parent, setPrimaryAction, variations]);
+	}, [addToCart, format, parent, selectedAttributes, selectedVariation, setPrimaryAction]);
 
 	/**
 	 *
 	 */
 	return (
-		<Box space="xSmall">
+		<Box space="xSmall" style={{ minWidth: 200 }}>
 			{attributes.map((attribute) => {
-				// const matched = allMatch.find((match) => match.name === attribute.name);
-				const selectedOption = undefined;
+				// find selected option
+				const selected = selectedAttributes.find((a) => a.name === attribute.name);
 
 				return (
 					<Box key={attribute.name} space="xSmall">
@@ -95,13 +106,13 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 							<VariationButtons
 								attribute={attribute}
 								onSelect={handleSelect}
-								// selectedOption={selectedOption}
+								selectedOption={selected?.option}
 							/>
 						) : (
 							<VariationSelect
 								attribute={attribute}
 								onSelect={handleSelect}
-								// selectedOption={selectedOption}
+								selectedOption={selected?.option}
 							/>
 						)}
 					</Box>
