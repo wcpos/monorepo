@@ -6,6 +6,7 @@ import { of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
+import Suspense from '@wcpos/components/src/suspense';
 
 import CustomerPill from './customer-pill';
 import StatusPill from './status-pill';
@@ -47,9 +48,9 @@ const FilterBar = () => {
 	return (
 		<Box space="small" horizontal>
 			<StatusPill active={statusFilterActive} setQuery={setQuery} />
-			<React.Suspense>
+			<Suspense>
 				<CustomerPill selectedCustomerResource={selectedCustomerResource} setQuery={setQuery} />
-			</React.Suspense>
+			</Suspense>
 		</Box>
 	);
 };

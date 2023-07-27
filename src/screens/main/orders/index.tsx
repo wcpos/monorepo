@@ -7,6 +7,7 @@ import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
 
 import EditOrder from './edit-order';
@@ -33,9 +34,9 @@ const Stack = createStackNavigator<OrdersStackParamList>();
 const OrdersWithProviders = () => {
 	return (
 		<ErrorBoundary>
-			<React.Suspense>
+			<Suspense>
 				<Orders />
-			</React.Suspense>
+			</Suspense>
 		</ErrorBoundary>
 	);
 };
@@ -66,9 +67,9 @@ const EditOrderWithProviders = ({
 				},
 			]}
 		>
-			<React.Suspense>
+			<Suspense>
 				<EditOrder resource={resource} />
-			</React.Suspense>
+			</Suspense>
 		</ModalLayout>
 	);
 };
@@ -100,9 +101,9 @@ const ReceiptWithProviders = ({
 			]}
 			style={{ height: '100%' }}
 		>
-			<React.Suspense>
+			<Suspense>
 				<Receipt resource={resource} />
-			</React.Suspense>
+			</Suspense>
 		</ModalLayout>
 	);
 };

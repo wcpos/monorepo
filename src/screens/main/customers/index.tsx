@@ -7,6 +7,7 @@ import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
 
 import AddCustomer from './add-customer';
@@ -32,9 +33,9 @@ const Stack = createStackNavigator<CustomersStackParamList>();
 const CustomersWithProviders = () => {
 	return (
 		<ErrorBoundary>
-			<React.Suspense>
+			<Suspense>
 				<Customers />
-			</React.Suspense>
+			</Suspense>
 		</ErrorBoundary>
 	);
 };
@@ -87,9 +88,9 @@ const EditCustomerWithProviders = ({
 				},
 			]}
 		>
-			<React.Suspense>
+			<Suspense>
 				<EditCustomer resource={resource} />
-			</React.Suspense>
+			</Suspense>
 		</ModalLayout>
 	);
 };

@@ -5,6 +5,7 @@ import { isRxDocument } from 'rxdb';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import useSnackbar from '@wcpos/components/src/snackbar';
+import Suspense from '@wcpos/components/src/suspense';
 import Table, { CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
@@ -81,7 +82,7 @@ const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocume
 			if (Cell) {
 				return (
 					<ErrorBoundary>
-						<React.Suspense>
+						<Suspense>
 							<Cell
 								item={item}
 								column={column}
@@ -89,7 +90,7 @@ const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocume
 								cellWidth={cellWidth}
 								onChange={handleChange}
 							/>
-						</React.Suspense>
+						</Suspense>
 					</ErrorBoundary>
 				);
 			}

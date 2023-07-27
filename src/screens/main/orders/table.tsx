@@ -4,6 +4,7 @@ import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 
 import Actions from './cells/actions';
@@ -65,9 +66,9 @@ const OrdersTable = ({ uiSettings }: OrdersTableProps) => {
 		if (Cell) {
 			return (
 				<ErrorBoundary>
-					<React.Suspense>
+					<Suspense>
 						<Cell item={item} column={column} index={index} />
-					</React.Suspense>
+					</Suspense>
 				</ErrorBoundary>
 			);
 		}

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import Popover from '@wcpos/components/src/popover';
+import Suspense from '@wcpos/components/src/suspense';
 import log from '@wcpos/utils/src/logger';
 
 import CategorySelectMenu from './menu';
@@ -83,9 +84,9 @@ const CategorySelectSearch = ({ onBlur }) => {
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
 				<ProductCategoriesProvider query={categoryQuery}>
-					<React.Suspense>
+					<Suspense>
 						<CategorySelectMenu onChange={onSelectCategory} />
-					</React.Suspense>
+					</Suspense>
 				</ProductCategoriesProvider>
 			</Popover.Content>
 		</Popover>

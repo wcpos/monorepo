@@ -6,6 +6,7 @@ import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 
 import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
@@ -43,17 +44,17 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 
 	return (
 		<OrdersProvider query={openOrderQuery}>
-			<React.Suspense
+			<Suspense
 			// suspend until orders and default customer are loaded
 			>
 				<CurrentOrderProvider orderID={orderID} newOrderResource={newOrderResource}>
-					<React.Suspense
+					<Suspense
 					// suspend until tax rates are loaded
 					>
 						<POS />
-					</React.Suspense>
+					</Suspense>
 				</CurrentOrderProvider>
-			</React.Suspense>
+			</Suspense>
 		</OrdersProvider>
 	);
 };
@@ -81,9 +82,9 @@ const CheckoutWithProviders = ({
 			}}
 			style={{ minHeight: '80%' }}
 		>
-			<React.Suspense>
+			<Suspense>
 				<Checkout resource={resource} />
-			</React.Suspense>
+			</Suspense>
 		</ModalLayout>
 	);
 };
@@ -113,9 +114,9 @@ const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamLis
 			]}
 			style={{ height: '100%' }}
 		>
-			<React.Suspense>
+			<Suspense>
 				<Receipt resource={resource} />
-			</React.Suspense>
+			</Suspense>
 		</ModalLayout>
 	);
 };
@@ -126,7 +127,7 @@ const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamLis
 const POSStackNavigator = () => {
 	return (
 		<ErrorBoundary>
-			<React.Suspense>
+			<Suspense>
 				<Stack.Navigator screenOptions={{ headerShown: false }}>
 					<Stack.Screen name="POS" component={POSWithProviders} />
 					<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
@@ -134,7 +135,7 @@ const POSStackNavigator = () => {
 						<Stack.Screen name="Receipt" component={ReceiptWithProviders} />
 					</Stack.Group>
 				</Stack.Navigator>
-			</React.Suspense>
+			</Suspense>
 		</ErrorBoundary>
 	);
 };

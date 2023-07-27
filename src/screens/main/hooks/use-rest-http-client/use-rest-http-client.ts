@@ -17,15 +17,15 @@ export const useRestHttpClient = () => {
 	const { site, wpCredentials } = useLocalData();
 	const baseURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
-	const [isAuth, setIsAuth] = React.useState(true); // asume true until proven otherwise
 	const navigation = useNavigation();
 
-	/**
-	 *
-	 */
 	React.useEffect(() => {
-		setIsAuth(true);
+		console.log('jwt', jwt);
 	}, [jwt]);
+
+	// React.useEffect(() => {
+	// 	console.log('isAuth', isAuth);
+	// }, [isAuth]);
 
 	/**
 	 * Intercept errors and check for 401
@@ -33,7 +33,6 @@ export const useRestHttpClient = () => {
 	const errorHandler = React.useCallback(
 		(error) => {
 			if (error.response && error.response.status === 401) {
-				setIsAuth(false);
 				navigation.navigate('Login');
 				return null; // prevent snackbars from showing
 			}

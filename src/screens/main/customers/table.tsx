@@ -5,6 +5,7 @@ import { useObservableState, useObservableSuspense } from 'observable-hooks';
 import { map, tap } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 
 import cells from './cells';
@@ -46,9 +47,9 @@ const CustomersTable = ({ uiSettings }: CustomersTableProps) => {
 			if (Cell) {
 				return (
 					<ErrorBoundary>
-						<React.Suspense>
+						<Suspense>
 							<Cell item={item} column={column} index={index} cellWidth={cellWidth} />
-						</React.Suspense>
+						</Suspense>
 					</ErrorBoundary>
 				);
 			}

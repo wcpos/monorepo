@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import Popover from '@wcpos/components/src/popover';
+import Suspense from '@wcpos/components/src/suspense';
 import log from '@wcpos/utils/src/logger';
 
 import CustomerSelectMenu from './menu';
@@ -94,9 +95,9 @@ const CustomerSelectSearch = ({ onSelectCustomer, autoFocus = false, value }) =>
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
 				<CustomersProvider query={query}>
-					<React.Suspense>
+					<Suspense>
 						<CustomerSelectMenu onChange={onSelectCustomer} />
-					</React.Suspense>
+					</Suspense>
 				</CustomersProvider>
 			</Popover.Content>
 		</Popover>

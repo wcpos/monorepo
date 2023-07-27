@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 
 import { useVariationTable } from './context';
 import VariationsFilterBar from './filter-bar';
@@ -28,9 +29,9 @@ const Variations = ({ parent }) => {
 					<VariationsFilterBar parent={parent} />
 				</ErrorBoundary>
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-					<React.Suspense>
+					<Suspense>
 						<Table parent={parent} />
-					</React.Suspense>
+					</Suspense>
 				</Box>
 			</Box>
 		</VariationsProvider>

@@ -3,6 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 import Table, { CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 
@@ -61,9 +62,9 @@ const ProductTableRow = ({
 			if (Cell) {
 				return (
 					<ErrorBoundary>
-						<React.Suspense>
+						<Suspense>
 							<Cell item={item} column={column} index={index} cellWidth={cellWidth} />
-						</React.Suspense>
+						</Suspense>
 					</ErrorBoundary>
 				);
 			}

@@ -3,6 +3,7 @@ import * as React from 'react';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
+import Suspense from '@wcpos/components/src/suspense';
 import Tabs from '@wcpos/components/src/tabs';
 
 import Cart from './cart';
@@ -20,17 +21,17 @@ const OpenOrders = ({ isColumn = false }) => {
 		<Box padding="small" paddingLeft={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
 			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<ErrorBoundary>
-					<React.Suspense>
+					<Suspense>
 						{currentOrder.isNew ? (
 							<EmptyCart currentOrder={currentOrder} />
 						) : (
 							<Cart currentOrder={currentOrder} />
 						)}
-					</React.Suspense>
+					</Suspense>
 				</ErrorBoundary>
 			</Box>
 			<ErrorBoundary>
-				<React.Suspense
+				<Suspense
 					fallback={
 						// Fallback is the 'new cart' button
 						<Tabs.TabBarSkeleton
@@ -42,7 +43,7 @@ const OpenOrders = ({ isColumn = false }) => {
 					}
 				>
 					<OpenOrderTabs />
-				</React.Suspense>
+				</Suspense>
 			</ErrorBoundary>
 		</Box>
 	);

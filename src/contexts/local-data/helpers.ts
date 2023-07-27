@@ -10,11 +10,10 @@ export const getOrInsertSite = async (userDB, site) => {
 // Helper function to get or insert wp_credentials
 export const getOrInsertWPCredentials = async (userDB, wp_credentials) => {
 	let savedCredentials = await userDB.wp_credentials.findOneFix(wp_credentials.uuid).exec();
-	if (savedCredentials) {
-		// always update the nonce
-		savedCredentials.incrementalPatch({ jwt: wp_credentials.jwt });
-	}
-	if (!savedCredentials) {
+	if (savedCredentials && savedCredentials.jwt !== wp_credentials.jwt) {
+		// always update if jwt has changed
+		await savedCredentials.patch({ jwt: wp_credentials.jwt });
+	} else if (!savedCredentials) {
 		savedCredentials = await userDB.wp_credentials.insert(wp_credentials);
 	}
 	return savedCredentials;

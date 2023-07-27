@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import Popover from '@wcpos/components/src/popover';
+import Suspense from '@wcpos/components/src/suspense';
 import log from '@wcpos/utils/src/logger';
 
 import TagSelectMenu from './menu';
@@ -80,9 +81,9 @@ const TagSelectSearch = ({ onBlur }) => {
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
 				<ProductTagsProvider query={tagQuery}>
-					<React.Suspense>
+					<Suspense>
 						<TagSelectMenu onChange={onSelectTag} />
-					</React.Suspense>
+					</Suspense>
 				</ProductTagsProvider>
 			</Popover.Content>
 		</Popover>

@@ -3,7 +3,7 @@ import * as React from 'react';
 import { ObservableResource, useObservableState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { from, throwError, combineLatest, of } from 'rxjs';
-import { switchMap, filter, first, expand, catchError, map, tap } from 'rxjs/operators';
+import { switchMap, filter, first, expand, catchError, map, tap, timeout } from 'rxjs/operators';
 
 import { createTemporaryDB } from '@wcpos/database';
 
@@ -76,6 +76,13 @@ const useNewOrderResource = () => {
 						if (!isRxDocument(doc)) {
 							pullDocument(defaultCustomerID, customerCollection);
 						}
+					}),
+					filter((doc) => isRxDocument(doc)),
+					timeout(5000), // timeout after 5000ms
+					catchError((error) => {
+						console.error('Timeout error', error);
+						// return a fallback Observable or value if needed
+						return of(guestCustomer);
 					})
 			  )
 			: of(guestCustomer);

@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
 import useTheme from '@wcpos/themes';
 
@@ -37,9 +38,9 @@ const TableContainer = ({ uiSettings }) => {
 			</Box>
 			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<ErrorBoundary>
-					<React.Suspense>
+					<Suspense>
 						<Table uiSettings={uiSettings} />
-					</React.Suspense>
+					</Suspense>
 				</ErrorBoundary>
 			</Box>
 		</Box>

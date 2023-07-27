@@ -7,6 +7,7 @@ import { of } from 'rxjs';
 import { startWith, switchMap, tap } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
+import Suspense from '@wcpos/components/src/suspense';
 
 import CategoryPill from './category-pill';
 import FeaturedPill from './featured-pill';
@@ -77,12 +78,12 @@ const FilterBar = () => {
 		<Box space="small" horizontal>
 			<FeaturedPill />
 			<OnSalePill />
-			<React.Suspense>
+			<Suspense>
 				<CategoryPill resource={selectedCategoryResource} />
-			</React.Suspense>
-			<React.Suspense>
+			</Suspense>
+			<Suspense>
 				<TagPill resource={selectedTagResource} />
-			</React.Suspense>
+			</Suspense>
 		</Box>
 	);
 };

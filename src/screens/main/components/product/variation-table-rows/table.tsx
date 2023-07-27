@@ -4,6 +4,7 @@ import get from 'lodash/get';
 import { useObservableSuspense, useObservableState, useSubscription } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 import Table, { CellRenderer, useTable } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
@@ -81,7 +82,7 @@ const VariationsTable = ({ parent }) => {
 			if (Cell) {
 				return (
 					<ErrorBoundary>
-						<React.Suspense>
+						<Suspense>
 							<Cell
 								item={item}
 								column={column}
@@ -89,7 +90,7 @@ const VariationsTable = ({ parent }) => {
 								cellWidth={cellWidth}
 								parent={parent}
 							/>
-						</React.Suspense>
+						</Suspense>
 					</ErrorBoundary>
 				);
 			}

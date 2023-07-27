@@ -7,6 +7,7 @@ import { from } from 'rxjs';
 
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
+import Suspense from '@wcpos/components/src/suspense';
 import WebView from '@wcpos/components/src/webview';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
@@ -82,9 +83,9 @@ const LoginWithProvider = ({ route }) => {
 	 */
 	return (
 		<ModalLayout title={t('Login', { _tags: 'core' })}>
-			<React.Suspense>
+			<Suspense>
 				<Login resource={resource} />
-			</React.Suspense>
+			</Suspense>
 		</ModalLayout>
 	);
 };

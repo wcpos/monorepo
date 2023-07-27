@@ -8,6 +8,7 @@ import Box from '@wcpos/components/src/box';
 import Dialog from '@wcpos/components/src/dialog';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
+import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
 
 import WPUsersList from './wp-users-list';
@@ -78,9 +79,9 @@ const Site = ({ site, first }: SiteProps) => {
 					</Box>
 					<Box>
 						<ErrorBoundary>
-							<React.Suspense>
+							<Suspense>
 								<WPUsersList wpUsersResource={wpUsersResource} site={site} />
-							</React.Suspense>
+							</Suspense>
 						</ErrorBoundary>
 					</Box>
 				</Box>

@@ -10,6 +10,7 @@ import { ThemeProvider } from 'styled-components/native';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Portal from '@wcpos/components/src/portal';
 import { SnackbarProvider } from '@wcpos/components/src/snackbar';
+import Suspense from '@wcpos/components/src/suspense';
 import getTheme from '@wcpos/themes';
 
 import { LocalDataProvider } from './contexts/local-data';
@@ -73,7 +74,7 @@ const App = () => {
 				<LocalDataProvider initialProps={initialProps}>
 					<ThemeProvider theme={theme}>
 						<ErrorBoundary>
-							<React.Suspense fallback={<Splash />}>
+							<Suspense fallback={<Splash />}>
 								<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
 									<SnackbarProvider>
 										<Portal.Provider>
@@ -82,7 +83,7 @@ const App = () => {
 										</Portal.Provider>
 									</SnackbarProvider>
 								</SafeAreaProviderCompat>
-							</React.Suspense>
+							</Suspense>
 						</ErrorBoundary>
 					</ThemeProvider>
 				</LocalDataProvider>

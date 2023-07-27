@@ -4,6 +4,7 @@ import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 
 import AddFee from './add-fee';
 import AddShipping from './add-shipping';
@@ -35,7 +36,7 @@ const Cart = () => {
 
 			<CartProvider order={currentOrder}>
 				<ErrorBoundary>
-					<React.Suspense>
+					<Suspense>
 						<Box fill>
 							<Table />
 						</Box>
@@ -73,7 +74,7 @@ const Cart = () => {
 								<PayButton />
 							</ErrorBoundary>
 						</Box>
-					</React.Suspense>
+					</Suspense>
 				</ErrorBoundary>
 			</CartProvider>
 		</Box>

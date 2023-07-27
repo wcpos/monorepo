@@ -7,6 +7,7 @@ import { switchMap, tap, map } from 'rxjs/operators';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Logo from '@wcpos/components/src/logo';
+import Suspense from '@wcpos/components/src/suspense';
 
 import DemoButton from './components/demo-button';
 import SitesList from './components/sites-list';
@@ -45,9 +46,9 @@ const Connect = () => {
 						<UrlInput />
 					</Box>
 					<ErrorBoundary>
-						<React.Suspense>
+						<Suspense>
 							<SitesList sitesResource={sitesResource} />
-						</React.Suspense>
+						</Suspense>
 					</ErrorBoundary>
 					<Box>
 						<DemoButton />

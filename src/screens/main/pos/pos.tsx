@@ -4,6 +4,7 @@ import { useWindowDimensions } from 'react-native';
 import { useTheme } from 'styled-components/native';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
@@ -37,9 +38,9 @@ const POS = () => {
 	return (
 		<TaxRateProvider query={query}>
 			<ErrorBoundary>
-				<React.Suspense>
+				<Suspense>
 					{dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />}
-				</React.Suspense>
+				</Suspense>
 			</ErrorBoundary>
 		</TaxRateProvider>
 	);

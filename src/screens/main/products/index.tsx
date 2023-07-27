@@ -6,6 +6,7 @@ import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
 
 import AddProduct from './add-product';
@@ -36,9 +37,9 @@ const ProductsWithProviders = ({
 }: NativeStackScreenProps<ProductsStackParamList, 'Products'>) => {
 	return (
 		<ErrorBoundary>
-			<React.Suspense>
+			<Suspense>
 				<Products />
-			</React.Suspense>
+			</Suspense>
 		</ErrorBoundary>
 	);
 };
@@ -91,9 +92,9 @@ const EditProductWithProviders = ({
 				},
 			]}
 		>
-			<React.Suspense>
+			<Suspense>
 				<EditProduct resource={resource} />
-			</React.Suspense>
+			</Suspense>
 		</ModalLayout>
 	);
 };
@@ -127,9 +128,9 @@ const EditVariationWithProviders = ({
 				},
 			]}
 		>
-			<React.Suspense>
+			<Suspense>
 				<EditVariation resource={resource} />
-			</React.Suspense>
+			</Suspense>
 		</ModalLayout>
 	);
 };

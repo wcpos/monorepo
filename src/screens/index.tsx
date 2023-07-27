@@ -9,6 +9,7 @@ import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
+import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
 
 import AuthNavigator from './auth';
@@ -155,9 +156,9 @@ const RootNavigator = ({ initialProps }) => {
 								 * FIXME - this catches the site = null problem when logging out
 								 * There needs to be a better way to handle this
 								 */
-								<React.Suspense>
+								<Suspense>
 									<MainNavigator />
-								</React.Suspense>
+								</Suspense>
 							);
 						}}
 					</Stack.Screen>
