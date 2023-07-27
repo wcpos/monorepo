@@ -4,7 +4,7 @@ import { requestIdlePromise } from 'rxdb';
 
 import { getRxStorageIndexedDB } from './plugins/storage-indexeddb';
 import { getMemorySyncedRxStorage } from './plugins/storage-memory-synced';
-import { wrappedValidateZSchemaStorage } from '../plugins/validate';
+// import { wrappedValidateZSchemaStorage } from '../plugins/validate';
 
 // const parentStorage = wrappedValidateZSchemaStorage({ storage: getRxStorageIndexedDB() });
 // const parentStorage = wrappedValidateAjvStorage({

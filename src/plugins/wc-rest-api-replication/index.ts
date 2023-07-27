@@ -4,6 +4,8 @@ import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { PROMISE_RESOLVE_TRUE, flatClone } from 'rxdb/plugins/utils';
 import { BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 
+import log from '@wcpos/utils/src/logger';
+
 import type {
 	ReplicationOptions,
 	ReplicationPullOptions,
@@ -110,12 +112,6 @@ class RxReplicationState<RxDocType, CheckpointType> {
 			this.remoteEvents$.subscribe({
 				next: (ev) => {
 					if (ev === 'RESYNC') {
-						/**
-						 * TODO: set remote ids lastAudit to null to force a remoteID fetch?
-						 */
-						this.start({ resync: true });
-					}
-					if (ev === 'QUERY') {
 						// Cancel the current pull operation if there is one
 						if (this.currentPull) {
 							this.currentPull.cancel();
@@ -142,26 +138,30 @@ class RxReplicationState<RxDocType, CheckpointType> {
 	/**
 	 *
 	 */
-	async fetchAndSaveRemoteIDs(): Promise<void> {
-		const fetchRemoteIDs = this.pull && this.pull.fetchRemoteIDs;
-		if (fetchRemoteIDs) {
-			// get remoteIDs from local storage
+	async fetchAndSaveRemoteIDs(): Promise<string[] | null> {
+		try {
+			const fetchRemoteIDs = this.pull && this.pull.fetchRemoteIDs;
+			if (!fetchRemoteIDs) {
+				throw new Error('fetchRemoteIDs is not defined');
+			}
+
 			let result = await this.collection.getLocal(this.replicationIdentifierHash);
-			// if not found, or if lastAudit is more than 10 minutes ago
-			if (!result || new Date(result.get('lastAudit')).getTime() < new Date().getTime() - 1000 * 60 * 10) {
-				// fetch remoteIDs
+
+			if (
+				!result ||
+				new Date(result.get('lastAudit')).getTime() < new Date().getTime() - 1000 * 60 * 10
+			) {
 				const remoteIDs = await fetchRemoteIDs();
-				// save remoteIDs to local storage
 				result = await this.collection.upsertLocal(this.replicationIdentifierHash, {
 					remoteIDs,
 					lastAudit: new Date().toISOString(),
 				});
 			}
 
-			// return remoteIDs
 			return result.get('remoteIDs');
-		} else {
-			throw new Error('fetchRemoteIDs is not defined');
+		} catch (err) {
+			this.subjects.error.next(err);
+			return null;
 		}
 	}
 
@@ -169,63 +169,65 @@ class RxReplicationState<RxDocType, CheckpointType> {
 	 *
 	 */
 	async runPull(batchSize, count): Promise<{ documents: any[]; checkpoint: any }> {
-		const pullModifier =
-			this.pull && this.pull.modifier ? this.pull.modifier : (d: any) => Promise.resolve(d);
+		try {
+			const pullModifier =
+				this.pull && this.pull.modifier ? this.pull.modifier : (d: any) => Promise.resolve(d);
 
-		// get remoteIDs
-		const remoteIDs = await this.fetchAndSaveRemoteIDs();
+			const remoteIDs = await this.fetchAndSaveRemoteIDs();
+			const localDocs = await this.pull.fetchLocalDocs();
 
-		// get all local docs
-		const localDocs = await this.pull.fetchLocalDocs();
-
-		let localIDs = [];
-		let dates = [];
-
-		localDocs.forEach(doc => {
-			if (doc.id) {
-				localIDs.push(parseInt(doc.id, 10));
-		
-				if (doc.date_modified_gmt) {
-					dates.push(doc.date_modified_gmt);
-				}
+			if (!Array.isArray(remoteIDs) || !Array.isArray(localDocs)) {
+				throw new Error('remoteIDs or localDocs is not an array');
 			}
-		});
 
-		// Sort the dates array in ascending order, then take the last one (the latest date)
-		const lastModified = dates.sort()[dates.length - 1];
+			const localIDs = [];
+			const dates = [];
 
-		// audit the remoteIDs and localIDs
-		const include = remoteIDs.filter((id) => !localIDs.includes(id)); // elements in remoteIDs but not in localIDs
-		const exclude = remoteIDs.filter((id) => localIDs.includes(id)); // elements in both remoteIDs and localIDs
-		const remove = localDocs
-			.filter((doc) => !remoteIDs.includes(doc.id)) // elements in localIDs but not in remoteIDs
-			.map((doc) => doc.uuid); // get the uuids of the items to be removed
+			localDocs.forEach((doc) => {
+				if (doc.id) {
+					localIDs.push(parseInt(doc.id, 10));
 
-		const completeIntitalSync = include.length === 0;
+					if (doc.date_modified_gmt) {
+						dates.push(doc.date_modified_gmt);
+					}
+				}
+			});
 
-		// remove orphaned documents
-		if (remove.length > 0) {
-			await this.collection.bulkRemove(remove);
+			// Sort the dates array in ascending order, then take the last one (the latest date)
+			const lastModified = dates.sort()[dates.length - 1];
+
+			// audit the remoteIDs and localIDs
+			const include = remoteIDs.filter((id) => !localIDs.includes(id)); // elements in remoteIDs but not in localIDs
+			const exclude = remoteIDs.filter((id) => localIDs.includes(id)); // elements in both remoteIDs and localIDs
+			const remove = localIDs.filter((id) => !remoteIDs.includes(id)); // elements in localIDs but not in remoteIDs
+
+			const completeIntitalSync = include.length === 0;
+
+			// remove orphaned documents
+			await this.pull.audit({ include, exclude, remove });
+
+			// these values then become the checkpoint for the pull handler
+			const checkpoint = {
+				include,
+				exclude,
+				lastModified,
+				completeIntitalSync,
+				count,
+			};
+
+			const result = await this.pull.handler(checkpoint, batchSize);
+
+			const useResult = flatClone(result);
+			useResult.documents = await Promise.all(useResult.documents.map((d) => pullModifier(d)));
+
+			// insert documents
+			await this.collection.bulkInsert(useResult.documents);
+
+			return useResult;
+		} catch (error) {
+			log.error(error);
+			throw error;
 		}
-
-		// these values then become the checkpoint for the pull handler
-		const checkpoint = {
-			include,
-			exclude,
-			lastModified,
-			completeIntitalSync,
-			count,
-		};
-
-		const result = await this.pull.handler(checkpoint, batchSize);
-
-		const useResult = flatClone(result);
-		useResult.documents = await Promise.all(useResult.documents.map((d) => pullModifier(d)));
-
-		// insert documents
-		await this.collection.bulkInsert(useResult.documents);
-
-		return useResult;
 	}
 
 	/**
@@ -237,7 +239,7 @@ class RxReplicationState<RxDocType, CheckpointType> {
 		}
 
 		// started flag to prevent multiple start() calls on re-renders
-		if(this.started && !options.resync) {
+		if (this.started && !options.resync) {
 			return;
 		}
 		this.started = true;
@@ -272,7 +274,7 @@ class RxReplicationState<RxDocType, CheckpointType> {
 				this.currentPull = null;
 			}
 		} catch (err) {
-			console.error(err);
+			log.error(err);
 		} finally {
 			this.subjects.active.next(false);
 		}
