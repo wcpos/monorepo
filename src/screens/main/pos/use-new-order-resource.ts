@@ -76,7 +76,8 @@ const useNewOrderResource = () => {
 						if (!isRxDocument(doc)) {
 							pullDocument(defaultCustomerID, customerCollection);
 						}
-					})
+					}),
+					filter((doc) => isRxDocument(doc))
 			  )
 			: of(guestCustomer);
 
