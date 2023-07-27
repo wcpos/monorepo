@@ -10,6 +10,7 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
+import useNewOrderResource from './use-new-order-resource';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { OrdersProvider } from '../contexts/orders';
@@ -38,13 +39,14 @@ const openOrderQuery = new Query({
  */
 const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'POS'>) => {
 	const orderID = get(route, ['params', 'orderID']);
+	const newOrderResource = useNewOrderResource();
 
 	return (
 		<OrdersProvider query={openOrderQuery}>
 			<React.Suspense
 			// suspend until orders and default customer are loaded
 			>
-				<CurrentOrderProvider orderID={orderID}>
+				<CurrentOrderProvider orderID={orderID} newOrderResource={newOrderResource}>
 					<React.Suspense
 					// suspend until tax rates are loaded
 					>

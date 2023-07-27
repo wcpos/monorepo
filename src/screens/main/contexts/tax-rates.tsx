@@ -1,6 +1,4 @@
 import isEmpty from 'lodash/isEmpty';
-import sortBy from 'lodash/sortBy';
-import { map } from 'rxjs/operators';
 
 import createDataProvider from './create-data-provider';
 import { filterTaxRates } from './tax-rates.helpers';
@@ -46,9 +44,9 @@ const [TaxRateProvider, useTaxRates] = createDataProvider<TaxRateDocument, APIQu
 			const { include } = checkpoint;
 
 			/**
-			 * Taxes don't have a dae field, so if localIDs = remoteIDs, then we can skip the API call
+			 * Taxes don't have a date field, so if localIDs = remoteIDs, then we can skip the API call
 			 */
-			if (isEmpty(params) && isEmpty(include)) {
+			if (isEmpty(include)) {
 				return false;
 			}
 
@@ -61,54 +59,6 @@ const [TaxRateProvider, useTaxRates] = createDataProvider<TaxRateDocument, APIQu
 			return params;
 		},
 	},
-	// prepareQueryParams: (params, query, checkpoint, batchSize) => {
-	// 	/**
-	// 	 * FIXME: tax has no modified after and will keep fetching over and over
-	// 	 */
-	// 	if (params.modified_after) {
-	// 		params.earlyReturn = true;
-	// 	}
-
-	// 	/**
-	// 	 * FIXME: taxes have no include/exclude, so I'm just going to fetch all of them
-	// 	 * 100 should be enough, right?
-	// 	 */
-	// 	params.per_page = 100;
-
-	// 	return params;
-	// },
-	// filterQuery: (query$) => {
-	// 	return query$.pipe(
-	// 		map((q) => {
-	// 			const selector = q.selector || {};
-	// 			// if q.search is an object, then it's a location search
-	// 			if (q.search && typeof q.search === 'object') {
-	// 				// pick out country, state, city and postcode from q.search
-	// 				const { country, state } = q.search;
-	// 				selector.$and = [{ $or: [{ country }, { country: '' }] }];
-	// 				if (state) {
-	// 					selector.$and.push({ $or: [{ state }, { state: '' }] });
-	// 				}
-	// 			}
-
-	// 			return { ...q, selector };
-	// 		})
-	// 	);
-	// },
-	// filterQueryData: (data$, query$) => {
-	// 	const q = query$.getValue();
-	// 	return data$.pipe(
-	// 		map((result) => {
-	// 			if (q.search && typeof q.search === 'object') {
-	// 				const { postcode, city } = q.search;
-	// 				return filterTaxRates(result, postcode, city);
-	// 			} else {
-	// 				return result;
-	// 			}
-	// 		}),
-	// 		map((result) => sortBy(result, 'order'))
-	// 	);
-	// },
 });
 
 export { TaxRateProvider, useTaxRates };

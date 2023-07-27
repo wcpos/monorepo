@@ -42,28 +42,28 @@ const CustomerSelectSearch = ({ onSelectCustomer, autoFocus = false, value }) =>
 		[query]
 	);
 
-	/**
-	 * HACK: get the selected customer from value and set it as selectedCustomer
-	 */
-	React.useEffect(() => {
-		async function getCustomer() {
-			try {
-				let selectedCustomer = await collection.findOneFix({ selector: { id: value } }).exec();
-				if (!selectedCustomer && value !== 0) {
-					selectedCustomer = await pullDocument(value, collection);
-				}
-				if (selectedCustomer) {
-					setSelectedCustomer(selectedCustomer);
-				}
-			} catch (error) {
-				log.error(error);
-			}
-		}
+	// /**
+	//  * HACK: get the selected customer from value and set it as selectedCustomer
+	//  */
+	// React.useEffect(() => {
+	// 	async function getCustomer() {
+	// 		try {
+	// 			let selectedCustomer = await collection.findOneFix({ selector: { id: value } }).exec();
+	// 			if (!selectedCustomer && value !== 0) {
+	// 				selectedCustomer = await pullDocument(value, collection);
+	// 			}
+	// 			if (selectedCustomer) {
+	// 				setSelectedCustomer(selectedCustomer);
+	// 			}
+	// 		} catch (error) {
+	// 			log.error(error);
+	// 		}
+	// 	}
 
-		if (value) {
-			getCustomer();
-		}
-	}, [collection, pullDocument, value]);
+	// 	if (value) {
+	// 		getCustomer();
+	// 	}
+	// }, [collection, pullDocument, value]);
 
 	/**
 	 *

@@ -29,25 +29,26 @@ interface APIQueryParams {
  */
 const [CustomersProvider, useCustomers] = createDataProvider<CustomerDocument, APIQueryParams>({
 	collectionName: 'customers',
-	initialQuery: { sortBy: 'id', sortDirection: 'asc' }, // Default query, will be overridden by prop
-	prepareQueryParams: (params, query, checkpoint, batchSize) => {
-		let orderby = params.orderby;
+	hooks: {
+		filterApiQueryParams: (params, checkpoint, batchSize) => {
+			let orderby = params.orderby;
 
-		if (query.sortBy === 'date_created') {
-			orderby = 'registered_date';
-		}
+			if (orderby === 'date_created') {
+				orderby = 'registered_date';
+			}
 
-		// HACK: get the deafult_customer, probably a better way to do this
-		if (params.id) {
-			params.include = params.id;
-			params.id = undefined;
-		}
+			// HACK: get the deafult_customer, probably a better way to do this
+			// if (params.id) {
+			// 	params.include = params.id;
+			// 	params.id = undefined;
+			// }
 
-		return {
-			...params,
-			role: 'all',
-			orderby,
-		};
+			return {
+				...params,
+				role: 'all',
+				orderby,
+			};
+		},
 	},
 });
 

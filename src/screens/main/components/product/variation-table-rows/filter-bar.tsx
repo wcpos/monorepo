@@ -20,13 +20,9 @@ const VariationsFilterBar = ({ parent }) => {
 	const { query } = useVariations();
 	const { setExpanded } = useVariationTable();
 	const selectedAttributes = useObservableState(
-		query.state$.pipe(
-			map((q) => get(q, ['search', 'attributes'])),
-			tap((res) => console.log('tap', res))
-		),
-		get(query, ['currentState', 'search', 'attributes'])
+		query.state$.pipe(map((q) => get(q, ['search', 'attributes']))),
+		get(query, ['currentState', 'search', 'attributes'], [])
 	);
-	console.log('selectedAttributes', selectedAttributes);
 
 	/**
 	 *

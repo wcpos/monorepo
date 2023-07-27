@@ -205,6 +205,8 @@ class Query<T> {
 		this._whereClauses.forEach((clause) => {
 			params[clause.field] = clause.value;
 		});
+		params.orderby = this._queryState$.value?.sortBy;
+		params.order = this._queryState$.value?.sortDirection;
 		return params;
 	}
 }

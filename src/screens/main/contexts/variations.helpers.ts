@@ -23,7 +23,7 @@ import type { QueryState } from './use-query';
  */
 export function updateVariationAttributeSearch(
 	search: QueryState['search'] | null,
-	attribute: { name: string; value: string }
+	attribute: { id: number; name: string; value: string }
 ) {
 	// if null, remove the attribute search
 	if (attribute === null) {
@@ -37,7 +37,7 @@ export function updateVariationAttributeSearch(
 	} else {
 		$allMatch.push(attribute);
 	}
-	return { attributes: $allMatch };
+	return { attributes: [...$allMatch] }; // make sure we return a new array
 }
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 

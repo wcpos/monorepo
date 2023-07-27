@@ -16,6 +16,9 @@ interface Props {
 export const ProductVariationActions = ({ item: variation, parent }: Props) => {
 	const { addVariation } = useCartHelpers();
 
+	/**
+	 * TODO: move this to a helper function
+	 */
 	const metaData = React.useMemo(() => {
 		return variation.attributes.map((attribute) => {
 			return {

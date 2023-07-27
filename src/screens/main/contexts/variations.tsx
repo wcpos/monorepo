@@ -37,18 +37,6 @@ const [VariationsProvider, useVariations] = createDataProvider<
 	APIQueryParams
 >({
 	collectionName: 'variations',
-	prepareQueryParams: (params, query, checkpoint, batchSize) => {
-		let orderby = params.orderby;
-
-		if (query.sortBy === 'name') {
-			orderby = 'title';
-		}
-
-		return {
-			...params,
-			orderby,
-		};
-	},
 	hooks: {
 		postQueryResult: (result, queryState) => {
 			const allMatch = get(queryState, ['search', 'attributes']);
@@ -57,6 +45,19 @@ const [VariationsProvider, useVariations] = createDataProvider<
 				return filterVariationsByAttributes(result, allMatch);
 			}
 			return result;
+		},
+		filterApiQueryParams: (params, checkpoint, batchSize) => {
+			let orderby = params.orderby;
+
+			if (orderby === 'name') {
+				orderby = 'title';
+			}
+
+			return {
+				...params,
+				id: undefined, // remove id: { $in: [] } from query
+				orderby,
+			};
 		},
 	},
 });

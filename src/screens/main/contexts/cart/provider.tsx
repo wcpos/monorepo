@@ -91,9 +91,8 @@ const CartProvider = ({ children, order }: CartContextProps) => {
 								distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
 								map(([subtotal, total, taxClass, metaData = []]) => {
 									// get taxStatus from meta_data
-									const taxStatus = metaData.find(
-										(m) => m.key === '_woocommerce_pos_tax_status'
-									)?.value;
+									const taxStatus = metaData.find((m) => m.key === '_woocommerce_pos_tax_status')
+										?.value;
 									const taxes = calculateLineItemTaxes({ subtotal, total, taxClass, taxStatus });
 									item.incrementalPatch(taxes);
 									return { subtotal, total, ...taxes };

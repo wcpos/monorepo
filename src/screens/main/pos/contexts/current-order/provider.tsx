@@ -1,8 +1,7 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import useNewOrder from './use-new-order';
 import { useOrders } from '../../../contexts/orders';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -16,31 +15,38 @@ export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
 	orderID?: string;
+	newOrderResource: ObservableResource<OrderDocument>;
 }
 
 /**
  * Provider the active order by uuid, or a new order
  */
-const CurrentOrderProvider = ({ children, orderID }: CurrentOrderContextProviderProps) => {
+const CurrentOrderProvider = ({
+	children,
+	orderID,
+	newOrderResource,
+}: CurrentOrderContextProviderProps) => {
 	const { resource } = useOrders();
 	const orders = useObservableSuspense(resource);
-	const newOrder = useNewOrder();
-
-	// const defaultCustomerID = store.default_customer_is_cashier
-	// 	? wpCredentials.id
-	// 	: store.default_customer;
-
-	let currentOrder = orders.find((order) => order.uuid === orderID);
-	if (!currentOrder) {
-		currentOrder = newOrder;
-	}
+	const newOrder = useObservableSuspense(newOrderResource);
 
 	/**
 	 *
 	 */
-	return (
-		<CurrentOrderContext.Provider value={{ currentOrder }}>{children}</CurrentOrderContext.Provider>
-	);
+	const currentOrder = React.useMemo(() => {
+		const order = orders.find((order) => order.uuid === orderID);
+		return order ?? newOrder;
+	}, [orders, newOrder, orderID]);
+
+	/**
+	 *
+	 */
+	const value = React.useMemo(() => ({ currentOrder }), [currentOrder]);
+
+	/**
+	 *
+	 */
+	return <CurrentOrderContext.Provider value={value}>{children}</CurrentOrderContext.Provider>;
 };
 
 export default CurrentOrderProvider;

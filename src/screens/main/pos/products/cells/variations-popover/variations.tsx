@@ -63,6 +63,7 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	const handleSelect = React.useCallback(
 		(attribute, option) => {
 			const newState = updateVariationAttributeSearch(query.currentState.search, {
+				id: attribute.id,
 				name: attribute.name,
 				option,
 			});
@@ -78,8 +79,9 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 		if (selectedVariation) {
 			// convert attributes to meta_data
 			const selectedAttributesMetaData = selectedAttributes.map((a) => ({
-				key: a.name,
-				value: a.option,
+				attr_id: a.id,
+				display_key: a.name,
+				display_value: a.option,
 			}));
 			setPrimaryAction({
 				label: t('Add to Cart') + ': ' + format(selectedVariation.price),

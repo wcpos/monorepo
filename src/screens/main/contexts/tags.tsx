@@ -1,3 +1,5 @@
+import isEmpty from 'lodash/isEmpty';
+
 import createDataProvider from './create-data-provider';
 
 type ProductTagDocument = import('@wcpos/database/src').ProductTagDocument;
@@ -25,15 +27,19 @@ const [ProductTagsProvider, useProductTags] = createDataProvider<
 	APIQueryParams
 >({
 	collectionName: 'products/tags',
-	initialQuery: { sortBy: 'id', sortDirection: 'asc' }, // Default query, will be overridden by prop
-	prepareQueryParams: (params, query, checkpoint, batchSize) => {
-		/**
-		 * FIXME: category has no modified after and will keep fetching over and over
-		 */
-		if (params.modified_after) {
-			params.earlyReturn = true;
-		}
-		return params;
+	hooks: {
+		filterApiQueryParams: (params, checkpoint, batchSize) => {
+			const { include } = checkpoint;
+
+			/**
+			 * Tags don't have a date field, so if localIDs = remoteIDs, then we can skip the API call
+			 */
+			if (isEmpty(include)) {
+				return false;
+			}
+
+			return params;
+		},
 	},
 });
 

@@ -21,6 +21,31 @@ const ProductAttributes = ({ product }: Props) => {
 	/**
 	 *
 	 */
+	const handleSelect = React.useCallback(
+		(attribute, option) => {
+			if (!expanded) {
+				// @TODO - find a better way to do this
+				// I need to expand the table, then update the query
+				setExpanded({
+					id: attribute.id,
+					name: attribute.name,
+					option,
+				});
+			} else {
+				const newState = updateVariationAttributeSearch(query.currentState.search, {
+					id: attribute.id,
+					name: attribute.name,
+					option,
+				});
+				query.search(newState);
+			}
+		},
+		[expanded, query, setExpanded]
+	);
+
+	/**
+	 *
+	 */
 	return (
 		<Box space="xxSmall">
 			{attributes
@@ -30,25 +55,7 @@ const ProductAttributes = ({ product }: Props) => {
 						<Text size="small" type="secondary">{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
 							<React.Fragment key={option}>
-								<Link
-									size="small"
-									onPress={() => {
-										if (!expanded) {
-											// @TODO - find a better way to do this
-											// I need to expand the table, then update the query
-											setExpanded({
-												name: attr.name,
-												option,
-											});
-										} else {
-											const newState = updateVariationAttributeSearch(query.currentState.search, {
-												name: attr.name,
-												option,
-											});
-											query.search(newState);
-										}
-									}}
-								>
+								<Link size="small" onPress={() => handleSelect(attr, option)}>
 									{option}
 								</Link>
 								{index < attr.options.length - 1 && ', '}

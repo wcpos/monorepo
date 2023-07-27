@@ -21,10 +21,6 @@ const POS = () => {
 	const dimensions = useWindowDimensions();
 	const location = useTaxLocation();
 
-	React.useEffect(() => {
-		console.log('location', location);
-	}, [location]);
-
 	/**
 	 *
 	 */

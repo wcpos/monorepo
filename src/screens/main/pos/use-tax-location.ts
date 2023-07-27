@@ -6,19 +6,26 @@ import useCurrentOrder from './contexts/current-order';
 import useLocalData from '../../../contexts/local-data';
 import useBaseTaxLocation from '../hooks/use-base-tax-location';
 
+/**
+ *
+ */
 const useTaxLocation = () => {
 	const { store } = useLocalData();
 	const { currentOrder } = useCurrentOrder();
 	const baseLocation = useBaseTaxLocation();
 	const taxBasedOn = useObservableState(store.tax_based_on$, store?.tax_based_on);
-	const billing = useObservableState(currentOrder.billing$, currentOrder?.billing);
-	const shipping = useObservableState(currentOrder.shipping$, currentOrder?.shipping);
 
-	// React.useEffect(() => {
-	// 	console.log(currentOrder);
-	// }, [currentOrder]);
+	/**
+	 * TODO - updating billing and shipping based on the current order causes a loop
+	 * I need to find a better way to do this.
+	 */
+	const billing = currentOrder?.billing;
+	const shipping = currentOrder?.shipping;
 
-	return React.useMemo(() => {
+	/**
+	 *
+	 */
+	const location = React.useMemo(() => {
 		if (taxBasedOn === 'base') {
 			return baseLocation;
 		}
@@ -38,16 +45,18 @@ const useTaxLocation = () => {
 		};
 	}, [
 		taxBasedOn,
-		baseLocation,
 		shipping?.city,
 		shipping?.country,
 		shipping?.state,
 		shipping?.postcode,
+		baseLocation,
 		billing?.city,
 		billing?.country,
 		billing?.state,
 		billing?.postcode,
 	]);
+
+	return location;
 };
 
 export default useTaxLocation;

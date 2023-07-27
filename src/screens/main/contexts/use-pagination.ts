@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableRef, useObservable } from 'observable-hooks';
 import { Observable, combineLatest } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 
 import type { RxDocument } from 'rxdb';
 

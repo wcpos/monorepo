@@ -103,7 +103,7 @@ export const useReplicationState = ({
 					if (remove.length > 0 && collection.name !== 'variations') {
 						// deletion should be rare, only when an item is deleted from the server
 						log.warn('removing', remove, 'from', collection.name);
-						await collection.bulkRemove(remove);
+						await collection.find({ selector: { id: { $in: remove } } }).remove();
 					}
 				},
 				handler: async (checkpoint, batchSize) => {
