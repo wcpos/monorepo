@@ -7,9 +7,24 @@
   <!-- 
       This viewport works for phones with notches.
       It's optimized for gestures by disabling global zoom.
-     -->
+    -->
   <meta name="viewport"
     content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1.00001, viewport-fit=cover" />
+  <!-- 
+    This is for the electron desktop app.
+    NOTE: it is not needed for the web app.
+    TODO: I should make the connect more secure, eg: connect-src 'self' http://localhost:* https://localhost:*; 
+    but, I would need to route every http request through electron, which requires some work
+    - translations
+    - online NetInfo
+
+    NOTE: http://localhost:* access is only required for development
+  -->
+  <meta http-equiv="Content-Security-Policy" 
+    content="
+      default-src 'unsafe-inline' *;  
+      script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* https://localhost:*;
+    " />
   <title>WooCommerce POS</title>
   <style>
     /**
