@@ -150,17 +150,10 @@ const populatePlugin: RxPlugin = {
 				const refCollection = getRefCollection(this.collection, key);
 				return this.get$(key).pipe(
 					distinctUntilChanged(isEqual),
-					switchMap((ids: string[]) => {
-						return refCollection.storageInstance
-							.findDocumentsById(ids, true)
-							.then((newResultData) => {
-								const docs = Object.values(newResultData).map((docData) =>
-									refCollection._docCache.getCachedRxDocument(docData)
-								);
-								return docs;
-							});
-					}),
-					switchMap((docs: any[]) => {
+					switchMap((ids: string[]) => refCollection.findByIds(ids).exec()),
+					switchMap((docsMap: Map<string, RxDocument>) => {
+						const docs = [...docsMap.values()];
+
 						// Map each lineItem to an observable of its deleted$ property
 						const deletedObservables = docs.map((doc) => doc.deleted$);
 
