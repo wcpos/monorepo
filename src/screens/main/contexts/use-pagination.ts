@@ -21,23 +21,21 @@ const usePagination = ({ data$, pageSize = 10 }: UsePagination) => {
 	/**
 	 *
 	 */
-	const paginatedData$ = useObservable(
-		() =>
-			combineLatest([data$, loadMore$]).pipe(
-				map(([docs, trigger]) => {
-					const count = docs.length;
-					const page = pageNumberRef.current;
-					const result = {
-						data: docs.slice(0, page * pageSize),
-						count,
-						hasMore: count > page * pageSize,
-					};
-					pageNumberRef.current += 1;
-					return result;
-				})
-			),
-		[]
-	);
+	const paginatedData$ = React.useMemo(() => {
+		return combineLatest([data$, loadMore$]).pipe(
+			map(([docs, trigger]) => {
+				const count = docs.length;
+				const page = pageNumberRef.current;
+				const result = {
+					data: docs.slice(0, page * pageSize),
+					count,
+					hasMore: count > page * pageSize,
+				};
+				pageNumberRef.current += 1;
+				return result;
+			})
+		);
+	}, [data$, loadMore$, pageSize]);
 
 	/**
 	 *

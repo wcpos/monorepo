@@ -129,7 +129,6 @@ class Query<T> {
 		this._whereClauses.forEach((clause) => {
 			selector[clause.field] = clause.value;
 		});
-		log.debug('selector', selector);
 		return selector;
 	}
 
@@ -207,6 +206,9 @@ class Query<T> {
 		});
 		params.orderby = this._queryState$.value?.sortBy;
 		params.order = this._queryState$.value?.sortDirection;
+		if (typeof this._queryState$.value?.search === 'string') {
+			params.search = this._queryState$.value?.search;
+		}
 		return params;
 	}
 }

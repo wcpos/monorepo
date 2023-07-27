@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState, useObservable } from 'observable-hooks';
-import { interval } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { interval, merge } from 'rxjs';
+import { map, tap } from 'rxjs/operators';
 
 import { replicateRxCollection } from '@wcpos/database/src/plugins/wc-rest-api-replication';
 import log from '@wcpos/utils/src/logger';
@@ -53,7 +53,7 @@ export const useReplicationState = ({
 	/**
 	 * Create a long polling stream
 	 */
-	const poll$ = useObservable(() => interval(pollingTime).pipe(map(() => 'RESYNC')));
+	// const poll$ = useObservable(() => interval(pollingTime).pipe(map(() => 'RESYNC')));
 
 	/**
 	 *
@@ -116,7 +116,6 @@ export const useReplicationState = ({
 						/**
 						 * If params hook returns false, don't fetch
 						 */
-						console.log('params', params);
 						if (!params) {
 							return {
 								documents: [],
@@ -169,10 +168,10 @@ export const useReplicationState = ({
 						log.error(err);
 					}
 				},
-				stream$: poll$,
+				stream$: merge(interval(pollingTime), query.state$).pipe(map(() => 'RESYNC')),
 			},
 		});
-	}, [apiURL, collection, endpoint, hooks, http, poll$, query, remoteIDs]);
+	}, [apiURL, collection, endpoint, hooks, http, pollingTime, query, remoteIDs]);
 
 	return replicationState;
 };

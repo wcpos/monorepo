@@ -1,3 +1,4 @@
+import get from 'lodash/get';
 import { map } from 'rxjs/operators';
 
 import createDataProvider from './create-data-provider';
@@ -43,6 +44,7 @@ interface APIQueryParams {
  */
 const [ProductsProvider, useProducts] = createDataProvider<ProductDocument, APIQueryParams>({
 	collectionName: 'products',
+	clearCollectionNames: ['products', 'variations'],
 	hooks: {
 		filterApiQueryParams: (params, checkpoint, batchSize) => {
 			let orderby = params.orderby;
@@ -53,6 +55,16 @@ const [ProductsProvider, useProducts] = createDataProvider<ProductDocument, APIQ
 
 			if (orderby === 'date_created') {
 				orderby = 'date';
+			}
+
+			if (params.categories) {
+				params.category = get(params, ['categories', '$elemMatch', 'id']);
+				delete params.categories;
+			}
+
+			if (params.tags) {
+				params.tag = get(params, ['tags', '$elemMatch', 'id']);
+				delete params.categories;
 			}
 
 			return {

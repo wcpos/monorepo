@@ -38,6 +38,7 @@ interface APIQueryParams {
  */
 const [OrdersProvider, useOrders] = createDataProvider<OrderDocument, APIQueryParams>({
 	collectionName: 'orders',
+	clearCollectionNames: ['orders', 'line_items', 'fee_lines', 'shipping_lines'],
 	hooks: {
 		filterApiQueryParams: (params, checkpoint, batchSize) => {
 			let orderby = params.orderby;

@@ -15,6 +15,7 @@ interface DataProviderProps {
 	query: Query<RxCollection>;
 	apiEndpoint?: string;
 	remoteIDs?: number[];
+	clearCollectionNames?: CollectionKey[];
 }
 
 interface DataContextValue<TDocument> {
@@ -57,6 +58,7 @@ const createDataProvider = <TDocument, TQueryParams>({
 	hooks = {},
 }: {
 	collectionName: CollectionKey;
+	clearCollectionNames?: CollectionKey[];
 	prepareQueryParams?: (
 		params: TQueryParams,
 		query: QueryState,
@@ -70,7 +72,13 @@ const createDataProvider = <TDocument, TQueryParams>({
 	/**
 	 *
 	 */
-	const DataProvider = ({ children, query, apiEndpoint, remoteIDs }: DataProviderProps) => {
+	const DataProvider = ({
+		children,
+		query,
+		apiEndpoint,
+		remoteIDs,
+		clearCollectionNames,
+	}: DataProviderProps) => {
 		const { storeDB } = useLocalData();
 		const { collection } = useCollection(collectionName);
 
@@ -122,8 +130,8 @@ const createDataProvider = <TDocument, TQueryParams>({
 		 */
 		const clear = React.useCallback(async () => {
 			replicationState.cancel();
-			await storeDB.reset([collectionName]);
-		}, [replicationState, storeDB]);
+			await storeDB.reset(clearCollectionNames || [collectionName]);
+		}, [clearCollectionNames, replicationState, storeDB]);
 
 		/**
 		 *

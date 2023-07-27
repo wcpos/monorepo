@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
@@ -95,12 +94,7 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 
 	return (
 		<>
-			<Icon
-				name="sliders"
-				onPress={() => {
-					setOpened(true);
-				}}
-			/>
+			<Icon name="sliders" onPress={() => setOpened(true)} />
 			<Modal
 				title={title}
 				opened={opened}

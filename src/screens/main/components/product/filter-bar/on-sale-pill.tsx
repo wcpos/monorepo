@@ -11,11 +11,10 @@ import { useProducts } from '../../../contexts/products';
 
 const OnSalePill = () => {
 	const { query } = useProducts();
-	// const isActive = useObservableState(
-	// 	query.state$.pipe(map((query) => get(query, ['selector', 'on_sale']))),
-	// 	get(query, ['currentState', 'selector', 'on_sale'])
-	// );
-	const isActive = false;
+	const isActive = useObservableState(
+		query.state$.pipe(map((state) => get(state, ['selector', 'on_sale']))),
+		get(query, ['currentState', 'selector', 'on_sale'])
+	);
 
 	return (
 		<Pill

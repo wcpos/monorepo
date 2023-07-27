@@ -53,10 +53,10 @@ const App = () => {
 	/**
 	 * PHP plugin update messsage
 	 */
-	if (version && semverGt('1.2.0', version)) {
+	if (version && semverGt('1.3.0', version)) {
 		return (
 			<WarningMessage>
-				Please update your WooCommerce POS plugin to version 1.2.0 or higher
+				Please update your WooCommerce POS plugin to version 1.3.0 or higher
 			</WarningMessage>
 		);
 	}
