@@ -19,10 +19,6 @@ export const useRestHttpClient = () => {
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
 	const navigation = useNavigation();
 
-	React.useEffect(() => {
-		console.log('jwt', jwt);
-	}, [jwt]);
-
 	// React.useEffect(() => {
 	// 	console.log('isAuth', isAuth);
 	// }, [isAuth]);
