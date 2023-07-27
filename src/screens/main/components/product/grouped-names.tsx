@@ -4,11 +4,11 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
-import useProducts from '../../contexts/products';
+import { useProducts } from '../../contexts/products';
 
 const GroupedNames = () => {
 	const { resource } = useProducts();
-	const { data } = useObservableSuspense(resource);
+	const data = useObservableSuspense(resource);
 	const names = data.map((doc) => doc.name);
 
 	return (

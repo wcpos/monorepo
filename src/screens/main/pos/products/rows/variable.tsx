@@ -38,11 +38,6 @@ const variationCells = {
 	sku: SKU,
 };
 
-const query = new Query({
-	sortBy: 'id',
-	sortDirection: 'asc',
-});
-
 /**
  *
  */
@@ -85,7 +80,11 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	 * @TODO - fix hack for attribute click
 	 */
 	const variationTableContext = React.useMemo(() => {
-		query.where('id', { $in: variationIDs });
+		const query = new Query({
+			selector: { id: { $in: variationIDs } },
+			sortBy: 'id',
+			sortDirection: 'asc',
+		});
 
 		if (typeof expanded === 'object') {
 			query.search({ attributes: [expanded] });
