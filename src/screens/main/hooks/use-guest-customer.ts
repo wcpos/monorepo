@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 
 import useLocalData from '../../../contexts/local-data';
+import { t } from '../../../lib/translations';
 
 /**
  *
@@ -16,7 +17,7 @@ const useGuestCustomer = () => {
 		() => ({
 			customer_id: 0,
 			billing: {
-				first_name: '',
+				first_name: t('Guest', { _tags: 'core' }),
 				last_name: '',
 				company: '',
 				address_1: '',

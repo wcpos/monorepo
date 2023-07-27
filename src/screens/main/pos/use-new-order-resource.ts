@@ -76,8 +76,7 @@ const useNewOrderResource = () => {
 						if (!isRxDocument(doc)) {
 							pullDocument(defaultCustomerID, customerCollection);
 						}
-					}),
-					filter((doc) => isRxDocument(doc))
+					})
 			  )
 			: of(guestCustomer);
 
@@ -85,9 +84,9 @@ const useNewOrderResource = () => {
 			switchMap(([order, customer]) => {
 				const customerJSON = isRxDocument(customer) ? customer.toJSON() : customer;
 				return order.incrementalPatch({
-					customer_id: customerJSON.id,
+					customer_id: customerJSON?.id,
 					billing: {
-						...(customerJSON.billing || {}),
+						...(customerJSON?.billing || {}),
 						email: customerJSON?.billing?.email || customerJSON?.email,
 						first_name:
 							customerJSON?.billing?.first_name ||
