@@ -12,7 +12,7 @@ export const getOrInsertWPCredentials = async (userDB, wp_credentials) => {
 	let savedCredentials = await userDB.wp_credentials.findOneFix(wp_credentials.uuid).exec();
 	if (savedCredentials) {
 		// always update the nonce
-		savedCredentials.incrementalPatch({ wp_nonce: wp_credentials.wp_nonce });
+		savedCredentials.incrementalPatch({ jwt: wp_credentials.jwt });
 	}
 	if (!savedCredentials) {
 		savedCredentials = await userDB.wp_credentials.insert(wp_credentials);
