@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import Bottleneck from 'bottleneck';
 import merge from 'lodash/merge';
 import set from 'lodash/set';
 
@@ -13,6 +14,8 @@ type AxiosRequestConfig = import('axios').AxiosRequestConfig;
 type AxiosError = import('axios').AxiosError;
 
 export type RequestConfig = AxiosRequestConfig;
+
+const limiter = new Bottleneck({ maxConcurrent: 10 });
 
 /**
  * Http Client provides a standard API for all platforms
@@ -45,7 +48,7 @@ export const useHttpClient = (errorHandler?: (error: unknown) => unknown) => {
 			}
 
 			try {
-				const response = await http.request(config);
+				const response = await limiter.schedule(() => http.request(config));
 				return response;
 			} catch (error) {
 				log.error(error);
