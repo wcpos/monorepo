@@ -22,7 +22,7 @@ import { t } from '../../../../../lib/translations';
  * FIXME: If I don't memo this component the avatar flashes every time the cart is changed
  * Shouldn't the header components already be memoized?
  */
-const UserMenu_ = () => {
+export const UserMenu = () => {
 	const { wpCredentials, isWebApp, initialProps, site, store } = useLocalData();
 	const logout = useLogout();
 	const login = useLogin();
@@ -173,5 +173,3 @@ const UserMenu_ = () => {
 		</>
 	);
 };
-
-export const UserMenu = React.memo(UserMenu_);

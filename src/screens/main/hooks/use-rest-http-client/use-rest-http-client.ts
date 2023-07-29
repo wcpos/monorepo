@@ -17,6 +17,7 @@ export const useRestHttpClient = () => {
 	const { site, wpCredentials } = useLocalData();
 	const baseURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
+
 	const navigation = useNavigation();
 
 	// React.useEffect(() => {
@@ -47,16 +48,18 @@ export const useRestHttpClient = () => {
 	 */
 	const request = React.useCallback(
 		async (reqConfig: RequestConfig = {}) => {
-			const config = merge(
-				{},
-				{
-					baseURL,
-					headers: {
-						Authorization: `Bearer ${jwt}`,
-					},
-				},
-				reqConfig
-			);
+			const shouldUseJwtAsParam = typeof window !== 'undefined' && window.useJwtAsParam === true;
+			const defaultConfig = {
+				baseURL,
+				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
+			};
+
+			if (shouldUseJwtAsParam) {
+				const params = { authorization: `Bearer ${jwt}` };
+				defaultConfig.params = merge(params, reqConfig.params);
+			}
+
+			const config = merge({}, defaultConfig, reqConfig);
 
 			return httpClient.request(config);
 		},
