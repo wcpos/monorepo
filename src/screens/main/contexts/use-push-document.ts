@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
@@ -45,7 +46,8 @@ const usePushDocument = () => {
 						? await latestDoc.toPopulatedOrderJSON()
 						: await latestDoc.toPopulatedJSON();
 
-				const { data } = await http.post(endpoint, populatedData);
+				const response = await http.post(endpoint, populatedData);
+				const data = get(response, 'data');
 				/**
 				 * It's possible for the WC REST API server to retrun a 200 response but with data = ""
 				 * Do a check here to see if the data is empty and if so, throw an error
@@ -58,7 +60,7 @@ const usePushDocument = () => {
 
 				// FIXME: I think this is done automatically by the patch, ie: preSave?
 				// I need tests so I can be sure
-				await collection.upsertRefs(parsedData);
+				// await collection.upsertRefs(parsedData);
 				return latestDoc.incrementalPatch(parsedData);
 				// return latestDoc.patch(parsedData);
 			} catch (err) {

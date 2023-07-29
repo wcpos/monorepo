@@ -35,20 +35,33 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 		async (event: MessageEvent) => {
 			if (event?.data?.action === 'wcpos-payment-received') {
 				try {
-					const { payload } = event.data;
-					const parsedData = order.collection.parseRestResponse(payload);
-					await order.incrementalPatch(parsedData);
-					navigation.dispatch(
-						StackActions.replace('Receipt', {
-							orderID: order.uuid,
-						})
-					);
+					const payload = event.data.payload;
+					if (payload) {
+						const latest = order.getLatest();
+						const parsedData = latest.collection.parseRestResponse(payload);
+						const success = await latest.incrementalPatch(parsedData);
+						if (success) {
+							navigation.dispatch(
+								StackActions.replace('Receipt', {
+									orderID: order.uuid,
+								})
+							);
+						}
+					}
 				} catch (err) {
 					log.error(err);
+					addSnackbar({ message: err?.message, type: 'error' });
+				} finally {
+					setPrimaryAction((prev) => {
+						return {
+							...prev,
+							loading: false,
+						};
+					});
 				}
 			}
 		},
-		[navigation, order]
+		[addSnackbar, navigation, order, setPrimaryAction]
 	);
 
 	/**

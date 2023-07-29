@@ -2,12 +2,14 @@ import * as React from 'react';
 
 import { useNavigation, StackActions } from '@react-navigation/native';
 import { useObservableState } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
 
 import Button from '@wcpos/components/src/button';
+import { useSnackbar } from '@wcpos/components/src/snackbar/use-snackbar';
 
 import { t } from '../../../../../lib/translations';
+import usePushDocument from '../../../contexts/use-push-document';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
-import useRestHttpClient from '../../../hooks/use-rest-http-client';
 import useCurrentOrder from '../../contexts/current-order';
 
 /**
@@ -17,58 +19,31 @@ const PayButton = () => {
 	const { currentOrder } = useCurrentOrder();
 	const total = useObservableState(currentOrder.total$, currentOrder.total);
 	const { format } = useCurrencyFormat();
-	const http = useRestHttpClient();
 	const navigation = useNavigation();
+	const [loading, setLoading] = React.useState(false);
+	const addSnackbar = useSnackbar();
+	const pushDocument = usePushDocument();
 
 	/**
 	 *
 	 */
-	// const saveOrder = React.useCallback(async () => {
-	// 	const data = await order.toRestApiJSON();
-	// 	let endpoint = 'orders';
-	// 	if (order.id) {
-	// 		endpoint += `/${order.id}`;
-	// 	}
-
-	// 	const result = await http.post(endpoint, {
-	// 		data,
-	// 	});
-
-	// 	if (result.status === 201 || result.status === 200) {
-	// 		// TODO - this should be part of the parseRestResponse
-	// 		await order.collection.upsertChildren(result.data);
-	// 		return order.atomicPatch(result.data);
-	// 		// if (order.id) {
-	// 		// 	await order.collection.upsertChildren(result.data);
-
-	// 		// 	// const parsed = order.collection.parseRestResponse(result.data);
-
-	// 		// 	order.atomicPatch(result.data);
-	// 		// 	return order;
-	// 		// }
-	// 		// await order.collection.upsertChildren(result.data);
-	// 		// const newOrder = await order.collection.insert(result.data);
-	// 		// // switcharoo
-	// 		// await order.remove();
-	// 		// setCurrentOrder(newOrder);
-	// 		// return newOrder;
-	// 	}
-	// }, [http, order]);
-
-	/**
-	 *
-	 */
-	const handlePay = React.useCallback(() => {
-		// saveOrder();
-		// navigation.navigate('Checkout', { orderID: order.uuid });
-		navigation.dispatch(StackActions.push('Checkout', { orderID: currentOrder.uuid }));
-
-		// saveOrder().then((o) => {
-		// 	if (o) {
-		// 		navigation.navigate('Checkout', { _id: o._id });
-		// 	}
-		// });
-	}, [navigation, currentOrder.uuid]);
+	const handlePay = React.useCallback(async () => {
+		setLoading(true);
+		try {
+			await pushDocument(currentOrder).then((savedDoc) => {
+				if (isRxDocument(savedDoc)) {
+					debugger;
+					navigation.dispatch(StackActions.push('Checkout', { orderID: currentOrder.uuid }));
+				}
+			});
+		} catch (error) {
+			addSnackbar({
+				message: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+			});
+		} finally {
+			setLoading(false);
+		}
+	}, [pushDocument, currentOrder, navigation, addSnackbar]);
 
 	/**
 	 *
@@ -86,6 +61,7 @@ const PayButton = () => {
 				borderTopRightRadius: 0,
 				borderBottomLeftRadius: 0,
 			}}
+			loading={loading}
 		/>
 	);
 };

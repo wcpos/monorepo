@@ -22,8 +22,8 @@ const SaveButton = () => {
 			background="outline"
 			onPress={async () => {
 				setLoading(true);
-				await pushDocument(currentOrder)
-					.then((savedDoc) => {
+				try {
+					await pushDocument(currentOrder).then((savedDoc) => {
 						/**
 						 * TODO; move this geenric sanckbar to the pushDocument hook
 						 */
@@ -32,8 +32,14 @@ const SaveButton = () => {
 								message: t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
 							});
 						}
-					})
-					.finally(() => setLoading(false));
+					});
+				} catch (error) {
+					addSnackbar({
+						message: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+					});
+				} finally {
+					setLoading(false);
+				}
 			}}
 			style={{ flex: 1 }}
 			loading={loading}
