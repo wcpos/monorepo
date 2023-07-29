@@ -15,7 +15,15 @@ type AxiosError = import('axios').AxiosError;
 
 export type RequestConfig = AxiosRequestConfig;
 
-const limiter = new Bottleneck({ maxConcurrent: 10 });
+const limiter = new Bottleneck({
+	maxConcurrent: 10,
+	highWater: 50,
+	strategy: Bottleneck.strategy.BLOCK,
+});
+
+limiter.on('error', (error) => {
+	console.error('Queue limit exceeded!', error);
+});
 
 /**
  * Http Client provides a standard API for all platforms
