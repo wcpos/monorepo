@@ -24,13 +24,8 @@ const AddNoteButton = () => {
 	 * Keep textarea value insync with the order.customer_note
 	 */
 	React.useEffect(() => {
-		console.log('note changed', note);
 		setValue(note);
 	}, [note]);
-
-	React.useEffect(() => {
-		console.log('value changed', value);
-	}, [value]);
 
 	/**
 	 *
