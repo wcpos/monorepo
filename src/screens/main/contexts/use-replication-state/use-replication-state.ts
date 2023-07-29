@@ -3,7 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableState, useObservable } from 'observable-hooks';
 import { interval, merge } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
+import { map, tap, throttleTime } from 'rxjs/operators';
 
 import { replicateRxCollection } from '@wcpos/database/src/plugins/wc-rest-api-replication';
 import log from '@wcpos/utils/src/logger';
@@ -168,7 +168,13 @@ export const useReplicationState = ({
 						log.error(err);
 					}
 				},
-				stream$: merge(interval(pollingTime), query.state$).pipe(map(() => 'RESYNC')),
+				stream$: merge(interval(pollingTime), query.state$).pipe(
+					map(() => 'RESYNC'),
+					/**
+					 * Important: throttleTime is used to prevent multiple server requests from being sent
+					 */
+					throttleTime(1000, undefined, { leading: true, trailing: false })
+				),
 			},
 		});
 	}, [apiURL, collection, endpoint, hooks, http, pollingTime, query, remoteIDs]);
