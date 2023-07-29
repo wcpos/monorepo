@@ -69,6 +69,7 @@ const [ProductsProvider, useProducts] = createDataProvider<ProductDocument, APIQ
 
 			return {
 				...params,
+				id: undefined, // remove id: { $in: [] } from query, eg: grouped products
 				orderby,
 				status: 'publish',
 			};

@@ -24,16 +24,26 @@ const AddNoteButton = () => {
 	 * Keep textarea value insync with the order.customer_note
 	 */
 	React.useEffect(() => {
+		console.log('note changed', note);
 		setValue(note);
 	}, [note]);
+
+	React.useEffect(() => {
+		console.log('value changed', value);
+	}, [value]);
 
 	/**
 	 *
 	 */
-	const handleSaveNote = React.useCallback(() => {
-		const latestDoc = currentOrder.getLatest();
-		latestDoc.patch({ customer_note: value });
-		setOpened(false);
+	const handleSaveNote = React.useCallback(async () => {
+		try {
+			const latest = currentOrder.getLatest();
+			const success = await latest.incrementalPatch({ customer_note: value });
+		} catch (err) {
+			console.log(err);
+		} finally {
+			setOpened(false);
+		}
 	}, [currentOrder, value]);
 
 	/**
