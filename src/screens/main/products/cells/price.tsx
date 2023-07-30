@@ -5,7 +5,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
-import PriceWithTax from '../../../components/product/price';
+import PriceWithTax from '../../components/product/price';
 
 type Props = {
 	item: import('@wcpos/database').ProductDocument;

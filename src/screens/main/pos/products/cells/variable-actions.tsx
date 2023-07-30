@@ -19,20 +19,6 @@ const VariableActions = ({ item: parent }: VariableActionsProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const { addVariation } = useCartHelpers();
 
-	/**
-	 *
-	 */
-	const query = React.useMemo(
-		() =>
-			new Query({
-				selector: { id: { $in: parent.variations } },
-			}),
-		[
-			parent.variations,
-			opened, // reset query when popover is closed
-		]
-	);
-
 	// /**
 	//  *
 	//  */
@@ -58,13 +44,7 @@ const VariableActions = ({ item: parent }: VariableActionsProps) => {
 				/>
 			</Popover.Target>
 			<Popover.Content>
-				<VariationsProvider
-					query={query}
-					apiEndpoint={`products/${parent.id}/variations`}
-					remoteIDs={parent.variations}
-				>
-					<VariationsPopover parent={parent} addToCart={addToCart} />
-				</VariationsProvider>
+				<VariationsPopover parent={parent} addToCart={addToCart} />
 			</Popover.Content>
 		</Popover>
 	);

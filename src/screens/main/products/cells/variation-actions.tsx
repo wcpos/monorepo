@@ -7,14 +7,18 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 
 import DeleteDialog from './delete-dialog';
-import { t } from '../../../../../lib/translations';
-import usePullDocument from '../../../contexts/use-pull-document';
+import { t } from '../../../../lib/translations';
+import usePullDocument from '../../contexts/use-pull-document';
 
 type Props = {
-	item: import('@wcpos/database').ProductDocument;
+	item: import('@wcpos/database').ProductVariationDocument;
+	parent: import('@wcpos/database').ProductDocument;
 };
 
-const Actions = ({ item: product }: Props) => {
+/**
+ *
+ */
+const Actions = ({ item: variation, parent }: Props) => {
 	const [menuOpened, setMenuOpened] = React.useState(false);
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const navigation = useNavigation();
@@ -33,14 +37,22 @@ const Actions = ({ item: product }: Props) => {
 				items={[
 					{
 						label: t('Edit', { _tags: 'core' }),
-						action: () => navigation.navigate('EditProduct', { productID: product.uuid }),
+						action: () =>
+							navigation.navigate('EditVariation', {
+								parentID: parent.id,
+								variationID: variation.uuid,
+							}),
 						icon: 'penToSquare',
 					},
 					{
 						label: t('Sync', { _tags: 'core' }),
 						action: () => {
-							if (product.id) {
-								pullDocument(product.id, product.collection);
+							if (variation.id) {
+								pullDocument(
+									variation.id,
+									variation.collection,
+									`products/${parent.id}/variations`
+								);
 							}
 						},
 						icon: 'arrowRotateRight',
@@ -58,7 +70,7 @@ const Actions = ({ item: product }: Props) => {
 			</Dropdown>
 
 			<Modal opened={deleteDialogOpened} onClose={() => setDeleteDialogOpened(false)}>
-				<DeleteDialog product={product} setDeleteDialogOpened={setDeleteDialogOpened} />
+				<DeleteDialog product={variation} setDeleteDialogOpened={setDeleteDialogOpened} />
 			</Modal>
 		</>
 	);

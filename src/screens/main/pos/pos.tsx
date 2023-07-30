@@ -10,9 +10,8 @@ import log from '@wcpos/utils/src/logger';
 
 import POSColumns from './columns';
 import POSTabs from './tabs';
-import useTaxLocation from './use-tax-location';
-import { Query } from '../contexts/query';
-import { TaxRateProvider } from '../contexts/tax-rates';
+import { useQuery } from '../../../contexts/store-state-manager';
+import useBaseTaxLocation from '../hooks/use-base-tax-location';
 
 /**
  * Tax query depends on store.tax_based_on, if customer also depends on currentOrder
@@ -20,29 +19,35 @@ import { TaxRateProvider } from '../contexts/tax-rates';
 const POS = () => {
 	const theme = useTheme();
 	const dimensions = useWindowDimensions();
-	const location = useTaxLocation();
+	const location = useBaseTaxLocation();
 
 	/**
 	 *
 	 */
-	const query = React.useMemo(
-		() =>
-			new Query({
-				search: location,
-				sortBy: 'id',
-				sortDirection: 'asc',
-			}),
-		[location]
-	);
+	useQuery({
+		queryKeys: ['tax-rates', location],
+		collectionName: 'taxes',
+		initialQuery: {
+			search: location,
+		},
+	});
+
+	/**
+	 * TODO: why here
+	 */
+	useQuery({
+		queryKeys: ['products'],
+		collectionName: 'products',
+		initialQuery: {
+			// sortBy: uiSettings.get('sortBy'),
+			// sortDirection: uiSettings.get('sortDirection'),
+		},
+	});
 
 	return (
-		<TaxRateProvider query={query}>
-			<ErrorBoundary>
-				<Suspense>
-					{dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />}
-				</Suspense>
-			</ErrorBoundary>
-		</TaxRateProvider>
+		<ErrorBoundary>
+			<Suspense>{dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />}</Suspense>
+		</ErrorBoundary>
 	);
 };
 

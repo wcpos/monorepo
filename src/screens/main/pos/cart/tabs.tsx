@@ -15,11 +15,10 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-const CartTabs = () => {
+const CartTabs = ({ query }) => {
 	const navigation = useNavigation();
 	const { currentOrder } = useCurrentOrder();
-	const { resource } = useOrders();
-	const orders = useObservableSuspense(resource);
+	const orders = useObservableSuspense(query.resource);
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
 	/**

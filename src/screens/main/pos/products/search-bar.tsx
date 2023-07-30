@@ -10,7 +10,6 @@ import { t } from '../../../../lib/translations';
 import FilterBar from '../../components/product/filter-bar';
 import Search from '../../components/product/search';
 import UISettings from '../../components/ui-settings';
-import { useProducts } from '../../contexts/products';
 import useUI from '../../contexts/ui-settings';
 import useCartHelpers from '../../hooks/use-cart-helpers';
 
@@ -20,20 +19,20 @@ import useCartHelpers from '../../hooks/use-cart-helpers';
 const SearchBar = () => {
 	const { uiSettings } = useUI('pos.products');
 	const { addProduct, addVariation } = useCartHelpers();
-	const orderComplete = useNavigationState((state) => {
-		return get(state, ['routes', 1, 'name']) === 'Receipt';
-	});
-	const { sync } = useProducts();
+	// const orderComplete = useNavigationState((state) => {
+	// 	return get(state, ['routes', 1, 'name']) === 'Receipt';
+	// });
+	// const { sync } = useProducts();
 
-	/**
-	 * HACK: I want to trigger a sync of products when the order is paid
-	 * listen for route changes to cart/receipt and trigger sync
-	 */
-	React.useEffect(() => {
-		if (orderComplete) {
-			sync();
-		}
-	}, [orderComplete, sync]);
+	// /**
+	//  * HACK: I want to trigger a sync of products when the order is paid
+	//  * listen for route changes to cart/receipt and trigger sync
+	//  */
+	// React.useEffect(() => {
+	// 	if (orderComplete) {
+	// 		sync();
+	// 	}
+	// }, [orderComplete, sync]);
 
 	/**
 	 *

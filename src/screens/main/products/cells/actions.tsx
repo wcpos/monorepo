@@ -7,18 +7,14 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 
 import DeleteDialog from './delete-dialog';
-import { t } from '../../../../../lib/translations';
-import usePullDocument from '../../../contexts/use-pull-document';
+import { t } from '../../../../lib/translations';
+import usePullDocument from '../../contexts/use-pull-document';
 
 type Props = {
-	item: import('@wcpos/database').ProductVariationDocument;
-	parent: import('@wcpos/database').ProductDocument;
+	item: import('@wcpos/database').ProductDocument;
 };
 
-/**
- *
- */
-const Actions = ({ item: variation, parent }: Props) => {
+const Actions = ({ item: product }: Props) => {
 	const [menuOpened, setMenuOpened] = React.useState(false);
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const navigation = useNavigation();
@@ -37,22 +33,14 @@ const Actions = ({ item: variation, parent }: Props) => {
 				items={[
 					{
 						label: t('Edit', { _tags: 'core' }),
-						action: () =>
-							navigation.navigate('EditVariation', {
-								parentID: parent.id,
-								variationID: variation.uuid,
-							}),
+						action: () => navigation.navigate('EditProduct', { productID: product.uuid }),
 						icon: 'penToSquare',
 					},
 					{
 						label: t('Sync', { _tags: 'core' }),
 						action: () => {
-							if (variation.id) {
-								pullDocument(
-									variation.id,
-									variation.collection,
-									`products/${parent.id}/variations`
-								);
+							if (product.id) {
+								pullDocument(product.id, product.collection);
 							}
 						},
 						icon: 'arrowRotateRight',
@@ -70,7 +58,7 @@ const Actions = ({ item: variation, parent }: Props) => {
 			</Dropdown>
 
 			<Modal opened={deleteDialogOpened} onClose={() => setDeleteDialogOpened(false)}>
-				<DeleteDialog product={variation} setDeleteDialogOpened={setDeleteDialogOpened} />
+				<DeleteDialog product={product} setDeleteDialogOpened={setDeleteDialogOpened} />
 			</Modal>
 		</>
 	);

@@ -4,8 +4,8 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import Pill from '@wcpos/components/src/pill';
 
+import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
 import { t } from '../../../../../lib/translations';
-import { useProducts } from '../../../contexts/products';
 import TagSelect from '../tag-select';
 
 interface TagPillProps {
@@ -17,8 +17,9 @@ interface TagPillProps {
  */
 const TagPill = ({ resource }: TagPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
-	const { query } = useProducts();
 	const tag = useObservableSuspense(resource);
+	const manager = useStoreStateManager();
+	const query = manager.getQuery(['products']);
 
 	/**
 	 *

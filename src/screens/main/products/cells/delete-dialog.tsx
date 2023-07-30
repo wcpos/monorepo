@@ -4,8 +4,8 @@ import Box from '@wcpos/components/src/box';
 import { useModal } from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../../lib/translations';
-import useDeleteDocument from '../../../contexts/use-delete-document';
+import { t } from '../../../../lib/translations';
+import useDeleteDocument from '../../contexts/use-delete-document';
 
 interface DeleteDialogProps {
 	product: import('@wcpos/database').ProductDocument;

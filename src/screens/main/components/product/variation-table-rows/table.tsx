@@ -31,11 +31,12 @@ const sharedCells = {
 /**
  *
  */
-const VariationsTable = ({ parent }) => {
-	const { paginatedResource, replicationState, loadNextPage, setQuery } = useVariations();
-	const { data, count, hasMore } = useObservableSuspense(paginatedResource);
-	const loading = useObservableState(replicationState.active$, false);
-	const total = parent.variations.length;
+const VariationsTable = ({ query, parent }) => {
+	const data = useObservableSuspense(query.resource);
+	// const { paginatedResource, replicationState, loadNextPage, setQuery } = useVariations();
+	// const { data, count, hasMore } = useObservableSuspense(paginatedResource);
+	// const loading = useObservableState(replicationState.active$, false);
+	// const total = parent.variations.length;
 	// const { query } = useProducts();
 	const context = useTable(); // get context from parent product, ie: columns
 	const { cells } = useVariationTable();
@@ -107,13 +108,13 @@ const VariationsTable = ({ parent }) => {
 	/**
 	 *
 	 */
-	const onEndReached = React.useCallback(() => {
-		if (hasMore) {
-			loadNextPage();
-		} else if (!loading && total > count) {
-			replicationState.start({ fetchRemoteIDs: false });
-		}
-	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+	// const onEndReached = React.useCallback(() => {
+	// 	if (hasMore) {
+	// 		loadNextPage();
+	// 	} else if (!loading && total > count) {
+	// 		replicationState.start({ fetchRemoteIDs: false });
+	// 	}
+	// }, [count, hasMore, loadNextPage, loading, replicationState, total]);
 
 	/**
 	 *
@@ -121,13 +122,12 @@ const VariationsTable = ({ parent }) => {
 	return (
 		<Table<ProductVariationDocument>
 			data={data}
-			footer={<Footer count={count} total={total} loading={loading} />}
+			// footer={<Footer count={count} total={total} loading={loading} />}
 			estimatedItemSize={100}
 			context={{ ...context, cellRenderer }}
 			ListEmptyComponent={<EmptyTableRow message={t('No variations found', { _tags: 'core' })} />}
-			onEndReached={onEndReached}
-			loading={loading}
-			nestedScrollEnabled={true}
+			// onEndReached={onEndReached}
+			// loading={loading}
 			hideHeader={true}
 		/>
 	);

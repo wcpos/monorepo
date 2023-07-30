@@ -5,16 +5,17 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
-import Text from '@wcpos/components/src/text';
 
+import cells from './cells';
 import SearchBar from './search-bar';
-import Table from './table';
+import { useQuery } from '../../../contexts/store-state-manager';
 import { t } from '../../../lib/translations';
 import AddNewCustomer from '../components/add-new-customer';
+import DataTable from '../components/data-table';
 import UiSettings from '../components/ui-settings';
-import { CustomersProvider } from '../contexts/customers';
-import { Query } from '../contexts/query';
 import useUI from '../contexts/ui-settings';
+
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
 /**
  *
@@ -26,51 +27,55 @@ const Customers = () => {
 	/**
 	 *
 	 */
-	const query = React.useMemo(
-		() =>
-			new Query({
-				sortBy: uiSettings.get('sortBy'),
-				sortDirection: uiSettings.get('sortDirection'),
-			}),
-		[uiSettings]
-	);
+	const query = useQuery({
+		queryKeys: ['customers'],
+		collectionName: 'customers',
+		initialQuery: {
+			sortBy: uiSettings.get('sortBy'),
+			sortDirection: uiSettings.get('sortDirection'),
+		},
+	});
 
 	/**
 	 *
 	 */
 	return (
-		<CustomersProvider query={query}>
-			<Box padding="small" style={{ height: '100%' }}>
+		<Box padding="small" style={{ height: '100%' }}>
+			<Box
+				raised
+				rounding="medium"
+				style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
+			>
 				<Box
-					raised
-					rounding="medium"
-					style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
+					horizontal
+					space="small"
+					padding="small"
+					align="center"
+					style={{
+						backgroundColor: theme.colors.grey,
+						borderTopLeftRadius: theme.rounding.medium,
+						borderTopRightRadius: theme.rounding.medium,
+					}}
 				>
-					<Box
-						horizontal
-						space="small"
-						padding="small"
-						align="center"
-						style={{
-							backgroundColor: theme.colors.grey,
-							borderTopLeftRadius: theme.rounding.medium,
-							borderTopRightRadius: theme.rounding.medium,
-						}}
-					>
-						<SearchBar />
-						<AddNewCustomer />
-						<UiSettings uiSettings={uiSettings} title={t('Customer Settings', { _tags: 'core' })} />
-					</Box>
-					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-						<ErrorBoundary>
-							<Suspense>
-								<Table uiSettings={uiSettings} />
-							</Suspense>
-						</ErrorBoundary>
-					</Box>
+					<SearchBar query={query} />
+					<AddNewCustomer />
+					<UiSettings uiSettings={uiSettings} title={t('Customer Settings', { _tags: 'core' })} />
+				</Box>
+				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+					<ErrorBoundary>
+						<Suspense>
+							<DataTable<CustomerDocument>
+								query={query}
+								uiSettings={uiSettings}
+								cells={cells}
+								noDataMessage={t('No customers found', { _tags: 'core' })}
+								estimatedItemSize={100}
+							/>
+						</Suspense>
+					</ErrorBoundary>
 				</Box>
 			</Box>
-		</CustomersProvider>
+		</Box>
 	);
 };
 

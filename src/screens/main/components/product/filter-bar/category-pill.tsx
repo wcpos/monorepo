@@ -4,8 +4,8 @@ import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
 import Pill from '@wcpos/components/src/pill';
 
+import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
 import { t } from '../../../../../lib/translations';
-import { useProducts } from '../../../contexts/products';
 import CategorySelect from '../category-select';
 
 interface CategoryPillProps {
@@ -17,7 +17,8 @@ interface CategoryPillProps {
  */
 const CategoryPill = ({ resource }: CategoryPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
-	const { query } = useProducts();
+	const manager = useStoreStateManager();
+	const query = manager.getQuery(['products']);
 	const category = useObservableSuspense(resource);
 
 	/**

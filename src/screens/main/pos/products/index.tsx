@@ -9,15 +9,24 @@ import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
-import SearchBar from './search-bar';
-import Table from './table';
-import { ProductsProvider } from '../../contexts/products';
-import { Query } from '../../contexts/query';
+import SimpleProductTableRow from './rows/simple';
+import VariableProductTableRow from './rows/variable';
+import { useQuery } from '../../../../contexts/store-state-manager';
+import { t } from '../../../../lib/translations';
+import DataTable from '../../components/data-table';
+import FilterBar from '../../components/product/filter-bar';
+import Search from '../../components/product/search';
+import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
+import useCartHelpers from '../../hooks/use-cart-helpers';
 
-type ProductCollection = import('@wcpos/database').ProductCollection;
+type ProductDocument = import('@wcpos/database').ProductDocument;
 
-// import BarcodeScanner from './barcode-scanner';
+// Table Rows
+const TABLE_ROW_COMPONENTS = {
+	simple: SimpleProductTableRow,
+	variable: VariableProductTableRow,
+};
 
 /**
  *
@@ -25,6 +34,7 @@ type ProductCollection = import('@wcpos/database').ProductCollection;
 const POSProducts = ({ isColumn = false }) => {
 	const theme = useTheme();
 	const { uiSettings } = useUI('pos.products');
+	const { addProduct, addVariation } = useCartHelpers();
 	const showOutOfStock = useObservableState(
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
@@ -33,12 +43,19 @@ const POSProducts = ({ isColumn = false }) => {
 	/**
 	 *
 	 */
-	const query = React.useMemo(() => {
-		const q = new Query<ProductCollection>({
+	const query = useQuery({
+		queryKeys: ['products'],
+		collectionName: 'products',
+		initialQuery: {
 			sortBy: uiSettings.get('sortBy'),
 			sortDirection: uiSettings.get('sortDirection'),
-		});
+		},
+	});
 
+	/**
+	 *
+	 */
+	React.useEffect(() => {
 		if (!showOutOfStock) {
 			// query.where...
 			// q.selector.$and.push({
@@ -48,40 +65,81 @@ const POSProducts = ({ isColumn = false }) => {
 			// 	],
 			// });
 		}
+	}, [query, showOutOfStock]);
 
-		return q;
-	}, [showOutOfStock, uiSettings]);
+	/**
+	 *
+	 */
+	const renderItem = React.useCallback((props) => {
+		let Component = TABLE_ROW_COMPONENTS[props.item.type];
 
+		// If we still didn't find a component, use SimpleProductTableRow as a fallback
+		// eg: Grouped products
+		if (!Component) {
+			Component = SimpleProductTableRow;
+		}
+
+		return (
+			<ErrorBoundary>
+				<Component {...props} />
+			</ErrorBoundary>
+		);
+	}, []);
+
+	/**
+	 *
+	 */
 	return (
-		<ProductsProvider query={query}>
-			<Box padding="small" paddingRight={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
+		<Box padding="small" paddingRight={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
+			<Box
+				raised
+				rounding="medium"
+				style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
+			>
 				<Box
-					raised
-					rounding="medium"
-					style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
+					horizontal
+					style={{
+						backgroundColor: theme.colors.grey,
+						borderTopLeftRadius: theme.rounding.medium,
+						borderTopRightRadius: theme.rounding.medium,
+					}}
 				>
-					<Box
-						horizontal
-						style={{
-							backgroundColor: theme.colors.grey,
-							borderTopLeftRadius: theme.rounding.medium,
-							borderTopRightRadius: theme.rounding.medium,
-						}}
-					>
-						<ErrorBoundary>
-							<SearchBar />
-						</ErrorBoundary>
-					</Box>
-					<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-						<ErrorBoundary>
-							<Suspense>
-								<Table uiSettings={uiSettings} />
-							</Suspense>
-						</ErrorBoundary>
-					</Box>
+					<ErrorBoundary>
+						<Box fill space="small">
+							<Box horizontal align="center" padding="small" paddingBottom="none" space="small">
+								<ErrorBoundary>
+									<Search query={query} addProduct={addProduct} addVariation={addVariation} />
+								</ErrorBoundary>
+								<ErrorBoundary>
+									<UISettings
+										uiSettings={uiSettings}
+										title={t('Product Settings', { _tags: 'core' })}
+									/>
+								</ErrorBoundary>
+							</Box>
+							<Box horizontal padding="small" paddingTop="none">
+								<ErrorBoundary>
+									<FilterBar />
+								</ErrorBoundary>
+							</Box>
+						</Box>
+					</ErrorBoundary>
+				</Box>
+				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+					<ErrorBoundary>
+						<Suspense>
+							<DataTable<ProductDocument>
+								query={query}
+								uiSettings={uiSettings}
+								renderItem={renderItem}
+								noDataMessage={t('No products found', { _tags: 'core' })}
+								estimatedItemSize={100}
+							/>
+						</Suspense>
+					</ErrorBoundary>
 				</Box>
 			</Box>
-		</ProductsProvider>
+		</Box>
 	);
 };
 

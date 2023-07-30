@@ -5,8 +5,8 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Checkbox from '@wcpos/components/src/checkbox';
 
-import { t } from '../../../../../lib/translations';
-import NumberInput from '../../../components/number-input';
+import { t } from '../../../../lib/translations';
+import NumberInput from '../../components/number-input';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

@@ -6,13 +6,13 @@ import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
 
-import { t } from '../../../../lib/translations';
-import FilterBar from '../../components/product/filter-bar';
-import Search from '../../components/product/search';
-import UISettings from '../../components/ui-settings';
-import useUI from '../../contexts/ui-settings';
+import { t } from '../../../lib/translations';
+import FilterBar from '../components/product/filter-bar';
+import Search from '../components/product/search';
+import UISettings from '../components/ui-settings';
+import useUI from '../contexts/ui-settings';
 
-const SearchBar = () => {
+const SearchBar = ({ query }) => {
 	const { uiSettings } = useUI('products');
 	// const navigation = useNavigation();
 
@@ -30,7 +30,7 @@ const SearchBar = () => {
 		<Box fill space="small">
 			<Box horizontal align="center" padding="small" paddingBottom="none" space="small">
 				<ErrorBoundary>
-					<Search />
+					<Search query={query} />
 				</ErrorBoundary>
 				<ErrorBoundary>
 					{/* <Icon
@@ -43,7 +43,7 @@ const SearchBar = () => {
 			</Box>
 			<Box horizontal padding="small" paddingTop="none">
 				<ErrorBoundary>
-					<FilterBar />
+					<FilterBar query={query} />
 				</ErrorBoundary>
 			</Box>
 		</Box>

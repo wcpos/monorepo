@@ -14,8 +14,6 @@ import POS from './pos';
 import useNewOrderResource from './use-new-order-resource';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
-import { OrdersProvider } from '../contexts/orders';
-import { Query } from '../contexts/query';
 import useCollection from '../hooks/use-collection';
 import Receipt from '../receipt';
 
@@ -29,33 +27,29 @@ export type POSStackParamList = {
 
 const Stack = createStackNavigator<POSStackParamList>();
 
-const openOrderQuery = new Query({
-	sortBy: 'date_created_gmt',
-	sortDirection: 'desc',
-	selector: { status: 'pos-open' },
-});
-
 /**
  *
  */
 const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'POS'>) => {
 	const orderID = get(route, ['params', 'orderID']);
 	const newOrderResource = useNewOrderResource();
+	const { collection } = useCollection('orders');
+
+	const openOrderResource = React.useMemo(
+		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
+		[collection, orderID]
+	);
 
 	return (
-		<OrdersProvider query={openOrderQuery}>
-			<Suspense
-			// suspend until orders and default customer are loaded
+		<Suspense>
+			<CurrentOrderProvider
+				orderID={orderID}
+				openOrderResource={openOrderResource}
+				newOrderResource={newOrderResource}
 			>
-				<CurrentOrderProvider orderID={orderID} newOrderResource={newOrderResource}>
-					<Suspense
-					// suspend until tax rates are loaded
-					>
-						<POS />
-					</Suspense>
-				</CurrentOrderProvider>
-			</Suspense>
-		</OrdersProvider>
+				<POS />
+			</CurrentOrderProvider>
+		</Suspense>
 	);
 };
 

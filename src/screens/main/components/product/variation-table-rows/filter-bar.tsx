@@ -10,14 +10,16 @@ import Icon from '@wcpos/components/src/icon';
 
 import AttributePill from './attribute-pill';
 import { useVariationTable } from './context';
-import { useVariations, updateVariationAttributeSearch } from '../../../contexts/variations';
+import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
+import { updateVariationAttributeSearch } from '../../../contexts/variations';
 
 /**
  *
  */
 const VariationsFilterBar = ({ parent }) => {
 	const theme = useTheme();
-	const { query } = useVariations();
+	const manager = useStoreStateManager();
+	const query = manager.getQuery(['variations', { parentID: parent.id }]);
 	const { setExpanded } = useVariationTable();
 	const selectedAttributes = useObservableState(
 		query.state$.pipe(map((q) => get(q, ['search', 'attributes']))),
@@ -70,4 +72,4 @@ const VariationsFilterBar = ({ parent }) => {
 	);
 };
 
-export default VariationsFilterBar;
+export default React.memo(VariationsFilterBar);

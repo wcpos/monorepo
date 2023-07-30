@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { AppState } from 'react-native';
 
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -15,6 +14,7 @@ import Text from '@wcpos/components/src/text';
 import AuthNavigator from './auth';
 import MainNavigator from './main';
 import useLocalData from '../contexts/local-data';
+import { useStoreStateManager } from '../contexts/store-state-manager';
 import { t } from '../lib/translations';
 import { URL } from '../lib/url';
 
@@ -31,7 +31,8 @@ const Stack = createStackNavigator<RootStackParamList>();
  *
  */
 const RootNavigator = ({ initialProps }) => {
-	const { store, storeDB, locale } = useLocalData();
+	const { store, locale } = useLocalData();
+	const { storeDB } = useStoreStateManager();
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
 

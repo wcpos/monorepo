@@ -10,12 +10,12 @@ import Table, { CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../../../lib/translations';
-import DateCreated from '../../../components/date';
-import Categories from '../../../components/product/categories';
-import { ProductImage } from '../../../components/product/image';
-import Tags from '../../../components/product/tags';
-import usePushDocument from '../../../contexts/use-push-document';
+import { t } from '../../../../lib/translations';
+import DateCreated from '../../components/date';
+import Categories from '../../components/product/categories';
+import { ProductImage } from '../../components/product/image';
+import Tags from '../../components/product/tags';
+import usePushDocument from '../../contexts/use-push-document';
 import Actions from '../cells/actions';
 import Barcode from '../cells/barcode';
 import EdittablePrice from '../cells/edittable-price';

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import Pill from '@wcpos/components/src/pill';
 
-import { useProducts } from '../../contexts/products';
+import { useStoreStateManager } from '../../../../contexts/store-state-manager';
 
 type ProductTagsProps = {
 	item: import('@wcpos/database').ProductDocument;
@@ -10,7 +10,8 @@ type ProductTagsProps = {
 
 const ProductTags = ({ item: product }: ProductTagsProps) => {
 	const { tags } = product;
-	const { query } = useProducts();
+	const manager = useStoreStateManager();
+	const query = manager.getQuery(['products']);
 
 	/**
 	 *

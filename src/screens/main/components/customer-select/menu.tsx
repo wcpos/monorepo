@@ -50,12 +50,11 @@ interface CustomerSelectMenuProps {
 /**
  *
  */
-const CustomerSelectMenu = ({ onChange }: CustomerSelectMenuProps) => {
+const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 	const theme = useTheme();
-	const { paginatedResource, replicationState, loadNextPage } = useCustomers();
-	const { data: customers, count, hasMore } = useObservableSuspense(paginatedResource);
-	const loading = useObservableState(replicationState.active$, false);
-	const total = useTotalCount('customers', replicationState);
+	const customers = useObservableSuspense(query.resource);
+	// const loading = useObservableState(replicationState.active$, false);
+	// const total = useTotalCount('customers', replicationState);
 	const { targetMeasurements, contentMeasurements } = usePopover();
 
 	/**
@@ -115,13 +114,13 @@ const CustomerSelectMenu = ({ onChange }: CustomerSelectMenuProps) => {
 	/**
 	 *
 	 */
-	const onEndReached = React.useCallback(() => {
-		if (hasMore) {
-			loadNextPage();
-		} else if (!loading && total > count) {
-			replicationState.start({ fetchRemoteIDs: false });
-		}
-	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+	// const onEndReached = React.useCallback(() => {
+	// 	if (hasMore) {
+	// 		loadNextPage();
+	// 	} else if (!loading && total > count) {
+	// 		replicationState.start({ fetchRemoteIDs: false });
+	// 	}
+	// }, [count, hasMore, loadNextPage, loading, replicationState, total]);
 
 	/**
 	 *
@@ -133,8 +132,8 @@ const CustomerSelectMenu = ({ onChange }: CustomerSelectMenuProps) => {
 				renderItem={renderItem}
 				estimatedItemSize={50}
 				ListHeaderComponent={renderGuestItem}
-				onEndReached={onEndReached}
-				ListFooterComponent={loading ? Loader : null}
+				// onEndReached={onEndReached}
+				// ListFooterComponent={loading ? Loader : null}
 			/>
 		</View>
 	);

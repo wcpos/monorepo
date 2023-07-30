@@ -9,10 +9,24 @@ import Tabs from '@wcpos/components/src/tabs';
 import Cart from './cart';
 import EmptyCart from './empty-cart';
 import OpenOrderTabs from './tabs';
+import { useQuery } from '../../../../contexts/store-state-manager';
 import useCurrentOrder from '../contexts/current-order';
 
 const OpenOrders = ({ isColumn = false }) => {
 	const { currentOrder } = useCurrentOrder();
+
+	/**
+	 *
+	 */
+	const query = useQuery({
+		queryKeys: ['orders', { status: 'pos-open' }],
+		collectionName: 'orders',
+		initialQuery: {
+			sortBy: 'date_created_gmt',
+			sortDirection: 'desc',
+			selector: { status: 'pos-open' },
+		},
+	});
 
 	/**
 	 *
@@ -42,7 +56,7 @@ const OpenOrders = ({ isColumn = false }) => {
 						/>
 					}
 				>
-					<OpenOrderTabs />
+					<OpenOrderTabs query={query} />
 				</Suspense>
 			</ErrorBoundary>
 		</Box>

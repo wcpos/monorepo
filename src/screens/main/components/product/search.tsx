@@ -37,6 +37,7 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
  * Search field
  */
 const ProductSearch = ({
+	query,
 	addProduct,
 	addVariation,
 }: {
@@ -47,7 +48,6 @@ const ProductSearch = ({
 		metaData: any
 	) => Promise<void>;
 }) => {
-	const { query } = useProducts();
 	const [search, setSearch] = React.useState('');
 	const { barcode$ } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();

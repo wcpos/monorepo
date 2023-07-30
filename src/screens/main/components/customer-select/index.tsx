@@ -4,10 +4,10 @@ import Popover from '@wcpos/components/src/popover';
 import Suspense from '@wcpos/components/src/suspense';
 import log from '@wcpos/utils/src/logger';
 
-import CustomerSelectMenu from './menu';
+import CustomerQueryWrapper from './query-wrapper';
 import SearchInput from './search-input';
+import { useStoreStateManager } from '../../../../contexts/store-state-manager';
 import { t } from '../../../../lib/translations';
-import { CustomersProvider } from '../../contexts/customers';
 import { Query } from '../../contexts/query';
 import usePullDocument from '../../contexts/use-pull-document';
 import useCollection from '../../hooks/use-collection';
@@ -15,32 +15,23 @@ import useCollection from '../../hooks/use-collection';
 /**
  *
  */
-const CustomerSelectSearch = ({ onSelectCustomer, autoFocus = false, value }) => {
+const CustomerSelect = ({ onSelectCustomer, autoFocus = false, value }) => {
 	const [opened, setOpened] = React.useState(false);
 	const [selectedCustomer, setSelectedCustomer] = React.useState({ id: 0 });
 	const pullDocument = usePullDocument();
 	const { collection } = useCollection('customers');
-
-	/**
-	 *
-	 */
-	const query = React.useMemo(
-		() =>
-			new Query({
-				sortBy: 'last_name',
-				sortDirection: 'asc',
-			}),
-		[]
-	);
+	const manager = useStoreStateManager();
 
 	/**
 	 *
 	 */
 	const onSearch = React.useCallback(
 		(search) => {
+			debugger;
+			const query = manager.getQuery(['customers']);
 			query.debouncedSearch(search);
 		},
-		[query]
+		[manager]
 	);
 
 	// /**
@@ -94,12 +85,10 @@ const CustomerSelectSearch = ({ onSelectCustomer, autoFocus = false, value }) =>
 				/>
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
-				<Suspense>
-					<CustomerSelectMenu onChange={onSelectCustomer} />
-				</Suspense>
+				<CustomerQueryWrapper onChange={onSelectCustomer} />
 			</Popover.Content>
 		</Popover>
 	);
 };
 
-export default CustomerSelectSearch;
+export default CustomerSelect;

@@ -13,6 +13,7 @@ import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer }) => {
 	const [search, setSearch] = React.useState('');
 	const { format } = useCustomerNameFormat();
+	const initialRender = React.useRef(true);
 
 	/**
 	 *
@@ -26,10 +27,14 @@ const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer }) => {
 	}, [selectedCustomer, format]);
 
 	/**
-	 *
+	 * HACK: I want to pass search to onSearch, but not on initial render
 	 */
 	React.useEffect(() => {
-		onSearch(search);
+		if (initialRender.current) {
+			initialRender.current = false;
+		} else {
+			onSearch(search);
+		}
 	}, [search, onSearch]);
 
 	/**

@@ -8,11 +8,11 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import TextInput, { TextInputContainer } from '@wcpos/components/src/textinput';
 
-import ProductAttributes from '../../../components/product/attributes';
-import GroupedNames from '../../../components/product/grouped-names';
-import { ProductsProvider } from '../../../contexts/products';
-import { Query } from '../../../contexts/query';
-import { useUISettings } from '../../../contexts/ui-settings/use-ui-settings';
+import ProductAttributes from '../../components/product/attributes';
+import GroupedNames from '../../components/product/grouped-names';
+import { ProductsProvider } from '../../contexts/products';
+import { Query } from '../../contexts/query';
+import { useUISettings } from '../../contexts/ui-settings/use-ui-settings';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

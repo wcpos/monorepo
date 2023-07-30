@@ -8,10 +8,6 @@ import { map, tap, throttleTime } from 'rxjs/operators';
 import { replicateRxCollection } from '@wcpos/database/src/plugins/wc-rest-api-replication';
 import log from '@wcpos/utils/src/logger';
 
-import {
-	defaultPrepareQueryParams,
-	// retryWithExponentialBackoff,
-} from './replication.helpers';
 import useLocalData from '../../../../contexts/local-data';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
@@ -22,12 +18,6 @@ interface Props {
 	collection: RxCollection;
 	apiEndpoint?: string;
 	query: Query<RxCollection>;
-	prepareQueryParams?: (
-		params: ReturnType<typeof defaultPrepareQueryParams>,
-		query: QueryState,
-		checkpoint: any,
-		batchSize: number
-	) => Record<string, string>;
 	pollingTime?: number;
 	remoteIDs?: number[];
 	hooks?: any;
@@ -40,7 +30,6 @@ export const useReplicationState = ({
 	collection,
 	apiEndpoint,
 	query,
-	prepareQueryParams,
 	pollingTime = 600000,
 	remoteIDs,
 	hooks,

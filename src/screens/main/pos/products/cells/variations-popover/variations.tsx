@@ -11,7 +11,7 @@ import Text from '@wcpos/components/src/text';
 import VariationButtons from './buttons';
 import VariationSelect from './select';
 import { t } from '../../../../../../lib/translations';
-import { useVariations, updateVariationAttributeSearch } from '../../../../contexts/variations';
+import { updateVariationAttributeSearch } from '../../../../contexts/variations';
 import useCurrencyFormat from '../../../../hooks/use-currency-format';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -38,10 +38,10 @@ export const getAttributesWithCharacterCount = (attributes: ProductDocument['att
 /**
  *
  */
-const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
+const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	const { setPrimaryAction } = usePopover();
-	const { resource, query } = useVariations();
-	const variations = useObservableSuspense(resource);
+	const variations = useObservableSuspense(query.resource);
+	console.log(variations);
 	const selectedAttributes = useObservableState(
 		query.state$.pipe(map((q) => get(q, ['search', 'attributes'], []))),
 		get(query, ['currentState', 'search', 'attributes'], [])
@@ -124,4 +124,4 @@ const VariablePopover = ({ parent, addToCart }: VariationPopoverProps) => {
 	);
 };
 
-export default VariablePopover;
+export default Variations;

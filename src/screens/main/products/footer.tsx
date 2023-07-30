@@ -6,11 +6,11 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import useLocalData from '../../../../contexts/local-data';
-import { t } from '../../../../lib/translations';
-import TaxBasedOn from '../../components/product/tax-based-on';
-import SyncButton from '../../components/sync-button';
-import { useProducts } from '../../contexts/products';
+import useLocalData from '../../../contexts/local-data';
+import { t } from '../../../lib/translations';
+import TaxBasedOn from '../components/product/tax-based-on';
+import SyncButton from '../components/sync-button';
+import { useProducts } from '../contexts/products';
 
 interface ProductFooterProps {
 	count: number;

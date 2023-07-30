@@ -13,16 +13,15 @@ import Table, { CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../../../lib/translations';
-import DateCreated from '../../../components/date';
-import Categories from '../../../components/product/categories';
-import { ProductImage } from '../../../components/product/image';
-import Tags from '../../../components/product/tags';
-import VariablePrice from '../../../components/product/variable-price';
-import Variations from '../../../components/product/variation-table-rows';
-import { VariationTableContext } from '../../../components/product/variation-table-rows/context';
-import { Query } from '../../../contexts/query';
-import usePushDocument from '../../../contexts/use-push-document';
+import { t } from '../../../../lib/translations';
+import DateCreated from '../../components/date';
+import Categories from '../../components/product/categories';
+import { ProductImage } from '../../components/product/image';
+import Tags from '../../components/product/tags';
+import VariablePrice from '../../components/product/variable-price';
+import Variations from '../../components/product/variation-table-rows';
+import { VariationTableContext } from '../../components/product/variation-table-rows/context';
+import usePushDocument from '../../contexts/use-push-document';
 import Actions from '../cells/actions';
 import Barcode from '../cells/barcode';
 import EdittablePrice from '../cells/edittable-price';
@@ -65,7 +64,6 @@ const variationCells = {
 const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();
-	const variationIDs = useObservableState(item.variations$, item.variations);
 	const [expanded, setExpanded] = React.useState(false);
 
 	/**
@@ -134,23 +132,16 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	 * @TODO - fix hack for attribute click
 	 */
 	const variationTableContext = React.useMemo(() => {
-		const query = new Query({
-			selector: { id: { $in: variationIDs } },
-			sortBy: 'id',
-			sortDirection: 'asc',
-		});
-
-		if (typeof expanded === 'object') {
-			query.search({ attributes: [expanded] });
-		}
+		// if (typeof expanded === 'object') {
+		// 	query.search({ attributes: [expanded] });
+		// }
 
 		return {
-			query,
 			expanded: !!expanded,
 			setExpanded,
 			cells: variationCells,
 		};
-	}, [expanded, variationIDs]);
+	}, [expanded]);
 
 	/**
 	 *

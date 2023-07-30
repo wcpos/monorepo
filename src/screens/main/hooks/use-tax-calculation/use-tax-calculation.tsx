@@ -12,14 +12,20 @@ import {
 	sumTaxes,
 } from './utils';
 import useLocalData from '../../../../contexts/local-data';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { useStoreStateManager } from '../../../../contexts/store-state-manager';
+import useBaseTaxLocation from '../use-base-tax-location';
 
 /**
  *
  */
 const useTaxCalculation = () => {
-	const { resource } = useTaxRates();
-	const rates = useObservableSuspense(resource);
+	const manager = useStoreStateManager();
+	/**
+	 * TODO!!! update location for customer
+	 */
+	const location = useBaseTaxLocation();
+	const query = manager.getQuery(['tax-rates', location]);
+	const rates = useObservableSuspense(query.resource);
 
 	const { store } = useLocalData();
 	if (!store) {
