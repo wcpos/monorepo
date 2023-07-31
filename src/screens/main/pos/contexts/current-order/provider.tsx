@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { useOrders } from '../../../contexts/orders';
+import { useCartHelpers } from './use-cart-helpers';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -28,12 +28,14 @@ const CurrentOrderProvider = ({
 }: CurrentOrderContextProviderProps) => {
 	const order = useObservableSuspense(openOrderResource);
 	const newOrder = useObservableSuspense(newOrderResource);
+	const currentOrder = order ?? newOrder;
+	const helpers = useCartHelpers(currentOrder);
 
 	/**
 	 *
 	 */
 	return (
-		<CurrentOrderContext.Provider value={{ currentOrder: order ?? newOrder }}>
+		<CurrentOrderContext.Provider value={{ currentOrder, ...helpers }}>
 			{children}
 		</CurrentOrderContext.Provider>
 	);

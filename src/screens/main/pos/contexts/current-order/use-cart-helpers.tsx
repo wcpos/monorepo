@@ -1,25 +1,86 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
+import isEmpty from 'lodash/isEmpty';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
 
-import { priceToNumber, processNewOrder, processExistingOrder, addItem } from './helpers';
-import useLocalData from '../../../../contexts/local-data';
-import useCurrentOrder from '../../pos/contexts/current-order';
-import useCollection from '../use-collection';
-import useTaxCalculation from '../use-tax-calculation';
+import useLocalData from '../../../../../contexts/local-data';
+import useCollection from '../../../hooks/use-collection';
+import useTaxCalculation from '../../../hooks/use-tax-calculation';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
-export const useCartHelpers = () => {
+/**
+ *
+ */
+const addItem = async (currentOrder, $push) =>
+	currentOrder.incrementalUpdate({
+		$push,
+	});
+
+/**
+ *
+ */
+const filteredMetaData = (metaData) => (metaData || []).filter((md) => !md.key.startsWith('_'));
+
+/**
+ *
+ */
+const priceToNumber = (price?: string) => parseFloat(isEmpty(price) ? '0' : price);
+
+/**
+ *
+ */
+const getDateCreated = () => {
+	const date = new Date();
+	const dateGmt = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+	const date_created = date.toISOString().split('.')[0];
+	const date_created_gmt = dateGmt.toISOString().split('.')[0];
+	return { date_created, date_created_gmt };
+};
+
+/**
+ *
+ */
+const processNewOrder = async (order, ordersCollection, data) => {
+	await order.remove();
+	const newOrder = await ordersCollection.insert({
+		...order.toJSON(),
+		...getDateCreated(),
+		...data,
+	});
+	return newOrder;
+};
+
+/**
+ *
+ */
+const processExistingOrder = async (order, product, existing) => {
+	if (existing.length === 1) {
+		const item = existing[0];
+		const current = item.getLatest();
+		const currentQuantity = current.quantity;
+		const currentSubtotal = current.subtotal;
+		const currentTotal = current.total;
+		const newValue = currentQuantity + 1;
+		item.incrementalPatch({
+			quantity: Number(newValue),
+			subtotal: String((parseFloat(currentSubtotal) / currentQuantity) * Number(newValue)),
+			total: String((parseFloat(currentTotal) / currentQuantity) * Number(newValue)),
+		});
+	} else {
+		await addItem(order, { line_items: product });
+	}
+};
+
+export const useCartHelpers = (currentOrder) => {
 	const { collection } = useCollection('orders');
 	const navigation = useNavigation();
-	const { currentOrder } = useCurrentOrder();
 	const { store } = useLocalData();
-	const { calculateTaxesFromPrice } = useTaxCalculation();
+	const { calculateTaxesFromPrice } = useTaxCalculation('pos');
 	const pricesIncludeTax = useObservableState(
 		store.prices_include_tax$.pipe(map((val) => val === 'yes')),
 		store.prices_include_tax === 'yes'

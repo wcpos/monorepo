@@ -32,7 +32,6 @@ const PayButton = () => {
 		try {
 			await pushDocument(currentOrder).then((savedDoc) => {
 				if (isRxDocument(savedDoc)) {
-					debugger;
 					navigation.dispatch(StackActions.push('Checkout', { orderID: currentOrder.uuid }));
 				}
 			});

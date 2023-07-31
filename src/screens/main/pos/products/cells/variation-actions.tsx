@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import Icon from '@wcpos/components/src/icon';
 
-import useCartHelpers from '../../../hooks/use-cart-helpers';
+import useCurrentOrder from '../../contexts/current-order';
 
 interface Props {
 	item: import('@wcpos/database').ProductVariationDocument;
@@ -14,7 +14,7 @@ interface Props {
  *
  */
 export const ProductVariationActions = ({ item: variation, parent }: Props) => {
-	const { addVariation } = useCartHelpers();
+	const { addVariation } = useCurrentOrder();
 
 	/**
 	 * TODO: move this to a helper function

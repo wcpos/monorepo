@@ -35,7 +35,7 @@ const Products = () => {
 	 *
 	 */
 	useQuery({
-		queryKeys: ['tax-rates', location],
+		queryKeys: ['tax-rates', 'base'],
 		collectionName: 'taxes',
 		initialQuery: {
 			search: location,
@@ -104,6 +104,7 @@ const Products = () => {
 								renderItem={renderItem}
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
+								extraContext={{ taxLocation: 'base' }}
 							/>
 						</Suspense>
 					</ErrorBoundary>

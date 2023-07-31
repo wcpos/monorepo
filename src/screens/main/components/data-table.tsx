@@ -12,17 +12,21 @@ import TextCell from './text-cell';
 
 import type { Query } from '../../../contexts/store-state-manager';
 
-type UISettingsColumn = import('../contexts/ui-settings').UISettingsColumn; // Change to your own type
+type UISettingsColumn = import('../contexts/ui-settings').UISettingsColumn;
 
 interface CommonTableProps<DocumentType> {
 	query: Query<DocumentType>;
-	uiSettings: import('../contexts/ui-settings').UISettingsDocument; // Change to your own type
+	uiSettings: import('../contexts/ui-settings').UISettingsDocument;
 	cells: Record<string, React.FC<any>>;
 	renderItem?: (props: any) => JSX.Element;
 	noDataMessage: string;
 	estimatedItemSize: number;
+	extraContext?: Partial<TableContextProps<DocumentType>>;
 }
 
+/**
+ *
+ */
 const DataTable = <DocumentType,>({
 	query,
 	uiSettings,
@@ -30,6 +34,7 @@ const DataTable = <DocumentType,>({
 	renderItem,
 	noDataMessage = 'No record found',
 	estimatedItemSize,
+	extraContext,
 }: CommonTableProps<DocumentType>) => {
 	const data = useObservableSuspense(query.resource);
 	const columns = useObservableState(
@@ -38,6 +43,9 @@ const DataTable = <DocumentType,>({
 	) as UISettingsColumn[];
 	const { sortBy, sortDirection } = useObservableState(query.state$, query.currentState);
 
+	/**
+	 *
+	 */
 	const cellRenderer = React.useCallback<CellRenderer<DocumentType>>(
 		({ item, column, index }) => {
 			const Cell = get(cells, [column.key]);
@@ -57,6 +65,9 @@ const DataTable = <DocumentType,>({
 		[cells]
 	);
 
+	/**
+	 *
+	 */
 	const context = React.useMemo<TableContextProps<DocumentType>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
@@ -65,9 +76,13 @@ const DataTable = <DocumentType,>({
 			sortDirection,
 			cellRenderer,
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
+			...extraContext,
 		};
-	}, [columns, sortBy, sortDirection, cellRenderer, query, uiSettings]);
+	}, [columns, sortBy, sortDirection, cellRenderer, extraContext, query, uiSettings]);
 
+	/**
+	 *
+	 */
 	return (
 		<Table<DocumentType>
 			data={data}

@@ -5,7 +5,6 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 
 import { t } from '../../../../../lib/translations';
 import useCurrentOrder from '../../contexts/current-order';
-import useCartHelpers from '../../../hooks/use-cart-helpers';
 
 interface ActionProps {
 	item:
@@ -15,8 +14,7 @@ interface ActionProps {
 }
 
 export const Actions = ({ item }: ActionProps) => {
-	const { currentOrder } = useCurrentOrder();
-	const { removeItem } = useCartHelpers();
+	const { currentOrder, removeItem } = useCurrentOrder();
 	const addSnackbar = useSnackbar();
 
 	/**

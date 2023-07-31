@@ -4,6 +4,7 @@ import delay from 'lodash/delay';
 
 import TextInput from '@wcpos/components/src/textinput';
 
+import { useStoreStateManager } from '../../../../contexts/store-state-manager';
 import { t } from '../../../../lib/translations';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
@@ -13,7 +14,19 @@ import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer }) => {
 	const [search, setSearch] = React.useState('');
 	const { format } = useCustomerNameFormat();
-	const initialRender = React.useRef(true);
+	const manager = useStoreStateManager();
+
+	/**
+	 *
+	 */
+	const handleSearch = React.useCallback(
+		(search) => {
+			setSearch(search);
+			const query = manager.getQuery(['customers']);
+			query.debouncedSearch(search);
+		},
+		[manager]
+	);
 
 	/**
 	 *
@@ -27,23 +40,12 @@ const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer }) => {
 	}, [selectedCustomer, format]);
 
 	/**
-	 * HACK: I want to pass search to onSearch, but not on initial render
-	 */
-	React.useEffect(() => {
-		if (initialRender.current) {
-			initialRender.current = false;
-		} else {
-			onSearch(search);
-		}
-	}, [search, onSearch]);
-
-	/**
 	 *
 	 */
 	return (
 		<TextInput
 			value={search}
-			onChangeText={setSearch}
+			onChangeText={handleSearch}
 			containerStyle={{ flex: 1 }}
 			clearable
 			autoFocus={autoFocus}

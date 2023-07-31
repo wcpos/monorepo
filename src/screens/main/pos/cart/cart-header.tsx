@@ -12,7 +12,6 @@ import AddCustomer from '../../components/add-new-customer';
 import CustomerSelect from '../../components/customer-select';
 import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
-import useCartHelpers from '../../hooks/use-cart-helpers';
 import useGuestCustomer from '../../hooks/use-guest-customer';
 import useCurrentOrder from '../contexts/current-order';
 
@@ -31,10 +30,9 @@ const CartHeader = () => {
 	const { uiSettings } = useUI('pos.cart');
 	const theme = useTheme();
 	// const { storeDB } = useLocalData();
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrder, addCustomer } = useCurrentOrder();
 	const customerID = useObservableState(currentOrder.customer_id$, currentOrder.customer_id);
 	previousCustomerID = customerID !== -1 ? customerID : previousCustomerID;
-	const { addCustomer } = useCartHelpers();
 	const guestCustomer = useGuestCustomer();
 
 	/**

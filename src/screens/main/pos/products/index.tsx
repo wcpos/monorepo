@@ -18,7 +18,7 @@ import FilterBar from '../../components/product/filter-bar';
 import Search from '../../components/product/search';
 import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
-import useCartHelpers from '../../hooks/use-cart-helpers';
+import useCurrentOrder from '../contexts/current-order';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -34,7 +34,7 @@ const TABLE_ROW_COMPONENTS = {
 const POSProducts = ({ isColumn = false }) => {
 	const theme = useTheme();
 	const { uiSettings } = useUI('pos.products');
-	const { addProduct, addVariation } = useCartHelpers();
+	const { addProduct, addVariation } = useCurrentOrder();
 	const showOutOfStock = useObservableState(
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
@@ -134,6 +134,7 @@ const POSProducts = ({ isColumn = false }) => {
 								renderItem={renderItem}
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
+								extraContext={{ taxLocation: 'pos' }}
 							/>
 						</Suspense>
 					</ErrorBoundary>

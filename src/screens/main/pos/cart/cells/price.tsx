@@ -33,7 +33,7 @@ export const Price = ({ item }: Props) => {
 	const taxStatus = _taxStatus ?? 'taxable';
 	const { store } = useLocalData();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
-	const { calculateTaxesFromPrice } = useTaxCalculation();
+	const { calculateTaxesFromPrice } = useTaxCalculation('pos');
 	const taxes = calculateTaxesFromPrice({ price, taxClass, taxStatus, pricesIncludeTax: false });
 	const displayPrice = taxDisplayCart === 'incl' ? price + taxes.total : price;
 

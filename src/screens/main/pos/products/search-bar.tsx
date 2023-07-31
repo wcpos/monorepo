@@ -11,14 +11,14 @@ import FilterBar from '../../components/product/filter-bar';
 import Search from '../../components/product/search';
 import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
-import useCartHelpers from '../../hooks/use-cart-helpers';
+import useCurrentOrder from '../contexts/current-order';
 
 /**
  *
  */
 const SearchBar = () => {
 	const { uiSettings } = useUI('pos.products');
-	const { addProduct, addVariation } = useCartHelpers();
+	const { addProduct, addVariation } = useCurrentOrder();
 	// const orderComplete = useNavigationState((state) => {
 	// 	return get(state, ['routes', 1, 'name']) === 'Receipt';
 	// });

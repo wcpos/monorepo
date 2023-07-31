@@ -26,7 +26,9 @@ export const useQuery = <T>({
 	useEffect(() => {
 		// Add cleanup logic
 		return () => {
-			manager.deregisterQuery(queryKeys);
+			// @TODO - this cleans up too often and causes issues
+			// how to cleanup only when the query is no longer needed?
+			// manager.deregisterQuery(queryKeys);
 		};
 	}, [manager, queryKeys]);
 

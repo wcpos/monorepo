@@ -16,6 +16,7 @@ interface Props {
 	taxClass: string;
 	taxDisplay: 'text' | 'tooltip' | 'none';
 	strikethrough?: boolean;
+	taxLocation: 'pos' | 'base';
 }
 
 export const Price = ({
@@ -24,13 +25,14 @@ export const Price = ({
 	taxClass,
 	taxDisplay = 'tooltip',
 	strikethrough,
+	taxLocation,
 }: Props) => {
 	const { format } = useCurrencyFormat();
 	const { store } = useLocalData();
 	const taxDisplayShop = useObservableState(store?.tax_display_shop$, store?.tax_display_shop);
 	const calcTaxes = useObservableState(store?.calc_taxes$, store?.calc_taxes);
 	const taxable = taxStatus === 'taxable' && calcTaxes === 'yes';
-	const { getDisplayValues } = useTaxCalculation();
+	const { getDisplayValues } = useTaxCalculation(taxLocation);
 
 	let displayPrice = price;
 	let taxTotal = 0;

@@ -13,7 +13,6 @@ import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
 import { CountrySelect, StateSelect } from '../../components/country-state-select';
-import useCartHelpers from '../../hooks/use-cart-helpers';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import useCurrentOrder from '../contexts/current-order';
 
@@ -22,8 +21,7 @@ import useCurrentOrder from '../contexts/current-order';
  */
 const Customer = () => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
-	const { removeCustomer } = useCartHelpers();
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrder, removeCustomer } = useCurrentOrder();
 	const billing = useObservableState(currentOrder.billing$, currentOrder.billing);
 	const shipping = useObservableState(currentOrder.shipping$, currentOrder.shipping);
 	const customer_id = useObservableState(currentOrder.customer_id$, currentOrder.customer_id);

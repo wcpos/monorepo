@@ -15,7 +15,6 @@ import useLocalData from '../../../../contexts/local-data';
 import { t } from '../../../../lib/translations';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 import useCurrentOrder from '../contexts/current-order';
-import useCartHelpers from '../../hooks/use-cart-helpers';
 
 /**
  *
@@ -54,9 +53,8 @@ const initialData = {
  */
 const AddShipping = () => {
 	const [opened, setOpened] = React.useState(false);
-	const { addShipping } = useCartHelpers();
 	const [data, setData] = React.useState(initialData);
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrder, addShipping } = useCurrentOrder();
 	const currencySymbol = useObservableState(
 		currentOrder.currency_symbol$,
 		currentOrder.currency_symbol

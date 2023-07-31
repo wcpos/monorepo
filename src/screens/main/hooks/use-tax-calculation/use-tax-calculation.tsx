@@ -13,17 +13,15 @@ import {
 } from './utils';
 import useLocalData from '../../../../contexts/local-data';
 import { useStoreStateManager } from '../../../../contexts/store-state-manager';
-import useBaseTaxLocation from '../use-base-tax-location';
 
 /**
  *
  */
-const useTaxCalculation = () => {
+const useTaxCalculation = (location: 'pos' | 'base') => {
+	if (!location) {
+		throw new Error('Location must be either "pos" or "base"');
+	}
 	const manager = useStoreStateManager();
-	/**
-	 * TODO!!! update location for customer
-	 */
-	const location = useBaseTaxLocation();
 	const query = manager.getQuery(['tax-rates', location]);
 	const rates = useObservableSuspense(query.resource);
 

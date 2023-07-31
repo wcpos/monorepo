@@ -3,7 +3,7 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
-import Text from '@wcpos/components/src/text';
+import { useTable } from '@wcpos/components/src/table';
 
 import PriceWithTax from '../../components/product/price';
 
@@ -19,6 +19,7 @@ const Price = ({ item: product, column }: Props) => {
 	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
 	const taxClass = useObservableState(product.tax_class$, product.tax_class);
 	const { display } = column;
+	const context = useTable();
 
 	/**
 	 *
@@ -40,6 +41,7 @@ const Price = ({ item: product, column }: Props) => {
 			taxStatus={taxStatus}
 			taxClass={taxClass}
 			taxDisplay={show('tax') ? 'text' : 'tooltip'}
+			taxLocation={context?.taxLocation}
 		/>
 	);
 };

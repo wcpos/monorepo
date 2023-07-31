@@ -12,6 +12,7 @@ import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
 import useNewOrderResource from './use-new-order-resource';
+import { useQuery } from '../../../contexts/store-state-manager';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import useCollection from '../hooks/use-collection';
@@ -39,6 +40,17 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
 		[collection, orderID]
 	);
+
+	/**
+	 * We need to init the tax rate query here so it can be used in the cart helpers
+	 */
+	useQuery({
+		queryKeys: ['tax-rates', 'pos'],
+		collectionName: 'taxes',
+		initialQuery: {
+			search: location,
+		},
+	});
 
 	return (
 		<Suspense>

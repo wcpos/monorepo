@@ -56,7 +56,7 @@ interface CartContextProps {
  */
 const CartProvider = ({ children, order }: CartContextProps) => {
 	const { calculateOrderTotals, calculateShippingLineTaxes, calculateLineItemTaxes } =
-		useTaxCalculation();
+		useTaxCalculation('pos');
 
 	/**
 	 *

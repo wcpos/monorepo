@@ -11,6 +11,7 @@ import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 
 import CategorySelectItem, { EmptyTableRow } from './item';
+import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
 import { t } from '../../../../../lib/translations';
 import { useProductCategories } from '../../../contexts/categories';
 import useTotalCount from '../../../hooks/use-total-count';
@@ -50,13 +51,16 @@ interface CategorySelectMenuProps {
 /**
  *
  */
-const CategorySelectMenu = ({ onChange }) => {
+const CategorySelectMenu = ({ query }) => {
 	const theme = useTheme();
-	const { paginatedResource, replicationState, loadNextPage } = useProductCategories();
-	const { data: categories, count, hasMore } = useObservableSuspense(paginatedResource);
-	const loading = useObservableState(replicationState.active$, false);
-	const total = useTotalCount('products/categories', replicationState);
+	const categories = useObservableSuspense(query.resource);
+
+	// const { paginatedResource, replicationState, loadNextPage } = useProductCategories();
+	// const { data: categories, count, hasMore } = useObservableSuspense(paginatedResource);
+	// const loading = useObservableState(replicationState.active$, false);
+	// const total = useTotalCount('products/categories', replicationState);
 	const { targetMeasurements } = usePopover();
+	const manager = useStoreStateManager();
 
 	/**
 	 *
@@ -79,27 +83,38 @@ const CategorySelectMenu = ({ onChange }) => {
 	/**
 	 *
 	 */
-	const renderItem = React.useCallback(
-		({ item }) => {
-			return (
-				<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
-					<CategorySelectItem category={item} />
-				</Pressable>
-			);
+	const handleSelect = React.useCallback(
+		(category) => {
+			const query = manager.getQuery(['products']);
+			query.where('categories', { $elemMatch: { id: category.id } });
 		},
-		[calculatedStyled, onChange]
+		[manager]
 	);
 
 	/**
 	 *
 	 */
-	const onEndReached = React.useCallback(() => {
-		if (hasMore) {
-			loadNextPage();
-		} else if (!loading && total > count) {
-			replicationState.start({ fetchRemoteIDs: false });
-		}
-	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+	const renderItem = React.useCallback(
+		({ item }) => {
+			return (
+				<Pressable onPress={() => handleSelect(item)} style={calculatedStyled}>
+					<CategorySelectItem category={item} />
+				</Pressable>
+			);
+		},
+		[calculatedStyled, handleSelect]
+	);
+
+	/**
+	 *
+	 */
+	// const onEndReached = React.useCallback(() => {
+	// 	if (hasMore) {
+	// 		loadNextPage();
+	// 	} else if (!loading && total > count) {
+	// 		replicationState.start({ fetchRemoteIDs: false });
+	// 	}
+	// }, [count, hasMore, loadNextPage, loading, replicationState, total]);
 
 	/**
 	 *
@@ -111,8 +126,8 @@ const CategorySelectMenu = ({ onChange }) => {
 				renderItem={renderItem}
 				// estimatedItemSize={32}
 				ListEmptyComponent={<EmptyTableRow />}
-				onEndReached={onEndReached}
-				ListFooterComponent={loading ? Loader : null}
+				// onEndReached={onEndReached}
+				// ListFooterComponent={loading ? Loader : null}
 			/>
 		</View>
 	);

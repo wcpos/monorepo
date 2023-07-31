@@ -10,6 +10,7 @@ import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 
 import TagSelectItem, { EmptyTableRow } from './item';
+import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
 import { useProductTags } from '../../../contexts/tags';
 import useTotalCount from '../../../hooks/use-total-count';
 
@@ -48,13 +49,16 @@ interface TagSelectMenuProps {
 /**
  *
  */
-const TagSelectMenu = ({ onChange }) => {
+const TagSelectMenu = ({ query }) => {
 	const theme = useTheme();
-	const { paginatedResource, replicationState, loadNextPage } = useProductTags();
-	const { data: tags, count, hasMore } = useObservableSuspense(paginatedResource);
-	const loading = useObservableState(replicationState.active$, false);
-	const total = useTotalCount('products/categories', replicationState);
+	const tags = useObservableSuspense(query.resource);
+
+	// const { paginatedResource, replicationState, loadNextPage } = useProductTags();
+	// const { data: tags, count, hasMore } = useObservableSuspense(paginatedResource);
+	// const loading = useObservableState(replicationState.active$, false);
+	// const total = useTotalCount('products/categories', replicationState);
 	const { targetMeasurements } = usePopover();
+	const manager = useStoreStateManager();
 
 	/**
 	 *
@@ -77,27 +81,38 @@ const TagSelectMenu = ({ onChange }) => {
 	/**
 	 *
 	 */
-	const renderItem = React.useCallback(
-		({ item }) => {
-			return (
-				<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
-					<TagSelectItem tag={item} />
-				</Pressable>
-			);
+	const handleSelect = React.useCallback(
+		(tag) => {
+			const query = manager.getQuery(['products']);
+			query.where('tags', { $elemMatch: { id: tag.id } });
 		},
-		[calculatedStyled, onChange]
+		[manager]
 	);
 
 	/**
 	 *
 	 */
-	const onEndReached = React.useCallback(() => {
-		if (hasMore) {
-			loadNextPage();
-		} else if (!loading && total > count) {
-			replicationState.start({ fetchRemoteIDs: false });
-		}
-	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+	const renderItem = React.useCallback(
+		({ item }) => {
+			return (
+				<Pressable onPress={() => handleSelect(item)} style={calculatedStyled}>
+					<TagSelectItem tag={item} />
+				</Pressable>
+			);
+		},
+		[calculatedStyled, handleSelect]
+	);
+
+	/**
+	 *
+	 */
+	// const onEndReached = React.useCallback(() => {
+	// 	if (hasMore) {
+	// 		loadNextPage();
+	// 	} else if (!loading && total > count) {
+	// 		replicationState.start({ fetchRemoteIDs: false });
+	// 	}
+	// }, [count, hasMore, loadNextPage, loading, replicationState, total]);
 
 	/**
 	 *
@@ -109,8 +124,8 @@ const TagSelectMenu = ({ onChange }) => {
 				renderItem={renderItem}
 				estimatedItemSize={32}
 				ListEmptyComponent={<EmptyTableRow />}
-				onEndReached={onEndReached}
-				ListFooterComponent={loading ? Loader : null}
+				// onEndReached={onEndReached}
+				// ListFooterComponent={loading ? Loader : null}
 			/>
 		</View>
 	);

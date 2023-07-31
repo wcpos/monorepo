@@ -22,17 +22,6 @@ const POS = () => {
 	const location = useBaseTaxLocation();
 
 	/**
-	 *
-	 */
-	useQuery({
-		queryKeys: ['tax-rates', location],
-		collectionName: 'taxes',
-		initialQuery: {
-			search: location,
-		},
-	});
-
-	/**
 	 * TODO: why here
 	 */
 	useQuery({
