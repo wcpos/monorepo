@@ -17,6 +17,7 @@ interface StoreStateManagerProviderProps {
 export const StoreStateManagerProvider = ({ children }: StoreStateManagerProviderProps) => {
 	const { store, storeDB } = useLocalData();
 	const manager = React.useMemo(() => new StoreStateManager(storeDB), [storeDB]);
+	console.log('manager', manager);
 
 	React.useEffect(() => {
 		// Perform any required setup here...

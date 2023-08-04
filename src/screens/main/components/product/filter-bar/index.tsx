@@ -13,16 +13,16 @@ import CategoryPill from './category-pill';
 import FeaturedPill from './featured-pill';
 import OnSalePill from './on-sale-pill';
 import TagPill from './tag-pill';
-import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
 import usePullDocument from '../../../contexts/use-pull-document';
 import useCollection from '../../../hooks/use-collection';
 
-const FilterBar = () => {
+/**
+ *
+ */
+const FilterBar = ({ query }) => {
 	const { collection: categoryCollection } = useCollection('products/categories');
 	const { collection: tagCollection } = useCollection('products/tags');
 	const pullDocument = usePullDocument();
-	const manager = useStoreStateManager();
-	const query = manager.getQuery(['products']);
 
 	/**
 	 * TODO - this is a bit of a hack, but it works for now.
@@ -77,13 +77,13 @@ const FilterBar = () => {
 	 */
 	return (
 		<Box space="small" horizontal>
-			<FeaturedPill />
-			<OnSalePill />
+			<FeaturedPill query={query} />
+			<OnSalePill query={query} />
 			<Suspense>
-				<CategoryPill resource={selectedCategoryResource} />
+				<CategoryPill query={query} resource={selectedCategoryResource} />
 			</Suspense>
 			<Suspense>
-				<TagPill resource={selectedTagResource} />
+				<TagPill query={query} resource={selectedTagResource} />
 			</Suspense>
 		</Box>
 	);

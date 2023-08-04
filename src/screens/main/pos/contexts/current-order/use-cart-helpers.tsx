@@ -8,6 +8,7 @@ import { map } from 'rxjs/operators';
 import useSnackbar from '@wcpos/components/src/snackbar';
 
 import useLocalData from '../../../../../contexts/local-data';
+import { t } from '../../../../../lib/translations';
 import useCollection from '../../../hooks/use-collection';
 import useTaxCalculation from '../../../hooks/use-tax-calculation';
 
@@ -142,7 +143,10 @@ export const useCartHelpers = (currentOrder) => {
 				await processExistingOrder(order, newLineItem, existing);
 			}
 
-			addSnackbar({ message: `${product.name} added to cart`, type: 'success' });
+			addSnackbar({
+				message: t('{name} added to cart', { _tags: 'core', name: product.name }),
+				type: 'success',
+			});
 		},
 		[addSnackbar, calculateTaxesFromPrice, currentOrder, navigation, collection, pricesIncludeTax]
 	);
@@ -206,7 +210,10 @@ export const useCartHelpers = (currentOrder) => {
 				await processExistingOrder(order, newLineItem, existing);
 			}
 
-			addSnackbar({ message: `${parent.name} added to cart`, type: 'success' });
+			addSnackbar({
+				message: t('{name} added to cart', { _tags: 'core', name: parent.name }),
+				type: 'success',
+			});
 		},
 		[addSnackbar, calculateTaxesFromPrice, currentOrder, navigation, collection, pricesIncludeTax]
 	);

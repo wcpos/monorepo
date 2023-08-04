@@ -1,20 +1,13 @@
 import * as React from 'react';
 import { View, FlatList } from 'react-native';
 
-import { useObservableSuspense, useObservableState } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import { Avatar } from '@wcpos/components/src/avatar/avatar';
-import Box from '@wcpos/components/src/box';
-import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 
 import CategorySelectItem, { EmptyTableRow } from './item';
-import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
-import { t } from '../../../../../lib/translations';
-import { useProductCategories } from '../../../contexts/categories';
-import useTotalCount from '../../../hooks/use-total-count';
 
 type ProductCategoryDocument = import('@wcpos/database').ProductCategoryDocument;
 
@@ -51,7 +44,7 @@ interface CategorySelectMenuProps {
 /**
  *
  */
-const CategorySelectMenu = ({ query }) => {
+const CategorySelectMenu = ({ query, onSelect }) => {
 	const theme = useTheme();
 	const categories = useObservableSuspense(query.resource);
 
@@ -60,7 +53,6 @@ const CategorySelectMenu = ({ query }) => {
 	// const loading = useObservableState(replicationState.active$, false);
 	// const total = useTotalCount('products/categories', replicationState);
 	const { targetMeasurements } = usePopover();
-	const manager = useStoreStateManager();
 
 	/**
 	 *
@@ -83,26 +75,15 @@ const CategorySelectMenu = ({ query }) => {
 	/**
 	 *
 	 */
-	const handleSelect = React.useCallback(
-		(category) => {
-			const query = manager.getQuery(['products']);
-			query.where('categories', { $elemMatch: { id: category.id } });
-		},
-		[manager]
-	);
-
-	/**
-	 *
-	 */
 	const renderItem = React.useCallback(
 		({ item }) => {
 			return (
-				<Pressable onPress={() => handleSelect(item)} style={calculatedStyled}>
+				<Pressable onPress={() => onSelect(item)} style={calculatedStyled}>
 					<CategorySelectItem category={item} />
 				</Pressable>
 			);
 		},
-		[calculatedStyled, handleSelect]
+		[calculatedStyled, onSelect]
 	);
 
 	/**

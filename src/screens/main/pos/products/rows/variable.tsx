@@ -12,7 +12,6 @@ import { ProductImage } from '../../../components/product/image';
 import VariablePrice from '../../../components/product/variable-price';
 import Variations from '../../../components/product/variation-table-rows';
 import { VariationTableContext } from '../../../components/product/variation-table-rows/context';
-import { Query } from '../../../contexts/query';
 import { Name } from '../cells/name';
 import { Price } from '../cells/price';
 import { SKU } from '../cells/sku';
@@ -81,25 +80,12 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	 * @TODO - fix hack for attribute click
 	 */
 	const variationTableContext = React.useMemo(() => {
-		const query = new Query({
-			selector: { id: { $in: variationIDs } },
-			sortBy: 'id',
-			sortDirection: 'asc',
-		});
-
-		if (typeof expanded === 'object') {
-			query.search({ attributes: [expanded] });
-		} else {
-			query.search({ attributes: [] });
-		}
-
 		return {
-			query,
 			expanded,
 			setExpanded,
 			cells: variationCells,
 		};
-	}, [expanded, variationIDs]);
+	}, [expanded]);
 
 	/**
 	 *
@@ -107,7 +93,7 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	return (
 		<VariationTableContext.Provider value={variationTableContext}>
 			<Table.Row item={item} index={index} cellRenderer={cellRenderer} />
-			{!!expanded && <Variations parent={item} />}
+			{!!expanded && <Variations parent={item} initialSearch={expanded} />}
 		</VariationTableContext.Provider>
 	);
 };

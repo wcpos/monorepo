@@ -14,9 +14,6 @@ import Categories from '../../../components/product/categories';
 import GroupedNames from '../../../components/product/grouped-names';
 import StockQuantity from '../../../components/product/stock-quantity';
 import Tags from '../../../components/product/tags';
-import { ProductsProvider } from '../../../contexts/products';
-import { Query } from '../../../contexts/query';
-import { useUISettings } from '../../../contexts/ui-settings/use-ui-settings';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;
@@ -28,12 +25,6 @@ interface Props {
 
 export const Name = ({ item: product, column, variationQuery, setVariationQuery }: Props) => {
 	const name = useObservableState(product.name$, product.name);
-	const grouped = useObservableState(product.grouped_products$, product.grouped_products);
-	const groupedQuery = React.useMemo(
-		() => new Query({ selector: { id: { $in: grouped } } }),
-		[grouped]
-	);
-	const { uiSettings } = useUISettings('products');
 	const { display } = column;
 
 	/**
@@ -67,11 +58,7 @@ export const Name = ({ item: product, column, variationQuery, setVariationQuery 
 				/>
 			)}
 
-			{product.type === 'grouped' && (
-				<ProductsProvider query={groupedQuery}>
-					<GroupedNames />
-				</ProductsProvider>
-			)}
+			{product.type === 'grouped' && <GroupedNames parent={product} />}
 		</Box>
 	);
 };

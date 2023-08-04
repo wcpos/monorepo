@@ -8,7 +8,7 @@ import SearchInput from './search-input';
 /**
  *
  */
-const TagSelectSearch = ({ onBlur }) => {
+const TagSelectSearch = ({ onBlur, onSelect }) => {
 	const [opened, setOpened] = React.useState(false);
 
 	/**
@@ -27,7 +27,7 @@ const TagSelectSearch = ({ onBlur }) => {
 				<SearchInput setOpened={setOpened} onBlur={onBlur} />
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
-				<TagSelectMenu />
+				<TagSelectMenu onSelect={onSelect} />
 			</Popover.Content>
 		</Popover>
 	);

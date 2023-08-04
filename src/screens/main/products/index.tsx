@@ -74,7 +74,6 @@ const EditProductWithProviders = ({
 	navigation,
 }: NativeStackScreenProps<ProductsStackParamList, 'EditProduct'>) => {
 	const { productID } = route.params;
-	const { uiSettings } = useUISettings('products');
 	const { collection } = useCollection('products');
 
 	const resource = React.useMemo(
@@ -107,7 +106,6 @@ const EditVariationWithProviders = ({
 	navigation,
 }: NativeStackScreenProps<ProductsStackParamList, 'EditVariation'>) => {
 	const { variationID, parentID } = route.params;
-	const { uiSettings } = useUISettings('products');
 	const { collection } = useCollection('variations');
 
 	const resource = React.useMemo(

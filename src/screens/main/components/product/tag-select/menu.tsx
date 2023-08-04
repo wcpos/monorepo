@@ -1,18 +1,13 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { View, FlatList } from 'react-native';
 
-import { useObservableSuspense, useObservableState } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import { FlashList } from '@wcpos/components/src/flash-list';
-import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 
 import TagSelectItem, { EmptyTableRow } from './item';
-import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
-import { useProductTags } from '../../../contexts/tags';
-import useTotalCount from '../../../hooks/use-total-count';
 
 type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
 
@@ -49,7 +44,7 @@ interface TagSelectMenuProps {
 /**
  *
  */
-const TagSelectMenu = ({ query }) => {
+const TagSelectMenu = ({ query, onSelect }) => {
 	const theme = useTheme();
 	const tags = useObservableSuspense(query.resource);
 
@@ -58,7 +53,6 @@ const TagSelectMenu = ({ query }) => {
 	// const loading = useObservableState(replicationState.active$, false);
 	// const total = useTotalCount('products/categories', replicationState);
 	const { targetMeasurements } = usePopover();
-	const manager = useStoreStateManager();
 
 	/**
 	 *
@@ -81,26 +75,15 @@ const TagSelectMenu = ({ query }) => {
 	/**
 	 *
 	 */
-	const handleSelect = React.useCallback(
-		(tag) => {
-			const query = manager.getQuery(['products']);
-			query.where('tags', { $elemMatch: { id: tag.id } });
-		},
-		[manager]
-	);
-
-	/**
-	 *
-	 */
 	const renderItem = React.useCallback(
 		({ item }) => {
 			return (
-				<Pressable onPress={() => handleSelect(item)} style={calculatedStyled}>
+				<Pressable onPress={() => onSelect(item)} style={calculatedStyled}>
 					<TagSelectItem tag={item} />
 				</Pressable>
 			);
 		},
-		[calculatedStyled, handleSelect]
+		[calculatedStyled, onSelect]
 	);
 
 	/**
@@ -119,10 +102,10 @@ const TagSelectMenu = ({ query }) => {
 	 */
 	return (
 		<View style={{ width: targetMeasurements.value.width, maxHeight: 292, minHeight: 30 }}>
-			<FlashList<ProductTagDocument>
+			<FlatList<ProductTagDocument>
 				data={tags}
 				renderItem={renderItem}
-				estimatedItemSize={32}
+				// estimatedItemSize={32}
 				ListEmptyComponent={<EmptyTableRow />}
 				// onEndReached={onEndReached}
 				// ListFooterComponent={loading ? Loader : null}

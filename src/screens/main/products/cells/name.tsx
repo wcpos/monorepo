@@ -1,5 +1,4 @@
 import * as React from 'react';
-import type { TextInput as TextInputType } from 'react-native';
 
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
@@ -10,9 +9,6 @@ import TextInput, { TextInputContainer } from '@wcpos/components/src/textinput';
 
 import ProductAttributes from '../../components/product/attributes';
 import GroupedNames from '../../components/product/grouped-names';
-import { ProductsProvider } from '../../contexts/products';
-import { Query } from '../../contexts/query';
-import { useUISettings } from '../../contexts/ui-settings/use-ui-settings';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -50,12 +46,6 @@ const EdittableText = ({ name, onChange }) => {
  */
 const Name = ({ item: product, column, onChange, toggleVariations }: Props) => {
 	const name = useObservableState(product.name$, product.name);
-	const grouped = useObservableState(product.grouped_products$, product.grouped_products);
-	const groupedQuery = React.useMemo(
-		() => new Query({ selector: { id: { $in: grouped } } }),
-		[grouped]
-	);
-	const { uiSettings } = useUISettings('products');
 	const { display } = column;
 
 	/**
@@ -78,11 +68,7 @@ const Name = ({ item: product, column, onChange, toggleVariations }: Props) => {
 			{/* <EdittableText name={name} onChange={(name: string) => onChange(product, { name })} /> */}
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{product.type === 'variable' && <ProductAttributes product={product} />}
-			{product.type === 'grouped' && (
-				<ProductsProvider query={groupedQuery}>
-					<GroupedNames />
-				</ProductsProvider>
-			)}
+			{product.type === 'grouped' && <GroupedNames parent={product} />}
 		</Box>
 	);
 };

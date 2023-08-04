@@ -1,8 +1,7 @@
 import * as React from 'react';
 
 import Pill from '@wcpos/components/src/pill';
-
-import { useStoreStateManager } from '../../../../contexts/store-state-manager';
+import { useTable } from '@wcpos/components/src/table';
 
 interface ProductCategoriesProps {
 	item: import('@wcpos/database').ProductDocument;
@@ -10,8 +9,7 @@ interface ProductCategoriesProps {
 
 const ProductCategories = ({ item: product }: ProductCategoriesProps) => {
 	const { categories } = product;
-	const manager = useStoreStateManager();
-	const query = manager.getQuery(['products']);
+	const { query } = useTable();
 
 	/**
 	 *

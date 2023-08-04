@@ -36,7 +36,7 @@ const DataTable = <DocumentType,>({
 	estimatedItemSize,
 	extraContext,
 }: CommonTableProps<DocumentType>) => {
-	const data = useObservableSuspense(query.resource);
+	const data = useObservableSuspense(query.paginatedResource);
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
@@ -76,6 +76,7 @@ const DataTable = <DocumentType,>({
 			sortDirection,
 			cellRenderer,
 			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
+			query,
 			...extraContext,
 		};
 	}, [columns, sortBy, sortDirection, cellRenderer, extraContext, query, uiSettings]);
@@ -90,6 +91,8 @@ const DataTable = <DocumentType,>({
 			estimatedItemSize={estimatedItemSize}
 			context={context}
 			ListEmptyComponent={<EmptyTableRow message={noDataMessage} />}
+			onEndReached={() => query.nextPage()}
+			onEndReachedThreshold={0.5}
 		/>
 	);
 };

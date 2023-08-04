@@ -8,10 +8,12 @@ import Suspense from '@wcpos/components/src/suspense';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
-import SearchBar from './search-bar';
 import { useQuery } from '../../../contexts/store-state-manager';
 import { t } from '../../../lib/translations';
 import DataTable from '../components/data-table';
+import FilterBar from '../components/product/filter-bar';
+import Search from '../components/product/search';
+import UISettings from '../components/ui-settings';
 import useUI from '../contexts/ui-settings';
 import useBaseTaxLocation from '../hooks/use-base-tax-location';
 
@@ -46,7 +48,7 @@ const Products = () => {
 	 *
 	 */
 	const productQuery = useQuery({
-		queryKeys: ['products'],
+		queryKeys: ['products', { target: 'page' }],
 		collectionName: 'products',
 		initialQuery: {
 			sortBy: uiSettings.get('sortBy'),
@@ -91,9 +93,29 @@ const Products = () => {
 						borderTopRightRadius: theme.rounding.medium,
 					}}
 				>
-					<ErrorBoundary>
-						<SearchBar query={productQuery} />
-					</ErrorBoundary>
+					<Box fill space="small">
+						<Box horizontal align="center" padding="small" paddingBottom="none" space="small">
+							<ErrorBoundary>
+								<Search query={productQuery} />
+							</ErrorBoundary>
+							<ErrorBoundary>
+								{/* <Icon
+						name="plus"
+						onPress={() => navigation.navigate('AddProduct')}
+						tooltip={t('Add new customer', { _tags: 'core' })}
+					/> */}
+								<UISettings
+									uiSettings={uiSettings}
+									title={t('Product Settings', { _tags: 'core' })}
+								/>
+							</ErrorBoundary>
+						</Box>
+						<Box horizontal padding="small" paddingTop="none">
+							<ErrorBoundary>
+								<FilterBar query={productQuery} />
+							</ErrorBoundary>
+						</Box>
+					</Box>
 				</Box>
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 					<ErrorBoundary>

@@ -7,9 +7,8 @@ import SearchInput from './search-input';
 
 /**
  *
- * @returns
  */
-const CategorySelectSearch = ({ onBlur }) => {
+const CategorySelectSearch = ({ onBlur, onSelect }) => {
 	const [opened, setOpened] = React.useState(false);
 
 	/**
@@ -28,7 +27,7 @@ const CategorySelectSearch = ({ onBlur }) => {
 				<SearchInput setOpened={setOpened} onBlur={onBlur} />
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
-				<CategorySelectMenu />
+				<CategorySelectMenu onSelect={onSelect} />
 			</Popover.Content>
 		</Popover>
 	);

@@ -1,20 +1,19 @@
 import * as React from 'react';
 
 import TaxRatesTabs from './tabs';
-import { Query } from '../contexts/query';
-import { TaxRateProvider } from '../contexts/tax-rates';
-
-const query = new Query({});
+import { useQuery } from '../../../contexts/store-state-manager';
 
 /**
  *
  */
-export const TaxRatesWithProvider = () => {
-	return (
-		<TaxRateProvider query={query}>
-			<TaxRatesTabs />
-		</TaxRateProvider>
-	);
+export const TaxRates = () => {
+	useQuery({
+		queryKeys: ['tax-rates'],
+		collectionName: 'taxes',
+		initialQuery: {},
+	});
+
+	return <TaxRatesTabs />;
 };
 
-export default TaxRatesWithProvider;
+export default TaxRates;

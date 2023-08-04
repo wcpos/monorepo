@@ -9,24 +9,34 @@ import CustomerSelect from '../../components/customer-select';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
 interface CustomerPillProps {
-	selectedCustomerResource: ObservableResource<any>;
-	setQuery: any;
+	query: any;
+	resource: ObservableResource<import('@wcpos/database').CustomerDocument>;
 }
 
 /**
  *
  */
-const CustomerPill = ({ selectedCustomerResource, setQuery }: CustomerPillProps) => {
+const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
-	const customer = useObservableSuspense(selectedCustomerResource);
+	const customer = useObservableSuspense(resource);
 	const { format } = useCustomerNameFormat();
 
 	/**
 	 *
 	 */
+	const handleSelect = React.useCallback(
+		(customer) => {
+			query.where('customer_id', customer.id);
+		},
+		[query]
+	);
+
+	/**
+	 *
+	 */
 	const handleRemove = React.useCallback(() => {
-		setQuery('selector.customer_id', null);
-	}, [setQuery]);
+		query.where('customer_id', null);
+	}, [query]);
 
 	/**
 	 *
@@ -43,7 +53,7 @@ const CustomerPill = ({ selectedCustomerResource, setQuery }: CustomerPillProps)
 	 *
 	 */
 	return openSelect ? (
-		<CustomerSelect onBlur={() => setOpenSelect(false)} />
+		<CustomerSelect onBlur={() => setOpenSelect(false)} onSelectCustomer={handleSelect} />
 	) : (
 		<Pill icon="user" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
 			{t('Select Customer', { _tags: 'core' })}

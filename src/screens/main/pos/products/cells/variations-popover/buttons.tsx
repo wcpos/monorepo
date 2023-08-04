@@ -12,7 +12,7 @@ const VariationButtons = ({ attribute, onSelect, selectedOption }) => {
 				<Button
 					key={option}
 					type={option === selectedOption ? 'success' : 'secondary'}
-					onPress={() => onSelect(attribute, option)}
+					onPress={() => onSelect(attribute, option === selectedOption ? null : option)}
 				>
 					{option}
 				</Button>

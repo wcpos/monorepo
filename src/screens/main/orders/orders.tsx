@@ -13,6 +13,7 @@ import CustomerNote from './cells/note';
 import PaymentMethod from './cells/payment-method';
 import Status from './cells/status';
 import Total from './cells/total';
+import FilterBar from './filter-bar';
 import SearchBar from './search-bar';
 import { useQuery } from '../../../contexts/store-state-manager';
 import { t } from '../../../lib/translations';
@@ -75,13 +76,7 @@ const Orders = () => {
 					}}
 				>
 					<Box fill space="small">
-						<Box
-							horizontal
-							align="center"
-							padding="small"
-							//paddingBottom="none"
-							space="small"
-						>
+						<Box horizontal align="center" padding="small" paddingBottom="none" space="small">
 							<ErrorBoundary>
 								<SearchBar query={query} />
 							</ErrorBoundary>
@@ -92,9 +87,9 @@ const Orders = () => {
 								/>
 							</ErrorBoundary>
 						</Box>
-						{/* <Box horizontal padding="small" paddingTop="none">
-								<FilterBar />
-							</Box> */}
+						<Box horizontal padding="small" paddingTop="none">
+							<FilterBar query={query} />
+						</Box>
 					</Box>
 				</Box>
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>

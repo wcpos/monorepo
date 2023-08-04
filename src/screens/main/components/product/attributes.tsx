@@ -4,9 +4,11 @@ import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Link from '@wcpos/components/src/link';
+import { useTable } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 
 import { useVariationTable } from './variation-table-rows/context';
+import { useStoreStateManager } from '../../../../contexts/store-state-manager';
 import { t } from '../../../../lib/translations';
 import { updateVariationAttributeSearch } from '../../contexts/variations.helpers';
 
@@ -16,7 +18,8 @@ type Props = {
 
 const ProductAttributes = ({ product }: Props) => {
 	const attributes = useObservableState(product.attributes$, product.attributes);
-	const { query, expanded, setExpanded } = useVariationTable();
+	const { expanded, setExpanded } = useVariationTable();
+	const manager = useStoreStateManager();
 
 	/**
 	 *
@@ -25,13 +28,13 @@ const ProductAttributes = ({ product }: Props) => {
 		(attribute, option) => {
 			if (!expanded) {
 				// @TODO - find a better way to do this
-				// I need to expand the table, then update the query
 				setExpanded({
 					id: attribute.id,
 					name: attribute.name,
 					option,
 				});
 			} else {
+				const query = manager.getQuery(['variations', { parentID: product.id }]);
 				const newState = updateVariationAttributeSearch(query.currentState.search, {
 					id: attribute.id,
 					name: attribute.name,
@@ -40,7 +43,7 @@ const ProductAttributes = ({ product }: Props) => {
 				query.search(newState);
 			}
 		},
-		[expanded, query, setExpanded]
+		[expanded, manager, product.id, setExpanded]
 	);
 
 	/**

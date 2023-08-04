@@ -44,7 +44,7 @@ const POSProducts = ({ isColumn = false }) => {
 	 *
 	 */
 	const query = useQuery({
-		queryKeys: ['products'],
+		queryKeys: ['products', { target: 'pos' }],
 		collectionName: 'products',
 		initialQuery: {
 			sortBy: uiSettings.get('sortBy'),
@@ -119,7 +119,7 @@ const POSProducts = ({ isColumn = false }) => {
 							</Box>
 							<Box horizontal padding="small" paddingTop="none">
 								<ErrorBoundary>
-									<FilterBar />
+									<FilterBar query={query} />
 								</ErrorBoundary>
 							</Box>
 						</Box>

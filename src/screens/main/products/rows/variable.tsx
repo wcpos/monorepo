@@ -167,7 +167,7 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 			<Table.Row item={item} index={index} cellRenderer={cellRenderer} />
 			{!!expanded && (
 				// <Animated.View style={animatedStyle}>
-				<Variations parent={item} />
+				<Variations parent={item} initialSearch={expanded} />
 				// </Animated.View>
 			)}
 		</VariationTableContext.Provider>

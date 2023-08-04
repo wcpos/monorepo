@@ -24,14 +24,14 @@ const POS = () => {
 	/**
 	 * TODO: why here
 	 */
-	useQuery({
-		queryKeys: ['products'],
-		collectionName: 'products',
-		initialQuery: {
-			// sortBy: uiSettings.get('sortBy'),
-			// sortDirection: uiSettings.get('sortDirection'),
-		},
-	});
+	// useQuery({
+	// 	queryKeys: ['products'],
+	// 	collectionName: 'products',
+	// 	initialQuery: {
+	// 		// sortBy: uiSettings.get('sortBy'),
+	// 		// sortDirection: uiSettings.get('sortDirection'),
+	// 	},
+	// });
 
 	return (
 		<ErrorBoundary>

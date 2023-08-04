@@ -11,7 +11,7 @@ import { useQuery } from '../../../../../contexts/store-state-manager';
 /**
  *
  */
-const Variations = ({ parent }) => {
+const Variations = ({ parent, initialSearch }) => {
 	/**
 	 *
 	 */
@@ -20,6 +20,7 @@ const Variations = ({ parent }) => {
 		collectionName: 'variations',
 		initialQuery: {
 			selector: { id: { $in: parent.variations } },
+			search: { attributes: [initialSearch] },
 		},
 		apiEndpoint: `products/${parent.id}/variations`,
 		remoteIDs: parent.variations,

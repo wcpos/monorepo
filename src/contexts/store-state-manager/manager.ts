@@ -13,12 +13,9 @@ import { Query, QueryState } from './query';
  *
  */
 export class StoreStateManager {
-	private currentStoreDB: StoreDatabase | null = null;
 	private queries: Map<string, Query<any>> = new Map();
 
-	constructor(public storeDB: StoreDatabase) {
-		this.currentStoreDB = storeDB;
-	}
+	constructor(public storeDB: StoreDatabase) {}
 
 	serializeQueryKey(queryKey: (string | number | object)[]): string {
 		try {
@@ -36,11 +33,23 @@ export class StoreStateManager {
 	registerQuery<T>(
 		queryKey: (string | number | object)[],
 		collection,
-		initialQuery: QueryState
+		initialQuery: QueryState,
+		hooks?: any
 	): Query<T> {
 		const key = this.serializeQueryKey(queryKey);
 		if (!this.queries.has(key)) {
 			const query = new Query(collection, initialQuery);
+
+			/**
+			 * Create ObservableResource instances
+			 * - this doesn't seem like a Query concern so I'm putting it here
+			 */
+			query.resource = new ObservableResource(query.$);
+			query.paginatedResource = new ObservableResource(query.paginated$);
+
+			Object.entries(hooks).forEach(([hookName, hookFunction]) => {
+				query.addHook(hookName, hookFunction);
+			});
 			this.queries.set(key, query);
 		}
 		return this.queries.get(key) as Query<T>;
