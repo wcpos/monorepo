@@ -10,6 +10,7 @@
     "debug": "DEBUG=body-parser:json expo start -c",
     "export": "expo export",
     "export:web": "expo export --platform=web",
+    "export:electron": "ELECTRON=true expo export --platform=web",
     "test": "eslint --ext js,ts,tsx .",
     "start": "expo start -c",
     "start:no-dev": "expo start --no-dev --minify",
