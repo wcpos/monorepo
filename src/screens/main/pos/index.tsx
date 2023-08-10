@@ -43,12 +43,13 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 
 	/**
 	 * We need to init the tax rate query here so it can be used in the cart helpers
+	 * TODO - set location
 	 */
 	useQuery({
 		queryKeys: ['tax-rates', 'pos'],
 		collectionName: 'taxes',
 		initialQuery: {
-			search: location,
+			search: {},
 		},
 	});
 

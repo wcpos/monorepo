@@ -11,11 +11,13 @@ import log from '@wcpos/utils/src/logger';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
-import { useQuery } from '../../../../contexts/store-state-manager';
+import useLocalData from '../../../../contexts/local-data';
+import { useQuery, useStoreStateManager } from '../../../../contexts/store-state-manager';
 import { t } from '../../../../lib/translations';
 import DataTable from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
 import Search from '../../components/product/search';
+import TaxBasedOn from '../../components/product/tax-based-on';
 import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
 import useCurrentOrder from '../contexts/current-order';
@@ -39,6 +41,8 @@ const POSProducts = ({ isColumn = false }) => {
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
 	);
+	const { store } = useLocalData();
+	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 
 	/**
 	 *
@@ -51,6 +55,12 @@ const POSProducts = ({ isColumn = false }) => {
 			sortDirection: uiSettings.get('sortDirection'),
 		},
 	});
+
+	/**
+	 *
+	 */
+	const manager = useStoreStateManager();
+	const taxQuery = manager.getQuery(['tax-rates', 'pos']);
 
 	/**
 	 *
@@ -135,6 +145,13 @@ const POSProducts = ({ isColumn = false }) => {
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
 								extraContext={{ taxLocation: 'pos' }}
+								footer={
+									calcTaxes === 'yes' && (
+										<Box fill padding="small" space="xSmall" horizontal>
+											<TaxBasedOn query={taxQuery} />
+										</Box>
+									)
+								}
 							/>
 						</Suspense>
 					</ErrorBoundary>

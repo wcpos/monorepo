@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -8,11 +9,13 @@ import Suspense from '@wcpos/components/src/suspense';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
+import useLocalData from '../../../contexts/local-data';
 import { useQuery } from '../../../contexts/store-state-manager';
 import { t } from '../../../lib/translations';
 import DataTable from '../components/data-table';
 import FilterBar from '../components/product/filter-bar';
 import Search from '../components/product/search';
+import TaxBasedOn from '../components/product/tax-based-on';
 import UISettings from '../components/ui-settings';
 import useUI from '../contexts/ui-settings';
 import useBaseTaxLocation from '../hooks/use-base-tax-location';
@@ -32,11 +35,13 @@ const Products = () => {
 	const { uiSettings } = useUI('products');
 	const theme = useTheme();
 	const location = useBaseTaxLocation();
+	const { store } = useLocalData();
+	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 
 	/**
 	 *
 	 */
-	useQuery({
+	const taxQuery = useQuery({
 		queryKeys: ['tax-rates', 'base'],
 		collectionName: 'taxes',
 		initialQuery: {
@@ -127,6 +132,13 @@ const Products = () => {
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
 								extraContext={{ taxLocation: 'base' }}
+								footer={
+									calcTaxes === 'yes' && (
+										<Box fill padding="small" space="xSmall" horizontal>
+											<TaxBasedOn query={taxQuery} />
+										</Box>
+									)
+								}
 							/>
 						</Suspense>
 					</ErrorBoundary>

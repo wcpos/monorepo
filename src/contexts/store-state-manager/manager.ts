@@ -14,6 +14,7 @@ import { Query, QueryState } from './query';
  */
 export class StoreStateManager {
 	private queries: Map<string, Query<any>> = new Map();
+	private replicationStates: Map<string, ReplicationState<any, any>> = new Map(); // Add this line
 
 	constructor(public storeDB: StoreDatabase) {}
 
@@ -41,6 +42,12 @@ export class StoreStateManager {
 			const query = new Query(collection, initialQuery);
 
 			/**
+			 *
+			 */
+			const replicationState = replicateRxCollection({ collection });
+			this.replicationStates.set(key, replicationState);
+
+			/**
 			 * Create ObservableResource instances
 			 * - this doesn't seem like a Query concern so I'm putting it here
 			 */
@@ -50,6 +57,7 @@ export class StoreStateManager {
 			Object.entries(hooks).forEach(([hookName, hookFunction]) => {
 				query.addHook(hookName, hookFunction);
 			});
+
 			this.queries.set(key, query);
 		}
 		return this.queries.get(key) as Query<T>;

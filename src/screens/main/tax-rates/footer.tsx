@@ -11,8 +11,8 @@ import SyncButton from '../components/sync-button';
 import { useTaxRates } from '../contexts/tax-rates';
 import useTotalCount from '../hooks/use-total-count';
 
-const TaxRatesFooter = ({ count }) => {
-	const { sync, clear, replicationState } = useTaxRates();
+const TaxRatesFooter = ({ count, query }) => {
+	const { sync, clear, replicationState } = query;
 	const active = useObservableState(replicationState ? replicationState.active$ : of(false), false);
 	const total = useTotalCount('taxes', replicationState);
 

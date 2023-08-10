@@ -2,13 +2,19 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useTheme } from 'styled-components/native';
 
+import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
+import Text from '@wcpos/components/src/text';
 
 import EmptyTableRow from './empty-table-row';
+import SyncButton from './sync-button';
 import TextCell from './text-cell';
+import { t } from '../../../lib/translations';
+import useTotalCount from '../hooks/use-total-count';
 
 import type { Query } from '../../../contexts/store-state-manager';
 
@@ -22,7 +28,39 @@ interface CommonTableProps<DocumentType> {
 	noDataMessage: string;
 	estimatedItemSize: number;
 	extraContext?: Partial<TableContextProps<DocumentType>>;
+	footer?: React.ReactNode;
 }
+
+/**
+ *
+ */
+const DataTableFooter = ({ query, children }) => {
+	const theme = useTheme();
+	const { sync, clear, replicationState } = query;
+	const loading = useObservableState(replicationState.active$, false);
+	const count = useObservableState(query.count$, 0);
+	const total = useTotalCount(replicationState);
+
+	return (
+		<Box
+			horizontal
+			style={{
+				width: '100%',
+				backgroundColor: theme.colors.lightGrey,
+				borderBottomLeftRadius: theme.rounding.medium,
+				borderBottomRightRadius: theme.rounding.medium,
+				borderTopWidth: 1,
+				borderTopColor: theme.colors.grey,
+			}}
+		>
+			{children}
+			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">
+				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
+				<SyncButton sync={sync} clear={clear} active={loading} />
+			</Box>
+		</Box>
+	);
+};
 
 /**
  *
@@ -35,6 +73,7 @@ const DataTable = <DocumentType,>({
 	noDataMessage = 'No record found',
 	estimatedItemSize,
 	extraContext,
+	footer,
 }: CommonTableProps<DocumentType>) => {
 	const data = useObservableSuspense(query.paginatedResource);
 	const columns = useObservableState(
@@ -93,6 +132,7 @@ const DataTable = <DocumentType,>({
 			ListEmptyComponent={<EmptyTableRow message={noDataMessage} />}
 			onEndReached={() => query.nextPage()}
 			onEndReachedThreshold={0.5}
+			footer={<DataTableFooter query={query} children={footer} />}
 		/>
 	);
 };

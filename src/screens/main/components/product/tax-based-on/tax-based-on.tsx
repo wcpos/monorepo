@@ -10,17 +10,15 @@ import Text from '@wcpos/components/src/text';
 import DisplayCurrentTaxRates from './display-current-tax-rates';
 import useLocalData from '../../../../../contexts/local-data';
 import { t } from '../../../../../lib/translations';
-import { useTaxRates } from '../../../contexts/tax-rates';
 
 /**
  * NOTE: this must be used within a TaxRatesProvider
  */
-const TaxBasedOn = () => {
+const TaxBasedOn = ({ query }) => {
 	const { store } = useLocalData();
 	const taxBasedOn = useObservableState(store.tax_based_on$, store?.tax_based_on);
 	const [opened, setOpened] = React.useState(false);
-	const { resource, query } = useTaxRates();
-	const rates = useObservableSuspense(resource);
+	const rates = useObservableSuspense(query.resource);
 	const { country, state, city, postcode } = get(query, ['currentState', 'search'], {});
 
 	/**

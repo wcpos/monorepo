@@ -6,6 +6,7 @@ import { RxCollection, RxDocument } from 'rxdb';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { switchMap, map, distinctUntilChanged, shareReplay, tap, skip } from 'rxjs/operators';
 
+import type { ReplicationState } from '@wcpos/database/src/plugins/wc-rest-api-replication';
 import log from '@wcpos/utils/src/logger';
 
 import { Paginator } from './paginator';
@@ -41,6 +42,8 @@ class Query<T> {
 	private queryState$ = new BehaviorSubject<QueryState | undefined>(undefined);
 	private hooks: Hooks = {};
 	private paginator: Paginator<T>;
+
+	public replicationState?: ReplicationState<T, any>; // Add this property
 
 	constructor(
 		public collection: RxCollection<any, object, object>,
@@ -232,6 +235,20 @@ class Query<T> {
 			params.search = this.queryState$.value?.search;
 		}
 		return params;
+	}
+
+	get count$() {
+		return this.$.pipe(
+			map((docs) => docs.length),
+			distinctUntilChanged()
+		);
+	}
+
+	get total$() {
+		return this.$.pipe(
+			map((docs) => docs.length),
+			distinctUntilChanged()
+		);
 	}
 }
 

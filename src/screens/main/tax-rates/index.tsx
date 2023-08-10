@@ -7,13 +7,13 @@ import { useQuery } from '../../../contexts/store-state-manager';
  *
  */
 export const TaxRates = () => {
-	useQuery({
+	const query = useQuery({
 		queryKeys: ['tax-rates'],
 		collectionName: 'taxes',
 		initialQuery: {},
 	});
 
-	return <TaxRatesTabs />;
+	return <TaxRatesTabs query={query} />;
 };
 
 export default TaxRates;
