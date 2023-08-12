@@ -8,7 +8,7 @@ import Numpad from '@wcpos/components/src/numpad';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
-import useLocalData from '../../../contexts/local-data';
+import { useAppStateManager } from '../../../contexts/app-state-manager';
 import { t } from '../../../lib/translations';
 import useCurrencyFormat from '../hooks/use-currency-format';
 
@@ -35,7 +35,8 @@ const NumberInput = ({
 	disabled,
 	showDecimals = false,
 }: NumberInputProps) => {
-	const { store } = useLocalData();
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 	const decimalSeparator = useObservableState(store.price_decimal_sep$, store.price_decimal_sep);
 	const { format } = useCurrencyFormat({ withSymbol: false });
 	const displayValue = showDecimals ? format(value) : value;

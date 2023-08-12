@@ -33,13 +33,18 @@ const Stack = createStackNavigator<POSStackParamList>();
  */
 const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'POS'>) => {
 	const orderID = get(route, ['params', 'orderID']);
+	console.log('pos');
 	const newOrderResource = useNewOrderResource();
-	const { collection } = useCollection('orders');
 
-	const openOrderResource = React.useMemo(
-		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
-		[collection, orderID]
-	);
+	const openOrdersQuery = useQuery({
+		queryKeys: ['orders', 'pos'],
+		collectionName: 'orders',
+		initialQuery: {
+			search: {
+				status: 'open',
+			},
+		},
+	});
 
 	/**
 	 * We need to init the tax rate query here so it can be used in the cart helpers
@@ -57,10 +62,12 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 		<Suspense>
 			<CurrentOrderProvider
 				orderID={orderID}
-				openOrderResource={openOrderResource}
+				openOrdersQuery={openOrdersQuery}
 				newOrderResource={newOrderResource}
 			>
-				<POS />
+				<Suspense>
+					<POS />
+				</Suspense>
 			</CurrentOrderProvider>
 		</Suspense>
 	);
@@ -132,6 +139,7 @@ const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamLis
  * The actual navigator
  */
 const POSStackNavigator = () => {
+	console.log('pos stack');
 	return (
 		<ErrorBoundary>
 			<Suspense>

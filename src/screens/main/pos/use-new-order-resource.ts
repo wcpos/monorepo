@@ -1,17 +1,25 @@
 import * as React from 'react';
 
-import { ObservableResource, useObservableState } from 'observable-hooks';
+import { ObservableResource, useObservableState, useSubscription } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { from, throwError, combineLatest, of } from 'rxjs';
-import { switchMap, filter, first, expand, catchError, map, tap, timeout } from 'rxjs/operators';
+import {
+	switchMap,
+	filter,
+	first,
+	expand,
+	catchError,
+	tap,
+	distinctUntilChanged,
+	shareReplay,
+	withLatestFrom,
+} from 'rxjs/operators';
 
 import { createTemporaryDB } from '@wcpos/database';
 
+import { useDefaultCustomer } from './use-default-customer';
+import { useAppStateManager } from '../../../contexts/app-state-manager';
 import allCurrencies from '../../../contexts/currencies/currencies.json';
-import useLocalData from '../../../contexts/local-data';
-import usePullDocument from '../contexts/use-pull-document';
-import useCollection from '../hooks/use-collection';
-import useGuestCustomer from '../hooks/use-guest-customer';
 
 /**
  *
@@ -33,61 +41,67 @@ async function getOrCreateNewOrder() {
  *
  */
 const docResource$ = from(getOrCreateNewOrder()).pipe(
+	tap(() => console.log('hi')),
 	expand((order) =>
 		order.deleted$.pipe(
-			filter((deleted) => deleted),
+			filter((deleted) => deleted === true),
 			switchMap(() => from(getOrCreateNewOrder())),
 			first()
 		)
 	),
-	catchError((err) => throwError(err)) // propagate the error in RxJS pipeline
+	distinctUntilChanged((prev, curr) => prev.uuid === curr.uuid),
+	tap(() => console.log('emitting new order')),
+	catchError((err) => throwError(err)), // propagate the error in RxJS pipeline
+	shareReplay(1)
 );
 
 /**
  *
  */
 const useNewOrderResource = () => {
-	const { store, wpCredentials } = useLocalData();
+	const appStateManager = useAppStateManager();
+	const store = useObservableState(appStateManager.store$, appStateManager.store);
 	const currency = useObservableState(store.currency$, store.currency);
 	const prices_include_tax = useObservableState(
 		store.prices_include_tax$,
 		store.prices_include_tax
 	);
 	const tax_based_on = useObservableState(store.tax_based_on$, store.tax_based_on);
-	const defaultCustomerID = useObservableState(
-		combineLatest([store.default_customer$, store.default_customer_is_cashier$]).pipe(
-			map(([default_customer, default_customer_is_cashier]) =>
-				default_customer_is_cashier ? wpCredentials.id : default_customer
-			)
-		),
-		store.default_customer_is_cashier ? wpCredentials.id : store.default_customer
-	);
-	const { collection: customerCollection } = useCollection('customers');
-	const pullDocument = usePullDocument();
-	const guestCustomer = useGuestCustomer();
+	const customer$ = useDefaultCustomer();
+
+	React.useEffect(() => {
+		console.log('store', store);
+	}, [store]);
+
+	React.useEffect(() => {
+		console.log('currency', currency);
+	}, [currency]);
+
+	React.useEffect(() => {
+		console.log('prices_include_tax', prices_include_tax);
+	}, [prices_include_tax]);
+
+	React.useEffect(() => {
+		console.log('tax_based_on', tax_based_on);
+	}, [tax_based_on]);
+
+	React.useEffect(() => {
+		console.log('customer$', customer$);
+	}, [customer$]);
 
 	/**
 	 *
 	 */
 	const resource = React.useMemo(() => {
-		const customer$ = defaultCustomerID
-			? customerCollection.findOne({ selector: { id: defaultCustomerID } }).$.pipe(
-					tap((doc) => {
-						if (!isRxDocument(doc)) {
-							pullDocument(defaultCustomerID, customerCollection);
-						}
-					}),
-					filter((doc) => isRxDocument(doc)),
-					timeout(5000), // timeout after 5000ms
-					catchError((error) => {
-						console.error('Timeout error', error);
-						// return a fallback Observable or value if needed
-						return of(guestCustomer);
-					})
-			  )
-			: of(guestCustomer);
-
-		const resource$ = combineLatest([docResource$, customer$]).pipe(
+		console.log('hi');
+		const resource$ = docResource$.pipe(
+			tap((res) => {
+				console.log('res1', res);
+			}),
+			withLatestFrom(customer$),
+			tap((res) => {
+				console.log('res2', res);
+			}),
 			switchMap(([order, customer]) => {
 				const customerJSON = isRxDocument(customer) ? customer.toJSON() : customer;
 				return order.incrementalPatch({
@@ -116,15 +130,7 @@ const useNewOrderResource = () => {
 		);
 
 		return new ObservableResource(resource$);
-	}, [
-		currency,
-		customerCollection,
-		defaultCustomerID,
-		guestCustomer,
-		prices_include_tax,
-		pullDocument,
-		tax_based_on,
-	]);
+	}, [currency, customer$, prices_include_tax, tax_based_on]);
 
 	return resource;
 };

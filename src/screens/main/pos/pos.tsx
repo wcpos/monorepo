@@ -19,7 +19,7 @@ import useBaseTaxLocation from '../hooks/use-base-tax-location';
 const POS = () => {
 	const theme = useTheme();
 	const dimensions = useWindowDimensions();
-	const location = useBaseTaxLocation();
+	// const location = useBaseTaxLocation();
 
 	/**
 	 * TODO: why here

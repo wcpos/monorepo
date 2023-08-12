@@ -7,7 +7,6 @@ import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
 
 import CartTabTitle from './tab-title';
-import { useOrders } from '../../contexts/orders';
 import useCurrentOrder from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -47,16 +46,10 @@ const CartTabs = ({ query }) => {
 	 */
 	const handleTabChange = React.useCallback(
 		(idx: number) => {
-			// /**
-			//  * TODO - setParams updates the currentOrder without refreshing the products,
-			//  * this is great!, but I lose the back button. Push keeps the old order in the stack.
-			//  * I need to add the new order to the history without the rerender.
-			//  */
-			const orderID = routes[idx].key;
-			if (orderID !== currentOrder.uuid) {
-				navigation.setParams({ orderID });
+			const newOrderID = routes[idx].key;
+			if (newOrderID !== currentOrder.uuid) {
+				navigation.setParams({ orderID: newOrderID });
 			}
-			// navigation.dispatch(StackActions.push('POS', { orderID: orders[idx].uuid }));
 		},
 		[currentOrder.uuid, navigation, routes]
 	);

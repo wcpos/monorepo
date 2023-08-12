@@ -6,7 +6,7 @@ import { bufferTime, filter, map } from 'rxjs/operators';
 
 import { useHotkeys, RNKeyboardEvent, getKeyFromEvent } from '@wcpos/hooks/src/use-hotkeys';
 
-import useLocalData from '../../../../contexts/local-data';
+import { useAppStateManager } from '../../../../contexts/app-state-manager';
 import { t } from '../../../../lib/translations';
 
 interface BarcodeDetectionOptions {
@@ -46,7 +46,8 @@ export const useBarcodeDetection: BarcodeDetectionHook = ({
 		suffix: '',
 	},
 } = {}) => {
-	const { store } = useLocalData();
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 	const buffer = useObservableState(store.barcode_scanning_buffer$, store.barcode_scanning_buffer);
 	const minLength = useObservableState(
 		store.barcode_scanning_min_chars$,

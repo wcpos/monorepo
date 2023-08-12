@@ -11,7 +11,7 @@ import {
 	calculateTaxes,
 	sumTaxes,
 } from './utils';
-import useLocalData from '../../../../contexts/local-data';
+import { useAppStateManager } from '../../../../contexts/app-state-manager';
 import { useStoreStateManager } from '../../../../contexts/store-state-manager';
 
 /**
@@ -24,18 +24,15 @@ const useTaxCalculation = (location: 'pos' | 'base') => {
 	const manager = useStoreStateManager();
 	const query = manager.getQuery(['tax-rates', location]);
 	const rates = useObservableSuspense(query.resource);
-
-	const { store } = useLocalData();
-	if (!store) {
-		throw new Error('Store is not defined');
-	}
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 
 	const shippingTaxClass = useObservableState(store.shipping_tax_class$, store.shipping_tax_class);
 
 	/**
 	 * Convert WooCommerce settings into sensible primatives
 	 */
-	const _calcTaxes = useObservableState(store?.calc_taxes$, store?.calc_taxes);
+	const _calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const _pricesIncludeTax = useObservableState(store.prices_include_tax$, store.prices_include_tax);
 	const _taxRoundAtSubtotal = useObservableState(
 		store.tax_round_at_subtotal$,

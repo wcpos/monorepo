@@ -11,7 +11,6 @@ import Text from '@wcpos/components/src/text';
 import VariationButtons from './buttons';
 import VariationSelect from './select';
 import { t } from '../../../../../../lib/translations';
-import { updateVariationAttributeSearch } from '../../../../contexts/variations';
 import useCurrencyFormat from '../../../../hooks/use-currency-format';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -62,12 +61,12 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	 */
 	const handleSelect = React.useCallback(
 		(attribute, option) => {
-			const newState = updateVariationAttributeSearch(query.currentState.search, {
-				id: attribute.id,
-				name: attribute.name,
-				option,
-			});
-			query.search(newState);
+			// const newState = updateVariationAttributeSearch(query.currentState.search, {
+			// 	id: attribute.id,
+			// 	name: attribute.name,
+			// 	option,
+			// });
+			// query.search(newState);
 		},
 		[query]
 	);

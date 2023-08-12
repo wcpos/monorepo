@@ -7,7 +7,7 @@ import { map } from 'rxjs/operators';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
 
-import useLocalData from '../../../../../contexts/local-data';
+import { useAppStateManager } from '../../../../../contexts/app-state-manager';
 import { t } from '../../../../../lib/translations';
 import useCollection from '../../../hooks/use-collection';
 import useTaxCalculation from '../../../hooks/use-tax-calculation';
@@ -80,7 +80,8 @@ const processExistingOrder = async (order, product, existing) => {
 export const useCartHelpers = (currentOrder) => {
 	const { collection } = useCollection('orders');
 	const navigation = useNavigation();
-	const { store } = useLocalData();
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 	const { calculateTaxesFromPrice } = useTaxCalculation('pos');
 	const pricesIncludeTax = useObservableState(
 		store.prices_include_tax$.pipe(map((val) => val === 'yes')),

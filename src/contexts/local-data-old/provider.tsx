@@ -5,7 +5,7 @@ import pick from 'lodash/pick';
 import { ObservableResource } from 'observable-hooks';
 import { tap, map, switchMap } from 'rxjs/operators';
 
-import { current$, hydrateWebAppData, hydrateTranslations } from './observables';
+// import { current$, hydrateWebAppData, hydrateTranslations } from './observables';
 
 type UserDocument = import('@wcpos/database').UserDocument;
 type UserDatabase = import('@wcpos/database').UserDatabase;
@@ -51,55 +51,55 @@ export const LocalDataProvider = ({ children, initialProps }: LocalDataProviderP
 	 *
 	 */
 	const value = React.useMemo(() => {
-		const { site, wp_credentials, stores, store, store_id } = pick(initialProps, [
-			'site',
-			'wp_credentials',
-			'stores',
-			'store',
-			'store_id',
-		]);
+		// const { site, wp_credentials, stores, store, store_id } = pick(initialProps, [
+		// 	'site',
+		// 	'wp_credentials',
+		// 	'stores',
+		// 	'store',
+		// 	'store_id',
+		// ]);
 
-		/**
-		 * Hack fix for backwards compatibility, remove after v1 release
-		 */
-		const _stores = stores || [store];
-		const isWebApp = Boolean(site && wp_credentials && _stores);
+		// /**
+		//  * Hack fix for backwards compatibility, remove after v1 release
+		//  */
+		// const _stores = stores || [store];
+		// const isWebApp = Boolean(site && wp_credentials && _stores);
 
-		/**
-		 * If web app, we hydrate from initial props
-		 * FIXME: this feels a but messy, it probably could be improved
-		 * FIXME: change in store locale will not trigger a change to language
-		 */
-		const hydratedResources$ = isWebApp
-			? hydrateWebAppData(site, wp_credentials, _stores, store_id)
-			: current$;
+		// /**
+		//  * If web app, we hydrate from initial props
+		//  * FIXME: this feels a but messy, it probably could be improved
+		//  * FIXME: change in store locale will not trigger a change to language
+		//  */
+		// const hydratedResources$ = isWebApp
+		// 	? hydrateWebAppData(site, wp_credentials, _stores, store_id)
+		// 	: current$;
 
-		/**
-		 * Subscribe to locale changes in the current store and add locale to the local data
-		 */
-		const resources$ = hydratedResources$.pipe(
-			switchMap(({ user, userDB, site, wpCredentials, store, storeDB }) => {
-				const localeSetting$ = store?.locale$ || user.locale$;
-				return hydrateTranslations(localeSetting$, userDB).pipe(
-					map((locale) => ({
-						user,
-						userDB,
-						site,
-						wpCredentials,
-						store,
-						storeDB,
-						locale,
-					}))
-				);
-			})
-		);
+		// /**
+		//  * Subscribe to locale changes in the current store and add locale to the local data
+		//  */
+		// const resources$ = hydratedResources$.pipe(
+		// 	switchMap(({ user, userDB, site, wpCredentials, store, storeDB }) => {
+		// 		const localeSetting$ = store?.locale$ || user.locale$;
+		// 		return hydrateTranslations(localeSetting$, userDB).pipe(
+		// 			map((locale) => ({
+		// 				user,
+		// 				userDB,
+		// 				site,
+		// 				wpCredentials,
+		// 				store,
+		// 				storeDB,
+		// 				locale,
+		// 			}))
+		// 		);
+		// 	})
+		// );
 
 		/**
 		 *
 		 */
 		return {
 			// @ts-ignore
-			resources: new ObservableResource(resources$),
+			resources: new ObservableResource(null),
 			isWebApp,
 			initialProps,
 		};

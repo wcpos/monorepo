@@ -6,7 +6,7 @@ import get from 'lodash/get';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
-import useLocalData from '../../../contexts/local-data';
+import { useAppStateManager } from '../../../contexts/app-state-manager';
 import { t } from '../../../lib/translations';
 import { parseLinkHeader } from '../../../lib/url';
 
@@ -27,8 +27,11 @@ interface WpJsonResponse {
 	_links: Record<string, unknown>;
 }
 
+/**
+ * TODO - remove the need for direct access to the userDB here
+ */
 const useSiteConnect = () => {
-	const { user, userDB } = useLocalData();
+	const { user, userDB } = useAppStateManager();
 	const [loading, setLoading] = React.useState(false);
 	const [error, setError] = React.useState(false);
 	const http = useHttpClient();

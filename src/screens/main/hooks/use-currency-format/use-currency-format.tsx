@@ -12,7 +12,7 @@ import {
 	applyThousandSeparator,
 } from './format.helpers';
 import symbols from './symbols.json';
-import useLocalData from '../../../../contexts/local-data';
+import { useAppStateManager } from '../../../../contexts/app-state-manager';
 
 interface CurrencyFormatProps {
 	/**
@@ -26,7 +26,8 @@ interface CurrencyFormatProps {
  */
 export const useCurrencyFormat = (options?: CurrencyFormatProps) => {
 	const { withSymbol } = defaults(options, { withSymbol: true });
-	const { store } = useLocalData();
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 	const currency = useObservableState(store?.currency$, store?.currency);
 	const currencyPosition = useObservableState(store?.currency_pos$, store?.currency_pos);
 	const decimalSeparator = useObservableState(store?.price_decimal_sep$, store?.price_decimal_sep);

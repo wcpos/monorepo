@@ -8,14 +8,15 @@ import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
 import DisplayCurrentTaxRates from './display-current-tax-rates';
-import useLocalData from '../../../../../contexts/local-data';
+import { useAppStateManager } from '../../../../../contexts/app-state-manager';
 import { t } from '../../../../../lib/translations';
 
 /**
  * NOTE: this must be used within a TaxRatesProvider
  */
 const TaxBasedOn = ({ query }) => {
-	const { store } = useLocalData();
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 	const taxBasedOn = useObservableState(store.tax_based_on$, store?.tax_based_on);
 	const [opened, setOpened] = React.useState(false);
 	const rates = useObservableSuspense(query.resource);

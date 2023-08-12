@@ -17,8 +17,11 @@ interface WpUserProps {
 	site: import('@wcpos/database').SiteDocument;
 }
 
-const WPUsersList = ({ wpUsersResource, site }: WpUserProps) => {
-	const wpCreds = useObservableSuspense(wpUsersResource);
+/**
+ *
+ */
+export const WPUsers = ({ site }: WpUserProps) => {
+	const wpCreds = useObservableSuspense(site.populateResource('wp_credentials'));
 	const navigation = useNavigation();
 
 	return (
@@ -45,5 +48,3 @@ const WPUsersList = ({ wpUsersResource, site }: WpUserProps) => {
 		</Box>
 	);
 };
-
-export default WPUsersList;

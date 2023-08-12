@@ -4,7 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 
 import Connect from './connect';
 import Login from './login';
-import useLocalData from '../../contexts/local-data';
+import { useAppStateManager } from '../../contexts/app-state-manager';
 
 export type AuthStackParamList = {
 	Connect: undefined;
@@ -17,7 +17,7 @@ const Stack = createStackNavigator<AuthStackParamList>();
  *
  */
 const AuthNavigator = () => {
-	const { isWebApp } = useLocalData();
+	const { isWebApp } = useAppStateManager();
 
 	/**
 	 * WebApps should never hot the Connect screen, if they do it usually means

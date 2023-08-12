@@ -12,7 +12,7 @@ import Portal from '@wcpos/components/src/portal';
 import { SnackbarProvider } from '@wcpos/components/src/snackbar';
 import getTheme from '@wcpos/themes';
 
-import { LocalDataProvider } from './contexts/local-data';
+import { AppStateManagerProvider } from './contexts/app-state-manager';
 import { StoreStateManagerProvider } from './contexts/store-state-manager';
 import RootError from './root-error';
 import RootNavigator from './screens';
@@ -71,7 +71,7 @@ const App = () => {
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<GestureHandlerRootView style={{ flex: 1 }}>
-				<LocalDataProvider initialProps={initialProps}>
+				<AppStateManagerProvider initialProps={initialProps}>
 					<React.Suspense fallback={<Splash />}>
 						<StoreStateManagerProvider>
 							<ThemeProvider theme={theme}>
@@ -88,7 +88,7 @@ const App = () => {
 							</ThemeProvider>
 						</StoreStateManagerProvider>
 					</React.Suspense>
-				</LocalDataProvider>
+				</AppStateManagerProvider>
 			</GestureHandlerRootView>
 		</ErrorBoundary>
 	);

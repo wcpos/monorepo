@@ -12,17 +12,23 @@ import WebView from '@wcpos/components/src/webview';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
-import useLocalData from '../../contexts/local-data';
+import { useAppStateManager } from '../../contexts/app-state-manager';
 import { t } from '../../lib/translations';
 import { ModalLayout } from '../components/modal-layout';
 
 /**
  *
  */
-const Login = ({ resource }) => {
-	const site = useObservableSuspense(resource);
-	const { userDB } = useLocalData();
+const Login = ({ route }) => {
+	const { siteID } = route.params;
+	const { user } = useAppStateManager();
+	const sites = useObservableSuspense(user.populateResource('sites'));
 	const navigation = useNavigation();
+	const site = sites.find((s) => s.uuid === siteID);
+
+	if (!site) {
+		throw new Error('Site not found');
+	}
 
 	/**
 	 *
@@ -48,7 +54,7 @@ const Login = ({ resource }) => {
 				navigation.goBack();
 			}
 		},
-		[navigation, site, userDB.wp_credentials]
+		[navigation, site]
 	);
 
 	/**
@@ -69,25 +75,25 @@ const Login = ({ resource }) => {
 	);
 };
 
-const LoginWithProvider = ({ route }) => {
-	const { siteID } = route.params;
-	const { userDB } = useLocalData();
+// const LoginWithProvider = ({ route }) => {
+// 	const { siteID } = route.params;
+// 	const { userDB } = useLocalData();
 
-	const resource = React.useMemo(
-		() => new ObservableResource(from(userDB.sites.findOneFix(siteID).exec())),
-		[userDB, siteID]
-	);
+// 	const resource = React.useMemo(
+// 		() => new ObservableResource(from(userDB.sites.findOneFix(siteID).exec())),
+// 		[userDB, siteID]
+// 	);
 
-	/**
-	 *
-	 */
-	return (
-		<ModalLayout title={t('Login', { _tags: 'core' })}>
-			<Suspense>
-				<Login resource={resource} />
-			</Suspense>
-		</ModalLayout>
-	);
-};
+// 	/**
+// 	 *
+// 	 */
+// 	return (
+// 		<ModalLayout title={t('Login', { _tags: 'core' })}>
+// 			<Suspense>
+// 				<Login resource={resource} />
+// 			</Suspense>
+// 		</ModalLayout>
+// 	);
+// };
 
-export default LoginWithProvider;
+export default Login;

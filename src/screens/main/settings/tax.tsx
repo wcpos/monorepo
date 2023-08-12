@@ -1,16 +1,18 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
+import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
 
-import useLocalData from '../../../contexts/local-data';
+import { useAppStateManager } from '../../../contexts/app-state-manager';
 import { t } from '../../../lib/translations';
 import Form from '../components/document-form';
 
 export const TaxSettings = () => {
-	const { store } = useLocalData();
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 	const navigation = useNavigation();
 
 	return (

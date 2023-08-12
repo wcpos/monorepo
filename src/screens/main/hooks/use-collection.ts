@@ -6,7 +6,7 @@ import { filter } from 'rxjs/operators';
 import { storeCollections } from '@wcpos/database';
 import type { StoreDatabaseCollections } from '@wcpos/database';
 
-import useLocalData from '../../../contexts/local-data/';
+import { useAppStateManager } from '../../../contexts/app-state-manager';
 
 export type CollectionKey = keyof typeof storeCollections;
 
@@ -23,7 +23,8 @@ export type CollectionKey = keyof typeof storeCollections;
 const useCollection = <K extends CollectionKey>(
 	key: K
 ): { collection: StoreDatabaseCollections[K] } => {
-	const { storeDB } = useLocalData();
+	const appStateManager = useAppStateManager();
+	const storeDB = useObservableState(appStateManager.storeDB$, appStateManager.storeDB);
 	const collection = useObservableState(
 		storeDB.reset$.pipe(filter((collection) => collection.name === key)),
 		storeDB.collections[key]

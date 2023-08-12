@@ -6,7 +6,7 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import Tooltip from '@wcpos/components/src/tooltip';
 
-import useLocalData from '../../../../contexts/local-data';
+import { useAppStateManager } from '../../../../contexts/app-state-manager';
 import useCurrencyFormat from '../../hooks/use-currency-format';
 import useTaxCalculation from '../../hooks/use-tax-calculation';
 
@@ -28,7 +28,8 @@ export const Price = ({
 	taxLocation,
 }: Props) => {
 	const { format } = useCurrencyFormat();
-	const { store } = useLocalData();
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 	const taxDisplayShop = useObservableState(store?.tax_display_shop$, store?.tax_display_shop);
 	const calcTaxes = useObservableState(store?.calc_taxes$, store?.calc_taxes);
 	const taxable = taxStatus === 'taxable' && calcTaxes === 'yes';

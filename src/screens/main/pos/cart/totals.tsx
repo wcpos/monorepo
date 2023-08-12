@@ -9,7 +9,7 @@ import Text from '@wcpos/components/src/text';
 
 import CustomerNote from './customer-note';
 import ItemizedTaxes from './itemized-taxes';
-import useLocalData from '../../../../contexts/local-data';
+import { useAppStateManager } from '../../../../contexts/app-state-manager';
 import { t } from '../../../../lib/translations';
 import { useCart } from '../../contexts/cart';
 import useCurrencyFormat from '../../hooks/use-currency-format';
@@ -17,7 +17,8 @@ import useCurrentOrder from '../contexts/current-order';
 
 const Totals = () => {
 	const { currentOrder } = useCurrentOrder();
-	const { store } = useLocalData();
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 	const taxTotalDisplay = useObservableState(store.tax_total_display$, store.tax_total_display);
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);

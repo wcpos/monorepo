@@ -9,7 +9,7 @@ import { replicateRxCollection } from '@wcpos/database/src/plugins/wc-rest-api-r
 import log from '@wcpos/utils/src/logger';
 
 import useRestHttpClient from '../../hooks/use-rest-http-client';
-import useLocalData from '../local-data';
+import { useAppStateManager } from '../app-state-manager';
 
 import type { Query, QueryState } from './query';
 import type { RxCollection } from 'rxdb';
@@ -34,7 +34,8 @@ export const useReplicationState = ({
 	remoteIDs,
 	hooks,
 }: Props) => {
-	const { site } = useLocalData();
+	const appStateManager = useAppStateManager();
+	const site = useObservableState(appStateManager.site$, appStateManager.site);
 	const apiURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const endpoint = apiEndpoint || collection.name;
 	const http = useRestHttpClient();

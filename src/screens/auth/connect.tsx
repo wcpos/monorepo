@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { KeyboardAvoidingView, StyleSheet } from 'react-native';
 
-import { ObservableResource } from 'observable-hooks';
+import { ObservableResource, useObservableState } from 'observable-hooks';
 import { switchMap, tap, map } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
@@ -10,17 +10,14 @@ import Logo from '@wcpos/components/src/logo';
 import Suspense from '@wcpos/components/src/suspense';
 
 import DemoButton from './components/demo-button';
-import SitesList from './components/sites-list';
+import { Sites } from './components/sites';
 import UrlInput from './components/url-input';
-import useLocalData from '../../contexts/local-data';
+import { useAppStateManager } from '../../contexts/app-state-manager';
 import Platform from '../../utils/platform';
 
 const Connect = () => {
-	const { user } = useLocalData();
-	const sitesResource = React.useMemo(
-		() => new ObservableResource(user.populate$('sites')),
-		[user]
-	);
+	const appStateManager = useAppStateManager();
+	const user = useObservableState(appStateManager.user$, appStateManager.user);
 
 	return (
 		<KeyboardAvoidingView
@@ -47,7 +44,7 @@ const Connect = () => {
 					</Box>
 					<ErrorBoundary>
 						<Suspense>
-							<SitesList sitesResource={sitesResource} />
+							<Sites user={user} />
 						</Suspense>
 					</ErrorBoundary>
 					<Box>

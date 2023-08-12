@@ -13,9 +13,7 @@ import Modal from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
 
 import StoreSelect from './store-select';
-import useLocalData from '../../../../../contexts/local-data';
-import useLogin from '../../../../../hooks/use-login';
-import useLogout from '../../../../../hooks/use-logout';
+import { useAppStateManager } from '../../../../../contexts/app-state-manager';
 import { t } from '../../../../../lib/translations';
 
 /**
@@ -23,9 +21,8 @@ import { t } from '../../../../../lib/translations';
  * Shouldn't the header components already be memoized?
  */
 export const UserMenu = () => {
-	const { wpCredentials, isWebApp, initialProps, site, store } = useLocalData();
-	const logout = useLogout();
-	const login = useLogin();
+	const { wpCredentials, isWebApp, initialProps, site, store, login, logout } =
+		useAppStateManager();
 	const navigation = useNavigation();
 	const theme = useTheme();
 	const dimensions = useWindowDimensions();

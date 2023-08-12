@@ -24,18 +24,25 @@ interface CurrentOrderContextProviderProps {
 const CurrentOrderProvider = ({
 	children,
 	newOrderResource,
-	openOrderResource,
+	openOrdersQuery,
+	orderID,
 }: CurrentOrderContextProviderProps) => {
-	const order = useObservableSuspense(openOrderResource);
+	const orders = useObservableSuspense(openOrdersQuery.resource);
 	const newOrder = useObservableSuspense(newOrderResource);
-	const currentOrder = order ?? newOrder;
-	const helpers = useCartHelpers(currentOrder);
+
+	/**
+	 *
+	 */
+	const currentOrder = React.useMemo(() => {
+		const order = orders.find((order) => order.uuid === orderID);
+		return order ?? newOrder;
+	}, [orders, newOrder, orderID]);
 
 	/**
 	 *
 	 */
 	return (
-		<CurrentOrderContext.Provider value={{ currentOrder, ...helpers }}>
+		<CurrentOrderContext.Provider value={{ currentOrder, ...useCartHelpers(currentOrder) }}>
 			{children}
 		</CurrentOrderContext.Provider>
 	);

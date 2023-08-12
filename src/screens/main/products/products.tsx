@@ -9,7 +9,7 @@ import Suspense from '@wcpos/components/src/suspense';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
-import useLocalData from '../../../contexts/local-data';
+import { useAppStateManager } from '../../../contexts/app-state-manager';
 import { useQuery } from '../../../contexts/store-state-manager';
 import { t } from '../../../lib/translations';
 import DataTable from '../components/data-table';
@@ -35,7 +35,8 @@ const Products = () => {
 	const { uiSettings } = useUI('products');
 	const theme = useTheme();
 	const location = useBaseTaxLocation();
-	const { store } = useLocalData();
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 
 	/**

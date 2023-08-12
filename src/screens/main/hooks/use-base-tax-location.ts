@@ -1,12 +1,13 @@
 import { useObservableState } from 'observable-hooks';
 
-import useLocalData from '../../../contexts/local-data';
+import { useAppStateManager } from '../../../contexts/app-state-manager';
 
 /**
  *
  */
 const useBaseTaxLocation = () => {
-	const { store } = useLocalData();
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 	const storeCity = useObservableState(store.store_city$, store?.store_city);
 	const storeCountry = useObservableState(store.default_country$, store?.default_country);
 	const storePostcode = useObservableState(store.store_postcode$, store?.store_postcode);

@@ -7,7 +7,7 @@ import { map } from 'rxjs/operators';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import useLocalData from '../../../../../contexts/local-data';
+import { useAppStateManager } from '../../../../../contexts/app-state-manager';
 import NumberInput from '../../../components/number-input';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 import useTaxCalculation from '../../../hooks/use-tax-calculation';
@@ -41,7 +41,8 @@ export const Subtotal = ({ item, column }: Props) => {
 		getTaxStatus(item.meta_data)
 	);
 	const taxStatus = _taxStatus ?? 'taxable';
-	const { store } = useLocalData();
+	const appState = useAppStateManager();
+	const store = useObservableState(appState.store$, appState.store);
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
 	const { calculateTaxesFromPrice } = useTaxCalculation();
 	const taxes = calculateTaxesFromPrice({

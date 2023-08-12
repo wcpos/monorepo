@@ -1,14 +1,14 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { ObservableResource } from 'observable-hooks';
+import { ObservableResource, useObservableState } from 'observable-hooks';
 import { tap, catchError } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
 import initialSettings from './initial-settings.json';
 import { getTranslatedLabels } from './labels';
-import useLocalData from '../../../../contexts/local-data';
+import { useAppStateManager } from '../../../../contexts/app-state-manager';
 import { t } from '../../../../lib/translations';
 
 type StoreDatabase = import('@wcpos/database').StoreDatabase;
@@ -65,7 +65,9 @@ export const UISettingsContext = React.createContext<{
  *
  */
 export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
-	const { storeDB, locale } = useLocalData();
+	const appStateManager = useAppStateManager();
+	const storeDB = useObservableState(appStateManager.storeDB$, appStateManager.storeDB);
+	const locale = useObservableState(appStateManager.locale$, appStateManager.locale);
 
 	/**
 	 *
@@ -75,7 +77,10 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 			const labels = getTranslatedLabels();
 			return get(labels, [id, key], t('{item} label not found', { _tags: 'core', item: key }));
 		},
-		[locale]
+		[
+			// change when locale changes
+			locale,
+		]
 	);
 
 	/**

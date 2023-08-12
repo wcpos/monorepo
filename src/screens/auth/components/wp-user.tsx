@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
 
 import Dialog from '@wcpos/components/src/dialog';
 import Modal from '@wcpos/components/src/modal';
@@ -17,24 +17,25 @@ interface Props {
 }
 
 const WpUser = ({ site, wpUser }: Props) => {
-	const login = useLogin();
+	// const login = useLogin();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const [storeSelectModalOpened, setStoreSelectModalOpened] = React.useState(false);
 	const addSnackbar = useSnackbar();
-	const [stores] = useObservableState(() => wpUser.populate$('stores'), []);
+	const stores = useObservableSuspense(wpUser.populateResource('stores'));
 
 	/**
 	 *
 	 */
 	const handleLogin = React.useCallback(
-		async (storeID) => {
-			login({
-				siteID: site.uuid,
-				wpCredentialsID: wpUser.uuid,
-				storeID,
-			});
-		},
-		[login, site.uuid, wpUser.uuid]
+		() => {},
+		// async (storeID) => {
+		// 	login({
+		// 		siteID: site.uuid,
+		// 		wpCredentialsID: wpUser.uuid,
+		// 		storeID,
+		// 	});
+		// },
+		[]
 	);
 
 	/**

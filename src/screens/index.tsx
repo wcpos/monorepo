@@ -4,7 +4,7 @@ import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
@@ -13,7 +13,7 @@ import Text from '@wcpos/components/src/text';
 
 import AuthNavigator from './auth';
 import MainNavigator from './main';
-import useLocalData from '../contexts/local-data';
+import { useAppStateManager } from '../contexts/app-state-manager';
 import { useStoreStateManager } from '../contexts/store-state-manager';
 import { t } from '../lib/translations';
 import { URL } from '../lib/url';
@@ -31,8 +31,9 @@ const Stack = createStackNavigator<RootStackParamList>();
  *
  */
 const RootNavigator = ({ initialProps }) => {
-	const { store, locale } = useLocalData();
-	const { storeDB } = useStoreStateManager();
+	const appStateManager = useAppStateManager();
+	const store = useObservableState(appStateManager.store$, appStateManager.store);
+	const storeDB = useObservableState(appStateManager.storeDB$, appStateManager.storeDB);
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
 

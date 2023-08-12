@@ -2,7 +2,6 @@ import { renderHook } from '@testing-library/react-hooks';
 import { useObservableState } from 'observable-hooks';
 
 import { useCurrencyFormat } from './use-currency-format';
-import useLocalData from '../../../../contexts/local-data';
 
 jest.mock('../../../../contexts/local-data', () =>
 	require('../../../../contexts/local-data/__mocks__/local-data.mock')
