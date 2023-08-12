@@ -36,21 +36,30 @@ const registry = new Map<string, Promise<StoreDatabase | undefined>>();
  * creates the Store database
  */
 export async function createStoreDB(id: string) {
-	if (!registry.has(id)) {
-		const name = sanitizeStoreName(id);
-		try {
-			const db = await createDB<StoreDatabaseCollections>(name);
-			if (db) {
-				const collections = await db?.addCollections(storeCollections);
-				registry.set(id, Promise.resolve(db));
-			}
-		} catch (error) {
-			log.error(error);
-			removeDB(name);
-		}
+	const name = sanitizeStoreName(id);
+	try {
+		const db = await createDB<StoreDatabaseCollections>(name);
+		const collections = await db?.addCollections(storeCollections);
+		return db;
+	} catch (error) {
+		log.error(error);
+		removeDB(name);
 	}
+	// if (!registry.has(id)) {
+	// 	const name = sanitizeStoreName(id);
+	// 	try {
+	// 		const db = await createDB<StoreDatabaseCollections>(name);
+	// 		if (db) {
+	// 			const collections = await db?.addCollections(storeCollections);
+	// 			registry.set(id, Promise.resolve(db));
+	// 		}
+	// 	} catch (error) {
+	// 		log.error(error);
+	// 		removeDB(name);
+	// 	}
+	// }
 
-	return registry.get(id);
+	// return registry.get(id);
 }
 
 /**

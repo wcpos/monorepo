@@ -35,14 +35,15 @@ interface WcRestApiReplicationOptions<RxDocType, CheckpointType>
 	pull?: WcRestApiReplicationPullOptions<RxDocType, CheckpointType>;
 }
 
-export const replicationStates: Map<string, RxReplicationState<any, any>> = new Map();
+export const replicationStates: Map<string, ReplicationState<any, any>> = new Map();
+export type { ReplicationState, WcRestApiReplicationOptions as ReplicationOptions };
 
 /**
  * The standard RxDB replication state has a lot of checkpoint logic that is not needed for the
  * WooCommerce REST API. This class is a custom implementation of the RxDB replication state that
  * only includes the logic needed for the WooCommerce REST API.
  */
-class RxReplicationState<RxDocType, CheckpointType> {
+class ReplicationState<RxDocType, CheckpointType> {
 	public readonly subjects = {
 		canceled: new BehaviorSubject(false),
 		active: new BehaviorSubject(false),
@@ -336,7 +337,7 @@ export function replicateRxCollection<RxDocType, CheckpointType>({
 	retryTime = 1000 * 5,
 	waitForLeadership = true,
 	autoStart = false,
-}: WcRestApiReplicationOptions<RxDocType, CheckpointType>): RxReplicationState<
+}: WcRestApiReplicationOptions<RxDocType, CheckpointType>): ReplicationState<
 	RxDocType,
 	CheckpointType
 > {
@@ -346,7 +347,7 @@ export function replicateRxCollection<RxDocType, CheckpointType>({
 		[collection.database.name, collection.name, replicationIdentifier].join('|')
 	);
 
-	const replicationState = new RxReplicationState<RxDocType, CheckpointType>(
+	const replicationState = new ReplicationState<RxDocType, CheckpointType>(
 		replicationIdentifierHash,
 		collection,
 		deletedField,
@@ -366,7 +367,7 @@ export function replicateRxCollection<RxDocType, CheckpointType>({
  */
 export function startReplicationOnLeaderShip(
 	waitForLeadership: boolean,
-	replicationState: RxReplicationState<any, any>
+	replicationState: ReplicationState<any, any>
 ) {
 	/**
 	 * Always await this Promise to ensure that the current instance

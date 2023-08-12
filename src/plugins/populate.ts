@@ -7,6 +7,7 @@ import isPlainObject from 'lodash/isPlainObject';
 import map from 'lodash/map';
 import pickBy from 'lodash/pickBy';
 import uniq from 'lodash/uniq';
+import { ObservableResource } from 'observable-hooks';
 import { isRxCollection, RxPlugin, RxCollection, RxDocument } from 'rxdb';
 import { combineLatest, forkJoin } from 'rxjs';
 import {
@@ -189,6 +190,14 @@ const populatePlugin: RxPlugin = {
 				});
 
 				return Promise.all(childrenPromises).then(() => json);
+			};
+
+			/** */
+			proto.populateResource = function (this: RxDocument, key: string) {
+				if (!this[key + 'Resource']) {
+					this[key + 'Resource'] = new ObservableResource(this.populate$(key));
+				}
+				return this[key + 'Resource'];
 			};
 		},
 	},
