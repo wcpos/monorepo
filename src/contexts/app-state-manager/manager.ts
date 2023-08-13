@@ -55,6 +55,7 @@ const handleFirstUser = async (userDB: UserDatabase) => {
 		});
 	}
 	await userDB.upsertLocal('current', { userID: firstUser.uuid });
+	return firstUser;
 };
 
 const collectionMap = {
@@ -97,6 +98,10 @@ export class AppStateManager {
 		this.store$.subscribe(this.storeSubject$);
 		this.storeDB$.subscribe(this.storeDBSubject$);
 
+		// bind methods
+		this.login = this.login.bind(this);
+		this.logout = this.logout.bind(this);
+
 		// Initialize the bootstrap flow
 		this.bootstrap();
 	}
@@ -127,7 +132,25 @@ export class AppStateManager {
 	}
 
 	get user$() {
-		return this.createLocalObservable('userID');
+		return this.createLocalObservable('userID').pipe(
+			switchMap(async (user) => {
+				if (isRxDocument(user)) {
+					return user;
+				}
+				const anyUser = await this.userDB.users.findOne().exec();
+				if (isRxDocument(anyUser)) {
+					return anyUser;
+				}
+				const firstUser = await handleFirstUser(this.userDB);
+				return firstUser;
+			}),
+			map((user) => {
+				if (!isRxDocument(user)) {
+					throw new Error('User is not an RxDocument');
+				}
+				return user;
+			})
+		);
 	}
 
 	get site$() {
@@ -192,16 +215,21 @@ export class AppStateManager {
 		return this.storeDBSubject$.getValue();
 	}
 
-	async login() {
-		// TODO: add login flow
-	}
-
-	async logout() {
+	login = async ({ siteID, wpCredentialsID, storeID }) => {
 		return this.userDB.upsertLocal('current', {
-			userID: this.user.localID,
+			userID: this.user.uuid,
+			siteID,
+			wpCredentialsID,
+			storeID,
+		});
+	};
+
+	logout = async () => {
+		return this.userDB.upsertLocal('current', {
+			userID: this.user.uuid,
 			siteID: null,
 			wpCredentialsID: null,
 			storeID: null,
 		});
-	}
+	};
 }

@@ -14,7 +14,6 @@ import Text from '@wcpos/components/src/text';
 import AuthNavigator from './auth';
 import MainNavigator from './main';
 import { useAppStateManager } from '../contexts/app-state-manager';
-import { useStoreStateManager } from '../contexts/store-state-manager';
 import { t } from '../lib/translations';
 import { URL } from '../lib/url';
 
@@ -149,21 +148,17 @@ const RootNavigator = ({ initialProps }) => {
 			// 	console.log('state', state);
 			// }}
 		>
-			<Stack.Navigator screenOptions={{ headerShown: false }}>
+			<Stack.Navigator
+				/**
+				 * The key is important here for switching stores and logging out
+				 * It tells react to re-render the whole component tree
+				 * - using token, but could also use storeDB.name, I'm not sure when rxdb token changes
+				 */
+				key={storeDB?.token}
+				screenOptions={{ headerShown: false }}
+			>
 				{storeDB ? (
-					<Stack.Screen name="MainStack">
-						{() => {
-							return (
-								/**
-								 * FIXME - this catches the site = null problem when logging out
-								 * There needs to be a better way to handle this
-								 */
-								<Suspense>
-									<MainNavigator />
-								</Suspense>
-							);
-						}}
-					</Stack.Screen>
+					<Stack.Screen name="MainStack" component={MainNavigator} />
 				) : (
 					<Stack.Screen
 						name="AuthStack"

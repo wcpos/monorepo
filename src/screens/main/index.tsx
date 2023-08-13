@@ -193,16 +193,6 @@ const TaxRatesScreen = () => {
 const MainNavigator = () => {
 	const appStateManager = useAppStateManager();
 	const site = useObservableState(appStateManager.site$, appStateManager.site);
-
-	// if (!site) {
-	// 	/**
-	// 	 * FIXME - this is a hack to avoid the app crashing when site is null
-	// 	 * We need to find a better way to handle this
-	// 	 */
-	// 	throw new Promise((resolve, reject) => {
-	// 		resolve(true);
-	// 	});
-	// }
 	const wpAPIURL = useObservableState(site.wp_api_url$, site.wp_api_url);
 
 	return (
