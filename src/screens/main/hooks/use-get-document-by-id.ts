@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { isRxDocument } from 'rxdb';
 import { of } from 'rxjs';
-import { catchError, tap, filter } from 'rxjs/operators';
+import { catchError, tap, filter, switchMap } from 'rxjs/operators';
 
 import useCollection, { CollectionKey } from './use-collection';
 import usePullDocument from '../contexts/use-pull-document';
@@ -21,12 +21,11 @@ export const useGetDocumentByRemoteId$ = (
 
 	return React.useMemo(() => {
 		return collection.findOne({ selector: { id: remoteID } }).$.pipe(
-			tap((doc) => {
-				console.log('doc', doc);
+			switchMap((doc) => {
 				if (!isRxDocument(doc)) {
-					const success = pullDocument(remoteID, collection, apiEndpoint);
-					debugger;
+					return pullDocument(remoteID, collection, apiEndpoint);
 				}
+				return of(doc);
 			}),
 			filter((doc) => isRxDocument(doc)),
 			catchError((error) => {

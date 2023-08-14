@@ -1,8 +1,7 @@
 import * as React from 'react';
 import { KeyboardAvoidingView, StyleSheet } from 'react-native';
 
-import { ObservableResource, useObservableState } from 'observable-hooks';
-import { switchMap, tap, map } from 'rxjs/operators';
+import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';

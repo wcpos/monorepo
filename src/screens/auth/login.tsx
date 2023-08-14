@@ -21,7 +21,7 @@ import { ModalLayout } from '../components/modal-layout';
  */
 const Login = ({ route }) => {
 	const { siteID } = route.params;
-	const { user } = useAppStateManager();
+	const { user, userDB } = useAppStateManager();
 	const sites = useObservableSuspense(user.populateResource('sites'));
 	const navigation = useNavigation();
 	const site = sites.find((s) => s.uuid === siteID);
@@ -54,24 +54,26 @@ const Login = ({ route }) => {
 				navigation.goBack();
 			}
 		},
-		[navigation, site]
+		[navigation, site, userDB.wp_credentials]
 	);
 
 	/**
 	 *
 	 */
 	return (
-		<WebView
-			src={`${site.home}/wcpos-login`}
-			style={{ height: '500px' }}
-			onMessage={(event) => {
-				const action = get(event, 'data.action');
-				const payload = get(event, 'data.payload');
-				if (action === 'wcpos-wp-credentials') {
-					handleLogin(payload);
-				}
-			}}
-		/>
+		<ModalLayout title={t('Login', { _tags: 'core' })}>
+			<WebView
+				src={`${site.home}/wcpos-login`}
+				style={{ height: '500px' }}
+				onMessage={(event) => {
+					const action = get(event, 'data.action');
+					const payload = get(event, 'data.payload');
+					if (action === 'wcpos-wp-credentials') {
+						handleLogin(payload);
+					}
+				}}
+			/>
+		</ModalLayout>
 	);
 };
 

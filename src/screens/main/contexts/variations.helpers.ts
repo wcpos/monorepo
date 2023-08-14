@@ -1,8 +1,5 @@
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
-import set from 'lodash/set';
-
-import type { QueryState } from './use-query';
 
 /**
  * Handle attribute selection

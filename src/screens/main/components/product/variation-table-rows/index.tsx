@@ -20,11 +20,21 @@ const Variations = ({ parent, initialSearch }) => {
 		collectionName: 'variations',
 		initialQuery: {
 			selector: { id: { $in: parent.variations } },
-			search: { attributes: [initialSearch] },
+			// search: { attributes: [initialSearch] },
 		},
-		apiEndpoint: `products/${parent.id}/variations`,
-		remoteIDs: parent.variations,
+		parent,
 	});
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		if (initialSearch) {
+			query.search({ attributes: [initialSearch] });
+		} else {
+			query.search({});
+		}
+	}, [initialSearch, query]);
 
 	/**
 	 *
@@ -35,9 +45,11 @@ const Variations = ({ parent, initialSearch }) => {
 				<VariationsFilterBar parent={parent} />
 			</ErrorBoundary>
 			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-				<Suspense>
-					<Table parent={parent} query={query} />
-				</Suspense>
+				<ErrorBoundary>
+					<Suspense>
+						<Table parent={parent} query={query} />
+					</Suspense>
+				</ErrorBoundary>
 			</Box>
 		</Box>
 	);

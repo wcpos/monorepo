@@ -12,15 +12,14 @@ import useRestHttpClient from '../../hooks/use-rest-http-client';
 import { useAppStateManager } from '../app-state-manager';
 
 import type { Query, QueryState } from './query';
-import type { RxCollection } from 'rxdb';
+import type { RxCollection, RxDocument } from 'rxdb';
 
 interface Props {
 	collection: RxCollection;
-	apiEndpoint?: string;
 	query: Query<RxCollection>;
 	pollingTime?: number;
-	remoteIDs?: number[];
 	hooks?: any;
+	parent?: RxDocument;
 }
 
 /**
@@ -28,16 +27,17 @@ interface Props {
  */
 export const useReplicationState = ({
 	collection,
-	apiEndpoint,
 	query,
 	pollingTime = 600000,
-	remoteIDs,
 	hooks,
+	parent,
 }: Props) => {
 	const appStateManager = useAppStateManager();
 	const site = useObservableState(appStateManager.site$, appStateManager.site);
 	const apiURL = useObservableState(site.wc_api_url$, site.wc_api_url);
-	const endpoint = apiEndpoint || collection.name;
+	const endpoint = hooks?.filterApiEndpoint
+		? hooks?.filterApiEndpoint(collection, parent)
+		: collection.name;
 	const http = useRestHttpClient();
 
 	/**
@@ -55,8 +55,8 @@ export const useReplicationState = ({
 			pull: {
 				fetchRemoteIDs: async () => {
 					// if remoteIDs are passed in, use those
-					if (remoteIDs) {
-						return remoteIDs;
+					if (hooks?.fetchRemoteIDs) {
+						return hooks?.fetchRemoteIDs(parent);
 					}
 
 					// otherwise, fetch from API
@@ -167,7 +167,7 @@ export const useReplicationState = ({
 				),
 			},
 		});
-	}, [apiURL, collection, endpoint, hooks, http, pollingTime, query, remoteIDs]);
+	}, [apiURL, collection, endpoint, hooks, http, parent, pollingTime, query]);
 
 	return replicationState;
 };

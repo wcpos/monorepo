@@ -11,6 +11,7 @@ import Icon from '@wcpos/components/src/icon';
 import AttributePill from './attribute-pill';
 import { useVariationTable } from './context';
 import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
+import { updateVariationAttributeSearch } from '../../../contexts/variations.helpers';
 
 /**
  *
@@ -21,7 +22,7 @@ const VariationsFilterBar = ({ parent }) => {
 	const query = manager.getQuery(['variations', { parentID: parent.id }]);
 	const { setExpanded } = useVariationTable();
 	const selectedAttributes = useObservableState(
-		query.state$.pipe(map((q) => get(q, ['search', 'attributes']))),
+		query.state$.pipe(map((q) => get(q, ['search', 'attributes'], []))),
 		get(query, ['currentState', 'search', 'attributes'], [])
 	);
 
@@ -30,8 +31,8 @@ const VariationsFilterBar = ({ parent }) => {
 	 */
 	const handleSelect = React.useCallback(
 		(attribute) => {
-			// const newState = updateVariationAttributeSearch(query.currentState.search, attribute);
-			// query.search(newState);
+			const newState = updateVariationAttributeSearch(query.currentState.search, attribute);
+			query.search(newState);
 		},
 		[query]
 	);
@@ -53,7 +54,10 @@ const VariationsFilterBar = ({ parent }) => {
 					.filter((attribute) => attribute.variation)
 					.sort((a, b) => (a.position || 0) - (b.position || 0))
 					.map((attribute, index) => {
-						const selected = selectedAttributes.find((a) => a.name === attribute.name);
+						let selected;
+						if (Array.isArray(selectedAttributes)) {
+							selected = selectedAttributes.find((a) => a.name === attribute.name);
+						}
 						return (
 							<AttributePill
 								key={`${index}-${attribute.name}`}

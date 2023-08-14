@@ -18,6 +18,7 @@ interface QueryOptions {
 	queryKeys: (string | number | object)[];
 	collectionName: string;
 	initialQuery?: QueryState;
+	parent?: any;
 }
 
 const allHooks = {
@@ -42,6 +43,7 @@ export const useQuery = <T>({
 	queryKeys,
 	collectionName,
 	initialQuery,
+	parent,
 }: QueryOptions): Query<T> => {
 	const manager = useStoreStateManager();
 	const collection = manager.storeDB.collections[collectionName];
@@ -51,7 +53,7 @@ export const useQuery = <T>({
 	const query = manager.registerQuery<T>(queryKeys, collection, initialQuery, hooks);
 
 	// attach replicationState
-	const replicationState = useReplicationState({ collection, query, hooks });
+	const replicationState = useReplicationState({ collection, query, hooks, parent });
 	query.replicationState = replicationState;
 
 	/**
@@ -81,6 +83,7 @@ export const useQuery = <T>({
 				query.replicationState.cancel();
 				// @TODO - this cleans up too often and causes issues
 				// how to cleanup only when the query is no longer needed?
+				// if I clean up here, it gets deregistered too often, child components throw errors
 				// manager.deregisterQuery(queryKeys);
 			};
 		}, [query.replicationState, queryKeys])

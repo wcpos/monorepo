@@ -2,7 +2,7 @@ import Variations from './variations';
 import { useQuery } from '../../../../../../contexts/store-state-manager';
 
 /**
- * I need to quick of the query here
+ *
  */
 const VariationsPopover = ({ parent, addToCart }) => {
 	/**
@@ -13,9 +13,9 @@ const VariationsPopover = ({ parent, addToCart }) => {
 		collectionName: 'variations',
 		initialQuery: {
 			selector: { id: { $in: parent.variations } },
+			search: {},
 		},
-		apiEndpoint: `products/${parent.id}/variations`,
-		remoteIDs: parent.variations,
+		parent,
 	});
 
 	return <Variations query={query} parent={parent} addToCart={addToCart} />;

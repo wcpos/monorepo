@@ -67,15 +67,7 @@ const POSProducts = ({ isColumn = false }) => {
 	 *
 	 */
 	React.useEffect(() => {
-		if (!showOutOfStock) {
-			// query.where...
-			// q.selector.$and.push({
-			// 	$or: [
-			// 		{ manage_stock: false },
-			// 		{ $and: [{ manage_stock: true }, { stock_quantity: { $gt: 0 } }] },
-			// 	],
-			// });
-		}
+		query.where('stock_status', showOutOfStock ? undefined : 'instock');
 	}, [query, showOutOfStock]);
 
 	/**

@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
+import isPlainObject from 'lodash/isPlainObject';
 import { useObservableState } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
@@ -93,7 +94,14 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	return (
 		<VariationTableContext.Provider value={variationTableContext}>
 			<Table.Row item={item} index={index} cellRenderer={cellRenderer} />
-			{!!expanded && <Variations parent={item} initialSearch={expanded} />}
+			{!!expanded && (
+				<ErrorBoundary>
+					<Variations
+						parent={item}
+						initialSearch={isPlainObject(expanded) ? expanded : undefined}
+					/>
+				</ErrorBoundary>
+			)}
 		</VariationTableContext.Provider>
 	);
 };

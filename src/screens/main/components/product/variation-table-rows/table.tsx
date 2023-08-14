@@ -12,8 +12,6 @@ import log from '@wcpos/utils/src/logger';
 import { useVariationTable } from './context';
 import Footer from './footer';
 import { t } from '../../../../../lib/translations';
-import { useProducts } from '../../../contexts/products';
-import { useVariations } from '../../../contexts/variations';
 import EmptyTableRow from '../../empty-table-row';
 import { ProductVariationImage } from '../variation-image';
 import { ProductVariationName } from '../variation-name';
@@ -33,13 +31,9 @@ const sharedCells = {
  */
 const VariationsTable = ({ query, parent }) => {
 	const data = useObservableSuspense(query.resource);
-	// const { paginatedResource, replicationState, loadNextPage, setQuery } = useVariations();
-	// const { data, count, hasMore } = useObservableSuspense(paginatedResource);
-	// const loading = useObservableState(replicationState.active$, false);
-	// const total = parent.variations.length;
-	// const { query } = useProducts();
 	const context = useTable(); // get context from parent product, ie: columns
 	const { cells } = useVariationTable();
+	const loading = useObservableState(query.replicationState.active$, false);
 
 	/**
 	 * Detect change in product query and variations query
@@ -122,12 +116,12 @@ const VariationsTable = ({ query, parent }) => {
 	return (
 		<Table<ProductVariationDocument>
 			data={data}
-			// footer={<Footer count={count} total={total} loading={loading} />}
+			footer={<Footer query={query} parent={parent} count={data.length} loading={loading} />}
 			estimatedItemSize={100}
 			context={{ ...context, cellRenderer }}
 			ListEmptyComponent={<EmptyTableRow message={t('No variations found', { _tags: 'core' })} />}
 			// onEndReached={onEndReached}
-			// loading={loading}
+			loading={loading}
 			hideHeader={true}
 		/>
 	);

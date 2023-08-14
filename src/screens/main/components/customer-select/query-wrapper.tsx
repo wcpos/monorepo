@@ -11,7 +11,7 @@ const CustomerQueryWrapper = (props) => {
 	 *
 	 */
 	const query = useQuery({
-		queryKeys: ['customers'],
+		queryKeys: ['customers', 'select'],
 		collectionName: 'customers',
 		initialQuery: {
 			sortBy: 'last_name',

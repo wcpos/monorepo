@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { is } from 'core-js/core/object';
 import get from 'lodash/get';
+import isPlainObject from 'lodash/isPlainObject';
 import { useObservableState } from 'observable-hooks';
 import Animated, { useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { isRxDocument } from 'rxdb';
@@ -167,7 +167,12 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 			<Table.Row item={item} index={index} cellRenderer={cellRenderer} />
 			{!!expanded && (
 				// <Animated.View style={animatedStyle}>
-				<Variations parent={item} initialSearch={expanded} />
+				<ErrorBoundary>
+					<Variations
+						parent={item}
+						initialSearch={isPlainObject(expanded) ? expanded : undefined}
+					/>
+				</ErrorBoundary>
 				// </Animated.View>
 			)}
 		</VariationTableContext.Provider>

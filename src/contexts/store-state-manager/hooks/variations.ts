@@ -33,8 +33,7 @@ interface APIQueryParams {
  */
 const postQueryResult = (result, queryState) => {
 	const allMatch = get(queryState, ['search', 'attributes']);
-	console.log('allMatch', allMatch);
-	if (allMatch) {
+	if (Array.isArray(allMatch) && allMatch.length > 0) {
 		return filterVariationsByAttributes(result, allMatch);
 	}
 	return result;
@@ -57,4 +56,18 @@ const filterApiQueryParams = (params, checkpoint, batchSize) => {
 	};
 };
 
-export { filterApiQueryParams, postQueryResult };
+/**
+ *
+ */
+const filterApiEndpoint = (collection, parent) => {
+	return `products/${parent.id}/variations`;
+};
+
+/**
+ *
+ */
+const fetchRemoteIDs = (parent) => {
+	return parent.variations;
+};
+
+export { filterApiQueryParams, postQueryResult, filterApiEndpoint, fetchRemoteIDs };
