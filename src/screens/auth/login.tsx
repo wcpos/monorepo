@@ -12,7 +12,7 @@ import WebView from '@wcpos/components/src/webview';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
-import { useAppStateManager } from '../../contexts/app-state-manager';
+import { useAppState } from '../../contexts/app-state';
 import { t } from '../../lib/translations';
 import { ModalLayout } from '../components/modal-layout';
 
@@ -21,7 +21,7 @@ import { ModalLayout } from '../components/modal-layout';
  */
 const Login = ({ route }) => {
 	const { siteID } = route.params;
-	const { user, userDB } = useAppStateManager();
+	const { user, userDB } = useAppState();
 	const sites = useObservableSuspense(user.populateResource('sites'));
 	const navigation = useNavigation();
 	const site = sites.find((s) => s.uuid === siteID);

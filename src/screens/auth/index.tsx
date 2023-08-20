@@ -4,7 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 
 import Connect from './connect';
 import Login from './login';
-import { useAppStateManager } from '../../contexts/app-state-manager';
+import { useAppState } from '../../contexts/app-state';
 
 export type AuthStackParamList = {
 	Connect: undefined;
@@ -17,10 +17,10 @@ const Stack = createStackNavigator<AuthStackParamList>();
  *
  */
 const AuthNavigator = () => {
-	const { isWebApp } = useAppStateManager();
+	const { isWebApp } = useAppState();
 
 	/**
-	 * WebApps should never hot the Connect screen, if they do it usually means
+	 * WebApps should never hit the Connect screen, if they do it usually means
 	 * the database has thrown an error and we need to reset the database
 	 */
 	if (isWebApp) {

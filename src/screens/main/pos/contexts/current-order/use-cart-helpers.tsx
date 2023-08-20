@@ -1,13 +1,14 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
+import { set } from 'lodash';
 import isEmpty from 'lodash/isEmpty';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
 
-import { useAppStateManager } from '../../../../../contexts/app-state-manager';
+import { useAppState } from '../../../../../contexts/app-state';
 import { t } from '../../../../../lib/translations';
 import useCollection from '../../../hooks/use-collection';
 import useTaxCalculation from '../../../hooks/use-tax-calculation';
@@ -77,11 +78,9 @@ const processExistingOrder = async (order, product, existing) => {
 	}
 };
 
-export const useCartHelpers = (currentOrder) => {
+export const useCartHelpers = (currentOrder, setCurrentOrderID) => {
 	const { collection } = useCollection('orders');
-	const navigation = useNavigation();
-	const appState = useAppStateManager();
-	const store = useObservableState(appState.store$, appState.store);
+	const { store } = useAppState();
 	const { calculateTaxesFromPrice } = useTaxCalculation('pos');
 	const pricesIncludeTax = useObservableState(
 		store.prices_include_tax$.pipe(map((val) => val === 'yes')),
@@ -137,7 +136,7 @@ export const useCartHelpers = (currentOrder) => {
 				const newOrder = await processNewOrder(order, collection, {
 					line_items: [newLineItem],
 				});
-				navigation.setParams({ orderID: newOrder?.uuid });
+				setCurrentOrderID(newOrder?.uuid);
 			} else {
 				const populatedLineItems = await order.populate('line_items');
 				const existing = populatedLineItems.filter((li) => li.product_id === product.id);
@@ -149,7 +148,14 @@ export const useCartHelpers = (currentOrder) => {
 				type: 'success',
 			});
 		},
-		[addSnackbar, calculateTaxesFromPrice, currentOrder, navigation, collection, pricesIncludeTax]
+		[
+			calculateTaxesFromPrice,
+			pricesIncludeTax,
+			currentOrder,
+			addSnackbar,
+			collection,
+			setCurrentOrderID,
+		]
 	);
 
 	/**
@@ -204,7 +210,7 @@ export const useCartHelpers = (currentOrder) => {
 				const newOrder = await processNewOrder(order, collection, {
 					line_items: [newLineItem],
 				});
-				navigation.setParams({ orderID: newOrder?.uuid });
+				setCurrentOrderID(newOrder?.uuid);
 			} else {
 				const populatedLineItems = await order.populate('line_items');
 				const existing = populatedLineItems.filter((li) => li.variation_id === variation.id);
@@ -216,7 +222,14 @@ export const useCartHelpers = (currentOrder) => {
 				type: 'success',
 			});
 		},
-		[addSnackbar, calculateTaxesFromPrice, currentOrder, navigation, collection, pricesIncludeTax]
+		[
+			calculateTaxesFromPrice,
+			pricesIncludeTax,
+			currentOrder,
+			addSnackbar,
+			collection,
+			setCurrentOrderID,
+		]
 	);
 
 	/**
@@ -283,12 +296,12 @@ export const useCartHelpers = (currentOrder) => {
 				const newOrder = await processNewOrder(order, collection, {
 					fee_lines: [newFeelLine],
 				});
-				navigation.setParams({ orderID: newOrder?.uuid });
+				setCurrentOrderID(newOrder?.uuid);
 			} else {
 				await addItem(order, { fee_lines: newFeelLine });
 			}
 		},
-		[calculateTaxesFromPrice, currentOrder, navigation, collection]
+		[calculateTaxesFromPrice, currentOrder, collection, setCurrentOrderID]
 	);
 
 	/**
@@ -300,12 +313,12 @@ export const useCartHelpers = (currentOrder) => {
 
 			if (order.isNew) {
 				const newOrder = await processNewOrder(order, collection, { shipping_lines: [data] });
-				navigation.setParams({ orderID: newOrder?.uuid });
+				setCurrentOrderID(newOrder?.uuid);
 			} else {
 				await addItem(order, { shipping_lines: data });
 			}
 		},
-		[currentOrder, navigation, collection]
+		[currentOrder, collection, setCurrentOrderID]
 	);
 
 	return { addProduct, addVariation, removeItem, removeCustomer, addCustomer, addFee, addShipping };

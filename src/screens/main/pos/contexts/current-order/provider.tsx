@@ -1,8 +1,19 @@
 import * as React from 'react';
 
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import {
+	ObservableResource,
+	useObservable,
+	useObservableSuspense,
+	useObservableState,
+	useObservableRef,
+} from 'observable-hooks';
+import { switchMap } from 'rxjs/operators';
 
 import { useCartHelpers } from './use-cart-helpers';
+import { useAppState } from '../../../../../contexts/app-state';
+import { useQuery } from '../../../../../contexts/store-state-manager';
+import useCollection from '../../../hooks/use-collection';
+import { useNewOrder } from '../../use-new-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -15,7 +26,6 @@ export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
 	orderID?: string;
-	newOrderResource: ObservableResource<OrderDocument>;
 }
 
 /**
@@ -23,26 +33,80 @@ interface CurrentOrderContextProviderProps {
  */
 const CurrentOrderProvider = ({
 	children,
-	newOrderResource,
-	openOrdersQuery,
+	// openOrdersQuery,
 	orderID,
 }: CurrentOrderContextProviderProps) => {
-	const orders = useObservableSuspense(openOrdersQuery.resource);
-	const newOrder = useObservableSuspense(newOrderResource);
+	const [orderIDRef, orderID$] = useObservableRef(orderID);
+	const newOrder = useNewOrder();
+	const { isWebApp, initialProps } = useAppState();
+	const { collection } = useCollection('orders');
+
+	const openOrdersQuery = useQuery({
+		queryKeys: ['orders', { status: 'pos-open' }],
+		collectionName: 'orders',
+		initialQuery: {
+			selector: { status: 'pos-open' },
+			sortBy: 'date_created_gmt',
+			sortDirection: 'asc',
+		},
+	});
 
 	/**
 	 *
 	 */
-	const currentOrder = React.useMemo(() => {
-		const order = orders.find((order) => order.uuid === orderID);
-		return order ?? newOrder;
-	}, [orders, newOrder, orderID]);
+	const taxQuery = useQuery({
+		queryKeys: ['tax-rates', 'pos'],
+		collectionName: 'taxes',
+		initialQuery: {
+			search: {},
+		},
+	});
+
+	/**
+	 *
+	 */
+	const currentOrder$ = useObservable(
+		() =>
+			orderID$.pipe(
+				switchMap(async (uuid) => {
+					const order = await collection.findOneFix(uuid).exec();
+					return order ?? newOrder;
+				})
+			),
+		[]
+	);
+
+	/**
+	 *
+	 */
+	const currentOrder = useObservableState(currentOrder$, newOrder);
+
+	/**
+	 * NOTE: navigation.setParams({ orderID }); causes a re-render and is too slow
+	 */
+	const setCurrentOrderID = React.useCallback(
+		(id: string) => {
+			orderIDRef.current = id;
+
+			// keep web app url in sync
+			if (isWebApp) {
+				history.pushState({}, '', `${initialProps.homepage}cart/${id}`);
+			}
+		},
+		[initialProps.homepage, isWebApp, orderIDRef]
+	);
 
 	/**
 	 *
 	 */
 	return (
-		<CurrentOrderContext.Provider value={{ currentOrder, ...useCartHelpers(currentOrder) }}>
+		<CurrentOrderContext.Provider
+			value={{
+				currentOrder,
+				setCurrentOrderID,
+				...useCartHelpers(currentOrder, setCurrentOrderID),
+			}}
+		>
 			{children}
 		</CurrentOrderContext.Provider>
 	);

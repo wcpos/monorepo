@@ -24,7 +24,7 @@ import ProductsNavigator from './products';
 import Settings from './settings';
 import Support from './support';
 import TaxRates from './tax-rates';
-import { useAppStateManager } from '../../contexts/app-state-manager';
+import { useAppState } from '../../contexts/app-state';
 import { t } from '../../lib/translations';
 import { ModalLayout } from '../components/modal-layout';
 
@@ -160,7 +160,7 @@ const HelpScreen = () => {
  *
  */
 const LoginScreen = () => {
-	const { site, wpCredentials } = useAppStateManager();
+	const { site, wpCredentials } = useAppState();
 	// TODO - need to add a login url to the site object
 
 	return (
@@ -191,8 +191,7 @@ const TaxRatesScreen = () => {
  *
  */
 const MainNavigator = () => {
-	const appStateManager = useAppStateManager();
-	const site = useObservableState(appStateManager.site$, appStateManager.site);
+	const { site } = useAppState();
 	const wpAPIURL = useObservableState(site.wp_api_url$, site.wp_api_url);
 
 	return (

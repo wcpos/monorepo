@@ -2,15 +2,14 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import { useAppStateManager } from '../../../contexts/app-state-manager';
+import { useAppState } from '../../../contexts/app-state';
 import { t } from '../../../lib/translations';
 
 /**
  *
  */
 const useGuestCustomer = () => {
-	const appStateManager = useAppStateManager();
-	const store = useObservableState(appStateManager.store$, appStateManager.store);
+	const { store } = useAppState();
 	const defaultCountry = useObservableState(store.default_country$, store.default_country);
 	const [country, state] = defaultCountry.split(':');
 

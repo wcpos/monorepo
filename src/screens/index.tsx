@@ -13,7 +13,7 @@ import Text from '@wcpos/components/src/text';
 
 import AuthNavigator from './auth';
 import MainNavigator from './main';
-import { useAppStateManager } from '../contexts/app-state-manager';
+import { useAppState } from '../contexts/app-state';
 import { t } from '../lib/translations';
 import { URL } from '../lib/url';
 
@@ -30,9 +30,7 @@ const Stack = createStackNavigator<RootStackParamList>();
  *
  */
 const RootNavigator = ({ initialProps }) => {
-	const appStateManager = useAppStateManager();
-	const store = useObservableState(appStateManager.store$, appStateManager.store);
-	const storeDB = useObservableState(appStateManager.storeDB$, appStateManager.storeDB);
+	const { store, storeDB } = useAppState();
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
 
@@ -117,10 +115,6 @@ const RootNavigator = ({ initialProps }) => {
 
 	return (
 		<NavigationContainer
-			// FIXME - I thought this would re-render the app when the locale changes??
-			// it kind of works, the language updates when the settings are closed
-			// maybe I should just bite the bullet and use const t = useT()
-			// key={locale}
 			linking={linking}
 			theme={{
 				dark: false,

@@ -8,7 +8,7 @@ import Pill from '@wcpos/components/src/pill';
 import useSnackbar from '@wcpos/components/src/snackbar';
 
 import StoreSelect from './store-select';
-import { useAppStateManager } from '../../../contexts/app-state-manager';
+import { useAppState } from '../../../contexts/app-state';
 import { t } from '../../../lib/translations';
 
 interface Props {
@@ -17,7 +17,7 @@ interface Props {
 }
 
 const WpUser = ({ site, wpUser }: Props) => {
-	const { login } = useAppStateManager();
+	const { login } = useAppState();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const [storeSelectModalOpened, setStoreSelectModalOpened] = React.useState(false);
 	const addSnackbar = useSnackbar();

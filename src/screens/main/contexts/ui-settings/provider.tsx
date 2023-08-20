@@ -8,7 +8,7 @@ import log from '@wcpos/utils/src/logger';
 
 import initialSettings from './initial-settings.json';
 import { getTranslatedLabels } from './labels';
-import { useAppStateManager } from '../../../../contexts/app-state-manager';
+import { useAppState } from '../../../../contexts/app-state';
 import { t } from '../../../../lib/translations';
 
 type StoreDatabase = import('@wcpos/database').StoreDatabase;
@@ -65,9 +65,8 @@ export const UISettingsContext = React.createContext<{
  *
  */
 export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
-	const appStateManager = useAppStateManager();
-	const storeDB = useObservableState(appStateManager.storeDB$, appStateManager.storeDB);
-	const locale = useObservableState(appStateManager.locale$, appStateManager.locale);
+	const { storeDB } = useAppState();
+	const locale = 'en';
 
 	/**
 	 *

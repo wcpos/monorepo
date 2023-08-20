@@ -4,7 +4,7 @@ import { useObservableState } from 'observable-hooks';
 
 import { InputWithLabel } from '@wcpos/components/src/form-layout';
 
-import { useAppStateManager } from '../../../contexts/app-state-manager';
+import { useAppState } from '../../../contexts/app-state';
 import { t } from '../../../lib/translations';
 import CurrencySelect from '../components/currency-select';
 import CustomerSelect from '../components/customer-select';
@@ -12,8 +12,7 @@ import Form from '../components/document-form';
 import LanguageSelect from '../components/language-select';
 
 export const GeneralSettings = () => {
-	const appState = useAppStateManager();
-	const store = useObservableState(appState.store$, appState.store);
+	const { store } = useAppState();
 
 	// HACK: to get combobox to update with correct customer
 	const defaultCustomerID = useObservableState(store.default_customer$, store.default_customer);

@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { useNavigation, StackActions } from '@react-navigation/native';
 import { useObservableSuspense } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
@@ -15,8 +14,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  *
  */
 const CartTabs = ({ query }) => {
-	const navigation = useNavigation();
-	const { currentOrder } = useCurrentOrder();
+	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
 	const orders = useObservableSuspense(query.resource);
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
@@ -48,10 +46,10 @@ const CartTabs = ({ query }) => {
 		(idx: number) => {
 			const newOrderID = routes[idx].key;
 			if (newOrderID !== currentOrder.uuid) {
-				navigation.setParams({ orderID: newOrderID });
+				setCurrentOrderID(newOrderID);
 			}
 		},
-		[currentOrder.uuid, navigation, routes]
+		[currentOrder.uuid, routes, setCurrentOrderID]
 	);
 
 	/**

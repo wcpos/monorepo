@@ -2,12 +2,11 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import { useAppStateManager } from '../../../../contexts/app-state-manager';
+import { useAppState } from '../../../../contexts/app-state';
 import Form from '../../components/document-form';
 
 const BarcodeSettings = () => {
-	const appState = useAppStateManager();
-	const store = useObservableState(appState.store$, appState.store);
+	const { store } = useAppState();
 
 	return (
 		<Form

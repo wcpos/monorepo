@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { StoreStateManager } from './manager';
-import { useAppStateManager } from '../app-state-manager';
+import { useAppState } from '../app-state';
 
 export const StoreStateManagerContext = React.createContext<StoreStateManager | undefined>(
 	undefined
@@ -17,8 +17,7 @@ interface StoreStateManagerProviderProps {
  *
  */
 export const StoreStateManagerProvider = ({ children }: StoreStateManagerProviderProps) => {
-	const appStateManager = useAppStateManager();
-	const { storeDB } = useObservableSuspense(appStateManager.isReadyResource);
+	const { storeDB } = useAppState();
 	const storeStateManager = React.useMemo(() => new StoreStateManager(storeDB), [storeDB]);
 	console.log('storeStateManager', storeStateManager);
 
@@ -29,10 +28,11 @@ export const StoreStateManagerProvider = ({ children }: StoreStateManagerProvide
 		// Perform any required setup here...
 		return () => {
 			// Perform any cleanup here...
-			// manager.clearAllReplicationStates();
-			// manager.clearAllResourceStreams();
+			if (storeDB) {
+				storeDB.destroy();
+			}
 		};
-	}, [storeStateManager]);
+	}, [storeDB]);
 
 	return (
 		<StoreStateManagerContext.Provider value={storeStateManager}>

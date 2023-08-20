@@ -11,7 +11,6 @@ import Suspense from '@wcpos/components/src/suspense';
 import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
-import useNewOrderResource from './use-new-order-resource';
 import { useQuery } from '../../../contexts/store-state-manager';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
@@ -34,36 +33,34 @@ const Stack = createStackNavigator<POSStackParamList>();
 const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'POS'>) => {
 	const orderID = get(route, ['params', 'orderID']);
 	console.log('pos');
-	const newOrderResource = useNewOrderResource();
 
-	const openOrdersQuery = useQuery({
-		queryKeys: ['orders', 'pos'],
-		collectionName: 'orders',
-		initialQuery: {
-			search: {
-				status: 'open',
-			},
-		},
-	});
+	// const openOrdersQuery = useQuery({
+	// 	queryKeys: ['orders', 'pos'],
+	// 	collectionName: 'orders',
+	// 	initialQuery: {
+	// 		search: {
+	// 			status: 'open',
+	// 		},
+	// 	},
+	// });
 
-	/**
-	 * We need to init the tax rate query here so it can be used in the cart helpers
-	 * TODO - set location
-	 */
-	useQuery({
-		queryKeys: ['tax-rates', 'pos'],
-		collectionName: 'taxes',
-		initialQuery: {
-			search: {},
-		},
-	});
+	// /**
+	//  * We need to init the tax rate query here so it can be used in the cart helpers
+	//  * TODO - set location
+	//  */
+	// useQuery({
+	// 	queryKeys: ['tax-rates', 'pos'],
+	// 	collectionName: 'taxes',
+	// 	initialQuery: {
+	// 		search: {},
+	// 	},
+	// });
 
 	return (
 		<Suspense>
 			<CurrentOrderProvider
 				orderID={orderID}
-				openOrdersQuery={openOrdersQuery}
-				newOrderResource={newOrderResource}
+				// openOrdersQuery={openOrdersQuery}
 			>
 				<Suspense>
 					<POS />

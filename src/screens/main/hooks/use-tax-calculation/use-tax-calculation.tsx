@@ -11,7 +11,7 @@ import {
 	calculateTaxes,
 	sumTaxes,
 } from './utils';
-import { useAppStateManager } from '../../../../contexts/app-state-manager';
+import { useAppState } from '../../../../contexts/app-state';
 import { useStoreStateManager } from '../../../../contexts/store-state-manager';
 
 /**
@@ -24,8 +24,7 @@ const useTaxCalculation = (location: 'pos' | 'base') => {
 	const manager = useStoreStateManager();
 	const query = manager.getQuery(['tax-rates', location]);
 	const rates = useObservableSuspense(query.resource);
-	const appState = useAppStateManager();
-	const store = useObservableState(appState.store$, appState.store);
+	const { store } = useAppState();
 
 	const shippingTaxClass = useObservableState(store.shipping_tax_class$, store.shipping_tax_class);
 

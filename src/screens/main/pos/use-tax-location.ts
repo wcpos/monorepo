@@ -3,15 +3,14 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 
 import useCurrentOrder from './contexts/current-order';
-import { useAppStateManager } from '../../../contexts/app-state-manager';
+import { useAppState } from '../../../contexts/app-state';
 import useBaseTaxLocation from '../hooks/use-base-tax-location';
 
 /**
  *
  */
 const useTaxLocation = () => {
-	const appState = useAppStateManager();
-	const store = useObservableState(appState.store$, appState.store);
+	const { store } = useAppState();
 	// const { currentOrder } = useCurrentOrder();
 	const baseLocation = useBaseTaxLocation();
 	const taxBasedOn = useObservableState(store.tax_based_on$, store?.tax_based_on);

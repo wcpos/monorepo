@@ -12,8 +12,9 @@ import Portal from '@wcpos/components/src/portal';
 import { SnackbarProvider } from '@wcpos/components/src/snackbar';
 import getTheme from '@wcpos/themes';
 
-import { AppStateManagerProvider } from './contexts/app-state-manager';
+import { AppStateProvider } from './contexts/app-state';
 import { StoreStateManagerProvider } from './contexts/store-state-manager';
+import { initialProps, isWebApp, resource } from './hydrate-data';
 import RootError from './root-error';
 import RootNavigator from './screens';
 import Splash from './screens/splash';
@@ -24,17 +25,6 @@ import 'setimmediate'; // https://github.com/software-mansion/react-native-reani
 
 // enable freeze
 enableFreeze(true);
-
-type InitialProps = import('./types').InitialProps;
-
-/**
- * FIXME: initalProps is empty for non web apps
- * I need a better solution for type checking
- */
-let initialProps = {} as InitialProps;
-if (window) {
-	initialProps = window.initialProps as InitialProps;
-}
 
 /**
  *
@@ -71,7 +61,7 @@ const App = () => {
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<GestureHandlerRootView style={{ flex: 1 }}>
-				<AppStateManagerProvider initialProps={initialProps}>
+				<AppStateProvider initialProps={initialProps} isWebApp={isWebApp} resource={resource}>
 					<React.Suspense fallback={<Splash />}>
 						<StoreStateManagerProvider>
 							<ThemeProvider theme={theme}>
@@ -88,7 +78,7 @@ const App = () => {
 							</ThemeProvider>
 						</StoreStateManagerProvider>
 					</React.Suspense>
-				</AppStateManagerProvider>
+				</AppStateProvider>
 			</GestureHandlerRootView>
 		</ErrorBoundary>
 	);

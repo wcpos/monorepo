@@ -6,13 +6,12 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
 
-import { useAppStateManager } from '../../../contexts/app-state-manager';
+import { useAppState } from '../../../contexts/app-state';
 import { t } from '../../../lib/translations';
 import Form from '../components/document-form';
 
 export const TaxSettings = () => {
-	const appState = useAppStateManager();
-	const store = useObservableState(appState.store$, appState.store);
+	const { store } = useAppState();
 	const navigation = useNavigation();
 
 	return (

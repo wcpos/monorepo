@@ -8,15 +8,13 @@ import { useObservableState } from 'observable-hooks';
 import useHttpClient, { RequestConfig } from '@wcpos/hooks/src/use-http-client';
 import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 
-import { useAppStateManager } from '../../../../contexts/app-state-manager';
+import { useAppState } from '../../../../contexts/app-state';
 
 /**
  * TODO - becareful to use useOnlineStatus because it emits a lot of events
  */
 export const useRestHttpClient = () => {
-	const appState = useAppStateManager();
-	const site = useObservableState(appState.site$, appState.site);
-	const wpCredentials = useObservableState(appState.wpCredentials$, appState.wpCredentials);
+	const { site, wpCredentials } = useAppState();
 	const baseURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
 

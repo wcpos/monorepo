@@ -6,7 +6,7 @@ import { filter } from 'rxjs/operators';
 import { storeCollections } from '@wcpos/database';
 import type { StoreDatabaseCollections } from '@wcpos/database';
 
-import { useAppStateManager } from '../../../contexts/app-state-manager';
+import { useAppState } from '../../../contexts/app-state';
 
 export type CollectionKey = keyof typeof storeCollections;
 
@@ -23,8 +23,7 @@ export type CollectionKey = keyof typeof storeCollections;
 const useCollection = <K extends CollectionKey>(
 	key: K
 ): { collection: StoreDatabaseCollections[K] } => {
-	const appStateManager = useAppStateManager();
-	const storeDB = useObservableState(appStateManager.storeDB$, appStateManager.storeDB);
+	const { storeDB } = useAppState();
 	const collection = useObservableState(
 		storeDB.reset$.pipe(filter((collection) => collection.name === key)),
 		storeDB.collections[key]

@@ -1,8 +1,11 @@
 import * as React from 'react';
 
+import { useObservable } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { of } from 'rxjs';
 import { catchError, tap, filter, switchMap } from 'rxjs/operators';
+
+import log from '@wcpos/utils/src/logger';
 
 import useCollection, { CollectionKey } from './use-collection';
 import usePullDocument from '../contexts/use-pull-document';

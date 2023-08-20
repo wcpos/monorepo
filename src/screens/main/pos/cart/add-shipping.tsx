@@ -11,7 +11,7 @@ import Text from '@wcpos/components/src/text';
 import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
-import { useAppStateManager } from '../../../../contexts/app-state-manager';
+import { useAppState } from '../../../../contexts/app-state';
 import { t } from '../../../../lib/translations';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 import useCurrentOrder from '../contexts/current-order';
@@ -22,7 +22,7 @@ import useCurrentOrder from '../contexts/current-order';
 const ShippingSelect = ({ shippingResource, selectedMethod, onSelect }) => {
 	const options = useObservableSuspense(shippingResource);
 	const http = useRestHttpClient();
-	const { storeDB } = useAppStateManager();
+	const { storeDB } = useAppState();
 
 	React.useEffect(() => {
 		async function fetchShippingMethods() {

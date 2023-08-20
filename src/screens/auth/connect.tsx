@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { KeyboardAvoidingView, StyleSheet } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
-
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Logo from '@wcpos/components/src/logo';
@@ -11,12 +9,11 @@ import Suspense from '@wcpos/components/src/suspense';
 import DemoButton from './components/demo-button';
 import { Sites } from './components/sites';
 import UrlInput from './components/url-input';
-import { useAppStateManager } from '../../contexts/app-state-manager';
+import { useAppState } from '../../contexts/app-state';
 import Platform from '../../utils/platform';
 
 const Connect = () => {
-	const appStateManager = useAppStateManager();
-	const user = useObservableState(appStateManager.user$, appStateManager.user);
+	const { user } = useAppState();
 
 	return (
 		<KeyboardAvoidingView
