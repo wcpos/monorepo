@@ -43,7 +43,7 @@ export const Subtotal = ({ item, column }: Props) => {
 	const taxStatus = _taxStatus ?? 'taxable';
 	const { store } = useAppState();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
-	const { calculateTaxesFromPrice } = useTaxCalculation();
+	const { calculateTaxesFromPrice } = useTaxCalculation('pos');
 	const taxes = calculateTaxesFromPrice({
 		price: subtotal,
 		taxClass,

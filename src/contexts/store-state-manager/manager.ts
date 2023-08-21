@@ -39,7 +39,7 @@ export class StoreStateManager {
 	): Query<T> {
 		const key = this.serializeQueryKey(queryKey);
 		if (!this.queries.has(key)) {
-			const query = new Query(collection, initialQuery);
+			const query = new Query(collection, initialQuery, hooks);
 
 			/**
 			 *
@@ -53,10 +53,6 @@ export class StoreStateManager {
 			 */
 			query.resource = new ObservableResource(query.$);
 			query.paginatedResource = new ObservableResource(query.paginated$);
-
-			Object.entries(hooks).forEach(([hookName, hookFunction]) => {
-				query.addHook(hookName, hookFunction);
-			});
 
 			this.queries.set(key, query);
 		}

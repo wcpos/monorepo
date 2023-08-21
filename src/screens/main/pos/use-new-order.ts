@@ -34,7 +34,10 @@ async function getOrCreateNewOrder() {
 		const db = await createTemporaryDB();
 		let order = await db.orders.findOne().exec();
 		if (!order) {
-			order = await db.orders.insert({ status: 'pos-open' });
+			/**
+			 * Need to populate billing and shipping, otherwise billing.country is undefined
+			 */
+			order = await db.orders.insert({ status: 'pos-open', billing: {}, shipping: {} });
 		}
 		return order;
 	} catch (err) {

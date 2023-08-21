@@ -14,6 +14,7 @@ import { useAppState } from '../../../../../contexts/app-state';
 import { useQuery } from '../../../../../contexts/store-state-manager';
 import useCollection from '../../../hooks/use-collection';
 import { useNewOrder } from '../../use-new-order';
+import useTaxLocation from '../../use-tax-location';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -33,34 +34,13 @@ interface CurrentOrderContextProviderProps {
  */
 const CurrentOrderProvider = ({
 	children,
-	// openOrdersQuery,
 	orderID,
+	taxQuery,
 }: CurrentOrderContextProviderProps) => {
 	const [orderIDRef, orderID$] = useObservableRef(orderID);
 	const newOrder = useNewOrder();
 	const { isWebApp, initialProps } = useAppState();
 	const { collection } = useCollection('orders');
-
-	const openOrdersQuery = useQuery({
-		queryKeys: ['orders', { status: 'pos-open' }],
-		collectionName: 'orders',
-		initialQuery: {
-			selector: { status: 'pos-open' },
-			sortBy: 'date_created_gmt',
-			sortDirection: 'asc',
-		},
-	});
-
-	/**
-	 *
-	 */
-	const taxQuery = useQuery({
-		queryKeys: ['tax-rates', 'pos'],
-		collectionName: 'taxes',
-		initialQuery: {
-			search: {},
-		},
-	});
 
 	/**
 	 *
@@ -95,6 +75,12 @@ const CurrentOrderProvider = ({
 		},
 		[initialProps.homepage, isWebApp, orderIDRef]
 	);
+
+	/**
+	 * Update tax location based on settings
+	 */
+	const taxLocation = useTaxLocation(currentOrder);
+	taxQuery.search(taxLocation);
 
 	/**
 	 *

@@ -135,7 +135,7 @@ const Products = () => {
 								footer={
 									calcTaxes === 'yes' && (
 										<Box fill padding="small" space="xSmall" horizontal>
-											<TaxBasedOn query={taxQuery} />
+											<TaxBasedOn query={taxQuery} taxBasedOn="base" />
 										</Box>
 									)
 								}

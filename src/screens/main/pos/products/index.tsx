@@ -43,6 +43,7 @@ const POSProducts = ({ isColumn = false }) => {
 	);
 	const { store } = useAppState();
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
+	const taxBasedOn = useObservableState(store.tax_based_on$, store?.tax_based_on);
 
 	/**
 	 *
@@ -140,7 +141,7 @@ const POSProducts = ({ isColumn = false }) => {
 								footer={
 									calcTaxes === 'yes' && (
 										<Box fill padding="small" space="xSmall" horizontal>
-											<TaxBasedOn query={taxQuery} />
+											<TaxBasedOn query={taxQuery} taxBasedOn={taxBasedOn} />
 										</Box>
 									)
 								}

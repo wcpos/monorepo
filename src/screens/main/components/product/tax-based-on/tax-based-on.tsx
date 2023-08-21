@@ -2,24 +2,27 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import { InlineError } from '@wcpos/components/src/inline-error/inline-error';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
 import DisplayCurrentTaxRates from './display-current-tax-rates';
-import { useAppState } from '../../../../../contexts/app-state';
 import { t } from '../../../../../lib/translations';
 
 /**
  * NOTE: this must be used within a TaxRatesProvider
  */
-const TaxBasedOn = ({ query }) => {
-	const { store } = useAppState();
-	const taxBasedOn = useObservableState(store.tax_based_on$, store?.tax_based_on);
+const TaxBasedOn = ({ query, taxBasedOn }) => {
 	const [opened, setOpened] = React.useState(false);
 	const rates = useObservableSuspense(query.resource);
 	const { country, state, city, postcode } = get(query, ['currentState', 'search'], {});
+	// const { country, state, city, postcode } = useObservableState(
+	// 	query.state$.pipe(map((state) => get(state, ['search'], {}))),
+	// 	get(query, ['currentState', 'search'], {})
+	// );
+	console.log('rates', rates);
 
 	/**
 	 *

@@ -18,15 +18,19 @@ interface APIQueryParams {
  *
  */
 const preQuerySelector = (selector, queryState) => {
+	/**
+	 * @TODO - do I need to incorporate the old selector?
+	 */
+	const newSelector = {};
 	if (queryState.search && typeof queryState.search === 'object') {
 		// pick out country, state, city and postcode from q.search
 		const { country, state } = queryState.search;
-		selector.$and = [{ $or: [{ country }, { country: '' }] }];
+		newSelector.$and = [{ $or: [{ country }, { country: '' }] }];
 		if (state) {
-			selector.$and.push({ $or: [{ state }, { state: '' }] });
+			newSelector.$and.push({ $or: [{ state }, { state: '' }] });
 		}
 	}
-	return selector;
+	return newSelector;
 };
 
 /**

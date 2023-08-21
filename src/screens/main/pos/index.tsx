@@ -34,34 +34,30 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 	const orderID = get(route, ['params', 'orderID']);
 	console.log('pos');
 
-	// const openOrdersQuery = useQuery({
-	// 	queryKeys: ['orders', 'pos'],
-	// 	collectionName: 'orders',
-	// 	initialQuery: {
-	// 		search: {
-	// 			status: 'open',
-	// 		},
-	// 	},
-	// });
+	/**
+	 *
+	 */
+	const openOrdersQuery = useQuery({
+		queryKeys: ['orders', { status: 'pos-open' }],
+		collectionName: 'orders',
+		initialQuery: {
+			selector: { status: 'pos-open' },
+			sortBy: 'date_created_gmt',
+			sortDirection: 'asc',
+		},
+	});
 
-	// /**
-	//  * We need to init the tax rate query here so it can be used in the cart helpers
-	//  * TODO - set location
-	//  */
-	// useQuery({
-	// 	queryKeys: ['tax-rates', 'pos'],
-	// 	collectionName: 'taxes',
-	// 	initialQuery: {
-	// 		search: {},
-	// 	},
-	// });
+	/**
+	 *
+	 */
+	const taxQuery = useQuery({
+		queryKeys: ['tax-rates', 'pos'],
+		collectionName: 'taxes',
+	});
 
 	return (
 		<Suspense>
-			<CurrentOrderProvider
-				orderID={orderID}
-				// openOrdersQuery={openOrdersQuery}
-			>
+			<CurrentOrderProvider orderID={orderID} taxQuery={taxQuery}>
 				<Suspense>
 					<POS />
 				</Suspense>

@@ -127,7 +127,7 @@ export const useReplicationState = ({
 								endpoint,
 								{
 									include: checkpoint.include,
-									exclude: checkpoint.exclude,
+									// exclude: checkpoint.exclude, // do we need exclude?
 								},
 								{
 									// signal: controller.signal,

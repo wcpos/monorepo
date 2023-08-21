@@ -47,7 +47,8 @@ class Query<T> {
 
 	constructor(
 		public collection: RxCollection<any, object, object>,
-		initialQuery: QueryState
+		initialQuery: QueryState = {},
+		hooks: Hooks = {}
 	) {
 		if (initialQuery.selector) {
 			for (const field in initialQuery.selector) {
@@ -65,6 +66,16 @@ class Query<T> {
 			log.debug('Query state changed', state);
 			this.paginator.reset();
 		});
+
+		/**
+		 * Register hooks
+		 */
+		const allowedHookNames = ['preQuerySelector', 'postQueryResult'];
+		Object.entries(hooks).forEach(([hookName, hookFunction]) => {
+			if (allowedHookNames.includes(hookName)) {
+				this.addHook(hookName, hookFunction);
+			}
+		});
 	}
 
 	setCollection<T>(collection: RxCollection<T, object, object>): this {
@@ -72,6 +83,7 @@ class Query<T> {
 		this.collection = collection;
 		return this;
 	}
+	z;
 
 	addHook(type: keyof HookTypes, fn: any) {
 		this.hooks[type] = fn;
