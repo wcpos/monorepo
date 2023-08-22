@@ -13,9 +13,12 @@ import AddProduct from './add-product';
 import EditProduct from './edit-product';
 import EditVariation from './edit-variation';
 import Products from './products';
+import { useQuery } from '../../../contexts/store-state-manager';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
+import { TaxHelpersProvider } from '../contexts/tax-helpers';
 import useUISettings from '../contexts/ui-settings';
+import useBaseTaxLocation from '../hooks/use-base-tax-location';
 import useCollection from '../hooks/use-collection';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -35,10 +38,27 @@ const Stack = createStackNavigator<ProductsStackParamList>();
 const ProductsWithProviders = ({
 	route,
 }: NativeStackScreenProps<ProductsStackParamList, 'Products'>) => {
+	const location = useBaseTaxLocation();
+
+	/**
+	 *
+	 */
+	const taxQuery = useQuery({
+		queryKeys: ['tax-rates', 'base'],
+		collectionName: 'taxes',
+		initialQuery: {
+			search: location,
+		},
+	});
+
 	return (
 		<ErrorBoundary>
 			<Suspense>
-				<Products />
+				<TaxHelpersProvider taxQuery={taxQuery}>
+					<Suspense>
+						<Products />
+					</Suspense>
+				</TaxHelpersProvider>
 			</Suspense>
 		</ErrorBoundary>
 	);

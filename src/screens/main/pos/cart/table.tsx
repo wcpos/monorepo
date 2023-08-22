@@ -33,8 +33,8 @@ const CartTable = () => {
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
-	const { cartResource } = useCart();
-	const cart = useObservableSuspense(cartResource);
+	const { cart$ } = useCart();
+	const cart = useObservableState(cart$, { line_items: [], fee_lines: [], shipping_lines: [] });
 	// const deferredCart = React.useDeferredValue(cart);
 	const items = React.useMemo(() => flatten(Object.values(cart)), [cart]); // TODO - add sorting
 	// const items = React.useDeferredValue(flatten(Object.values(cart)));

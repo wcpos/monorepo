@@ -13,7 +13,7 @@ import { useAppState } from '../../../../contexts/app-state';
 import { t } from '../../../../lib/translations';
 import { useCart } from '../../contexts/cart';
 import useCurrencyFormat from '../../hooks/use-currency-format';
-import useCurrentOrder from '../contexts/current-order';
+import { useCurrentOrder } from '../contexts/current-order';
 
 const Totals = () => {
 	const { currentOrder } = useCurrentOrder();

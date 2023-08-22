@@ -7,7 +7,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../../lib/translations';
-import useCurrentOrder from '../../contexts/current-order';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 /**
  *

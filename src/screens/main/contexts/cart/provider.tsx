@@ -1,13 +1,13 @@
 import * as React from 'react';
 
-import flatten from 'lodash/flatten';
-import { ObservableResource, useSubscription, useObservableState } from 'observable-hooks';
+import { ObservableResource } from 'observable-hooks';
 import { Observable, combineLatest, iif, of } from 'rxjs';
-import { switchMap, map, catchError, filter, distinctUntilChanged } from 'rxjs/operators';
+import { switchMap, map, catchError, distinctUntilChanged } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import useTaxCalculation from '../../hooks/use-tax-calculation';
+import { useCurrentOrder } from '../../pos/contexts/current-order';
+import { useTaxHelpers } from '../tax-helpers';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
@@ -48,15 +48,15 @@ export const CartContext = React.createContext<{
 
 interface CartContextProps {
 	children: React.ReactNode;
-	order: import('@wcpos/database').OrderDocument;
 }
 
 /**
  *
  */
-const CartProvider = ({ children, order }: CartContextProps) => {
+const CartProvider = ({ children }: CartContextProps) => {
+	const { currentOrder: order } = useCurrentOrder();
 	const { calculateOrderTotals, calculateShippingLineTaxes, calculateLineItemTaxes } =
-		useTaxCalculation('pos');
+		useTaxHelpers();
 
 	/**
 	 *

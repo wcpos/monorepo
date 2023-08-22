@@ -13,7 +13,8 @@ import CustomerSelect from '../../components/customer-select';
 import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
 import useGuestCustomer from '../../hooks/use-guest-customer';
-import useCurrentOrder from '../contexts/current-order';
+import { useCartHelpers } from '../contexts/cart-helpers';
+import { useCurrentOrder } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -30,7 +31,8 @@ const CartHeader = () => {
 	const { uiSettings } = useUI('pos.cart');
 	const theme = useTheme();
 	// const { storeDB } = useLocalData();
-	const { currentOrder, addCustomer } = useCurrentOrder();
+	const { currentOrder } = useCurrentOrder();
+	const { addCustomer } = useCartHelpers();
 	const customerID = useObservableState(currentOrder.customer_id$, currentOrder.customer_id);
 	previousCustomerID = customerID !== -1 ? customerID : previousCustomerID;
 	const guestCustomer = useGuestCustomer();

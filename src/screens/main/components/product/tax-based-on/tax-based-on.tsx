@@ -10,18 +10,19 @@ import Text from '@wcpos/components/src/text';
 
 import DisplayCurrentTaxRates from './display-current-tax-rates';
 import { t } from '../../../../../lib/translations';
+import { useTaxHelpers } from '../../../contexts/tax-helpers';
 
 /**
  * NOTE: this must be used within a TaxRatesProvider
  */
-const TaxBasedOn = ({ query, taxBasedOn }) => {
+const TaxBasedOn = ({ taxBasedOn }) => {
 	const [opened, setOpened] = React.useState(false);
-	const rates = useObservableSuspense(query.resource);
-	const { country, state, city, postcode } = get(query, ['currentState', 'search'], {});
-	// const { country, state, city, postcode } = useObservableState(
-	// 	query.state$.pipe(map((state) => get(state, ['search'], {}))),
-	// 	get(query, ['currentState', 'search'], {})
-	// );
+	const { taxQuery } = useTaxHelpers();
+	const rates = useObservableSuspense(taxQuery.resource);
+	const { country, state, city, postcode } = useObservableState(
+		taxQuery.state$.pipe(map((state) => get(state, ['search'], {}))),
+		get(taxQuery, ['currentState', 'search'], {})
+	);
 	console.log('rates', rates);
 
 	/**

@@ -17,11 +17,9 @@ import CartHeader from './cart-header';
 import Table from './table';
 import Totals from './totals';
 import { CartProvider } from '../../contexts/cart';
-import useCurrentOrder from '../contexts/current-order';
 
 const Cart = () => {
 	const theme = useTheme();
-	const { currentOrder } = useCurrentOrder();
 
 	return (
 		<Box
@@ -34,7 +32,7 @@ const Cart = () => {
 				<CartHeader />
 			</ErrorBoundary>
 
-			<CartProvider order={currentOrder}>
+			<CartProvider>
 				<ErrorBoundary>
 					<Suspense>
 						<Box fill>

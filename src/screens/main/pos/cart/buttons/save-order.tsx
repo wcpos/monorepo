@@ -8,7 +8,7 @@ import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../../lib/translations';
 import usePushDocument from '../../../contexts/use-push-document';
-import useCurrentOrder from '../../contexts/current-order';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 const SaveButton = () => {
 	const { currentOrder } = useCurrentOrder();

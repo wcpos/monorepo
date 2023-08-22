@@ -10,7 +10,7 @@ import { useSnackbar } from '@wcpos/components/src/snackbar/use-snackbar';
 import { t } from '../../../../../lib/translations';
 import usePushDocument from '../../../contexts/use-push-document';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
-import useCurrentOrder from '../../contexts/current-order';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 /**
  *

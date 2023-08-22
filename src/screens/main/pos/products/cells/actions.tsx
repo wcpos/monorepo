@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import Icon from '@wcpos/components/src/icon';
 
-import useCurrentOrder from '../../contexts/current-order';
+import { useCartHelpers } from '../../contexts/cart-helpers';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;
@@ -13,7 +13,7 @@ interface Props {
  *
  */
 export const Actions = ({ item: product }: Props) => {
-	const { addProduct } = useCurrentOrder();
+	const { addProduct } = useCartHelpers();
 
 	/**
 	 *

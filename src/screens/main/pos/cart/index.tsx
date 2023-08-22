@@ -10,7 +10,7 @@ import Cart from './cart';
 import EmptyCart from './empty-cart';
 import OpenOrderTabs from './tabs';
 import { useQuery } from '../../../../contexts/store-state-manager';
-import useCurrentOrder from '../contexts/current-order';
+import { useCurrentOrder } from '../contexts/current-order';
 
 const OpenOrders = ({ isColumn = false }) => {
 	const { currentOrder } = useCurrentOrder();

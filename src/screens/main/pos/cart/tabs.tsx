@@ -6,7 +6,7 @@ import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
 
 import CartTabTitle from './tab-title';
-import useCurrentOrder from '../contexts/current-order';
+import { useCurrentOrder } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

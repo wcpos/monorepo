@@ -9,7 +9,7 @@ import TextArea from '@wcpos/components/src/textarea';
 import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
 
 import { t } from '../../../../../lib/translations';
-import useCurrentOrder from '../../contexts/current-order';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 /**
  *

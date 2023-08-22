@@ -9,7 +9,6 @@ import {
 } from 'observable-hooks';
 import { switchMap } from 'rxjs/operators';
 
-import { useCartHelpers } from './use-cart-helpers';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useQuery } from '../../../../../contexts/store-state-manager';
 import useCollection from '../../../hooks/use-collection';
@@ -20,6 +19,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CurrentOrderContextProps {
 	currentOrder: OrderDocument;
+	setCurrentOrderID: (id: string) => void;
 }
 
 export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>(null);
@@ -32,7 +32,7 @@ interface CurrentOrderContextProviderProps {
 /**
  * Provider the active order by uuid, or a new order
  */
-const CurrentOrderProvider = ({
+export const CurrentOrderProvider = ({
 	children,
 	orderID,
 	taxQuery,
@@ -80,7 +80,7 @@ const CurrentOrderProvider = ({
 	 * Update tax location based on settings
 	 */
 	const taxLocation = useTaxLocation(currentOrder);
-	taxQuery.search(taxLocation);
+	taxQuery.search(taxLocation); // I think this is going to trigger new cart helpers, which causes loop
 
 	/**
 	 *
@@ -90,12 +90,9 @@ const CurrentOrderProvider = ({
 			value={{
 				currentOrder,
 				setCurrentOrderID,
-				...useCartHelpers(currentOrder, setCurrentOrderID),
 			}}
 		>
 			{children}
 		</CurrentOrderContext.Provider>
 	);
 };
-
-export default CurrentOrderProvider;

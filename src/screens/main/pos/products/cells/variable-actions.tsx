@@ -4,9 +4,7 @@ import Icon from '@wcpos/components/src/icon';
 import Popover from '@wcpos/components/src/popover';
 
 import VariationsPopover from './variations-popover';
-import { Query } from '../../../contexts/query';
-import { VariationsProvider } from '../../../contexts/variations';
-import useCurrentOrder from '../../contexts/current-order';
+import { useCartHelpers } from '../../contexts/cart-helpers';
 
 interface VariableActionsProps {
 	item: import('@wcpos/database').ProductDocument;
@@ -17,7 +15,7 @@ interface VariableActionsProps {
  */
 const VariableActions = ({ item: parent }: VariableActionsProps) => {
 	const [opened, setOpened] = React.useState(false);
-	const { addVariation } = useCurrentOrder();
+	const { addVariation } = useCartHelpers();
 
 	// /**
 	//  *

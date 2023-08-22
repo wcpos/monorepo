@@ -19,8 +19,9 @@ import FilterBar from '../../components/product/filter-bar';
 import Search from '../../components/product/search';
 import TaxBasedOn from '../../components/product/tax-based-on';
 import UISettings from '../../components/ui-settings';
+import { useTaxHelpers } from '../../contexts/tax-helpers';
 import useUI from '../../contexts/ui-settings';
-import useCurrentOrder from '../contexts/current-order';
+import { useCartHelpers } from '../contexts/cart-helpers';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -36,14 +37,12 @@ const TABLE_ROW_COMPONENTS = {
 const POSProducts = ({ isColumn = false }) => {
 	const theme = useTheme();
 	const { uiSettings } = useUI('pos.products');
-	const { addProduct, addVariation } = useCurrentOrder();
+	const { addProduct, addVariation } = useCartHelpers();
+	const { calcTaxes, taxBasedOn } = useTaxHelpers();
 	const showOutOfStock = useObservableState(
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
 	);
-	const { store } = useAppState();
-	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
-	const taxBasedOn = useObservableState(store.tax_based_on$, store?.tax_based_on);
 
 	/**
 	 *
@@ -56,12 +55,6 @@ const POSProducts = ({ isColumn = false }) => {
 			sortDirection: uiSettings.get('sortDirection'),
 		},
 	});
-
-	/**
-	 *
-	 */
-	const manager = useStoreStateManager();
-	const taxQuery = manager.getQuery(['tax-rates', 'pos']);
 
 	/**
 	 *
@@ -139,9 +132,9 @@ const POSProducts = ({ isColumn = false }) => {
 								estimatedItemSize={100}
 								extraContext={{ taxLocation: 'pos' }}
 								footer={
-									calcTaxes === 'yes' && (
+									calcTaxes && (
 										<Box fill padding="small" space="xSmall" horizontal>
-											<TaxBasedOn query={taxQuery} taxBasedOn={taxBasedOn} />
+											<TaxBasedOn taxBasedOn={taxBasedOn} />
 										</Box>
 									)
 								}

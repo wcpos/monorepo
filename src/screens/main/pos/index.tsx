@@ -9,11 +9,13 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 
 import Checkout from './checkout';
+import { CartHelpersProvider } from './contexts/cart-helpers';
 import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
 import { useQuery } from '../../../contexts/store-state-manager';
 import { t } from '../../../lib/translations';
 import { ModalLayout } from '../../components/modal-layout';
+import { TaxHelpersProvider } from '../contexts/tax-helpers';
 import useCollection from '../hooks/use-collection';
 import Receipt from '../receipt';
 
@@ -59,7 +61,15 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 		<Suspense>
 			<CurrentOrderProvider orderID={orderID} taxQuery={taxQuery}>
 				<Suspense>
-					<POS />
+					<TaxHelpersProvider taxQuery={taxQuery}>
+						<Suspense>
+							<CartHelpersProvider>
+								<Suspense>
+									<POS />
+								</Suspense>
+							</CartHelpersProvider>
+						</Suspense>
+					</TaxHelpersProvider>
 				</Suspense>
 			</CurrentOrderProvider>
 		</Suspense>
