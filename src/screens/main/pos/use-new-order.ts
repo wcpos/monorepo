@@ -5,6 +5,7 @@ import {
 	useObservableState,
 	useObservableSuspense,
 	useSubscription,
+	useObservable,
 } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { from, throwError, combineLatest, of } from 'rxjs';
@@ -26,12 +27,10 @@ import { useDefaultCustomer } from './use-default-customer';
 import { useAppState } from '../../../contexts/app-state';
 import allCurrencies from '../../../contexts/currencies/currencies.json';
 
-/**
- *
- */
-async function getOrCreateNewOrder() {
-	try {
-		const db = await createTemporaryDB();
+const temporaryDB$ = from(createTemporaryDB()).pipe(shareReplay(1));
+
+const emptyOrder$ = temporaryDB$.pipe(
+	switchMap(async (db) => {
 		let order = await db.orders.findOne().exec();
 		if (!order) {
 			/**
@@ -40,76 +39,76 @@ async function getOrCreateNewOrder() {
 			order = await db.orders.insert({ status: 'pos-open', billing: {}, shipping: {} });
 		}
 		return order;
-	} catch (err) {
-		return Promise.reject(err); // propagate the error
-	}
-}
-
-/**
- *
- */
-const docResource$ = from(getOrCreateNewOrder()).pipe(
-	expand((order) =>
-		order.deleted$.pipe(
-			filter((deleted) => deleted === true),
-			switchMap(() => from(getOrCreateNewOrder())),
-			first()
-		)
-	),
-	distinctUntilChanged((prev, curr) => prev.uuid === curr.uuid),
-	tap(() => console.log('emitting new order'))
+	})
+	// tap((order) => console.log('emitting new order', order))
 );
-
-const resource = new ObservableResource(docResource$);
 
 /**
  *
  */
 export const useNewOrder = () => {
 	const { store } = useAppState();
-	const newOrder = useObservableSuspense(resource);
-	const currency = useObservableState(store.currency$, store.currency);
-	const prices_include_tax = useObservableState(
-		store.prices_include_tax$,
-		store.prices_include_tax
+	const { defaultCustomer$ } = useDefaultCustomer();
+
+	const newOrder$ = useObservable(
+		() =>
+			combineLatest([
+				emptyOrder$,
+				defaultCustomer$.pipe(
+					tap((res) => {
+						console.log('defaultCustomer$', res);
+					})
+				),
+				store.currency$.pipe(
+					tap((res) => {
+						console.log('currency$', res);
+					})
+				),
+				store.prices_include_tax$.pipe(
+					tap((res) => {
+						console.log('prices_include_tax$', res);
+					})
+				),
+				store.tax_based_on$.pipe(
+					tap((res) => {
+						console.log('tax_based_on$', res);
+					})
+				),
+			]).pipe(
+				switchMap(async ([order, customer, currency, prices_include_tax, tax_based_on]) => {
+					const customerJSON = isRxDocument(customer) ? customer.toJSON() : customer;
+					const newOrder = await order.incrementalPatch({
+						// add default customer to order
+						customer_id: customerJSON?.id,
+						billing: {
+							...(customerJSON?.billing || {}),
+							email: customerJSON?.billing?.email || customerJSON?.email,
+							first_name:
+								customerJSON?.billing?.first_name ||
+								customerJSON?.first_name ||
+								customerJSON?.username,
+							last_name: customerJSON?.billing?.last_name || customerJSON?.last_name,
+						},
+						shipping: customerJSON?.shipping,
+
+						// add other store settings
+						currency,
+						currency_symbol: allCurrencies.find((c) => c.code === currency).symbol || '',
+						prices_include_tax: prices_include_tax === 'yes',
+						meta_data: [
+							{
+								key: '_woocommerce_pos_tax_based_on',
+								value: tax_based_on,
+							},
+						],
+					});
+
+					return newOrder;
+				}),
+				tap((order) => console.log('emitting new order', order))
+			),
+		[]
 	);
-	const tax_based_on = useObservableState(store.tax_based_on$, store.tax_based_on);
-	const customer$ = useDefaultCustomer();
 
-	/**
-	 *
-	 */
-	React.useEffect(() => {
-		newOrder.incrementalPatch({
-			currency,
-			currency_symbol: allCurrencies.find((c) => c.code === currency).symbol || '',
-			prices_include_tax: prices_include_tax === 'yes',
-			meta_data: [
-				{
-					key: '_woocommerce_pos_tax_based_on',
-					value: tax_based_on,
-				},
-			],
-		});
-	}, [currency, newOrder, prices_include_tax, tax_based_on]);
-
-	/**
-	 *
-	 */
-	useSubscription(customer$, (customer) => {
-		const customerJSON = isRxDocument(customer) ? customer.toJSON() : customer;
-		newOrder.incrementalPatch({
-			customer_id: customerJSON?.id,
-			billing: {
-				...(customerJSON?.billing || {}),
-				email: customerJSON?.billing?.email || customerJSON?.email,
-				first_name:
-					customerJSON?.billing?.first_name || customerJSON?.first_name || customerJSON?.username,
-				last_name: customerJSON?.billing?.last_name || customerJSON?.last_name,
-			},
-			shipping: customerJSON?.shipping,
-		});
-	});
-
-	return newOrder;
+	return { newOrder$ };
 };

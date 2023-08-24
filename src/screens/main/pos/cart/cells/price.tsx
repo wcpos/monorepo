@@ -5,7 +5,7 @@ import { map } from 'rxjs/operators';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
-import useTaxCalculation from '../../../hooks/use-tax-calculation';
+import { useTaxHelpers } from '../../../contexts/tax-helpers';
 
 interface Props {
 	item: import('@wcpos/database').LineItemDocument;
@@ -33,7 +33,7 @@ export const Price = ({ item }: Props) => {
 	const taxStatus = _taxStatus ?? 'taxable';
 	const { store } = useAppState();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
-	const { calculateTaxesFromPrice } = useTaxCalculation('pos');
+	const { calculateTaxesFromPrice } = useTaxHelpers();
 	const taxes = calculateTaxesFromPrice({ price, taxClass, taxStatus, pricesIncludeTax: false });
 	const displayPrice = taxDisplayCart === 'incl' ? price + taxes.total : price;
 

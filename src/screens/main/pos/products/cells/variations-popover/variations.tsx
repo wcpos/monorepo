@@ -10,8 +10,8 @@ import Text from '@wcpos/components/src/text';
 
 import VariationButtons from './buttons';
 import VariationSelect from './select';
+import { updateVariationAttributeSearch } from '../../../../../../contexts/store-state-manager/hooks/variations.helpers';
 import { t } from '../../../../../../lib/translations';
-import { updateVariationAttributeSearch } from '../../../../contexts/variations.helpers';
 import useCurrencyFormat from '../../../../hooks/use-currency-format';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;

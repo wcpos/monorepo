@@ -11,8 +11,8 @@ import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
 import { t } from '../../../../lib/translations';
-import { useCartHelpers } from '../contexts/cart-helpers';
 import { useCurrentOrder } from '../contexts/current-order';
+import { useAddFee } from '../hooks/use-add-fee';
 
 const initialData = {
 	name: '',
@@ -28,7 +28,7 @@ const AddFee = () => {
 	const [opened, setOpened] = React.useState(false);
 	const [data, setData] = React.useState(initialData);
 	const { currentOrder } = useCurrentOrder();
-	const { addFee } = useCartHelpers();
+	const { addFee } = useAddFee();
 	const currencySymbol = useObservableState(
 		currentOrder.currency_symbol$,
 		currentOrder.currency_symbol

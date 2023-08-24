@@ -7,8 +7,8 @@ import Text from '@wcpos/components/src/text';
 import Tooltip from '@wcpos/components/src/tooltip';
 
 import { useAppState } from '../../../../contexts/app-state';
+import { useTaxHelpers } from '../../contexts/tax-helpers';
 import useCurrencyFormat from '../../hooks/use-currency-format';
-import useTaxCalculation from '../../hooks/use-tax-calculation';
 
 interface Props {
 	price: string;
@@ -32,7 +32,7 @@ export const Price = ({
 	const taxDisplayShop = useObservableState(store?.tax_display_shop$, store?.tax_display_shop);
 	const calcTaxes = useObservableState(store?.calc_taxes$, store?.calc_taxes);
 	const taxable = taxStatus === 'taxable' && calcTaxes === 'yes';
-	const { getDisplayValues } = useTaxCalculation(taxLocation);
+	const { getDisplayValues } = useTaxHelpers();
 
 	let displayPrice = price;
 	let taxTotal = 0;

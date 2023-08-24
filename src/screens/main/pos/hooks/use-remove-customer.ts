@@ -1,20 +1,9 @@
 import * as React from 'react';
 
-import { useCurrentOrder } from '../current-order';
+import { useCurrentOrder } from '../contexts/current-order';
 
-export const useCustomer = () => {
+export const useRemoveCustomer = () => {
 	const { currentOrder } = useCurrentOrder();
-
-	/**
-	 *
-	 */
-	const addCustomer = React.useCallback(
-		async (data) => {
-			const order = currentOrder.getLatest();
-			return order.patch(data);
-		},
-		[currentOrder]
-	);
 
 	/**
 	 *
@@ -29,7 +18,6 @@ export const useCustomer = () => {
 	}, [currentOrder]);
 
 	return {
-		addCustomer,
 		removeCustomer,
 	};
 };

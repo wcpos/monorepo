@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useNavigation } from '@react-navigation/native';
 import {
 	ObservableResource,
 	useObservable,
@@ -26,7 +27,8 @@ export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
-	orderID?: string;
+	resource: ObservableResource<OrderDocument>;
+	taxQuery: any;
 }
 
 /**
@@ -34,53 +36,33 @@ interface CurrentOrderContextProviderProps {
  */
 export const CurrentOrderProvider = ({
 	children,
-	orderID,
+	resource,
 	taxQuery,
 }: CurrentOrderContextProviderProps) => {
-	const [orderIDRef, orderID$] = useObservableRef(orderID);
-	const newOrder = useNewOrder();
-	const { isWebApp, initialProps } = useAppState();
-	const { collection } = useCollection('orders');
+	const currentOrder = useObservableSuspense(resource);
+	const navigation = useNavigation();
+	const location = useTaxLocation(currentOrder);
+	console.log(location);
+	taxQuery.search(location);
+	console.log('currentOrder', currentOrder);
+
+	/**
+	 * The tax rate can depend on the current order's location
+	 * So we need to re-query the tax rate when the order changes
+	 */
+	React.useEffect(() => {
+		taxQuery.search(location);
+	}, [location, taxQuery]);
 
 	/**
 	 *
-	 */
-	const currentOrder$ = useObservable(
-		() =>
-			orderID$.pipe(
-				switchMap(async (uuid) => {
-					const order = await collection.findOneFix(uuid).exec();
-					return order ?? newOrder;
-				})
-			),
-		[]
-	);
-
-	/**
-	 *
-	 */
-	const currentOrder = useObservableState(currentOrder$, newOrder);
-
-	/**
-	 * NOTE: navigation.setParams({ orderID }); causes a re-render and is too slow
 	 */
 	const setCurrentOrderID = React.useCallback(
-		(id: string) => {
-			orderIDRef.current = id;
-
-			// keep web app url in sync
-			if (isWebApp) {
-				history.pushState({}, '', `${initialProps.homepage}cart/${id}`);
-			}
+		(orderID: string) => {
+			navigation.setParams({ orderID });
 		},
-		[initialProps.homepage, isWebApp, orderIDRef]
+		[navigation]
 	);
-
-	/**
-	 * Update tax location based on settings
-	 */
-	const taxLocation = useTaxLocation(currentOrder);
-	taxQuery.search(taxLocation); // I think this is going to trigger new cart helpers, which causes loop
 
 	/**
 	 *

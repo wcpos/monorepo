@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservable, useObservableState } from 'observable-hooks';
 import { of, combineLatest } from 'rxjs';
-import { switchMap, map, distinctUntilChanged } from 'rxjs/operators';
+import { switchMap, map, distinctUntilChanged, tap, skip } from 'rxjs/operators';
 
 import { useAppState } from '../../../contexts/app-state';
 import useBaseTaxLocation from '../hooks/use-base-tax-location';
@@ -45,6 +45,7 @@ const useTaxLocation = (currentOrder) => {
 	const taxLocation$ = useObservable(
 		(inputs$) =>
 			combineLatest([store.tax_based_on$, inputs$]).pipe(
+				skip(1),
 				switchMap(([taxBasedOn, [order]]) => {
 					if (taxBasedOn === 'billing') {
 						return combineLatest([

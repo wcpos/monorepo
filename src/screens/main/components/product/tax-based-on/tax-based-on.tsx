@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 
 import { InlineError } from '@wcpos/components/src/inline-error/inline-error';
 import Popover from '@wcpos/components/src/popover';

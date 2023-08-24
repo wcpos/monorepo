@@ -4,8 +4,8 @@ import Icon from '@wcpos/components/src/icon';
 import useSnackbar from '@wcpos/components/src/snackbar';
 
 import { t } from '../../../../../lib/translations';
-import { useCartHelpers } from '../../contexts/cart-helpers';
 import { useCurrentOrder } from '../../contexts/current-order';
+import { useRemoveItem } from '../../hooks/use-remove-item';
 
 interface ActionProps {
 	item:
@@ -16,7 +16,7 @@ interface ActionProps {
 
 export const Actions = ({ item }: ActionProps) => {
 	const { currentOrder } = useCurrentOrder();
-	const { removeItem } = useCartHelpers();
+	const { removeItem } = useRemoveItem();
 	const addSnackbar = useSnackbar();
 
 	/**

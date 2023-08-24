@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useCurrentOrder } from '../current-order';
+import { useCurrentOrder } from '../contexts/current-order';
 
 /**
  * TODO - remove this, children uuids need to stay on the parent until sync is completed

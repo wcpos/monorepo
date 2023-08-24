@@ -14,8 +14,8 @@ import log from '@wcpos/utils/src/logger';
 import { useAppState } from '../../../../contexts/app-state';
 import { t } from '../../../../lib/translations';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
-import { useCartHelpers } from '../contexts/cart-helpers';
 import { useCurrentOrder } from '../contexts/current-order';
+import { useAddShipping } from '../hooks/use-add-shipping';
 
 /**
  *
@@ -56,7 +56,7 @@ const AddShipping = () => {
 	const [opened, setOpened] = React.useState(false);
 	const [data, setData] = React.useState(initialData);
 	const { currentOrder } = useCurrentOrder();
-	const { addShipping } = useCartHelpers();
+	const { addShipping } = useAddShipping();
 	const currencySymbol = useObservableState(
 		currentOrder.currency_symbol$,
 		currentOrder.currency_symbol

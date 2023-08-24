@@ -4,8 +4,8 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { priceToNumber } from './utils';
-import { t } from '../../../../../lib/translations';
-import { useTaxHelpers } from '../../../contexts/tax-helpers';
+import { t } from '../../../../lib/translations';
+import { useTaxHelpers } from '../../contexts/tax-helpers';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

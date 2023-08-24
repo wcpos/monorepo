@@ -8,8 +8,8 @@ import Text from '@wcpos/components/src/text';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
+import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
-import useTaxCalculation from '../../../hooks/use-tax-calculation';
 
 interface Props {
 	item: import('@wcpos/database').FeeLineDocument;
@@ -26,7 +26,7 @@ export const ShippingTotal = ({ item, column }: Props) => {
 	const { display } = column;
 	const { store } = useAppState();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
-	const { calculateTaxesFromPrice } = useTaxCalculation();
+	const { calculateTaxesFromPrice } = useTaxHelpers();
 	const taxes = calculateTaxesFromPrice({
 		price: total,
 		taxClass: 'standard', // TODO: what to put here?

@@ -12,7 +12,7 @@ import log from '@wcpos/utils/src/logger';
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
 import { useAppState } from '../../../../contexts/app-state';
-import { useQuery, useStoreStateManager } from '../../../../contexts/store-state-manager';
+import { useQuery } from '../../../../contexts/store-state-manager';
 import { t } from '../../../../lib/translations';
 import DataTable from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
@@ -21,7 +21,8 @@ import TaxBasedOn from '../../components/product/tax-based-on';
 import UISettings from '../../components/ui-settings';
 import { useTaxHelpers } from '../../contexts/tax-helpers';
 import useUI from '../../contexts/ui-settings';
-import { useCartHelpers } from '../contexts/cart-helpers';
+import { useAddProduct } from '../hooks/use-add-product';
+import { useAddVariation } from '../hooks/use-add-variation';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -37,12 +38,15 @@ const TABLE_ROW_COMPONENTS = {
 const POSProducts = ({ isColumn = false }) => {
 	const theme = useTheme();
 	const { uiSettings } = useUI('pos.products');
-	const { addProduct, addVariation } = useCartHelpers();
-	const { calcTaxes, taxBasedOn } = useTaxHelpers();
+	const { addProduct } = useAddProduct();
+	const { addVariation } = useAddVariation();
+	const { calcTaxes } = useTaxHelpers();
 	const showOutOfStock = useObservableState(
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
 	);
+	const { store } = useAppState();
+	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
 
 	/**
 	 *

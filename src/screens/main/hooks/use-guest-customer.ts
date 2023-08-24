@@ -15,7 +15,7 @@ const useGuestCustomer = () => {
 
 	return React.useMemo(
 		() => ({
-			customer_id: 0,
+			id: 0,
 			billing: {
 				first_name: t('Guest', { _tags: 'core' }),
 				last_name: '',

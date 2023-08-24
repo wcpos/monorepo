@@ -12,9 +12,5 @@ export const useDefaultCustomerID = () => {
 	);
 	const default_customer = useObservableState(store.default_customer$, store.default_customer);
 
-	React.useEffect(() => {
-		console.log('store', store);
-	}, [store]);
-
 	return is_casher ? wpCredentials.id : default_customer;
 };

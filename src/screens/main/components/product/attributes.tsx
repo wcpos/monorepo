@@ -4,13 +4,12 @@ import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Link from '@wcpos/components/src/link';
-import { useTable } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 
 import { useVariationTable } from './variation-table-rows/context';
 import { useStoreStateManager } from '../../../../contexts/store-state-manager';
+import { updateVariationAttributeSearch } from '../../../../contexts/store-state-manager/hooks/variations.helpers';
 import { t } from '../../../../lib/translations';
-import { updateVariationAttributeSearch } from '../../contexts/variations.helpers';
 
 type Props = {
 	product: import('@wcpos/database').ProductDocument;

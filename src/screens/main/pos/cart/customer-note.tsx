@@ -10,11 +10,13 @@ import TextArea from '@wcpos/components/src/textarea';
 import Tooltip from '@wcpos/components/src/tooltip';
 
 import { t } from '../../../../lib/translations';
+import { useCurrentOrder } from '../contexts/current-order';
 
-const CustomerNote = ({ note, order }) => {
+const CustomerNote = ({ note }) => {
 	const [isEditing, setIsEditing] = React.useState(false);
 	const [value, setValue] = React.useState(note);
 	const theme = useTheme();
+	const { currentOrder } = useCurrentOrder();
 
 	/**
 	 * Keep textarea value insync with the order.customer_note
@@ -27,10 +29,10 @@ const CustomerNote = ({ note, order }) => {
 	 *
 	 */
 	const handleSaveNote = React.useCallback(() => {
-		const latestDoc = order.getLatest();
-		latestDoc.patch({ customer_note: value.replace(/^\s+|\s+$/g, '').trim() });
+		const order = currentOrder.getLatest();
+		order.patch({ customer_note: value.replace(/^\s+|\s+$/g, '').trim() });
 		setIsEditing(false);
-	}, [order, value]);
+	}, [currentOrder, value]);
 
 	/**
 	 *

@@ -1,8 +1,7 @@
 import * as React from 'react';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
-import { addItem, processNewOrder } from './utils';
-import { useTaxHelpers } from '../../../contexts/tax-helpers';
+import { useTaxHelpers } from '../../contexts/tax-helpers';
 
 /**
  *
