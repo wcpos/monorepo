@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
+import { BehaviorSubject } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -12,10 +13,19 @@ import { useCartTotals } from './use-cart-totals';
 import { t } from '../../../../lib/translations';
 import useCurrencyFormat from '../../hooks/use-currency-format';
 
+interface Props {
+	extraTotals$?: BehaviorSubject<{
+		subtotal: string;
+		subtotal_tax: string;
+		fee_total: string;
+		fee_tax: string;
+	}>;
+}
+
 /**
  *
  */
-const Totals = () => {
+const Totals = ({ extraTotals$ }: Props) => {
 	const theme = useTheme();
 	const { format } = useCurrencyFormat();
 	const {
@@ -34,7 +44,7 @@ const Totals = () => {
 		taxDisplayCart,
 		calcTaxes,
 		customerNote,
-	} = useCartTotals();
+	} = useCartTotals(extraTotals$);
 
 	return (
 		<>

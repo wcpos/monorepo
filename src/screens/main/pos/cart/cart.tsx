@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { ObservableResource, useObservable } from 'observable-hooks';
-import { combineLatest } from 'rxjs';
-import { map, switchMap } from 'rxjs/operators';
+import { ObservableResource, useObservable, useSubscription } from 'observable-hooks';
+import { combineLatest, of } from 'rxjs';
+import { map, switchMap, debounceTime } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -19,11 +19,19 @@ import VoidButton from './buttons/void';
 import CartHeader from './cart-header';
 import Table from './table';
 import Totals from './totals';
+import { useTotalsCalculation } from './use-totals-calculation';
 import { useCurrentOrder } from '../contexts/current-order';
+
+/**
+ * When rxdb properties are updated, they emit for each, eg: total and subtotal
+ * This triggers unnecessary calculations, so we debounce the updates
+ */
+const DEBOUNCE_TIME_MS = 10;
 
 const Cart = () => {
 	const theme = useTheme();
 	const { currentOrder } = useCurrentOrder();
+	const { calculateOrderTotals, extraTotals$ } = useTotalsCalculation(currentOrder);
 
 	/**
 	 * Create an observable for the line items
@@ -55,6 +63,50 @@ const Cart = () => {
 	 */
 	const cartResource = React.useMemo(() => new ObservableResource(cart$), [cart$]);
 
+	/**
+	 * Create a new observable which emits everytime a line item changes
+	 */
+	const cartChanged$ = useObservable(
+		() =>
+			cart$.pipe(
+				switchMap(({ line_items, fee_lines, shipping_lines }) => {
+					// Function to create an observable for an RxDocument that emits the RxDocument whenever any property changes
+
+					// Create observables for the line items, fee lines, and shipping lines
+					// TODO - this should be improved, which properties do I need to watch?
+					const lineItemObservables = line_items.map((doc) =>
+						combineLatest([doc.total$, doc.total_tax$, doc.taxes$]).pipe(map(() => doc.getLatest()))
+					);
+					const feeLineObservables = fee_lines.map((doc) =>
+						combineLatest([doc.total$, doc.total_tax$, doc.taxes$]).pipe(map(() => doc.getLatest()))
+					);
+					const shippingLineObservables = shipping_lines.map((doc) =>
+						combineLatest([doc.total$, doc.total_tax$, doc.taxes$]).pipe(map(() => doc.getLatest()))
+					);
+
+					// Combine the observables and map to the cart object
+					return combineLatest([
+						lineItemObservables.length ? combineLatest(lineItemObservables) : of([]),
+						feeLineObservables.length ? combineLatest(feeLineObservables) : of([]),
+						shippingLineObservables.length ? combineLatest(shippingLineObservables) : of([]),
+					]).pipe(
+						map(([lineItems, feeLines, shippingLines]) => ({
+							lineItems,
+							feeLines,
+							shippingLines,
+						}))
+					);
+				}),
+				debounceTime(DEBOUNCE_TIME_MS)
+			),
+		[cart$]
+	);
+
+	/**
+	 * Subscribe to cart$ and then subscribe to each item and pass result to calculateOrderTotals
+	 */
+	useSubscription(cartChanged$, calculateOrderTotals);
+
 	return (
 		<Box
 			raised
@@ -84,7 +136,7 @@ const Cart = () => {
 			</Box>
 			<Box>
 				<ErrorBoundary>
-					<Totals />
+					<Totals extraTotals$={extraTotals$} />
 				</ErrorBoundary>
 			</Box>
 			<Box

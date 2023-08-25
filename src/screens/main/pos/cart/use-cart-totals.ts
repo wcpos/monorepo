@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, useObservableEagerState } from 'observable-hooks';
+import { BehaviorSubject } from 'rxjs';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -8,13 +9,21 @@ import { useCurrentOrder } from '../contexts/current-order';
 /**
  *
  */
-export const useCartTotals = () => {
+export const useCartTotals = (
+	extraTotals$: BehaviorSubject<{
+		subtotal: string;
+		subtotal_tax: string;
+		fee_total: string;
+		fee_tax: string;
+	}>
+) => {
 	const { currentOrder } = useCurrentOrder();
 	const { store } = useAppState();
 	const taxTotalDisplay = useObservableState(store.tax_total_display$, store.tax_total_display);
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
 	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
 	const customerNote = useObservableState(currentOrder.customer_note$, currentOrder.customer_note);
+	const { subtotal, subtotal_tax, fee_total, fee_tax } = useObservableEagerState(extraTotals$);
 
 	/**
 	 * Subscribe to properties that are available on the order
@@ -33,14 +42,6 @@ export const useCartTotals = () => {
 	const tax_lines = useObservableState(currentOrder.tax_lines$, currentOrder.tax_lines);
 	const total_tax = useObservableState(currentOrder.total_tax$, currentOrder.total_tax);
 	// const total = useObservableState(currentOrder.total$, currentOrder.total);
-
-	/**
-	 *
-	 */
-	const fee_tax = '0';
-	const fee_total = '0';
-	const subtotal_tax = '0';
-	const subtotal = '0';
 
 	/**
 	 * Helpers

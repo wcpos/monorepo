@@ -19,16 +19,15 @@ export const useTaxCalculation = (item: LineItemDocument | FeeLineDocument) => {
 			total,
 			subtotal,
 			taxClass,
-			metaData,
+			taxStatus,
 		}: {
 			total: string;
 			subtotal?: string;
 			taxClass?: string;
-			metaData?: any[];
+			taxStatus: string;
 		}) => {
 			const noSubtotal = subtotal === undefined;
 			let subtotalTaxes = { total: 0, taxes: [] };
-			const taxStatus = metaData.find((m) => m.key === '_woocommerce_pos_tax_status')?.value;
 
 			if (!noSubtotal) {
 				subtotalTaxes = calculateTaxesFromPrice({

@@ -48,12 +48,15 @@ export const LineItemRow: RenderItem = ({ item, index, target }) => {
 	const lineItem$ = useObservable(
 		() =>
 			combineLatest([item.subtotal$, item.total$, item.tax_class$, item.meta_data$]).pipe(
-				map(([subtotal, total, taxClass, metaData = []]) => ({
-					subtotal,
-					total,
-					taxClass,
-					metaData,
-				})),
+				map(([subtotal, total, taxClass, metaData = []]) => {
+					const taxStatus = metaData.find((m) => m.key === '_woocommerce_pos_tax_status')?.value;
+					return {
+						subtotal,
+						total,
+						taxClass,
+						taxStatus,
+					};
+				}),
 				distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
 				debounceTime(DEBOUNCE_TIME_MS)
 			),
