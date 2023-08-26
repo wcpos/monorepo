@@ -11,7 +11,7 @@ import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 /**
  *
  */
-const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer }) => {
+const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer, onBlur, size, style }) => {
 	const [search, setSearch] = React.useState('');
 	const { format } = useCustomerNameFormat();
 	const manager = useStoreStateManager();
@@ -50,11 +50,18 @@ const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer }) => {
 			clearable
 			autoFocus={autoFocus}
 			placeholder={placeholder}
+			size={size}
+			style={style}
+			/**
+			 * FIXME: this is a hack, useEffect is being called before onLayout for the Popover.Target
+			 * which means the width is not set correctly.
+			 */
 			/**
 			 * FIXME: this is a hack, useEffect is being called before onLayout for the Popover.Target
 			 * which means the width is not set correctly.
 			 */
 			onFocus={() => delay(() => setOpened(true), 100)}
+			onBlur={() => delay(onBlur, 100)}
 		/>
 	);
 };

@@ -53,7 +53,13 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 	 *
 	 */
 	return openSelect ? (
-		<CustomerSelect onBlur={() => setOpenSelect(false)} onSelectCustomer={handleSelect} />
+		<CustomerSelect
+			onBlur={() => setOpenSelect(false)}
+			onSelectCustomer={handleSelect}
+			autoFocus={true}
+			size="small"
+			style={{ minWidth: 200 }}
+		/>
 	) : (
 		<Pill icon="user" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
 			{t('Select Customer', { _tags: 'core' })}

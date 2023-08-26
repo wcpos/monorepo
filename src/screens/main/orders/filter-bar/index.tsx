@@ -1,57 +1,37 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { ObservableResource } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
-import { of } from 'rxjs';
-import { startWith, switchMap, tap } from 'rxjs/operators';
+import { useObservableState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 import Suspense from '@wcpos/components/src/suspense';
 
 import CustomerPill from './customer-pill';
 import StatusPill from './status-pill';
-import usePullDocument from '../../contexts/use-pull-document';
-import useCollection from '../../hooks/use-collection';
+import { useGetDocumentByRemoteId } from '../../hooks/use-get-document-by-remote-id';
+import { useGuestCustomer } from '../../hooks/use-guest-customer';
 
 const FilterBar = ({ query }) => {
-	const customerCollection = useCollection('customers');
-	const statusFilterActive = get(query, ['currentState', 'selector', 'status']);
-	const pullDocument = usePullDocument();
-
-	/**
-	 * TODO - this is a bit of a hack, but it works for now.
-	 * I need to adstarct this to the Query component
-	 */
-	const selectedCustomerResource = React.useMemo(() => {
-		const selectedCategory$ = query.state$.pipe(
-			startWith(get(query, ['currentState', 'selector', 'customer_id'])),
-			switchMap((query) => {
-				const customerID = get(query, ['currentState', 'selector', 'customer_id']);
-				if (customerID) {
-					return customerCollection.findOne({ selector: { id: customerID } }).$.pipe(
-						tap((doc) => {
-							if (!isRxDocument(doc)) {
-								pullDocument(customerID, customerCollection);
-							}
-						})
-					);
-				}
-				return of(undefined);
-			})
-		);
-
-		return new ObservableResource(selectedCategory$);
-	}, [customerCollection, pullDocument, query]);
+	const customerID = useObservableState(
+		query.state$.pipe(map((state) => get(state, ['selector', 'customer_id']))),
+		get(query, ['currentState', 'selector', 'customer_id'])
+	);
+	const guestCustomer = useGuestCustomer();
+	const { documentResource: customerResource } = useGetDocumentByRemoteId({
+		collectionName: 'customers',
+		remoteID: customerID,
+		fallback: customerID === 0 ? guestCustomer : null,
+	});
 
 	/**
 	 *
 	 */
 	return (
 		<Box space="small" horizontal>
-			<StatusPill active={statusFilterActive} query={query} />
+			{/* <StatusPill active={statusFilterActive} query={query} /> */}
 			<Suspense>
-				<CustomerPill resource={selectedCustomerResource} query={query} />
+				<CustomerPill resource={customerResource} query={query} />
 			</Suspense>
 		</Box>
 	);

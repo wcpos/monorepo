@@ -99,7 +99,7 @@ const Orders = () => {
 								query={query}
 								uiSettings={uiSettings}
 								cells={cells}
-								noDataMessage={t('No customers found', { _tags: 'core' })}
+								noDataMessage={t('No orders found', { _tags: 'core' })}
 								estimatedItemSize={100}
 							/>
 						</Suspense>

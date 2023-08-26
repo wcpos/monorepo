@@ -12,7 +12,7 @@ import AddCustomer from '../../components/add-new-customer';
 import CustomerSelect from '../../components/customer-select';
 import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
-import useGuestCustomer from '../../hooks/use-guest-customer';
+import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useAddCustomer } from '../hooks/use-add-customer';
 
@@ -30,38 +30,10 @@ let previousCustomerID = 0;
 const CartHeader = () => {
 	const { uiSettings } = useUI('pos.cart');
 	const theme = useTheme();
-	// const { storeDB } = useLocalData();
 	const { currentOrder } = useCurrentOrder();
 	const { addCustomer } = useAddCustomer();
 	const customerID = useObservableState(currentOrder.customer_id$, currentOrder.customer_id);
 	previousCustomerID = customerID !== -1 ? customerID : previousCustomerID;
-	const guestCustomer = useGuestCustomer();
-
-	/**
-	 *
-	 */
-	const handleCustomerSelect = React.useCallback(
-		(selectedCustomer: CustomerDocument) => {
-			/** Special case for Guest */
-			if (selectedCustomer.id === 0) {
-				return addCustomer(guestCustomer);
-			}
-
-			const customerJSON = selectedCustomer.toMutableJSON();
-			return addCustomer({
-				customer_id: customerJSON.id,
-				billing: {
-					...(customerJSON.billing || {}),
-					email: customerJSON?.billing?.email || customerJSON?.email,
-					first_name:
-						customerJSON?.billing?.first_name || customerJSON.first_name || customerJSON?.username,
-					last_name: customerJSON?.billing?.last_name || customerJSON.last_name,
-				},
-				shipping: customerJSON.shipping,
-			});
-		},
-		[addCustomer, guestCustomer]
-	);
 
 	/**
 	 *
@@ -84,7 +56,7 @@ const CartHeader = () => {
 				<ErrorBoundary>
 					{customerID === -1 ? (
 						<CustomerSelect
-							onSelectCustomer={handleCustomerSelect}
+							onSelectCustomer={(customer) => addCustomer(customer)}
 							autoFocus
 							value={previousCustomerID}
 						/>
@@ -94,7 +66,7 @@ const CartHeader = () => {
 				</ErrorBoundary>
 			</Box>
 			<ErrorBoundary>
-				<AddCustomer onAdd={handleCustomerSelect} />
+				<AddCustomer onAdd={(customer) => addCustomer(customer)} />
 			</ErrorBoundary>
 			<ErrorBoundary>
 				<UISettings uiSettings={uiSettings} title={t('Cart Settings', { _tags: 'core' })} />

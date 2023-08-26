@@ -20,7 +20,7 @@ const useDeleteDocument = () => {
 		async (id, collection, params) => {
 			let endpoint = collection.name;
 			try {
-				const { data } = await http.del((endpoint += `/${id}`), { params });
+				const { data } = await http.delete((endpoint += `/${id}`), { params });
 				if (data.id === id) {
 					addSnackbar({
 						message: t('Item deleted', { _tags: 'core' }),

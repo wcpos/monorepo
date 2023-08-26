@@ -4,8 +4,8 @@ import { ObservableResource } from 'observable-hooks';
 import { of, lastValueFrom } from 'rxjs';
 
 import { useDefaultCustomerID } from './use-default-customer-id';
-import { useGetDocumentByRemoteId } from '../hooks/use-get-document-by-id';
-import useGuestCustomer from '../hooks/use-guest-customer';
+import { useGetDocumentByRemoteId } from '../hooks/use-get-document-by-remote-id';
+import { useGuestCustomer } from '../hooks/use-guest-customer';
 
 export const useDefaultCustomer = () => {
 	const guestCustomer = useGuestCustomer();

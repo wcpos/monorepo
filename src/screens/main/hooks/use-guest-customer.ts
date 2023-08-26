@@ -8,7 +8,7 @@ import { t } from '../../../lib/translations';
 /**
  *
  */
-const useGuestCustomer = () => {
+export const useGuestCustomer = () => {
 	const { store } = useAppState();
 	const defaultCountry = useObservableState(store.default_country$, store.default_country);
 	const [country, state] = defaultCountry.split(':');
@@ -44,5 +44,3 @@ const useGuestCustomer = () => {
 		[country]
 	);
 };
-
-export default useGuestCustomer;

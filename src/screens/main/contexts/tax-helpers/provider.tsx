@@ -182,22 +182,6 @@ export const TaxHelpersProvider = ({ children, taxQuery }: TaxHelpersProviderPro
 	/**
 	 *
 	 */
-	const calculateOrderTotals = React.useCallback(
-		({ lineItems, feeLines, shippingLines }) => {
-			return calculateOrderTotalsAndTaxes({
-				lineItems,
-				feeLines,
-				shippingLines,
-				taxRates: rates, // NOTE: rates are only used to extract label and compound, not for calculation
-				taxRoundAtSubtotal,
-			});
-		},
-		[taxRoundAtSubtotal, rates]
-	);
-
-	/**
-	 *
-	 */
 	return (
 		<TaxHelpersContext.Provider
 			value={{
@@ -210,7 +194,6 @@ export const TaxHelpersProvider = ({ children, taxQuery }: TaxHelpersProviderPro
 				getDisplayValues,
 				// taxBasedOn,
 				taxQuery, // pass through for easy access
-				calculateOrderTotals,
 			}}
 		>
 			{children}

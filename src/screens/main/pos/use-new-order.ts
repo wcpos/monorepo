@@ -23,9 +23,9 @@ import {
 
 import { createTemporaryDB } from '@wcpos/database';
 
-import { useDefaultCustomer } from './use-default-customer';
 import { useAppState } from '../../../contexts/app-state';
 import allCurrencies from '../../../contexts/currencies/currencies.json';
+import { useDefaultCustomer } from '../hooks/use-default-customer';
 
 const temporaryDB$ = from(createTemporaryDB()).pipe(shareReplay(1));
 
@@ -54,26 +54,10 @@ export const useNewOrder = () => {
 		() =>
 			combineLatest([
 				emptyOrder$,
-				defaultCustomer$.pipe(
-					tap((res) => {
-						console.log('defaultCustomer$', res);
-					})
-				),
-				store.currency$.pipe(
-					tap((res) => {
-						console.log('currency$', res);
-					})
-				),
-				store.prices_include_tax$.pipe(
-					tap((res) => {
-						console.log('prices_include_tax$', res);
-					})
-				),
-				store.tax_based_on$.pipe(
-					tap((res) => {
-						console.log('tax_based_on$', res);
-					})
-				),
+				defaultCustomer$,
+				store.currency$,
+				store.prices_include_tax$,
+				store.tax_based_on$,
 			]).pipe(
 				switchMap(async ([order, customer, currency, prices_include_tax, tax_based_on]) => {
 					const customerJSON = isRxDocument(customer) ? customer.toJSON() : customer;

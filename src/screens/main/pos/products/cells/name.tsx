@@ -46,6 +46,7 @@ export const Name = ({ item: product, column, variationQuery, setVariationQuery 
 		<Box space="xSmall" style={{ width: '100%' }}>
 			<Text weight="bold">{name}</Text>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
+			{show('barcode') && <Text size="small">{product.barcode}</Text>}
 			{show('stock_quantity') && <StockQuantity product={product} size="small" />}
 			{show('categories') && <Categories item={product} />}
 			{show('tags') && <Tags item={product} />}

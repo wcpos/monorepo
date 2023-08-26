@@ -1,17 +1,26 @@
 import * as React from 'react';
 
+import { useObservableState, useObservableSuspense } from 'observable-hooks';
+
 import Popover from '@wcpos/components/src/popover';
 
 import CustomerQueryWrapper from './query-wrapper';
 import SearchInput from './search-input';
 import { useStoreStateManager } from '../../../../contexts/store-state-manager';
+import { useDefaultCustomer } from '../../hooks/use-default-customer';
 
 /**
  *
  */
-const CustomerSelect = ({ onSelectCustomer, autoFocus = false, value }) => {
+const CustomerSelect = ({
+	onSelectCustomer,
+	autoFocus = false,
+	value,
+	onBlur,
+	size = 'normal',
+	style,
+}) => {
 	const [opened, setOpened] = React.useState(false);
-	const [selectedCustomer, setSelectedCustomer] = React.useState({ id: 0 });
 	const manager = useStoreStateManager();
 
 	/**
@@ -35,7 +44,7 @@ const CustomerSelect = ({ onSelectCustomer, autoFocus = false, value }) => {
 				/**
 				 * If popover closes, go back to selected customer
 				 */
-				onSelectCustomer(selectedCustomer);
+				onSelectCustomer(value);
 				setOpened(false);
 			}}
 			withArrow={false}
@@ -48,7 +57,10 @@ const CustomerSelect = ({ onSelectCustomer, autoFocus = false, value }) => {
 					onSearch={onSearch}
 					autoFocus={autoFocus}
 					setOpened={setOpened}
-					selectedCustomer={selectedCustomer}
+					selectedCustomer={value}
+					onBlur={onBlur}
+					size={size}
+					style={style}
 				/>
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
