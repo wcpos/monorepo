@@ -4,8 +4,11 @@ import { Avatar } from '@wcpos/components/src/avatar/avatar';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
+
 const GuestCustomerSelectItem = () => {
+	const t = useT();
+
 	return (
 		<Box horizontal space="small" fill>
 			<Box>

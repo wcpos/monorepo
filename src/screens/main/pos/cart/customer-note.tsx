@@ -9,7 +9,7 @@ import Text from '@wcpos/components/src/text';
 import TextArea from '@wcpos/components/src/textarea';
 import Tooltip from '@wcpos/components/src/tooltip';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const CustomerNote = ({ note }) => {
@@ -17,6 +17,7 @@ const CustomerNote = ({ note }) => {
 	const [value, setValue] = React.useState(note);
 	const theme = useTheme();
 	const { currentOrder } = useCurrentOrder();
+	const t = useT();
 
 	/**
 	 * Keep textarea value insync with the order.customer_note

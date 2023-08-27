@@ -2,10 +2,11 @@ import * as React from 'react';
 
 import TextInput from '@wcpos/components/src/textinput';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 const SearchBar = ({ query }) => {
 	const [search, setSearch] = React.useState();
+	const t = useT();
 
 	const onSearch = React.useCallback(
 		(search) => {

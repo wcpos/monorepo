@@ -11,7 +11,7 @@ import Text from '@wcpos/components/src/text';
 import VariationButtons from './buttons';
 import VariationSelect from './select';
 import { updateVariationAttributeSearch } from '../../../../../../contexts/store-state-manager/hooks/variations.helpers';
-import { t } from '../../../../../../lib/translations';
+import { useT } from '../../../../../../contexts/translations';
 import useCurrencyFormat from '../../../../hooks/use-currency-format';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -48,6 +48,7 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	);
 	const selectedVariation = variations.length === 1 && variations[0];
 	const { format } = useCurrencyFormat();
+	const t = useT();
 
 	/**
 	 *
@@ -90,7 +91,7 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 		} else {
 			setPrimaryAction(undefined);
 		}
-	}, [addToCart, format, parent, selectedAttributes, selectedVariation, setPrimaryAction]);
+	}, [addToCart, format, parent, selectedAttributes, selectedVariation, setPrimaryAction, t]);
 
 	/**
 	 *

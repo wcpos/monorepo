@@ -7,8 +7,7 @@ import { useTheme } from 'styled-components/native';
 import Pill from '@wcpos/components/src/pill';
 import TextInput from '@wcpos/components/src/textinput';
 
-import { t } from '../../../lib/translations';
-import { useOrders } from '../contexts/orders';
+import { useT } from '../../../contexts/translations';
 
 /**
  *
@@ -19,6 +18,7 @@ const SearchBar = ({ query }) => {
 	const status = get(query, ['selector', 'status']);
 	const customerID = get(query, ['selector', 'customer_id']);
 	// const hasFilters = status || customerID || customerID === 0;
+	const t = useT();
 
 	/**
 	 *

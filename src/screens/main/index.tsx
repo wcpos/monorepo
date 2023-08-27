@@ -25,7 +25,7 @@ import Settings from './settings';
 import Support from './support';
 import TaxRates from './tax-rates';
 import { useAppState } from '../../contexts/app-state';
-import { t } from '../../lib/translations';
+import { useT } from '../../contexts/translations';
 import { ModalLayout } from '../components/modal-layout';
 
 export type MainStackParamList = {
@@ -55,6 +55,7 @@ const DrawerNavigator = ({ navigation }) => {
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
 	useKeyboardShortcuts(); // allows navigation by hotkeys
+	const t = useT();
 
 	const largeScreen = dimensions.width >= theme.screens.medium;
 
@@ -138,6 +139,8 @@ const DrawerNavigator = ({ navigation }) => {
  *
  */
 const SettingsScreen = () => {
+	const t = useT();
+
 	return (
 		<ModalLayout title={t('Settings', { _tags: 'core' })}>
 			<Settings />
@@ -149,6 +152,8 @@ const SettingsScreen = () => {
  *
  */
 const HelpScreen = () => {
+	const t = useT();
+
 	return (
 		<ModalLayout title={t('Help', { _tags: 'core' })}>
 			<Help />
@@ -161,6 +166,7 @@ const HelpScreen = () => {
  */
 const LoginScreen = () => {
 	const { site, wpCredentials } = useAppState();
+	const t = useT();
 	// TODO - need to add a login url to the site object
 
 	return (
@@ -180,6 +186,8 @@ const LoginScreen = () => {
  *
  */
 const TaxRatesScreen = () => {
+	const t = useT();
+
 	return (
 		<ModalLayout title={t('Tax Rates', { _tags: 'core' })} size="xxLarge">
 			<TaxRates />

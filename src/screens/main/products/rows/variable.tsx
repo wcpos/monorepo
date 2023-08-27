@@ -13,7 +13,7 @@ import Table, { CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import DateCreated from '../../components/date';
 import Categories from '../../components/product/categories';
 import { ProductImage } from '../../components/product/image';
@@ -65,6 +65,7 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();
 	const [expanded, setExpanded] = React.useState(false);
+	const t = useT();
 
 	/**
 	 *
@@ -88,7 +89,7 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 				});
 			}
 		},
-		[addSnackbar, pushDocument]
+		[addSnackbar, pushDocument, t]
 	);
 
 	/**

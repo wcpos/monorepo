@@ -5,10 +5,11 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 const Help = () => {
 	const theme = useTheme();
+	const t = useT();
 
 	return (
 		<Box space="normal">

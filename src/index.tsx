@@ -14,6 +14,7 @@ import getTheme from '@wcpos/themes';
 
 import { AppStateProvider } from './contexts/app-state';
 import { StoreStateManagerProvider } from './contexts/store-state-manager';
+import { TranslationProvider } from './contexts/translations';
 import { initialProps, isWebApp, resource } from './hydrate-data';
 import RootError from './root-error';
 import RootNavigator from './screens';
@@ -66,14 +67,16 @@ const App = () => {
 						<StoreStateManagerProvider>
 							<ThemeProvider theme={theme}>
 								<ErrorBoundary>
-									<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-										<SnackbarProvider>
-											<Portal.Provider>
-												<RootNavigator initialProps={initialProps} />
-												<Portal.Manager />
-											</Portal.Provider>
-										</SnackbarProvider>
-									</SafeAreaProviderCompat>
+									<TranslationProvider>
+										<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
+											<SnackbarProvider>
+												<Portal.Provider>
+													<RootNavigator initialProps={initialProps} />
+													<Portal.Manager />
+												</Portal.Provider>
+											</SnackbarProvider>
+										</SafeAreaProviderCompat>
+									</TranslationProvider>
 								</ErrorBoundary>
 							</ThemeProvider>
 						</StoreStateManagerProvider>

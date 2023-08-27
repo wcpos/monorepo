@@ -5,7 +5,7 @@ import Tabs from '@wcpos/components/src/tabs';
 
 import Form, { DocumentFormProps } from './document-form';
 import DocumentTree from './document-tree';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 export type FormWithJSONProps = DocumentFormProps;
 
@@ -14,6 +14,7 @@ export type FormWithJSONProps = DocumentFormProps;
  */
 const FormWithJSON = ({ document, fields, uiSchema, ...props }: FormWithJSONProps) => {
 	const [index, setIndex] = React.useState(0);
+	const t = useT();
 
 	/**
 	 *
@@ -44,7 +45,7 @@ const FormWithJSON = ({ document, fields, uiSchema, ...props }: FormWithJSONProp
 			{ key: 'form', title: t('Form', { _tags: 'core' }) },
 			{ key: 'json', title: t('JSON', { _tags: 'core' }) },
 		],
-		[]
+		[t]
 	);
 
 	/**

@@ -7,7 +7,7 @@ import { useModal } from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import { CountrySelect, StateSelect } from '../components/country-state-select';
 import EditForm from '../components/edit-form-with-json';
 import usePushDocument from '../contexts/use-push-document';
@@ -28,6 +28,7 @@ const EditCustomer = ({ resource }: Props) => {
 	const billingCountry = useObservableState(customer.billing.country$, customer.billing.country);
 	const shippingCountry = useObservableState(customer.shipping.country$, customer.shipping.country);
 	const { format } = useCustomerNameFormat();
+	const t = useT();
 
 	if (!customer) {
 		throw new Error(t('Customer not found', { _tags: 'core' }));
@@ -40,7 +41,7 @@ const EditCustomer = ({ resource }: Props) => {
 		setTitle(() =>
 			t('Edit {name}', { _tags: 'core', name: format(customer), _context: 'Edit Customer title' })
 		);
-	}, [customer, format, setTitle]);
+	}, [customer, format, setTitle, t]);
 
 	/**
 	 * Handle save button click
@@ -69,7 +70,7 @@ const EditCustomer = ({ resource }: Props) => {
 				};
 			});
 		}
-	}, [addSnackbar, customer, pushDocument, setPrimaryAction]);
+	}, [addSnackbar, customer, pushDocument, setPrimaryAction, t]);
 
 	/**
 	 *
@@ -79,7 +80,7 @@ const EditCustomer = ({ resource }: Props) => {
 			label: t('Save to Server', { _tags: 'core' }),
 			action: handleSave,
 		});
-	}, [handleSave, setPrimaryAction]);
+	}, [handleSave, setPrimaryAction, t]);
 
 	/**
 	 *

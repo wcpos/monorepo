@@ -10,11 +10,12 @@ import Text from '@wcpos/components/src/text';
 
 import Cart from './cart';
 import Products from './products';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 const POSTabs = () => {
 	const theme = useTheme();
 	const [activeTab, setActiveTab] = React.useState('products');
+	const t = useT();
 
 	return (
 		<View style={{ flex: 1 }}>

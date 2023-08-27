@@ -4,7 +4,7 @@ import Box from '@wcpos/components/src/box';
 import { useModal } from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 
 interface DeleteDialogProps {
@@ -20,6 +20,7 @@ interface DeleteDialogProps {
 const DeleteDialog = ({ product, setDeleteDialogOpened }: DeleteDialogProps) => {
 	const { setPrimaryAction } = useModal();
 	const deleteDocument = useDeleteDocument();
+	const t = useT();
 
 	/**
 	 * Handle delete button click
@@ -53,7 +54,7 @@ const DeleteDialog = ({ product, setDeleteDialogOpened }: DeleteDialogProps) => 
 			action: handleDelete,
 			type: 'critical',
 		});
-	}, [handleDelete, setPrimaryAction]);
+	}, [handleDelete, setPrimaryAction, t]);
 
 	/**
 	 *

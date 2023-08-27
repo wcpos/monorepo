@@ -9,7 +9,7 @@ import Suspense from '@wcpos/components/src/suspense';
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
 import { useQuery } from '../../../contexts/store-state-manager';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import DataTable from '../components/data-table';
 import FilterBar from '../components/product/filter-bar';
 import Search from '../components/product/search';
@@ -33,6 +33,7 @@ const Products = () => {
 	const { uiSettings } = useUI('products');
 	const theme = useTheme();
 	const { calcTaxes } = useTaxHelpers();
+	const t = useT();
 
 	/**
 	 *

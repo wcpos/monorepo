@@ -7,7 +7,6 @@ import { bufferTime, filter, map } from 'rxjs/operators';
 import { useHotkeys, RNKeyboardEvent, getKeyFromEvent } from '@wcpos/hooks/src/use-hotkeys';
 
 import { useAppState } from '../../../../contexts/app-state';
-import { t } from '../../../../lib/translations';
 
 interface BarcodeDetectionOptions {
 	callback?: (barcode: string) => void;

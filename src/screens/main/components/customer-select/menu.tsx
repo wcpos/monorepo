@@ -12,7 +12,7 @@ import Pressable from '@wcpos/components/src/pressable';
 import Text from '@wcpos/components/src/text';
 
 import CustomerSelectItem from './item';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
@@ -51,6 +51,7 @@ const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 	// const loading = useObservableState(replicationState.active$, false);
 	// const total = useTotalCount('customers', replicationState);
 	const { targetMeasurements, contentMeasurements } = usePopover();
+	const t = useT();
 
 	/**
 	 *
@@ -104,7 +105,7 @@ const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 				</Box>
 			</Pressable>
 		);
-	}, [calculatedStyled, onChange]);
+	}, [calculatedStyled, onChange, t]);
 
 	/**
 	 *

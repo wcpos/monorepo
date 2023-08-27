@@ -10,7 +10,7 @@ import SimpleTable from '@wcpos/components/src/simple-table';
 import Text from '@wcpos/components/src/text';
 import { TaxRateDocument } from '@wcpos/database';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 
 interface DisplayCurrentTaxRatesProps {
 	rates: TaxRateDocument[];
@@ -33,6 +33,7 @@ const DisplayCurrentTaxRates = ({
 	setOpened,
 }: DisplayCurrentTaxRatesProps) => {
 	const navigation = useNavigation();
+	const t = useT();
 
 	/**
 	 *

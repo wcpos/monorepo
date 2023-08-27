@@ -6,7 +6,7 @@ import Modal from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 
 /**
@@ -18,6 +18,7 @@ export const EmailModal = ({ defaultEmail = '', id, setShowEmailModal }) => {
 	const http = useRestHttpClient();
 	const [loading, setLoading] = React.useState(false);
 	const addSnackbar = useSnackbar();
+	const t = useT();
 
 	/**
 	 *
@@ -40,7 +41,7 @@ export const EmailModal = ({ defaultEmail = '', id, setShowEmailModal }) => {
 		} finally {
 			setLoading(false);
 		}
-	}, [addSnackbar, email, http, id, saveEmail, setShowEmailModal]);
+	}, [addSnackbar, email, http, id, saveEmail, setShowEmailModal, t]);
 
 	/**
 	 *

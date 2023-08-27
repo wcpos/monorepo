@@ -6,7 +6,7 @@ import Button from '@wcpos/components/src/button';
 import { useSnackbar } from '@wcpos/components/src/snackbar/use-snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 import usePushDocument from '../../../contexts/use-push-document';
 import { useCurrentOrder } from '../../contexts/current-order';
 
@@ -15,6 +15,7 @@ const SaveButton = () => {
 	const pushDocument = usePushDocument();
 	const [loading, setLoading] = React.useState(false);
 	const addSnackbar = useSnackbar();
+	const t = useT();
 
 	return (
 		<Button

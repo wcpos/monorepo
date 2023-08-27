@@ -7,9 +7,8 @@ import { useModal } from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import EditModal from '../components/edit-form-with-json';
-import useOrders from '../contexts/orders';
 import usePushDocument from '../contexts/use-push-document';
 
 interface Props {
@@ -24,6 +23,7 @@ const EditOrder = ({ resource }: Props) => {
 	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
+	const t = useT();
 
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));
@@ -37,7 +37,7 @@ const EditOrder = ({ resource }: Props) => {
 				? t('Edit Order #{number}', { _tags: 'core', number, _context: 'Checkout Order title' })
 				: t('Edit Order', { _tags: 'core' })
 		);
-	}, [number, setTitle]);
+	}, [number, setTitle, t]);
 
 	/**
 	 * Handle save button click
@@ -66,7 +66,7 @@ const EditOrder = ({ resource }: Props) => {
 				};
 			});
 		}
-	}, [addSnackbar, order, pushDocument, setPrimaryAction]);
+	}, [addSnackbar, order, pushDocument, setPrimaryAction, t]);
 
 	/**
 	 *
@@ -76,7 +76,7 @@ const EditOrder = ({ resource }: Props) => {
 			label: t('Save to Server', { _tags: 'core' }),
 			action: handleSave,
 		});
-	}, [handleSave, setPrimaryAction]);
+	}, [handleSave, setPrimaryAction, t]);
 
 	return (
 		<EditModal

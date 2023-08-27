@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Linking } from 'react-native';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
@@ -33,6 +34,7 @@ export interface AppState extends HydratedData {
 		storeID: string;
 	}) => void;
 	logout: () => void;
+	switchStore: (storeID: string) => void;
 }
 
 export const AppStateContext = React.createContext<AppState | undefined>(undefined);
@@ -74,19 +76,43 @@ export const AppStateProvider = ({
 	 *
 	 */
 	const logout = React.useCallback(async () => {
+		if (isWebApp) {
+			Linking.openURL(initialProps.logout_url);
+			return;
+		}
 		return userDB.upsertLocal('current', {
 			userID: user.uuid,
 			siteID: null,
 			wpCredentialsID: null,
 			storeID: null,
 		});
-	}, [user, userDB]);
+	}, [initialProps?.logout_url, isWebApp, user?.uuid, userDB]);
+
+	/**
+	 *
+	 */
+	const switchStore = React.useCallback(
+		async (storeID) => {
+			if (isWebApp) {
+				// TODO - need to trigger the web hydration with new storeID
+				debugger;
+				return;
+			}
+			return login({
+				siteID: site.uuid,
+				wpCredentialsID: wpCredentials.uuid,
+				storeID,
+			});
+		},
+		[isWebApp, login, site?.uuid, wpCredentials?.uuid]
+	);
 
 	/**
 	 *
 	 */
 	return (
 		<AppStateContext.Provider
+			key={store?.localID}
 			value={{
 				initialProps, // pass down initialProps
 				isWebApp,
@@ -98,6 +124,7 @@ export const AppStateProvider = ({
 				storeDB,
 				login,
 				logout,
+				switchStore,
 			}}
 		>
 			{children}

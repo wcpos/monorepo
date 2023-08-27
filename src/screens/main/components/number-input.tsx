@@ -9,7 +9,7 @@ import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
 import { useAppState } from '../../../contexts/app-state';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import useCurrencyFormat from '../hooks/use-currency-format';
 
 interface NumberInputProps {
@@ -41,6 +41,7 @@ const NumberInput = ({
 	const displayValue = showDecimals ? format(value) : value;
 	const [opened, setOpened] = React.useState(false);
 	const valueRef = React.useRef(displayValue);
+	const t = useT();
 
 	/**
 	 *

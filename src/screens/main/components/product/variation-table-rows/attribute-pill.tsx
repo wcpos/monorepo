@@ -3,11 +3,12 @@ import * as React from 'react';
 import Pill from '@wcpos/components/src/pill';
 import Select from '@wcpos/components/src/select';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 
 const VariationAttributePill = ({ attribute, onSelect, ...props }) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
 	const [selected, setSelected] = React.useState(props.selected);
+	const t = useT();
 
 	/**
 	 * @TODO - this works, but it's ugly as hell, need to choose controlled or uncontrolled

@@ -6,10 +6,11 @@ import Box from '@wcpos/components/src/box';
 import SimpleTable from '@wcpos/components/src/simple-table';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 export const KeyboardShortcuts = () => {
 	const theme = useTheme();
+	const t = useT();
 
 	/**
 	 *

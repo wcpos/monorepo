@@ -6,7 +6,7 @@ import isEmpty from 'lodash/isEmpty';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import useRestHttpClient from '../hooks/use-rest-http-client';
 
 type RxDocument = import('rxdb').RxDocument;
@@ -17,6 +17,7 @@ type RxDocument = import('rxdb').RxDocument;
 const usePushDocument = () => {
 	const http = useRestHttpClient();
 	const addSnackbar = useSnackbar();
+	const t = useT();
 
 	/**
 	 * TODO - I'm confused about when to use incrementalPatch v patch
@@ -71,7 +72,7 @@ const usePushDocument = () => {
 				});
 			}
 		},
-		[addSnackbar, http]
+		[addSnackbar, http, t]
 	);
 };
 

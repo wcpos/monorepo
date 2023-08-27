@@ -3,7 +3,7 @@ import * as React from 'react';
 import Icon from '@wcpos/components/src/icon';
 import useSnackbar from '@wcpos/components/src/snackbar';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 import { useCurrentOrder } from '../../contexts/current-order';
 import { useRemoveItem } from '../../hooks/use-remove-item';
 
@@ -18,6 +18,7 @@ export const Actions = ({ item }: ActionProps) => {
 	const { currentOrder } = useCurrentOrder();
 	const { removeItem } = useRemoveItem();
 	const addSnackbar = useSnackbar();
+	const t = useT();
 
 	/**
 	 *
@@ -45,7 +46,7 @@ export const Actions = ({ item }: ActionProps) => {
 			dismissable: true,
 			action: { label: t('Undo', { _tags: 'core' }), action: undoRemove },
 		});
-	}, [addSnackbar, item, undoRemove]);
+	}, [addSnackbar, item, t, undoRemove]);
 
 	/**
 	 *

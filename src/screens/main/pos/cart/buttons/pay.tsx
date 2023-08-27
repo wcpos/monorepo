@@ -7,7 +7,7 @@ import { isRxDocument } from 'rxdb';
 import Button from '@wcpos/components/src/button';
 import { useSnackbar } from '@wcpos/components/src/snackbar/use-snackbar';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 import usePushDocument from '../../../contexts/use-push-document';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 import { useCurrentOrder } from '../../contexts/current-order';
@@ -23,6 +23,7 @@ const PayButton = () => {
 	const [loading, setLoading] = React.useState(false);
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();
+	const t = useT();
 
 	/**
 	 *
@@ -42,7 +43,7 @@ const PayButton = () => {
 		} finally {
 			setLoading(false);
 		}
-	}, [pushDocument, currentOrder, navigation, addSnackbar]);
+	}, [pushDocument, currentOrder, navigation, addSnackbar, t]);
 
 	/**
 	 *

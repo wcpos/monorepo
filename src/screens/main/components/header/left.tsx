@@ -9,12 +9,13 @@ import Button from '@wcpos/components/src/button';
 import Icon from '@wcpos/components/src/icon';
 // import Logo from '@wcpos/components/src/logo';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 
 const HeaderLeft = () => {
 	const { width } = useWindowDimensions();
 	const theme = useTheme();
 	const navigation = useNavigation();
+	const t = useT();
 
 	/**
 	 *

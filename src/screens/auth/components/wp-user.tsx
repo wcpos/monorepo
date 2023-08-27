@@ -9,7 +9,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 
 import StoreSelect from './store-select';
 import { useAppState } from '../../../contexts/app-state';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 interface Props {
 	site: import('@wcpos/database').SiteDocument;
@@ -22,6 +22,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 	const [storeSelectModalOpened, setStoreSelectModalOpened] = React.useState(false);
 	const addSnackbar = useSnackbar();
 	const stores = useObservableSuspense(wpUser.populateResource('stores'));
+	const t = useT();
 
 	/**
 	 *
@@ -52,7 +53,7 @@ const WpUser = ({ site, wpUser }: Props) => {
 				message: t('No stores found for this user', { _tags: 'core' }),
 			});
 		}
-	}, [addSnackbar, handleLogin, stores]);
+	}, [addSnackbar, handleLogin, stores, t]);
 
 	/**
 	 * Remove user

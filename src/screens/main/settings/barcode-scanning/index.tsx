@@ -5,9 +5,11 @@ import Text from '@wcpos/components/src/text';
 
 import BarcodeDisplay from './display';
 import BarcodeSettings from './settings';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 
 const BarcodeScanning = () => {
+	const t = useT();
+
 	return (
 		<Box space="normal">
 			<BarcodeSettings />

@@ -7,7 +7,7 @@ import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../../contexts/app-state';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import { parseLinkHeader } from '../../../lib/url';
 
 type SiteDocument = import('@wcpos/database/src').SiteDocument;
@@ -35,6 +35,7 @@ const useSiteConnect = () => {
 	const [loading, setLoading] = React.useState(false);
 	const [error, setError] = React.useState(false);
 	const http = useHttpClient();
+	const t = useT();
 
 	/**
 	 *
@@ -64,7 +65,7 @@ const useSiteConnect = () => {
 				wc_api_auth_url: `${wpApiUrl}wcpos/v1/jwt`,
 			};
 		},
-		[http]
+		[http, t]
 	);
 
 	/**
@@ -93,7 +94,7 @@ const useSiteConnect = () => {
 			const parsed = parseLinkHeader(link);
 			return get(parsed, ['https://api.w.org/', 'url']);
 		},
-		[http]
+		[http, t]
 	);
 
 	/**
@@ -120,7 +121,7 @@ const useSiteConnect = () => {
 				setLoading(false);
 			}
 		},
-		[getSiteData, getWPAPIUrl, user, userDB.sites]
+		[getSiteData, getWPAPIUrl, t, user, userDB.sites]
 	);
 
 	return { onConnect, loading, error };

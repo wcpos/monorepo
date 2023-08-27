@@ -3,7 +3,7 @@ import * as React from 'react';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import useCurrencyFormat from '../../hooks/use-currency-format';
 
 /**
@@ -11,6 +11,7 @@ import useCurrencyFormat from '../../hooks/use-currency-format';
  */
 const ItemizedTaxes = ({ taxLines, taxDisplayCart }) => {
 	const { format } = useCurrencyFormat();
+	const t = useT();
 
 	return (
 		<Box horizontal>

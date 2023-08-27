@@ -3,8 +3,8 @@ import * as React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
 import { ObservableResource, useObservable } from 'observable-hooks';
-import { from, iif, of } from 'rxjs';
-import { switchMap, mergeMap, tap } from 'rxjs/operators';
+import { from, of, lastValueFrom } from 'rxjs';
+import { switchMap, mergeMap, tap, distinctUntilChanged } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
@@ -14,7 +14,7 @@ import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
 import { useNewOrder } from './use-new-order';
 import { useQuery } from '../../../contexts/store-state-manager';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { TaxHelpersProvider } from '../contexts/tax-helpers';
 import useCollection from '../hooks/use-collection';
@@ -43,21 +43,12 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 	const currentOrder$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
-				switchMap(async ([uuid]) => {
-					// If uuid is undefined, return the last value of newOrder$ immediately
+				switchMap(([uuid]) => {
 					if (!uuid) return newOrder$;
-
-					// Find the order by uuid
-					const order = await collection.findOneFix(uuid).exec();
-
-					// Return an observable conditionally based on the order
-					return iif(
-						() => !!order,
-						of(order), // If order is found, return it wrapped in an observable
-						newOrder$
-					);
-				}),
-				mergeMap((value) => value) // Flatten the inner observable
+					return collection
+						.findOneFix(uuid)
+						.$.pipe(distinctUntilChanged((prev, next) => prev.uuid === next.uuid));
+				})
 			),
 		[route.params?.orderID]
 	);
@@ -111,6 +102,7 @@ const CheckoutWithProviders = ({
 }: NativeStackScreenProps<POSStackParamList, 'Checkout'>) => {
 	const orderID = get(route, ['params', 'orderID']);
 	const { collection } = useCollection('orders');
+	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
@@ -139,6 +131,7 @@ const CheckoutWithProviders = ({
 const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'Receipt'>) => {
 	const orderID = get(route, ['params', 'orderID']);
 	const { collection } = useCollection('orders');
+	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),

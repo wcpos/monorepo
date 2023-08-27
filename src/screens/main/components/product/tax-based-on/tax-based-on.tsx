@@ -9,7 +9,7 @@ import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
 import DisplayCurrentTaxRates from './display-current-tax-rates';
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 
 /**
@@ -23,6 +23,7 @@ const TaxBasedOn = ({ taxBasedOn }) => {
 		taxQuery.state$.pipe(map((state) => get(state, ['search'], {}))),
 		get(taxQuery, ['currentState', 'search'], {})
 	);
+	const t = useT();
 	console.log('rates', rates);
 
 	/**

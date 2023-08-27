@@ -7,7 +7,17 @@ import Popover from '@wcpos/components/src/popover';
 import CustomerQueryWrapper from './query-wrapper';
 import SearchInput from './search-input';
 import { useStoreStateManager } from '../../../../contexts/store-state-manager';
-import { useDefaultCustomer } from '../../hooks/use-default-customer';
+
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
+
+interface CustomerSelectProps {
+	onSelectCustomer: (customer: CustomerDocument) => void;
+	autoFocus?: boolean;
+	value?: CustomerDocument;
+	onBlur?: () => void;
+	size?: 'small' | 'normal';
+	style?: React.CSSProperties;
+}
 
 /**
  *
@@ -16,10 +26,10 @@ const CustomerSelect = ({
 	onSelectCustomer,
 	autoFocus = false,
 	value,
-	onBlur,
+	onBlur = () => {},
 	size = 'normal',
 	style,
-}) => {
+}: CustomerSelectProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const manager = useStoreStateManager();
 

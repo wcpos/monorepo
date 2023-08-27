@@ -9,7 +9,7 @@ import Suspense from '@wcpos/components/src/suspense';
 import cells from './cells';
 import SearchBar from './search-bar';
 import { useQuery } from '../../../contexts/store-state-manager';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import AddNewCustomer from '../components/add-new-customer';
 import DataTable from '../components/data-table';
 import UiSettings from '../components/ui-settings';
@@ -23,6 +23,7 @@ type CustomerDocument = import('@wcpos/database').CustomerDocument;
 const Customers = () => {
 	const { uiSettings } = useUI('customers');
 	const theme = useTheme();
+	const t = useT();
 
 	/**
 	 *

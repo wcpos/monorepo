@@ -4,12 +4,13 @@ import { useObservableState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import useCurrencyFormat from '../../hooks/use-currency-format';
 
 const CartTabTitle = ({ focused, order }: { focused: boolean; order: any }) => {
 	const total = useObservableState(order.total$, order.total);
 	const { format } = useCurrencyFormat();
+	const t = useT();
 
 	return (
 		<Text type={focused ? 'inverse' : 'primary'}>

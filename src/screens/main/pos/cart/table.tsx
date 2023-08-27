@@ -9,7 +9,7 @@ import Table, { TableContextProps } from '@wcpos/components/src/table';
 import { FeeLineRow } from './rows/fee-line';
 import { LineItemRow } from './rows/line-item';
 import { ShippingLineRow } from './rows/shipping-line';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import EmptyTableRow from '../../components/empty-table-row';
 import useUI from '../../contexts/ui-settings';
 
@@ -43,6 +43,7 @@ const CartTable = ({ resource }) => {
 	const deferredCart = React.useDeferredValue(cart);
 	// TODO - add sorting
 	const items = React.useMemo(() => flatten(Object.values(deferredCart)), [deferredCart]);
+	const t = useT();
 
 	/**
 	 *

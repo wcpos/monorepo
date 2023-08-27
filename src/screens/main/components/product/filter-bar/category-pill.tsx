@@ -4,7 +4,7 @@ import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
 import Pill from '@wcpos/components/src/pill';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 import CategorySelect from '../category-select';
 
 interface CategoryPillProps {
@@ -18,6 +18,7 @@ interface CategoryPillProps {
 const CategoryPill = ({ query, resource }: CategoryPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
 	const category = useObservableSuspense(resource);
+	const t = useT();
 
 	/**
 	 *

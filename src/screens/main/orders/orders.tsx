@@ -16,7 +16,7 @@ import Total from './cells/total';
 import FilterBar from './filter-bar';
 import SearchBar from './search-bar';
 import { useQuery } from '../../../contexts/store-state-manager';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import DataTable from '../components/data-table';
 import Date from '../components/date';
 import UiSettings from '../components/ui-settings';
@@ -44,6 +44,7 @@ const cells = {
 const Orders = () => {
 	const { uiSettings } = useUI('orders');
 	const theme = useTheme();
+	const t = useT();
 
 	/**
 	 *

@@ -13,7 +13,7 @@ import Text from '@wcpos/components/src/text';
 import EmptyTableRow from './empty-table-row';
 import SyncButton from './sync-button';
 import TextCell from './text-cell';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import useTotalCount from '../hooks/use-total-count';
 
 import type { Query } from '../../../contexts/store-state-manager';
@@ -40,6 +40,7 @@ const DataTableFooter = ({ query, children }) => {
 	const loading = useObservableState(replicationState.active$, false);
 	const count = useObservableState(query.count$, 0);
 	const total = useTotalCount(replicationState);
+	const t = useT();
 
 	return (
 		<Box

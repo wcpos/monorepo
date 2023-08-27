@@ -10,7 +10,7 @@ import Table, { CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import DateCreated from '../../components/date';
 import Categories from '../../components/product/categories';
 import { ProductImage } from '../../components/product/image';
@@ -47,6 +47,7 @@ const cells = {
 const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();
+	const t = useT();
 
 	/**
 	 *
@@ -69,7 +70,7 @@ const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocume
 				});
 			}
 		},
-		[addSnackbar, pushDocument]
+		[addSnackbar, pushDocument, t]
 	);
 
 	/**

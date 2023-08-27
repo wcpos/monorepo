@@ -7,8 +7,7 @@ import { useTheme } from 'styled-components/native';
 import Pill from '@wcpos/components/src/pill';
 import TextInput from '@wcpos/components/src/textinput';
 
-import { t } from '../../../../lib/translations';
-import { useProducts } from '../../contexts/products';
+import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
 import useCollection from '../../hooks/use-collection';
 
@@ -52,6 +51,7 @@ const ProductSearch = ({
 	const { barcode$ } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
 	const { collection } = useCollection('products');
+	const t = useT();
 
 	const onSearch = React.useCallback(
 		(search) => {

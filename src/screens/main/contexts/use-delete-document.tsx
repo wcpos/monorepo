@@ -3,7 +3,7 @@ import * as React from 'react';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import useRestHttpClient from '../hooks/use-rest-http-client';
 
 type RxCollection = import('rxdb').RxCollection;
@@ -15,6 +15,7 @@ interface DeleteDocumentFunction {
 const useDeleteDocument = () => {
 	const http = useRestHttpClient();
 	const addSnackbar = useSnackbar();
+	const t = useT();
 
 	return React.useCallback<DeleteDocumentFunction>(
 		async (id, collection, params) => {
@@ -34,7 +35,7 @@ const useDeleteDocument = () => {
 				});
 			}
 		},
-		[addSnackbar, http]
+		[addSnackbar, http, t]
 	);
 };
 

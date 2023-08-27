@@ -6,13 +6,14 @@ import { useTheme } from 'styled-components/native';
 import Button from '@wcpos/components/src/button';
 import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import useSiteConnect from '../hooks/use-site-connect';
 
 export default function UrlInput() {
 	const { onConnect, loading, error } = useSiteConnect();
 	const [url, setURL] = React.useState('');
 	const theme = useTheme();
+	const t = useT();
 
 	return (
 		<TextInputWithLabel

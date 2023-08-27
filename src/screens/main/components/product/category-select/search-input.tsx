@@ -5,7 +5,7 @@ import delay from 'lodash/delay';
 import TextInput from '@wcpos/components/src/textinput';
 
 import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 
 /**
  *
@@ -13,6 +13,7 @@ import { t } from '../../../../../lib/translations';
 const SearchInput = ({ setOpened, onBlur }) => {
 	const [search, setSearch] = React.useState('');
 	const manager = useStoreStateManager();
+	const t = useT();
 
 	/**
 	 *

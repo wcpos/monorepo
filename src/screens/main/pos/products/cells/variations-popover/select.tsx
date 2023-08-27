@@ -2,11 +2,13 @@ import * as React from 'react';
 
 import Select from '@wcpos/components/src/select';
 
-import { t } from '../../../../../../lib/translations';
+import { useT } from '../../../../../../contexts/translations';
 /**
  *
  */
 const VariationSelect = ({ attribute, onSelect, selectedOption }) => {
+	const t = useT();
+
 	/**
 	 *
 	 */

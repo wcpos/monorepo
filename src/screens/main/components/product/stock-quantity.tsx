@@ -5,7 +5,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 
 interface Props {
 	product: import('@wcpos/database').ProductDocument;
@@ -15,6 +15,7 @@ interface Props {
 const StockQuantity = ({ product, size }: Props) => {
 	const stockQuantity = useObservableState(product.stock_quantity$, product.stock_quantity);
 	const manageStock = useObservableState(product.manage_stock$, product.manage_stock);
+	const t = useT();
 
 	/**
 	 * Early exit

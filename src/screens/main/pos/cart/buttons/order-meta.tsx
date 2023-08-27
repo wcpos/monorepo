@@ -8,7 +8,7 @@ import Modal from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 import EditForm from '../../../components/edit-form-with-json';
 import usePushDocument from '../../../contexts/use-push-document';
 import { useCurrentOrder } from '../../contexts/current-order';
@@ -22,6 +22,7 @@ const OrderMetaButton = () => {
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
 	const { currentOrder } = useCurrentOrder();
+	const t = useT();
 
 	/**
 	 *
@@ -37,7 +38,7 @@ const OrderMetaButton = () => {
 		} catch (error) {
 			log.error(error);
 		}
-	}, [addSnackbar, currentOrder, pushDocument]);
+	}, [addSnackbar, currentOrder, pushDocument, t]);
 
 	/**
 	 *

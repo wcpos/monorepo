@@ -6,7 +6,7 @@ import { isRxDocument } from 'rxdb';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import useRestHttpClient from '../hooks/use-rest-http-client';
 
 type RxDocument = import('rxdb').RxDocument;
@@ -20,6 +20,7 @@ type RxCollection = import('rxdb').RxCollection;
 const usePullDocument = () => {
 	const http = useRestHttpClient();
 	const addSnackbar = useSnackbar();
+	const t = useT();
 
 	return React.useCallback(
 		async (id: number, collection: RxCollection, apiEndpoint?: string) => {
@@ -50,7 +51,7 @@ const usePullDocument = () => {
 				});
 			}
 		},
-		[addSnackbar, http]
+		[addSnackbar, http, t]
 	);
 };
 

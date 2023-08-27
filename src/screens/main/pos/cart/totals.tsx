@@ -10,7 +10,7 @@ import Text from '@wcpos/components/src/text';
 import CustomerNote from './customer-note';
 import ItemizedTaxes from './itemized-taxes';
 import { useCartTotals } from './use-cart-totals';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import useCurrencyFormat from '../../hooks/use-currency-format';
 
 interface Props {
@@ -27,6 +27,7 @@ interface Props {
  */
 const Totals = ({ extraTotals$ }: Props) => {
 	const theme = useTheme();
+	const t = useT();
 	const { format } = useCurrencyFormat();
 	const {
 		tax_lines,

@@ -9,7 +9,7 @@ import Text from '@wcpos/components/src/text';
 import { useVariationTable } from './variation-table-rows/context';
 import { useStoreStateManager } from '../../../../contexts/store-state-manager';
 import { updateVariationAttributeSearch } from '../../../../contexts/store-state-manager/hooks/variations.helpers';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 
 type Props = {
 	product: import('@wcpos/database').ProductDocument;
@@ -19,6 +19,7 @@ const ProductAttributes = ({ product }: Props) => {
 	const attributes = useObservableState(product.attributes$, product.attributes);
 	const { expanded, setExpanded } = useVariationTable();
 	const manager = useStoreStateManager();
+	const t = useT();
 
 	/**
 	 *

@@ -46,7 +46,7 @@ export const useAddCustomer = () => {
 					first_name: data?.billing?.first_name || data.first_name || data?.username,
 					last_name: data?.billing?.last_name || data.last_name,
 				},
-				shipping: data.shipping,
+				shipping: data.shipping || {},
 			};
 
 			/**

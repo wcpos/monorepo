@@ -6,7 +6,7 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 // import Tooltip from '@wcpos/components/src/tooltip';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 import EditForm from '../../../components/edit-form-with-json';
 
 interface EditShippingLineProps {
@@ -18,6 +18,7 @@ interface EditShippingLineProps {
  */
 const EditButton = ({ item }: EditShippingLineProps) => {
 	const [opened, setOpened] = React.useState(false);
+	const t = useT();
 
 	/**
 	 *

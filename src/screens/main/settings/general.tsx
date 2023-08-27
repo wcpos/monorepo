@@ -5,7 +5,7 @@ import { useObservableSuspense } from 'observable-hooks';
 import { InputWithLabel } from '@wcpos/components/src/form-layout';
 
 import { useAppState } from '../../../contexts/app-state';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import CurrencySelect from '../components/currency-select';
 import CustomerSelect from '../components/customer-select';
 import Form from '../components/document-form';
@@ -16,6 +16,7 @@ export const GeneralSettings = () => {
 	const { store } = useAppState();
 	const { defaultCustomerResource } = useDefaultCustomer();
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
+	const t = useT();
 
 	/**
 	 *

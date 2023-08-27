@@ -4,7 +4,7 @@ import { Avatar } from '@wcpos/components/src/avatar/avatar';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
@@ -13,6 +13,8 @@ interface CustomerSelectItemProps {
 }
 
 const CustomerSelectItem = ({ customer }: CustomerSelectItemProps) => {
+	const t = useT();
+
 	if (customer.id === 0) {
 		return (
 			<Box horizontal space="small" fill>

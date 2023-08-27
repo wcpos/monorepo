@@ -13,7 +13,7 @@ import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../contexts/app-state';
-import { t } from '../../lib/translations';
+import { useT } from '../../contexts/translations';
 import { ModalLayout } from '../components/modal-layout';
 
 /**
@@ -25,6 +25,7 @@ const Login = ({ route }) => {
 	const sites = useObservableSuspense(user.populateResource('sites'));
 	const navigation = useNavigation();
 	const site = sites.find((s) => s.uuid === siteID);
+	const t = useT();
 
 	if (!site) {
 		throw new Error('Site not found');

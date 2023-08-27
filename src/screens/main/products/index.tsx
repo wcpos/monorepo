@@ -14,7 +14,7 @@ import EditProduct from './edit-product';
 import EditVariation from './edit-variation';
 import Products from './products';
 import { useQuery } from '../../../contexts/store-state-manager';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { TaxHelpersProvider } from '../contexts/tax-helpers';
 import useUISettings from '../contexts/ui-settings';
@@ -70,6 +70,8 @@ const ProductsWithProviders = ({
 const AddProductModal = ({
 	navigation,
 }: NativeStackScreenProps<ProductsStackParamList, 'AddProduct'>) => {
+	const t = useT();
+
 	return (
 		<ModalLayout
 			title={t('Add Product', { _tags: 'core' })}
@@ -95,6 +97,7 @@ const EditProductWithProviders = ({
 }: NativeStackScreenProps<ProductsStackParamList, 'EditProduct'>) => {
 	const { productID } = route.params;
 	const { collection } = useCollection('products');
+	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(productID).exec())),
@@ -127,6 +130,7 @@ const EditVariationWithProviders = ({
 }: NativeStackScreenProps<ProductsStackParamList, 'EditVariation'>) => {
 	const { variationID, parentID } = route.params;
 	const { collection } = useCollection('variations');
+	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(variationID).exec())),

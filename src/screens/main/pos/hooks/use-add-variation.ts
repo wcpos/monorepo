@@ -4,7 +4,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { priceToNumber } from './utils';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import { useTaxHelpers } from '../../contexts/tax-helpers';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -21,6 +21,7 @@ export const useAddVariation = () => {
 	const addSnackbar = useSnackbar();
 	const { addItemToOrder } = useAddItemToOrder();
 	const { pricesIncludeTax, calculateTaxesFromPrice } = useTaxHelpers();
+	const t = useT();
 
 	/**
 	 *
@@ -77,7 +78,7 @@ export const useAddVariation = () => {
 				});
 			}
 		},
-		[calculateTaxesFromPrice, pricesIncludeTax, addItemToOrder, addSnackbar]
+		[calculateTaxesFromPrice, pricesIncludeTax, addItemToOrder, addSnackbar, t]
 	);
 
 	return { addVariation };

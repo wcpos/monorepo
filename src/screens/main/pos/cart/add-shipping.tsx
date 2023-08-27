@@ -12,7 +12,7 @@ import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useAddShipping } from '../hooks/use-add-shipping';
@@ -61,6 +61,7 @@ const AddShipping = () => {
 		currentOrder.currency_symbol$,
 		currentOrder.currency_symbol
 	);
+	const t = useT();
 
 	/**
 	 * Create observable shipping resource
@@ -116,7 +117,7 @@ const AddShipping = () => {
 				total: { type: 'string', title: t('Total', { _tags: 'core' }) },
 			},
 		}),
-		[]
+		[t]
 	);
 
 	/**
@@ -135,7 +136,7 @@ const AddShipping = () => {
 				'ui:placeholder': 'local_pickup',
 			},
 		}),
-		[currencySymbol]
+		[currencySymbol, t]
 	);
 
 	/**

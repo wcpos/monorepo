@@ -4,7 +4,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import Pill from '@wcpos/components/src/pill';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 import TagSelect from '../tag-select';
 
 interface TagPillProps {
@@ -17,6 +17,7 @@ interface TagPillProps {
 const TagPill = ({ query, resource }: TagPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
 	const tag = useObservableSuspense(resource);
+	const t = useT();
 
 	/**
 	 *

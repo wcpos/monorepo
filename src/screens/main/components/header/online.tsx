@@ -3,7 +3,7 @@ import * as React from 'react';
 import Icon from '@wcpos/components/src/icon';
 import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 
 type OnlineState = {
 	type: 'success' | 'warning' | 'critical';
@@ -12,6 +12,7 @@ type OnlineState = {
 
 const Online = () => {
 	const { isConnected, isInternetReachable } = useOnlineStatus();
+	const t = useT();
 
 	const state: OnlineState = React.useMemo(() => {
 		if (!isConnected) {
@@ -30,7 +31,7 @@ const Online = () => {
 			type: 'success',
 			tooltip: t('Online', { _tags: 'core' }),
 		};
-	}, [isConnected, isInternetReachable]);
+	}, [isConnected, isInternetReachable, t]);
 
 	// if isInternetReachable is null we are still waiting for a response from the server
 	if (isInternetReachable === null) {

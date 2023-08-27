@@ -4,13 +4,14 @@ import moment from 'moment-timezone';
 import { interval } from 'rxjs';
 import { startWith } from 'rxjs/operators';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 
 /**
  *
  */
 export const useDateFormat = (gmtDate: string, format = 'MMMM D, YYYY', fromNow = true) => {
 	const [formattedDate, setFormattedDate] = React.useState('');
+	const t = useT();
 
 	React.useEffect(() => {
 		const updateDate = () => {
@@ -42,7 +43,7 @@ export const useDateFormat = (gmtDate: string, format = 'MMMM D, YYYY', fromNow 
 		const subscription = source$.subscribe(() => updateDate());
 
 		return () => subscription.unsubscribe();
-	}, [format, gmtDate]);
+	}, [format, gmtDate, t]);
 
 	return formattedDate;
 };

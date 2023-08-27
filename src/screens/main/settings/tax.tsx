@@ -7,12 +7,13 @@ import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
 
 import { useAppState } from '../../../contexts/app-state';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import Form from '../components/document-form';
 
 export const TaxSettings = () => {
 	const { store } = useAppState();
 	const navigation = useNavigation();
+	const t = useT();
 
 	return (
 		<Box space="normal">

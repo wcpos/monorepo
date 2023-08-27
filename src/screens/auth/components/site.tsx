@@ -9,7 +9,7 @@ import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
 
 import { WPUsers } from './wp-users';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 /**
  *
@@ -23,6 +23,7 @@ function getUrlWithoutProtocol(url: string) {
  */
 export const Site = ({ user, site, idx }) => {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
+	const t = useT();
 
 	/**
 	 * Remove site

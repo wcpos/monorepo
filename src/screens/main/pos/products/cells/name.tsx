@@ -8,7 +8,6 @@ import Box from '@wcpos/components/src/box';
 import Link from '@wcpos/components/src/link';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../../lib/translations';
 import Attributes from '../../../components/product/attributes';
 import Categories from '../../../components/product/categories';
 import GroupedNames from '../../../components/product/grouped-names';

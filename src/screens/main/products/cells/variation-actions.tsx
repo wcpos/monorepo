@@ -7,7 +7,7 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 
 import DeleteDialog from './delete-dialog';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import usePullDocument from '../../contexts/use-pull-document';
 
 type Props = {
@@ -23,6 +23,7 @@ const Actions = ({ item: variation, parent }: Props) => {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const navigation = useNavigation();
 	const pullDocument = usePullDocument();
+	const t = useT();
 
 	/**
 	 *

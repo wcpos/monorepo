@@ -6,7 +6,7 @@ import { map } from 'rxjs/operators';
 
 import Pill from '@wcpos/components/src/pill';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 
 /**
  *
@@ -16,6 +16,7 @@ const FeaturedPill = ({ query }) => {
 		query.state$.pipe(map((state) => get(state, ['selector', 'featured']))),
 		get(query, ['currentState', 'selector', 'featured'])
 	);
+	const t = useT();
 
 	return (
 		<Pill

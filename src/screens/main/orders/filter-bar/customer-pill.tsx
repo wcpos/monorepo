@@ -4,7 +4,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import Pill from '@wcpos/components/src/pill';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import CustomerSelect from '../../components/customer-select';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
@@ -20,6 +20,7 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
 	const customer = useObservableSuspense(resource);
 	const { format } = useCustomerNameFormat();
+	const t = useT();
 
 	/**
 	 *

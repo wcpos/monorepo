@@ -10,7 +10,7 @@ import Text from '@wcpos/components/src/text';
 import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useAddFee } from '../hooks/use-add-fee';
 
@@ -33,6 +33,7 @@ const AddFee = () => {
 		currentOrder.currency_symbol$,
 		currentOrder.currency_symbol
 	);
+	const t = useT();
 
 	/**
 	 *
@@ -61,7 +62,7 @@ const AddFee = () => {
 		} catch (error) {
 			log.error(error);
 		}
-	}, [addFee, data]);
+	}, [addFee, data, t]);
 
 	/**
 	 *
@@ -76,7 +77,7 @@ const AddFee = () => {
 				tax_class: { type: 'string', title: t('Tax Class', { _tags: 'core' }) },
 			},
 		}),
-		[]
+		[t]
 	);
 
 	/**
@@ -92,7 +93,7 @@ const AddFee = () => {
 				'ui:placeholder': t('Fee', { _tags: 'core' }),
 			},
 		}),
-		[currencySymbol]
+		[currencySymbol, t]
 	);
 
 	/**

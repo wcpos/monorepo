@@ -3,13 +3,15 @@ import * as React from 'react';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 interface EmptyTableRowProps {
 	message?: string;
 }
 
 const EmptyTableRow = ({ message }: EmptyTableRowProps) => {
+	const t = useT();
+
 	return (
 		<Box padding="small">
 			<Text>{message || t('No results found', { _tags: 'core' })}</Text>

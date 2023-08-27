@@ -1,12 +1,11 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 import SyncButton from '../../sync-button';
 
 /**
@@ -16,6 +15,7 @@ const VariationFooterTableRow = ({ query, parent, count, loading }) => {
 	const theme = useTheme();
 	const { sync, clear } = query;
 	const total = parent.variations.length;
+	const t = useT();
 
 	return (
 		<Box

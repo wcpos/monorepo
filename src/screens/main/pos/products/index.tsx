@@ -13,7 +13,7 @@ import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
 import { useAppState } from '../../../../contexts/app-state';
 import { useQuery } from '../../../../contexts/store-state-manager';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import DataTable from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
 import Search from '../../components/product/search';
@@ -47,6 +47,7 @@ const POSProducts = ({ isColumn = false }) => {
 	);
 	const { store } = useAppState();
 	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
+	const t = useT();
 
 	/**
 	 *
@@ -151,5 +152,5 @@ const POSProducts = ({ isColumn = false }) => {
 	);
 };
 
-// export default React.memo(POSProducts); // caches translations
+// export default React.memo(POSProducts);
 export default POSProducts;

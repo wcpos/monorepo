@@ -8,7 +8,7 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 
 import DeleteDialog from './delete-dialog';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
 
@@ -22,6 +22,7 @@ const Actions = ({ item: order }: Props) => {
 	const status = useObservableState(order.status$, order.status);
 	const pullDocument = usePullDocument();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
+	const t = useT();
 
 	/**
 	 *
@@ -77,7 +78,7 @@ const Actions = ({ item: order }: Props) => {
 		}
 
 		return menu;
-	}, [handleOpen, navigation, order.collection, order.id, order.uuid, pullDocument, status]);
+	}, [handleOpen, navigation, order.collection, order.id, order.uuid, pullDocument, status, t]);
 
 	/**
 	 *

@@ -14,7 +14,7 @@ import Text from '@wcpos/components/src/text';
 import AuthNavigator from './auth';
 import MainNavigator from './main';
 import { useAppState } from '../contexts/app-state';
-import { t } from '../lib/translations';
+import { useT } from '../contexts/translations';
 import { URL } from '../lib/url';
 
 // const MainNavigator = React.lazy(() => import('./main'));
@@ -33,6 +33,7 @@ const RootNavigator = ({ initialProps }) => {
 	const { store, storeDB } = useAppState();
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
+	const t = useT();
 
 	/**
 	 * store can be null, so we create an observable
@@ -148,7 +149,7 @@ const RootNavigator = ({ initialProps }) => {
 				 * It tells react to re-render the whole component tree
 				 * - using token, but could also use storeDB.name, I'm not sure when rxdb token changes
 				 */
-				key={storeDB?.token}
+				// key={storeDB?.token}
 				screenOptions={{ headerShown: false }}
 			>
 				{storeDB ? (

@@ -1,19 +1,8 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
-import {
-	ObservableResource,
-	useObservable,
-	useObservableSuspense,
-	useObservableState,
-	useObservableRef,
-} from 'observable-hooks';
-import { switchMap } from 'rxjs/operators';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { useAppState } from '../../../../../contexts/app-state';
-import { useQuery } from '../../../../../contexts/store-state-manager';
-import useCollection from '../../../hooks/use-collection';
-import { useNewOrder } from '../../use-new-order';
 import useTaxLocation from '../../use-tax-location';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;

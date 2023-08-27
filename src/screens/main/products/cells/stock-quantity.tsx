@@ -5,7 +5,7 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Checkbox from '@wcpos/components/src/checkbox';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import NumberInput from '../../components/number-input';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -21,6 +21,7 @@ type Props = {
 const StockQuantity = ({ item: product, onChange }: Props) => {
 	const stockQuantity = useObservableState(product.stock_quantity$, product.stock_quantity);
 	const manageStock = useObservableState(product.manage_stock$, product.manage_stock);
+	const t = useT();
 
 	return (
 		<Box space="small">

@@ -9,7 +9,7 @@ import { createStoreDB } from '@wcpos/database/src/stores-db';
 import { createUserDB } from '@wcpos/database/src/users-db';
 import log from '@wcpos/utils/src/logger';
 
-import locales from '../../lib/translations/locales.json';
+import locales from '../../lib/translations-old/locales.json';
 
 type UserDatabase = import('@wcpos/database').UserDatabase;
 

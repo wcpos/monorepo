@@ -18,7 +18,7 @@ import EdittablePrice from './cells/edittable-price';
 import Price from './cells/price';
 import StockQuanity from './cells/stock-quantity';
 import Actions from './cells/variation-actions';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import EmptyTableRow from '../components/empty-table-row';
 import { ProductVariationImage } from '../components/product/variation-image';
 import { ProductVariationName } from '../components/product/variation-name';
@@ -55,6 +55,7 @@ const Variations = ({ extraData, parent, parentIndex }: VariationsProps) => {
 	const variations = useObservableSuspense(resource);
 	const addSnackbar = useSnackbar();
 	const pushDocument = usePushDocument();
+	const t = useT();
 
 	/**
 	 *
@@ -77,7 +78,7 @@ const Variations = ({ extraData, parent, parentIndex }: VariationsProps) => {
 				});
 			}
 		},
-		[addSnackbar, parent, pushDocument]
+		[addSnackbar, parent, pushDocument, t]
 	);
 
 	/**

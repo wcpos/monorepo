@@ -11,7 +11,7 @@ import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
 
 import WPUser from './wp-user';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 interface WpUserProps {
 	site: import('@wcpos/database').SiteDocument;
@@ -23,6 +23,7 @@ interface WpUserProps {
 export const WPUsers = ({ site }: WpUserProps) => {
 	const wpCreds = useObservableSuspense(site.populateResource('wp_credentials'));
 	const navigation = useNavigation();
+	const t = useT();
 
 	return (
 		<Box space="xSmall">
