@@ -1,10 +1,8 @@
 import * as React from 'react';
 
 import { SafeAreaProviderCompat } from '@react-navigation/elements';
-import get from 'lodash/get';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { enableFreeze } from 'react-native-screens';
-import semverGt from 'semver/functions/gt';
 import { ThemeProvider } from 'styled-components/native';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
@@ -15,11 +13,10 @@ import getTheme from '@wcpos/themes';
 import { AppStateProvider } from './contexts/app-state';
 import { StoreStateManagerProvider } from './contexts/store-state-manager';
 import { TranslationProvider } from './contexts/translations';
-import { initialProps, isWebApp, resource } from './hydrate-data';
 import RootError from './root-error';
 import RootNavigator from './screens';
 import Splash from './screens/splash';
-import WarningMessage from './warning-message';
+// import WarningMessage from './warning-message';
 
 // import polyfills
 import 'setimmediate'; // https://github.com/software-mansion/react-native-reanimated/issues/4140
@@ -31,8 +28,6 @@ enableFreeze(true);
  *
  */
 const App = () => {
-	const version = get(initialProps, 'version');
-
 	const theme = React.useMemo(
 		() =>
 			getTheme({
@@ -43,17 +38,6 @@ const App = () => {
 	);
 
 	/**
-	 * PHP plugin update messsage
-	 */
-	if (version && semverGt('1.3.0', version)) {
-		return (
-			<WarningMessage>
-				Please update your WooCommerce POS plugin to version 1.3.0 or higher
-			</WarningMessage>
-		);
-	}
-
-	/**
 	 * NOTE:
 	 * The first ErrorBoundary is a catchall, it should use only pure React Native,
 	 * ie: it is not dependent on theme or custom components
@@ -62,7 +46,7 @@ const App = () => {
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<GestureHandlerRootView style={{ flex: 1 }}>
-				<AppStateProvider initialProps={initialProps} isWebApp={isWebApp} resource={resource}>
+				<AppStateProvider>
 					<React.Suspense fallback={<Splash />}>
 						<StoreStateManagerProvider>
 							<ThemeProvider theme={theme}>
@@ -71,7 +55,7 @@ const App = () => {
 										<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
 											<SnackbarProvider>
 												<Portal.Provider>
-													<RootNavigator initialProps={initialProps} />
+													<RootNavigator />
 													<Portal.Manager />
 												</Portal.Provider>
 											</SnackbarProvider>

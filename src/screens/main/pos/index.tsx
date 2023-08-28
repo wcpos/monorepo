@@ -3,8 +3,9 @@ import * as React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
 import { ObservableResource, useObservable } from 'observable-hooks';
-import { from, of, lastValueFrom } from 'rxjs';
-import { switchMap, mergeMap, tap, distinctUntilChanged } from 'rxjs/operators';
+import { isRxDocument } from 'rxdb';
+import { from, of } from 'rxjs';
+import { switchMap, distinctUntilChanged } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
@@ -45,9 +46,11 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 			inputs$.pipe(
 				switchMap(([uuid]) => {
 					if (!uuid) return newOrder$;
-					return collection
-						.findOneFix(uuid)
-						.$.pipe(distinctUntilChanged((prev, next) => prev.uuid === next.uuid));
+					return collection.findOne(uuid).$.pipe(
+						// make sure we have an order, eg: voiding an order will emit null
+						switchMap((order) => (isRxDocument(order) ? of(order) : newOrder$)),
+						distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid)
+					);
 				})
 			),
 		[route.params?.orderID]

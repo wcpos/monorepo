@@ -1,3 +1,5 @@
+import { BehaviorSubject } from 'rxjs';
+
 import { getAppDataResource } from './hydrate-web-data';
 
 type InitialProps = import('../types').InitialProps;
@@ -8,7 +10,14 @@ if (window && window.initialProps) {
 	throw new Error('No initialProps found');
 }
 
-const resource = getAppDataResource(initialProps);
+/**
+ * For web app, we need to be able to trigger a change to the store
+ * There might be a better way to do this, but for now we'll just use a BehaviorSubject
+ */
+const initialPropsSubject = new BehaviorSubject(initialProps);
+const initialProps$ = initialPropsSubject.asObservable();
+
+const resource = getAppDataResource(initialProps$);
 const isWebApp = true;
 
-export { isWebApp, initialProps, resource };
+export { isWebApp, initialProps, resource, initialPropsSubject };

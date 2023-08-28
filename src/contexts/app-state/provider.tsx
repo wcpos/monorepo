@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Linking } from 'react-native';
 
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 
 import type {
 	UserDatabase,
@@ -11,6 +11,8 @@ import type {
 	StoreDocument,
 	StoreDatabase,
 } from '@wcpos/database';
+
+import { initialProps, isWebApp, resource, initialPropsSubject } from '../../hydrate-data';
 
 export interface HydratedData {
 	userDB: UserDatabase;
@@ -34,27 +36,22 @@ export interface AppState extends HydratedData {
 		storeID: string;
 	}) => void;
 	logout: () => void;
-	switchStore: (storeID: string) => void;
+	switchStore: (store: StoreDocument) => void;
 }
 
 export const AppStateContext = React.createContext<AppState | undefined>(undefined);
 
 interface AppStateProviderProps {
 	children: React.ReactNode;
-	initialProps?: import('../../types').InitialProps;
-	isWebApp: boolean;
-	resource: ObservableResource<HydratedData>;
+	// initialProps?: import('../../types').InitialProps;
+	// isWebApp: boolean;
+	// resource: ObservableResource<HydratedData>;
 }
 
 /**
  *
  */
-export const AppStateProvider = ({
-	children,
-	initialProps,
-	resource,
-	isWebApp,
-}: AppStateProviderProps) => {
+export const AppStateProvider = ({ children }: AppStateProviderProps) => {
 	const { userDB, user, site, wpCredentials, store, storeDB } = useObservableSuspense(resource);
 
 	/**
@@ -86,25 +83,28 @@ export const AppStateProvider = ({
 			wpCredentialsID: null,
 			storeID: null,
 		});
-	}, [initialProps?.logout_url, isWebApp, user?.uuid, userDB]);
+	}, [user?.uuid, userDB]);
 
 	/**
 	 *
 	 */
 	const switchStore = React.useCallback(
-		async (storeID) => {
+		async (store) => {
 			if (isWebApp) {
-				// TODO - need to trigger the web hydration with new storeID
-				debugger;
+				/**
+				 * This is super messy, I need to refactor the web store switching
+				 * ... but it works for now
+				 */
+				initialPropsSubject.next({ ...initialProps, store_id: store.id });
 				return;
 			}
 			return login({
 				siteID: site.uuid,
 				wpCredentialsID: wpCredentials.uuid,
-				storeID,
+				storeID: store.localID,
 			});
 		},
-		[isWebApp, login, site?.uuid, wpCredentials?.uuid]
+		[login, site?.uuid, wpCredentials?.uuid]
 	);
 
 	/**

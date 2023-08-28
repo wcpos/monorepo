@@ -29,8 +29,8 @@ const Stack = createStackNavigator<RootStackParamList>();
 /**
  *
  */
-const RootNavigator = ({ initialProps }) => {
-	const { store, storeDB } = useAppState();
+const RootNavigator = () => {
+	const { store, storeDB, initialProps } = useAppState();
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
 	const t = useT();

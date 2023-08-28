@@ -9,7 +9,7 @@ import useCurrencyFormat from '../../hooks/use-currency-format';
 /**
  *
  */
-const ItemizedTaxes = ({ taxLines, taxDisplayCart }) => {
+const ItemizedTaxes = ({ taxLines = [], taxDisplayCart }) => {
 	const { format } = useCurrencyFormat();
 	const t = useT();
 

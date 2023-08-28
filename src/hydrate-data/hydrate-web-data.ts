@@ -1,5 +1,6 @@
 import { ObservableResource } from 'observable-hooks';
-import { switchMap, withLatestFrom, tap, catchError } from 'rxjs/operators';
+import { combineLatest } from 'rxjs';
+import { switchMap, catchError } from 'rxjs/operators';
 
 import { createStoreDB } from '@wcpos/database/src/stores-db';
 import log from '@wcpos/utils/src/logger';
@@ -73,12 +74,12 @@ export const getOrInsertStore = async (userDB, wpCredentials, stores, store_id) 
 /**
  *
  */
-export const getAppDataResource = (initialProps) => {
-	const combined$ = userDB$.pipe(
+export const getAppDataResource = (initialProps$) => {
+	const combined$ = combineLatest([userDB$, initialProps$]).pipe(
 		// tap(() => {
 		// 	debugger;
 		// }),
-		switchMap(async (userDB) => {
+		switchMap(async ([userDB, initialProps]) => {
 			const site = await getOrInsertSite(userDB, initialProps.site);
 			const wpCredentials = await getOrInsertWPCredentials(userDB, initialProps.wp_credentials);
 			const store = await getOrInsertStore(
