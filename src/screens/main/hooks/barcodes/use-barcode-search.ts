@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import flatten from 'lodash/flatten';
 
-import useCollection from '../use-collection';
+import { useCollection } from '../../../../hooks/use-collection';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;

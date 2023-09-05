@@ -7,7 +7,7 @@ import { catchError, tap, filter, switchMap, timeout } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import useCollection, { CollectionKey } from './use-collection';
+import { useCollection, CollectionKey } from '../../../hooks/use-collection';
 import usePullDocument from '../contexts/use-pull-document';
 
 interface Props {

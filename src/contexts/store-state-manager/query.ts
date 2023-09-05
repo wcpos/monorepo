@@ -2,8 +2,9 @@ import { orderBy } from '@shelf/fast-natural-order-by';
 import debounce from 'lodash/debounce';
 import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
+import isString from 'lodash/isString';
 import { RxCollection, RxDocument } from 'rxdb';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subscription, of } from 'rxjs';
 import { switchMap, map, distinctUntilChanged, shareReplay, tap, skip } from 'rxjs/operators';
 
 import type { ReplicationState } from '@wcpos/database/src/plugins/wc-rest-api-replication';
@@ -35,7 +36,8 @@ export type Hooks = {
 type WhereClause = { field: string; value: any };
 
 /**
- *
+ * The Query class holds the state of the query and exposes an observable that emits the query results
+ * It also exposes some helper methods to update the query state
  */
 class Query<T> {
 	private whereClauses: WhereClause[] = [];
@@ -44,6 +46,8 @@ class Query<T> {
 	private paginator: Paginator<T>;
 
 	public replicationState?: ReplicationState<T, any>; // Add this property
+
+	public readonly subs: Subscription[] = [];
 
 	constructor(
 		public collection: RxCollection<any, object, object>,
@@ -62,10 +66,24 @@ class Query<T> {
 		 * Subscribe to state changes and reset the pagination
 		 * Note: Subscription will trigger the first emission
 		 */
-		this.state$.subscribe((state) => {
-			log.debug('Query state changed', state);
-			this.paginator.reset();
-		});
+		this.subs.push(
+			this.state$.subscribe((state) => {
+				log.debug('Query state changed', state);
+				this.paginator.reset();
+			})
+		);
+
+		/**
+		 * Subscribe to the collection changes and update the search (if any)
+		 * This doesn't work and would cause a loop of calling query
+		 *
+		 * I need to turn orama into an oberservable and subscribe to it in the $
+		 */
+		// this.collection.$.subscribe((changeEvent) => {
+		// 	if (isString(this.queryState$.value?.search)) {
+		// 		this.search(this.queryState$.value?.search);
+		// 	}
+		// });
 
 		/**
 		 * Register hooks
@@ -134,16 +152,15 @@ class Query<T> {
 	}
 
 	async search(query: string | Record<string, any>) {
-		if (typeof query === 'string') {
-			if (query.trim() === '') {
-				this.whereClauses = this.whereClauses.filter((clause) => clause.field !== 'uuid');
-			} else {
-				// @ts-ignore
-				const { hits } = await this.collection.search(query);
-				const uuids = hits.map((hit: any) => hit.id);
-				this.whereClauses.push({ field: 'uuid', value: { $in: uuids } });
-			}
-		}
+		// if (typeof query === 'string') {
+		// 	if (query.trim() === '') {
+		// 		this.whereClauses = this.whereClauses.filter((clause) => clause.field !== 'uuid');
+		// 	} else {
+		// 		const { hits } = await this.collection.search(query);
+		// 		const uuids = hits.map((hit: any) => hit.id);
+		// 		this.whereClauses.push({ field: 'uuid', value: { $in: uuids } });
+		// 	}
+		// }
 		this.updateState({
 			...this.currentState,
 			selector: this.getSelectorFromClauses(),
@@ -185,32 +202,49 @@ class Query<T> {
 					throw new Error('Collection or queryState is not set');
 				}
 
-				let selector = queryState.selector || {};
-				if (this.hooks.preQuerySelector) {
-					selector = this.hooks.preQuerySelector(selector, queryState);
+				/**
+				 *  If there's a search query, we need to subscribe to the search observable
+				 */
+				let selector$ = of(queryState.selector || {});
+				if (isString(queryState.search)) {
+					selector$ = this.collection.search$(queryState.search).pipe(
+						map(({ hits }) => {
+							const uuids = hits.map((hit: any) => hit.id);
+							return {
+								...(queryState.selector || {}),
+								uuid: { $in: uuids },
+							};
+						})
+					);
 				}
 
-				return this.collection.find({ selector }).$.pipe(
-					// tap((res) => console.log(res)),
-					map((result) => ({ result, queryState }))
+				return selector$.pipe(
+					switchMap((s) => {
+						const selector = this.hooks?.preQuerySelector
+							? this.hooks.preQuerySelector(s, queryState)
+							: s;
+
+						return this.collection.find({ selector }).$.pipe(
+							/**
+							 * NoSQL sorting wasn't working for string numbers, so I'm handling sorting here
+							 */
+							map((result) => {
+								// Call the hook function if it's registered
+								if (this.hooks.postQueryResult) {
+									result = this.hooks.postQueryResult(result, queryState);
+								}
+								const { sortBy, sortDirection } = queryState;
+								let sortedResult = result;
+
+								if (sortBy && sortDirection) {
+									sortedResult = orderBy(result, [sortBy], [sortDirection]);
+								}
+
+								return sortedResult;
+							})
+						);
+					})
 				);
-			}),
-			/**
-			 * NoSQL sorting wasn't working for string numbers, so I'm handling sorting here
-			 */
-			map(({ result, queryState }) => {
-				// Call the hook function if it's registered
-				if (this.hooks.postQueryResult) {
-					result = this.hooks.postQueryResult(result, queryState);
-				}
-				const { sortBy, sortDirection } = queryState;
-				let sortedResult = result;
-
-				if (sortBy && sortDirection) {
-					sortedResult = orderBy(result, [sortBy], [sortDirection]);
-				}
-
-				return sortedResult;
 			}),
 			/**
 			 * We're only interested in insert/delete documents and order changes
@@ -261,6 +295,14 @@ class Query<T> {
 			map((docs) => docs.length),
 			distinctUntilChanged()
 		);
+	}
+
+	// clean up subscriptions
+	cancel() {
+		this.subs.forEach((sub) => sub.unsubscribe());
+
+		// do I need to complete all the observables?
+		this.queryState$.complete();
 	}
 }
 

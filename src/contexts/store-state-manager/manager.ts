@@ -1,16 +1,15 @@
 import { ObservableResource } from 'observable-hooks';
 
 import type { StoreDatabase } from '@wcpos/database';
-import {
-	replicateRxCollection,
-	ReplicationState,
-	ReplicationOptions,
-} from '@wcpos/database/src/plugins/wc-rest-api-replication';
 
 import { Query, QueryState } from './query';
+import { ReplicationState } from './replication';
 
 /**
- *
+ * TODO - in the future it would be nice to have a smarter management for replication
+ * that can orchestrate audits, queries and mutations and make sure they are all in sync
+ * For now, we just create a new replication state for each query, and do some basic
+ * optimations within the replication state itself.
  */
 export class StoreStateManager {
 	private queries: Map<string, Query<any>> = new Map();
@@ -42,12 +41,6 @@ export class StoreStateManager {
 			const query = new Query(collection, initialQuery, hooks);
 
 			/**
-			 *
-			 */
-			const replicationState = replicateRxCollection({ collection });
-			this.replicationStates.set(key, replicationState);
-
-			/**
 			 * Create ObservableResource instances
 			 * - this doesn't seem like a Query concern so I'm putting it here
 			 */
@@ -73,5 +66,28 @@ export class StoreStateManager {
 	deregisterQuery(queryKey: (string | number | object)[]): void {
 		const key = this.serializeQueryKey(queryKey);
 		this.queries.delete(key);
+	}
+
+	/**
+	 * Replications are unique to an endpoint, most of the time endpoint = collection
+	 * except for variations which are a pain in the ass
+	 */
+	registerReplicationState<T>(
+		endpoint: string,
+		collection,
+		http: any,
+		hooks: any
+	): ReplicationState<T> {
+		if (!this.replicationStates.has(endpoint)) {
+			const replication = new ReplicationState({ collection, hooks, http });
+			this.replicationStates.set(endpoint, replication);
+		}
+		return this.replicationStates.get(endpoint) as ReplicationState<T>;
+	}
+
+	deregisterReplicationState(endpoint) {
+		const replicationState = this.replicationStates.get(endpoint);
+		replicationState.cancel();
+		this.replicationStates.delete(endpoint);
 	}
 }

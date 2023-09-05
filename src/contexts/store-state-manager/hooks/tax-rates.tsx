@@ -48,9 +48,7 @@ const postQueryResult = (result, queryState) => {
 /**
  *
  */
-const filterApiQueryParams = (params, checkpoint, batchSize) => {
-	const { include } = checkpoint;
-
+const filterApiQueryParams = (params, include) => {
 	/**
 	 * Taxes don't have a date field, so if localIDs = remoteIDs, then we can skip the API call
 	 */

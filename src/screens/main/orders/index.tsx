@@ -14,7 +14,7 @@ import EditOrder from './edit-order';
 import Orders from './orders';
 import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
-import useCollection from '../hooks/use-collection';
+import { useCollection } from '../../../hooks/use-collection';
 import Receipt from '../receipt';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';

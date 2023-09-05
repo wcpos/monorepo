@@ -21,8 +21,8 @@ const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 	 */
 	const handleClearAndSync = React.useCallback(async () => {
 		await clear();
-		await sync();
-	}, [clear, sync]);
+		// await sync(); // this sync function is going to be stale after clear
+	}, [clear]);
 
 	/**
 	 *

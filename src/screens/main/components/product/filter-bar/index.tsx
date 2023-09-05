@@ -14,7 +14,7 @@ import FeaturedPill from './featured-pill';
 import OnSalePill from './on-sale-pill';
 import TagPill from './tag-pill';
 import usePullDocument from '../../../contexts/use-pull-document';
-import useCollection from '../../../hooks/use-collection';
+import { useCollection } from '../../../../../hooks/use-collection';
 
 /**
  *

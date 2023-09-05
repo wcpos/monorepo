@@ -15,11 +15,11 @@ import EditVariation from './edit-variation';
 import Products from './products';
 import { useQuery } from '../../../contexts/store-state-manager';
 import { useT } from '../../../contexts/translations';
+import { useCollection } from '../../../hooks/use-collection';
 import { ModalLayout } from '../../components/modal-layout';
 import { TaxHelpersProvider } from '../contexts/tax-helpers';
 import useUISettings from '../contexts/ui-settings';
 import useBaseTaxLocation from '../hooks/use-base-tax-location';
-import useCollection from '../hooks/use-collection';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 

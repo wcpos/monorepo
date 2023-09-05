@@ -8,7 +8,7 @@ import Table from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
-import useCollection from '../../../hooks/use-collection';
+import { useCollection } from '../../../../../hooks/use-collection';
 
 interface UserSettingsProps {
 	onClose: () => void;

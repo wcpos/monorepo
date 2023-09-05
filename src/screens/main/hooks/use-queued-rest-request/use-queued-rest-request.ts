@@ -3,7 +3,7 @@ import * as React from 'react';
 import axios from 'axios';
 import { MinQueue } from 'heapify';
 
-import useRestHttpClient from '../use-rest-http-client';
+import useRestHttpClient from '../../../../hooks/use-rest-http-client';
 
 const minQueue = new MinQueue(1000);
 const requestMap = {};

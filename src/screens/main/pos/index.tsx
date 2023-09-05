@@ -16,9 +16,9 @@ import POS from './pos';
 import { useNewOrder } from './use-new-order';
 import { useQuery } from '../../../contexts/store-state-manager';
 import { useT } from '../../../contexts/translations';
+import { useCollection } from '../../../hooks/use-collection';
 import { ModalLayout } from '../../components/modal-layout';
 import { TaxHelpersProvider } from '../contexts/tax-helpers';
-import useCollection from '../hooks/use-collection';
 import Receipt from '../receipt';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';

@@ -1,7 +1,10 @@
 import * as React from 'react';
 
 import { useFocusEffect } from '@react-navigation/native';
+import { queries } from '@testing-library/react';
 import get from 'lodash/get';
+import { useObservable, useSubscription } from 'observable-hooks';
+import { switchMap } from 'rxjs/operators';
 
 import * as categories from './hooks/categories';
 import * as customers from './hooks/customers';
@@ -11,8 +14,9 @@ import * as tags from './hooks/tags';
 import * as taxes from './hooks/tax-rates';
 import * as variations from './hooks/variations';
 import { Query, QueryState } from './query';
-import { useReplicationState } from './use-replication-state';
 import { useStoreStateManager } from './use-store-state-manager';
+import { useCollection } from '../../hooks/use-collection';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 interface QueryOptions {
 	queryKeys: (string | number | object)[];
@@ -46,47 +50,64 @@ export const useQuery = <T>({
 	parent,
 }: QueryOptions): Query<T> => {
 	const manager = useStoreStateManager();
-	const collection = manager.storeDB.collections[collectionName];
+	const { collection } = useCollection(collectionName);
 	const hooks = get(allHooks, collectionName, {});
+	const endpoint =
+		collectionName === 'variations' ? `products/${parent.id}/variations` : collectionName;
+	const http = useRestHttpClient(endpoint);
 
-	// get the query (it will be registered if it doesn't exist)
+	/**
+	 * get the query (it will be registered if it doesn't exist)
+	 */
 	const query = manager.registerQuery<T>(queryKeys, collection, initialQuery, hooks);
 
-	// attach replicationState
-	const replicationState = useReplicationState({ collection, query, hooks, parent });
+	/**
+	 *
+	 */
+	const replicationState = manager.registerReplicationState<T>(endpoint, collection, http, hooks);
 	query.replicationState = replicationState;
 
 	/**
 	 *
 	 */
+	useSubscription(query.state$, (state) => {
+		console.log('query state changed', state);
+		replicationState.start(query);
+	});
+
+	/**
+	 *
+	 */
 	query.clear = React.useCallback(async () => {
-		replicationState.cancel();
+		manager.deregisterQuery(queryKeys);
+		manager.deregisterReplicationState(endpoint);
 		await manager.storeDB.reset(clearCollectionNames[collectionName] || [collectionName]);
-	}, [collectionName, manager.storeDB, replicationState]);
+	}, [collectionName, endpoint, manager, queryKeys]);
 
 	/**
 	 *
 	 */
 	query.sync = React.useCallback(() => {
-		replicationState.reSync();
-	}, [replicationState]);
+		replicationState.start(query);
+	}, [query, replicationState]);
 
 	/**
 	 *
 	 */
 	useFocusEffect(
 		React.useCallback(() => {
-			query.replicationState.start();
+			console.log('useFocusEffect resume replication');
+			replicationState.resume(query);
 			// Add cleanup logic
 			return () => {
-				console.log('cleaning up query', queryKeys);
-				query.replicationState.cancel();
+				console.log('useFocusEffect pause replication');
+				replicationState.pause();
 				// @TODO - this cleans up too often and causes issues
 				// how to cleanup only when the query is no longer needed?
 				// if I clean up here, it gets deregistered too often, child components throw errors
 				// manager.deregisterQuery(queryKeys);
 			};
-		}, [query.replicationState, queryKeys])
+		}, [query, replicationState])
 	);
 
 	return query;

@@ -5,7 +5,10 @@ import { useObservableState, useObservable } from 'observable-hooks';
 import { interval, merge } from 'rxjs';
 import { map, tap, throttleTime } from 'rxjs/operators';
 
-import { replicateRxCollection } from '@wcpos/database/src/plugins/wc-rest-api-replication';
+import {
+	replicateRxCollection,
+	ReplicationState,
+} from '@wcpos/database/src/plugins/wc-rest-api-replication';
 import log from '@wcpos/utils/src/logger';
 
 import useRestHttpClient from '../../hooks/use-rest-http-client';
@@ -15,6 +18,7 @@ import type { Query, QueryState } from './query';
 import type { RxCollection, RxDocument } from 'rxdb';
 
 interface Props {
+	queryKey: (string | number | object)[];
 	collection: RxCollection;
 	query: Query<RxCollection>;
 	pollingTime?: number;
@@ -22,10 +26,32 @@ interface Props {
 	parent?: RxDocument;
 }
 
+const registry: Map<string, ReplicationState<any, any>> = new Map();
+
+/**
+ *
+ */
+function defaultFilterApiQueryParams(params) {
+	/**
+	 * remove all uuid params?
+	 */
+	if (params.uuid) {
+		params.uuid = undefined;
+	}
+
+	Object.assign(params, {
+		per_page: 10,
+		dates_are_gmt: true,
+	});
+
+	return params;
+}
+
 /**
  *
  */
 export const useReplicationState = ({
+	queryKey,
 	collection,
 	query,
 	pollingTime = 600000,
@@ -47,7 +73,23 @@ export const useReplicationState = ({
 	/**
 	 *
 	 */
+	React.useEffect(() => {
+		const key = JSON.stringify(queryKey);
+		if (registry.has(key)) {
+			const state = registry.get(key);
+			state.cancel();
+			registry.delete(key);
+		}
+	}, [queryKey, collection, http]);
+
+	/**
+	 *
+	 */
 	const replicationState = React.useMemo(() => {
+		const key = JSON.stringify(queryKey);
+		if (registry.has(key)) {
+			return registry.get(key);
+		}
 		return replicateRxCollection({
 			collection,
 			replicationIdentifier: `replication-to-${apiURL}/${endpoint}`,
@@ -98,6 +140,7 @@ export const useReplicationState = ({
 				handler: async (checkpoint, batchSize) => {
 					try {
 						let params = query.getApiQueryParams();
+						params = defaultFilterApiQueryParams(params);
 						if (hooks?.filterApiQueryParams) {
 							params = hooks.filterApiQueryParams(params, checkpoint, batchSize);
 						}
@@ -166,7 +209,7 @@ export const useReplicationState = ({
 				),
 			},
 		});
-	}, [apiURL, collection, endpoint, hooks, http, parent, pollingTime, query]);
+	}, [apiURL, collection, endpoint, hooks, http, parent, pollingTime, query, queryKey]);
 
 	return replicationState;
 };

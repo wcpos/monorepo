@@ -13,7 +13,7 @@ import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import useRestHttpClient from '../../hooks/use-rest-http-client';
+import useRestHttpClient from '../../../../hooks/use-rest-http-client';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useAddShipping } from '../hooks/use-add-shipping';
 

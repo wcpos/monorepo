@@ -8,14 +8,14 @@ import { useObservableState } from 'observable-hooks';
 import useHttpClient, { RequestConfig } from '@wcpos/hooks/src/use-http-client';
 import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 
-import { useAppState } from '../../contexts/app-state';
+import { useAppState } from '../contexts/app-state';
 
 /**
  * TODO - becareful to use useOnlineStatus because it emits a lot of events
  */
-export const useRestHttpClient = () => {
+export const useRestHttpClient = (endpoint = '') => {
 	const { site, wpCredentials } = useAppState();
-	const baseURL = useObservableState(site.wc_api_url$, site.wc_api_url);
+	const wcAPIURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
 
 	const navigation = useNavigation();
@@ -50,7 +50,7 @@ export const useRestHttpClient = () => {
 		async (reqConfig: RequestConfig = {}) => {
 			const shouldUseJwtAsParam = typeof window !== 'undefined' && window.useJwtAsParam === true;
 			const defaultConfig = {
-				baseURL,
+				baseURL: wcAPIURL + '/' + endpoint,
 				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
 			};
 
@@ -63,7 +63,7 @@ export const useRestHttpClient = () => {
 
 			return httpClient.request(config);
 		},
-		[baseURL, httpClient, jwt]
+		[endpoint, httpClient, jwt, wcAPIURL]
 	);
 
 	/**

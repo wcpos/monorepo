@@ -2,7 +2,7 @@ import { useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 // import { map } from 'rxjs/operators';
 
-// import useCollection from './use-collection';
+// import { useCollection } from './use-collection';
 
 type StoreDatabaseCollections = import('@wcpos/database').StoreDatabaseCollections;
 

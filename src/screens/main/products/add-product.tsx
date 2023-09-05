@@ -7,7 +7,7 @@ import Text from '@wcpos/components/src/text';
 import Form from '@wcpos/react-native-jsonschema-form';
 
 import { useT } from '../../../contexts/translations';
-import useCollection from '../hooks/use-collection';
+import { useCollection } from '../../../hooks/use-collection';
 
 const AddProduct = () => {
 	const { collection } = useCollection('products');
