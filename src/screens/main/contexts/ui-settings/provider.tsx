@@ -62,7 +62,8 @@ export const UISettingsContext = React.createContext<{
 }>(null);
 
 /**
- *
+ * @TODO - this is messy, needs to be refactored, perhaps register uiSettings as part of
+ * Store State Manager, and then use that to create the uiResources
  */
 export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 	const { storeDB } = useAppState();

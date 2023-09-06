@@ -15,12 +15,12 @@ import Status from './cells/status';
 import Total from './cells/total';
 import FilterBar from './filter-bar';
 import SearchBar from './search-bar';
-import { useQuery } from '../../../contexts/store-state-manager';
 import { useT } from '../../../contexts/translations';
 import DataTable from '../components/data-table';
 import Date from '../components/date';
 import UiSettings from '../components/ui-settings';
 import useUI from '../contexts/ui-settings';
+import { useQuery } from '../hooks/use-query';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

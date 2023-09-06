@@ -10,8 +10,8 @@ import Icon from '@wcpos/components/src/icon';
 
 import AttributePill from './attribute-pill';
 import { useVariationTable } from './context';
-import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
-import { updateVariationAttributeSearch } from '../../../../../contexts/store-state-manager/hooks/variations.helpers';
+import { useStoreStateManager } from '../../../contexts/store-state-manager';
+import { updateVariationAttributeSearch } from '../../../contexts/store-state-manager/hooks/variations.helpers';
 
 /**
  *

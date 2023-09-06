@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { SafeAreaProviderCompat } from '@react-navigation/elements';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { enableFreeze } from 'react-native-screens';
+// import { enableFreeze } from 'react-native-screens';
 import { ThemeProvider } from 'styled-components/native';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
@@ -11,7 +11,6 @@ import { SnackbarProvider } from '@wcpos/components/src/snackbar';
 import getTheme from '@wcpos/themes';
 
 import { AppStateProvider } from './contexts/app-state';
-import { StoreStateManagerProvider } from './contexts/store-state-manager';
 import { TranslationProvider } from './contexts/translations';
 import RootError from './root-error';
 import RootNavigator from './screens';
@@ -22,7 +21,7 @@ import Splash from './screens/splash';
 import 'setimmediate'; // https://github.com/software-mansion/react-native-reanimated/issues/4140
 
 // enable freeze
-enableFreeze(true);
+// enableFreeze(true);
 
 /**
  *
@@ -48,22 +47,20 @@ const App = () => {
 			<GestureHandlerRootView style={{ flex: 1 }}>
 				<AppStateProvider>
 					<React.Suspense fallback={<Splash />}>
-						<StoreStateManagerProvider>
-							<ThemeProvider theme={theme}>
-								<ErrorBoundary>
-									<TranslationProvider>
-										<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-											<SnackbarProvider>
-												<Portal.Provider>
-													<RootNavigator />
-													<Portal.Manager />
-												</Portal.Provider>
-											</SnackbarProvider>
-										</SafeAreaProviderCompat>
-									</TranslationProvider>
-								</ErrorBoundary>
-							</ThemeProvider>
-						</StoreStateManagerProvider>
+						<ThemeProvider theme={theme}>
+							<ErrorBoundary>
+								<TranslationProvider>
+									<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
+										<SnackbarProvider>
+											<Portal.Provider>
+												<RootNavigator />
+												<Portal.Manager />
+											</Portal.Provider>
+										</SnackbarProvider>
+									</SafeAreaProviderCompat>
+								</TranslationProvider>
+							</ErrorBoundary>
+						</ThemeProvider>
 					</React.Suspense>
 				</AppStateProvider>
 			</GestureHandlerRootView>

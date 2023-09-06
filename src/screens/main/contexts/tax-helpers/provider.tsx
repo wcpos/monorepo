@@ -15,7 +15,7 @@ import {
 import { useAppState } from '../../../../contexts/app-state';
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
-type TaxQuery = import('../../../../contexts/store-state-manager').Query<TaxRateDocument>;
+type TaxQuery = import('../store-state-manager').Query<TaxRateDocument>;
 
 interface TaxHelpersContextProps {
 	rates: TaxRateDocument[];

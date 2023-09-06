@@ -1,7 +1,9 @@
 import * as React from 'react';
 
+import Suspense from '@wcpos/components/src/suspense';
+
 import TaxRatesTabs from './tabs';
-import { useQuery } from '../../../contexts/store-state-manager';
+import { useQuery } from '../hooks/use-query';
 
 /**
  *
@@ -13,7 +15,11 @@ export const TaxRates = () => {
 		initialQuery: {},
 	});
 
-	return <TaxRatesTabs query={query} />;
+	return (
+		<Suspense>
+			<TaxRatesTabs query={query} />
+		</Suspense>
+	);
 };
 
 export default TaxRates;

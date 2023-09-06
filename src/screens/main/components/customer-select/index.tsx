@@ -6,7 +6,7 @@ import Popover from '@wcpos/components/src/popover';
 
 import CustomerQueryWrapper from './query-wrapper';
 import SearchInput from './search-input';
-import { useStoreStateManager } from '../../../../contexts/store-state-manager';
+import { useStoreStateManager } from '../../contexts/store-state-manager';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 

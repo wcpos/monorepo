@@ -1,7 +1,7 @@
 import Suspense from '@wcpos/components/src/suspense';
 
 import Menu from './menu';
-import { useQuery } from '../../../../contexts/store-state-manager';
+import { useQuery } from '../../hooks/use-query';
 
 /**
  * I need to kick off the query here

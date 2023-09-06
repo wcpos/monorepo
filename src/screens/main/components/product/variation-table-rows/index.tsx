@@ -6,7 +6,7 @@ import Suspense from '@wcpos/components/src/suspense';
 
 import VariationsFilterBar from './filter-bar';
 import Table from './table';
-import { useQuery } from '../../../../../contexts/store-state-manager';
+import { useQuery } from '../../../hooks/use-query';
 
 /**
  *

@@ -9,7 +9,7 @@ import Tabs from '@wcpos/components/src/tabs';
 import Cart from './cart';
 import EmptyCart from './empty-cart';
 import OpenOrderTabs from './tabs';
-import { useQuery } from '../../../../contexts/store-state-manager';
+import { useQuery } from '../../hooks/use-query';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const OpenOrders = ({ isColumn = false }) => {

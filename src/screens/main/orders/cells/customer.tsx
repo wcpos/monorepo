@@ -5,7 +5,7 @@ import { useObservableState } from 'observable-hooks';
 import Pill from '@wcpos/components/src/pill';
 import Text from '@wcpos/components/src/text';
 
-import { useStoreStateManager } from '../../../../contexts/store-state-manager';
+import { useStoreStateManager } from '../../contexts/store-state-manager';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
 type Props = {

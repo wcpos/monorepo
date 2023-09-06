@@ -7,6 +7,7 @@ import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-nativ
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Gutter from '@wcpos/components/src/gutter';
+import Suspense from '@wcpos/components/src/suspense';
 
 import OpenOrders from './cart';
 import Products from './products';
@@ -91,13 +92,17 @@ const ResizableColumns = () => {
 	return (
 		<Box horizontal onLayout={onContainerLayout} style={{ height: '100%' }}>
 			<Animated.View style={[columnStyle]}>
-				<Products isColumn />
+				<Suspense>
+					<Products isColumn />
+				</Suspense>
 			</Animated.View>
 			<GestureDetector gesture={panGesture}>
 				<Gutter />
 			</GestureDetector>
 			<View style={{ flex: 1 }}>
-				<OpenOrders isColumn />
+				<Suspense>
+					<OpenOrders isColumn />
+				</Suspense>
 			</View>
 		</Box>
 	);

@@ -7,8 +7,8 @@ import Link from '@wcpos/components/src/link';
 import Text from '@wcpos/components/src/text';
 
 import { useVariationTable } from './variation-table-rows/context';
-import { useStoreStateManager } from '../../../../contexts/store-state-manager';
-import { updateVariationAttributeSearch } from '../../../../contexts/store-state-manager/hooks/variations.helpers';
+import { useStoreStateManager } from '../../contexts/store-state-manager';
+import { updateVariationAttributeSearch } from '../../contexts/store-state-manager/hooks/variations.helpers';
 import { useT } from '../../../../contexts/translations';
 
 type Props = {

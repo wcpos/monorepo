@@ -5,7 +5,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
 
-import { useStoreStateManager } from '../../../../contexts/store-state-manager';
+import { useStoreStateManager } from '../../contexts/store-state-manager';
 import { useOrders } from '../../contexts/orders';
 
 type Props = {

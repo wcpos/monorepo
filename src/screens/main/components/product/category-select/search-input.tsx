@@ -4,7 +4,7 @@ import delay from 'lodash/delay';
 
 import TextInput from '@wcpos/components/src/textinput';
 
-import { useStoreStateManager } from '../../../../../contexts/store-state-manager';
+import { useStoreStateManager } from '../../../contexts/store-state-manager';
 import { useT } from '../../../../../contexts/translations';
 
 /**

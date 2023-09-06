@@ -1,5 +1,5 @@
 import Variations from './variations';
-import { useQuery } from '../../../../../../contexts/store-state-manager';
+import { useQuery } from '../../../../hooks/use-query';
 
 /**
  *

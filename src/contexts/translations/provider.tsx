@@ -16,7 +16,7 @@ const txInstance = createNativeInstance({
 	filterTags: 'core',
 });
 
-export const TranslationContext = React.createContext<TxNative>(null);
+export const TranslationContext = React.createContext<TxNative['translate']>(null);
 
 /**
  * Convert system locales to our Transifex locales
@@ -104,7 +104,7 @@ export const TranslationProvider = ({ children }) => {
 			 * or the translations are updated
 			 */
 			key={`${locale}-${version}`}
-			value={txInstance}
+			value={txInstance.translate.bind(txInstance)}
 		>
 			{children}
 		</TranslationContext.Provider>

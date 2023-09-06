@@ -1,9 +1,11 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
+import { useSubscription } from 'observable-hooks';
+
+import { useSnackbar } from '@wcpos/components/src/snackbar/use-snackbar';
 
 import { StoreStateManager } from './manager';
-import { useAppState } from '../app-state';
+import { useAppState } from '../../../../contexts/app-state';
 
 export const StoreStateManagerContext = React.createContext<StoreStateManager | undefined>(
 	undefined
@@ -19,7 +21,7 @@ interface StoreStateManagerProviderProps {
 export const StoreStateManagerProvider = ({ children }: StoreStateManagerProviderProps) => {
 	const { storeDB } = useAppState();
 	const storeStateManager = React.useMemo(() => new StoreStateManager(storeDB), [storeDB]);
-	console.log('storeStateManager', storeStateManager);
+	const addSnackbar = useSnackbar();
 
 	/**
 	 *
@@ -33,6 +35,16 @@ export const StoreStateManagerProvider = ({ children }: StoreStateManagerProvide
 			}
 		};
 	}, [storeDB]);
+
+	/**
+	 * @TODO - manage all HTTP errors
+	 */
+	useSubscription(storeStateManager.replicationStateErrors$, (error) => {
+		addSnackbar({
+			message: `${error}`,
+			type: 'critical',
+		});
+	});
 
 	return (
 		<StoreStateManagerContext.Provider value={storeStateManager}>

@@ -4,7 +4,7 @@ import { useObservableSuspense } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
-import { useQuery } from '../../../../contexts/store-state-manager';
+import { useQuery } from '../../hooks/use-query';
 
 /**
  *

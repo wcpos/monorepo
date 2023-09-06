@@ -12,7 +12,6 @@ import log from '@wcpos/utils/src/logger';
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
 import { useAppState } from '../../../../contexts/app-state';
-import { useQuery } from '../../../../contexts/store-state-manager';
 import { useT } from '../../../../contexts/translations';
 import DataTable from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
@@ -21,6 +20,7 @@ import TaxBasedOn from '../../components/product/tax-based-on';
 import UISettings from '../../components/ui-settings';
 import { useTaxHelpers } from '../../contexts/tax-helpers';
 import useUI from '../../contexts/ui-settings';
+import { useQuery } from '../../hooks/use-query';
 import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 
@@ -152,5 +152,4 @@ const POSProducts = ({ isColumn = false }) => {
 	);
 };
 
-// export default React.memo(POSProducts);
 export default POSProducts;

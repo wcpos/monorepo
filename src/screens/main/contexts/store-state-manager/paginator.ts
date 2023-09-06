@@ -40,4 +40,8 @@ export class Paginator<T> {
 		this.currentPage = 0;
 		this.isEndReached = false;
 	}
+
+	hasMore(): boolean {
+		return !this.isEndReached;
+	}
 }

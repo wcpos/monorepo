@@ -10,7 +10,7 @@ import Text from '@wcpos/components/src/text';
 
 import VariationButtons from './buttons';
 import VariationSelect from './select';
-import { updateVariationAttributeSearch } from '../../../../../../contexts/store-state-manager/hooks/variations.helpers';
+import { updateVariationAttributeSearch } from '../../../../contexts/store-state-manager/hooks/variations.helpers';
 import { useT } from '../../../../../../contexts/translations';
 import useCurrencyFormat from '../../../../hooks/use-currency-format';
 

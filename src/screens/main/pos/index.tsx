@@ -5,7 +5,7 @@ import get from 'lodash/get';
 import { ObservableResource, useObservable } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { from, of } from 'rxjs';
-import { switchMap, distinctUntilChanged } from 'rxjs/operators';
+import { switchMap, distinctUntilChanged, tap } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
@@ -14,11 +14,11 @@ import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
 import { useNewOrder } from './use-new-order';
-import { useQuery } from '../../../contexts/store-state-manager';
 import { useT } from '../../../contexts/translations';
 import { useCollection } from '../../../hooks/use-collection';
 import { ModalLayout } from '../../components/modal-layout';
 import { TaxHelpersProvider } from '../contexts/tax-helpers';
+import { useQuery } from '../hooks/use-query';
 import Receipt from '../receipt';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';

@@ -1,4 +1,6 @@
 import { ObservableResource } from 'observable-hooks';
+import { Subject, Observable } from 'rxjs';
+import { mergeMap, takeUntil, filter } from 'rxjs/operators';
 
 import type { StoreDatabase } from '@wcpos/database';
 
@@ -13,7 +15,12 @@ import { ReplicationState } from './replication';
  */
 export class StoreStateManager {
 	private queries: Map<string, Query<any>> = new Map();
-	private replicationStates: Map<string, ReplicationState<any, any>> = new Map(); // Add this line
+	private replicationStates: Map<string, ReplicationState<any, any>> = new Map();
+
+	private replicationStateErrorsSubject = new Subject<Observable<any>>();
+	public replicationStateErrors$ = this.replicationStateErrorsSubject.pipe(
+		mergeMap((error$) => error$)
+	);
 
 	constructor(public storeDB: StoreDatabase) {}
 
@@ -81,13 +88,19 @@ export class StoreStateManager {
 		if (!this.replicationStates.has(endpoint)) {
 			const replication = new ReplicationState({ collection, hooks, http });
 			this.replicationStates.set(endpoint, replication);
+
+			// Subscribe to this replicationState's error$ and remove it upon deregistration
+			const canceled$ = replication.canceled$.pipe(filter((isCanceled) => isCanceled === true));
+			this.replicationStateErrorsSubject.next(replication.error$.pipe(takeUntil(canceled$)));
 		}
 		return this.replicationStates.get(endpoint) as ReplicationState<T>;
 	}
 
-	deregisterReplicationState(endpoint) {
+	deregisterReplicationState(endpoint: string): void {
 		const replicationState = this.replicationStates.get(endpoint);
-		replicationState.cancel();
-		this.replicationStates.delete(endpoint);
+		if (replicationState) {
+			replicationState.cancel();
+			this.replicationStates.delete(endpoint);
+		}
 	}
 }

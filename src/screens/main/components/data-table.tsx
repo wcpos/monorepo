@@ -16,7 +16,7 @@ import TextCell from './text-cell';
 import { useT } from '../../../contexts/translations';
 import useTotalCount from '../hooks/use-total-count';
 
-import type { Query } from '../../../contexts/store-state-manager';
+import type { Query } from '../contexts/store-state-manager';
 
 type UISettingsColumn = import('../contexts/ui-settings').UISettingsColumn;
 

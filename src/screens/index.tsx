@@ -50,69 +50,72 @@ const RootNavigator = () => {
 	}
 	const baseURL = Linking.createURL(pathname);
 
-	const linking = {
-		prefixes: ['wcpos://', baseURL],
-		config: {
-			screens: {
-				AuthStack: {
-					path: pathname + 'connect',
-					screens: {
-						Connect: '',
-						Login: 'login/:siteID',
+	const linking = React.useMemo(
+		() => ({
+			prefixes: ['wcpos://', baseURL],
+			config: {
+				screens: {
+					AuthStack: {
+						path: pathname + 'connect',
+						screens: {
+							Connect: '',
+							Login: 'login/:siteID',
+						},
 					},
-				},
-				MainStack: {
-					path: pathname,
-					screens: {
-						MainDrawer: {
-							// path: pathname,
-							screens: {
-								POSStack: {
-									path: 'cart',
-									screens: {
-										POS: ':orderID?',
-										Checkout: ':orderID/checkout',
-										Receipt: 'receipt/:orderID',
+					MainStack: {
+						path: pathname,
+						screens: {
+							MainDrawer: {
+								// path: pathname,
+								screens: {
+									POSStack: {
+										path: 'cart',
+										screens: {
+											POS: ':orderID?',
+											Checkout: ':orderID/checkout',
+											Receipt: 'receipt/:orderID',
+										},
 									},
-								},
-								ProductsStack: {
-									path: 'products',
-									screens: {
-										Products: '',
-										AddProduct: 'add',
-										EditProduct: 'edit/:productID',
-										EditVariation: 'edit/:parentID/:variationID',
+									ProductsStack: {
+										path: 'products',
+										screens: {
+											Products: '',
+											AddProduct: 'add',
+											EditProduct: 'edit/:productID',
+											EditVariation: 'edit/:parentID/:variationID',
+										},
 									},
-								},
-								OrdersStack: {
-									path: 'orders',
-									screens: {
-										Orders: '',
-										EditOrder: 'edit/:orderID',
-										Receipt: 'receipt/:orderID',
+									OrdersStack: {
+										path: 'orders',
+										screens: {
+											Orders: '',
+											EditOrder: 'edit/:orderID',
+											Receipt: 'receipt/:orderID',
+										},
 									},
-								},
-								CustomersStack: {
-									path: 'customers',
-									screens: {
-										Customers: '',
-										AddCustomer: 'add',
-										EditCustomer: 'edit/:customerID',
+									CustomersStack: {
+										path: 'customers',
+										screens: {
+											Customers: '',
+											AddCustomer: 'add',
+											EditCustomer: 'edit/:customerID',
+										},
 									},
-								},
-								SupportStack: {
-									path: 'support',
+									SupportStack: {
+										path: 'support',
+									},
 								},
 							},
+							Settings: 'settings',
+							Login: 'login',
+							TaxRates: 'tax-rates',
 						},
-						Settings: 'settings',
-						Login: 'login',
-						TaxRates: 'tax-rates',
 					},
 				},
 			},
-		},
-	} as LinkingOptions<RootStackParamList>;
+		}),
+		[baseURL, pathname]
+	);
 
 	return (
 		<NavigationContainer
@@ -140,7 +143,7 @@ const RootNavigator = () => {
 				},
 			}}
 			// onStateChange={(state) => {
-			// 	console.log('state', state);
+			// 	console.log('navigation state', state);
 			// }}
 		>
 			<Stack.Navigator

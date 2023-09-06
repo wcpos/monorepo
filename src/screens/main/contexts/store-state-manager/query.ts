@@ -43,10 +43,8 @@ class Query<T> {
 	private whereClauses: WhereClause[] = [];
 	private queryState$ = new BehaviorSubject<QueryState | undefined>(undefined);
 	private hooks: Hooks = {};
-	private paginator: Paginator<T>;
 
-	public replicationState?: ReplicationState<T, any>; // Add this property
-
+	public readonly paginator: Paginator<T>;
 	public readonly subs: Subscription[] = [];
 
 	constructor(
@@ -266,9 +264,9 @@ class Query<T> {
 		return this.paginator.paginate(this.$);
 	}
 
-	nextPage(): void {
-		return this.paginator.nextPage();
-	}
+	// nextPage(): void {
+	// 	return this.paginator.nextPage();
+	// }
 
 	getApiQueryParams() {
 		const params: Record<string, any> = {};

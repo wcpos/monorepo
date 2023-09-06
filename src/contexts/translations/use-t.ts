@@ -8,5 +8,5 @@ export const useT = () => {
 		throw new Error(`useT must be called within TranslationContext`);
 	}
 
-	return context.translate.bind(context);
+	return context;
 };

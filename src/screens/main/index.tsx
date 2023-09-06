@@ -13,6 +13,7 @@ import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
+import { StoreStateManagerProvider } from './contexts/store-state-manager';
 import { UISettingsProvider } from './contexts/ui-settings';
 import CustomersNavigator from './customers';
 import Help from './help';
@@ -203,23 +204,25 @@ const MainNavigator = () => {
 	const wpAPIURL = useObservableState(site.wp_api_url$, site.wp_api_url);
 
 	return (
-		<UISettingsProvider>
-			<OnlineStatusProvider wpAPIURL={wpAPIURL}>
-				{/** NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
-				<Portal.Provider>
-					<Stack.Navigator screenOptions={{ headerShown: false }}>
-						<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
-						<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-							<Stack.Screen name="Settings" component={SettingsScreen} />
-							<Stack.Screen name="Help" component={HelpScreen} />
-							<Stack.Screen name="Login" component={LoginScreen} />
-							<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
-						</Stack.Group>
-					</Stack.Navigator>
-					<Portal.Manager />
-				</Portal.Provider>
-			</OnlineStatusProvider>
-		</UISettingsProvider>
+		<StoreStateManagerProvider>
+			<UISettingsProvider>
+				<OnlineStatusProvider wpAPIURL={wpAPIURL}>
+					{/** NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
+					<Portal.Provider>
+						<Stack.Navigator screenOptions={{ headerShown: false }}>
+							<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
+							<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
+								<Stack.Screen name="Settings" component={SettingsScreen} />
+								<Stack.Screen name="Help" component={HelpScreen} />
+								<Stack.Screen name="Login" component={LoginScreen} />
+								<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
+							</Stack.Group>
+						</Stack.Navigator>
+						<Portal.Manager />
+					</Portal.Provider>
+				</OnlineStatusProvider>
+			</UISettingsProvider>
+		</StoreStateManagerProvider>
 	);
 };
 

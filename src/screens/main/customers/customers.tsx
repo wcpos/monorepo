@@ -8,12 +8,12 @@ import Suspense from '@wcpos/components/src/suspense';
 
 import cells from './cells';
 import SearchBar from './search-bar';
-import { useQuery } from '../../../contexts/store-state-manager';
 import { useT } from '../../../contexts/translations';
 import AddNewCustomer from '../components/add-new-customer';
 import DataTable from '../components/data-table';
 import UiSettings from '../components/ui-settings';
 import useUI from '../contexts/ui-settings';
+import { useQuery } from '../hooks/use-query';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
