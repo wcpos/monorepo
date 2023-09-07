@@ -1,9 +1,7 @@
 import { isRxDocument } from 'rxdb';
 
-import { createUserDB } from '@wcpos/database/src/users-db';
-
 export default class CustomCache {
-	constructor() {
+	constructor(public readonly userDB) {
 		this.translationsByLocale = {};
 	}
 
@@ -19,11 +17,25 @@ export default class CustomCache {
 			/**
 			 * if updated translations are different from local storage, update local storage
 			 */
-			const userDB = await createUserDB();
-			const localDoc = await userDB.getLocal(localeCode);
-			const localTranslations = isRxDocument(localDoc) ? localDoc.toJSON().data : {};
-			if (JSON.stringify(localTranslations) !== JSON.stringify(translations)) {
-				await userDB.upsertLocal(localeCode, translations);
+			try {
+				const localDoc = await this.userDB.getLocal('translations');
+
+				if (!isRxDocument(localDoc)) {
+					// first save to local storage
+					await this.userDB.insertLocal('translations', {
+						[localeCode]: translations,
+					});
+				} else {
+					// update if changed
+					const localTranslations = localDoc.get(localeCode) || {};
+					if (JSON.stringify(localTranslations) !== JSON.stringify(translations)) {
+						await localDoc.incrementalPatch({
+							[localeCode]: translations,
+						});
+					}
+				}
+			} catch (error) {
+				console.error(error);
 			}
 		}
 

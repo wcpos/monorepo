@@ -6,7 +6,7 @@ import { filter } from 'rxjs/operators';
 import { storeCollections } from '@wcpos/database';
 import type { StoreDatabaseCollections } from '@wcpos/database';
 
-import { useAppState } from '../contexts/app-state';
+import { useAppState } from '../../../contexts/app-state';
 
 export type CollectionKey = keyof typeof storeCollections;
 

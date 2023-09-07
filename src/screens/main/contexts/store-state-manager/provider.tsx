@@ -25,19 +25,6 @@ export const StoreStateManagerProvider = ({ children }: StoreStateManagerProvide
 	const addSnackbar = useSnackbar();
 
 	/**
-	 *
-	 */
-	React.useEffect(() => {
-		// Perform any required setup here...
-		return () => {
-			// Perform any cleanup here...
-			if (storeDB) {
-				storeDB.destroy();
-			}
-		};
-	}, [storeDB]);
-
-	/**
 	 * @TODO - manage all HTTP errors
 	 */
 	useSubscription(storeStateManager.replicationStateErrors$, (error) => {

@@ -110,6 +110,20 @@ export const AppStateProvider = ({ children }: AppStateProviderProps) => {
 	/**
 	 *
 	 */
+	React.useEffect(() => {
+		// Perform any required setup here...
+		return () => {
+			// Perform any cleanup here...
+			if (storeDB) {
+				// free up memory is the storeDB changes
+				storeDB.destroy();
+			}
+		};
+	}, [storeDB]);
+
+	/**
+	 *
+	 */
 	return (
 		<AppStateContext.Provider
 			key={store?.localID}

@@ -11,7 +11,7 @@ import * as products from './hooks/products';
 import * as tags from './hooks/tags';
 import * as taxes from './hooks/tax-rates';
 import * as variations from './hooks/variations';
-import { useCollection, CollectionKey } from '../../../../hooks/use-collection';
+import { useCollection, CollectionKey } from '../use-collection';
 import { useStoreStateManager } from '../../contexts/store-state-manager';
 import { useReplicationState } from '../use-replication-state';
 
@@ -81,8 +81,8 @@ export const useQuery = <T>({ queryKeys, collectionName, initialQuery, parent }:
 	 */
 	query.sync = React.useCallback(() => {
 		replicationState.start();
-		replicationState.runPull(query.getApiQueryParams());
-	}, [query, replicationState]);
+		// replicationState.runPull(query.getApiQueryParams());
+	}, [replicationState]);
 
 	/**
 	 *

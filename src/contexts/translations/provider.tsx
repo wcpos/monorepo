@@ -6,15 +6,10 @@ import { useObservableState, useObservableSuspense, ObservableResource } from 'o
 import { of, lastValueFrom } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
+import CustomCache from './cache';
 import locales from './locales.json';
 import { userDB$ } from '../../hydrate-data/global-user';
 import { useAppState } from '../app-state';
-
-const txInstance = createNativeInstance({
-	token: '1/09853773ef9cda3be96c8c451857172f26927c0f',
-	// cache: new CustomCache(),
-	filterTags: 'core',
-});
 
 export const TranslationContext = React.createContext<TxNative['translate']>(null);
 
@@ -36,19 +31,19 @@ const localTranslationsResource = new ObservableResource(localTranslations$);
  * Listen to TRANSLATIONS_FETCHED event and save to local storage
  * @TODO - move this back into the custom cache, so we can use different instances
  */
-onEvent('TRANSLATIONS_FETCHED', async ({ localeCode, filterTags }, _tx) => {
-	const newTranslation = _tx.cache.getTranslations(localeCode);
-	const userDB = await lastValueFrom(userDB$);
-	const localTranslations = await userDB.getLocal('translations');
-	const currentTranslation = localTranslations?.get(localeCode);
+// onEvent('TRANSLATIONS_FETCHED', async ({ localeCode, filterTags }, _tx) => {
+// 	const newTranslation = _tx.cache.getTranslations(localeCode);
+// 	const userDB = await lastValueFrom(userDB$);
+// 	const localTranslations = await userDB.getLocal('translations');
+// 	const currentTranslation = localTranslations?.get(localeCode);
 
-	if (JSON.stringify(newTranslation) !== JSON.stringify(currentTranslation)) {
-		await userDB.upsertLocal('translations', {
-			...(localTranslations?.toJSON().data ?? {}),
-			[localeCode]: newTranslation,
-		});
-	}
-});
+// 	if (JSON.stringify(newTranslation) !== JSON.stringify(currentTranslation)) {
+// 		await userDB.upsertLocal('translations', {
+// 			...(localTranslations?.toJSON().data ?? {}),
+// 			[localeCode]: newTranslation,
+// 		});
+// 	}
+// });
 
 /**
  * This is a stripped down version of the TransifexProvider
@@ -59,9 +54,20 @@ onEvent('TRANSLATIONS_FETCHED', async ({ localeCode, filterTags }, _tx) => {
  * - load the translations from local storage (if any)
  */
 export const TranslationProvider = ({ children }) => {
-	const { store } = useAppState();
+	const { store, userDB } = useAppState();
 	const cachedTranslationsDoc = useObservableSuspense(localTranslationsResource);
 	const version = cachedTranslationsDoc?.getLatest().revision;
+
+	/**
+	 *
+	 */
+	const txInstance = React.useMemo(() => {
+		return createNativeInstance({
+			token: '1/09853773ef9cda3be96c8c451857172f26927c0f',
+			cache: new CustomCache(userDB), // pass in the userDB so we can save the translations
+			filterTags: 'core',
+		});
+	}, [userDB]);
 
 	/**
 	 *
@@ -80,7 +86,12 @@ export const TranslationProvider = ({ children }) => {
 	 */
 	const cachedTranslations = cachedTranslationsDoc?.get(locale);
 	if (cachedTranslations) {
-		txInstance.cache.update(locale, cachedTranslations);
+		txInstance.cache.update(
+			locale,
+			cachedTranslations,
+			// special case to manually update the CustomCache
+			true
+		);
 	}
 
 	/**

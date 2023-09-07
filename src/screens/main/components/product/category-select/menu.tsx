@@ -1,9 +1,10 @@
 import * as React from 'react';
 import { View, FlatList } from 'react-native';
 
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
+import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 
@@ -47,11 +48,7 @@ interface CategorySelectMenuProps {
 const CategorySelectMenu = ({ query, onSelect }) => {
 	const theme = useTheme();
 	const categories = useObservableSuspense(query.resource);
-
-	// const { paginatedResource, replicationState, loadNextPage } = useProductCategories();
-	// const { data: categories, count, hasMore } = useObservableSuspense(paginatedResource);
-	// const loading = useObservableState(replicationState.active$, false);
-	// const total = useTotalCount('products/categories', replicationState);
+	const loading = useObservableState(query.replicationState.active$, false);
 	const { targetMeasurements } = usePopover();
 
 	/**
@@ -107,8 +104,8 @@ const CategorySelectMenu = ({ query, onSelect }) => {
 				renderItem={renderItem}
 				// estimatedItemSize={32}
 				ListEmptyComponent={<EmptyTableRow />}
-				// onEndReached={onEndReached}
-				// ListFooterComponent={loading ? Loader : null}
+				onEndReached={() => query.nextPage()}
+				ListFooterComponent={loading ? Loader : null}
 			/>
 		</View>
 	);

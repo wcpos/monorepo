@@ -14,7 +14,7 @@ import EditProduct from './edit-product';
 import EditVariation from './edit-variation';
 import Products from './products';
 import { useT } from '../../../contexts/translations';
-import { useCollection } from '../../../hooks/use-collection';
+import { useCollection } from '../hooks/use-collection';
 import { ModalLayout } from '../../components/modal-layout';
 import { TaxHelpersProvider } from '../contexts/tax-helpers';
 import useUISettings from '../contexts/ui-settings';

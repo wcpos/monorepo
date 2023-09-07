@@ -83,10 +83,11 @@ export class StoreStateManager {
 		endpoint: string,
 		collection,
 		http: any,
-		hooks: any
+		hooks: any,
+		parent: any
 	): ReplicationState<T> {
 		if (!this.replicationStates.has(endpoint)) {
-			const replication = new ReplicationState({ collection, hooks, http });
+			const replication = new ReplicationState({ collection, hooks, http, parent });
 			this.replicationStates.set(endpoint, replication);
 
 			// Subscribe to this replicationState's error$ and remove it upon deregistration

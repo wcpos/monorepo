@@ -1,7 +1,8 @@
 import Bottleneck from 'bottleneck';
+import { is } from 'core-js/core/object';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
-import { RxDocumentData, WithDeleted } from 'rxdb';
+import { RxDocumentData, WithDeleted, requestIdlePromise } from 'rxdb';
 import { BehaviorSubject, Subject, Observable, Subscription, lastValueFrom, interval } from 'rxjs';
 import {
 	filter,
@@ -66,18 +67,27 @@ export class ReplicationState<RxDocType> {
 	public readonly collection: any;
 	public readonly hooks: any;
 	public readonly http: any;
+	public readonly parent: any;
+	public readonly greedy: boolean;
 	public readonly limiter: any;
 
 	/**
 	 *
 	 */
-	constructor({ collection, hooks, http }) {
+	constructor({ collection, hooks, http, parent, greedy = false }) {
 		this.collection = collection;
 		this.hooks = hooks;
 		this.http = http;
+		this.parent = parent;
+		this.greedy = greedy;
 		this.limiter = new Bottleneck({
 			maxConcurrent: 1,
 		});
+
+		// @HACK - we need variations and taxes to be greedy, ie: get all available data
+		if (collection.name === 'variations' || collection.name === 'taxes') {
+			this.greedy = true;
+		}
 
 		// stop the replication when the collection gets destroyed
 		this.collection.onDestroy.push(() => this.cancel());
@@ -100,47 +110,68 @@ export class ReplicationState<RxDocType> {
 			})
 		);
 
-		// subscribe to collection changes
+		/**
+		 * subscribe to collection changes
+		 * @TODO - categories and tags don't have a date_modified_gmt field, what to do?
+		 */
 		this.subs.push(
 			this.collection
 				.find({
 					selector: {
 						id: { $ne: null },
 					},
-					sort: [{ date_modified_gmt: 'desc' }],
+					sort:
+						this.collection.name === 'products/categories' ||
+						this.collection.name === 'products/tags'
+							? undefined
+							: [{ date_modified_gmt: 'desc' }],
 				})
 				.$.subscribe((docs) => {
-					const ids = docs.map((doc) => doc.get('id'));
+					/**
+					 * @TODO - I need to change the tax-rates schema to make sure id is always integer
+					 */
+					const ids = docs.map((doc) => parseInt(doc.get('id'), 10));
 					const lastModified = docs[0]?.get('date_modified_gmt');
 					this.subjects.localIDs.next(ids);
 					this.subjects.lastModified.next(lastModified);
-				})
-		);
 
-		// set up audit on a 10 minute interval
-		this.subs.push(
-			this.paused$
-				.pipe(
-					switchMap((isPaused) => (isPaused ? [] : interval(1000 * 60 * 10).pipe(startWith(0)))),
-					filter(() => !this.subjects.paused.getValue())
-				)
-				.subscribe(async () => {
-					await this.runAudit();
-
-					// also check for recent updates
-					const lastModified = this.subjects.lastModified.getValue();
-					if (lastModified) {
-						this.runPull(
-							{
-								after: lastModified,
-							},
-							[]
-						);
-					} else {
-						this.runPull({ orderby: 'date', order: 'desc' }, []);
+					/**
+					 * @HACK - this is ugly, but works for now
+					 * It might be better to use the WP Headers, eg: X-WP-TotalPages to trigger the next page
+					 */
+					if (this.greedy) {
+						const unsynced = this.getUnsyncedRemoteIDs();
+						if (unsynced.length > 0) {
+							this.runPull();
+						}
 					}
 				})
 		);
+
+		/**
+		 *
+		 */
+		this.subs.push(
+			this.paused$
+				.pipe(
+					switchMap((isPaused) => (isPaused ? [] : interval(1000 * 60 * 5).pipe(startWith(0)))),
+					filter(() => !this.subjects.paused.getValue())
+				)
+				.subscribe(async () => {
+					this.runAll();
+				})
+		);
+
+		/**
+		 * If there is any error on the http client, pause the replication
+		 */
+		// this.subs.push(
+		// 	this.http.error$.subscribe((error) => {
+		// 		if (error) {
+		// 			this.pause();
+		// 		}
+		// 	})
+		// );
 
 		// listen to scheduled jobs
 		this.limiter.on('executing', () => {
@@ -164,13 +195,12 @@ export class ReplicationState<RxDocType> {
 	/**
 	 *
 	 */
-	async start() {
+	start() {
 		this.subjects.paused.next(false);
 	}
 
 	// Pause the replication
 	pause() {
-		console.log('pausing replication');
 		this.subjects.paused.next(true);
 	}
 
@@ -213,12 +243,70 @@ export class ReplicationState<RxDocType> {
 	/**
 	 *
 	 */
+	async runAll() {
+		await this.runAudit();
+		await this.runLastModified();
+		await this.runPull();
+	}
+
+	/**
+	 *
+	 */
 	async runAudit() {
+		if (this.isStopped()) {
+			return;
+		}
+
 		if (this.lastFetchRemoteIDsTime < new Date().getTime() - 1000 * 60 * 10) {
 			return this.limiter
 				.schedule({ priority: 2, id: 'audit' }, this.fetchRemoteIDs.bind(this))
 				.catch((error) => this.subjects.error.next(error));
 		}
+	}
+
+	/**
+	 *
+	 */
+	async runLastModified() {
+		if (this.isStopped()) {
+			return;
+		}
+
+		/**
+		 * @HACK - categories and tags don't have a date_modified_gmt field
+		 */
+		if (
+			this.collection.name === 'products/categories' ||
+			this.collection.name === 'products/tags'
+		) {
+			return;
+		}
+
+		const lastModified = this.subjects.lastModified.getValue();
+		let queryParams;
+
+		if (lastModified) {
+			queryParams = { after: lastModified };
+		} else {
+			queryParams = { orderby: 'date', order: 'desc' };
+		}
+
+		// filter the query params into the format we want for WC REST API
+		let params = defaultFilterApiQueryParams(queryParams);
+		if (this.hooks?.filterApiQueryParams) {
+			params = this.hooks.filterApiQueryParams(params);
+		}
+
+		// allow early exit from some pull requests
+		if (!params) {
+			return;
+		}
+
+		return this.limiter
+			.schedule({ priority: 4, id: 'lastModified' }, this.pull.bind(this, params))
+			.catch((error) => {
+				this.subjects.error.next(error);
+			});
 	}
 
 	/**
@@ -238,7 +326,7 @@ export class ReplicationState<RxDocType> {
 		}
 
 		// allow early exit from some pull requests
-		if (!params) {
+		if (!params || isEmpty(include)) {
 			return;
 		}
 
@@ -259,11 +347,20 @@ export class ReplicationState<RxDocType> {
 
 		if (this.hooks?.fetchRemoteIDs) {
 			// special case for variations
-			remoteIDs = await this.hooks?.fetchRemoteIDs(parent);
+			remoteIDs = await this.hooks?.fetchRemoteIDs(this.parent);
 		} else {
 			const response = await this.http.get('', {
 				params: { fields: ['id'], posts_per_page: -1 },
 			});
+
+			/**
+			 * If there is an auth error, response will be null
+			 * @TODO - what should we do here?
+			 */
+			if (!response) {
+				return;
+			}
+
 			const data = get(response, 'data');
 			remoteIDs = data.map((doc) => doc.id);
 		}
@@ -272,14 +369,26 @@ export class ReplicationState<RxDocType> {
 		if (Array.isArray(remoteIDs) && remoteIDs.every((item) => typeof item === 'number')) {
 			await this.collection.upsertLocal('audit', { remoteIDs });
 			this.lastFetchRemoteIDsTime = new Date().getTime();
-			return remoteIDs;
 		} else {
 			throw new Error('Fetch remote IDs failed');
 		}
+
+		/**
+		 *
+		 */
+		const remove = this.subjects.localIDs.getValue().filter((id) => !remoteIDs.includes(id));
+		if (remove.length > 0) {
+			// deletion should be rare, only when an item is deleted from the server
+			log.warn('removing', remove, 'from', this.collection.name);
+			await this.collection.find({ selector: { id: { $in: remove } } }).remove();
+		}
+
+		return remoteIDs;
 	}
 
 	/**
 	 * Makes a request to the server and saves the data to the local database
+	 * @TODO - we need a greedy pull which checks the total pages and pulls all pages
 	 */
 	async pull(params, include) {
 		let response;
@@ -299,6 +408,14 @@ export class ReplicationState<RxDocType> {
 					},
 				}
 			);
+		}
+
+		/**
+		 * If there is an auth error, response will be null
+		 * @TODO - what should we do here?
+		 */
+		if (!response) {
+			return;
 		}
 
 		const data = get(response, 'data', []);

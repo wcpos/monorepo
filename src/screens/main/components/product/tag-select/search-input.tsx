@@ -4,12 +4,10 @@ import delay from 'lodash/delay';
 
 import TextInput from '@wcpos/components/src/textinput';
 
-import { useStoreStateManager } from '../../../contexts/store-state-manager';
 import { useT } from '../../../../../contexts/translations';
 
 const SearchInput = ({ setOpened, onBlur, onSearch, value }) => {
 	const [search, setSearch] = React.useState('');
-	const manager = useStoreStateManager();
 	const t = useT();
 
 	/**
@@ -18,10 +16,9 @@ const SearchInput = ({ setOpened, onBlur, onSearch, value }) => {
 	const handleSearch = React.useCallback(
 		(search) => {
 			setSearch(search);
-			const query = manager.getQuery(['products/tags']);
-			query.debouncedSearch(search);
+			onSearch(search);
 		},
-		[manager]
+		[onSearch]
 	);
 
 	/**

@@ -14,7 +14,7 @@ import log from '@wcpos/utils/src/logger';
 
 import { CountrySelect, StateSelect } from './country-state-select';
 import { useT } from '../../../contexts/translations';
-import { useCollection } from '../../../hooks/use-collection';
+import { useCollection } from '../hooks/use-collection';
 import usePushDocument from '../contexts/use-push-document';
 
 interface AddNewCustomerProps {

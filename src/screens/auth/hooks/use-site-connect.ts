@@ -48,6 +48,14 @@ const useSiteConnect = () => {
 			// hack - add param to break cache
 			const response = await http.get(wpApiUrl, { params: { wcpos: 1 } });
 			const data = get(response, 'data') as WpJsonResponse;
+
+			/**
+			 * I have seen cases where the data is not complete, the wp-json index can be 50kb for some sites
+			 */
+			if (!data || typeof data !== 'object') {
+				throw Error(t('Bad API response', { _tags: 'core' }));
+			}
+
 			const namespaces = get(data, 'namespaces');
 			if (!namespaces) {
 				throw Error(t('WordPress API not found', { _tags: 'core' }));

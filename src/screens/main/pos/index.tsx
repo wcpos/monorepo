@@ -15,7 +15,7 @@ import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
 import { useNewOrder } from './use-new-order';
 import { useT } from '../../../contexts/translations';
-import { useCollection } from '../../../hooks/use-collection';
+import { useCollection } from '../hooks/use-collection';
 import { ModalLayout } from '../../components/modal-layout';
 import { TaxHelpersProvider } from '../contexts/tax-helpers';
 import { useQuery } from '../hooks/use-query';

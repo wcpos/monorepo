@@ -4,7 +4,6 @@ import delay from 'lodash/delay';
 
 import TextInput from '@wcpos/components/src/textinput';
 
-import { useStoreStateManager } from '../../contexts/store-state-manager';
 import { useT } from '../../../../contexts/translations';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
@@ -14,7 +13,6 @@ import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer, onBlur, size, style }) => {
 	const [search, setSearch] = React.useState('');
 	const { format } = useCustomerNameFormat();
-	const manager = useStoreStateManager();
 	const t = useT();
 
 	/**
@@ -23,10 +21,9 @@ const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer, onBlur,
 	const handleSearch = React.useCallback(
 		(search) => {
 			setSearch(search);
-			const query = manager.getQuery(['customers']);
-			query.debouncedSearch(search);
+			onSearch(search);
 		},
-		[manager]
+		[onSearch]
 	);
 
 	/**

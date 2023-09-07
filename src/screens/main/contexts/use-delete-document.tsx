@@ -4,7 +4,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
-import { useRestHttpClient } from '../../../hooks/use-rest-http-client';
+import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 type RxCollection = import('rxdb').RxCollection;
 

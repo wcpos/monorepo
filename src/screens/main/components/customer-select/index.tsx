@@ -38,7 +38,7 @@ const CustomerSelect = ({
 	 */
 	const onSearch = React.useCallback(
 		(search) => {
-			const query = manager.getQuery(['customers']);
+			const query = manager.getQuery(['customers', 'select']);
 			query.debouncedSearch(search);
 		},
 		[manager]
@@ -56,6 +56,7 @@ const CustomerSelect = ({
 				 */
 				onSelectCustomer(value);
 				setOpened(false);
+				onSearch('');
 			}}
 			withArrow={false}
 			matchWidth

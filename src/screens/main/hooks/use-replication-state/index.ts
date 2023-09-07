@@ -9,9 +9,9 @@ import * as products from './hooks/products';
 import * as tags from './hooks/tags';
 import * as taxes from './hooks/tax-rates';
 import * as variations from './hooks/variations';
-import { useCollection, CollectionKey } from '../../../../hooks/use-collection';
-import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
 import { useStoreStateManager } from '../../contexts/store-state-manager';
+import { useCollection, CollectionKey } from '../use-collection';
+import { useRestHttpClient } from '../use-rest-http-client';
 
 const allHooks = {
 	products,
@@ -49,7 +49,13 @@ export const useReplicationState = <T>({ collectionName, parent }: Props) => {
 	const http = useRestHttpClient(endpoint);
 	const hooks = get(allHooks, collectionName, {});
 
-	const replicationState = manager.registerReplicationState<T>(endpoint, collection, http, hooks);
+	const replicationState = manager.registerReplicationState<T>(
+		endpoint,
+		collection,
+		http,
+		hooks,
+		parent
+	);
 
 	/**
 	 * This is a bit of a hack

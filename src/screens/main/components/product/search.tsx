@@ -9,7 +9,7 @@ import TextInput from '@wcpos/components/src/textinput';
 
 import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
-import { useCollection } from '../../../../hooks/use-collection';
+import { useCollection } from '../../hooks/use-collection';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;

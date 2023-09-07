@@ -4,11 +4,14 @@ import { useNavigation } from '@react-navigation/native';
 import merge from 'lodash/merge';
 import set from 'lodash/set';
 import { useObservableState } from 'observable-hooks';
+import { BehaviorSubject } from 'rxjs';
 
 import useHttpClient, { RequestConfig } from '@wcpos/hooks/src/use-http-client';
 import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 
-import { useAppState } from '../contexts/app-state';
+import { useAppState } from '../../../contexts/app-state';
+
+const errorSubject = new BehaviorSubject(null);
 
 /**
  * TODO - becareful to use useOnlineStatus because it emits a lot of events
@@ -30,6 +33,7 @@ export const useRestHttpClient = (endpoint = '') => {
 	const errorHandler = React.useCallback(
 		(error) => {
 			if (error.response && error.response.status === 401) {
+				errorSubject.next(error);
 				navigation.navigate('Login');
 				return null; // prevent snackbars from showing
 			}
@@ -90,6 +94,11 @@ export const useRestHttpClient = (endpoint = '') => {
 			head(url: string, config: RequestConfig = {}) {
 				return request({ ...config, method: 'HEAD', url });
 			},
+
+			/**
+			 * @TODO - this is just an experiment to see if the httpClient should manage it's own error state
+			 */
+			error$: errorSubject.asObservable(),
 		}),
 		[request]
 	);

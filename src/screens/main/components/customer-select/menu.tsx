@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View, FlatList } from 'react-native';
 
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import { Avatar } from '@wcpos/components/src/avatar/avatar';
@@ -48,7 +48,7 @@ interface CustomerSelectMenuProps {
 const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 	const theme = useTheme();
 	const customers = useObservableSuspense(query.paginatedResource);
-	// const loading = useObservableState(replicationState.active$, false);
+	const loading = useObservableState(query.replicationState.active$, false);
 	// const total = useTotalCount('customers', replicationState);
 	const { targetMeasurements, contentMeasurements } = usePopover();
 	const t = useT();
@@ -129,7 +129,7 @@ const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 				estimatedItemSize={50}
 				ListHeaderComponent={renderGuestItem}
 				onEndReached={() => query.nextPage()}
-				// ListFooterComponent={loading ? Loader : null}
+				ListFooterComponent={loading ? Loader : null}
 			/>
 		</View>
 	);
