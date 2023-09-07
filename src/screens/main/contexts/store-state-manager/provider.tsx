@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useSubscription } from 'observable-hooks';
 
 import { useSnackbar } from '@wcpos/components/src/snackbar/use-snackbar';
+import log from '@wcpos/utils/src/logger';
 
 import { StoreStateManager } from './manager';
 import { useAppState } from '../../../../contexts/app-state';
@@ -40,8 +41,13 @@ export const StoreStateManagerProvider = ({ children }: StoreStateManagerProvide
 	 * @TODO - manage all HTTP errors
 	 */
 	useSubscription(storeStateManager.replicationStateErrors$, (error) => {
+		if (error.message.includes('A job with the same id already exists')) {
+			// HACK - I'm just going to ignore these for now
+			log.info(error.message);
+			return;
+		}
 		addSnackbar({
-			message: `${error}`,
+			message: error.message,
 			type: 'critical',
 		});
 	});

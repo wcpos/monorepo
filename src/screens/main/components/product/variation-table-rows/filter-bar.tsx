@@ -11,7 +11,6 @@ import Icon from '@wcpos/components/src/icon';
 import AttributePill from './attribute-pill';
 import { useVariationTable } from './context';
 import { useStoreStateManager } from '../../../contexts/store-state-manager';
-import { updateVariationAttributeSearch } from '../../../contexts/store-state-manager/hooks/variations.helpers';
 
 /**
  *
@@ -31,8 +30,7 @@ const VariationsFilterBar = ({ parent }) => {
 	 */
 	const handleSelect = React.useCallback(
 		(attribute) => {
-			const newState = updateVariationAttributeSearch(query.currentState.search, attribute);
-			query.search(newState);
+			query.updateVariationAttributeSearch(attribute);
 		},
 		[query]
 	);

@@ -1,6 +1,6 @@
 import get from 'lodash/get';
 
-import { updateVariationAttributeSearch, filterVariationsByAttributes } from './variations.helpers';
+import { filterVariationsByAttributes } from './variations.helpers';
 
 type ProductVariationDocument = import('@wcpos/database/src').ProductVariationDocument;
 

@@ -9,9 +9,9 @@ import * as products from './hooks/products';
 import * as tags from './hooks/tags';
 import * as taxes from './hooks/tax-rates';
 import * as variations from './hooks/variations';
-import { useStoreStateManager } from '../../contexts/store-state-manager';
 import { useCollection, CollectionKey } from '../../../../hooks/use-collection';
 import { useRestHttpClient } from '../../../../hooks/use-rest-http-client';
+import { useStoreStateManager } from '../../contexts/store-state-manager';
 
 const allHooks = {
 	products,
@@ -50,6 +50,16 @@ export const useReplicationState = <T>({ collectionName, parent }: Props) => {
 	const hooks = get(allHooks, collectionName, {});
 
 	const replicationState = manager.registerReplicationState<T>(endpoint, collection, http, hooks);
+
+	/**
+	 * This is a bit of a hack
+	 * If the http client changes, eg: the user updates auth, we need to update the http client
+	 * Another option would be to deregister the replication state and register a new one,
+	 * like we do with collection changes
+	 */
+	React.useEffect(() => {
+		replicationState.setHttpClient(http);
+	}, [http, replicationState]);
 
 	return replicationState;
 };

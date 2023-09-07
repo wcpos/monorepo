@@ -1,13 +1,12 @@
 import { orderBy } from '@shelf/fast-natural-order-by';
 import debounce from 'lodash/debounce';
-import isEmpty from 'lodash/isEmpty';
+import get from 'lodash/get';
 import isEqual from 'lodash/isEqual';
 import isString from 'lodash/isString';
 import { RxCollection, RxDocument } from 'rxdb';
 import { BehaviorSubject, Observable, Subscription, of } from 'rxjs';
 import { switchMap, map, distinctUntilChanged, shareReplay, tap, skip } from 'rxjs/operators';
 
-import type { ReplicationState } from '@wcpos/database/src/plugins/wc-rest-api-replication';
 import log from '@wcpos/utils/src/logger';
 
 import { Paginator } from './paginator';
@@ -301,6 +300,43 @@ class Query<T> {
 
 		// do I need to complete all the observables?
 		this.queryState$.complete();
+	}
+
+	/**
+	 * Handle attribute selection
+	 * Attributes queries have the form:
+	 * {
+	 * 	selector: {
+	 * 		attributes: {
+	 * 			$allMatch: [
+	 * 				{
+	 * 					name: 'Color',
+	 * 					option: 'Blue',
+	 * 				},
+	 * 			],
+	 * 		},
+	 * 	}
+	 *
+	 * Note: $allMatch is an array so we need to check if it exists and add/remove to it
+	 */
+	updateVariationAttributeSearch(attribute: { id: number; name: string; value: string }) {
+		// this is only a helper for variations
+		if (this.collection.name !== 'variations') {
+			throw new Error('updateVariationAttributeSearch is only for variations');
+		}
+		// if null, remove the attribute search
+		if (attribute === null) {
+			return { attributes: null };
+		}
+		// add attribute to query
+		const $allMatch = get(this.currentState.search, 'attributes', []);
+		const index = $allMatch.findIndex((a) => a.name === attribute.name);
+		if (index > -1) {
+			$allMatch[index] = attribute;
+		} else {
+			$allMatch.push(attribute);
+		}
+		this.search({ attributes: [...$allMatch] });
 	}
 }
 

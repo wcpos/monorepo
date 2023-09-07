@@ -63,7 +63,9 @@ export const useQuery = <T>({ queryKeys, collectionName, initialQuery, parent }:
 	});
 
 	/**
-	 *
+	 * @TODO - doing a storeDB.reset will recreate the collection, which will cause this hook to re-run
+	 * If we deregister here it will create a new Query and ReplicationState
+	 * It works, but I'm not super happy with it
 	 */
 	query.clear = React.useCallback(async () => {
 		manager.deregisterQuery(queryKeys);

@@ -7,9 +7,8 @@ import Link from '@wcpos/components/src/link';
 import Text from '@wcpos/components/src/text';
 
 import { useVariationTable } from './variation-table-rows/context';
-import { useStoreStateManager } from '../../contexts/store-state-manager';
-import { updateVariationAttributeSearch } from '../../contexts/store-state-manager/hooks/variations.helpers';
 import { useT } from '../../../../contexts/translations';
+import { useStoreStateManager } from '../../contexts/store-state-manager';
 
 type Props = {
 	product: import('@wcpos/database').ProductDocument;
@@ -35,12 +34,11 @@ const ProductAttributes = ({ product }: Props) => {
 				});
 			} else {
 				const query = manager.getQuery(['variations', { parentID: product.id }]);
-				const newState = updateVariationAttributeSearch(query.currentState.search, {
+				query.updateVariationAttributeSearch({
 					id: attribute.id,
 					name: attribute.name,
 					option,
 				});
-				query.search(newState);
 			}
 		},
 		[expanded, manager, product.id, setExpanded]

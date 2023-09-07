@@ -18,15 +18,17 @@ import log from '@wcpos/utils/src/logger';
 import { defaultFilterApiQueryParams } from './replication.helpers';
 
 /**
- * The Bottleneck class is used to limit the number of concurrent requests
- * - generally we only want to run job at a time, eg: audit, then pull, then push
- *
  * The ReplicationState class holds the state of the replication and exposes observables
+ * Each WC REST API endpoint has a ReplicationState instance
+ *
  * - Audit runs first and is the highest priority, it initializes the replication state so we know
  *  what remote IDs are known to the replication, and what the last modified date is
  * - Next priority is responding to the queryState, we want to make sure the user has the information
  * they are looking for as quickly as possible
  * - Next we set up a general pull/push replication that runs in the background
+ *
+ * The Bottleneck class is used to limit the number of concurrent requests
+ * - generally we only want to run job at a time, eg: audit, lastModified, pull, push
  *
  * There are also some helper methods to pull/push on demand
  */
@@ -153,6 +155,13 @@ export class ReplicationState<RxDocType> {
 	}
 
 	/**
+	 * Set the http client
+	 */
+	setHttpClient(http) {
+		this.http = http;
+	}
+
+	/**
 	 *
 	 */
 	async start() {
@@ -169,7 +178,9 @@ export class ReplicationState<RxDocType> {
 	cancel() {
 		this.isCanceled = true;
 		this.subs.forEach((sub) => sub.unsubscribe());
-		this.limiter.stop();
+		this.limiter.stop().catch((error) => {
+			this.subjects.error.next(error);
+		});
 
 		this.subjects.active.next(false);
 		this.subjects.canceled.next(true);
