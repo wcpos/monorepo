@@ -42,6 +42,6 @@ export const useGuestCustomer = () => {
 				state: '',
 			},
 		}),
-		[country]
+		[country, t]
 	);
 };
