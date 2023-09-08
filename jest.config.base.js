@@ -12,10 +12,10 @@ module.exports = {
 	collectCoverage: true,
 	coveragePathIgnorePatterns: ['(tests/.*.mock).(jsx?|tsx?)$'],
 	verbose: true,
-	globals: {
-		'ts-jest': {
-			diagnostics: false,
-			// isolatedModules: true,
-		},
-	},
+	// globals: {
+	// 	'ts-jest': {
+	// 		diagnostics: false,
+	// 		// isolatedModules: true,
+	// 	},
+	// },
 };

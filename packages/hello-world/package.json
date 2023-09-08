@@ -17,9 +17,9 @@
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
-    "react-native-builder-bob": "0.20.4",
-    "tsup": "^6.7.0",
-    "typescript": "^5.0.4"
+    "react-native-builder-bob": "0.21.3",
+    "tsup": "^7.2.0",
+    "typescript": "^5.1.6"
   },
   "eslintConfig": {
     "extends": "@wcpos/eslint-config"

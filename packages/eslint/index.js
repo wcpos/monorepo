@@ -1,6 +1,6 @@
 module.exports = {
 	extends: ['eslint-config-universe', 'plugin:react-hooks/recommended'],
-	plugins: ['@typescript-eslint', 'jest', 'react-native', 'react-hooks'],
+	plugins: ['@typescript-eslint', 'react-native', 'react-hooks'],
 	rules: {
 		'prettier/prettier': [
 			'error',
@@ -35,5 +35,6 @@ module.exports = {
 				'newlines-between': 'always',
 			},
 		],
+		'@typescript-eslint/no-useless-constructor': 'off',
 	},
 };
