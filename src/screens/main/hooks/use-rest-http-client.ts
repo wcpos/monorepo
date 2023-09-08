@@ -1,8 +1,8 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
+import get from 'lodash/get';
 import merge from 'lodash/merge';
-import set from 'lodash/set';
 import { useObservableState } from 'observable-hooks';
 import { BehaviorSubject } from 'rxjs';
 
@@ -52,7 +52,7 @@ export const useRestHttpClient = (endpoint = '') => {
 	 */
 	const request = React.useCallback(
 		async (reqConfig: RequestConfig = {}) => {
-			const shouldUseJwtAsParam = typeof window !== 'undefined' && window.useJwtAsParam === true;
+			const shouldUseJwtAsParam = get(window, ['initialProps', 'site', 'use_jwt_as_param']);
 			const defaultConfig = {
 				baseURL: wcAPIURL + '/' + endpoint,
 				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
