@@ -39,6 +39,7 @@ const convertHexToRGBA = (hexCode, opacity = 1) => {
 };
 
 interface CustomerSelectMenuProps {
+	query: any;
 	onChange: (item: CustomerDocument) => void;
 }
 

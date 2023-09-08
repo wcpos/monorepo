@@ -24,7 +24,6 @@ const TaxBasedOn = ({ taxBasedOn }) => {
 		get(taxQuery, ['currentState', 'search'], {})
 	);
 	const t = useT();
-	console.log('rates', rates);
 
 	/**
 	 *

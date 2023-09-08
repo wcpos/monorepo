@@ -1,12 +1,10 @@
 import * as React from 'react';
 
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
-
 import Popover from '@wcpos/components/src/popover';
 
-import CustomerQueryWrapper from './query-wrapper';
+import Menu from './menu';
 import SearchInput from './search-input';
-import { useStoreStateManager } from '../../contexts/store-state-manager';
+import { useQuery } from '../../hooks/use-query';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
@@ -31,17 +29,27 @@ const CustomerSelect = ({
 	style,
 }: CustomerSelectProps) => {
 	const [opened, setOpened] = React.useState(false);
-	const manager = useStoreStateManager();
+
+	/**
+	 *
+	 */
+	const query = useQuery({
+		queryKeys: ['customers', 'select'],
+		collectionName: 'customers',
+		initialQuery: {
+			sortBy: 'last_name',
+			sortDirection: 'asc',
+		},
+	});
 
 	/**
 	 *
 	 */
 	const onSearch = React.useCallback(
 		(search) => {
-			const query = manager.getQuery(['customers', 'select']);
 			query.debouncedSearch(search);
 		},
-		[manager]
+		[query]
 	);
 
 	/**
@@ -83,7 +91,7 @@ const CustomerSelect = ({
 				/>
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
-				<CustomerQueryWrapper onChange={onSelectCustomer} />
+				<Menu query={query} onChange={onSelectCustomer} />
 			</Popover.Content>
 		</Popover>
 	);
