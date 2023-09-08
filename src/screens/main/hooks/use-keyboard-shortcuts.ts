@@ -2,11 +2,11 @@ import { useNavigation } from '@react-navigation/native';
 
 import { useHotkeys } from '@wcpos/hooks/src/use-hotkeys';
 
-import useLogout from '../../../hooks/use-logout';
+import { useAppState } from '../../../contexts/app-state';
 
 const useKeyboardShortcuts = () => {
 	const navigation = useNavigation();
-	const logout = useLogout();
+	const { logout } = useAppState();
 
 	/** Settings Modal */
 	useHotkeys('ctrl+shift+s', (event, handler) => {

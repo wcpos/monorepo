@@ -2,8 +2,10 @@ import * as React from 'react';
 
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
-import { ObservableResource } from 'observable-hooks';
-import { from } from 'rxjs';
+import { ObservableResource, useObservable } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
+import { from, of } from 'rxjs';
+import { switchMap, distinctUntilChanged, tap } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
@@ -11,12 +13,12 @@ import Suspense from '@wcpos/components/src/suspense';
 import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
-import useNewOrderResource from './use-new-order-resource';
-import { t } from '../../../lib/translations';
+import { useNewOrder } from './use-new-order';
+import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
-import { OrdersProvider } from '../contexts/orders';
-import { Query } from '../contexts/query';
-import useCollection from '../hooks/use-collection';
+import { TaxHelpersProvider } from '../contexts/tax-helpers';
+import { useCollection } from '../hooks/use-collection';
+import { useQuery } from '../hooks/use-query';
 import Receipt from '../receipt';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -29,33 +31,69 @@ export type POSStackParamList = {
 
 const Stack = createStackNavigator<POSStackParamList>();
 
-const openOrderQuery = new Query({
-	sortBy: 'date_created_gmt',
-	sortDirection: 'desc',
-	selector: { status: 'pos-open' },
-});
-
 /**
  *
  */
 const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'POS'>) => {
-	const orderID = get(route, ['params', 'orderID']);
-	const newOrderResource = useNewOrderResource();
+	const { newOrder$ } = useNewOrder();
+	const { collection } = useCollection('orders');
+
+	/**
+	 * Construct observable which emits order document when orderID changes
+	 */
+	const currentOrder$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(([uuid]) => {
+					if (!uuid) return newOrder$;
+					return collection.findOne({ selector: { uuid, status: 'pos-open' } }).$.pipe(
+						// make sure we have an order, eg: voiding an order will emit null
+						switchMap((order) => (isRxDocument(order) ? of(order) : newOrder$)),
+						distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid)
+					);
+				})
+			),
+		[route.params?.orderID]
+	);
+
+	/**
+	 * Create resource so we can suspend until order is loaded
+	 */
+	const resource = React.useMemo(() => new ObservableResource(currentOrder$), [currentOrder$]);
+
+	/**
+	 *
+	 */
+	const openOrdersQuery = useQuery({
+		queryKeys: ['orders', { status: 'pos-open' }],
+		collectionName: 'orders',
+		initialQuery: {
+			selector: { status: 'pos-open' },
+			sortBy: 'date_created_gmt',
+			sortDirection: 'asc',
+		},
+	});
+
+	/**
+	 *
+	 */
+	const taxQuery = useQuery({
+		queryKeys: ['tax-rates', 'pos'],
+		collectionName: 'taxes',
+	});
 
 	return (
-		<OrdersProvider query={openOrderQuery}>
-			<Suspense
-			// suspend until orders and default customer are loaded
-			>
-				<CurrentOrderProvider orderID={orderID} newOrderResource={newOrderResource}>
-					<Suspense
-					// suspend until tax rates are loaded
-					>
-						<POS />
-					</Suspense>
-				</CurrentOrderProvider>
-			</Suspense>
-		</OrdersProvider>
+		<Suspense>
+			<CurrentOrderProvider resource={resource} taxQuery={taxQuery}>
+				<Suspense>
+					<TaxHelpersProvider taxQuery={taxQuery}>
+						<Suspense>
+							<POS />
+						</Suspense>
+					</TaxHelpersProvider>
+				</Suspense>
+			</CurrentOrderProvider>
+		</Suspense>
 	);
 };
 
@@ -67,6 +105,7 @@ const CheckoutWithProviders = ({
 }: NativeStackScreenProps<POSStackParamList, 'Checkout'>) => {
 	const orderID = get(route, ['params', 'orderID']);
 	const { collection } = useCollection('orders');
+	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
@@ -95,6 +134,7 @@ const CheckoutWithProviders = ({
 const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'Receipt'>) => {
 	const orderID = get(route, ['params', 'orderID']);
 	const { collection } = useCollection('orders');
+	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),

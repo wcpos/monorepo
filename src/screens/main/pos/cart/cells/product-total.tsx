@@ -6,7 +6,7 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import useLocalData from '../../../../../contexts/local-data';
+import { useAppState } from '../../../../../contexts/app-state';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 
 interface Props {
@@ -21,7 +21,7 @@ export const ProductTotal = ({ item, column }: Props) => {
 	const total_tax = useObservableState(item.total_tax$, item.total_tax);
 	const { format } = useCurrencyFormat();
 	const { display } = column;
-	const { store } = useLocalData();
+	const { store } = useAppState();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
 	const displayTotal =
 		taxDisplayCart === 'incl' ? parseFloat(total) + parseFloat(total_tax) : total;

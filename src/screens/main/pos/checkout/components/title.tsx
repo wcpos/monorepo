@@ -4,7 +4,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 
 interface CheckoutTitleProps {
@@ -14,6 +14,7 @@ interface CheckoutTitleProps {
 const CheckoutTitle = ({ order }: CheckoutTitleProps) => {
 	const { format } = useCurrencyFormat();
 	const total = useObservableState(order.total$, order.total);
+	const t = useT();
 
 	if (!order) {
 		throw new Error('Order not found');

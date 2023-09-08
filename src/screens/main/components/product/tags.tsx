@@ -1,8 +1,7 @@
 import * as React from 'react';
 
 import Pill from '@wcpos/components/src/pill';
-
-import { useProducts } from '../../contexts/products';
+import { useTable } from '@wcpos/components/src/table';
 
 type ProductTagsProps = {
 	item: import('@wcpos/database').ProductDocument;
@@ -10,7 +9,7 @@ type ProductTagsProps = {
 
 const ProductTags = ({ item: product }: ProductTagsProps) => {
 	const { tags } = product;
-	const { query } = useProducts();
+	const query = useTable();
 
 	/**
 	 *

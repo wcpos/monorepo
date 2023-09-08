@@ -6,7 +6,7 @@ import { filter } from 'rxjs/operators';
 import { storeCollections } from '@wcpos/database';
 import type { StoreDatabaseCollections } from '@wcpos/database';
 
-import useLocalData from '../../../contexts/local-data/';
+import { useAppState } from '../../../contexts/app-state';
 
 export type CollectionKey = keyof typeof storeCollections;
 
@@ -20,10 +20,10 @@ export type CollectionKey = keyof typeof storeCollections;
  * This allows us to do a 'clear and sync' and update components
  * that are using the collection.
  */
-const useCollection = <K extends CollectionKey>(
+export const useCollection = <K extends CollectionKey>(
 	key: K
 ): { collection: StoreDatabaseCollections[K] } => {
-	const { storeDB } = useLocalData();
+	const { storeDB } = useAppState();
 	const collection = useObservableState(
 		storeDB.reset$.pipe(filter((collection) => collection.name === key)),
 		storeDB.collections[key]
@@ -31,5 +31,3 @@ const useCollection = <K extends CollectionKey>(
 
 	return { collection };
 };
-
-export default useCollection;

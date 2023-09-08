@@ -7,36 +7,42 @@ import BarcodeScanning from './barcode-scanning';
 import { GeneralSettings } from './general';
 import { KeyboardShortcuts } from './shortcuts';
 import { TaxSettings } from './tax';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 /**
  *
  */
 export const SettingsTabs = () => {
 	const [index, setIndex] = React.useState(0);
+	const t = useT();
+
+	const routes = React.useMemo(
+		() => [
+			{
+				key: 'general',
+				title: t('General Settings', { _tags: 'core' }),
+				Component: GeneralSettings,
+			},
+			{ key: 'tax', title: t('Tax Settings', { _tags: 'core' }), Component: TaxSettings },
+			{
+				key: 'barcode',
+				title: t('Barcode Scanning', { _tags: 'core' }),
+				Component: BarcodeScanning,
+			},
+			{
+				key: 'shortcuts',
+				title: t('Keyboard Shortcuts', { _tags: 'core' }),
+				Component: KeyboardShortcuts,
+			},
+		],
+		[t]
+	);
 
 	return (
 		<Tabs
 			navigationState={{
 				index,
-				routes: [
-					{
-						key: 'general',
-						title: t('General Settings', { _tags: 'core' }),
-						Component: GeneralSettings,
-					},
-					{ key: 'tax', title: t('Tax Settings', { _tags: 'core' }), Component: TaxSettings },
-					{
-						key: 'barcode',
-						title: t('Barcode Scanning', { _tags: 'core' }),
-						Component: BarcodeScanning,
-					},
-					{
-						key: 'shortcuts',
-						title: t('Keyboard Shortcuts', { _tags: 'core' }),
-						Component: KeyboardShortcuts,
-					},
-				],
+				routes,
 			}}
 			renderScene={({ route }) => (
 				<Box paddingTop="small">

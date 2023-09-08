@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import Pill from '@wcpos/components/src/pill';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 
 interface StatusPillProps {
 	active: boolean;
@@ -10,6 +10,8 @@ interface StatusPillProps {
 }
 
 const StatusPill = ({ active, setQuery }: StatusPillProps) => {
+	const t = useT();
+
 	return (
 		<Pill
 			icon="circle"

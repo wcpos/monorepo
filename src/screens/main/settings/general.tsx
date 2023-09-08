@@ -1,21 +1,22 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableSuspense } from 'observable-hooks';
 
 import { InputWithLabel } from '@wcpos/components/src/form-layout';
 
-import useLocalData from '../../../contexts/local-data';
-import { t } from '../../../lib/translations';
+import { useAppState } from '../../../contexts/app-state';
+import { useT } from '../../../contexts/translations';
 import CurrencySelect from '../components/currency-select';
 import CustomerSelect from '../components/customer-select';
 import Form from '../components/document-form';
 import LanguageSelect from '../components/language-select';
+import { useDefaultCustomer } from '../hooks/use-default-customer';
 
 export const GeneralSettings = () => {
-	const { store } = useLocalData();
-
-	// HACK: to get combobox to update with correct customer
-	const defaultCustomerID = useObservableState(store.default_customer$, store.default_customer);
+	const { store } = useAppState();
+	const { defaultCustomerResource } = useDefaultCustomer();
+	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
+	const t = useT();
 
 	/**
 	 *
@@ -49,7 +50,7 @@ export const GeneralSettings = () => {
 						<InputWithLabel label={label}>
 							<CustomerSelect
 								{...props}
-								value={defaultCustomerID}
+								value={defaultCustomer}
 								onSelectCustomer={handleCustomerSelect}
 							/>
 						</InputWithLabel>

@@ -9,10 +9,24 @@ import Tabs from '@wcpos/components/src/tabs';
 import Cart from './cart';
 import EmptyCart from './empty-cart';
 import OpenOrderTabs from './tabs';
-import useCurrentOrder from '../contexts/current-order';
+import { useQuery } from '../../hooks/use-query';
+import { useCurrentOrder } from '../contexts/current-order';
 
 const OpenOrders = ({ isColumn = false }) => {
 	const { currentOrder } = useCurrentOrder();
+
+	/**
+	 *
+	 */
+	const query = useQuery({
+		queryKeys: ['orders', { status: 'pos-open' }],
+		collectionName: 'orders',
+		initialQuery: {
+			sortBy: 'date_created_gmt',
+			sortDirection: 'desc',
+			selector: { status: 'pos-open' },
+		},
+	});
 
 	/**
 	 *
@@ -21,13 +35,11 @@ const OpenOrders = ({ isColumn = false }) => {
 		<Box padding="small" paddingLeft={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
 			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<ErrorBoundary>
-					<Suspense>
-						{currentOrder.isNew ? (
-							<EmptyCart currentOrder={currentOrder} />
-						) : (
-							<Cart currentOrder={currentOrder} />
-						)}
-					</Suspense>
+					{currentOrder.isNew ? (
+						<EmptyCart currentOrder={currentOrder} />
+					) : (
+						<Cart currentOrder={currentOrder} />
+					)}
 				</ErrorBoundary>
 			</Box>
 			<ErrorBoundary>
@@ -42,7 +54,7 @@ const OpenOrders = ({ isColumn = false }) => {
 						/>
 					}
 				>
-					<OpenOrderTabs />
+					<OpenOrderTabs query={query} />
 				</Suspense>
 			</ErrorBoundary>
 		</Box>

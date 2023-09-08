@@ -7,8 +7,8 @@ import Link from '@wcpos/components/src/link';
 import Text from '@wcpos/components/src/text';
 
 import { useVariationTable } from './variation-table-rows/context';
-import { t } from '../../../../lib/translations';
-import { updateVariationAttributeSearch } from '../../contexts/variations.helpers';
+import { useT } from '../../../../contexts/translations';
+import { useStoreStateManager } from '../../contexts/store-state-manager';
 
 type Props = {
 	product: import('@wcpos/database').ProductDocument;
@@ -16,7 +16,9 @@ type Props = {
 
 const ProductAttributes = ({ product }: Props) => {
 	const attributes = useObservableState(product.attributes$, product.attributes);
-	const { query, expanded, setExpanded } = useVariationTable();
+	const { expanded, setExpanded } = useVariationTable();
+	const manager = useStoreStateManager();
+	const t = useT();
 
 	/**
 	 *
@@ -25,22 +27,21 @@ const ProductAttributes = ({ product }: Props) => {
 		(attribute, option) => {
 			if (!expanded) {
 				// @TODO - find a better way to do this
-				// I need to expand the table, then update the query
 				setExpanded({
 					id: attribute.id,
 					name: attribute.name,
 					option,
 				});
 			} else {
-				const newState = updateVariationAttributeSearch(query.currentState.search, {
+				const query = manager.getQuery(['variations', { parentID: product.id }]);
+				query.updateVariationAttributeSearch({
 					id: attribute.id,
 					name: attribute.name,
 					option,
 				});
-				query.search(newState);
 			}
 		},
-		[expanded, query, setExpanded]
+		[expanded, manager, product.id, setExpanded]
 	);
 
 	/**

@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import { ObservableResource } from 'observable-hooks';
-import { switchMap, tap } from 'rxjs/operators';
-
 import Avatar from '@wcpos/components/src/avatar';
 import Box from '@wcpos/components/src/box';
 import Dialog from '@wcpos/components/src/dialog';
@@ -11,18 +8,8 @@ import Icon from '@wcpos/components/src/icon';
 import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
 
-import WPUsersList from './wp-users-list';
-import useLocalData from '../../../contexts/local-data';
-import { t } from '../../../lib/translations';
-
-type SiteDocument = import('@wcpos/database').SiteDocument;
-type UserDocument = import('@wcpos/database').UserDocument;
-
-interface SiteProps {
-	site: SiteDocument;
-	// user: UserDocument;
-	first: boolean;
-}
+import { WPUsers } from './wp-users';
+import { useT } from '../../../contexts/translations';
 
 /**
  *
@@ -31,13 +18,12 @@ function getUrlWithoutProtocol(url: string) {
 	return url?.replace(/^.*:\/{2,}|\s|\/+$/g, '') || '';
 }
 
-const Site = ({ site, first }: SiteProps) => {
-	const { user } = useLocalData();
+/**
+ *
+ */
+export const Site = ({ user, site, idx }) => {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
-	const wpUsersResource = React.useMemo(
-		() => new ObservableResource(site.populate$('wp_credentials')),
-		[site]
-	);
+	const t = useT();
 
 	/**
 	 * Remove site
@@ -53,11 +39,8 @@ const Site = ({ site, first }: SiteProps) => {
 		} catch (err) {
 			throw err;
 		}
-	}, [user, site]);
+	}, [site, user]);
 
-	/**
-	 *
-	 */
 	return (
 		<>
 			<Box
@@ -65,7 +48,7 @@ const Site = ({ site, first }: SiteProps) => {
 				padding="medium"
 				space="medium"
 				align="center"
-				style={{ borderTopWidth: first ? 0 : 1 }}
+				style={{ borderTopWidth: idx === 0 ? 0 : 1 }}
 			>
 				<Box>
 					<Avatar source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url)}`} />
@@ -80,7 +63,7 @@ const Site = ({ site, first }: SiteProps) => {
 					<Box>
 						<ErrorBoundary>
 							<Suspense>
-								<WPUsersList wpUsersResource={wpUsersResource} site={site} />
+								<WPUsers site={site} />
 							</Suspense>
 						</ErrorBoundary>
 					</Box>
@@ -105,5 +88,3 @@ const Site = ({ site, first }: SiteProps) => {
 		</>
 	);
 };
-
-export default Site;

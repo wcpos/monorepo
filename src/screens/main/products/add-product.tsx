@@ -6,12 +6,13 @@ import { useModal } from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
 import Form from '@wcpos/react-native-jsonschema-form';
 
-import { t } from '../../../lib/translations';
-import useCollection from '../hooks/use-collection';
+import { useT } from '../../../contexts/translations';
+import { useCollection } from '../hooks/use-collection';
 
 const AddProduct = () => {
 	const { collection } = useCollection('products');
 	const { setPrimaryAction } = useModal();
+	const t = useT();
 
 	/**
 	 *
@@ -28,7 +29,7 @@ const AddProduct = () => {
 			label: t('Save to Server', { _tags: 'core' }),
 			action: handleSave,
 		});
-	}, [handleSave, setPrimaryAction]);
+	}, [handleSave, setPrimaryAction, t]);
 
 	/**
 	 *

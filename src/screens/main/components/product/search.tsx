@@ -7,10 +7,9 @@ import { useTheme } from 'styled-components/native';
 import Pill from '@wcpos/components/src/pill';
 import TextInput from '@wcpos/components/src/textinput';
 
-import { t } from '../../../../lib/translations';
-import { useProducts } from '../../contexts/products';
+import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
-import useCollection from '../../hooks/use-collection';
+import { useCollection } from '../../hooks/use-collection';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
@@ -37,6 +36,7 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
  * Search field
  */
 const ProductSearch = ({
+	query,
 	addProduct,
 	addVariation,
 }: {
@@ -47,11 +47,11 @@ const ProductSearch = ({
 		metaData: any
 	) => Promise<void>;
 }) => {
-	const { query } = useProducts();
 	const [search, setSearch] = React.useState('');
 	const { barcode$ } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
 	const { collection } = useCollection('products');
+	const t = useT();
 
 	const onSearch = React.useCallback(
 		(search) => {

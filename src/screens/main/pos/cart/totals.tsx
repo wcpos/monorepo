@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { BehaviorSubject } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -9,58 +9,46 @@ import Text from '@wcpos/components/src/text';
 
 import CustomerNote from './customer-note';
 import ItemizedTaxes from './itemized-taxes';
-import useLocalData from '../../../../contexts/local-data';
-import { t } from '../../../../lib/translations';
-import { useCart } from '../../contexts/cart';
+import { useCartTotals } from './use-cart-totals';
+import { useT } from '../../../../contexts/translations';
 import useCurrencyFormat from '../../hooks/use-currency-format';
-import useCurrentOrder from '../contexts/current-order';
 
-const Totals = () => {
-	const { currentOrder } = useCurrentOrder();
-	const { store } = useLocalData();
-	const taxTotalDisplay = useObservableState(store.tax_total_display$, store.tax_total_display);
-	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
-	const calcTaxes = useObservableState(store.calc_taxes$, store.calc_taxes);
-	const customerNote = useObservableState(currentOrder.customer_note$, currentOrder.customer_note);
-	const { cartTotalsResource } = useCart();
+interface Props {
+	extraTotals$?: BehaviorSubject<{
+		subtotal: string;
+		subtotal_tax: string;
+		fee_total: string;
+		fee_tax: string;
+	}>;
+}
+
+/**
+ *
+ */
+const Totals = ({ extraTotals$ }: Props) => {
+	const theme = useTheme();
+	const t = useT();
+	const { format } = useCurrencyFormat();
 	const {
-		discount_total,
-		shipping_total,
 		tax_lines,
 		total_tax,
-		subtotal,
-		subtotal_tax,
-		fee_total,
-		shipping_tax,
-		fee_tax,
-		discount_tax,
-	} = useObservableSuspense(cartTotalsResource);
-	const { format } = useCurrencyFormat();
-	const theme = useTheme();
-
-	const hasSubtotal = parseFloat(subtotal) !== 0;
-	const hasDiscount = parseFloat(discount_total) !== 0;
-	const hasShipping = parseFloat(shipping_total) !== 0;
-	const hasFee = parseFloat(fee_total) !== 0;
-	const hasTax = parseFloat(total_tax) !== 0;
-	const hasTotals = hasSubtotal || hasDiscount || hasShipping || hasFee || hasTax;
-
-	const displaySubtotal =
-		taxDisplayCart === 'incl' ? parseFloat(subtotal) + parseFloat(subtotal_tax) : subtotal;
-	const displayDiscountTotal =
-		taxDisplayCart === 'incl'
-			? parseFloat(discount_total) + parseFloat(discount_tax)
-			: discount_total;
-	const displayFeeTotal =
-		taxDisplayCart === 'incl' ? parseFloat(fee_total) + parseFloat(fee_tax) : fee_total;
-	const displayShippingTotal =
-		taxDisplayCart === 'incl'
-			? parseFloat(shipping_total) + parseFloat(shipping_tax)
-			: shipping_total;
+		hasDiscount,
+		hasShipping,
+		hasFee,
+		hasTax,
+		hasTotals,
+		displaySubtotal,
+		displayDiscountTotal,
+		displayFeeTotal,
+		displayShippingTotal,
+		taxTotalDisplay,
+		taxDisplayCart,
+		calcTaxes,
+		customerNote,
+	} = useCartTotals(extraTotals$);
 
 	return (
 		<>
-			{' '}
 			{hasTotals ? (
 				<Box
 					padding="small"
@@ -120,7 +108,7 @@ const Totals = () => {
 							</Box>
 						)
 					}
-					{calcTaxes === 'yes' && hasTax ? (
+					{calcTaxes && hasTax ? (
 						taxTotalDisplay === 'itemized' ? (
 							<ItemizedTaxes taxLines={tax_lines} taxDisplayCart={taxDisplayCart} />
 						) : (
@@ -153,7 +141,7 @@ const Totals = () => {
 						backgroundColor: theme.colors.lightestGrey,
 					}}
 				>
-					<CustomerNote note={customerNote} order={currentOrder} />
+					<CustomerNote note={customerNote} />
 				</Box>
 			)}
 		</>

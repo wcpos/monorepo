@@ -12,17 +12,24 @@ import WebView from '@wcpos/components/src/webview';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
-import useLocalData from '../../contexts/local-data';
-import { t } from '../../lib/translations';
+import { useAppState } from '../../contexts/app-state';
+import { useT } from '../../contexts/translations';
 import { ModalLayout } from '../components/modal-layout';
 
 /**
  *
  */
-const Login = ({ resource }) => {
-	const site = useObservableSuspense(resource);
-	const { userDB } = useLocalData();
+const Login = ({ route }) => {
+	const { siteID } = route.params;
+	const { user, userDB } = useAppState();
+	const sites = useObservableSuspense(user.populateResource('sites'));
 	const navigation = useNavigation();
+	const site = sites.find((s) => s.uuid === siteID);
+	const t = useT();
+
+	if (!site) {
+		throw new Error('Site not found');
+	}
 
 	/**
 	 *
@@ -55,39 +62,41 @@ const Login = ({ resource }) => {
 	 *
 	 */
 	return (
-		<WebView
-			src={`${site.home}/wcpos-login`}
-			style={{ height: '500px' }}
-			onMessage={(event) => {
-				const action = get(event, 'data.action');
-				const payload = get(event, 'data.payload');
-				if (action === 'wcpos-wp-credentials') {
-					handleLogin(payload);
-				}
-			}}
-		/>
-	);
-};
-
-const LoginWithProvider = ({ route }) => {
-	const { siteID } = route.params;
-	const { userDB } = useLocalData();
-
-	const resource = React.useMemo(
-		() => new ObservableResource(from(userDB.sites.findOneFix(siteID).exec())),
-		[userDB, siteID]
-	);
-
-	/**
-	 *
-	 */
-	return (
 		<ModalLayout title={t('Login', { _tags: 'core' })}>
-			<Suspense>
-				<Login resource={resource} />
-			</Suspense>
+			<WebView
+				src={`${site.home}/wcpos-login`}
+				style={{ height: '500px' }}
+				onMessage={(event) => {
+					const action = get(event, 'data.action');
+					const payload = get(event, 'data.payload');
+					if (action === 'wcpos-wp-credentials') {
+						handleLogin(payload);
+					}
+				}}
+			/>
 		</ModalLayout>
 	);
 };
 
-export default LoginWithProvider;
+// const LoginWithProvider = ({ route }) => {
+// 	const { siteID } = route.params;
+// 	const { userDB } = useLocalData();
+
+// 	const resource = React.useMemo(
+// 		() => new ObservableResource(from(userDB.sites.findOneFix(siteID).exec())),
+// 		[userDB, siteID]
+// 	);
+
+// 	/**
+// 	 *
+// 	 */
+// 	return (
+// 		<ModalLayout title={t('Login', { _tags: 'core' })}>
+// 			<Suspense>
+// 				<Login resource={resource} />
+// 			</Suspense>
+// 		</ModalLayout>
+// 	);
+// };
+
+export default Login;

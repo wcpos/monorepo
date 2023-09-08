@@ -1,19 +1,26 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
 import { isRxDocument } from 'rxdb';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../lib/translations';
-import useRestHttpClient from '../hooks/use-rest-http-client';
+import { useT } from '../../../contexts/translations';
+import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 type RxDocument = import('rxdb').RxDocument;
 type RxCollection = import('rxdb').RxCollection;
 
+/**
+ * Pull document needs to be improved
+ * - it should be part of the replication process
+ * - it should be reactive, a lot of components need to suspend until the document is pulled
+ */
 const usePullDocument = () => {
 	const http = useRestHttpClient();
 	const addSnackbar = useSnackbar();
+	const t = useT();
 
 	return React.useCallback(
 		async (id: number, collection: RxCollection, apiEndpoint?: string) => {
@@ -24,15 +31,18 @@ const usePullDocument = () => {
 				return;
 			}
 			try {
-				const { data } = await http.get((endpoint += `/${id}`));
-				const parsedData = collection.parseRestResponse(data);
-				const success = await collection.upsert(parsedData);
-				// if (isRxDocument(success)) {
-				// 	addSnackbar({
-				// 		message: t('Item synced', { _tags: 'core' }),
-				// 	});
-				// }
-				return success;
+				const response = await http.get((endpoint += `/${id}`));
+				const data = get(response, 'data');
+				if (data) {
+					const parsedData = collection.parseRestResponse(data);
+					const success = await collection.upsert(parsedData);
+					// if (isRxDocument(success)) {
+					// 	addSnackbar({
+					// 		message: t('Item synced', { _tags: 'core' }),
+					// 	});
+					// }
+					return success;
+				}
 			} catch (err) {
 				log.error(err);
 				addSnackbar({
@@ -41,7 +51,7 @@ const usePullDocument = () => {
 				});
 			}
 		},
-		[addSnackbar, http]
+		[addSnackbar, http, t]
 	);
 };
 

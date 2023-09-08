@@ -13,9 +13,9 @@ import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
 import { CountrySelect, StateSelect } from './country-state-select';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
+import { useCollection } from '../hooks/use-collection';
 import usePushDocument from '../contexts/use-push-document';
-import useCollection from '../hooks/use-collection';
 
 interface AddNewCustomerProps {
 	onAdd?: (doc: import('@wcpos/database').CustomerDocument) => void;
@@ -33,6 +33,7 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 	const billingCountry = get(customerData, ['billing', 'country']);
 	const shippingCountry = get(customerData, ['shipping', 'country']);
 	const [loading, setLoading] = React.useState(false);
+	const t = useT();
 
 	/**
 	 *
@@ -57,7 +58,7 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 		} finally {
 			setLoading(false);
 		}
-	}, [addSnackbar, collection, customerData, onAdd, pushDocument]);
+	}, [addSnackbar, collection, customerData, onAdd, pushDocument, t]);
 
 	/**
 	 *
@@ -219,7 +220,7 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 				'ui:collapsible': 'closed',
 			},
 		};
-	}, [billingCountry, shippingCountry]);
+	}, [billingCountry, shippingCountry, t]);
 
 	return (
 		<>

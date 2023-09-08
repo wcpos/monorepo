@@ -8,8 +8,8 @@ import Modal from '@wcpos/components/src/modal';
 import TextArea from '@wcpos/components/src/textarea';
 import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
 
-import { t } from '../../../../../lib/translations';
-import useCurrentOrder from '../../contexts/current-order';
+import { useT } from '../../../../../contexts/translations';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 /**
  *
@@ -19,6 +19,7 @@ const AddNoteButton = () => {
 	const { currentOrder } = useCurrentOrder();
 	const note = useObservableState(currentOrder.customer_note$, currentOrder.customer_note);
 	const [value, setValue] = React.useState(note);
+	const t = useT();
 
 	/**
 	 * Keep textarea value insync with the order.customer_note

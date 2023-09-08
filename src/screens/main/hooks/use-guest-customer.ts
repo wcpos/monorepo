@@ -2,20 +2,21 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import useLocalData from '../../../contexts/local-data';
-import { t } from '../../../lib/translations';
+import { useAppState } from '../../../contexts/app-state';
+import { useT } from '../../../contexts/translations';
 
 /**
  *
  */
-const useGuestCustomer = () => {
-	const { store } = useLocalData();
+export const useGuestCustomer = () => {
+	const { store } = useAppState();
 	const defaultCountry = useObservableState(store.default_country$, store.default_country);
 	const [country, state] = defaultCountry.split(':');
+	const t = useT();
 
 	return React.useMemo(
 		() => ({
-			customer_id: 0,
+			id: 0,
 			billing: {
 				first_name: t('Guest', { _tags: 'core' }),
 				last_name: '',
@@ -44,5 +45,3 @@ const useGuestCustomer = () => {
 		[country]
 	);
 };
-
-export default useGuestCustomer;

@@ -1,20 +1,25 @@
 import * as React from 'react';
 
-import TaxRatesTabs from './tabs';
-import { Query } from '../contexts/query';
-import { TaxRateProvider } from '../contexts/tax-rates';
+import Suspense from '@wcpos/components/src/suspense';
 
-const query = new Query({});
+import TaxRatesTabs from './tabs';
+import { useQuery } from '../hooks/use-query';
 
 /**
  *
  */
-export const TaxRatesWithProvider = () => {
+export const TaxRates = () => {
+	const query = useQuery({
+		queryKeys: ['tax-rates'],
+		collectionName: 'taxes',
+		initialQuery: {},
+	});
+
 	return (
-		<TaxRateProvider query={query}>
-			<TaxRatesTabs />
-		</TaxRateProvider>
+		<Suspense>
+			<TaxRatesTabs query={query} />
+		</Suspense>
 	);
 };
 
-export default TaxRatesWithProvider;
+export default TaxRates;

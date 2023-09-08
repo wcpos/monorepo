@@ -13,19 +13,16 @@ import Modal from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
 
 import StoreSelect from './store-select';
-import useLocalData from '../../../../../contexts/local-data';
-import useLogin from '../../../../../hooks/use-login';
-import useLogout from '../../../../../hooks/use-logout';
-import { t } from '../../../../../lib/translations';
+import { useAppState } from '../../../../../contexts/app-state';
+import { useT } from '../../../../../contexts/translations';
 
 /**
  * FIXME: If I don't memo this component the avatar flashes every time the cart is changed
  * Shouldn't the header components already be memoized?
  */
 export const UserMenu = () => {
-	const { wpCredentials, isWebApp, initialProps, site, store } = useLocalData();
-	const logout = useLogout();
-	const login = useLogin();
+	const { wpCredentials, isWebApp, initialProps, site, store, login, logout, switchStore } =
+		useAppState();
 	const navigation = useNavigation();
 	const theme = useTheme();
 	const dimensions = useWindowDimensions();
@@ -33,6 +30,7 @@ export const UserMenu = () => {
 	const avatar_url = useObservableState(wpCredentials?.avatar_url$, wpCredentials?.avatar_url);
 	const stores = useObservableState(wpCredentials?.stores$, wpCredentials?.stores);
 	const [storeSelectModalOpened, setStoreSelectModalOpened] = React.useState(false);
+	const t = useT();
 
 	/**
 	 *
@@ -40,20 +38,6 @@ export const UserMenu = () => {
 	const storesResource = React.useMemo(
 		() => new ObservableResource(wpCredentials.populate$('stores'), (val) => !!val),
 		[wpCredentials]
-	);
-
-	/**
-	 *
-	 */
-	const handleStoreSwitch = React.useCallback(
-		async (storeID) => {
-			login({
-				siteID: site.uuid,
-				wpCredentialsID: wpCredentials.uuid,
-				storeID,
-			});
-		},
-		[login, site.uuid, wpCredentials.uuid]
 	);
 
 	/**
@@ -86,7 +70,7 @@ export const UserMenu = () => {
 				{
 					icon: 'arrowRightFromBracket',
 					label: t('Logout', { _tags: 'core' }),
-					action: () => Linking.openURL(initialProps.logout_url),
+					action: logout,
 					type: 'critical',
 				},
 			];
@@ -135,7 +119,7 @@ export const UserMenu = () => {
 
 			return desktopMenu;
 		}
-	}, [initialProps, isWebApp, logout, navigation, site.home, stores]);
+	}, [initialProps, isWebApp, logout, navigation, site.home, stores?.length, t]);
 
 	return (
 		<>
@@ -166,7 +150,7 @@ export const UserMenu = () => {
 			>
 				<StoreSelect
 					storesResource={storesResource}
-					onSelect={handleStoreSwitch}
+					onSelect={switchStore}
 					currentStoreID={store.localID}
 				/>
 			</Modal>

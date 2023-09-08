@@ -4,8 +4,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import Pill from '@wcpos/components/src/pill';
 
-import { t } from '../../../../../lib/translations';
-import { useProducts } from '../../../contexts/products';
+import { useT } from '../../../../../contexts/translations';
 import TagSelect from '../tag-select';
 
 interface TagPillProps {
@@ -15,10 +14,20 @@ interface TagPillProps {
 /**
  *
  */
-const TagPill = ({ resource }: TagPillProps) => {
+const TagPill = ({ query, resource }: TagPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
-	const { query } = useProducts();
 	const tag = useObservableSuspense(resource);
+	const t = useT();
+
+	/**
+	 *
+	 */
+	const handleSelect = React.useCallback(
+		(tag) => {
+			query.where('tags', { $elemMatch: { id: tag.id } });
+		},
+		[query]
+	);
 
 	/**
 	 *
@@ -42,7 +51,7 @@ const TagPill = ({ resource }: TagPillProps) => {
 	 *
 	 */
 	return openSelect ? (
-		<TagSelect onBlur={() => setOpenSelect(false)} />
+		<TagSelect onBlur={() => setOpenSelect(false)} onSelect={handleSelect} />
 	) : (
 		<Pill icon="tag" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
 			{t('Select Tag', { _tags: 'core' })}

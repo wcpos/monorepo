@@ -4,7 +4,7 @@ import Icon from '@wcpos/components/src/icon';
 import SimpleTable from '@wcpos/components/src/simple-table';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 interface TaxRateTableProps {
 	rates: import('@wcpos/database').TaxRateDocument[];
@@ -14,6 +14,8 @@ interface TaxRateTableProps {
  *
  */
 const TaxRateTable = ({ rates }: TaxRateTableProps) => {
+	const t = useT();
+
 	/**
 	 *
 	 */
@@ -88,7 +90,7 @@ const TaxRateTable = ({ rates }: TaxRateTableProps) => {
 				cellRenderer,
 			},
 		],
-		[cellRenderer]
+		[cellRenderer, t]
 	);
 
 	return <SimpleTable columns={columns} data={rates} />;

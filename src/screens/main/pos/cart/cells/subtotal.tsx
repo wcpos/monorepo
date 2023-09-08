@@ -7,10 +7,10 @@ import { map } from 'rxjs/operators';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import useLocalData from '../../../../../contexts/local-data';
+import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
+import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
-import useTaxCalculation from '../../../hooks/use-tax-calculation';
 
 interface Props {
 	item: import('@wcpos/database').LineItemDocument;
@@ -41,9 +41,9 @@ export const Subtotal = ({ item, column }: Props) => {
 		getTaxStatus(item.meta_data)
 	);
 	const taxStatus = _taxStatus ?? 'taxable';
-	const { store } = useLocalData();
+	const { store } = useAppState();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
-	const { calculateTaxesFromPrice } = useTaxCalculation();
+	const { calculateTaxesFromPrice } = useTaxHelpers();
 	const taxes = calculateTaxesFromPrice({
 		price: subtotal,
 		taxClass,

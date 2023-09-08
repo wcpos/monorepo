@@ -6,51 +6,12 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 import Form from '@wcpos/react-native-jsonschema-form';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 interface UiSettingsProps {
 	uiSettings: import('../contexts/ui-settings').UISettingsDocument;
 	title: string;
 }
-
-const schema = {
-	type: 'object',
-	properties: {
-		// sortBy: {
-		// 	type: 'string',
-		// },
-		// sortDirection: {
-		// 	type: 'string',
-		// 	enum: ['asc', 'desc'],
-		// 	enumNames: ['Ascending', 'Descending'],
-		// },
-
-		columns: {
-			// uniqueItems: false,
-			title: t('Columns', { _tags: 'core' }),
-			type: 'array',
-			items: {
-				type: 'object',
-				properties: {
-					show: {
-						type: 'boolean',
-					},
-					display: {
-						type: 'array',
-						items: {
-							type: 'object',
-							properties: {
-								show: {
-									type: 'boolean',
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-};
 
 const uiSchema = {
 	columns: {
@@ -74,24 +35,68 @@ const uiSchema = {
 const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 	const formData = uiSettings.toJSON().data;
 	const [opened, setOpened] = React.useState(false);
+	const t = useT();
 
 	/**
 	 * Hack to add out-of-stock to Products
 	 * TODO: I need to create a Column Class that can be extended
 	 */
-	const _schema =
-		uiSettings.id === 'pos.products'
+	const schema = React.useMemo(() => {
+		const _schema = {
+			type: 'object',
+			properties: {
+				// sortBy: {
+				// 	type: 'string',
+				// },
+				// sortDirection: {
+				// 	type: 'string',
+				// 	enum: ['asc', 'desc'],
+				// 	enumNames: ['Ascending', 'Descending'],
+				// },
+
+				columns: {
+					// uniqueItems: false,
+					title: t('Columns', { _tags: 'core' }),
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							show: {
+								type: 'boolean',
+							},
+							display: {
+								type: 'array',
+								items: {
+									type: 'object',
+									properties: {
+										show: {
+											type: 'boolean',
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		};
+
+		return uiSettings.id === 'pos.products'
 			? {
-					...schema,
+					..._schema,
 					properties: {
 						showOutOfStock: {
 							type: 'boolean',
 						},
-						...schema.properties,
+						..._schema.properties,
 					},
 			  }
-			: schema;
+			: _schema;
+	}, [t, uiSettings.id]);
 
+	/**
+	 *
+	 */
 	return (
 		<>
 			<Icon name="sliders" onPress={() => setOpened(true)} />
@@ -108,7 +113,7 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 				}}
 			>
 				<Form
-					schema={_schema}
+					schema={schema}
 					uiSchema={uiSchema}
 					formData={formData}
 					onChange={(value) => {

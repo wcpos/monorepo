@@ -1,23 +1,18 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { View, FlatList } from 'react-native';
 
-import { set } from 'lodash';
 import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import { Avatar } from '@wcpos/components/src/avatar/avatar';
 import Box from '@wcpos/components/src/box';
-import { FlashList } from '@wcpos/components/src/flash-list';
-import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
+import Table from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 
-import GuestCustomerSelectItem from './guest-item';
 import CustomerSelectItem from './item';
-import { t } from '../../../../lib/translations';
-import { useCustomers } from '../../contexts/customers';
-import useTotalCount from '../../hooks/use-total-count';
+import { useT } from '../../../../contexts/translations';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
@@ -50,13 +45,13 @@ interface CustomerSelectMenuProps {
 /**
  *
  */
-const CustomerSelectMenu = ({ onChange }: CustomerSelectMenuProps) => {
+const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 	const theme = useTheme();
-	const { paginatedResource, replicationState, loadNextPage } = useCustomers();
-	const { data: customers, count, hasMore } = useObservableSuspense(paginatedResource);
-	const loading = useObservableState(replicationState.active$, false);
-	const total = useTotalCount('customers', replicationState);
+	const customers = useObservableSuspense(query.paginatedResource);
+	const loading = useObservableState(query.replicationState.active$, false);
+	// const total = useTotalCount('customers', replicationState);
 	const { targetMeasurements, contentMeasurements } = usePopover();
+	const t = useT();
 
 	/**
 	 *
@@ -110,31 +105,31 @@ const CustomerSelectMenu = ({ onChange }: CustomerSelectMenuProps) => {
 				</Box>
 			</Pressable>
 		);
-	}, [calculatedStyled, onChange]);
+	}, [calculatedStyled, onChange, t]);
 
 	/**
 	 *
 	 */
-	const onEndReached = React.useCallback(() => {
-		if (hasMore) {
-			loadNextPage();
-		} else if (!loading && total > count) {
-			replicationState.start({ fetchRemoteIDs: false });
-		}
-	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+	// const onEndReached = React.useCallback(() => {
+	// 	if (hasMore) {
+	// 		loadNextPage();
+	// 	} else if (!loading && total > count) {
+	// 		replicationState.start({ fetchRemoteIDs: false });
+	// 	}
+	// }, [count, hasMore, loadNextPage, loading, replicationState, total]);
 
 	/**
 	 *
 	 */
 	return (
 		<View style={{ width: targetMeasurements.value.width, maxHeight: 292 }}>
-			<FlashList<CustomerDocument>
+			<FlatList<CustomerDocument>
 				data={customers}
 				renderItem={renderItem}
 				estimatedItemSize={50}
 				ListHeaderComponent={renderGuestItem}
-				onEndReached={onEndReached}
-				ListFooterComponent={loading ? Loader : null}
+				onEndReached={() => query.nextPage()}
+				ListFooterComponent={<Table.LoadingRow loading={loading} style={{ padding: 0 }} />}
 			/>
 		</View>
 	);

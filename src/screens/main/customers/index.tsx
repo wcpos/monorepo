@@ -13,9 +13,10 @@ import Text from '@wcpos/components/src/text';
 import AddCustomer from './add-customer';
 import Customers from './customers';
 import EditCustomer from './edit-customer';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
+import { useCollection } from '../hooks/use-collection';
 import { ModalLayout } from '../../components/modal-layout';
-import useCollection from '../hooks/use-collection';
+import useUI from '../contexts/ui-settings';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -46,6 +47,8 @@ const CustomersWithProviders = () => {
 const AddCustomerWithProviders = ({
 	navigation,
 }: NativeStackScreenProps<CustomersStackParamList, 'AddCustomer'>) => {
+	const t = useT();
+
 	return (
 		<ModalLayout
 			title={t('Add Customer', { _tags: 'core' })}
@@ -71,6 +74,7 @@ const EditCustomerWithProviders = ({
 }: NativeStackScreenProps<CustomersStackParamList, 'EditCustomer'>) => {
 	const customerID = get(route, ['params', 'customerID']);
 	const { collection } = useCollection('customers');
+	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(customerID).exec())),

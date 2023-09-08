@@ -11,18 +11,16 @@ import Text from '@wcpos/components/src/text';
 import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import { CountrySelect, StateSelect } from '../../components/country-state-select';
-import useCartHelpers from '../../hooks/use-cart-helpers';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
-import useCurrentOrder from '../contexts/current-order';
+import { useCurrentOrder } from '../contexts/current-order';
 
 /**
  *
  */
-const Customer = () => {
+const Customer = ({ setShowCustomerSelect }) => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
-	const { removeCustomer } = useCartHelpers();
 	const { currentOrder } = useCurrentOrder();
 	const billing = useObservableState(currentOrder.billing$, currentOrder.billing);
 	const shipping = useObservableState(currentOrder.shipping$, currentOrder.shipping);
@@ -31,6 +29,7 @@ const Customer = () => {
 	const name = format({ billing, shipping, id: customer_id });
 	const billingCountry = get(billing, ['country']);
 	const shippingCountry = get(shipping, ['country']);
+	const t = useT();
 
 	/**
 	 *
@@ -167,7 +166,7 @@ const Customer = () => {
 				},
 			},
 		};
-	}, [billingCountry, shippingCountry]);
+	}, [billingCountry, shippingCountry, t]);
 
 	/**
 	 *
@@ -175,7 +174,13 @@ const Customer = () => {
 	return (
 		<Box horizontal align="center" space="small">
 			<Text weight="bold">{t('Customer', { _tags: 'core' })}:</Text>
-			<Pill removable onRemove={removeCustomer} onPress={() => setEditModalOpened(true)}>
+			<Pill
+				removable
+				onRemove={() => {
+					setShowCustomerSelect(true);
+				}}
+				onPress={() => setEditModalOpened(true)}
+			>
 				{name}
 			</Pill>
 

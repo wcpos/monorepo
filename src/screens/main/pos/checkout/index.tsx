@@ -7,7 +7,7 @@ import { useModal } from '@wcpos/components/src/modal';
 
 import PaymentWebview from './components/payment-webview';
 import CheckoutTitle from './components/title';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
@@ -18,6 +18,7 @@ interface Props {
  */
 const Checkout = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
+	const t = useT();
 
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));
@@ -39,7 +40,7 @@ const Checkout = ({ resource }: Props) => {
 			});
 		}
 		setTitle(() => title);
-	}, [number, setTitle]);
+	}, [number, setTitle, t]);
 
 	/**
 	 *

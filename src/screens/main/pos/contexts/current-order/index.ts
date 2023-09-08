@@ -1,4 +1,2 @@
-import CurrentOrderProvider from './provider';
-
-export { CurrentOrderProvider };
-export { useCurrentOrder as default } from './use-current-order';
+export { CurrentOrderProvider } from './provider';
+export { useCurrentOrder } from './use-current-order';

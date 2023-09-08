@@ -5,7 +5,7 @@ import { Checkbox } from '@wcpos/components/src/checkbox/checkbox';
 import { useModal } from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
@@ -24,6 +24,7 @@ const DeleteDialog = ({ customer, setDeleteDialogOpened }: DeleteDialogProps) =>
 	const { setPrimaryAction } = useModal();
 	const deleteDocument = useDeleteDocument();
 	const { format } = useCustomerNameFormat();
+	const t = useT();
 
 	/**
 	 * Handle delete button click
@@ -58,7 +59,7 @@ const DeleteDialog = ({ customer, setDeleteDialogOpened }: DeleteDialogProps) =>
 			disabled: !force,
 			type: 'critical',
 		});
-	}, [force, handleDelete, setPrimaryAction]);
+	}, [force, handleDelete, setPrimaryAction, t]);
 
 	/**
 	 *

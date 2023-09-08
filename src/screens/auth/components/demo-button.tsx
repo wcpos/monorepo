@@ -6,13 +6,14 @@ import Loader from '@wcpos/components/src/loader';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import useSiteConnect from '../hooks/use-site-connect';
 
 const DemoButton = () => {
 	const { onConnect } = useSiteConnect();
 	const http = useHttpClient();
 	const [loading, setLoading] = React.useState(false);
+	const t = useT();
 
 	const handleDemoLogin = async () => {
 		setLoading(true);

@@ -4,21 +4,31 @@ import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
 import Pill from '@wcpos/components/src/pill';
 
-import { t } from '../../../../../lib/translations';
-import { useProducts } from '../../../contexts/products';
+import { useT } from '../../../../../contexts/translations';
 import CategorySelect from '../category-select';
 
 interface CategoryPillProps {
+	query: any;
 	resource: ObservableResource<import('@wcpos/database').ProductTagDocument>;
 }
 
 /**
  *
  */
-const CategoryPill = ({ resource }: CategoryPillProps) => {
+const CategoryPill = ({ query, resource }: CategoryPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
-	const { query } = useProducts();
 	const category = useObservableSuspense(resource);
+	const t = useT();
+
+	/**
+	 *
+	 */
+	const handleSelect = React.useCallback(
+		(category) => {
+			query.where('categories', { $elemMatch: { id: category.id } });
+		},
+		[query]
+	);
 
 	/**
 	 *
@@ -42,7 +52,7 @@ const CategoryPill = ({ resource }: CategoryPillProps) => {
 	 *
 	 */
 	return openSelect ? (
-		<CategorySelect onBlur={() => setOpenSelect(false)} />
+		<CategorySelect onBlur={() => setOpenSelect(false)} onSelect={handleSelect} />
 	) : (
 		<Pill icon="folder" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
 			{t('Select Category', { _tags: 'core' })}

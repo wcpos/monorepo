@@ -7,7 +7,7 @@ import { useModal } from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import EditModal from '../components/edit-form-with-json';
 import usePushDocument from '../contexts/use-push-document';
 
@@ -23,6 +23,7 @@ const EditVariation = ({ resource }: Props) => {
 	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
+	const t = useT();
 
 	if (!variation) {
 		throw new Error(t('Variation not found', { _tags: 'core' }));
@@ -57,7 +58,7 @@ const EditVariation = ({ resource }: Props) => {
 				};
 			});
 		}
-	}, [addSnackbar, variation, pushDocument, setPrimaryAction]);
+	}, [setPrimaryAction, pushDocument, variation, addSnackbar, t]);
 
 	/**
 	 *
@@ -68,7 +69,7 @@ const EditVariation = ({ resource }: Props) => {
 			label: t('Save to Server', { _tags: 'core' }),
 			action: handleSave,
 		});
-	}, [handleSave, setPrimaryAction, setTitle]);
+	}, [handleSave, setPrimaryAction, setTitle, t]);
 
 	/**
 	 *

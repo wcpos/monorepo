@@ -1,52 +1,66 @@
 import * as React from 'react';
 
+import { useNavigation } from '@react-navigation/native';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import { useOrders } from '../../../contexts/orders';
+import useTaxLocation from '../../use-tax-location';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CurrentOrderContextProps {
 	currentOrder: OrderDocument;
+	setCurrentOrderID: (id: string) => void;
 }
 
 export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>(null);
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
-	orderID?: string;
-	newOrderResource: ObservableResource<OrderDocument>;
+	resource: ObservableResource<OrderDocument>;
+	taxQuery: any;
 }
 
 /**
  * Provider the active order by uuid, or a new order
  */
-const CurrentOrderProvider = ({
+export const CurrentOrderProvider = ({
 	children,
-	orderID,
-	newOrderResource,
+	resource,
+	taxQuery,
 }: CurrentOrderContextProviderProps) => {
-	const { resource } = useOrders();
-	const orders = useObservableSuspense(resource);
-	const newOrder = useObservableSuspense(newOrderResource);
+	const currentOrder = useObservableSuspense(resource);
+	const navigation = useNavigation();
+	const location = useTaxLocation(currentOrder);
+
+	/**
+	 * The tax rate can depend on the current order's location
+	 * So we need to re-query the tax rate when the order changes
+	 */
+	React.useEffect(() => {
+		taxQuery.search(location);
+	}, [location, taxQuery]);
 
 	/**
 	 *
 	 */
-	const currentOrder = React.useMemo(() => {
-		const order = orders.find((order) => order.uuid === orderID);
-		return order ?? newOrder;
-	}, [orders, newOrder, orderID]);
+	const setCurrentOrderID = React.useCallback(
+		(orderID: string) => {
+			navigation.setParams({ orderID });
+		},
+		[navigation]
+	);
 
 	/**
 	 *
 	 */
-	const value = React.useMemo(() => ({ currentOrder }), [currentOrder]);
-
-	/**
-	 *
-	 */
-	return <CurrentOrderContext.Provider value={value}>{children}</CurrentOrderContext.Provider>;
+	return (
+		<CurrentOrderContext.Provider
+			value={{
+				currentOrder,
+				setCurrentOrderID,
+			}}
+		>
+			{children}
+		</CurrentOrderContext.Provider>
+	);
 };
-
-export default CurrentOrderProvider;

@@ -6,8 +6,8 @@ import get from 'lodash/get';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
-import useLocalData from '../../../contexts/local-data';
-import { t } from '../../../lib/translations';
+import { useAppState } from '../../../contexts/app-state';
+import { useT } from '../../../contexts/translations';
 import { parseLinkHeader } from '../../../lib/url';
 
 type SiteDocument = import('@wcpos/database/src').SiteDocument;
@@ -27,11 +27,15 @@ interface WpJsonResponse {
 	_links: Record<string, unknown>;
 }
 
+/**
+ * TODO - remove the need for direct access to the userDB here
+ */
 const useSiteConnect = () => {
-	const { user, userDB } = useLocalData();
+	const { user, userDB } = useAppState();
 	const [loading, setLoading] = React.useState(false);
 	const [error, setError] = React.useState(false);
 	const http = useHttpClient();
+	const t = useT();
 
 	/**
 	 *
@@ -44,6 +48,14 @@ const useSiteConnect = () => {
 			// hack - add param to break cache
 			const response = await http.get(wpApiUrl, { params: { wcpos: 1 } });
 			const data = get(response, 'data') as WpJsonResponse;
+
+			/**
+			 * I have seen cases where the data is not complete, the wp-json index can be 50kb for some sites
+			 */
+			if (!data || typeof data !== 'object') {
+				throw Error(t('Bad API response', { _tags: 'core' }));
+			}
+
 			const namespaces = get(data, 'namespaces');
 			if (!namespaces) {
 				throw Error(t('WordPress API not found', { _tags: 'core' }));
@@ -61,7 +73,7 @@ const useSiteConnect = () => {
 				wc_api_auth_url: `${wpApiUrl}wcpos/v1/jwt`,
 			};
 		},
-		[http]
+		[http, t]
 	);
 
 	/**
@@ -90,7 +102,7 @@ const useSiteConnect = () => {
 			const parsed = parseLinkHeader(link);
 			return get(parsed, ['https://api.w.org/', 'url']);
 		},
-		[http]
+		[http, t]
 	);
 
 	/**
@@ -117,7 +129,7 @@ const useSiteConnect = () => {
 				setLoading(false);
 			}
 		},
-		[getSiteData, getWPAPIUrl, user, userDB.sites]
+		[getSiteData, getWPAPIUrl, t, user, userDB.sites]
 	);
 
 	return { onConnect, loading, error };

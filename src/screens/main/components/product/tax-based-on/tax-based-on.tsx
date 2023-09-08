@@ -2,26 +2,29 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { map, tap } from 'rxjs/operators';
 
 import { InlineError } from '@wcpos/components/src/inline-error/inline-error';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
 import DisplayCurrentTaxRates from './display-current-tax-rates';
-import useLocalData from '../../../../../contexts/local-data';
-import { t } from '../../../../../lib/translations';
-import { useTaxRates } from '../../../contexts/tax-rates';
+import { useT } from '../../../../../contexts/translations';
+import { useTaxHelpers } from '../../../contexts/tax-helpers';
 
 /**
  * NOTE: this must be used within a TaxRatesProvider
  */
-const TaxBasedOn = () => {
-	const { store } = useLocalData();
-	const taxBasedOn = useObservableState(store.tax_based_on$, store?.tax_based_on);
+const TaxBasedOn = ({ taxBasedOn }) => {
 	const [opened, setOpened] = React.useState(false);
-	const { resource, query } = useTaxRates();
-	const rates = useObservableSuspense(resource);
-	const { country, state, city, postcode } = get(query, ['currentState', 'search'], {});
+	const { taxQuery } = useTaxHelpers();
+	const rates = useObservableSuspense(taxQuery.resource);
+	const { country, state, city, postcode } = useObservableState(
+		taxQuery.state$.pipe(map((state) => get(state, ['search'], {}))),
+		get(taxQuery, ['currentState', 'search'], {})
+	);
+	const t = useT();
+	console.log('rates', rates);
 
 	/**
 	 *

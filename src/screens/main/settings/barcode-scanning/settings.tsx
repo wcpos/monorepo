@@ -1,10 +1,12 @@
 import * as React from 'react';
 
-import useLocalData from '../../../../contexts/local-data';
+import { useObservableState } from 'observable-hooks';
+
+import { useAppState } from '../../../../contexts/app-state';
 import Form from '../../components/document-form';
 
 const BarcodeSettings = () => {
-	const { store } = useLocalData();
+	const { store } = useAppState();
 
 	return (
 		<Form

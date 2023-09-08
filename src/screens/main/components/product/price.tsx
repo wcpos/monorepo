@@ -6,9 +6,9 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import Tooltip from '@wcpos/components/src/tooltip';
 
-import useLocalData from '../../../../contexts/local-data';
+import { useAppState } from '../../../../contexts/app-state';
+import { useTaxHelpers } from '../../contexts/tax-helpers';
 import useCurrencyFormat from '../../hooks/use-currency-format';
-import useTaxCalculation from '../../hooks/use-tax-calculation';
 
 interface Props {
 	price: string;
@@ -16,6 +16,7 @@ interface Props {
 	taxClass: string;
 	taxDisplay: 'text' | 'tooltip' | 'none';
 	strikethrough?: boolean;
+	taxLocation: 'pos' | 'base';
 }
 
 export const Price = ({
@@ -24,13 +25,14 @@ export const Price = ({
 	taxClass,
 	taxDisplay = 'tooltip',
 	strikethrough,
+	taxLocation,
 }: Props) => {
 	const { format } = useCurrencyFormat();
-	const { store } = useLocalData();
+	const { store } = useAppState();
 	const taxDisplayShop = useObservableState(store?.tax_display_shop$, store?.tax_display_shop);
 	const calcTaxes = useObservableState(store?.calc_taxes$, store?.calc_taxes);
 	const taxable = taxStatus === 'taxable' && calcTaxes === 'yes';
-	const { getDisplayValues } = useTaxCalculation();
+	const { getDisplayValues } = useTaxHelpers();
 
 	let displayPrice = price;
 	let taxTotal = 0;

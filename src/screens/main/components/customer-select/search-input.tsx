@@ -4,15 +4,27 @@ import delay from 'lodash/delay';
 
 import TextInput from '@wcpos/components/src/textinput';
 
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
 /**
  *
  */
-const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer }) => {
+const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer, onBlur, size, style }) => {
 	const [search, setSearch] = React.useState('');
 	const { format } = useCustomerNameFormat();
+	const t = useT();
+
+	/**
+	 *
+	 */
+	const handleSearch = React.useCallback(
+		(search) => {
+			setSearch(search);
+			onSearch(search);
+		},
+		[onSearch]
+	);
 
 	/**
 	 *
@@ -23,14 +35,7 @@ const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer }) => {
 		}
 
 		return t('Search Customers', { _tags: 'core' });
-	}, [selectedCustomer, format]);
-
-	/**
-	 *
-	 */
-	React.useEffect(() => {
-		onSearch(search);
-	}, [search, onSearch]);
+	}, [selectedCustomer, t, format]);
 
 	/**
 	 *
@@ -38,16 +43,23 @@ const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer }) => {
 	return (
 		<TextInput
 			value={search}
-			onChangeText={setSearch}
+			onChangeText={handleSearch}
 			containerStyle={{ flex: 1 }}
 			clearable
 			autoFocus={autoFocus}
 			placeholder={placeholder}
+			size={size}
+			style={style}
+			/**
+			 * FIXME: this is a hack, useEffect is being called before onLayout for the Popover.Target
+			 * which means the width is not set correctly.
+			 */
 			/**
 			 * FIXME: this is a hack, useEffect is being called before onLayout for the Popover.Target
 			 * which means the width is not set correctly.
 			 */
 			onFocus={() => delay(() => setOpened(true), 100)}
+			onBlur={() => delay(onBlur, 100)}
 		/>
 	);
 };

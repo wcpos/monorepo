@@ -4,17 +4,22 @@ import delay from 'lodash/delay';
 
 import TextInput from '@wcpos/components/src/textinput';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 
 const SearchInput = ({ setOpened, onBlur, onSearch, value }) => {
 	const [search, setSearch] = React.useState('');
+	const t = useT();
 
 	/**
 	 *
 	 */
-	React.useEffect(() => {
-		onSearch(search);
-	}, [search, onSearch]);
+	const handleSearch = React.useCallback(
+		(search) => {
+			setSearch(search);
+			onSearch(search);
+		},
+		[onSearch]
+	);
 
 	/**
 	 *
@@ -23,7 +28,7 @@ const SearchInput = ({ setOpened, onBlur, onSearch, value }) => {
 		<TextInput
 			placeholder={t('Search Tags', { _tags: 'core' })}
 			value={search}
-			onChangeText={setSearch}
+			onChangeText={handleSearch}
 			containerStyle={{ flex: 1, width: 170 }}
 			size="small"
 			clearable

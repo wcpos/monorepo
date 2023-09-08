@@ -4,37 +4,54 @@ import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 
-import { useVariationTable } from './context';
 import VariationsFilterBar from './filter-bar';
 import Table from './table';
-import { VariationsProvider } from '../../../contexts/variations';
+import { useQuery } from '../../../hooks/use-query';
 
 /**
  *
  */
-const Variations = ({ parent }) => {
-	const { query } = useVariationTable();
+const Variations = ({ parent, initialSearch }) => {
+	/**
+	 *
+	 */
+	const query = useQuery({
+		queryKeys: ['variations', { parentID: parent.id }],
+		collectionName: 'variations',
+		initialQuery: {
+			selector: { id: { $in: parent.variations } },
+			// search: { attributes: [initialSearch] },
+		},
+		parent,
+	});
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		if (initialSearch) {
+			query.search({ attributes: [initialSearch] });
+		} else {
+			query.search({});
+		}
+	}, [initialSearch, query]);
 
 	/**
 	 *
 	 */
 	return (
-		<VariationsProvider
-			query={query}
-			apiEndpoint={`products/${parent.id}/variations`}
-			remoteIDs={parent.variations}
-		>
-			<Box>
+		<Box>
+			<ErrorBoundary>
+				<VariationsFilterBar parent={parent} />
+			</ErrorBoundary>
+			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<ErrorBoundary>
-					<VariationsFilterBar parent={parent} />
-				</ErrorBoundary>
-				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 					<Suspense>
-						<Table parent={parent} />
+						<Table parent={parent} query={query} />
 					</Suspense>
-				</Box>
+				</ErrorBoundary>
 			</Box>
-		</VariationsProvider>
+		</Box>
 	);
 };
 

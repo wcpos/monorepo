@@ -4,7 +4,7 @@ import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
 import Loader from '@wcpos/components/src/loader';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 interface SyncButtonProps {
 	sync: () => Promise<null>;
@@ -14,14 +14,15 @@ interface SyncButtonProps {
 
 const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 	const [openMenu, setOpenMenu] = React.useState(false);
+	const t = useT();
 
 	/**
 	 *
 	 */
 	const handleClearAndSync = React.useCallback(async () => {
 		await clear();
-		await sync();
-	}, [clear, sync]);
+		// await sync(); // this sync function is going to be stale after clear
+	}, [clear]);
 
 	/**
 	 *

@@ -7,7 +7,7 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 
 import DeleteDialog from './delete-dialog';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import usePullDocument from '../../contexts/use-pull-document';
 
 type Props = {
@@ -19,6 +19,7 @@ const Actions = ({ item: customer }: Props) => {
 	const [menuOpened, setMenuOpened] = React.useState(false);
 	const pullDocument = usePullDocument();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
+	const t = useT();
 
 	/**
 	 *
@@ -52,7 +53,7 @@ const Actions = ({ item: customer }: Props) => {
 				icon: 'arrowRotateRight',
 			});
 		}
-	}, [customer.collection, customer.id, customer.uuid, navigation, pullDocument]);
+	}, [customer.collection, customer.id, customer.uuid, navigation, pullDocument, t]);
 
 	/**
 	 *

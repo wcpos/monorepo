@@ -6,15 +6,14 @@ import { map } from 'rxjs/operators';
 
 import Pill from '@wcpos/components/src/pill';
 
-import { t } from '../../../../../lib/translations';
-import { useProducts } from '../../../contexts/products';
+import { useT } from '../../../../../contexts/translations';
 
-const OnSalePill = () => {
-	const { query } = useProducts();
+const OnSalePill = ({ query }) => {
 	const isActive = useObservableState(
 		query.state$.pipe(map((state) => get(state, ['selector', 'on_sale']))),
 		get(query, ['currentState', 'selector', 'on_sale'])
 	);
+	const t = useT();
 
 	return (
 		<Pill

@@ -4,7 +4,7 @@ import { Avatar } from '@wcpos/components/src/avatar/avatar';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 
 type ProductCategoryDocument = import('@wcpos/database').ProductCategoryDocument;
 
@@ -13,6 +13,8 @@ interface CategorySelectItemProps {
 }
 
 export const EmptyTableRow = () => {
+	const t = useT();
+
 	return (
 		<Box horizontal fill padding="small">
 			<Text>{t('No categories found', { _tags: 'core' })}</Text>

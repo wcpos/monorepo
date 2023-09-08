@@ -7,7 +7,7 @@ import { useModal } from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 import EditModal from '../components/edit-form-with-json';
 import usePushDocument from '../contexts/use-push-document';
 
@@ -23,6 +23,7 @@ const EditProduct = ({ resource }: Props) => {
 	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
+	const t = useT();
 
 	if (!product) {
 		throw new Error(t('Product not found', { _tags: 'core' }));
@@ -58,7 +59,7 @@ const EditProduct = ({ resource }: Props) => {
 				};
 			});
 		}
-	}, [addSnackbar, product, pushDocument, setPrimaryAction]);
+	}, [addSnackbar, product, pushDocument, setPrimaryAction, t]);
 
 	/**
 	 *
@@ -69,7 +70,7 @@ const EditProduct = ({ resource }: Props) => {
 			label: t('Save to Server', { _tags: 'core' }),
 			action: handleSave,
 		});
-	}, [handleSave, name, setPrimaryAction, setTitle]);
+	}, [handleSave, name, setPrimaryAction, setTitle, t]);
 
 	/**
 	 *

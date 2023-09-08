@@ -8,15 +8,13 @@ import Table from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
-import useLocalData from '../../../../../contexts/local-data';
-import useCollection from '../../../hooks/use-collection';
+import { useCollection } from '../../../hooks/use-collection';
 
 interface UserSettingsProps {
 	onClose: () => void;
 }
 
 const UserSettings = ({ onClose }: UserSettingsProps) => {
-	const { storeDB } = useLocalData();
 	const [country, setCountry] = React.useState('GB');
 	const { collection } = useCollection('taxes');
 

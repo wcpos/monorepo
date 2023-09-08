@@ -4,6 +4,7 @@ import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
+import { useTable } from '@wcpos/components/src/table';
 
 import PriceWithTax from '../../../components/product/price';
 
@@ -20,6 +21,7 @@ export const Price = ({ item: product, column }: Props) => {
 	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
 	const taxClass = useObservableState(product.tax_class$, product.tax_class);
 	const { display } = column;
+	const context = useTable();
 
 	/**
 	 * TODO - move this into the ui as a helper function
@@ -44,6 +46,7 @@ export const Price = ({ item: product, column }: Props) => {
 				taxStatus={taxStatus}
 				taxClass={taxClass}
 				taxDisplay={show('tax') ? 'text' : 'tooltip'}
+				taxLocation={context?.taxLocation}
 				strikethrough
 			/>
 			<PriceWithTax
@@ -51,6 +54,7 @@ export const Price = ({ item: product, column }: Props) => {
 				taxStatus={taxStatus}
 				taxClass={taxClass}
 				taxDisplay={show('tax') ? 'text' : 'tooltip'}
+				taxLocation={context?.taxLocation}
 			/>
 		</Box>
 	) : (
@@ -59,6 +63,7 @@ export const Price = ({ item: product, column }: Props) => {
 			taxStatus={taxStatus}
 			taxClass={taxClass}
 			taxDisplay={show('tax') ? 'text' : 'tooltip'}
+			taxLocation={context?.taxLocation}
 		/>
 	);
 };

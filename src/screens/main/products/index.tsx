@@ -13,10 +13,13 @@ import AddProduct from './add-product';
 import EditProduct from './edit-product';
 import EditVariation from './edit-variation';
 import Products from './products';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
+import { useCollection } from '../hooks/use-collection';
 import { ModalLayout } from '../../components/modal-layout';
+import { TaxHelpersProvider } from '../contexts/tax-helpers';
 import useUISettings from '../contexts/ui-settings';
-import useCollection from '../hooks/use-collection';
+import useBaseTaxLocation from '../hooks/use-base-tax-location';
+import { useQuery } from '../hooks/use-query';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -32,13 +35,28 @@ const Stack = createStackNavigator<ProductsStackParamList>();
 /**
  * TODO: move the Products provider here
  */
-const ProductsWithProviders = ({
-	route,
-}: NativeStackScreenProps<ProductsStackParamList, 'Products'>) => {
+const ProductsWithProviders = () => {
+	const location = useBaseTaxLocation();
+
+	/**
+	 *
+	 */
+	const taxQuery = useQuery({
+		queryKeys: ['tax-rates', 'base'],
+		collectionName: 'taxes',
+		initialQuery: {
+			search: location,
+		},
+	});
+
 	return (
 		<ErrorBoundary>
 			<Suspense>
-				<Products />
+				<TaxHelpersProvider taxQuery={taxQuery}>
+					<Suspense>
+						<Products />
+					</Suspense>
+				</TaxHelpersProvider>
 			</Suspense>
 		</ErrorBoundary>
 	);
@@ -50,6 +68,8 @@ const ProductsWithProviders = ({
 const AddProductModal = ({
 	navigation,
 }: NativeStackScreenProps<ProductsStackParamList, 'AddProduct'>) => {
+	const t = useT();
+
 	return (
 		<ModalLayout
 			title={t('Add Product', { _tags: 'core' })}
@@ -74,8 +94,8 @@ const EditProductWithProviders = ({
 	navigation,
 }: NativeStackScreenProps<ProductsStackParamList, 'EditProduct'>) => {
 	const { productID } = route.params;
-	const { uiSettings } = useUISettings('products');
 	const { collection } = useCollection('products');
+	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(productID).exec())),
@@ -107,8 +127,8 @@ const EditVariationWithProviders = ({
 	navigation,
 }: NativeStackScreenProps<ProductsStackParamList, 'EditVariation'>) => {
 	const { variationID, parentID } = route.params;
-	const { uiSettings } = useUISettings('products');
 	const { collection } = useCollection('variations');
+	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(variationID).exec())),

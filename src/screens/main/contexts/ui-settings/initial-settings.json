@@ -26,6 +26,10 @@
             "show": false
           },
           {
+            "key": "barcode",
+            "show": false
+          },
+          {
             "key": "categories",
             "show": true
           },
@@ -37,13 +41,15 @@
       },
       {
         "key": "sku",
-        "show": false,
-        "disableSort": true
+        "show": false
+      },
+      {
+        "key": "barcode",
+        "show": false
       },
       {
         "key": "type",
-        "show": false,
-        "disableSort": true
+        "show": false
       },
       {
         "key": "stock_quantity",
@@ -167,13 +173,11 @@
       },
       {
         "key": "sku",
-        "show": false,
-        "disableSort": true
+        "show": false
       },
       {
         "key": "barcode",
-        "show": false,
-        "disableSort": true
+        "show": false
       },
       {
         "key": "stock_quantity",

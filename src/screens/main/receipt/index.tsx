@@ -7,7 +7,7 @@ import { useModal } from '@wcpos/components/src/modal';
 
 import { EmailModal } from './components/email';
 import { ReceiptTemplate } from './components/template-webview';
-import { t } from '../../../lib/translations';
+import { useT } from '../../../contexts/translations';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
@@ -18,6 +18,7 @@ interface Props {
  */
 export const ReceiptModal = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
+	const t = useT();
 
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));

@@ -8,8 +8,8 @@ import Numpad from '@wcpos/components/src/numpad';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
 
-import useLocalData from '../../../contexts/local-data';
-import { t } from '../../../lib/translations';
+import { useAppState } from '../../../contexts/app-state';
+import { useT } from '../../../contexts/translations';
 import useCurrencyFormat from '../hooks/use-currency-format';
 
 interface NumberInputProps {
@@ -35,12 +35,13 @@ const NumberInput = ({
 	disabled,
 	showDecimals = false,
 }: NumberInputProps) => {
-	const { store } = useLocalData();
+	const { store } = useAppState();
 	const decimalSeparator = useObservableState(store.price_decimal_sep$, store.price_decimal_sep);
 	const { format } = useCurrencyFormat({ withSymbol: false });
 	const displayValue = showDecimals ? format(value) : value;
 	const [opened, setOpened] = React.useState(false);
 	const valueRef = React.useRef(displayValue);
+	const t = useT();
 
 	/**
 	 *

@@ -6,8 +6,8 @@ import Button from '@wcpos/components/src/button';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
-import { t } from '../../../../../lib/translations';
-import useCurrentOrder from '../../contexts/current-order';
+import { useT } from '../../../../../contexts/translations';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 /**
  *
@@ -16,6 +16,7 @@ const VoidButton = () => {
 	const { currentOrder } = useCurrentOrder();
 	const addSnackbar = useSnackbar();
 	const navigation = useNavigation();
+	const t = useT();
 
 	/**
 	 *
@@ -45,7 +46,7 @@ const VoidButton = () => {
 			dismissable: true,
 			action: { label: t('Undo', { _tags: 'core' }), action: () => undoRemove(orderJson) },
 		});
-	}, [addSnackbar, navigation, currentOrder, undoRemove]);
+	}, [currentOrder, navigation, addSnackbar, t, undoRemove]);
 
 	/**
 	 *

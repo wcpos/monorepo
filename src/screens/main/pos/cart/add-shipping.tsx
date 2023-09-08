@@ -11,11 +11,11 @@ import Text from '@wcpos/components/src/text';
 import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
-import useLocalData from '../../../../contexts/local-data';
-import { t } from '../../../../lib/translations';
+import { useAppState } from '../../../../contexts/app-state';
+import { useT } from '../../../../contexts/translations';
 import useRestHttpClient from '../../hooks/use-rest-http-client';
-import useCurrentOrder from '../contexts/current-order';
-import useCartHelpers from '../../hooks/use-cart-helpers';
+import { useCurrentOrder } from '../contexts/current-order';
+import { useAddShipping } from '../hooks/use-add-shipping';
 
 /**
  *
@@ -23,7 +23,7 @@ import useCartHelpers from '../../hooks/use-cart-helpers';
 const ShippingSelect = ({ shippingResource, selectedMethod, onSelect }) => {
 	const options = useObservableSuspense(shippingResource);
 	const http = useRestHttpClient();
-	const { storeDB } = useLocalData();
+	const { storeDB } = useAppState();
 
 	React.useEffect(() => {
 		async function fetchShippingMethods() {
@@ -54,13 +54,14 @@ const initialData = {
  */
 const AddShipping = () => {
 	const [opened, setOpened] = React.useState(false);
-	const { addShipping } = useCartHelpers();
 	const [data, setData] = React.useState(initialData);
 	const { currentOrder } = useCurrentOrder();
+	const { addShipping } = useAddShipping();
 	const currencySymbol = useObservableState(
 		currentOrder.currency_symbol$,
 		currentOrder.currency_symbol
 	);
+	const t = useT();
 
 	/**
 	 * Create observable shipping resource
@@ -116,7 +117,7 @@ const AddShipping = () => {
 				total: { type: 'string', title: t('Total', { _tags: 'core' }) },
 			},
 		}),
-		[]
+		[t]
 	);
 
 	/**
@@ -135,7 +136,7 @@ const AddShipping = () => {
 				'ui:placeholder': 'local_pickup',
 			},
 		}),
-		[currencySymbol]
+		[currencySymbol, t]
 	);
 
 	/**

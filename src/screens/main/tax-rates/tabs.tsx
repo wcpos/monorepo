@@ -8,15 +8,13 @@ import Tabs from '@wcpos/components/src/tabs';
 
 import TaxRatesFooter from './footer';
 import TaxRateTable from './rate-table';
-import { useTaxRates } from '../contexts/tax-rates';
 
 /**
  *
  */
-export const TaxRatesTabs = () => {
+export const TaxRatesTabs = ({ query }) => {
 	const [index, setIndex] = React.useState(0);
-	const { resource } = useTaxRates();
-	const rates = useObservableSuspense(resource);
+	const rates = useObservableSuspense(query.resource);
 
 	/**
 	 *
@@ -77,7 +75,7 @@ export const TaxRatesTabs = () => {
 					onIndexChange={setIndex}
 				/>
 			) : null}
-			<TaxRatesFooter count={rates.length} />
+			<TaxRatesFooter count={rates.length} query={query} />
 		</Box>
 	);
 };

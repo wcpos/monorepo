@@ -6,7 +6,7 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 
-import { t } from '../../../../../lib/translations';
+import { useT } from '../../../../../contexts/translations';
 import EditForm from '../../../components/edit-form-with-json';
 
 interface EditLineItemProps {
@@ -18,6 +18,7 @@ interface EditLineItemProps {
  */
 const EditButton = ({ item }: EditLineItemProps) => {
 	const [opened, setOpened] = React.useState(false);
+	const t = useT();
 
 	/**
 	 *

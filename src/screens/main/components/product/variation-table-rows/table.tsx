@@ -11,9 +11,7 @@ import log from '@wcpos/utils/src/logger';
 
 import { useVariationTable } from './context';
 import Footer from './footer';
-import { t } from '../../../../../lib/translations';
-import { useProducts } from '../../../contexts/products';
-import { useVariations } from '../../../contexts/variations';
+import { useT } from '../../../../../contexts/translations';
 import EmptyTableRow from '../../empty-table-row';
 import { ProductVariationImage } from '../variation-image';
 import { ProductVariationName } from '../variation-name';
@@ -31,14 +29,12 @@ const sharedCells = {
 /**
  *
  */
-const VariationsTable = ({ parent }) => {
-	const { paginatedResource, replicationState, loadNextPage, setQuery } = useVariations();
-	const { data, count, hasMore } = useObservableSuspense(paginatedResource);
-	const loading = useObservableState(replicationState.active$, false);
-	const total = parent.variations.length;
-	// const { query } = useProducts();
+const VariationsTable = ({ query, parent }) => {
+	const data = useObservableSuspense(query.resource);
 	const context = useTable(); // get context from parent product, ie: columns
 	const { cells } = useVariationTable();
+	const loading = useObservableState(query.replicationState.active$, false);
+	const t = useT();
 
 	/**
 	 * Detect change in product query and variations query
@@ -107,13 +103,13 @@ const VariationsTable = ({ parent }) => {
 	/**
 	 *
 	 */
-	const onEndReached = React.useCallback(() => {
-		if (hasMore) {
-			loadNextPage();
-		} else if (!loading && total > count) {
-			replicationState.start({ fetchRemoteIDs: false });
-		}
-	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+	// const onEndReached = React.useCallback(() => {
+	// 	if (hasMore) {
+	// 		loadNextPage();
+	// 	} else if (!loading && total > count) {
+	// 		replicationState.start({ fetchRemoteIDs: false });
+	// 	}
+	// }, [count, hasMore, loadNextPage, loading, replicationState, total]);
 
 	/**
 	 *
@@ -121,13 +117,12 @@ const VariationsTable = ({ parent }) => {
 	return (
 		<Table<ProductVariationDocument>
 			data={data}
-			footer={<Footer count={count} total={total} loading={loading} />}
+			footer={<Footer query={query} parent={parent} count={data.length} loading={loading} />}
 			estimatedItemSize={100}
 			context={{ ...context, cellRenderer }}
 			ListEmptyComponent={<EmptyTableRow message={t('No variations found', { _tags: 'core' })} />}
-			onEndReached={onEndReached}
+			// onEndReached={onEndReached}
 			loading={loading}
-			nestedScrollEnabled={true}
 			hideHeader={true}
 		/>
 	);

@@ -8,7 +8,7 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 
 import DeleteDialog from './delete-dialog';
-import { t } from '../../../../lib/translations';
+import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
 
@@ -19,9 +19,10 @@ interface Props {
 const Actions = ({ item: order }: Props) => {
 	const navigation = useNavigation();
 	const [menuOpened, setMenuOpened] = React.useState(false);
-	const status = useObservableState(order.status$, order.status);
+	// const status = useObservableState(order.status$, order.status);
 	const pullDocument = usePullDocument();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
+	const t = useT();
 
 	/**
 	 *
@@ -68,7 +69,8 @@ const Actions = ({ item: order }: Props) => {
 			});
 		}
 
-		if (status === 'completed' || status === 'pos-partial') {
+		// if order has an id, then it has a receipt
+		if (order.id) {
 			menu.splice(1, 0, {
 				label: t('Receipt', { _tags: 'core' }),
 				icon: 'receipt',
@@ -77,7 +79,7 @@ const Actions = ({ item: order }: Props) => {
 		}
 
 		return menu;
-	}, [handleOpen, navigation, order.collection, order.id, order.uuid, pullDocument, status]);
+	}, [handleOpen, navigation, order.collection, order.id, order.uuid, pullDocument, t]);
 
 	/**
 	 *

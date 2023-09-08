@@ -5,7 +5,7 @@ import { useObservableState } from 'observable-hooks';
 import Pill from '@wcpos/components/src/pill';
 import Text from '@wcpos/components/src/text';
 
-import { useOrders } from '../../contexts/orders';
+import { useStoreStateManager } from '../../contexts/store-state-manager';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
 type Props = {
@@ -13,7 +13,8 @@ type Props = {
 };
 
 const Customer = ({ item: order }: Props) => {
-	const { query } = useOrders();
+	const manager = useStoreStateManager();
+	const query = manager.getQuery(['orders']);
 	const { format } = useCustomerNameFormat();
 	const customerID = useObservableState(order.customer_id$, order.customer_id);
 	const billing = useObservableState(order.billing$, order.billing);

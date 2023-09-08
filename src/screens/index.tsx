@@ -1,11 +1,10 @@
 import * as React from 'react';
-import { AppState } from 'react-native';
 
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
@@ -14,8 +13,8 @@ import Text from '@wcpos/components/src/text';
 
 import AuthNavigator from './auth';
 import MainNavigator from './main';
-import useLocalData from '../contexts/local-data';
-import { t } from '../lib/translations';
+import { useAppState } from '../contexts/app-state';
+import { useT } from '../contexts/translations';
 import { URL } from '../lib/url';
 
 // const MainNavigator = React.lazy(() => import('./main'));
@@ -30,10 +29,11 @@ const Stack = createStackNavigator<RootStackParamList>();
 /**
  *
  */
-const RootNavigator = ({ initialProps }) => {
-	const { store, storeDB, locale } = useLocalData();
+const RootNavigator = () => {
+	const { store, storeDB, initialProps } = useAppState();
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
+	const t = useT();
 
 	/**
 	 * store can be null, so we create an observable
@@ -50,76 +50,75 @@ const RootNavigator = ({ initialProps }) => {
 	}
 	const baseURL = Linking.createURL(pathname);
 
-	const linking = {
-		prefixes: ['wcpos://', baseURL],
-		config: {
-			screens: {
-				AuthStack: {
-					path: pathname + 'connect',
-					screens: {
-						Connect: '',
-						Login: 'login/:siteID',
+	const linking = React.useMemo(
+		() => ({
+			prefixes: ['wcpos://', baseURL],
+			config: {
+				screens: {
+					AuthStack: {
+						path: pathname + 'connect',
+						screens: {
+							Connect: '',
+							Login: 'login/:siteID',
+						},
 					},
-				},
-				MainStack: {
-					path: pathname,
-					screens: {
-						MainDrawer: {
-							// path: pathname,
-							screens: {
-								POSStack: {
-									path: 'cart',
-									screens: {
-										POS: ':orderID?',
-										Checkout: ':orderID/checkout',
-										Receipt: 'receipt/:orderID',
+					MainStack: {
+						path: pathname,
+						screens: {
+							MainDrawer: {
+								// path: pathname,
+								screens: {
+									POSStack: {
+										path: 'cart',
+										screens: {
+											POS: ':orderID?',
+											Checkout: ':orderID/checkout',
+											Receipt: 'receipt/:orderID',
+										},
 									},
-								},
-								ProductsStack: {
-									path: 'products',
-									screens: {
-										Products: '',
-										AddProduct: 'add',
-										EditProduct: 'edit/:productID',
-										EditVariation: 'edit/:parentID/:variationID',
+									ProductsStack: {
+										path: 'products',
+										screens: {
+											Products: '',
+											AddProduct: 'add',
+											EditProduct: 'edit/:productID',
+											EditVariation: 'edit/:parentID/:variationID',
+										},
 									},
-								},
-								OrdersStack: {
-									path: 'orders',
-									screens: {
-										Orders: '',
-										EditOrder: 'edit/:orderID',
-										Receipt: 'receipt/:orderID',
+									OrdersStack: {
+										path: 'orders',
+										screens: {
+											Orders: '',
+											EditOrder: 'edit/:orderID',
+											Receipt: 'receipt/:orderID',
+										},
 									},
-								},
-								CustomersStack: {
-									path: 'customers',
-									screens: {
-										Customers: '',
-										AddCustomer: 'add',
-										EditCustomer: 'edit/:customerID',
+									CustomersStack: {
+										path: 'customers',
+										screens: {
+											Customers: '',
+											AddCustomer: 'add',
+											EditCustomer: 'edit/:customerID',
+										},
 									},
-								},
-								SupportStack: {
-									path: 'support',
+									SupportStack: {
+										path: 'support',
+									},
 								},
 							},
+							Settings: 'settings',
+							Login: 'login',
+							TaxRates: 'tax-rates',
 						},
-						Settings: 'settings',
-						Login: 'login',
-						TaxRates: 'tax-rates',
 					},
 				},
 			},
-		},
-	} as LinkingOptions<RootStackParamList>;
+		}),
+		[baseURL, pathname]
+	);
 
 	return (
 		<NavigationContainer
-			// FIXME - I thought this would re-render the app when the locale changes??
-			// it kind of works, the language updates when the settings are closed
-			// maybe I should just bite the bullet and use const t = useT()
-			// key={locale}
 			linking={linking}
 			theme={{
 				dark: false,
@@ -144,24 +143,20 @@ const RootNavigator = ({ initialProps }) => {
 				},
 			}}
 			// onStateChange={(state) => {
-			// 	console.log('state', state);
+			// 	console.log('navigation state', state);
 			// }}
 		>
-			<Stack.Navigator screenOptions={{ headerShown: false }}>
+			<Stack.Navigator
+				/**
+				 * The key is important here for switching stores and logging out
+				 * It tells react to re-render the whole component tree
+				 * - using token, but could also use storeDB.name, I'm not sure when rxdb token changes
+				 */
+				// key={storeDB?.token}
+				screenOptions={{ headerShown: false }}
+			>
 				{storeDB ? (
-					<Stack.Screen name="MainStack">
-						{() => {
-							return (
-								/**
-								 * FIXME - this catches the site = null problem when logging out
-								 * There needs to be a better way to handle this
-								 */
-								<Suspense>
-									<MainNavigator />
-								</Suspense>
-							);
-						}}
-					</Stack.Screen>
+					<Stack.Screen name="MainStack" component={MainNavigator} />
 				) : (
 					<Stack.Screen
 						name="AuthStack"

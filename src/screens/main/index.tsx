@@ -13,6 +13,7 @@ import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
+import { StoreStateManagerProvider } from './contexts/store-state-manager';
 import { UISettingsProvider } from './contexts/ui-settings';
 import CustomersNavigator from './customers';
 import Help from './help';
@@ -24,8 +25,8 @@ import ProductsNavigator from './products';
 import Settings from './settings';
 import Support from './support';
 import TaxRates from './tax-rates';
-import useLocalData from '../../contexts/local-data';
-import { t } from '../../lib/translations';
+import { useAppState } from '../../contexts/app-state';
+import { useT } from '../../contexts/translations';
 import { ModalLayout } from '../components/modal-layout';
 
 export type MainStackParamList = {
@@ -55,6 +56,7 @@ const DrawerNavigator = ({ navigation }) => {
 	const dimensions = useWindowDimensions();
 	const theme = useTheme();
 	useKeyboardShortcuts(); // allows navigation by hotkeys
+	const t = useT();
 
 	const largeScreen = dimensions.width >= theme.screens.medium;
 
@@ -138,6 +140,8 @@ const DrawerNavigator = ({ navigation }) => {
  *
  */
 const SettingsScreen = () => {
+	const t = useT();
+
 	return (
 		<ModalLayout title={t('Settings', { _tags: 'core' })}>
 			<Settings />
@@ -149,6 +153,8 @@ const SettingsScreen = () => {
  *
  */
 const HelpScreen = () => {
+	const t = useT();
+
 	return (
 		<ModalLayout title={t('Help', { _tags: 'core' })}>
 			<Help />
@@ -160,7 +166,8 @@ const HelpScreen = () => {
  *
  */
 const LoginScreen = () => {
-	const { site, wpCredentials } = useLocalData();
+	const { site, wpCredentials } = useAppState();
+	const t = useT();
 	// TODO - need to add a login url to the site object
 
 	return (
@@ -180,6 +187,8 @@ const LoginScreen = () => {
  *
  */
 const TaxRatesScreen = () => {
+	const t = useT();
+
 	return (
 		<ModalLayout title={t('Tax Rates', { _tags: 'core' })} size="xxLarge">
 			<TaxRates />
@@ -191,36 +200,29 @@ const TaxRatesScreen = () => {
  *
  */
 const MainNavigator = () => {
-	const { site } = useLocalData();
-	if (!site) {
-		/**
-		 * FIXME - this is a hack to avoid the app crashing when site is null
-		 * We need to find a better way to handle this
-		 */
-		throw new Promise((resolve, reject) => {
-			resolve(true);
-		});
-	}
+	const { site } = useAppState();
 	const wpAPIURL = useObservableState(site.wp_api_url$, site.wp_api_url);
 
 	return (
-		<UISettingsProvider>
-			<OnlineStatusProvider wpAPIURL={wpAPIURL}>
-				{/** NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
-				<Portal.Provider>
-					<Stack.Navigator screenOptions={{ headerShown: false }}>
-						<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
-						<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-							<Stack.Screen name="Settings" component={SettingsScreen} />
-							<Stack.Screen name="Help" component={HelpScreen} />
-							<Stack.Screen name="Login" component={LoginScreen} />
-							<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
-						</Stack.Group>
-					</Stack.Navigator>
-					<Portal.Manager />
-				</Portal.Provider>
-			</OnlineStatusProvider>
-		</UISettingsProvider>
+		<StoreStateManagerProvider>
+			<UISettingsProvider>
+				<OnlineStatusProvider wpAPIURL={wpAPIURL}>
+					{/** NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
+					<Portal.Provider>
+						<Stack.Navigator screenOptions={{ headerShown: false }}>
+							<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
+							<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
+								<Stack.Screen name="Settings" component={SettingsScreen} />
+								<Stack.Screen name="Help" component={HelpScreen} />
+								<Stack.Screen name="Login" component={LoginScreen} />
+								<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
+							</Stack.Group>
+						</Stack.Navigator>
+						<Portal.Manager />
+					</Portal.Provider>
+				</OnlineStatusProvider>
+			</UISettingsProvider>
+		</StoreStateManagerProvider>
 	);
 };
 

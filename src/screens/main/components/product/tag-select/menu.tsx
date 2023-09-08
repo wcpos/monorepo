@@ -1,17 +1,14 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { View, FlatList } from 'react-native';
 
 import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import { FlashList } from '@wcpos/components/src/flash-list';
-import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
+import Table from '@wcpos/components/src/table';
 
 import TagSelectItem, { EmptyTableRow } from './item';
-import { useProductTags } from '../../../contexts/tags';
-import useTotalCount from '../../../hooks/use-total-count';
 
 type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
 
@@ -48,12 +45,10 @@ interface TagSelectMenuProps {
 /**
  *
  */
-const TagSelectMenu = ({ onChange }) => {
+const TagSelectMenu = ({ query, onSelect }) => {
 	const theme = useTheme();
-	const { paginatedResource, replicationState, loadNextPage } = useProductTags();
-	const { data: tags, count, hasMore } = useObservableSuspense(paginatedResource);
-	const loading = useObservableState(replicationState.active$, false);
-	const total = useTotalCount('products/categories', replicationState);
+	const tags = useObservableSuspense(query.resource);
+	const loading = useObservableState(query.replicationState.active$, false);
 	const { targetMeasurements } = usePopover();
 
 	/**
@@ -80,37 +75,37 @@ const TagSelectMenu = ({ onChange }) => {
 	const renderItem = React.useCallback(
 		({ item }) => {
 			return (
-				<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
+				<Pressable onPress={() => onSelect(item)} style={calculatedStyled}>
 					<TagSelectItem tag={item} />
 				</Pressable>
 			);
 		},
-		[calculatedStyled, onChange]
+		[calculatedStyled, onSelect]
 	);
 
 	/**
 	 *
 	 */
-	const onEndReached = React.useCallback(() => {
-		if (hasMore) {
-			loadNextPage();
-		} else if (!loading && total > count) {
-			replicationState.start({ fetchRemoteIDs: false });
-		}
-	}, [count, hasMore, loadNextPage, loading, replicationState, total]);
+	// const onEndReached = React.useCallback(() => {
+	// 	if (hasMore) {
+	// 		loadNextPage();
+	// 	} else if (!loading && total > count) {
+	// 		replicationState.start({ fetchRemoteIDs: false });
+	// 	}
+	// }, [count, hasMore, loadNextPage, loading, replicationState, total]);
 
 	/**
 	 *
 	 */
 	return (
 		<View style={{ width: targetMeasurements.value.width, maxHeight: 292, minHeight: 30 }}>
-			<FlashList<ProductTagDocument>
+			<FlatList<ProductTagDocument>
 				data={tags}
 				renderItem={renderItem}
-				estimatedItemSize={32}
+				// estimatedItemSize={32}
 				ListEmptyComponent={<EmptyTableRow />}
-				onEndReached={onEndReached}
-				ListFooterComponent={loading ? Loader : null}
+				onEndReached={() => query.nextPage()}
+				ListFooterComponent={<Table.LoadingRow loading={loading} style={{ padding: 0 }} />}
 			/>
 		</View>
 	);
