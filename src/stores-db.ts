@@ -30,7 +30,7 @@ function sanitizeStoreName(id: string) {
 /**
  *
  */
-const registry = new Map<string, Promise<StoreDatabase | undefined>>();
+// const registry = new Map<string, Promise<StoreDatabase | undefined>>();
 
 /**
  * creates the Store database
