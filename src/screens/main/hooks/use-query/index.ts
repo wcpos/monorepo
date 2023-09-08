@@ -11,8 +11,8 @@ import * as products from './hooks/products';
 import * as tags from './hooks/tags';
 import * as taxes from './hooks/tax-rates';
 import * as variations from './hooks/variations';
-import { useCollection, CollectionKey } from '../use-collection';
 import { useStoreStateManager } from '../../contexts/store-state-manager';
+import { useCollection, CollectionKey } from '../use-collection';
 import { useReplicationState } from '../use-replication-state';
 
 const allHooks = {
@@ -58,7 +58,6 @@ export const useQuery = <T>({ queryKeys, collectionName, initialQuery, parent }:
 	 *
 	 */
 	useSubscription(query.state$, (state) => {
-		console.log('query state changed', state);
 		replicationState.runPull(query.getApiQueryParams());
 	});
 
@@ -100,18 +99,16 @@ export const useQuery = <T>({ queryKeys, collectionName, initialQuery, parent }:
 	 */
 	useFocusEffect(
 		React.useCallback(() => {
-			console.log(`useFocusEffect resume ${collectionName} replication`);
 			replicationState.start();
 			// Add cleanup logic
 			return () => {
-				console.log(`useFocusEffect pause ${collectionName} replication`);
 				replicationState.pause();
 				// @TODO - this cleans up too often and causes issues
 				// how to cleanup only when the query is no longer needed?
 				// if I clean up here, it gets deregistered too often, child components throw errors
 				// manager.deregisterQuery(queryKeys);
 			};
-		}, [replicationState, collectionName])
+		}, [replicationState])
 	);
 
 	return query;

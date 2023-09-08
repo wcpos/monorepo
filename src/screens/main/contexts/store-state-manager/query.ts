@@ -65,7 +65,7 @@ class Query<T> {
 		 */
 		this.subs.push(
 			this.state$.subscribe((state) => {
-				log.debug('Query state changed', state);
+				// log.debug('Query state changed', state);
 				this.paginator.reset();
 			})
 		);
@@ -109,7 +109,13 @@ class Query<T> {
 	}
 
 	where(field: string, value: any): this {
-		this.whereClauses.push({ field, value });
+		// remove any existing where clause for this field
+		this.whereClauses = this.whereClauses.filter((clause) => clause.field !== field);
+
+		// if value is not null/undefined, add the new where clause
+		if (value !== null && value !== undefined) {
+			this.whereClauses.push({ field, value });
+		}
 
 		// add the new selector to the current state and emit it
 		const newState = {

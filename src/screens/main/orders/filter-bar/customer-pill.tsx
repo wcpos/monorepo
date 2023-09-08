@@ -27,7 +27,9 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 	 */
 	const handleSelect = React.useCallback(
 		(customer) => {
-			query.where('customer_id', customer.id);
+			if (customer && customer.id) {
+				query.where('customer_id', customer.id);
+			}
 		},
 		[query]
 	);

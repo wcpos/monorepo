@@ -40,7 +40,6 @@ export const getAttributesWithCharacterCount = (attributes: ProductDocument['att
 const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	const { setPrimaryAction } = usePopover();
 	const variations = useObservableSuspense(query.resource);
-	console.log(variations);
 	const selectedAttributes = useObservableState(
 		query.state$.pipe(map((q) => get(q, ['search', 'attributes'], []))),
 		get(query, ['currentState', 'search', 'attributes'], [])

@@ -88,8 +88,8 @@ export const useNewOrder = () => {
 					});
 
 					return newOrder;
-				}),
-				tap((order) => console.log('emitting new order', order))
+				})
+				// tap((order) => console.log('emitting new order', order))
 			),
 		[]
 	);

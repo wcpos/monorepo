@@ -14,7 +14,7 @@ const TagsQueryWrapper = (props) => {
 		queryKeys: ['products/tags'],
 		collectionName: 'products/tags',
 		initialQuery: {
-			sortBy: 'last_name',
+			sortBy: 'name',
 			sortDirection: 'asc',
 		},
 	});

@@ -18,11 +18,20 @@ const TagSelectSearch = ({ onBlur, onSelect }) => {
 	 */
 	const onSearch = React.useCallback(
 		(search) => {
-			const query = manager.getQuery(['products/categories']);
+			const query = manager.getQuery(['products/tags']);
 			query.debouncedSearch(search);
 		},
 		[manager]
 	);
+
+	/**
+	 * Reset search when unmounting
+	 */
+	React.useEffect(() => {
+		return () => {
+			onSearch('');
+		};
+	}, [onSearch]);
 
 	/**
 	 *
@@ -33,7 +42,6 @@ const TagSelectSearch = ({ onBlur, onSelect }) => {
 			//onOpen={() => setOpened(true)}
 			onClose={() => {
 				setOpened(false);
-				onSearch(''); // reset search
 			}}
 			withArrow={false}
 			matchWidth

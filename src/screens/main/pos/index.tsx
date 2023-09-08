@@ -15,9 +15,9 @@ import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
 import { useNewOrder } from './use-new-order';
 import { useT } from '../../../contexts/translations';
-import { useCollection } from '../hooks/use-collection';
 import { ModalLayout } from '../../components/modal-layout';
 import { TaxHelpersProvider } from '../contexts/tax-helpers';
+import { useCollection } from '../hooks/use-collection';
 import { useQuery } from '../hooks/use-query';
 import Receipt from '../receipt';
 
@@ -46,7 +46,7 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 			inputs$.pipe(
 				switchMap(([uuid]) => {
 					if (!uuid) return newOrder$;
-					return collection.findOne(uuid).$.pipe(
+					return collection.findOne({ selector: { uuid, status: 'pos-open' } }).$.pipe(
 						// make sure we have an order, eg: voiding an order will emit null
 						switchMap((order) => (isRxDocument(order) ? of(order) : newOrder$)),
 						distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid)
@@ -165,7 +165,6 @@ const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamLis
  * The actual navigator
  */
 const POSStackNavigator = () => {
-	console.log('pos stack');
 	return (
 		<ErrorBoundary>
 			<Suspense>

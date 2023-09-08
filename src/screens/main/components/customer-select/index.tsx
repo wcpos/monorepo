@@ -45,6 +45,15 @@ const CustomerSelect = ({
 	);
 
 	/**
+	 * Reset search when unmounting
+	 */
+	React.useEffect(() => {
+		return () => {
+			onSearch('');
+		};
+	}, [onSearch]);
+
+	/**
 	 *
 	 */
 	return (
@@ -56,7 +65,6 @@ const CustomerSelect = ({
 				 */
 				onSelectCustomer(value);
 				setOpened(false);
-				onSearch('');
 			}}
 			withArrow={false}
 			matchWidth

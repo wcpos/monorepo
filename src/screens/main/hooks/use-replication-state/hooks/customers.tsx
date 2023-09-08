@@ -28,7 +28,7 @@ interface APIQueryParams {
 const filterApiQueryParams = (params, checkpoint, batchSize) => {
 	let orderby = params.orderby;
 
-	if (orderby === 'date_created') {
+	if (orderby === 'date_created' || orderby === 'date') {
 		orderby = 'registered_date';
 	}
 

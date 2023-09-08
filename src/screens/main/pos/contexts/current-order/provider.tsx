@@ -31,9 +31,6 @@ export const CurrentOrderProvider = ({
 	const currentOrder = useObservableSuspense(resource);
 	const navigation = useNavigation();
 	const location = useTaxLocation(currentOrder);
-	console.log(location);
-	taxQuery.search(location);
-	console.log('currentOrder', currentOrder);
 
 	/**
 	 * The tax rate can depend on the current order's location

@@ -6,6 +6,7 @@ import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import Loader from '@wcpos/components/src/loader';
 import Suspense from '@wcpos/components/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
@@ -82,6 +83,7 @@ const DataTable = <DocumentType,>({
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
 	const { sortBy, sortDirection } = useObservableState(query.state$, query.currentState);
+	const loading = useObservableState(query.replicationState.active$, false);
 
 	/**
 	 *
@@ -134,6 +136,7 @@ const DataTable = <DocumentType,>({
 			onEndReached={() => query.nextPage()}
 			onEndReachedThreshold={0.5}
 			footer={<DataTableFooter query={query} children={footer} />}
+			ListFooterComponent={<Table.LoadingRow loading={loading} />}
 		/>
 	);
 };

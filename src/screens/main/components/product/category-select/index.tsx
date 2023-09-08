@@ -25,6 +25,15 @@ const CategorySelectSearch = ({ onBlur, onSelect }) => {
 	);
 
 	/**
+	 * Reset search when unmounting
+	 */
+	React.useEffect(() => {
+		return () => {
+			onSearch('');
+		};
+	}, [onSearch]);
+
+	/**
 	 *
 	 */
 	return (
@@ -33,7 +42,6 @@ const CategorySelectSearch = ({ onBlur, onSelect }) => {
 			//onOpen={() => setOpened(true)}
 			onClose={() => {
 				setOpened(false);
-				onSearch(''); // reset search
 			}}
 			withArrow={false}
 			matchWidth

@@ -4,9 +4,9 @@ import { View, FlatList } from 'react-native';
 import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
+import Table from '@wcpos/components/src/table';
 
 import TagSelectItem, { EmptyTableRow } from './item';
 
@@ -105,7 +105,7 @@ const TagSelectMenu = ({ query, onSelect }) => {
 				// estimatedItemSize={32}
 				ListEmptyComponent={<EmptyTableRow />}
 				onEndReached={() => query.nextPage()}
-				ListFooterComponent={loading ? Loader : null}
+				ListFooterComponent={<Table.LoadingRow loading={loading} style={{ padding: 0 }} />}
 			/>
 		</View>
 	);

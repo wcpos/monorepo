@@ -62,6 +62,7 @@ export class ReplicationState<RxDocType> {
 	// Internal state
 	private isCanceled = false;
 	private lastFetchRemoteIDsTime = null;
+	private pollingTime = 1000 * 60 * 5; // 5 minutes
 
 	// constructors params
 	public readonly collection: any;
@@ -154,7 +155,7 @@ export class ReplicationState<RxDocType> {
 		this.subs.push(
 			this.paused$
 				.pipe(
-					switchMap((isPaused) => (isPaused ? [] : interval(1000 * 60 * 5).pipe(startWith(0)))),
+					switchMap((isPaused) => (isPaused ? [] : interval(this.pollingTime).pipe(startWith(0)))),
 					filter(() => !this.subjects.paused.getValue())
 				)
 				.subscribe(async () => {
@@ -257,7 +258,7 @@ export class ReplicationState<RxDocType> {
 			return;
 		}
 
-		if (this.lastFetchRemoteIDsTime < new Date().getTime() - 1000 * 60 * 10) {
+		if (this.lastFetchRemoteIDsTime < new Date().getTime() - this.pollingTime) {
 			return this.limiter
 				.schedule({ priority: 2, id: 'audit' }, this.fetchRemoteIDs.bind(this))
 				.catch((error) => this.subjects.error.next(error));
@@ -286,7 +287,7 @@ export class ReplicationState<RxDocType> {
 		let queryParams;
 
 		if (lastModified) {
-			queryParams = { after: lastModified };
+			queryParams = { modified_after: lastModified };
 		} else {
 			queryParams = { orderby: 'date', order: 'desc' };
 		}
@@ -343,7 +344,6 @@ export class ReplicationState<RxDocType> {
 	 */
 	async fetchRemoteIDs(): Promise<number[]> {
 		let remoteIDs = null;
-		console.log('fetching remote ids');
 
 		if (this.hooks?.fetchRemoteIDs) {
 			// special case for variations
@@ -374,10 +374,10 @@ export class ReplicationState<RxDocType> {
 		}
 
 		/**
-		 *
+		 * @TODO - variations can be orphaned at the moment, we need a relationship table with parent
 		 */
 		const remove = this.subjects.localIDs.getValue().filter((id) => !remoteIDs.includes(id));
-		if (remove.length > 0) {
+		if (remove.length > 0 && this.collection.name !== 'variations') {
 			// deletion should be rare, only when an item is deleted from the server
 			log.warn('removing', remove, 'from', this.collection.name);
 			await this.collection.find({ selector: { id: { $in: remove } } }).remove();
@@ -427,8 +427,7 @@ export class ReplicationState<RxDocType> {
 		});
 
 		const documents = await Promise.all(promises);
-		console.log('here comes', documents);
 
-		await this.collection.bulkInsert(documents);
+		await this.collection.bulkUpsert(documents);
 	}
 }

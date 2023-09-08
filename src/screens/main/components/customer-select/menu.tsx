@@ -6,9 +6,9 @@ import { useTheme } from 'styled-components/native';
 
 import { Avatar } from '@wcpos/components/src/avatar/avatar';
 import Box from '@wcpos/components/src/box';
-import Loader from '@wcpos/components/src/loader';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
+import Table from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 
 import CustomerSelectItem from './item';
@@ -129,7 +129,7 @@ const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 				estimatedItemSize={50}
 				ListHeaderComponent={renderGuestItem}
 				onEndReached={() => query.nextPage()}
-				ListFooterComponent={loading ? Loader : null}
+				ListFooterComponent={<Table.LoadingRow loading={loading} style={{ padding: 0 }} />}
 			/>
 		</View>
 	);

@@ -35,13 +35,11 @@ const OpenOrders = ({ isColumn = false }) => {
 		<Box padding="small" paddingLeft={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
 			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<ErrorBoundary>
-					<Suspense>
-						{currentOrder.isNew ? (
-							<EmptyCart currentOrder={currentOrder} />
-						) : (
-							<Cart currentOrder={currentOrder} />
-						)}
-					</Suspense>
+					{currentOrder.isNew ? (
+						<EmptyCart currentOrder={currentOrder} />
+					) : (
+						<Cart currentOrder={currentOrder} />
+					)}
 				</ErrorBoundary>
 			</Box>
 			<ErrorBoundary>
