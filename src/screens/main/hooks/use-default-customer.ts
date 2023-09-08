@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ObservableResource } from 'observable-hooks';
-import { of, lastValueFrom } from 'rxjs';
+import { of, lastValueFrom, startWith } from 'rxjs';
 
 import { useDefaultCustomerID } from './use-default-customer-id';
 import { useGetDocumentByRemoteId } from '../hooks/use-get-document-by-remote-id';
@@ -15,7 +15,8 @@ export const useDefaultCustomer = () => {
 		remoteID: defaultCustomerID,
 		fallback: guestCustomer,
 	});
-	const defaultCustomer$ = defaultCustomerID === 0 ? of(guestCustomer) : document$;
+	const _hack$ = document$.pipe(startWith(guestCustomer));
+	const defaultCustomer$ = defaultCustomerID === 0 ? of(guestCustomer) : _hack$;
 	const defaultCustomerPromise = lastValueFrom(defaultCustomer$);
 
 	const defaultCustomerResource = React.useMemo(
