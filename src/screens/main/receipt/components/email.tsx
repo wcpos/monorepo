@@ -7,7 +7,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 
 import { useT } from '../../../../contexts/translations';
-import useRestHttpClient from '../../hooks/use-rest-http-client';
+import { useRestHttpClient } from '../../hooks/use-rest-http-client';
 
 /**
  *
