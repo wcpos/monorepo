@@ -4,6 +4,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Checkbox from '@wcpos/components/src/checkbox';
+import Text from '@wcpos/components/src/text';
 
 import { useT } from '../../../../contexts/translations';
 import NumberInput from '../../components/number-input';

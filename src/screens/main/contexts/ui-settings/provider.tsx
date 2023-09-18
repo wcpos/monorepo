@@ -106,6 +106,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 					id: t('ID', { _tags: 'core' }),
 					name: t('Product', { _tags: 'core' }),
 					stock_quantity: t('Stock', { _tags: 'core' }),
+					stock_status: t('Stock Status', { _tags: 'core' }),
 					sku: t('SKU', { _tags: 'core' }),
 					barcode: t('Barcode', { _tags: 'core' }),
 					categories: t('Categories', { _tags: 'core' }),
@@ -167,13 +168,13 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 		}
 
 		/**
-		 *
+		 * @TODO - I need to have a process to migrate to new settings schema
 		 */
 		function createUIResource(id: UISettingsResourceID) {
 			const resource$ = storeDB.getLocal$(id).pipe(
 				tap((localDoc) => {
+					const initial = get(initialSettings, id);
 					if (!localDoc) {
-						const initial = get(initialSettings, id);
 						storeDB.insertLocal(id, initial);
 					} else {
 						// add helper functions

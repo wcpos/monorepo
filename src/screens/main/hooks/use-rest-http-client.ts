@@ -83,10 +83,28 @@ export const useRestHttpClient = (endpoint = '') => {
 				return request({ ...config, method: 'POST', url, data });
 			},
 			put(url: string, data: any, config: RequestConfig = {}) {
-				return request({ ...config, method: 'PUT', url, data });
+				/**
+				 * Some servers don't allow PUT requests, so we can use POST instead
+				 * and add a _method=PUT query param and header
+				 */
+				const newConfig = {
+					...config,
+					headers: { ...config.headers, 'X-HTTP-Method-Override': 'PUT' },
+					params: { ...config.params, _method: 'PUT' },
+				};
+				return request({ ...newConfig, method: 'POST', url, data });
 			},
 			patch(url: string, data: any, config: RequestConfig = {}) {
-				return request({ ...config, method: 'PATCH', url, data });
+				/**
+				 * Some servers don't allow PUT requests, so we can use POST instead
+				 * and add a _method=PUT query param and header
+				 */
+				const newConfig = {
+					...config,
+					headers: { ...config.headers, 'X-HTTP-Method-Override': 'PATCH' },
+					params: { ...config.params, _method: 'PATCH' },
+				};
+				return request({ ...newConfig, method: 'POST', url, data });
 			},
 			delete(url: string, config: RequestConfig = {}) {
 				return request({ ...config, method: 'DELETE', url });

@@ -430,4 +430,22 @@ export class ReplicationState<RxDocType> {
 
 		await this.collection.bulkUpsert(documents);
 	}
+
+	/**
+	 *
+	 */
+	async remotePatch(doc, data) {
+		try {
+			if (!doc.id) {
+				throw new Error('document does not have an id');
+			}
+			const response = await this.http.patch(String(doc.id), data);
+			const parsedData = this.collection.parseRestResponse(response.data);
+			await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+			await doc.incrementalPatch(parsedData);
+			return doc;
+		} catch (error) {
+			this.subjects.error.next(error);
+		}
+	}
 }

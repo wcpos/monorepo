@@ -26,6 +26,7 @@ import FilterBar from '../components/product/variation-table-rows/filter-bar';
 import Footer from '../components/product/variation-table-rows/footer';
 import usePushDocument from '../contexts/use-push-document';
 import useVariations from '../contexts/variations';
+import { useMutation } from '../hooks/use-mutation';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
@@ -53,32 +54,17 @@ const cells = {
 const Variations = ({ extraData, parent, parentIndex }: VariationsProps) => {
 	const { resource } = useVariations();
 	const variations = useObservableSuspense(resource);
-	const addSnackbar = useSnackbar();
-	const pushDocument = usePushDocument();
-	const t = useT();
+	const mutation = useMutation();
 
 	/**
 	 *
 	 */
 	const handleChange = React.useCallback(
 		async (product: ProductVariationDocument, data: Record<string, unknown>) => {
-			try {
-				const latest = product.getLatest();
-				const doc = await latest.patch(data);
-				const success = await pushDocument(doc, parent);
-				if (isRxDocument(success)) {
-					addSnackbar({
-						message: t('Variation {id} saved', { _tags: 'core', id: success.id }),
-					});
-				}
-			} catch (error) {
-				log.error(error);
-				addSnackbar({
-					message: t('There was an error: {message}', { _tags: 'core', message: error.message }),
-				});
-			}
+			debugger;
+			mutation.mutate({ document: product, data });
 		},
-		[addSnackbar, parent, pushDocument, t]
+		[mutation]
 	);
 
 	/**

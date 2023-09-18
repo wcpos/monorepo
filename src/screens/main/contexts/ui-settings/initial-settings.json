@@ -185,6 +185,11 @@
         "align": "center"
       },
       {
+        "key": "stock_status",
+        "show": true,
+        "align": "center"
+      },
+      {
         "key": "categories",
         "disableSort": true,
         "show": true

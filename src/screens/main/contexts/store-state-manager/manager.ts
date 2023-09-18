@@ -104,4 +104,14 @@ export class StoreStateManager {
 			this.replicationStates.delete(endpoint);
 		}
 	}
+
+	getReplicationState(endpoint: string) {
+		const replicationState = this.replicationStates.get(endpoint);
+
+		if (!replicationState) {
+			throw new Error(`Replication State with endpoint: ${endpoint} not found.`);
+		}
+
+		return replicationState;
+	}
 }

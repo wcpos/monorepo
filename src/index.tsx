@@ -19,6 +19,7 @@ import Splash from './screens/splash';
 
 // import polyfills
 import 'setimmediate'; // https://github.com/software-mansion/react-native-reanimated/issues/4140
+// import './polyfills';
 
 // enable freeze
 // enableFreeze(true);

@@ -12,6 +12,7 @@ import log from '@wcpos/utils/src/logger';
 import { useVariationTable } from './context';
 import Footer from './footer';
 import { useT } from '../../../../../contexts/translations';
+import { useMutation } from '../../../hooks/use-mutation';
 import EmptyTableRow from '../../empty-table-row';
 import { ProductVariationImage } from '../variation-image';
 import { ProductVariationName } from '../variation-name';
@@ -35,6 +36,7 @@ const VariationsTable = ({ query, parent }) => {
 	const { cells } = useVariationTable();
 	const loading = useObservableState(query.replicationState.active$, false);
 	const t = useT();
+	const mutation = useMutation({ endpoint: `products/${parent.id}/variations` });
 
 	/**
 	 * Detect change in product query and variations query
@@ -69,6 +71,17 @@ const VariationsTable = ({ query, parent }) => {
 	// });
 
 	/**
+	 * @TODO - the variation table is shared between POS and Products page
+	 * I'm not sure if this should be here
+	 */
+	const handleChange = React.useCallback(
+		async (variation: ProductVariationDocument, data: Record<string, unknown>) => {
+			mutation.mutate({ document: variation, data });
+		},
+		[mutation]
+	);
+
+	/**
 	 *
 	 */
 	const cellRenderer = React.useCallback<CellRenderer<ProductVariationDocument>>(
@@ -85,6 +98,7 @@ const VariationsTable = ({ query, parent }) => {
 								index={index}
 								cellWidth={cellWidth}
 								parent={parent}
+								onChange={handleChange}
 							/>
 						</Suspense>
 					</ErrorBoundary>
@@ -97,7 +111,7 @@ const VariationsTable = ({ query, parent }) => {
 
 			return null;
 		},
-		[cells, parent]
+		[cells, handleChange, parent]
 	);
 
 	/**
