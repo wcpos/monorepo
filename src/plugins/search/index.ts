@@ -66,7 +66,7 @@ export const searchPlugin: RxPlugin = {
 							enabled: false,
 						},
 						components: {
-							tokenizer: { language: 'english', stemming: false, stopWords: false },
+							// tokenizer: { language: 'english', stemming: false, stopWords: false },
 							getDocumentIndexId(doc) {
 								return doc[primaryPath];
 							},
