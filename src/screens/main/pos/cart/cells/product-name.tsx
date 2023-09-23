@@ -4,6 +4,7 @@ import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
+import { EdittableText } from '@wcpos/components/src/edittable-text';
 import Text from '@wcpos/components/src/text';
 
 import EditLineItemButton from './edit-line-item';
@@ -43,10 +44,22 @@ export const ProductName = ({ item, column }: Props) => {
 	/**
 	 *
 	 */
+	const handleUpdate = React.useCallback(
+		(newValue: string) => {
+			item.incrementalPatch({ name: newValue });
+		},
+		[item]
+	);
+
+	/**
+	 *
+	 */
 	return (
 		<Box horizontal space="xSmall" style={{ width: '100%' }}>
 			<Box fill space="xSmall">
-				<Text>{name}</Text>
+				<EdittableText weight="bold" onChange={handleUpdate}>
+					{name}
+				</EdittableText>
 				{show('sku') && <Text size="small">{item.sku}</Text>}
 
 				{attributes.map((meta) => {

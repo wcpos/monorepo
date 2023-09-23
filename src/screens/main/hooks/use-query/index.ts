@@ -11,6 +11,7 @@ import * as products from './hooks/products';
 import * as tags from './hooks/tags';
 import * as taxes from './hooks/tax-rates';
 import * as variations from './hooks/variations';
+import { useLocale } from '../../../../hooks/use-locale';
 import { useStoreStateManager } from '../../contexts/store-state-manager';
 import { useCollection, CollectionKey } from '../use-collection';
 import { useReplicationState } from '../use-replication-state';
@@ -47,11 +48,12 @@ export const useQuery = <T>({ queryKeys, collectionName, initialQuery, parent }:
 	const replicationState = useReplicationState({ collectionName, parent });
 	const endpoint =
 		collectionName === 'variations' ? `products/${parent.id}/variations` : collectionName;
+	const { locale } = useLocale();
 
 	/**
 	 * get the query (it will be registered if it doesn't exist)
 	 */
-	const query = manager.registerQuery<T>(queryKeys, collection, initialQuery, hooks);
+	const query = manager.registerQuery<T>(queryKeys, collection, initialQuery, hooks, locale);
 	query.replicationState = replicationState;
 
 	/**
@@ -84,7 +86,7 @@ export const useQuery = <T>({ queryKeys, collectionName, initialQuery, parent }:
 	}, [replicationState]);
 
 	/**
-	 *
+	 * @TODO - move this into the query service
 	 */
 	query.nextPage = React.useCallback(() => {
 		query.paginator.nextPage();

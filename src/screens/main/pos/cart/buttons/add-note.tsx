@@ -66,7 +66,7 @@ const AddNoteButton = () => {
 					},
 				]}
 			>
-				<TextArea value={value} onChangeText={setValue} />
+				<TextArea value={value} onChangeText={setValue} autoFocus />
 			</Modal>
 		</>
 	);

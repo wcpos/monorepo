@@ -2,15 +2,15 @@ import { orderBy } from '@shelf/fast-natural-order-by';
 import debounce from 'lodash/debounce';
 import get from 'lodash/get';
 import isEqual from 'lodash/isEqual';
-import isString from 'lodash/isString';
 import { RxCollection, RxDocument } from 'rxdb';
-import { BehaviorSubject, Observable, Subscription, of } from 'rxjs';
-import { switchMap, map, distinctUntilChanged, shareReplay, tap, skip } from 'rxjs/operators';
+import { BehaviorSubject, Observable, Subscription } from 'rxjs';
+import { switchMap, map, distinctUntilChanged, skip } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import { Paginator } from './paginator';
-import { removeNulls, stringifyWithSortedKeys } from './query.helpers';
+import { removeNulls } from './query.helpers';
+import { PaginatorService } from '../paginator';
+import { SearchService } from '../search';
 type SortDirection = import('@wcpos/components/src/table').SortDirection;
 
 export interface QueryState {
@@ -40,47 +40,57 @@ type WhereClause = { field: string; value: any };
  */
 class Query<T> {
 	private whereClauses: WhereClause[] = [];
-	private queryState$ = new BehaviorSubject<QueryState | undefined>(undefined);
 	private hooks: Hooks = {};
 
-	public readonly paginator: Paginator<T>;
+	public readonly paginator: PaginatorService<T>;
+	public readonly searchService: SearchService;
 	public readonly subs: Subscription[] = [];
 
+	public readonly subjects = {
+		queryState: new BehaviorSubject<QueryState | undefined>(undefined),
+		result: new BehaviorSubject<RxDocument<T>[]>([]),
+	};
+
+	readonly queryState$: Observable<QueryState | undefined> =
+		this.subjects.queryState.asObservable();
+	readonly result$: Observable<RxDocument<T>[]> = this.subjects.result.asObservable();
+
+	/**
+	 *
+	 */
 	constructor(
 		public collection: RxCollection<any, object, object>,
 		initialQuery: QueryState = {},
-		hooks: Hooks = {}
+		hooks: Hooks = {},
+		locale: string = 'en'
 	) {
 		if (initialQuery.selector) {
 			for (const field in initialQuery.selector) {
 				this.whereClauses.push({ field, value: initialQuery.selector[field] });
 			}
 		}
-		this.updateState(initialQuery);
-		this.paginator = new Paginator<T>();
+		this.paginator = new PaginatorService<T>(this.$, 10);
+		this.searchService = new SearchService(collection, locale);
 
 		/**
-		 * Subscribe to state changes and reset the pagination
-		 * Note: Subscription will trigger the first emission
+		 * Keep track of what we are subscribed to
 		 */
 		this.subs.push(
+			/**
+			 * Subscribe to state changes and reset the pagination
+			 * Note: Subscription will trigger the first emission
+			 */
 			this.state$.subscribe((state) => {
-				// log.debug('Query state changed', state);
 				this.paginator.reset();
+			}),
+
+			/**
+			 * Subscribe to query changes and emit the results
+			 */
+			this.query$.subscribe((result) => {
+				this.subjects.result.next(result);
 			})
 		);
-
-		/**
-		 * Subscribe to the collection changes and update the search (if any)
-		 * This doesn't work and would cause a loop of calling query
-		 *
-		 * I need to turn orama into an oberservable and subscribe to it in the $
-		 */
-		// this.collection.$.subscribe((changeEvent) => {
-		// 	if (isString(this.queryState$.value?.search)) {
-		// 		this.search(this.queryState$.value?.search);
-		// 	}
-		// });
 
 		/**
 		 * Register hooks
@@ -91,6 +101,11 @@ class Query<T> {
 				this.addHook(hookName, hookFunction);
 			}
 		});
+
+		/**
+		 * This will trigger the first emission
+		 */
+		this.updateState(initialQuery);
 	}
 
 	setCollection<T>(collection: RxCollection<T, object, object>): this {
@@ -105,7 +120,7 @@ class Query<T> {
 	}
 
 	updateState(newState: QueryState) {
-		this.queryState$.next(removeNulls(newState));
+		this.subjects.queryState.next(removeNulls(newState));
 	}
 
 	where(field: string, value: any): this {
@@ -119,7 +134,7 @@ class Query<T> {
 
 		// add the new selector to the current state and emit it
 		const newState = {
-			...this.queryState$.value,
+			...this.currentState,
 			selector: this.getSelectorFromClauses(),
 		};
 		this.updateState(newState);
@@ -133,7 +148,7 @@ class Query<T> {
 		if (typeof sortByOrObj === 'string') {
 			// Single field-direction pair
 			this.updateState({
-				...this.queryState$.value,
+				...this.currentState,
 				sortBy: sortByOrObj,
 				sortDirection: sortDirection!,
 			});
@@ -145,7 +160,7 @@ class Query<T> {
 				SortDirection,
 			];
 			this.updateState({
-				...this.queryState$.value,
+				...this.currentState,
 				sortBy: lastField,
 				sortDirection: lastDirection,
 			});
@@ -154,21 +169,31 @@ class Query<T> {
 		return this;
 	}
 
-	async search(query: string | Record<string, any>) {
-		// if (typeof query === 'string') {
-		// 	if (query.trim() === '') {
-		// 		this.whereClauses = this.whereClauses.filter((clause) => clause.field !== 'uuid');
-		// 	} else {
-		// 		const { hits } = await this.collection.search(query);
-		// 		const uuids = hits.map((hit: any) => hit.id);
-		// 		this.whereClauses.push({ field: 'uuid', value: { $in: uuids } });
-		// 	}
-		// }
-		this.updateState({
-			...this.currentState,
-			selector: this.getSelectorFromClauses(),
-			search: query,
-		});
+	search(query: string | Record<string, any> = '') {
+		if (typeof query === 'string') {
+			this.subs.push(
+				this.searchService.search$(query).subscribe((uuids) => {
+					// remove uuid from whereClauses
+					this.whereClauses = this.whereClauses.filter((clause) => clause.field !== 'uuid');
+
+					if (uuids) {
+						this.whereClauses.push({ field: 'uuid', value: { $in: uuids } });
+					}
+
+					this.updateState({
+						...this.currentState,
+						selector: this.getSelectorFromClauses(),
+						search: query,
+					});
+				})
+			);
+		} else {
+			this.updateState({
+				...this.currentState,
+				selector: this.getSelectorFromClauses(),
+				search: query,
+			});
+		}
 	}
 
 	debouncedSearch = debounce(this.search, 250);
@@ -181,71 +206,56 @@ class Query<T> {
 		return selector;
 	}
 
+	/**
+	 * A promise version of runQuery, I don't think this is used anywhere
+	 */
 	async exec(): Promise<any[]> {
 		if (!this.collection) throw new Error('Collection is not set');
-		const selector = this.queryState$.value?.selector || {};
+		const selector = this.currentState?.selector || {};
 		return this.collection.find({ selector }).exec();
 	}
 
 	get currentState(): QueryState | undefined {
-		return this.queryState$.value;
+		return this.subjects.queryState.getValue();
 	}
 
-	get state$(): Observable<QueryState | undefined> {
-		return this.queryState$.pipe(
-			skip(1),
-			distinctUntilChanged((x, y) => stringifyWithSortedKeys(x) === stringifyWithSortedKeys(y))
-		);
-	}
-
-	get $() {
-		return this.queryState$.pipe(
+	/**
+	 *
+	 */
+	private get query$() {
+		return this.state$.pipe(
 			switchMap((queryState) => {
 				if (!this.collection || !queryState) {
 					throw new Error('Collection or queryState is not set');
 				}
 
 				/**
-				 *  If there's a search query, we need to subscribe to the search observable
+				 * Now we can prepare the selector for rxdb
+				 * - be careful not to mutate the queryState
 				 */
-				let selector$ = of(queryState.selector || {});
-				if (isString(queryState.search)) {
-					selector$ = this.collection.search$(queryState.search).pipe(
-						map(({ hits }) => {
-							const uuids = hits.map((hit: any) => hit.id);
-							return {
-								...(queryState.selector || {}),
-								uuid: { $in: uuids },
-							};
-						})
-					);
-				}
+				let selector = { ...queryState.selector } || {};
 
-				return selector$.pipe(
-					switchMap((s) => {
-						const selector = this.hooks?.preQuerySelector
-							? this.hooks.preQuerySelector(s, queryState)
-							: s;
+				selector = this.hooks?.preQuerySelector
+					? this.hooks.preQuerySelector(selector, queryState)
+					: selector;
 
-						return this.collection.find({ selector }).$.pipe(
-							/**
-							 * NoSQL sorting wasn't working for string numbers, so I'm handling sorting here
-							 */
-							map((result) => {
-								// Call the hook function if it's registered
-								if (this.hooks.postQueryResult) {
-									result = this.hooks.postQueryResult(result, queryState);
-								}
-								const { sortBy, sortDirection } = queryState;
-								let sortedResult = result;
+				return this.collection.find({ selector }).$.pipe(
+					/**
+					 * NoSQL sorting wasn't working for string numbers, so I'm handling sorting here
+					 */
+					map((result) => {
+						// Call the hook function if it's registered
+						if (this.hooks.postQueryResult) {
+							result = this.hooks.postQueryResult(result, queryState);
+						}
+						const { sortBy, sortDirection } = queryState;
+						let sortedResult = result;
 
-								if (sortBy && sortDirection) {
-									sortedResult = orderBy(result, [sortBy], [sortDirection]);
-								}
+						if (sortBy && sortDirection) {
+							sortedResult = orderBy(result, [sortBy], [sortDirection]);
+						}
 
-								return sortedResult;
-							})
-						);
+						return sortedResult;
 					})
 				);
 			}),
@@ -257,16 +267,8 @@ class Query<T> {
 					prev.map((doc) => doc.uuid),
 					next.map((doc) => doc.uuid)
 				);
-			}),
-			/**
-			 * Many components will subscribe to this observable, so we want to share the same
-			 */
-			shareReplay(1)
+			})
 		);
-	}
-
-	get paginated$(): Observable<RxDocument<T>[]> {
-		return this.paginator.paginate(this.$);
 	}
 
 	// nextPage(): void {
@@ -278,34 +280,12 @@ class Query<T> {
 		this.whereClauses.forEach((clause) => {
 			params[clause.field] = clause.value;
 		});
-		params.orderby = this.queryState$.value?.sortBy;
-		params.order = this.queryState$.value?.sortDirection;
-		if (typeof this.queryState$.value?.search === 'string') {
-			params.search = this.queryState$.value?.search;
+		params.orderby = this.currentState?.sortBy;
+		params.order = this.currentState?.sortDirection;
+		if (typeof this.currentState?.search === 'string') {
+			params.search = this.currentState?.search;
 		}
 		return params;
-	}
-
-	get count$() {
-		return this.$.pipe(
-			map((docs) => docs.length),
-			distinctUntilChanged()
-		);
-	}
-
-	get total$() {
-		return this.$.pipe(
-			map((docs) => docs.length),
-			distinctUntilChanged()
-		);
-	}
-
-	// clean up subscriptions
-	cancel() {
-		this.subs.forEach((sub) => sub.unsubscribe());
-
-		// do I need to complete all the observables?
-		this.queryState$.complete();
 	}
 
 	/**
@@ -343,6 +323,62 @@ class Query<T> {
 			$allMatch.push(attribute);
 		}
 		this.search({ attributes: [...$allMatch] });
+	}
+
+	/**
+	 * Observable getters
+	 *
+	 * We don't know where these are going to be used, so we need to:
+	 * - keep the logic simple, it may be run many times in a component
+	 * - clean-up on cancel, just incase it's not unsubscribed when component unmounts
+	 */
+	get $() {
+		return this.result$;
+	}
+
+	// @TODO - state$ and queryState$ seem redundant, but I need this skip(1)
+	// problem is, I want queryState.getValue(), but I don't want the initial emission
+	get state$(): Observable<QueryState | undefined> {
+		return this.queryState$.pipe(skip(1));
+	}
+
+	get count$() {
+		return this.$.pipe(
+			map((docs) => docs.length),
+			distinctUntilChanged()
+		);
+	}
+
+	// @TODO - I should count the total number of docs in the collection
+	// get total$() {
+	// 	return this.$.pipe(
+	// 		map((docs) => docs.length),
+	// 		distinctUntilChanged()
+	// 	);
+	// }
+
+	/**
+	 * Pagination
+	 */
+	get paginated$(): Observable<RxDocument<T>[]> {
+		return this.paginator.$;
+	}
+
+	/**
+	 * Cancel
+	 *
+	 * Make sure we clean up subscriptions:
+	 * - things we subscribe to in this class, also
+	 * - complete the observables accessible from this class
+	 */
+	cancel() {
+		this.subs.forEach((sub) => sub.unsubscribe());
+
+		this.subjects.queryState.complete();
+		this.subjects.result.complete();
+
+		this.paginator.cancel();
+		this.searchService.cancel();
 	}
 }
 

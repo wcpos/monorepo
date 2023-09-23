@@ -1,4 +1,4 @@
-type QueryState = import('./query').QueryState;
+type QueryState = import('../query').QueryState;
 
 /**
  * Recursively removes all properties with `null` values from an object.

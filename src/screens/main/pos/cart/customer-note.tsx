@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
+import { EdittableText } from '@wcpos/components/src/edittable-text';
 import Icon from '@wcpos/components/src/icon';
 import Pressable from '@wcpos/components/src/pressable';
 import Text from '@wcpos/components/src/text';
@@ -48,7 +49,13 @@ const CustomerNote = ({ note }) => {
 
 			<Box fill>
 				{isEditing ? (
-					<TextArea value={value} onChangeText={setValue} onBlur={handleSaveNote} blurOnSubmit />
+					<TextArea
+						value={value}
+						onChangeText={setValue}
+						onBlur={handleSaveNote}
+						autoFocus
+						onReturnKeyPress={handleSaveNote}
+					/>
 				) : (
 					<Pressable onPress={() => setIsEditing(true)}>
 						<Text style={{ lineHeight: theme.font.lineHeight.large }}>{note}</Text>

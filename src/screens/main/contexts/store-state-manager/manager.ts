@@ -4,8 +4,8 @@ import { mergeMap, takeUntil, filter } from 'rxjs/operators';
 
 import type { StoreDatabase } from '@wcpos/database';
 
-import { Query, QueryState } from './query';
-import { ReplicationState } from './replication';
+import { Query, QueryState } from '../../services/query';
+import { ReplicationState } from '../../services/replication';
 
 /**
  * TODO - in the future it would be nice to have a smarter management for replication
@@ -41,11 +41,12 @@ export class StoreStateManager {
 		queryKey: (string | number | object)[],
 		collection,
 		initialQuery: QueryState,
-		hooks?: any
+		hooks?: any,
+		locale?: string
 	): Query<T> {
 		const key = this.serializeQueryKey(queryKey);
 		if (!this.queries.has(key)) {
-			const query = new Query(collection, initialQuery, hooks);
+			const query = new Query(collection, initialQuery, hooks, locale);
 
 			/**
 			 * Create ObservableResource instances

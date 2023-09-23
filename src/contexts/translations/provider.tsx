@@ -1,49 +1,21 @@
 import * as React from 'react';
 
-import { onEvent, TxNative, createNativeInstance } from '@transifex/native';
-import { getLocales } from 'expo-localization';
-import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
-import { of, lastValueFrom } from 'rxjs';
+import { TxNative, createNativeInstance } from '@transifex/native';
+import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { switchMap } from 'rxjs/operators';
 
 import CustomCache from './cache';
-import locales from './locales.json';
+import { useLocale } from '../../hooks/use-locale';
 import { userDB$ } from '../../hydrate-data/global-user';
 import { useAppState } from '../app-state';
 
 export const TranslationContext = React.createContext<TxNative['translate']>(null);
 
 /**
- * Convert system locales to our Transifex locales
- */
-const systemLocales = getLocales();
-const { languageCode, languageTag } = systemLocales[0];
-const { locale: systemLocale } =
-	locales[languageTag.toLowerCase()] || locales[languageCode] || locales['en'];
-
-/**
  *
  */
 const localTranslations$ = userDB$.pipe(switchMap((userDB) => userDB.getLocal$('translations')));
 const localTranslationsResource = new ObservableResource(localTranslations$);
-
-/**
- * Listen to TRANSLATIONS_FETCHED event and save to local storage
- * @TODO - move this back into the custom cache, so we can use different instances
- */
-// onEvent('TRANSLATIONS_FETCHED', async ({ localeCode, filterTags }, _tx) => {
-// 	const newTranslation = _tx.cache.getTranslations(localeCode);
-// 	const userDB = await lastValueFrom(userDB$);
-// 	const localTranslations = await userDB.getLocal('translations');
-// 	const currentTranslation = localTranslations?.get(localeCode);
-
-// 	if (JSON.stringify(newTranslation) !== JSON.stringify(currentTranslation)) {
-// 		await userDB.upsertLocal('translations', {
-// 			...(localTranslations?.toJSON().data ?? {}),
-// 			[localeCode]: newTranslation,
-// 		});
-// 	}
-// });
 
 /**
  * This is a stripped down version of the TransifexProvider
@@ -54,9 +26,10 @@ const localTranslationsResource = new ObservableResource(localTranslations$);
  * - load the translations from local storage (if any)
  */
 export const TranslationProvider = ({ children }) => {
-	const { store, userDB } = useAppState();
+	const { userDB } = useAppState();
 	const cachedTranslationsDoc = useObservableSuspense(localTranslationsResource);
 	const version = cachedTranslationsDoc?.getLatest().revision;
+	const { locale } = useLocale();
 
 	/**
 	 *
@@ -68,18 +41,6 @@ export const TranslationProvider = ({ children }) => {
 			filterTags: 'core',
 		});
 	}, [userDB]);
-
-	/**
-	 *
-	 */
-	// const locale$ = useObservable(
-	// 	(inputs$) => inputs$.pipe(map(([s]) => s?.locale ?? systemLocale)),
-	// 	[store]
-	// );
-	const locale = useObservableState(
-		store ? store.locale$ : of(systemLocale),
-		store?.locale ?? systemLocale
-	);
 
 	/**
 	 * If we have translations, manually update the cache
