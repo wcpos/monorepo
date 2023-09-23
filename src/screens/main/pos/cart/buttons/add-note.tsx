@@ -4,43 +4,43 @@ import { TextInput } from 'react-native';
 import { useObservableState } from 'observable-hooks';
 
 import Button from '@wcpos/components/src/button';
-import Modal from '@wcpos/components/src/modal';
+import Modal, { useModal } from '@wcpos/components/src/modal';
 import TextArea from '@wcpos/components/src/textarea';
-import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
 
 import { useT } from '../../../../../contexts/translations';
 import { useCurrentOrder } from '../../contexts/current-order';
 
 /**
- *
+ * @TODO - this
  */
-const AddNoteButton = () => {
-	const [opened, setOpened] = React.useState(false);
-	const { currentOrder } = useCurrentOrder();
-	const note = useObservableState(currentOrder.customer_note$, currentOrder.customer_note);
+const AddNote = ({ order, setOpened }) => {
+	const note = useObservableState(order.customer_note$, order.customer_note);
 	const [value, setValue] = React.useState(note);
+	const { setPrimaryAction } = useModal();
 	const t = useT();
 
-	/**
-	 * Keep textarea value insync with the order.customer_note
-	 */
 	React.useEffect(() => {
 		setValue(note);
 	}, [note]);
 
-	/**
-	 *
-	 */
-	const handleSaveNote = React.useCallback(async () => {
-		try {
-			const latest = currentOrder.getLatest();
-			const success = await latest.incrementalPatch({ customer_note: value });
-		} catch (err) {
-			console.log(err);
-		} finally {
+	setPrimaryAction({
+		label: t('Add Note', { _tags: 'core' }),
+		action: async () => {
+			await order.incrementalPatch({ customer_note: value });
 			setOpened(false);
-		}
-	}, [currentOrder, value]);
+		},
+	});
+
+	return <TextArea value={value} onChangeText={setValue} autoFocus />;
+};
+
+/**
+ *
+ */
+const AddNoteButton = () => {
+	const { currentOrder } = useCurrentOrder();
+	const [opened, setOpened] = React.useState(false);
+	const t = useT();
 
 	/**
 	 *
@@ -54,20 +54,22 @@ const AddNoteButton = () => {
 				style={{ flex: 1 }}
 			/>
 
-			<Modal
-				opened={opened}
-				onClose={() => setOpened(false)}
-				title={t('Order Note', { _tags: 'core' })}
-				primaryAction={{ label: t('Add Note', { _tags: 'core' }), action: handleSaveNote }}
-				secondaryActions={[
-					{
-						label: t('Cancel', { _tags: 'core' }),
-						action: () => setOpened(false),
-					},
-				]}
-			>
-				<TextArea value={value} onChangeText={setValue} autoFocus />
-			</Modal>
+			{opened && (
+				<Modal
+					opened={opened}
+					onClose={() => setOpened(false)}
+					title={t('Order Note', { _tags: 'core' })}
+					// primaryAction={{ label: t('Add Note', { _tags: 'core' }) }}
+					secondaryActions={[
+						{
+							label: t('Cancel', { _tags: 'core' }),
+							action: () => setOpened(false),
+						},
+					]}
+				>
+					<AddNote order={currentOrder} setOpened={setOpened} />
+				</Modal>
+			)}
 		</>
 	);
 };

@@ -1,6 +1,7 @@
 import { create, insertMultiple, count, search, remove, insert, update } from '@orama/orama/dist';
 import defaults from 'lodash/defaults';
 import isEmpty from 'lodash/isEmpty';
+import trim from 'lodash/trim';
 import { RxCollection } from 'rxdb';
 import { Subscription, Subject, Observable, of } from 'rxjs';
 
@@ -38,14 +39,23 @@ const localeToLangMap: { [key: string]: string } = {
 	sl: 'slovenian',
 	bg: 'bulgarian',
 	ta: 'tamil',
+
+	// custom tokenizers
+	ja: 'japanese',
+	ko: 'korean',
+	th: 'thai',
+	vi: 'vietnamese',
+	zh: 'chinese',
 	// Default to English for any other locale
 };
 
-function getRegexForLocale(locale: string): RegExp {
-	const langCode = locale.split('_')[0]; // Extract language code from locale
-	const lang = localeToLangMap[langCode] || 'english';
-	return regexMap[lang];
-}
+const SPLITTERS: Record<string, RegExp> = {
+	japanese: /[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]+/gim,
+	korean: /[^a-zA-Z0-9\u3131-\u3163\uAC00-\uD7A3]+/gim,
+	thai: /[^a-zA-Z0-9ก-๙]+/gim,
+	vietnamese: /[^a-zA-Z0-9àáâãèéêìíòóôõùúýăđĩũơưạảấầẩẫậắằẳẵặẹẻẽếềễểệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]+/gim,
+	chinese: /[^a-zA-Z0-9\u4e00-\u9fff]+/gim,
+};
 
 /**
  * Orama Search Service for WooCommerce POS
@@ -144,14 +154,11 @@ export class SearchService {
 
 	async createSearchDB() {
 		try {
-			this.searchDB = await create({
+			// Base options
+			const options = {
 				id: this.collection.name,
 				language: this.getLanguage(),
 				schema: this.getSearchSchema(),
-				/**
-				 * Just sorting via table settings at the moment
-				 * @TODO - sort by relevance
-				 */
 				sort: {
 					enabled: false,
 				},
@@ -164,7 +171,17 @@ export class SearchService {
 						return indexID;
 					},
 				},
-			});
+			};
+
+			// Check if a custom tokenizer exists for the locale
+			const customTokenizer = this.getTokenizer();
+
+			if (customTokenizer) {
+				options.language = undefined; // Set language to undefined if custom tokenizer exists
+				options.components.tokenizer = customTokenizer;
+			}
+
+			this.searchDB = await create(options);
 		} catch (err) {
 			log.error(err);
 		}
@@ -177,6 +194,34 @@ export class SearchService {
 		const langCode = this.locale.split('_')[0];
 		const lang = localeToLangMap[langCode] || 'english';
 		return lang;
+	}
+
+	getTokenizer() {
+		const langCode = this.locale.split('_')[0];
+		const lang = localeToLangMap[langCode] || 'english';
+		const splitRule = SPLITTERS[lang];
+
+		if (splitRule) {
+			return {
+				language: lang,
+				normalizationCache: new Map(),
+				tokenize(input: string) {
+					if (typeof input !== 'string') {
+						return [input];
+					}
+					const tokens = input
+						.toLowerCase()
+						.split(splitRule)
+						.map(trim)
+						// .map(this.normalizeToken.bind(this, prop ?? ''))
+						.filter(Boolean);
+
+					return tokens;
+				},
+			};
+		}
+
+		return null;
 	}
 
 	getSearchSchema() {
