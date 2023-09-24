@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import isPlainObject from 'lodash/isPlainObject';
-import { useObservableState } from 'observable-hooks';
+// import { useObservableState } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
@@ -43,7 +43,7 @@ const variationCells = {
  *
  */
 const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
-	const variationIDs = useObservableState(item.variations$, item.variations);
+	// const variationIDs = useObservableState(item.variations$, item.variations);
 	const [expanded, setExpanded] = React.useState(false);
 
 	/**

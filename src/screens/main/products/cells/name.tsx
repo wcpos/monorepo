@@ -7,7 +7,7 @@ import Box from '@wcpos/components/src/box';
 import { EdittableText } from '@wcpos/components/src/edittable-text';
 import Text from '@wcpos/components/src/text';
 
-import ProductAttributes from '../../components/product/attributes';
+import ProductAttributes, { PlainAttributes } from '../../components/product/attributes';
 import GroupedNames from '../../components/product/grouped-names';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -45,6 +45,7 @@ const Name = ({ item: product, column, onChange, toggleVariations }: Props) => {
 				{name}
 			</EdittableText>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
+			{show('attributes') && <PlainAttributes product={product} />}
 			{product.type === 'variable' && <ProductAttributes product={product} />}
 			{product.type === 'grouped' && <GroupedNames parent={product} />}
 		</Box>

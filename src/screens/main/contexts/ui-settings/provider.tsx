@@ -90,6 +90,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 					price: t('Price', { _tags: 'core' }),
 					tax: t('Tax', { _tags: 'core' }),
 					actions: t('Actions', { _tags: 'core' }),
+					attributes: t('Attributes', { _tags: 'core' }),
 				},
 				'pos.cart': {
 					quantity: t('Qty', { _tags: 'core', _context: 'Short for quantity' }),
@@ -119,6 +120,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 					date_created: t('Date created', { _tags: 'core' }),
 					date_modified: t('Date modified', { _tags: 'core' }),
 					actions: t('Actions', { _tags: 'core' }),
+					attributes: t('Attributes', { _tags: 'core' }),
 				},
 				orders: {
 					status: t('Status', { _tags: 'core' }),

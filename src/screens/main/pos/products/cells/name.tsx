@@ -1,14 +1,12 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
-import Link from '@wcpos/components/src/link';
 import Text from '@wcpos/components/src/text';
 
-import Attributes from '../../../components/product/attributes';
+import Attributes, { PlainAttributes } from '../../../components/product/attributes';
 import Categories from '../../../components/product/categories';
 import GroupedNames from '../../../components/product/grouped-names';
 import StockQuantity from '../../../components/product/stock-quantity';
@@ -19,10 +17,9 @@ interface Props {
 	column: import('@wcpos/components/src/table').ColumnProps<
 		import('@wcpos/database').ProductDocument
 	>;
-	expandVariations?: () => void;
 }
 
-export const Name = ({ item: product, column, variationQuery, setVariationQuery }: Props) => {
+export const Name = ({ item: product, column }: Props) => {
 	const name = useObservableState(product.name$, product.name);
 	const { display } = column;
 
@@ -49,12 +46,13 @@ export const Name = ({ item: product, column, variationQuery, setVariationQuery 
 			{show('stock_quantity') && <StockQuantity product={product} size="small" />}
 			{show('categories') && <Categories item={product} />}
 			{show('tags') && <Tags item={product} />}
+			{show('attributes') && <PlainAttributes product={product} />}
 
 			{product.type === 'variable' && (
 				<Attributes
 					product={product}
-					variationQuery={variationQuery}
-					setVariationQuery={setVariationQuery}
+					// variationQuery={variationQuery}
+					// setVariationQuery={setVariationQuery}
 				/>
 			)}
 

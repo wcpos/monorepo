@@ -14,6 +14,31 @@ type Props = {
 	product: import('@wcpos/database').ProductDocument;
 };
 
+export const PlainAttributes = ({ product }: Props) => {
+	const attributes = useObservableState(product.attributes$, product.attributes);
+
+	/**
+	 *
+	 */
+	return (
+		<Box space="xxSmall">
+			{attributes
+				.filter((attr: any) => !attr.variation)
+				.map((attr: any) => (
+					<Text key={`${attr.name}-${attr.id}`}>
+						<Text size="small" type="secondary">{`${attr.name}: `}</Text>
+						{attr.options.map((option: string, index: number) => (
+							<Text size="small" key={option}>
+								{option}
+								{index < attr.options.length - 1 && ', '}
+							</Text>
+						))}
+					</Text>
+				))}
+		</Box>
+	);
+};
+
 const ProductAttributes = ({ product }: Props) => {
 	const attributes = useObservableState(product.attributes$, product.attributes);
 	const { expanded, setExpanded } = useVariationTable();

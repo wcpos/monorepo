@@ -36,6 +36,10 @@
           {
             "key": "tags",
             "hide": false
+          },
+          {
+            "key": "attributes",
+            "show": false
           }
         ]
       },
@@ -162,6 +166,10 @@
         "display": [
           {
             "key": "sku",
+            "show": false
+          },
+          {
+            "key": "attributes",
             "show": false
           }
         ]
