@@ -7,7 +7,7 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 
 import Customer from './customer';
 import { useT } from '../../../../contexts/translations';
-import AddCustomer from '../../components/add-new-customer';
+import { AddNewCustomer } from '../../components/customer/add-new';
 import CustomerSelect from '../../components/customer-select';
 import UISettings from '../../components/ui-settings';
 import useUI from '../../contexts/ui-settings';
@@ -63,7 +63,7 @@ const CartHeader = () => {
 				</ErrorBoundary>
 			</Box>
 			<ErrorBoundary>
-				<AddCustomer onAdd={(customer) => addCustomer(customer)} />
+				<AddNewCustomer onAdd={(customer) => addCustomer(customer)} />
 			</ErrorBoundary>
 			<ErrorBoundary>
 				<UISettings uiSettings={uiSettings} title={t('Cart Settings', { _tags: 'core' })} />

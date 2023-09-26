@@ -18,6 +18,7 @@ import Tags from '../../components/product/tags';
 import VariablePrice from '../../components/product/variable-price';
 import Variations from '../../components/product/variation-table-rows';
 import { VariationTableContext } from '../../components/product/variation-table-rows/context';
+import { useCollection } from '../../hooks/use-collection';
 import { useMutation } from '../../hooks/use-mutation';
 import Actions from '../cells/actions';
 import Barcode from '../cells/barcode';
@@ -62,7 +63,8 @@ const variationCells = {
  *
  */
 const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
-	const mutation = useMutation();
+	const { collection } = useCollection('products');
+	const mutation = useMutation({ collection });
 	const [expanded, setExpanded] = React.useState(false);
 
 	/**

@@ -12,6 +12,7 @@ import log from '@wcpos/utils/src/logger';
 import { useVariationTable } from './context';
 import Footer from './footer';
 import { useT } from '../../../../../contexts/translations';
+import { useCollection } from '../../../hooks/use-collection';
 import { useMutation } from '../../../hooks/use-mutation';
 import EmptyTableRow from '../../empty-table-row';
 import { ProductVariationImage } from '../variation-image';
@@ -36,7 +37,8 @@ const VariationsTable = ({ query, parent }) => {
 	const { cells } = useVariationTable();
 	const loading = useObservableState(query.replicationState.active$, false);
 	const t = useT();
-	const mutation = useMutation({ endpoint: `products/${parent.id}/variations` });
+	const { collection } = useCollection('variations');
+	const mutation = useMutation({ endpoint: `products/${parent.id}/variations`, collection });
 
 	/**
 	 * Detect change in product query and variations query

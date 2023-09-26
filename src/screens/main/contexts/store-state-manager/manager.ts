@@ -73,7 +73,12 @@ export class StoreStateManager {
 
 	deregisterQuery(queryKey: (string | number | object)[]): void {
 		const key = this.serializeQueryKey(queryKey);
-		this.queries.delete(key);
+		// cancel the query
+		const query = this.queries.get(key);
+		if (query) {
+			query.cancel();
+			this.queries.delete(key);
+		}
 	}
 
 	/**
@@ -106,6 +111,11 @@ export class StoreStateManager {
 		}
 	}
 
+	/**
+	 * @TODO - there is a problem when creating a new customer in the cart
+	 * The customer replicationState has not be registered yet, so it throws an error
+	 * - surely replicationState should be decoupled from useQuery
+	 */
 	getReplicationState(endpoint: string) {
 		const replicationState = this.replicationStates.get(endpoint);
 

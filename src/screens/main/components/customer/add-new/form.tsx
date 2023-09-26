@@ -1,71 +1,55 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import isEmpty from 'lodash/isEmpty';
 import pick from 'lodash/pick';
-import { isRxDocument } from 'rxdb';
 
-import Icon from '@wcpos/components/src/icon';
-import Modal from '@wcpos/components/src/modal';
-import useSnackbar from '@wcpos/components/src/snackbar';
-import Text from '@wcpos/components/src/text';
+import { useModal } from '@wcpos/components/src/modal';
 import Form from '@wcpos/react-native-jsonschema-form';
-import log from '@wcpos/utils/src/logger';
 
-import { CountrySelect, StateSelect } from './country-state-select';
-import { useT } from '../../../contexts/translations';
-import usePushDocument from '../contexts/use-push-document';
-import { useCollection } from '../hooks/use-collection';
-
-interface AddNewCustomerProps {
-	onAdd?: (doc: import('@wcpos/database').CustomerDocument) => void;
-}
+import { useT } from '../../../../../contexts/translations';
+import { useCollection } from '../../../hooks/use-collection';
+import { useMutation } from '../../../hooks/use-mutation';
+import { CountrySelect, StateSelect } from '../../country-state-select';
 
 /**
  *
  */
-const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
-	const [opened, setOpened] = React.useState(false);
+export const AddNewCustomerForm = ({ onAdd }) => {
 	const [customerData, setCustomerData] = React.useState({});
 	const { collection } = useCollection('customers');
-	const pushDocument = usePushDocument();
-	const addSnackbar = useSnackbar();
+	const t = useT();
+
 	const billingCountry = get(customerData, ['billing', 'country']);
 	const shippingCountry = get(customerData, ['shipping', 'country']);
+	const { setPrimaryAction } = useModal();
 	const [loading, setLoading] = React.useState(false);
-	const t = useT();
+	const { create } = useMutation({ collection });
 
 	/**
 	 *
 	 */
 	const handleSave = React.useCallback(async () => {
+		setLoading(true);
 		try {
-			setLoading(true);
-			const doc = await collection.insert(customerData);
-			const success = await pushDocument(doc);
-			if (isRxDocument(success)) {
+			const doc = await create({ data: customerData });
+			if (onAdd) {
 				onAdd(doc);
-				addSnackbar({
-					message: t('Customer {id} saved', { _tags: 'core', id: success.id }),
-				});
 			}
-			setOpened(false);
-		} catch (error) {
-			log.error(error);
-			addSnackbar({
-				message: t('There was an error: {message}', { _tags: 'core', message: error.message }),
-			});
 		} finally {
 			setLoading(false);
 		}
-	}, [addSnackbar, collection, customerData, onAdd, pushDocument, t]);
+	}, [create, customerData, onAdd]);
 
 	/**
 	 *
 	 */
-	const handleChange = React.useCallback((changes) => {
-		setCustomerData(changes);
-	}, []);
+	React.useEffect(() => {
+		setPrimaryAction({
+			label: t('Add Customer', { _tags: 'core' }),
+			action: () => handleSave(),
+			loading,
+		});
+	}, [handleSave, loading, setPrimaryAction, t]);
 
 	/**
 	 *
@@ -223,32 +207,6 @@ const AddNewCustomer = ({ onAdd }: AddNewCustomerProps) => {
 	}, [billingCountry, shippingCountry, t]);
 
 	return (
-		<>
-			<Icon
-				name="userPlus"
-				onPress={() => setOpened(true)}
-				tooltip={t('Add new customer', { _tags: 'core' })}
-			/>
-
-			<Modal
-				size="large"
-				opened={opened}
-				onClose={() => setOpened(false)}
-				title={t('Add New Customer', { _tags: 'core' })}
-				primaryAction={{
-					label: t('Add Customer', { _tags: 'core' }),
-					action: handleSave,
-					loading,
-					disabled: isEmpty(customerData.email),
-				}}
-				secondaryActions={[
-					{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
-				]}
-			>
-				<Form formData={customerData} schema={schema} uiSchema={uiSchema} onChange={handleChange} />
-			</Modal>
-		</>
+		<Form formData={customerData} schema={schema} uiSchema={uiSchema} onChange={setCustomerData} />
 	);
 };
-
-export default AddNewCustomer;

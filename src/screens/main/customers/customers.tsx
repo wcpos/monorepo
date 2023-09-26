@@ -9,7 +9,7 @@ import Suspense from '@wcpos/components/src/suspense';
 import cells from './cells';
 import SearchBar from './search-bar';
 import { useT } from '../../../contexts/translations';
-import AddNewCustomer from '../components/add-new-customer';
+import { AddNewCustomer } from '../components/customer/add-new';
 import DataTable from '../components/data-table';
 import UiSettings from '../components/ui-settings';
 import useUI from '../contexts/ui-settings';

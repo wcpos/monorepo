@@ -55,6 +55,8 @@ class Query<T> {
 		this.subjects.queryState.asObservable();
 	readonly result$: Observable<RxDocument<T>[]> = this.subjects.result.asObservable();
 
+	private isCanceled = false;
+
 	/**
 	 *
 	 */
@@ -372,6 +374,7 @@ class Query<T> {
 	 * - complete the observables accessible from this class
 	 */
 	cancel() {
+		this.isCanceled = true;
 		this.subs.forEach((sub) => sub.unsubscribe());
 
 		this.subjects.queryState.complete();

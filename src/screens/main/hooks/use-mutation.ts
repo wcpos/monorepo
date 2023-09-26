@@ -1,25 +1,32 @@
 import * as React from 'react';
 
-import { isRxDocument, RxDocument } from 'rxdb';
+import { isRxDocument, RxDocument, RxCollection } from 'rxdb';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
+import { useReplicationState } from './use-replication-state';
 import { useT } from '../../../contexts/translations';
 import { useStoreStateManager } from '../contexts/store-state-manager';
 
 interface Props {
 	endpoint?: string;
 	onError?: (error: Error) => void;
+	collection?: RxCollection;
 }
 
 /**
  *
  */
-export const useMutation = ({ endpoint, onError }: Props = {}) => {
+export const useMutation = ({ endpoint, onError, collection }: Props = {}) => {
 	const manager = useStoreStateManager();
 	const addSnackbar = useSnackbar();
 	const t = useT();
+
+	/**
+	 * @FIXME - this is a hack, if there is no replicationState we need to register one!!
+	 */
+	const replicationState = useReplicationState({ collectionName: endpoint || collection?.name });
 
 	/**
 	 *
@@ -30,8 +37,13 @@ export const useMutation = ({ endpoint, onError }: Props = {}) => {
 			if (onError) {
 				onError(error);
 			}
+
+			let message = error.message;
+			if (error?.rxdb) {
+				message = 'rxdb ' + error.code;
+			}
 			addSnackbar({
-				message: t('There was an error: {message}', { _tags: 'core', message: error.message }),
+				message: t('There was an error: {message}', { _tags: 'core', message }),
 			});
 		},
 		[addSnackbar, onError, t]
@@ -43,7 +55,7 @@ export const useMutation = ({ endpoint, onError }: Props = {}) => {
 	const handleSuccess = React.useCallback(
 		(doc: RxDocument) => {
 			addSnackbar({
-				message: t('Product {id} saved', { _tags: 'core', id: doc.id }),
+				message: t('Document {id} saved', { _tags: 'core', id: doc.id }),
 			});
 		},
 		[addSnackbar, t]
@@ -75,5 +87,30 @@ export const useMutation = ({ endpoint, onError }: Props = {}) => {
 		[endpoint, handleError, handleSuccess, manager]
 	);
 
-	return { mutate };
+	/**
+	 *
+	 */
+	const create = React.useCallback(
+		async ({ data }: { data: Record<string, unknown> }) => {
+			try {
+				// create local document
+				const doc = await collection.insert(data);
+
+				// create remote document
+				const updatedDoc = await replicationState.remoteCreate(doc.toJSON());
+				if (isRxDocument(updatedDoc)) {
+					handleSuccess(updatedDoc);
+					return updatedDoc;
+				} else {
+					doc.remove();
+					handleError(new Error('Document not created'));
+				}
+			} catch (error) {
+				handleError(error);
+			}
+		},
+		[collection, handleError, handleSuccess, replicationState]
+	);
+
+	return { mutate, create };
 };

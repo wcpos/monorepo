@@ -39,7 +39,7 @@ const DataTableFooter = ({ query, children }) => {
 	const theme = useTheme();
 	const { sync, clear, replicationState } = query;
 	const loading = useObservableState(replicationState.active$, false);
-	const count = useObservableState(query.count$, 0);
+	const count = useObservableState(query.count$, 0); // count is the query count, not pagination count
 	const total = useTotalCount(replicationState);
 	const t = useT();
 
@@ -134,7 +134,7 @@ const DataTable = <DocumentType,>({
 			context={context}
 			ListEmptyComponent={<EmptyTableRow message={noDataMessage} />}
 			onEndReached={() => query.nextPage()}
-			onEndReachedThreshold={0.5}
+			onEndReachedThreshold={1}
 			footer={<DataTableFooter query={query} children={footer} />}
 			ListFooterComponent={<Table.LoadingRow loading={loading} />}
 		/>

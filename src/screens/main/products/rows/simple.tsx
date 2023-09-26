@@ -12,6 +12,7 @@ import DateCreated from '../../components/date';
 import Categories from '../../components/product/categories';
 import { ProductImage } from '../../components/product/image';
 import Tags from '../../components/product/tags';
+import { useCollection } from '../../hooks/use-collection';
 import { useMutation } from '../../hooks/use-mutation';
 import Actions from '../cells/actions';
 import Barcode from '../cells/barcode';
@@ -44,7 +45,8 @@ const cells = {
  *
  */
 const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
-	const mutation = useMutation();
+	const { collection } = useCollection('products');
+	const mutation = useMutation({ collection });
 
 	/**
 	 *

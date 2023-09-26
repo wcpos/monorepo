@@ -448,4 +448,19 @@ export class ReplicationState<RxDocType> {
 			this.subjects.error.next(error);
 		}
 	}
+
+	/**
+	 *
+	 */
+	async remoteCreate(data) {
+		try {
+			const response = await this.http.post('', data);
+			const parsedData = this.collection.parseRestResponse(response.data);
+			await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+			const doc = await this.collection.upsert(parsedData);
+			return doc;
+		} catch (error) {
+			this.subjects.error.next(error);
+		}
+	}
 }
