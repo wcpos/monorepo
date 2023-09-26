@@ -10,9 +10,9 @@
     "test": "echo 'Nothing to test'"
   },
   "dependencies": {
-    "@babel/core": "^7.22.20",
+    "@babel/core": "^7.23.0",
     "@babel/plugin-proposal-export-namespace-from": "7.18.9",
-    "@babel/preset-typescript": "^7.22.15",
+    "@babel/preset-typescript": "^7.23.0",
     "babel-jest": "^29.7.0",
     "babel-preset-expo": "9.7.0"
   },
