@@ -15,7 +15,7 @@ const VariationsPopover = ({ parent, addToCart }) => {
 			selector: { id: { $in: parent.variations } },
 			search: {},
 		},
-		parent,
+		endpoint: `products/${parent.id}/variations`,
 	});
 
 	return <Variations query={query} parent={parent} addToCart={addToCart} />;

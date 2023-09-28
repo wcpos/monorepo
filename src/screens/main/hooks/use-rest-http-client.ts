@@ -75,6 +75,7 @@ export const useRestHttpClient = (endpoint = '') => {
 	 */
 	return React.useMemo(
 		() => ({
+			endpoint,
 			request,
 			get(url: string, config: RequestConfig = {}) {
 				return request({ ...config, method: 'GET', url });
@@ -118,6 +119,6 @@ export const useRestHttpClient = (endpoint = '') => {
 			 */
 			error$: errorSubject.asObservable(),
 		}),
-		[request]
+		[endpoint, request]
 	);
 };

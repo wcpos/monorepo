@@ -56,18 +56,4 @@ const filterApiQueryParams = (params, checkpoint, batchSize) => {
 	};
 };
 
-/**
- *
- */
-const filterApiEndpoint = (collection, parent) => {
-	return `products/${parent.id}/variations`;
-};
-
-/**
- *
- */
-const fetchRemoteIDs = (parent) => {
-	return parent.variations;
-};
-
-export { filterApiQueryParams, postQueryResult, filterApiEndpoint, fetchRemoteIDs };
+export { filterApiQueryParams, postQueryResult };

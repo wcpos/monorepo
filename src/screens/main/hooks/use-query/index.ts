@@ -30,7 +30,7 @@ interface Props {
 	queryKeys: (string | number | object)[];
 	collectionName: CollectionKey;
 	initialQuery?: QueryState;
-	parent?: any;
+	endpoint?: string;
 }
 
 const clearCollectionNames = {
@@ -41,13 +41,11 @@ const clearCollectionNames = {
 /**
  * This is a bit messy, but works for now
  */
-export const useQuery = <T>({ queryKeys, collectionName, initialQuery, parent }: Props) => {
+export const useQuery = <T>({ queryKeys, collectionName, initialQuery, endpoint }: Props) => {
 	const manager = useStoreStateManager();
 	const { collection } = useCollection(collectionName);
 	const hooks = get(allHooks, collectionName, {});
-	const replicationState = useReplicationState({ collectionName, parent });
-	const endpoint =
-		collectionName === 'variations' ? `products/${parent.id}/variations` : collectionName;
+	const replicationState = useReplicationState({ collectionName, endpoint });
 	const { locale } = useLocale();
 
 	/**

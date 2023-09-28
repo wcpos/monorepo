@@ -23,7 +23,7 @@ export const AddNewCustomerForm = ({ onAdd }) => {
 	const shippingCountry = get(customerData, ['shipping', 'country']);
 	const { setPrimaryAction } = useModal();
 	const [loading, setLoading] = React.useState(false);
-	const { create } = useMutation({ collection });
+	const { create } = useMutation({ collectionName: 'customers' });
 
 	/**
 	 *

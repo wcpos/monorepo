@@ -25,37 +25,20 @@ const allHooks = {
 
 interface Props {
 	collectionName: CollectionKey;
-	parent?: any;
+	endpoint?: string;
 }
 
 /**
  *
  */
-export const useReplicationState = <T>({ collectionName, parent }: Props) => {
+export const useReplicationState = <T>({ collectionName, endpoint }: Props) => {
 	const manager = useStoreStateManager();
 	const { collection } = useCollection(collectionName);
-
-	/**
-	 * Bit of a hack to get the right endpoint for variations
-	 */
-	let endpoint = collectionName;
-	if (collectionName === 'variations') {
-		if (!parent) {
-			throw new Error('parent is required for variations');
-		}
-		endpoint = `products/${parent.id}/variations`;
-	}
-
-	const http = useRestHttpClient(endpoint);
+	const ep = endpoint || collectionName;
+	const http = useRestHttpClient(ep);
 	const hooks = get(allHooks, collectionName, {});
 
-	const replicationState = manager.registerReplicationState<T>(
-		endpoint,
-		collection,
-		http,
-		hooks,
-		parent
-	);
+	const replicationState = manager.registerReplicationState<T>(ep, collection, http, hooks);
 
 	/**
 	 * This is a bit of a hack

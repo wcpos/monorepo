@@ -7,6 +7,7 @@ import { storeCollections } from '@wcpos/database';
 import type { StoreDatabaseCollections } from '@wcpos/database';
 
 import { useAppState } from '../../../contexts/app-state';
+import { useT } from '../../../contexts/translations';
 
 export type CollectionKey = keyof typeof storeCollections;
 
@@ -22,12 +23,37 @@ export type CollectionKey = keyof typeof storeCollections;
  */
 export const useCollection = <K extends CollectionKey>(
 	key: K
-): { collection: StoreDatabaseCollections[K] } => {
+): { collection: StoreDatabaseCollections[K]; collectionLabel: string } => {
+	const t = useT();
 	const { storeDB } = useAppState();
 	const collection = useObservableState(
 		storeDB.reset$.pipe(filter((collection) => collection.name === key)),
 		storeDB.collections[key]
 	);
 
-	return { collection };
+	/**
+	 *
+	 */
+	const collectionLabel = React.useMemo(() => {
+		switch (key) {
+			case 'products':
+				return t('Product', { _tags: 'core' });
+			case 'variations':
+				return t('Variation', { _tags: 'core' });
+			case 'customers':
+				return t('Customer', { _tags: 'core' });
+			case 'orders':
+				return t('Order', { _tags: 'core' });
+			case 'taxes':
+				return t('Tax', { _tags: 'core' });
+			case 'products/categories':
+				return t('Category', { _tags: 'core' });
+			case 'products/tags':
+				return t('Tag', { _tags: 'core' });
+			default:
+				return t('Document', { _tags: 'core' });
+		}
+	}, [t, key]);
+
+	return { collection, collectionLabel };
 };

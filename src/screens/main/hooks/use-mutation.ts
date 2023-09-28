@@ -5,28 +5,30 @@ import { isRxDocument, RxDocument, RxCollection } from 'rxdb';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
+import { useCollection, CollectionKey } from './use-collection';
 import { useReplicationState } from './use-replication-state';
 import { useT } from '../../../contexts/translations';
 import { useStoreStateManager } from '../contexts/store-state-manager';
 
 interface Props {
+	collectionName: CollectionKey;
 	endpoint?: string;
 	onError?: (error: Error) => void;
-	collection?: RxCollection;
 }
 
 /**
  *
  */
-export const useMutation = ({ endpoint, onError, collection }: Props = {}) => {
+export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
 	const manager = useStoreStateManager();
 	const addSnackbar = useSnackbar();
 	const t = useT();
+	const { collection, collectionLabel } = useCollection(collectionName);
 
 	/**
-	 * @FIXME - this is a hack, if there is no replicationState we need to register one!!
+	 * If there is no replicationState we need to register one
 	 */
-	const replicationState = useReplicationState({ collectionName: endpoint || collection?.name });
+	const replicationState = useReplicationState({ collectionName, endpoint });
 
 	/**
 	 *
@@ -55,10 +57,10 @@ export const useMutation = ({ endpoint, onError, collection }: Props = {}) => {
 	const handleSuccess = React.useCallback(
 		(doc: RxDocument) => {
 			addSnackbar({
-				message: t('Document {id} saved', { _tags: 'core', id: doc.id }),
+				message: t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }),
 			});
 		},
-		[addSnackbar, t]
+		[addSnackbar, collectionLabel, t]
 	);
 
 	/**
@@ -78,13 +80,15 @@ export const useMutation = ({ endpoint, onError, collection }: Props = {}) => {
 					handleSuccess(updatedDoc);
 					return updatedDoc;
 				} else {
-					handleError(new Error('Document not updated'));
+					handleError(
+						new Error(t('{title} not updated', { _tags: 'core', title: collectionLabel }))
+					);
 				}
 			} catch (error) {
 				handleError(error);
 			}
 		},
-		[endpoint, handleError, handleSuccess, manager]
+		[collectionLabel, endpoint, handleError, handleSuccess, manager, t]
 	);
 
 	/**
@@ -103,13 +107,15 @@ export const useMutation = ({ endpoint, onError, collection }: Props = {}) => {
 					return updatedDoc;
 				} else {
 					doc.remove();
-					handleError(new Error('Document not created'));
+					handleError(
+						new Error(t('{title} not created', { _tags: 'core', title: collectionLabel }))
+					);
 				}
 			} catch (error) {
 				handleError(error);
 			}
 		},
-		[collection, handleError, handleSuccess, replicationState]
+		[collection, collectionLabel, handleError, handleSuccess, replicationState, t]
 	);
 
 	return { mutate, create };

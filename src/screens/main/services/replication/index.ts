@@ -68,18 +68,24 @@ export class ReplicationState<RxDocType> {
 	public readonly collection: any;
 	public readonly hooks: any;
 	public readonly http: any;
-	public readonly parent: any;
+	// public readonly parent: any;
 	public readonly greedy: boolean;
 	public readonly limiter: any;
 
 	/**
 	 *
 	 */
-	constructor({ collection, hooks, http, parent, greedy = false }) {
+	constructor({
+		collection,
+		hooks,
+		http,
+		// parent,
+		greedy = false,
+	}) {
 		this.collection = collection;
 		this.hooks = hooks;
 		this.http = http;
-		this.parent = parent;
+		// this.parent = parent;
 		this.greedy = greedy;
 		this.limiter = new Bottleneck({
 			maxConcurrent: 1,
@@ -346,8 +352,13 @@ export class ReplicationState<RxDocType> {
 		let remoteIDs = null;
 
 		if (this.hooks?.fetchRemoteIDs) {
-			// special case for variations
-			remoteIDs = await this.hooks?.fetchRemoteIDs(this.parent);
+			/**
+			 * @HACK - this is a bit hacky, but it works for now
+			 * Variations is one collection locally, containing all variations
+			 * But it is multiple endpoints on the server, one for each product
+			 * Maybe we should have a separate collection for each variable product?
+			 */
+			remoteIDs = await this.hooks?.fetchRemoteIDs(this.http.endpoint, this.collection);
 		} else {
 			const response = await this.http.get('', {
 				params: { fields: ['id'], posts_per_page: -1 },

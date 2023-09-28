@@ -54,6 +54,12 @@ const EditCustomer = ({ resource }: Props) => {
 					loading: true,
 				};
 			});
+			// @HACK - if billing.email is empty, set it to customer email
+			if (!customer.billing.email) {
+				await customer.incrementalPatch({
+					billing: { ...customer.billing, email: customer.email },
+				});
+			}
 			const success = await pushDocument(customer);
 			if (isRxDocument(success)) {
 				addSnackbar({

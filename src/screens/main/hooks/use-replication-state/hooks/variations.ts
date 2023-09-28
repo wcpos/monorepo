@@ -56,18 +56,24 @@ const filterApiQueryParams = (params, checkpoint, batchSize) => {
 	};
 };
 
-/**
- *
- */
-const filterApiEndpoint = (collection, parent) => {
-	return `products/${parent.id}/variations`;
+const getProductId = (str: string): number | false => {
+	const match = str.match(/^products\/(\d+)\/variations$/);
+	return match ? parseInt(match[1], 10) : false;
 };
 
 /**
  *
  */
-const fetchRemoteIDs = (parent) => {
-	return parent.variations;
+const fetchRemoteIDs = async (endpoint, collection) => {
+	const productId = getProductId(endpoint);
+	if (productId) {
+		// I need to fetch the product from the database
+		const productsCollection = collection.database.collections['products'];
+		const product = await productsCollection.findOne({ selector: { id: productId } }).exec();
+		return product.variations;
+	} else {
+		throw new Error('Invalid endpoint');
+	}
 };
 
-export { filterApiQueryParams, postQueryResult, filterApiEndpoint, fetchRemoteIDs };
+export { filterApiQueryParams, postQueryResult, fetchRemoteIDs };

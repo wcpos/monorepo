@@ -22,7 +22,7 @@ const Variations = ({ parent, initialSearch }) => {
 			selector: { id: { $in: parent.variations } },
 			// search: { attributes: [initialSearch] },
 		},
-		parent,
+		endpoint: `products/${parent.id}/variations`,
 	});
 
 	/**
