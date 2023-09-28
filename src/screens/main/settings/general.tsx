@@ -22,9 +22,12 @@ export const GeneralSettings = () => {
 	 *
 	 */
 	const handleCustomerSelect = (customer) => {
-		store.incrementalPatch({
-			default_customer: customer.id,
-		});
+		if (customer.id !== defaultCustomer.id) {
+			debugger;
+			store.incrementalPatch({
+				default_customer: customer.id,
+			});
+		}
 	};
 
 	/**
@@ -45,16 +48,18 @@ export const GeneralSettings = () => {
 				},
 				default_customer: {
 					'ui:label': t('Default Customer', { _tags: 'core' }),
-					'ui:widget': ({ label, ...props }) => (
-						// TODO - a label prop should automatically switch to InputWithLabel?
-						<InputWithLabel label={label}>
-							<CustomerSelect
-								{...props}
-								value={defaultCustomer}
-								onSelectCustomer={handleCustomerSelect}
-							/>
-						</InputWithLabel>
-					),
+					'ui:widget': ({ label, ...props }) => {
+						return (
+							// TODO - a label prop should automatically switch to InputWithLabel?
+							<InputWithLabel label={label}>
+								<CustomerSelect
+									// {...props}
+									value={defaultCustomer}
+									onSelectCustomer={handleCustomerSelect}
+								/>
+							</InputWithLabel>
+						);
+					},
 				},
 				default_customer_is_cashier: {
 					'ui:label': t('Default Customer is cashier', { _tags: 'core' }),

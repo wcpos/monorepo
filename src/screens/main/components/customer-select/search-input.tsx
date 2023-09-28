@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { TextInput as RNTextInput } from 'react-native';
 
 import delay from 'lodash/delay';
 
@@ -10,10 +11,20 @@ import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 /**
  *
  */
-const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer, onBlur, size, style }) => {
+const SearchInput = ({
+	onSearch,
+	setOpened,
+	autoFocus,
+	selectedCustomer,
+	onBlur,
+	size,
+	style,
+	opened,
+}) => {
 	const [search, setSearch] = React.useState('');
 	const { format } = useCustomerNameFormat();
 	const t = useT();
+	const inputRef = React.useRef<RNTextInput>();
 
 	/**
 	 *
@@ -38,10 +49,20 @@ const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer, onBlur,
 	}, [selectedCustomer, t, format]);
 
 	/**
+	 * Focus input when opened
+	 */
+	React.useEffect(() => {
+		if (opened) {
+			inputRef.current.focus();
+		}
+	}, [opened]);
+
+	/**
 	 *
 	 */
 	return (
 		<TextInput
+			ref={inputRef}
 			value={search}
 			onChangeText={handleSearch}
 			containerStyle={{ flex: 1 }}
@@ -50,10 +71,6 @@ const SearchInput = ({ onSearch, setOpened, autoFocus, selectedCustomer, onBlur,
 			placeholder={placeholder}
 			size={size}
 			style={style}
-			/**
-			 * FIXME: this is a hack, useEffect is being called before onLayout for the Popover.Target
-			 * which means the width is not set correctly.
-			 */
 			/**
 			 * FIXME: this is a hack, useEffect is being called before onLayout for the Popover.Target
 			 * which means the width is not set correctly.

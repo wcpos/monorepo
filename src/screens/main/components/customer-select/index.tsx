@@ -84,6 +84,7 @@ const CustomerSelect = ({
 					onSearch={onSearch}
 					autoFocus={autoFocus}
 					setOpened={setOpened}
+					opened={opened}
 					selectedCustomer={value}
 					onBlur={onBlur}
 					size={size}
