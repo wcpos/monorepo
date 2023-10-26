@@ -17,7 +17,7 @@ const errorSubject = new BehaviorSubject(null);
  * TODO - becareful to use useOnlineStatus because it emits a lot of events
  */
 export const useRestHttpClient = (endpoint = '') => {
-	const { site, wpCredentials } = useAppState();
+	const { site, wpCredentials, store } = useAppState();
 	const wcAPIURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
 
@@ -55,19 +55,26 @@ export const useRestHttpClient = (endpoint = '') => {
 			const shouldUseJwtAsParam = get(window, ['initialProps', 'site', 'use_jwt_as_param']);
 			const defaultConfig = {
 				baseURL: wcAPIURL + '/' + endpoint,
+				// baseURL: 'https://wc-82.local/wp-json/wcpos/v1/' + endpoint,
 				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
+				params: {},
 			};
 
 			if (shouldUseJwtAsParam) {
 				const params = { authorization: `Bearer ${jwt}` };
-				defaultConfig.params = merge(params, reqConfig.params);
+				defaultConfig.params = merge(params, defaultConfig.params);
+			}
+
+			if (store.id !== 0) {
+				const params = { store_id: store.id };
+				defaultConfig.params = merge(params, defaultConfig.params);
 			}
 
 			const config = merge({}, defaultConfig, reqConfig);
 
 			return httpClient.request(config);
 		},
-		[endpoint, httpClient, jwt, wcAPIURL]
+		[endpoint, httpClient, jwt, store.id, wcAPIURL]
 	);
 
 	/**
