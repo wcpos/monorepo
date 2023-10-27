@@ -65,8 +65,8 @@ Simplifed, we have:
   - `/contexts`
   - `/hooks`
   - **`/sub-folder`**
-    - `route navigator`
-    - ... all the way down
+    - `navigator`
+    - ...
 
 
 ## 👷 Workflows
