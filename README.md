@@ -31,30 +31,60 @@ This repository contains the core [React-Native](https://reactnative.dev/) compo
 
 ## 📁 Structure
 
-Coming soon.
+> **Disclaimer:** The folder structure may change over time.
+
+The folder structure is designed to segregate concerns while maintaining modularity and readability. It primarily consists of:
+
+- **`/src`**
+  - `index.tsx` - root component
+  - **`/contexts`** - context providers for state management
+  - **`/hooks`** - shared hooks that contain business logic and UI helpers
+  - **`/screens`** - contains various screen sub-folders, each representing a 'screen'
+    - `index.tsx` - route navigator component
+    - **`/components`** - shared components
+    - **`/screen-1-folder`** - 
+      - `index.tsx` - route navigator component
+      - **`/components`** - shared components
+      - **`/contexts`** - context providers for state management
+      - **`/hooks`** - shared hooks that contain business logic and UI helpers
+      - **`/sub-screen-folder`**
+        - `index.tsx`
+        - ...
+    - **`/screen-2-folder`**
+      - ...
+
+Simplifed, we have:
+
+- route navigator
+- /components
+- /contexts
+- /hooks
+  - route navigator
+  - /components
+  - /contexts
+  - /hooks
+    - route navigator
+    - ... all the way down
+
 
 ## 👷 Workflows
 
-#### Prerequisites
+### Prerequisites
 - [Node.js](https://nodejs.org/)
 - [Yarn package manager](https://yarnpkg.com/getting-started/install)
 
-```sh
-git clone https://github.com/wcpos/core.git
-```
-
-To prepare the repository for local development you should rename `.env.example` to `.env`, this will set the local development flag to `true`.
-
-Next you will need to install the required PHP via `composer` and JavaScript packages via `yarn`.
+### Clone and install dependencies
 
 ```sh
+git clone https://github.com/wcpos/core.git wcpos-core
+cd wcpos-core
 yarn install
 ```
 
-Once you have installed the required packages you can now start development. To build the settings page, use: 
+### Running tests
 
 ```sh
- yarn settings start
+ yarn test
 ```
 
 ## 🚀 How to use it
