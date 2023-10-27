@@ -55,15 +55,17 @@ The folder structure is designed to segregate concerns while maintaining modular
 
 Simplifed, we have:
 
-- route navigator
-- /components
-- /contexts
-- /hooks
-  - route navigator
-  - /components
-  - /contexts
-  - /hooks
-    - route navigator
+- `navigator`
+- `/components`
+- `/contexts`
+- `/hooks`
+- **`/sub-folder`**
+  - `navigator`
+  - `/components`
+  - `/contexts`
+  - `/hooks`
+  - **`/sub-folder`**
+    - `route navigator`
     - ... all the way down
 
 

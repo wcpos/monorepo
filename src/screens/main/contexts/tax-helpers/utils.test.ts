@@ -1,10 +1,10 @@
 import {
-	calcTaxes,
+	calculateTaxes,
 	sumTaxes,
 	sumItemizedTaxes,
 	calculateDisplayValues,
 	calculateLineItemTotals,
-	calculateOrderTotals,
+	calculateOrderTotalsAndTaxes,
 } from './utils';
 
 /**
@@ -25,11 +25,11 @@ describe('Calculate Taxes', () => {
 		};
 
 		// @ts-ignore
-		const inclusiveTaxes = calcTaxes(9.99, [taxRate], true);
+		const inclusiveTaxes = calculateTaxes(9.99, [taxRate], true);
 		expect(inclusiveTaxes).toEqual([{ id: '72', total: '1.665' }]);
 
 		// @ts-ignore
-		const exclusiveTaxes = calcTaxes(9.99, [taxRate], false);
+		const exclusiveTaxes = calculateTaxes(9.99, [taxRate], false);
 		expect(exclusiveTaxes).toEqual([{ id: '72', total: '1.998' }]);
 	});
 
@@ -62,7 +62,7 @@ describe('Calculate Taxes', () => {
 
 		// prices exclusive of tax.
 		// @ts-ignore
-		const exclusiveTaxes = calcTaxes(100, taxRates, false);
+		const exclusiveTaxes = calculateTaxes(100, taxRates, false);
 		expect(exclusiveTaxes).toEqual([
 			{ id: '72', total: '5' },
 			{ id: '17', total: '8.925' },
@@ -70,7 +70,7 @@ describe('Calculate Taxes', () => {
 
 		// prices inclusive of tax.
 		// @ts-ignore
-		const inclusiveTaxes = calcTaxes(100, taxRates, true);
+		const inclusiveTaxes = calculateTaxes(100, taxRates, true);
 		/**
 		 * 100 is inclusive of all taxes.
 		 *
@@ -274,7 +274,7 @@ describe('Calculate Taxes', () => {
 				},
 			];
 
-			const result = calculateOrderTotals({
+			const result = calculateOrderTotalsAndTaxes({
 				// @ts-ignore
 				lines,
 				taxRoundAtSubtotal: true,
@@ -324,7 +324,7 @@ describe('Calculate Taxes', () => {
 				},
 			];
 
-			const result = calculateOrderTotals({
+			const result = calculateOrderTotalsAndTaxes({
 				// @ts-ignore
 				lines,
 				taxRoundAtSubtotal: true,
@@ -338,7 +338,7 @@ describe('Calculate Taxes', () => {
 
 		test('Calculates order totals with empty lines', () => {
 			const lines: any[] = [];
-			const result = calculateOrderTotals({
+			const result = calculateOrderTotalsAndTaxes({
 				lines,
 				taxRoundAtSubtotal: true,
 				rates: [
@@ -405,7 +405,7 @@ describe('Calculate Taxes', () => {
 					],
 				},
 			];
-			const result = calculateOrderTotals({
+			const result = calculateOrderTotalsAndTaxes({
 				// @ts-ignore
 				lines,
 				taxRoundAtSubtotal: true,
