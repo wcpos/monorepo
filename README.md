@@ -15,13 +15,13 @@
     </a>
   </p>
   <p>
-    <a href="https://github.com/wcpos/woocommerce-pos#-structure"><b>About</b></a>
+    <a href="https://github.com/wcpos/core#-structure"><b>About</b></a>
     &ensp;&mdash;&ensp;
-    <a href="https://github.com/wcpos/woocommerce-pos#-structure"><b>Structure</b></a>
+    <a href="https://github.com/wcpos/core#-structure"><b>Structure</b></a>
     &ensp;&mdash;&ensp;
-    <a href="https://github.com/wcpos/woocommerce-pos#-workflows"><b>Workflows</b></a>
+    <a href="https://github.com/wcpos/core#-workflows"><b>Workflows</b></a>
     &ensp;&mdash;&ensp;
-    <a href="https://github.com/wcpos/woocommerce-pos#-how-to-use-it"><b>How to use it</b></a>
+    <a href="https://github.com/wcpos/core#-how-to-use-it"><b>How to use it</b></a>
   </p>
 </div>
 
