@@ -28,7 +28,7 @@
 
 ## 💡 About
 
-The goal of this project is to develop a <u>free</u> and <u>extensible</u> Point of Sale application with first support for collecting payment via cryptocurrency.
+The goal of this project is to develop a <u>free</u> and <u>extensible</u> Point of Sale application with first-class support for collecting payment via cryptocurrency.
 
 Currently the application requires [WooCommerce](https://woocommerce.com) to provide the backend database, but it should not necessarily be limited to WooCommerce.
 
