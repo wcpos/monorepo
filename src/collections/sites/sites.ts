@@ -9,4 +9,12 @@ type SiteStatics = Record<string, unknown>;
 
 export const sites = {
 	schema,
+	migrationStrategies: {
+		1: (oldDoc: any) => {
+			return {
+				...oldDoc,
+				wcpos_api_url: oldDoc.wp_api_url + 'wcpos/v1',
+			};
+		},
+	},
 };
