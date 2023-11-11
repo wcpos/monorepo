@@ -5,6 +5,7 @@ import get from 'lodash/get';
 import merge from 'lodash/merge';
 import { useObservableState } from 'observable-hooks';
 import { BehaviorSubject } from 'rxjs';
+import semver from 'semver';
 
 import useHttpClient, { RequestConfig } from '@wcpos/hooks/src/use-http-client';
 import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
@@ -17,8 +18,8 @@ const errorSubject = new BehaviorSubject(null);
  * TODO - becareful to use useOnlineStatus because it emits a lot of events
  */
 export const useRestHttpClient = (endpoint = '') => {
-	const { site, wpCredentials, store } = useAppState();
-	const wcAPIURL = useObservableState(site.wc_api_url$, site.wc_api_url);
+	const { site, wpCredentials, store, initialProps } = useAppState();
+	// const wcAPIURL = useObservableState(site.wc_api_url$, site.wc_api_url);
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
 
 	const navigation = useNavigation();
@@ -53,9 +54,20 @@ export const useRestHttpClient = (endpoint = '') => {
 	const request = React.useCallback(
 		async (reqConfig: RequestConfig = {}) => {
 			const shouldUseJwtAsParam = get(window, ['initialProps', 'site', 'use_jwt_as_param']);
+			const version = get(initialProps, 'version', '');
+			// if version is 1.4 or greater, use the new api
+			let apiURL = site.wc_api_url;
+			if (semver.gt(version, '1.3.13')) {
+				apiURL = site.wcpos_api_url;
+
+				// sanity check, make sure we have a wcpos_api_url
+				if (!apiURL) {
+					apiURL = site.wp_api_url + 'wcpos/v1';
+					site.incrementalPatch({ wcpos_api_url: apiURL });
+				}
+			}
 			const defaultConfig = {
-				baseURL: wcAPIURL + '/' + endpoint,
-				// baseURL: 'https://wc-82.local/wp-json/wcpos/v1/' + endpoint,
+				baseURL: apiURL + '/' + endpoint,
 				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
 				params: {},
 			};
@@ -74,7 +86,7 @@ export const useRestHttpClient = (endpoint = '') => {
 
 			return httpClient.request(config);
 		},
-		[endpoint, httpClient, jwt, store.id, wcAPIURL]
+		[endpoint, httpClient, jwt, store.id, site, initialProps]
 	);
 
 	/**
