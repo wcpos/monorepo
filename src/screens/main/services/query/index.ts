@@ -254,7 +254,7 @@ class Query<T> {
 						let sortedResult = result;
 
 						if (sortBy && sortDirection) {
-							sortedResult = orderBy(result, [sortBy], [sortDirection]);
+							sortedResult = orderBy(result, [(v) => v[sortBy]], [sortDirection]);
 						}
 
 						return sortedResult;
