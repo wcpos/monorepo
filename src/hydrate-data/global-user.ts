@@ -29,9 +29,11 @@ export const userDB$ = from(createUserDB()).pipe(shareReplay(1));
  *
  */
 export const user$ = userDB$.pipe(
-	switchMap((userDB) =>
-		userDB.getLocal$('current').pipe(
-			switchMap((current) => userDB.users.findOneFix(current?.get('userID')).exec()),
+	switchMap((userDB) => {
+		return userDB.getLocal$('current').pipe(
+			switchMap((current) => {
+				return userDB.users.findOneFix(current?.get('userID')).exec();
+			}),
 			switchMap(async (user) => {
 				if (isRxDocument(user)) {
 					return user;
@@ -49,6 +51,6 @@ export const user$ = userDB$.pipe(
 				}
 				return user as UserDocument;
 			})
-		)
-	)
+		);
+	})
 );

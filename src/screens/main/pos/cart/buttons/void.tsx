@@ -7,6 +7,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../../contexts/translations';
+import useDeleteDocument from '../../../contexts/use-delete-document';
 import { useCurrentOrder } from '../../contexts/current-order';
 
 /**
@@ -16,6 +17,7 @@ const VoidButton = () => {
 	const { currentOrder } = useCurrentOrder();
 	const addSnackbar = useSnackbar();
 	const navigation = useNavigation();
+	const deleteDocument = useDeleteDocument();
 	const t = useT();
 
 	/**
@@ -34,19 +36,21 @@ const VoidButton = () => {
 	);
 
 	/**
-	 * TODO - don't we just want to set the status to cancelled?
+	 *
 	 */
 	const handleRemove = React.useCallback(async () => {
 		const orderJson = await currentOrder.toPopulatedJSON();
 		const latest = currentOrder.getLatest();
-		await latest.remove();
-		navigation.setParams({ orderID: '' });
+		if (latest.id) {
+			deleteDocument(latest.id, latest.collection);
+		}
+		latest.remove();
 		addSnackbar({
 			message: t('Order removed', { _tags: 'core' }),
 			dismissable: true,
 			action: { label: t('Undo', { _tags: 'core' }), action: () => undoRemove(orderJson) },
 		});
-	}, [currentOrder, navigation, addSnackbar, t, undoRemove]);
+	}, [currentOrder, addSnackbar, t, deleteDocument, undoRemove]);
 
 	/**
 	 *
