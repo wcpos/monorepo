@@ -9,10 +9,41 @@ import semver from 'semver';
 
 import useHttpClient, { RequestConfig } from '@wcpos/hooks/src/use-http-client';
 import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
+import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../../contexts/app-state';
 
 const errorSubject = new BehaviorSubject(null);
+
+/**
+ *
+ * @param responseString
+ * @returns
+ */
+function extractValidJSON(responseString) {
+	// Find the index where the actual JSON starts
+	const indexOfJsonStart = responseString.search(/[{[]/);
+
+	if (indexOfJsonStart === -1) {
+		log.error('No JSON found in the response');
+		return null;
+	}
+
+	// Extracting up to where we suspect the JSON ends
+	const possibleJson = responseString.substring(indexOfJsonStart);
+
+	// Trying to find a valid JSON object
+	for (let i = possibleJson.length; i > 0; i--) {
+		try {
+			return JSON.parse(possibleJson.substring(0, i));
+		} catch (error) {
+			// Not a valid JSON yet, continue trimming
+		}
+	}
+
+	log.error('Valid JSON not found in the response');
+	return null;
+}
 
 /**
  * TODO - becareful to use useOnlineStatus because it emits a lot of events
@@ -84,7 +115,20 @@ export const useRestHttpClient = (endpoint = '') => {
 
 			const config = merge({}, defaultConfig, reqConfig);
 
-			return httpClient.request(config);
+			return httpClient.request(config).then((response) => {
+				const data = response.data;
+
+				/**
+				 * This is a HACK
+				 * Some servers return invalid JSON, so we try to recover from it
+				 * eg: rando WordPress plugin echo's out a bunch of HTML before the JSON
+				 */
+				if (typeof response.data === 'string') {
+					log.error('Trying to recover from invalid JSON response', data);
+					response.data = extractValidJSON(response.data);
+				}
+				return response;
+			});
 		},
 		[endpoint, httpClient, jwt, store.id, site, initialProps]
 	);
