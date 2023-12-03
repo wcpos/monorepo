@@ -24,6 +24,9 @@ interface NumberInputProps {
 
 	/**  */
 	showDecimals?: boolean;
+
+	/**  */
+	showDiscounts?: number[];
 }
 
 /**
@@ -34,6 +37,7 @@ const NumberInput = ({
 	onChange,
 	disabled,
 	showDecimals = false,
+	showDiscounts,
 }: NumberInputProps) => {
 	const { store } = useAppState();
 	const decimalSeparator = useObservableState(store.price_decimal_sep$, store.price_decimal_sep);
@@ -87,6 +91,7 @@ const NumberInput = ({
 						handleSubmit();
 					}}
 					decimalSeparator={decimalSeparator}
+					discounts={showDiscounts}
 				/>
 			</Popover.Content>
 		</Popover>

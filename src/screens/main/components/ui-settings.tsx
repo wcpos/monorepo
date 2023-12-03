@@ -81,17 +81,31 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 			},
 		};
 
-		return uiSettings.id === 'pos.products'
-			? {
-					..._schema,
-					properties: {
-						showOutOfStock: {
-							type: 'boolean',
-						},
-						..._schema.properties,
+		if (uiSettings.id === 'pos.products') {
+			return {
+				..._schema,
+				properties: {
+					showOutOfStock: {
+						type: 'boolean',
 					},
-			  }
-			: _schema;
+					..._schema.properties,
+				},
+			};
+		}
+
+		if(uiSettings.id === 'pos.cart') {
+			return {
+				..._schema,
+				properties: {
+					quickDiscounts: {
+						type: 'string',
+					},
+					..._schema.properties,
+				},
+			}
+		}
+
+		return _schema;
 	}, [t, uiSettings.id]);
 
 	/**

@@ -87,6 +87,7 @@
   "pos.cart": {
     "sortBy": "id",
     "sortDirection": "asc",
+    "quickDiscounts": [5, 10, 15, 20],
     "columns": [
       {
         "key": "quantity",

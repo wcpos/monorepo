@@ -40,7 +40,7 @@ const HeaderLeft = () => {
 	 */
 	if (width < theme.screens.medium) {
 		return (
-			<Box padding="small" paddingLeft="none">
+			<Box padding="small">
 				<Button
 					onPress={handleOpenDrawer}
 					title={t('Menu', { _tags: 'core' })}

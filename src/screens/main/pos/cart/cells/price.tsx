@@ -6,6 +6,7 @@ import { map } from 'rxjs/operators';
 import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
+import useUI from '../../../contexts/ui-settings';
 
 interface Props {
 	item: import('@wcpos/database').LineItemDocument;
@@ -19,10 +20,24 @@ const getTaxStatus = (meta_data) => {
 	return meta ? meta.value : undefined;
 };
 
+function ensureNumberArray(input: string | number[]): number[] {
+	if (typeof input === 'string') {
+			// Split the string by commas (or another separator if needed), and convert each part to a number
+			return input.split(',').map(Number);
+	} else if (Array.isArray(input)) {
+			// Convert each element of the array to a number
+			return input.map(Number);
+	} else {
+			// If input is neither a string nor an array, return an empty array or handle as needed
+			return [];
+	}
+}
+
 /**
  *
  */
 export const Price = ({ item }: Props) => {
+	
 	const price = useObservableState(item.price$, item.price);
 	const taxClass = useObservableState(item.tax_class$, item.tax_class);
 	// find meta data value when key = _woocommerce_pos_tax_status
@@ -36,6 +51,16 @@ export const Price = ({ item }: Props) => {
 	const { calculateTaxesFromPrice } = useTaxHelpers();
 	const taxes = calculateTaxesFromPrice({ price, taxClass, taxStatus, pricesIncludeTax: false });
 	const displayPrice = taxDisplayCart === 'incl' ? price + taxes.total : price;
+
+	/**
+	 * Discounts
+	 */
+	const { uiSettings } = useUI('pos.cart');
+	const quickDiscounts = useObservableState(
+		uiSettings.get$('quickDiscounts'),
+		uiSettings.get('quickDiscounts')
+	);
+
 
 	/**
 	 * update subtotal, not price
@@ -62,5 +87,10 @@ export const Price = ({ item }: Props) => {
 	/**
 	 *
 	 */
-	return <NumberInput value={String(displayPrice)} onChange={handleUpdate} showDecimals />;
+	return <NumberInput 
+		value={String(displayPrice)} 
+		onChange={handleUpdate} 
+		showDecimals 
+		showDiscounts={ensureNumberArray(quickDiscounts)} 
+	/>;
 };

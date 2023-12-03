@@ -93,6 +93,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 					attributes: t('Attributes', { _tags: 'core' }),
 				},
 				'pos.cart': {
+					quickDiscounts: t('Quick Discounts', { _tags: 'core' }),
 					quantity: t('Qty', { _tags: 'core', _context: 'Short for quantity' }),
 					name: t('Name', { _tags: 'core' }),
 					sku: t('SKU', { _tags: 'core' }),
@@ -179,6 +180,13 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 					if (!localDoc) {
 						storeDB.insertLocal(id, initial);
 					} else {
+						// hack for cart discounts
+						if (id === 'pos.cart') {
+							const quickDiscounts = localDoc.get('quickDiscounts');
+							if(!quickDiscounts) {
+								localDoc.incrementalPatch({ quickDiscounts: initial.quickDiscounts || [] });
+							}
+						}
 						// add helper functions
 						Object.assign(localDoc, {
 							reset,
