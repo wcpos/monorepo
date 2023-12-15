@@ -115,7 +115,6 @@ class Query<T> {
 		this.collection = collection;
 		return this;
 	}
-	z;
 
 	addHook(type: keyof HookTypes, fn: any) {
 		this.hooks[type] = fn;
