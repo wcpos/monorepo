@@ -1,8 +1,11 @@
 import * as React from 'react';
 
 import moment from 'moment-timezone';
-import { interval } from 'rxjs';
-import { startWith } from 'rxjs/operators';
+import { useObservable, useObservableState } from 'observable-hooks';
+import { of } from 'rxjs';
+import { switchMap, map } from 'rxjs/operators';
+
+import { useHeartbeatObservable } from '@wcpos/hooks/src/use-heartbeat';
 
 import { useT } from '../../../../contexts/translations';
 
@@ -10,40 +13,57 @@ import { useT } from '../../../../contexts/translations';
  *
  */
 export const useDateFormat = (gmtDate: string, format = 'MMMM D, YYYY', fromNow = true) => {
-	const [formattedDate, setFormattedDate] = React.useState('');
 	const t = useT();
+	const heartbeat$ = useHeartbeatObservable(60000); // every minute
 
-	React.useEffect(() => {
-		const updateDate = () => {
+	/**
+	 *
+	 */
+	const formatDate = React.useCallback(() => {
+		const localDate = moment.utc(gmtDate).local();
+		if (fromNow) {
 			const now = moment();
-			const localDate = moment(gmtDate).tz(moment.tz.guess());
-
-			if (!localDate.isValid()) {
-				setFormattedDate('');
-				return;
-			}
-
 			const diffInMinutes = now.diff(localDate, 'minutes');
 			const diffInHours = now.diff(localDate, 'hours');
 
-			let newFormattedDate = '';
-
-			if (diffInMinutes < 60) {
-				newFormattedDate = t('{x} mins ago', { _tags: 'core', x: diffInMinutes });
+			if (diffInMinutes < 1) {
+				return t('just now', { _tags: 'core' });
+			} else if (diffInMinutes < 2) {
+				return t('a minute ago', { _tags: 'core' });
+			} else if (diffInMinutes < 60) {
+				return t('{x} mins ago', { _tags: 'core', x: diffInMinutes });
+			} else if (diffInHours < 2) {
+				return t('an hour ago', { _tags: 'core' });
 			} else if (diffInHours < 24) {
-				newFormattedDate = t('{x} hours ago', { _tags: 'core', x: diffInHours });
+				return t('{x} hours ago', { _tags: 'core', x: diffInHours });
 			} else {
-				newFormattedDate = localDate.format(format);
+				return localDate.format(format);
 			}
+		} else {
+			return localDate.format(format);
+		}
+	}, [gmtDate, format, fromNow, t]);
 
-			setFormattedDate(newFormattedDate);
-		};
+	/**
+	 *
+	 */
+	const formattedDate$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(([gmtDate, formatDate]) => {
+					const now = moment();
+					const localDate = moment.utc(gmtDate).local();
+					if (now.diff(localDate, 'days') >= 1) {
+						// If more than a day old, no need for an observable
+						return of(formatDate());
+					}
 
-		const source$ = interval(60000).pipe(startWith(0)); // Update every minute, starting immediately
-		const subscription = source$.subscribe(() => updateDate());
+					// If less than a day old, use a heartbeat observable
+					return heartbeat$.pipe(map(formatDate));
+				})
+			),
+		[gmtDate, formatDate]
+	);
 
-		return () => subscription.unsubscribe();
-	}, [format, gmtDate, t]);
-
-	return formattedDate;
+	return useObservableState(formattedDate$, formatDate());
 };

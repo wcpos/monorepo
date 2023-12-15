@@ -83,7 +83,7 @@ export const defaultPrepareQueryParams = (query: QueryState, batchSize: number) 
 		orderby: query.sortBy,
 		// page: checkpoint.nextPage || 1,
 		per_page: batchSize,
-		dates_are_gmt: true,
+		// dates_are_gmt: true,
 	});
 };
 
@@ -100,7 +100,7 @@ export function defaultFilterApiQueryParams(params) {
 
 	Object.assign(params, {
 		per_page: 10,
-		dates_are_gmt: true,
+		// dates_are_gmt: true,
 	});
 
 	return params;

@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
@@ -17,12 +16,13 @@ interface Props {
 	column: import('@wcpos/components/src/table').ColumnProps<Document>;
 }
 
-const Date = ({ item, column }: Props) => {
-	const key = get(column, 'key', 'date_created_gmt');
+/**
+ * We should always use the GMT date, and then format it based on the user's timezone.
+ */
+export const Date = ({ item, column }: Props) => {
+	const key = column.key.endsWith('_gmt') ? column.key : column.key + '_gmt';
 	const dateGmt = useObservableState(item[key + '$'], item[key]);
 	const dateFormatted = useDateFormat(dateGmt);
 
 	return <Text>{dateFormatted}</Text>;
 };
-
-export default Date;

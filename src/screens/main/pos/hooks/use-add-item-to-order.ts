@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { getDateCreated } from './utils';
+import { getCurrentGMTDate } from './utils';
 import { useCollection } from '../../hooks/use-collection';
 import { useCurrentOrder } from '../contexts/current-order';
 
@@ -17,7 +17,7 @@ export const useAddItemToOrder = () => {
 
 			const orderJSON = {
 				...order.toJSON(),
-				...getDateCreated(),
+				date_created_gmt: getCurrentGMTDate(),
 				[type]: [data],
 			};
 
@@ -71,6 +71,7 @@ export const useAddItemToOrder = () => {
 			// default: add line item type
 			return order.incrementalUpdate({
 				$push: {
+					date_modified_gmt: getCurrentGMTDate(),
 					[type]: data,
 				},
 			});

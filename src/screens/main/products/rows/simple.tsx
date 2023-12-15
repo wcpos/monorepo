@@ -8,7 +8,7 @@ import Table, { CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
-import DateCreated from '../../components/date';
+import { Date } from '../../components/date';
 import Categories from '../../components/product/categories';
 import { ProductImage } from '../../components/product/image';
 import Tags from '../../components/product/tags';
@@ -33,8 +33,8 @@ const cells = {
 	price: Price,
 	regular_price: EdittablePrice,
 	sale_price: EdittablePrice,
-	date_created: DateCreated,
-	date_modified: DateCreated,
+	date_created: Date,
+	date_modified: Date,
 	stock_quantity: StockQuanity,
 	tags: Tags,
 	stock_status: StockStatus,

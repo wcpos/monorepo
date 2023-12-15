@@ -4,6 +4,7 @@ import * as React from 'react';
 import { isRxDocument } from 'rxdb';
 
 // import { useAppState } from '../../../../contexts/app-state';
+import { getCurrentGMTDate } from './utils';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useCurrentOrder } from '../contexts/current-order';
 
@@ -47,6 +48,7 @@ export const useAddCustomer = () => {
 					last_name: data?.billing?.last_name || data.last_name,
 				},
 				shipping: data.shipping || {},
+				date_modified_gmt: getCurrentGMTDate(),
 			};
 
 			/**
