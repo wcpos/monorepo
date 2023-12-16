@@ -71,7 +71,6 @@ export const useAddItemToOrder = () => {
 			// default: add line item type
 			return order.incrementalUpdate({
 				$push: {
-					date_modified_gmt: getCurrentGMTDate(),
 					[type]: data,
 				},
 			});
