@@ -23,4 +23,5 @@ module.exports = {
 		},
 	},
 	transformIgnorePatterns: ['node_modules/(?!(@shelf/fast-natural-order-by)/)'],
+	testEnvironment: 'jsdom',
 };
