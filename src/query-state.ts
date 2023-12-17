@@ -1,6 +1,6 @@
 import { orderBy } from '@shelf/fast-natural-order-by';
 import isEqual from 'lodash/isEqual';
-import { BehaviorSubject, Observable, Subscription } from 'rxjs';
+import { BehaviorSubject, Observable, Subscription, Subject } from 'rxjs';
 import { map, switchMap, distinctUntilChanged } from 'rxjs/operators';
 
 import type { RxCollection, RxDocument } from 'rxdb';
@@ -15,17 +15,19 @@ export interface QueryParams {
 	sortBy?: string;
 	sortDirection?: SortDirection;
 	selector?: import('rxdb').MangoQuery['selector'];
-	limit?: number;
-	skip?: number;
+	// limit?: number; // we're doing our own pagination
+	// skip?: number;
+}
+
+export interface QueryHooks {
+	preQueryParams?: (params: QueryParams) => QueryParams;
+	postQueryResult?: (result: any, params: QueryParams) => any;
 }
 
 export interface QueryConfig<T> {
 	collection: T;
 	initialParams?: QueryParams;
-	hooks?: {
-		preQueryParams?: (params: QueryParams) => QueryParams;
-		postQueryResult?: (result: any, params: QueryParams) => any;
-	};
+	hooks?: QueryHooks;
 }
 
 type WhereClause = { field: string; value: any };
@@ -46,6 +48,7 @@ export class Query<T extends RxCollection> {
 	public readonly subjects = {
 		params: new BehaviorSubject<QueryParams | undefined>(undefined),
 		result: new BehaviorSubject<DocumentType<T>[]>([]),
+		error: new Subject<Error>(),
 	};
 
 	/**
@@ -53,6 +56,7 @@ export class Query<T extends RxCollection> {
 	 */
 	readonly params$: Observable<QueryParams | undefined> = this.subjects.params.asObservable();
 	readonly result$: Observable<DocumentType<T>[]> = this.subjects.result.asObservable();
+	readonly error$: Observable<Error> = this.subjects.error.asObservable();
 
 	/**
 	 *
@@ -200,6 +204,7 @@ export class Query<T extends RxCollection> {
 		// Complete subjects
 		this.subjects.params.complete();
 		this.subjects.result.complete();
+		this.subjects.error.complete();
 	}
 }
 
