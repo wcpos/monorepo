@@ -61,7 +61,7 @@ export class Query<T extends RxCollection> {
 	/**
 	 *
 	 */
-	constructor({ collection, initialParams, hooks }: QueryConfig<T>) {
+	constructor({ collection, initialParams = {}, hooks }: QueryConfig<T>) {
 		this.collection = collection;
 		this.subjects.params.next(initialParams);
 		this.hooks = hooks || {};

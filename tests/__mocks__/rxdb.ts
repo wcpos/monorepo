@@ -1,3 +1,5 @@
+import { of } from 'rxjs';
+
 export class MockRxDocument {
 	constructor(public data: any) {}
 
@@ -12,8 +14,12 @@ export class MockRxDocument {
 
 export class MockRxCollection {
 	private documents = new Map();
+	private mockLocalData = {};
+	public name: string;
 
-	constructor(config) {}
+	constructor(config) {
+		this.name = config.name;
+	}
 
 	insert(docData: any) {
 		const doc = new MockRxDocument(docData);
@@ -22,11 +28,21 @@ export class MockRxCollection {
 	}
 
 	find() {
-		// Return a mock query interface
+		return {
+			$: of(Array.from(this.documents.values())),
+		};
 	}
 
 	findOne(id: string) {
 		return Promise.resolve(this.documents.get(id));
+	}
+
+	getLocal$(id: string) {
+		return of(this.mockLocalData[id]);
+	}
+
+	setMockLocalData(id: string, data: any) {
+		this.mockLocalData[id] = data;
 	}
 }
 
@@ -37,7 +53,6 @@ export class MockRxDatabase {
 		Object.keys(collectionsConfig).forEach((collectionName) => {
 			this.collections[collectionName] = new MockRxCollection(collectionsConfig[collectionName]);
 		});
-		console.log(this.collections);
 
 		// add getter for collection key
 		Object.keys(collectionsConfig).forEach((collectionName) => {

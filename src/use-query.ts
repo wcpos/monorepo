@@ -7,7 +7,7 @@ import type { QueryParams, QueryHooks } from './query-state';
 interface QueryOptions {
 	queryKey: (string | number | object)[];
 	collectionName: string;
-	initialParams: QueryParams;
+	initialParams?: QueryParams;
 	hooks?: QueryHooks;
 	locale?: string;
 }

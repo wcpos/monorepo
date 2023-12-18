@@ -1,13 +1,22 @@
 import { Observable, Subject, Subscription } from 'rxjs';
 
+import { CollectionReplicationState } from './collection-replication-state';
+import { QueryReplicationState } from './query-replication-state';
 import { Query } from './query-state';
 
 import type { QueryParams, QueryHooks } from './query-state';
-import type { RxDatabase } from 'rxdb';
+import type { RxDatabase, RxCollection } from 'rxdb';
 
-export class Manager<T extends RxDatabase> {
-	private queries: Map<string, Query<any>> = new Map();
+export class Manager<TDatabase extends RxDatabase> {
 	private isCanceled = false;
+
+	/**
+	 * Registry of all query and replication states
+	 */
+	private queries: Map<string, Query<RxCollection>> = new Map();
+	private collectionReplicationStates: Map<string, CollectionReplicationState<RxCollection>> =
+		new Map();
+	private queryReplicationStates: Map<string, QueryReplicationState> = new Map();
 
 	/**
 	 *
@@ -23,7 +32,7 @@ export class Manager<T extends RxDatabase> {
 	readonly error$: Observable<Error> = this.subjects.error.asObservable();
 
 	constructor(
-		private localDB: T,
+		private localDB: TDatabase,
 		private httpClient
 	) {}
 
@@ -49,7 +58,7 @@ export class Manager<T extends RxDatabase> {
 	}: {
 		queryKey: (string | number | object)[];
 		collectionName: string;
-		initialParams: QueryParams;
+		initialParams?: QueryParams;
 		hooks?: QueryHooks;
 		locale?: string;
 	}) {
@@ -57,7 +66,9 @@ export class Manager<T extends RxDatabase> {
 		if (key && !this.queries.has(key)) {
 			const collection = this.getCollection(collectionName);
 			if (collection) {
-				const query = new Query({ collection, initialParams, hooks });
+				const query = new Query<typeof collection>({ collection, initialParams, hooks });
+				const collectionReplication = this.registerCollectionReplication(collectionName);
+
 				/**
 				 * Subscribe to query errors and pipe them to the error subject
 				 */
@@ -66,6 +77,7 @@ export class Manager<T extends RxDatabase> {
 						this.subjects.error.next(error);
 					})
 				);
+
 				this.queries.set(key, query);
 			}
 		}
@@ -79,7 +91,7 @@ export class Manager<T extends RxDatabase> {
 		return this.localDB[collectionName];
 	}
 
-	getQuery<T>(queryKey: (string | number | object)[]): Query<T> | undefined {
+	getQuery(queryKey: (string | number | object)[]) {
 		const key = this.serializeQueryKey(queryKey);
 		const query = this.queries.get(key);
 
@@ -98,6 +110,33 @@ export class Manager<T extends RxDatabase> {
 			query.cancel();
 			this.queries.delete(key);
 		}
+	}
+
+	/**
+	 * There is one collection replication state per collection
+	 */
+	registerCollectionReplication(collectionName: string) {
+		if (!this.collectionReplicationStates.has(collectionName)) {
+			const collection = this.getCollection(collectionName);
+
+			const collectionReplication = new CollectionReplicationState({
+				httpClient: this.httpClient,
+				collection,
+			});
+
+			/**
+			 * Subscribe to query errors and pipe them to the error subject
+			 */
+			this.subs.push(
+				collectionReplication.error$.subscribe((error) => {
+					this.subjects.error.next(error);
+				})
+			);
+
+			this.collectionReplicationStates.set(collectionName, collectionReplication);
+		}
+
+		return this.collectionReplicationStates.get(collectionName);
 	}
 
 	/**
