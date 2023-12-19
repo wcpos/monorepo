@@ -2,7 +2,6 @@ import * as React from 'react';
 import { useWindowDimensions } from 'react-native';
 
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import { useNavigation } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
@@ -10,14 +9,15 @@ import { useTheme } from 'styled-components/native';
 import Icon from '@wcpos/components/src/icon';
 import Portal from '@wcpos/components/src/portal';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
+import { QueryProvider } from '@wcpos/query';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
-import { StoreStateManagerProvider } from './contexts/store-state-manager';
 import { UISettingsProvider } from './contexts/ui-settings';
 import CustomersNavigator from './customers';
 import Help from './help';
 import useKeyboardShortcuts from './hooks/use-keyboard-shortcuts';
+import { useRestHttpClient } from './hooks/use-rest-http-client';
 import Login from './login';
 import OrdersNavigator from './orders';
 import POSNavigator from './pos';
@@ -202,9 +202,11 @@ const TaxRatesScreen = () => {
 const MainNavigator = () => {
 	const { site } = useAppState();
 	const wpAPIURL = useObservableState(site.wp_api_url$, site.wp_api_url);
+	const { storeDB } = useAppState();
+	const http = useRestHttpClient();
 
 	return (
-		<StoreStateManagerProvider>
+		<QueryProvider localDB={storeDB} http={http}>
 			<UISettingsProvider>
 				<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 					{/** NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
@@ -222,7 +224,7 @@ const MainNavigator = () => {
 					</Portal.Provider>
 				</OnlineStatusProvider>
 			</UISettingsProvider>
-		</StoreStateManagerProvider>
+		</QueryProvider>
 	);
 };
 

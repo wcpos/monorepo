@@ -20,8 +20,8 @@ const TaxBasedOn = ({ taxBasedOn }) => {
 	const { taxQuery } = useTaxHelpers();
 	const rates = useObservableSuspense(taxQuery.resource);
 	const { country, state, city, postcode } = useObservableState(
-		taxQuery.state$.pipe(map((state) => get(state, ['search'], {}))),
-		get(taxQuery, ['currentState', 'search'], {})
+		taxQuery.params$.pipe(map((params) => get(params, ['search'], {}))),
+		get(taxQuery.getParams(), ['search'], {})
 	);
 	const t = useT();
 

@@ -5,6 +5,7 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
@@ -16,7 +17,6 @@ import TaxBasedOn from '../components/product/tax-based-on';
 import UISettings from '../components/ui-settings';
 import { useTaxHelpers } from '../contexts/tax-helpers';
 import useUI from '../contexts/ui-settings';
-import { useQuery } from '../hooks/use-query';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -41,7 +41,7 @@ const Products = () => {
 	const productQuery = useQuery({
 		queryKeys: ['products', { target: 'page' }],
 		collectionName: 'products',
-		initialQuery: {
+		initialParams: {
 			sortBy: uiSettings.get('sortBy'),
 			sortDirection: uiSettings.get('sortDirection'),
 		},

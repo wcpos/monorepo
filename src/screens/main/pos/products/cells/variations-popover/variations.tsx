@@ -41,8 +41,8 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	const { setPrimaryAction } = usePopover();
 	const variations = useObservableSuspense(query.resource);
 	const selectedAttributes = useObservableState(
-		query.state$.pipe(map((q) => get(q, ['search', 'attributes'], []))),
-		get(query, ['currentState', 'search', 'attributes'], [])
+		query.params$.pipe(map((params) => get(params, ['search', 'attributes'], []))),
+		get(query.getParams(), ['search', 'attributes'], [])
 	);
 	const selectedVariation = variations.length === 1 && variations[0];
 	const { format } = useCurrencyFormat();

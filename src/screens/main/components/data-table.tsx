@@ -10,14 +10,13 @@ import Loader from '@wcpos/components/src/loader';
 import Suspense from '@wcpos/components/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
+import type { Query } from '@wcpos/query';
 
 import EmptyTableRow from './empty-table-row';
 import SyncButton from './sync-button';
 import TextCell from './text-cell';
 import { useT } from '../../../contexts/translations';
 import useTotalCount from '../hooks/use-total-count';
-
-import type { Query } from '../contexts/store-state-manager';
 
 type UISettingsColumn = import('../contexts/ui-settings').UISettingsColumn;
 
@@ -65,6 +64,16 @@ const DataTableFooter = ({ query, children }) => {
 };
 
 /**
+ * Loading row should be separate from the table component to check loading state from the DataTable
+ */
+const LoadingRow = ({ query }) => {
+	// const loading = useObservableState(query.replicationState.active$, false);
+	const loading = false;
+
+	return <Table.LoadingRow loading={loading} />;
+};
+
+/**
  *
  */
 const DataTable = <DocumentType,>({
@@ -82,8 +91,7 @@ const DataTable = <DocumentType,>({
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
-	const { sortBy, sortDirection } = useObservableState(query.state$, query.currentState);
-	const loading = useObservableState(query.replicationState.active$, false);
+	const { sortBy, sortDirection } = useObservableState(query.params$, query.getParams());
 
 	/**
 	 *
@@ -136,7 +144,7 @@ const DataTable = <DocumentType,>({
 			onEndReached={() => query.nextPage()}
 			onEndReachedThreshold={1}
 			footer={<DataTableFooter query={query} children={footer} />}
-			ListFooterComponent={<Table.LoadingRow loading={loading} />}
+			ListFooterComponent={<LoadingRow query={query} />}
 		/>
 	);
 };

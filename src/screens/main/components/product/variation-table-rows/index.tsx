@@ -3,10 +3,10 @@ import * as React from 'react';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import VariationsFilterBar from './filter-bar';
 import Table from './table';
-import { useQuery } from '../../../hooks/use-query';
 
 /**
  *
@@ -18,7 +18,7 @@ const Variations = ({ parent, initialSearch }) => {
 	const query = useQuery({
 		queryKeys: ['variations', { parentID: parent.id }],
 		collectionName: 'variations',
-		initialQuery: {
+		initialParams: {
 			selector: { id: { $in: parent.variations } },
 			// search: { attributes: [initialSearch] },
 		},

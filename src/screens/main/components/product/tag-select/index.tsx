@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 import Popover from '@wcpos/components/src/popover';
+import { useQuery } from '@wcpos/query';
 
 import Menu from './menu';
 import SearchInput from './search-input';
-import { useQuery } from '../../../hooks/use-query';
 /**
  *
  */
@@ -17,7 +17,7 @@ const TagSelectSearch = ({ onBlur, onSelect }) => {
 	const query = useQuery({
 		queryKeys: ['products/tags'],
 		collectionName: 'products/tags',
-		initialQuery: {
+		initialParams: {
 			sortBy: 'name',
 			sortDirection: 'asc',
 		},

@@ -1,7 +1,7 @@
 import Suspense from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import Menu from './menu';
-import { useQuery } from '../../../hooks/use-query';
 
 /**
  * I need to kick off the query here
@@ -13,7 +13,7 @@ const TagsQueryWrapper = (props) => {
 	const query = useQuery({
 		queryKeys: ['products/tags'],
 		collectionName: 'products/tags',
-		initialQuery: {
+		initialParams: {
 			sortBy: 'name',
 			sortDirection: 'asc',
 		},

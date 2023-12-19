@@ -5,11 +5,11 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
 import Suspense from '@wcpos/components/src/suspense';
 import Tabs from '@wcpos/components/src/tabs';
+import { useQuery } from '@wcpos/query';
 
 import Cart from './cart';
 import EmptyCart from './empty-cart';
 import OpenOrderTabs from './tabs';
-import { useQuery } from '../../hooks/use-query';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const OpenOrders = ({ isColumn = false }) => {
@@ -21,7 +21,7 @@ const OpenOrders = ({ isColumn = false }) => {
 	const query = useQuery({
 		queryKeys: ['orders', { status: 'pos-open' }],
 		collectionName: 'orders',
-		initialQuery: {
+		initialParams: {
 			sortBy: 'date_created_gmt',
 			sortDirection: 'desc',
 			selector: { status: 'pos-open' },

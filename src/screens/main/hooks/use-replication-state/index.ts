@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
+import { useQueryManager } from '@wcpos/query';
+
 import * as categories from './hooks/categories';
 import * as customers from './hooks/customers';
 import * as orders from './hooks/orders';
@@ -9,7 +11,6 @@ import * as products from './hooks/products';
 import * as tags from './hooks/tags';
 import * as taxes from './hooks/tax-rates';
 import * as variations from './hooks/variations';
-import { useStoreStateManager } from '../../contexts/store-state-manager';
 import { useCollection, CollectionKey } from '../use-collection';
 import { useRestHttpClient } from '../use-rest-http-client';
 
@@ -32,7 +33,7 @@ interface Props {
  *
  */
 export const useReplicationState = <T>({ collectionName, endpoint }: Props) => {
-	const manager = useStoreStateManager();
+	const manager = useQueryManager();
 	const { collection } = useCollection(collectionName);
 	const ep = endpoint || collectionName;
 	const http = useRestHttpClient(ep);

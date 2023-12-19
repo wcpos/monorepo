@@ -9,6 +9,7 @@ import { switchMap, distinctUntilChanged, tap } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
@@ -18,7 +19,6 @@ import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { TaxHelpersProvider } from '../contexts/tax-helpers';
 import { useCollection } from '../hooks/use-collection';
-import { useQuery } from '../hooks/use-query';
 import Receipt from '../receipt';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -67,7 +67,7 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 	const openOrdersQuery = useQuery({
 		queryKeys: ['orders', { status: 'pos-open' }],
 		collectionName: 'orders',
-		initialQuery: {
+		initialParams: {
 			selector: { status: 'pos-open' },
 			sortBy: 'date_created_gmt',
 			sortDirection: 'asc',

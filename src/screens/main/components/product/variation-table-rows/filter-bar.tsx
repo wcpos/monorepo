@@ -7,22 +7,22 @@ import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
+import { useQueryManager } from '@wcpos/query';
 
 import AttributePill from './attribute-pill';
 import { useVariationTable } from './context';
-import { useStoreStateManager } from '../../../contexts/store-state-manager';
 
 /**
  *
  */
 const VariationsFilterBar = ({ parent }) => {
 	const theme = useTheme();
-	const manager = useStoreStateManager();
+	const manager = useQueryManager();
 	const query = manager.getQuery(['variations', { parentID: parent.id }]);
 	const { setExpanded } = useVariationTable();
 	const selectedAttributes = useObservableState(
-		query.state$.pipe(map((q) => get(q, ['search', 'attributes'], []))),
-		get(query, ['currentState', 'search', 'attributes'], [])
+		query.params$.pipe(map((params) => get(params, ['search', 'attributes'], []))),
+		get(query.getParams(), ['search', 'attributes'], [])
 	);
 
 	/**

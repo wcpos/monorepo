@@ -4,9 +4,7 @@ import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
-
-import { useStoreStateManager } from '../../contexts/store-state-manager';
-import { useOrders } from '../../contexts/orders';
+import { useQueryManager } from '@wcpos/query';
 
 type Props = {
 	item: import('@wcpos/database').OrderDocument;
@@ -58,7 +56,7 @@ const Status = ({ item: order }: Props) => {
 	const status = useObservableState(order.status$, order.status);
 	const iconName = get(iconMap, [status, 'name'], 'circleQuestion');
 	const iconType = get(iconMap, [status, 'type'], 'disabled');
-	const manager = useStoreStateManager();
+	const manager = useQueryManager();
 	const query = manager.getQuery(['orders']);
 
 	/**

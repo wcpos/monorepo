@@ -5,6 +5,7 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import Actions from './cells/actions';
 import Address from './cells/address';
@@ -20,7 +21,6 @@ import DataTable from '../components/data-table';
 import { Date } from '../components/date';
 import UiSettings from '../components/ui-settings';
 import useUI from '../contexts/ui-settings';
-import { useQuery } from '../hooks/use-query';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -52,7 +52,7 @@ const Orders = () => {
 	const query = useQuery({
 		queryKeys: ['orders'],
 		collectionName: 'orders',
-		initialQuery: {
+		initialParams: {
 			sortBy: uiSettings.get('sortBy'),
 			sortDirection: uiSettings.get('sortDirection'),
 		},

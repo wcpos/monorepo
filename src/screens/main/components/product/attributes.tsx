@@ -5,10 +5,10 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Link from '@wcpos/components/src/link';
 import Text from '@wcpos/components/src/text';
+import { useQueryManager } from '@wcpos/query';
 
 import { useVariationTable } from './variation-table-rows/context';
 import { useT } from '../../../../contexts/translations';
-import { useStoreStateManager } from '../../contexts/store-state-manager';
 
 type Props = {
 	product: import('@wcpos/database').ProductDocument;
@@ -42,7 +42,7 @@ export const PlainAttributes = ({ product }: Props) => {
 const ProductAttributes = ({ product }: Props) => {
 	const attributes = useObservableState(product.attributes$, product.attributes);
 	const { expanded, setExpanded } = useVariationTable();
-	const manager = useStoreStateManager();
+	const manager = useQueryManager();
 	const t = useT();
 
 	/**

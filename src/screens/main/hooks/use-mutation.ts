@@ -3,12 +3,12 @@ import * as React from 'react';
 import { isRxDocument, RxDocument, RxCollection } from 'rxdb';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
+import { useQueryManager } from '@wcpos/query';
 import log from '@wcpos/utils/src/logger';
 
 import { useCollection, CollectionKey } from './use-collection';
 import { useReplicationState } from './use-replication-state';
 import { useT } from '../../../contexts/translations';
-import { useStoreStateManager } from '../contexts/store-state-manager';
 
 interface Props {
 	collectionName: CollectionKey;
@@ -20,7 +20,7 @@ interface Props {
  *
  */
 export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
-	const manager = useStoreStateManager();
+	const manager = useQueryManager();
 	const addSnackbar = useSnackbar();
 	const t = useT();
 	const { collection, collectionLabel } = useCollection(collectionName);

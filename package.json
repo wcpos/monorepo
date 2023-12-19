@@ -30,6 +30,7 @@
     "@wcpos/components": "*",
     "@wcpos/database": "*",
     "@wcpos/hooks": "*",
+    "@wcpos/query": "*",
     "@wcpos/react-native-jsonschema-form": "*",
     "@wcpos/themes": "*",
     "@wcpos/utils": "*",

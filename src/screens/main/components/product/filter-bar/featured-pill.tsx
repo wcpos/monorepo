@@ -13,8 +13,8 @@ import { useT } from '../../../../../contexts/translations';
  */
 const FeaturedPill = ({ query }) => {
 	const isActive = useObservableState(
-		query.state$.pipe(map((state) => get(state, ['selector', 'featured']))),
-		get(query, ['currentState', 'selector', 'featured'])
+		query.params$.pipe(map((params) => get(params, ['selector', 'featured']))),
+		get(query.getParams(), ['selector', 'featured'])
 	);
 	const t = useT();
 
