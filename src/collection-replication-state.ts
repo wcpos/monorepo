@@ -21,6 +21,7 @@ interface CollectionReplicationConfig<T extends RxCollection> {
 	collection: T;
 	httpClient: any;
 	hooks?: any;
+	endpoint: string;
 }
 
 export class CollectionReplicationState<T extends RxCollection> {
@@ -60,11 +61,11 @@ export class CollectionReplicationState<T extends RxCollection> {
 	/**
 	 *
 	 */
-	constructor({ collection, httpClient, hooks }: CollectionReplicationConfig<T>) {
+	constructor({ collection, httpClient, hooks, endpoint }: CollectionReplicationConfig<T>) {
 		this.collection = collection;
 		this.httpClient = httpClient;
 		this.hooks = hooks || {};
-		this.endpoint = this.getEndpoint();
+		this.endpoint = endpoint;
 
 		/**
 		 * Subscribe to the remoteIDs local document
@@ -127,17 +128,6 @@ export class CollectionReplicationState<T extends RxCollection> {
 		await this.auditIDs();
 		// await this.syncLastModified();
 		// await this.syncRemoteIDs();
-	}
-
-	/**
-	 * Allow the user to override the endpoint, eg: variations collection will have
-	 * /products/<parent_id>/variations endpoint
-	 */
-	getEndpoint(): string {
-		if (this.hooks.preEndpoint) {
-			return this.hooks.preEndpoint(this.collection);
-		}
-		return this.collection.name;
 	}
 
 	/**

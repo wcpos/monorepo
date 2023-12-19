@@ -51,7 +51,10 @@ export class MockRxDatabase {
 
 	addCollections(collectionsConfig: { [key: string]: any }) {
 		Object.keys(collectionsConfig).forEach((collectionName) => {
-			this.collections[collectionName] = new MockRxCollection(collectionsConfig[collectionName]);
+			this.collections[collectionName] = new MockRxCollection({
+				name: collectionName,
+				...collectionsConfig[collectionName],
+			});
 		});
 
 		// add getter for collection key

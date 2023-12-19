@@ -7,32 +7,32 @@ import type { RxCollection } from 'rxdb';
 describe('CollectionReplicationState', () => {
 	beforeEach(() => {});
 
-	it('should return the default endpoint', () => {
-		const mockCollection = new MockRxCollection({ name: 'testCollection' });
-		const replicationState = new CollectionReplicationState({
-			collection: mockCollection,
-			httpClient: {},
-		});
+	// it('should return the default endpoint', () => {
+	// 	const mockCollection = new MockRxCollection({ name: 'testCollection' });
+	// 	const replicationState = new CollectionReplicationState({
+	// 		collection: mockCollection,
+	// 		httpClient: {},
+	// 	});
 
-		expect(replicationState.getEndpoint()).toBe('testCollection');
-		expect(replicationState.endpoint).toBe('testCollection');
-	});
+	// 	expect(replicationState.getEndpoint()).toBe('testCollection');
+	// 	expect(replicationState.endpoint).toBe('testCollection');
+	// });
 
-	it('should return a custom endpoint from preEndpoint hook', () => {
-		const mockCollection = new MockRxCollection({ name: 'testCollection' });
-		const customEndpoint = 'customEndpoint';
-		const hooks = {
-			preEndpoint: jest.fn().mockReturnValue(customEndpoint),
-		};
-		const replicationState = new CollectionReplicationState({
-			collection: mockCollection,
-			httpClient: {},
-			hooks,
-		});
+	// it('should return a custom endpoint from preEndpoint hook', () => {
+	// 	const mockCollection = new MockRxCollection({ name: 'testCollection' });
+	// 	const customEndpoint = 'customEndpoint';
+	// 	const hooks = {
+	// 		preEndpoint: jest.fn().mockReturnValue(customEndpoint),
+	// 	};
+	// 	const replicationState = new CollectionReplicationState({
+	// 		collection: mockCollection,
+	// 		httpClient: {},
+	// 		hooks,
+	// 	});
 
-		expect(replicationState.getEndpoint()).toBe(customEndpoint);
-		expect(hooks.preEndpoint).toHaveBeenCalledWith(mockCollection);
-	});
+	// 	expect(replicationState.getEndpoint()).toBe(customEndpoint);
+	// 	expect(hooks.preEndpoint).toHaveBeenCalledWith(mockCollection);
+	// });
 
 	describe('fetchRemoteIDs', () => {
 		it('fetches remote IDs successfully', async () => {

@@ -11,12 +11,21 @@ export class Manager<TDatabase extends RxDatabase> {
 	private isCanceled = false;
 
 	/**
-	 * Registry of all query and replication states
+	 * Registry of all RxDB queries, indexed by query key
 	 */
-	private queries: Map<string, Query<RxCollection>> = new Map();
+	public queries: Map<string, Query<RxCollection>> = new Map();
+
+	/**
+	 * Registry of all replication states, indexed by endpoint
+	 * - for most collections collection.name = endpoint
+	 * - special case for product variations, where:
+	 * -- endpoint = 'products/<parent_id>/variations' and
+	 * -- endpoint = 'products/variations' (for all variation queries, ie: barcode)
+	 */
 	private collectionReplicationStates: Map<string, CollectionReplicationState<RxCollection>> =
 		new Map();
-	private queryReplicationStates: Map<string, QueryReplicationState> = new Map();
+	private queryReplicationStates: Map<string, Map<string, QueryReplicationState<RxCollection>>> =
+		new Map();
 
 	/**
 	 *
@@ -53,7 +62,7 @@ export class Manager<TDatabase extends RxDatabase> {
 		queryKey,
 		collectionName,
 		initialParams,
-		hooks,
+		hooks = {},
 		locale,
 	}: {
 		queryKey: (string | number | object)[];
@@ -67,7 +76,24 @@ export class Manager<TDatabase extends RxDatabase> {
 			const collection = this.getCollection(collectionName);
 			if (collection) {
 				const query = new Query<typeof collection>({ collection, initialParams, hooks });
-				const collectionReplication = this.registerCollectionReplication(collectionName);
+				const endpoint = this.getEndpoint(collection, hooks);
+				const collectionReplication = this.registerCollectionReplication({ collection, endpoint });
+
+				/**
+				 * Subscribe to query params and register a new replication state for the query
+				 * - also cancel the previous query replication
+				 */
+				this.subs.push(
+					query.params$.subscribe((params) => {
+						const apiQueryParams = this.getApiQueryParams(params);
+						this.registerQueryReplication(
+							apiQueryParams,
+							collectionReplication,
+							collection,
+							endpoint
+						);
+					})
+				);
 
 				/**
 				 * Subscribe to query errors and pipe them to the error subject
@@ -113,15 +139,25 @@ export class Manager<TDatabase extends RxDatabase> {
 	}
 
 	/**
-	 * There is one collection replication state per collection
+	 * Allow the user to override the endpoint, eg: variations collection will have
+	 * /products/<parent_id>/variations endpoint
 	 */
-	registerCollectionReplication(collectionName: string) {
-		if (!this.collectionReplicationStates.has(collectionName)) {
-			const collection = this.getCollection(collectionName);
+	getEndpoint(collection, hooks): string {
+		if (hooks.preEndpoint) {
+			return hooks.preEndpoint(collection);
+		}
+		return collection.name;
+	}
 
+	/**
+	 * There is one replication state per collection
+	 */
+	registerCollectionReplication({ collection, endpoint }) {
+		if (!this.collectionReplicationStates.has(endpoint)) {
 			const collectionReplication = new CollectionReplicationState({
 				httpClient: this.httpClient,
 				collection,
+				endpoint,
 			});
 
 			/**
@@ -133,10 +169,72 @@ export class Manager<TDatabase extends RxDatabase> {
 				})
 			);
 
-			this.collectionReplicationStates.set(collectionName, collectionReplication);
+			this.collectionReplicationStates.set(endpoint, collectionReplication);
 		}
 
-		return this.collectionReplicationStates.get(collectionName);
+		return this.collectionReplicationStates.get(endpoint);
+	}
+
+	/**
+	 * There is one replication state per unique query
+	 */
+	registerQueryReplication(apiQueryParams, collectionReplication, collection, endpoint) {
+		if (!this.queryReplicationStates.has(endpoint)) {
+			this.queryReplicationStates.set(endpoint, new Map());
+		}
+		const queryStates = this.queryReplicationStates.get(endpoint);
+		const apiQueryKey = this.serializeQueryKey(apiQueryParams);
+
+		// pause all other queries
+		queryStates.forEach((state) => {
+			state.pause();
+		});
+
+		// if there is no query state for this query, create one
+		let queryState = queryStates.get(apiQueryKey);
+		if (!queryState) {
+			queryState = new QueryReplicationState({
+				httpClient: this.httpClient,
+				apiQueryParams,
+				collectionReplication,
+				collection,
+				endpoint,
+			});
+
+			/**
+			 * Subscribe to query errors and pipe them to the error subject
+			 */
+			this.subs.push(
+				queryState.error$.subscribe((error) => {
+					this.subjects.error.next(error);
+				})
+			);
+
+			queryStates.set(apiQueryKey, queryState);
+		}
+
+		// start the query
+		queryState.start();
+	}
+
+	/**
+	 * Get the query params that are used for the API
+	 * - NOTE: the api query params have a different format than the query params
+	 * - allow hooks to modify the query params
+	 */
+	getApiQueryParams(params: QueryParams) {
+		params = params || {};
+
+		Object.assign(params, {
+			uuid: undefined, // remove all uuid params?
+			per_page: 10,
+		});
+
+		if (this.hooks?.filterApiQueryParams) {
+			params = this.hooks.filterApiQueryParams(params);
+		}
+
+		return params;
 	}
 
 	/**
