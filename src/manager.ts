@@ -59,19 +59,19 @@ export class Manager<TDatabase extends RxDatabase> {
 	}
 
 	registerQuery({
-		queryKey,
+		queryKeys,
 		collectionName,
 		initialParams,
 		hooks = {},
 		locale,
 	}: {
-		queryKey: (string | number | object)[];
+		queryKeys: (string | number | object)[];
 		collectionName: string;
 		initialParams?: QueryParams;
 		hooks?: QueryHooks;
 		locale?: string;
 	}) {
-		const key = this.serializeQueryKey(queryKey);
+		const key = this.serializeQueryKey(queryKeys);
 		if (key && !this.queries.has(key)) {
 			const collection = this.getCollection(collectionName);
 			if (collection) {
@@ -107,7 +107,7 @@ export class Manager<TDatabase extends RxDatabase> {
 				this.queries.set(key, query);
 			}
 		}
-		return this.getQuery(queryKey);
+		return this.getQuery(queryKeys);
 	}
 
 	getCollection(collectionName: string) {
@@ -117,8 +117,8 @@ export class Manager<TDatabase extends RxDatabase> {
 		return this.localDB[collectionName];
 	}
 
-	getQuery(queryKey: (string | number | object)[]) {
-		const key = this.serializeQueryKey(queryKey);
+	getQuery(queryKeys: (string | number | object)[]) {
+		const key = this.serializeQueryKey(queryKeys);
 		const query = this.queries.get(key);
 
 		if (!query) {
@@ -128,8 +128,8 @@ export class Manager<TDatabase extends RxDatabase> {
 		return query;
 	}
 
-	deregisterQuery(queryKey: (string | number | object)[]): void {
-		const key = this.serializeQueryKey(queryKey);
+	deregisterQuery(queryKeys: (string | number | object)[]): void {
+		const key = this.serializeQueryKey(queryKeys);
 		// cancel the query
 		const query = this.queries.get(key);
 		if (query) {

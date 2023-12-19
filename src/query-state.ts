@@ -1,5 +1,6 @@
 import { orderBy } from '@shelf/fast-natural-order-by';
 import isEqual from 'lodash/isEqual';
+import { ObservableResource } from 'observable-hooks';
 import { BehaviorSubject, Observable, Subscription, Subject } from 'rxjs';
 import { map, switchMap, distinctUntilChanged } from 'rxjs/operators';
 
@@ -57,6 +58,8 @@ export class Query<T extends RxCollection> {
 	readonly params$: Observable<QueryParams | undefined> = this.subjects.params.asObservable();
 	readonly result$: Observable<DocumentType<T>[]> = this.subjects.result.asObservable();
 	readonly error$: Observable<Error> = this.subjects.error.asObservable();
+	readonly resource = new ObservableResource(this.result$);
+	readonly paginatedResource = new ObservableResource(this.result$);
 
 	/**
 	 *
@@ -168,6 +171,8 @@ export class Query<T extends RxCollection> {
 		return this;
 	}
 
+	search(query: string | Record<string, any> = '') {}
+
 	private updateParams(additionalParams: Partial<QueryParams> = {}): void {
 		// Construct the selector from where clauses
 		const selector = this.whereClauses.reduce((acc, clause) => {
@@ -189,6 +194,11 @@ export class Query<T extends RxCollection> {
 	getParams(): QueryParams | undefined {
 		return this.subjects.params.getValue();
 	}
+
+	/**
+	 * Pagination
+	 */
+	nextPage() {}
 
 	/**
 	 * Cancel

@@ -5,7 +5,7 @@ import { useQueryManager } from './provider';
 import type { QueryParams, QueryHooks } from './query-state';
 
 interface QueryOptions {
-	queryKey: (string | number | object)[];
+	queryKeys: (string | number | object)[];
 	collectionName: string;
 	initialParams?: QueryParams;
 	hooks?: QueryHooks;
