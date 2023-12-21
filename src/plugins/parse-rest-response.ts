@@ -62,31 +62,6 @@ export function pruneProperties(schema: ExtendedRxJsonSchema<any>, json: Record<
 /**
  *
  */
-function deepClone(obj: any) {
-	if (obj === null || typeof obj !== 'object') {
-		return obj;
-	}
-
-	if (Array.isArray(obj)) {
-		const clonedArray = [];
-		for (let i = 0; i < obj.length; i++) {
-			clonedArray[i] = deepClone(obj[i]);
-		}
-		return clonedArray;
-	}
-
-	const clonedObj: Record<string, any> = {};
-	for (const key in obj) {
-		if (obj.hasOwnProperty(key)) {
-			clonedObj[key] = deepClone(obj[key]);
-		}
-	}
-	return clonedObj;
-}
-
-/**
- *
- */
 function coercePrimitiveTypes(
 	schema: ExtendedRxJsonSchema<any>,
 	data: any,
@@ -152,7 +127,7 @@ export function coerceData(
 						schema
 					);
 				} else if (schema.properties[prop].hasOwnProperty('default')) {
-					coercedData[prop] = deepClone(schema.properties[prop].default);
+					coercedData[prop] = cloneDeep(schema.properties[prop].default);
 				}
 			}
 			return coercedData;
