@@ -1,17 +1,21 @@
+import cloneDeep from 'lodash/cloneDeep';
 import difference from 'lodash/difference';
 import isPlainObject from 'lodash/isPlainObject';
 import unset from 'lodash/unset';
 
 import log from '@wcpos/utils/src/logger';
 
-import { getMetaUUID } from './generate-id';
-
 import type { RxCollection, RxJsonSchema, RxPlugin } from 'rxdb';
+
+type ExtendedRxJsonSchema<T> = RxJsonSchema<T> & {
+	ref?: string;
+	items?: RxJsonSchema<any>;
+};
 
 /**
  *
  */
-export function pruneProperties(schema: RxJsonSchema<any>, json: Record<string, any>) {
+export function pruneProperties(schema: ExtendedRxJsonSchema<any>, json: Record<string, any>) {
 	/**
 	 * TODO - WC REST API returns _links, which is forbidden by rxdb
 	 * Not sure whether to swap _links -> links here or on the serverside PHP
@@ -58,21 +62,78 @@ export function pruneProperties(schema: RxJsonSchema<any>, json: Record<string, 
 /**
  *
  */
+function deepClone(obj: any) {
+	if (obj === null || typeof obj !== 'object') {
+		return obj;
+	}
+
+	if (Array.isArray(obj)) {
+		const clonedArray = [];
+		for (let i = 0; i < obj.length; i++) {
+			clonedArray[i] = deepClone(obj[i]);
+		}
+		return clonedArray;
+	}
+
+	const clonedObj: Record<string, any> = {};
+	for (const key in obj) {
+		if (obj.hasOwnProperty(key)) {
+			clonedObj[key] = deepClone(obj[key]);
+		}
+	}
+	return clonedObj;
+}
+
+/**
+ *
+ */
+function coercePrimitiveTypes(
+	schema: ExtendedRxJsonSchema<any>,
+	data: any,
+	collection?: RxCollection,
+	parentSchema?: ExtendedRxJsonSchema<any> | null
+): any {
+	switch (schema.type) {
+		case 'number':
+		case 'integer':
+			return Number(data);
+		case 'string':
+			/** NOTE - Special case for ref collections */
+			if (collection && parentSchema && parentSchema.ref) {
+				const refCollection = collection.database.collections[parentSchema.ref];
+				return coerceData(refCollection.schema.jsonSchema, data, refCollection);
+			}
+			if (isPlainObject(data)) {
+				return JSON.stringify(data);
+			}
+			return String(data || '');
+		case 'boolean':
+			return typeof data === 'string' ? data === 'true' : Boolean(data);
+		case 'null':
+			return null;
+		default:
+			return data;
+	}
+}
+
+/**
+ *
+ */
 export function coerceData(
-	schema: RxJsonSchema<any>,
+	schema: ExtendedRxJsonSchema<any>,
 	json: Record<string, any>,
 	collection?: RxCollection
 ) {
 	function traverse(
-		schema: RxJsonSchema<any>,
+		schema: ExtendedRxJsonSchema<any>,
 		data: Record<string, any>,
-		parentSchema: RxJsonSchema<any> | null = null
+		parentSchema: ExtendedRxJsonSchema<any> | null = null
 	): Record<string, any> {
 		/**
 		 * JSON nodes
 		 */
 		if (schema.type === 'object') {
-			const coercedData = {};
+			const coercedData: Record<string, any> = {};
 			for (const prop in schema.properties) {
 				/** Special case for rxdb internals */
 				if (prop.startsWith('_')) continue;
@@ -85,46 +146,31 @@ export function coerceData(
 				}
 
 				if ((data || {}).hasOwnProperty(prop)) {
-					coercedData[prop] = traverse(schema.properties[prop], data[prop], schema);
+					coercedData[prop] = traverse(
+						schema.properties[prop] as ExtendedRxJsonSchema<any>,
+						data[prop],
+						schema
+					);
 				} else if (schema.properties[prop].hasOwnProperty('default')) {
-					coercedData[prop] = schema.properties[prop].default;
+					coercedData[prop] = deepClone(schema.properties[prop].default);
 				}
 			}
 			return coercedData;
 		}
 		if (schema.type === 'array') {
 			const coercedData = [];
-			for (let i = 0; i < data.length; i++) {
-				coercedData.push(traverse(schema.items, data[i], schema));
+			if (Array.isArray(data)) {
+				for (let i = 0; i < data.length; i++) {
+					if (schema.items) {
+						coercedData.push(traverse(schema.items, data[i], schema));
+					}
+				}
 			}
 			return coercedData;
 		}
 
-		/**
-		 * Primitive types
-		 */
-		if (schema.type === 'number' || schema.type === 'integer') {
-			return Number(data);
-		}
-		if (schema.type === 'string') {
-			/** NOTE - Special case for ref collections */
-			if (collection && parentSchema && parentSchema.ref) {
-				const refCollection = collection.database.collections[parentSchema.ref];
-				return coerceData(refCollection.schema.jsonSchema, data, refCollection);
-			}
-			if (isPlainObject(data)) {
-				return JSON.stringify(data);
-			}
-			return String(data || '');
-		}
-		if (schema.type === 'boolean') {
-			/** TODO - perhaps shouldn't do this, effective makes default false? */
-			return typeof data === 'string' ? data === 'true' : Boolean(data);
-		}
-		if (schema.type === 'null') {
-			return null;
-		}
-		return data;
+		// Primitive types handling
+		return coercePrimitiveTypes(schema, data, collection, parentSchema);
 	}
 
 	return traverse(schema, json);

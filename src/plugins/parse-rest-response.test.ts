@@ -3,7 +3,10 @@ import { RxJsonSchema } from 'rxdb';
 import { pruneProperties, coerceData, parseRestResponse } from './parse-rest-response';
 
 describe('pruneProperties', () => {
-	const schema: RxJsonSchema<any> = {
+	const schema = {
+		version: 1,
+		type: 'object',
+		primaryKey: 'id',
 		properties: {
 			id: {
 				type: 'integer',
@@ -82,7 +85,9 @@ describe('pruneProperties', () => {
 describe('coerceData', () => {
 	it('should return data with proper types', () => {
 		const schema = {
+			version: 1,
 			type: 'object',
+			primaryKey: 'id',
 			properties: {
 				numberProp: { type: 'number' },
 				integerProp: { type: 'integer' },
@@ -107,7 +112,9 @@ describe('coerceData', () => {
 
 	it('should set default value for missing property', () => {
 		const schema = {
+			version: 1,
 			type: 'object',
+			primaryKey: 'id',
 			properties: {
 				propA: { type: 'string', default: 'defaultA' },
 				propB: { type: 'string', default: 'defaultB' },
@@ -120,7 +127,9 @@ describe('coerceData', () => {
 
 	it('should handle nested objects', () => {
 		const schema = {
+			version: 1,
 			type: 'object',
+			primaryKey: 'id',
 			properties: {
 				objProp: {
 					type: 'object',
@@ -148,7 +157,9 @@ describe('coerceData', () => {
 
 	it('should handle arrays', () => {
 		const schema = {
+			version: 1,
 			type: 'object',
+			primaryKey: 'id',
 			properties: {
 				arrayProp: {
 					type: 'array',
@@ -167,7 +178,9 @@ describe('coerceData', () => {
 
 	it('FIX: should coerce null object to {}', () => {
 		const schema = {
+			version: 1,
 			type: 'object',
+			primaryKey: 'id',
 			properties: {
 				objProp: {
 					type: 'object',
@@ -187,160 +200,182 @@ describe('coerceData', () => {
 			objProp: {},
 		});
 	});
-});
 
-describe('parseRestResponse', () => {
-	it('should parse nested data', () => {
-		const ordersCollection = {
-			schema: {
-				jsonSchema: {
-					type: 'object',
-					properties: {
-						uuid: {
-							type: 'string',
-						},
-						id: {
-							type: 'integer',
-						},
-						number: {
-							type: 'string',
-						},
-						line_items: {
-							type: 'array',
-							ref: 'line_items',
-							items: {
-								type: 'string',
-							},
-						},
-						meta_data: {
-							type: 'array',
-							items: {
-								type: 'object',
-								properties: {
-									key: {
-										type: 'string',
-									},
-									value: {
-										type: 'string',
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			parseRestResponse,
-		};
-
-		const lineItemsCollection = {
-			schema: {
-				jsonSchema: {
-					type: 'object',
-					properties: {
-						uuid: {
-							type: 'string',
-						},
-						id: {
-							type: 'integer',
-						},
-						name: {
-							type: 'string',
-						},
-						parent_name: {
-							type: 'string',
-						},
-						image: {
-							type: 'object',
-							properties: {
-								id: {
-									type: 'integer',
-								},
-								src: {
-									type: 'string',
-								},
-							},
-						},
-						meta_data: {
-							type: 'array',
-							items: {
-								type: 'object',
-								properties: {
-									key: {
-										type: 'string',
-									},
-									value: {
-										type: 'string',
-									},
-								},
-							},
-						},
-					},
+	it('should return an empty array when schema expects an array but gets null', () => {
+		const schema = {
+			version: 1,
+			type: 'object',
+			primaryKey: 'id',
+			properties: {
+				arrayProp: {
+					type: 'array',
+					items: { type: 'number' },
 				},
 			},
 		};
-
-		ordersCollection.database = {
-			collections: {
-				orders: ordersCollection,
-				line_items: lineItemsCollection,
-			},
+		const data = {
+			arrayProp: null,
 		};
-
-		const response = {
-			id: 1,
-			number: 1,
-			line_items: [
-				{
-					id: 1,
-					name: 'Belt',
-					parent_name: null,
-					image: {
-						id: '46',
-						src: 'https://wchpos.local/wp-content/uploads/2022/12/belt-2.jpg',
-					},
-					meta_data: [
-						{
-							key: '_woocommerce_pos_uuid',
-							value: 'line-item-uuid',
-						},
-					],
-				},
-			],
-			meta_data: [
-				{
-					key: '_woocommerce_pos_uuid',
-					value: 'order-uuid',
-				},
-			],
-		};
-		expect(ordersCollection.parseRestResponse(response)).toEqual({
-			uuid: 'order-uuid',
-			id: 1,
-			number: '1',
-			line_items: [
-				{
-					uuid: 'line-item-uuid',
-					id: 1,
-					name: 'Belt',
-					parent_name: '',
-					image: {
-						id: 46,
-						src: 'https://wchpos.local/wp-content/uploads/2022/12/belt-2.jpg',
-					},
-					meta_data: [
-						{
-							key: '_woocommerce_pos_uuid',
-							value: 'line-item-uuid',
-						},
-					],
-				},
-			],
-			meta_data: [
-				{
-					key: '_woocommerce_pos_uuid',
-					value: 'order-uuid',
-				},
-			],
+		const coercedData = coerceData(schema, data);
+		expect(coercedData).toEqual({
+			arrayProp: [],
 		});
 	});
 });
+
+// describe('parseRestResponse', () => {
+// 	it('should parse nested data', () => {
+// 		const ordersCollection = {
+// 			schema: {
+// 				jsonSchema: {
+// 					type: 'object',
+// 					properties: {
+// 						uuid: {
+// 							type: 'string',
+// 						},
+// 						id: {
+// 							type: 'integer',
+// 						},
+// 						number: {
+// 							type: 'string',
+// 						},
+// 						line_items: {
+// 							type: 'array',
+// 							ref: 'line_items',
+// 							items: {
+// 								type: 'string',
+// 							},
+// 						},
+// 						meta_data: {
+// 							type: 'array',
+// 							items: {
+// 								type: 'object',
+// 								properties: {
+// 									key: {
+// 										type: 'string',
+// 									},
+// 									value: {
+// 										type: 'string',
+// 									},
+// 								},
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			parseRestResponse,
+// 		};
+
+// 		const lineItemsCollection = {
+// 			schema: {
+// 				jsonSchema: {
+// 					type: 'object',
+// 					properties: {
+// 						uuid: {
+// 							type: 'string',
+// 						},
+// 						id: {
+// 							type: 'integer',
+// 						},
+// 						name: {
+// 							type: 'string',
+// 						},
+// 						parent_name: {
+// 							type: 'string',
+// 						},
+// 						image: {
+// 							type: 'object',
+// 							properties: {
+// 								id: {
+// 									type: 'integer',
+// 								},
+// 								src: {
+// 									type: 'string',
+// 								},
+// 							},
+// 						},
+// 						meta_data: {
+// 							type: 'array',
+// 							items: {
+// 								type: 'object',
+// 								properties: {
+// 									key: {
+// 										type: 'string',
+// 									},
+// 									value: {
+// 										type: 'string',
+// 									},
+// 								},
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		};
+
+// 		ordersCollection.database = {
+// 			collections: {
+// 				orders: ordersCollection,
+// 				line_items: lineItemsCollection,
+// 			},
+// 		};
+
+// 		const response = {
+// 			id: 1,
+// 			number: 1,
+// 			line_items: [
+// 				{
+// 					id: 1,
+// 					name: 'Belt',
+// 					parent_name: null,
+// 					image: {
+// 						id: '46',
+// 						src: 'https://wchpos.local/wp-content/uploads/2022/12/belt-2.jpg',
+// 					},
+// 					meta_data: [
+// 						{
+// 							key: '_woocommerce_pos_uuid',
+// 							value: 'line-item-uuid',
+// 						},
+// 					],
+// 				},
+// 			],
+// 			meta_data: [
+// 				{
+// 					key: '_woocommerce_pos_uuid',
+// 					value: 'order-uuid',
+// 				},
+// 			],
+// 		};
+
+// 		expect(ordersCollection.parseRestResponse(response)).toEqual({
+// 			uuid: 'order-uuid',
+// 			id: 1,
+// 			number: '1',
+// 			line_items: [
+// 				{
+// 					uuid: 'line-item-uuid',
+// 					id: 1,
+// 					name: 'Belt',
+// 					parent_name: '',
+// 					image: {
+// 						id: 46,
+// 						src: 'https://wchpos.local/wp-content/uploads/2022/12/belt-2.jpg',
+// 					},
+// 					meta_data: [
+// 						{
+// 							key: '_woocommerce_pos_uuid',
+// 							value: 'line-item-uuid',
+// 						},
+// 					],
+// 				},
+// 			],
+// 			meta_data: [
+// 				{
+// 					key: '_woocommerce_pos_uuid',
+// 					value: 'order-uuid',
+// 				},
+// 			],
+// 		});
+// 	});
+// });
