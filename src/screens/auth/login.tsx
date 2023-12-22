@@ -43,10 +43,19 @@ const Login = ({ route }) => {
 				const wpCredentials = await userDB.wp_credentials.findOneFix(uuid).exec();
 
 				if (wpCredentials) {
-					await wpCredentials.patch({ jwt });
+					await wpCredentials.incrementalPatch({ jwt });
+					// check if site has this wp_credentials
+					const siteHasWPCredentials = site.wp_credentials.find((id) => id === uuid);
+					if (!siteHasWPCredentials) {
+						await site
+							.getLatest()
+							.incrementalPatch({ wp_credentials: [...site.wp_credentials, uuid] });
+					}
 				} else {
 					await userDB.wp_credentials.insert(payload);
-					await site.patch({ wp_credentials: [uuid] });
+					await site
+						.getLatest()
+						.incrementalPatch({ wp_credentials: [...site.wp_credentials, uuid] });
 				}
 			} catch (err) {
 				log.error(err);

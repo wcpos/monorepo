@@ -86,9 +86,10 @@ export const useRestHttpClient = (endpoint = '') => {
 		async (reqConfig: RequestConfig = {}) => {
 			const shouldUseJwtAsParam = get(window, ['initialProps', 'site', 'use_jwt_as_param']);
 			const version = get(initialProps, 'version', '');
+
 			// if version is 1.4 or greater, use the new api
 			let apiURL = site.wc_api_url;
-			if (semver.gt(version, '1.3.13')) {
+			if (version && semver.gt(version, '1.3.13')) {
 				apiURL = site.wcpos_api_url;
 
 				// sanity check, make sure we have a wcpos_api_url
