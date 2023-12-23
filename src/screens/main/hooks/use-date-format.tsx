@@ -6,8 +6,9 @@ import { of } from 'rxjs';
 import { switchMap, map } from 'rxjs/operators';
 
 import { useHeartbeatObservable } from '@wcpos/hooks/src/use-heartbeat';
+import { usePageVisibility } from '@wcpos/hooks/src/use-page-visibility';
 
-import { useT } from '../../../../contexts/translations';
+import { useT } from '../../../contexts/translations';
 
 /**
  *
@@ -15,6 +16,7 @@ import { useT } from '../../../../contexts/translations';
 export const useDateFormat = (gmtDate: string, format = 'MMMM D, YYYY', fromNow = true) => {
 	const t = useT();
 	const heartbeat$ = useHeartbeatObservable(60000); // every minute
+	const { visibile$ } = usePageVisibility();
 
 	/**
 	 *
@@ -59,7 +61,12 @@ export const useDateFormat = (gmtDate: string, format = 'MMMM D, YYYY', fromNow 
 					}
 
 					// If less than a day old, use a heartbeat observable
-					return heartbeat$.pipe(map(formatDate));
+					return visibile$.pipe(
+						switchMap(() => heartbeat$),
+						map(() => {
+							return formatDate();
+						})
+					);
 				})
 			),
 		[gmtDate, formatDate]

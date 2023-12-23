@@ -4,7 +4,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
-import useDateFormat from '../hooks/use-date-format';
+import { useDateFormat } from '../hooks/use-date-format';
 
 type Document =
 	| import('@wcpos/database').ProductDocument
