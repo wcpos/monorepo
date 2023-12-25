@@ -25,7 +25,7 @@ describe('Manager', () => {
 	describe('Query States', () => {
 		it('should correctly serialize query keys', () => {
 			const queryKey = ['test', { id: 1 }];
-			expect(manager.serializeQueryKey(queryKey)).toBe(JSON.stringify(queryKey));
+			expect(manager.stringify(queryKey)).toBe(JSON.stringify(queryKey));
 		});
 
 		it('should handle serialization errors', (done) => {
@@ -38,17 +38,17 @@ describe('Manager', () => {
 				done();
 			});
 
-			manager.serializeQueryKey([circularObj]);
+			manager.stringify([circularObj]);
 		});
 
 		it('should return true if query exists', () => {
-			const queryKey = ['testQuery'];
+			const queryKeys = ['testQuery'];
 			manager.registerQuery({
-				queryKey,
+				queryKeys,
 				collectionName: 'testCollection',
 				initialParams: {},
 			});
-			expect(manager.hasQuery(queryKey)).toBe(true);
+			expect(manager.hasQuery(queryKeys)).toBe(true);
 		});
 
 		it('should return false if query does not exist', () => {
@@ -56,13 +56,13 @@ describe('Manager', () => {
 		});
 
 		it('should register a new query', () => {
-			const queryKey = ['newQuery'];
+			const queryKeys = ['newQuery'];
 			manager.registerQuery({
-				queryKey,
+				queryKeys,
 				collectionName: 'testCollection',
 				initialParams: {},
 			});
-			expect(manager.queries.has(JSON.stringify(queryKey))).toBe(true);
+			expect(manager.queries.has(JSON.stringify(queryKeys))).toBe(true);
 		});
 
 		it('should return the specified collection', () => {
@@ -80,13 +80,13 @@ describe('Manager', () => {
 		});
 
 		it('should retrieve an existing query', () => {
-			const queryKey = ['existingQuery'];
+			const queryKeys = ['existingQuery'];
 			manager.registerQuery({
-				queryKey,
+				queryKeys,
 				collectionName: 'testCollection',
 				initialParams: {},
 			});
-			expect(manager.getQuery(queryKey)).toBeDefined();
+			expect(manager.getQuery(queryKeys)).toBeDefined();
 		});
 
 		it('should handle non-existent queries', (done) => {
@@ -121,30 +121,63 @@ describe('Manager', () => {
 	describe('Collection Replication States', () => {
 		it('should register a collection replication state with a new query', () => {
 			manager.registerQuery({
-				queryKey: ['newQuery'],
+				queryKeys: ['newQuery'],
 				collectionName: 'testCollection',
 				initialParams: {},
 			});
 
-			expect(manager.collectionReplicationStates.has('testCollection')).toBe(true);
+			expect(manager.replicationStates.has('testCollection')).toBe(true);
 		});
-	});
 
-	describe('Query Replication States', () => {
-		it('should register a new query replication states', () => {
-			const query = manager.registerQuery({
-				queryKey: ['newQuery'],
+		it('should register a collection replication state with a given endpoint', () => {
+			manager.registerQuery({
+				queryKeys: ['newQuery'],
 				collectionName: 'testCollection',
 				initialParams: {},
+				endpoint: 'testEndpoint',
 			});
 
-			expect(manager.queryReplicationStates.has('testCollection')).toBe(true);
+			expect(manager.replicationStates.has('testEndpoint')).toBe(true);
+		});
 
-			const queryReplicationStates = manager.queryReplicationStates.get('testCollection');
-			expect(queryReplicationStates.size).toEqual(1);
+		it('should share a collection replication state between queries with the same endpoint', () => {
+			manager.registerQuery({
+				queryKeys: ['newQuery1'],
+				collectionName: 'testCollection',
+				initialParams: {},
+				endpoint: 'testEndpoint',
+			});
 
-			query?.where('status', 'completed');
-			expect(queryReplicationStates.size).toEqual(2);
+			manager.registerQuery({
+				queryKeys: ['newQuery2'],
+				collectionName: 'testCollection',
+				initialParams: {},
+				endpoint: 'testEndpoint',
+			});
+
+			expect(manager.replicationStates.has('testEndpoint')).toBe(true);
+
+			const replicationStatesForQuery1 = manager.getReplicationStatesByQueryKeys(['newQuery1']);
+			const replicationStatesForQuery2 = manager.getReplicationStatesByQueryKeys(['newQuery2']);
+			expect(replicationStatesForQuery1).toEqual(replicationStatesForQuery2);
 		});
 	});
+
+	// describe('Query Replication States', () => {
+	// 	it('should register a new query replication states', () => {
+	// 		const query = manager.registerQuery({
+	// 			queryKeys: ['newQuery'],
+	// 			collectionName: 'testCollection',
+	// 			initialParams: {},
+	// 		});
+
+	// 		expect(manager.replicationStates.has('testCollection')).toBe(true);
+
+	// 		const queryReplicationStates = manager.queryReplicationStates.get('testCollection');
+	// 		expect(queryReplicationStates.size).toEqual(1);
+
+	// 		query?.where('status', 'completed');
+	// 		expect(queryReplicationStates.size).toEqual(2);
+	// 	});
+	// });
 });

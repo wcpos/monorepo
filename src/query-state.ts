@@ -26,6 +26,7 @@ export interface QueryHooks {
 }
 
 export interface QueryConfig<T> {
+	id: string;
 	collection: T;
 	initialParams?: QueryParams;
 	hooks?: QueryHooks;
@@ -37,6 +38,7 @@ type WhereClause = { field: string; value: any };
  * A wrapper class for RxDB queries
  */
 export class Query<T extends RxCollection> {
+	public readonly id: string;
 	public collection: T;
 	private isCanceled = false;
 	private whereClauses: WhereClause[] = [];
@@ -50,6 +52,7 @@ export class Query<T extends RxCollection> {
 		params: new BehaviorSubject<QueryParams | undefined>(undefined),
 		result: new BehaviorSubject<DocumentType<T>[]>([]),
 		error: new Subject<Error>(),
+		cancel: new Subject<void>(),
 	};
 
 	/**
@@ -58,13 +61,16 @@ export class Query<T extends RxCollection> {
 	readonly params$: Observable<QueryParams | undefined> = this.subjects.params.asObservable();
 	readonly result$: Observable<DocumentType<T>[]> = this.subjects.result.asObservable();
 	readonly error$: Observable<Error> = this.subjects.error.asObservable();
+	readonly cancel$: Observable<void> = this.subjects.cancel.asObservable();
+
 	readonly resource = new ObservableResource(this.result$);
 	readonly paginatedResource = new ObservableResource(this.result$);
 
 	/**
 	 *
 	 */
-	constructor({ collection, initialParams = {}, hooks }: QueryConfig<T>) {
+	constructor({ id, collection, initialParams = {}, hooks }: QueryConfig<T>) {
+		this.id = id;
 		this.collection = collection;
 		this.subjects.params.next(initialParams);
 		this.hooks = hooks || {};
@@ -195,6 +201,13 @@ export class Query<T extends RxCollection> {
 		return this.subjects.params.getValue();
 	}
 
+	get count$() {
+		return this.result$.pipe(
+			map((docs) => docs.length),
+			distinctUntilChanged()
+		);
+	}
+
 	/**
 	 * Pagination
 	 */
@@ -215,6 +228,8 @@ export class Query<T extends RxCollection> {
 		this.subjects.params.complete();
 		this.subjects.result.complete();
 		this.subjects.error.complete();
+
+		this.subjects.cancel.next();
 	}
 }
 

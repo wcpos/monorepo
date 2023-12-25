@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observable, Subscription, Subject, interval } from 'rxjs';
+import { BehaviorSubject, Observable, Subscription, Subject, interval, combineLatest } from 'rxjs';
 import {
 	filter,
 	tap,
@@ -192,6 +192,27 @@ export class CollectionReplicationState<T extends RxCollection> {
 		} catch (error) {
 			this.subjects.error.next(error);
 		}
+	}
+
+	/**
+	 * Total count is the number of remote IDs, plus any local docs without an ID
+	 */
+	get total$() {
+		return combineLatest([this.remoteIDs$, this.unsyncedLocalDocs$]).pipe(
+			map(([remoteIDs, unsyncedLocalDocs]) => {
+				return remoteIDs.length + unsyncedLocalDocs.length;
+			})
+		);
+	}
+
+	get unsyncedLocalDocs$() {
+		return this.collection.find({ selector: { id: null } }).$;
+	}
+
+	getUnsyncedRemoteIDs() {
+		const remoteIDs = this.subjects.remoteIDs.getValue();
+		const localIDs = this.subjects.localIDs.getValue();
+		return remoteIDs.filter((id) => !localIDs.includes(id));
 	}
 
 	/**

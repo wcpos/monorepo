@@ -1,3 +1,4 @@
+import isEmpty from 'lodash/isEmpty';
 import { BehaviorSubject, Observable, Subscription, Subject, interval } from 'rxjs';
 import {
 	filter,
@@ -9,13 +10,13 @@ import {
 	distinctUntilChanged,
 } from 'rxjs/operators';
 
+import type { CollectionReplicationState } from './collection-replication-state';
 import type { RxCollection } from 'rxdb';
 
 interface QueryReplicationConfig<T extends RxCollection> {
 	collection: T;
 	httpClient: any;
-	apiQueryParams: any;
-	collectionReplication: any;
+	collectionReplication: CollectionReplicationState<T>;
 	hooks?: any;
 	endpoint: string;
 }
@@ -26,6 +27,7 @@ export class QueryReplicationState<T extends RxCollection> {
 	public readonly collection: T;
 	public readonly httpClient: any;
 	public readonly endpoint: any;
+	public readonly collectionReplication: CollectionReplicationState<T>;
 
 	/**
 	 *
@@ -46,13 +48,13 @@ export class QueryReplicationState<T extends RxCollection> {
 	constructor({
 		collection,
 		httpClient,
-		apiQueryParams,
 		collectionReplication,
 		endpoint,
 	}: QueryReplicationConfig<T>) {
 		this.collection = collection;
 		this.httpClient = httpClient;
 		this.endpoint = endpoint;
+		this.collectionReplication = collectionReplication;
 
 		/**
 		 *
@@ -69,7 +71,52 @@ export class QueryReplicationState<T extends RxCollection> {
 		);
 	}
 
-	run() {}
+	async run() {
+		await this.runPull();
+	}
+
+	async runPull() {
+		if (this.isStopped()) {
+			return;
+		}
+
+		try {
+			let response;
+			const include = this.collectionReplication.getUnsyncedRemoteIDs();
+
+			if (isEmpty(include)) {
+				response = await this.httpClient.get(this.endpoint);
+			} else {
+				response = await this.httpClient.post(
+					this.endpoint,
+					{
+						include,
+					},
+					{
+						headers: {
+							'X-HTTP-Method-Override': 'GET',
+						},
+					}
+				);
+			}
+
+			if (!response.data) {
+				this.subjects.error.next(response);
+			}
+
+			const promises = response.data.map(async (doc) => {
+				const parsedData = this.collection.parseRestResponse(doc);
+				await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+				return parsedData;
+			});
+
+			const documents = await Promise.all(promises);
+
+			await this.collection.bulkUpsert(documents);
+		} catch (error) {
+			this.subjects.error.next(error);
+		}
+	}
 
 	/**
 	 * We need to a way to pause and start the replication, eg: when the user is offline
