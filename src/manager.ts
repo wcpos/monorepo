@@ -146,8 +146,6 @@ export class Manager<TDatabase extends RxDatabase> {
 								endpoint: queryEndpoint,
 							});
 
-							this.addQueryKeyToReplicationsMap(key, queryEndpoint);
-
 							/**
 							 * Subscribe to the query trigger and trigger the query replication
 							 */
@@ -159,6 +157,8 @@ export class Manager<TDatabase extends RxDatabase> {
 
 							queryReplication.start();
 						}
+
+						this.addQueryKeyToReplicationsMap(key, queryEndpoint);
 					})
 				);
 
@@ -206,6 +206,10 @@ export class Manager<TDatabase extends RxDatabase> {
 		}
 	}
 
+	/**
+	 * TODO: I need track how many queries are using a replication state, ie:
+	 * increment / decrement a counter when a query is added / removed
+	 */
 	addQueryKeyToReplicationsMap(key: string, endpoint: string) {
 		if (!this.queryKeyToReplicationsMap.has(key)) {
 			this.queryKeyToReplicationsMap.set(key, []);
