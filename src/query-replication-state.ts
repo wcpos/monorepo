@@ -36,15 +36,19 @@ export class QueryReplicationState<T extends RxCollection> {
 	public readonly subjects = {
 		error: new Subject<Error>(),
 		paused: new BehaviorSubject<boolean>(true), // true when the replication is paused, start true
+		active: new BehaviorSubject<boolean>(false), // true when something is running, false when not
 	};
-
-	readonly paused$: Observable<boolean> = this.subjects.paused.asObservable();
 
 	/**
 	 *
 	 */
 	readonly error$: Observable<Error> = this.subjects.error.asObservable();
+	readonly paused$: Observable<boolean> = this.subjects.paused.asObservable();
+	readonly active$: Observable<boolean> = this.subjects.active.asObservable();
 
+	/**
+	 *
+	 */
 	constructor({
 		collection,
 		httpClient,
@@ -60,6 +64,9 @@ export class QueryReplicationState<T extends RxCollection> {
 		 *
 		 */
 		this.subs.push(
+			/**
+			 * Pause/Start the replication
+			 */
 			this.paused$
 				.pipe(
 					switchMap((isPaused) => (isPaused ? [] : interval(this.pollingTime).pipe(startWith(0)))),
@@ -68,36 +75,47 @@ export class QueryReplicationState<T extends RxCollection> {
 				.subscribe(async () => {
 					this.run();
 				})
+
+			/**
+			 *
+			 */
 		);
 	}
 
+	/**
+	 *
+	 */
 	async run() {
+		await this.collectionReplication.firstSync;
 		await this.runPull();
 	}
 
+	/**
+	 *
+	 */
 	async runPull() {
-		if (this.isStopped()) {
+		if (this.isStopped() || this.subjects.active.getValue()) {
+			return;
+		}
+
+		this.subjects.active.next(true);
+		const include = this.collectionReplication.getUnsyncedRemoteIDs();
+		const lastModified = this.collectionReplication.subjects.lastModified.getValue();
+
+		/**
+		 * If there is nothing to fetch, then return
+		 */
+		if (isEmpty(include) && !lastModified) {
 			return;
 		}
 
 		try {
 			let response;
-			const include = this.collectionReplication.getUnsyncedRemoteIDs();
 
 			if (isEmpty(include)) {
-				response = await this.httpClient.get(this.endpoint);
+				response = await this.fetchLastModified({ lastModified });
 			} else {
-				response = await this.httpClient.post(
-					this.endpoint,
-					{
-						include,
-					},
-					{
-						headers: {
-							'X-HTTP-Method-Override': 'GET',
-						},
-					}
-				);
+				response = await this.fetchRemoteIDs({ include });
 			}
 
 			if (!response.data) {
@@ -115,7 +133,48 @@ export class QueryReplicationState<T extends RxCollection> {
 			await this.collection.bulkUpsert(documents);
 		} catch (error) {
 			this.subjects.error.next(error);
+		} finally {
+			this.subjects.active.next(false);
 		}
+	}
+
+	/**
+	 *
+	 */
+	async fetchRemoteIDs({ include }) {
+		const response = await this.httpClient.post(
+			this.endpoint,
+			{
+				include,
+			},
+			{
+				headers: {
+					'X-HTTP-Method-Override': 'GET',
+				},
+			}
+		);
+
+		return response;
+	}
+
+	/**
+	 *
+	 */
+	async fetchLastModified({ lastModified }) {
+		const response = await this.httpClient.get(this.endpoint, {
+			params: {
+				modified_after: lastModified,
+			},
+		});
+
+		return response;
+	}
+
+	/**
+	 *
+	 */
+	nextPage() {
+		this.run();
 	}
 
 	/**

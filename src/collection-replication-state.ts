@@ -61,11 +61,22 @@ export class CollectionReplicationState<T extends RxCollection> {
 	/**
 	 *
 	 */
+	private firstSyncResolver: (() => void) | null = null;
+	public readonly firstSync: Promise<void>;
+
+	/**
+	 *
+	 */
 	constructor({ collection, httpClient, hooks, endpoint }: CollectionReplicationConfig<T>) {
 		this.collection = collection;
 		this.httpClient = httpClient;
 		this.hooks = hooks || {};
 		this.endpoint = endpoint;
+
+		// Initialize the firstSync promise
+		this.firstSync = new Promise<void>((resolve) => {
+			this.firstSyncResolver = resolve;
+		});
 
 		/**
 		 * Subscribe to the remoteIDs local document
@@ -126,8 +137,11 @@ export class CollectionReplicationState<T extends RxCollection> {
 	 */
 	async run() {
 		await this.auditIDs();
-		// await this.syncLastModified();
-		// await this.syncRemoteIDs();
+
+		if (this.firstSyncResolver) {
+			this.firstSyncResolver();
+			this.firstSyncResolver = null; // Clear the resolver to prevent future calls
+		}
 	}
 
 	/**

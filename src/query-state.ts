@@ -43,6 +43,8 @@ export class Query<T extends RxCollection> {
 	private isCanceled = false;
 	private whereClauses: WhereClause[] = [];
 	private hooks: QueryConfig<T>['hooks'];
+	private paginationEndReached = false;
+	private pageSize: number;
 
 	/**
 	 *
@@ -53,6 +55,9 @@ export class Query<T extends RxCollection> {
 		result: new BehaviorSubject<DocumentType<T>[]>([]),
 		error: new Subject<Error>(),
 		cancel: new Subject<void>(),
+		currentPage: new BehaviorSubject<number>(1),
+		paginatedResult: new BehaviorSubject<DocumentType<T>[]>([]),
+		triggerServerQuery: new Subject<void>(),
 	};
 
 	/**
@@ -62,9 +67,13 @@ export class Query<T extends RxCollection> {
 	readonly result$: Observable<DocumentType<T>[]> = this.subjects.result.asObservable();
 	readonly error$: Observable<Error> = this.subjects.error.asObservable();
 	readonly cancel$: Observable<void> = this.subjects.cancel.asObservable();
+	readonly currentPage$: Observable<number> = this.subjects.currentPage.asObservable();
+	readonly paginatedResult$: Observable<DocumentType<T>[]> =
+		this.subjects.paginatedResult.asObservable();
+	readonly triggerServerQuery$: Observable<void> = this.subjects.triggerServerQuery.asObservable();
 
 	readonly resource = new ObservableResource(this.result$);
-	readonly paginatedResource = new ObservableResource(this.result$);
+	readonly paginatedResource = new ObservableResource(this.paginatedResult$);
 
 	/**
 	 *
@@ -74,6 +83,7 @@ export class Query<T extends RxCollection> {
 		this.collection = collection;
 		this.subjects.params.next(initialParams);
 		this.hooks = hooks || {};
+		this.pageSize = 10;
 
 		/**
 		 * Keep track of what we are subscribed to
@@ -84,7 +94,25 @@ export class Query<T extends RxCollection> {
 			 */
 			this.find$.subscribe((result) => {
 				this.subjects.result.next(result);
-			})
+			}),
+
+			/**
+			 * Subscribe to result$ and emit paginated results
+			 */
+			this.result$
+				.pipe(
+					switchMap((items) =>
+						this.currentPage$.pipe(
+							map((currentPage) => {
+								const end = currentPage * this.pageSize;
+								const pageItems = items.slice(0, end);
+								this.paginationEndReached = pageItems.length < end;
+								return pageItems;
+							})
+						)
+					)
+				)
+				.subscribe(this.subjects.paginatedResult)
 		);
 	}
 
@@ -211,7 +239,20 @@ export class Query<T extends RxCollection> {
 	/**
 	 * Pagination
 	 */
-	nextPage() {}
+	nextPage() {
+		if (!this.paginationEndReached) {
+			const page = this.subjects.currentPage.value + 1;
+			this.subjects.currentPage.next(page);
+		} else {
+			// the Query Replication will listen for this event and trigger a server query
+			this.subjects.triggerServerQuery.next();
+		}
+	}
+
+	paginationReset() {
+		this.paginationEndReached = false;
+		this.subjects.currentPage.next(1);
+	}
 
 	/**
 	 * Cancel

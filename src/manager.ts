@@ -127,20 +127,38 @@ export class Manager<TDatabase extends RxDatabase> {
 				collectionReplication.start();
 
 				/**
-				 * Subscribe to query params and register a new replication state for the query
-				 * - also cancel the previous query replication
+				 * Add some subscriptions for the Query Class
+				 * - these will be completed when the query instance is cancelled
 				 */
-				this.subs.push(
+				query.subs.push(
+					/**
+					 * Subscribe to query params and register a new replication state for the query
+					 * - also cancel the previous query replication
+					 */
 					query.params$.subscribe((params) => {
 						const apiQueryParams = this.getApiQueryParams(params);
 						const queryEndpoint = buildUrlWithParams(endpoint, apiQueryParams);
-						const queryReplication = this.registerQueryReplication({
-							collectionReplication,
-							collection,
-							endpoint: queryEndpoint,
-						});
-						this.addQueryKeyToReplicationsMap(key, queryEndpoint);
-						queryReplication.start();
+
+						if (!this.replicationStates.has(queryEndpoint)) {
+							const queryReplication = this.registerQueryReplication({
+								collectionReplication,
+								collection,
+								endpoint: queryEndpoint,
+							});
+
+							this.addQueryKeyToReplicationsMap(key, queryEndpoint);
+
+							/**
+							 * Subscribe to the query trigger and trigger the query replication
+							 */
+							query.subs.push(
+								query.triggerServerQuery$.subscribe((page) => {
+									queryReplication.nextPage();
+								})
+							);
+
+							queryReplication.start();
+						}
 					})
 				);
 
@@ -238,27 +256,24 @@ export class Manager<TDatabase extends RxDatabase> {
 	 * There is one replication state per unique query
 	 */
 	registerQueryReplication({ endpoint, collectionReplication, collection }) {
-		if (!this.replicationStates.has(endpoint)) {
-			const queryReplication = new QueryReplicationState({
-				httpClient: this.httpClient,
-				collectionReplication,
-				collection,
-				endpoint,
-			});
+		const queryReplication = new QueryReplicationState({
+			httpClient: this.httpClient,
+			collectionReplication,
+			collection,
+			endpoint,
+		});
 
-			/**
-			 * Subscribe to query errors and pipe them to the error subject
-			 */
-			this.subs.push(
-				queryReplication.error$.subscribe((error) => {
-					this.subjects.error.next(error);
-				})
-			);
+		/**
+		 * Subscribe to query errors and pipe them to the error subject
+		 */
+		this.subs.push(
+			queryReplication.error$.subscribe((error) => {
+				this.subjects.error.next(error);
+			})
+		);
 
-			this.replicationStates.set(endpoint, queryReplication);
-		}
-
-		return this.replicationStates.get(endpoint);
+		this.replicationStates.set(endpoint, collectionReplication);
+		return queryReplication;
 	}
 
 	/**
