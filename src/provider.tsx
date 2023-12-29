@@ -9,6 +9,7 @@ const QueryContext = React.createContext<Manager<RxDatabase> | undefined>(undefi
 interface QueryProviderProps<T extends RxDatabase> {
 	localDB: T;
 	http: any; // Replace 'any' with the actual type of your HTTP client
+	locale: string;
 	children: React.ReactNode;
 }
 
@@ -16,8 +17,9 @@ export const QueryProvider = <T extends RxDatabase>({
 	localDB,
 	http,
 	children,
+	locale,
 }: QueryProviderProps<T>) => {
-	const manager = React.useMemo(() => new Manager(localDB, http), [localDB, http]);
+	const manager = React.useMemo(() => new Manager(localDB, http, locale), [localDB, http, locale]);
 
 	/**
 	 * Clean up the manager when the dependency changes

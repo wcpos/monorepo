@@ -1,22 +1,23 @@
+import forEach from 'lodash/forEach';
 import { Observable, Subject, Subscription } from 'rxjs';
 
 import { CollectionReplicationState } from './collection-replication-state';
+import allHooks from './hooks';
 import { QueryReplicationState } from './query-replication-state';
 import { Query } from './query-state';
+import { Search } from './search-state';
 import { buildUrlWithParams } from './utils';
 
-import type { QueryParams, QueryHooks } from './query-state';
+import type { QueryParams } from './query-state';
 import type { RxDatabase, RxCollection } from 'rxdb';
 
 /**
  *
  */
-export interface ResisterQueryConfig {
+export interface RegisterQueryConfig {
 	queryKeys: (string | number | object)[];
 	collectionName: string;
 	initialParams?: QueryParams;
-	hooks?: QueryHooks;
-	locale?: string;
 	endpoint?: string;
 }
 
@@ -48,7 +49,7 @@ export class Manager<TDatabase extends RxDatabase> {
 	> = new Map();
 
 	/**
-	 *
+	 * Each queryKey should have one collection replication and at least one query replication
 	 */
 	public queryKeyToReplicationsMap: Map<string, string[]> = new Map();
 
@@ -67,7 +68,8 @@ export class Manager<TDatabase extends RxDatabase> {
 
 	constructor(
 		private localDB: TDatabase,
-		private httpClient
+		private httpClient,
+		private locale: string
 	) {
 		/**
 		 * Subscribe to localDB to detect if collection is reset
@@ -107,21 +109,22 @@ export class Manager<TDatabase extends RxDatabase> {
 		return this.queries.has(key);
 	}
 
-	registerQuery({
-		queryKeys,
-		collectionName,
-		initialParams,
-		hooks = {},
-		locale,
-		...args
-	}: ResisterQueryConfig) {
+	registerQuery({ queryKeys, collectionName, initialParams, ...args }: RegisterQueryConfig) {
 		const key = this.stringify(queryKeys);
 		const endpoint = args.endpoint || collectionName;
+		const hooks = allHooks[collectionName] || {};
 
 		if (key && !this.queries.has(key)) {
 			const collection = this.getCollection(collectionName);
 			if (collection) {
-				const query = new Query<typeof collection>({ id: key, collection, initialParams, hooks });
+				const searchService = new Search({ collection, locale: this.locale });
+				const query = new Query<typeof collection>({
+					id: key,
+					collection,
+					initialParams,
+					hooks,
+					searchService,
+				});
 				const collectionReplication = this.registerCollectionReplication({ collection, endpoint });
 				this.addQueryKeyToReplicationsMap(key, endpoint);
 				collectionReplication.start();
@@ -136,7 +139,10 @@ export class Manager<TDatabase extends RxDatabase> {
 					 * - also cancel the previous query replication
 					 */
 					query.params$.subscribe((params) => {
-						const apiQueryParams = this.getApiQueryParams(params);
+						let apiQueryParams = this.getApiQueryParams(params);
+						if (hooks?.filterApiQueryParams) {
+							apiQueryParams = hooks.filterApiQueryParams(apiQueryParams, params);
+						}
 						const queryEndpoint = buildUrlWithParams(endpoint, apiQueryParams);
 
 						if (!this.replicationStates.has(queryEndpoint)) {
@@ -285,16 +291,21 @@ export class Manager<TDatabase extends RxDatabase> {
 	 * - NOTE: the api query params have a different format than the query params
 	 * - allow hooks to modify the query params
 	 */
-	getApiQueryParams(params: QueryParams) {
-		params = params || {};
-
-		Object.assign(params, {
-			uuid: undefined, // remove all uuid params?
+	getApiQueryParams(queryParams: QueryParams = {}) {
+		const params = {
+			orderby: queryParams?.sortBy,
+			order: queryParams?.sortDirection,
 			per_page: 10,
-		});
+		};
 
-		if (this.hooks?.filterApiQueryParams) {
-			params = this.hooks.filterApiQueryParams(params);
+		if (queryParams?.search && typeof queryParams?.search === 'string') {
+			params.search = queryParams?.search;
+		}
+
+		if (queryParams?.selector) {
+			forEach(queryParams.selector, (value, key) => {
+				params[key] = value;
+			});
 		}
 
 		return params;

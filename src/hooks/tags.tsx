@@ -20,7 +20,7 @@ interface APIQueryParams {
 /**
  *
  */
-const filterApiQueryParams = (params, checkpoint, batchSize) => {
+const filterApiQueryParams = (params, checkpoint) => {
 	const { include } = checkpoint;
 
 	/**

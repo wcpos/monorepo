@@ -35,7 +35,7 @@ interface APIQueryParams {
 /**
  *
  */
-const filterApiQueryParams = (params, checkpoint, batchSize) => {
+const filterApiQueryParams = (params) => {
 	let orderby = params.orderby;
 
 	if (orderby === 'date_created' || orderby === 'date_created_gmt') {

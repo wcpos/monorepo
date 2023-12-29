@@ -1,9 +1,12 @@
 import { orderBy } from '@shelf/fast-natural-order-by';
+import debounce from 'lodash/debounce';
+import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
 import { ObservableResource } from 'observable-hooks';
 import { BehaviorSubject, Observable, Subscription, Subject } from 'rxjs';
 import { map, switchMap, distinctUntilChanged } from 'rxjs/operators';
 
+import type { Search } from './search-state';
 import type { RxCollection, RxDocument } from 'rxdb';
 
 // This type utility extracts the document type from a collection
@@ -30,6 +33,7 @@ export interface QueryConfig<T> {
 	collection: T;
 	initialParams?: QueryParams;
 	hooks?: QueryHooks;
+	searchService: Search;
 }
 
 type WhereClause = { field: string; value: any };
@@ -45,6 +49,8 @@ export class Query<T extends RxCollection> {
 	private hooks: QueryConfig<T>['hooks'];
 	private paginationEndReached = false;
 	private pageSize: number;
+	private searchService: Search;
+	private activeSearchSubscription: Subscription | null = null;
 
 	/**
 	 *
@@ -78,12 +84,13 @@ export class Query<T extends RxCollection> {
 	/**
 	 *
 	 */
-	constructor({ id, collection, initialParams = {}, hooks }: QueryConfig<T>) {
+	constructor({ id, collection, initialParams = {}, hooks, searchService }: QueryConfig<T>) {
 		this.id = id;
 		this.collection = collection;
 		this.subjects.params.next(initialParams);
 		this.hooks = hooks || {};
 		this.pageSize = 10;
+		this.searchService = searchService;
 
 		/**
 		 * Keep track of what we are subscribed to
@@ -205,7 +212,43 @@ export class Query<T extends RxCollection> {
 		return this;
 	}
 
-	search(query: string | Record<string, any> = '') {}
+	search(query: string | Record<string, any> = '') {
+		if (typeof query === 'string' || query === null) {
+			// if activeSearchSubscription exists, cancel it
+			if (this.activeSearchSubscription) {
+				this.activeSearchSubscription.unsubscribe();
+			}
+
+			/**
+			 * If empty, we can just remove the uuid where clause
+			 */
+			if (isEmpty(query)) {
+				this.whereClauses = this.whereClauses.filter((clause) => clause.field !== 'uuid');
+				return this.updateParams({ search: query });
+			}
+
+			/**
+			 * We need to use the Orama searchDB to find matching uuids
+			 */
+			this.activeSearchSubscription = this.searchService.search$(query).subscribe((uuids) => {
+				// remove uuid from whereClauses
+				this.whereClauses = this.whereClauses.filter((clause) => clause.field !== 'uuid');
+
+				if (uuids) {
+					this.whereClauses.push({ field: 'uuid', value: { $in: uuids } });
+				}
+
+				this.updateParams({ search: query });
+			});
+
+			// make sure we clean up the subscription on cancel
+			this.subs.push(this.activeSearchSubscription);
+		} else {
+			this.updateParams({ search: query });
+		}
+	}
+
+	debouncedSearch = debounce(this.search, 250);
 
 	private updateParams(additionalParams: Partial<QueryParams> = {}): void {
 		// Construct the selector from where clauses

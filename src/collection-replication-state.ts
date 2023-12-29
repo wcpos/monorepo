@@ -230,6 +230,38 @@ export class CollectionReplicationState<T extends RxCollection> {
 	}
 
 	/**
+	 * Remote mutations patch/create
+	 * I'm not 100% sure this is the right spot for these, but I'm thinking in the future
+	 * there will have to be some kind of queuing system for when the app is offline
+	 */
+	async remotePatch(doc, data) {
+		try {
+			if (!doc.id) {
+				throw new Error('document does not have an id');
+			}
+			const response = await this.httpClient.patch(this.endpoint + '/' + doc.id, data);
+			const parsedData = this.collection.parseRestResponse(response.data);
+			await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+			await doc.incrementalPatch(parsedData);
+			return doc;
+		} catch (error) {
+			this.subjects.error.next(error);
+		}
+	}
+
+	async remoteCreate(data) {
+		try {
+			const response = await this.httpClient.post(this.endpoint, data);
+			const parsedData = this.collection.parseRestResponse(response.data);
+			await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+			const doc = await this.collection.upsert(parsedData);
+			return doc;
+		} catch (error) {
+			this.subjects.error.next(error);
+		}
+	}
+
+	/**
 	 * We need to a way to pause and start the replication, eg: when the user is offline
 	 */
 	start() {

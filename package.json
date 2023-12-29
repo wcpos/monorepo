@@ -18,6 +18,7 @@
   },
   "packageManager": "yarn@3.5.0",
   "dependencies": {
+    "@orama/orama": "^1.2.11",
     "@shelf/fast-natural-order-by": "^2.0.0",
     "lodash": "^4.17.21",
     "observable-hooks": "^4.2.3",
