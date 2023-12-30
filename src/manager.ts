@@ -3,10 +3,12 @@ import { Observable, Subject, Subscription } from 'rxjs';
 
 import { CollectionReplicationState } from './collection-replication-state';
 import allHooks from './hooks';
+import { QueryCache } from './query-cache';
 import { QueryReplicationState } from './query-replication-state';
 import { Query } from './query-state';
+import { ReplicationCache } from './replication-cache';
 import { Search } from './search-state';
-import { buildUrlWithParams } from './utils';
+import { buildEndpointWithParams } from './utils';
 
 import type { QueryParams } from './query-state';
 import type { RxDatabase, RxCollection } from 'rxdb';
@@ -30,7 +32,7 @@ export class Manager<TDatabase extends RxDatabase> {
 	/**
 	 * Registry of all RxDB queries, indexed by queryKeys
 	 */
-	public queries: Map<string, Query<RxCollection>> = new Map();
+	public queries: QueryCache<string, Query<RxCollection>> = new QueryCache();
 
 	/**
 	 * Registry of all replication states, indexed by endpoint & query params
@@ -43,10 +45,10 @@ export class Manager<TDatabase extends RxDatabase> {
 	 *
 	 * NOTE: replication states can be shared between queryKeys
 	 */
-	public replicationStates: Map<
+	public replicationStates: ReplicationCache<
 		string,
 		CollectionReplicationState<RxCollection> | QueryReplicationState<RxCollection>
-	> = new Map();
+	> = new ReplicationCache();
 
 	/**
 	 * Each queryKey should have one collection replication and at least one query replication
@@ -83,6 +85,10 @@ export class Manager<TDatabase extends RxDatabase> {
 						const endpoints = this.queryKeyToReplicationsMap.get(key);
 						endpoints.forEach((endpoint) => {
 							const replication = this.replicationStates.get(endpoint);
+							if (!replication) {
+								console.log('endpoint', endpoint);
+								console.log('replicationStates', this.replicationStates);
+							}
 							replication.cancel();
 							this.replicationStates.delete(endpoint);
 						});
@@ -143,7 +149,7 @@ export class Manager<TDatabase extends RxDatabase> {
 						if (hooks?.filterApiQueryParams) {
 							apiQueryParams = hooks.filterApiQueryParams(apiQueryParams, params);
 						}
-						const queryEndpoint = buildUrlWithParams(endpoint, apiQueryParams);
+						const queryEndpoint = buildEndpointWithParams(endpoint, apiQueryParams);
 
 						if (!this.replicationStates.has(queryEndpoint)) {
 							const queryReplication = this.registerQueryReplication({
@@ -282,7 +288,7 @@ export class Manager<TDatabase extends RxDatabase> {
 			})
 		);
 
-		this.replicationStates.set(endpoint, collectionReplication);
+		this.replicationStates.set(endpoint, queryReplication);
 		return queryReplication;
 	}
 

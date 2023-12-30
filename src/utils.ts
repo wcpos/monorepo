@@ -8,16 +8,16 @@ export function isArrayOfIntegers(value) {
 }
 
 /**
- *
+ * eg: customers?orderby=last_name&order=asc&per_page=10&role=all
  */
-export function buildUrlWithParams(endpoint: string, params: Record<string, any>) {
+export function buildEndpointWithParams(endpoint: string, params: Record<string, any>) {
 	const url = new URL(endpoint, 'http://dummybase'); // Dummy base, actual base URL is in httpClient
 	Object.keys(params).forEach((key) => {
 		if (params[key] !== undefined && params[key] !== null) {
 			url.searchParams.append(key, params[key]);
 		}
 	});
-	return url.pathname + url.search;
+	return url.pathname.slice(1) + url.search;
 }
 
 /**

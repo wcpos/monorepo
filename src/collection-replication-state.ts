@@ -43,6 +43,7 @@ export class CollectionReplicationState<T extends RxCollection> {
 	public readonly subs: Subscription[] = [];
 	public readonly subjects = {
 		error: new Subject<Error>(),
+		active: new BehaviorSubject<boolean>(false), // true when something is running, false when not
 		remoteIDs: new BehaviorSubject<number[]>([]), // emits all remote ids that are known to the replication
 		localIDs: new BehaviorSubject<number[]>([]), // emits all local ids that are known to the replication
 		lastModified: new BehaviorSubject<string>(null), // emits the date of the last modified document
@@ -53,6 +54,7 @@ export class CollectionReplicationState<T extends RxCollection> {
 	 *
 	 */
 	readonly error$: Observable<Error> = this.subjects.error.asObservable();
+	readonly active$: Observable<boolean> = this.subjects.active.asObservable();
 	readonly remoteIDs$: Observable<number[]> = this.subjects.remoteIDs.asObservable();
 	readonly localIDs$: Observable<number[]> = this.subjects.localIDs.asObservable();
 	readonly lastModified$: Observable<string> = this.subjects.lastModified.asObservable();
@@ -152,29 +154,33 @@ export class CollectionReplicationState<T extends RxCollection> {
 			return;
 		}
 
-		let remoteIDs;
-		if (this.lastFetchRemoteIDsTime < new Date().getTime() - this.pollingTime) {
-			remoteIDs = await this.fetchRemoteIDs();
-			if (isArrayOfIntegers(remoteIDs)) {
-				await this.collection.upsertLocal('audit', { remoteIDs });
-				this.subjects.remoteIDs.next(remoteIDs);
+		try {
+			let remoteIDs;
+			if (this.lastFetchRemoteIDsTime < new Date().getTime() - this.pollingTime) {
+				remoteIDs = await this.fetchRemoteIDs();
+				if (isArrayOfIntegers(remoteIDs)) {
+					await this.collection.upsertLocal('audit', { remoteIDs });
+					this.subjects.remoteIDs.next(remoteIDs);
+				}
+			} else {
+				remoteIDs = this.subjects.remoteIDs.getValue();
 			}
-		} else {
-			remoteIDs = this.subjects.remoteIDs.getValue();
-		}
 
-		if (!Array.isArray(remoteIDs) || remoteIDs.length === 0) {
-			return;
-		}
+			if (!Array.isArray(remoteIDs) || remoteIDs.length === 0) {
+				return;
+			}
 
-		/**
-		 * @TODO - variations can be orphaned at the moment, we need a relationship table with parent
-		 */
-		const remove = this.subjects.localIDs.getValue().filter((id) => !remoteIDs.includes(id));
-		if (remove.length > 0 && this.collection.name !== 'variations') {
-			// deletion should be rare, only when an item is deleted from the server
-			console.warn('removing', remove, 'from', this.collection.name);
-			await this.collection.find({ selector: { id: { $in: remove } } }).remove();
+			/**
+			 * @TODO - variations can be orphaned at the moment, we need a relationship table with parent
+			 */
+			const remove = this.subjects.localIDs.getValue().filter((id) => !remoteIDs.includes(id));
+			if (remove.length > 0 && this.collection.name !== 'variations') {
+				// deletion should be rare, only when an item is deleted from the server
+				console.warn('removing', remove, 'from', this.collection.name);
+				await this.collection.find({ selector: { id: { $in: remove } } }).remove();
+			}
+		} catch (error) {
+			this.subjects.error.next(error);
 		}
 	}
 
@@ -193,6 +199,12 @@ export class CollectionReplicationState<T extends RxCollection> {
 			return this.hooks?.fetchRemoteIDs(this.endpoint, this.collection);
 		}
 
+		if (this.subjects.active.getValue()) {
+			return;
+		}
+
+		this.subjects.active.next(true);
+
 		try {
 			const response = await this.httpClient.get(this.endpoint, {
 				params: { fields: ['id'], posts_per_page: -1 },
@@ -205,6 +217,8 @@ export class CollectionReplicationState<T extends RxCollection> {
 			return response.data.map((doc) => doc.id);
 		} catch (error) {
 			this.subjects.error.next(error);
+		} finally {
+			this.subjects.active.next(false);
 		}
 	}
 
