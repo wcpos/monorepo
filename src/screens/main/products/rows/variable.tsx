@@ -62,7 +62,7 @@ const variationCells = {
  *
  */
 const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
-	const mutation = useMutation({ collectionName: 'products' });
+	const { patch } = useMutation({ collectionName: 'products' });
 	const [expanded, setExpanded] = React.useState(false);
 
 	/**
@@ -70,9 +70,9 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	 */
 	const handleChange = React.useCallback(
 		async (product: ProductDocument, data: Record<string, unknown>) => {
-			mutation.mutate({ document: product, data });
+			patch({ document: product, data });
 		},
-		[mutation]
+		[patch]
 	);
 
 	/**

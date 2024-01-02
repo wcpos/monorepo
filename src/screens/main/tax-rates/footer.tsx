@@ -4,15 +4,17 @@ import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
+import { useReplicationState } from '@wcpos/query';
 
 import { useT } from '../../../contexts/translations';
 import SyncButton from '../components/sync-button';
-import useTotalCount from '../hooks/use-total-count';
+import { useCollectionReset } from '../hooks/use-collection-reset';
 
 const TaxRatesFooter = ({ count, query }) => {
-	const { sync, clear, replicationState } = query;
-	const active = useObservableState(replicationState.active$, false);
-	const total = useTotalCount(replicationState);
+	const { sync, active$, total$ } = useReplicationState(query);
+	const { clear } = useCollectionReset(query.collection.name);
+	const active = useObservableState(active$, false);
+	const total = useObservableState(total$, 0);
 	const t = useT();
 
 	return (

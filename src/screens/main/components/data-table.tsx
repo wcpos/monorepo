@@ -10,13 +10,13 @@ import Loader from '@wcpos/components/src/loader';
 import Suspense from '@wcpos/components/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import type { Query } from '@wcpos/query';
+import { useReplicationState, Query } from '@wcpos/query';
 
 import EmptyTableRow from './empty-table-row';
 import SyncButton from './sync-button';
 import TextCell from './text-cell';
 import { useT } from '../../../contexts/translations';
-import useTotalCount from '../hooks/use-total-count';
+import { useCollectionReset } from '../hooks/use-collection-reset';
 
 type UISettingsColumn = import('../contexts/ui-settings').UISettingsColumn;
 
@@ -36,10 +36,11 @@ interface CommonTableProps<DocumentType> {
  */
 const DataTableFooter = ({ query, children }) => {
 	const theme = useTheme();
-	const { sync, clear, replicationState } = query;
-	const loading = useObservableState(replicationState.active$, false);
+	const { sync, active$, total$ } = useReplicationState(query);
+	const { clear } = useCollectionReset(query.collection.name);
+	const loading = useObservableState(active$, false);
 	const count = useObservableState(query.count$, 0); // count is the query count, not pagination count
-	const total = useTotalCount(replicationState);
+	const total = useObservableState(total$, 0);
 	const t = useT();
 
 	return (

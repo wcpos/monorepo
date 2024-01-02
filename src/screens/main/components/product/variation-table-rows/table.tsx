@@ -7,6 +7,7 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import Table, { CellRenderer, useTable } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
+import { useReplicationState } from '@wcpos/query';
 import log from '@wcpos/utils/src/logger';
 
 import { useVariationTable } from './context';
@@ -34,9 +35,10 @@ const VariationsTable = ({ query, parent }) => {
 	const data = useObservableSuspense(query.resource);
 	const context = useTable(); // get context from parent product, ie: columns
 	const { cells } = useVariationTable();
-	const loading = useObservableState(query.replicationState.active$, false);
+	const { active$ } = useReplicationState(query);
+	const loading = useObservableState(active$, false);
 	const t = useT();
-	const mutation = useMutation({
+	const { patch } = useMutation({
 		collectionName: 'variations',
 		endpoint: `products/${parent.id}/variations`,
 	});
@@ -79,9 +81,9 @@ const VariationsTable = ({ query, parent }) => {
 	 */
 	const handleChange = React.useCallback(
 		async (variation: ProductVariationDocument, data: Record<string, unknown>) => {
-			mutation.mutate({ document: variation, data });
+			patch({ document: variation, data });
 		},
-		[mutation]
+		[patch]
 	);
 
 	/**

@@ -7,6 +7,7 @@ import { useTheme } from 'styled-components/native';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 import Table from '@wcpos/components/src/table';
+import { useReplicationState } from '@wcpos/query';
 
 import TagSelectItem, { EmptyTableRow } from './item';
 
@@ -48,7 +49,8 @@ interface TagSelectMenuProps {
 const TagSelectMenu = ({ query, onSelect }) => {
 	const theme = useTheme();
 	const tags = useObservableSuspense(query.resource);
-	const loading = useObservableState(query.replicationState.active$, false);
+	const { active$ } = useReplicationState(query.id);
+	const loading = useObservableState(active$, false);
 	const { targetMeasurements } = usePopover();
 
 	/**
