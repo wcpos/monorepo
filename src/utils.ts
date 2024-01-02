@@ -1,3 +1,5 @@
+import snakeCase from 'lodash/snakeCase';
+
 /**
  *
  * @param value
@@ -95,3 +97,10 @@ export const pluckProperties = (obj: NestedObject, keys: string[]): NestedObject
 
 	return result;
 };
+
+/**
+ *
+ */
+export function toUpperSnakeCase(str: string): string {
+	return snakeCase(str).toUpperCase();
+}

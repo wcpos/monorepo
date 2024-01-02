@@ -13,6 +13,9 @@ interface QueryProviderProps<T extends RxDatabase> {
 	children: React.ReactNode;
 }
 
+/**
+ *
+ */
 export const QueryProvider = <T extends RxDatabase>({
 	localDB,
 	http,

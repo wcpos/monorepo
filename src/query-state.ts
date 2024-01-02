@@ -34,6 +34,7 @@ export interface QueryConfig<T> {
 	initialParams?: QueryParams;
 	hooks?: QueryHooks;
 	searchService: Search;
+	endpoint?: string;
 }
 
 type WhereClause = { field: string; value: any };
@@ -51,6 +52,7 @@ export class Query<T extends RxCollection> {
 	private pageSize: number;
 	private searchService: Search;
 	private activeSearchSubscription: Subscription | null = null;
+	public readonly endpoint: string;
 
 	/**
 	 *
@@ -84,13 +86,21 @@ export class Query<T extends RxCollection> {
 	/**
 	 *
 	 */
-	constructor({ id, collection, initialParams = {}, hooks, searchService }: QueryConfig<T>) {
+	constructor({
+		id,
+		collection,
+		initialParams = {},
+		hooks,
+		searchService,
+		endpoint,
+	}: QueryConfig<T>) {
 		this.id = id;
 		this.collection = collection;
 		this.subjects.params.next(initialParams);
 		this.hooks = hooks || {};
 		this.pageSize = 10;
 		this.searchService = searchService;
+		this.endpoint = endpoint;
 
 		/**
 		 * Keep track of what we are subscribed to

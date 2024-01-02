@@ -1,13 +1,14 @@
 import forEach from 'lodash/forEach';
 import { Observable, Subject, Subscription } from 'rxjs';
+import { filter, map } from 'rxjs/operators';
 
 import { CollectionReplicationState } from './collection-replication-state';
 import allHooks from './hooks';
-import { QueryCache } from './query-cache';
 import { QueryReplicationState } from './query-replication-state';
 import { Query } from './query-state';
-import { ReplicationCache } from './replication-cache';
+import { Registry } from './registry';
 import { Search } from './search-state';
+import { SubscribableBase } from './subscribable-base';
 import { buildEndpointWithParams } from './utils';
 
 import type { QueryParams } from './query-state';
@@ -26,46 +27,28 @@ export interface RegisterQueryConfig {
 /**
  *
  */
-export class Manager<TDatabase extends RxDatabase> {
-	private isCanceled = false;
-
-	/**
-	 * Registry of all RxDB queries, indexed by queryKeys
-	 */
-	public queries: QueryCache<string, Query<RxCollection>> = new QueryCache();
-
-	/**
-	 * Registry of all replication states, indexed by endpoint & query params
-	 * - for most collections collection.name = endpoint
-	 * - special case for product variations, where:
-	 * -- endpoint = 'products/<parent_id>/variations' and
-	 * -- endpoint = 'products/variations' (for all variation queries, ie: barcode)
-	 * - a query replication state will have the endpoint and query params, eg:
-	 * -- 'products?stock_status=instock'
-	 *
-	 * NOTE: replication states can be shared between queryKeys
-	 */
-	public replicationStates: ReplicationCache<
+export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
+	public readonly queryStates: Registry<string, Query<RxCollection>>;
+	public readonly replicationStates: Registry<
 		string,
 		CollectionReplicationState<RxCollection> | QueryReplicationState<RxCollection>
-	> = new ReplicationCache();
+	>;
 
 	/**
-	 * Each queryKey should have one collection replication and at least one query replication
+	 * Each queryKey should have one collection replication and one query replication
 	 */
-	public queryKeyToReplicationsMap: Map<string, string[]> = new Map();
+	public readonly activeCollectionReplications: Registry<
+		string,
+		CollectionReplicationState<RxCollection>
+	>;
+	public readonly activeQueryReplications: Registry<string, QueryReplicationState<RxCollection>>;
 
 	/**
 	 *
 	 */
-	public readonly subs: Subscription[] = [];
 	public readonly subjects = {
 		error: new Subject<Error>(),
 	};
-
-	/**
-	 *
-	 */
 	readonly error$: Observable<Error> = this.subjects.error.asObservable();
 
 	constructor(
@@ -73,32 +56,17 @@ export class Manager<TDatabase extends RxDatabase> {
 		private httpClient,
 		private locale: string
 	) {
-		/**
-		 * Subscribe to localDB to detect if collection is reset
-		 */
+		super();
+		this.queryStates = new Registry();
+		this.replicationStates = new Registry();
+		this.activeCollectionReplications = new Registry();
+		this.activeQueryReplications = new Registry();
+
 		this.subs.push(
-			this.localDB.reset$.subscribe((col) => {
-				// find all queries that use this collection
-				this.queries.forEach((query, key) => {
-					if (query.collection.name === col.name) {
-						// cancel all replications
-						const endpoints = this.queryKeyToReplicationsMap.get(key);
-						endpoints.forEach((endpoint) => {
-							const replication = this.replicationStates.get(endpoint);
-							if (!replication) {
-								console.log('endpoint', endpoint);
-								console.log('replicationStates', this.replicationStates);
-							}
-							replication.cancel();
-							this.replicationStates.delete(endpoint);
-						});
-						this.queryKeyToReplicationsMap.delete(key);
-						// cancel the query
-						this.queries.delete(key);
-						query.cancel();
-					}
-				});
-			})
+			/**
+			 * Subscribe to localDB to detect if collection is reset
+			 */
+			this.localDB.reset$.subscribe(this.onCollectionReset.bind(this))
 		);
 	}
 
@@ -112,7 +80,7 @@ export class Manager<TDatabase extends RxDatabase> {
 
 	hasQuery(queryKeys: (string | number | object)[]): boolean {
 		const key = this.stringify(queryKeys);
-		return this.queries.has(key);
+		return this.queryStates.has(key);
 	}
 
 	registerQuery({ queryKeys, collectionName, initialParams, ...args }: RegisterQueryConfig) {
@@ -120,74 +88,26 @@ export class Manager<TDatabase extends RxDatabase> {
 		const endpoint = args.endpoint || collectionName;
 		const hooks = allHooks[collectionName] || {};
 
-		if (key && !this.queries.has(key)) {
+		if (!this.queryStates.has(key)) {
 			const collection = this.getCollection(collectionName);
 			if (collection) {
 				const searchService = new Search({ collection, locale: this.locale });
-				const query = new Query<typeof collection>({
+				const queryState = new Query<typeof collection>({
 					id: key,
 					collection,
 					initialParams,
 					hooks,
 					searchService,
+					endpoint,
+					errorSubject: this.subjects.error,
 				});
-				const collectionReplication = this.registerCollectionReplication({ collection, endpoint });
-				this.addQueryKeyToReplicationsMap(key, endpoint);
-				collectionReplication.start();
 
-				/**
-				 * Add some subscriptions for the Query Class
-				 * - these will be completed when the query instance is cancelled
-				 */
-				query.subs.push(
-					/**
-					 * Subscribe to query params and register a new replication state for the query
-					 * - also cancel the previous query replication
-					 */
-					query.params$.subscribe((params) => {
-						let apiQueryParams = this.getApiQueryParams(params);
-						if (hooks?.filterApiQueryParams) {
-							apiQueryParams = hooks.filterApiQueryParams(apiQueryParams, params);
-						}
-						const queryEndpoint = buildEndpointWithParams(endpoint, apiQueryParams);
-
-						if (!this.replicationStates.has(queryEndpoint)) {
-							const queryReplication = this.registerQueryReplication({
-								collectionReplication,
-								collection,
-								endpoint: queryEndpoint,
-							});
-
-							/**
-							 * Subscribe to the query trigger and trigger the query replication
-							 */
-							query.subs.push(
-								query.triggerServerQuery$.subscribe((page) => {
-									queryReplication.nextPage();
-								})
-							);
-
-							queryReplication.start();
-						}
-
-						this.addQueryKeyToReplicationsMap(key, queryEndpoint);
-					})
-				);
-
-				/**
-				 * Subscribe to query errors and pipe them to the error subject
-				 */
-				this.subs.push(
-					query.error$.subscribe((error) => {
-						this.subjects.error.next(error);
-					})
-				);
-
-				this.queries.set(key, query);
+				this.queryStates.set(key, queryState);
+				this.onNewQueryState(queryState);
 			}
 		}
 
-		return this.getQuery(queryKeys);
+		return this.queryStates.get(key);
 	}
 
 	getCollection(collectionName: string) {
@@ -199,7 +119,7 @@ export class Manager<TDatabase extends RxDatabase> {
 
 	getQuery(queryKeys: (string | number | object)[]) {
 		const key = this.stringify(queryKeys);
-		const query = this.queries.get(key);
+		const query = this.queryStates.get(key);
 
 		if (!query) {
 			this.subjects.error.next(new Error(`Query with key: ${key} not found.`));
@@ -208,38 +128,78 @@ export class Manager<TDatabase extends RxDatabase> {
 		return query;
 	}
 
-	deregisterQuery(queryKeys: (string | number | object)[]): void {
-		const key = this.stringify(queryKeys);
-		// cancel the query
-		const query = this.queries.get(key);
+	deregisterQuery(key: string): void {
+		const query = this.queryStates.get(key);
 		if (query) {
+			this.queryStates.delete(key);
+			this.activeCollectionReplications.delete(key);
+			this.activeQueryReplications.delete(key);
+
+			// cancel last, this will trigger the useQuery components to re-init the query
 			query.cancel();
-			this.queries.delete(key);
 		}
 	}
 
 	/**
-	 * TODO: I need track how many queries are using a replication state, ie:
-	 * increment / decrement a counter when a query is added / removed
+	 *
 	 */
-	addQueryKeyToReplicationsMap(key: string, endpoint: string) {
-		if (!this.queryKeyToReplicationsMap.has(key)) {
-			this.queryKeyToReplicationsMap.set(key, []);
-		}
-		const replications = this.queryKeyToReplicationsMap.get(key);
-		if (!replications.includes(endpoint)) {
-			replications.push(endpoint);
-		}
+	onCollectionReset(collection) {
+		// cancel all replication states for the collection
+		this.replicationStates.forEach((replication, endpoint) => {
+			if (replication.collection.name === collection.name) {
+				this.deregisterReplication(endpoint);
+			}
+		});
+
+		// cancel all query states for the collection
+		this.queryStates.forEach((query, key) => {
+			if (query.collection.name === collection.name) {
+				this.deregisterQuery(key);
+			}
+		});
 	}
 
-	getReplicationStatesByQueryID(key: string) {
-		const endpoints = this.queryKeyToReplicationsMap.get(key);
-		return endpoints.map((endpoint) => this.replicationStates.get(endpoint));
-	}
+	/**
+	 * Tasks to perform when a new query state is registered
+	 * - register a new collection replication state
+	 * - start the collection replication
+	 * - subscribe to the query params and register a new query replication state
+	 */
+	onNewQueryState(queryState: Query<RxCollection>) {
+		const { collection, endpoint } = queryState;
+		const collectionReplication = this.registerCollectionReplication({ collection, endpoint });
+		this.activeCollectionReplications.set(queryState.id, collectionReplication);
+		collectionReplication.start();
 
-	getReplicationStatesByQueryKeys(queryKeys: (string | number | object)[]) {
-		const key = this.stringify(queryKeys);
-		return this.getReplicationStatesByQueryID(key);
+		/**
+		 * Add internal subscriptions to the query state
+		 * @TODO - should this be part of the events system?
+		 */
+		queryState.subs.push(
+			/**
+			 * Subscribe to query params and register a new replication state for the query
+			 */
+			queryState.params$.subscribe((params) => {
+				let apiQueryParams = this.getApiQueryParams(params);
+				const hooks = allHooks[queryState.collection.name] || {};
+				if (hooks?.filterApiQueryParams) {
+					apiQueryParams = hooks.filterApiQueryParams(apiQueryParams, params);
+				}
+				const queryEndpoint = buildEndpointWithParams(endpoint, apiQueryParams);
+				const queryReplication = this.registerQueryReplication({
+					collectionReplication,
+					collection,
+					queryEndpoint,
+				});
+				if (this.activeQueryReplications.has(queryState.id)) {
+					this.activeQueryReplications.get(queryState.id).pause();
+					this.activeQueryReplications.delete(queryState.id);
+				}
+				this.activeQueryReplications.set(queryState.id, queryReplication);
+
+				queryReplication.start();
+			})
+		);
 	}
 
 	/**
@@ -251,16 +211,8 @@ export class Manager<TDatabase extends RxDatabase> {
 				httpClient: this.httpClient,
 				collection,
 				endpoint,
+				errorSubject: this.subjects.error,
 			});
-
-			/**
-			 * Subscribe to query errors and pipe them to the error subject
-			 */
-			this.subs.push(
-				collectionReplication.error$.subscribe((error) => {
-					this.subjects.error.next(error);
-				})
-			);
 
 			this.replicationStates.set(endpoint, collectionReplication);
 		}
@@ -269,27 +221,33 @@ export class Manager<TDatabase extends RxDatabase> {
 	}
 
 	/**
-	 * There is one replication state per unique query
+	 * There is one replication state per query endpoint
 	 */
-	registerQueryReplication({ endpoint, collectionReplication, collection }) {
-		const queryReplication = new QueryReplicationState({
-			httpClient: this.httpClient,
-			collectionReplication,
-			collection,
-			endpoint,
-		});
+	registerQueryReplication({ queryEndpoint, collectionReplication, collection }) {
+		if (!this.replicationStates.has(queryEndpoint)) {
+			const queryReplication = new QueryReplicationState({
+				httpClient: this.httpClient,
+				collectionReplication,
+				collection,
+				endpoint: queryEndpoint,
+				errorSubject: this.subjects.error,
+			});
 
-		/**
-		 * Subscribe to query errors and pipe them to the error subject
-		 */
-		this.subs.push(
-			queryReplication.error$.subscribe((error) => {
-				this.subjects.error.next(error);
-			})
-		);
+			this.replicationStates.set(queryEndpoint, queryReplication);
+		}
 
-		this.replicationStates.set(endpoint, queryReplication);
-		return queryReplication;
+		return this.replicationStates.get(queryEndpoint);
+	}
+
+	/**
+	 *
+	 */
+	deregisterReplication(endpoint: string) {
+		const replicationState = this.replicationStates.get(endpoint);
+		if (replicationState) {
+			replicationState.cancel();
+			this.replicationStates.delete(endpoint);
+		}
 	}
 
 	/**
@@ -326,13 +284,9 @@ export class Manager<TDatabase extends RxDatabase> {
 	 * - cancel all queries
 	 */
 	cancel() {
-		this.isCanceled = true;
-		this.subs.forEach((sub) => sub.unsubscribe());
-
-		// Complete subjects
-		this.subjects.error.complete();
+		super.cancel();
 
 		// Cancel all queries
-		this.queries.forEach((query) => query.cancel());
+		this.queryStates.forEach((query) => query.cancel());
 	}
 }

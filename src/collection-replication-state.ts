@@ -9,6 +9,7 @@ import {
 	distinctUntilChanged,
 } from 'rxjs/operators';
 
+import { SubscribableBase } from './subscribable-base';
 import { isArrayOfIntegers } from './utils';
 
 import type { RxCollection } from 'rxdb';
@@ -22,27 +23,28 @@ interface CollectionReplicationConfig<T extends RxCollection> {
 	httpClient: any;
 	hooks?: any;
 	endpoint: string;
+	errorSubject: Subject<Error>;
 }
 
-export class CollectionReplicationState<T extends RxCollection> {
+export class CollectionReplicationState<T extends RxCollection> extends SubscribableBase {
 	private hooks: CollectionReplicationConfig<T>['hooks'];
 	public readonly endpoint: string;
 	public readonly collection: T;
 	public readonly httpClient: any;
+	private errorSubject: Subject<Error>;
 
 	/**
 	 * Internal State
 	 */
-	private isCanceled = false;
 	private lastFetchRemoteIDsTime = null;
 	private pollingTime = 1000 * 60 * 5; // 5 minutes
+	private fetchRemoteIDsPromise: Promise<number[]>;
 
 	/**
 	 *
 	 */
 	public readonly subs: Subscription[] = [];
 	public readonly subjects = {
-		error: new Subject<Error>(),
 		active: new BehaviorSubject<boolean>(false), // true when something is running, false when not
 		remoteIDs: new BehaviorSubject<number[]>([]), // emits all remote ids that are known to the replication
 		localIDs: new BehaviorSubject<number[]>([]), // emits all local ids that are known to the replication
@@ -53,7 +55,6 @@ export class CollectionReplicationState<T extends RxCollection> {
 	/**
 	 *
 	 */
-	readonly error$: Observable<Error> = this.subjects.error.asObservable();
 	readonly active$: Observable<boolean> = this.subjects.active.asObservable();
 	readonly remoteIDs$: Observable<number[]> = this.subjects.remoteIDs.asObservable();
 	readonly localIDs$: Observable<number[]> = this.subjects.localIDs.asObservable();
@@ -69,11 +70,19 @@ export class CollectionReplicationState<T extends RxCollection> {
 	/**
 	 *
 	 */
-	constructor({ collection, httpClient, hooks, endpoint }: CollectionReplicationConfig<T>) {
+	constructor({
+		collection,
+		httpClient,
+		hooks,
+		endpoint,
+		errorSubject,
+	}: CollectionReplicationConfig<T>) {
+		super();
 		this.collection = collection;
 		this.httpClient = httpClient;
 		this.hooks = hooks || {};
 		this.endpoint = endpoint;
+		this.errorSubject = errorSubject;
 
 		// Initialize the firstSync promise
 		this.firstSync = new Promise<void>((resolve) => {
@@ -155,20 +164,11 @@ export class CollectionReplicationState<T extends RxCollection> {
 		}
 
 		try {
-			let remoteIDs;
-			if (this.lastFetchRemoteIDsTime < new Date().getTime() - this.pollingTime) {
-				remoteIDs = await this.fetchRemoteIDs();
-				if (isArrayOfIntegers(remoteIDs)) {
-					await this.collection.upsertLocal('audit', { remoteIDs });
-					this.subjects.remoteIDs.next(remoteIDs);
-				}
-			} else {
-				remoteIDs = this.subjects.remoteIDs.getValue();
-			}
+			const remoteIDs = await this.getRemoteIDs();
 
-			if (!Array.isArray(remoteIDs) || remoteIDs.length === 0) {
-				return;
-			}
+			// if (!Array.isArray(remoteIDs) || remoteIDs.length === 0) {
+			// 	return;
+			// }
 
 			/**
 			 * @TODO - variations can be orphaned at the moment, we need a relationship table with parent
@@ -180,7 +180,29 @@ export class CollectionReplicationState<T extends RxCollection> {
 				await this.collection.find({ selector: { id: { $in: remove } } }).remove();
 			}
 		} catch (error) {
-			this.subjects.error.next(error);
+			this.errorSubject.next(error);
+		}
+	}
+
+	/**
+	 * Get remote IDs from local storage or from the endpoint
+	 */
+	async getRemoteIDs() {
+		try {
+			let remoteIDs;
+			if (this.lastFetchRemoteIDsTime < new Date().getTime() - this.pollingTime) {
+				remoteIDs = await this.fetchRemoteIDs();
+				this.lastFetchRemoteIDsTime = new Date().getTime();
+				if (isArrayOfIntegers(remoteIDs)) {
+					await this.collection.upsertLocal('audit', { remoteIDs });
+				}
+			} else {
+				remoteIDs = await this.getStoredRemoteIDs();
+			}
+
+			return remoteIDs;
+		} catch (error) {
+			this.errorSubject.next(error);
 		}
 	}
 
@@ -199,27 +221,51 @@ export class CollectionReplicationState<T extends RxCollection> {
 			return this.hooks?.fetchRemoteIDs(this.endpoint, this.collection);
 		}
 
-		if (this.subjects.active.getValue()) {
-			return;
+		if (this.fetchRemoteIDsPromise) {
+			return this.fetchRemoteIDsPromise;
 		}
 
-		this.subjects.active.next(true);
+		this.fetchRemoteIDsPromise = new Promise<number[]>(async (resolve, reject) => {
+			this.subjects.active.next(true);
+			try {
+				const response = await this.httpClient.get(this.endpoint, {
+					params: { fields: ['id'], posts_per_page: -1 },
+				});
 
-		try {
-			const response = await this.httpClient.get(this.endpoint, {
-				params: { fields: ['id'], posts_per_page: -1 },
-			});
+				if (!response.data || !Array.isArray(response.data)) {
+					throw new Error('Invalid response data for remote IDs');
+				}
 
-			if (!response.data || !Array.isArray(response.data)) {
-				throw new Error('Invalid response data for remote IDs');
+				resolve(response.data.map((doc) => doc.id));
+			} catch (error) {
+				reject(error);
+				this.errorSubject.next(error);
+			} finally {
+				this.fetchRemoteIDsPromise = null;
+				this.subjects.active.next(false);
 			}
+		});
 
-			return response.data.map((doc) => doc.id);
-		} catch (error) {
-			this.subjects.error.next(error);
-		} finally {
-			this.subjects.active.next(false);
-		}
+		return this.fetchRemoteIDsPromise;
+	}
+
+	/**
+	 * TODO: when collection is reset, the remoteIDs subject is not updated before the
+	 * query is called again. I'm not really sure why.
+	 */
+	async getUnsyncedRemoteIDs() {
+		// const remoteIDs = this.subjects.remoteIDs.getValue();
+		const remoteIDs = await this.getRemoteIDs();
+		const localIDs = this.subjects.localIDs.getValue();
+		return remoteIDs.filter((id) => !localIDs.includes(id));
+	}
+
+	/**
+	 *
+	 */
+	async getStoredRemoteIDs() {
+		const doc = await this.collection.getLocal('audit');
+		return doc?.get('remoteIDs');
 	}
 
 	/**
@@ -228,19 +274,25 @@ export class CollectionReplicationState<T extends RxCollection> {
 	get total$() {
 		return combineLatest([this.remoteIDs$, this.unsyncedLocalDocs$]).pipe(
 			map(([remoteIDs, unsyncedLocalDocs]) => {
-				return remoteIDs.length + unsyncedLocalDocs.length;
+				return (remoteIDs || []).length + (unsyncedLocalDocs || []).length;
 			})
 		);
 	}
 
+	/**
+	 * Don't use this, total$ is subscribed and it throws an error because we can't
+	 * unsubscribe when the collection is reset. Use the subs above instead.
+	 */
+	// get remoteIDs$() {
+	// 	return this.collection.getLocal$('audit').pipe(
+	// 		map((doc) => {
+	// 			return doc?.get('remoteIDs');
+	// 		})
+	// 	);
+	// }
+
 	get unsyncedLocalDocs$() {
 		return this.collection.find({ selector: { id: null } }).$;
-	}
-
-	getUnsyncedRemoteIDs() {
-		const remoteIDs = this.subjects.remoteIDs.getValue();
-		const localIDs = this.subjects.localIDs.getValue();
-		return remoteIDs.filter((id) => !localIDs.includes(id));
 	}
 
 	/**
@@ -259,7 +311,7 @@ export class CollectionReplicationState<T extends RxCollection> {
 			await doc.incrementalPatch(parsedData);
 			return doc;
 		} catch (error) {
-			this.subjects.error.next(error);
+			this.errorSubject.next(error);
 		}
 	}
 
@@ -271,7 +323,7 @@ export class CollectionReplicationState<T extends RxCollection> {
 			const doc = await this.collection.upsert(parsedData);
 			return doc;
 		} catch (error) {
-			this.subjects.error.next(error);
+			this.errorSubject.next(error);
 		}
 	}
 
@@ -288,20 +340,5 @@ export class CollectionReplicationState<T extends RxCollection> {
 
 	isStopped() {
 		return this.isCanceled || this.subjects.paused.getValue();
-	}
-
-	/**
-	 * Cancel
-	 *
-	 * Make sure we clean up subscriptions:
-	 * - things we subscribe to in this class, also
-	 * - complete the observables accessible from this class
-	 */
-	cancel() {
-		this.isCanceled = true;
-		this.subs.forEach((sub) => sub.unsubscribe());
-
-		// Complete subjects
-		this.subjects.error.complete();
 	}
 }

@@ -10,6 +10,8 @@ import {
 	distinctUntilChanged,
 } from 'rxjs/operators';
 
+import { SubscribableBase } from './subscribable-base';
+
 import type { CollectionReplicationState } from './collection-replication-state';
 import type { RxCollection } from 'rxdb';
 
@@ -19,14 +21,15 @@ interface QueryReplicationConfig<T extends RxCollection> {
 	collectionReplication: CollectionReplicationState<T>;
 	hooks?: any;
 	endpoint: string;
+	errorSubject: Subject<Error>;
 }
 
-export class QueryReplicationState<T extends RxCollection> {
-	private isCanceled = false;
+export class QueryReplicationState<T extends RxCollection> extends SubscribableBase {
 	private pollingTime = 1000 * 60 * 5; // 5 minutes
 	public readonly collection: T;
 	public readonly httpClient: any;
 	public readonly endpoint: any;
+	private errorSubject: Subject<Error>;
 	public readonly collectionReplication: CollectionReplicationState<T>;
 
 	/**
@@ -34,7 +37,6 @@ export class QueryReplicationState<T extends RxCollection> {
 	 */
 	public readonly subs: Subscription[] = [];
 	public readonly subjects = {
-		error: new Subject<Error>(),
 		paused: new BehaviorSubject<boolean>(true), // true when the replication is paused, start true
 		active: new BehaviorSubject<boolean>(false), // true when something is running, false when not
 	};
@@ -42,7 +44,6 @@ export class QueryReplicationState<T extends RxCollection> {
 	/**
 	 *
 	 */
-	readonly error$: Observable<Error> = this.subjects.error.asObservable();
 	readonly paused$: Observable<boolean> = this.subjects.paused.asObservable();
 	readonly active$: Observable<boolean> = this.subjects.active.asObservable();
 
@@ -54,11 +55,14 @@ export class QueryReplicationState<T extends RxCollection> {
 		httpClient,
 		collectionReplication,
 		endpoint,
+		errorSubject,
 	}: QueryReplicationConfig<T>) {
+		super();
 		this.collection = collection;
 		this.httpClient = httpClient;
 		this.endpoint = endpoint;
 		this.collectionReplication = collectionReplication;
+		this.errorSubject = errorSubject;
 
 		/**
 		 *
@@ -98,8 +102,7 @@ export class QueryReplicationState<T extends RxCollection> {
 			return;
 		}
 
-		this.subjects.active.next(true);
-		const include = this.collectionReplication.getUnsyncedRemoteIDs();
+		const include = await this.collectionReplication.getUnsyncedRemoteIDs();
 		const lastModified = this.collectionReplication.subjects.lastModified.getValue();
 
 		/**
@@ -108,6 +111,8 @@ export class QueryReplicationState<T extends RxCollection> {
 		if (isEmpty(include) && !lastModified) {
 			return;
 		}
+
+		this.subjects.active.next(true);
 
 		try {
 			let response;
@@ -119,7 +124,7 @@ export class QueryReplicationState<T extends RxCollection> {
 			}
 
 			if (!response.data) {
-				this.subjects.error.next(response);
+				this.errorSubject.next(response);
 			}
 
 			const promises = response.data.map(async (doc) => {
@@ -132,7 +137,7 @@ export class QueryReplicationState<T extends RxCollection> {
 
 			await this.collection.bulkUpsert(documents);
 		} catch (error) {
-			this.subjects.error.next(error);
+			this.errorSubject.next(error);
 		} finally {
 			this.subjects.active.next(false);
 		}
@@ -190,20 +195,5 @@ export class QueryReplicationState<T extends RxCollection> {
 
 	isStopped() {
 		return this.isCanceled || this.subjects.paused.getValue();
-	}
-
-	/**
-	 * Cancel
-	 *
-	 * Make sure we clean up subscriptions:
-	 * - things we subscribe to in this class, also
-	 * - complete the observables accessible from this class
-	 */
-	cancel() {
-		this.isCanceled = true;
-		this.subs.forEach((sub) => sub.unsubscribe());
-
-		// Complete subjects
-		this.subjects.error.complete();
 	}
 }
