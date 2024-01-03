@@ -79,9 +79,10 @@ export const useReplicationState = (
 	/**
 	 *
 	 */
-	const sync = React.useCallback(() => {
-		console.log('sync');
-	}, []);
+	const sync = React.useCallback(async () => {
+		await collectionReplication.run({ force: true });
+		await queryReplication.run({ force: true });
+	}, [collectionReplication, queryReplication]);
 
 	return {
 		active$,

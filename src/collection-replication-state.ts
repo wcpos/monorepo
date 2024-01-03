@@ -1,3 +1,4 @@
+import isEmpty from 'lodash/isEmpty';
 import { BehaviorSubject, Observable, Subscription, Subject, interval, combineLatest } from 'rxjs';
 import {
 	filter,
@@ -90,23 +91,28 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 		});
 
 		/**
-		 * Subscribe to the remoteIDs local document
+		 * Push internal subscriptions to the subs array
 		 */
 		this.subs.push(
-			collection.getLocal$('audit').subscribe((doc) => {
-				if (doc) {
-					this.subjects.remoteIDs.next(doc.get('remoteIDs'));
-				}
-			})
-		);
+			/**
+			 * Subscribe to the remoteIDs local document
+			 */
+			collection
+				.getLocal$('audit')
+				.pipe(
+					filter((localDoc) => !!localDoc),
+					map((localDoc) => localDoc.get('remoteIDs'))
+				)
+				.subscribe((remoteIDs) => {
+					this.subjects.remoteIDs.next(remoteIDs);
+				}),
 
-		/**
-		 * Subscribe to collection changes and track the array of localIDs and lastModified date
-		 * @TODO - categories and tags don't have a date_modified_gmt field, what to do?
-		 * @TODO - get the IDs without having to construict the whole document
-		 */
-		this.subs.push(
-			this.collection
+			/**
+			 * Subscribe to collection changes and track the array of localIDs and lastModified date
+			 * @TODO - categories and tags don't have a date_modified_gmt field, what to do?
+			 * @TODO - get the IDs without having to construict the whole document
+			 */
+			collection
 				.find({
 					selector: {
 						id: { $ne: null },
@@ -125,13 +131,11 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 					const lastModified = docs[0]?.get('date_modified_gmt');
 					this.subjects.localIDs.next(ids);
 					this.subjects.lastModified.next(lastModified);
-				})
-		);
+				}),
 
-		/**
-		 *
-		 */
-		this.subs.push(
+			/**
+			 * Set up a polling interval to run the replication
+			 */
 			this.paused$
 				.pipe(
 					switchMap((isPaused) => (isPaused ? [] : interval(this.pollingTime).pipe(startWith(0)))),
@@ -146,7 +150,11 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	/**
 	 * Run the collection replication
 	 */
-	async run() {
+	async run({ force }: { force?: boolean } = {}) {
+		if (force) {
+			this.lastFetchRemoteIDsTime = null;
+		}
+
 		await this.auditIDs();
 
 		if (this.firstSyncResolver) {
@@ -159,7 +167,7 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	 *
 	 */
 	async auditIDs() {
-		if (this.isStopped()) {
+		if (this.isStopped() || this.subjects.active.getValue()) {
 			return;
 		}
 
@@ -189,18 +197,16 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	 */
 	async getRemoteIDs() {
 		try {
-			let remoteIDs;
 			if (this.lastFetchRemoteIDsTime < new Date().getTime() - this.pollingTime) {
-				remoteIDs = await this.fetchRemoteIDs();
+				const remoteIDs = await this.fetchRemoteIDs();
 				this.lastFetchRemoteIDsTime = new Date().getTime();
 				if (isArrayOfIntegers(remoteIDs)) {
-					await this.collection.upsertLocal('audit', { remoteIDs });
+					this.subjects.remoteIDs.next(remoteIDs); // update the remoteIDs subject immediately
+					this.collection.upsertLocal('audit', { remoteIDs }); // store the remoteIDs locally
 				}
-			} else {
-				remoteIDs = await this.getStoredRemoteIDs();
 			}
 
-			return remoteIDs;
+			return this.subjects.remoteIDs.getValue();
 		} catch (error) {
 			this.errorSubject.next(error);
 		}
@@ -221,32 +227,23 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 			return this.hooks?.fetchRemoteIDs(this.endpoint, this.collection);
 		}
 
-		if (this.fetchRemoteIDsPromise) {
-			return this.fetchRemoteIDsPromise;
-		}
+		this.subjects.active.next(true);
 
-		this.fetchRemoteIDsPromise = new Promise<number[]>(async (resolve, reject) => {
-			this.subjects.active.next(true);
-			try {
-				const response = await this.httpClient.get(this.endpoint, {
-					params: { fields: ['id'], posts_per_page: -1 },
-				});
+		try {
+			const response = await this.httpClient.get(this.endpoint, {
+				params: { fields: ['id'], posts_per_page: -1 },
+			});
 
-				if (!response.data || !Array.isArray(response.data)) {
-					throw new Error('Invalid response data for remote IDs');
-				}
-
-				resolve(response.data.map((doc) => doc.id));
-			} catch (error) {
-				reject(error);
-				this.errorSubject.next(error);
-			} finally {
-				this.fetchRemoteIDsPromise = null;
-				this.subjects.active.next(false);
+			if (!response.data || !Array.isArray(response.data)) {
+				throw new Error('Invalid response data for remote IDs');
 			}
-		});
 
-		return this.fetchRemoteIDsPromise;
+			return response.data.map((doc) => doc.id);
+		} catch (error) {
+			this.errorSubject.next(error);
+		} finally {
+			this.subjects.active.next(false);
+		}
 	}
 
 	/**
@@ -254,8 +251,8 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	 * query is called again. I'm not really sure why.
 	 */
 	async getUnsyncedRemoteIDs() {
-		// const remoteIDs = this.subjects.remoteIDs.getValue();
-		const remoteIDs = await this.getRemoteIDs();
+		await this.firstSync;
+		const remoteIDs = this.subjects.remoteIDs.getValue();
 		const localIDs = this.subjects.localIDs.getValue();
 		return remoteIDs.filter((id) => !localIDs.includes(id));
 	}
@@ -266,6 +263,81 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	async getStoredRemoteIDs() {
 		const doc = await this.collection.getLocal('audit');
 		return doc?.get('remoteIDs');
+	}
+
+	/**
+	 *
+	 */
+	async fetchUnsynced() {
+		if (this.isStopped() || this.subjects.active.getValue()) {
+			return;
+		}
+
+		const include = await this.getUnsyncedRemoteIDs();
+		const lastModified = this.subjects.lastModified.getValue();
+
+		this.subjects.active.next(true);
+
+		try {
+			let response;
+			if (isEmpty(include)) {
+				response = await this.fetchLastModified({ lastModified });
+			} else {
+				response = await this.fetchUnsyncedRemoteIDs({ include });
+			}
+
+			if (!response.data || !Array.isArray(response.data)) {
+				throw new Error('Invalid response data for query replication');
+			}
+
+			const promises = response.data.map(async (doc) => {
+				const parsedData = this.collection.parseRestResponse(doc);
+				await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+				return parsedData;
+			});
+
+			const documents = await Promise.all(promises);
+
+			await this.collection.bulkUpsert(documents);
+		} catch (error) {
+			this.errorSubject.next(error);
+		} finally {
+			this.subjects.active.next(false);
+		}
+	}
+
+	/**
+	 *
+	 */
+	async fetchUnsyncedRemoteIDs({ include }) {
+		this.subjects.active.next(true);
+
+		const response = await this.httpClient.post(
+			this.endpoint,
+			{
+				include,
+			},
+			{
+				headers: {
+					'X-HTTP-Method-Override': 'GET',
+				},
+			}
+		);
+
+		return response;
+	}
+
+	/**
+	 *
+	 */
+	async fetchLastModified({ lastModified }) {
+		const response = await this.httpClient.get(this.endpoint, {
+			params: {
+				modified_after: lastModified,
+			},
+		});
+
+		return response;
 	}
 
 	/**

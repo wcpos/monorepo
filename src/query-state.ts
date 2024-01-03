@@ -6,6 +6,8 @@ import { ObservableResource } from 'observable-hooks';
 import { BehaviorSubject, Observable, Subscription, Subject } from 'rxjs';
 import { map, switchMap, distinctUntilChanged } from 'rxjs/operators';
 
+import { SubscribableBase } from './subscribable-base';
+
 import type { Search } from './search-state';
 import type { RxCollection, RxDocument } from 'rxdb';
 
@@ -35,6 +37,7 @@ export interface QueryConfig<T> {
 	hooks?: QueryHooks;
 	searchService: Search;
 	endpoint?: string;
+	errorSubject: Subject<Error>;
 }
 
 type WhereClause = { field: string; value: any };
@@ -42,10 +45,9 @@ type WhereClause = { field: string; value: any };
 /**
  * A wrapper class for RxDB queries
  */
-export class Query<T extends RxCollection> {
+export class Query<T extends RxCollection> extends SubscribableBase {
 	public readonly id: string;
 	public collection: T;
-	private isCanceled = false;
 	private whereClauses: WhereClause[] = [];
 	private hooks: QueryConfig<T>['hooks'];
 	private paginationEndReached = false;
@@ -53,6 +55,7 @@ export class Query<T extends RxCollection> {
 	private searchService: Search;
 	private activeSearchSubscription: Subscription | null = null;
 	public readonly endpoint: string;
+	private errorSubject: Subject<Error>;
 
 	/**
 	 *
@@ -61,11 +64,9 @@ export class Query<T extends RxCollection> {
 	public readonly subjects = {
 		params: new BehaviorSubject<QueryParams | undefined>(undefined),
 		result: new BehaviorSubject<DocumentType<T>[]>([]),
-		error: new Subject<Error>(),
-		cancel: new Subject<void>(),
 		currentPage: new BehaviorSubject<number>(1),
 		paginatedResult: new BehaviorSubject<DocumentType<T>[]>([]),
-		triggerServerQuery: new Subject<void>(),
+		paginationEndReachedNextPage: new Subject<void>(),
 	};
 
 	/**
@@ -73,12 +74,11 @@ export class Query<T extends RxCollection> {
 	 */
 	readonly params$: Observable<QueryParams | undefined> = this.subjects.params.asObservable();
 	readonly result$: Observable<DocumentType<T>[]> = this.subjects.result.asObservable();
-	readonly error$: Observable<Error> = this.subjects.error.asObservable();
-	readonly cancel$: Observable<void> = this.subjects.cancel.asObservable();
 	readonly currentPage$: Observable<number> = this.subjects.currentPage.asObservable();
 	readonly paginatedResult$: Observable<DocumentType<T>[]> =
 		this.subjects.paginatedResult.asObservable();
-	readonly triggerServerQuery$: Observable<void> = this.subjects.triggerServerQuery.asObservable();
+	readonly paginationEndReachedNextPage$: Observable<void> =
+		this.subjects.paginationEndReachedNextPage.asObservable();
 
 	readonly resource = new ObservableResource(this.result$);
 	readonly paginatedResource = new ObservableResource(this.paginatedResult$);
@@ -93,7 +93,9 @@ export class Query<T extends RxCollection> {
 		hooks,
 		searchService,
 		endpoint,
+		errorSubject,
 	}: QueryConfig<T>) {
+		super();
 		this.id = id;
 		this.collection = collection;
 		this.subjects.params.next(initialParams);
@@ -101,6 +103,7 @@ export class Query<T extends RxCollection> {
 		this.pageSize = 10;
 		this.searchService = searchService;
 		this.endpoint = endpoint;
+		this.errorSubject = errorSubject;
 
 		/**
 		 * Keep track of what we are subscribed to
@@ -118,18 +121,24 @@ export class Query<T extends RxCollection> {
 			 */
 			this.result$
 				.pipe(
-					switchMap((items) =>
-						this.currentPage$.pipe(
+					switchMap((items) => {
+						if (this.paginationEndReached) {
+							const page = this.subjects.currentPage.value + 1;
+							this.subjects.currentPage.next(page);
+						}
+						return this.currentPage$.pipe(
 							map((currentPage) => {
 								const end = currentPage * this.pageSize;
 								const pageItems = items.slice(0, end);
-								this.paginationEndReached = pageItems.length < end;
+								this.paginationEndReached = pageItems.length === items.length;
 								return pageItems;
 							})
-						)
-					)
+						);
+					})
 				)
-				.subscribe(this.subjects.paginatedResult)
+				.subscribe((result) => {
+					this.subjects.paginatedResult.next(result);
+				})
 		);
 	}
 
@@ -298,32 +307,13 @@ export class Query<T extends RxCollection> {
 			this.subjects.currentPage.next(page);
 		} else {
 			// the Query Replication will listen for this event and trigger a server query
-			this.subjects.triggerServerQuery.next();
+			this.subjects.paginationEndReachedNextPage.next();
 		}
 	}
 
 	paginationReset() {
 		this.paginationEndReached = false;
 		this.subjects.currentPage.next(1);
-	}
-
-	/**
-	 * Cancel
-	 *
-	 * Make sure we clean up subscriptions:
-	 * - things we subscribe to in this class, also
-	 * - complete the observables accessible from this class
-	 */
-	cancel() {
-		this.isCanceled = true;
-		this.subs.forEach((sub) => sub.unsubscribe());
-
-		// Complete subjects
-		this.subjects.params.complete();
-		this.subjects.result.complete();
-		this.subjects.error.complete();
-
-		this.subjects.cancel.next();
 	}
 }
 

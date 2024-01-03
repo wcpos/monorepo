@@ -198,6 +198,15 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				this.activeQueryReplications.set(queryState.id, queryReplication);
 
 				queryReplication.start();
+			}),
+
+			/**
+			 * Subscribe to paginationEndReachedNextPage and trigger a new query fetch
+			 */
+			queryState.paginationEndReachedNextPage$.subscribe(() => {
+				if (this.activeQueryReplications.has(queryState.id)) {
+					this.activeQueryReplications.get(queryState.id).nextPage();
+				}
 			})
 		);
 	}
@@ -268,7 +277,9 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 		if (queryParams?.selector) {
 			forEach(queryParams.selector, (value, key) => {
-				params[key] = value;
+				if (key !== 'uuid') {
+					params[key] = value;
+				}
 			});
 		}
 
@@ -288,5 +299,8 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 		// Cancel all queries
 		this.queryStates.forEach((query) => query.cancel());
+
+		// Cancel all replications
+		this.replicationStates.forEach((replication) => replication.cancel());
 	}
 }

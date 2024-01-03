@@ -31,6 +31,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	public readonly endpoint: any;
 	private errorSubject: Subject<Error>;
 	public readonly collectionReplication: CollectionReplicationState<T>;
+	public syncCompleted = false;
 
 	/**
 	 *
@@ -79,40 +80,37 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 				.subscribe(async () => {
 					this.run();
 				})
-
-			/**
-			 *
-			 */
 		);
 	}
 
 	/**
 	 *
 	 */
-	async run() {
+	async run({ force }: { force?: boolean } = {}) {
 		await this.collectionReplication.firstSync;
-		await this.runPull();
+		await this.fetchUnsynced();
 	}
 
 	/**
 	 *
 	 */
-	async runPull() {
+	async fetchUnsynced() {
 		if (this.isStopped() || this.subjects.active.getValue()) {
 			return;
 		}
+
+		this.subjects.active.next(true);
 
 		const include = await this.collectionReplication.getUnsyncedRemoteIDs();
 		const lastModified = this.collectionReplication.subjects.lastModified.getValue();
 
 		/**
-		 * If there is nothing to fetch, then return
+		 * If query sync is already completed, we go to the collection sync
 		 */
-		if (isEmpty(include) && !lastModified) {
-			return;
+		if (this.syncCompleted) {
+			this.subjects.active.next(false);
+			return this.collectionReplication.fetchUnsynced();
 		}
-
-		this.subjects.active.next(true);
 
 		try {
 			let response;
@@ -120,11 +118,15 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 			if (isEmpty(include)) {
 				response = await this.fetchLastModified({ lastModified });
 			} else {
-				response = await this.fetchRemoteIDs({ include });
+				response = await this.fetchUnsyncedRemoteIDs({ include });
 			}
 
-			if (!response.data) {
-				this.errorSubject.next(response);
+			if (!response.data || !Array.isArray(response.data)) {
+				throw new Error('Invalid response data for query replication');
+			}
+
+			if (response.data.length === 0) {
+				this.syncCompleted = true;
 			}
 
 			const promises = response.data.map(async (doc) => {
@@ -146,7 +148,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	/**
 	 *
 	 */
-	async fetchRemoteIDs({ include }) {
+	async fetchUnsyncedRemoteIDs({ include }) {
 		const response = await this.httpClient.post(
 			this.endpoint,
 			{
