@@ -13,6 +13,7 @@ interface QueryOptions {
 	initialParams?: QueryParams;
 	hooks?: QueryHooks;
 	locale?: string;
+	endpoint?: string;
 }
 
 export const useQuery = (queryOptions: QueryOptions) => {

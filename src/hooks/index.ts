@@ -12,6 +12,6 @@ export default {
 	orders,
 	products,
 	'products/tags': tags,
-	'tax-rates': taxRates,
+	taxes: taxRates,
 	variations,
 };

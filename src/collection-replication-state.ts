@@ -38,8 +38,8 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	 * Internal State
 	 */
 	private lastFetchRemoteIDsTime = null;
+	private lastFetchUnsyncedTime = null;
 	private pollingTime = 1000 * 60 * 5; // 5 minutes
-	private fetchRemoteIDsPromise: Promise<number[]>;
 
 	/**
 	 *
@@ -125,7 +125,9 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 				})
 				.$.subscribe((docs) => {
 					/**
-					 * @TODO - I need to change the tax-rates schema to make sure id is always integer
+					 * NOTE: some schemas store use the remoteID as the primary key, which in rxdb
+					 * must be a string. So we have to make sure the id is an integer so we can compare
+					 * it to the remoteIDs array.
 					 */
 					const ids = docs.map((doc) => parseInt(doc.get('id'), 10));
 					const lastModified = docs[0]?.get('date_modified_gmt');
@@ -153,6 +155,7 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	async run({ force }: { force?: boolean } = {}) {
 		if (force) {
 			this.lastFetchRemoteIDsTime = null;
+			this.lastFetchUnsyncedTime = null;
 		}
 
 		await this.auditIDs();
@@ -273,6 +276,12 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 			return;
 		}
 
+		// Limit the number of times we fetch unsynced docs to keep server load down
+		if (this.lastFetchUnsyncedTime < new Date().getTime() - this.pollingTime) {
+			return;
+		}
+		this.lastFetchUnsyncedTime = new Date().getTime();
+
 		const include = await this.getUnsyncedRemoteIDs();
 		const lastModified = this.subjects.lastModified.getValue();
 
@@ -363,8 +372,18 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	// 	);
 	// }
 
+	/**
+	 *
+	 */
 	get unsyncedLocalDocs$() {
-		return this.collection.find({ selector: { id: null } }).$;
+		return this.collection.find({
+			selector: {
+				$or: [
+					{ id: null }, // Matches documents where id is explicitly null
+					{ id: { $exists: false } }, // Matches documents where id is not defined
+				],
+			},
+		}).$;
 	}
 
 	/**

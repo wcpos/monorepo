@@ -17,20 +17,23 @@ interface APIQueryParams {
 /**
  *
  */
-const preQuerySelector = (selector, queryState) => {
+const preQueryParams = (queryParams) => {
 	/**
 	 * @TODO - do I need to incorporate the old selector?
 	 */
 	const newSelector = {};
-	if (queryState.search && typeof queryState.search === 'object') {
+	if (queryParams.search && typeof queryParams.search === 'object') {
 		// pick out country, state, city and postcode from q.search
-		const { country, state } = queryState.search;
+		const { country, state } = queryParams.search;
 		newSelector.$and = [{ $or: [{ country }, { country: '' }] }];
 		if (state) {
 			newSelector.$and.push({ $or: [{ state }, { state: '' }] });
 		}
 	}
-	return newSelector;
+
+	queryParams.selector = newSelector;
+
+	return queryParams;
 };
 
 /**
@@ -52,9 +55,9 @@ const filterApiQueryParams = (params, include) => {
 	/**
 	 * Taxes don't have a date field, so if localIDs = remoteIDs, then we can skip the API call
 	 */
-	if (isEmpty(include)) {
-		return false;
-	}
+	// if (isEmpty(include)) {
+	// 	return false;
+	// }
 
 	/**
 	 * FIXME: taxes have no include/exclude, so I'm just going to fetch all of them
@@ -65,4 +68,4 @@ const filterApiQueryParams = (params, include) => {
 	return params;
 };
 
-export { preQuerySelector, postQueryResult, filterApiQueryParams };
+export { preQueryParams, postQueryResult, filterApiQueryParams };
