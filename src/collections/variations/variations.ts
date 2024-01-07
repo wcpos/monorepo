@@ -21,6 +21,9 @@ export const productVariations = {
 			return oldDoc;
 		},
 	},
+	options: {
+		searchFields: ['sku', 'barcode'],
+	},
 	// statics: {},
 	// methods: {},
 	// attachments: {},
