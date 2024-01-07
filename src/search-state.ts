@@ -6,7 +6,7 @@ import { map, distinctUntilChanged, switchMap, tap } from 'rxjs/operators';
 import { maybeCreateSearchDB } from './search-dbs';
 
 import type { Orama } from '@orama/orama';
-import type { RxCollection } from 'rxdb';
+import type { RxCollection, RxDocument } from 'rxdb';
 
 /**
  * Orama Search Service for WooCommerce POS
@@ -28,12 +28,6 @@ export class Search {
 		error: new Subject<Error>(),
 	};
 
-	/**
-	 * A new search subject is created each time search$ is called
-	 * - we need this to push new results if the searchDB changes
-	 */
-	private currentSearchSubject: Subject<string[]> | null = null;
-
 	constructor({ collection, locale }) {
 		this.searchFields = collection.options.searchFields || [];
 
@@ -46,7 +40,7 @@ export class Search {
 		this.searchDBPromise = maybeCreateSearchDB(collection, locale);
 	}
 
-	async search(term: string, options: object = {}, searchDB): Promise<string[] | null> {
+	async search(term: string, options: object = {}, searchDB) {
 		const limit = await count(searchDB);
 		const config = defaults(
 			{
@@ -56,9 +50,7 @@ export class Search {
 			},
 			options
 		);
-		const { hits } = await search(searchDB, { term, ...config });
-		const uuids = hits.map((hit: { id: string }) => hit.id);
-		return uuids;
+		return search(searchDB, { term, ...config });
 	}
 
 	/**

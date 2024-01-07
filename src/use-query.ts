@@ -7,7 +7,7 @@ import { useQueryManager } from './provider';
 
 import type { QueryParams, QueryHooks } from './query-state';
 
-interface QueryOptions {
+export interface QueryOptions {
 	queryKeys: (string | number | object)[];
 	collectionName: string;
 	initialParams?: QueryParams;

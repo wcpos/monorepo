@@ -1,9 +1,12 @@
 import { orderBy } from '@shelf/fast-natural-order-by';
 import debounce from 'lodash/debounce';
+import forEach from 'lodash/forEach';
+import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
 import { ObservableResource } from 'observable-hooks';
-import { BehaviorSubject, Observable, Subscription, Subject } from 'rxjs';
+import { doc } from 'prettier';
+import { BehaviorSubject, Observable, Subscription, Subject, combineLatest } from 'rxjs';
 import { map, switchMap, distinctUntilChanged } from 'rxjs/operators';
 
 import { SubscribableBase } from './subscribable-base';
@@ -42,6 +45,18 @@ export interface QueryConfig<T> {
 
 type WhereClause = { field: string; value: any };
 
+export interface QueryResult<T> {
+	elapsed: number;
+	searchActive: boolean;
+	count?: number;
+	hits: {
+		id: string;
+		score: number;
+		document: DocumentType<T>;
+		positions?: Record<string, object>;
+	}[];
+}
+
 /**
  * A wrapper class for RxDB queries
  */
@@ -53,7 +68,6 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	private paginationEndReached = false;
 	private pageSize: number;
 	private searchService: Search;
-	private activeSearchSubscription: Subscription | null = null;
 	public readonly endpoint: string;
 	private errorSubject: Subject<Error>;
 
@@ -63,22 +77,23 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	public readonly subs: Subscription[] = [];
 	public readonly subjects = {
 		params: new BehaviorSubject<QueryParams | undefined>(undefined),
-		result: new BehaviorSubject<DocumentType<T>[]>([]),
+		result: new Subject<QueryResult<T>>(),
 		currentPage: new BehaviorSubject<number>(1),
 		paginatedResult: new BehaviorSubject<DocumentType<T>[]>([]),
 		paginationEndReachedNextPage: new Subject<void>(),
+		additionalSearchResults: new BehaviorSubject<QueryResult<T>>(undefined),
 	};
 
 	/**
 	 *
 	 */
-	readonly params$: Observable<QueryParams | undefined> = this.subjects.params.asObservable();
-	readonly result$: Observable<DocumentType<T>[]> = this.subjects.result.asObservable();
-	readonly currentPage$: Observable<number> = this.subjects.currentPage.asObservable();
-	readonly paginatedResult$: Observable<DocumentType<T>[]> =
-		this.subjects.paginatedResult.asObservable();
-	readonly paginationEndReachedNextPage$: Observable<void> =
+	readonly params$ = this.subjects.params.asObservable();
+	readonly result$ = this.subjects.result.asObservable();
+	readonly currentPage$ = this.subjects.currentPage.asObservable();
+	readonly paginatedResult$ = this.subjects.paginatedResult.asObservable();
+	readonly paginationEndReachedNextPage$ =
 		this.subjects.paginationEndReachedNextPage.asObservable();
+	readonly additionalSearchResults$ = this.subjects.additionalSearchResults.asObservable();
 
 	readonly resource = new ObservableResource(this.result$);
 	readonly paginatedResource = new ObservableResource(this.paginatedResult$);
@@ -98,12 +113,19 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		super();
 		this.id = id;
 		this.collection = collection;
-		this.subjects.params.next(initialParams);
 		this.hooks = hooks || {};
 		this.pageSize = 10;
 		this.searchService = searchService;
 		this.endpoint = endpoint;
 		this.errorSubject = errorSubject;
+
+		/**
+		 * Set initial params
+		 */
+		forEach(initialParams.selector, (value, key) => {
+			this.whereClauses.push({ field: key, value });
+		});
+		this.subjects.params.next(initialParams);
 
 		/**
 		 * Keep track of what we are subscribed to
@@ -148,6 +170,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	private get find$() {
 		return this.params$.pipe(
 			switchMap((params) => {
+				const startTime = performance.now(); // Start time measurement
 				let modifiedParams = params || {};
 
 				// Apply the preQueryParams hook if provided
@@ -155,35 +178,88 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 					modifiedParams = this.hooks.preQueryParams(modifiedParams);
 				}
 
-				return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
-					map((docs: DocumentType<T>[]) => {
-						/**
-						 * Sorting wasn't working for string numbers, so I'm handling sorting here
-						 */
-						const { sortBy, sortDirection } = modifiedParams;
-						let sortedResult = docs;
+				const searchActive =
+					typeof modifiedParams.search === 'string' && !isEmpty(modifiedParams.search);
 
-						if (sortBy && sortDirection) {
-							sortedResult = orderBy(docs, [(v) => v[sortBy]], [sortDirection]);
-						}
+				if (searchActive) {
+					return combineLatest([
+						this.searchService.search$(modifiedParams.search),
+						this.additionalSearchResults$,
+					]).pipe(
+						switchMap(([searchResults, additionalSearchResults]) => {
+							return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
+								map((docs) => {
+									if (additionalSearchResults) {
+										const combinedHits = [...searchResults.hits, ...additionalSearchResults.hits];
+										const uniqueHits = Array.from(
+											new Map(combinedHits.map((hit) => [hit.id, hit])).values()
+										);
+										uniqueHits.sort((a, b) => b.score - a.score);
+										searchResults.count = uniqueHits.length;
+										searchResults.hits = uniqueHits;
+										console.log('searchResults', searchResults);
+									}
+									const filteredAndSortedDocs = searchResults.hits
+										.map((hit) => ({
+											...hit,
+											document: docs.find((doc) => doc.uuid === hit.id),
+										}))
+										.filter((hit) => hit.document !== undefined);
 
-						if (this.hooks?.postQueryResult) {
-							sortedResult = this.hooks.postQueryResult(docs, modifiedParams);
-						}
+									const endTime = performance.now(); // End time measurement
+									const elapsed = endTime - startTime;
 
-						return sortedResult;
-					})
-				);
-			}),
+									return {
+										elapsed,
+										searchActive: true,
+										hits: filteredAndSortedDocs,
+									};
+								})
+							);
+						})
+					);
+				} else {
+					return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
+						map((docs: DocumentType<T>[]) => {
+							/**
+							 * Sorting wasn't working for string numbers, so I'm handling sorting here
+							 */
+							const { sortBy, sortDirection } = modifiedParams;
+							let sortedResult = docs;
+
+							if (sortBy && sortDirection) {
+								sortedResult = orderBy(docs, [(v) => v[sortBy]], [sortDirection]);
+							}
+
+							if (this.hooks?.postQueryResult) {
+								sortedResult = this.hooks.postQueryResult(docs, modifiedParams);
+							}
+
+							const endTime = performance.now(); // End time measurement
+							const elapsed = endTime - startTime;
+
+							return {
+								elapsed,
+								searchActive: false,
+								count: docs.length,
+								hits: sortedResult.map((doc) => ({
+									id: doc.uuid,
+									document: doc,
+								})),
+							};
+						})
+					);
+				}
+			})
 			/**
 			 * We're only interested in insert/delete documents and order changes
 			 */
-			distinctUntilChanged((prev, next) => {
-				return isEqual(
-					prev.map((doc) => doc.uuid || doc.id),
-					next.map((doc) => doc.uuid || doc.id)
-				);
-			})
+			// distinctUntilChanged((prev, next) => {
+			// 	return isEqual(
+			// 		prev.map((doc) => doc.uuid || doc.id),
+			// 		next.map((doc) => doc.uuid || doc.id)
+			// 	);
+			// })
 		);
 	}
 
@@ -232,43 +308,53 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	}
 
 	search(query: string | Record<string, any> = '') {
-		if (typeof query === 'string' || query === null) {
-			// if activeSearchSubscription exists, cancel it
-			if (this.activeSearchSubscription) {
-				this.activeSearchSubscription.unsubscribe();
-			}
-
-			/**
-			 * If empty, we can just remove the uuid where clause
-			 */
-			if (isEmpty(query)) {
-				this.whereClauses = this.whereClauses.filter((clause) => clause.field !== 'uuid');
-				return this.updateParams({ search: query });
-			}
-
-			/**
-			 * We need to use the Orama searchDB to find matching uuids
-			 */
-			this.activeSearchSubscription = this.searchService.search$(query).subscribe((uuids) => {
-				// remove uuid from whereClauses
-				this.whereClauses = this.whereClauses.filter((clause) => clause.field !== 'uuid');
-
-				if (uuids) {
-					this.whereClauses.push({ field: 'uuid', value: { $in: uuids } });
-				}
-
-				this.updateParams({ search: query });
-			});
-
-			// make sure we clean up the subscription on cancel
-			this.subs.push(this.activeSearchSubscription);
-		} else {
-			this.updateParams({ search: query });
-		}
+		this.updateParams({ search: query });
 	}
 
 	debouncedSearch = debounce(this.search, 250);
 
+	/**
+	 * Handle attribute selection
+	 * Attributes queries have the form:
+	 * {
+	 * 	selector: {
+	 * 		attributes: {
+	 * 			$allMatch: [
+	 * 				{
+	 * 					name: 'Color',
+	 * 					option: 'Blue',
+	 * 				},
+	 * 			],
+	 * 		},
+	 * 	}
+	 *
+	 * Note: $allMatch is an array so we need to check if it exists and add/remove to it
+	 */
+	updateVariationAttributeSearch(attribute: { id: number; name: string; value: string }) {
+		// this is only a helper for variations
+		if (this.collection.name !== 'variations') {
+			throw new Error('updateVariationAttributeSearch is only for variations');
+		}
+		// if null, remove the attribute search
+		if (attribute === null) {
+			return { attributes: null };
+		}
+		// add attribute to query
+		const $allMatch = get(this.getParams(), 'attributes', []);
+		const index = $allMatch.findIndex((a) => a.name === attribute.name);
+		if (index > -1) {
+			$allMatch[index] = attribute;
+		} else {
+			$allMatch.push(attribute);
+		}
+
+		this.whereClauses.push({ field: 'attributes', value: [...$allMatch] });
+		this.updateParams();
+	}
+
+	/**
+	 *
+	 */
 	private updateParams(additionalParams: Partial<QueryParams> = {}): void {
 		// Construct the selector from where clauses
 		const selector = this.whereClauses.reduce((acc, clause) => {
