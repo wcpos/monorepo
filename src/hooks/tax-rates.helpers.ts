@@ -57,6 +57,8 @@ function postcodeLocationMatcher(postcode: string, postcodes: string[]): boolean
  */
 export function filterTaxRates(
 	taxRates: TaxRate[],
+	country: string = '',
+	state: string = '',
 	postcode: string = '',
 	city: string = ''
 ): TaxRate[] {
@@ -71,6 +73,9 @@ export function filterTaxRates(
 		const cityUpperCase = city.toUpperCase();
 
 		return filter(sortedTaxRates, (rate, index) => {
+			const countryMatch =
+				isEmpty(rate.country) || rate.country.toUpperCase() === country.toUpperCase();
+			const stateMatch = isEmpty(rate.state) || rate.state.toUpperCase() === state.toUpperCase();
 			const postcodeMatch =
 				isEmpty(rate.postcodes) || postcodeLocationMatcher(postcode, rate.postcodes);
 			const cityMatch =
@@ -85,7 +90,7 @@ export function filterTaxRates(
 				return false;
 			}
 
-			return postcodeMatch && cityMatch;
+			return countryMatch && stateMatch && postcodeMatch && cityMatch;
 		});
 	});
 

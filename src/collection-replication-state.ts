@@ -237,7 +237,7 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 				params: { fields: ['id'], posts_per_page: -1 },
 			});
 
-			if (!response.data || !Array.isArray(response.data)) {
+			if (!Array.isArray(response?.data)) {
 				throw new Error('Invalid response data for remote IDs');
 			}
 
@@ -258,6 +258,13 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 		const remoteIDs = this.subjects.remoteIDs.getValue();
 		const localIDs = this.subjects.localIDs.getValue();
 		return remoteIDs.filter((id) => !localIDs.includes(id));
+	}
+
+	async getSyncedRemoteIDs() {
+		await this.firstSync;
+		const remoteIDs = this.subjects.remoteIDs.getValue();
+		const localIDs = this.subjects.localIDs.getValue();
+		return remoteIDs.filter((id) => localIDs.includes(id));
 	}
 
 	/**
@@ -295,7 +302,7 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 				response = await this.fetchUnsyncedRemoteIDs({ include });
 			}
 
-			if (!response.data || !Array.isArray(response.data)) {
+			if (!Array.isArray(response?.data)) {
 				throw new Error('Invalid response data for query replication');
 			}
 
@@ -397,6 +404,11 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 				throw new Error('document does not have an id');
 			}
 			const response = await this.httpClient.patch(this.endpoint + '/' + doc.id, data);
+
+			if (!response?.data) {
+				throw new Error('Invalid response data for remote patch');
+			}
+
 			const parsedData = this.collection.parseRestResponse(response.data);
 			await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
 			await doc.incrementalPatch(parsedData);
@@ -409,6 +421,11 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	async remoteCreate(data) {
 		try {
 			const response = await this.httpClient.post(this.endpoint, data);
+
+			if (!response?.data) {
+				throw new Error('Invalid response data for remote create');
+			}
+
 			const parsedData = this.collection.parseRestResponse(response.data);
 			await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
 			const doc = await this.collection.upsert(parsedData);

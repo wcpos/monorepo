@@ -102,6 +102,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		this.subjects.active.next(true);
 
 		const include = await this.collectionReplication.getUnsyncedRemoteIDs();
+		const exclude = await this.collectionReplication.getSyncedRemoteIDs();
 		const lastModified = this.collectionReplication.subjects.lastModified.getValue();
 
 		/**
@@ -118,10 +119,14 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 			if (isEmpty(include)) {
 				response = await this.fetchLastModified({ lastModified });
 			} else {
-				response = await this.fetchUnsyncedRemoteIDs({ include });
+				if (exclude?.length < include?.length) {
+					response = await this.fetchUnsyncedRemoteIDs({ exclude });
+				} else {
+					response = await this.fetchUnsyncedRemoteIDs({ include });
+				}
 			}
 
-			if (!response.data || !Array.isArray(response.data)) {
+			if (!Array.isArray(response?.data)) {
 				throw new Error('Invalid response data for query replication');
 			}
 
@@ -148,11 +153,12 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	/**
 	 *
 	 */
-	async fetchUnsyncedRemoteIDs({ include }) {
+	async fetchUnsyncedRemoteIDs({ include = undefined, exclude = undefined }) {
 		const response = await this.httpClient.post(
 			this.endpoint,
 			{
 				include,
+				exclude,
 			},
 			{
 				headers: {

@@ -1,4 +1,5 @@
 import { orderBy } from '@shelf/fast-natural-order-by';
+import cloneDeep from 'lodash/cloneDeep';
 import debounce from 'lodash/debounce';
 import forEach from 'lodash/forEach';
 import get from 'lodash/get';
@@ -30,7 +31,11 @@ export interface QueryParams {
 
 export interface QueryHooks {
 	preQueryParams?: (params: QueryParams) => QueryParams;
-	postQueryResult?: (result: any, params: QueryParams) => any;
+	postQueryResult?: (
+		docs: RxDocument[],
+		modifiedParams: QueryParams,
+		originalParams: QueryParams
+	) => RxDocument[];
 }
 
 export interface QueryConfig<T> {
@@ -70,6 +75,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	private searchService: Search;
 	public readonly endpoint: string;
 	private errorSubject: Subject<Error>;
+	private primaryKey: string;
 
 	/**
 	 *
@@ -79,7 +85,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		params: new BehaviorSubject<QueryParams | undefined>(undefined),
 		result: new Subject<QueryResult<T>>(),
 		currentPage: new BehaviorSubject<number>(1),
-		paginatedResult: new BehaviorSubject<DocumentType<T>[]>([]),
+		paginatedResult: new Subject<QueryResult<T>>(),
 		paginationEndReachedNextPage: new Subject<void>(),
 		additionalSearchResults: new BehaviorSubject<QueryResult<T>>(undefined),
 	};
@@ -118,6 +124,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		this.searchService = searchService;
 		this.endpoint = endpoint;
 		this.errorSubject = errorSubject;
+		this.primaryKey = collection.schema.primaryPath;
 
 		/**
 		 * Set initial params
@@ -151,9 +158,12 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 						return this.currentPage$.pipe(
 							map((currentPage) => {
 								const end = currentPage * this.pageSize;
-								const pageItems = items.slice(0, end);
-								this.paginationEndReached = pageItems.length === items.length;
-								return pageItems;
+								const pageItems = items.hits.slice(0, end);
+								this.paginationEndReached = pageItems.length === items.hits.length;
+								return {
+									...items,
+									hits: pageItems,
+								};
 							})
 						);
 					})
@@ -171,7 +181,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		return this.params$.pipe(
 			switchMap((params) => {
 				const startTime = performance.now(); // Start time measurement
-				let modifiedParams = params || {};
+				let modifiedParams = cloneDeep(params || {}); // clone params, note nested objects need to be cloned too!
 
 				// Apply the preQueryParams hook if provided
 				if (this.hooks?.preQueryParams) {
@@ -202,7 +212,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 									const filteredAndSortedDocs = searchResults.hits
 										.map((hit) => ({
 											...hit,
-											document: docs.find((doc) => doc.uuid === hit.id),
+											document: docs.find((doc) => doc[this.primaryKey] === hit.id),
 										}))
 										.filter((hit) => hit.document !== undefined);
 
@@ -212,6 +222,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 									return {
 										elapsed,
 										searchActive: true,
+										count: filteredAndSortedDocs.length,
 										hits: filteredAndSortedDocs,
 									};
 								})
@@ -225,14 +236,23 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 							 * Sorting wasn't working for string numbers, so I'm handling sorting here
 							 */
 							const { sortBy, sortDirection } = modifiedParams;
-							let sortedResult = docs;
+							let filteredAndSortedDocs = docs;
 
 							if (sortBy && sortDirection) {
-								sortedResult = orderBy(docs, [(v) => v[sortBy]], [sortDirection]);
+								// @TODO - ordering by multiple fields?
+								filteredAndSortedDocs = orderBy(
+									filteredAndSortedDocs,
+									[(v) => v[sortBy]],
+									[sortDirection]
+								);
 							}
 
 							if (this.hooks?.postQueryResult) {
-								sortedResult = this.hooks.postQueryResult(docs, modifiedParams);
+								filteredAndSortedDocs = this.hooks.postQueryResult(
+									filteredAndSortedDocs,
+									modifiedParams,
+									params
+								);
 							}
 
 							const endTime = performance.now(); // End time measurement
@@ -241,9 +261,9 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 							return {
 								elapsed,
 								searchActive: false,
-								count: docs.length,
-								hits: sortedResult.map((doc) => ({
-									id: doc.uuid,
+								count: filteredAndSortedDocs.length,
+								hits: filteredAndSortedDocs.map((doc) => ({
+									id: doc[this.primaryKey],
 									document: doc,
 								})),
 							};
@@ -330,17 +350,14 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	 *
 	 * Note: $allMatch is an array so we need to check if it exists and add/remove to it
 	 */
-	updateVariationAttributeSearch(attribute: { id: number; name: string; value: string }) {
+	updateVariationAttributeSelector(attribute: { id: number; name: string; option: string }) {
 		// this is only a helper for variations
 		if (this.collection.name !== 'variations') {
 			throw new Error('updateVariationAttributeSearch is only for variations');
 		}
-		// if null, remove the attribute search
-		if (attribute === null) {
-			return { attributes: null };
-		}
+
 		// add attribute to query
-		const $allMatch = get(this.getParams(), 'attributes', []);
+		const $allMatch = get(this.getParams(), ['selector', 'attributes', '$allMatch'], []);
 		const index = $allMatch.findIndex((a) => a.name === attribute.name);
 		if (index > -1) {
 			$allMatch[index] = attribute;
@@ -348,8 +365,15 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 			$allMatch.push(attribute);
 		}
 
-		this.whereClauses.push({ field: 'attributes', value: [...$allMatch] });
+		this.whereClauses.push({ field: 'attributes', value: { $allMatch: [...$allMatch] } });
 		this.updateParams();
+	}
+
+	resetVariationAttributeSelector() {
+		if (get(this.getParams(), ['selector', 'attributes'])) {
+			this.whereClauses = this.whereClauses.filter((clause) => clause.field !== 'attributes');
+			this.updateParams();
+		}
 	}
 
 	/**
@@ -379,7 +403,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 
 	get count$() {
 		return this.result$.pipe(
-			map((docs) => docs.length),
+			map((result) => result.count),
 			distinctUntilChanged()
 		);
 	}
