@@ -15,7 +15,8 @@ import {
 import { useAppState } from '../../../../contexts/app-state';
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
-type TaxQuery = import('../store-state-manager').Query<TaxRateDocument>;
+type TaxRateCollection = import('@wcpos/database').TaxRateCollection;
+type TaxQuery = import('@wcpos/query').Query<TaxRateCollection>;
 
 interface TaxHelpersContextProps {
 	rates: TaxRateDocument[];
@@ -96,7 +97,8 @@ interface TaxHelpersProviderProps {
  *
  */
 export const TaxHelpersProvider = ({ children, taxQuery }: TaxHelpersProviderProps) => {
-	const rates = useObservableSuspense(taxQuery.resource);
+	const result = useObservableSuspense(taxQuery.resource);
+	const rates = result.hits.map((hit) => hit.document);
 	const { store } = useAppState();
 	const shippingTaxClass = useObservableState(store.shipping_tax_class$, store.shipping_tax_class);
 	// const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);

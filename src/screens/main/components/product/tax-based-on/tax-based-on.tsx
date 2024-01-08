@@ -18,7 +18,8 @@ import { useTaxHelpers } from '../../../contexts/tax-helpers';
 const TaxBasedOn = ({ taxBasedOn }) => {
 	const [opened, setOpened] = React.useState(false);
 	const { taxQuery } = useTaxHelpers();
-	const rates = useObservableSuspense(taxQuery.resource);
+	const result = useObservableSuspense(taxQuery.resource);
+	const rates = result.hits.map(({ document }) => document);
 	const { country, state, city, postcode } = useObservableState(
 		taxQuery.params$.pipe(map((params) => get(params, ['search'], {}))),
 		get(taxQuery.getParams(), ['search'], {})
@@ -45,7 +46,7 @@ const TaxBasedOn = ({ taxBasedOn }) => {
 			placement="top-start"
 		>
 			<Popover.Target>
-				{Array.isArray(rates) && rates.length > 0 ? (
+				{result.count > 0 ? (
 					<Text size="small">{taxBasedOnLabel}</Text>
 				) : (
 					<InlineError size="small" message={taxBasedOnLabel} />

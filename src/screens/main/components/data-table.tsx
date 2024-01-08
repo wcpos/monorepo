@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { combineLatest } from 'rxjs';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -11,6 +13,7 @@ import Suspense from '@wcpos/components/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 import { useReplicationState, Query } from '@wcpos/query';
+import logger from '@wcpos/utils/src/logger';
 
 import EmptyTableRow from './empty-table-row';
 import SyncButton from './sync-button';
@@ -87,7 +90,7 @@ const DataTable = <DocumentType,>({
 	extraContext,
 	footer,
 }: CommonTableProps<DocumentType>) => {
-	const data = useObservableSuspense(query.paginatedResource);
+	const result = useObservableSuspense(query.paginatedResource);
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
@@ -105,13 +108,13 @@ const DataTable = <DocumentType,>({
 				return (
 					<ErrorBoundary>
 						<Suspense>
-							<Cell item={item} column={column} index={index} />
+							<Cell item={item.document} column={column} index={index} />
 						</Suspense>
 					</ErrorBoundary>
 				);
 			}
 
-			return <TextCell item={item} column={column} />;
+			return <TextCell item={item.document} column={column} />;
 		},
 		[cells]
 	);
@@ -122,7 +125,9 @@ const DataTable = <DocumentType,>({
 	const context = React.useMemo<TableContextProps<DocumentType>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
-			sort: ({ sortBy, sortDirection }) => query.sort(sortBy, sortDirection),
+			sort: result.searchActive
+				? null
+				: ({ sortBy, sortDirection }) => query.sort(sortBy, sortDirection),
 			sortBy,
 			sortDirection,
 			cellRenderer,
@@ -130,20 +135,29 @@ const DataTable = <DocumentType,>({
 			query,
 			...extraContext,
 		};
-	}, [columns, sortBy, sortDirection, cellRenderer, extraContext, query, uiSettings]);
+	}, [
+		columns,
+		result.searchActive,
+		sortBy,
+		sortDirection,
+		cellRenderer,
+		query,
+		extraContext,
+		uiSettings,
+	]);
 
 	/**
 	 *
 	 */
 	return (
 		<Table<DocumentType>
-			data={data}
+			data={result.hits}
 			renderItem={renderItem}
 			estimatedItemSize={estimatedItemSize}
 			context={context}
 			ListEmptyComponent={<EmptyTableRow message={noDataMessage} />}
 			onEndReached={() => query.nextPage()}
-			onEndReachedThreshold={1}
+			onEndReachedThreshold={0.5}
 			footer={<DataTableFooter query={query} children={footer} />}
 			ListFooterComponent={<LoadingRow query={query} />}
 		/>

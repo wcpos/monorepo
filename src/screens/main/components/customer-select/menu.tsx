@@ -49,7 +49,7 @@ interface CustomerSelectMenuProps {
  */
 const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 	const theme = useTheme();
-	const customers = useObservableSuspense(query.paginatedResource);
+	const result = useObservableSuspense(query.paginatedResource);
 	const { active$ } = useReplicationState(query.id);
 	const loading = useObservableState(active$, false);
 	// const total = useTotalCount('customers', replicationState);
@@ -81,7 +81,7 @@ const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 		({ item }) => {
 			return (
 				<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
-					<CustomerSelectItem customer={item} />
+					<CustomerSelectItem customer={item.document} />
 				</Pressable>
 			);
 		},
@@ -127,7 +127,7 @@ const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 	return (
 		<View style={{ width: targetMeasurements.value.width, maxHeight: 292 }}>
 			<FlatList<CustomerDocument>
-				data={customers}
+				data={result.hits}
 				renderItem={renderItem}
 				estimatedItemSize={50}
 				ListHeaderComponent={renderGuestItem}

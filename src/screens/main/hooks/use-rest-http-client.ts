@@ -116,16 +116,14 @@ export const useRestHttpClient = (endpoint = '') => {
 			const config = merge({}, defaultConfig, reqConfig);
 
 			return httpClient.request(config).then((response) => {
-				const data = response.data;
-
 				/**
 				 * This is a HACK
 				 * Some servers return invalid JSON, so we try to recover from it
 				 * eg: rando WordPress plugin echo's out a bunch of HTML before the JSON
 				 */
-				if (typeof response.data === 'string') {
-					log.error('Trying to recover from invalid JSON response', data);
-					response.data = extractValidJSON(response.data);
+				if (typeof response?.data === 'string') {
+					log.error('Trying to recover from invalid JSON response', response?.data);
+					response.data = extractValidJSON(response?.data);
 				}
 				return response;
 			});

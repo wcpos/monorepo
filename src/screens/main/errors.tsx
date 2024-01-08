@@ -4,6 +4,7 @@ import { useSubscription } from 'observable-hooks';
 
 import { useSnackbar } from '@wcpos/components/src/snackbar/use-snackbar';
 import { useQueryManager } from '@wcpos/query';
+import log from '@wcpos/utils/src/logger';
 
 /**
  * TODO - we need a app-wide event bus to channel errors to the snackbar
@@ -17,6 +18,7 @@ export const ErrorSnackbar = () => {
 	 *
 	 */
 	useSubscription(manager.error$, (error) => {
+		log.error(error);
 		addSnackbar({
 			message: error.message,
 			type: 'critical',

@@ -1,8 +1,9 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
+import isEqual from 'lodash/isEqual';
 import { useObservableState } from 'observable-hooks';
-import { map, tap } from 'rxjs/operators';
+import { map, tap, distinctUntilChanged } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -20,9 +21,11 @@ const VariationsFilterBar = ({ parent }) => {
 	const manager = useQueryManager();
 	const query = manager.getQuery(['variations', { parentID: parent.id }]);
 	const { setExpanded } = useVariationTable();
+
+	// new array is being created every time
 	const selectedAttributes = useObservableState(
-		query.params$.pipe(map((params) => get(params, ['search', 'attributes'], []))),
-		get(query.getParams(), ['search', 'attributes'], [])
+		query.params$.pipe(map((params) => get(params, ['selector', 'attributes', '$allMatch']))),
+		get(query.getParams(), ['selector', 'attributes', '$allMatch'])
 	);
 
 	/**
@@ -30,7 +33,7 @@ const VariationsFilterBar = ({ parent }) => {
 	 */
 	const handleSelect = React.useCallback(
 		(attribute) => {
-			query.updateVariationAttributeSearch(attribute);
+			query.updateVariationAttributeSelector(attribute);
 		},
 		[query]
 	);

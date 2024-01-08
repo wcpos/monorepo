@@ -1,11 +1,14 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
+import { combineLatest } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
-import { useQuery } from '@wcpos/query';
+import { useRelationalQuery } from '@wcpos/query';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
@@ -38,20 +41,31 @@ const Products = () => {
 	/**
 	 *
 	 */
-	const productQuery = useQuery({
-		queryKeys: ['products', { target: 'page' }],
-		collectionName: 'products',
-		initialParams: {
-			sortBy: uiSettings.get('sortBy'),
-			sortDirection: uiSettings.get('sortDirection'),
+	const { parentQuery: productQuery } = useRelationalQuery(
+		{
+			queryKeys: ['products', { target: 'page', type: 'relational' }],
+			collectionName: 'products',
+			initialParams: {
+				sortBy: uiSettings.get('sortBy'),
+				sortDirection: uiSettings.get('sortDirection'),
+			},
 		},
-	});
+		{
+			queryKeys: ['variations', { target: 'page', type: 'relational' }],
+			collectionName: 'variations',
+			initialParams: {
+				sortBy: 'id',
+				sortDirection: uiSettings.get('sortDirection'),
+			},
+			endpoint: 'products/variations',
+		}
+	);
 
 	/**
 	 *
 	 */
 	const renderItem = React.useCallback((props) => {
-		let Component = TABLE_ROW_COMPONENTS[props.item.type];
+		let Component = TABLE_ROW_COMPONENTS[props.item.document.type];
 
 		// If we still didn't find a component, use SimpleProductTableRow as a fallback
 		// eg: Grouped products

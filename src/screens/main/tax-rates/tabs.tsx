@@ -14,7 +14,8 @@ import TaxRateTable from './rate-table';
  */
 export const TaxRatesTabs = ({ query }) => {
 	const [index, setIndex] = React.useState(0);
-	const rates = useObservableSuspense(query.resource);
+	const result = useObservableSuspense(query.resource);
+	const rates = result.hits.map(({ document }) => document);
 
 	/**
 	 *

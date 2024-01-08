@@ -68,7 +68,7 @@ const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocume
 					<ErrorBoundary>
 						<Suspense>
 							<Cell
-								item={item}
+								item={item.document}
 								column={column}
 								index={index}
 								cellWidth={cellWidth}
@@ -79,8 +79,8 @@ const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocume
 				);
 			}
 
-			if (item[column.key]) {
-				return <Text>{String(item[column.key])}</Text>;
+			if (item.document[column.key]) {
+				return <Text>{String(item.document[column.key])}</Text>;
 			}
 
 			return null;

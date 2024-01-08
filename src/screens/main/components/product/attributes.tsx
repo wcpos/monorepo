@@ -41,7 +41,7 @@ export const PlainAttributes = ({ product }: Props) => {
 
 const ProductAttributes = ({ product }: Props) => {
 	const attributes = useObservableState(product.attributes$, product.attributes);
-	const { expanded, setExpanded } = useVariationTable();
+	const { expanded, setExpanded, setInitialSelectedAttributes } = useVariationTable();
 	const manager = useQueryManager();
 	const t = useT();
 
@@ -51,22 +51,24 @@ const ProductAttributes = ({ product }: Props) => {
 	const handleSelect = React.useCallback(
 		(attribute, option) => {
 			if (!expanded) {
-				// @TODO - find a better way to do this
-				setExpanded({
+				setInitialSelectedAttributes({
 					id: attribute.id,
 					name: attribute.name,
 					option,
 				});
+				setExpanded(true);
 			} else {
 				const query = manager.getQuery(['variations', { parentID: product.id }]);
-				query.updateVariationAttributeSearch({
-					id: attribute.id,
-					name: attribute.name,
-					option,
-				});
+				if (query) {
+					query.updateVariationAttributeSelector({
+						id: attribute.id,
+						name: attribute.name,
+						option,
+					});
+				}
 			}
 		},
-		[expanded, manager, product.id, setExpanded]
+		[expanded, manager, product.id, setExpanded, setInitialSelectedAttributes]
 	);
 
 	/**

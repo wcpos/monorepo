@@ -14,7 +14,6 @@ const VariationsPopover = ({ parent, addToCart }) => {
 		collectionName: 'variations',
 		initialParams: {
 			selector: { id: { $in: parent.variations } },
-			search: {},
 		},
 		endpoint: `products/${parent.id}/variations`,
 	});

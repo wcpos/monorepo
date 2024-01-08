@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
+
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
@@ -11,7 +13,9 @@ import Table from './table';
 /**
  *
  */
-const Variations = ({ parent, initialSearch }) => {
+const Variations = ({ item, initialSelectedAttributes }) => {
+	const parent = item.document;
+
 	/**
 	 *
 	 */
@@ -20,21 +24,22 @@ const Variations = ({ parent, initialSearch }) => {
 		collectionName: 'variations',
 		initialParams: {
 			selector: { id: { $in: parent.variations } },
-			// search: { attributes: [initialSearch] },
 		},
 		endpoint: `products/${parent.id}/variations`,
 	});
 
 	/**
-	 *
+	 * initialSelectedAttributes can change when the user quick selects variation
+	 * so we can't just use the initial value, we need to update the query
 	 */
 	React.useEffect(() => {
-		if (initialSearch) {
-			query.search({ attributes: [initialSearch] });
-		} else {
-			query.search({});
+		const hasSelectedAttributes = get(query.getParams(), ['selector', 'attributes']);
+		if (initialSelectedAttributes) {
+			query.updateVariationAttributeSelector(initialSelectedAttributes);
+		} else if (hasSelectedAttributes) {
+			query.resetVariationAttributeSelector();
 		}
-	}, [initialSearch, query]);
+	}, [initialSelectedAttributes, query]);
 
 	/**
 	 *

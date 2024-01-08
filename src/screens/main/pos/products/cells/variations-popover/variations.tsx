@@ -15,8 +15,11 @@ import useCurrencyFormat from '../../../../hooks/use-currency-format';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
+type ProductVariationCollection = import('@wcpos/database').ProductVariationCollection;
+type Query = import('@wcpos/query').Query<ProductVariationCollection>;
 
 interface VariationPopoverProps {
+	query: Query;
 	parent: import('@wcpos/database').ProductDocument;
 	addToCart: (variation: ProductDocument, metaData: LineItemDocument['meta_data']) => void;
 }
@@ -39,12 +42,12 @@ export const getAttributesWithCharacterCount = (attributes: ProductDocument['att
  */
 const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	const { setPrimaryAction } = usePopover();
-	const variations = useObservableSuspense(query.resource);
+	const result = useObservableSuspense(query.resource);
 	const selectedAttributes = useObservableState(
-		query.params$.pipe(map((params) => get(params, ['search', 'attributes'], []))),
-		get(query.getParams(), ['search', 'attributes'], [])
+		query.params$.pipe(map((params) => get(params, ['selector', 'attributes', '$allMatch']))),
+		get(query.getParams(), ['selector', 'attributes', '$allMatch'])
 	);
-	const selectedVariation = variations.length === 1 && variations[0];
+	const selectedVariation = result.count === 1 && result.hits[0].document;
 	const { format } = useCurrencyFormat();
 	const t = useT();
 
@@ -61,7 +64,7 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	 */
 	const handleSelect = React.useCallback(
 		(attribute, option) => {
-			query.updateVariationAttributeSearch({
+			query.updateVariationAttributeSelector({
 				id: attribute.id,
 				name: attribute.name,
 				option,
@@ -97,7 +100,7 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 		<Box space="xSmall" style={{ minWidth: 200 }}>
 			{attributes.map((attribute) => {
 				// find selected option
-				const selected = selectedAttributes.find((a) => a.name === attribute.name);
+				const selected = selectedAttributes?.find((a) => a.name === attribute.name);
 
 				return (
 					<Box key={attribute.name} space="xSmall">

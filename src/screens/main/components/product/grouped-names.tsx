@@ -9,8 +9,8 @@ import { useQuery } from '@wcpos/query';
  *
  */
 const GroupedNames = ({ query }) => {
-	const data = useObservableSuspense(query.resource);
-	const names = data.map((doc) => doc.name);
+	const result = useObservableSuspense(query.resource);
+	const names = result.hits.map(({ document }) => document.name);
 
 	return (
 		<Text>

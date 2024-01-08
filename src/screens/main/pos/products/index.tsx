@@ -7,7 +7,7 @@ import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
-import { useQuery } from '@wcpos/query';
+import { useRelationalQuery } from '@wcpos/query';
 import log from '@wcpos/utils/src/logger';
 
 import SimpleProductTableRow from './rows/simple';
@@ -52,14 +52,25 @@ const POSProducts = ({ isColumn = false }) => {
 	/**
 	 *
 	 */
-	const query = useQuery({
-		queryKeys: ['products', { target: 'pos' }],
-		collectionName: 'products',
-		initialParams: {
-			sortBy: uiSettings.get('sortBy'),
-			sortDirection: uiSettings.get('sortDirection'),
+	const { parentQuery: query } = useRelationalQuery(
+		{
+			queryKeys: ['products', { target: 'pos', type: 'relational' }],
+			collectionName: 'products',
+			initialParams: {
+				sortBy: uiSettings.get('sortBy'),
+				sortDirection: uiSettings.get('sortDirection'),
+			},
 		},
-	});
+		{
+			queryKeys: ['variations', { target: 'pos', type: 'relational' }],
+			collectionName: 'variations',
+			initialParams: {
+				sortBy: 'id',
+				sortDirection: uiSettings.get('sortDirection'),
+			},
+			endpoint: 'products/variations',
+		}
+	);
 
 	/**
 	 *
@@ -72,7 +83,7 @@ const POSProducts = ({ isColumn = false }) => {
 	 *
 	 */
 	const renderItem = React.useCallback((props) => {
-		let Component = TABLE_ROW_COMPONENTS[props.item.type];
+		let Component = TABLE_ROW_COMPONENTS[props.item.document.type];
 
 		// If we still didn't find a component, use SimpleProductTableRow as a fallback
 		// eg: Grouped products

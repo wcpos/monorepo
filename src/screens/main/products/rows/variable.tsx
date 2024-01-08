@@ -64,6 +64,16 @@ const variationCells = {
 const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
 	const { patch } = useMutation({ collectionName: 'products' });
 	const [expanded, setExpanded] = React.useState(false);
+	const [initialSelectedAttributes, setInitialSelectedAttributes] = React.useState();
+
+	/**
+	 * Expand variations if there are search results
+	 */
+	React.useEffect(() => {
+		if (item.hasChildren) {
+			setExpanded(true);
+		}
+	}, [item.hasChildren]);
 
 	/**
 	 *
@@ -87,7 +97,7 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 					<ErrorBoundary>
 						<Suspense>
 							<Cell
-								item={item}
+								item={item.document}
 								column={column}
 								index={index}
 								cellWidth={cellWidth}
@@ -98,8 +108,8 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 				);
 			}
 
-			if (item[column.key]) {
-				return <Text>{String(item[column.key])}</Text>;
+			if (item.document[column.key]) {
+				return <Text>{String(item.document[column.key])}</Text>;
 			}
 
 			return null;
@@ -121,8 +131,9 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 		// }
 
 		return {
-			expanded: !!expanded,
+			expanded,
 			setExpanded,
+			setInitialSelectedAttributes,
 			cells: variationCells,
 		};
 	}, [expanded]);
@@ -149,13 +160,10 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	return (
 		<VariationTableContext.Provider value={variationTableContext}>
 			<Table.Row item={item} index={index} cellRenderer={cellRenderer} />
-			{!!expanded && (
+			{expanded && (
 				// <Animated.View style={animatedStyle}>
 				<ErrorBoundary>
-					<Variations
-						parent={item}
-						initialSearch={isPlainObject(expanded) ? expanded : undefined}
-					/>
+					<Variations item={item} initialSelectedAttributes={initialSelectedAttributes} />
 				</ErrorBoundary>
 				// </Animated.View>
 			)}
