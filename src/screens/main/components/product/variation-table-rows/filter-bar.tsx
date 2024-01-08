@@ -8,18 +8,26 @@ import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
-import { useQueryManager } from '@wcpos/query';
 
 import AttributePill from './attribute-pill';
 import { useVariationTable } from './context';
+import { VariationSearchPill } from './search-pill';
+
+type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductCollection = import('@wcpos/database').ProductCollection;
+type Query = import('@wcpos/query').Query<ProductCollection>;
+
+interface Props {
+	parent: ProductDocument;
+	query: Query;
+	parentSearchTerm?: string;
+}
 
 /**
  *
  */
-const VariationsFilterBar = ({ parent }) => {
+const VariationsFilterBar = ({ parent, query, parentSearchTerm }: Props) => {
 	const theme = useTheme();
-	const manager = useQueryManager();
-	const query = manager.getQuery(['variations', { parentID: parent.id }]);
 	const { setExpanded } = useVariationTable();
 
 	// new array is being created every time
@@ -41,6 +49,25 @@ const VariationsFilterBar = ({ parent }) => {
 	/**
 	 *
 	 */
+	const handleSearch = React.useCallback(
+		(search: string) => {
+			query.debouncedSearch(search);
+		},
+		[query]
+	);
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		if (parentSearchTerm) {
+			query.search(parentSearchTerm);
+		}
+	}, [parentSearchTerm, query]);
+
+	/**
+	 *
+	 */
 	return (
 		<Box
 			horizontal
@@ -51,6 +78,7 @@ const VariationsFilterBar = ({ parent }) => {
 			}}
 		>
 			<Box fill horizontal space="small">
+				<VariationSearchPill onSearch={handleSearch} parentSearchTerm={parentSearchTerm} />
 				{(parent.attributes || [])
 					.filter((attribute) => attribute.variation)
 					.sort((a, b) => (a.position || 0) - (b.position || 0))

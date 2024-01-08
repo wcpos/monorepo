@@ -13,7 +13,7 @@ import Table from './table';
 /**
  *
  */
-const Variations = ({ item, initialSelectedAttributes }) => {
+const Variations = ({ item, initialSelectedAttributes, parentSearchTerm }) => {
 	const parent = item.document;
 
 	/**
@@ -47,7 +47,7 @@ const Variations = ({ item, initialSelectedAttributes }) => {
 	return (
 		<Box>
 			<ErrorBoundary>
-				<VariationsFilterBar parent={parent} />
+				<VariationsFilterBar parent={parent} query={query} parentSearchTerm={parentSearchTerm} />
 			</ErrorBoundary>
 			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 				<ErrorBoundary>

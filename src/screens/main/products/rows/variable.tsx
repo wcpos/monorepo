@@ -70,9 +70,7 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	 * Expand variations if there are search results
 	 */
 	React.useEffect(() => {
-		if (item.hasChildren) {
-			setExpanded(true);
-		}
+		setExpanded(!!item.hasChildren);
 	}, [item.hasChildren]);
 
 	/**
@@ -163,7 +161,11 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 			{expanded && (
 				// <Animated.View style={animatedStyle}>
 				<ErrorBoundary>
-					<Variations item={item} initialSelectedAttributes={initialSelectedAttributes} />
+					<Variations
+						item={item}
+						initialSelectedAttributes={initialSelectedAttributes}
+						parentSearchTerm={item?.parentSearchTerm}
+					/>
 				</ErrorBoundary>
 				// </Animated.View>
 			)}
