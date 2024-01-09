@@ -20,16 +20,7 @@ interface APIQueryParams {
 /**
  *
  */
-const filterApiQueryParams = (params, checkpoint) => {
-	const { include } = checkpoint;
-
-	/**
-	 * Tags don't have a date field, so if localIDs = remoteIDs, then we can skip the API call
-	 */
-	if (isEmpty(include)) {
-		return false;
-	}
-
+const filterApiQueryParams = (params) => {
 	return params;
 };
 

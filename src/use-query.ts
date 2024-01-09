@@ -17,8 +17,17 @@ export interface QueryOptions {
 }
 
 export const useQuery = (queryOptions: QueryOptions) => {
-	const queryManager = useQueryManager();
-	const query = queryManager.registerQuery(queryOptions);
+	const manager = useQueryManager();
+	const query = manager.registerQuery(queryOptions);
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		return () => {
+			manager.maybePauseQueryReplications(query);
+		};
+	}, [query, manager]);
 
 	/**
 	 * This is a hack for when when collection is reset:

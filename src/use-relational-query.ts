@@ -61,6 +61,7 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 									...hit,
 									score: averageScoreEntry ? averageScoreEntry.averageScore : null,
 									hasChildren: true,
+									parentSearchTerm: parentParams.search,
 								};
 							}),
 						};

@@ -57,13 +57,6 @@ const postQueryResult: QueryHooks['postQueryResult'] = (docs, modifiedParams, or
  */
 const filterApiQueryParams = (params, include) => {
 	/**
-	 * Taxes don't have a date field, so if localIDs = remoteIDs, then we can skip the API call
-	 */
-	// if (isEmpty(include)) {
-	// 	return false;
-	// }
-
-	/**
 	 * FIXME: taxes have no include/exclude, so I'm just going to fetch all of them
 	 * 100 should be enough, right?
 	 */

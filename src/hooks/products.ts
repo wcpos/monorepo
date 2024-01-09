@@ -57,7 +57,7 @@ const filterApiQueryParams = (params) => {
 
 	if (params.tags) {
 		params.tag = get(params, ['tags', '$elemMatch', 'id']);
-		delete params.categories;
+		delete params.tags;
 	}
 
 	return {

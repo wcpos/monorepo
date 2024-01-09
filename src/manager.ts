@@ -191,22 +191,13 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 					collection,
 					queryEndpoint,
 				});
+				// if we're replacing an existing query replication, maybe pause it
 				if (this.activeQueryReplications.has(queryState.id)) {
-					this.activeQueryReplications.get(queryState.id).pause();
-					this.activeQueryReplications.delete(queryState.id);
+					this.maybePauseQueryReplications(queryState);
 				}
 				this.activeQueryReplications.set(queryState.id, queryReplication);
 
 				queryReplication.start();
-			}),
-
-			/**
-			 * Subscribe to paginationEndReachedNextPage and trigger a new query fetch
-			 */
-			queryState.paginationEndReachedNextPage$.subscribe(() => {
-				if (this.activeQueryReplications.has(queryState.id)) {
-					this.activeQueryReplications.get(queryState.id).nextPage();
-				}
 			})
 		);
 	}
@@ -215,7 +206,8 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	 * There is one replication state per collection
 	 */
 	registerCollectionReplication({ collection, endpoint }) {
-		if (!this.replicationStates.has(endpoint)) {
+		const replicationState = this.replicationStates.get(endpoint);
+		if (!replicationState || !(replicationState instanceof CollectionReplicationState)) {
 			const collectionReplication = new CollectionReplicationState({
 				httpClient: this.httpClient,
 				collection,
@@ -233,7 +225,8 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	 * There is one replication state per query endpoint
 	 */
 	registerQueryReplication({ queryEndpoint, collectionReplication, collection }) {
-		if (!this.replicationStates.has(queryEndpoint)) {
+		const replicationState = this.replicationStates.get(queryEndpoint);
+		if (!replicationState || !(replicationState instanceof QueryReplicationState)) {
 			const queryReplication = new QueryReplicationState({
 				httpClient: this.httpClient,
 				collectionReplication,
@@ -284,6 +277,32 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 
 		return params;
+	}
+
+	/**
+	 * When a useQuery is unmounted, we check if we need to pause the query replications
+	 * - if there are no more useQuery components for a query, we pause the query replications
+	 * - when a new useQuery component is mounted, we resume the query replications
+	 * - collection replications are not paused
+	 */
+	maybePauseQueryReplications(query: Query<RxCollection>) {
+		const activeQueryReplication = this.activeQueryReplications.get(query.id);
+		const activeQueryReplications = this.getActiveQueryReplicationStatesByEndpoint(
+			activeQueryReplication.endpoint
+		);
+		if (activeQueryReplications.length === 1) {
+			activeQueryReplication.pause();
+		}
+	}
+
+	getActiveQueryReplicationStatesByEndpoint(endpoint: string) {
+		const matchingStates = [];
+		this.activeQueryReplications.forEach((state) => {
+			if (state.endpoint === endpoint) {
+				matchingStates.push(state);
+			}
+		});
+		return matchingStates;
 	}
 
 	/**

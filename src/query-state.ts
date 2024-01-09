@@ -70,8 +70,6 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	public collection: T;
 	private whereClauses: WhereClause[] = [];
 	private hooks: QueryConfig<T>['hooks'];
-	private paginationEndReached = false;
-	private pageSize: number;
 	private searchService: Search;
 	public readonly endpoint: string;
 	private errorSubject: Subject<Error>;
@@ -84,9 +82,6 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	public readonly subjects = {
 		params: new BehaviorSubject<QueryParams | undefined>(undefined),
 		result: new Subject<QueryResult<T>>(),
-		currentPage: new BehaviorSubject<number>(1),
-		paginatedResult: new Subject<QueryResult<T>>(),
-		paginationEndReachedNextPage: new Subject<void>(),
 		additionalSearchResults: new BehaviorSubject<QueryResult<T>>(undefined),
 	};
 
@@ -95,14 +90,9 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	 */
 	readonly params$ = this.subjects.params.asObservable();
 	readonly result$ = this.subjects.result.asObservable();
-	readonly currentPage$ = this.subjects.currentPage.asObservable();
-	readonly paginatedResult$ = this.subjects.paginatedResult.asObservable();
-	readonly paginationEndReachedNextPage$ =
-		this.subjects.paginationEndReachedNextPage.asObservable();
 	readonly additionalSearchResults$ = this.subjects.additionalSearchResults.asObservable();
 
 	readonly resource = new ObservableResource(this.result$);
-	readonly paginatedResource = new ObservableResource(this.paginatedResult$);
 
 	/**
 	 *
@@ -120,7 +110,6 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		this.id = id;
 		this.collection = collection;
 		this.hooks = hooks || {};
-		this.pageSize = 10;
 		this.searchService = searchService;
 		this.endpoint = endpoint;
 		this.errorSubject = errorSubject;
@@ -143,34 +132,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 			 */
 			this.find$.subscribe((result) => {
 				this.subjects.result.next(result);
-			}),
-
-			/**
-			 * Subscribe to result$ and emit paginated results
-			 */
-			this.result$
-				.pipe(
-					switchMap((items) => {
-						if (this.paginationEndReached) {
-							const page = this.subjects.currentPage.value + 1;
-							this.subjects.currentPage.next(page);
-						}
-						return this.currentPage$.pipe(
-							map((currentPage) => {
-								const end = currentPage * this.pageSize;
-								const pageItems = items.hits.slice(0, end);
-								this.paginationEndReached = pageItems.length === items.hits.length;
-								return {
-									...items,
-									hits: pageItems,
-								};
-							})
-						);
-					})
-				)
-				.subscribe((result) => {
-					this.subjects.paginatedResult.next(result);
-				})
+			})
 		);
 	}
 
@@ -193,7 +155,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 
 				if (searchActive) {
 					return combineLatest([
-						this.searchService.search$(modifiedParams.search),
+						this.searchService.search$(modifiedParams.search as string),
 						this.additionalSearchResults$,
 					]).pipe(
 						switchMap(([searchResults, additionalSearchResults]) => {
@@ -207,7 +169,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 										uniqueHits.sort((a, b) => b.score - a.score);
 										searchResults.count = uniqueHits.length;
 										searchResults.hits = uniqueHits;
-										console.log('searchResults', searchResults);
+										// console.log('searchResults', searchResults);
 									}
 									const filteredAndSortedDocs = searchResults.hits
 										.map((hit) => ({
@@ -270,16 +232,16 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 						})
 					);
 				}
-			})
+			}),
 			/**
 			 * We're only interested in insert/delete documents and order changes
 			 */
-			// distinctUntilChanged((prev, next) => {
-			// 	return isEqual(
-			// 		prev.map((doc) => doc.uuid || doc.id),
-			// 		next.map((doc) => doc.uuid || doc.id)
-			// 	);
-			// })
+			distinctUntilChanged((prev, next) => {
+				return isEqual(
+					prev.hits.map((hit) => hit.id),
+					next.hits.map((hit) => hit.id)
+				);
+			})
 		);
 	}
 
@@ -287,8 +249,9 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	 * Selector helpers
 	 */
 	where(field: string, value: any): this {
-		if (value === null) {
-			// Remove the clause if value is null
+		if (value === undefined || value === null) {
+			// Remove the clause if value is null or undefined
+			// @TODO - what about empty string, array or object?
 			this.whereClauses = this.whereClauses.filter((clause) => clause.field !== field);
 		} else {
 			const existingClause = this.whereClauses.find((clause) => clause.field === field);
@@ -406,24 +369,6 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 			map((result) => result.count),
 			distinctUntilChanged()
 		);
-	}
-
-	/**
-	 * Pagination
-	 */
-	nextPage() {
-		if (!this.paginationEndReached) {
-			const page = this.subjects.currentPage.value + 1;
-			this.subjects.currentPage.next(page);
-		} else {
-			// the Query Replication will listen for this event and trigger a server query
-			this.subjects.paginationEndReachedNextPage.next();
-		}
-	}
-
-	paginationReset() {
-		this.paginationEndReached = false;
-		this.subjects.currentPage.next(1);
 	}
 }
 

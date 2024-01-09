@@ -5,7 +5,7 @@ import { map, distinctUntilChanged, switchMap, tap } from 'rxjs/operators';
 
 import { maybeCreateSearchDB } from './search-dbs';
 
-import type { Orama } from '@orama/orama';
+import type { Orama, Results } from '@orama/orama';
 import type { RxCollection, RxDocument } from 'rxdb';
 
 /**
@@ -18,6 +18,7 @@ import type { RxCollection, RxDocument } from 'rxdb';
  */
 export class Search {
 	private searchDBPromise: Promise<Orama<any>>;
+	private searchFields: string[];
 
 	/**
 	 *
@@ -50,6 +51,10 @@ export class Search {
 			},
 			options
 		);
+
+		/**
+		 * @TODO - search takes a language param, should I use that rather than create new searchDBs?
+		 */
 		return search(searchDB, { term, ...config });
 	}
 
@@ -58,7 +63,7 @@ export class Search {
 	 * - we don't know for sure if the searchDB has been created
 	 * - we also need to emit new results if the searchDB changes
 	 */
-	search$(term: string, options = {}): Observable<string[]> {
+	search$(term: string, options = {}): Observable<Results<any>> {
 		return from(this.searchDBPromise).pipe(
 			switchMap((searchDB) =>
 				searchDB.changed$.pipe(switchMap(() => from(this.search(term, options, searchDB))))
