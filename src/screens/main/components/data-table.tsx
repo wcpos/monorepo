@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 import { combineLatest } from 'rxjs';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
@@ -12,7 +12,7 @@ import Loader from '@wcpos/components/src/loader';
 import Suspense from '@wcpos/components/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import { useReplicationState, Query } from '@wcpos/query';
+import { useReplicationState, Query, useInfiniteScroll } from '@wcpos/query';
 import logger from '@wcpos/utils/src/logger';
 
 import EmptyTableRow from './empty-table-row';
@@ -37,12 +37,11 @@ interface CommonTableProps<DocumentType> {
 /**
  *
  */
-const DataTableFooter = ({ query, children }) => {
+const DataTableFooter = ({ query, children, count }) => {
 	const theme = useTheme();
 	const { sync, active$, total$ } = useReplicationState(query);
 	const { clear } = useCollectionReset(query.collection.name);
 	const loading = useObservableState(active$, false);
-	const count = useObservableState(query.count$, 0); // count is the query count, not pagination count
 	const total = useObservableState(total$, 0);
 	const t = useT();
 
@@ -90,7 +89,7 @@ const DataTable = <DocumentType,>({
 	extraContext,
 	footer,
 }: CommonTableProps<DocumentType>) => {
-	const result = useObservableSuspense(query.paginatedResource);
+	const result = useInfiniteScroll(query);
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
@@ -156,9 +155,9 @@ const DataTable = <DocumentType,>({
 			estimatedItemSize={estimatedItemSize}
 			context={context}
 			ListEmptyComponent={<EmptyTableRow message={noDataMessage} />}
-			onEndReached={() => query.nextPage()}
+			onEndReached={() => result.nextPage()}
 			onEndReachedThreshold={0.5}
-			footer={<DataTableFooter query={query} children={footer} />}
+			footer={<DataTableFooter query={query} children={footer} count={result.count} />}
 			ListFooterComponent={<LoadingRow query={query} />}
 		/>
 	);

@@ -10,7 +10,7 @@ import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 import Table from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
-import { useReplicationState } from '@wcpos/query';
+import { useInfiniteScroll, useReplicationState } from '@wcpos/query';
 
 import CustomerSelectItem from './item';
 import { useT } from '../../../../contexts/translations';
@@ -49,7 +49,7 @@ interface CustomerSelectMenuProps {
  */
 const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 	const theme = useTheme();
-	const result = useObservableSuspense(query.paginatedResource);
+	const result = useInfiniteScroll(query);
 	const { active$ } = useReplicationState(query.id);
 	const loading = useObservableState(active$, false);
 	// const total = useTotalCount('customers', replicationState);
@@ -80,7 +80,7 @@ const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 	const renderItem = React.useCallback(
 		({ item }) => {
 			return (
-				<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
+				<Pressable onPress={() => onChange(item.document)} style={calculatedStyled}>
 					<CustomerSelectItem customer={item.document} />
 				</Pressable>
 			);
@@ -131,7 +131,7 @@ const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 				renderItem={renderItem}
 				estimatedItemSize={50}
 				ListHeaderComponent={renderGuestItem}
-				onEndReached={() => query.nextPage()}
+				onEndReached={() => result.nextPage()}
 				ListFooterComponent={<Table.LoadingRow loading={loading} style={{ padding: 0 }} />}
 			/>
 		</View>
