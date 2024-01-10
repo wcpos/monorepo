@@ -22,16 +22,18 @@ interface QueryReplicationConfig<T extends RxCollection> {
 	hooks?: any;
 	endpoint: string;
 	errorSubject: Subject<Error>;
+	greedy?: boolean;
 }
 
 export class QueryReplicationState<T extends RxCollection> extends SubscribableBase {
-	private pollingTime = 1000 * 60 * 5; // 5 minutes
+	public readonly pollingTime = 1000 * 60 * 5; // 5 minutes
 	public readonly collection: T;
 	public readonly httpClient: any;
 	public readonly endpoint: any;
-	private errorSubject: Subject<Error>;
+	public readonly errorSubject: Subject<Error>;
 	public readonly collectionReplication: CollectionReplicationState<T>;
 	public syncCompleted = false;
+	public readonly greedy;
 
 	/**
 	 *
@@ -45,8 +47,8 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	/**
 	 *
 	 */
-	readonly paused$: Observable<boolean> = this.subjects.paused.asObservable();
-	readonly active$: Observable<boolean> = this.subjects.active.asObservable();
+	public readonly paused$: Observable<boolean> = this.subjects.paused.asObservable();
+	public readonly active$: Observable<boolean> = this.subjects.active.asObservable();
 
 	/**
 	 *
@@ -57,6 +59,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		collectionReplication,
 		endpoint,
 		errorSubject,
+		greedy = false,
 	}: QueryReplicationConfig<T>) {
 		super();
 		this.collection = collection;
@@ -64,6 +67,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		this.endpoint = endpoint;
 		this.collectionReplication = collectionReplication;
 		this.errorSubject = errorSubject;
+		this.greedy = greedy;
 
 		/**
 		 *
@@ -88,7 +92,20 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	 */
 	async run({ force }: { force?: boolean } = {}) {
 		await this.collectionReplication.firstSync;
-		await this.fetchUnsynced();
+		const saved = await this.fetchUnsynced();
+
+		if (this.greedy && saved && saved.length > 0) {
+			/**
+			 * This is a hack to stop products/variations query from fetching potentially 1000's of documents
+			 * We only want the greedy for 'search' in that case
+			 */
+			if (this.endpoint.startsWith('products/variations') && !this.endpoint.includes('search')) {
+				return;
+			}
+
+			// Have to be careally careful here, potential infinite loop!!
+			this.run();
+		}
 	}
 
 	/**
@@ -132,6 +149,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 			if (response.data.length === 0) {
 				this.syncCompleted = true;
+				return;
 			}
 
 			const promises = response.data.map(async (doc) => {
@@ -142,7 +160,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 			const documents = await Promise.all(promises);
 
-			await this.collection.bulkUpsert(documents);
+			return this.collection.bulkUpsert(documents);
 		} catch (error) {
 			this.errorSubject.next(error);
 		} finally {

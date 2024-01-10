@@ -76,6 +76,7 @@ const filterApiQueryParams = (params) => {
 		id: undefined, // remove id: { $in: [] } from query
 		attributes: undefined, // there is no attributes filter in the API (@TODO)
 		orderby,
+		status: 'publish',
 	};
 };
 

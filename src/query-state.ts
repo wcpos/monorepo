@@ -46,6 +46,7 @@ export interface QueryConfig<T> {
 	searchService: Search;
 	endpoint?: string;
 	errorSubject: Subject<Error>;
+	greedy?: boolean;
 }
 
 type WhereClause = { field: string; value: any };
@@ -76,6 +77,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	public readonly endpoint: string;
 	public readonly errorSubject: Subject<Error>;
 	public readonly primaryKey: string;
+	public readonly greedy: boolean;
 
 	/**
 	 *
@@ -105,6 +107,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		searchService,
 		endpoint,
 		errorSubject,
+		greedy = false,
 	}: QueryConfig<T>) {
 		super();
 		this.id = id;
@@ -114,6 +117,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		this.endpoint = endpoint;
 		this.errorSubject = errorSubject;
 		this.primaryKey = collection.schema.primaryPath;
+		this.greedy = greedy;
 
 		/**
 		 * Set initial params
@@ -173,6 +177,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	get find$() {
 		return this.params$.pipe(
 			switchMap((params) => {
+				const startTime = performance.now(); // Start time measurement
 				let modifiedParams = cloneDeep(params || {}); // clone params, note nested objects need to be cloned too!
 
 				// Apply the preQueryParams hook if provided
@@ -183,17 +188,25 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 				const searchActive =
 					typeof modifiedParams.search === 'string' && !isEmpty(modifiedParams.search);
 
-				return searchActive
-					? this.handleSearchActive(modifiedParams)
-					: this.handleSearchInactive(modifiedParams, params);
-			}),
-			tap((res) => console.log('find$', res))
+				let rxdbQuery$: Observable<QueryResult<T>>;
+				if (searchActive) {
+					rxdbQuery$ = this.handleSearchActive(modifiedParams);
+				} else {
+					rxdbQuery$ = this.handleSearchInactive(modifiedParams, params);
+				}
+
+				return rxdbQuery$.pipe(
+					map((result) => {
+						const endTime = performance.now(); // End time measurement
+						const elapsed = endTime - startTime;
+						return { elapsed, ...result };
+					})
+				);
+			})
 		);
 	}
 
 	handleSearchActive(modifiedParams: QueryParams) {
-		const startTime = performance.now(); // Start time measurement
-
 		return this.searchService.search$(modifiedParams.search as string).pipe(
 			switchMap((searchResults) => {
 				return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
@@ -205,11 +218,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 							}))
 							.filter((hit) => hit.document !== undefined);
 
-						const endTime = performance.now(); // End time measurement
-						const elapsed = endTime - startTime;
-
 						return {
-							elapsed,
 							searchActive: true,
 							searchTerm: modifiedParams.search,
 							count: filteredAndSortedDocs.length,
@@ -218,24 +227,10 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 					})
 				);
 			})
-			// distinctUntilChanged((prev, next) => {
-			// 	// Check if search is active and searchTerm has changed
-			// 	if (prev.searchActive !== next.searchActive || prev.searchTerm !== next.searchTerm) {
-			// 		return false;
-			// 	}
-
-			// 	// Check if the number of hits or their order has changed
-			// 	return isEqual(
-			// 		prev.hits.map((hit) => hit.id),
-			// 		next.hits.map((hit) => hit.id)
-			// 	);
-			// })
 		);
 	}
 
 	handleSearchInactive(modifiedParams: QueryParams, originalParams: QueryParams) {
-		const startTime = performance.now(); // Start time measurement
-
 		return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
 			map((docs: DocumentType<T>[]) => {
 				/**
@@ -261,11 +256,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 					);
 				}
 
-				const endTime = performance.now(); // End time measurement
-				const elapsed = endTime - startTime;
-
 				return {
-					elapsed,
 					searchActive: false,
 					count: filteredAndSortedDocs.length,
 					hits: filteredAndSortedDocs.map((doc) => ({
@@ -274,13 +265,6 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 					})),
 				};
 			})
-			// distinctUntilChanged((prev, next) => {
-			// 	// Check if the number of hits or their order has changed
-			// 	return isEqual(
-			// 		prev.hits.map((hit) => hit.id),
-			// 		next.hits.map((hit) => hit.id)
-			// 	);
-			// })
 		);
 	}
 

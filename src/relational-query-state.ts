@@ -1,8 +1,8 @@
 import _groupBy from 'lodash/groupBy';
 import _map from 'lodash/map';
 import _maxBy from 'lodash/maxBy';
-import { combineLatest, of } from 'rxjs';
-import { map, switchMap, filter, tap } from 'rxjs/operators';
+import { combineLatest } from 'rxjs';
+import { map, switchMap, filter } from 'rxjs/operators';
 
 import { Query, QueryParams } from './query-state';
 
@@ -26,8 +26,6 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 	 *
 	 */
 	override handleSearchActive(modifiedParams: QueryParams) {
-		const startTime = performance.now(); // Start time measurement
-
 		return combineLatest([
 			this.searchService.search$(modifiedParams.search as string),
 			this.handleRelationalSearch(modifiedParams),
@@ -52,11 +50,7 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 							}))
 							.filter((hit) => hit.document !== undefined);
 
-						const endTime = performance.now(); // End time measurement
-						const elapsed = endTime - startTime;
-
 						return {
-							elapsed,
 							searchActive: true,
 							searchTerm: modifiedParams.search,
 							count: filteredAndSortedDocs.length,
@@ -65,33 +59,6 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 					})
 				);
 			})
-			// distinctUntilChanged((prev, next) => {
-			// 	// Check if search is active and searchTerm has changed
-			// 	if (prev.searchActive !== next.searchActive || prev.searchTerm !== next.searchTerm) {
-			// 		return false;
-			// 	}
-
-			// 	// Check if the number of hits or their order has changed
-			// 	const idsAreEqual = _isEqual(
-			// 		prev.hits.map((hit) => hit.id),
-			// 		next.hits.map((hit) => hit.id)
-			// 	);
-
-			// 	// if search is active, check if the childrenSearchCount has changed
-			// 	let childrenAreEqual = true;
-			// 	if (idsAreEqual && next.searchActive) {
-			// 		childrenAreEqual = prev.hits.every((hit, index) => {
-			// 			const nextHit = next.hits[index];
-			// 			return (
-			// 				hit.parentSearchTerm === nextHit.parentSearchTerm &&
-			// 				hit.childrenSearchCount === nextHit.childrenSearchCount &&
-			// 				hit.score === nextHit.score
-			// 			);
-			// 		});
-			// 	}
-
-			// 	return idsAreEqual && childrenAreEqual;
-			// })
 		);
 	}
 
@@ -118,40 +85,40 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 					parent_id: parseInt(key, 10),
 					averageScore: _maxBy(values, 'score')?.score || 0,
 					childrenSearchCount: values.length, // Count of childQuery hits for this parent_id
+					searchTerm: childResult.searchTerm,
 				}));
 
-				const parentIds = averagedScores
-					.map(({ parent_id }) => parent_id)
-					.filter((id) => !isNaN(id));
+				return this.handleParentLookup(averagedScores);
+			})
+		);
+	}
 
-				/**
-				 *
-				 */
-				this.parentLookupQuery.where('id', { $in: parentIds });
-				return combineLatest([of(averagedScores), this.parentLookupQuery.find$]).pipe(
-					tap((res) => console.log('res', res)),
-					map(([averagedScores, parentLookupResult]) => {
-						const parentLookupWithScore = {
-							...parentLookupResult,
-							hits: parentLookupResult.hits.map((hit) => {
-								const averageScoreEntry = averagedScores.find(
-									(scoreEntry) => scoreEntry.parent_id === hit.document.id
-								);
-								return {
-									...hit,
-									score: averageScoreEntry ? averageScoreEntry.averageScore : hit.score,
-									childrenSearchCount: averageScoreEntry
-										? averageScoreEntry.childrenSearchCount
-										: 0,
-									parentSearchTerm: modifiedParams.search,
-								};
-							}),
+	/**
+	 *
+	 */
+	handleParentLookup(averagedScores) {
+		const parentIds = averagedScores.map(({ parent_id }) => parent_id).filter((id) => !isNaN(id));
+
+		this.parentLookupQuery.where('id', { $in: parentIds });
+
+		return this.parentLookupQuery.find$.pipe(
+			map((parentLookupResult) => {
+				const parentLookupWithScore = {
+					...parentLookupResult,
+					hits: parentLookupResult.hits.map((hit) => {
+						const averageScoreEntry = averagedScores.find(
+							(scoreEntry) => scoreEntry.parent_id === hit.document.id
+						);
+						return {
+							...hit,
+							score: averageScoreEntry ? averageScoreEntry.averageScore : hit.score,
+							childrenSearchCount: averageScoreEntry ? averageScoreEntry.childrenSearchCount : 0,
+							parentSearchTerm: averageScoreEntry ? averageScoreEntry.searchTerm : '',
 						};
+					}),
+				};
 
-						console.log('parentLookupWithScore', parentLookupWithScore);
-						return parentLookupWithScore;
-					})
-				);
+				return parentLookupWithScore;
 			})
 		);
 	}

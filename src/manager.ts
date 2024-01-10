@@ -23,6 +23,7 @@ export interface RegisterQueryConfig {
 	collectionName: string;
 	initialParams?: QueryParams;
 	endpoint?: string;
+	greedy?: boolean;
 }
 
 /**
@@ -84,7 +85,13 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		return this.queryStates.has(key);
 	}
 
-	registerQuery({ queryKeys, collectionName, initialParams, ...args }: RegisterQueryConfig) {
+	registerQuery({
+		queryKeys,
+		collectionName,
+		initialParams,
+		greedy,
+		...args
+	}: RegisterQueryConfig) {
 		const key = this.stringify(queryKeys);
 		const endpoint = args.endpoint || collectionName;
 		const hooks = allHooks[collectionName] || {};
@@ -101,6 +108,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 					searchService,
 					endpoint,
 					errorSubject: this.subjects.error,
+					greedy,
 				});
 
 				this.queryStates.set(key, queryState);
@@ -112,7 +120,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	}
 
 	registerRelationalQuery(
-		{ queryKeys, collectionName, initialParams, ...args }: RegisterQueryConfig,
+		{ queryKeys, collectionName, initialParams, greedy, ...args }: RegisterQueryConfig,
 		childQuery: Query<any>,
 		parentLookupQuery: Query<any>
 	) {
@@ -133,6 +141,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 						searchService,
 						endpoint,
 						errorSubject: this.subjects.error,
+						greedy,
 					},
 					childQuery,
 					parentLookupQuery
@@ -226,6 +235,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 					collectionReplication,
 					collection,
 					queryEndpoint,
+					greedy: queryState.greedy,
 				});
 				// if we're replacing an existing query replication, maybe pause it
 				if (this.activeQueryReplications.has(queryState.id)) {
@@ -260,7 +270,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	/**
 	 * There is one replication state per query endpoint
 	 */
-	registerQueryReplication({ queryEndpoint, collectionReplication, collection }) {
+	registerQueryReplication({ queryEndpoint, collectionReplication, collection, greedy }) {
 		const replicationState = this.replicationStates.get(queryEndpoint);
 		if (!replicationState || !(replicationState instanceof QueryReplicationState)) {
 			const queryReplication = new QueryReplicationState({
@@ -269,6 +279,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				collection,
 				endpoint: queryEndpoint,
 				errorSubject: this.subjects.error,
+				greedy,
 			});
 
 			this.replicationStates.set(queryEndpoint, queryReplication);
