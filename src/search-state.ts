@@ -6,7 +6,6 @@ import { map, distinctUntilChanged, switchMap, tap } from 'rxjs/operators';
 import { maybeCreateSearchDB } from './search-dbs';
 
 import type { Orama, Results } from '@orama/orama';
-import type { RxCollection, RxDocument } from 'rxdb';
 
 /**
  * Orama Search Service for WooCommerce POS

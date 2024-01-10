@@ -7,6 +7,7 @@ import allHooks from './hooks';
 import { QueryReplicationState } from './query-replication-state';
 import { Query } from './query-state';
 import { Registry } from './registry';
+import { RelationalQuery } from './relational-query-state';
 import { Search } from './search-state';
 import { SubscribableBase } from './subscribable-base';
 import { buildEndpointWithParams } from './utils';
@@ -101,6 +102,41 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 					endpoint,
 					errorSubject: this.subjects.error,
 				});
+
+				this.queryStates.set(key, queryState);
+				this.onNewQueryState(queryState);
+			}
+		}
+
+		return this.queryStates.get(key);
+	}
+
+	registerRelationalQuery(
+		{ queryKeys, collectionName, initialParams, ...args }: RegisterQueryConfig,
+		childQuery: Query<any>,
+		parentLookupQuery: Query<any>
+	) {
+		const key = this.stringify(queryKeys);
+		const endpoint = args.endpoint || collectionName;
+		const hooks = allHooks[collectionName] || {};
+
+		if (!this.queryStates.has(key)) {
+			const collection = this.getCollection(collectionName);
+			if (collection) {
+				const searchService = new Search({ collection, locale: this.locale });
+				const queryState = new RelationalQuery<typeof collection>(
+					{
+						id: key,
+						collection,
+						initialParams,
+						hooks,
+						searchService,
+						endpoint,
+						errorSubject: this.subjects.error,
+					},
+					childQuery,
+					parentLookupQuery
+				);
 
 				this.queryStates.set(key, queryState);
 				this.onNewQueryState(queryState);

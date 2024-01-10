@@ -8,7 +8,7 @@ import isEqual from 'lodash/isEqual';
 import { ObservableResource } from 'observable-hooks';
 import { doc } from 'prettier';
 import { BehaviorSubject, Observable, Subscription, Subject, combineLatest } from 'rxjs';
-import { map, switchMap, distinctUntilChanged } from 'rxjs/operators';
+import { map, switchMap, distinctUntilChanged, debounceTime, tap } from 'rxjs/operators';
 
 import { SubscribableBase } from './subscribable-base';
 
@@ -59,6 +59,8 @@ export interface QueryResult<T> {
 		score: number;
 		document: DocumentType<T>;
 		positions?: Record<string, object>;
+		childrenSearchCount?: number;
+		parentSearchTerm?: string;
 	}[];
 }
 
@@ -67,13 +69,13 @@ export interface QueryResult<T> {
  */
 export class Query<T extends RxCollection> extends SubscribableBase {
 	public readonly id: string;
-	public collection: T;
-	private whereClauses: WhereClause[] = [];
-	private hooks: QueryConfig<T>['hooks'];
-	private searchService: Search;
+	public readonly collection: T;
+	public readonly whereClauses: WhereClause[] = [];
+	public readonly hooks: QueryConfig<T>['hooks'];
+	public readonly searchService: Search;
 	public readonly endpoint: string;
-	private errorSubject: Subject<Error>;
-	private primaryKey: string;
+	public readonly errorSubject: Subject<Error>;
+	public readonly primaryKey: string;
 
 	/**
 	 *
@@ -82,17 +84,15 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	public readonly subjects = {
 		params: new BehaviorSubject<QueryParams | undefined>(undefined),
 		result: new Subject<QueryResult<T>>(),
-		additionalSearchResults: new BehaviorSubject<QueryResult<T>>(undefined),
 	};
 
 	/**
 	 *
 	 */
-	readonly params$ = this.subjects.params.asObservable();
-	readonly result$ = this.subjects.result.asObservable();
-	readonly additionalSearchResults$ = this.subjects.additionalSearchResults.asObservable();
+	public readonly params$ = this.subjects.params.asObservable();
+	public readonly result$ = this.subjects.result.asObservable();
 
-	readonly resource = new ObservableResource(this.result$);
+	public readonly resource = new ObservableResource(this.result$);
 
 	/**
 	 *
@@ -130,19 +130,49 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 			/**
 			 * Subscribe to query changes and emit the results
 			 */
-			this.find$.subscribe((result) => {
-				this.subjects.result.next(result);
-			})
+			this.find$
+				.pipe(
+					distinctUntilChanged((prev, next) => {
+						// Check if search is active and searchTerm has changed
+						if (prev.searchActive !== next.searchActive || prev.searchTerm !== next.searchTerm) {
+							return false;
+						}
+
+						// Check if the number of hits or their order has changed
+						const idsAreEqual = isEqual(
+							prev.hits.map((hit) => hit.id),
+							next.hits.map((hit) => hit.id)
+						);
+
+						// if search is active, check if the childrenSearchCount has changed
+						let childrenAreEqual = true;
+						if (idsAreEqual && next.searchActive) {
+							childrenAreEqual = prev.hits.every((hit, index) => {
+								const nextHit = next.hits[index];
+								return (
+									hit.parentSearchTerm === nextHit.parentSearchTerm &&
+									hit.childrenSearchCount === nextHit.childrenSearchCount &&
+									hit.score === nextHit.score
+								);
+							});
+						}
+
+						return idsAreEqual && childrenAreEqual;
+					})
+				)
+				.subscribe((result) => {
+					console.log('Query result', result);
+					this.subjects.result.next(result);
+				})
 		);
 	}
 
 	/**
 	 * A wrapper for the RxDB collection.find().$ observable
 	 */
-	private get find$() {
+	get find$() {
 		return this.params$.pipe(
 			switchMap((params) => {
-				const startTime = performance.now(); // Start time measurement
 				let modifiedParams = cloneDeep(params || {}); // clone params, note nested objects need to be cloned too!
 
 				// Apply the preQueryParams hook if provided
@@ -153,95 +183,104 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 				const searchActive =
 					typeof modifiedParams.search === 'string' && !isEmpty(modifiedParams.search);
 
-				if (searchActive) {
-					return combineLatest([
-						this.searchService.search$(modifiedParams.search as string),
-						this.additionalSearchResults$,
-					]).pipe(
-						switchMap(([searchResults, additionalSearchResults]) => {
-							return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
-								map((docs) => {
-									if (additionalSearchResults) {
-										const combinedHits = [...searchResults.hits, ...additionalSearchResults.hits];
-										const uniqueHits = Array.from(
-											new Map(combinedHits.map((hit) => [hit.id, hit])).values()
-										);
-										uniqueHits.sort((a, b) => b.score - a.score);
-										searchResults.count = uniqueHits.length;
-										searchResults.hits = uniqueHits;
-										// console.log('searchResults', searchResults);
-									}
-									const filteredAndSortedDocs = searchResults.hits
-										.map((hit) => ({
-											...hit,
-											document: docs.find((doc) => doc[this.primaryKey] === hit.id),
-										}))
-										.filter((hit) => hit.document !== undefined);
-
-									const endTime = performance.now(); // End time measurement
-									const elapsed = endTime - startTime;
-
-									return {
-										elapsed,
-										searchActive: true,
-										count: filteredAndSortedDocs.length,
-										hits: filteredAndSortedDocs,
-									};
-								})
-							);
-						})
-					);
-				} else {
-					return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
-						map((docs: DocumentType<T>[]) => {
-							/**
-							 * Sorting wasn't working for string numbers, so I'm handling sorting here
-							 */
-							const { sortBy, sortDirection } = modifiedParams;
-							let filteredAndSortedDocs = docs;
-
-							if (sortBy && sortDirection) {
-								// @TODO - ordering by multiple fields?
-								filteredAndSortedDocs = orderBy(
-									filteredAndSortedDocs,
-									[(v) => v[sortBy]],
-									[sortDirection]
-								);
-							}
-
-							if (this.hooks?.postQueryResult) {
-								filteredAndSortedDocs = this.hooks.postQueryResult(
-									filteredAndSortedDocs,
-									modifiedParams,
-									params
-								);
-							}
-
-							const endTime = performance.now(); // End time measurement
-							const elapsed = endTime - startTime;
-
-							return {
-								elapsed,
-								searchActive: false,
-								count: filteredAndSortedDocs.length,
-								hits: filteredAndSortedDocs.map((doc) => ({
-									id: doc[this.primaryKey],
-									document: doc,
-								})),
-							};
-						})
-					);
-				}
+				return searchActive
+					? this.handleSearchActive(modifiedParams)
+					: this.handleSearchInactive(modifiedParams, params);
 			}),
-			/**
-			 * We're only interested in insert/delete documents and order changes
-			 */
-			distinctUntilChanged((prev, next) => {
-				return isEqual(
-					prev.hits.map((hit) => hit.id),
-					next.hits.map((hit) => hit.id)
+			tap((res) => console.log('find$', res))
+		);
+	}
+
+	handleSearchActive(modifiedParams: QueryParams) {
+		const startTime = performance.now(); // Start time measurement
+
+		return this.searchService.search$(modifiedParams.search as string).pipe(
+			switchMap((searchResults) => {
+				return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
+					map((docs) => {
+						const filteredAndSortedDocs = searchResults.hits
+							.map((hit) => ({
+								...hit,
+								document: docs.find((doc) => doc[this.primaryKey] === hit.id),
+							}))
+							.filter((hit) => hit.document !== undefined);
+
+						const endTime = performance.now(); // End time measurement
+						const elapsed = endTime - startTime;
+
+						return {
+							elapsed,
+							searchActive: true,
+							searchTerm: modifiedParams.search,
+							count: filteredAndSortedDocs.length,
+							hits: filteredAndSortedDocs,
+						};
+					})
 				);
 			})
+			// distinctUntilChanged((prev, next) => {
+			// 	// Check if search is active and searchTerm has changed
+			// 	if (prev.searchActive !== next.searchActive || prev.searchTerm !== next.searchTerm) {
+			// 		return false;
+			// 	}
+
+			// 	// Check if the number of hits or their order has changed
+			// 	return isEqual(
+			// 		prev.hits.map((hit) => hit.id),
+			// 		next.hits.map((hit) => hit.id)
+			// 	);
+			// })
+		);
+	}
+
+	handleSearchInactive(modifiedParams: QueryParams, originalParams: QueryParams) {
+		const startTime = performance.now(); // Start time measurement
+
+		return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
+			map((docs: DocumentType<T>[]) => {
+				/**
+				 * Sorting wasn't working for string numbers, so I'm handling sorting here
+				 */
+				const { sortBy, sortDirection } = modifiedParams;
+				let filteredAndSortedDocs = docs;
+
+				if (sortBy && sortDirection) {
+					// @TODO - ordering by multiple fields?
+					filteredAndSortedDocs = orderBy(
+						filteredAndSortedDocs,
+						[(v) => v[sortBy]],
+						[sortDirection]
+					);
+				}
+
+				if (this.hooks?.postQueryResult) {
+					filteredAndSortedDocs = this.hooks.postQueryResult(
+						filteredAndSortedDocs,
+						modifiedParams,
+						originalParams
+					);
+				}
+
+				const endTime = performance.now(); // End time measurement
+				const elapsed = endTime - startTime;
+
+				return {
+					elapsed,
+					searchActive: false,
+					count: filteredAndSortedDocs.length,
+					hits: filteredAndSortedDocs.map((doc) => ({
+						id: doc[this.primaryKey],
+						document: doc,
+					})),
+				};
+			})
+			// distinctUntilChanged((prev, next) => {
+			// 	// Check if the number of hits or their order has changed
+			// 	return isEqual(
+			// 		prev.hits.map((hit) => hit.id),
+			// 		next.hits.map((hit) => hit.id)
+			// 	);
+			// })
 		);
 	}
 
@@ -371,5 +410,3 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		);
 	}
 }
-
-export default Query;
