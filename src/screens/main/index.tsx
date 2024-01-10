@@ -228,7 +228,7 @@ const MainNavigator = () => {
 				</OnlineStatusProvider>
 			</UISettingsProvider>
 			<ErrorSnackbar />
-			<QueryDevtools />
+			{/* <QueryDevtools /> */}
 		</QueryProvider>
 	);
 };

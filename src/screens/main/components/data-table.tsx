@@ -1,9 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
-import { combineLatest } from 'rxjs';
-import { distinctUntilChanged, map } from 'rxjs/operators';
+import { useObservableState, useSubscription } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -70,8 +68,8 @@ const DataTableFooter = ({ query, children, count }) => {
  * Loading row should be separate from the table component to check loading state from the DataTable
  */
 const LoadingRow = ({ query }) => {
-	// const loading = useObservableState(query.replicationState.active$, false);
-	const loading = false;
+	const { active$ } = useReplicationState(query);
+	const loading = useObservableState(active$, false);
 
 	return <Table.LoadingRow loading={loading} />;
 };
@@ -95,6 +93,7 @@ const DataTable = <DocumentType,>({
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
 	const { sortBy, sortDirection } = useObservableState(query.params$, query.getParams());
+	const listRef = React.useRef();
 
 	/**
 	 *
@@ -146,10 +145,20 @@ const DataTable = <DocumentType,>({
 	]);
 
 	/**
+	 * If the query params change, we should scroll to top
+	 */
+	useSubscription(query.params$, () => {
+		if (listRef?.current) {
+			listRef.current?.scrollToOffset({ offset: 0 });
+		}
+	});
+
+	/**
 	 *
 	 */
 	return (
 		<Table<DocumentType>
+			ref={listRef}
 			data={result.hits}
 			renderItem={renderItem}
 			estimatedItemSize={estimatedItemSize}

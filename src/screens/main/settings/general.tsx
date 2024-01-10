@@ -23,7 +23,6 @@ export const GeneralSettings = () => {
 	 */
 	const handleCustomerSelect = (customer) => {
 		if (customer.id !== defaultCustomer.id) {
-			debugger;
 			store.incrementalPatch({
 				default_customer: customer.id,
 			});

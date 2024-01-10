@@ -41,7 +41,13 @@ export const PlainAttributes = ({ product }: Props) => {
 
 const ProductAttributes = ({ product }: Props) => {
 	const attributes = useObservableState(product.attributes$, product.attributes);
-	const { expanded, setExpanded, setInitialSelectedAttributes } = useVariationTable();
+	const {
+		expanded,
+		setExpanded,
+		setInitialSelectedAttributes,
+		childrenSearchCount,
+		parentSearchTerm,
+	} = useVariationTable();
 	const manager = useQueryManager();
 	const t = useT();
 
@@ -72,6 +78,27 @@ const ProductAttributes = ({ product }: Props) => {
 	);
 
 	/**
+	 * Expand text string
+	 */
+	const expandText = React.useMemo(() => {
+		let text = '';
+		if (expanded) {
+			text += t('Collapse', { _tags: 'core' });
+		} else {
+			text += t('Expand', { _tags: 'core' });
+		}
+		if (childrenSearchCount > 0) {
+			text += ' - ';
+			text += t('{count} variations found for {term}', {
+				count: childrenSearchCount,
+				term: parentSearchTerm,
+				_tags: 'core',
+			});
+		}
+		return text;
+	}, [childrenSearchCount, expanded, parentSearchTerm, t]);
+
+	/**
 	 *
 	 */
 	return (
@@ -92,7 +119,7 @@ const ProductAttributes = ({ product }: Props) => {
 					</Text>
 				))}
 			<Link size="small" onPress={() => setExpanded(!expanded)}>
-				{expanded ? t('Collapse', { _tags: 'core' }) : t('Expand', { _tags: 'core' })}
+				{expandText}
 			</Link>
 		</Box>
 	);
