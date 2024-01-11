@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState, useSubscription } from 'observable-hooks';
+import { debounceTime } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -146,10 +147,11 @@ const DataTable = <DocumentType,>({
 
 	/**
 	 * If the query params change, we should scroll to top
+	 * - debounceTime so we don't flash the old results
 	 */
-	useSubscription(query.params$, () => {
+	useSubscription(query.params$.pipe(debounceTime(10)), () => {
 		if (listRef?.current) {
-			listRef.current?.scrollToOffset({ offset: 0 });
+			listRef.current?.scrollToOffset({ offset: 0, animated: false });
 		}
 	});
 

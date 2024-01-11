@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-import { combineLatest } from 'rxjs';
-import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -12,6 +9,7 @@ import { useRelationalQuery } from '@wcpos/query';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
+import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
 import DataTable from '../components/data-table';
 import FilterBar from '../components/product/filter-bar';
@@ -41,7 +39,7 @@ const Products = () => {
 	/**
 	 *
 	 */
-	const { parentQuery: productQuery } = useRelationalQuery(
+	const { parentQuery: query } = useRelationalQuery(
 		{
 			queryKeys: ['products', { target: 'page', type: 'relational' }],
 			collectionName: 'products',
@@ -58,8 +56,14 @@ const Products = () => {
 				sortDirection: uiSettings.get('sortDirection'),
 			},
 			endpoint: 'products/variations',
+			greedy: true,
 		}
 	);
+
+	/**
+	 * Barcode
+	 */
+	useBarcode(query);
 
 	/**
 	 *
@@ -101,7 +105,7 @@ const Products = () => {
 					<Box fill space="small">
 						<Box horizontal align="center" padding="small" paddingBottom="none" space="small">
 							<ErrorBoundary>
-								<Search query={productQuery} />
+								<Search query={query} />
 							</ErrorBoundary>
 							<ErrorBoundary>
 								{/* <Icon
@@ -117,7 +121,7 @@ const Products = () => {
 						</Box>
 						<Box horizontal padding="small" paddingTop="none">
 							<ErrorBoundary>
-								<FilterBar query={productQuery} />
+								<FilterBar query={query} />
 							</ErrorBoundary>
 						</Box>
 					</Box>
@@ -126,7 +130,7 @@ const Products = () => {
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable<ProductDocument>
-								query={productQuery}
+								query={query}
 								uiSettings={uiSettings}
 								renderItem={renderItem}
 								noDataMessage={t('No products found', { _tags: 'core' })}

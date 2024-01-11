@@ -12,6 +12,7 @@ import log from '@wcpos/utils/src/logger';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
+import { useBarcode } from './use-barcode';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import DataTable from '../../components/data-table';
@@ -69,8 +70,14 @@ const POSProducts = ({ isColumn = false }) => {
 				sortDirection: uiSettings.get('sortDirection'),
 			},
 			endpoint: 'products/variations',
+			greedy: true,
 		}
 	);
+
+	/**
+	 * Barcode
+	 */
+	useBarcode(query);
 
 	/**
 	 *

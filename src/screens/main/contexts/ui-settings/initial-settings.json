@@ -170,6 +170,10 @@
             "show": false
           },
           {
+            "key": "barcode",
+            "show": false
+          },
+          {
             "key": "attributes",
             "show": false
           }

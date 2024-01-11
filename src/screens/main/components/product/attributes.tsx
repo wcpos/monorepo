@@ -87,7 +87,13 @@ const ProductAttributes = ({ product }: Props) => {
 		} else {
 			text += t('Expand', { _tags: 'core' });
 		}
-		if (childrenSearchCount > 0) {
+		if (childrenSearchCount === 1) {
+			text += ' - ';
+			text += t('1 variation found for {term}', {
+				term: parentSearchTerm,
+				_tags: 'core',
+			});
+		} else if (childrenSearchCount > 0) {
 			text += ' - ';
 			text += t('{count} variations found for {term}', {
 				count: childrenSearchCount,

@@ -9,8 +9,8 @@ import type { CollectionKey } from './use-collection';
  * - Some collections are linked, so we need to reset them all
  */
 const resetCollectionNames = {
-	products: ['products', 'variations'],
-	orders: ['orders', 'line_items', 'fee_lines', 'shipping_lines'],
+	products: ['variations', 'products'],
+	orders: ['line_items', 'fee_lines', 'shipping_lines', 'orders'],
 };
 
 export const useCollectionReset = (key: CollectionKey) => {
