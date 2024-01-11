@@ -1,9 +1,9 @@
 import * as React from 'react';
 
 import Suspense from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import TaxRatesTabs from './tabs';
-import { useQuery } from '../hooks/use-query';
 
 /**
  *
@@ -12,7 +12,7 @@ export const TaxRates = () => {
 	const query = useQuery({
 		queryKeys: ['tax-rates'],
 		collectionName: 'taxes',
-		initialQuery: {},
+		initialParams: {},
 	});
 
 	return (

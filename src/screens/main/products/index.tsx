@@ -8,18 +8,18 @@ import { from } from 'rxjs';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
+import { useQuery } from '@wcpos/query';
 
 import AddProduct from './add-product';
 import EditProduct from './edit-product';
 import EditVariation from './edit-variation';
 import Products from './products';
 import { useT } from '../../../contexts/translations';
-import { useCollection } from '../hooks/use-collection';
 import { ModalLayout } from '../../components/modal-layout';
 import { TaxHelpersProvider } from '../contexts/tax-helpers';
 import useUISettings from '../contexts/ui-settings';
 import useBaseTaxLocation from '../hooks/use-base-tax-location';
-import { useQuery } from '../hooks/use-query';
+import { useCollection } from '../hooks/use-collection';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -44,7 +44,7 @@ const ProductsWithProviders = () => {
 	const taxQuery = useQuery({
 		queryKeys: ['tax-rates', 'base'],
 		collectionName: 'taxes',
-		initialQuery: {
+		initialParams: {
 			search: location,
 		},
 	});

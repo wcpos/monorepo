@@ -27,8 +27,10 @@ export const useAddVariation = () => {
 	 *
 	 */
 	const addVariation = React.useCallback(
-		async (variation: ProductVariationDocument, parent: ProductDocument, metaData: MetaData[]) => {
+		async (variation: ProductVariationDocument, parent: ProductDocument, metaData?: MetaData[]) => {
 			let priceWithoutTax = priceToNumber(variation.price);
+			let attributes = metaData;
+
 			const tax = calculateTaxesFromPrice({
 				price: parseFloat(variation.price),
 				taxClass: variation.tax_class,
@@ -49,6 +51,16 @@ export const useAddVariation = () => {
 				regularPriceWithoutTax = priceToNumber(variation.regular_price) - regularTax.total;
 			}
 
+			if (!attributes) {
+				attributes = variation.attributes.map((attr) => ({
+					key: attr.name,
+					value: attr.option,
+					attr_id: attr.id,
+					display_key: attr.name,
+					display_value: attr.option,
+				}));
+			}
+
 			const newLineItem = {
 				price: priceWithoutTax,
 				subtotal: String(regularPriceWithoutTax),
@@ -64,7 +76,7 @@ export const useAddVariation = () => {
 				tax_class: variation.tax_class,
 				// meta_data: filteredMetaData(parent.meta_data).concat(metaData),
 				meta_data: [
-					...metaData,
+					...attributes,
 					{ key: '_woocommerce_pos_tax_status', value: variation.tax_status },
 				],
 			};

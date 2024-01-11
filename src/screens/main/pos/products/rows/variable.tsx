@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import isPlainObject from 'lodash/isPlainObject';
 // import { useObservableState } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
@@ -45,6 +44,15 @@ const variationCells = {
 const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
 	// const variationIDs = useObservableState(item.variations$, item.variations);
 	const [expanded, setExpanded] = React.useState(false);
+	const [initialSelectedAttributes, setInitialSelectedAttributes] = React.useState();
+
+	/**
+	 * Expand variations if there are search results
+	 * - Let's not expend the variations by default, the UI is too messy
+	 */
+	// React.useEffect(() => {
+	// 	setExpanded(!!item.childrenSearchCount);
+	// }, [item.childrenSearchCount]);
 
 	/**
 	 *
@@ -57,14 +65,14 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 				return (
 					<ErrorBoundary>
 						<Suspense>
-							<Cell item={item} column={column} index={index} cellWidth={cellWidth} />
+							<Cell item={item.document} column={column} index={index} cellWidth={cellWidth} />
 						</Suspense>
 					</ErrorBoundary>
 				);
 			}
 
-			if (item[column.key]) {
-				return <Text>{String(item[column.key])}</Text>;
+			if (item.document[column.key]) {
+				return <Text>{String(item.document[column.key])}</Text>;
 			}
 
 			return null;
@@ -84,9 +92,12 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 		return {
 			expanded,
 			setExpanded,
+			setInitialSelectedAttributes,
 			cells: variationCells,
+			childrenSearchCount: item.childrenSearchCount,
+			parentSearchTerm: item?.parentSearchTerm,
 		};
-	}, [expanded]);
+	}, [expanded, item.childrenSearchCount, item?.parentSearchTerm]);
 
 	/**
 	 *
@@ -94,13 +105,16 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	return (
 		<VariationTableContext.Provider value={variationTableContext}>
 			<Table.Row item={item} index={index} cellRenderer={cellRenderer} />
-			{!!expanded && (
+			{expanded && (
+				// <Animated.View style={animatedStyle}>
 				<ErrorBoundary>
 					<Variations
-						parent={item}
-						initialSearch={isPlainObject(expanded) ? expanded : undefined}
+						item={item}
+						initialSelectedAttributes={initialSelectedAttributes}
+						parentSearchTerm={item?.parentSearchTerm}
 					/>
 				</ErrorBoundary>
+				// </Animated.View>
 			)}
 		</VariationTableContext.Provider>
 	);

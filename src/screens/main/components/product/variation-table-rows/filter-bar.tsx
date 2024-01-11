@@ -1,8 +1,9 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
+import isEqual from 'lodash/isEqual';
 import { useObservableState } from 'observable-hooks';
-import { map, tap } from 'rxjs/operators';
+import { map, tap, distinctUntilChanged } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -10,19 +11,29 @@ import Icon from '@wcpos/components/src/icon';
 
 import AttributePill from './attribute-pill';
 import { useVariationTable } from './context';
-import { useStoreStateManager } from '../../../contexts/store-state-manager';
+import { VariationSearchPill } from './search-pill';
+
+type ProductDocument = import('@wcpos/database').ProductDocument;
+type ProductCollection = import('@wcpos/database').ProductCollection;
+type Query = import('@wcpos/query').Query<ProductCollection>;
+
+interface Props {
+	parent: ProductDocument;
+	query: Query;
+	parentSearchTerm?: string;
+}
 
 /**
  *
  */
-const VariationsFilterBar = ({ parent }) => {
+const VariationsFilterBar = ({ parent, query, parentSearchTerm }: Props) => {
 	const theme = useTheme();
-	const manager = useStoreStateManager();
-	const query = manager.getQuery(['variations', { parentID: parent.id }]);
 	const { setExpanded } = useVariationTable();
+
+	// new array is being created every time
 	const selectedAttributes = useObservableState(
-		query.state$.pipe(map((q) => get(q, ['search', 'attributes'], []))),
-		get(query, ['currentState', 'search', 'attributes'], [])
+		query.params$.pipe(map((params) => get(params, ['selector', 'attributes', '$allMatch']))),
+		get(query.getParams(), ['selector', 'attributes', '$allMatch'])
 	);
 
 	/**
@@ -30,10 +41,29 @@ const VariationsFilterBar = ({ parent }) => {
 	 */
 	const handleSelect = React.useCallback(
 		(attribute) => {
-			query.updateVariationAttributeSearch(attribute);
+			query.updateVariationAttributeSelector(attribute);
 		},
 		[query]
 	);
+
+	/**
+	 *
+	 */
+	const handleSearch = React.useCallback(
+		(search: string) => {
+			query.debouncedSearch(search);
+		},
+		[query]
+	);
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		if (parentSearchTerm) {
+			query.search(parentSearchTerm);
+		}
+	}, [parentSearchTerm, query]);
 
 	/**
 	 *
@@ -48,6 +78,7 @@ const VariationsFilterBar = ({ parent }) => {
 			}}
 		>
 			<Box fill horizontal space="small">
+				<VariationSearchPill onSearch={handleSearch} parentSearchTerm={parentSearchTerm} />
 				{(parent.attributes || [])
 					.filter((attribute) => attribute.variation)
 					.sort((a, b) => (a.position || 0) - (b.position || 0))

@@ -10,6 +10,7 @@ import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 import Table from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
+import { useInfiniteScroll, useReplicationState } from '@wcpos/query';
 
 import CustomerSelectItem from './item';
 import { useT } from '../../../../contexts/translations';
@@ -48,8 +49,9 @@ interface CustomerSelectMenuProps {
  */
 const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 	const theme = useTheme();
-	const customers = useObservableSuspense(query.paginatedResource);
-	const loading = useObservableState(query.replicationState.active$, false);
+	const result = useInfiniteScroll(query);
+	const { active$ } = useReplicationState(query.id);
+	const loading = useObservableState(active$, false);
 	// const total = useTotalCount('customers', replicationState);
 	const { targetMeasurements, contentMeasurements } = usePopover();
 	const t = useT();
@@ -78,8 +80,8 @@ const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 	const renderItem = React.useCallback(
 		({ item }) => {
 			return (
-				<Pressable onPress={() => onChange(item)} style={calculatedStyled}>
-					<CustomerSelectItem customer={item} />
+				<Pressable onPress={() => onChange(item.document)} style={calculatedStyled}>
+					<CustomerSelectItem customer={item.document} />
 				</Pressable>
 			);
 		},
@@ -125,11 +127,11 @@ const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 	return (
 		<View style={{ width: targetMeasurements.value.width, maxHeight: 292 }}>
 			<FlatList<CustomerDocument>
-				data={customers}
+				data={result.hits}
 				renderItem={renderItem}
 				estimatedItemSize={50}
 				ListHeaderComponent={renderGuestItem}
-				onEndReached={() => query.nextPage()}
+				onEndReached={() => result.nextPage()}
 				ListFooterComponent={<Table.LoadingRow loading={loading} style={{ padding: 0 }} />}
 			/>
 		</View>

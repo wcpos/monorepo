@@ -44,16 +44,16 @@ const cells = {
  *
  */
 const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
-	const mutation = useMutation({ collectionName: 'products' });
+	const { patch } = useMutation({ collectionName: 'products' });
 
 	/**
 	 *
 	 */
 	const handleChange = React.useCallback(
 		async (product: ProductDocument, data: Record<string, unknown>) => {
-			mutation.mutate({ document: product, data });
+			patch({ document: product, data });
 		},
-		[mutation]
+		[patch]
 	);
 
 	/**
@@ -68,7 +68,7 @@ const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocume
 					<ErrorBoundary>
 						<Suspense>
 							<Cell
-								item={item}
+								item={item.document}
 								column={column}
 								index={index}
 								cellWidth={cellWidth}
@@ -79,8 +79,8 @@ const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocume
 				);
 			}
 
-			if (item[column.key]) {
-				return <Text>{String(item[column.key])}</Text>;
+			if (item.document[column.key]) {
+				return <Text>{String(item.document[column.key])}</Text>;
 			}
 
 			return null;

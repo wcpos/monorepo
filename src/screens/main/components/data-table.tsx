@@ -1,7 +1,8 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableState, useSubscription } from 'observable-hooks';
+import { debounceTime } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -10,14 +11,14 @@ import Loader from '@wcpos/components/src/loader';
 import Suspense from '@wcpos/components/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
+import { useReplicationState, Query, useInfiniteScroll } from '@wcpos/query';
+import logger from '@wcpos/utils/src/logger';
 
 import EmptyTableRow from './empty-table-row';
 import SyncButton from './sync-button';
 import TextCell from './text-cell';
 import { useT } from '../../../contexts/translations';
-import useTotalCount from '../hooks/use-total-count';
-
-import type { Query } from '../contexts/store-state-manager';
+import { useCollectionReset } from '../hooks/use-collection-reset';
 
 type UISettingsColumn = import('../contexts/ui-settings').UISettingsColumn;
 
@@ -35,12 +36,12 @@ interface CommonTableProps<DocumentType> {
 /**
  *
  */
-const DataTableFooter = ({ query, children }) => {
+const DataTableFooter = ({ query, children, count }) => {
 	const theme = useTheme();
-	const { sync, clear, replicationState } = query;
-	const loading = useObservableState(replicationState.active$, false);
-	const count = useObservableState(query.count$, 0); // count is the query count, not pagination count
-	const total = useTotalCount(replicationState);
+	const { sync, active$, total$ } = useReplicationState(query);
+	const { clear } = useCollectionReset(query.collection.name);
+	const loading = useObservableState(active$, false);
+	const total = useObservableState(total$, 0);
 	const t = useT();
 
 	return (
@@ -65,6 +66,16 @@ const DataTableFooter = ({ query, children }) => {
 };
 
 /**
+ * Loading row should be separate from the table component to check loading state from the DataTable
+ */
+const LoadingRow = ({ query }) => {
+	const { active$ } = useReplicationState(query);
+	const loading = useObservableState(active$, false);
+
+	return <Table.LoadingRow loading={loading} />;
+};
+
+/**
  *
  */
 const DataTable = <DocumentType,>({
@@ -77,13 +88,13 @@ const DataTable = <DocumentType,>({
 	extraContext,
 	footer,
 }: CommonTableProps<DocumentType>) => {
-	const data = useObservableSuspense(query.paginatedResource);
+	const result = useInfiniteScroll(query);
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
-	const { sortBy, sortDirection } = useObservableState(query.state$, query.currentState);
-	const loading = useObservableState(query.replicationState.active$, false);
+	const { sortBy, sortDirection } = useObservableState(query.params$, query.getParams());
+	const listRef = React.useRef();
 
 	/**
 	 *
@@ -96,13 +107,13 @@ const DataTable = <DocumentType,>({
 				return (
 					<ErrorBoundary>
 						<Suspense>
-							<Cell item={item} column={column} index={index} />
+							<Cell item={item.document} column={column} index={index} />
 						</Suspense>
 					</ErrorBoundary>
 				);
 			}
 
-			return <TextCell item={item} column={column} />;
+			return <TextCell item={item.document} column={column} />;
 		},
 		[cells]
 	);
@@ -113,7 +124,9 @@ const DataTable = <DocumentType,>({
 	const context = React.useMemo<TableContextProps<DocumentType>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
-			sort: ({ sortBy, sortDirection }) => query.sort(sortBy, sortDirection),
+			sort: result.searchActive
+				? null
+				: ({ sortBy, sortDirection }) => query.sort(sortBy, sortDirection),
 			sortBy,
 			sortDirection,
 			cellRenderer,
@@ -121,22 +134,42 @@ const DataTable = <DocumentType,>({
 			query,
 			...extraContext,
 		};
-	}, [columns, sortBy, sortDirection, cellRenderer, extraContext, query, uiSettings]);
+	}, [
+		columns,
+		result.searchActive,
+		sortBy,
+		sortDirection,
+		cellRenderer,
+		query,
+		extraContext,
+		uiSettings,
+	]);
+
+	/**
+	 * If the query params change, we should scroll to top
+	 * - debounceTime so we don't flash the old results
+	 */
+	useSubscription(query.params$.pipe(debounceTime(10)), () => {
+		if (listRef?.current) {
+			listRef.current?.scrollToOffset({ offset: 0, animated: false });
+		}
+	});
 
 	/**
 	 *
 	 */
 	return (
 		<Table<DocumentType>
-			data={data}
+			ref={listRef}
+			data={result.hits}
 			renderItem={renderItem}
 			estimatedItemSize={estimatedItemSize}
 			context={context}
 			ListEmptyComponent={<EmptyTableRow message={noDataMessage} />}
-			onEndReached={() => query.nextPage()}
-			onEndReachedThreshold={1}
-			footer={<DataTableFooter query={query} children={footer} />}
-			ListFooterComponent={<Table.LoadingRow loading={loading} />}
+			onEndReached={() => result.nextPage()}
+			onEndReachedThreshold={0.5}
+			footer={<DataTableFooter query={query} children={footer} count={result.count} />}
+			ListFooterComponent={<LoadingRow query={query} />}
 		/>
 	);
 };

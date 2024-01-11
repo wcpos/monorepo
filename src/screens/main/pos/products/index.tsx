@@ -7,10 +7,12 @@ import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
+import { useRelationalQuery } from '@wcpos/query';
 import log from '@wcpos/utils/src/logger';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
+import { useBarcode } from './use-barcode';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import DataTable from '../../components/data-table';
@@ -20,7 +22,6 @@ import TaxBasedOn from '../../components/product/tax-based-on';
 import UISettings from '../../components/ui-settings';
 import { useTaxHelpers } from '../../contexts/tax-helpers';
 import useUI from '../../contexts/ui-settings';
-import { useQuery } from '../../hooks/use-query';
 import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 
@@ -52,14 +53,31 @@ const POSProducts = ({ isColumn = false }) => {
 	/**
 	 *
 	 */
-	const query = useQuery({
-		queryKeys: ['products', { target: 'pos' }],
-		collectionName: 'products',
-		initialQuery: {
-			sortBy: uiSettings.get('sortBy'),
-			sortDirection: uiSettings.get('sortDirection'),
+	const { parentQuery: query } = useRelationalQuery(
+		{
+			queryKeys: ['products', { target: 'pos', type: 'relational' }],
+			collectionName: 'products',
+			initialParams: {
+				sortBy: uiSettings.get('sortBy'),
+				sortDirection: uiSettings.get('sortDirection'),
+			},
 		},
-	});
+		{
+			queryKeys: ['variations', { target: 'pos', type: 'relational' }],
+			collectionName: 'variations',
+			initialParams: {
+				sortBy: 'id',
+				sortDirection: uiSettings.get('sortDirection'),
+			},
+			endpoint: 'products/variations',
+			greedy: true,
+		}
+	);
+
+	/**
+	 * Barcode
+	 */
+	useBarcode(query);
 
 	/**
 	 *
@@ -72,7 +90,7 @@ const POSProducts = ({ isColumn = false }) => {
 	 *
 	 */
 	const renderItem = React.useCallback((props) => {
-		let Component = TABLE_ROW_COMPONENTS[props.item.type];
+		let Component = TABLE_ROW_COMPONENTS[props.item.document.type];
 
 		// If we still didn't find a component, use SimpleProductTableRow as a fallback
 		// eg: Grouped products

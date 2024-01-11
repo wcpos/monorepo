@@ -5,6 +5,7 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import cells from './cells';
 import SearchBar from './search-bar';
@@ -13,7 +14,6 @@ import { AddNewCustomer } from '../components/customer/add-new';
 import DataTable from '../components/data-table';
 import UiSettings from '../components/ui-settings';
 import useUI from '../contexts/ui-settings';
-import { useQuery } from '../hooks/use-query';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
@@ -31,7 +31,7 @@ const Customers = () => {
 	const query = useQuery({
 		queryKeys: ['customers'],
 		collectionName: 'customers',
-		initialQuery: {
+		initialParams: {
 			sortBy: uiSettings.get('sortBy'),
 			sortDirection: uiSettings.get('sortDirection'),
 		},

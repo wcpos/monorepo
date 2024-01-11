@@ -3,15 +3,14 @@ import * as React from 'react';
 import { useObservableSuspense } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
-
-import { useQuery } from '../../hooks/use-query';
+import { useQuery } from '@wcpos/query';
 
 /**
  *
  */
 const GroupedNames = ({ query }) => {
-	const data = useObservableSuspense(query.resource);
-	const names = data.map((doc) => doc.name);
+	const result = useObservableSuspense(query.resource);
+	const names = result.hits.map(({ document }) => document.name);
 
 	return (
 		<Text>
@@ -33,7 +32,7 @@ const WrappedQuery = ({ parent }) => {
 	const query = useQuery({
 		queryKeys: ['products', { target: 'grouped', parentID: parent.id }],
 		collectionName: 'products',
-		initialQuery: {
+		initialParams: {
 			selector: {
 				id: {
 					$in: parent.grouped_products,

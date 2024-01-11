@@ -1,16 +1,18 @@
 import * as React from 'react';
 import { View, FlatList } from 'react-native';
 
-import { useObservableSuspense, useObservableState } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
 import Table from '@wcpos/components/src/table';
+import { useInfiniteScroll, useReplicationState } from '@wcpos/query';
 
 import TagSelectItem, { EmptyTableRow } from './item';
 
 type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
+type QueryResult = import('@wcpos/query').QueryResult<ProductTagDocument>;
 
 /**
  * TODO - this is taken from the menu component, should be moved to a shared location
@@ -47,8 +49,9 @@ interface TagSelectMenuProps {
  */
 const TagSelectMenu = ({ query, onSelect }) => {
 	const theme = useTheme();
-	const tags = useObservableSuspense(query.resource);
-	const loading = useObservableState(query.replicationState.active$, false);
+	const result = useInfiniteScroll(query);
+	const { active$ } = useReplicationState(query.id);
+	const loading = useObservableState(active$, false);
 	const { targetMeasurements } = usePopover();
 
 	/**
@@ -75,8 +78,8 @@ const TagSelectMenu = ({ query, onSelect }) => {
 	const renderItem = React.useCallback(
 		({ item }) => {
 			return (
-				<Pressable onPress={() => onSelect(item)} style={calculatedStyled}>
-					<TagSelectItem tag={item} />
+				<Pressable onPress={() => onSelect(item.document)} style={calculatedStyled}>
+					<TagSelectItem tag={item.document} />
 				</Pressable>
 			);
 		},
@@ -99,12 +102,12 @@ const TagSelectMenu = ({ query, onSelect }) => {
 	 */
 	return (
 		<View style={{ width: targetMeasurements.value.width, maxHeight: 292, minHeight: 30 }}>
-			<FlatList<ProductTagDocument>
-				data={tags}
+			<FlatList<QueryResult>
+				data={result.hits}
 				renderItem={renderItem}
 				// estimatedItemSize={32}
 				ListEmptyComponent={<EmptyTableRow />}
-				onEndReached={() => query.nextPage()}
+				onEndReached={() => result.nextPage()}
 				ListFooterComponent={<Table.LoadingRow loading={loading} style={{ padding: 0 }} />}
 			/>
 		</View>

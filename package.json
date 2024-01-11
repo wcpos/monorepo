@@ -15,7 +15,6 @@
     "build": "bob build"
   },
   "dependencies": {
-    "@orama/orama": "^1.2.11",
     "@react-native-community/masked-view": "0.1.11",
     "@react-native-community/netinfo": "11.2.1",
     "@react-navigation/bottom-tabs": "^6.5.11",
@@ -30,6 +29,7 @@
     "@wcpos/components": "*",
     "@wcpos/database": "*",
     "@wcpos/hooks": "*",
+    "@wcpos/query": "*",
     "@wcpos/react-native-jsonschema-form": "*",
     "@wcpos/themes": "*",
     "@wcpos/utils": "*",

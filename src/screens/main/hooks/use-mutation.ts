@@ -3,12 +3,11 @@ import * as React from 'react';
 import { isRxDocument, RxDocument, RxCollection } from 'rxdb';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
+import { useQueryManager } from '@wcpos/query';
 import log from '@wcpos/utils/src/logger';
 
 import { useCollection, CollectionKey } from './use-collection';
-import { useReplicationState } from './use-replication-state';
 import { useT } from '../../../contexts/translations';
-import { useStoreStateManager } from '../contexts/store-state-manager';
 
 interface Props {
 	collectionName: CollectionKey;
@@ -20,7 +19,7 @@ interface Props {
  *
  */
 export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
-	const manager = useStoreStateManager();
+	const manager = useQueryManager();
 	const addSnackbar = useSnackbar();
 	const t = useT();
 	const { collection, collectionLabel } = useCollection(collectionName);
@@ -28,7 +27,10 @@ export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
 	/**
 	 * If there is no replicationState we need to register one
 	 */
-	const replicationState = useReplicationState({ collectionName, endpoint });
+	const replicationState = manager.registerCollectionReplication({
+		collection,
+		endpoint: endpoint ?? collectionName,
+	});
 
 	/**
 	 *
@@ -66,7 +68,7 @@ export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
 	/**
 	 *
 	 */
-	const mutate = React.useCallback(
+	const patch = React.useCallback(
 		async ({ document, data }: { document: RxDocument; data: Record<string, unknown> }) => {
 			try {
 				// update local document
@@ -74,7 +76,6 @@ export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
 				const doc = await latest.patch(data);
 
 				// update remote document
-				const replicationState = manager.getReplicationState(endpoint || document.collection.name);
 				const updatedDoc = await replicationState.remotePatch(doc, data);
 				if (isRxDocument(updatedDoc)) {
 					handleSuccess(updatedDoc);
@@ -88,7 +89,7 @@ export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
 				handleError(error);
 			}
 		},
-		[collectionLabel, endpoint, handleError, handleSuccess, manager, t]
+		[collectionLabel, handleError, handleSuccess, replicationState, t]
 	);
 
 	/**
@@ -118,5 +119,5 @@ export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
 		[collection, collectionLabel, handleError, handleSuccess, replicationState, t]
 	);
 
-	return { mutate, create };
+	return { patch, create };
 };

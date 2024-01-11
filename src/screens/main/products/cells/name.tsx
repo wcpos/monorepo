@@ -40,11 +40,12 @@ const Name = ({ item: product, column, onChange, toggleVariations }: Props) => {
 	 *
 	 */
 	return (
-		<Box space="small" style={{ width: '100%' }}>
+		<Box space="xSmall" style={{ width: '100%' }}>
 			<EdittableText weight="bold" onChange={(name: string) => onChange(product, { name })}>
 				{name}
 			</EdittableText>
 			{show('sku') && <Text size="small">{product.sku}</Text>}
+			{show('barcode') && <Text size="small">{product.barcode}</Text>}
 			{show('attributes') && <PlainAttributes product={product} />}
 			{product.type === 'variable' && <ProductAttributes product={product} />}
 			{product.type === 'grouped' && <GroupedNames parent={product} />}

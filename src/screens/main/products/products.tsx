@@ -5,9 +5,11 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
+import { useRelationalQuery } from '@wcpos/query';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
+import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
 import DataTable from '../components/data-table';
 import FilterBar from '../components/product/filter-bar';
@@ -16,7 +18,6 @@ import TaxBasedOn from '../components/product/tax-based-on';
 import UISettings from '../components/ui-settings';
 import { useTaxHelpers } from '../contexts/tax-helpers';
 import useUI from '../contexts/ui-settings';
-import { useQuery } from '../hooks/use-query';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -38,20 +39,37 @@ const Products = () => {
 	/**
 	 *
 	 */
-	const productQuery = useQuery({
-		queryKeys: ['products', { target: 'page' }],
-		collectionName: 'products',
-		initialQuery: {
-			sortBy: uiSettings.get('sortBy'),
-			sortDirection: uiSettings.get('sortDirection'),
+	const { parentQuery: query } = useRelationalQuery(
+		{
+			queryKeys: ['products', { target: 'page', type: 'relational' }],
+			collectionName: 'products',
+			initialParams: {
+				sortBy: uiSettings.get('sortBy'),
+				sortDirection: uiSettings.get('sortDirection'),
+			},
 		},
-	});
+		{
+			queryKeys: ['variations', { target: 'page', type: 'relational' }],
+			collectionName: 'variations',
+			initialParams: {
+				sortBy: 'id',
+				sortDirection: uiSettings.get('sortDirection'),
+			},
+			endpoint: 'products/variations',
+			greedy: true,
+		}
+	);
+
+	/**
+	 * Barcode
+	 */
+	useBarcode(query);
 
 	/**
 	 *
 	 */
 	const renderItem = React.useCallback((props) => {
-		let Component = TABLE_ROW_COMPONENTS[props.item.type];
+		let Component = TABLE_ROW_COMPONENTS[props.item.document.type];
 
 		// If we still didn't find a component, use SimpleProductTableRow as a fallback
 		// eg: Grouped products
@@ -87,7 +105,7 @@ const Products = () => {
 					<Box fill space="small">
 						<Box horizontal align="center" padding="small" paddingBottom="none" space="small">
 							<ErrorBoundary>
-								<Search query={productQuery} />
+								<Search query={query} />
 							</ErrorBoundary>
 							<ErrorBoundary>
 								{/* <Icon
@@ -103,7 +121,7 @@ const Products = () => {
 						</Box>
 						<Box horizontal padding="small" paddingTop="none">
 							<ErrorBoundary>
-								<FilterBar query={productQuery} />
+								<FilterBar query={query} />
 							</ErrorBoundary>
 						</Box>
 					</Box>
@@ -112,7 +130,7 @@ const Products = () => {
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable<ProductDocument>
-								query={productQuery}
+								query={query}
 								uiSettings={uiSettings}
 								renderItem={renderItem}
 								noDataMessage={t('No products found', { _tags: 'core' })}

@@ -5,10 +5,10 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Link from '@wcpos/components/src/link';
 import Text from '@wcpos/components/src/text';
+import { useQueryManager } from '@wcpos/query';
 
 import { useVariationTable } from './variation-table-rows/context';
 import { useT } from '../../../../contexts/translations';
-import { useStoreStateManager } from '../../contexts/store-state-manager';
 
 type Props = {
 	product: import('@wcpos/database').ProductDocument;
@@ -41,8 +41,14 @@ export const PlainAttributes = ({ product }: Props) => {
 
 const ProductAttributes = ({ product }: Props) => {
 	const attributes = useObservableState(product.attributes$, product.attributes);
-	const { expanded, setExpanded } = useVariationTable();
-	const manager = useStoreStateManager();
+	const {
+		expanded,
+		setExpanded,
+		setInitialSelectedAttributes,
+		childrenSearchCount,
+		parentSearchTerm,
+	} = useVariationTable();
+	const manager = useQueryManager();
 	const t = useT();
 
 	/**
@@ -51,23 +57,52 @@ const ProductAttributes = ({ product }: Props) => {
 	const handleSelect = React.useCallback(
 		(attribute, option) => {
 			if (!expanded) {
-				// @TODO - find a better way to do this
-				setExpanded({
+				setInitialSelectedAttributes({
 					id: attribute.id,
 					name: attribute.name,
 					option,
 				});
+				setExpanded(true);
 			} else {
 				const query = manager.getQuery(['variations', { parentID: product.id }]);
-				query.updateVariationAttributeSearch({
-					id: attribute.id,
-					name: attribute.name,
-					option,
-				});
+				if (query) {
+					query.updateVariationAttributeSelector({
+						id: attribute.id,
+						name: attribute.name,
+						option,
+					});
+				}
 			}
 		},
-		[expanded, manager, product.id, setExpanded]
+		[expanded, manager, product.id, setExpanded, setInitialSelectedAttributes]
 	);
+
+	/**
+	 * Expand text string
+	 */
+	const expandText = React.useMemo(() => {
+		let text = '';
+		if (expanded) {
+			text += t('Collapse', { _tags: 'core' });
+		} else {
+			text += t('Expand', { _tags: 'core' });
+		}
+		if (childrenSearchCount === 1) {
+			text += ' - ';
+			text += t('1 variation found for {term}', {
+				term: parentSearchTerm,
+				_tags: 'core',
+			});
+		} else if (childrenSearchCount > 0) {
+			text += ' - ';
+			text += t('{count} variations found for {term}', {
+				count: childrenSearchCount,
+				term: parentSearchTerm,
+				_tags: 'core',
+			});
+		}
+		return text;
+	}, [childrenSearchCount, expanded, parentSearchTerm, t]);
 
 	/**
 	 *
@@ -90,7 +125,7 @@ const ProductAttributes = ({ product }: Props) => {
 					</Text>
 				))}
 			<Link size="small" onPress={() => setExpanded(!expanded)}>
-				{expanded ? t('Collapse', { _tags: 'core' }) : t('Expand', { _tags: 'core' })}
+				{expandText}
 			</Link>
 		</Box>
 	);

@@ -45,6 +45,7 @@ export const ProductVariationName = ({ item: variation, column }: Props) => {
 				))}
 			</View>
 			{show('sku') && <Text size="small">{variation.sku}</Text>}
+			{show('barcode') && <Text size="small">{variation.barcode}</Text>}
 			{show('stock_quantity') && <StockQuantity product={variation} size="small" />}
 		</Box>
 	);

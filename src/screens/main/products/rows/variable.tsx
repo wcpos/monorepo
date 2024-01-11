@@ -62,17 +62,26 @@ const variationCells = {
  *
  */
 const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
-	const mutation = useMutation({ collectionName: 'products' });
+	const { patch } = useMutation({ collectionName: 'products' });
 	const [expanded, setExpanded] = React.useState(false);
+	const [initialSelectedAttributes, setInitialSelectedAttributes] = React.useState();
+
+	/**
+	 * Expand variations if there are search results
+	 * - Let's not expend the variations by default, the UI is too messy
+	 */
+	// React.useEffect(() => {
+	// 	setExpanded(!!item.childrenSearchCount);
+	// }, [item.childrenSearchCount]);
 
 	/**
 	 *
 	 */
 	const handleChange = React.useCallback(
 		async (product: ProductDocument, data: Record<string, unknown>) => {
-			mutation.mutate({ document: product, data });
+			patch({ document: product, data });
 		},
-		[mutation]
+		[patch]
 	);
 
 	/**
@@ -87,7 +96,7 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 					<ErrorBoundary>
 						<Suspense>
 							<Cell
-								item={item}
+								item={item.document}
 								column={column}
 								index={index}
 								cellWidth={cellWidth}
@@ -98,8 +107,8 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 				);
 			}
 
-			if (item[column.key]) {
-				return <Text>{String(item[column.key])}</Text>;
+			if (item.document[column.key]) {
+				return <Text>{String(item.document[column.key])}</Text>;
 			}
 
 			return null;
@@ -121,11 +130,14 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 		// }
 
 		return {
-			expanded: !!expanded,
+			expanded,
 			setExpanded,
+			setInitialSelectedAttributes,
 			cells: variationCells,
+			childrenSearchCount: item.childrenSearchCount,
+			parentSearchTerm: item?.parentSearchTerm,
 		};
-	}, [expanded]);
+	}, [expanded, item.childrenSearchCount, item?.parentSearchTerm]);
 
 	/**
 	 *
@@ -149,12 +161,13 @@ const VariableProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocu
 	return (
 		<VariationTableContext.Provider value={variationTableContext}>
 			<Table.Row item={item} index={index} cellRenderer={cellRenderer} />
-			{!!expanded && (
+			{expanded && (
 				// <Animated.View style={animatedStyle}>
 				<ErrorBoundary>
 					<Variations
-						parent={item}
-						initialSearch={isPlainObject(expanded) ? expanded : undefined}
+						item={item}
+						initialSelectedAttributes={initialSelectedAttributes}
+						parentSearchTerm={item?.parentSearchTerm}
 					/>
 				</ErrorBoundary>
 				// </Animated.View>

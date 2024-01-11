@@ -10,8 +10,8 @@ import { useT } from '../../../../../contexts/translations';
 
 const OnSalePill = ({ query }) => {
 	const isActive = useObservableState(
-		query.state$.pipe(map((state) => get(state, ['selector', 'on_sale']))),
-		get(query, ['currentState', 'selector', 'on_sale'])
+		query.params$.pipe(map((params) => get(params, ['selector', 'on_sale']))),
+		get(query.getParams(), ['selector', 'on_sale'])
 	);
 	const t = useT();
 

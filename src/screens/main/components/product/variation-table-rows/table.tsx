@@ -7,6 +7,7 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import Table, { CellRenderer, useTable } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
+import { useReplicationState } from '@wcpos/query';
 import log from '@wcpos/utils/src/logger';
 
 import { useVariationTable } from './context';
@@ -31,12 +32,13 @@ const sharedCells = {
  *
  */
 const VariationsTable = ({ query, parent }) => {
-	const data = useObservableSuspense(query.resource);
+	const result = useObservableSuspense(query.resource);
 	const context = useTable(); // get context from parent product, ie: columns
 	const { cells } = useVariationTable();
-	const loading = useObservableState(query.replicationState.active$, false);
+	const { active$ } = useReplicationState(query);
+	const loading = useObservableState(active$, false);
 	const t = useT();
-	const mutation = useMutation({
+	const { patch } = useMutation({
 		collectionName: 'variations',
 		endpoint: `products/${parent.id}/variations`,
 	});
@@ -79,9 +81,9 @@ const VariationsTable = ({ query, parent }) => {
 	 */
 	const handleChange = React.useCallback(
 		async (variation: ProductVariationDocument, data: Record<string, unknown>) => {
-			mutation.mutate({ document: variation, data });
+			patch({ document: variation, data });
 		},
-		[mutation]
+		[patch]
 	);
 
 	/**
@@ -96,7 +98,7 @@ const VariationsTable = ({ query, parent }) => {
 					<ErrorBoundary>
 						<Suspense>
 							<Cell
-								item={item}
+								item={item.document}
 								column={column}
 								index={index}
 								cellWidth={cellWidth}
@@ -108,8 +110,8 @@ const VariationsTable = ({ query, parent }) => {
 				);
 			}
 
-			if (item[column.key]) {
-				return <Text>{String(item[column.key])}</Text>;
+			if (item.document[column.key]) {
+				return <Text>{String(item.document[column.key])}</Text>;
 			}
 
 			return null;
@@ -133,8 +135,8 @@ const VariationsTable = ({ query, parent }) => {
 	 */
 	return (
 		<Table<ProductVariationDocument>
-			data={data}
-			footer={<Footer query={query} parent={parent} count={data.length} loading={loading} />}
+			data={result.hits}
+			footer={<Footer query={query} parent={parent} count={result.count} loading={loading} />}
 			estimatedItemSize={100}
 			context={{ ...context, cellRenderer }}
 			ListEmptyComponent={<EmptyTableRow message={t('No variations found', { _tags: 'core' })} />}

@@ -15,7 +15,8 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  */
 const CartTabs = ({ query }) => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
-	const orders = useObservableSuspense(query.resource);
+	const result = useObservableSuspense(query.resource);
+	const orders = result.hits.map((hit) => hit.document);
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
 	/**

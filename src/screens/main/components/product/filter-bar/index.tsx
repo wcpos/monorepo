@@ -28,8 +28,8 @@ const FilterBar = ({ query }) => {
 	 * TODO - this is a bit of a hack, but it works for now.
 	 */
 	const selectedCategoryResource = React.useMemo(() => {
-		const selectedCategory$ = query.state$.pipe(
-			startWith(get(query, ['currentState', 'selector', 'categories', '$elemMatch', 'id'])),
+		const selectedCategory$ = query.params$.pipe(
+			startWith(get(query.getParams(), ['selector', 'categories', '$elemMatch', 'id'])),
 			switchMap((query) => {
 				const categoryFilterID = get(query, ['selector', 'categories', '$elemMatch', 'id']);
 				if (categoryFilterID) {
@@ -52,8 +52,8 @@ const FilterBar = ({ query }) => {
 	 *
 	 */
 	const selectedTagResource = React.useMemo(() => {
-		const selectedTag$ = query.state$.pipe(
-			startWith(get(query, ['currentState', 'selector', 'tags', '$elemMatch', 'id'])),
+		const selectedTag$ = query.params$.pipe(
+			startWith(get(query.getParams(), ['selector', 'tags', '$elemMatch', 'id'])),
 			switchMap((query) => {
 				const tagFilterID = get(query, ['selector', 'tags', '$elemMatch', 'id']);
 				if (tagFilterID) {

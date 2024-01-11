@@ -1,28 +1,12 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-import { Observable, Subject } from 'rxjs';
+import { useFocusEffect } from '@react-navigation/native';
+import { useObservableState, useObservableCallback } from 'observable-hooks';
 import { bufferTime, filter, map } from 'rxjs/operators';
 
 import { useHotkeys, RNKeyboardEvent, getKeyFromEvent } from '@wcpos/hooks/src/use-hotkeys';
 
 import { useAppState } from '../../../../contexts/app-state';
-
-interface BarcodeDetectionOptions {
-	callback?: (barcode: string) => void;
-	options?: {
-		enabled?: boolean;
-		buffer?: number;
-		minLength?: number;
-		prefix?: string;
-		suffix?: string;
-	}; // Define the options type as needed
-}
-
-type BarcodeDetectionHook = ({ callback, options }: BarcodeDetectionOptions) => {
-	// onKeyboardEvent: (event: RNKeyboardEvent) => void;
-	barcode$: Observable<string>;
-};
 
 // Constants
 const BUFFER = 500;
@@ -35,16 +19,16 @@ const CHARCOUNT = 8;
  * @returns {object} - An object containing the `onKeyboardEvent` function to be used as an event handler,
  * and the `barcode$` observable that emits detected barcodes.
  */
-export const useBarcodeDetection: BarcodeDetectionHook = ({
-	callback,
+export const useBarcodeDetection = (
+	callback = () => {},
 	options = {
 		enabled: true,
 		buffer: BUFFER,
 		minLength: CHARCOUNT,
 		prefix: '',
 		suffix: '',
-	},
-} = {}) => {
+	}
+) => {
 	const { store } = useAppState();
 	const buffer = useObservableState(store.barcode_scanning_buffer$, store.barcode_scanning_buffer);
 	const minLength = useObservableState(
@@ -53,57 +37,51 @@ export const useBarcodeDetection: BarcodeDetectionHook = ({
 	);
 	const prefix = useObservableState(store.barcode_scanning_prefix$, store.barcode_scanning_prefix);
 	const suffix = useObservableState(store.barcode_scanning_suffix$, store.barcode_scanning_suffix);
-	const keypress$ = React.useRef(new Subject()).current;
+	const [enabled, setEnabled] = React.useState(true);
 
 	/**
 	 *
 	 */
-	const onKeyboardEvent = React.useCallback(
-		(event: RNKeyboardEvent) => {
-			const key = getKeyFromEvent(event);
-			keypress$.next(key);
-		},
-		[keypress$]
+	const [onKeyboardEvent, barcode$] = useObservableCallback((event$) =>
+		event$.pipe(
+			bufferTime(buffer),
+			map((events) => {
+				// map to key names, remove tab, enter and shift
+				const keys = events
+					.map((event) => getKeyFromEvent(event))
+					.filter((key) => key !== 'Tab' && key !== 'Enter' && key !== 'Shift');
+				return keys.join('');
+			}),
+			map((string) => {
+				// remove prefix and suffix
+				if (string.startsWith(prefix)) {
+					string = string.slice(prefix.length);
+				}
+				if (string.endsWith(suffix)) {
+					string = string.slice(0, -suffix.length);
+				}
+				return string;
+			}),
+			filter((barcode) => barcode.length >= minLength)
+		)
 	);
 
 	/**
 	 *
 	 */
-	useHotkeys('*', onKeyboardEvent);
+	useHotkeys('*', onKeyboardEvent, { enabled });
 
 	/**
-	 *
+	 * Disable hotkeys when not on page.
 	 */
-	const barcode$ = React.useMemo(() => {
-		return keypress$.pipe(
-			bufferTime(buffer),
-			map((events) => {
-				let startIndex = 0;
-				let endIndex = events.length;
-
-				if (prefix) {
-					const prefixIndex = events.findIndex((key) => key === prefix);
-					if (prefixIndex === -1) {
-						return [];
-					}
-					startIndex = prefixIndex + 1;
-				}
-
-				if (suffix) {
-					const suffixIndex = events.findIndex((key) => key === suffix);
-					if (suffixIndex === -1) {
-						return [];
-					}
-					endIndex = suffixIndex;
-				}
-
-				return events.slice(startIndex, endIndex);
-			}),
-			map((events) => events.filter((key) => key !== 'Tab' && key !== 'Enter' && key !== 'Shift')),
-			filter((events) => events.length >= minLength),
-			map((events) => events.join(''))
-		);
-	}, [prefix, suffix, keypress$, buffer, minLength]);
+	useFocusEffect(
+		React.useCallback(() => {
+			setEnabled(true);
+			return () => {
+				setEnabled(false);
+			};
+		}, [])
+	);
 
 	/**
 	 * Return observable which emits barcodes.

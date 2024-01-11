@@ -14,8 +14,8 @@ import { useGuestCustomer } from '../../hooks/use-guest-customer';
 
 const FilterBar = ({ query }) => {
 	const customerID = useObservableState(
-		query.state$.pipe(map((state) => get(state, ['selector', 'customer_id']))),
-		get(query, ['currentState', 'selector', 'customer_id'])
+		query.params$.pipe(map((params) => get(params, ['selector', 'customer_id']))),
+		get(query.getParams(), ['selector', 'customer_id'])
 	);
 	const guestCustomer = useGuestCustomer();
 	const { documentResource: customerResource } = useGetDocumentByRemoteId({

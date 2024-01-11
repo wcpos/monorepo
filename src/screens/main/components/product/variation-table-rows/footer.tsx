@@ -4,8 +4,10 @@ import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
+import { useReplicationState } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
+import { useCollectionReset } from '../../../hooks/use-collection-reset';
 import SyncButton from '../../sync-button';
 
 /**
@@ -13,7 +15,8 @@ import SyncButton from '../../sync-button';
  */
 const VariationFooterTableRow = ({ query, parent, count, loading }) => {
 	const theme = useTheme();
-	const { sync, clear } = query;
+	const { sync } = useReplicationState(query);
+	const { clear } = useCollectionReset(query.collection.name);
 	const total = parent.variations.length;
 	const t = useT();
 
