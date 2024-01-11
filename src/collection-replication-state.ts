@@ -158,6 +158,10 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 			this.lastFetchUnsyncedTime = null;
 		}
 
+		if (this.isStopped() && force) {
+			this.start();
+		}
+
 		await this.auditIDs();
 
 		if (this.firstSyncResolver) {

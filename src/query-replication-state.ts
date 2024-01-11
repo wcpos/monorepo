@@ -11,6 +11,7 @@ import {
 } from 'rxjs/operators';
 
 import { SubscribableBase } from './subscribable-base';
+import { getParamValueFromEndpoint } from './utils';
 
 import type { CollectionReplicationState } from './collection-replication-state';
 import type { RxCollection } from 'rxdb';
@@ -91,6 +92,10 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	 *
 	 */
 	async run({ force }: { force?: boolean } = {}) {
+		if (this.isStopped() && force) {
+			this.start();
+		}
+
 		await this.collectionReplication.firstSync;
 		const saved = await this.fetchUnsynced();
 
@@ -118,9 +123,25 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 		this.subjects.active.next(true);
 
-		const include = await this.collectionReplication.getUnsyncedRemoteIDs();
-		const exclude = await this.collectionReplication.getSyncedRemoteIDs();
+		let include = await this.collectionReplication.getUnsyncedRemoteIDs();
+		let exclude = await this.collectionReplication.getSyncedRemoteIDs();
 		const lastModified = this.collectionReplication.subjects.lastModified.getValue();
+
+		/**
+		 * Hack: if query has include / exclude, we should override above?
+		 * @TODO - query state should init with params object and construct the endpoint id internally
+		 */
+		const endpointIncludes = getParamValueFromEndpoint(this.endpoint, 'include');
+		if (endpointIncludes) {
+			const ids = endpointIncludes.split(',');
+			include = ids.map((id) => parseInt(id, 10));
+		}
+
+		const endpointExcludes = getParamValueFromEndpoint(this.endpoint, 'exclude');
+		if (endpointExcludes) {
+			const ids = endpointExcludes.split(',');
+			exclude = ids.map((id) => parseInt(id, 10));
+		}
 
 		/**
 		 * If query sync is already completed, we go to the collection sync

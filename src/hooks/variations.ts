@@ -71,9 +71,17 @@ const filterApiQueryParams = (params) => {
 		orderby = 'title';
 	}
 
+	if (params.id) {
+		if (params.id.$in) {
+			params.include = params.id.$in.join(',');
+		} else if (typeof params.id === 'number' || typeof params.id === 'string') {
+			params.include = params.id;
+		}
+		delete params.id;
+	}
+
 	return {
 		...params,
-		id: undefined, // remove id: { $in: [] } from query
 		attributes: undefined, // there is no attributes filter in the API (@TODO)
 		orderby,
 		status: 'publish',

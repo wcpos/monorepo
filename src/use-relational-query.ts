@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
+import { merge } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import { useQueryManager } from './provider';
@@ -38,7 +39,12 @@ export const useRelationalQuery = (parentOptions: QueryOptions, childOptions: Qu
 	 * - re-render components that use this query
 	 * - on re-render the query is recreated
 	 */
-	const trigger = useObservableState(parentQuery.cancel$.pipe(map(() => trigger + 1)), 0);
+	const trigger = useObservableState(
+		merge(parentQuery.cancel$, childQuery.cancel$, parentLookupQuery.cancel$).pipe(
+			map(() => trigger + 1)
+		),
+		0
+	);
 
 	return { parentQuery, childQuery, parentLookupQuery };
 };

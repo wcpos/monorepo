@@ -104,3 +104,12 @@ export const pluckProperties = (obj: NestedObject, keys: string[]): NestedObject
 export function toUpperSnakeCase(str: string): string {
 	return snakeCase(str).toUpperCase();
 }
+
+/**
+ *
+ */
+export function getParamValueFromEndpoint(endpoint: string, param: string) {
+	const url = new URL(endpoint, 'http://dummy.com');
+	const params = new URLSearchParams(url.search);
+	return params.get(param);
+}

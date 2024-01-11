@@ -165,7 +165,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 					})
 				)
 				.subscribe((result) => {
-					console.log('Query result', result);
+					// console.log('Query result', result);
 					this.subjects.result.next(result);
 				})
 		);

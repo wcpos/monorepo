@@ -67,13 +67,9 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 	 * Note; result$ is optimized to only emit certain changes, so we subscribe to find$ directly
 	 */
 	handleRelationalSearch(modifiedParams: QueryParams) {
-		this.childQuery.search(modifiedParams.search);
-
-		return this.childQuery.find$.pipe(
+		const obs$ = this.childQuery.find$.pipe(
 			filter((result) => result.searchActive),
 			switchMap((childResult) => {
-				console.log('childResult', childResult);
-
 				const scoreIdPairs = childResult.hits.map(({ document, score }) => ({
 					score,
 					parent_id: document.parent_id,
@@ -91,6 +87,10 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 				return this.handleParentLookup(averagedScores);
 			})
 		);
+
+		this.childQuery.search(modifiedParams.search);
+
+		return obs$;
 	}
 
 	/**
@@ -99,9 +99,7 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 	handleParentLookup(averagedScores) {
 		const parentIds = averagedScores.map(({ parent_id }) => parent_id).filter((id) => !isNaN(id));
 
-		this.parentLookupQuery.where('id', { $in: parentIds });
-
-		return this.parentLookupQuery.find$.pipe(
+		const obs$ = this.parentLookupQuery.find$.pipe(
 			map((parentLookupResult) => {
 				const parentLookupWithScore = {
 					...parentLookupResult,
@@ -121,5 +119,9 @@ export class RelationalQuery<T extends RxCollection> extends Query<T> {
 				return parentLookupWithScore;
 			})
 		);
+
+		this.parentLookupQuery.where('id', { $in: parentIds });
+
+		return obs$;
 	}
 }
