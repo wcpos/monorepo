@@ -25,3 +25,6 @@
 [submodule "apps/managed"]
 	path = apps/managed
 	url = https://github.com/wcpos/managed-expo
+[submodule "packages/query"]
+	path = packages/query
+	url = https://github.com/wcpos/query.git
