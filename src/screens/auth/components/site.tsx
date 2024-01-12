@@ -30,10 +30,11 @@ export const Site = ({ user, site, idx }) => {
 	 */
 	const handleRemoveSite = React.useCallback(async () => {
 		try {
-			await site.remove();
+			const latest = site.getLatest();
+			await latest.remove();
 			await user.incrementalUpdate({
 				$pullAll: {
-					sites: [site.uuid],
+					sites: [latest.uuid],
 				},
 			});
 		} catch (err) {

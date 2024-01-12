@@ -2,14 +2,9 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
-import { from } from 'rxjs';
+import { useObservableSuspense } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Modal from '@wcpos/components/src/modal';
-import Suspense from '@wcpos/components/src/suspense';
 import WebView from '@wcpos/components/src/webview';
-import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../contexts/app-state';

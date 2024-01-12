@@ -85,19 +85,15 @@ export const useRestHttpClient = (endpoint = '') => {
 	const request = React.useCallback(
 		async (reqConfig: RequestConfig = {}) => {
 			const shouldUseJwtAsParam = get(window, ['initialProps', 'site', 'use_jwt_as_param']);
-			const version = get(initialProps, 'version', '');
 
-			// if version is 1.4 or greater, use the new api
-			let apiURL = site.wc_api_url;
-			if (version && semver.gt(version, '1.3.13')) {
-				apiURL = site.wcpos_api_url;
+			let apiURL = site.wcpos_api_url;
 
-				// sanity check, make sure we have a wcpos_api_url
-				if (!apiURL) {
-					apiURL = site.wp_api_url + 'wcpos/v1';
-					site.incrementalPatch({ wcpos_api_url: apiURL });
-				}
+			// sanity check, make sure we have a wcpos_api_url
+			if (!apiURL) {
+				apiURL = site.wp_api_url + 'wcpos/v1';
+				site.incrementalPatch({ wcpos_api_url: apiURL });
 			}
+
 			const defaultConfig = {
 				baseURL: apiURL + '/' + endpoint,
 				headers: shouldUseJwtAsParam ? {} : { Authorization: `Bearer ${jwt}` },
