@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/database",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Local database for @wcpos/core",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/database#readme",
@@ -22,8 +22,8 @@
     "uuid": "3.4.0"
   },
   "dependencies": {
-    "@orama/orama": "^1.2.11",
-    "@orama/plugin-data-persistence": "^1.2.11",
+    "@orama/orama": "^2.0.1",
+    "@orama/plugin-data-persistence": "^2.0.1",
     "c-promise2": "^0.13.12",
     "expo-sqlite": "~11.6.0",
     "fast-text-encoding": "^1.0.6",
