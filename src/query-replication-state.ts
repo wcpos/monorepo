@@ -1,3 +1,4 @@
+import intersection from 'lodash/intersection';
 import isEmpty from 'lodash/isEmpty';
 import { BehaviorSubject, Observable, Subscription, Subject, interval } from 'rxjs';
 import {
@@ -133,14 +134,14 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		 */
 		const endpointIncludes = getParamValueFromEndpoint(this.endpoint, 'include');
 		if (endpointIncludes) {
-			const ids = endpointIncludes.split(',');
-			include = ids.map((id) => parseInt(id, 10));
+			const ids = endpointIncludes.split(',').map((id) => parseInt(id, 10));
+			include = intersection(include, ids);
 		}
 
 		const endpointExcludes = getParamValueFromEndpoint(this.endpoint, 'exclude');
 		if (endpointExcludes) {
-			const ids = endpointExcludes.split(',');
-			exclude = ids.map((id) => parseInt(id, 10));
+			const ids = endpointExcludes.split(',').map((id) => parseInt(id, 10));
+			exclude = intersection(exclude, ids);
 		}
 
 		/**

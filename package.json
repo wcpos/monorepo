@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/query",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Query and Replication for WooCommerce POS",
   "author": "kilbot <paul@kilbot.com>",
   "license": "MIT",
@@ -18,7 +18,7 @@
   },
   "packageManager": "yarn@3.5.0",
   "dependencies": {
-    "@orama/orama": "^1.2.11",
+    "@orama/orama": "^2.0.1",
     "@shelf/fast-natural-order-by": "^2.0.0",
     "@wcpos/components": "*",
     "lodash": "^4.17.21",
@@ -27,8 +27,8 @@
     "typescript": "^5.3.3"
   },
   "devDependencies": {
-    "@babel/core": "^7.23.6",
-    "@babel/preset-env": "^7.23.6",
+    "@babel/core": "^7.23.7",
+    "@babel/preset-env": "^7.23.8",
     "@babel/preset-react": "^7.23.3",
     "@babel/preset-typescript": "^7.23.3",
     "@testing-library/react": "^14.1.2",
