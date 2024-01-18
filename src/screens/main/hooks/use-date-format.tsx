@@ -1,9 +1,10 @@
 import * as React from 'react';
 
-import moment from 'moment-timezone';
+import { parseISO, format, differenceInMinutes, differenceInHours, isToday } from 'date-fns';
+import { utcToZonedTime } from 'date-fns-tz';
 import { useObservable, useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
-import { switchMap, map } from 'rxjs/operators';
+import { switchMap, map, filter } from 'rxjs/operators';
 
 import { useHeartbeatObservable } from '@wcpos/hooks/src/use-heartbeat';
 import { usePageVisibility } from '@wcpos/hooks/src/use-page-visibility';
@@ -13,20 +14,22 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const useDateFormat = (gmtDate: string, format = 'MMMM D, YYYY', fromNow = true) => {
+export const useDateFormat = (gmtDate: string, formatPattern = 'MMMM d, yyyy', fromNow = true) => {
 	const t = useT();
 	const heartbeat$ = useHeartbeatObservable(60000); // every minute
 	const { visibile$ } = usePageVisibility();
+	const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	const gmtDateObject = parseISO(gmtDate.endsWith('Z') ? gmtDate : `${gmtDate}Z`);
+	const localDate = utcToZonedTime(gmtDateObject, timeZone);
 
 	/**
 	 *
 	 */
 	const formatDate = React.useCallback(() => {
-		const localDate = moment.utc(gmtDate).local();
 		if (fromNow) {
-			const now = moment();
-			const diffInMinutes = now.diff(localDate, 'minutes');
-			const diffInHours = now.diff(localDate, 'hours');
+			const now = new Date();
+			const diffInMinutes = differenceInMinutes(now, localDate);
+			const diffInHours = differenceInHours(now, localDate);
 
 			if (diffInMinutes < 1) {
 				return t('just now', { _tags: 'core' });
@@ -39,38 +42,22 @@ export const useDateFormat = (gmtDate: string, format = 'MMMM D, YYYY', fromNow 
 			} else if (diffInHours < 24) {
 				return t('{x} hours ago', { _tags: 'core', x: diffInHours });
 			} else {
-				return localDate.format(format);
+				return format(localDate, formatPattern);
 			}
 		} else {
-			return localDate.format(format);
+			return format(localDate, formatPattern);
 		}
-	}, [gmtDate, format, fromNow, t]);
+	}, [localDate, fromNow, t, formatPattern]);
 
 	/**
 	 *
 	 */
-	const formattedDate$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([gmtDate, formatDate]) => {
-					const now = moment();
-					const localDate = moment.utc(gmtDate).local();
-					if (now.diff(localDate, 'days') >= 1) {
-						// If more than a day old, no need for an observable
-						return of(formatDate());
-					}
-
-					// If less than a day old, use a heartbeat observable
-					return visibile$.pipe(
-						switchMap(() => heartbeat$),
-						map(() => {
-							return formatDate();
-						})
-					);
-				})
-			),
-		[gmtDate, formatDate]
+	return useObservableState(
+		visibile$.pipe(
+			filter(() => isToday(localDate)),
+			switchMap(() => heartbeat$),
+			map(formatDate)
+		),
+		formatDate()
 	);
-
-	return useObservableState(formattedDate$, formatDate());
 };

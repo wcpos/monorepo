@@ -26,6 +26,7 @@ const Variations = ({ item, initialSelectedAttributes, parentSearchTerm }) => {
 			selector: { id: { $in: parent.variations } },
 		},
 		endpoint: `products/${parent.id}/variations`,
+		greedy: true,
 	});
 
 	/**
