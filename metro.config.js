@@ -7,8 +7,7 @@ module.exports = (() => {
 	const config = getDefaultConfig(__dirname);
 
 	// I need to add mjs
-	console.log(config.resolver.sourceExts);
-	config.resolver.sourceExts.push('mjs');
+	// config.resolver.sourceExts.push('mjs');
 
 	//
 	if (process.env.ELECTRON === 'true') {
