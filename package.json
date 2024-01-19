@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/database",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Local database for @wcpos/core",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/database#readme",
@@ -18,27 +18,24 @@
     "generate-interfaces": "generate-interfaces \"./src/**/schema.json\"",
     "generate-interfaces:watch": "generate-interfaces -w \"./src/**/schema.json\""
   },
-  "resolutions": {
-    "uuid": "3.4.0"
-  },
   "dependencies": {
     "@orama/orama": "^2.0.1",
     "@orama/plugin-data-persistence": "^2.0.1",
     "c-promise2": "^0.13.12",
-    "expo-sqlite": "~11.6.0",
+    "expo-sqlite": "~13.2.1",
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.17.21",
     "observable-hooks": "4.2.3",
     "react": "18.2.0",
     "rxdb": "^14.17.1",
     "rxjs": "7.8.1",
-    "uuid": "3.4.0"
+    "uuid": "9.0.1"
   },
   "devDependencies": {
     "@faker-js/faker": "^8.3.1",
     "@types/jest": "^29.5.11",
     "@types/lodash": "4.14.202",
-    "@types/uuid": "3.4.13",
+    "@types/uuid": "9.0.7",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
     "jest": "^29.7.0",
