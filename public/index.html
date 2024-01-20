@@ -8,8 +8,7 @@
       This viewport works for phones with notches.
       It's optimized for gestures by disabling global zoom.
     -->
-  <meta name="viewport"
-    content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1.00001, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
   <!-- 
     This is for the electron desktop app.
     NOTE: it is not needed for the web app.
@@ -32,7 +31,7 @@
   <style>
     /**
        * Extend the react-native-web reset:
-       * https://github.com/necolas/react-native-web/blob/master/packages/react-native-web/src/exports/StyleSheet/initialRules.js
+       * https://necolas.github.io/react-native-web/docs/setup/#root-element
        */
     html,
     body,
