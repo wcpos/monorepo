@@ -9,7 +9,7 @@
  * There might be other use cases for having locale available during storeDB
  * creation?
  */
-import { create, insertMultiple, remove, insert, update } from '@orama/orama';
+import { create, insertMultiple, remove, insert, update } from '@orama/orama/dist';
 import trim from 'lodash/trim';
 import { BehaviorSubject } from 'rxjs';
 

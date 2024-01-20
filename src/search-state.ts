@@ -1,4 +1,4 @@
-import { count, search } from '@orama/orama';
+import { count, search } from '@orama/orama/dist';
 import defaults from 'lodash/defaults';
 import { Subscription, Subject, Observable, BehaviorSubject, from } from 'rxjs';
 import { map, distinctUntilChanged, switchMap, tap } from 'rxjs/operators';
