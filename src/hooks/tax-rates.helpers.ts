@@ -19,35 +19,40 @@ function normalizePostcode(postcode: string): string {
 }
 
 /**
- * Generate an array of wildcard postcodes based on the given postcode.
+ * Generate an array of possible postcodes based on a given wildcard or range pattern.
  */
-function getWildcardPostcodes(postcode: string): string[] {
-	const wildcards = [];
-	const lastCharIndex = postcode.length - 1;
+function getMatchingPostcodes(pattern: string): string[] {
+	if (pattern.includes('...')) {
+		const [start, end] = pattern.split('...').map(normalizePostcode);
+		let current = parseInt(start, 10);
+		const last = parseInt(end, 10);
+		const matches = [];
 
-	for (let i = lastCharIndex; i >= 0; i--) {
-		if (postcode[i] !== '*') {
-			const wildcardPostcode = postcode.slice(0, i) + '*';
-			wildcards.push(wildcardPostcode);
+		while (current <= last) {
+			matches.push(current.toString());
+			current++;
 		}
-	}
 
-	return uniq([postcode, ...wildcards]);
+		return matches;
+	} else if (pattern.endsWith('*')) {
+		// For wildcard patterns, return the pattern for comparison in `includes` check.
+		return [pattern.slice(0, -1)];
+	} else {
+		// Handle exact match
+		return [normalizePostcode(pattern)];
+	}
 }
 
 /**
- * Check if a given postcode matches any of the postcodes in the provided list,
- * accounting for wildcard postcodes and postcode ranges.
+ * Check if a given postcode matches any of the patterns in the provided list.
  */
-function postcodeLocationMatcher(postcode: string, postcodes: string[]): boolean {
+function postcodeMatcher(postcode: string, patterns: string[]): boolean {
 	const normalizedPostcode = normalizePostcode(postcode);
-	const wildcardPostcodes = getWildcardPostcodes(normalizedPostcode);
 
-	return some(postcodes, (range) => {
-		const [min, max] = map(range.split('...'), normalizePostcode);
-		return (
-			includes(wildcardPostcodes, min) ||
-			(normalizedPostcode >= min && normalizedPostcode <= (max || min))
+	return some(patterns, (pattern) => {
+		const matchingPostcodes = getMatchingPostcodes(pattern);
+		return matchingPostcodes.some((pc) =>
+			pattern.endsWith('*') ? normalizedPostcode.startsWith(pc) : pc === normalizedPostcode
 		);
 	});
 }
@@ -62,22 +67,17 @@ export function filterTaxRates(
 	postcode: string = '',
 	city: string = ''
 ): TaxRate[] {
-	// Group tax rates by class
 	const taxRatesByClass = groupBy(taxRates, 'class');
-
-	// Filter tax rates within each class
 	const filteredTaxRatesByClass = map(taxRatesByClass, (taxRatesInClass) => {
-		// Sort tax rates by priority
-		const sortedTaxRates = sortBy(taxRatesInClass, ['priority', 'id']);
-
+		const sortedTaxRates = sortBy(taxRatesInClass, ['priority', 'order', 'id']);
 		const cityUpperCase = city.toUpperCase();
+		let foundMatchAtCurrentPriority = false;
 
 		return filter(sortedTaxRates, (rate, index) => {
 			const countryMatch =
 				isEmpty(rate.country) || rate.country.toUpperCase() === country.toUpperCase();
 			const stateMatch = isEmpty(rate.state) || rate.state.toUpperCase() === state.toUpperCase();
-			const postcodeMatch =
-				isEmpty(rate.postcodes) || postcodeLocationMatcher(postcode, rate.postcodes);
+			const postcodeMatch = isEmpty(rate.postcodes) || postcodeMatcher(postcode, rate.postcodes);
 			const cityMatch =
 				isEmpty(rate.cities) ||
 				includes(
@@ -85,15 +85,21 @@ export function filterTaxRates(
 					cityUpperCase
 				);
 
-			// Check if the current tax rate has the same priority as the previous tax rate
-			if (index > 0 && sortedTaxRates[index - 1].priority === rate.priority) {
-				return false;
+			const isMatch = countryMatch && stateMatch && postcodeMatch && cityMatch;
+			const isNewPriority = index === 0 || sortedTaxRates[index - 1].priority !== rate.priority;
+
+			if (isNewPriority) {
+				foundMatchAtCurrentPriority = false;
 			}
 
-			return countryMatch && stateMatch && postcodeMatch && cityMatch;
+			if (isMatch && !foundMatchAtCurrentPriority) {
+				foundMatchAtCurrentPriority = true;
+				return true;
+			}
+
+			return false;
 		});
 	});
 
-	// Flatten the array of tax rates
 	return flatten(filteredTaxRatesByClass);
 }
