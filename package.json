@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/core",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "description": "The core WooCommerce POS app",
   "author": "kilbot <paul@kilbot.com>",
   "license": "MIT",
