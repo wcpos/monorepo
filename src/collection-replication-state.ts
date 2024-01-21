@@ -187,8 +187,15 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 
 			/**
 			 * @TODO - variations can be orphaned at the moment, we need a relationship table with parent
+			 *
+			 * @TODO - localIDs should be an array of integers, but some schemas use the remoteID as the
+			 * primary key, which in rxdb must be a string.
+			 * It's only tax rates that have this issue, I need to change the way they are stored
 			 */
-			const remove = this.subjects.localIDs.getValue().filter((id) => !remoteIDs.includes(id));
+			let remove = this.subjects.localIDs.getValue().filter((id) => !remoteIDs.includes(id));
+			if (remove.length > 0 && this.collection.name !== 'taxes') {
+				remove = remove.map((id) => String(id));
+			}
 			if (remove.length > 0 && this.collection.name !== 'variations') {
 				// deletion should be rare, only when an item is deleted from the server
 				console.warn('removing', remove, 'from', this.collection.name);
