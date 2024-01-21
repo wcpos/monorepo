@@ -46,10 +46,10 @@ export const useBarcodeDetection = (
 		event$.pipe(
 			bufferTime(buffer),
 			map((events) => {
-				// map to key names, remove tab, enter and shift
+				// Filter keys based on the regex
 				const keys = events
 					.map((event) => getKeyFromEvent(event))
-					.filter((key) => key !== 'Tab' && key !== 'Enter' && key !== 'Shift');
+					.filter((key) => key.length === 1);
 				return keys.join('');
 			}),
 			map((string) => {
