@@ -13,8 +13,8 @@ import log from '@wcpos/utils/src/logger';
 
 import { Date } from '../../components/date';
 import Categories from '../../components/product/categories';
-import { ProductImage } from '../../components/product/image';
 import Tags from '../../components/product/tags';
+import { VariableProductImage } from '../../components/product/variable-image';
 import VariablePrice from '../../components/product/variable-price';
 import Variations from '../../components/product/variation-table-rows';
 import { VariationTableContext } from '../../components/product/variation-table-rows/context';
@@ -33,7 +33,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 const cells = {
 	actions: Actions,
 	categories: Categories,
-	image: ProductImage,
+	image: VariableProductImage,
 	name: Name,
 	barcode: Barcode,
 	price: VariablePrice,
