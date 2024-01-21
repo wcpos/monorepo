@@ -1,40 +1,47 @@
-const fs = require('fs');
 const path = require('path');
 
 const { getDefaultConfig } = require('expo/metro-config');
 
-module.exports = (() => {
-	const config = getDefaultConfig(__dirname);
+// Find the project and workspace directories
+const projectRoot = __dirname;
+// This can be replaced with `find-yarn-workspace-root`
+const workspaceRoot = path.resolve(projectRoot, '../..');
 
-	// I need to add mjs
-	// config.resolver.sourceExts.push('mjs');
+const config = getDefaultConfig(projectRoot);
 
-	//
-	if (process.env.ELECTRON === 'true') {
-		config.resolver.sourceExts = [
-			'electron.ts',
-			'electron.tsx',
-			'electron.js',
-			'electron.jsx',
-			'electron.json',
-			'electron.cjs',
-			'electron.mjs',
-			'web.ts',
-			'web.tsx',
-			'web.js',
-			'web.jsx',
-			'web.json',
-			'web.cjs',
-			'web.mjs',
-			'ts',
-			'tsx',
-			'js',
-			'jsx',
-			'json',
-			'cjs',
-			'mjs',
-		];
-	}
+// 1. Watch all files within the monorepo
+config.watchFolders = [workspaceRoot];
+// 2. Let Metro know where to resolve packages and in what order
+config.resolver.nodeModulesPaths = [
+	path.resolve(projectRoot, 'node_modules'),
+	path.resolve(workspaceRoot, 'node_modules'),
+];
 
-	return config;
-})();
+//
+if (process.env.ELECTRON === 'true') {
+	config.resolver.sourceExts = [
+		'electron.ts',
+		'electron.tsx',
+		'electron.js',
+		'electron.jsx',
+		'electron.json',
+		'electron.cjs',
+		'electron.mjs',
+		'web.ts',
+		'web.tsx',
+		'web.js',
+		'web.jsx',
+		'web.json',
+		'web.cjs',
+		'web.mjs',
+		'ts',
+		'tsx',
+		'js',
+		'jsx',
+		'json',
+		'cjs',
+		'mjs',
+	];
+}
+
+module.exports = config;
