@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/hooks",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Hooks for WooCommerce POS",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/hooks#readme",
@@ -24,7 +24,7 @@
     "@wcpos/components": "*",
     "axios": "1.6.5",
     "bottleneck": "^2.19.5",
-    "js-base64": "^3.7.5",
+    "js-base64": "^3.7.6",
     "lodash": "4.17.21",
     "observable-hooks": "4.2.3",
     "react": "18.2.0",
