@@ -361,6 +361,10 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 		const response = await this.httpClient.get(this.endpoint, {
 			params: {
 				modified_after: lastModified,
+				/**
+				 * Modified after is always in GMT
+				 */
+				dates_are_gmt: true,
 			},
 		});
 
