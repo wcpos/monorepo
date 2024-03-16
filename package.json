@@ -19,7 +19,8 @@
     "test": "yarn workspaces foreach run test",
     "themes": "yarn workspace @wcpos/themes",
     "with-flipper": "yarn workspace @wcpos/app-with-flipper",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "preinstall": "npx ts-node ./scripts/install-rxdb-license.ts"
   },
   "workspaces": {
     "packages": [
@@ -28,22 +29,26 @@
     ]
   },
   "devDependencies": {
-    "@babel/core": "^7.23.7",
-    "@babel/preset-env": "^7.23.8",
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
     "@babel/preset-react": "^7.23.3",
-    "@transifex/cli": "^6.0.2",
-    "@types/jest": "^29.5.11",
+    "@transifex/cli": "^7.1.0",
+    "@types/jest": "^29.5.12",
     "@wcpos/eslint-config": "*",
     "babel-jest": "^29.7.0",
     "jest": "^29.7.0",
     "patch-package": "^8.0.0",
     "postinstall-postinstall": "^2.1.0",
-    "prettier": "3.2.4",
-    "ts-jest": "^29.1.1",
-    "typescript": "^5.3.3"
+    "prettier": "3.2.5",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.2"
   },
   "packageManager": "yarn@3.3.1",
   "eslintConfig": {
     "extends": "@wcpos/eslint-config"
+  },
+  "accessTokens": {
+    "rxdb-premium": "***REMOVED***"
   }
 }
