@@ -3,7 +3,7 @@ import { createRxDatabase, removeRxDatabase } from 'rxdb';
 import log from '@wcpos/utils/src/logger';
 
 import config from './adapter';
-import { disableVersionCheck } from './adapter/shared/version-check';
+import { disableVersionCheck } from 'rxdb-premium/dist/es/shared/version-check.js';
 
 import './plugins';
 disableVersionCheck();

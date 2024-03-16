@@ -1,8 +1,6 @@
 import log from '@wcpos/utils/src/logger';
 
-import { getRxStorageSQLite } from './plugins/storage-sqlite';
-
-type SQLiteQueryWithParams = any;
+import { getRxStorageSQLite, SQLiteQueryWithParams } from 'rxdb-premium/plugins/storage-sqlite';
 
 /**
  *
@@ -48,6 +46,14 @@ const config = {
 						type: 'run',
 						name: db.name,
 						sql: { query: 'PRAGMA ' + r + ' = ' + a, params: [] },
+						context: {
+							method: 'setPragma',
+							data: {
+								pragmaName: 'journal_mode',
+								pragmaValue: 'WAL',
+								description: 'Sets the SQLite journal mode to Write-Ahead Logging for better concurrency.',
+							},
+						},
 					});
 					return db;
 				} catch (error) {

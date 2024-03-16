@@ -3,7 +3,7 @@ import Database from 'tauri-plugin-sql-api';
 
 import log from '@wcpos/utils/src/logger';
 
-import { getRxStorageSQLite } from './plugins/storage-sqlite';
+import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 
 const config = {
 	storage: getRxStorageSQLite({

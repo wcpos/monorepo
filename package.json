@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/database",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Local database for @wcpos/core",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/database#readme",
@@ -19,29 +19,30 @@
     "generate-interfaces:watch": "generate-interfaces -w \"./src/**/schema.json\""
   },
   "dependencies": {
-    "@orama/orama": "^2.0.1",
-    "@orama/plugin-data-persistence": "^2.0.1",
+    "@orama/orama": "^2.0.11",
+    "@orama/plugin-data-persistence": "^2.0.11",
     "c-promise2": "^0.13.12",
-    "expo-sqlite": "~13.2.1",
+    "expo-sqlite": "~13.3.0",
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.17.21",
     "observable-hooks": "4.2.3",
     "react": "18.2.0",
-    "rxdb": "^14.17.1",
+    "rxdb": "14.17.1",
+    "rxdb-premium": "14.17.0",
     "rxjs": "7.8.1",
     "uuid": "9.0.1"
   },
   "devDependencies": {
-    "@faker-js/faker": "^8.3.1",
-    "@types/jest": "^29.5.11",
-    "@types/lodash": "4.14.202",
-    "@types/uuid": "9.0.7",
+    "@faker-js/faker": "^8.4.1",
+    "@types/jest": "^29.5.12",
+    "@types/lodash": "4.17.0",
+    "@types/uuid": "9.0.8",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
     "jest": "^29.7.0",
     "jsonschema-to-interface": "1.0.5",
-    "ts-jest": "^29.1.1",
-    "typescript": "^5.3.3"
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.4.2"
   },
   "eslintConfig": {
     "extends": "@wcpos/eslint-config"
