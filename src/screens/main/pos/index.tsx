@@ -117,6 +117,8 @@ const CheckoutWithProviders = ({
 			size="xLarge"
 			title={t('Checkout', { _tags: 'core' })}
 			primaryAction={{
+				disabled: true,
+				loading: true,
 				label: t('Process Payment', { _tags: 'core' }),
 			}}
 			style={{ minHeight: '80%' }}

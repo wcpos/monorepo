@@ -33,21 +33,24 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
 
 	/**
-	 * 
+	 *
 	 */
 	const paymentURLWithToken = React.useMemo(() => {
-    // Append the JWT token as a query parameter to the payment URL
-    const url = new URL(paymentURL);
-    url.searchParams.append('token', jwt);
-    return url.toString();
-  }, [paymentURL, jwt]);
+		// Append the JWT token as a query parameter to the payment URL
+		const url = new URL(paymentURL);
+		url.searchParams.append('token', jwt);
+		return url.toString();
+	}, [paymentURL, jwt]);
 
 	/**
 	 *
 	 */
 	const handlePaymentReceived = React.useCallback(
 		async (event: MessageEvent) => {
-			if (event?.data?.action === 'wcpos-payment-received' && typeof event?.data?.payload === 'object') {
+			if (
+				event?.data?.action === 'wcpos-payment-received' &&
+				typeof event?.data?.payload === 'object'
+			) {
 				try {
 					const payload = event.data.payload;
 					const latest = order.getLatest();
@@ -60,7 +63,6 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 							})
 						);
 					}
-
 				} catch (err) {
 					log.error(err);
 					addSnackbar({ message: err?.message, type: 'error' });
@@ -69,6 +71,7 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 						return {
 							...prev,
 							loading: false,
+							disabled: false,
 						};
 					});
 				}
@@ -88,6 +91,7 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 			return {
 				...prev,
 				loading: true,
+				disabled: true,
 			};
 		});
 	}, [setPrimaryAction]);
@@ -103,6 +107,22 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 	/**
 	 *
 	 */
+	const onWebViewLoaded = React.useCallback(
+		(event) => {
+			setPrimaryAction((prev) => {
+				return {
+					...prev,
+					loading: false,
+					disabled: false,
+				};
+			});
+		},
+		[setPrimaryAction]
+	);
+
+	/**
+	 *
+	 */
 	return (
 		<View style={{ flex: 1 }}>
 			<ErrorBoundary>
@@ -110,9 +130,7 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 					<WebView
 						ref={iframeRef}
 						src={paymentURLWithToken}
-						onLoad={() => {
-							// setLoading(false);
-						}}
+						onLoad={onWebViewLoaded}
 						onMessage={(event) => {
 							if (event?.data?.payload?.data) {
 								addSnackbar({ message: event?.data?.payload?.message });
