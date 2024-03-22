@@ -10,6 +10,7 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 
 import AddFee from './add-fee';
+import { AddMiscProduct } from './add-misc-product';
 import AddShipping from './add-shipping';
 import AddNoteButton from './buttons/add-note';
 import OrderMetaButton from './buttons/order-meta';
@@ -122,6 +123,11 @@ const Cart = () => {
 					<Suspense>
 						<Table resource={cartResource} />
 					</Suspense>
+				</ErrorBoundary>
+			</Box>
+			<Box>
+				<ErrorBoundary>
+					<AddMiscProduct />
 				</ErrorBoundary>
 			</Box>
 			<Box>

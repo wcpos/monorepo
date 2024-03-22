@@ -4,6 +4,7 @@ import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 
 import AddFee from './add-fee';
+import { AddMiscProduct } from './add-misc-product';
 import AddShipping from './add-shipping';
 import CartHeader from './cart-header';
 
@@ -23,6 +24,11 @@ const EmptyCart = ({ currentOrder }: CartProps) => {
 				<CartHeader />
 			</ErrorBoundary>
 
+			<Box>
+				<ErrorBoundary>
+					<AddMiscProduct />
+				</ErrorBoundary>
+			</Box>
 			<Box>
 				<ErrorBoundary>
 					<AddFee />

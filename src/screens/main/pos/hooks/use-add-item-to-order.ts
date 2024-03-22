@@ -41,7 +41,7 @@ export const useAddItemToOrder = () => {
 			}
 
 			// if line item, check it an item with the same product_id already exists
-			if (type === 'line_items') {
+			if (type === 'line_items' && data.product_id !== 0) {
 				const populatedLineItems = await order.populate('line_items');
 				let existing = [];
 				if (data.variation_id) {
