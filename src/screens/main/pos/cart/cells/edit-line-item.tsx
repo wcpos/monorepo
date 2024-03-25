@@ -1,13 +1,14 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import get from 'lodash/get';
+import pick from 'lodash/pick';
 
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
-import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 
 import { useT } from '../../../../../contexts/translations';
-import EditForm from '../../../components/edit-form-with-json';
+import { EditForm } from '../../../components/edit-json-form';
+import { useCollection } from '../../../hooks/use-collection';
 
 interface EditLineItemProps {
 	item: import('@wcpos/database').LineItemDocument;
@@ -19,6 +20,42 @@ interface EditLineItemProps {
 const EditButton = ({ item }: EditLineItemProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const t = useT();
+	const { collection } = useCollection('orders');
+
+	/**
+	 * Get schema for line item
+	 */
+	const schema = React.useMemo(() => {
+		const lineItemSchema = get(
+			collection,
+			'schema.jsonSchema.properties.line_items.items.properties'
+		);
+		const fields = [
+			'name',
+			'sku',
+			'price',
+			'quantity',
+			'tax_class',
+			'subtotal',
+			// 'subtotal_tax',
+			// 'total',
+			// 'total_tax',
+			'taxes',
+			'meta_data',
+		];
+		return {
+			properties: pick(lineItemSchema, fields),
+			title: null,
+			description: null,
+		};
+	}, [collection]);
+
+	/**
+	 *
+	 */
+	const handleChange = React.useCallback((newData) => {
+		console.log(newData);
+	}, []);
 
 	/**
 	 *
@@ -37,20 +74,9 @@ const EditButton = ({ item }: EditLineItemProps) => {
 				onClose={() => setOpened(false)}
 			>
 				<EditForm
-					document={item}
-					fields={[
-						'name',
-						'sku',
-						'price',
-						'quantity',
-						'tax_class',
-						'subtotal',
-						// 'subtotal_tax',
-						// 'total',
-						// 'total_tax',
-						'taxes',
-						'meta_data',
-					]}
+					json={item}
+					onChange={handleChange}
+					schema={schema}
 					uiSchema={{
 						'ui:title': null,
 						'ui:description': null,

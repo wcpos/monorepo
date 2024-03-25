@@ -36,20 +36,20 @@ const DEBOUNCE_TIME_MS = 10;
  *
  */
 export const FeeLineRow: RenderItem = ({ item, index, target }) => {
-	const { calculateLineItemTaxes } = useTaxCalculation(item);
+	// const { calculateLineItemTaxes } = useTaxCalculation(item);
 
-	/**
-	 *
-	 */
-	const feeLine$ = useObservable(() =>
-		combineLatest([item.total$, item.tax_class$, item.tax_status$]).pipe(
-			map(([total, taxClass, taxStatus]) => ({ total, taxClass, taxStatus })),
-			distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
-			debounceTime(DEBOUNCE_TIME_MS)
-		)
-	);
+	// /**
+	//  *
+	//  */
+	// const feeLine$ = useObservable(() =>
+	// 	combineLatest([item.total$, item.tax_class$, item.tax_status$]).pipe(
+	// 		map(([total, taxClass, taxStatus]) => ({ total, taxClass, taxStatus })),
+	// 		distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
+	// 		debounceTime(DEBOUNCE_TIME_MS)
+	// 	)
+	// );
 
-	useSubscription(feeLine$, calculateLineItemTaxes);
+	// useSubscription(feeLine$, calculateLineItemTaxes);
 
 	/**
 	 *

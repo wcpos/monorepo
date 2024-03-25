@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
@@ -11,6 +10,7 @@ import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 interface Props {
 	item: import('@wcpos/database').LineItemDocument;
@@ -28,25 +28,18 @@ const getTaxStatus = (meta_data) => {
  *
  */
 export const Subtotal = ({ item, column }: Props) => {
-	const _subtotal = useObservableState(item.subtotal$, item.subtotal);
-	const subtotal = parseFloat(_subtotal);
-	const subtotal_tax = useObservableState(item.subtotal_tax$, item.subtotal_tax);
+	const { currentOrder } = useCurrentOrder();
+
+	const subtotal = parseFloat(item.subtotal);
 	const { format } = useCurrencyFormat();
 	const { display } = column;
-
-	const taxClass = useObservableState(item.tax_class$, item.tax_class);
-	// find meta data value when key = _woocommerce_pos_tax_status
-	const _taxStatus = useObservableState(
-		item.meta_data$.pipe(map((meta_data) => getTaxStatus(meta_data))),
-		getTaxStatus(item.meta_data)
-	);
-	const taxStatus = _taxStatus ?? 'taxable';
+	const taxStatus = getTaxStatus(item.meta_data) ?? 'taxable';
 	const { store } = useAppState();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
 	const { calculateTaxesFromPrice } = useTaxHelpers();
 	const taxes = calculateTaxesFromPrice({
 		price: subtotal,
-		taxClass,
+		taxClass: item.tax_class,
 		taxStatus,
 		pricesIncludeTax: false,
 	});
@@ -61,15 +54,28 @@ export const Subtotal = ({ item, column }: Props) => {
 			if (taxDisplayCart === 'incl') {
 				const taxes = calculateTaxesFromPrice({
 					price: newSubtotal,
-					taxClass,
+					taxClass: item.tax_class,
 					taxStatus,
 					pricesIncludeTax: true,
 				});
 				newSubtotal = parseFloat(newValue) - taxes.total;
 			}
-			item.incrementalPatch({ subtotal: String(newSubtotal) });
+			currentOrder.incrementalModify((order) => {
+				const updatedLineItems = order.line_items.map((li) => {
+					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+					if (uuidMetaData && uuidMetaData.value === item.uuid) {
+						return {
+							...li,
+							subtotal: String(newSubtotal),
+						};
+					}
+					return li;
+				});
+
+				return { ...order, line_items: updatedLineItems };
+			});
 		},
-		[calculateTaxesFromPrice, item, taxClass, taxDisplayCart, taxStatus]
+		[calculateTaxesFromPrice, currentOrder, item.tax_class, item.uuid, taxDisplayCart, taxStatus]
 	);
 
 	/**
@@ -91,7 +97,7 @@ export const Subtotal = ({ item, column }: Props) => {
 			<NumberInput value={String(displaySubtotal)} onChange={handleUpdate} showDecimals />
 			{show('tax') && (
 				<Text type="textMuted" size="small">
-					{`${taxDisplayCart}. ${format(subtotal_tax) || 0} tax`}
+					{`${taxDisplayCart}. ${format(item.subtotal_tax) || 0} tax`}
 				</Text>
 			)}
 		</Box>

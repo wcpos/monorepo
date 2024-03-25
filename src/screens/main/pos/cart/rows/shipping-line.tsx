@@ -36,19 +36,19 @@ const DEBOUNCE_TIME_MS = 10;
  *
  */
 export const ShippingLineRow: RenderItem = ({ item, index, target }) => {
-	const { calculateShippingLineTaxes } = useShippingTaxCalculation(item);
+	// const { calculateShippingLineTaxes } = useShippingTaxCalculation(item);
 
-	const shippingLine$ = useObservable(
-		() =>
-			combineLatest([item.total$]).pipe(
-				map(([total]) => ({ total })),
-				distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
-				debounceTime(DEBOUNCE_TIME_MS)
-			),
-		[]
-	);
+	// const shippingLine$ = useObservable(
+	// 	() =>
+	// 		combineLatest([item.total$]).pipe(
+	// 			map(([total]) => ({ total })),
+	// 			distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
+	// 			debounceTime(DEBOUNCE_TIME_MS)
+	// 		),
+	// 	[]
+	// );
 
-	useSubscription(shippingLine$, calculateShippingLineTaxes);
+	// useSubscription(shippingLine$, calculateShippingLineTaxes);
 
 	/**
 	 *

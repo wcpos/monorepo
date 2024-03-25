@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { v4 as uuidv4 } from 'uuid';
+
 import { getCurrentGMTDate } from './utils';
 import { useCollection } from '../../hooks/use-collection';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -35,6 +37,18 @@ export const useAddItemToOrder = () => {
 	const addItemToOrder = React.useCallback(
 		async (type, data) => {
 			const order = currentOrder.getLatest();
+
+			// make sure items have a uuid before saving
+			data.meta_data = data.meta_data || [];
+			const meta = data.meta_data.find((meta: any) => meta.key === '_woocommerce_pos_uuid');
+			const metaUUID = meta && meta.value;
+
+			if (!metaUUID) {
+				data.meta_data.push({
+					key: '_woocommerce_pos_uuid',
+					value: uuidv4(),
+				});
+			}
 
 			if (order.isNew) {
 				return saveNewOrder(type, data);

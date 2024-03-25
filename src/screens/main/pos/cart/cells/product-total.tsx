@@ -17,14 +17,12 @@ interface Props {
 }
 
 export const ProductTotal = ({ item, column }: Props) => {
-	const total = useObservableState(item.total$, item.total);
-	const total_tax = useObservableState(item.total_tax$, item.total_tax);
 	const { format } = useCurrencyFormat();
 	const { display } = column;
 	const { store } = useAppState();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
 	const displayTotal =
-		taxDisplayCart === 'incl' ? parseFloat(total) + parseFloat(total_tax) : total;
+		taxDisplayCart === 'incl' ? parseFloat(item.total) + parseFloat(item.total_tax) : item.total;
 
 	/**
 	 * TODO - move this into the ui as a helper function
@@ -42,7 +40,7 @@ export const ProductTotal = ({ item, column }: Props) => {
 			<Text>{format(displayTotal || 0)}</Text>
 			{show('tax') && (
 				<Text type="textMuted" size="small">
-					{`${taxDisplayCart}. ${format(total_tax) || 0} tax`}
+					{`${taxDisplayCart}. ${format(item.total_tax) || 0} tax`}
 				</Text>
 			)}
 		</Box>

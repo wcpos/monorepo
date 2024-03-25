@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
 import pick from 'lodash/pick';
 
 import Icon from '@wcpos/components/src/icon';
@@ -7,7 +8,8 @@ import Modal from '@wcpos/components/src/modal';
 // import Tooltip from '@wcpos/components/src/tooltip';
 
 import { useT } from '../../../../../contexts/translations';
-import EditForm from '../../../components/edit-form-with-json';
+import { EditForm } from '../../../components/edit-json-form';
+import { useCollection } from '../../../hooks/use-collection';
 
 interface EditShippingLineProps {
 	item: import('@wcpos/database').ShippingLineDocument;
@@ -19,6 +21,29 @@ interface EditShippingLineProps {
 const EditButton = ({ item }: EditShippingLineProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const t = useT();
+	const { collection } = useCollection('orders');
+
+	/**
+	 * Get schema for fee lines
+	 */
+	const schema = React.useMemo(() => {
+		const shippingLineSchema = get(
+			collection,
+			'schema.jsonSchema.properties.shipping_lines.items.properties'
+		);
+		const fields = [
+			'method_title',
+			'method_id',
+			// 'instance_id',
+			'total',
+			// 'total_tax',
+			'taxes',
+			'meta_data',
+		];
+		return {
+			properties: pick(shippingLineSchema, fields),
+		};
+	}, [collection]);
 
 	/**
 	 *
@@ -37,16 +62,11 @@ const EditButton = ({ item }: EditShippingLineProps) => {
 				onClose={() => setOpened(false)}
 			>
 				<EditForm
-					document={item}
-					fields={[
-						'method_title',
-						'method_id',
-						// 'instance_id',
-						'total',
-						// 'total_tax',
-						'taxes',
-						'meta_data',
-					]}
+					json={item}
+					schema={schema}
+					onChange={(newData) => {
+						console.log(newData);
+					}}
 					uiSchema={{
 						'ui:title': null,
 						'ui:description': null,

@@ -1,35 +1,47 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-
 import Box from '@wcpos/components/src/box';
 import { EdittableText } from '@wcpos/components/src/edittable-text';
 import Text from '@wcpos/components/src/text';
 
 import EditShippingLineButton from './edit-shipping-line';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 interface Props {
 	item: import('@wcpos/database').ShippingLineDocument;
 }
 
 export const ShippingTitle = ({ item }: Props) => {
-	const methodTitle = useObservableState(item.method_title$, item.method_title);
+	const { currentOrder } = useCurrentOrder();
 
 	/**
 	 *
 	 */
 	const handleUpdate = React.useCallback(
-		(newValue: string) => {
-			item.incrementalPatch({ method_title: newValue });
+		async (newValue: string) => {
+			currentOrder.incrementalModify((order) => {
+				const updatedItems = order.shipping_lines.map((li) => {
+					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+					if (uuidMetaData && uuidMetaData.value === item.uuid) {
+						return {
+							...li,
+							method_title: newValue,
+						};
+					}
+					return li;
+				});
+
+				return { ...order, shipping_lines: updatedItems };
+			});
 		},
-		[item]
+		[currentOrder, item.uuid]
 	);
 
 	return (
 		<Box horizontal space="xSmall" style={{ width: '100%' }}>
 			<Box fill>
 				<EdittableText weight="bold" onChange={handleUpdate}>
-					{methodTitle}
+					{item.method_title}
 				</EdittableText>
 			</Box>
 			<Box distribution="center">
