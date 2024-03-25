@@ -2,6 +2,7 @@
 apps/*/credentials.json
 packages/*/build
 coverage
+.env
 
 # Expo
 .expo
@@ -65,4 +66,4 @@ xcuserdata
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
-.env
+yarn.lock
