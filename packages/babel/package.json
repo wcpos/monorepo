@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/babel-preset-expo",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Babel configuration for React Native with Expo",
   "author": "kilbot <paul@kilbot.com>",
   "license": "MIT",
@@ -10,9 +10,9 @@
     "test": "echo 'Nothing to test'"
   },
   "dependencies": {
-    "@babel/core": "^7.24.0",
+    "@babel/core": "^7.24.3",
     "@babel/plugin-proposal-export-namespace-from": "7.18.9",
-    "@babel/preset-typescript": "^7.23.3",
+    "@babel/preset-typescript": "^7.24.1",
     "babel-jest": "^29.7.0",
     "babel-preset-expo": "10.0.1"
   },
