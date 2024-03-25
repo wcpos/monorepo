@@ -193,7 +193,7 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 			 * It's only tax rates that have this issue, I need to change the way they are stored
 			 */
 			let remove = this.subjects.localIDs.getValue().filter((id) => !remoteIDs.includes(id));
-			if (remove.length > 0 && this.collection.name !== 'taxes') {
+			if (remove.length > 0 && this.collection.name === 'taxes') {
 				remove = remove.map((id) => String(id));
 			}
 			if (remove.length > 0 && this.collection.name !== 'variations') {
@@ -401,7 +401,7 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 		return this.collection.find({
 			selector: {
 				$or: [
-					{ id: null }, // Matches documents where id is explicitly null
+					{ id: { $eq: null } }, // Matches documents where id is explicitly null
 					{ id: { $exists: false } }, // Matches documents where id is not defined
 				],
 			},
