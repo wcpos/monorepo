@@ -1,5 +1,5 @@
-import { RxStorageOPFSStatics } from './plugins/storage-opfs';
-import { getRxStorageWorker } from './plugins/storage-worker';
+import { RxStorageOPFSStatics } from 'rxdb-premium/plugins/storage-opfs';
+import { getRxStorageWorker } from 'rxdb-premium/plugins/storage-worker';
 
 // const parentStorage = wrappedValidateZSchemaStorage({ storage: getRxStorageIndexedDB() });
 // const parentStorage = wrappedValidateAjvStorage({
