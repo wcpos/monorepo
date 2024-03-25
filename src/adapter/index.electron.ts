@@ -1,4 +1,4 @@
-import log from '@wcpos/utils/src/logger';
+import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 
 import { getRxStorageSQLite, SQLiteQueryWithParams } from 'rxdb-premium/plugins/storage-sqlite';
 

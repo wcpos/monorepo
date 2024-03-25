@@ -9,82 +9,82 @@
  * WooCommerce Product Variation schema
  */
 export interface WooCommerceProductVariationSchema {
-	/**
-	 * Unique identifier for the resource.
-	 */
-	uuid?: string;
-	id?: number;
-	date_created?: string;
-	date_created_gmt?: string;
-	date_modified?: string;
-	date_modified_gmt?: string;
-	description?: string;
-	permalink?: string;
-	sku?: string;
-	barcode?: string;
-	price?: string;
-	regular_price?: string;
-	sale_price?: string;
-	date_on_sale_from?: string;
-	date_on_sale_from_gmt?: string;
-	date_on_sale_to?: string;
-	date_on_sale_to_gmt?: string;
-	on_sale?: boolean;
-	status?: 'draft' | 'pending' | 'private' | 'publish';
-	purchasable?: boolean;
-	virtual?: boolean;
-	downloadable?: boolean;
-	downloads?: any[];
-	download_limit?: number;
-	download_expiry?: number;
-	tax_status?: 'taxable' | 'shipping' | 'none';
-	tax_class?: string;
-	manage_stock?: boolean;
-	stock_quantity?: number | null;
-	stock_status?: 'instock' | 'outofstock' | 'onbackorder';
-	backorders?: 'no' | 'notify' | 'yes';
-	backorders_allowed?: boolean;
-	backordered?: boolean;
-	low_stock_amount?: number | null;
-	weight?: string;
-	dimensions?: {
-		length?: string;
-		width?: string;
-		height?: string;
-		[k: string]: any;
-	};
-	shipping_class?: string;
-	shipping_class_id?: number;
-	image?: {
-		[k: string]: any;
-	} | null;
-	has_options?: boolean;
-	attributes?: {
-		id?: number;
-		name?: string;
-		option?: string;
-		[k: string]: any;
-	}[];
-	menu_order?: number;
-	meta_data?: {
-		id?: number;
-		key?: string;
-		value?: string;
-		[k: string]: any;
-	}[];
-	links?: {
-		collection?: {
-			href?: string;
-			[k: string]: any;
-		}[];
-		self?: {
-			href?: string;
-			[k: string]: any;
-		}[];
-		[k: string]: any;
-	};
-	thumbnail?: string;
-	parent_id?: number;
-	name?: string;
-	[k: string]: any;
+  /**
+   * Unique identifier for the resource.
+   */
+  uuid?: string;
+  id?: number;
+  date_created?: string;
+  date_created_gmt?: string;
+  date_modified?: string;
+  date_modified_gmt?: string;
+  description?: string;
+  permalink?: string;
+  sku?: string;
+  barcode?: string;
+  price?: string;
+  regular_price?: string;
+  sale_price?: string;
+  date_on_sale_from?: string;
+  date_on_sale_from_gmt?: string;
+  date_on_sale_to?: string;
+  date_on_sale_to_gmt?: string;
+  on_sale?: boolean;
+  status?: "draft" | "pending" | "private" | "publish";
+  purchasable?: boolean;
+  virtual?: boolean;
+  downloadable?: boolean;
+  downloads?: any[];
+  download_limit?: number;
+  download_expiry?: number;
+  tax_status?: "taxable" | "shipping" | "none";
+  tax_class?: string;
+  manage_stock?: boolean;
+  stock_quantity?: number | null;
+  stock_status?: "instock" | "outofstock" | "onbackorder";
+  backorders?: "no" | "notify" | "yes";
+  backorders_allowed?: boolean;
+  backordered?: boolean;
+  low_stock_amount?: number | null;
+  weight?: string;
+  dimensions?: {
+    length?: string;
+    width?: string;
+    height?: string;
+    [k: string]: any;
+  };
+  shipping_class?: string;
+  shipping_class_id?: number;
+  image?: {
+    [k: string]: any;
+  } | null;
+  has_options?: boolean;
+  attributes?: {
+    id?: number;
+    name?: string;
+    option?: string;
+    [k: string]: any;
+  }[];
+  menu_order?: number;
+  meta_data?: {
+    id?: number;
+    key?: string;
+    value?: string;
+    [k: string]: any;
+  }[];
+  links?: {
+    collection?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    self?: {
+      href?: string;
+      [k: string]: any;
+    }[];
+    [k: string]: any;
+  };
+  thumbnail?: string;
+  parent_id?: number;
+  name?: string;
+  [k: string]: any;
 }

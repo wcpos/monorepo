@@ -285,7 +285,116 @@ export interface WooCommerceOrderSchema {
   /**
    * Line items data.
    */
-  line_items?: string[];
+  line_items?: {
+    /**
+     * Item ID.
+     */
+    id?: number;
+    /**
+     * Product name.
+     */
+    name?: string;
+    /**
+     * Product ID.
+     */
+    product_id?: number;
+    /**
+     * Variation ID, if applicable.
+     */
+    variation_id?: number;
+    parent_name?: string;
+    /**
+     * Product SKU.
+     */
+    sku?: string;
+    /**
+     * Product price.
+     */
+    price?: number;
+    /**
+     * Quantity ordered.
+     */
+    quantity?: number;
+    /**
+     * Tax class of product.
+     */
+    tax_class?: string;
+    /**
+     * Line subtotal (before discounts).
+     */
+    subtotal?: string;
+    /**
+     * Line subtotal tax (before discounts).
+     */
+    subtotal_tax?: string;
+    /**
+     * Line total (after discounts).
+     */
+    total?: string;
+    /**
+     * Line total tax (after discounts).
+     */
+    total_tax?: string;
+    /**
+     * Line taxes.
+     */
+    taxes?: {
+      /**
+       * Tax rate ID.
+       */
+      id?: number;
+      /**
+       * Tax total.
+       */
+      total?: string;
+      /**
+       * Tax subtotal.
+       */
+      subtotal?: string;
+      [k: string]: any;
+    }[];
+    /**
+     * Meta data.
+     */
+    meta_data?: {
+      /**
+       * Meta ID.
+       */
+      id?: number;
+      /**
+       * Meta key.
+       */
+      key?: string;
+      /**
+       * Meta value.
+       */
+      value?: string;
+      /**
+       * Display key.
+       */
+      display_key?: string;
+      /**
+       * Display value.
+       */
+      display_value?: string;
+      [k: string]: any;
+    }[];
+    /**
+     * Product image.
+     */
+    image?: {
+      /**
+       * Image ID.
+       */
+      id?: number;
+      /**
+       * Image URL.
+       */
+      src?: string;
+      [k: string]: any;
+    };
+    [k: string]: any;
+  }[];
   tax_lines?: {
     id?: number;
     rate_code?: string;
@@ -318,11 +427,129 @@ export interface WooCommerceOrderSchema {
   /**
    * Shipping lines data.
    */
-  shipping_lines?: string[];
+  shipping_lines?: {
+    id?: number;
+    /**
+     * Shipping method name.
+     */
+    method_title?: string;
+    /**
+     * Shipping method ID.
+     */
+    method_id?: string;
+    /**
+     * Shipping instance ID.
+     */
+    instance_id?: string;
+    /**
+     * Line total (after discounts).
+     */
+    total?: string;
+    /**
+     * Line total tax (after discounts).
+     */
+    total_tax?: string;
+    /**
+     * Line taxes.
+     */
+    taxes?: {
+      /**
+       * Tax rate ID.
+       */
+      id?: number;
+      /**
+       * Tax total.
+       */
+      total?: string;
+      [k: string]: any;
+    }[];
+    /**
+     * Meta data.
+     */
+    meta_data?: {
+      /**
+       * Meta ID.
+       */
+      id?: number;
+      /**
+       * Meta key.
+       */
+      key?: string;
+      /**
+       * Meta value.
+       */
+      value?: string;
+      [k: string]: any;
+    }[];
+    [k: string]: any;
+  }[];
   /**
    * Fee lines data.
    */
-  fee_lines?: string[];
+  fee_lines?: {
+    id?: number;
+    /**
+     * Fee name.
+     */
+    name?: string;
+    /**
+     * Fee amount.
+     */
+    amount?: string;
+    /**
+     * Tax class of fee.
+     */
+    tax_class?: string;
+    /**
+     * Tax status of fee.
+     */
+    tax_status?: "taxable" | "none";
+    /**
+     * Line total (after discounts).
+     */
+    total?: string;
+    /**
+     * Line total tax (after discounts).
+     */
+    total_tax?: string;
+    /**
+     * Line taxes.
+     */
+    taxes?: {
+      /**
+       * Tax rate ID.
+       */
+      id?: number;
+      /**
+       * Tax total.
+       */
+      total?: string;
+      /**
+       * Tax subtotal.
+       */
+      subtotal?: string;
+      [k: string]: any;
+    }[];
+    /**
+     * Meta data.
+     */
+    meta_data?: {
+      /**
+       * Meta ID.
+       */
+      id?: number;
+      /**
+       * Meta key.
+       */
+      key?: string;
+      /**
+       * Meta value.
+       */
+      value?: string;
+      [k: string]: any;
+    }[];
+    [k: string]: any;
+  }[];
   /**
    * Coupons line data.
    */

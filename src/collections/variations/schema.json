@@ -4,6 +4,7 @@
   "description": "WooCommerce Product Variation schema",
   "type": "object",
   "primaryKey": "uuid",
+  "attachments": {},
   "properties": {
     "uuid": {
       "description": "Unique identifier for the resource.",
