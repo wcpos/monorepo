@@ -17,3 +17,18 @@ export const getCurrentGMTDate = () => {
 	// Format the date in the desired format
 	return formatDate(nowUtc, "yyyy-MM-dd'T'HH:mm:ss");
 };
+
+/**
+ *
+ */
+export function findByMetaDataUUID(items: [], uuid: string) {
+	for (const item of items) {
+		const uuidMetaData = item.meta_data.find(
+			(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
+		);
+		if (uuidMetaData) {
+			return item;
+		}
+	}
+	return null;
+}

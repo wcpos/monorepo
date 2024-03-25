@@ -8,6 +8,7 @@ import { EdittableText } from '@wcpos/components/src/edittable-text';
 import Text from '@wcpos/components/src/text';
 
 import EditLineItemButton from './edit-line-item';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
 interface Props {
@@ -16,8 +17,7 @@ interface Props {
 }
 
 export const ProductName = ({ item, column }: Props) => {
-	const name = useObservableState(item.name$, item.name);
-	const metaData = useObservableState(item.meta_data$, item.meta_data) || [];
+	const { currentOrder } = useCurrentOrder();
 	const { display } = column;
 
 	/**
@@ -34,7 +34,7 @@ export const ProductName = ({ item, column }: Props) => {
 	/**
 	 *  filter out the private meta data
 	 */
-	const attributes = metaData.filter((meta) => {
+	const attributes = item.meta_data.filter((meta) => {
 		if (meta.key) {
 			return !meta.key.startsWith('_');
 		}
@@ -45,10 +45,23 @@ export const ProductName = ({ item, column }: Props) => {
 	 *
 	 */
 	const handleUpdate = React.useCallback(
-		(newValue: string) => {
-			item.incrementalPatch({ name: newValue });
+		async (newValue: string) => {
+			currentOrder.incrementalModify((order) => {
+				const updatedLineItems = order.line_items.map((li) => {
+					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+					if (uuidMetaData && uuidMetaData.value === item.uuid) {
+						return {
+							...li,
+							name: newValue,
+						};
+					}
+					return li;
+				});
+
+				return { ...order, line_items: updatedLineItems };
+			});
 		},
-		[item]
+		[currentOrder, item.uuid]
 	);
 
 	/**
@@ -58,7 +71,7 @@ export const ProductName = ({ item, column }: Props) => {
 		<Box horizontal space="xSmall" style={{ width: '100%' }}>
 			<Box fill space="xSmall">
 				<EdittableText weight="bold" onChange={handleUpdate}>
-					{name}
+					{item.name}
 				</EdittableText>
 				{show('sku') && <Text size="small">{item.sku}</Text>}
 

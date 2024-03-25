@@ -11,6 +11,7 @@ import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 interface Props {
 	item: import('@wcpos/database').FeeLineDocument;
@@ -20,20 +21,18 @@ interface Props {
  * Changing the total actually updates the price, because the WC REST API makes no sense
  */
 export const FeeTotal = ({ item, column }: Props) => {
-	const _total = useObservableState(item.total$, item.total);
-	const total = parseFloat(_total);
-	const total_tax = useObservableState(item.total_tax$, item.total_tax);
+	const { currentOrder } = useCurrentOrder();
+
+	const total = parseFloat(item.total);
 	const { format } = useCurrencyFormat();
 	const { display } = column;
-	const taxClass = useObservableState(item.tax_class$, item.tax_class);
-	const taxStatus = useObservableState(item.tax_status$, item.tax_status);
 	const { store } = useAppState();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
 	const { calculateTaxesFromPrice } = useTaxHelpers();
 	const taxes = calculateTaxesFromPrice({
 		price: total,
-		taxClass,
-		taxStatus,
+		taxClass: item.tax_class,
+		taxStatus: item.tax_status,
 		pricesIncludeTax: false,
 	});
 	const displayTotal = taxDisplayCart === 'incl' ? total + taxes.total : total;
@@ -47,15 +46,35 @@ export const FeeTotal = ({ item, column }: Props) => {
 			if (taxDisplayCart === 'incl') {
 				const taxes = calculateTaxesFromPrice({
 					price: total,
-					taxClass,
-					taxStatus,
+					taxClass: item.tax_class,
+					taxStatus: item.tax_status,
 					pricesIncludeTax: true,
 				});
 				total = parseFloat(newValue) - taxes.total;
 			}
-			item.incrementalPatch({ total: String(total) });
+			currentOrder.incrementalModify((order) => {
+				const updatedItems = order.fee_lines.map((li) => {
+					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+					if (uuidMetaData && uuidMetaData.value === item.uuid) {
+						return {
+							...li,
+							total: String(total),
+						};
+					}
+					return li;
+				});
+
+				return { ...order, fee_lines: updatedItems };
+			});
 		},
-		[calculateTaxesFromPrice, item, taxClass, taxDisplayCart, taxStatus]
+		[
+			calculateTaxesFromPrice,
+			currentOrder,
+			item.tax_class,
+			item.tax_status,
+			item.uuid,
+			taxDisplayCart,
+		]
 	);
 
 	/**
@@ -77,7 +96,7 @@ export const FeeTotal = ({ item, column }: Props) => {
 			<NumberInput value={String(displayTotal)} onChange={handleUpdate} showDecimals />
 			{show('tax') && (
 				<Text type="textMuted" size="small">
-					{`${taxDisplayCart}. ${format(total_tax) || 0} tax`}
+					{`${taxDisplayCart}. ${format(item.total_tax) || 0} tax`}
 				</Text>
 			)}
 		</Box>

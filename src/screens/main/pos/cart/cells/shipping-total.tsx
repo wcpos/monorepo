@@ -10,6 +10,7 @@ import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 interface Props {
 	item: import('@wcpos/database').FeeLineDocument;
@@ -19,9 +20,9 @@ interface Props {
  * Changing the total actually updates the price, because the WC REST API makes no sense
  */
 export const ShippingTotal = ({ item, column }: Props) => {
-	const _total = useObservableState(item.total$, item.total);
-	const total = parseFloat(_total);
-	const total_tax = useObservableState(item.total_tax$, item.total_tax);
+	const { currentOrder } = useCurrentOrder();
+
+	const total = parseFloat(item.total);
 	const { format } = useCurrencyFormat();
 	const { display } = column;
 	const { store } = useAppState();
@@ -50,9 +51,22 @@ export const ShippingTotal = ({ item, column }: Props) => {
 				});
 				total = parseFloat(newValue) - taxes.total;
 			}
-			item.incrementalPatch({ total: String(total) });
+			currentOrder.incrementalModify((order) => {
+				const updatedItems = order.shipping_lines.map((li) => {
+					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+					if (uuidMetaData && uuidMetaData.value === item.uuid) {
+						return {
+							...li,
+							total: String(total),
+						};
+					}
+					return li;
+				});
+
+				return { ...order, shipping_lines: updatedItems };
+			});
 		},
-		[calculateTaxesFromPrice, item, taxDisplayCart]
+		[calculateTaxesFromPrice, currentOrder, item.uuid, taxDisplayCart]
 	);
 
 	/**
@@ -74,7 +88,7 @@ export const ShippingTotal = ({ item, column }: Props) => {
 			<NumberInput value={String(displayTotal)} onChange={handleUpdate} showDecimals />
 			{show('tax') && (
 				<Text type="textMuted" size="small">
-					{`${taxDisplayCart}. ${format(total_tax) || 0} tax`}
+					{`${taxDisplayCart}. ${format(item.total_tax) || 0} tax`}
 				</Text>
 			)}
 		</Box>

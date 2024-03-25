@@ -1,36 +1,42 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-
 import NumberInput from '../../../components/number-input';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 interface Props {
 	item: import('@wcpos/database').LineItemDocument;
 }
 
 export const Quantity = ({ item }: Props) => {
-	const quantity = useObservableState(item.quantity$, item.quantity);
+	const { currentOrder } = useCurrentOrder();
 
 	/**
 	 *
 	 */
-	const handleUpdate = React.useCallback(
-		(newValue) => {
-			const current = item.getLatest();
-			const currentQuantity = current.quantity;
-			const currentSubtotal = current.subtotal;
-			const currentTotal = current.total;
-			item.incrementalPatch({
-				quantity: Number(newValue),
-				subtotal: String((parseFloat(currentSubtotal) / currentQuantity) * Number(newValue)),
-				total: String((parseFloat(currentTotal) / currentQuantity) * Number(newValue)),
+	const updateQuantity = React.useCallback(
+		async (newQuantity: string) => {
+			currentOrder.incrementalModify((order) => {
+				const updatedLineItems = order.line_items.map((li) => {
+					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+					if (uuidMetaData && uuidMetaData.value === item.uuid) {
+						return {
+							...li,
+							quantity: newQuantity,
+							subtotal: String((parseFloat(li.subtotal) / li.quantity) * Number(newQuantity)),
+							total: String((parseFloat(li.total) / li.quantity) * Number(newQuantity)),
+						};
+					}
+					return li;
+				});
+
+				return { ...order, line_items: updatedLineItems };
 			});
 		},
-		[item]
+		[currentOrder, item.uuid]
 	);
 
 	/**
 	 *
 	 */
-	return <NumberInput value={String(quantity)} onChange={handleUpdate} />;
+	return <NumberInput value={String(item.quantity)} onChange={updateQuantity} />;
 };

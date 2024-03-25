@@ -8,7 +8,7 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
-import EditModal from '../components/edit-form-with-json';
+import EditModal from '../components/edit-document-form';
 import usePushDocument from '../contexts/use-push-document';
 
 interface Props {

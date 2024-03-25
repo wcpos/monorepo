@@ -9,7 +9,7 @@ import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
 import { CountrySelect, StateSelect } from '../components/country-state-select';
-import EditForm from '../components/edit-form-with-json';
+import EditForm from '../components/edit-document-form';
 import usePushDocument from '../contexts/use-push-document';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format/use-customer-name-format';
 

@@ -1,34 +1,46 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-
 import Box from '@wcpos/components/src/box';
 import { EdittableText } from '@wcpos/components/src/edittable-text';
 
 import EditFeeLineButton from './edit-fee-line';
+import { useCurrentOrder } from '../../contexts/current-order';
 
 interface Props {
 	item: import('@wcpos/database').FeeLineDocument;
 }
 
 export const FeeName = ({ item }: Props) => {
-	const name = useObservableState(item.name$, item.name);
+	const { currentOrder } = useCurrentOrder();
 
 	/**
 	 *
 	 */
 	const handleUpdate = React.useCallback(
-		(newValue: string) => {
-			item.incrementalPatch({ name: newValue });
+		async (newValue: string) => {
+			currentOrder.incrementalModify((order) => {
+				const updatedLineItems = order.fee_lines.map((li) => {
+					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+					if (uuidMetaData && uuidMetaData.value === item.uuid) {
+						return {
+							...li,
+							name: newValue,
+						};
+					}
+					return li;
+				});
+
+				return { ...order, fee_lines: updatedLineItems };
+			});
 		},
-		[item]
+		[currentOrder, item]
 	);
 
 	return (
 		<Box horizontal space="xSmall" style={{ width: '100%' }}>
 			<Box fill>
 				<EdittableText weight="bold" onChange={handleUpdate}>
-					{name}
+					{item.name}
 				</EdittableText>
 			</Box>
 			<Box distribution="center">

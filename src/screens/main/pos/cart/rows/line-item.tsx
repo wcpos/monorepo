@@ -43,30 +43,30 @@ const DEBOUNCE_TIME_MS = 10;
  *
  */
 export const LineItemRow: RenderItem = ({ item, index, target }) => {
-	const { calculateLineItemTaxes } = useTaxCalculation(item);
+	// const { calculateLineItemTaxes } = useTaxCalculation(item);
 
-	const lineItem$ = useObservable(
-		(input$) =>
-			combineLatest([item.subtotal$, item.total$, item.tax_class$, item.meta_data$]).pipe(
-				map(([subtotal, total, taxClass, metaData = []]) => {
-					const taxStatus = metaData.find((m) => m.key === '_woocommerce_pos_tax_status')?.value;
-					return {
-						subtotal,
-						total,
-						taxClass,
-						taxStatus,
-					};
-				}),
-				distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
-				debounceTime(DEBOUNCE_TIME_MS)
-			),
-		[]
-	);
+	// const lineItem$ = useObservable(
+	// 	(input$) =>
+	// 		combineLatest([item.subtotal$, item.total$, item.tax_class$, item.meta_data$]).pipe(
+	// 			map(([subtotal, total, taxClass, metaData = []]) => {
+	// 				const taxStatus = metaData.find((m) => m.key === '_woocommerce_pos_tax_status')?.value;
+	// 				return {
+	// 					subtotal,
+	// 					total,
+	// 					taxClass,
+	// 					taxStatus,
+	// 				};
+	// 			}),
+	// 			distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
+	// 			debounceTime(DEBOUNCE_TIME_MS)
+	// 		),
+	// 	[]
+	// );
 
-	/**
-	 * Calculate taxes
-	 */
-	useSubscription(lineItem$, calculateLineItemTaxes);
+	// /**
+	//  * Calculate taxes
+	//  */
+	// useSubscription(lineItem$, calculateLineItemTaxes);
 
 	/**
 	 *

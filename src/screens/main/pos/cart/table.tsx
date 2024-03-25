@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import flatten from 'lodash/flatten';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableContextProps } from '@wcpos/components/src/table';
@@ -12,6 +12,7 @@ import { ShippingLineRow } from './rows/shipping-line';
 import { useT } from '../../../../contexts/translations';
 import EmptyTableRow from '../../components/empty-table-row';
 import useUI from '../../contexts/ui-settings';
+import { useCurrentOrder } from '../contexts/current-order';
 
 type ColumnProps = import('@wcpos/components/src/table').ColumnProps;
 type Sort = import('@wcpos/components/src/table').Sort;
@@ -33,34 +34,48 @@ const TABLE_ROW_COMPONENTS = {
 /**
  *
  */
-const CartTable = ({ resource }) => {
+const CartTable = () => {
 	const { uiSettings } = useUI('pos.cart');
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
-	const cart = useObservableSuspense(resource);
-	const deferredCart = React.useDeferredValue(cart);
-	// TODO - add sorting
-	const items = React.useMemo(() => flatten(Object.values(deferredCart)), [deferredCart]);
 	const t = useT();
+	const { currentOrder } = useCurrentOrder();
 
 	/**
 	 *
 	 */
-	// const cellRenderer = React.useCallback<CellRenderer<CartItem>>(({ item, column, index }) => {
-	// 	const Cell = get(cells, [item.collection.name, column.key]);
+	const lineItems = useObservableEagerState(currentOrder.line_items$);
+	const feeLines = useObservableEagerState(currentOrder.fee_lines$);
+	const shippingLines = useObservableEagerState(currentOrder.shipping_lines$);
 
-	// 	if (Cell) {
-	// 		return <Cell item={item} column={column} index={index} />;
-	// 	}
+	const items = Array.isArray(lineItems)
+		? lineItems.map((item) => {
+				const uuidMetaData = item.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+				if (uuidMetaData && uuidMetaData.value) {
+					return { ...item, uuid: uuidMetaData.value, type: 'line_items' };
+				}
+			})
+		: [];
 
-	// 	if (item[column.key]) {
-	// 		return <Text>{item[column.key]}</Text>;
-	// 	}
+	const fees = Array.isArray(feeLines)
+		? feeLines.map((item) => {
+				const uuidMetaData = item.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+				if (uuidMetaData && uuidMetaData.value) {
+					return { ...item, uuid: uuidMetaData.value, type: 'fee_lines' };
+				}
+			})
+		: [];
 
-	// 	return null;
-	// }, []);
+	const shipping = Array.isArray(shippingLines)
+		? shippingLines.map((item) => {
+				const uuidMetaData = item.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
+				if (uuidMetaData && uuidMetaData.value) {
+					return { ...item, uuid: uuidMetaData.value, type: 'shipping_lines' };
+				}
+			})
+		: [];
 
 	/**
 	 *
@@ -82,7 +97,7 @@ const CartTable = ({ resource }) => {
 	 *
 	 */
 	const renderItem = React.useCallback((props) => {
-		let Component = TABLE_ROW_COMPONENTS[props.item.collection.name];
+		let Component = TABLE_ROW_COMPONENTS[props.item.type];
 
 		// If we still didn't find a component, use LineItemRow
 		if (!Component) {
@@ -101,7 +116,7 @@ const CartTable = ({ resource }) => {
 	 */
 	return (
 		<Table<CartItem>
-			data={items} // estimatedItemSize={46}
+			data={items.concat(fees).concat(shipping)} // estimatedItemSize={46}
 			renderItem={renderItem}
 			context={context}
 			ListEmptyComponent={<EmptyTableRow message={t('Cart is empty', { _tags: 'core' })} />}

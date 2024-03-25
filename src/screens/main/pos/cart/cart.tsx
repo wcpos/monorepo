@@ -31,81 +31,6 @@ const DEBOUNCE_TIME_MS = 10;
 const Cart = () => {
 	const theme = useTheme();
 	const { currentOrder } = useCurrentOrder();
-	const { calculateOrderTotals, extraTotals$ } = useTotalsCalculation(currentOrder);
-
-	/**
-	 * Create an observable for the line items
-	 * - this will be used to populate the cart
-	 */
-	const cart$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([order]) =>
-					combineLatest([
-						order.populate$('line_items'),
-						order.populate$('fee_lines'),
-						order.populate$('shipping_lines'),
-					]).pipe(
-						map(([line_items, fee_lines, shipping_lines]) => ({
-							line_items,
-							fee_lines,
-							shipping_lines,
-						}))
-					)
-				)
-			),
-		[currentOrder]
-	);
-
-	/**
-	 * The cart items have to be fetched from the database, which causes a slight flash
-	 * By using a resource, we can suspend until the data is ready
-	 */
-	const cartResource = React.useMemo(() => new ObservableResource(cart$), [cart$]);
-
-	/**
-	 * Create a new observable which emits everytime a line item changes
-	 */
-	const cartChanged$ = useObservable(
-		() =>
-			cart$.pipe(
-				switchMap(({ line_items, fee_lines, shipping_lines }) => {
-					// Function to create an observable for an RxDocument that emits the RxDocument whenever any property changes
-
-					// Create observables for the line items, fee lines, and shipping lines
-					// TODO - this should be improved, which properties do I need to watch?
-					const lineItemObservables = line_items.map((doc) =>
-						combineLatest([doc.total$, doc.total_tax$, doc.taxes$]).pipe(map(() => doc.getLatest()))
-					);
-					const feeLineObservables = fee_lines.map((doc) =>
-						combineLatest([doc.total$, doc.total_tax$, doc.taxes$]).pipe(map(() => doc.getLatest()))
-					);
-					const shippingLineObservables = shipping_lines.map((doc) =>
-						combineLatest([doc.total$, doc.total_tax$, doc.taxes$]).pipe(map(() => doc.getLatest()))
-					);
-
-					// Combine the observables and map to the cart object
-					return combineLatest([
-						lineItemObservables.length ? combineLatest(lineItemObservables) : of([]),
-						feeLineObservables.length ? combineLatest(feeLineObservables) : of([]),
-						shippingLineObservables.length ? combineLatest(shippingLineObservables) : of([]),
-					]).pipe(
-						map(([lineItems, feeLines, shippingLines]) => ({
-							lineItems,
-							feeLines,
-							shippingLines,
-						}))
-					);
-				}),
-				debounceTime(DEBOUNCE_TIME_MS)
-			),
-		[cart$]
-	);
-
-	/**
-	 * Subscribe to cart$ and then subscribe to each item and pass result to calculateOrderTotals
-	 */
-	useSubscription(cartChanged$, calculateOrderTotals);
 
 	return (
 		<Box
@@ -119,9 +44,7 @@ const Cart = () => {
 			</ErrorBoundary>
 			<Box fill>
 				<ErrorBoundary>
-					<Suspense>
-						<Table resource={cartResource} />
-					</Suspense>
+					<Table />
 				</ErrorBoundary>
 			</Box>
 			<Box>
@@ -134,11 +57,11 @@ const Cart = () => {
 					<AddShipping />
 				</ErrorBoundary>
 			</Box>
-			<Box>
+			{/* <Box>
 				<ErrorBoundary>
 					<Totals extraTotals$={extraTotals$} />
 				</ErrorBoundary>
-			</Box>
+			</Box> */}
 			<Box
 				horizontal
 				space="small"
