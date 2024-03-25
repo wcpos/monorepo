@@ -377,9 +377,125 @@
     "line_items": {
       "description": "Line items data.",
       "type": "array",
-      "ref": "line_items",
       "items": {
-        "type": "string"
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Item ID.",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Product name.",
+            "type": "string"
+          },
+          "product_id": {
+            "description": "Product ID.",
+            "type": "integer"
+          },
+          "variation_id": {
+            "description": "Variation ID, if applicable.",
+            "type": "integer"
+          },
+          "parent_name": {
+            "type": "string"
+          },
+          "sku": {
+            "description": "Product SKU.",
+            "type": "string"
+          },
+          "price": {
+            "description": "Product price.",
+            "type": "number"
+          },
+          "quantity": {
+            "description": "Quantity ordered.",
+            "type": "number"
+          },
+          "tax_class": {
+            "description": "Tax class of product.",
+            "type": "string"
+          },
+          "subtotal": {
+            "description": "Line subtotal (before discounts).",
+            "type": "string"
+          },
+          "subtotal_tax": {
+            "description": "Line subtotal tax (before discounts).",
+            "type": "string"
+          },
+          "total": {
+            "description": "Line total (after discounts).",
+            "type": "string"
+          },
+          "total_tax": {
+            "description": "Line total tax (after discounts).",
+            "type": "string"
+          },
+          "taxes": {
+            "description": "Line taxes.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Tax rate ID.",
+                  "type": "integer"
+                },
+                "total": {
+                  "description": "Tax total.",
+                  "type": "string"
+                },
+                "subtotal": {
+                  "description": "Tax subtotal.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "meta_data": {
+            "description": "Meta data.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Meta ID.",
+                  "type": "integer"
+                },
+                "key": {
+                  "description": "Meta key.",
+                  "type": "string"
+                },
+                "value": {
+                  "description": "Meta value.",
+                  "type": "string"
+                },
+                "display_key": {
+                  "description": "Display key.",
+                  "type": "string"
+                },
+                "display_value": {
+                  "description": "Display value.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "image": {
+            "description": "Product image.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Image ID.",
+                "type": "integer"
+              },
+              "src": {
+                "description": "Image URL.",
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     },
     "tax_lines": {
@@ -438,17 +554,150 @@
     "shipping_lines": {
       "description": "Shipping lines data.",
       "type": "array",
-      "ref": "shipping_lines",
       "items": {
-        "type": "string"
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "method_title": {
+            "description": "Shipping method name.",
+            "type": "string"
+          },
+          "method_id": {
+            "description": "Shipping method ID.",
+            "type": "string"
+          },
+          "instance_id": {
+            "description": "Shipping instance ID.",
+            "type": "string"
+          },
+          "total": {
+            "description": "Line total (after discounts).",
+            "type": "string"
+          },
+          "total_tax": {
+            "description": "Line total tax (after discounts).",
+            "type": "string"
+          },
+          "taxes": {
+            "description": "Line taxes.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Tax rate ID.",
+                  "type": "integer"
+                },
+                "total": {
+                  "description": "Tax total.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "meta_data": {
+            "description": "Meta data.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Meta ID.",
+                  "type": "integer"
+                },
+                "key": {
+                  "description": "Meta key.",
+                  "type": "string"
+                },
+                "value": {
+                  "description": "Meta value.",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "fee_lines": {
       "description": "Fee lines data.",
       "type": "array",
-      "ref": "fee_lines",
       "items": {
-        "type": "string"
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "description": "Fee name.",
+            "type": "string"
+          },
+          "amount": {
+            "description": "Fee amount.",
+            "type": "string"
+          },
+          "tax_class": {
+            "description": "Tax class of fee.",
+            "type": "string"
+          },
+          "tax_status": {
+            "description": "Tax status of fee.",
+            "type": "string",
+            "enum": ["taxable", "none"]
+          },
+          "total": {
+            "description": "Line total (after discounts).",
+            "type": "string"
+          },
+          "total_tax": {
+            "description": "Line total tax (after discounts).",
+            "type": "string"
+          },
+          "taxes": {
+            "description": "Line taxes.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Tax rate ID.",
+                  "type": "integer"
+                },
+                "total": {
+                  "description": "Tax total.",
+                  "type": "string"
+                },
+                "subtotal": {
+                  "description": "Tax subtotal.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "meta_data": {
+            "description": "Meta data.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Meta ID.",
+                  "type": "integer"
+                },
+                "key": {
+                  "description": "Meta key.",
+                  "type": "string"
+                },
+                "value": {
+                  "description": "Meta value.",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "coupon_lines": {

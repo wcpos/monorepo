@@ -11,34 +11,6 @@ export type TemporaryDatabaseCollections = {
 export type TemporaryDatabase = import('rxdb').RxDatabase<TemporaryDatabaseCollections>;
 
 /**
- * Remove children references from schema
- */
-const newOrderSchema = {
-	...orderSchema,
-	properties: {
-		...orderSchema.properties,
-		line_items: {
-			type: 'array',
-			items: {
-				type: 'string',
-			},
-		},
-		fee_lines: {
-			type: 'array',
-			items: {
-				type: 'string',
-			},
-		},
-		shipping_lines: {
-			type: 'array',
-			items: {
-				type: 'string',
-			},
-		},
-	},
-};
-
-/**
  *
  */
 let temporaryDB: Promise<TemporaryDatabase | undefined>;
@@ -55,7 +27,7 @@ export async function createTemporaryDB() {
 			});
 			const collections = await db?.addCollections({
 				orders: {
-					schema: newOrderSchema,
+					schema: orderSchema,
 				},
 			});
 			collections.orders.postCreate(function (plainData, rxDocument) {

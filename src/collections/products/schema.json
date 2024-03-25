@@ -1,9 +1,10 @@
 {
   "title": "WooCommerce Product schema",
-  "version": 1,
+  "version": 0,
   "description": "WooCommerce Product schema",
   "type": "object",
   "primaryKey": "uuid",
+  "attachments": {},
   "properties": {
     "uuid": {
       "description": "Unique identifier for the resource.",

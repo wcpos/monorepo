@@ -1,12 +1,12 @@
 import categories from './categories';
 import customers from './customers';
-import fee_lines from './fee-lines';
-import line_items from './line-items';
+// import fee_lines from './fee-lines';
+// import line_items from './line-items';
 import logs from './logs';
 import orders from './orders';
 import payment_gateways from './payment-gateways';
 import products from './products';
-import shipping_lines from './shipping-lines';
+// import shipping_lines from './shipping-lines';
 import sites from './sites';
 import stores from './stores';
 import tags from './tags';
@@ -21,9 +21,9 @@ export const storeCollections = {
 	products,
 	variations,
 	orders,
-	line_items,
-	fee_lines,
-	shipping_lines,
+	// line_items,
+	// fee_lines,
+	// shipping_lines,
 	customers,
 	taxes, // NOTE: WC REST API uses 'taxes', not 'tax_rates', going against all other endpoints.
 	payment_gateways,

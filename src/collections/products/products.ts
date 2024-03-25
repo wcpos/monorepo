@@ -70,11 +70,7 @@ const conflictHandler: RxConflictHandler<any> = function (
 export const products: RxCollectionCreator = {
 	schema,
 	localDocuments: true, // needed for custom checkpoint
-	migrationStrategies: {
-		1: (oldDoc: any) => {
-			return null; // nuke old data
-		},
-	},
+	migrationStrategies: {},
 	options: {
 		searchFields: ['name', 'sku', 'barcode'],
 	},
