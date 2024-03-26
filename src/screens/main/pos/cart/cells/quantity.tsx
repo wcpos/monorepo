@@ -1,42 +1,25 @@
 import * as React from 'react';
 
 import NumberInput from '../../../components/number-input';
-import { useCurrentOrder } from '../../contexts/current-order';
+import { useUpdateLineItem } from '../hooks/use-update-line-item';
 
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 interface Props {
-	item: import('@wcpos/database').LineItemDocument;
+	uuid: string;
+	item: LineItem;
+	column: import('@wcpos/components/src/table').ColumnProps<LineItem>;
 }
 
-export const Quantity = ({ item }: Props) => {
-	const { currentOrder } = useCurrentOrder();
+export const Quantity = ({ uuid, item }: Props) => {
+	const { updateLineItem } = useUpdateLineItem();
 
 	/**
 	 *
 	 */
-	const updateQuantity = React.useCallback(
-		async (newQuantity: string) => {
-			currentOrder.incrementalModify((order) => {
-				const updatedLineItems = order.line_items.map((li) => {
-					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
-					if (uuidMetaData && uuidMetaData.value === item.uuid) {
-						return {
-							...li,
-							quantity: newQuantity,
-							subtotal: String((parseFloat(li.subtotal) / li.quantity) * Number(newQuantity)),
-							total: String((parseFloat(li.total) / li.quantity) * Number(newQuantity)),
-						};
-					}
-					return li;
-				});
-
-				return { ...order, line_items: updatedLineItems };
-			});
-		},
-		[currentOrder, item.uuid]
+	return (
+		<NumberInput
+			value={String(item.quantity)}
+			onChange={(quantity) => updateLineItem(uuid, { quantity })}
+		/>
 	);
-
-	/**
-	 *
-	 */
-	return <NumberInput value={String(item.quantity)} onChange={updateQuantity} />;
 };

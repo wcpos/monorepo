@@ -1,15 +1,18 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useUI from '../../../contexts/ui-settings';
-import { useCurrentOrder } from '../../contexts/current-order';
+import { useUpdateLineItem } from '../hooks/use-update-line-item';
 
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 interface Props {
-	item: import('@wcpos/database').LineItemDocument;
+	uuid: string;
+	item: LineItem;
+	column: import('@wcpos/components/src/table').ColumnProps<LineItem>;
 }
 
 const getTaxStatus = (meta_data) => {
@@ -36,13 +39,13 @@ function ensureNumberArray(input: string | number[]): number[] {
 /**
  *
  */
-export const Price = ({ item }: Props) => {
-	const { currentOrder } = useCurrentOrder();
+export const Price = ({ uuid, item }: Props) => {
+	const { updateLineItem } = useUpdateLineItem();
 
 	// find meta data value when key = _woocommerce_pos_tax_status
 	const taxStatus = getTaxStatus(item.meta_data) ?? 'taxable';
 	const { store } = useAppState();
-	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
+	const taxDisplayCart = useObservableEagerState(store.tax_display_cart$);
 	const { calculateTaxesFromPrice } = useTaxHelpers();
 	const taxes = calculateTaxesFromPrice({
 		price: item.price,
@@ -56,53 +59,7 @@ export const Price = ({ item }: Props) => {
 	 * Discounts
 	 */
 	const { uiSettings } = useUI('pos.cart');
-	const quickDiscounts = useObservableState(
-		uiSettings.get$('quickDiscounts'),
-		uiSettings.get('quickDiscounts')
-	);
-
-	/**
-	 * update subtotal, not price
-	 */
-	const handleUpdate = React.useCallback(
-		async (newValue: string) => {
-			let newPrice = parseFloat(newValue);
-			if (taxDisplayCart === 'incl') {
-				const taxes = calculateTaxesFromPrice({
-					price: newPrice,
-					taxClass: item.tax_class,
-					taxStatus,
-					pricesIncludeTax: true,
-				});
-				newPrice = parseFloat(newValue) - taxes.total;
-			}
-			const newTotal = String(item.quantity * newPrice);
-			currentOrder.incrementalModify((order) => {
-				const updatedLineItems = order.line_items.map((li) => {
-					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
-					if (uuidMetaData && uuidMetaData.value === item.uuid) {
-						return {
-							...li,
-							price: newPrice,
-							total: newTotal,
-						};
-					}
-					return li;
-				});
-
-				return { ...order, line_items: updatedLineItems };
-			});
-		},
-		[
-			calculateTaxesFromPrice,
-			currentOrder,
-			item.quantity,
-			item.tax_class,
-			item.uuid,
-			taxDisplayCart,
-			taxStatus,
-		]
-	);
+	const quickDiscounts = useObservableEagerState(uiSettings.get$('quickDiscounts'));
 
 	/**
 	 *
@@ -110,7 +67,7 @@ export const Price = ({ item }: Props) => {
 	return (
 		<NumberInput
 			value={String(displayPrice)}
-			onChange={handleUpdate}
+			onChange={(price) => updateLineItem(uuid, { price })}
 			showDecimals
 			showDiscounts={ensureNumberArray(quickDiscounts)}
 		/>

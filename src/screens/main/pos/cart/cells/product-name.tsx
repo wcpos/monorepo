@@ -1,24 +1,24 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
-import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import { EdittableText } from '@wcpos/components/src/edittable-text';
 import Text from '@wcpos/components/src/text';
 
 import EditLineItemButton from './edit-line-item';
-import { useCurrentOrder } from '../../contexts/current-order';
+import { useUpdateLineItem } from '../hooks/use-update-line-item';
 
-type LineItemDocument = import('@wcpos/database').LineItemDocument;
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 interface Props {
-	item: LineItemDocument;
-	column: import('@wcpos/components/src/table').ColumnProps<LineItemDocument>;
+	uuid: string;
+	item: LineItem;
+	column: import('@wcpos/components/src/table').ColumnProps<LineItem>;
 }
 
-export const ProductName = ({ item, column }: Props) => {
-	const { currentOrder } = useCurrentOrder();
+export const ProductName = ({ uuid, item, column }: Props) => {
 	const { display } = column;
+	const { updateLineItem } = useUpdateLineItem();
 
 	/**
 	 *
@@ -44,33 +44,10 @@ export const ProductName = ({ item, column }: Props) => {
 	/**
 	 *
 	 */
-	const handleUpdate = React.useCallback(
-		async (newValue: string) => {
-			currentOrder.incrementalModify((order) => {
-				const updatedLineItems = order.line_items.map((li) => {
-					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
-					if (uuidMetaData && uuidMetaData.value === item.uuid) {
-						return {
-							...li,
-							name: newValue,
-						};
-					}
-					return li;
-				});
-
-				return { ...order, line_items: updatedLineItems };
-			});
-		},
-		[currentOrder, item.uuid]
-	);
-
-	/**
-	 *
-	 */
 	return (
 		<Box horizontal space="xSmall" style={{ width: '100%' }}>
 			<Box fill space="xSmall">
-				<EdittableText weight="bold" onChange={handleUpdate}>
+				<EdittableText weight="bold" onChange={(name) => updateLineItem(uuid, { name })}>
 					{item.name}
 				</EdittableText>
 				{show('sku') && <Text size="small">{item.sku}</Text>}

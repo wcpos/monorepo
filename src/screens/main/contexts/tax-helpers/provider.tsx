@@ -28,7 +28,7 @@ interface TaxHelpersContextProps {
 		price?: number;
 		taxClass?: string;
 		taxStatus?: string;
-		_pricesIncludeTax?: boolean;
+		pricesIncludeTax?: boolean;
 	}) => {
 		total: number;
 		taxes: any[];
@@ -44,46 +44,46 @@ interface TaxHelpersContextProps {
 	};
 	// taxBasedOn: 'base' | 'shipping' | 'billing';
 	taxQuery: TaxQuery;
-	calculateLineItemTaxes: (args: {
-		total: string;
-		subtotal?: string;
-		taxClass?: string;
-		taxStatus?: string;
-	}) => {
-		total_tax: string;
-		taxes: {
-			id: number;
-			subtotal: string;
-			total: string;
-		}[];
-		subtotal_tax?: string;
-	};
-	calculateShippingLineTaxes: (args: { total: string }) => {
-		total: string;
-		total_tax: string;
-		taxes: {
-			id: number;
-			subtotal: string;
-			total: string;
-		}[];
-	};
-	calculateOrderTotals: (args: { lineItems: any[]; feeLines: any[]; shippingLines: any[] }) => {
-		discount_total: string;
-		discount_tax: string;
-		shipping_total: string;
-		shipping_tax: string;
-		cart_tax: string;
-		total_tax: string;
-		total: string;
-		tax_lines: {
-			id: number;
-			rate_code: string;
-			rate_id: number;
-			label: string;
-			compound: boolean;
-			tax_total: string;
-		}[];
-	};
+	// calculateLineItemTaxes: (args: {
+	// 	total: string;
+	// 	subtotal?: string;
+	// 	taxClass?: string;
+	// 	taxStatus?: string;
+	// }) => {
+	// 	total_tax: string;
+	// 	taxes: {
+	// 		id: number;
+	// 		subtotal: string;
+	// 		total: string;
+	// 	}[];
+	// 	subtotal_tax?: string;
+	// };
+	// calculateShippingLineTaxes: (args: { total: string }) => {
+	// 	total: string;
+	// 	total_tax: string;
+	// 	taxes: {
+	// 		id: number;
+	// 		subtotal: string;
+	// 		total: string;
+	// 	}[];
+	// };
+	// calculateOrderTotals: (args: { lineItems: any[]; feeLines: any[]; shippingLines: any[] }) => {
+	// 	discount_total: string;
+	// 	discount_tax: string;
+	// 	shipping_total: string;
+	// 	shipping_tax: string;
+	// 	cart_tax: string;
+	// 	total_tax: string;
+	// 	total: string;
+	// 	tax_lines: {
+	// 		id: number;
+	// 		rate_code: string;
+	// 		rate_id: number;
+	// 		label: string;
+	// 		compound: boolean;
+	// 		tax_total: string;
+	// 	}[];
+	// };
 }
 
 export const TaxHelpersContext = React.createContext<TaxHelpersContextProps>(null);
