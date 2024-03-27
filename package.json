@@ -79,7 +79,7 @@
     "@types/core-js": "^2.5.8",
     "@types/jest": "^29.5.12",
     "@types/lodash": "4.17.0",
-    "@types/react": "^18.2.70",
+    "@types/react": "^18.2.73",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",

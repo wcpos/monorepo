@@ -4,61 +4,62 @@ import { useObservableState } from 'observable-hooks';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
-import { calculateTaxes, sumItemizedTaxes, sumTaxes } from '../../../contexts/tax-helpers/utils';
+import { calculateLineItemTotals } from '../../../contexts/tax-helpers/utils';
 
-type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
 
 /**
  * Calculate line item totals
+ *
+ * @TODO - this is a duplicate of the function in tax-helpers/utils.ts, why is this here?
  */
-function calculateLineItemTotals({
-	quantity,
-	price,
-	total,
-	rates,
-	pricesIncludeTax,
-	taxRoundAtSubtotal,
-}: {
-	quantity: number;
-	price: string;
-	total: string;
-	rates: TaxRateDocument[];
-	pricesIncludeTax: boolean;
-	taxRoundAtSubtotal: boolean;
-}) {
-	// Subtotal
-	const priceAsFloat = parseFloat(price);
-	const subtotal = quantity * priceAsFloat;
-	const subtotalTaxes = calculateTaxes(subtotal, rates);
-	const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes, taxRoundAtSubtotal);
+// function calculateLineItemTotals({
+// 	quantity,
+// 	price,
+// 	total,
+// 	rates,
+// 	pricesIncludeTax,
+// 	taxRoundAtSubtotal,
+// }: {
+// 	quantity: number;
+// 	price: string;
+// 	total: string;
+// 	rates: TaxRateDocument[];
+// 	pricesIncludeTax: boolean;
+// 	taxRoundAtSubtotal: boolean;
+// }) {
+// 	// Subtotal
+// 	const priceAsFloat = parseFloat(price);
+// 	const subtotal = quantity * priceAsFloat;
+// 	const subtotalTaxes = calculateTaxes(subtotal, rates);
+// 	const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes, taxRoundAtSubtotal);
 
-	// Total
-	const totalTaxes = calculateTaxes(parseFloat(total), rates);
-	const itemizedTotalTaxes = sumItemizedTaxes(totalTaxes, taxRoundAtSubtotal);
-	const taxes = itemizedSubTotalTaxes.map((obj) => {
-		const index = itemizedTotalTaxes.findIndex((el) => el.id === obj.id);
-		const totalTax = index !== -1 ? itemizedTotalTaxes[index] : { total: 0 };
-		return {
-			id: obj.id,
-			subtotal: String(obj.total ?? 0),
-			total: String(totalTax.total ?? 0),
-		};
-	});
+// 	// Total
+// 	const totalTaxes = calculateTaxes(parseFloat(total), rates);
+// 	const itemizedTotalTaxes = sumItemizedTaxes(totalTaxes, taxRoundAtSubtotal);
+// 	const taxes = itemizedSubTotalTaxes.map((obj) => {
+// 		const index = itemizedTotalTaxes.findIndex((el) => el.id === obj.id);
+// 		const totalTax = index !== -1 ? itemizedTotalTaxes[index] : { total: 0 };
+// 		return {
+// 			id: obj.id,
+// 			subtotal: String(obj.total ?? 0),
+// 			total: String(totalTax.total ?? 0),
+// 		};
+// 	});
 
-	return {
-		subtotal: String(subtotal),
-		subtotal_tax: String(sumTaxes(subtotalTaxes, taxRoundAtSubtotal)),
-		total: String(total),
-		total_tax: String(sumTaxes(totalTaxes, taxRoundAtSubtotal)),
-		taxes,
-	};
-}
+// 	return {
+// 		subtotal: String(subtotal),
+// 		subtotal_tax: String(sumTaxes(subtotalTaxes, taxRoundAtSubtotal)),
+// 		total: String(total),
+// 		total_tax: String(sumTaxes(totalTaxes, taxRoundAtSubtotal)),
+// 		taxes,
+// 	};
+// }
 
 /**
  *
  */
-export const useShippingTaxCalculation = (item: ShippingLineDocument) => {
+export const useShippingTaxCalculation = () => {
 	const { store } = useAppState();
 	const shippingTaxClass = useObservableState(store.shipping_tax_class$, store.shipping_tax_class);
 	const { calcTaxes, rates, taxRoundAtSubtotal } = useTaxHelpers();
@@ -112,9 +113,9 @@ export const useShippingTaxCalculation = (item: ShippingLineDocument) => {
 				taxes: updatedTaxes,
 			};
 
-			item.incrementalPatch(result);
+			return result;
 		},
-		[calcTaxes, rates, shippingTaxClass, taxRoundAtSubtotal, item]
+		[calcTaxes, rates, shippingTaxClass, taxRoundAtSubtotal]
 	);
 
 	return {

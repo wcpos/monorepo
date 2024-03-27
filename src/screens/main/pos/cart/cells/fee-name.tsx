@@ -4,42 +4,25 @@ import Box from '@wcpos/components/src/box';
 import { EdittableText } from '@wcpos/components/src/edittable-text';
 
 import EditFeeLineButton from './edit-fee-line';
-import { useCurrentOrder } from '../../contexts/current-order';
+import { useUpdateFeeLine } from '../hooks/use-update-fee-line';
 
+type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 interface Props {
-	item: import('@wcpos/database').FeeLineDocument;
+	uuid: string;
+	item: FeeLine;
+	column: import('@wcpos/components/src/table').ColumnProps<FeeLine>;
 }
 
-export const FeeName = ({ item }: Props) => {
-	const { currentOrder } = useCurrentOrder();
-
-	/**
-	 *
-	 */
-	const handleUpdate = React.useCallback(
-		async (newValue: string) => {
-			currentOrder.incrementalModify((order) => {
-				const updatedLineItems = order.fee_lines.map((li) => {
-					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
-					if (uuidMetaData && uuidMetaData.value === item.uuid) {
-						return {
-							...li,
-							name: newValue,
-						};
-					}
-					return li;
-				});
-
-				return { ...order, fee_lines: updatedLineItems };
-			});
-		},
-		[currentOrder, item]
-	);
+/**
+ *
+ */
+export const FeeName = ({ uuid, item }: Props) => {
+	const { updateFeeLine } = useUpdateFeeLine();
 
 	return (
 		<Box horizontal space="xSmall" style={{ width: '100%' }}>
 			<Box fill>
-				<EdittableText weight="bold" onChange={handleUpdate}>
+				<EdittableText weight="bold" onChange={(name) => updateFeeLine(uuid, { name })}>
 					{item.name}
 				</EdittableText>
 			</Box>

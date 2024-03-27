@@ -10,7 +10,6 @@ import Suspense from '@wcpos/components/src/suspense';
 import Table, { CellRenderer, TableProps } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
 
-import { useShippingTaxCalculation } from './use-shipping-tax-calculation';
 import { Actions } from '../cells/actions';
 import { ShippingTitle } from '../cells/shipping-title';
 import { ShippingTotal } from '../cells/shipping-total';
@@ -27,29 +26,9 @@ const cells = {
 };
 
 /**
- * When rxdb properties are updated, they emit for each, eg: total and subtotal
- * This triggers unnecessary calculations, so we debounce the updates
- */
-const DEBOUNCE_TIME_MS = 10;
-
-/**
  *
  */
-export const ShippingLineRow: RenderItem = ({ item, index, target }) => {
-	// const { calculateShippingLineTaxes } = useShippingTaxCalculation(item);
-
-	// const shippingLine$ = useObservable(
-	// 	() =>
-	// 		combineLatest([item.total$]).pipe(
-	// 			map(([total]) => ({ total })),
-	// 			distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)),
-	// 			debounceTime(DEBOUNCE_TIME_MS)
-	// 		),
-	// 	[]
-	// );
-
-	// useSubscription(shippingLine$, calculateShippingLineTaxes);
-
+export const ShippingLineRow = ({ id, item, index, target }) => {
 	/**
 	 *
 	 */
@@ -61,7 +40,7 @@ export const ShippingLineRow: RenderItem = ({ item, index, target }) => {
 				return (
 					<ErrorBoundary>
 						<Suspense>
-							<Cell item={item} column={column} index={index} cellWidth={cellWidth} />
+							<Cell uuid={id} item={item} column={column} index={index} cellWidth={cellWidth} />
 						</Suspense>
 					</ErrorBoundary>
 				);
@@ -73,7 +52,7 @@ export const ShippingLineRow: RenderItem = ({ item, index, target }) => {
 
 			return null;
 		},
-		[]
+		[id]
 	);
 
 	return <Table.Row item={item} index={index} target={target} cellRenderer={cellRenderer} />;

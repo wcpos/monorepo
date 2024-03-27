@@ -11,9 +11,13 @@ import NumberInput from '../../../components/number-input';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 import { useCurrentOrder } from '../../contexts/current-order';
+import { useUpdateLineItem } from '../hooks/use-update-line-item';
 
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 interface Props {
-	item: import('@wcpos/database').LineItemDocument;
+	uuid: string;
+	item: LineItem;
+	column: import('@wcpos/components/src/table').ColumnProps<LineItem>;
 }
 
 const getTaxStatus = (meta_data) => {
@@ -27,8 +31,9 @@ const getTaxStatus = (meta_data) => {
 /**
  *
  */
-export const Subtotal = ({ item, column }: Props) => {
+export const Subtotal = ({ uuid, item, column }: Props) => {
 	const { currentOrder } = useCurrentOrder();
+	const { updateLineItem } = useUpdateLineItem();
 
 	const subtotal = parseFloat(item.subtotal);
 	const { format } = useCurrencyFormat();
@@ -94,7 +99,11 @@ export const Subtotal = ({ item, column }: Props) => {
 	 */
 	return (
 		<Box space="xSmall" align="end">
-			<NumberInput value={String(displaySubtotal)} onChange={handleUpdate} showDecimals />
+			<NumberInput
+				value={String(displaySubtotal)}
+				onChange={(subtotal) => updateLineItem(uuid, { subtotal })}
+				showDecimals
+			/>
 			{show('tax') && (
 				<Text type="textMuted" size="small">
 					{`${taxDisplayCart}. ${format(item.subtotal_tax) || 0} tax`}

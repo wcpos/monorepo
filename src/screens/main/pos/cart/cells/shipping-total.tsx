@@ -10,17 +10,20 @@ import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
-import { useCurrentOrder } from '../../contexts/current-order';
+import { useUpdateShippingLine } from '../hooks/use-update-shipping-line';
 
+type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 interface Props {
-	item: import('@wcpos/database').FeeLineDocument;
+	uuid: string;
+	item: ShippingLine;
+	column: import('@wcpos/components/src/table').ColumnProps<ShippingLine>;
 }
 
 /**
  * Changing the total actually updates the price, because the WC REST API makes no sense
  */
-export const ShippingTotal = ({ item, column }: Props) => {
-	const { currentOrder } = useCurrentOrder();
+export const ShippingTotal = ({ uuid, item, column }: Props) => {
+	const { updateShippingLine } = useUpdateShippingLine();
 
 	const total = parseFloat(item.total);
 	const { format } = useCurrencyFormat();
@@ -39,39 +42,6 @@ export const ShippingTotal = ({ item, column }: Props) => {
 	/**
 	 *
 	 */
-	const handleUpdate = React.useCallback(
-		(newValue) => {
-			let total = parseFloat(newValue);
-			if (taxDisplayCart === 'incl') {
-				const taxes = calculateTaxesFromPrice({
-					price: total,
-					taxClass: 'standard', // TODO: what to put here?
-					taxStatus: 'taxable', // TODO: what to put here?
-					pricesIncludeTax: true,
-				});
-				total = parseFloat(newValue) - taxes.total;
-			}
-			currentOrder.incrementalModify((order) => {
-				const updatedItems = order.shipping_lines.map((li) => {
-					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
-					if (uuidMetaData && uuidMetaData.value === item.uuid) {
-						return {
-							...li,
-							total: String(total),
-						};
-					}
-					return li;
-				});
-
-				return { ...order, shipping_lines: updatedItems };
-			});
-		},
-		[calculateTaxesFromPrice, currentOrder, item.uuid, taxDisplayCart]
-	);
-
-	/**
-	 *
-	 */
 	const show = React.useCallback(
 		(key: string): boolean => {
 			const d = find(display, { key });
@@ -85,7 +55,11 @@ export const ShippingTotal = ({ item, column }: Props) => {
 	 */
 	return (
 		<Box space="xSmall" align="end">
-			<NumberInput value={String(displayTotal)} onChange={handleUpdate} showDecimals />
+			<NumberInput
+				value={String(displayTotal)}
+				onChange={(total) => updateShippingLine(uuid, { total })}
+				showDecimals
+			/>
 			{show('tax') && (
 				<Text type="textMuted" size="small">
 					{`${taxDisplayCart}. ${format(item.total_tax) || 0} tax`}

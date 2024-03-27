@@ -15,7 +15,13 @@ jest.mock('../../../contexts/tax-helpers', () => ({
 	useTaxHelpers: () => ({
 		calculateTaxesFromPrice: jest.fn().mockImplementation(({ price }) => ({
 			total: price * 0.1, // Simplified tax calculation for testing
-			taxes: [],
+			taxes: [
+				{
+					id: '1',
+					subtotal: price * 0.1,
+					total: price * 0.1,
+				},
+			],
 		})),
 	}),
 }));
@@ -33,6 +39,11 @@ jest.mock('../../contexts/current-order', () => ({
 						],
 					},
 					{
+						name: 'Item 1',
+						quantity: 1,
+						price: 10,
+						subtotal: '10',
+						total: '10',
 						meta_data: [
 							{ key: '_woocommerce_pos_uuid', value: '23e108ca-63a7-469a-ad12-ed72e0d04be3' },
 						],
@@ -94,7 +105,7 @@ describe('useUpdateLineItem', () => {
 		);
 	});
 
-	it('updates line item price correctly and recalculates taxes', async () => {
+	it('updates line item price correctly', async () => {
 		const { result } = renderHook(() => useUpdateLineItem());
 
 		// Mock UUID and price change
@@ -111,6 +122,98 @@ describe('useUpdateLineItem', () => {
 					expect.objectContaining({
 						meta_data: expect.arrayContaining([expect.objectContaining({ value: uuid })]),
 						price: parseFloat(newPrice),
+					}),
+				]),
+			})
+		);
+	});
+
+	it('updates subtotal and total when quantity is changed', async () => {
+		const { result } = renderHook(() => useUpdateLineItem());
+
+		// Mock UUID and price change
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		const newQuantity = 7;
+
+		await act(async () => {
+			result.current.updateLineItem(uuid, { quantity: newQuantity });
+		});
+
+		expect(mockIncrementalPatch).toHaveBeenCalledWith(
+			expect.objectContaining({
+				line_items: expect.arrayContaining([
+					expect.objectContaining({
+						meta_data: expect.arrayContaining([expect.objectContaining({ value: uuid })]),
+						quantity: 7,
+						price: 10,
+						subtotal: '70',
+						total: '70',
+					}),
+				]),
+			})
+		);
+	});
+
+	it('updates taxes when quantity is changed', async () => {
+		const { result } = renderHook(() => useUpdateLineItem());
+
+		// Mock UUID and price change
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		const newQuantity = 7;
+
+		await act(async () => {
+			result.current.updateLineItem(uuid, { quantity: newQuantity });
+		});
+
+		expect(mockIncrementalPatch).toHaveBeenCalledWith(
+			expect.objectContaining({
+				line_items: expect.arrayContaining([
+					expect.objectContaining({
+						meta_data: expect.arrayContaining([expect.objectContaining({ value: uuid })]),
+						quantity: 7,
+						price: 10,
+						subtotal_tax: '7',
+						total_tax: '7',
+						taxes: [
+							{
+								id: '1',
+								subtotal: '7',
+								total: '7',
+							},
+						],
+					}),
+				]),
+			})
+		);
+	});
+
+	it('updates taxes when price is changed', async () => {
+		const { result } = renderHook(() => useUpdateLineItem());
+
+		// Mock UUID and price change
+		const uuid = '23e108ca-63a7-469a-ad12-ed72e0d04be3';
+		const newPrice = '20.00';
+
+		await act(async () => {
+			result.current.updateLineItem(uuid, { price: newPrice });
+		});
+
+		expect(mockIncrementalPatch).toHaveBeenCalledWith(
+			expect.objectContaining({
+				line_items: expect.arrayContaining([
+					expect.objectContaining({
+						meta_data: expect.arrayContaining([expect.objectContaining({ value: uuid })]),
+						quantity: 1,
+						price: 20,
+						subtotal_tax: '1', // subtotal stays the same
+						total_tax: '2',
+						taxes: [
+							{
+								id: '1',
+								subtotal: '1',
+								total: '2',
+							},
+						],
 					}),
 				]),
 			})

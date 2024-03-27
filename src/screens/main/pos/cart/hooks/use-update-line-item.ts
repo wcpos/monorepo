@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-import find from 'lodash/find';
-import uniq from 'lodash/uniq';
 import { useObservableEagerState } from 'observable-hooks';
 import { of } from 'rxjs';
 
+import { useTaxCalculation } from './use-tax-calculation';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import { useCurrentOrder } from '../../contexts/current-order';
@@ -19,6 +18,7 @@ interface Changes {
 	quantity?: string | number;
 	name?: string;
 	price?: string | number;
+	subtotal?: string | number;
 }
 
 /**
@@ -29,69 +29,18 @@ export const useUpdateLineItem = () => {
 	const { store } = useAppState();
 	const taxDisplayCart = useObservableEagerState(store?.tax_display_cart$ || of('excl'));
 	const { calculateTaxesFromPrice } = useTaxHelpers();
+	const { calculateLineItemTaxes } = useTaxCalculation();
 
 	/**
+	 * Get tax status from line item meta data
 	 *
+	 * @TODO - default is 'taxable', is this correct?
 	 */
-	const calculateLineItemTaxes = ({
-		total,
-		subtotal,
-		taxClass,
-		taxStatus,
-	}: {
-		total: string;
-		subtotal?: string;
-		taxClass?: string;
-		taxStatus?: string;
-	}) => {
-		const noSubtotal = subtotal === undefined;
-		let subtotalTaxes = { total: 0, taxes: [] as { id: number; total: string }[] };
-
-		if (!noSubtotal) {
-			subtotalTaxes = calculateTaxesFromPrice({
-				price: parseFloat(subtotal),
-				taxClass,
-				taxStatus,
-				pricesIncludeTax: false,
-			});
-		}
-
-		const totalTaxes = calculateTaxesFromPrice({
-			price: parseFloat(total),
-			taxClass,
-			taxStatus,
-			pricesIncludeTax: false,
-		});
-
-		const uniqueTaxIds = uniq([
-			...subtotalTaxes.taxes.map((tax) => tax.id),
-			...totalTaxes.taxes.map((tax) => tax.id),
-		]);
-
-		const taxes = uniqueTaxIds.map((id) => {
-			const subtotalTax = find(subtotalTaxes.taxes, { id }) || { total: 0 };
-			const totalTax = find(totalTaxes.taxes, { id }) || { total: 0 };
-			return {
-				id,
-				subtotal: noSubtotal ? '' : String(subtotalTax.total),
-				total: String(totalTax.total),
-			};
-		});
-
-		const result: {
-			total_tax: string;
-			subtotal_tax?: string;
-			taxes: { id: number; subtotal: string; total: string }[];
-		} = {
-			total_tax: String(totalTaxes.total),
-			taxes,
-		};
-
-		if (!noSubtotal) {
-			result.subtotal_tax = String(subtotalTaxes.total);
-		}
-
-		return result;
+	const getTaxStatus = (lineItem: LineItem): string => {
+		const taxStatusMetaData = lineItem.meta_data?.find(
+			(meta) => meta.key === '_woocommerce_pos_tax_status'
+		);
+		return taxStatusMetaData?.value ?? 'taxable';
 	};
 
 	/**
@@ -102,11 +51,21 @@ export const useUpdateLineItem = () => {
 		const newSubtotal =
 			(parseFloat(lineItem.subtotal ?? '0') / (lineItem.quantity ?? 1)) * newQuantity;
 		const newTotal = (parseFloat(lineItem.total ?? '0') / (lineItem.quantity ?? 1)) * newQuantity;
+
+		// recalculate taxes
+		const taxes = calculateLineItemTaxes({
+			total: String(newTotal),
+			subtotal: String(newSubtotal),
+			taxStatus: getTaxStatus(lineItem),
+			taxClass: lineItem.tax_class ?? '',
+		});
+
 		return {
 			...lineItem,
 			quantity: newQuantity,
 			subtotal: String(newSubtotal),
 			total: String(newTotal),
+			...taxes,
 		};
 	};
 
@@ -124,10 +83,7 @@ export const useUpdateLineItem = () => {
 	 * Update price of line item
 	 */
 	const updatePrice = (lineItem: LineItem, newPrice: number): LineItem => {
-		const taxStatusMetaData = lineItem.meta_data?.find(
-			(meta) => meta.key === '_woocommerce_pos_tax_status'
-		);
-		const taxStatus = taxStatusMetaData?.value ?? 'taxable';
+		const taxStatus = getTaxStatus(lineItem);
 
 		if (taxDisplayCart === 'incl') {
 			const taxes = calculateTaxesFromPrice({
@@ -141,47 +97,101 @@ export const useUpdateLineItem = () => {
 
 		const newTotal = String((lineItem.quantity ?? 1) * newPrice);
 
+		// recalculate taxes
+		const taxes = calculateLineItemTaxes({
+			total: newTotal,
+			subtotal: lineItem.subtotal ?? '0',
+			taxStatus,
+			taxClass: lineItem.tax_class ?? '',
+		});
+
 		return {
 			...lineItem,
 			price: newPrice,
 			total: newTotal,
+			...taxes,
+		};
+	};
+
+	/**
+	 * Update subtotal of line item
+	 */
+	const updateSubtotal = (lineItem: LineItem, newSubtotal: number): LineItem => {
+		const taxStatus = getTaxStatus(lineItem);
+
+		if (taxDisplayCart === 'incl') {
+			const taxes = calculateTaxesFromPrice({
+				price: newSubtotal,
+				taxClass: lineItem?.tax_class ?? '',
+				taxStatus,
+				pricesIncludeTax: true,
+			});
+			newSubtotal -= taxes.total;
+		}
+
+		// recalculate taxes
+		const taxes = calculateLineItemTaxes({
+			total: lineItem.total ?? '0',
+			subtotal: String(newSubtotal),
+			taxStatus,
+			taxClass: lineItem.tax_class ?? '',
+		});
+
+		return {
+			...lineItem,
+			subtotal: String(newSubtotal),
+			...taxes,
 		};
 	};
 
 	/**
 	 * Update line item
+	 *
+	 * @TODO - what if more than one property is changed at once?
 	 */
 	const updateLineItem = async (uuid: string, changes: Changes) => {
 		const order = currentOrder.getLatest();
+		let updated = false;
+
 		const updatedLineItems = order.line_items?.map((lineItem) => {
-			if (
-				lineItem.meta_data?.some(
-					(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
-				)
-			) {
-				let updatedItem = { ...lineItem };
+			const uuidMatch = lineItem.meta_data?.some(
+				(m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid
+			);
 
-				if (changes.quantity !== undefined) {
-					const quantity =
-						typeof changes.quantity === 'number' ? changes.quantity : Number(changes.quantity);
-					if (!isNaN(quantity)) updatedItem = updateQuantity(updatedItem, quantity);
-				}
-
-				if (changes.name !== undefined) {
-					updatedItem = updateName(updatedItem, changes.name);
-				}
-
-				if (changes.price !== undefined) {
-					const price = typeof changes.price === 'number' ? changes.price : Number(changes.price);
-					if (!isNaN(price)) updatedItem = updatePrice(updatedItem, price);
-				}
-
-				return updatedItem;
+			// early return if no match, or we have already updated a line item
+			if (updated || !uuidMatch) {
+				return lineItem;
 			}
-			return lineItem;
+
+			let updatedItem = { ...lineItem };
+
+			if (changes.quantity !== undefined) {
+				const quantity =
+					typeof changes.quantity === 'number' ? changes.quantity : Number(changes.quantity);
+				if (!isNaN(quantity)) updatedItem = updateQuantity(updatedItem, quantity);
+			}
+
+			if (changes.name !== undefined) {
+				updatedItem = updateName(updatedItem, changes.name);
+			}
+
+			if (changes.price !== undefined) {
+				const price = typeof changes.price === 'number' ? changes.price : Number(changes.price);
+				if (!isNaN(price)) updatedItem = updatePrice(updatedItem, price);
+			}
+
+			if (changes.subtotal !== undefined) {
+				const subtotal =
+					typeof changes.subtotal === 'number' ? changes.subtotal : Number(changes.subtotal);
+				if (!isNaN(subtotal)) updatedItem = updateSubtotal(updatedItem, subtotal);
+			}
+
+			updated = true;
+			return updatedItem;
 		});
 
-		if (updatedLineItems) {
+		// if we have updated a line item, patch the order
+		if (updated && updatedLineItems) {
 			order.incrementalPatch({ line_items: updatedLineItems });
 		}
 	};
