@@ -40,7 +40,14 @@ export const ShippingLineRow = ({ id, item, index, target }) => {
 				return (
 					<ErrorBoundary>
 						<Suspense>
-							<Cell uuid={id} item={item} column={column} index={index} cellWidth={cellWidth} />
+							<Cell
+								type="shipping_lines"
+								uuid={id}
+								item={item}
+								column={column}
+								index={index}
+								cellWidth={cellWidth}
+							/>
 						</Suspense>
 					</ErrorBoundary>
 				);

@@ -5,18 +5,18 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 
 import { useT } from '../../../../../contexts/translations';
 import { useCurrentOrder } from '../../contexts/current-order';
-import { useRemoveItem } from '../../hooks/use-remove-item';
 
 interface ActionProps {
+	uuid: string;
+	type: 'line_items' | 'fee_lines' | 'shipping_lines';
 	item:
 		| import('@wcpos/database').LineItemDocument
 		| import('@wcpos/database').FeeLineDocument
 		| import('@wcpos/database').ShippingLineDocument;
 }
 
-export const Actions = ({ item }: ActionProps) => {
+export const Actions = ({ uuid, type, item }: ActionProps) => {
 	const { currentOrder } = useCurrentOrder();
-	const { removeItem } = useRemoveItem();
 	const addSnackbar = useSnackbar();
 	const t = useT();
 
@@ -26,27 +26,35 @@ export const Actions = ({ item }: ActionProps) => {
 	const undoRemove = React.useCallback(async () => {
 		return currentOrder?.incrementalUpdate({
 			$push: {
-				[item.collection.name]: item.toJSON(),
+				[type]: item,
 			},
 		});
-	}, [currentOrder, item]);
+	}, [currentOrder, item, type]);
 
 	/**
 	 *
 	 */
 	const handleRemove = React.useCallback(async () => {
 		const name = item.name || item.method_title;
-		await item.incrementalRemove();
-		// await removeItem(item);
+		const order = currentOrder.getLatest();
 
-		// await currentOrder?.removeCartLine(item);
+		// find uuid and remove from order
+		const updatedItems = order[type].filter(
+			(i) =>
+				!i.meta_data.some((meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid)
+		);
+
+		// Update the order with the item removed
+		await currentOrder.incrementalPatch({
+			[type]: updatedItems,
+		});
 
 		addSnackbar({
 			message: t('{name} removed from cart', { name, _tags: 'core' }),
 			dismissable: true,
 			action: { label: t('Undo', { _tags: 'core' }), action: undoRemove },
 		});
-	}, [addSnackbar, item, t, undoRemove]);
+	}, [addSnackbar, currentOrder, item.method_title, item.name, t, type, undoRemove, uuid]);
 
 	/**
 	 *

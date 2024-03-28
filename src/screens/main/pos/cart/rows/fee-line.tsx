@@ -40,7 +40,14 @@ export const FeeLineRow = ({ id, item, index, target }) => {
 				return (
 					<ErrorBoundary>
 						<Suspense>
-							<Cell uuid={id} item={item} column={column} index={index} cellWidth={cellWidth} />
+							<Cell
+								type="fee_lines"
+								uuid={id}
+								item={item}
+								column={column}
+								index={index}
+								cellWidth={cellWidth}
+							/>
 						</Suspense>
 					</ErrorBoundary>
 				);

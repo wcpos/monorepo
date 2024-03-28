@@ -41,7 +41,14 @@ export const LineItemRow = ({ index, id, item }) => {
 				return (
 					<ErrorBoundary>
 						<Suspense>
-							<Cell uuid={id} item={item} column={column} index={index} cellWidth={cellWidth} />
+							<Cell
+								type="line_items"
+								uuid={id}
+								item={item}
+								column={column}
+								index={index}
+								cellWidth={cellWidth}
+							/>
 						</Suspense>
 					</ErrorBoundary>
 				);
