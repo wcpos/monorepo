@@ -5,7 +5,7 @@ import { useObservableState } from 'observable-hooks';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableContextProps } from '@wcpos/components/src/table';
 
-import { useCartLines, CartLine } from './hooks/use-cart-lines';
+import { useCartLines, CartLine } from '../hooks/use-cart-lines';
 import { FeeLineRow } from './rows/fee-line';
 import { LineItemRow } from './rows/line-item';
 import { ShippingLineRow } from './rows/shipping-line';

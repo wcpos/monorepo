@@ -7,7 +7,7 @@ import { EdittableText } from '@wcpos/components/src/edittable-text';
 import Text from '@wcpos/components/src/text';
 
 import EditLineItemButton from './edit-line-item';
-import { useUpdateLineItem } from '../hooks/use-update-line-item';
+import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 interface Props {

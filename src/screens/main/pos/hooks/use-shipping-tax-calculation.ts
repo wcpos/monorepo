@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import { useAppState } from '../../../../../contexts/app-state';
-import { useTaxHelpers } from '../../../contexts/tax-helpers';
-import { calculateLineItemTotals } from '../../../contexts/tax-helpers/utils';
+import { useAppState } from '../../../../contexts/app-state';
+import { useTaxHelpers } from '../../contexts/tax-helpers';
+import { calculateLineItemTotals } from '../../contexts/tax-helpers/utils';
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
 

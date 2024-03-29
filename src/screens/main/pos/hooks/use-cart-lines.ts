@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useCurrentOrder } from '../../contexts/current-order';
+import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][0];
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][0];

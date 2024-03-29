@@ -3,7 +3,7 @@ import * as React from 'react';
 import find from 'lodash/find';
 import uniq from 'lodash/uniq';
 
-import { useTaxHelpers } from '../../../contexts/tax-helpers';
+import { useTaxHelpers } from '../../contexts/tax-helpers';
 
 export interface CalculateLineItemTaxesProps {
 	total: string;

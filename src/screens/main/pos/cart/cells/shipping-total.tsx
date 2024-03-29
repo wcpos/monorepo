@@ -10,7 +10,7 @@ import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
-import { useUpdateShippingLine } from '../hooks/use-update-shipping-line';
+import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 interface Props {

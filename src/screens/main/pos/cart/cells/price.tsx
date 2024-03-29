@@ -6,7 +6,7 @@ import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useUI from '../../../contexts/ui-settings';
-import { useUpdateLineItem } from '../hooks/use-update-line-item';
+import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 interface Props {

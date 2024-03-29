@@ -4,7 +4,7 @@ import Box from '@wcpos/components/src/box';
 import { EdittableText } from '@wcpos/components/src/edittable-text';
 
 import EditShippingLineButton from './edit-shipping-line';
-import { useUpdateShippingLine } from '../hooks/use-update-shipping-line';
+import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 interface Props {

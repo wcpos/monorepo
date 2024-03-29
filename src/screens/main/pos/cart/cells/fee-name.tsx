@@ -4,7 +4,7 @@ import Box from '@wcpos/components/src/box';
 import { EdittableText } from '@wcpos/components/src/edittable-text';
 
 import EditFeeLineButton from './edit-fee-line';
-import { useUpdateFeeLine } from '../hooks/use-update-fee-line';
+import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 interface Props {

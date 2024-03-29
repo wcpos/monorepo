@@ -10,7 +10,7 @@ import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
-import { useUpdateFeeLine } from '../hooks/use-update-fee-line';
+import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 interface Props {

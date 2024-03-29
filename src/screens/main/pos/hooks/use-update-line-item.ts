@@ -4,9 +4,9 @@ import { useObservableEagerState } from 'observable-hooks';
 import { of } from 'rxjs';
 
 import { useTaxCalculation } from './use-tax-calculation';
-import { useAppState } from '../../../../../contexts/app-state';
-import { useTaxHelpers } from '../../../contexts/tax-helpers';
-import { useCurrentOrder } from '../../contexts/current-order';
+import { useAppState } from '../../../../contexts/app-state';
+import { useTaxHelpers } from '../../contexts/tax-helpers';
+import { useCurrentOrder } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 type LineItem = NonNullable<OrderDocument['line_items']>[number];

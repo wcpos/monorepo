@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import NumberInput from '../../../components/number-input';
-import { useUpdateLineItem } from '../hooks/use-update-line-item';
+import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 interface Props {
