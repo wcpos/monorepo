@@ -6,6 +6,12 @@ import { getCurrentGMTDate } from './utils';
 import { useCollection } from '../../hooks/use-collection';
 import { useCurrentOrder } from '../contexts/current-order';
 
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+type CartLine = LineItem | FeeLine | ShippingLine;
+type CartLineType = 'line_items' | 'fee_lines' | 'shipping_lines';
+
 export const useAddItemToOrder = () => {
 	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
 	const { collection } = useCollection('orders');
@@ -14,7 +20,7 @@ export const useAddItemToOrder = () => {
 	 *
 	 */
 	const saveNewOrder = React.useCallback(
-		async (type: 'line_items' | 'fee_lines' | 'shipping_lines', data: object) => {
+		async (type: CartLineType, data: CartLine) => {
 			const order = currentOrder.getLatest();
 
 			const orderJSON = {
@@ -27,6 +33,7 @@ export const useAddItemToOrder = () => {
 
 			const newOrder = await collection.insert(orderJSON);
 			setCurrentOrderID(newOrder?.uuid);
+			return newOrder;
 		},
 		[collection, currentOrder, setCurrentOrderID]
 	);
@@ -35,7 +42,7 @@ export const useAddItemToOrder = () => {
 	 * NOTE: If I don't include getLatest(), the populate() will return old data
 	 */
 	const addItemToOrder = React.useCallback(
-		async (type, data) => {
+		async (type: CartLineType, data: CartLine) => {
 			const order = currentOrder.getLatest();
 
 			// make sure items have a uuid before saving
@@ -52,42 +59,13 @@ export const useAddItemToOrder = () => {
 
 			if (order.isNew) {
 				return saveNewOrder(type, data);
+			} else {
+				return order.incrementalUpdate({
+					$push: {
+						[type]: data,
+					},
+				});
 			}
-
-			// if line item, check it an item with the same product_id already exists
-			if (type === 'line_items' && data.product_id !== 0) {
-				const populatedLineItems = await order.populate('line_items');
-				let existing = [];
-				if (data.variation_id) {
-					existing = populatedLineItems.filter((li) => li.variation_id === data.variation_id);
-				} else {
-					existing = populatedLineItems.filter((li) => li.product_id === data.product_id);
-				}
-
-				// if item already in cart
-				if (existing.length === 1) {
-					const item = existing[0];
-					const current = item.getLatest();
-					const currentQuantity = current.quantity;
-					const currentSubtotal = current.subtotal;
-					const currentTotal = current.total;
-					const newValue = currentQuantity + 1;
-					await item.incrementalPatch({
-						quantity: Number(newValue),
-						subtotal: String((parseFloat(currentSubtotal) / currentQuantity) * Number(newValue)),
-						total: String((parseFloat(currentTotal) / currentQuantity) * Number(newValue)),
-					});
-
-					return order;
-				}
-			}
-
-			// default: add line item type
-			return order.incrementalUpdate({
-				$push: {
-					[type]: data,
-				},
-			});
 		},
 		[currentOrder, saveNewOrder]
 	);

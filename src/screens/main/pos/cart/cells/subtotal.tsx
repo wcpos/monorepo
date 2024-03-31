@@ -32,7 +32,6 @@ const getTaxStatus = (meta_data) => {
  *
  */
 export const Subtotal = ({ uuid, item, column }: Props) => {
-	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
 
 	const subtotal = parseFloat(item.subtotal);
@@ -49,39 +48,6 @@ export const Subtotal = ({ uuid, item, column }: Props) => {
 		pricesIncludeTax: false,
 	});
 	const displaySubtotal = taxDisplayCart === 'incl' ? subtotal + taxes.total : subtotal;
-
-	/**
-	 *
-	 */
-	const handleUpdate = React.useCallback(
-		(newValue) => {
-			let newSubtotal = parseFloat(newValue);
-			if (taxDisplayCart === 'incl') {
-				const taxes = calculateTaxesFromPrice({
-					price: newSubtotal,
-					taxClass: item.tax_class,
-					taxStatus,
-					pricesIncludeTax: true,
-				});
-				newSubtotal = parseFloat(newValue) - taxes.total;
-			}
-			currentOrder.incrementalModify((order) => {
-				const updatedLineItems = order.line_items.map((li) => {
-					const uuidMetaData = li.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
-					if (uuidMetaData && uuidMetaData.value === item.uuid) {
-						return {
-							...li,
-							subtotal: String(newSubtotal),
-						};
-					}
-					return li;
-				});
-
-				return { ...order, line_items: updatedLineItems };
-			});
-		},
-		[calculateTaxesFromPrice, currentOrder, item.tax_class, item.uuid, taxDisplayCart, taxStatus]
-	);
 
 	/**
 	 *

@@ -95,6 +95,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 				'pos.cart': {
 					quickDiscounts: t('Quick Discounts', { _tags: 'core' }),
 					quantity: t('Qty', { _tags: 'core', _context: 'Short for quantity' }),
+					split: t('Split', { _tags: 'core', _context: 'Split quantity' }),
 					name: t('Name', { _tags: 'core' }),
 					sku: t('SKU', { _tags: 'core' }),
 					price: t('Price', { _tags: 'core' }),
@@ -183,7 +184,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 						// hack for cart discounts
 						if (id === 'pos.cart') {
 							const quickDiscounts = localDoc.get('quickDiscounts');
-							if(!quickDiscounts) {
+							if (!quickDiscounts) {
 								localDoc.incrementalPatch({ quickDiscounts: initial.quickDiscounts || [] });
 							}
 						}

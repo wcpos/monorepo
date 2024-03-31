@@ -92,7 +92,13 @@
       {
         "key": "quantity",
         "show": true,
-        "align": "center"
+        "align": "center",
+        "display": [
+          {
+            "key": "split",
+            "show": false
+          }
+        ]
       },
       {
         "key": "name",

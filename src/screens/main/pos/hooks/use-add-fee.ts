@@ -19,7 +19,7 @@ export const useAddFee = () => {
 				price: parseFloat(data.total),
 				taxClass: data.tax_class,
 				taxStatus: data.tax_status,
-				pricesIncludeTax: false,
+				pricesIncludeTax: data.prices_include_tax,
 			});
 
 			const newFeelLine = {

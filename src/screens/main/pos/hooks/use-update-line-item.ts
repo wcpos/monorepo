@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 import { of } from 'rxjs';
+import { v4 as uuidv4 } from 'uuid';
 
 import { useTaxCalculation } from './use-tax-calculation';
 import { useAppState } from '../../../../contexts/app-state';
@@ -192,9 +193,70 @@ export const useUpdateLineItem = () => {
 
 		// if we have updated a line item, patch the order
 		if (updated && updatedLineItems) {
-			order.incrementalPatch({ line_items: updatedLineItems });
+			return order.incrementalPatch({ line_items: updatedLineItems });
 		}
 	};
 
-	return { updateLineItem };
+	/**
+	 *
+	 */
+	const splitLineItem = async (uuid) => {
+		const order = currentOrder.getLatest();
+		const lineItemIndex = order.line_items.findIndex((item) =>
+			item.meta_data.some((meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid)
+		);
+
+		if (lineItemIndex === -1) {
+			console.error('Line item not found');
+			return;
+		}
+
+		const lineItemToSplit = order.line_items[lineItemIndex];
+
+		if (lineItemToSplit.quantity <= 1) {
+			console.error('Line item quantity must be greater than 1');
+			return;
+		}
+
+		const lineItemToCopy = updateQuantity(lineItemToSplit, 1);
+		const quantity = Math.floor(lineItemToSplit.quantity);
+		const rawRemainder = lineItemToSplit.quantity - quantity;
+		const remainder = parseFloat(rawRemainder.toFixed(6));
+		const newLineItems = [];
+
+		for (let i = 0; i < quantity; i++) {
+			const newItem = {
+				...lineItemToCopy,
+				meta_data: lineItemToCopy.meta_data.map((meta) =>
+					meta.key === '_woocommerce_pos_uuid'
+						? { ...meta, value: i === 0 ? uuid : uuidv4() }
+						: meta
+				),
+			};
+			newLineItems.push(newItem);
+		}
+
+		if (remainder > 0) {
+			const remainderLineItem = updateQuantity(lineItemToCopy, remainder);
+			const newItem = {
+				...remainderLineItem,
+				quantity: remainder,
+				meta_data: remainderLineItem.meta_data.map((meta) =>
+					meta.key === '_woocommerce_pos_uuid' ? { ...meta, value: uuidv4() } : meta
+				),
+			};
+			newLineItems.push(newItem);
+		}
+
+		// Replace the original item with the new items in the order
+		const updatedLineItems = [
+			...order.line_items.slice(0, lineItemIndex),
+			...newLineItems,
+			...order.line_items.slice(lineItemIndex + 1),
+		];
+
+		return currentOrder.incrementalPatch({ line_items: updatedLineItems });
+	};
+
+	return { updateLineItem, splitLineItem };
 };
