@@ -10,6 +10,7 @@ import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
 import { useTaxHelpers } from '../../../contexts/tax-helpers';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
+import { useCurrentOrder } from '../../contexts/current-order';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
@@ -24,10 +25,11 @@ interface Props {
  */
 export const FeeTotal = ({ uuid, item, column }: Props) => {
 	const { updateFeeLine } = useUpdateFeeLine();
+	const { currentOrder } = useCurrentOrder();
+	const { format } = useCurrencyFormat({ currencySymbol: currentOrder.currency_symbol });
+	const { display } = column;
 
 	const total = parseFloat(item.total);
-	const { format } = useCurrencyFormat();
-	const { display } = column;
 	const { store } = useAppState();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
 	const { calculateTaxesFromPrice } = useTaxHelpers();

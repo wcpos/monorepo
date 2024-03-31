@@ -1,15 +1,23 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
 import { useT } from '../../../../contexts/translations';
 import useCurrencyFormat from '../../hooks/use-currency-format';
 
-const CartTabTitle = ({ focused, order }: { focused: boolean; order: any }) => {
-	const total = useObservableState(order.total$, order.total);
-	const { format } = useCurrencyFormat();
+interface Props {
+	focused: boolean;
+	order: import('@wcpos/database').OrderDocument;
+}
+
+/**
+ *
+ */
+const CartTabTitle = ({ focused, order }: Props) => {
+	const total = useObservableEagerState(order?.total$);
+	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
 	const t = useT();
 
 	return (

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useNavigation, StackActions } from '@react-navigation/native';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import Button from '@wcpos/components/src/button';
@@ -17,8 +17,8 @@ import { useCurrentOrder } from '../../contexts/current-order';
  */
 const PayButton = () => {
 	const { currentOrder } = useCurrentOrder();
-	const total = useObservableState(currentOrder.total$, currentOrder.total);
-	const { format } = useCurrencyFormat();
+	const total = useObservableEagerState(currentOrder.total$);
+	const { format } = useCurrencyFormat({ currencySymbol: currentOrder.currency_symbol });
 	const navigation = useNavigation();
 	const [loading, setLoading] = React.useState(false);
 	const addSnackbar = useSnackbar();

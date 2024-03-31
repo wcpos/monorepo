@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import defaults from 'lodash/defaults';
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import {
 	toNumericString,
@@ -19,25 +19,27 @@ interface CurrencyFormatProps {
 	 *
 	 */
 	withSymbol?: boolean;
+	/**
+	 *
+	 */
+	currencySymbol?: string;
 }
 
 /**
  *
  */
 export const useCurrencyFormat = (options?: CurrencyFormatProps) => {
-	const { withSymbol } = defaults(options, { withSymbol: true });
 	const { store } = useAppState();
-	const currency = useObservableState(store?.currency$, store?.currency);
-	const currencyPosition = useObservableState(store?.currency_pos$, store?.currency_pos);
-	const decimalSeparator = useObservableState(store?.price_decimal_sep$, store?.price_decimal_sep);
-	const thousandSeparator = useObservableState(
-		store?.price_thousand_sep$,
-		store?.price_thousand_sep
-	);
-	const decimalPrecision = useObservableState(
-		store?.price_num_decimals$,
-		store?.price_num_decimals
-	);
+	const currency = useObservableEagerState(store?.currency$);
+	const storeCurrencySymbol = get(symbols, currency);
+	const { withSymbol, currencySymbol } = defaults(options, {
+		withSymbol: true,
+		currencySymbol: storeCurrencySymbol,
+	});
+	const currencyPosition = useObservableEagerState(store?.currency_pos$);
+	const decimalSeparator = useObservableEagerState(store?.price_decimal_sep$);
+	const thousandSeparator = useObservableEagerState(store?.price_thousand_sep$);
+	const decimalPrecision = useObservableEagerState(store?.price_num_decimals$);
 	const fixedDecimalPrecision = true;
 	const allowNegative = true;
 	const thousandsGroupStyle = 'thousand';
@@ -66,15 +68,18 @@ export const useCurrencyFormat = (options?: CurrencyFormatProps) => {
 
 			// add prefix and suffix
 			if (withSymbol) {
-				const symbol = get(symbols, currency);
-				if (symbol && (currencyPosition === 'left' || currencyPosition === 'left_space')) {
+				if (currencySymbol && (currencyPosition === 'left' || currencyPosition === 'left_space')) {
 					beforeDecimal =
 						currencyPosition === 'left_space'
-							? `${symbol} ${beforeDecimal}`
-							: symbol + beforeDecimal;
+							? `${currencySymbol} ${beforeDecimal}`
+							: currencySymbol + beforeDecimal;
 				}
-				if (symbol && (currencyPosition === 'right' || currencyPosition === 'right_space')) {
-					afterDecimal += currencyPosition === 'right_space' ? ` ${symbol}` : symbol;
+				if (
+					currencySymbol &&
+					(currencyPosition === 'right' || currencyPosition === 'right_space')
+				) {
+					afterDecimal +=
+						currencyPosition === 'right_space' ? ` ${currencySymbol}` : currencySymbol;
 				}
 			}
 
@@ -85,8 +90,8 @@ export const useCurrencyFormat = (options?: CurrencyFormatProps) => {
 		},
 		[
 			allowNegative,
-			currency,
 			currencyPosition,
+			currencySymbol,
 			decimalPrecision,
 			decimalSeparator,
 			fixedDecimalPrecision,

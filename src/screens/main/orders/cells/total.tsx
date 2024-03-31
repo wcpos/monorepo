@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
@@ -11,8 +11,8 @@ type Props = {
 };
 
 const Total = ({ item: order }: Props) => {
-	const total = useObservableState(order.total$, order.total);
-	const { format } = useCurrencyFormat();
+	const total = useObservableEagerState(order.total$);
+	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
 
 	return total ? <Text>{format(total || 0)}</Text> : <Text.Skeleton length="short" />;
 };
