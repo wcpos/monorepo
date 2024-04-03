@@ -5,13 +5,13 @@ import { useObservableState } from 'observable-hooks';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableContextProps } from '@wcpos/components/src/table';
 
-import { useCartLines, CartLine } from '../hooks/use-cart-lines';
 import { FeeLineRow } from './rows/fee-line';
 import { LineItemRow } from './rows/line-item';
 import { ShippingLineRow } from './rows/shipping-line';
 import { useT } from '../../../../contexts/translations';
 import EmptyTableRow from '../../components/empty-table-row';
 import useUI from '../../contexts/ui-settings';
+import { useCartLines, CartLine } from '../hooks/use-cart-lines';
 
 type UISettingsColumn = import('../../contexts/ui-settings').UISettingsColumn;
 
@@ -36,7 +36,7 @@ const CartTable = () => {
 	/**
 	 *
 	 */
-	const context = React.useMemo<TableContextProps<CartItem>>(() => {
+	const context = React.useMemo<TableContextProps<CartLine>>(() => {
 		return {
 			columns: columns.filter((column) => column.show),
 			// sort: ({ sortBy, sortDirection }) => {

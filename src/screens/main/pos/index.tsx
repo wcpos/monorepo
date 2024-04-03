@@ -17,7 +17,7 @@ import POS from './pos';
 import { useNewOrder } from './use-new-order';
 import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
-import { TaxHelpersProvider } from '../contexts/tax-helpers';
+import { TaxRatesProvider } from '../contexts/tax-rates';
 import { useCollection } from '../hooks/use-collection';
 import Receipt from '../receipt';
 
@@ -78,7 +78,7 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 	 *
 	 */
 	const taxQuery = useQuery({
-		queryKeys: ['tax-rates', 'pos'],
+		queryKeys: ['tax-rates'],
 		collectionName: 'taxes',
 	});
 
@@ -86,11 +86,11 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 		<Suspense>
 			<CurrentOrderProvider resource={resource} taxQuery={taxQuery}>
 				<Suspense>
-					<TaxHelpersProvider taxQuery={taxQuery}>
+					<TaxRatesProvider taxQuery={taxQuery}>
 						<Suspense>
 							<POS />
 						</Suspense>
-					</TaxHelpersProvider>
+					</TaxRatesProvider>
 				</Suspense>
 			</CurrentOrderProvider>
 		</Suspense>

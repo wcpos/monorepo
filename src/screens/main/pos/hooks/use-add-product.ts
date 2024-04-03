@@ -9,7 +9,8 @@ import { useAddItemToOrder } from './use-add-item-to-order';
 import { useUpdateLineItem } from './use-update-line-item';
 import { priceToNumber, findByProductVariationID, getUuidFromLineItem } from './utils';
 import { useT } from '../../../../contexts/translations';
-import { useTaxHelpers } from '../../contexts/tax-helpers';
+import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -21,7 +22,8 @@ type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 export const useAddProduct = () => {
 	const addSnackbar = useSnackbar();
 	const { addItemToOrder } = useAddItemToOrder();
-	const { pricesIncludeTax, calculateTaxesFromPrice } = useTaxHelpers();
+	const { pricesIncludeTax } = useTaxRates();
+	const { calculateTaxesFromValue } = useTaxCalculator();
 	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
 	const t = useT();
@@ -34,19 +36,17 @@ export const useAddProduct = () => {
 	const convertProductToLineItem = React.useCallback(
 		(product: ProductDocument): LineItem => {
 			let priceWithoutTax = priceToNumber(product.price);
-			const tax = calculateTaxesFromPrice({
-				price: parseFloat(product.price),
+			const tax = calculateTaxesFromValue({
+				value: product.price,
 				taxClass: product.tax_class,
 				taxStatus: product.tax_status,
-				// pricesIncludeTax, // this is already set in the tax helper
 			});
 
 			let regularPriceWithoutTax = priceToNumber(product.regular_price);
-			const regularTax = calculateTaxesFromPrice({
-				price: parseFloat(product.regular_price),
+			const regularTax = calculateTaxesFromValue({
+				value: product.regular_price,
 				taxClass: product.tax_class,
 				taxStatus: product.tax_status,
-				// pricesIncludeTax, // this is already set in the tax helper
 			});
 
 			if (pricesIncludeTax) {
@@ -70,7 +70,7 @@ export const useAddProduct = () => {
 				// meta_data: filteredMetaData(product.meta_data),
 			};
 		},
-		[calculateTaxesFromPrice, pricesIncludeTax]
+		[calculateTaxesFromValue, pricesIncludeTax]
 	);
 
 	/**

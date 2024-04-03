@@ -20,7 +20,7 @@ import FilterBar from '../../components/product/filter-bar';
 import Search from '../../components/product/search';
 import TaxBasedOn from '../../components/product/tax-based-on';
 import UISettings from '../../components/ui-settings';
-import { useTaxHelpers } from '../../contexts/tax-helpers';
+import { useTaxRates } from '../../contexts/tax-rates';
 import useUI from '../../contexts/ui-settings';
 import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
@@ -41,7 +41,7 @@ const POSProducts = ({ isColumn = false }) => {
 	const { uiSettings } = useUI('pos.products');
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
-	const { calcTaxes } = useTaxHelpers();
+	const { calcTaxes } = useTaxRates();
 	const showOutOfStock = useObservableState(
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')

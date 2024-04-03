@@ -9,7 +9,8 @@ import { useAddItemToOrder } from './use-add-item-to-order';
 import { useUpdateLineItem } from './use-update-line-item';
 import { priceToNumber, findByProductVariationID, getUuidFromLineItem } from './utils';
 import { useT } from '../../../../contexts/translations';
-import { useTaxHelpers } from '../../contexts/tax-helpers';
+import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
@@ -26,7 +27,8 @@ interface MetaData {
 export const useAddVariation = () => {
 	const addSnackbar = useSnackbar();
 	const { addItemToOrder } = useAddItemToOrder();
-	const { pricesIncludeTax, calculateTaxesFromPrice } = useTaxHelpers();
+	const { pricesIncludeTax } = useTaxRates();
+	const { calculateTaxesFromValue } = useTaxCalculator();
 	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
 	const t = useT();
@@ -43,19 +45,17 @@ export const useAddVariation = () => {
 			let priceWithoutTax = priceToNumber(variation.price);
 			let attributes = metaData;
 
-			const tax = calculateTaxesFromPrice({
-				price: parseFloat(variation.price),
+			const tax = calculateTaxesFromValue({
+				value: variation.price,
 				taxClass: variation.tax_class,
 				taxStatus: variation.tax_status,
-				// pricesIncludeTax, // this is already set in the tax helper
 			});
 
 			let regularPriceWithoutTax = priceToNumber(variation.regular_price);
-			const regularTax = calculateTaxesFromPrice({
-				price: parseFloat(variation.regular_price),
+			const regularTax = calculateTaxesFromValue({
+				value: variation.regular_price,
 				taxClass: variation.tax_class,
 				taxStatus: variation.tax_status,
-				// pricesIncludeTax, // this is already set in the tax helper
 			});
 
 			if (pricesIncludeTax) {
@@ -77,8 +77,8 @@ export const useAddVariation = () => {
 				price: priceWithoutTax,
 				subtotal: String(regularPriceWithoutTax),
 				total: String(priceWithoutTax),
-				subtotal_tax: tax.total,
-				total_tax: tax.total,
+				subtotal_tax: String(tax.total),
+				total_tax: String(tax.total),
 				taxes: tax.taxes,
 				product_id: parent.id,
 				name: parent.name,
@@ -93,7 +93,7 @@ export const useAddVariation = () => {
 				],
 			};
 		},
-		[calculateTaxesFromPrice, pricesIncludeTax]
+		[calculateTaxesFromValue, pricesIncludeTax]
 	);
 
 	/**

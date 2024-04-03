@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import { map, tap } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
 
 import { InlineError } from '@wcpos/components/src/inline-error/inline-error';
 import Popover from '@wcpos/components/src/popover';
@@ -10,14 +10,14 @@ import Text from '@wcpos/components/src/text';
 
 import DisplayCurrentTaxRates from './display-current-tax-rates';
 import { useT } from '../../../../../contexts/translations';
-import { useTaxHelpers } from '../../../contexts/tax-helpers';
+import { useTaxRates } from '../../../contexts/tax-rates';
 
 /**
  * NOTE: this must be used within a TaxRatesProvider
  */
 const TaxBasedOn = ({ taxBasedOn }) => {
 	const [opened, setOpened] = React.useState(false);
-	const { taxQuery } = useTaxHelpers();
+	const { taxQuery } = useTaxRates();
 	const result = useObservableSuspense(taxQuery.resource);
 	const rates = result.hits.map(({ document }) => document);
 	const { country, state, city, postcode } = useObservableState(

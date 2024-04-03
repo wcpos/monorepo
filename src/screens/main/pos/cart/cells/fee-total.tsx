@@ -1,14 +1,12 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
-import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
-import { useTaxHelpers } from '../../../contexts/tax-helpers';
+import { useTaxDisplayValues } from '../../../hooks/taxes/use-tax-display-values';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 import { useCurrentOrder } from '../../contexts/current-order';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
@@ -28,18 +26,13 @@ export const FeeTotal = ({ uuid, item, column }: Props) => {
 	const { currentOrder } = useCurrentOrder();
 	const { format } = useCurrencyFormat({ currencySymbol: currentOrder.currency_symbol });
 	const { display } = column;
-
-	const total = parseFloat(item.total);
-	const { store } = useAppState();
-	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
-	const { calculateTaxesFromPrice } = useTaxHelpers();
-	const taxes = calculateTaxesFromPrice({
-		price: total,
+	const { displayValue, inclOrExcl } = useTaxDisplayValues({
+		value: item.total,
 		taxClass: item.tax_class,
 		taxStatus: item.tax_status,
-		pricesIncludeTax: false,
+		context: 'cart',
+		valueIncludesTax: false,
 	});
-	const displayTotal = taxDisplayCart === 'incl' ? total + taxes.total : total;
 
 	/**
 	 *
@@ -58,13 +51,13 @@ export const FeeTotal = ({ uuid, item, column }: Props) => {
 	return (
 		<Box space="xSmall" align="end">
 			<NumberInput
-				value={String(displayTotal)}
+				value={displayValue}
 				onChange={(total) => updateFeeLine(uuid, { total })}
 				showDecimals
 			/>
 			{show('tax') && (
 				<Text type="textMuted" size="small">
-					{`${taxDisplayCart}. ${format(item.total_tax) || 0} tax`}
+					{`${inclOrExcl} ${format(item.total_tax) || 0} tax`}
 				</Text>
 			)}
 		</Box>

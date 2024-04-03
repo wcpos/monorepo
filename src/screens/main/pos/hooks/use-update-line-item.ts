@@ -1,12 +1,10 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
 import { v4 as uuidv4 } from 'uuid';
 
-import { useTaxCalculation } from './use-tax-calculation';
-import { useAppState } from '../../../../contexts/app-state';
-import { useTaxHelpers } from '../../contexts/tax-helpers';
+import { getTaxStatusFromMetaData } from './utils';
+import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
+import { useTaxDisplay } from '../../hooks/taxes/use-tax-display';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -27,22 +25,8 @@ interface Changes {
  */
 export const useUpdateLineItem = () => {
 	const { currentOrder } = useCurrentOrder();
-	const { store } = useAppState();
-	const taxDisplayCart = useObservableEagerState(store?.tax_display_cart$ || of('excl'));
-	const { calculateTaxesFromPrice } = useTaxHelpers();
-	const { calculateLineItemTaxes } = useTaxCalculation();
-
-	/**
-	 * Get tax status from line item meta data
-	 *
-	 * @TODO - default is 'taxable', is this correct?
-	 */
-	const getTaxStatus = (lineItem: LineItem): string => {
-		const taxStatusMetaData = lineItem.meta_data?.find(
-			(meta) => meta.key === '_woocommerce_pos_tax_status'
-		);
-		return taxStatusMetaData?.value ?? 'taxable';
-	};
+	const { inclOrExcl } = useTaxDisplay({ context: 'cart' });
+	const { calculateTaxesFromValue, calculateLineItemTaxes } = useTaxCalculator();
 
 	/**
 	 * Update quantity of line item
@@ -57,7 +41,7 @@ export const useUpdateLineItem = () => {
 		const taxes = calculateLineItemTaxes({
 			total: String(newTotal),
 			subtotal: String(newSubtotal),
-			taxStatus: getTaxStatus(lineItem),
+			taxStatus: getTaxStatusFromMetaData(lineItem.meta_data),
 			taxClass: lineItem.tax_class ?? '',
 		});
 
@@ -84,14 +68,14 @@ export const useUpdateLineItem = () => {
 	 * Update price of line item
 	 */
 	const updatePrice = (lineItem: LineItem, newPrice: number): LineItem => {
-		const taxStatus = getTaxStatus(lineItem);
+		const taxStatus = getTaxStatusFromMetaData(lineItem.meta_data);
 
-		if (taxDisplayCart === 'incl') {
-			const taxes = calculateTaxesFromPrice({
-				price: newPrice,
+		if (inclOrExcl === 'incl') {
+			const taxes = calculateTaxesFromValue({
+				value: newPrice,
 				taxClass: lineItem?.tax_class ?? '',
 				taxStatus,
-				pricesIncludeTax: true,
+				valueIncludesTax: true,
 			});
 			newPrice -= taxes.total;
 		}
@@ -118,14 +102,14 @@ export const useUpdateLineItem = () => {
 	 * Update subtotal of line item
 	 */
 	const updateSubtotal = (lineItem: LineItem, newSubtotal: number): LineItem => {
-		const taxStatus = getTaxStatus(lineItem);
+		const taxStatus = getTaxStatusFromMetaData(lineItem.meta_data);
 
-		if (taxDisplayCart === 'incl') {
-			const taxes = calculateTaxesFromPrice({
-				price: newSubtotal,
+		if (inclOrExcl === 'incl') {
+			const taxes = calculateTaxesFromValue({
+				value: newSubtotal,
 				taxClass: lineItem?.tax_class ?? '',
 				taxStatus,
-				pricesIncludeTax: true,
+				valueIncludesTax: true,
 			});
 			newSubtotal -= taxes.total;
 		}

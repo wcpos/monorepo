@@ -16,12 +16,12 @@ export type Cart = CartItem[];
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
 interface Tax {
-	id: string;
+	id: number;
 	total: string;
 }
 type TaxArray = Tax[];
 interface Rate {
-	id: string;
+	id: number;
 	rate: string;
 }
 type RateArray = Rate[];
@@ -154,36 +154,36 @@ export function sumItemizedTaxes(taxes: TaxArray, round = true) {
  * Calculate the display values for a price with or without taxes
  */
 export function calculateDisplayValues({
-	price,
+	value,
 	rates,
 	pricesIncludeTax,
-	taxDisplayShop,
+	inclOrExcl,
 	taxRoundAtSubtotal,
 }: {
-	price: string | undefined;
-	taxDisplayShop: 'incl' | 'excl';
-	pricesIncludeTax: boolean;
+	value: string | undefined;
 	rates: TaxRateDocument[];
+	pricesIncludeTax: boolean;
+	inclOrExcl: 'incl' | 'excl';
 	taxRoundAtSubtotal: boolean;
 }) {
-	const _price = price ? parseFloat(price) : 0;
-	const taxes = calculateTaxes(_price, rates, pricesIncludeTax);
+	const valueAsNumber = value ? parseFloat(value) : 0;
+	const taxes = calculateTaxes(valueAsNumber, rates, pricesIncludeTax);
 	const itemizedTaxTotals = sumItemizedTaxes(taxes, taxRoundAtSubtotal);
 	const taxTotal = sumTaxes(itemizedTaxTotals);
-	let displayPrice = price;
+	let displayValue = value;
 
-	if (pricesIncludeTax && taxDisplayShop === 'excl') {
-		displayPrice = String(round(_price - taxTotal, 6));
+	if (pricesIncludeTax && inclOrExcl === 'excl') {
+		displayValue = String(round(valueAsNumber - taxTotal, 6));
 	}
 
-	if (!pricesIncludeTax && taxDisplayShop === 'incl') {
-		displayPrice = String(round(_price + taxTotal, 6));
+	if (!pricesIncludeTax && inclOrExcl === 'incl') {
+		displayValue = String(round(valueAsNumber + taxTotal, 6));
 	}
 
 	return {
-		displayPrice,
+		displayValue,
 		taxTotal: String(taxTotal),
-		taxDisplayShop,
+		inclOrExcl,
 	};
 }
 

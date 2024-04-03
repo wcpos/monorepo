@@ -36,9 +36,9 @@ export const CurrentOrderProvider = ({
 	 * The tax rate can depend on the current order's location
 	 * So we need to re-query the tax rate when the order changes
 	 */
-	React.useEffect(() => {
-		taxQuery.search(location);
-	}, [location, taxQuery]);
+	// React.useEffect(() => {
+	// 	taxQuery.search(location);
+	// }, [location, taxQuery]);
 
 	/**
 	 *

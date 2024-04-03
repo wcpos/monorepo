@@ -221,19 +221,37 @@
       {
         "key": "price",
         "show": true,
-        "align": "right"
+        "align": "right",
+        "display": [
+          {
+            "key": "tax",
+            "show": false
+          }
+        ]
       },
       {
         "key": "regular_price",
         "show": true,
         "align": "right",
-        "disableSort": true
+        "disableSort": true,
+        "display": [
+          {
+            "key": "tax",
+            "show": false
+          }
+        ]
       },
       {
         "key": "sale_price",
         "show": true,
         "align": "right",
-        "disableSort": true
+        "disableSort": true,
+        "display": [
+          {
+            "key": "tax",
+            "show": false
+          }
+        ]
       },
       {
         "key": "date_created",

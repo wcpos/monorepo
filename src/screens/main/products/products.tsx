@@ -16,7 +16,7 @@ import FilterBar from '../components/product/filter-bar';
 import Search from '../components/product/search';
 import TaxBasedOn from '../components/product/tax-based-on';
 import UISettings from '../components/ui-settings';
-import { useTaxHelpers } from '../contexts/tax-helpers';
+import { useTaxRates } from '../contexts/tax-rates';
 import useUI from '../contexts/ui-settings';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -33,7 +33,7 @@ const TABLE_ROW_COMPONENTS = {
 const Products = () => {
 	const { uiSettings } = useUI('products');
 	const theme = useTheme();
-	const { calcTaxes } = useTaxHelpers();
+	const { calcTaxes } = useTaxRates();
 	const t = useT();
 
 	/**

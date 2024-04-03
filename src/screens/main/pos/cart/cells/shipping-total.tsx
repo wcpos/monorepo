@@ -1,14 +1,12 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
-import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
-import { useTaxHelpers } from '../../../contexts/tax-helpers';
+import { useTaxDisplayValues } from '../../../hooks/taxes/use-tax-display-values';
 import useCurrencyFormat from '../../../hooks/use-currency-format';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
@@ -24,20 +22,15 @@ interface Props {
  */
 export const ShippingTotal = ({ uuid, item, column }: Props) => {
 	const { updateShippingLine } = useUpdateShippingLine();
-
-	const total = parseFloat(item.total);
 	const { format } = useCurrencyFormat();
 	const { display } = column;
-	const { store } = useAppState();
-	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);
-	const { calculateTaxesFromPrice } = useTaxHelpers();
-	const taxes = calculateTaxesFromPrice({
-		price: total,
+	const { displayValue, inclOrExcl } = useTaxDisplayValues({
+		value: item.total,
 		taxClass: 'standard', // TODO: what to put here?
-		taxStatus: 'taxable', // TODO: what to put here?
-		pricesIncludeTax: false,
+		taxStatus: 'taxable', // TODO: what to put here? shipping??
+		valueIncludesTax: false,
+		context: 'cart',
 	});
-	const displayTotal = taxDisplayCart === 'incl' ? total + taxes.total : total;
 
 	/**
 	 *
@@ -56,13 +49,13 @@ export const ShippingTotal = ({ uuid, item, column }: Props) => {
 	return (
 		<Box space="xSmall" align="end">
 			<NumberInput
-				value={String(displayTotal)}
+				value={displayValue}
 				onChange={(total) => updateShippingLine(uuid, { total })}
 				showDecimals
 			/>
 			{show('tax') && (
 				<Text type="textMuted" size="small">
-					{`${taxDisplayCart}. ${format(item.total_tax) || 0} tax`}
+					{`${inclOrExcl} ${format(item.total_tax) || 0} tax`}
 				</Text>
 			)}
 		</Box>

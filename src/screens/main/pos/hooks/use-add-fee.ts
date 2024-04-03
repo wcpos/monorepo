@@ -1,13 +1,13 @@
 import * as React from 'react';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
-import { useTaxHelpers } from '../../contexts/tax-helpers';
+import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
 
 /**
  *
  */
 export const useAddFee = () => {
-	const { calculateTaxesFromPrice } = useTaxHelpers();
+	const { calculateTaxesFromValue } = useTaxCalculator();
 	const { addItemToOrder } = useAddItemToOrder();
 
 	/**
@@ -15,11 +15,11 @@ export const useAddFee = () => {
 	 */
 	const addFee = React.useCallback(
 		async (data) => {
-			const tax = calculateTaxesFromPrice({
-				price: parseFloat(data.total),
+			const tax = calculateTaxesFromValue({
+				value: data.total,
 				taxClass: data.tax_class,
 				taxStatus: data.tax_status,
-				pricesIncludeTax: data.prices_include_tax,
+				valueIncludesTax: data.prices_include_tax,
 			});
 
 			const newFeelLine = {
@@ -30,7 +30,7 @@ export const useAddFee = () => {
 
 			addItemToOrder('fee_lines', newFeelLine);
 		},
-		[calculateTaxesFromPrice, addItemToOrder]
+		[calculateTaxesFromValue, addItemToOrder]
 	);
 
 	return { addFee };

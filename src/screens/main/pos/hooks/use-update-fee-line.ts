@@ -1,11 +1,8 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
-
-import { useTaxCalculation } from './use-tax-calculation';
-import { useAppState } from '../../../../contexts/app-state';
-import { useTaxHelpers } from '../../contexts/tax-helpers';
+import { getTaxStatusFromMetaData } from './utils';
+import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
+import { useTaxDisplay } from '../../hooks/taxes/use-tax-display';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -24,22 +21,8 @@ interface Changes {
  */
 export const useUpdateFeeLine = () => {
 	const { currentOrder } = useCurrentOrder();
-	const { store } = useAppState();
-	const taxDisplayCart = useObservableEagerState(store?.tax_display_cart$ || of('excl'));
-	const { calculateTaxesFromPrice } = useTaxHelpers();
-	const { calculateLineItemTaxes } = useTaxCalculation();
-
-	/**
-	 * Get tax status from fee line meta data
-	 *
-	 * @TODO - default is 'taxable', is this correct?
-	 */
-	const getTaxStatus = (lineItem: FeeLine): string => {
-		const taxStatusMetaData = lineItem.meta_data?.find(
-			(meta) => meta.key === '_woocommerce_pos_tax_status'
-		);
-		return taxStatusMetaData?.value ?? 'taxable';
-	};
+	const { inclOrExcl } = useTaxDisplay({ context: 'cart' });
+	const { calculateTaxesFromValue, calculateLineItemTaxes } = useTaxCalculator();
 
 	/**
 	 * Update name of line item
@@ -55,14 +38,14 @@ export const useUpdateFeeLine = () => {
 	 * Update total of fee line
 	 */
 	const updateTotal = (lineItem: FeeLine, newTotal: number): FeeLine => {
-		const taxStatus = getTaxStatus(lineItem);
+		const taxStatus = getTaxStatusFromMetaData(lineItem.meta_data);
 
-		if (taxDisplayCart === 'incl') {
-			const taxes = calculateTaxesFromPrice({
-				price: newTotal,
+		if (inclOrExcl === 'incl') {
+			const taxes = calculateTaxesFromValue({
+				value: newTotal,
 				taxClass: lineItem?.tax_class ?? '',
 				taxStatus,
-				pricesIncludeTax: true,
+				valueIncludesTax: true,
 			});
 			newTotal -= taxes.total;
 		}

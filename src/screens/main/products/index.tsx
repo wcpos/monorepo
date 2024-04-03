@@ -16,7 +16,7 @@ import EditVariation from './edit-variation';
 import Products from './products';
 import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
-import { TaxHelpersProvider } from '../contexts/tax-helpers';
+import { TaxRatesProvider } from '../contexts/tax-rates';
 import useUISettings from '../contexts/ui-settings';
 import useBaseTaxLocation from '../hooks/use-base-tax-location';
 import { useCollection } from '../hooks/use-collection';
@@ -36,27 +36,22 @@ const Stack = createStackNavigator<ProductsStackParamList>();
  * TODO: move the Products provider here
  */
 const ProductsWithProviders = () => {
-	const location = useBaseTaxLocation();
-
 	/**
 	 *
 	 */
 	const taxQuery = useQuery({
-		queryKeys: ['tax-rates', 'base'],
+		queryKeys: ['tax-rates'],
 		collectionName: 'taxes',
-		initialParams: {
-			search: location,
-		},
 	});
 
 	return (
 		<ErrorBoundary>
 			<Suspense>
-				<TaxHelpersProvider taxQuery={taxQuery}>
+				<TaxRatesProvider taxQuery={taxQuery}>
 					<Suspense>
 						<Products />
 					</Suspense>
-				</TaxHelpersProvider>
+				</TaxRatesProvider>
 			</Suspense>
 		</ErrorBoundary>
 	);

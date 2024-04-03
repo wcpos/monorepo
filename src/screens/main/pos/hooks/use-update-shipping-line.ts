@@ -1,11 +1,7 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-import { of } from 'rxjs';
-
-import { useShippingTaxCalculation } from './use-shipping-tax-calculation';
-import { useAppState } from '../../../../contexts/app-state';
-import { useTaxHelpers } from '../../contexts/tax-helpers';
+import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
+import { useTaxDisplay } from '../../hooks/taxes/use-tax-display';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -24,10 +20,8 @@ interface Changes {
  */
 export const useUpdateShippingLine = () => {
 	const { currentOrder } = useCurrentOrder();
-	const { store } = useAppState();
-	const taxDisplayCart = useObservableEagerState(store?.tax_display_cart$ || of('excl'));
-	const { calculateTaxesFromPrice } = useTaxHelpers();
-	const { calculateShippingLineTaxes } = useShippingTaxCalculation();
+	const { inclOrExcl } = useTaxDisplay({ context: 'cart' });
+	const { calculateTaxesFromValue, calculateShippingLineTaxes } = useTaxCalculator();
 
 	/**
 	 * Update name of line item
@@ -43,12 +37,12 @@ export const useUpdateShippingLine = () => {
 	 * Update total of fee line
 	 */
 	const updateTotal = (shippingLine: ShippingLine, newTotal: number): ShippingLine => {
-		if (taxDisplayCart === 'incl') {
-			const taxes = calculateTaxesFromPrice({
-				price: newTotal,
+		if (inclOrExcl === 'incl') {
+			const taxes = calculateTaxesFromValue({
+				value: newTotal,
 				taxClass: 'standard', // TODO: what to put here?
 				taxStatus: 'taxable', // TODO: what to put here?
-				pricesIncludeTax: true,
+				valueIncludesTax: true,
 			});
 			newTotal -= taxes.total;
 		}

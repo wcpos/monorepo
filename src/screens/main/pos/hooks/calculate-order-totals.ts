@@ -1,14 +1,17 @@
-import * as React from 'react';
-
 import round from 'lodash/round';
-import { useObservableRef } from 'observable-hooks';
 
-import { useTaxRates } from '../../contexts/tax-rates';
-
-type LineItemDocument = import('@wcpos/database').LineItemDocument;
-type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
-type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+
+interface Props {
+	lineItems?: LineItem[];
+	shippingLines?: ShippingLine[];
+	feeLines?: FeeLine[];
+	taxRates?: TaxRateDocument[];
+	taxRoundAtSubtotal?: boolean;
+}
 
 /**
  *
@@ -20,19 +23,13 @@ function parseNumber(value: any): number {
 /**
  *
  */
-function calculateOrderTotalsAndTaxes({
-	lineItems,
-	shippingLines,
-	feeLines,
-	taxRates,
-	taxRoundAtSubtotal,
-}: {
-	lineItems: LineItemDocument[];
-	shippingLines: ShippingLineDocument[];
-	feeLines: FeeLineDocument[];
-	taxRates: TaxRateDocument[];
-	taxRoundAtSubtotal: boolean;
-}) {
+export function calculateOrderTotals({
+	lineItems = [],
+	shippingLines = [],
+	feeLines = [],
+	taxRates = [],
+	taxRoundAtSubtotal = false,
+}: Props) {
 	let discount_total = 0;
 	let discount_tax = 0;
 	let shipping_total = 0;
@@ -123,6 +120,9 @@ function calculateOrderTotalsAndTaxes({
 	const filteredTaxLines = taxLines.filter((taxLine) => parseFloat(taxLine.tax_total) !== 0);
 
 	return {
+		/**
+		 * These properties are stored on the order document
+		 */
 		discount_total: String(round(discount_total, 6)),
 		discount_tax: String(round(discount_tax, 6)),
 		shipping_total: String(round(shipping_total, 6)),
@@ -143,50 +143,3 @@ function calculateOrderTotalsAndTaxes({
 		fee_tax: String(round(fee_tax, 6)),
 	};
 }
-
-/**
- *
- */
-export const useTotalsCalculation = (order) => {
-	const { rates, taxRoundAtSubtotal } = useTaxRates();
-	const [extraTotalsRef, extraTotals$] = useObservableRef({
-		subtotal: '0',
-		subtotal_tax: '0',
-		fee_total: '0',
-		fee_tax: '0',
-	});
-
-	/**
-	 *
-	 */
-	const calculateOrderTotals = React.useCallback(
-		({ lineItems, feeLines, shippingLines }) => {
-			const totals = calculateOrderTotalsAndTaxes({
-				lineItems,
-				feeLines,
-				shippingLines,
-				taxRates: rates, // NOTE: rates are only used to extract label and compound, not for calculation
-				taxRoundAtSubtotal,
-			});
-			order.incrementalPatch({
-				discount_tax: totals.discount_tax,
-				discount_total: totals.discount_total,
-				shipping_tax: totals.shipping_tax,
-				shipping_total: totals.shipping_total,
-				cart_tax: totals.cart_tax,
-				total_tax: totals.total_tax,
-				total: totals.total,
-				tax_lines: totals.tax_lines,
-			});
-			extraTotalsRef.current = {
-				subtotal: totals.subtotal,
-				subtotal_tax: totals.subtotal_tax,
-				fee_total: totals.fee_total,
-				fee_tax: totals.fee_tax,
-			};
-		},
-		[rates, taxRoundAtSubtotal, order, extraTotalsRef]
-	);
-
-	return { calculateOrderTotals, extraTotals$ };
-};

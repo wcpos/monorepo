@@ -32,6 +32,18 @@ export const getUuidFromLineItemMetaData = (metaData: CartLine['meta_data']) => 
 };
 
 /**
+ * Get tax status from fee line meta data
+ *
+ * @TODO - default is 'taxable', is this correct?
+ */
+export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
+	const taxStatusMetaData = (metaData ?? []).find(
+		(meta) => meta.key === '_woocommerce_pos_tax_status'
+	);
+	return (taxStatusMetaData?.value ?? 'taxable') as 'taxable' | 'none' | 'shipping';
+};
+
+/**
  * Retrieves the UUID from a line item's meta data.
  */
 export const getUuidFromLineItem = (item: CartLine) => {
