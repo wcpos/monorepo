@@ -19,16 +19,16 @@
     "generate-interfaces:watch": "generate-interfaces -w \"./src/**/schema.json\""
   },
   "dependencies": {
-    "@orama/orama": "^2.0.11",
-    "@orama/plugin-data-persistence": "^2.0.11",
+    "@orama/orama": "^2.0.12",
+    "@orama/plugin-data-persistence": "^2.0.12",
     "c-promise2": "^0.13.12",
-    "expo-sqlite": "~13.3.0",
+    "expo-sqlite": "~13.4.0",
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.17.21",
     "observable-hooks": "4.2.3",
     "react": "18.2.0",
-    "rxdb": "^15.14.0",
-    "rxdb-premium": "^15.12.0",
+    "rxdb": "^15.16.0",
+    "rxdb-premium": "^15.15.1",
     "rxjs": "7.8.1",
     "uuid": "9.0.1"
   },

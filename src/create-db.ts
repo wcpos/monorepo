@@ -4,7 +4,6 @@ import { disableVersionCheck } from 'rxdb-premium/plugins/shared';
 import log from '@wcpos/utils/src/logger';
 
 import config from './adapter';
-import { disableVersionCheck } from 'rxdb-premium/dist/es/shared/version-check.js';
 
 import './plugins';
 disableVersionCheck();

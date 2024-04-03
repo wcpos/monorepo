@@ -1,5 +1,3 @@
-import { Subject } from 'rxjs';
-
 import log from '@wcpos/utils/src/logger';
 
 import { storeCollections } from './collections';
@@ -9,9 +7,6 @@ export type StoreDatabaseCollections = {
 	products: import('./collections/products').ProductCollection;
 	variations: import('./collections/variations').ProductVariationCollection;
 	orders: import('./collections/orders').OrderCollection;
-	line_items: import('./collections/line-items').LineItemCollection;
-	fee_lines: import('./collections/fee-lines').FeeLineCollection;
-	shipping_lines: import('./collections/shipping-lines').ShippingLineCollection;
 	customers: import('./collections/customers').CustomerCollection;
 	taxes: import('./collections/tax-rates').TaxRateCollection;
 	payment_gateways: import('./collections/payment-gateways').PaymentGatewayCollection;
@@ -43,7 +38,7 @@ export async function createStoreDB(id: string) {
 		return db;
 	} catch (error) {
 		log.error(error);
-		removeDB(name);
+		removeDB(name + '_v150');
 	}
 	// if (!registry.has(id)) {
 	// 	const name = sanitizeStoreName(id);
@@ -67,5 +62,5 @@ export async function createStoreDB(id: string) {
  */
 export async function removeStoreDB(id: string) {
 	const name = sanitizeStoreName(id);
-	return removeDB(name);
+	return removeDB(name + '_v150');
 }

@@ -28,7 +28,7 @@ export async function createUserDB() {
 			userDB = Promise.resolve(db);
 		} catch (error) {
 			log.error(error);
-			removeDB('wcposusers');
+			removeDB('wcposusers_v150');
 		}
 	}
 
@@ -39,5 +39,5 @@ export async function createUserDB() {
  *
  */
 export async function removeUserDB() {
-	return removeDB('wcposusers');
+	return removeDB('wcposusers_v150');
 }
