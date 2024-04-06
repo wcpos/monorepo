@@ -4,15 +4,19 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
-import useCurrencyFormat from '../../hooks/use-currency-format';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
 type Props = {
 	item: import('@wcpos/database').OrderDocument;
 };
 
+/**
+ *
+ */
 const Total = ({ item: order }: Props) => {
 	const total = useObservableEagerState(order.total$);
-	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
+	const currencySymbol = useObservableEagerState(order.currency_symbol$);
+	const { format } = useCurrencyFormat({ currencySymbol });
 
 	return total ? <Text>{format(total || 0)}</Text> : <Text.Skeleton length="short" />;
 };

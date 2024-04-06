@@ -1,20 +1,16 @@
 import * as React from 'react';
 
-import isEmpty from 'lodash/isEmpty';
-import { useObservableEagerState } from 'observable-hooks';
-import { BehaviorSubject } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
+import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Text from '@wcpos/components/src/text';
 
-import CustomerNote from './customer-note';
-import ItemizedTaxes from './itemized-taxes';
-import { useAppState } from '../../../../contexts/app-state';
+import { CustomerNote } from './totals/customer-note';
+import { Taxes } from './totals/taxes';
 import { useT } from '../../../../contexts/translations';
 import { useTaxDisplay } from '../../hooks/taxes/use-tax-display';
-import useCurrencyFormat from '../../hooks/use-currency-format';
-import { useCurrentOrder } from '../contexts/current-order';
+import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
 import { useOrderTotals } from '../hooks/use-order-totals';
 
 /**
@@ -23,12 +19,8 @@ import { useOrderTotals } from '../hooks/use-order-totals';
 const Totals = () => {
 	const theme = useTheme();
 	const t = useT();
-	const { currentOrder } = useCurrentOrder();
-	const { format } = useCurrencyFormat({ currencySymbol: currentOrder.currency_symbol });
+	const { format } = useCurrentOrderCurrencyFormat();
 	const { inclOrExcl } = useTaxDisplay({ context: 'cart' });
-	const { store } = useAppState();
-	const taxTotalDisplay = useObservableEagerState(store.tax_total_display$);
-	const calcTaxes = true;
 
 	const {
 		subtotal,
@@ -64,8 +56,6 @@ const Totals = () => {
 		inclOrExcl === 'incl' ? parseFloat(fee_total) + parseFloat(fee_tax) : fee_total;
 	const displayShippingTotal =
 		inclOrExcl === 'incl' ? parseFloat(shipping_total) + parseFloat(shipping_tax) : shipping_total;
-
-	const customerNote = useObservableEagerState(currentOrder.customer_note$);
 
 	return (
 		<>
@@ -128,42 +118,14 @@ const Totals = () => {
 							</Box>
 						)
 					}
-					{calcTaxes && hasTax ? (
-						taxTotalDisplay === 'itemized' ? (
-							<ItemizedTaxes taxLines={tax_lines} taxDisplayCart={inclOrExcl} />
-						) : (
-							<Box horizontal>
-								<Box fill>
-									<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
-								</Box>
-								<Box horizontal space="normal">
-									<Box fill align="end">
-										<Text>{inclOrExcl}</Text>
-									</Box>
-									<Box>
-										<Text>{format(total_tax || 0)}</Text>
-									</Box>
-								</Box>
-							</Box>
-						)
+					{hasTax ? (
+						<ErrorBoundary>
+							<Taxes totalTax={total_tax} taxLines={tax_lines} />
+						</ErrorBoundary>
 					) : null}
 				</Box>
 			) : null}
-			{!isEmpty(customerNote) && (
-				<Box
-					padding="small"
-					space="small"
-					border
-					style={{
-						borderLeftWidth: 0,
-						borderRightWidth: 0,
-						borderColor: theme.colors.lightGrey,
-						backgroundColor: theme.colors.lightestGrey,
-					}}
-				>
-					<CustomerNote note={customerNote} />
-				</Box>
-			)}
+			<CustomerNote />
 		</>
 	);
 };

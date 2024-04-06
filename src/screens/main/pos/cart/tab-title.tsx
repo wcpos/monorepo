@@ -5,7 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import Text from '@wcpos/components/src/text';
 
 import { useT } from '../../../../contexts/translations';
-import useCurrencyFormat from '../../hooks/use-currency-format';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
 interface Props {
 	focused: boolean;
@@ -17,7 +17,8 @@ interface Props {
  */
 const CartTabTitle = ({ focused, order }: Props) => {
 	const total = useObservableEagerState(order?.total$);
-	const { format } = useCurrencyFormat({ currencySymbol: order.currency_symbol });
+	const currencySymbol = useObservableEagerState(order?.currency_symbol$);
+	const { format } = useCurrencyFormat({ currencySymbol });
 	const t = useT();
 
 	return (

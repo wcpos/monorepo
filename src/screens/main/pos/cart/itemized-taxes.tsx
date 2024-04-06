@@ -4,13 +4,13 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
 import { useT } from '../../../../contexts/translations';
-import useCurrencyFormat from '../../hooks/use-currency-format';
+import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
 
 /**
  *
  */
 const ItemizedTaxes = ({ taxLines = [], taxDisplayCart }) => {
-	const { format } = useCurrencyFormat();
+	const { format } = useCurrentOrderCurrencyFormat();
 	const t = useT();
 
 	return (
@@ -27,7 +27,7 @@ const ItemizedTaxes = ({ taxLines = [], taxDisplayCart }) => {
 							<Box horizontal space="normal">
 								<Box fill align="end">
 									<Text>
-										{taxDisplayCart}. {tax.label}
+										{taxDisplayCart} {tax.label}
 									</Text>
 								</Box>
 								<Box>

@@ -6,7 +6,7 @@ import Tooltip from '@wcpos/components/src/tooltip';
 
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useTaxDisplayValues } from '../../hooks/taxes/use-tax-display-values';
-import useCurrencyFormat from '../../hooks/use-currency-format';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
 interface Props {
 	price: string;

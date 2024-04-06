@@ -7,7 +7,7 @@ import Text from '@wcpos/components/src/text';
 
 import NumberInput from '../../../components/number-input';
 import { useTaxDisplayValues } from '../../../hooks/taxes/use-tax-display-values';
-import useCurrencyFormat from '../../../hooks/use-currency-format';
+import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 import { getTaxStatusFromMetaData } from '../../hooks/utils';
 
@@ -23,7 +23,6 @@ interface Props {
  */
 export const Subtotal = ({ uuid, item, column }: Props) => {
 	const { updateLineItem } = useUpdateLineItem();
-
 	const { format } = useCurrencyFormat();
 	const { display } = column;
 	const taxStatus = getTaxStatusFromMetaData(item.meta_data);

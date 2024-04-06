@@ -11,7 +11,7 @@ import Text from '@wcpos/components/src/text';
 import VariationButtons from './buttons';
 import VariationSelect from './select';
 import { useT } from '../../../../../../contexts/translations';
-import useCurrencyFormat from '../../../../hooks/use-currency-format';
+import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type LineItemDocument = import('@wcpos/database').LineItemDocument;

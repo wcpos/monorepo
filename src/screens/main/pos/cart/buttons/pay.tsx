@@ -9,7 +9,7 @@ import { useSnackbar } from '@wcpos/components/src/snackbar/use-snackbar';
 
 import { useT } from '../../../../../contexts/translations';
 import usePushDocument from '../../../contexts/use-push-document';
-import useCurrencyFormat from '../../../hooks/use-currency-format';
+import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useCurrentOrder } from '../../contexts/current-order';
 
 /**
@@ -18,7 +18,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
 const PayButton = () => {
 	const { currentOrder } = useCurrentOrder();
 	const total = useObservableEagerState(currentOrder.total$);
-	const { format } = useCurrencyFormat({ currencySymbol: currentOrder.currency_symbol });
+	const { format } = useCurrentOrderCurrencyFormat();
 	const navigation = useNavigation();
 	const [loading, setLoading] = React.useState(false);
 	const addSnackbar = useSnackbar();

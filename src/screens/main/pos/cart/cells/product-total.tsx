@@ -7,15 +7,21 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
 import { useAppState } from '../../../../../contexts/app-state';
-import useCurrencyFormat from '../../../hooks/use-currency-format';
+import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+type CartItem = LineItem | FeeLine | ShippingLine;
 
 interface Props {
-	item:
-		| import('@wcpos/database').LineItemDocument
-		| import('@wcpos/database').FeeLineDocument
-		| import('@wcpos/database').ShippingLineDocument;
+	item: CartItem;
+	column: import('@wcpos/components/src/table').ColumnProps<CartItem>;
 }
 
+/**
+ *
+ */
 export const ProductTotal = ({ item, column }: Props) => {
 	const { format } = useCurrencyFormat();
 	const { display } = column;

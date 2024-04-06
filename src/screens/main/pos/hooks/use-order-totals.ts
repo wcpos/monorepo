@@ -1,13 +1,8 @@
 import * as React from 'react';
 
-import {
-	useObservable,
-	useObservableEagerState,
-	useSubscription,
-	useObservableState,
-} from 'observable-hooks';
+import { useObservable, useObservableState } from 'observable-hooks';
 import { combineLatest } from 'rxjs';
-import { map, tap, switchMap, debounceTime, distinct, distinctUntilChanged } from 'rxjs/operators';
+import { map, switchMap, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 
 import { calculateOrderTotals } from './calculate-order-totals';
 import { useTaxRates } from '../../contexts/tax-rates';
@@ -62,7 +57,20 @@ export const useOrderTotals = () => {
 		[currentOrder, rates, taxRoundAtSubtotal]
 	);
 
-	const totals = useObservableState(totals$, {});
+	const totals = useObservableState(totals$, {
+		discount_total: currentOrder.discount_total || '',
+		discount_tax: currentOrder.discount_tax || '',
+		shipping_total: currentOrder.shipping_total || '',
+		shipping_tax: currentOrder.shipping_tax || '',
+		cart_tax: currentOrder.cart_tax || '',
+		total: currentOrder.total || '',
+		total_tax: currentOrder.total_tax || '',
+		tax_lines: currentOrder.tax_lines || [],
+		subtotal: '',
+		subtotal_tax: '',
+		fee_total: '',
+		fee_tax: '',
+	});
 
 	return totals;
 };

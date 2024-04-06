@@ -7,7 +7,7 @@ import Text from '@wcpos/components/src/text';
 
 import NumberInput from '../../../components/number-input';
 import { useTaxDisplayValues } from '../../../hooks/taxes/use-tax-display-values';
-import useCurrencyFormat from '../../../hooks/use-currency-format';
+import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];

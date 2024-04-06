@@ -10,7 +10,7 @@ import Text from '@wcpos/components/src/text';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import useCurrencyFormat from '../hooks/use-currency-format';
+import { useCurrencyFormat } from '../hooks/use-currency-format';
 
 interface NumberInputProps {
 	/**  */

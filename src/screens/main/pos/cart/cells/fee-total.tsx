@@ -7,8 +7,7 @@ import Text from '@wcpos/components/src/text';
 
 import NumberInput from '../../../components/number-input';
 import { useTaxDisplayValues } from '../../../hooks/taxes/use-tax-display-values';
-import useCurrencyFormat from '../../../hooks/use-currency-format';
-import { useCurrentOrder } from '../../contexts/current-order';
+import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
@@ -23,8 +22,7 @@ interface Props {
  */
 export const FeeTotal = ({ uuid, item, column }: Props) => {
 	const { updateFeeLine } = useUpdateFeeLine();
-	const { currentOrder } = useCurrentOrder();
-	const { format } = useCurrencyFormat({ currencySymbol: currentOrder.currency_symbol });
+	const { format } = useCurrentOrderCurrencyFormat();
 	const { display } = column;
 	const { displayValue, inclOrExcl } = useTaxDisplayValues({
 		value: item.total,
