@@ -7,7 +7,12 @@ import log from '@wcpos/utils/src/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useUpdateLineItem } from './use-update-line-item';
-import { priceToNumber, findByProductVariationID, getUuidFromLineItem } from './utils';
+import {
+	priceToNumber,
+	findByProductVariationID,
+	getUuidFromLineItem,
+	sanitizePrice,
+} from './utils';
 import { useT } from '../../../../contexts/translations';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
@@ -35,23 +40,26 @@ export const useAddProduct = () => {
 	 */
 	const convertProductToLineItem = React.useCallback(
 		(product: ProductDocument): LineItem => {
-			let priceWithoutTax = priceToNumber(product.price);
+			const price = sanitizePrice(product.price);
+			const regularPrice = sanitizePrice(product.regular_price);
+
+			let priceWithoutTax = priceToNumber(price);
 			const tax = calculateTaxesFromValue({
-				value: product.price,
+				value: price,
 				taxClass: product.tax_class,
 				taxStatus: product.tax_status,
 			});
 
-			let regularPriceWithoutTax = priceToNumber(product.regular_price);
+			let regularPriceWithoutTax = priceToNumber(regularPrice);
 			const regularTax = calculateTaxesFromValue({
-				value: product.regular_price,
+				value: regularPrice,
 				taxClass: product.tax_class,
 				taxStatus: product.tax_status,
 			});
 
 			if (pricesIncludeTax) {
-				priceWithoutTax = priceToNumber(product.price) - tax.total;
-				regularPriceWithoutTax = priceToNumber(product.regular_price) - regularTax.total;
+				priceWithoutTax = priceToNumber(price) - tax.total;
+				regularPriceWithoutTax = priceToNumber(regularPrice) - regularTax.total;
 			}
 
 			return {

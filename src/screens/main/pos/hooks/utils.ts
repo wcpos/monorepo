@@ -13,6 +13,11 @@ type CartLine = LineItem | FeeLine | ShippingLine;
 export const priceToNumber = (price?: string) => parseFloat(isEmpty(price) ? '0' : price);
 
 /**
+ *
+ */
+export const sanitizePrice = (price?: string) => (price && price !== '' ? price : '0');
+
+/**
  * @returns {string} - Current GMT date
  */
 export const getCurrentGMTDate = () => {

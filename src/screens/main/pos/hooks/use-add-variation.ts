@@ -7,7 +7,12 @@ import log from '@wcpos/utils/src/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
 import { useUpdateLineItem } from './use-update-line-item';
-import { priceToNumber, findByProductVariationID, getUuidFromLineItem } from './utils';
+import {
+	priceToNumber,
+	findByProductVariationID,
+	getUuidFromLineItem,
+	sanitizePrice,
+} from './utils';
 import { useT } from '../../../../contexts/translations';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
@@ -42,25 +47,28 @@ export const useAddVariation = () => {
 			parent: ProductDocument,
 			metaData?: MetaData[]
 		): LineItem => {
-			let priceWithoutTax = priceToNumber(variation.price);
+			const price = sanitizePrice(variation.price);
+			const regularPrice = sanitizePrice(variation.regular_price);
+
+			let priceWithoutTax = priceToNumber(price);
 			let attributes = metaData;
 
 			const tax = calculateTaxesFromValue({
-				value: variation.price,
+				value: price,
 				taxClass: variation.tax_class,
 				taxStatus: variation.tax_status,
 			});
 
-			let regularPriceWithoutTax = priceToNumber(variation.regular_price);
+			let regularPriceWithoutTax = priceToNumber(regularPrice);
 			const regularTax = calculateTaxesFromValue({
-				value: variation.regular_price,
+				value: regularPrice,
 				taxClass: variation.tax_class,
 				taxStatus: variation.tax_status,
 			});
 
 			if (pricesIncludeTax) {
-				priceWithoutTax = priceToNumber(variation.price) - tax.total;
-				regularPriceWithoutTax = priceToNumber(variation.regular_price) - regularTax.total;
+				priceWithoutTax = priceToNumber(price) - tax.total;
+				regularPriceWithoutTax = priceToNumber(regularPrice) - regularTax.total;
 			}
 
 			if (!attributes) {
