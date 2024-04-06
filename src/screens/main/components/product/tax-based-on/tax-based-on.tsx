@@ -1,9 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import { useObservableState, useObservableSuspense } from 'observable-hooks';
-import { map } from 'rxjs/operators';
-
 import { InlineError } from '@wcpos/components/src/inline-error/inline-error';
 import Popover from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
@@ -13,17 +9,11 @@ import { useT } from '../../../../../contexts/translations';
 import { useTaxRates } from '../../../contexts/tax-rates';
 
 /**
- * NOTE: this must be used within a TaxRatesProvider
+ *
  */
-const TaxBasedOn = ({ taxBasedOn }) => {
+const TaxBasedOn = () => {
 	const [opened, setOpened] = React.useState(false);
-	const { taxQuery } = useTaxRates();
-	const result = useObservableSuspense(taxQuery.resource);
-	const rates = result.hits.map(({ document }) => document);
-	const { country, state, city, postcode } = useObservableState(
-		taxQuery.params$.pipe(map((params) => get(params, ['search'], {}))),
-		get(taxQuery.getParams(), ['search'], {})
-	);
+	const { rates, taxBasedOn, location } = useTaxRates();
 	const t = useT();
 
 	/**
@@ -46,7 +36,7 @@ const TaxBasedOn = ({ taxBasedOn }) => {
 			placement="top-start"
 		>
 			<Popover.Target>
-				{result.count > 0 ? (
+				{rates.length > 0 ? (
 					<Text size="small">{taxBasedOnLabel}</Text>
 				) : (
 					<InlineError size="small" message={taxBasedOnLabel} />
@@ -55,10 +45,10 @@ const TaxBasedOn = ({ taxBasedOn }) => {
 			<Popover.Content style={{ width: 380 }}>
 				<DisplayCurrentTaxRates
 					rates={rates}
-					country={country}
-					state={state}
-					city={city}
-					postcode={postcode}
+					country={location.country}
+					state={location.state}
+					city={location.city}
+					postcode={location.postcode}
 					setOpened={setOpened}
 				/>
 			</Popover.Content>

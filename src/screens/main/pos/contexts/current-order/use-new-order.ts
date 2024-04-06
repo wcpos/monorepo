@@ -1,31 +1,15 @@
 import * as React from 'react';
 
-import {
-	ObservableResource,
-	useObservableState,
-	useObservableSuspense,
-	useSubscription,
-	useObservable,
-} from 'observable-hooks';
+import { useObservable } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
-import { from, throwError, combineLatest, of } from 'rxjs';
-import {
-	switchMap,
-	filter,
-	first,
-	expand,
-	catchError,
-	tap,
-	distinctUntilChanged,
-	shareReplay,
-	withLatestFrom,
-} from 'rxjs/operators';
+import { from, combineLatest } from 'rxjs';
+import { switchMap, shareReplay } from 'rxjs/operators';
 
 import { createTemporaryDB } from '@wcpos/database';
 
-import { useAppState } from '../../../contexts/app-state';
-import allCurrencies from '../../../contexts/currencies/currencies.json';
-import { useDefaultCustomer } from '../hooks/use-default-customer';
+import { useAppState } from '../../../../../contexts/app-state';
+import allCurrencies from '../../../../../contexts/currencies/currencies.json';
+import { useDefaultCustomer } from '../../../hooks/use-default-customer';
 
 const temporaryDB$ = from(createTemporaryDB()).pipe(shareReplay(1));
 

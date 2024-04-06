@@ -139,7 +139,7 @@ const Products = () => {
 								footer={
 									calcTaxes && (
 										<Box fill padding="small" space="xSmall" horizontal>
-											<TaxBasedOn taxBasedOn="base" />
+											<TaxBasedOn />
 										</Box>
 									)
 								}

@@ -2,10 +2,8 @@ import * as React from 'react';
 
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
-import { ObservableResource, useObservable } from 'observable-hooks';
-import { isRxDocument } from 'rxdb';
-import { from, of } from 'rxjs';
-import { switchMap, distinctUntilChanged, tap } from 'rxjs/operators';
+import { ObservableResource } from 'observable-hooks';
+import { from } from 'rxjs';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
@@ -13,11 +11,10 @@ import { useQuery } from '@wcpos/query';
 
 import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
+import { useCurrentOrderResource } from './contexts/current-order/use-current-order-resource';
 import POS from './pos';
-import { useNewOrder } from './use-new-order';
 import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
-import { TaxRatesProvider } from '../contexts/tax-rates';
 import { useCollection } from '../hooks/use-collection';
 import Receipt from '../receipt';
 
@@ -35,31 +32,7 @@ const Stack = createStackNavigator<POSStackParamList>();
  *
  */
 const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'POS'>) => {
-	const { newOrder$ } = useNewOrder();
-	const { collection } = useCollection('orders');
-
-	/**
-	 * Construct observable which emits order document when orderID changes
-	 */
-	const currentOrder$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(([uuid]) => {
-					if (!uuid) return newOrder$;
-					return collection.findOne({ selector: { uuid, status: 'pos-open' } }).$.pipe(
-						// make sure we have an order, eg: voiding an order will emit null
-						switchMap((order) => (isRxDocument(order) ? of(order) : newOrder$)),
-						distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid)
-					);
-				})
-			),
-		[route.params?.orderID]
-	);
-
-	/**
-	 * Create resource so we can suspend until order is loaded
-	 */
-	const resource = React.useMemo(() => new ObservableResource(currentOrder$), [currentOrder$]);
+	const { resource } = useCurrentOrderResource({ uuid: route.params?.orderID });
 
 	/**
 	 *
@@ -74,23 +47,11 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 		},
 	});
 
-	/**
-	 *
-	 */
-	const taxQuery = useQuery({
-		queryKeys: ['tax-rates'],
-		collectionName: 'taxes',
-	});
-
 	return (
 		<Suspense>
-			<CurrentOrderProvider resource={resource} taxQuery={taxQuery}>
+			<CurrentOrderProvider resource={resource}>
 				<Suspense>
-					<TaxRatesProvider taxQuery={taxQuery}>
-						<Suspense>
-							<POS />
-						</Suspense>
-					</TaxRatesProvider>
+					<POS />
 				</Suspense>
 			</CurrentOrderProvider>
 		</Suspense>

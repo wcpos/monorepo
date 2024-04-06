@@ -13,7 +13,6 @@ import log from '@wcpos/utils/src/logger';
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
 import { useBarcode } from './use-barcode';
-import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import DataTable from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
@@ -46,8 +45,6 @@ const POSProducts = ({ isColumn = false }) => {
 		uiSettings.get$('showOutOfStock'),
 		uiSettings.get('showOutOfStock')
 	);
-	const { store } = useAppState();
-	const taxBasedOn = useObservableState(store.tax_based_on$, store.tax_based_on);
 	const t = useT();
 
 	/**
@@ -157,7 +154,7 @@ const POSProducts = ({ isColumn = false }) => {
 								footer={
 									calcTaxes && (
 										<Box fill padding="small" space="xSmall" horizontal>
-											<TaxBasedOn taxBasedOn={taxBasedOn} />
+											<TaxBasedOn />
 										</Box>
 									)
 								}
