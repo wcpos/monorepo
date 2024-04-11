@@ -14,21 +14,19 @@
     "src/**"
   ],
   "scripts": {
-    "test": "eslint --ext ts,tsx ./src",
-    "generate-interfaces": "generate-interfaces \"./src/**/schema.json\"",
-    "generate-interfaces:watch": "generate-interfaces -w \"./src/**/schema.json\""
+    "test": "eslint --ext ts,tsx ./src"
   },
   "dependencies": {
-    "@orama/orama": "^2.0.12",
-    "@orama/plugin-data-persistence": "^2.0.12",
+    "@orama/orama": "^2.0.15",
+    "@orama/plugin-data-persistence": "^2.0.15",
     "c-promise2": "^0.13.12",
     "expo-sqlite": "~13.4.0",
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.17.21",
     "observable-hooks": "4.2.3",
     "react": "18.2.0",
-    "rxdb": "^15.16.0",
-    "rxdb-premium": "^15.15.1",
+    "rxdb": "^15.17.0",
+    "rxdb-premium": "^15.17.0",
     "rxjs": "7.8.1",
     "uuid": "9.0.1"
   },
@@ -40,9 +38,8 @@
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
     "jest": "^29.7.0",
-    "jsonschema-to-interface": "1.0.5",
     "ts-jest": "^29.1.2",
-    "typescript": "^5.4.3"
+    "typescript": "^5.4.5"
   },
   "eslintConfig": {
     "extends": "@wcpos/eslint-config"

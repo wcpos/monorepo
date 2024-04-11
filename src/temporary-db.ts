@@ -1,19 +1,30 @@
-import { createRxDatabase } from 'rxdb';
+import {
+	createRxDatabase,
+	toTypedRxJsonSchema,
+	ExtractDocumentTypeFromTypedRxJsonSchema,
+	RxJsonSchema,
+} from 'rxdb';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import log from '@wcpos/utils/src/logger';
 
-import orderSchema from './collections/orders/schema.json';
+import { ordersLiteral } from './collections/schemas/orders';
 
-export type TemporaryDatabaseCollections = {
-	orders: import('./collections/orders').OrderCollection;
-};
-export type TemporaryDatabase = import('rxdb').RxDatabase<TemporaryDatabaseCollections>;
+import type { RxCollectionCreator, RxCollection, RxDatabase } from 'rxdb';
+
+const ordersTyped = toTypedRxJsonSchema(ordersLiteral);
+export const OrderSchema: RxJsonSchema<OrderDocument> = ordersLiteral;
+export type OrderDocument = ExtractDocumentTypeFromTypedRxJsonSchema<typeof ordersTyped>;
+export type OrderCollection = RxCollection<OrderDocument>;
+const orders: RxCollectionCreator<OrderDocument> = { schema: ordersLiteral };
+const collections = { orders };
+
+export type TemporaryDatabase = RxDatabase<typeof collections>;
 
 /**
  *
  */
-let temporaryDB: Promise<TemporaryDatabase | undefined>;
+let temporaryDB: Promise<TemporaryDatabase>;
 
 /**
  * This could be called more than once, so we need to make sure we only create the DB once.
@@ -21,16 +32,12 @@ let temporaryDB: Promise<TemporaryDatabase | undefined>;
 export async function createTemporaryDB() {
 	if (!temporaryDB) {
 		try {
-			const db = await createRxDatabase<TemporaryDatabase>({
+			const db = (await createRxDatabase({
 				name: 'temporary',
 				storage: getRxStorageMemory(),
-			});
-			const collections = await db?.addCollections({
-				orders: {
-					schema: orderSchema,
-				},
-			});
-			collections.orders.postCreate(function (plainData, rxDocument) {
+			})) as unknown as TemporaryDatabase;
+			const c = await db?.addCollections(collections);
+			c.orders.postCreate(function (plainData, rxDocument) {
 				Object.defineProperty(rxDocument, 'isNew', {
 					get: () => true,
 				});

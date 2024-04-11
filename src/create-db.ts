@@ -11,9 +11,9 @@ disableVersionCheck();
 /**
  * creates the generic database
  */
-export async function createDB<T>(name: string) {
+export async function createDB(name: string) {
 	try {
-		const db = await createRxDatabase<T>({
+		const db = await createRxDatabase({
 			name: `${name}_v150`,
 			...config,
 			password: 'posInstanceId',

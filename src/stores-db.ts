@@ -1,19 +1,11 @@
 import log from '@wcpos/utils/src/logger';
 
-import { storeCollections } from './collections';
+import { storeCollections, StoreCollections } from './collections';
 import { createDB, removeDB } from './create-db';
 
-export type StoreDatabaseCollections = {
-	products: import('./collections/products').ProductCollection;
-	variations: import('./collections/variations').ProductVariationCollection;
-	orders: import('./collections/orders').OrderCollection;
-	customers: import('./collections/customers').CustomerCollection;
-	taxes: import('./collections/tax-rates').TaxRateCollection;
-	payment_gateways: import('./collections/payment-gateways').PaymentGatewayCollection;
-	'products/categories': import('./collections/categories').ProductCategoryCollection;
-	'products/tags': import('./collections/tags').ProductTagCollection;
-};
-export type StoreDatabase = import('rxdb').RxDatabase<StoreDatabaseCollections>;
+import type { RxDatabase } from 'rxdb';
+
+export type StoreDatabase = RxDatabase<StoreCollections>;
 
 /**
  * Database name needs to start with a letter, id is a short uuid
@@ -33,7 +25,7 @@ function sanitizeStoreName(id: string) {
 export async function createStoreDB(id: string) {
 	const name = sanitizeStoreName(id);
 	try {
-		const db = await createDB<StoreDatabaseCollections>(name);
+		const db = await createDB(name);
 		const collections = await db?.addCollections(storeCollections);
 		return db;
 	} catch (error) {
