@@ -43,14 +43,14 @@ const preQueryParams: QueryHooks['preQueryParams'] = (queryParams) => {
 /**
  *
  */
-const postQueryResult: QueryHooks['postQueryResult'] = (docs, modifiedParams, originalParams) => {
-	if (originalParams.search && typeof originalParams.search === 'object') {
-		const { country, state, postcode, city } = originalParams.search;
-		return filterTaxRates(docs, country, state, postcode, city);
-	} else {
-		return docs;
-	}
-};
+// const postQueryResult: QueryHooks['postQueryResult'] = (docs, modifiedParams, originalParams) => {
+// 	if (originalParams.search && typeof originalParams.search === 'object') {
+// 		const { country, state, postcode, city } = originalParams.search;
+// 		return filterTaxRates(docs, country, state, postcode, city);
+// 	} else {
+// 		return docs;
+// 	}
+// };
 
 /**
  *
@@ -65,4 +65,4 @@ const filterApiQueryParams = (params, include) => {
 	return params;
 };
 
-export { preQueryParams, postQueryResult, filterApiQueryParams };
+export { preQueryParams, filterApiQueryParams };

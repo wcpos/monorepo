@@ -10,27 +10,30 @@ import {
 	distinctUntilChanged,
 } from 'rxjs/operators';
 
+import type { StoreDatabase } from '@wcpos/database';
+
 import { SubscribableBase } from './subscribable-base';
 import { isArrayOfIntegers } from './utils';
 
-import type { RxCollection } from 'rxdb';
+type Collection = StoreDatabase['collections'][keyof StoreDatabase['collections']];
 
 export interface QueryHooks {
-	preEndpoint?: (collection: RxCollection) => string;
+	preEndpoint?: (collection: Collection) => string;
 }
 
-interface CollectionReplicationConfig<T extends RxCollection> {
-	collection: T;
+interface CollectionReplicationConfig<Collection> {
+	collection: Collection;
 	httpClient: any;
 	hooks?: any;
 	endpoint: string;
 	errorSubject: Subject<Error>;
 }
 
-export class CollectionReplicationState<T extends RxCollection> extends SubscribableBase {
+export class CollectionReplicationState<T extends Collection> extends SubscribableBase {
 	private hooks: CollectionReplicationConfig<T>['hooks'];
 	public readonly endpoint: string;
 	public readonly collection: T;
+	public readonly storeDB: StoreDatabase;
 	public readonly httpClient: any;
 	private errorSubject: Subject<Error>;
 
@@ -40,27 +43,23 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	private lastFetchRemoteIDsTime = null;
 	private lastFetchUnsyncedTime = null;
 	private pollingTime = 1000 * 60 * 5; // 5 minutes
+	public readonly subs: Subscription[] = [];
 
 	/**
-	 *
+	 * All public observables should be exposed as subjects so they can be completed on cancel
 	 */
-	public readonly subs: Subscription[] = [];
 	public readonly subjects = {
 		active: new BehaviorSubject<boolean>(false), // true when something is running, false when not
-		remoteIDs: new BehaviorSubject<number[]>([]), // emits all remote ids that are known to the replication
-		localIDs: new BehaviorSubject<number[]>([]), // emits all local ids that are known to the replication
-		lastModified: new BehaviorSubject<string>(null), // emits the date of the last modified document
 		paused: new BehaviorSubject<boolean>(true), // true when the replication is paused, start true
+		total: new BehaviorSubject<number>(0), // total number of documents
 	};
 
 	/**
-	 *
+	 * Public Observables
 	 */
 	readonly active$: Observable<boolean> = this.subjects.active.asObservable();
-	readonly remoteIDs$: Observable<number[]> = this.subjects.remoteIDs.asObservable();
-	readonly localIDs$: Observable<number[]> = this.subjects.localIDs.asObservable();
-	readonly lastModified$: Observable<string> = this.subjects.lastModified.asObservable();
 	readonly paused$: Observable<boolean> = this.subjects.paused.asObservable();
+	readonly total$: Observable<number> = this.subjects.total.asObservable();
 
 	/**
 	 *
@@ -80,6 +79,7 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	}: CollectionReplicationConfig<T>) {
 		super();
 		this.collection = collection;
+		this.storeDB = collection.database;
 		this.httpClient = httpClient;
 		this.hooks = hooks || {};
 		this.endpoint = endpoint;
@@ -91,49 +91,30 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 		});
 
 		/**
-		 * Push internal subscriptions to the subs array
+		 * Push all internal subscriptions to the subs array
+		 * Internal subscriptions are cleaned up when replication is canceled
 		 */
 		this.subs.push(
 			/**
-			 * Subscribe to the remoteIDs local document
+			 * Subscribe to remote and local collections to calculate the total number of documents
 			 */
-			collection
-				.getLocal$('audit')
-				.pipe(
-					filter((localDoc) => !!localDoc),
-					map((localDoc) => localDoc.get('remoteIDs'))
-				)
-				.subscribe((remoteIDs) => {
-					this.subjects.remoteIDs.next(remoteIDs);
-				}),
-
-			/**
-			 * Subscribe to collection changes and track the array of localIDs and lastModified date
-			 * @TODO - categories and tags don't have a date_modified_gmt field, what to do?
-			 * @TODO - get the IDs without having to construict the whole document
-			 */
-			collection
-				.find({
-					selector: {
-						id: { $ne: null },
-					},
-					sort:
-						this.collection.name === 'products/categories' ||
-						this.collection.name === 'products/tags'
-							? undefined
-							: [{ date_modified_gmt: 'desc' }],
-				})
-				.$.subscribe((docs) => {
-					/**
-					 * NOTE: some schemas store use the remoteID as the primary key, which in rxdb
-					 * must be a string. So we have to make sure the id is an integer so we can compare
-					 * it to the remoteIDs array.
-					 */
-					const ids = docs.map((doc) => parseInt(doc.get('id'), 10));
-					const lastModified = docs[0]?.get('date_modified_gmt');
-					this.subjects.localIDs.next(ids);
-					this.subjects.lastModified.next(lastModified);
-				}),
+			combineLatest([
+				// remote record count
+				this.storeDB.collections.sync
+					.find({ selector: { endpoint: this.endpoint } })
+					.$.pipe(distinctUntilChanged((a, b) => a.length === b.length)),
+				// local unsynced record count
+				this.collection
+					.find({
+						selector: {
+							id: { $eq: null },
+						},
+					})
+					.$.pipe(distinctUntilChanged((a, b) => a.length === b.length)),
+			]).subscribe(([remote, local]) => {
+				console.log('total count triggered', this.endpoint);
+				this.subjects.total.next(remote.length + local.length);
+			}),
 
 			/**
 			 * Set up a polling interval to run the replication
@@ -162,12 +143,52 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 			this.start();
 		}
 
-		await this.auditIDs();
+		/**
+		 * Run can be called multiple times during a page render, so we need to make sure we only
+		 * run the replication once at a time.
+		 *
+		 * Fetching the remote state will update the sync collection, which triggers other events
+		 * such as the total count, fetching updated documents, removing orphaned documents etc
+		 */
+		if (this.lastFetchRemoteIDsTime < new Date().getTime() - this.pollingTime) {
+			this.lastFetchRemoteIDsTime = new Date().getTime();
+			const remoteState = await this.fetchRemoteState();
+			await this.audit(remoteState);
+		}
 
 		if (this.firstSyncResolver) {
 			this.firstSyncResolver();
 			this.firstSyncResolver = null; // Clear the resolver to prevent future calls
 		}
+	}
+
+	/**
+	 *
+	 */
+	async audit(remoteState) {
+		const localDocs = await this.collection.find().exec();
+		const localIDs = localDocs.map((doc) => doc.get('id')).filter((id) => Number.isInteger(id));
+		const remoteIDs = remoteState.map((doc) => doc.get('id')).filter((id) => Number.isInteger(id));
+
+		// Find all local docs that are not in the remote state
+		const remove = localIDs.filter((id) => !remoteIDs.includes(id));
+		if (remove.length > 0 && this.collection.name !== 'variations') {
+			// deletion should be rare, only when an item is deleted from the server
+			console.warn('removing', remove, 'from', this.collection.name);
+			await this.collection.find({ selector: { id: { $in: remove } } }).remove();
+		}
+
+		// Find all remote docs that have been updated
+		const localMap = new Map(localDocs.map((doc) => [doc.id, doc.date_modified_gmt]));
+
+		const updatedIds = remoteState
+			.filter((remoteDoc) => {
+				const localDate = localMap.get(remoteDoc.id);
+				return localDate && remoteDoc.date_modified_gmt > localDate;
+			})
+			.map((doc) => doc.id);
+
+		console.log('updatedIds', updatedIds);
 	}
 
 	/**
@@ -180,6 +201,7 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 
 		try {
 			const remoteIDs = await this.getRemoteIDs();
+			debugger;
 
 			// if (!Array.isArray(remoteIDs) || remoteIDs.length === 0) {
 			// 	return;
@@ -187,15 +209,9 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 
 			/**
 			 * @TODO - variations can be orphaned at the moment, we need a relationship table with parent
-			 *
-			 * @TODO - localIDs should be an array of integers, but some schemas use the remoteID as the
-			 * primary key, which in rxdb must be a string.
-			 * It's only tax rates that have this issue, I need to change the way they are stored
 			 */
-			let remove = this.subjects.localIDs.getValue().filter((id) => !remoteIDs.includes(id));
-			if (remove.length > 0 && this.collection.name === 'taxes') {
-				remove = remove.map((id) => String(id));
-			}
+			const remove = this.subjects.localIDs.getValue().filter((id) => !remoteIDs.includes(id));
+
 			if (remove.length > 0 && this.collection.name !== 'variations') {
 				// deletion should be rare, only when an item is deleted from the server
 				console.warn('removing', remove, 'from', this.collection.name);
@@ -212,15 +228,14 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	async getRemoteIDs() {
 		try {
 			if (this.lastFetchRemoteIDsTime < new Date().getTime() - this.pollingTime) {
-				const remoteIDs = await this.fetchRemoteIDs();
+				await this.fetchRemoteIDs();
 				this.lastFetchRemoteIDsTime = new Date().getTime();
-				if (isArrayOfIntegers(remoteIDs)) {
-					this.subjects.remoteIDs.next(remoteIDs); // update the remoteIDs subject immediately
-					this.collection.upsertLocal('audit', { remoteIDs }); // store the remoteIDs locally
-				}
 			}
 
-			return this.subjects.remoteIDs.getValue();
+			return this.storeDB.collections.sync
+				.find({ selector: { endpoint: this.endpoint } })
+				.exec()
+				.then((docs) => docs.map((doc) => doc.get('id')));
 		} catch (error) {
 			this.errorSubject.next(error);
 		}
@@ -230,29 +245,40 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	 * Makes a request the the endpoint to fetch all remote IDs
 	 * - can be overwritten by the fetchRemoteIDs hook, this is required for variations
 	 */
-	async fetchRemoteIDs(): Promise<number[]> {
-		if (this.hooks?.fetchRemoteIDs) {
-			/**
-			 * @HACK - this is a bit hacky, but it works for now
-			 * Variations is one collection locally, containing all variations
-			 * But it is multiple endpoints on the server, one for each product
-			 * Maybe we should have a separate collection for each variable product?
-			 */
-			return this.hooks?.fetchRemoteIDs(this.endpoint, this.collection);
+	async fetchRemoteState() {
+		// if (this.hooks?.fetchRemoteIDs) {
+		// 	/**
+		// 	 * @HACK - this is a bit hacky, but it works for now
+		// 	 * Variations is one collection locally, containing all variations
+		// 	 * But it is multiple endpoints on the server, one for each product
+		// 	 * Maybe we should have a separate collection for each variable product?
+		// 	 */
+		// 	return this.hooks?.fetchRemoteIDs(this.endpoint, this.collection);
+		// }
+
+		if (this.isStopped() || this.subjects.active.getValue()) {
+			return;
 		}
 
 		this.subjects.active.next(true);
 
 		try {
 			const response = await this.httpClient.get(this.endpoint, {
-				params: { fields: ['id'], posts_per_page: -1 },
+				params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
 			});
 
 			if (!Array.isArray(response?.data)) {
 				throw new Error('Invalid response data for remote IDs');
 			}
 
-			return response.data.map((doc) => doc.id);
+			const data = response.data.map((doc) => ({ ...doc, endpoint: this.endpoint }));
+			const { success, error } = await this.storeDB.collections.sync.bulkUpsert(data);
+
+			if (error.length > 0) {
+				throw new Error('Error saving remote state for ' + this.endpoint);
+			}
+
+			return success;
 		} catch (error) {
 			this.errorSubject.next(error);
 		} finally {
@@ -266,15 +292,37 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	 */
 	async getUnsyncedRemoteIDs() {
 		await this.firstSync;
-		const remoteIDs = this.subjects.remoteIDs.getValue();
-		const localIDs = this.subjects.localIDs.getValue();
+
+		const remoteIDs = await this.storeDB.collections.sync
+			.find({ selector: { endpoint: this.endpoint } })
+			.exec()
+			.then((docs) => docs.map((doc) => doc.get('id')))
+			.then((ids) => ids.filter((id) => Number.isInteger(id)));
+
+		const localIDs = await this.collection
+			.find()
+			.exec()
+			.then((docs) => docs.map((doc) => doc.get('id')))
+			.then((ids) => ids.filter((id) => Number.isInteger(id)));
+
 		return remoteIDs.filter((id) => !localIDs.includes(id));
 	}
 
 	async getSyncedRemoteIDs() {
 		await this.firstSync;
-		const remoteIDs = this.subjects.remoteIDs.getValue();
-		const localIDs = this.subjects.localIDs.getValue();
+
+		const remoteIDs = await this.storeDB.collections.sync
+			.find({ selector: { endpoint: this.endpoint } })
+			.exec()
+			.then((docs) => docs.map((doc) => doc.get('id')))
+			.then((ids) => ids.filter((id) => Number.isInteger(id)));
+
+		const localIDs = await this.collection
+			.find()
+			.exec()
+			.then((docs) => docs.map((doc) => doc.get('id')))
+			.then((ids) => ids.filter((id) => Number.isInteger(id)));
+
 		return remoteIDs.filter((id) => localIDs.includes(id));
 	}
 
@@ -282,9 +330,19 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 	 *
 	 */
 	async getStoredRemoteIDs() {
-		const doc = await this.collection.getLocal('audit');
-		return doc?.get('remoteIDs');
+		const remoteIDs = await this.storeDB.collections.sync
+			.find({ selector: { endpoint: this.endpoint } })
+			.exec()
+			.then((docs) => docs.map((doc) => doc.get('id')))
+			.then((ids) => ids.filter((id) => Number.isInteger(id)));
+
+		return remoteIDs;
 	}
+
+	/**
+	 *
+	 */
+	async getLocalLastModifiedDate() {}
 
 	/**
 	 *
@@ -369,43 +427,6 @@ export class CollectionReplicationState<T extends RxCollection> extends Subscrib
 		});
 
 		return response;
-	}
-
-	/**
-	 * Total count is the number of remote IDs, plus any local docs without an ID
-	 */
-	get total$() {
-		return combineLatest([this.remoteIDs$, this.unsyncedLocalDocs$]).pipe(
-			map(([remoteIDs, unsyncedLocalDocs]) => {
-				return (remoteIDs || []).length + (unsyncedLocalDocs || []).length;
-			})
-		);
-	}
-
-	/**
-	 * Don't use this, total$ is subscribed and it throws an error because we can't
-	 * unsubscribe when the collection is reset. Use the subs above instead.
-	 */
-	// get remoteIDs$() {
-	// 	return this.collection.getLocal$('audit').pipe(
-	// 		map((doc) => {
-	// 			return doc?.get('remoteIDs');
-	// 		})
-	// 	);
-	// }
-
-	/**
-	 *
-	 */
-	get unsyncedLocalDocs$() {
-		return this.collection.find({
-			selector: {
-				$or: [
-					{ id: { $eq: null } }, // Matches documents where id is explicitly null
-					{ id: { $exists: false } }, // Matches documents where id is not defined
-				],
-			},
-		}).$;
 	}
 
 	/**

@@ -126,7 +126,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 		let include = await this.collectionReplication.getUnsyncedRemoteIDs();
 		let exclude = await this.collectionReplication.getSyncedRemoteIDs();
-		const lastModified = this.collectionReplication.subjects.lastModified.getValue();
+		// const lastModified = this.collectionReplication.getLocalLastModifiedDate();
 
 		/**
 		 * Hack: if query has include / exclude, we should override above?
@@ -156,7 +156,9 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 			let response;
 
 			if (isEmpty(include)) {
-				response = await this.fetchLastModified({ lastModified });
+				// I think we can remove this now because we have remote date_modified_gmt, so we know what to fetch
+				// response = await this.fetchLastModified({ lastModified });
+				response = { data: [] };
 			} else {
 				if (exclude?.length < include?.length) {
 					response = await this.fetchUnsyncedRemoteIDs({ exclude });
