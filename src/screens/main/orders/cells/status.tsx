@@ -6,6 +6,8 @@ import { useObservableState } from 'observable-hooks';
 import Icon from '@wcpos/components/src/icon';
 import { useQueryManager } from '@wcpos/query';
 
+import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
+
 type Props = {
 	item: import('@wcpos/database').OrderDocument;
 };
@@ -58,6 +60,7 @@ const Status = ({ item: order }: Props) => {
 	const iconType = get(iconMap, [status, 'type'], 'disabled');
 	const manager = useQueryManager();
 	const query = manager.getQuery(['orders']);
+	const { getLabel } = useOrderStatusLabel();
 
 	/**
 	 *
@@ -66,7 +69,7 @@ const Status = ({ item: order }: Props) => {
 		<Icon
 			name={iconName}
 			type={iconType}
-			tooltip={status}
+			tooltip={getLabel(status)}
 			tooltipPlacement="right"
 			onPress={() => query.where('status', status)}
 		/>

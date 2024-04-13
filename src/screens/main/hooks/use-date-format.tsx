@@ -1,9 +1,8 @@
 import * as React from 'react';
 
 import { parseISO, format, differenceInMinutes, differenceInHours, isToday } from 'date-fns';
-import { utcToZonedTime } from 'date-fns-tz';
-import { useObservable, useObservableState } from 'observable-hooks';
-import { of } from 'rxjs';
+import { toZonedTime } from 'date-fns-tz';
+import { useObservableState } from 'observable-hooks';
 import { switchMap, map, filter } from 'rxjs/operators';
 
 import { useHeartbeatObservable } from '@wcpos/hooks/src/use-heartbeat';
@@ -20,7 +19,7 @@ export const useDateFormat = (gmtDate: string, formatPattern = 'MMMM d, yyyy', f
 	const { visibile$ } = usePageVisibility();
 	const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 	const gmtDateObject = parseISO(gmtDate.endsWith('Z') ? gmtDate : `${gmtDate}Z`);
-	const localDate = utcToZonedTime(gmtDateObject, timeZone);
+	const localDate = toZonedTime(gmtDateObject, timeZone);
 
 	/**
 	 *

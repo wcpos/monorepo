@@ -8,18 +8,26 @@ import { startWith, switchMap, tap } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 import Suspense from '@wcpos/components/src/suspense';
+import type { Query } from '@wcpos/query';
 
 import CategoryPill from './category-pill';
 import FeaturedPill from './featured-pill';
 import OnSalePill from './on-sale-pill';
+import { StockStatusPill } from './stock-status-pill';
 import TagPill from './tag-pill';
 import usePullDocument from '../../../contexts/use-pull-document';
 import { useCollection } from '../../../hooks/use-collection';
 
+type ProductCollection = import('@wcpos/database').ProductCollection;
+
+interface Props {
+	query: Query<ProductCollection>;
+}
+
 /**
  *
  */
-const FilterBar = ({ query }) => {
+const FilterBar = ({ query }: Props) => {
 	const { collection: categoryCollection } = useCollection('products/categories');
 	const { collection: tagCollection } = useCollection('products/tags');
 	const pullDocument = usePullDocument();
@@ -76,7 +84,8 @@ const FilterBar = ({ query }) => {
 	 *
 	 */
 	return (
-		<Box space="small" horizontal>
+		<Box space="small" horizontal style={{ flexWrap: 'wrap', width: '100%' }}>
+			<StockStatusPill query={query} />
 			<FeaturedPill query={query} />
 			<OnSalePill query={query} />
 			<Suspense>

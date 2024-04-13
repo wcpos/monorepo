@@ -67,7 +67,7 @@ export const CustomerNote = () => {
 			<Box horizontal space="small">
 				<Box paddingTop="xxSmall">
 					<Tooltip content={t('Customer Note', { _tags: 'core' })}>
-						<Icon name="noteSticky" type="secondary" />
+						<Icon name="messageLines" type="secondary" />
 					</Tooltip>
 				</Box>
 

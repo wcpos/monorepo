@@ -13,7 +13,7 @@ import POSTabs from './tabs';
 import { TaxRatesProvider } from '../contexts/tax-rates';
 
 /**
- * Tax query depends on store.tax_based_on, if customer also depends on currentOrder
+ * 
  */
 const POS = () => {
 	const theme = useTheme();

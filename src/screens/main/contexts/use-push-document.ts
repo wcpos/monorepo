@@ -42,12 +42,13 @@ const usePushDocument = () => {
 				 * FIXME: this is a hack to customise the data sent to the server for orders
 				 * It's not ideal, but it works for now
 				 */
-				const populatedData =
-					latestDoc.collection.name === 'orders'
-						? await latestDoc.toPopulatedOrderJSON()
-						: await latestDoc.toPopulatedJSON();
+				// const populatedData =
+				// 	latestDoc.collection.name === 'orders'
+				// 		? await latestDoc.toPopulatedOrderJSON()
+				// 		: await latestDoc.toPopulatedJSON();
 
-				const response = await http.post(endpoint, populatedData);
+				const json = latestDoc.toJSON();
+				const response = await http.post(endpoint, json);
 				const data = get(response, 'data');
 				/**
 				 * It's possible for the WC REST API server to retrun a 200 response but with data = ""

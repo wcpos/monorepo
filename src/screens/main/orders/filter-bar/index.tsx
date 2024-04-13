@@ -29,7 +29,7 @@ const FilterBar = ({ query }) => {
 	 */
 	return (
 		<Box space="small" horizontal>
-			{/* <StatusPill active={statusFilterActive} query={query} /> */}
+			<StatusPill query={query} />
 			<Suspense>
 				<CustomerPill resource={customerResource} query={query} />
 			</Suspense>

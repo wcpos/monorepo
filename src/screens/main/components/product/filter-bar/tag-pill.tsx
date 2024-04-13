@@ -1,20 +1,25 @@
 import * as React from 'react';
 
-import { ObservableResource, useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
 import Pill from '@wcpos/components/src/pill';
+import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 import TagSelect from '../tag-select';
 
-interface TagPillProps {
-	resource: ObservableResource<import('@wcpos/database').ProductTagDocument>;
+type ProductCollection = import('@wcpos/database').ProductCollection;
+type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
+
+interface Props {
+	query: Query<ProductCollection>;
+	resource: ObservableResource<ProductTagDocument>;
 }
 
 /**
  *
  */
-const TagPill = ({ query, resource }: TagPillProps) => {
+const TagPill = ({ query, resource }: Props) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
 	const tag = useObservableSuspense(resource);
 	const t = useT();

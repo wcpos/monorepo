@@ -15,7 +15,7 @@ const Note = ({ item: order }: OrderNoteProps) => {
 		return null;
 	}
 
-	return <Icon name="noteSticky" tooltip={note} />;
+	return <Icon name="messageLines" tooltip={note} />;
 };
 
 export default Note;

@@ -20,6 +20,7 @@ const Support = () => {
 			<WidgetBot
 				server="711884517081612298"
 				channel="1093100746372829254"
+				shard="https://emerald.widgetbot.io"
 				style={{ height: '100%', width: '100%', border: '0px' }}
 				// onAPI={(api) => {
 				// 	window.discordApi = api;

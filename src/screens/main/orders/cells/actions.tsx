@@ -11,6 +11,7 @@ import DeleteDialog from './delete-dialog';
 import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
+import { useMutation } from '../../hooks/use-mutation';
 
 interface Props {
 	item: import('@wcpos/database').OrderDocument;
@@ -21,6 +22,7 @@ const Actions = ({ item: order }: Props) => {
 	const [menuOpened, setMenuOpened] = React.useState(false);
 	// const status = useObservableState(order.status$, order.status);
 	const pullDocument = usePullDocument();
+	const { patch } = useMutation({ collectionName: 'orders' });
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 
@@ -28,9 +30,9 @@ const Actions = ({ item: order }: Props) => {
 	 *
 	 */
 	const handleOpen = React.useCallback(() => {
-		order.patch({ status: 'pos-open' });
+		patch({ document: order, data: { status: 'pos-open' } });
 		navigation.navigate('POSStack', { screen: 'POS', params: { orderID: order.uuid } });
-	}, [navigation, order]);
+	}, [navigation, order, patch]);
 
 	/**
 	 *

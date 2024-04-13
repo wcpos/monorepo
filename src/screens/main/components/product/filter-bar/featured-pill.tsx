@@ -5,13 +5,20 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import Pill from '@wcpos/components/src/pill';
+import { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
+
+type ProductCollection = import('@wcpos/database').ProductCollection;
+
+interface Props {
+	query: Query<ProductCollection>;
+}
 
 /**
  *
  */
-const FeaturedPill = ({ query }) => {
+const FeaturedPill = ({ query }: Props) => {
 	const isActive = useObservableState(
 		query.params$.pipe(map((params) => get(params, ['selector', 'featured']))),
 		get(query.getParams(), ['selector', 'featured'])

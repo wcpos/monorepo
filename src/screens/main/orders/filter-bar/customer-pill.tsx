@@ -3,14 +3,16 @@ import * as React from 'react';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import Pill from '@wcpos/components/src/pill';
+import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 import CustomerSelect from '../../components/customer-select';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
 interface CustomerPillProps {
-	query: any;
-	resource: ObservableResource<import('@wcpos/database').CustomerDocument>;
+	query: Query<CustomerCollection>;
+	resource: ObservableResource<CustomerDocument>;
 }
 
 /**
