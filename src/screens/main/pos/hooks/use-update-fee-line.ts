@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { getTaxStatusFromMetaData } from './utils';
+import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
 import { useTaxDisplay } from '../../hooks/taxes/use-tax-display';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -23,6 +24,7 @@ export const useUpdateFeeLine = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { inclOrExcl } = useTaxDisplay({ context: 'cart' });
 	const { calculateTaxesFromValue, calculateLineItemTaxes } = useTaxCalculator();
+	const { localPatch } = useLocalMutation();
 
 	/**
 	 * Update name of line item
@@ -100,7 +102,7 @@ export const useUpdateFeeLine = () => {
 
 		// if we have updated a line item, patch the order
 		if (updated && updatedFeeLines) {
-			order.incrementalPatch({ fee_lines: updatedFeeLines });
+			return localPatch({ document: order, data: { fee_lines: updatedFeeLines } });
 		}
 	};
 

@@ -3,22 +3,12 @@ import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { getTaxStatusFromMetaData } from './utils';
+import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
 import { useTaxDisplay } from '../../hooks/taxes/use-tax-display';
 import { useCurrentOrder } from '../contexts/current-order';
 
-type OrderDocument = import('@wcpos/database').OrderDocument;
-type LineItem = NonNullable<OrderDocument['line_items']>[number];
-
-/**
- * Account for string or number changes just in case
- */
-interface Changes {
-	quantity?: string | number;
-	name?: string;
-	price?: string | number;
-	subtotal?: string | number;
-}
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 
 /**
  *
@@ -27,6 +17,7 @@ export const useUpdateLineItem = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { inclOrExcl } = useTaxDisplay({ context: 'cart' });
 	const { calculateTaxesFromValue, calculateLineItemTaxes } = useTaxCalculator();
+	const { localPatch } = useLocalMutation();
 
 	/**
 	 * Update quantity of line item
@@ -130,61 +121,70 @@ export const useUpdateLineItem = () => {
 	};
 
 	/**
+	 * Applies updates to a line item based on provided changes.
+	 * Handles complex updates like quantity, price, and subtotal separately to ensure proper tax recalculation.
+	 */
+	const applyChangesToLineItem = (lineItem: LineItem, changes: Partial<LineItem>): LineItem => {
+		let updatedItem = { ...lineItem };
+
+		// Handle complex properties with specific logic
+		if (changes.quantity !== undefined) {
+			const quantity = Number(changes.quantity);
+			if (!isNaN(quantity)) updatedItem = updateQuantity(updatedItem, quantity);
+		}
+
+		if (changes.price !== undefined) {
+			const price = Number(changes.price);
+			if (!isNaN(price)) updatedItem = updatePrice(updatedItem, price);
+		}
+
+		if (changes.subtotal !== undefined) {
+			const subtotal = Number(changes.subtotal);
+			if (!isNaN(subtotal)) updatedItem = updateSubtotal(updatedItem, subtotal);
+		}
+
+		// Handle simpler properties by direct assignment
+		for (const key of Object.keys(changes)) {
+			if (!['quantity', 'price', 'subtotal'].includes(key)) {
+				updatedItem[key] = changes[key];
+			}
+		}
+
+		return updatedItem;
+	};
+
+	/**
 	 * Update line item
 	 *
 	 * @TODO - what if more than one property is changed at once?
 	 */
-	const updateLineItem = async (uuid: string, changes: Changes) => {
+	const updateLineItem = async (uuid: string, changes: Partial<LineItem>) => {
 		const order = currentOrder.getLatest();
 		let updated = false;
 
 		const updatedLineItems = order.line_items?.map((lineItem) => {
-			const uuidMatch = lineItem.meta_data?.some(
-				(m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid
-			);
-
-			// early return if no match, or we have already updated a line item
-			if (updated || !uuidMatch) {
+			if (
+				updated ||
+				!lineItem.meta_data?.some((m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid)
+			) {
 				return lineItem;
 			}
 
-			let updatedItem = { ...lineItem };
-
-			if (changes.quantity !== undefined) {
-				const quantity =
-					typeof changes.quantity === 'number' ? changes.quantity : Number(changes.quantity);
-				if (!isNaN(quantity)) updatedItem = updateQuantity(updatedItem, quantity);
-			}
-
-			if (changes.name !== undefined) {
-				updatedItem = updateName(updatedItem, changes.name);
-			}
-
-			if (changes.price !== undefined) {
-				const price = typeof changes.price === 'number' ? changes.price : Number(changes.price);
-				if (!isNaN(price)) updatedItem = updatePrice(updatedItem, price);
-			}
-
-			if (changes.subtotal !== undefined) {
-				const subtotal =
-					typeof changes.subtotal === 'number' ? changes.subtotal : Number(changes.subtotal);
-				if (!isNaN(subtotal)) updatedItem = updateSubtotal(updatedItem, subtotal);
-			}
-
+			const updatedItem = applyChangesToLineItem(lineItem, changes);
 			updated = true;
 			return updatedItem;
 		});
 
 		// if we have updated a line item, patch the order
 		if (updated && updatedLineItems) {
-			return order.incrementalPatch({ line_items: updatedLineItems });
+			return localPatch({ document: order, data: { line_items: updatedLineItems } });
 		}
 	};
 
 	/**
 	 *
 	 */
-	const splitLineItem = async (uuid) => {
+	const splitLineItem = async (uuid: string) => {
 		const order = currentOrder.getLatest();
 		const lineItemIndex = order.line_items.findIndex((item) =>
 			item.meta_data.some((meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid)
@@ -239,7 +239,7 @@ export const useUpdateLineItem = () => {
 			...order.line_items.slice(lineItemIndex + 1),
 		];
 
-		return currentOrder.incrementalPatch({ line_items: updatedLineItems });
+		return localPatch({ document: order, data: { line_items: updatedLineItems } });
 	};
 
 	return { updateLineItem, splitLineItem };

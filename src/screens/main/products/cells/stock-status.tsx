@@ -4,7 +4,7 @@ import { useObservableState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
-import { useT } from '../../../../contexts/translations';
+import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -15,6 +15,26 @@ type Props = {
 
 export const StockStatus = ({ item: product, onChange }: Props) => {
 	const stockStatus = useObservableState(product.stock_status$, product.stock_status);
+	const { getLabel } = useStockStatusLabel();
 
-	return <Text>{stockStatus}</Text>;
+	const type = React.useMemo(() => {
+		switch (stockStatus) {
+			case 'instock':
+				return 'success';
+			case 'outofstock':
+				return 'critical';
+			case 'onbackorder':
+				return 'warning';
+			case 'lowstock':
+				return 'warning';
+			default:
+				return 'primary';
+		}
+	}, [stockStatus]);
+
+	return (
+		<Text type={type} align="center" size="small">
+			{getLabel(stockStatus)}
+		</Text>
+	);
 };

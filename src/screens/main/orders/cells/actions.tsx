@@ -11,7 +11,7 @@ import DeleteDialog from './delete-dialog';
 import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
-import { useMutation } from '../../hooks/use-mutation';
+import { useMutation } from '../../hooks/mutations/use-mutation';
 
 interface Props {
 	item: import('@wcpos/database').OrderDocument;

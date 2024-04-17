@@ -6,18 +6,21 @@ import { useObservableState } from 'observable-hooks';
 import Button from '@wcpos/components/src/button';
 import Modal, { useModal } from '@wcpos/components/src/modal';
 import TextArea from '@wcpos/components/src/textarea';
+import type { OrderDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
+import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../../contexts/current-order';
 
 /**
- * @TODO - this
+ *
  */
 const AddNote = ({ order, setOpened }) => {
 	const note = useObservableState(order.customer_note$, order.customer_note);
 	const [value, setValue] = React.useState(note);
 	const { setPrimaryAction } = useModal();
 	const t = useT();
+	const { localPatch } = useLocalMutation();
 
 	React.useEffect(() => {
 		setValue(note);
@@ -26,7 +29,12 @@ const AddNote = ({ order, setOpened }) => {
 	setPrimaryAction({
 		label: t('Add Note', { _tags: 'core' }),
 		action: async () => {
-			await order.incrementalPatch({ customer_note: value });
+			await localPatch({
+				document: order,
+				data: {
+					customer_note: value,
+				},
+			});
 			setOpened(false);
 		},
 	});

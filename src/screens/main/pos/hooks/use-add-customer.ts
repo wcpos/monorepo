@@ -4,6 +4,7 @@ import * as React from 'react';
 import { isRxDocument } from 'rxdb';
 
 // import { useAppState } from '../../../../contexts/app-state';
+import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
 import { useCurrentOrder } from '../contexts/current-order';
 
@@ -13,6 +14,7 @@ type Customer = CustomerDocument | { id: number; billing?: object; shipping: obj
 export const useAddCustomer = () => {
 	const { currentOrder } = useCurrentOrder();
 	const guestCustomer = useGuestCustomer();
+	const { localPatch } = useLocalMutation();
 	// const { store } = useAppState();
 	// const defaultCountry = useObservableState(store.default_country$, store.default_country);
 	// const [country, state] = defaultCountry.split(':');
@@ -52,10 +54,9 @@ export const useAddCustomer = () => {
 			/**
 			 * Add customer to order
 			 */
-			const order = currentOrder.getLatest();
-			return order.patch(tansformedData);
+			return localPatch({ document: currentOrder, data: tansformedData });
 		},
-		[currentOrder, guestCustomer]
+		[currentOrder, guestCustomer, localPatch]
 	);
 
 	return {

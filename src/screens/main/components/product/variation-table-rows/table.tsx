@@ -13,7 +13,7 @@ import log from '@wcpos/utils/src/logger';
 import { useVariationTable } from './context';
 import Footer from './footer';
 import { useT } from '../../../../../contexts/translations';
-import { useMutation } from '../../../hooks/use-mutation';
+import { useMutation } from '../../../hooks/mutations/use-mutation';
 import EmptyTableRow from '../../empty-table-row';
 import { ProductVariationImage } from '../variation-image';
 import { ProductVariationName } from '../variation-name';

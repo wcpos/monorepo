@@ -12,7 +12,7 @@ import { Date } from '../../components/date';
 import Categories from '../../components/product/categories';
 import { ProductImage } from '../../components/product/image';
 import Tags from '../../components/product/tags';
-import { useMutation } from '../../hooks/use-mutation';
+import { useMutation } from '../../hooks/mutations/use-mutation';
 import Actions from '../cells/actions';
 import Barcode from '../cells/barcode';
 import EdittablePrice from '../cells/edittable-price';

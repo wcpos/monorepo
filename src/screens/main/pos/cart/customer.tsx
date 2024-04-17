@@ -13,8 +13,11 @@ import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../contexts/translations';
 import { CountrySelect, StateSelect } from '../../components/country-state-select';
+import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
+
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 /**
  *
@@ -30,6 +33,7 @@ const Customer = ({ setShowCustomerSelect }) => {
 	const billingCountry = get(billing, ['country']);
 	const shippingCountry = get(shipping, ['country']);
 	const t = useT();
+	const { localPatch } = useLocalMutation();
 
 	/**
 	 *
@@ -37,12 +41,12 @@ const Customer = ({ setShowCustomerSelect }) => {
 	const handleSaveCustomer = React.useCallback(
 		async (newData) => {
 			try {
-				await currentOrder.incrementalPatch(newData);
+				await localPatch({ document: currentOrder, data: newData });
 			} catch (error) {
 				log.error(error);
 			}
 		},
-		[currentOrder]
+		[currentOrder, localPatch]
 	);
 
 	/**

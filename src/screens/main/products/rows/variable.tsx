@@ -18,7 +18,7 @@ import { VariableProductImage } from '../../components/product/variable-image';
 import VariablePrice from '../../components/product/variable-price';
 import Variations from '../../components/product/variation-table-rows';
 import { VariationTableContext } from '../../components/product/variation-table-rows/context';
-import { useMutation } from '../../hooks/use-mutation';
+import { useMutation } from '../../hooks/mutations/use-mutation';
 import Actions from '../cells/actions';
 import Barcode from '../cells/barcode';
 import EdittablePrice from '../cells/edittable-price';

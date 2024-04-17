@@ -21,7 +21,7 @@ type Props = {
 /**
  *
  */
-const Name = ({ item: product, column, onChange, toggleVariations }: Props) => {
+const Name = ({ item: product, column, onChange }: Props) => {
 	const name = useObservableState(product.name$, product.name);
 	const { display } = column;
 

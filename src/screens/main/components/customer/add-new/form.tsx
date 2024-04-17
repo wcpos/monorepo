@@ -8,7 +8,7 @@ import Form from '@wcpos/react-native-jsonschema-form';
 
 import { useT } from '../../../../../contexts/translations';
 import { useCollection } from '../../../hooks/use-collection';
-import { useMutation } from '../../../hooks/use-mutation';
+import { useMutation } from '../../../hooks/mutations/use-mutation';
 import { CountrySelect, StateSelect } from '../../country-state-select';
 
 /**

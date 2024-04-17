@@ -3,26 +3,35 @@ import * as React from 'react';
 import { isRxDocument, RxDocument, RxCollection } from 'rxdb';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
+import type {
+	OrderDocument,
+	ProductDocument,
+	CustomerDocument,
+	ProductVariationDocument,
+} from '@wcpos/database';
 import { useQueryManager } from '@wcpos/query';
 import log from '@wcpos/utils/src/logger';
 
-import { useCollection, CollectionKey } from './use-collection';
-import { useT } from '../../../contexts/translations';
+import { useLocalMutation } from './use-local-mutation';
+import { useT } from '../../../../contexts/translations';
+import { useCollection, CollectionKey } from '../use-collection';
+
+type Document = OrderDocument | ProductDocument | CustomerDocument | ProductVariationDocument;
 
 interface Props {
 	collectionName: CollectionKey;
 	endpoint?: string;
-	onError?: (error: Error) => void;
 }
 
 /**
  *
  */
-export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
+export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const manager = useQueryManager();
 	const addSnackbar = useSnackbar();
 	const t = useT();
 	const { collection, collectionLabel } = useCollection(collectionName);
+	const { localPatch } = useLocalMutation();
 
 	/**
 	 * If there is no replicationState we need to register one
@@ -38,9 +47,6 @@ export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
 	const handleError = React.useCallback(
 		(error: Error) => {
 			log.error(error);
-			if (onError) {
-				onError(error);
-			}
 
 			let message = error.message;
 			if (error?.rxdb) {
@@ -50,7 +56,7 @@ export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
 				message: t('There was an error: {message}', { _tags: 'core', message }),
 			});
 		},
-		[addSnackbar, onError, t]
+		[addSnackbar, t]
 	);
 
 	/**
@@ -69,14 +75,11 @@ export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
 	 *
 	 */
 	const patch = React.useCallback(
-		async ({ document, data }: { document: RxDocument; data: Record<string, unknown> }) => {
-			try {
-				// update local document
-				const latest = document.getLatest();
-				const doc = await latest.patch(data);
+		async ({ document, data }: { document: Document; data: Record<string, unknown> }) => {
+			const { document: doc, changes } = await localPatch({ document, data });
 
-				// update remote document
-				const updatedDoc = await replicationState.remotePatch(doc, data);
+			try {
+				const updatedDoc = await replicationState.remotePatch(doc, changes);
 				if (isRxDocument(updatedDoc)) {
 					handleSuccess(updatedDoc);
 					return updatedDoc;
@@ -89,7 +92,7 @@ export const useMutation = ({ collectionName, endpoint, onError }: Props) => {
 				handleError(error);
 			}
 		},
-		[collectionLabel, handleError, handleSuccess, replicationState, t]
+		[collectionLabel, handleError, handleSuccess, localPatch, replicationState, t]
 	);
 
 	/**

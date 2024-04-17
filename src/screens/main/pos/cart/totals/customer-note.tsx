@@ -13,6 +13,7 @@ import TextArea from '@wcpos/components/src/textarea';
 import Tooltip from '@wcpos/components/src/tooltip';
 
 import { useT } from '../../../../../contexts/translations';
+import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../../contexts/current-order';
 
 /**
@@ -25,6 +26,7 @@ export const CustomerNote = () => {
 	const [value, setValue] = React.useState(note);
 	const theme = useTheme();
 	const t = useT();
+	const { localPatch } = useLocalMutation();
 
 	// /**
 	//  * Keep textarea value insync with the order.customer_note
@@ -37,10 +39,12 @@ export const CustomerNote = () => {
 	 *
 	 */
 	const handleSaveNote = React.useCallback(() => {
-		const order = currentOrder.getLatest();
-		order.patch({ customer_note: value.replace(/^\s+|\s+$/g, '').trim() });
+		localPatch({
+			document: currentOrder,
+			data: { customer_note: value.replace(/^\s+|\s+$/g, '').trim() },
+		});
 		setIsEditing(false);
-	}, [currentOrder, value]);
+	}, [currentOrder, localPatch, value]);
 
 	/**
 	 *
