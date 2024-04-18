@@ -2,11 +2,12 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
+import { getUuidFromLineItem } from './utils';
 import { useCurrentOrder } from '../contexts/current-order';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][0];
-type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][0];
-type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][0];
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 export type CartLine = {
 	item: LineItem | FeeLine | ShippingLine;
 	id: string;
@@ -18,46 +19,20 @@ export type CartLine = {
  */
 export const useCartLines = () => {
 	const { currentOrder } = useCurrentOrder();
-
-	/**
-	 *
-	 */
 	const lineItems = useObservableEagerState(currentOrder.line_items$);
 	const feeLines = useObservableEagerState(currentOrder.fee_lines$);
 	const shippingLines = useObservableEagerState(currentOrder.shipping_lines$);
 
 	/**
-	 *
+	 * We need to filter out any items that have been 'removed', eg: product_id === null.
 	 */
-	const items = Array.isArray(lineItems)
-		? lineItems.map((item) => {
-				const uuidMetaData = item.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
-				if (uuidMetaData && uuidMetaData.value) {
-					return { item, id: uuidMetaData.value, type: 'line_items' };
-				}
-			})
-		: [];
+	const cartLines = React.useMemo(() => {
+		return {
+			line_items: lineItems.filter((item) => item.product_id !== null),
+			fee_lines: feeLines.filter((item) => item.name !== null),
+			shipping_lines: shippingLines.filter((item) => item.method_id !== null),
+		};
+	}, [lineItems, feeLines, shippingLines]);
 
-	const fees = Array.isArray(feeLines)
-		? feeLines.map((item) => {
-				const uuidMetaData = item.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
-				if (uuidMetaData && uuidMetaData.value) {
-					return { item, id: uuidMetaData.value, type: 'fee_lines' };
-				}
-			})
-		: [];
-
-	const shipping = Array.isArray(shippingLines)
-		? shippingLines.map((item) => {
-				const uuidMetaData = item.meta_data.find((meta) => meta.key === '_woocommerce_pos_uuid');
-				if (uuidMetaData && uuidMetaData.value) {
-					return { item, id: uuidMetaData.value, type: 'shipping_lines' };
-				}
-			})
-		: [];
-
-	/**
-	 *
-	 */
-	return [...items, ...fees, ...shipping] as CartLine[];
+	return cartLines;
 };

@@ -79,9 +79,9 @@ export const useRemoveLineItem = () => {
 								case 'line_items':
 									return { ...item, product_id: null };
 								case 'fee_lines':
-									return { ...item, method_id: null };
-								case 'shipping_lines':
 									return { ...item, name: null };
+								case 'shipping_lines':
+									return { ...item, method_id: null };
 								default:
 									return item;
 							}
@@ -100,17 +100,21 @@ export const useRemoveLineItem = () => {
 				},
 			});
 
-			addSnackbar({
-				message: t('{name} removed from cart', {
-					name: itemToRestore?.name || itemToRestore?.method_name,
-					_tags: 'core',
-				}),
-				dismissable: true,
-				action: {
-					label: t('Undo', { _tags: 'core' }),
-					action: () => undoRemove(uuid, type, itemToRestore),
-				},
-			});
+			if (itemToRestore) {
+				addSnackbar({
+					message: t('{name} removed from cart', {
+						name: itemToRestore?.name || itemToRestore?.method_name,
+						_tags: 'core',
+					}),
+					dismissable: true,
+					action: {
+						label: t('Undo', { _tags: 'core' }),
+						action: () => undoRemove(uuid, type, itemToRestore),
+					},
+				});
+			} else {
+				// should we show a snackbar if the item was not found?
+			}
 		},
 		[addSnackbar, currentOrder, localPatch, t, undoRemove]
 	);

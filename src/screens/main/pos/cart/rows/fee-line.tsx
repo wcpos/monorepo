@@ -1,9 +1,6 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservable, useSubscription } from 'observable-hooks';
-import { combineLatest } from 'rxjs';
-import { debounceTime, distinctUntilChanged, map } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
@@ -14,8 +11,8 @@ import { Actions } from '../cells/actions';
 import { FeeName } from '../cells/fee-name';
 import { FeeTotal } from '../cells/fee-total';
 
-type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
-type RenderItem = TableProps<FeeLineDocument>['renderItem'];
+type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type RenderItem = TableProps<FeeLine>['renderItem'];
 
 const cells = {
 	actions: Actions,
@@ -28,11 +25,11 @@ const cells = {
 /**
  *
  */
-export const FeeLineRow = ({ id, item, index, target }) => {
+export const FeeLineRow = ({ uuid, item, index, target }) => {
 	/**
 	 *
 	 */
-	const cellRenderer = React.useCallback<CellRenderer<FeeLineDocument>>(
+	const cellRenderer = React.useCallback<CellRenderer<FeeLine>>(
 		({ item, column, index, cellWidth }) => {
 			const Cell = get(cells, column.key);
 
@@ -42,7 +39,7 @@ export const FeeLineRow = ({ id, item, index, target }) => {
 						<Suspense>
 							<Cell
 								type="fee_lines"
-								uuid={id}
+								uuid={uuid}
 								item={item}
 								column={column}
 								index={index}
@@ -59,7 +56,7 @@ export const FeeLineRow = ({ id, item, index, target }) => {
 
 			return null;
 		},
-		[id]
+		[uuid]
 	);
 
 	return <Table.Row item={item} index={index} target={target} cellRenderer={cellRenderer} />;

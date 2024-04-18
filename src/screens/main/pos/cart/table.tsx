@@ -12,6 +12,7 @@ import { useT } from '../../../../contexts/translations';
 import EmptyTableRow from '../../components/empty-table-row';
 import useUI from '../../contexts/ui-settings';
 import { useCartLines, CartLine } from '../hooks/use-cart-lines';
+import { getUuidFromLineItemMetaData } from '../hooks/utils';
 
 type UISettingsColumn = import('../../contexts/ui-settings').UISettingsColumn;
 
@@ -31,7 +32,30 @@ const CartTable = () => {
 		uiSettings.get('columns')
 	) as UISettingsColumn[];
 	const t = useT();
-	const lines = useCartLines();
+	const { line_items, fee_lines, shipping_lines } = useCartLines();
+
+	/**
+	 * @TODO - add sorting?
+	 * @NOTE - this a slight different format than the other data tables
+	 */
+	const mapItems = React.useCallback((items, type) => {
+		return items.map((item) => ({
+			item,
+			uuid: getUuidFromLineItemMetaData(item.meta_data),
+			type,
+		}));
+	}, []);
+
+	/**
+	 *
+	 */
+	const lines = React.useMemo(() => {
+		return [
+			...mapItems(line_items, 'line_items'),
+			...mapItems(fee_lines, 'fee_lines'),
+			...mapItems(shipping_lines, 'shipping_lines'),
+		];
+	}, [mapItems, line_items, fee_lines, shipping_lines]);
 
 	/**
 	 *

@@ -14,8 +14,8 @@ import { ProductTotal } from '../cells/product-total';
 import { Quantity } from '../cells/quantity';
 import { Subtotal } from '../cells/subtotal';
 
-type LineItemDocument = import('@wcpos/database').LineItemDocument;
-type RenderItem = TableProps<any>['renderItem'];
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type RenderItem = TableProps<LineItem>['renderItem'];
 
 const cells = {
 	actions: Actions,
@@ -29,11 +29,11 @@ const cells = {
 /**
  *
  */
-export const LineItemRow = ({ index, id, item }) => {
+export const LineItemRow = ({ index, uuid, item }) => {
 	/**
 	 *
 	 */
-	const cellRenderer = React.useCallback<CellRenderer<any>>(
+	const cellRenderer = React.useCallback<CellRenderer<LineItem>>(
 		({ item, column, index, cellWidth }) => {
 			const Cell = get(cells, column.key);
 
@@ -43,7 +43,7 @@ export const LineItemRow = ({ index, id, item }) => {
 						<Suspense>
 							<Cell
 								type="line_items"
-								uuid={id}
+								uuid={uuid}
 								item={item}
 								column={column}
 								index={index}
@@ -60,7 +60,7 @@ export const LineItemRow = ({ index, id, item }) => {
 
 			return null;
 		},
-		[id]
+		[uuid]
 	);
 
 	return <Table.Row item={item} index={index} cellRenderer={cellRenderer} />;
