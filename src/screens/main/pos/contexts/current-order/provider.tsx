@@ -3,6 +3,8 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
+import { useNewOrder } from './use-new-order';
+
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CurrentOrderContextProps {
@@ -14,14 +16,15 @@ export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
-	resource: ObservableResource<OrderDocument>;
+	resource: ObservableResource<OrderDocument | null>;
 }
 
 /**
  * Provider the active order by uuid, or a new order
  */
 export const CurrentOrderProvider = ({ children, resource }: CurrentOrderContextProviderProps) => {
-	const currentOrder = useObservableSuspense(resource);
+	const { newOrder } = useNewOrder();
+	const currentOrder = useObservableSuspense(resource) ?? newOrder;
 	const navigation = useNavigation();
 
 	/**

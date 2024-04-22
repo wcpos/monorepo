@@ -1,6 +1,7 @@
 import { format as formatDate } from 'date-fns';
-import { zonedTimeToUtc } from 'date-fns-tz';
+import { fromZonedTime } from 'date-fns-tz';
 import isEmpty from 'lodash/isEmpty';
+import { count } from 'rxjs';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
@@ -22,7 +23,7 @@ export const sanitizePrice = (price?: string) => (price && price !== '' ? price 
  */
 export const getCurrentGMTDate = () => {
 	// Get the current date and time in UTC
-	const nowUtc = zonedTimeToUtc(new Date(), 'UTC');
+	const nowUtc = fromZonedTime(new Date(), 'UTC');
 
 	// Format the date in the desired format
 	return formatDate(nowUtc, "yyyy-MM-dd'T'HH:mm:ss");
@@ -83,4 +84,25 @@ export const findByProductVariationID = (
 	);
 
 	return matchingItems;
+};
+
+/**
+ *
+ */
+type CustomerJSON = import('@wcpos/database').CustomerDocumentType;
+export const transformCustomerJSONToOrderJSON = (
+	customer: CustomerJSON,
+	defaultCountry: string
+) => {
+	return {
+		customer_id: customer.id,
+		billing: {
+			...(customer.billing || {}),
+			email: customer?.billing?.email || customer?.email,
+			first_name: customer?.billing?.first_name || customer.first_name || customer?.username,
+			last_name: customer?.billing?.last_name || customer?.last_name,
+			country: customer?.billing?.country || defaultCountry,
+		},
+		shipping: customer.shipping || {},
+	};
 };

@@ -2,8 +2,9 @@ import * as React from 'react';
 
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
-import { ObservableResource } from 'observable-hooks';
-import { from } from 'rxjs';
+import { ObservableResource, useObservable } from 'observable-hooks';
+import { from, of, Observable } from 'rxjs';
+import { distinctUntilChanged, switchMap } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
@@ -11,7 +12,6 @@ import { useQuery } from '@wcpos/query';
 
 import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
-import { useCurrentOrderResource } from './contexts/current-order/use-current-order-resource';
 import POS from './pos';
 import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
@@ -19,6 +19,7 @@ import { useCollection } from '../hooks/use-collection';
 import Receipt from '../receipt';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 export type POSStackParamList = {
 	POS: { orderID?: string };
@@ -32,12 +33,12 @@ const Stack = createStackNavigator<POSStackParamList>();
  *
  */
 const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'POS'>) => {
-	const { resource } = useCurrentOrderResource({ uuid: route.params?.orderID });
+	const { collection } = useCollection('orders');
 
 	/**
 	 *
 	 */
-	const openOrdersQuery = useQuery({
+	useQuery({
 		queryKeys: ['orders', { status: 'pos-open' }],
 		collectionName: 'orders',
 		initialParams: {
@@ -46,6 +47,25 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 			sortDirection: 'asc',
 		},
 	});
+
+	/**
+	 *
+	 */
+	const order$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(([uuid]) =>
+					uuid ? collection.findOne({ selector: { uuid, status: 'pos-open' } }).$ : of(null)
+				),
+				distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid)
+			),
+		[route.params?.orderID]
+	);
+
+	/**
+	 *
+	 */
+	const resource = React.useMemo(() => new ObservableResource(order$), [order$]);
 
 	return (
 		<Suspense>

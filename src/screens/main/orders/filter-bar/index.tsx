@@ -1,15 +1,15 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableState, ObservableResource } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
 import Suspense from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import CustomerPill from './customer-pill';
 import StatusPill from './status-pill';
-import { useGetDocumentByRemoteId } from '../../hooks/use-get-document-by-remote-id';
 import { useGuestCustomer } from '../../hooks/use-guest-customer';
 
 const FilterBar = ({ query }) => {
@@ -17,12 +17,26 @@ const FilterBar = ({ query }) => {
 		query.params$.pipe(map((params) => get(params, ['selector', 'customer_id']))),
 		get(query.getParams(), ['selector', 'customer_id'])
 	);
-	const guestCustomer = useGuestCustomer();
-	const { documentResource: customerResource } = useGetDocumentByRemoteId({
+
+	/**
+	 *
+	 */
+	const customerQuery = useQuery({
+		queryKeys: ['customers', { id: customerID }],
 		collectionName: 'customers',
-		remoteID: customerID,
-		fallback: customerID === 0 ? guestCustomer : null,
+		initialParams: {
+			selector: { id: customerID },
+		},
 	});
+
+	/**
+	 *
+	 */
+	const customerResource = React.useMemo(
+		() =>
+			new ObservableResource(customerQuery.result$.pipe(map((result) => result.hits[0].document))),
+		[customerQuery.result$]
+	);
 
 	/**
 	 *

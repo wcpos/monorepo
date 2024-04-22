@@ -11,6 +11,12 @@ import Loader from '@wcpos/components/src/loader';
 import Suspense from '@wcpos/components/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
+import type {
+	ProductDocument,
+	OrderDocument,
+	CustomerDocument,
+	TaxRateDocument,
+} from '@wcpos/database';
 import { useReplicationState, Query, useInfiniteScroll } from '@wcpos/query';
 import logger from '@wcpos/utils/src/logger';
 
@@ -21,15 +27,16 @@ import { useT } from '../../../contexts/translations';
 import { useCollectionReset } from '../hooks/use-collection-reset';
 
 type UISettingsColumn = import('../contexts/ui-settings').UISettingsColumn;
+type DocumentType = ProductDocument | OrderDocument | CustomerDocument | TaxRateDocument;
 
-interface CommonTableProps<DocumentType> {
-	query: Query<DocumentType>;
+interface CommonTableProps<T> {
+	query: Query<any>;
 	uiSettings: import('../contexts/ui-settings').UISettingsDocument;
 	cells: Record<string, React.FC<any>>;
 	renderItem?: (props: any) => JSX.Element;
 	noDataMessage: string;
 	estimatedItemSize: number;
-	extraContext?: Partial<TableContextProps<DocumentType>>;
+	extraContext?: Partial<TableContextProps<T>>;
 	footer?: React.ReactNode;
 }
 
@@ -78,7 +85,7 @@ const LoadingRow = ({ query }) => {
 /**
  *
  */
-const DataTable = <DocumentType,>({
+const DataTable = <T extends DocumentType>({
 	query,
 	uiSettings,
 	cells,
@@ -87,7 +94,7 @@ const DataTable = <DocumentType,>({
 	estimatedItemSize,
 	extraContext,
 	footer,
-}: CommonTableProps<DocumentType>) => {
+}: CommonTableProps<T>) => {
 	const result = useInfiniteScroll(query);
 	const columns = useObservableState(
 		uiSettings.get$('columns'),
@@ -99,7 +106,7 @@ const DataTable = <DocumentType,>({
 	/**
 	 *
 	 */
-	const cellRenderer = React.useCallback<CellRenderer<DocumentType>>(
+	const cellRenderer = React.useCallback<CellRenderer<{ document: T }>>(
 		({ item, column, index }) => {
 			const Cell = get(cells, [column.key]);
 
@@ -121,7 +128,7 @@ const DataTable = <DocumentType,>({
 	/**
 	 *
 	 */
-	const context = React.useMemo<TableContextProps<DocumentType>>(() => {
+	const context = React.useMemo(() => {
 		return {
 			columns: columns.filter((column) => column.show),
 			sort: result.searchActive
@@ -159,7 +166,7 @@ const DataTable = <DocumentType,>({
 	 *
 	 */
 	return (
-		<Table<DocumentType>
+		<Table
 			ref={listRef}
 			data={result.hits}
 			renderItem={renderItem}

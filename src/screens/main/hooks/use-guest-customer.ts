@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -10,7 +10,7 @@ import { useT } from '../../../contexts/translations';
  */
 export const useGuestCustomer = () => {
 	const { store } = useAppState();
-	const defaultCountry = useObservableState(store.default_country$, store.default_country);
+	const defaultCountry = useObservableEagerState(store.default_country$);
 	const [country, state] = defaultCountry.split(':');
 	const t = useT();
 

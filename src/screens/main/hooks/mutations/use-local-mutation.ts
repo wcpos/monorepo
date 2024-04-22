@@ -1,5 +1,8 @@
 import * as React from 'react';
 
+import { format as formatDate } from 'date-fns';
+import { fromZonedTime } from 'date-fns-tz';
+
 import useSnackbar from '@wcpos/components/src/snackbar';
 import type {
 	OrderDocument,
@@ -32,7 +35,8 @@ export const useLocalMutation = () => {
 	const localPatch = React.useCallback(
 		async <T extends Document>({ document, data }: LocalPatchProps<T>) => {
 			try {
-				data.date_modified_gmt = new Date().toISOString().slice(0, 19);
+				const nowUtc = fromZonedTime(new Date(), 'UTC');
+				data.date_modified_gmt = formatDate(nowUtc, "yyyy-MM-dd'T'HH:mm:ss");
 				const latest = document.getLatest(); // This seems to be required, else rxdb gives conflict error.
 				const doc = await latest.patch(data);
 				return { changes: data, document: doc };

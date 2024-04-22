@@ -1,9 +1,8 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import isEqual from 'lodash/isEqual';
 import { useObservableState } from 'observable-hooks';
-import { map, tap, distinctUntilChanged } from 'rxjs/operators';
+import { map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -77,7 +76,7 @@ const VariationsFilterBar = ({ parent, query, parentSearchTerm }: Props) => {
 				backgroundColor: theme.colors.grey,
 			}}
 		>
-			<Box fill horizontal space="small">
+			<Box fill horizontal space="small" style={{ flexWrap: 'wrap', width: '100%' }}>
 				<VariationSearchPill onSearch={handleSearch} parentSearchTerm={parentSearchTerm} />
 				{(parent.attributes || [])
 					.filter((attribute) => attribute.variation)

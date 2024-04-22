@@ -28,9 +28,9 @@ export const useCartLines = () => {
 	 */
 	const cartLines = React.useMemo(() => {
 		return {
-			line_items: lineItems.filter((item) => item.product_id !== null),
-			fee_lines: feeLines.filter((item) => item.name !== null),
-			shipping_lines: shippingLines.filter((item) => item.method_id !== null),
+			line_items: (lineItems || []).filter((item) => item.product_id !== null),
+			fee_lines: (feeLines || []).filter((item) => item.name !== null),
+			shipping_lines: (shippingLines || []).filter((item) => item.method_id !== null),
 		};
 	}, [lineItems, feeLines, shippingLines]);
 
