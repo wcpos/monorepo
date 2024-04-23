@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Image from '@wcpos/components/src/image';
 
@@ -13,7 +13,7 @@ type Props = {
 };
 
 export const ProductImage = ({ item: product, cellWidth }: Props) => {
-	const images = useObservableState(product.images$, product.images);
+	const images = useObservableEagerState(product.images$);
 	const imageURL = get(images, [0, 'src'], undefined);
 	const source = useImageAttachment(product, imageURL);
 

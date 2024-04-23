@@ -1,4 +1,5 @@
 import round from 'lodash/round';
+import sumBy from 'lodash/sumBy';
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
@@ -13,6 +14,19 @@ interface Props {
 	taxRoundAtSubtotal?: boolean;
 }
 
+interface TaxLine {
+	rate_id: number;
+	label: string;
+	compound: boolean;
+	tax_total: number;
+	shipping_tax_total: number;
+	rate_percent: number;
+	meta_data: any[];
+}
+
+// Define a type for the accumulator in the reduce function
+type TaxLinesMap = Record<string, TaxLine>;
+
 /**
  *
  */
@@ -21,7 +35,7 @@ function parseNumber(value: any): number {
 }
 
 /**
- *
+ * @TODO - rounding?!
  */
 export function calculateOrderTotals({
 	lineItems = [],
@@ -42,15 +56,19 @@ export function calculateOrderTotals({
 	let fee_total = 0;
 	let fee_tax = 0;
 
-	const taxLines = taxRates.map((taxRate) => ({
-		rate_id: parseInt(taxRate.id, 10),
-		label: taxRate.name,
-		compound: taxRate.compound,
-		tax_total: 0,
-		shipping_tax_total: 0,
-		rate_percent: parseFloat(taxRate.rate),
-		meta_data: [],
-	}));
+	// Initialize taxLines as an object
+	const taxLines = taxRates.reduce<TaxLinesMap>((acc, taxRate) => {
+		acc[taxRate.id] = {
+			rate_id: taxRate.id,
+			label: taxRate.name,
+			compound: taxRate.compound,
+			tax_total: 0,
+			shipping_tax_total: 0,
+			rate_percent: parseFloat(taxRate.rate),
+			meta_data: [],
+		};
+		return acc;
+	}, {});
 
 	// Calculate line item totals
 	lineItems.forEach((item) => {
@@ -68,10 +86,7 @@ export function calculateOrderTotals({
 
 		if (Array.isArray(item.taxes)) {
 			item.taxes.forEach((tax) => {
-				const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
-				if (taxLine) {
-					taxLine.tax_total += parseNumber(tax.total);
-				}
+				taxLines[tax.id].tax_total += parseNumber(tax.total);
 			});
 		}
 	});
@@ -85,10 +100,7 @@ export function calculateOrderTotals({
 
 		if (Array.isArray(line.taxes)) {
 			line.taxes.forEach((tax) => {
-				const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
-				if (taxLine) {
-					taxLine.tax_total += parseNumber(tax.total);
-				}
+				taxLines[tax.id].tax_total += parseNumber(tax.total);
 			});
 		}
 	});
@@ -102,22 +114,27 @@ export function calculateOrderTotals({
 
 		if (Array.isArray(line.taxes)) {
 			line.taxes.forEach((tax) => {
-				const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
-				if (taxLine) {
-					taxLine.shipping_tax_total += parseNumber(tax.total);
-				}
+				taxLines[tax.id].shipping_tax_total += parseNumber(tax.total);
 			});
 		}
 	});
 
-	taxLines.forEach((taxLine) => {
-		cart_tax += taxLine.tax_total;
-		taxLine.tax_total = String(round(taxLine.tax_total, 6));
-		taxLine.shipping_tax_total = String(round(taxLine.shipping_tax_total, 6));
-	});
+	// Sum the tax totals for cart_tax before converting to string
+	const taxLinesArray = Object.values(taxLines) || [];
+	cart_tax += sumBy(taxLinesArray, 'tax_total');
 
-	// Remove tax lines with 0 tax total
-	const filteredTaxLines = taxLines.filter((taxLine) => parseFloat(taxLine.tax_total) !== 0);
+	const filteredTaxLines = taxLinesArray
+		.map((taxLine) => {
+			if (taxLine.tax_total === 0 && taxLine.shipping_tax_total === 0) {
+				return null;
+			}
+			return {
+				...taxLine,
+				tax_total: String(round(taxLine.tax_total, 6)),
+				shipping_tax_total: String(round(taxLine.shipping_tax_total, 6)),
+			};
+		})
+		.filter(Boolean);
 
 	return {
 		/**

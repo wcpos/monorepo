@@ -13,7 +13,7 @@ import { useCurrentOrder } from '../contexts/current-order';
  */
 export const useOrderTotals = () => {
 	const { currentOrder } = useCurrentOrder();
-	const { rates, taxRoundAtSubtotal } = useTaxRates();
+	const { allRates, taxRoundAtSubtotal } = useTaxRates();
 	const { localPatch } = useLocalMutation();
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
 
@@ -25,12 +25,12 @@ export const useOrderTotals = () => {
 			lineItems: line_items,
 			feeLines: fee_lines,
 			shippingLines: shipping_lines,
-			taxRates: rates,
+			taxRates: allRates, // NOTE: rates are not used for calc, just to get the tax rate label
 			taxRoundAtSubtotal,
 		});
 
 		return totals;
-	}, [line_items, fee_lines, shipping_lines, rates, taxRoundAtSubtotal]);
+	}, [line_items, fee_lines, shipping_lines, allRates, taxRoundAtSubtotal]);
 
 	/**
 	 *

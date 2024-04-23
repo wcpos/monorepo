@@ -13,6 +13,7 @@ type TaxRateCollection = import('@wcpos/database').TaxRateCollection;
 type TaxQuery = import('@wcpos/query').Query<TaxRateCollection>;
 
 interface TaxRatesContextProps {
+	allRates: TaxRateDocument[];
 	rates: TaxRateDocument[];
 	shippingTaxClass: string;
 	calcTaxes: boolean;
@@ -128,6 +129,7 @@ export const TaxRatesProvider = ({ children, taxQuery, order }: TaxRatesProvider
 	return (
 		<TaxRatesContext.Provider
 			value={{
+				allRates, // all rates are needed sometimes for itemized tax display
 				rates,
 				shippingTaxClass,
 				calcTaxes,

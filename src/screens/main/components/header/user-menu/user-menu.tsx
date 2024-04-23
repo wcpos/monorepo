@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useWindowDimensions, Linking } from 'react-native';
 
 import { useNavigation } from '@react-navigation/native';
-import { ObservableResource, useObservableState } from 'observable-hooks';
+import { ObservableResource, useObservableEagerState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Avatar from '@wcpos/components/src/avatar';
@@ -15,6 +15,7 @@ import Text from '@wcpos/components/src/text';
 import StoreSelect from './store-select';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
+import { useImageAttachment } from '../../../hooks/use-image-attachment';
 
 /**
  * FIXME: If I don't memo this component the avatar flashes every time the cart is changed
@@ -27,10 +28,11 @@ export const UserMenu = () => {
 	const theme = useTheme();
 	const dimensions = useWindowDimensions();
 	const [opened, setOpened] = React.useState(false);
-	const avatar_url = useObservableState(wpCredentials?.avatar_url$, wpCredentials?.avatar_url);
-	const stores = useObservableState(wpCredentials?.stores$, wpCredentials?.stores);
+	const avatarUrl = useObservableEagerState(wpCredentials?.avatar_url$);
+	const stores = useObservableEagerState(wpCredentials?.stores$);
 	const [storeSelectModalOpened, setStoreSelectModalOpened] = React.useState(false);
 	const t = useT();
+	const avatarSource = useImageAttachment(wpCredentials, avatarUrl);
 
 	/**
 	 *
@@ -132,7 +134,7 @@ export const UserMenu = () => {
 			>
 				<Box horizontal space="xSmall" align="center">
 					<Avatar
-						source={avatar_url}
+						source={avatarSource}
 						// placeholder="PK"
 						size="small"
 					/>
