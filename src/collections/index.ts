@@ -152,7 +152,7 @@ const orders: RxCollectionCreator<OrderDocumentType> = {
  */
 const customersTyped = toTypedRxJsonSchema(customersLiteral);
 const customerSchema: RxJsonSchema<CustomerDocumentType> = customersLiteral;
-type CustomerDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof customersTyped>;
+export type CustomerDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof customersTyped>;
 export type CustomerDocument = RxDocument<CustomerDocumentType>;
 export type CustomerCollection = RxCollection<CustomerDocumentType>;
 const customers: RxCollectionCreator<CustomerDocumentType> = {

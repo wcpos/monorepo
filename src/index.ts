@@ -29,6 +29,7 @@ export type {
 	ProductVariationCollection,
 	OrderDocument,
 	OrderCollection,
+	CustomerDocumentType,
 	CustomerDocument,
 	CustomerCollection,
 	TaxRateDocument,

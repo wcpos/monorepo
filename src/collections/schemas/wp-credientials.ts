@@ -4,6 +4,7 @@ export const wpCredentialsLiteral = {
 	description: 'WordPress credentials',
 	type: 'object',
 	primaryKey: 'uuid',
+	attachments: {},
 	properties: {
 		uuid: {
 			description: 'Unique identifier for the resource.',

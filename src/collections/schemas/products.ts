@@ -153,7 +153,7 @@ export const productsLiteral = {
 		},
 		stock_status: {
 			default: 'instock',
-			enum: ['instock', 'outofstock', 'onbackorder'],
+			enum: ['instock', 'outofstock', 'onbackorder', 'lowstock'],
 			type: 'string',
 		},
 		backorders: {
