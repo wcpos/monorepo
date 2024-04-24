@@ -8,3 +8,4 @@ export { QueryDevtools } from './devtools';
 export { useInfiniteScroll } from './use-infinite-scroll';
 export type { RelationalQuery } from './relational-query-state';
 export type { Query, QueryHooks, QueryResult };
+export type { CollectionReplicationState } from './collection-replication-state';

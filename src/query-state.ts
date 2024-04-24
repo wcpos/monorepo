@@ -7,7 +7,15 @@ import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
 import { ObservableResource } from 'observable-hooks';
 import { doc } from 'prettier';
-import { BehaviorSubject, Observable, Subscription, Subject, combineLatest } from 'rxjs';
+import {
+	BehaviorSubject,
+	Observable,
+	Subscription,
+	Subject,
+	ReplaySubject,
+	combineLatest,
+	catchError,
+} from 'rxjs';
 import { map, switchMap, distinctUntilChanged, debounceTime, tap } from 'rxjs/operators';
 
 import { SubscribableBase } from './subscribable-base';
@@ -85,7 +93,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	public readonly subs: Subscription[] = [];
 	public readonly subjects = {
 		params: new BehaviorSubject<QueryParams | undefined>(undefined),
-		result: new Subject<QueryResult<T>>(),
+		result: new ReplaySubject<QueryResult<T>>(1),
 	};
 
 	/**
@@ -163,6 +171,9 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 
 						return idsAreEqual && childrenAreEqual;
 					})
+					// catchError((error) => {
+					// 	this.errorSubject.next(error);
+					// })
 				)
 				.subscribe((result) => {
 					// console.log('Query result', result);

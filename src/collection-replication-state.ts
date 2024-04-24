@@ -15,7 +15,22 @@ import type { StoreDatabase } from '@wcpos/database';
 import { SubscribableBase } from './subscribable-base';
 import { isArrayOfIntegers } from './utils';
 
-type Collection = StoreDatabase['collections'][keyof StoreDatabase['collections']];
+type ProductCollection = import('@wcpos/database').ProductCollection;
+type ProductVariationCollection = import('@wcpos/database').ProductVariationCollection;
+type ProductCategoryCollection = import('@wcpos/database').ProductCategoryCollection;
+type ProductTagCollection = import('@wcpos/database').ProductTagCollection;
+type OrderCollection = import('@wcpos/database').OrderCollection;
+type CustomerCollection = import('@wcpos/database').CustomerCollection;
+type TaxRateCollection = import('@wcpos/database').TaxRateCollection;
+
+type Collection =
+	| ProductCollection
+	| ProductVariationCollection
+	| ProductCategoryCollection
+	| ProductTagCollection
+	| OrderCollection
+	| CustomerCollection
+	| TaxRateCollection;
 
 export interface QueryHooks {
 	preEndpoint?: (collection: Collection) => string;
@@ -94,39 +109,48 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		 * Push all internal subscriptions to the subs array
 		 * Internal subscriptions are cleaned up when replication is canceled
 		 */
-		this.subs.push(
-			/**
-			 * Subscribe to remote and local collections to calculate the total number of documents
-			 */
-			combineLatest([
-				// remote record count
-				this.storeDB.collections.sync
-					.find({ selector: { endpoint: this.endpoint } })
-					.$.pipe(distinctUntilChanged((a, b) => a.length === b.length)),
-				// local unsynced record count
-				this.collection
-					.find({
-						selector: {
-							id: { $eq: null },
-						},
-					})
-					.$.pipe(distinctUntilChanged((a, b) => a.length === b.length)),
-			]).subscribe(([remote, local]) => {
-				console.log('total count triggered', this.endpoint);
-				this.subjects.total.next(remote.length + local.length);
-			}),
+		this.setupDocumentCount();
+		this.setupPolling();
+	}
 
-			/**
-			 * Set up a polling interval to run the replication
-			 */
-			this.paused$
-				.pipe(
-					switchMap((isPaused) => (isPaused ? [] : interval(this.pollingTime).pipe(startWith(0)))),
-					filter(() => !this.subjects.paused.getValue())
-				)
-				.subscribe(async () => {
-					this.run();
-				})
+	/**
+	 * Subscribe to remote and local collections to calculate the total number of documents
+	 */
+	private setupDocumentCount() {
+		const remoteCount$ = this.storeDB.collections.sync
+			.find({ selector: { endpoint: this.endpoint } })
+			.$.pipe(
+				map((docs) => docs?.length || 0),
+				distinctUntilChanged()
+			);
+
+		const newLocalCount$ = this.collection.find({ selector: { id: { $eq: null } } }).$.pipe(
+			map((docs) => docs?.length || 0),
+			distinctUntilChanged()
+		);
+
+		const totalCount$ = combineLatest([remoteCount$, newLocalCount$]).pipe(
+			map(([remoteCount, newLocalCount]) => remoteCount + newLocalCount),
+			startWith(0)
+		);
+
+		// Subscribe to the total count and update the subject
+		this.subs.push(totalCount$.subscribe((count) => this.subjects.total.next(count)));
+	}
+
+	/**
+	 * Set up a polling interval to run the replication
+	 */
+	private setupPolling() {
+		const polling$ = this.paused$.pipe(
+			switchMap((isPaused) => (isPaused ? [] : interval(this.pollingTime).pipe(startWith(0)))),
+			filter(() => !this.subjects.paused.getValue())
+		);
+
+		this.subs.push(
+			polling$.subscribe(async () => {
+				this.run();
+			})
 		);
 	}
 
@@ -166,6 +190,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 *
 	 */
 	async audit(remoteState) {
+		if (isEmpty(remoteState)) {
+			return;
+		}
+
 		const localDocs = await this.collection.find().exec();
 		const localIDs = localDocs.map((doc) => doc.get('id')).filter((id) => Number.isInteger(id));
 		const remoteIDs = remoteState.map((doc) => doc.get('id')).filter((id) => Number.isInteger(id));
@@ -188,56 +216,8 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			})
 			.map((doc) => doc.id);
 
-		console.log('updatedIds', updatedIds);
-	}
-
-	/**
-	 *
-	 */
-	async auditIDs() {
-		if (this.isStopped() || this.subjects.active.getValue()) {
-			return;
-		}
-
-		try {
-			const remoteIDs = await this.getRemoteIDs();
-			debugger;
-
-			// if (!Array.isArray(remoteIDs) || remoteIDs.length === 0) {
-			// 	return;
-			// }
-
-			/**
-			 * @TODO - variations can be orphaned at the moment, we need a relationship table with parent
-			 */
-			const remove = this.subjects.localIDs.getValue().filter((id) => !remoteIDs.includes(id));
-
-			if (remove.length > 0 && this.collection.name !== 'variations') {
-				// deletion should be rare, only when an item is deleted from the server
-				console.warn('removing', remove, 'from', this.collection.name);
-				await this.collection.find({ selector: { id: { $in: remove } } }).remove();
-			}
-		} catch (error) {
-			this.errorSubject.next(error);
-		}
-	}
-
-	/**
-	 * Get remote IDs from local storage or from the endpoint
-	 */
-	async getRemoteIDs() {
-		try {
-			if (this.lastFetchRemoteIDsTime < new Date().getTime() - this.pollingTime) {
-				await this.fetchRemoteIDs();
-				this.lastFetchRemoteIDsTime = new Date().getTime();
-			}
-
-			return this.storeDB.collections.sync
-				.find({ selector: { endpoint: this.endpoint } })
-				.exec()
-				.then((docs) => docs.map((doc) => doc.get('id')));
-		} catch (error) {
-			this.errorSubject.next(error);
+		if (updatedIds.length > 0) {
+			this.sync({ include: updatedIds, force: true });
 		}
 	}
 
@@ -271,8 +251,20 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				throw new Error('Invalid response data for remote IDs');
 			}
 
+			/**
+			 * Save the remote state to the sync collection
+			 * - we need to delete the old state first
+			 */
 			const data = response.data.map((doc) => ({ ...doc, endpoint: this.endpoint }));
-			const { success, error } = await this.storeDB.collections.sync.bulkUpsert(data);
+			const syncCollection = this.storeDB.collections.sync;
+			await syncCollection
+				.find({ selector: { endpoint: this.endpoint } })
+				.exec()
+				.then((docs) => {
+					const ids = docs.map((doc) => doc.primary);
+					return syncCollection.bulkRemove(ids);
+				});
+			const { success, error } = await this.storeDB.collections.sync.bulkInsert(data);
 
 			if (error.length > 0) {
 				throw new Error('Error saving remote state for ' + this.endpoint);
@@ -292,37 +284,18 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 */
 	async getUnsyncedRemoteIDs() {
 		await this.firstSync;
-
-		const remoteIDs = await this.storeDB.collections.sync
-			.find({ selector: { endpoint: this.endpoint } })
-			.exec()
-			.then((docs) => docs.map((doc) => doc.get('id')))
-			.then((ids) => ids.filter((id) => Number.isInteger(id)));
-
-		const localIDs = await this.collection
-			.find()
-			.exec()
-			.then((docs) => docs.map((doc) => doc.get('id')))
-			.then((ids) => ids.filter((id) => Number.isInteger(id)));
-
+		const remoteIDs = await this.getStoredRemoteIDs();
+		const localIDs = await this.getLocalIDs();
 		return remoteIDs.filter((id) => !localIDs.includes(id));
 	}
 
+	/**
+	 *
+	 */
 	async getSyncedRemoteIDs() {
 		await this.firstSync;
-
-		const remoteIDs = await this.storeDB.collections.sync
-			.find({ selector: { endpoint: this.endpoint } })
-			.exec()
-			.then((docs) => docs.map((doc) => doc.get('id')))
-			.then((ids) => ids.filter((id) => Number.isInteger(id)));
-
-		const localIDs = await this.collection
-			.find()
-			.exec()
-			.then((docs) => docs.map((doc) => doc.get('id')))
-			.then((ids) => ids.filter((id) => Number.isInteger(id)));
-
+		const remoteIDs = await this.getStoredRemoteIDs();
+		const localIDs = await this.getLocalIDs();
 		return remoteIDs.filter((id) => localIDs.includes(id));
 	}
 
@@ -342,42 +315,53 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	/**
 	 *
 	 */
+	async getLocalIDs() {
+		const localIDs = await this.collection
+			.find()
+			.exec()
+			.then((docs) => docs.map((doc) => doc.get('id')))
+			.then((ids) => ids.filter((id) => Number.isInteger(id)));
+
+		return localIDs;
+	}
+
+	/**
+	 *
+	 */
 	async getLocalLastModifiedDate() {}
 
 	/**
 	 *
 	 */
-	async fetchUnsynced() {
-		if (this.isStopped() || this.subjects.active.getValue()) {
-			return;
+	async sync({
+		include,
+		greedy,
+		force,
+	}: { include?: number[]; greedy?: boolean; force?: boolean } = {}) {
+		if (!force && (this.isStopped() || this.subjects.active.getValue())) {
 		}
 
-		// Limit the number of times we fetch unsynced docs to keep server load down
-		if (this.lastFetchUnsyncedTime < new Date().getTime() - this.pollingTime) {
+		if (!include) {
+			include = await this.getUnsyncedRemoteIDs();
+		}
+
+		// If there are no unsynced or updated remote IDs, we can skip the fetch.
+		if (include.length === 0) {
 			return;
 		}
-		this.lastFetchUnsyncedTime = new Date().getTime();
-
-		const include = await this.getUnsyncedRemoteIDs();
-		const lastModified = this.subjects.lastModified.getValue();
 
 		this.subjects.active.next(true);
 
 		try {
-			let response;
-			if (isEmpty(include)) {
-				response = await this.fetchLastModified({ lastModified });
-			} else {
-				response = await this.fetchUnsyncedRemoteIDs({ include });
-			}
+			const response = await this.fetchRemoteByIDs({ include });
 
 			if (!Array.isArray(response?.data)) {
-				throw new Error('Invalid response data for query replication');
+				throw new Error('Invalid response data for collection replication');
 			}
 
 			const promises = response.data.map(async (doc) => {
 				const parsedData = this.collection.parseRestResponse(doc);
-				await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+				// await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
 				return parsedData;
 			});
 
@@ -394,9 +378,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	/**
 	 *
 	 */
-	async fetchUnsyncedRemoteIDs({ include }) {
-		this.subjects.active.next(true);
-
+	async fetchRemoteByIDs({ include }) {
 		const response = await this.httpClient.post(
 			this.endpoint,
 			{
@@ -446,7 +428,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			}
 
 			const parsedData = this.collection.parseRestResponse(response.data);
-			await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+			// await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
 			await doc.incrementalPatch(parsedData);
 			return doc;
 		} catch (error) {
@@ -463,7 +445,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			}
 
 			const parsedData = this.collection.parseRestResponse(response.data);
-			await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+			// await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
 			const doc = await this.collection.upsert(parsedData);
 			return doc;
 		} catch (error) {

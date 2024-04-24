@@ -72,20 +72,25 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		this.greedy = greedy;
 
 		/**
-		 *
+		 * Push all internal subscriptions to the subs array
+		 * Internal subscriptions are cleaned up when replication is canceled
 		 */
+		this.setupPolling();
+	}
+
+	/**
+	 * Set up a polling interval to run the replication
+	 */
+	private setupPolling() {
+		const polling$ = this.paused$.pipe(
+			switchMap((isPaused) => (isPaused ? [] : interval(this.pollingTime).pipe(startWith(0)))),
+			filter(() => !this.subjects.paused.getValue())
+		);
+
 		this.subs.push(
-			/**
-			 * Pause/Start the replication
-			 */
-			this.paused$
-				.pipe(
-					switchMap((isPaused) => (isPaused ? [] : interval(this.pollingTime).pipe(startWith(0)))),
-					filter(() => !this.subjects.paused.getValue())
-				)
-				.subscribe(async () => {
-					this.run();
-				})
+			polling$.subscribe(async () => {
+				this.run();
+			})
 		);
 	}
 
@@ -149,7 +154,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		 */
 		if (this.syncCompleted) {
 			this.subjects.active.next(false);
-			return this.collectionReplication.fetchUnsynced();
+			return this.collectionReplication.sync();
 		}
 
 		try {
@@ -178,7 +183,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 			const promises = response.data.map(async (doc) => {
 				const parsedData = this.collection.parseRestResponse(doc);
-				await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
+				// await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
 				return parsedData;
 			});
 
