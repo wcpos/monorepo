@@ -1,13 +1,16 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservable } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { map, shareReplay, startWith } from 'rxjs/operators';
 
 import { useQuery } from '@wcpos/query';
 
 import { useDefaultCustomerID } from './use-default-customer-id';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 
+/**
+ *
+ */
 export const useDefaultCustomer = () => {
 	const guestCustomer = useGuestCustomer();
 	const defaultCustomerID = useDefaultCustomerID();

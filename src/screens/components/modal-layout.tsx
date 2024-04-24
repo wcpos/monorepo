@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useNavigation, StackActions } from '@react-navigation/native';
 
 import Modal, { ModalProps } from '@wcpos/components/src/modal';
+import Suspense from '@wcpos/components/src/suspense';
 
 import useModalRefreshFix from '../../hooks/use-modal-refresh-fix';
 
@@ -23,7 +24,7 @@ export const ModalLayout = ({ children, ...props }: ModalLayoutProps) => {
 			opened
 			onClose={() => navigation.dispatch(StackActions.pop(1))}
 		>
-			{children}
+			<Suspense>{children}</Suspense>
 		</Modal>
 	);
 };

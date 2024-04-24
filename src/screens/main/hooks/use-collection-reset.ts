@@ -10,12 +10,17 @@ import type { CollectionKey } from './use-collection';
  */
 const resetCollectionNames = {
 	products: ['variations', 'products'],
-	orders: ['line_items', 'fee_lines', 'shipping_lines', 'orders'],
 };
 
+/**
+ *
+ */
 export const useCollectionReset = (key: CollectionKey) => {
 	const { storeDB } = useAppState();
 
+	/**
+	 *
+	 */
 	const clear = React.useCallback(() => {
 		const keys = resetCollectionNames[key] || [key];
 		storeDB.reset(keys);

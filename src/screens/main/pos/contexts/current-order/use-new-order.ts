@@ -31,8 +31,8 @@ const newOrder$ = temporaryDB$.pipe(
 			})
 		)
 	),
-	distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid)
-	// tap((order) => console.log('emitting new order', order))
+	distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid),
+	tap((order) => console.log('emitting new order', order))
 );
 
 const newOrderResource = new ObservableResource(newOrder$);

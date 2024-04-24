@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import Box from '@wcpos/components/src/box';
+import Suspense from '@wcpos/components/src/suspense';
 import Tabs from '@wcpos/components/src/tabs';
 
 import BarcodeScanning from './barcode-scanning';
@@ -46,7 +47,9 @@ export const SettingsTabs = () => {
 			}}
 			renderScene={({ route }) => (
 				<Box paddingTop="small">
-					<route.Component />
+					<Suspense>
+						<route.Component />
+					</Suspense>
 				</Box>
 			)}
 			onIndexChange={setIndex}

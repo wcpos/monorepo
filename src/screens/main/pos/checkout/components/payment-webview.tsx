@@ -13,6 +13,7 @@ import WebView from '@wcpos/components/src/webview';
 import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../../../../contexts/app-state';
+import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -31,6 +32,7 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 	);
 	const { wpCredentials } = useAppState();
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
+	const { stockAdjustment } = useStockAdjustment();
 
 	/**
 	 *
@@ -53,6 +55,12 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 			) {
 				try {
 					const payload = event.data.payload;
+					// get line_items with "_reduced_stock" meta
+					const reducedStockItems = (payload?.line_items || []).filter((item) =>
+						item.meta_data.some((meta) => meta.key === '_reduced_stock')
+					);
+					stockAdjustment(reducedStockItems);
+
 					const latest = order.getLatest();
 					const parsedData = latest.collection.parseRestResponse(payload);
 					const success = await latest.incrementalPatch(parsedData);
@@ -77,7 +85,7 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 				}
 			}
 		},
-		[addSnackbar, navigation, order, setPrimaryAction]
+		[addSnackbar, navigation, order, setPrimaryAction, stockAdjustment]
 	);
 
 	/**
