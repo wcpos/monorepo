@@ -11,6 +11,7 @@ import {
 } from 'rxjs/operators';
 
 import type { StoreDatabase } from '@wcpos/database';
+import log from '@wcpos/utils/src/logger';
 
 import { SubscribableBase } from './subscribable-base';
 import { isArrayOfIntegers } from './utils';
@@ -174,8 +175,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		 * Fetching the remote state will update the sync collection, which triggers other events
 		 * such as the total count, fetching updated documents, removing orphaned documents etc
 		 */
-		if (this.lastFetchRemoteIDsTime < new Date().getTime() - this.pollingTime) {
-			this.lastFetchRemoteIDsTime = new Date().getTime();
+		const now = new Date().getTime();
+		if (this.lastFetchRemoteIDsTime < now - this.pollingTime) {
+			this.lastFetchRemoteIDsTime = now;
 			const remoteState = await this.fetchRemoteState();
 			await this.audit(remoteState);
 		}
@@ -202,7 +204,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		const remove = localIDs.filter((id) => !remoteIDs.includes(id));
 		if (remove.length > 0 && this.collection.name !== 'variations') {
 			// deletion should be rare, only when an item is deleted from the server
-			console.warn('removing', remove, 'from', this.collection.name);
+			log.warn('removing', remove, 'from', this.collection.name);
 			await this.collection.find({ selector: { id: { $in: remove } } }).remove();
 		}
 
@@ -217,25 +219,15 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			.map((doc) => doc.id);
 
 		if (updatedIds.length > 0) {
-			this.sync({ include: updatedIds, force: true });
+			await this.sync({ include: updatedIds, force: true });
 		}
 	}
 
 	/**
 	 * Makes a request the the endpoint to fetch all remote IDs
-	 * - can be overwritten by the fetchRemoteIDs hook, this is required for variations
+	 * - this should be done as rarely as possible, getting all remote IDs is expensive on the server
 	 */
 	async fetchRemoteState() {
-		// if (this.hooks?.fetchRemoteIDs) {
-		// 	/**
-		// 	 * @HACK - this is a bit hacky, but it works for now
-		// 	 * Variations is one collection locally, containing all variations
-		// 	 * But it is multiple endpoints on the server, one for each product
-		// 	 * Maybe we should have a separate collection for each variable product?
-		// 	 */
-		// 	return this.hooks?.fetchRemoteIDs(this.endpoint, this.collection);
-		// }
-
 		if (this.isStopped() || this.subjects.active.getValue()) {
 			return;
 		}
@@ -253,20 +245,23 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 			/**
 			 * Save the remote state to the sync collection
-			 * - we need to delete the old state first
+			 * - we need to remove any orphaned ids, eg: doc deleted on server
+			 * - it's tempting to just bullk delete and insert, but it causes doc totals to flash in the UI
 			 */
 			const data = response.data.map((doc) => ({ ...doc, endpoint: this.endpoint }));
 			const syncCollection = this.storeDB.collections.sync;
-			await syncCollection
+			const ids = await syncCollection
 				.find({ selector: { endpoint: this.endpoint } })
 				.exec()
-				.then((docs) => {
-					const ids = docs.map((doc) => doc.primary);
-					return syncCollection.bulkRemove(ids);
-				});
-			const { success, error } = await this.storeDB.collections.sync.bulkInsert(data);
+				.then((docs) => docs.map((doc) => doc.id));
+			const orphanedIds = ids.filter((id) => !data.map((doc) => doc.id).includes(id));
+			await syncCollection
+				.find({ selector: { endpoint: this.endpoint, id: { $in: orphanedIds } } })
+				.remove();
+			const { success, error } = await this.storeDB.collections.sync.bulkUpsert(data);
 
 			if (error.length > 0) {
+				log.error('Error saving remote state for ' + this.endpoint, error);
 				throw new Error('Error saving remote state for ' + this.endpoint);
 			}
 
@@ -436,6 +431,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		}
 	}
 
+	/**
+	 *
+	 */
 	async remoteCreate(data) {
 		try {
 			const response = await this.httpClient.post(this.endpoint, data);

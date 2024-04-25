@@ -53,12 +53,27 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	};
 	readonly error$: Observable<Error> = this.subjects.error.asObservable();
 
-	constructor(
+	/**
+	 * Enforce singleton pattern
+	 */
+	// private static instanceCount = 0;
+	// private instanceId: number;
+	private static instance: Manager<any>;
+
+	private constructor(
 		private localDB: TDatabase,
 		private httpClient,
 		private locale: string
 	) {
 		super();
+		// Manager.instanceCount++;
+		// this.instanceId = Manager.instanceCount;
+		// console.log(`Manager instance created with ID: ${this.instanceId}`, {
+		// 	localDB,
+		// 	httpClient,
+		// 	locale,
+		// });
+
 		this.queryStates = new Registry();
 		this.replicationStates = new Registry();
 		this.activeCollectionReplications = new Registry();
@@ -70,6 +85,17 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			 */
 			this.localDB.reset$.subscribe(this.onCollectionReset.bind(this))
 		);
+	}
+
+	public static getInstance<TDatabase extends RxDatabase>(
+		localDB: TDatabase,
+		httpClient,
+		locale: string
+	) {
+		if (!Manager.instance) {
+			Manager.instance = new Manager<TDatabase>(localDB, httpClient, locale);
+		}
+		return Manager.instance as Manager<TDatabase>;
 	}
 
 	stringify(params: any): string {

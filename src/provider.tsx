@@ -22,7 +22,10 @@ export const QueryProvider = <T extends RxDatabase>({
 	children,
 	locale,
 }: QueryProviderProps<T>) => {
-	const manager = React.useMemo(() => new Manager(localDB, http, locale), [localDB, http, locale]);
+	const manager = React.useMemo(
+		() => Manager.getInstance<T>(localDB, http, locale),
+		[localDB, http, locale]
+	);
 
 	/**
 	 * Clean up the manager when the dependency changes
