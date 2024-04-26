@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState, useSubscription } from 'observable-hooks';
+import { useObservableState, useSubscription, useObservableEagerState } from 'observable-hooks';
 import { debounceTime, skip } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
@@ -24,14 +24,14 @@ import EmptyTableRow from './empty-table-row';
 import SyncButton from './sync-button';
 import TextCell from './text-cell';
 import { useT } from '../../../contexts/translations';
+import { useUISettings, UISettingID } from '../contexts/ui-settings';
 import { useCollectionReset } from '../hooks/use-collection-reset';
 
-type UISettingsColumn = import('../contexts/ui-settings').UISettingsColumn;
 type DocumentType = ProductDocument | OrderDocument | CustomerDocument | TaxRateDocument;
 
 interface CommonTableProps<T> {
+	id: UISettingID;
 	query: Query<any>;
-	uiSettings: import('../contexts/ui-settings').UISettingsDocument;
 	cells: Record<string, React.FC<any>>;
 	renderItem?: (props: any) => JSX.Element;
 	noDataMessage: string;
@@ -86,8 +86,8 @@ const LoadingRow = ({ query }) => {
  *
  */
 const DataTable = <T extends DocumentType>({
+	id,
 	query,
-	uiSettings,
 	cells,
 	renderItem,
 	noDataMessage = 'No record found',
@@ -95,11 +95,9 @@ const DataTable = <T extends DocumentType>({
 	extraContext,
 	footer,
 }: CommonTableProps<T>) => {
+	const { uiSettings, getUILabel } = useUISettings(id);
+	const columns = useObservableEagerState(uiSettings.columns$);
 	const result = useInfiniteScroll(query);
-	const columns = useObservableState(
-		uiSettings.get$('columns'),
-		uiSettings.get('columns')
-	) as UISettingsColumn[];
 	const { sortBy, sortDirection } = useObservableState(query.params$, query.getParams());
 	const listRef = React.useRef();
 
@@ -137,7 +135,7 @@ const DataTable = <T extends DocumentType>({
 			sortBy,
 			sortDirection,
 			cellRenderer,
-			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
+			headerLabel: ({ column }) => getUILabel(column.key),
 			query,
 			...extraContext,
 		};
@@ -149,7 +147,7 @@ const DataTable = <T extends DocumentType>({
 		cellRenderer,
 		query,
 		extraContext,
-		uiSettings,
+		getUILabel,
 	]);
 
 	/**

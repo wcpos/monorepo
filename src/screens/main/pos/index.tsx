@@ -54,12 +54,12 @@ const POSWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, '
 	const order$ = useObservable(
 		(inputs$) =>
 			inputs$.pipe(
-				switchMap(([uuid]) =>
-					uuid ? collection.findOne({ selector: { uuid, status: 'pos-open' } }).$ : of(null)
+				switchMap(([col, uuid]) =>
+					uuid ? col.findOne({ selector: { uuid, status: 'pos-open' } }).$ : of(null)
 				),
 				distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid)
 			),
-		[route.params?.orderID]
+		[collection, route.params?.orderID]
 	);
 
 	/**

@@ -1,64 +1,42 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import { ObservableResource, useObservableState } from 'observable-hooks';
-import { tap, catchError } from 'rxjs/operators';
+import { ObservableResource, useObservable } from 'observable-hooks';
+import { switchMap } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 
-import initialSettings from './initial-settings.json';
 import { useUILabel } from './use-ui-label';
+import {
+	mergeWithInitalValues,
+	UISettingSchema,
+	UISettingState,
+	resetToInitialValues,
+	UISettingID,
+	patchState,
+} from './utils';
 import { useAppState } from '../../../../contexts/app-state';
-
-type StoreDatabase = import('@wcpos/database').StoreDatabase;
-
-export interface UISettingsDisplay {
-	key: string;
-	hide: boolean;
-	order: number;
-}
-
-export interface UISettingsColumn {
-	key: string;
-	disableSort: boolean;
-	order: number;
-	width: string;
-	show: boolean;
-	hideLabel: boolean;
-	display: UISettingsDisplay[];
-}
-
-export interface UISettingsSchema {
-	sortBy: string;
-	sortDirection: import('@wcpos/components/src/table').SortDirection;
-	width: number;
-	columns: UISettingsColumn[];
-}
-
-export type UISettingsDocument = import('rxdb').RxLocalDocument<StoreDatabase, UISettingsSchema> & {
-	reset: () => void;
-	getLabel: (key: string) => string;
-};
-export type UISettingsResource = import('observable-hooks').ObservableResource<UISettingsDocument>;
 
 interface UISettingsProviderProps {
 	children: React.ReactNode;
 }
 
-const resourceIDs = [
-	'pos.products',
-	'pos.cart',
-	'pos.checkout',
-	'products',
-	'orders',
-	'customers',
-	'coupons',
-] as const;
-export type UISettingsResourceID = (typeof resourceIDs)[number];
+export interface UISettingsContextValue {
+	resources: {
+		'pos-products': ObservableResource<UISettingState<'pos-products'>>;
+		'pos-cart': ObservableResource<UISettingState<'pos-cart'>>;
+		products: ObservableResource<UISettingState<'products'>>;
+		orders: ObservableResource<UISettingState<'orders'>>;
+		customers: ObservableResource<UISettingState<'customers'>>;
+	};
+	getLabel: (id: string, key: string) => string;
+	reset: (id: UISettingID) => Promise<void>;
+	patch: <T extends UISettingID>(
+		id: T,
+		data: Partial<UISettingSchema<T>>
+	) => Promise<UISettingState<T>>;
+}
 
-export const UISettingsContext = React.createContext<{
-	uiResources: Record<UISettingsResourceID, UISettingsResource>;
-}>(null);
+export const UISettingsContext = React.createContext<UISettingsContextValue>(null);
 
 /**
  * @TODO - this is messy, needs to be refactored, perhaps register uiSettings as part of
@@ -69,65 +47,108 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 	const { getLabel } = useUILabel();
 
 	/**
-	 *
+	 * Create UI Observables
 	 */
-	const value = React.useMemo(() => {
-		/**
-		 *
-		 */
-		function reset(id: UISettingsResourceID) {
-			const initial = get(initialSettings, id);
-			storeDB.upsertLocal(id, initial);
-		}
-
-		/**
-		 * @TODO - I need to have a process to migrate to new settings schema
-		 */
-		function createUIResource(id: UISettingsResourceID) {
-			const resource$ = storeDB.getLocal$(id).pipe(
-				tap((localDoc) => {
-					const initial = get(initialSettings, id);
-					if (!localDoc) {
-						storeDB.insertLocal(id, initial);
-					} else {
-						// hack for cart discounts
-						if (id === 'pos.cart') {
-							const quickDiscounts = localDoc.get('quickDiscounts');
-							if (!quickDiscounts) {
-								localDoc.incrementalPatch({ quickDiscounts: initial.quickDiscounts || [] });
-							}
-						}
-						// add helper functions
-						Object.assign(localDoc, {
-							reset,
-							getLabel: (key) => getLabel(localDoc.id, key),
-						});
-					}
-				}),
-				catchError((err) => {
-					log.error(err);
-					throw new Error('Error loading UI resources');
+	const posProducts$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(async ([db]) => {
+					const state = await db.addState<UISettingSchema<'pos-products'>>('pos-products');
+					await mergeWithInitalValues('pos-products', state);
+					return state;
 				})
-			);
+			),
+		[storeDB]
+	);
 
-			return new ObservableResource(resource$, (val) => !!val);
-		}
+	const posCart$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(async ([db]) => {
+					const state = await db.addState<UISettingSchema<'pos-cart'>>('pos-cart');
+					await mergeWithInitalValues('pos-cart', state);
+					return state;
+				})
+			),
+		[storeDB]
+	);
 
-		/**
-		 *
-		 */
-		return {
-			uiResources: {
-				'pos.products': createUIResource('pos.products'),
-				'pos.cart': createUIResource('pos.cart'),
-				// 'pos.checkout': createUIResource('pos.checkout'),
-				products: createUIResource('products'),
-				orders: createUIResource('orders'),
-				customers: createUIResource('customers'),
-				// coupons: getResource('pos.products'),
+	const products$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(async ([db]) => {
+					const state = await db.addState<UISettingSchema<'products'>>('products');
+					await mergeWithInitalValues('products', state);
+					return state;
+				})
+			),
+		[storeDB]
+	);
+
+	const orders$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(async ([db]) => {
+					const state = await db.addState<UISettingSchema<'orders'>>('orders');
+					await mergeWithInitalValues('orders', state);
+					return state;
+				})
+			),
+		[storeDB]
+	);
+
+	const customers$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(async ([db]) => {
+					const state = await db.addState<UISettingSchema<'customers'>>('customers');
+					await mergeWithInitalValues('customers', state);
+					return state;
+				})
+			),
+		[storeDB]
+	);
+
+	/**
+	 * Reset UI Settings
+	 */
+	const reset = React.useCallback(
+		async (id: UISettingID) => {
+			const state = await storeDB.addState(id);
+			await resetToInitialValues(id, state);
+		},
+		[storeDB]
+	);
+
+	/**
+	 * Patch UI Settings
+	 */
+	const patch = React.useCallback(
+		async (id: UISettingID, data: Partial<UISettingSchema<UISettingID>>) => {
+			const state = await storeDB.addState(id);
+			await patchState(state, data);
+		},
+		[storeDB]
+	);
+
+	/**
+	 * Create UI Resources
+	 */
+	const value = React.useMemo(
+		() => ({
+			resources: {
+				'pos-products': new ObservableResource(posProducts$),
+				'pos-cart': new ObservableResource(posCart$),
+				products: new ObservableResource(products$),
+				orders: new ObservableResource(orders$),
+				customers: new ObservableResource(customers$),
 			},
-		};
-	}, [storeDB, getLabel]);
+			getLabel,
+			reset,
+			patch,
+		}),
+		[customers$, getLabel, orders$, patch, posCart$, posProducts$, products$, reset]
+	);
 
 	/**
 	 *

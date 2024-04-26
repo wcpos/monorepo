@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useFocusEffect } from '@react-navigation/native';
-import { useObservableState, useObservableCallback } from 'observable-hooks';
+import { useObservableEagerState, useObservableCallback } from 'observable-hooks';
 import { bufferTime, filter, map } from 'rxjs/operators';
 
 import { useHotkeys, RNKeyboardEvent, getKeyFromEvent } from '@wcpos/hooks/src/use-hotkeys';
@@ -30,13 +30,10 @@ export const useBarcodeDetection = (
 	}
 ) => {
 	const { store } = useAppState();
-	const buffer = useObservableState(store.barcode_scanning_buffer$, store.barcode_scanning_buffer);
-	const minLength = useObservableState(
-		store.barcode_scanning_min_chars$,
-		store.barcode_scanning_min_chars
-	);
-	const prefix = useObservableState(store.barcode_scanning_prefix$, store.barcode_scanning_prefix);
-	const suffix = useObservableState(store.barcode_scanning_suffix$, store.barcode_scanning_suffix);
+	const buffer = useObservableEagerState(store.barcode_scanning_buffer$);
+	const minLength = useObservableEagerState(store.barcode_scanning_min_chars$);
+	const prefix = useObservableEagerState(store.barcode_scanning_prefix$);
+	const suffix = useObservableEagerState(store.barcode_scanning_suffix$);
 	const [enabled, setEnabled] = React.useState(true);
 
 	/**

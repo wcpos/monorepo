@@ -1,20 +1,16 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 
 type Props = {
 	item: import('@wcpos/database').OrderDocument;
-	column: import('../../contexts/ui-settings').UISettingsColumn;
 };
 
-const PaymentMethod = ({ item, column }: Props) => {
-	const paymentMethod = useObservableState(item.payment_method$, item.payment_method);
-	const paymentMethodTitle = useObservableState(
-		item.payment_method_title$,
-		item.payment_method_title
-	);
+const PaymentMethod = ({ item }: Props) => {
+	// const paymentMethod = useObservableEagerState(item.payment_method$);
+	const paymentMethodTitle = useObservableEagerState(item.payment_method_title$);
 
 	return paymentMethodTitle ? <Text>{paymentMethodTitle}</Text> : null;
 };

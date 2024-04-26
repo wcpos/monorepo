@@ -17,7 +17,7 @@ import Search from '../components/product/search';
 import TaxBasedOn from '../components/product/tax-based-on';
 import UISettings from '../components/ui-settings';
 import { useTaxRates } from '../contexts/tax-rates';
-import useUI from '../contexts/ui-settings';
+import { useUISettings } from '../contexts/ui-settings';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -31,7 +31,7 @@ const TABLE_ROW_COMPONENTS = {
  *
  */
 const Products = () => {
-	const { uiSettings } = useUI('products');
+	const { uiSettings } = useUISettings('products');
 	const theme = useTheme();
 	const { calcTaxes } = useTaxRates();
 	const t = useT();
@@ -44,8 +44,8 @@ const Products = () => {
 			queryKeys: ['products', { target: 'page', type: 'relational' }],
 			collectionName: 'products',
 			initialParams: {
-				sortBy: uiSettings.get('sortBy'),
-				sortDirection: uiSettings.get('sortDirection'),
+				sortBy: uiSettings.sortBy,
+				sortDirection: uiSettings.sortDirection,
 			},
 		},
 		{
@@ -53,7 +53,7 @@ const Products = () => {
 			collectionName: 'variations',
 			initialParams: {
 				sortBy: 'id',
-				sortDirection: uiSettings.get('sortDirection'),
+				sortDirection: uiSettings.sortDirection,
 			},
 			endpoint: 'products/variations',
 			greedy: true,
@@ -130,8 +130,8 @@ const Products = () => {
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable<ProductDocument>
+								id="products"
 								query={query}
-								uiSettings={uiSettings}
 								renderItem={renderItem}
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}

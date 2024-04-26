@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import NumberInput from '../../../components/number-input';
-import useUI from '../../../contexts/ui-settings';
+import { useUISettings } from '../../../contexts/ui-settings';
 import { useTaxDisplayValues } from '../../../hooks/taxes/use-tax-display-values';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 import { getTaxStatusFromMetaData } from '../../hooks/utils';
@@ -47,8 +47,8 @@ export const Price = ({ uuid, item }: Props) => {
 	/**
 	 * Discounts
 	 */
-	const { uiSettings } = useUI('pos.cart');
-	const quickDiscounts = useObservableEagerState(uiSettings.get$('quickDiscounts'));
+	const { uiSettings } = useUISettings('pos-cart');
+	const quickDiscounts = useObservableEagerState(uiSettings.quickDiscounts$);
 
 	/**
 	 *

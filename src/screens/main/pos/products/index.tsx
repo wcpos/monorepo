@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -20,7 +20,7 @@ import Search from '../../components/product/search';
 import TaxBasedOn from '../../components/product/tax-based-on';
 import UISettings from '../../components/ui-settings';
 import { useTaxRates } from '../../contexts/tax-rates';
-import useUI from '../../contexts/ui-settings';
+import { useUISettings } from '../../contexts/ui-settings';
 import { useAddProduct } from '../hooks/use-add-product';
 import { useAddVariation } from '../hooks/use-add-variation';
 
@@ -37,14 +37,11 @@ const TABLE_ROW_COMPONENTS = {
  */
 const POSProducts = ({ isColumn = false }) => {
 	const theme = useTheme();
-	const { uiSettings } = useUI('pos.products');
+	const { uiSettings } = useUISettings('pos-products');
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
 	const { calcTaxes } = useTaxRates();
-	const showOutOfStock = useObservableState(
-		uiSettings.get$('showOutOfStock'),
-		uiSettings.get('showOutOfStock')
-	);
+	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 	const t = useT();
 
 	/**
@@ -55,8 +52,8 @@ const POSProducts = ({ isColumn = false }) => {
 			queryKeys: ['products', { target: 'pos', type: 'relational' }],
 			collectionName: 'products',
 			initialParams: {
-				sortBy: uiSettings.get('sortBy'),
-				sortDirection: uiSettings.get('sortDirection'),
+				sortBy: uiSettings.sortBy,
+				sortDirection: uiSettings.sortDirection,
 			},
 		},
 		{
@@ -64,7 +61,7 @@ const POSProducts = ({ isColumn = false }) => {
 			collectionName: 'variations',
 			initialParams: {
 				sortBy: 'id',
-				sortDirection: uiSettings.get('sortDirection'),
+				sortDirection: uiSettings.sortDirection,
 			},
 			endpoint: 'products/variations',
 			greedy: true,
@@ -145,8 +142,8 @@ const POSProducts = ({ isColumn = false }) => {
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable<ProductDocument>
+								id="pos-products"
 								query={query}
-								uiSettings={uiSettings}
 								renderItem={renderItem}
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}

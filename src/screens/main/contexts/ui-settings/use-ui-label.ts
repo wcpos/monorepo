@@ -13,7 +13,7 @@ export const useUILabel = () => {
 	const getLabel = React.useCallback(
 		(id: string, key: string) => {
 			const labels = {
-				'pos.products': {
+				'pos-products': {
 					showOutOfStock: t('Show out-of-stock products', { _tags: 'core' }),
 					image: t('Image', { _tags: 'core' }),
 					name: t('Product', { _tags: 'core' }),
@@ -30,7 +30,7 @@ export const useUILabel = () => {
 					actions: t('Actions', { _tags: 'core' }),
 					attributes: t('Attributes', { _tags: 'core' }),
 				},
-				'pos.cart': {
+				'pos-cart': {
 					quickDiscounts: t('Quick Discounts', { _tags: 'core' }),
 					quantity: t('Qty', { _tags: 'core', _context: 'Short for quantity' }),
 					split: t('Split', { _tags: 'core', _context: 'Split quantity' }),

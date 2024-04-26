@@ -10,14 +10,14 @@ import { useT } from '../../../../contexts/translations';
 import { AddNewCustomer } from '../../components/customer/add-new';
 import CustomerSelect from '../../components/customer-select';
 import UISettings from '../../components/ui-settings';
-import useUI from '../../contexts/ui-settings';
+import { useUISettings } from '../../contexts/ui-settings';
 import { useAddCustomer } from '../hooks/use-add-customer';
 
 /**
  *
  */
 const CartHeader = () => {
-	const { uiSettings } = useUI('pos.cart');
+	const { uiSettings } = useUISettings('pos-cart');
 	const theme = useTheme();
 	const { addCustomer } = useAddCustomer();
 	const [showCustomerSelect, setShowCustomerSelect] = React.useState(false);

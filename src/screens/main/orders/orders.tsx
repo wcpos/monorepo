@@ -20,7 +20,7 @@ import { useT } from '../../../contexts/translations';
 import DataTable from '../components/data-table';
 import { Date } from '../components/date';
 import UiSettings from '../components/ui-settings';
-import useUI from '../contexts/ui-settings';
+import { useUISettings } from '../contexts/ui-settings';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -42,7 +42,7 @@ const cells = {
  *
  */
 const Orders = () => {
-	const { uiSettings } = useUI('orders');
+	const { uiSettings } = useUISettings('orders');
 	const theme = useTheme();
 	const t = useT();
 
@@ -53,8 +53,8 @@ const Orders = () => {
 		queryKeys: ['orders'],
 		collectionName: 'orders',
 		initialParams: {
-			sortBy: uiSettings.get('sortBy'),
-			sortDirection: uiSettings.get('sortDirection'),
+			sortBy: uiSettings.sortBy,
+			sortDirection: uiSettings.sortDirection,
 		},
 	});
 
@@ -97,8 +97,8 @@ const Orders = () => {
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable<OrderDocument>
+								id="orders"
 								query={query}
-								uiSettings={uiSettings}
 								cells={cells}
 								noDataMessage={t('No orders found', { _tags: 'core' })}
 								estimatedItemSize={100}

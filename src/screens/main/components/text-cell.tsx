@@ -1,16 +1,23 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
+import { Observable, of } from 'rxjs';
 
 import Text from '@wcpos/components/src/text';
 
-type Props = {
+import type { UISettingState, UISettingID } from '../contexts/ui-settings';
+
+type Props<T extends UISettingID> = {
 	item: import('rxdb').RxDocument;
-	column: import('../contexts/ui-settings').UISettingsColumn;
+	column: UISettingState<T>['columns'][number];
 };
 
-const TextCell = ({ item, column }: Props) => {
-	const text = useObservableState(item[column.key + '$'], item[column.key]);
+/**
+ *
+ */
+const TextCell = <T extends UISettingID>({ item, column }: Props<T>) => {
+	const textObservable = item[column.key + '$'] as Observable<string> | undefined;
+	const text = useObservableEagerState(textObservable ? textObservable : of(null));
 	return <Text>{text}</Text>;
 };
 

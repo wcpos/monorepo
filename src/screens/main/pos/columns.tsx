@@ -11,7 +11,7 @@ import Suspense from '@wcpos/components/src/suspense';
 
 import OpenOrders from './cart';
 import Products from './products';
-import useUI from '../contexts/ui-settings';
+import { useUISettings } from '../contexts/ui-settings';
 
 /**
  *
@@ -26,14 +26,14 @@ const clamp = (value: number, lowerBound: number, upperBound: number) => {
  *
  */
 const ResizableColumns = () => {
-	const { uiSettings } = useUI('pos.products');
-	const columnWidth = useSharedValue(uiSettings.get('width'));
+	const { uiSettings } = useUISettings('pos-products');
+	const columnWidth = useSharedValue(uiSettings.width);
 	const startValue = useSharedValue(columnWidth.value);
 	const isActivePanGesture = useSharedValue(false);
 	const containerWidth = useSharedValue(800);
-	uiSettings.get$('width').subscribe((width) => {
-		columnWidth.value = width;
-	});
+	// uiSettings.get$('width').subscribe((width) => {
+	// 	columnWidth.value = width;
+	// });
 
 	/**
 	 *

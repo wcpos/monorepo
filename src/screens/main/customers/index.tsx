@@ -15,7 +15,6 @@ import Customers from './customers';
 import EditCustomer from './edit-customer';
 import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
-import useUI from '../contexts/ui-settings';
 import { useCollection } from '../hooks/use-collection';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';

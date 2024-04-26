@@ -1,5 +1,5 @@
 {
-  "pos.products": {
+  "pos-products": {
     "sortBy": "name",
     "sortDirection": "asc",
     "width": 60,
@@ -84,7 +84,7 @@
       }
     ]
   },
-  "pos.cart": {
+  "pos-cart": {
     "sortBy": "id",
     "sortDirection": "asc",
     "quickDiscounts": [5, 10, 15, 20],

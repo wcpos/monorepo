@@ -1,15 +1,17 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
+import { useObservableState } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 import Form from '@wcpos/react-native-jsonschema-form';
 
 import { useT } from '../../../contexts/translations';
+import { UISettingID, UISettingState, useUISettings } from '../contexts/ui-settings';
 
-interface UiSettingsProps {
-	uiSettings: import('../contexts/ui-settings').UISettingsDocument;
+interface Props<T extends UISettingID> {
+	uiSettings: UISettingState<T>;
 	title: string;
 }
 
@@ -32,8 +34,12 @@ const uiSchema = {
 	},
 };
 
-const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
-	const formData = uiSettings.toJSON().data;
+/**
+ *
+ */
+const UISettings = <T extends UISettingID>({ uiSettings, title }: Props<T>) => {
+	const formData = useObservableState(uiSettings.$, uiSettings.get());
+	const { getUILabel, resetUI, patchUI } = useUISettings(uiSettings.prefix);
 	const [opened, setOpened] = React.useState(false);
 	const t = useT();
 
@@ -81,7 +87,7 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 			},
 		};
 
-		if (uiSettings.id === 'pos.products') {
+		if (uiSettings.prefix === 'pos-products') {
 			return {
 				..._schema,
 				properties: {
@@ -93,7 +99,7 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 			};
 		}
 
-		if(uiSettings.id === 'pos.cart') {
+		if (uiSettings.prefix === 'pos-cart') {
 			return {
 				..._schema,
 				properties: {
@@ -102,11 +108,11 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 					},
 					..._schema.properties,
 				},
-			}
+			};
 		}
 
 		return _schema;
-	}, [t, uiSettings.id]);
+	}, [t, uiSettings.prefix]);
 
 	/**
 	 *
@@ -122,7 +128,7 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 				}}
 				primaryAction={{
 					label: t('Restore Default Settings', { _tags: 'core' }),
-					action: () => uiSettings.reset(uiSettings.id),
+					action: resetUI,
 					type: 'critical',
 				}}
 			>
@@ -130,9 +136,7 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 					schema={schema}
 					uiSchema={uiSchema}
 					formData={formData}
-					onChange={(value) => {
-						uiSettings.incrementalPatch(value);
-					}}
+					onChange={(value) => patchUI({ columns: value.columns })}
 					formContext={{
 						/**
 						 * Turns schema path into a label
@@ -149,12 +153,12 @@ const UISettings = ({ uiSettings, title }: UiSettingsProps) => {
 							// root
 							const path = jsonSchemaPath.split('.').slice(2, -1);
 							if (path.length === 0) {
-								return uiSettings.getLabel(key);
+								return getUILabel(key);
 							}
 
 							// nested columns
-							const columnKey = get(uiSettings.get('columns'), path.concat('key'), null);
-							const label = uiSettings.getLabel(columnKey);
+							const columnKey = get(uiSettings.columns, path.concat('key'), null);
+							const label = getUILabel(columnKey);
 							return label;
 						},
 					}}

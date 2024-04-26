@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Table, { TableContextProps } from '@wcpos/components/src/table';
@@ -10,11 +10,9 @@ import { LineItemRow } from './rows/line-item';
 import { ShippingLineRow } from './rows/shipping-line';
 import { useT } from '../../../../contexts/translations';
 import EmptyTableRow from '../../components/empty-table-row';
-import useUI from '../../contexts/ui-settings';
+import { useUISettings } from '../../contexts/ui-settings';
 import { useCartLines, CartLine } from '../hooks/use-cart-lines';
 import { getUuidFromLineItemMetaData } from '../hooks/utils';
-
-type UISettingsColumn = import('../../contexts/ui-settings').UISettingsColumn;
 
 const TABLE_ROW_COMPONENTS = {
 	line_items: LineItemRow,
@@ -26,11 +24,8 @@ const TABLE_ROW_COMPONENTS = {
  *
  */
 const CartTable = () => {
-	const { uiSettings } = useUI('pos.cart');
-	const columns = useObservableState(
-		uiSettings.get$('columns'),
-		uiSettings.get('columns')
-	) as UISettingsColumn[];
+	const { uiSettings, getUILabel } = useUISettings('pos-cart');
+	const columns = useObservableEagerState(uiSettings.columns$);
 	const t = useT();
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
 
@@ -69,9 +64,9 @@ const CartTable = () => {
 			// },
 			// sortBy: query.sortBy,
 			// sortDirection: query.sortDirection,
-			headerLabel: ({ column }) => uiSettings.getLabel(column.key),
+			headerLabel: ({ column }) => getUILabel(column.key),
 		};
-	}, [columns, uiSettings]);
+	}, [columns, getUILabel]);
 
 	/**
 	 *

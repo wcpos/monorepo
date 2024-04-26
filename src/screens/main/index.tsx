@@ -3,7 +3,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createStackNavigator } from '@react-navigation/stack';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Icon from '@wcpos/components/src/icon';
@@ -203,7 +203,7 @@ const TaxRatesScreen = () => {
  */
 const MainNavigator = () => {
 	const { site } = useAppState();
-	const wpAPIURL = useObservableState(site.wp_api_url$, site.wp_api_url);
+	const wpAPIURL = useObservableEagerState(site.wp_api_url$);
 	const { storeDB } = useAppState();
 	const http = useRestHttpClient();
 	const { locale } = useLocale();

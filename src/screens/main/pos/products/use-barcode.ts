@@ -1,9 +1,9 @@
-import { useSubscription, useObservableState } from 'observable-hooks';
+import { useSubscription, useObservableEagerState } from 'observable-hooks';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
 
 import { useT } from '../../../../contexts/translations';
-import useUI from '../../contexts/ui-settings';
+import { useUISettings } from '../../contexts/ui-settings';
 import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
 import { useCollection } from '../../hooks/use-collection';
 import { useAddProduct } from '../hooks/use-add-product';
@@ -20,11 +20,8 @@ export const useBarcode = (productQuery: Query) => {
 	const showSnackbar = useSnackbar();
 	const t = useT();
 	const { collection: productCollection } = useCollection('products');
-	const { uiSettings } = useUI('pos.products');
-	const showOutOfStock = useObservableState(
-		uiSettings.get$('showOutOfStock'),
-		uiSettings.get('showOutOfStock')
-	);
+	const { uiSettings } = useUISettings('pos-products');
+	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 
 	/**
 	 *

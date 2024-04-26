@@ -17,8 +17,6 @@ import Products from './products';
 import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { TaxRatesProvider } from '../contexts/tax-rates';
-import useUISettings from '../contexts/ui-settings';
-import useBaseTaxLocation from '../hooks/use-base-tax-location';
 import { useCollection } from '../hooks/use-collection';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';

@@ -13,7 +13,7 @@ import { useT } from '../../../contexts/translations';
 import { AddNewCustomer } from '../components/customer/add-new';
 import DataTable from '../components/data-table';
 import UiSettings from '../components/ui-settings';
-import useUI from '../contexts/ui-settings';
+import { useUISettings } from '../contexts/ui-settings';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
@@ -21,7 +21,7 @@ type CustomerDocument = import('@wcpos/database').CustomerDocument;
  *
  */
 const Customers = () => {
-	const { uiSettings } = useUI('customers');
+	const { uiSettings } = useUISettings('customers');
 	const theme = useTheme();
 	const t = useT();
 
@@ -32,8 +32,8 @@ const Customers = () => {
 		queryKeys: ['customers'],
 		collectionName: 'customers',
 		initialParams: {
-			sortBy: uiSettings.get('sortBy'),
-			sortDirection: uiSettings.get('sortDirection'),
+			sortBy: uiSettings.sortBy,
+			sortDirection: uiSettings.sortDirection,
 		},
 	});
 
@@ -66,8 +66,8 @@ const Customers = () => {
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable<CustomerDocument>
+								id="customers"
 								query={query}
-								uiSettings={uiSettings}
 								cells={cells}
 								noDataMessage={t('No customers found', { _tags: 'core' })}
 								estimatedItemSize={100}
