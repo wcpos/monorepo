@@ -5,6 +5,7 @@ import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
+import { RxDBStatePlugin } from 'rxdb/plugins/state';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
 
 import { findOneFixPlugin } from './find-one-fix';
@@ -39,6 +40,7 @@ addRxPlugin(RxDBLeaderElectionPlugin);
 addRxPlugin(RxDBMigrationPlugin);
 addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBAttachmentsPlugin);
+addRxPlugin(RxDBStatePlugin);
 
 // custom plugins
 addRxPlugin(RxDBGenerateIdPlugin); // should run before populate and parseRestResponse
