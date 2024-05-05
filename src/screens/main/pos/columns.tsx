@@ -26,14 +26,11 @@ const clamp = (value: number, lowerBound: number, upperBound: number) => {
  *
  */
 const ResizableColumns = () => {
-	const { uiSettings } = useUISettings('pos-products');
+	const { uiSettings, patchUI } = useUISettings('pos-products');
 	const columnWidth = useSharedValue(uiSettings.width);
 	const startValue = useSharedValue(columnWidth.value);
 	const isActivePanGesture = useSharedValue(false);
 	const containerWidth = useSharedValue(800);
-	// uiSettings.get$('width').subscribe((width) => {
-	// 	columnWidth.value = width;
-	// });
 
 	/**
 	 *
@@ -43,16 +40,6 @@ const ResizableColumns = () => {
 			containerWidth.value = e.nativeEvent.layout.width;
 		},
 		[containerWidth]
-	);
-
-	/**
-	 *
-	 */
-	const saveColumnWidth = React.useCallback(
-		(width: number) => {
-			uiSettings.incrementalPatch({ width });
-		},
-		[uiSettings]
 	);
 
 	/**
@@ -74,9 +61,9 @@ const ResizableColumns = () => {
 				})
 				.onEnd((_) => {
 					isActivePanGesture.value = false;
-					runOnJS(saveColumnWidth)(columnWidth.value);
+					runOnJS(patchUI)({ width: columnWidth.value });
 				}),
-		[columnWidth, containerWidth.value, isActivePanGesture, saveColumnWidth, startValue]
+		[columnWidth, containerWidth.value, isActivePanGesture, patchUI, startValue]
 	);
 
 	/**
@@ -93,7 +80,9 @@ const ResizableColumns = () => {
 		<Box horizontal onLayout={onContainerLayout} style={{ height: '100%' }}>
 			<Animated.View style={[columnStyle]}>
 				<Suspense>
-					<Products isColumn />
+					<ErrorBoundary>
+						<Products isColumn />
+					</ErrorBoundary>
 				</Suspense>
 			</Animated.View>
 			<GestureDetector gesture={panGesture}>
@@ -101,7 +90,9 @@ const ResizableColumns = () => {
 			</GestureDetector>
 			<View style={{ flex: 1 }}>
 				<Suspense>
-					<OpenOrders isColumn />
+					<ErrorBoundary>
+						<OpenOrders isColumn />
+					</ErrorBoundary>
 				</Suspense>
 			</View>
 		</Box>

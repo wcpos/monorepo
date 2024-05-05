@@ -1,7 +1,10 @@
 import { isRxDocument } from 'rxdb';
 
+/**
+ * Custom cache for translations
+ */
 export default class CustomCache {
-	constructor(public readonly userDB) {
+	constructor(public readonly translationState) {
 		this.translationsByLocale = {};
 	}
 
@@ -17,25 +20,9 @@ export default class CustomCache {
 			/**
 			 * if updated translations are different from local storage, update local storage
 			 */
-			try {
-				const localDoc = await this.userDB.getLocal('translations');
-
-				if (!isRxDocument(localDoc)) {
-					// first save to local storage
-					await this.userDB.insertLocal('translations', {
-						[localeCode]: translations,
-					});
-				} else {
-					// update if changed
-					const localTranslations = localDoc.get(localeCode) || {};
-					if (JSON.stringify(localTranslations) !== JSON.stringify(translations)) {
-						await localDoc.incrementalPatch({
-							[localeCode]: translations,
-						});
-					}
-				}
-			} catch (error) {
-				console.error(error);
+			const local = this.translationState[localeCode];
+			if (JSON.stringify(local) !== JSON.stringify(translations)) {
+				await this.translationState.set(localeCode, () => translations);
 			}
 		}
 

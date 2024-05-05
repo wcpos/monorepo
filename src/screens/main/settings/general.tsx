@@ -9,7 +9,7 @@ import { useT } from '../../../contexts/translations';
 import CurrencySelect from '../components/currency-select';
 import CustomerSelect from '../components/customer-select';
 import Form from '../components/document-form';
-import LanguageSelect from '../components/language-select';
+import { LanguageSelect } from '../components/language-select';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 
 export const GeneralSettings = () => {

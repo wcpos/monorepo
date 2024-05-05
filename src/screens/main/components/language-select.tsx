@@ -4,32 +4,31 @@ import map from 'lodash/map';
 
 import { ComboboxWithLabel } from '@wcpos/components/src/combobox';
 
-import useLanguages, { LanguagesProvider } from '../../../contexts/languages';
+import { useLocale } from '../../../hooks/use-locale';
 
 /**
  *
  */
-const LanguageSelect = ({ label, value = 'en_US', onChange }) => {
-	const allLanguages = useLanguages();
-	const options = map(allLanguages, (language) => ({
-		label: `${language.name}${
-			language.name !== language.nativeName ? ` (${language.nativeName})` : ''
-		}`,
-		value: language.locale,
-	}));
+export const LanguageSelect = ({ label, value = 'en_US', onChange }) => {
+	const { locales } = useLocale();
+
+	/**
+	 *
+	 */
+	const options = React.useMemo(
+		() =>
+			map(locales, (language) => {
+				let label = language.name;
+				if (language?.nativeName && language.name !== language.nativeName) {
+					label += ` (${language.nativeName})`;
+				}
+				return {
+					label,
+					value: language.locale,
+				};
+			}),
+		[locales]
+	);
 
 	return <ComboboxWithLabel label={label} options={options} value={value} onChange={onChange} />;
 };
-
-/**
- *
- */
-const LanguageSelectWithProvider = (props) => {
-	return (
-		<LanguagesProvider>
-			<LanguageSelect {...props} />
-		</LanguagesProvider>
-	);
-};
-
-export default LanguageSelectWithProvider;

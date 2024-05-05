@@ -6,7 +6,7 @@ import {
 	ObservableResource,
 } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
-import { from } from 'rxjs';
+import { from, of } from 'rxjs';
 import { switchMap, shareReplay, tap, distinctUntilChanged, filter } from 'rxjs/operators';
 import useDeepCompareEffect from 'use-deep-compare-effect';
 
@@ -22,19 +22,22 @@ const temporaryDB$ = from(createTemporaryDB()).pipe(shareReplay(1));
 const newOrder$ = temporaryDB$.pipe(
 	switchMap((db) =>
 		db.orders.findOne().$.pipe(
-			filter((order) => {
+			tap((order) => {
 				if (!isRxDocument(order)) {
 					db.orders.insert({ status: 'pos-open', billing: {}, shipping: {} });
-					return false;
 				}
-				return true;
-			})
+			}),
+			filter((order) => isRxDocument(order))
 		)
 	),
 	distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid),
 	tap((order) => console.log('emitting new order', order))
 );
 
+/**
+ * @FIXME: This will subscribe and emit a new order on app load, I should be careful about
+ * global subscriptions like this.
+ */
 const newOrderResource = new ObservableResource(newOrder$);
 
 /**
@@ -52,7 +55,7 @@ export const useNewOrder = () => {
 	const newOrder = useObservableSuspense(newOrderResource);
 
 	/**
-	 * @TODO - change to .modify()
+	 *
 	 */
 	useDeepCompareEffect(() => {
 		const customer = isRxDocument(defaultCustomer)
@@ -70,7 +73,7 @@ export const useNewOrder = () => {
 		];
 
 		newOrder.incrementalPatch(data);
-	}, [defaultCustomer, currency, prices_include_tax, tax_based_on, country]);
+	}, [newOrder, defaultCustomer, currency, prices_include_tax, tax_based_on, country]);
 
 	return { newOrder };
 };

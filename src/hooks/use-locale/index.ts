@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { getLocales } from 'expo-localization';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { of } from 'rxjs';
 
 import locales from './locales.json';
@@ -21,10 +21,13 @@ const { locale: systemLocale } =
 export const useLocale = () => {
 	const { store } = useAppState();
 
-	const locale = useObservableState(
-		store ? store.locale$ : of(systemLocale),
-		store?.locale ?? systemLocale
-	);
+	/**
+	 * Store may or may not be available
+	 */
+	const locale = useObservableEagerState(store ? store.locale$ : of(systemLocale));
 
-	return { locale };
+	return {
+		locale,
+		locales, // pass through locales for use in dropdown menus etc
+	};
 };

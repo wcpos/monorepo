@@ -1,12 +1,17 @@
 import * as React from 'react';
 
 import { TxNative, createNativeInstance } from '@transifex/native';
-import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import {
+	useObservableSuspense,
+	ObservableResource,
+	useObservableEagerState,
+} from 'observable-hooks';
+import { of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
 import CustomCache from './cache';
 import { useLocale } from '../../hooks/use-locale';
-import { userDB$ } from '../../hydrate-data/global-user';
+// import { userDB$ } from '../../hydrate-data/global-user';
 import { useAppState } from '../app-state';
 
 export const TranslationContext = React.createContext<TxNative['translate']>(null);
@@ -14,8 +19,8 @@ export const TranslationContext = React.createContext<TxNative['translate']>(nul
 /**
  *
  */
-const localTranslations$ = userDB$.pipe(switchMap((userDB) => userDB.getLocal$('translations')));
-const localTranslationsResource = new ObservableResource(localTranslations$);
+// const localTranslations$ = userDB$.pipe(switchMap((userDB) => userDB.getLocal$('translations')));
+const localTranslationsResource = new ObservableResource(of(null));
 
 /**
  * This is a stripped down version of the TransifexProvider
@@ -26,10 +31,9 @@ const localTranslationsResource = new ObservableResource(localTranslations$);
  * - load the translations from local storage (if any)
  */
 export const TranslationProvider = ({ children }) => {
-	const { userDB } = useAppState();
-	const cachedTranslationsDoc = useObservableSuspense(localTranslationsResource);
-	const version = cachedTranslationsDoc?.getLatest().revision;
+	const { translationsState } = useAppState();
 	const { locale } = useLocale();
+	const translations = useObservableEagerState(translationsState.get$(locale));
 
 	/**
 	 *
@@ -37,19 +41,18 @@ export const TranslationProvider = ({ children }) => {
 	const txInstance = React.useMemo(() => {
 		return createNativeInstance({
 			token: '1/09853773ef9cda3be96c8c451857172f26927c0f',
-			cache: new CustomCache(userDB), // pass in the userDB so we can save the translations
+			cache: new CustomCache(translationsState),
 			filterTags: 'core',
 		});
-	}, [userDB]);
+	}, [translationsState]);
 
 	/**
 	 * If we have translations, manually update the cache
 	 */
-	const cachedTranslations = cachedTranslationsDoc?.get(locale);
-	if (cachedTranslations) {
+	if (translations) {
 		txInstance.cache.update(
 			locale,
-			cachedTranslations,
+			translations,
 			// special case to manually update the CustomCache
 			true
 		);
@@ -75,7 +78,7 @@ export const TranslationProvider = ({ children }) => {
 			 * Bit of a hack to force re-render when locale changes
 			 * or the translations are updated
 			 */
-			key={`${locale}-${version}`}
+			key={locale}
 			value={txInstance.translate.bind(txInstance)}
 		>
 			{children}

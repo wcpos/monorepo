@@ -4,7 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
 import { ObservableResource, useObservable } from 'observable-hooks';
 import { from, of, Observable } from 'rxjs';
-import { distinctUntilChanged, shareReplay, switchMap } from 'rxjs/operators';
+import { distinctUntilChanged, shareReplay, switchMap, tap } from 'rxjs/operators';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';

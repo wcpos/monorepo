@@ -25,6 +25,15 @@ import 'setimmediate'; // https://github.com/software-mansion/react-native-reani
 // enableFreeze(true);
 
 /**
+ * Initial Props
+ * - only web at the moment, but may be useful for other platforms in the future
+ */
+let initialProps: Record<string, unknown> = {};
+if (window && window.initialProps) {
+	initialProps = Object.freeze(window.initialProps); // prevent accidental mutation
+}
+
+/**
  *
  */
 const App = () => {
@@ -46,24 +55,39 @@ const App = () => {
 	return (
 		<ErrorBoundary FallbackComponent={RootError}>
 			<GestureHandlerRootView style={{ flex: 1 }}>
-				<AppStateProvider>
-					<React.Suspense fallback={<Splash />}>
-						<ThemeProvider theme={theme}>
-							<ErrorBoundary>
-								<TranslationProvider>
-									<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-										<SnackbarProvider>
-											<Portal.Provider>
-												<RootNavigator />
-												<Portal.Manager />
-											</Portal.Provider>
-										</SnackbarProvider>
-									</SafeAreaProviderCompat>
-								</TranslationProvider>
-							</ErrorBoundary>
-						</ThemeProvider>
-					</React.Suspense>
-				</AppStateProvider>
+				<React.Suspense
+					/**
+					 * First suspense to load the initial app state
+					 * - we now have site, user, store, etc if the user is logged in
+					 */
+					fallback={<Splash />}
+				>
+					<AppStateProvider initialProps={initialProps}>
+						<React.Suspense
+							/**
+							 * Second suspense to allow anything else to load that depends on the app state
+							 * - translations, theme, etc
+							 * - in the future it might be nice to have a loading screen that shows progress for initial load
+							 */
+							fallback={<Splash />}
+						>
+							<ThemeProvider theme={theme}>
+								<ErrorBoundary>
+									<TranslationProvider>
+										<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
+											<SnackbarProvider>
+												<Portal.Provider>
+													<RootNavigator />
+													<Portal.Manager />
+												</Portal.Provider>
+											</SnackbarProvider>
+										</SafeAreaProviderCompat>
+									</TranslationProvider>
+								</ErrorBoundary>
+							</ThemeProvider>
+						</React.Suspense>
+					</AppStateProvider>
+				</React.Suspense>
 			</GestureHandlerRootView>
 		</ErrorBoundary>
 	);

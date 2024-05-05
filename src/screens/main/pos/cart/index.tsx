@@ -15,6 +15,10 @@ import { useCurrentOrder } from '../contexts/current-order';
 const OpenOrders = ({ isColumn = false }) => {
 	const { currentOrder } = useCurrentOrder();
 
+	if (!currentOrder) {
+		throw new Error('Current order is not defined');
+	}
+
 	/**
 	 *
 	 */

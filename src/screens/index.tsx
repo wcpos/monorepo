@@ -4,7 +4,11 @@ import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
 import get from 'lodash/get';
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import {
+	useObservableEagerState,
+	useObservableState,
+	useObservableSuspense,
+} from 'observable-hooks';
 import { of } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
@@ -38,7 +42,7 @@ const RootNavigator = () => {
 	/**
 	 * store can be null, so we create an observable
 	 */
-	const storeName = useObservableState(store?.name$ ?? of(''), store?.name ?? '');
+	const storeName = useObservableEagerState(store ? store.name$ : of(''));
 
 	/**
 	 * Pathname eg: 'pos' for default web app

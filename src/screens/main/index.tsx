@@ -205,8 +205,13 @@ const MainNavigator = () => {
 	const { site } = useAppState();
 	const wpAPIURL = useObservableEagerState(site.wp_api_url$);
 	const { storeDB } = useAppState();
-	const http = useRestHttpClient();
 	const { locale } = useLocale();
+
+	/**
+	 * The http client should be smarter, ie: if offline or no auth, it should pause the replications
+	 * or put this as part of the OnlineStatusProvider
+	 */
+	const http = useRestHttpClient();
 
 	return (
 		<QueryProvider localDB={storeDB} http={http} locale={locale}>

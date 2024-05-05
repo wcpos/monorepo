@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
 import merge from 'lodash/merge';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { BehaviorSubject } from 'rxjs';
 import semver from 'semver';
 
@@ -51,7 +51,7 @@ function extractValidJSON(responseString) {
 export const useRestHttpClient = (endpoint = '') => {
 	const { site, wpCredentials, store, initialProps } = useAppState();
 	// const wcAPIURL = useObservableState(site.wc_api_url$, site.wc_api_url);
-	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
+	const jwt = useObservableEagerState(wpCredentials.jwt$);
 
 	const navigation = useNavigation();
 
@@ -125,7 +125,7 @@ export const useRestHttpClient = (endpoint = '') => {
 				return response;
 			});
 		},
-		[endpoint, httpClient, jwt, store.id, site, initialProps]
+		[endpoint, httpClient, jwt, store.id, site]
 	);
 
 	/**
