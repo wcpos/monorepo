@@ -24,29 +24,23 @@ export type TemporaryDatabase = RxDatabase<typeof collections>;
 /**
  *
  */
-let temporaryDB: Promise<TemporaryDatabase>;
-
-/**
- * This could be called more than once, so we need to make sure we only create the DB once.
- */
 export async function createTemporaryDB() {
-	if (!temporaryDB) {
-		try {
-			const db = (await createRxDatabase({
-				name: 'temporary',
-				storage: getRxStorageMemory(),
-			})) as unknown as TemporaryDatabase;
-			const c = await db?.addCollections(collections);
-			c.orders.postCreate(function (plainData, rxDocument) {
-				Object.defineProperty(rxDocument, 'isNew', {
-					get: () => true,
-				});
-			});
-			temporaryDB = Promise.resolve(db);
-		} catch (error) {
-			log.error(error);
-		}
-	}
+	try {
+		const db = await createRxDatabase<TemporaryDatabase>({
+			name: 'temporary',
+			storage: getRxStorageMemory(),
+			ignoreDuplicate: true,
+		});
 
-	return temporaryDB;
+		const cols = await db?.addCollections(collections);
+		cols.orders.postCreate(function (plainData, rxDocument) {
+			Object.defineProperty(rxDocument, 'isNew', {
+				get: () => true,
+			});
+		});
+
+		return db;
+	} catch (error) {
+		log.error(error);
+	}
 }

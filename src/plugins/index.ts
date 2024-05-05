@@ -1,9 +1,9 @@
 import { addRxPlugin } from 'rxdb';
 import { RxDBAttachmentsPlugin } from 'rxdb/plugins/attachments';
+import { RxDBCleanupPlugin } from 'rxdb/plugins/cleanup';
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
-import { RxDBLocalDocumentsPlugin } from 'rxdb/plugins/local-documents';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
 import { RxDBStatePlugin } from 'rxdb/plugins/state';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
@@ -33,7 +33,6 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // default plugins
-addRxPlugin(RxDBLocalDocumentsPlugin);
 // addRxPlugin(RxDBQueryBuilderPlugin);
 addRxPlugin(RxDBUpdatePlugin);
 addRxPlugin(RxDBLeaderElectionPlugin);
@@ -41,6 +40,7 @@ addRxPlugin(RxDBMigrationPlugin);
 addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBAttachmentsPlugin);
 addRxPlugin(RxDBStatePlugin);
+addRxPlugin(RxDBCleanupPlugin);
 
 // custom plugins
 addRxPlugin(RxDBGenerateIdPlugin); // should run before populate and parseRestResponse

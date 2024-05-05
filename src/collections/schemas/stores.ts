@@ -8,7 +8,7 @@ export const storesLiteral = {
 		localID: {
 			description: 'Unique local identifier for the resource. Not a UUID.',
 			type: 'string',
-			maxLength: 8,
+			maxLength: 10,
 		},
 		id: {
 			type: 'number',
@@ -564,6 +564,12 @@ export const storesLiteral = {
 		},
 		barcode_scanning_suffix: {
 			title: 'Barcode scanner suffix',
+			type: 'string',
+		},
+		date_created_gmt: {
+			type: 'string',
+		},
+		date_modified_gmt: {
 			type: 'string',
 		},
 	},

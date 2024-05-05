@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/database",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Local database for @wcpos/core",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/database#readme",
@@ -17,16 +17,16 @@
     "test": "eslint --ext ts,tsx ./src"
   },
   "dependencies": {
-    "@orama/orama": "^2.0.16",
-    "@orama/plugin-data-persistence": "^2.0.16",
+    "@orama/orama": "^2.0.17",
+    "@orama/plugin-data-persistence": "^2.0.17",
     "c-promise2": "^0.13.12",
     "expo-sqlite": "~13.4.0",
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.17.21",
     "observable-hooks": "4.2.3",
     "react": "18.2.0",
-    "rxdb": "^15.18.3",
-    "rxdb-premium": "^15.18.0",
+    "rxdb": "^15.19.0",
+    "rxdb-premium": "^15.19.0",
     "rxjs": "7.8.1",
     "uuid": "9.0.1"
   },

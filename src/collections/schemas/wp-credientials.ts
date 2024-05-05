@@ -57,5 +57,11 @@ export const wpCredentialsLiteral = {
 				type: 'string',
 			},
 		},
+		date_created_gmt: {
+			type: 'string',
+		},
+		date_modified_gmt: {
+			type: 'string',
+		},
 	},
 } as const;
