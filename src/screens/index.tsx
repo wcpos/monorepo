@@ -4,16 +4,9 @@ import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
 import get from 'lodash/get';
-import {
-	useObservableEagerState,
-	useObservableState,
-	useObservableSuspense,
-} from 'observable-hooks';
+import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { of } from 'rxjs';
 import { useTheme } from 'styled-components/native';
-
-import Suspense from '@wcpos/components/src/suspense';
-import Text from '@wcpos/components/src/text';
 
 import AuthNavigator from './auth';
 import MainNavigator from './main';
@@ -34,7 +27,9 @@ const Stack = createStackNavigator<RootStackParamList>();
  *
  */
 const RootNavigator = () => {
-	const { store, storeDB, initialProps } = useAppState();
+	const { store, storeDB, initialProps, hydrationResource, isReadyResource } = useAppState();
+	useObservableSuspense(hydrationResource); // suspend until hydration is complete
+	useObservableSuspense(isReadyResource); // suspend until app is ready
 	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
 	const t = useT();

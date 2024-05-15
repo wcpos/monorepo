@@ -4,6 +4,7 @@ import { useWindowDimensions } from 'react-native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useObservableEagerState } from 'observable-hooks';
+import { isRxDatabase } from 'rxdb';
 import { useTheme } from 'styled-components/native';
 
 import Icon from '@wcpos/components/src/icon';
@@ -202,9 +203,8 @@ const TaxRatesScreen = () => {
  *
  */
 const MainNavigator = () => {
-	const { site } = useAppState();
+	const { site, storeDB } = useAppState();
 	const wpAPIURL = useObservableEagerState(site.wp_api_url$);
-	const { storeDB } = useAppState();
 	const { locale } = useLocale();
 
 	/**
@@ -212,6 +212,13 @@ const MainNavigator = () => {
 	 * or put this as part of the OnlineStatusProvider
 	 */
 	const http = useRestHttpClient();
+
+	/**
+	 * Sanity check: we should not proceed if we don't have a storeDB
+	 */
+	if (!isRxDatabase(storeDB)) {
+		return null;
+	}
 
 	return (
 		<QueryProvider localDB={storeDB} http={http} locale={locale}>

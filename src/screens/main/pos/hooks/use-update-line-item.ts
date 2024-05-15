@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { unset } from 'lodash';
 import { v4 as uuidv4 } from 'uuid';
 
 import { getTaxStatusFromMetaData } from './utils';
@@ -206,15 +207,14 @@ export const useUpdateLineItem = () => {
 		const quantity = Math.floor(lineItemToSplit.quantity);
 		const rawRemainder = lineItemToSplit.quantity - quantity;
 		const remainder = parseFloat(rawRemainder.toFixed(6));
-		const newLineItems = [];
+		const newLineItems = [{ ...lineItemToCopy }];
+		unset(lineItemToCopy, 'id'); // remove id so it is treated as a new item
 
-		for (let i = 0; i < quantity; i++) {
+		for (let i = 1; i < quantity; i++) {
 			const newItem = {
 				...lineItemToCopy,
 				meta_data: lineItemToCopy.meta_data.map((meta) =>
-					meta.key === '_woocommerce_pos_uuid'
-						? { ...meta, value: i === 0 ? uuid : uuidv4() }
-						: meta
+					meta.key === '_woocommerce_pos_uuid' ? { ...meta, value: uuidv4() } : meta
 				),
 			};
 			newLineItems.push(newItem);

@@ -30,7 +30,7 @@ export const ShippingTitle = ({ uuid, item }: Props) => {
 				</EdittableText>
 			</Box>
 			<Box distribution="center">
-				<EditShippingLineButton item={item} />
+				<EditShippingLineButton uuid={uuid} item={item} />
 			</Box>
 		</Box>
 	);

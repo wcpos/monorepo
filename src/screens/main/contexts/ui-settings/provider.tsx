@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ObservableResource, useObservable } from 'observable-hooks';
-import { switchMap } from 'rxjs/operators';
+import { switchMap, distinctUntilChanged, tap } from 'rxjs/operators';
 
 import log from '@wcpos/utils/src/logger';
 

@@ -46,14 +46,22 @@ const obs$ = userDB$.pipe(
 	switchMap(({ userDB, appState }) => {
 		return appState.current$.pipe(
 			switchMap(async (current) => {
-				const site = await userDB.sites.findOne({ selector: { uuid: current?.siteID } }).exec();
-				const wpCredentials = await userDB.wp_credentials
-					.findOne({ selector: { uuid: current?.wpCredentialsID } })
-					.exec();
-				const store = await userDB.stores
-					.findOne({ selector: { localID: current?.storeID } })
-					.exec();
-				const storeDB = store ? await createStoreDB(store.localID) : null;
+				let site, wpCredentials, store, storeDB;
+				/**
+				 * Becareful! RxDB will return a value if primary ID is empty, it sucks, I hate it.
+				 */
+				if (current?.siteID) {
+					site = await userDB.sites.findOne(current.siteID).exec();
+				}
+				if (current?.wpCredentialsID) {
+					wpCredentials = await userDB.wp_credentials.findOne(current.wpCredentialsID).exec();
+				}
+				if (current?.storeID) {
+					store = await userDB.stores.findOne(current.storeID).exec();
+				}
+				if (isRxDocument(store)) {
+					storeDB = await createStoreDB(store.localID);
+				}
 				return { site, wpCredentials, store, storeDB };
 			})
 		);

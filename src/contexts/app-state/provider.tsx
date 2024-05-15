@@ -1,14 +1,9 @@
 import * as React from 'react';
-import { Linking } from 'react-native';
 
-import {
-	useObservable,
-	useObservableSuspense,
-	useObservableRef,
-	ObservableResource,
-} from 'observable-hooks';
+import { useObservableRef, ObservableResource } from 'observable-hooks';
 import { isRxDatabase } from 'rxdb';
-import { filter } from 'rxjs/operators';
+import { from } from 'rxjs';
+import { distinctUntilChanged, filter } from 'rxjs/operators';
 
 import type {
 	UserDatabase,
@@ -62,18 +57,7 @@ interface AppStateProviderProps {
 export const AppStateProvider = ({ children, initialProps }: AppStateProviderProps) => {
 	const { userDB, appState, translationsState, user, site, wpCredentials, store, storeDB } =
 		useUserDB();
-
-	/**
-	 *
-	 */
-	React.useEffect(
-		() => {
-			hydrateInitialProps({ userDB, appState, user, initialProps });
-		},
-		[
-			// no dependencies, run once on mount
-		]
-	);
+	const [isReadyRef, isReady$] = useObservableRef(false);
 
 	/**
 	 *
@@ -111,6 +95,25 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 	);
 
 	/**
+	 * Wait for bootstrap to finish
+	 *
+	 * @TODO - there's got to be a way to combine hydration and isReady checks
+	 */
+	const hydrationResource = React.useMemo(
+		() =>
+			new ObservableResource(from(hydrateInitialProps({ userDB, appState, user, initialProps }))),
+		[
+			// no dependencies, only run once on mount
+		]
+	);
+
+	if (isWebApp) {
+		isReadyRef.current = isRxDatabase(storeDB);
+	} else {
+		isReadyRef.current = true;
+	}
+
+	/**
 	 *
 	 */
 	const value = React.useMemo(() => {
@@ -127,6 +130,13 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 			login,
 			logout,
 			switchStore,
+			isReadyResource: new ObservableResource(
+				isReady$.pipe(
+					filter((v) => v),
+					distinctUntilChanged()
+				)
+			),
+			hydrationResource,
 		};
 	}, [
 		userDB,
@@ -140,6 +150,8 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 		login,
 		logout,
 		switchStore,
+		isReady$,
+		hydrationResource,
 	]);
 
 	/**

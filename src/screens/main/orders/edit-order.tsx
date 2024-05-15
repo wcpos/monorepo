@@ -1,6 +1,12 @@
 import * as React from 'react';
 
-import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
+import get from 'lodash/get';
+import pick from 'lodash/pick';
+import {
+	useObservableSuspense,
+	ObservableResource,
+	useObservableEagerState,
+} from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
@@ -8,8 +14,9 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
-import EditModal from '../components/edit-document-form';
+import { EditForm } from '../components/edit-json-form';
 import usePushDocument from '../contexts/use-push-document';
+import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
@@ -24,12 +31,13 @@ const EditOrder = ({ resource }: Props) => {
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
 	const t = useT();
+	const { localPatch } = useLocalMutation();
 
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));
 	}
 
-	const number = useObservableState(order.number$, order.number);
+	const number = useObservableEagerState(order.number$);
 
 	React.useEffect(() => {
 		setTitle(() =>
@@ -78,103 +86,123 @@ const EditOrder = ({ resource }: Props) => {
 		});
 	}, [handleSave, setPrimaryAction, t]);
 
+	/**
+	 *
+	 */
+	const schema = React.useMemo(() => {
+		const orderSchema = get(order.collection, 'schema.jsonSchema.properties');
+		const fields = [
+			'number',
+			'discount_total',
+			'discount_tax',
+			'shipping_total',
+			'shipping_tax',
+			'cart_tax',
+			'total',
+			'total_tax',
+			'prices_include_tax',
+			// 'customer_id',
+			// 'customer_note',
+			// 'billing',
+			// 'shipping',
+			'payment_method',
+			'payment_method_title',
+			'tax_lines',
+			'coupon_lines',
+			'refunds',
+			'meta_data',
+			'currency',
+			'currency_symbol',
+		];
+		return {
+			properties: pick(orderSchema, fields),
+		};
+	}, [order.collection]);
+
+	/**
+	 *
+	 */
+	const uiSchema = React.useMemo(
+		() => ({
+			number: {
+				'ui:label': t('Order Number', { _tags: 'core' }),
+			},
+			discount_total: {
+				'ui:label': t('Discount Total', { _tags: 'core' }),
+			},
+			discount_tax: {
+				'ui:label': t('Discount Tax', { _tags: 'core' }),
+			},
+			shipping_total: {
+				'ui:label': t('Shipping Total', { _tags: 'core' }),
+			},
+			shipping_tax: {
+				'ui:label': t('Shipping Tax', { _tags: 'core' }),
+			},
+			cart_tax: {
+				'ui:label': t('Cart Tax', { _tags: 'core' }),
+			},
+			total: {
+				'ui:label': t('Total', { _tags: 'core' }),
+			},
+			total_tax: {
+				'ui:label': t('Total Tax', { _tags: 'core' }),
+			},
+			prices_include_tax: {
+				'ui:label': t('Prices Include Tax', { _tags: 'core' }),
+			},
+			payment_method: {
+				'ui:label': t('Payment Method ID', { _tags: 'core' }),
+			},
+			payment_method_title: {
+				'ui:label': t('Payment Method Title', { _tags: 'core' }),
+			},
+			billing: {
+				'ui:collapsible': 'closed',
+				'ui:title': t('Billing Address', { _tags: 'core' }),
+				'ui:description': null,
+			},
+			shipping: {
+				'ui:collapsible': 'closed',
+				'ui:title': t('Shipping Address', { _tags: 'core' }),
+				'ui:description': null,
+			},
+			tax_lines: {
+				'ui:collapsible': 'closed',
+				'ui:title': t('Taxes', { _tags: 'core' }),
+				'ui:description': null,
+			},
+			coupon_lines: {
+				'ui:collapsible': 'closed',
+				'ui:title': t('Coupons', { _tags: 'core' }),
+				'ui:description': null,
+			},
+			refunds: {
+				'ui:collapsible': 'closed',
+				'ui:title': t('Refunds', { _tags: 'core' }),
+				'ui:description': null,
+			},
+			meta_data: {
+				'ui:collapsible': 'closed',
+				'ui:title': t('Meta Data', { _tags: 'core' }),
+				'ui:description': null,
+			},
+			currency: {
+				'ui:label': t('Currency', { _tags: 'core' }),
+			},
+			currency_symbol: {
+				'ui:label': t('Currency Symbol', { _tags: 'core' }),
+			},
+		}),
+		[t]
+	);
+
 	return (
-		<EditModal
-			document={order}
-			fields={[
-				'number',
-				'discount_total',
-				'discount_tax',
-				'shipping_total',
-				'shipping_tax',
-				'cart_tax',
-				'total',
-				'total_tax',
-				'prices_include_tax',
-				// 'customer_id',
-				// 'customer_note',
-				// 'billing',
-				// 'shipping',
-				'payment_method',
-				'payment_method_title',
-				'tax_lines',
-				'coupon_lines',
-				'refunds',
-				'meta_data',
-				'currency',
-				'currency_symbol',
-			]}
-			uiSchema={{
-				number: {
-					'ui:label': t('Order Number', { _tags: 'core' }),
-				},
-				discount_total: {
-					'ui:label': t('Discount Total', { _tags: 'core' }),
-				},
-				discount_tax: {
-					'ui:label': t('Discount Tax', { _tags: 'core' }),
-				},
-				shipping_total: {
-					'ui:label': t('Shipping Total', { _tags: 'core' }),
-				},
-				shipping_tax: {
-					'ui:label': t('Shipping Tax', { _tags: 'core' }),
-				},
-				cart_tax: {
-					'ui:label': t('Cart Tax', { _tags: 'core' }),
-				},
-				total: {
-					'ui:label': t('Total', { _tags: 'core' }),
-				},
-				total_tax: {
-					'ui:label': t('Total Tax', { _tags: 'core' }),
-				},
-				prices_include_tax: {
-					'ui:label': t('Prices Include Tax', { _tags: 'core' }),
-				},
-				payment_method: {
-					'ui:label': t('Payment Method ID', { _tags: 'core' }),
-				},
-				payment_method_title: {
-					'ui:label': t('Payment Method Title', { _tags: 'core' }),
-				},
-				billing: {
-					'ui:collapsible': 'closed',
-					'ui:title': t('Billing Address', { _tags: 'core' }),
-					'ui:description': null,
-				},
-				shipping: {
-					'ui:collapsible': 'closed',
-					'ui:title': t('Shipping Address', { _tags: 'core' }),
-					'ui:description': null,
-				},
-				tax_lines: {
-					'ui:collapsible': 'closed',
-					'ui:title': t('Taxes', { _tags: 'core' }),
-					'ui:description': null,
-				},
-				coupon_lines: {
-					'ui:collapsible': 'closed',
-					'ui:title': t('Coupons', { _tags: 'core' }),
-					'ui:description': null,
-				},
-				refunds: {
-					'ui:collapsible': 'closed',
-					'ui:title': t('Refunds', { _tags: 'core' }),
-					'ui:description': null,
-				},
-				meta_data: {
-					'ui:collapsible': 'closed',
-					'ui:title': t('Meta Data', { _tags: 'core' }),
-					'ui:description': null,
-				},
-				currency: {
-					'ui:label': t('Currency', { _tags: 'core' }),
-				},
-				currency_symbol: {
-					'ui:label': t('Currency Symbol', { _tags: 'core' }),
-				},
-			}}
+		<EditForm
+			json={order.toMutableJSON()}
+			schema={schema}
+			uiSchema={uiSchema}
+			onChange={({ changes }) => localPatch({ document: order, data: changes })}
 		/>
 	);
 };

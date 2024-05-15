@@ -10,18 +10,21 @@ import Modal from '@wcpos/components/src/modal';
 import { useT } from '../../../../../contexts/translations';
 import { EditForm } from '../../../components/edit-json-form';
 import { useCollection } from '../../../hooks/use-collection';
+import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
 interface EditShippingLineProps {
-	item: import('@wcpos/database').ShippingLineDocument;
+	uuid: string;
+	item: import('@wcpos/database').OrderDocument['shipping_lines'][number];
 }
 
 /**
  *
  */
-const EditButton = ({ item }: EditShippingLineProps) => {
+const EditButton = ({ uuid, item }: EditShippingLineProps) => {
 	const [opened, setOpened] = React.useState(false);
 	const t = useT();
 	const { collection } = useCollection('orders');
+	const { updateShippingLine } = useUpdateShippingLine();
 
 	/**
 	 * Get schema for fee lines
@@ -32,13 +35,13 @@ const EditButton = ({ item }: EditShippingLineProps) => {
 			'schema.jsonSchema.properties.shipping_lines.items.properties'
 		);
 		const fields = [
-			'method_title',
+			// 'method_title',
 			'method_id',
-			// 'instance_id',
-			'total',
+			'instance_id',
+			// 'total',
 			// 'total_tax',
-			'taxes',
-			'meta_data',
+			// 'taxes',
+			// 'meta_data',
 		];
 		return {
 			properties: pick(shippingLineSchema, fields),
@@ -55,46 +58,46 @@ const EditButton = ({ item }: EditShippingLineProps) => {
 				onPress={() => setOpened(true)}
 				// tooltip={t('Edit', { _tags: 'core' })}
 			/>
-			<Modal
-				title={t('Edit {name}', { _tags: 'core', name: item.method_title })}
-				size="large"
-				opened={opened}
-				onClose={() => setOpened(false)}
-			>
-				<EditForm
-					json={item}
-					schema={schema}
-					onChange={(newData) => {
-						console.log(newData);
-					}}
-					uiSchema={{
-						'ui:title': null,
-						'ui:description': null,
-						method_title: {
-							'ui:label': t('Shipping Method Title', { _tags: 'core' }),
-						},
-						method_id: {
-							'ui:label': t('Shipping Method ID', { _tags: 'core' }),
-						},
-						// instance_id: {
-						// 	'ui:label': t('ID', { _tags: 'core' }),
-						// },
-						total: {
-							'ui:label': t('Total', { _tags: 'core' }),
-						},
-						taxes: {
-							'ui:collapsible': 'closed',
-							'ui:title': t('Taxes', { _tags: 'core' }),
+			{opened && (
+				<Modal
+					title={t('Edit {name}', { _tags: 'core', name: item.method_title })}
+					size="large"
+					opened
+					onClose={() => setOpened(false)}
+				>
+					<EditForm
+						json={item}
+						schema={schema}
+						onChange={({ changes }) => updateShippingLine(uuid, changes)}
+						uiSchema={{
+							'ui:title': null,
 							'ui:description': null,
-						},
-						meta_data: {
-							'ui:collapsible': 'closed',
-							'ui:title': t('Meta Data', { _tags: 'core' }),
-							'ui:description': null,
-						},
-					}}
-				/>
-			</Modal>
+							// method_title: {
+							// 	'ui:label': t('Shipping Method Title', { _tags: 'core' }),
+							// },
+							method_id: {
+								'ui:label': t('Shipping Method ID', { _tags: 'core' }),
+							},
+							instance_id: {
+								'ui:label': t('Instance ID', { _tags: 'core' }),
+							},
+							// total: {
+							// 	'ui:label': t('Total', { _tags: 'core' }),
+							// },
+							// taxes: {
+							// 	'ui:collapsible': 'closed',
+							// 	'ui:title': t('Taxes', { _tags: 'core' }),
+							// 	'ui:description': null,
+							// },
+							// meta_data: {
+							// 	'ui:collapsible': 'closed',
+							// 	'ui:title': t('Meta Data', { _tags: 'core' }),
+							// 	'ui:description': null,
+							// },
+						}}
+					/>
+				</Modal>
+			)}
 		</>
 	);
 };

@@ -7,7 +7,7 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
 import { useAppState } from '../../../../../contexts/app-state';
-import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
@@ -23,7 +23,7 @@ interface Props {
  *
  */
 export const ProductTotal = ({ item, column }: Props) => {
-	const { format } = useCurrencyFormat();
+	const { format } = useCurrentOrderCurrencyFormat();
 	const { display } = column;
 	const { store } = useAppState();
 	const taxDisplayCart = useObservableState(store.tax_display_cart$, store.tax_display_cart);

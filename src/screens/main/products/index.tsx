@@ -155,7 +155,7 @@ const ProductsNavigator = () => {
 	return (
 		<Stack.Navigator screenOptions={{ headerShown: false }}>
 			<Stack.Screen name="Products" component={ProductsWithProviders} />
-			<Stack.Group screenOptions={{ presentation: 'modal' }}>
+			<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
 				<Stack.Screen name="AddProduct" component={AddProductModal} />
 				<Stack.Screen name="EditProduct" component={EditProductWithProviders} />
 				<Stack.Screen name="EditVariation" component={EditVariationWithProviders} />

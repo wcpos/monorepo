@@ -120,50 +120,52 @@ const UISettings = <T extends UISettingID>({ uiSettings, title }: Props<T>) => {
 	return (
 		<>
 			<Icon name="sliders" onPress={() => setOpened(true)} />
-			<Modal
-				title={title}
-				opened={opened}
-				onClose={() => {
-					setOpened(false);
-				}}
-				primaryAction={{
-					label: t('Restore Default Settings', { _tags: 'core' }),
-					action: resetUI,
-					type: 'critical',
-				}}
-			>
-				<Form
-					schema={schema}
-					uiSchema={uiSchema}
-					formData={formData}
-					onChange={(value) => patchUI({ columns: value.columns })}
-					formContext={{
-						/**
-						 * Turns schema path into a label
-						 */
-						label: (jsonSchemaPath, key) => {
-							// special case for common labels
-							if (key === 'sortBy') {
-								return t('Sort by', { _tags: 'core' });
-							}
-							if (key === 'sortDirection') {
-								return t('Sort direction', { _tags: 'core' });
-							}
-
-							// root
-							const path = jsonSchemaPath.split('.').slice(2, -1);
-							if (path.length === 0) {
-								return getUILabel(key);
-							}
-
-							// nested columns
-							const columnKey = get(uiSettings.columns, path.concat('key'), null);
-							const label = getUILabel(columnKey);
-							return label;
-						},
+			{opened && (
+				<Modal
+					title={title}
+					opened
+					onClose={() => {
+						setOpened(false);
 					}}
-				/>
-			</Modal>
+					primaryAction={{
+						label: t('Restore Default Settings', { _tags: 'core' }),
+						action: resetUI,
+						type: 'critical',
+					}}
+				>
+					<Form
+						schema={schema}
+						uiSchema={uiSchema}
+						formData={formData}
+						onChange={({ formData }) => patchUI(formData)}
+						formContext={{
+							/**
+							 * Turns schema path into a label
+							 */
+							label: (jsonSchemaPath, key) => {
+								// special case for common labels
+								if (key === 'sortBy') {
+									return t('Sort by', { _tags: 'core' });
+								}
+								if (key === 'sortDirection') {
+									return t('Sort direction', { _tags: 'core' });
+								}
+
+								// root
+								const path = jsonSchemaPath.split('.').slice(2, -1);
+								if (path.length === 0) {
+									return getUILabel(key);
+								}
+
+								// nested columns
+								const columnKey = get(uiSettings.columns, path.concat('key'), null);
+								const label = getUILabel(columnKey);
+								return label;
+							},
+						}}
+					/>
+				</Modal>
+			)}
 		</>
 	);
 };

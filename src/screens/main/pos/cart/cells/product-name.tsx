@@ -16,6 +16,9 @@ interface Props {
 	column: import('@wcpos/components/src/table').ColumnProps<LineItem>;
 }
 
+/**
+ *
+ */
 export const ProductName = ({ uuid, item, column }: Props) => {
 	const { display } = column;
 	const { updateLineItem } = useUpdateLineItem();
@@ -62,7 +65,7 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 				})}
 			</Box>
 			<Box distribution="center">
-				<EditLineItemButton item={item} />
+				<EditLineItemButton uuid={uuid} item={item} />
 			</Box>
 		</Box>
 	);

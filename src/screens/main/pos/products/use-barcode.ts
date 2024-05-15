@@ -62,6 +62,7 @@ export const useBarcode = (productQuery: Query) => {
 				productQuery.search(barcode);
 				return;
 			}
+
 			const parent = await productCollection.findOne({ selector: { id: parent_id } }).exec();
 			if (!parent) {
 				productQuery.search(barcode);

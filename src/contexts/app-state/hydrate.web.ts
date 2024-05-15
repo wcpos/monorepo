@@ -13,8 +13,6 @@ export const isWebApp = true;
  * Generate a unique id for stores
  */
 async function generateHashId(dataObject) {
-	console.log('generateHashId', dataObject);
-
 	// Convert the object to a JSON string
 	const dataString = JSON.stringify(dataObject);
 
@@ -36,6 +34,9 @@ export const hydrateInitialProps = async ({ userDB, appState, user, initialProps
 	}
 	const siteDoc = await userDB.sites.upsert(initialProps.site);
 	const wpCredentialsDoc = await userDB.wp_credentials.upsert(initialProps.wp_credentials);
+	const urlParams = new URLSearchParams(window.location.search);
+	const initialStoreID = parseInt(urlParams.get('store'), 10);
+	let storeID;
 
 	/**
 	 * Generate a unique id for each store
@@ -48,6 +49,9 @@ export const hydrateInitialProps = async ({ userDB, appState, user, initialProps
 				wpCredentialsID: wpCredentialsDoc.uuid,
 				storeID: store.id,
 			});
+			if (initialStoreID === store.id) {
+				storeID = localID;
+			}
 			return {
 				...store,
 				localID,
@@ -63,9 +67,14 @@ export const hydrateInitialProps = async ({ userDB, appState, user, initialProps
 		stores: storeDocs.map((store) => store.localID),
 	});
 
-	await appState.set('current', () => ({
+	const oldState = await appState.get('current');
+	const newState = {
 		siteID: siteDoc.uuid,
 		wpCredentialsID: wpCredentialsDoc.uuid,
-		storeID: storeDocs[0].localID,
-	}));
+		storeID: storeID ? storeID : storeDocs[0].localID, // default to first store
+	};
+
+	if (JSON.stringify(oldState) !== JSON.stringify(newState)) {
+		await appState.set('current', () => newState);
+	}
 };

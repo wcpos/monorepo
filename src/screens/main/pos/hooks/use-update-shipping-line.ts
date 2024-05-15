@@ -70,7 +70,7 @@ export const useUpdateShippingLine = () => {
 		const order = currentOrder.getLatest();
 		let updated = false;
 
-		const updatedShippingLines = order.fee_lines?.map((lineItem) => {
+		const updatedShippingLines = order.shipping_lines?.map((lineItem) => {
 			const uuidMatch = lineItem.meta_data?.some(
 				(m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid
 			);

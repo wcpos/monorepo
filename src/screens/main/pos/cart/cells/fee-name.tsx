@@ -27,7 +27,7 @@ export const FeeName = ({ uuid, item }: Props) => {
 				</EdittableText>
 			</Box>
 			<Box distribution="center">
-				<EditFeeLineButton item={item} />
+				<EditFeeLineButton uuid={uuid} item={item} />
 			</Box>
 		</Box>
 	);
