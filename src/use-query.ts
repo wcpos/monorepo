@@ -34,7 +34,7 @@ export const useQuery = (queryOptions: QueryOptions) => {
 	 * - re-render components that use this query
 	 * - on re-render the query is recreated
 	 */
-	const trigger = useObservableState(query.cancel$.pipe(map(() => trigger + 1)), 0);
+	// const trigger = useObservableState(query.cancel$.pipe(map(() => trigger + 1)), 0);
 
 	return query;
 };

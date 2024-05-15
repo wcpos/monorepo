@@ -14,7 +14,7 @@ import type { StoreDatabase } from '@wcpos/database';
 import log from '@wcpos/utils/src/logger';
 
 import { SubscribableBase } from './subscribable-base';
-import { isArrayOfIntegers } from './utils';
+import { bulkUpsert } from './utils';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 type ProductVariationCollection = import('@wcpos/database').ProductVariationCollection;
@@ -181,11 +181,6 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			const remoteState = await this.fetchRemoteState();
 			await this.audit(remoteState);
 		}
-
-		if (this.firstSyncResolver) {
-			this.firstSyncResolver();
-			this.firstSyncResolver = null; // Clear the resolver to prevent future calls
-		}
 	}
 
 	/**
@@ -263,6 +258,12 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			if (error.length > 0) {
 				log.error('Error saving remote state for ' + this.endpoint, error);
 				throw new Error('Error saving remote state for ' + this.endpoint);
+			}
+
+			// Resolve the firstSync promise
+			if (this.firstSyncResolver) {
+				this.firstSyncResolver();
+				this.firstSyncResolver = null; // Clear the resolver to prevent future calls
 			}
 
 			return success;
@@ -354,15 +355,8 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				throw new Error('Invalid response data for collection replication');
 			}
 
-			const promises = response.data.map(async (doc) => {
-				const parsedData = this.collection.parseRestResponse(doc);
-				// await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
-				return parsedData;
-			});
-
-			const documents = await Promise.all(promises);
-
-			await this.collection.bulkUpsert(documents);
+			const documents = response.data.map((doc) => this.collection.parseRestResponse(doc));
+			await bulkUpsert(this.collection, documents);
 		} catch (error) {
 			this.errorSubject.next(error);
 		} finally {

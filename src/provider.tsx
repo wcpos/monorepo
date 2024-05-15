@@ -14,7 +14,7 @@ interface QueryProviderProps<T extends RxDatabase> {
 }
 
 /**
- *
+ * @TODO -
  */
 export const QueryProvider = <T extends RxDatabase>({
 	localDB,
@@ -22,23 +22,16 @@ export const QueryProvider = <T extends RxDatabase>({
 	children,
 	locale,
 }: QueryProviderProps<T>) => {
-	const manager = React.useMemo(
-		() => Manager.getInstance<T>(localDB, http, locale),
-		[localDB, http, locale]
-	);
-
-	/**
-	 * Clean up the manager when the dependency changes
-	 */
-	React.useEffect(() => {
-		return () => {
-			manager.cancel();
-		};
-	}, [manager]);
+	const manager = React.useMemo(() => {
+		return Manager.getInstance<T>(localDB, http, locale);
+	}, [localDB, http, locale]);
 
 	return <QueryContext.Provider value={manager}>{children}</QueryContext.Provider>;
 };
 
+/**
+ *
+ */
 export const useQueryManager = (): Manager<RxDatabase> => {
 	const context = React.useContext(QueryContext);
 	if (!context) {

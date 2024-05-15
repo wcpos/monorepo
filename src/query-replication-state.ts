@@ -12,7 +12,7 @@ import {
 } from 'rxjs/operators';
 
 import { SubscribableBase } from './subscribable-base';
-import { getParamValueFromEndpoint } from './utils';
+import { getParamValueFromEndpoint, bulkUpsert } from './utils';
 
 import type { CollectionReplicationState } from './collection-replication-state';
 import type { RxCollection } from 'rxdb';
@@ -102,7 +102,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 			this.start();
 		}
 
-		await this.collectionReplication.firstSync;
+		// await this.collectionReplication.firstSync;
 		const saved = await this.fetchUnsynced();
 
 		if (this.greedy && saved && saved.length > 0) {
@@ -181,15 +181,8 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 				return;
 			}
 
-			const promises = response.data.map(async (doc) => {
-				const parsedData = this.collection.parseRestResponse(doc);
-				// await this.collection.upsertRefs(parsedData); // upsertRefs mutates the parsedData
-				return parsedData;
-			});
-
-			const documents = await Promise.all(promises);
-
-			return this.collection.bulkUpsert(documents);
+			const documents = response.data.map((doc) => this.collection.parseRestResponse(doc));
+			await bulkUpsert(this.collection, documents);
 		} catch (error) {
 			this.errorSubject.next(error);
 		} finally {

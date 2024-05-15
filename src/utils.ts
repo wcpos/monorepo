@@ -113,3 +113,31 @@ export function getParamValueFromEndpoint(endpoint: string, param: string) {
 	const params = new URLSearchParams(url.search);
 	return params.get(param);
 }
+
+/**
+ *
+ */
+export async function bulkUpsert(collection, documents) {
+	const primaryPath = collection.schema.primaryPath;
+	const ids = documents.map((doc) => doc[primaryPath]);
+	const localDocs = await collection.findByIds(ids).exec();
+
+	/**
+	 * Check date_modified_gmt to see if there is a conflict
+	 */
+	if (localDocs.size === 0) {
+		return collection.bulkUpsert(documents);
+	}
+
+	const updatedDocs = documents.filter((doc) => {
+		const localDoc = localDocs.get(doc[primaryPath]);
+		if (localDoc && localDoc.date_modified_gmt) {
+			return localDoc.date_modified_gmt < doc.date_modified_gmt;
+		}
+		return true;
+	});
+
+	if (updatedDocs.length > 0) {
+		return collection.bulkUpsert(updatedDocs);
+	}
+}

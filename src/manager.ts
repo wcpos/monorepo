@@ -85,6 +85,11 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 			 */
 			this.localDB.reset$.subscribe(this.onCollectionReset.bind(this))
 		);
+
+		/**
+		 * Subscribe to localDB to detect if db is destroyed
+		 */
+		this.localDB.onDestroy.push(() => this.cancel());
 	}
 
 	public static getInstance<TDatabase extends RxDatabase>(
@@ -92,9 +97,23 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		httpClient,
 		locale: string
 	) {
-		if (!Manager.instance) {
-			Manager.instance = new Manager<TDatabase>(localDB, httpClient, locale);
+		// Check if instance exists and dependencies are the same
+		if (
+			Manager.instance &&
+			Manager.instance.localDB === localDB &&
+			// Manager.instance.httpClient === httpClient && // @TODO - look into this
+			Manager.instance.locale === locale
+		) {
+			return Manager.instance as Manager<TDatabase>;
 		}
+
+		// If instance exists but dependencies have changed, cancel the existing instance
+		if (Manager.instance) {
+			Manager.instance.cancel();
+		}
+
+		// Create a new instance
+		Manager.instance = new Manager(localDB, httpClient, locale);
 		return Manager.instance as Manager<TDatabase>;
 	}
 
