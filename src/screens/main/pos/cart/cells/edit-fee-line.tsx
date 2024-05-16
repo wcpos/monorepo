@@ -44,7 +44,7 @@ const EditButton = ({ uuid, item }: EditFeelLineProps) => {
 			// 'subtotal_tax',
 			// 'total_tax',
 			// 'taxes',
-			// 'meta_data',
+			'meta_data',
 		];
 		return {
 			properties: pick(feeLineSchema, fields),
@@ -92,11 +92,11 @@ const EditButton = ({ uuid, item }: EditFeelLineProps) => {
 							// 	'ui:title': t('Taxes', { _tags: 'core' }),
 							// 	'ui:description': null,
 							// },
-							// meta_data: {
-							// 	'ui:collapsible': 'closed',
-							// 	'ui:title': t('Meta Data', { _tags: 'core' }),
-							// 	'ui:description': null,
-							// },
+							meta_data: {
+								'ui:collapsible': 'closed',
+								'ui:title': t('Meta Data', { _tags: 'core' }),
+								'ui:description': null,
+							},
 						}}
 					/>
 				</Modal>

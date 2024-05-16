@@ -12,7 +12,7 @@ type Props = {
 const Address = ({ item: customer, column }: Props) => {
 	const address = useObservableState(customer[`${column.key}$`], customer[column.key]);
 
-	return <Format.Address address={address} showName={false} />;
+	return <Format.Address address={address} showName={true} />;
 };
 
 export default Address;

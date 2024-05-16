@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import pick from 'lodash/pick';
 import { isRxDocument } from 'rxdb';
 
 import Button from '@wcpos/components/src/button';
@@ -10,9 +8,8 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../../contexts/translations';
-import { EditForm } from '../../../components/edit-json-form';
+import { EditDocumentForm } from '../../../components/edit-document-form';
 import usePushDocument from '../../../contexts/use-push-document';
-import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../../contexts/current-order';
 
 /**
@@ -25,7 +22,6 @@ const OrderMetaButton = () => {
 	const addSnackbar = useSnackbar();
 	const { currentOrder } = useCurrentOrder();
 	const t = useT();
-	const { localPatch } = useLocalMutation();
 
 	/**
 	 *
@@ -42,40 +38,6 @@ const OrderMetaButton = () => {
 			log.error(error);
 		}
 	}, [addSnackbar, currentOrder, pushDocument, t]);
-
-	/**
-	 * Get schema
-	 */
-	const schema = React.useMemo(() => {
-		const orderSchema = get(currentOrder.collection, 'schema.jsonSchema.properties');
-		const fields = [
-			'number',
-			// 'status',
-			// 'discount_total',
-			// 'discount_tax',
-			// 'shipping_total',
-			// 'shipping_tax',
-			// 'cart_tax',
-			// 'total',
-			// 'total_tax',
-			// 'prices_include_tax',
-			// 'customer_id',
-			// 'customer_note',
-			// 'billing',
-			// 'shipping',
-			// 'payment_method',
-			// 'payment_method_title',
-			// 'tax_lines',
-			// 'coupon_lines',
-			// 'refunds',
-			// 'meta_data',
-			'currency',
-			'currency_symbol',
-		];
-		return {
-			properties: pick(orderSchema, fields),
-		};
-	}, [currentOrder.collection]);
 
 	/**
 	 *  uiSchema
@@ -145,16 +107,16 @@ const OrderMetaButton = () => {
 			// 	'ui:title': t('Refunds', { _tags: 'core' }),
 			// 	'ui:description': null,
 			// },
-			// meta_data: {
-			// 	'ui:collapsible': 'closed',
-			// 	'ui:title': t('Meta Data', { _tags: 'core' }),
-			// 	'ui:description': null,
-			// },
 			currency: {
 				'ui:label': t('Currency', { _tags: 'core' }),
 			},
 			currency_symbol: {
 				'ui:label': t('Currency Symbol', { _tags: 'core' }),
+			},
+			meta_data: {
+				'ui:collapsible': 'closed',
+				'ui:title': t('Meta Data', { _tags: 'core' }),
+				'ui:description': null,
 			},
 		}),
 		[t]
@@ -188,11 +150,33 @@ const OrderMetaButton = () => {
 						},
 					]}
 				>
-					<EditForm
-						json={currentOrder.toMutableJSON()}
-						schema={schema}
+					<EditDocumentForm
+						document={currentOrder}
+						fields={[
+							'number',
+							// 'status',
+							// 'discount_total',
+							// 'discount_tax',
+							// 'shipping_total',
+							// 'shipping_tax',
+							// 'cart_tax',
+							// 'total',
+							// 'total_tax',
+							// 'prices_include_tax',
+							// 'customer_id',
+							// 'customer_note',
+							// 'billing',
+							// 'shipping',
+							// 'payment_method',
+							// 'payment_method_title',
+							// 'tax_lines',
+							// 'coupon_lines',
+							// 'refunds',
+							'currency',
+							'currency_symbol',
+							'meta_data',
+						]}
 						uiSchema={uiSchema}
-						onChange={({ changes }) => localPatch({ document: currentOrder, data: changes })}
 					/>
 				</Modal>
 			)}

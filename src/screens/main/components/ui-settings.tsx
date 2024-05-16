@@ -20,6 +20,8 @@ const uiSchema = {
 		'ui:options': {
 			removable: false,
 			addable: false,
+			border: false,
+			padding: 'none',
 		},
 		items: {
 			display: {
@@ -28,6 +30,8 @@ const uiSchema = {
 				'ui:options': {
 					removable: false,
 					addable: false,
+					border: false,
+					padding: 'none',
 				},
 			},
 		},
@@ -137,7 +141,7 @@ const UISettings = <T extends UISettingID>({ uiSettings, title }: Props<T>) => {
 						schema={schema}
 						uiSchema={uiSchema}
 						formData={formData}
-						onChange={({ formData }) => patchUI(formData)}
+						onChange={({ changes }) => patchUI(changes)}
 						formContext={{
 							/**
 							 * Turns schema path into a label

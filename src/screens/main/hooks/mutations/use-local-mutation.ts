@@ -2,6 +2,9 @@ import * as React from 'react';
 
 import { format as formatDate } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
+import cloneDeep from 'lodash/cloneDeep';
+import get from 'lodash/get';
+import set from 'lodash/set';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
 import type {
@@ -35,11 +38,49 @@ export const useLocalMutation = () => {
 	const localPatch = React.useCallback(
 		async <T extends Document>({ document, data }: LocalPatchProps<T>) => {
 			try {
-				const nowUtc = fromZonedTime(new Date(), 'UTC');
-				data.date_modified_gmt = formatDate(nowUtc, "yyyy-MM-dd'T'HH:mm:ss");
+				// check schema for date_modified_gmt field
+				const hasDate = get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
+
+				if (hasDate) {
+					const nowUtc = fromZonedTime(new Date(), 'UTC');
+					data.date_modified_gmt = formatDate(nowUtc, "yyyy-MM-dd'T'HH:mm:ss");
+				}
+
 				const latest = document.getLatest(); // This seems to be required, else rxdb gives conflict error.
-				const doc = await latest.patch(data);
-				return { changes: data, document: doc };
+
+				/**
+				 * Data from Form component can be nested in dot notation, so we need use lodash set.
+				 * - This is a bit messy, but I'm not sure how use to handle things like arrays using patch.
+				 * - We want to use patch so we can minimal changes locally and then sync patch to server.
+				 *
+				 * NOTE: rxdb only sets the root key
+				 */
+				const changes = {};
+				const doc = await latest.modify((old) => {
+					Object.keys(data).forEach((key) => {
+						const path = key.split('.');
+						const root = path.shift();
+						if (path.length === 0) {
+							old[root] = data[key];
+							changes[root] = data[key];
+						} else {
+							// Handle nested keys for both objects and arrays
+							if (Array.isArray(old[root])) {
+								const updatedArray = cloneDeep(old[root]);
+								set(updatedArray, path, data[key]);
+								old[root] = updatedArray;
+								changes[root] = updatedArray;
+							} else {
+								const updatedObject = set(cloneDeep(old[root]), path, data[key]);
+								old[root] = updatedObject;
+								changes[root] = updatedObject;
+							}
+						}
+					});
+					return old;
+				});
+				console.log('changes', changes);
+				return { changes, document: doc };
 			} catch (error) {
 				log.error('Error patching document', error);
 				let message = error.message;

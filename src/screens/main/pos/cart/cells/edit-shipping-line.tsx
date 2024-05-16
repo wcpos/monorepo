@@ -41,7 +41,7 @@ const EditButton = ({ uuid, item }: EditShippingLineProps) => {
 			// 'total',
 			// 'total_tax',
 			// 'taxes',
-			// 'meta_data',
+			'meta_data',
 		];
 		return {
 			properties: pick(shippingLineSchema, fields),
@@ -89,11 +89,11 @@ const EditButton = ({ uuid, item }: EditShippingLineProps) => {
 							// 	'ui:title': t('Taxes', { _tags: 'core' }),
 							// 	'ui:description': null,
 							// },
-							// meta_data: {
-							// 	'ui:collapsible': 'closed',
-							// 	'ui:title': t('Meta Data', { _tags: 'core' }),
-							// 	'ui:description': null,
-							// },
+							meta_data: {
+								'ui:collapsible': 'closed',
+								'ui:title': t('Meta Data', { _tags: 'core' }),
+								'ui:description': null,
+							},
 						}}
 					/>
 				</Modal>

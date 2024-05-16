@@ -1,3 +1,5 @@
+import set from 'lodash/set';
+
 import initialSettings from './initial-settings.json';
 
 // Define a type for the keys of initialSettings
@@ -42,15 +44,23 @@ export const resetToInitialValues = async (id: UISettingID, state: UISettingStat
 };
 
 /**
- *
+ * This is a bit of a mess, because setting nested values from the Form component is tricky
  */
 export const patchState = async <T extends UISettingID>(
 	state: UISettingState<T>,
 	data: Partial<UISettingSchema<T>>
 ) => {
 	for (const key of Object.keys(data)) {
-		const typedKey = key as keyof UISettingSchema<T>;
-		await state.set(typedKey, () => data[typedKey]);
+		const path = key.split('.');
+		const root = path.shift();
+		const typedKey = root as keyof UISettingSchema<T>;
+		await state.set(typedKey, (old) => {
+			if (path.length > 0) {
+				return set(old, path, data[key]);
+			} else {
+				return data[key];
+			}
+		});
 	}
 	return state;
 };
