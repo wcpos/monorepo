@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import pick from 'lodash/pick';
 import {
 	useObservableSuspense,
 	ObservableResource,
@@ -15,14 +13,15 @@ import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
 import { CountrySelect, StateSelect } from '../components/country-state-select';
-import { EditForm } from '../components/edit-json-form';
+import { EditDocumentForm } from '../components/edit-document-form';
 import usePushDocument from '../contexts/use-push-document';
-import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { useCustomerNameFormat } from '../hooks/use-customer-name-format/use-customer-name-format';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').CustomerDocument>;
 }
+
+const fields = ['first_name', 'last_name', 'email', 'role', 'username', 'billing', 'shipping'];
 
 /**
  *
@@ -36,7 +35,6 @@ const EditCustomer = ({ resource }: Props) => {
 	const shippingCountry = useObservableEagerState(customer.shipping.country$);
 	const { format } = useCustomerNameFormat();
 	const t = useT();
-	const { localPatch } = useLocalMutation();
 
 	if (!customer) {
 		throw new Error(t('Customer not found', { _tags: 'core' }));
@@ -95,17 +93,6 @@ const EditCustomer = ({ resource }: Props) => {
 			action: handleSave,
 		});
 	}, [handleSave, setPrimaryAction, t]);
-
-	/**
-	 *
-	 */
-	const schema = React.useMemo(() => {
-		const orderSchema = get(customer.collection, 'schema.jsonSchema.properties');
-		const fields = ['first_name', 'last_name', 'email', 'role', 'username', 'billing', 'shipping'];
-		return {
-			properties: pick(orderSchema, fields),
-		};
-	}, [customer.collection]);
 
 	/**
 	 *
@@ -232,14 +219,7 @@ const EditCustomer = ({ resource }: Props) => {
 	/**
 	 *
 	 */
-	return (
-		<EditForm
-			json={customer.toMutableJSON()}
-			schema={schema}
-			uiSchema={uiSchema}
-			onChange={({ changes }) => localPatch({ document: customer, data: changes })}
-		/>
-	);
+	return <EditDocumentForm document={customer} fields={fields} uiSchema={uiSchema} />;
 };
 
 export default EditCustomer;

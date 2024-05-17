@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import pick from 'lodash/pick';
 import useDeepCompareEffect from 'use-deep-compare-effect';
 
 import { calculateOrderTotals } from './calculate-order-totals';
@@ -36,6 +37,36 @@ export const useOrderTotals = () => {
 	 *
 	 */
 	useDeepCompareEffect(() => {
+		/**
+		 * This will always patch on the first render, but we don't want to update the date_modified_gmt
+		 * So, only patch if the totals have been modified.
+		 */
+		const currentTotals = pick(currentOrder, [
+			'discount_tax',
+			'discount_total',
+			'shipping_tax',
+			'shipping_total',
+			'cart_tax',
+			'total_tax',
+			'total',
+			'tax_lines',
+		]);
+
+		const newTotals = pick(totals, [
+			'discount_tax',
+			'discount_total',
+			'shipping_tax',
+			'shipping_total',
+			'cart_tax',
+			'total_tax',
+			'total',
+			'tax_lines',
+		]);
+
+		if (JSON.stringify(currentTotals) === JSON.stringify(newTotals)) {
+			return;
+		}
+
 		localPatch({
 			document: currentOrder,
 			data: {

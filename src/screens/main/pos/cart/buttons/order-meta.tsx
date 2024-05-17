@@ -177,6 +177,7 @@ const OrderMetaButton = () => {
 							'meta_data',
 						]}
 						uiSchema={uiSchema}
+						withJSONTree
 					/>
 				</Modal>
 			)}

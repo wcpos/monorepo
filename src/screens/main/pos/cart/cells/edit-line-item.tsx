@@ -7,7 +7,7 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 
 import { useT } from '../../../../../contexts/translations';
-import { EditForm } from '../../../components/edit-json-form';
+import { EditFormWithJSONTree } from '../../../components/edit-form-with-json-tree';
 import { useCollection } from '../../../hooks/use-collection';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
@@ -70,7 +70,7 @@ const EditButton = ({ uuid, item }: EditLineItemProps) => {
 					opened
 					onClose={() => setOpened(false)}
 				>
-					<EditForm
+					<EditFormWithJSONTree
 						json={item}
 						onChange={({ changes }) => updateLineItem(uuid, changes)}
 						schema={schema}

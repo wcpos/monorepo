@@ -8,7 +8,7 @@ import Modal from '@wcpos/components/src/modal';
 // import Tooltip from '@wcpos/components/src/tooltip';
 
 import { useT } from '../../../../../contexts/translations';
-import { EditForm } from '../../../components/edit-json-form';
+import { EditFormWithJSONTree } from '../../../components/edit-form-with-json-tree';
 import { useCollection } from '../../../hooks/use-collection';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
@@ -65,7 +65,7 @@ const EditButton = ({ uuid, item }: EditShippingLineProps) => {
 					opened
 					onClose={() => setOpened(false)}
 				>
-					<EditForm
+					<EditFormWithJSONTree
 						json={item}
 						schema={schema}
 						onChange={({ changes }) => updateShippingLine(uuid, changes)}

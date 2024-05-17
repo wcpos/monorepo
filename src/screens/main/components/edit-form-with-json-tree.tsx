@@ -10,7 +10,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const EditForm = ({ json, schema, uiSchema, onChange }) => {
+export const EditFormWithJSONTree = ({ json, schema, uiSchema, onChange }) => {
 	const [index, setIndex] = React.useState(0);
 	const t = useT();
 

@@ -1,43 +1,30 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
-import get from 'lodash/get';
-import pick from 'lodash/pick';
 
 import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
-import Form from '@wcpos/react-native-jsonschema-form';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
+import { EditDocumentForm } from '../components/edit-document-form';
+
+const fields = [
+	'calc_taxes',
+	'prices_include_tax',
+	'tax_based_on',
+	'shipping_tax_class',
+	'tax_round_at_subtotal',
+	'tax_display_shop',
+	'tax_display_cart',
+	'price_display_suffix',
+	'tax_total_display',
+];
 
 export const TaxSettings = () => {
 	const { store } = useAppState();
 	const navigation = useNavigation();
 	const t = useT();
-	const { localPatch } = useLocalMutation();
-
-	/**
-	 *
-	 */
-	const schema = React.useMemo(() => {
-		const orderSchema = get(store.collection, 'schema.jsonSchema.properties');
-		const fields = [
-			'calc_taxes',
-			'prices_include_tax',
-			'tax_based_on',
-			'shipping_tax_class',
-			'tax_round_at_subtotal',
-			'tax_display_shop',
-			'tax_display_cart',
-			'price_display_suffix',
-			'tax_total_display',
-		];
-		return {
-			properties: pick(orderSchema, fields),
-		};
-	}, [store.collection]);
 
 	/**
 	 *
@@ -87,12 +74,7 @@ export const TaxSettings = () => {
 					onPress={() => navigation.navigate('TaxRates')}
 				/>
 			</Box>
-			<Form
-				formData={store.toMutableJSON()}
-				schema={schema}
-				uiSchema={uiSchema}
-				onChange={({ changes }) => localPatch({ document: store, data: changes })}
-			/>
+			<EditDocumentForm document={store} fields={fields} uiSchema={uiSchema} />
 		</Box>
 	);
 };

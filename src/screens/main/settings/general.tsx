@@ -1,19 +1,36 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import pick from 'lodash/pick';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { InputWithLabel } from '@wcpos/components/src/form-layout';
-import Form from '@wcpos/react-native-jsonschema-form';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import CurrencySelect from '../components/currency-select';
 import CustomerSelect from '../components/customer-select';
+import { EditDocumentForm } from '../components/edit-document-form';
 import { LanguageSelect } from '../components/language-select';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
+
+const fields = [
+	'name',
+	'locale',
+	'default_customer',
+	'default_customer_is_cashier',
+	// 'store_address',
+	// 'store_address_2',
+	// 'store_city',
+	// 'default_country',
+	// 'store_postcode',
+	// 'enable_coupons',
+	// 'calc_discounts_sequentially',
+	'currency',
+	'currency_pos',
+	'price_thousand_sep',
+	'price_decimal_sep',
+	'price_num_decimals',
+];
 
 export const GeneralSettings = () => {
 	const { store } = useAppState();
@@ -36,34 +53,6 @@ export const GeneralSettings = () => {
 		},
 		[defaultCustomer.id, localPatch, store]
 	);
-
-	/**
-	 *
-	 */
-	const schema = React.useMemo(() => {
-		const orderSchema = get(store.collection, 'schema.jsonSchema.properties');
-		const fields = [
-			'name',
-			'locale',
-			'default_customer',
-			'default_customer_is_cashier',
-			// 'store_address',
-			// 'store_address_2',
-			// 'store_city',
-			// 'default_country',
-			// 'store_postcode',
-			// 'enable_coupons',
-			// 'calc_discounts_sequentially',
-			'currency',
-			'currency_pos',
-			'price_thousand_sep',
-			'price_decimal_sep',
-			'price_num_decimals',
-		];
-		return {
-			properties: pick(orderSchema, fields),
-		};
-	}, [store.collection]);
 
 	/**
 	 *
@@ -120,12 +109,5 @@ export const GeneralSettings = () => {
 	/**
 	 *
 	 */
-	return (
-		<Form
-			formData={store.toMutableJSON()}
-			schema={schema}
-			uiSchema={uiSchema}
-			onChange={({ changes }) => localPatch({ document: store, data: changes })}
-		/>
-	);
+	return <EditDocumentForm document={store} fields={fields} uiSchema={uiSchema} />;
 };

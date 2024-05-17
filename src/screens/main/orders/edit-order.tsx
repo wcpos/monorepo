@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import pick from 'lodash/pick';
 import {
 	useObservableSuspense,
 	ObservableResource,
@@ -14,13 +12,36 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
-import { EditForm } from '../components/edit-json-form';
+import { EditDocumentForm } from '../components/edit-document-form';
 import usePushDocument from '../contexts/use-push-document';
-import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
 }
+
+const fields = [
+	'number',
+	'discount_total',
+	'discount_tax',
+	'shipping_total',
+	'shipping_tax',
+	'cart_tax',
+	'total',
+	'total_tax',
+	'prices_include_tax',
+	// 'customer_id',
+	// 'customer_note',
+	// 'billing',
+	// 'shipping',
+	'payment_method',
+	'payment_method_title',
+	'tax_lines',
+	'coupon_lines',
+	'refunds',
+	'meta_data',
+	'currency',
+	'currency_symbol',
+];
 
 /**
  *
@@ -31,7 +52,6 @@ const EditOrder = ({ resource }: Props) => {
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
 	const t = useT();
-	const { localPatch } = useLocalMutation();
 
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));
@@ -85,39 +105,6 @@ const EditOrder = ({ resource }: Props) => {
 			action: handleSave,
 		});
 	}, [handleSave, setPrimaryAction, t]);
-
-	/**
-	 *
-	 */
-	const schema = React.useMemo(() => {
-		const orderSchema = get(order.collection, 'schema.jsonSchema.properties');
-		const fields = [
-			'number',
-			'discount_total',
-			'discount_tax',
-			'shipping_total',
-			'shipping_tax',
-			'cart_tax',
-			'total',
-			'total_tax',
-			'prices_include_tax',
-			// 'customer_id',
-			// 'customer_note',
-			// 'billing',
-			// 'shipping',
-			'payment_method',
-			'payment_method_title',
-			'tax_lines',
-			'coupon_lines',
-			'refunds',
-			'meta_data',
-			'currency',
-			'currency_symbol',
-		];
-		return {
-			properties: pick(orderSchema, fields),
-		};
-	}, [order.collection]);
 
 	/**
 	 *
@@ -197,14 +184,7 @@ const EditOrder = ({ resource }: Props) => {
 		[t]
 	);
 
-	return (
-		<EditForm
-			json={order.toMutableJSON()}
-			schema={schema}
-			uiSchema={uiSchema}
-			onChange={({ changes }) => localPatch({ document: order, data: changes })}
-		/>
-	);
+	return <EditDocumentForm document={order} fields={fields} uiSchema={uiSchema} />;
 };
 
 export default EditOrder;

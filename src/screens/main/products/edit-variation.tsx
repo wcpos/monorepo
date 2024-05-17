@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import pick from 'lodash/pick';
 import {
 	useObservableSuspense,
 	ObservableResource,
@@ -14,13 +12,37 @@ import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
-import { EditForm } from '../components/edit-json-form';
+import { EditDocumentForm } from '../components/edit-document-form';
 import usePushDocument from '../contexts/use-push-document';
-import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').ProductVariationDocument>;
 }
+
+const fields = [
+	'status',
+	'featured',
+	// 'description',
+	// 'short_description',
+	'sku',
+	'barcode',
+	'price',
+	'regular_price',
+	'sale_price',
+	// 'date_on_sale_from',
+	// 'date_on_sale_to',
+	'on_sale',
+	'tax_status',
+	'tax_class',
+	'manage_stock',
+	'stock_quantity',
+	// 'low_stock_amount',
+	// 'weight',
+	// 'dimensions',
+	// 'categories',
+	// 'tags',
+	'meta_data',
+];
 
 /**
  *
@@ -31,7 +53,6 @@ const EditVariation = ({ resource }: Props) => {
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
 	const t = useT();
-	const { localPatch } = useLocalMutation();
 
 	if (!variation) {
 		throw new Error(t('Variation not found', { _tags: 'core' }));
@@ -78,40 +99,6 @@ const EditVariation = ({ resource }: Props) => {
 			action: handleSave,
 		});
 	}, [handleSave, setPrimaryAction, setTitle, t]);
-
-	/**
-	 *
-	 */
-	const schema = React.useMemo(() => {
-		const orderSchema = get(variation.collection, 'schema.jsonSchema.properties');
-		const fields = [
-			'status',
-			'featured',
-			// 'description',
-			// 'short_description',
-			'sku',
-			'barcode',
-			'price',
-			'regular_price',
-			'sale_price',
-			// 'date_on_sale_from',
-			// 'date_on_sale_to',
-			'on_sale',
-			'tax_status',
-			'tax_class',
-			'manage_stock',
-			'stock_quantity',
-			// 'low_stock_amount',
-			// 'weight',
-			// 'dimensions',
-			// 'categories',
-			// 'tags',
-			'meta_data',
-		];
-		return {
-			properties: pick(orderSchema, fields),
-		};
-	}, [variation.collection]);
 
 	/**
 	 *
@@ -166,14 +153,7 @@ const EditVariation = ({ resource }: Props) => {
 	/**
 	 *
 	 */
-	return (
-		<EditForm
-			json={variation.toMutableJSON()}
-			schema={schema}
-			uiSchema={uiSchema}
-			onChange={({ changes }) => localPatch({ document: variation, data: changes })}
-		/>
-	);
+	return <EditDocumentForm document={variation} fields={fields} uiSchema={uiSchema} withJSONTree />;
 };
 
 export default EditVariation;

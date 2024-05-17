@@ -1,34 +1,19 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import pick from 'lodash/pick';
-
-import Form from '@wcpos/react-native-jsonschema-form';
-
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
-import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { EditDocumentForm } from '../../components/edit-document-form';
+
+const fields = [
+	'barcode_scanning_buffer',
+	'barcode_scanning_min_chars',
+	'barcode_scanning_prefix',
+	'barcode_scanning_suffix',
+];
 
 const BarcodeSettings = () => {
 	const { store } = useAppState();
-	const { localPatch } = useLocalMutation();
 	const t = useT();
-
-	/**
-	 *
-	 */
-	const schema = React.useMemo(() => {
-		const orderSchema = get(store.collection, 'schema.jsonSchema.properties');
-		const fields = [
-			'barcode_scanning_buffer',
-			'barcode_scanning_min_chars',
-			'barcode_scanning_prefix',
-			'barcode_scanning_suffix',
-		];
-		return {
-			properties: pick(orderSchema, fields),
-		};
-	}, [store.collection]);
 
 	/**
 	 *
@@ -53,14 +38,7 @@ const BarcodeSettings = () => {
 		[t]
 	);
 
-	return (
-		<Form
-			formData={store.toMutableJSON()}
-			schema={schema}
-			uiSchema={uiSchema}
-			onChange={({ changes }) => localPatch({ document: store, data: changes })}
-		/>
-	);
+	return <EditDocumentForm document={store} fields={fields} uiSchema={uiSchema} />;
 };
 
 export default BarcodeSettings;
