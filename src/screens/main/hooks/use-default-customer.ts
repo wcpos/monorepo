@@ -16,7 +16,7 @@ export const useDefaultCustomer = () => {
 	const defaultCustomerID = useDefaultCustomerID();
 
 	const query = useQuery({
-		queryKeys: ['customers', { id: defaultCustomerID }],
+		queryKeys: ['customers', 'defaultCustomer'],
 		collectionName: 'customers',
 		initialParams: {
 			selector: { id: defaultCustomerID },

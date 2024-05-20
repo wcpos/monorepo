@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Pill from '@wcpos/components/src/pill';
 import Text from '@wcpos/components/src/text';
@@ -16,9 +16,9 @@ const Customer = ({ item: order }: Props) => {
 	const manager = useQueryManager();
 	const query = manager.getQuery(['orders']);
 	const { format } = useCustomerNameFormat();
-	const customerID = useObservableState(order.customer_id$, order.customer_id);
-	const billing = useObservableState(order.billing$, order.billing);
-	const shipping = useObservableState(order.shipping$, order.shipping);
+	const customerID = useObservableEagerState(order.customer_id$);
+	const billing = useObservableEagerState(order.billing$);
+	const shipping = useObservableEagerState(order.shipping$);
 
 	return (
 		<Pill onPress={() => query.where('customer_id', customerID)}>

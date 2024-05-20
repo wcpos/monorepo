@@ -73,6 +73,7 @@ const EditButton = ({ uuid, item }: EditFeelLineProps) => {
 						onChange={({ changes }) => updateFeeLine(uuid, changes)}
 						schema={schema}
 						uiSchema={{
+							'ui:rootFieldId': 'fee_line',
 							'ui:title': null,
 							'ui:description': null,
 							// name: {

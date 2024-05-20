@@ -39,9 +39,9 @@ const Customer = ({ setShowCustomerSelect }) => {
 	 *
 	 */
 	const handleSaveCustomer = React.useCallback(
-		async (newData) => {
+		async ({ changes }) => {
 			try {
-				await localPatch({ document: currentOrder, data: newData });
+				await localPatch({ document: currentOrder, data: changes });
 			} catch (error) {
 				log.error(error);
 			}
@@ -188,19 +188,23 @@ const Customer = ({ setShowCustomerSelect }) => {
 				{name}
 			</Pill>
 
-			<Modal
-				size="large"
-				opened={editModalOpened}
-				onClose={() => setEditModalOpened(false)}
-				title={t('Edit Customer Address', { _tags: 'core' })}
-			>
-				<Form
-					formData={{ billing, shipping }}
-					schema={schema}
-					uiSchema={uiSchema}
-					onChange={handleSaveCustomer}
-				/>
-			</Modal>
+			{editModalOpened && (
+				<Modal
+					size="large"
+					opened
+					onClose={() => setEditModalOpened(false)}
+					title={t('Edit Customer Address', { _tags: 'core' })}
+				>
+					<Form
+						formData={{ billing, shipping }}
+						schema={schema}
+						uiSchema={uiSchema}
+						onChange={({ changes }) => {
+							localPatch({ document: currentOrder, data: changes });
+						}}
+					/>
+				</Modal>
+			)}
 		</Box>
 	);
 };

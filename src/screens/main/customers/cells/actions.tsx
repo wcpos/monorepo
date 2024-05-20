@@ -92,9 +92,11 @@ const Actions = ({ item: customer }: Props) => {
 				<Icon name="ellipsisVertical" onPress={() => setMenuOpened(true)} />
 			</Dropdown>
 
-			<Modal opened={deleteDialogOpened} onClose={() => setDeleteDialogOpened(false)}>
-				<DeleteDialog customer={customer} setDeleteDialogOpened={setDeleteDialogOpened} />
-			</Modal>
+			{deleteDialogOpened && (
+				<Modal opened onClose={() => setDeleteDialogOpened(false)}>
+					<DeleteDialog customer={customer} setDeleteDialogOpened={setDeleteDialogOpened} />
+				</Modal>
+			)}
 		</>
 	);
 };

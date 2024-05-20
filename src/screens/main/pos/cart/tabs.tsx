@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableSuspense } from 'observable-hooks';
-
 import Icon from '@wcpos/components/src/icon';
 import Tabs from '@wcpos/components/src/tabs';
 
@@ -13,10 +11,9 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-const CartTabs = ({ query }) => {
-	const { currentOrder, setCurrentOrderID } = useCurrentOrder();
-	const result = useObservableSuspense(query.resource);
-	const orders = result.hits.map((hit) => hit.document);
+const CartTabs = () => {
+	const { currentOrder, openOrders, setCurrentOrderID } = useCurrentOrder();
+	const orders = openOrders.map((res) => res.document);
 	const focusedIndex = orders.findIndex((order) => order.uuid === currentOrder.uuid);
 
 	/**

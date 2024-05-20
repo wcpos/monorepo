@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
@@ -17,6 +17,7 @@ import { useAddProduct } from '../hooks/use-add-product';
 const initialData = {
 	name: '',
 	price: '',
+	sku: '',
 	taxable: true,
 	tax_class: '',
 };
@@ -29,36 +30,23 @@ export const AddMiscProduct = () => {
 	const [data, setData] = React.useState(initialData);
 	const { currentOrder } = useCurrentOrder();
 	const { addProduct } = useAddProduct();
-	const currencySymbol = useObservableState(
-		currentOrder.currency_symbol$,
-		currentOrder.currency_symbol
-	);
+	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const t = useT();
-
-	/**
-	 *
-	 */
-	const handleChange = React.useCallback(
-		(newData) => {
-			setData((prev) => ({ ...prev, ...newData }));
-		},
-		[setData]
-	);
 
 	/**
 	 *
 	 */
 	const handleAddMiscProduct = React.useCallback(() => {
 		try {
-			const { name, price, taxable, tax_class } = data;
+			const { name, price, sku, taxable, tax_class } = data;
 			addProduct({
 				id: 0,
 				name: isEmpty(name) ? t('Product', { _tags: 'core' }) : name,
 				price: isEmpty(price) ? '0' : price,
+				sku,
 				regular_price: isEmpty(price) ? '0' : price,
 				tax_status: taxable ? 'taxable' : 'none',
 				tax_class,
-				sku: 'misc-pos-product', // a sku is required but not used by woocommerce
 			});
 			setData(initialData);
 			setOpened(false);
@@ -76,6 +64,7 @@ export const AddMiscProduct = () => {
 			properties: {
 				name: { type: 'string', title: t('Name', { _tags: 'core' }) },
 				price: { type: 'string', title: t('Price', { _tags: 'core' }) },
+				sku: { type: 'string', title: t('SKU', { _tags: 'core' }) },
 				taxable: { type: 'boolean', title: t('Taxable', { _tags: 'core' }) },
 				tax_class: { type: 'string', title: t('Tax Class', { _tags: 'core' }) },
 			},
@@ -112,22 +101,31 @@ export const AddMiscProduct = () => {
 					<Icon name="circlePlus" onPress={() => setOpened(true)} />
 				</Box>
 			</Box>
-			<Modal
-				opened={opened}
-				onClose={() => setOpened(false)}
-				title={t('Add Miscellaneous Product', { _tags: 'core' })}
-				primaryAction={{
-					label: t('Add to Cart', { _tags: 'core' }),
-					action: handleAddMiscProduct,
-				}}
-				secondaryActions={[
-					{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
-				]}
-			>
-				<Box space="small">
-					<Form formData={data} schema={schema} uiSchema={uiSchema} onChange={handleChange} />
-				</Box>
-			</Modal>
+			{opened && (
+				<Modal
+					opened
+					onClose={() => setOpened(false)}
+					title={t('Add Miscellaneous Product', { _tags: 'core' })}
+					primaryAction={{
+						label: t('Add to Cart', { _tags: 'core' }),
+						action: handleAddMiscProduct,
+					}}
+					secondaryActions={[
+						{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
+					]}
+				>
+					<Box space="small">
+						<Form
+							formData={data}
+							schema={schema}
+							uiSchema={uiSchema}
+							onChange={({ formData }) => {
+								setData(formData);
+							}}
+						/>
+					</Box>
+				</Modal>
+			)}
 		</>
 	);
 };

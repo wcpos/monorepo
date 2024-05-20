@@ -60,18 +60,19 @@ export const hydrateInitialProps = async ({ userDB, appState, user, initialProps
 	);
 
 	/**
-	 * TODO - check date_modified_gmt and only update if newer
+	 * @TODO - how to handle conflicts between remote and local store settings?
+	 * - what is the date_modified_gmt for default store (ID:0)
 	 */
-	const { success: storeDocs } = await userDB.stores.bulkUpsert(stores);
+	await userDB.stores.bulkInsert(stores); // will not overwrite existing data
 	await wpCredentialsDoc.patch({
-		stores: storeDocs.map((store) => store.localID),
+		stores: stores.map((store) => store.localID),
 	});
 
 	const oldState = await appState.get('current');
 	const newState = {
 		siteID: siteDoc.uuid,
 		wpCredentialsID: wpCredentialsDoc.uuid,
-		storeID: storeID ? storeID : storeDocs[0].localID, // default to first store
+		storeID: storeID ? storeID : stores[0].localID, // default to first store
 	};
 
 	if (JSON.stringify(oldState) !== JSON.stringify(newState)) {

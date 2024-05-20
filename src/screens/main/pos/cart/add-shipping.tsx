@@ -1,7 +1,11 @@
 import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
-import { useObservableSuspense, useObservableState } from 'observable-hooks';
+import {
+	useObservableSuspense,
+	useObservableState,
+	useObservableEagerState,
+} from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
@@ -43,24 +47,22 @@ const ShippingSelect = ({ shippingResource, selectedMethod, onSelect }) => {
 	return <Select options={options} value={selectedMethod} onChange={onSelect} />;
 };
 
-const initialData = {
-	method_title: '',
-	method_id: '',
-	total: '',
-};
-
 /**
- *
+ * @TODO - what tax_class should be used when tax settings are set to 'inherit'?
  */
 const AddShipping = () => {
+	const { store } = useAppState();
+	const shippingTaxClass = useObservableEagerState(store.shipping_tax_class$);
+	const [data, setData] = React.useState({
+		method_title: '',
+		method_id: '',
+		total: '',
+		tax_class: shippingTaxClass === 'inherit' ? '' : shippingTaxClass,
+	});
 	const [opened, setOpened] = React.useState(false);
-	const [data, setData] = React.useState(initialData);
 	const { currentOrder } = useCurrentOrder();
 	const { addShipping } = useAddShipping();
-	const currencySymbol = useObservableState(
-		currentOrder.currency_symbol$,
-		currentOrder.currency_symbol
-	);
+	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const t = useT();
 
 	/**
@@ -80,23 +82,14 @@ const AddShipping = () => {
 	// 	);
 	// }, [storeDB]);
 
-	/**
-	 *
-	 */
-	const handleChange = React.useCallback(
-		(newData) => {
-			setData((prev) => ({ ...prev, ...newData }));
-		},
-		[setData]
-	);
-
 	const handleAddShipping = () => {
 		try {
-			const { method_title, method_id, total } = data;
+			const { method_title, method_id, total, tax_class } = data;
 			addShipping({
 				method_title: isEmpty(method_title) ? t('Shipping', { _tags: 'core' }) : method_title,
 				method_id: isEmpty(method_id) ? 'local_pickup' : method_id,
 				total: isEmpty(total) ? '0' : total,
+				tax_class,
 			});
 			setData(initialData);
 			setOpened(false);
@@ -115,6 +108,7 @@ const AddShipping = () => {
 				method_title: { type: 'string', title: t('Shipping Method Title', { _tags: 'core' }) },
 				method_id: { type: 'string', title: t('Shipping Method ID', { _tags: 'core' }) },
 				total: { type: 'string', title: t('Total', { _tags: 'core' }) },
+				tax_class: { type: 'string', title: t('Tax Class', { _tags: 'core' }) },
 			},
 		}),
 		[t]
@@ -152,22 +146,31 @@ const AddShipping = () => {
 					<Icon name="circlePlus" onPress={() => setOpened(true)} />
 				</Box>
 			</Box>
-			<Modal
-				opened={opened}
-				onClose={() => setOpened(false)}
-				title={t('Add Shipping', { _tags: 'core' })}
-				primaryAction={{
-					label: t('Add to Cart', { _tags: 'core' }),
-					action: handleAddShipping,
-				}}
-				secondaryActions={[
-					{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
-				]}
-			>
-				<Box space="small">
-					<Form formData={data} schema={schema} uiSchema={uiSchema} onChange={handleChange} />
-				</Box>
-			</Modal>
+			{opened && (
+				<Modal
+					opened
+					onClose={() => setOpened(false)}
+					title={t('Add Shipping', { _tags: 'core' })}
+					primaryAction={{
+						label: t('Add to Cart', { _tags: 'core' }),
+						action: handleAddShipping,
+					}}
+					secondaryActions={[
+						{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
+					]}
+				>
+					<Box space="small">
+						<Form
+							formData={data}
+							schema={schema}
+							uiSchema={uiSchema}
+							onChange={({ formData }) => {
+								setData(formData);
+							}}
+						/>
+					</Box>
+				</Modal>
+			)}
 		</>
 	);
 };

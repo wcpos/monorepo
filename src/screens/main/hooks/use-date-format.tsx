@@ -13,7 +13,7 @@ import { useT } from '../../../contexts/translations';
 /**
  *
  */
-export const useDateFormat = (gmtDate: string, formatPattern = 'MMMM d, yyyy', fromNow = true) => {
+export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', fromNow = true) => {
 	const t = useT();
 	const heartbeat$ = useHeartbeatObservable(60000); // every minute
 	const { visibile$ } = usePageVisibility();

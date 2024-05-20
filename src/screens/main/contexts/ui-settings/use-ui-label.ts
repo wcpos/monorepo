@@ -65,6 +65,7 @@ export const useUILabel = () => {
 				orders: {
 					status: t('Status', { _tags: 'core' }),
 					number: t('Order Number', { _tags: 'core' }),
+					created_via: t('Created via', { _tags: 'core' }),
 					customer_id: t('Customer', { _tags: 'core' }),
 					billing: t('Billing Address', { _tags: 'core' }),
 					shipping: t('Shipping Address', { _tags: 'core' }),
@@ -73,6 +74,7 @@ export const useUILabel = () => {
 					date_created: t('Date created', { _tags: 'core' }),
 					date_modified: t('Date modified', { _tags: 'core' }),
 					date_completed: t('Date completed', { _tags: 'core' }),
+					cashier: t('Cashier', { _tags: 'core' }),
 					payment_method: t('Payment Method', { _tags: 'core' }),
 					total: t('Total', { _tags: 'core' }),
 					actions: t('Actions', { _tags: 'core' }),

@@ -184,7 +184,7 @@ const EditOrder = ({ resource }: Props) => {
 		[t]
 	);
 
-	return <EditDocumentForm document={order} fields={fields} uiSchema={uiSchema} />;
+	return <EditDocumentForm document={order} fields={fields} uiSchema={uiSchema} withJSONTree />;
 };
 
 export default EditOrder;

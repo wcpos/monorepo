@@ -124,19 +124,17 @@ export const useTaxCalculator = () => {
 	 * TODO - I need to test this against WC unit tests to make sure it's correct
 	 * see the WC_Tax::get_shipping_tax_rates() method for more details
 	 *
-	 * Here we are using any tax rate that has the shipping flag set to true
-	 * unless the shipping tax class is set, in which case we use that.
-	 * If no tax rates are found, we use the standard tax class.
+	 * - tax rate should have the shipping flag set to true
+	 * - shipping tax class is set on the store settings
 	 */
 	const calculateShippingLineTaxes = React.useCallback(
 		({ total }) => {
 			let appliedRates = rates.filter((rate) => rate.shipping === true);
-			if (shippingTaxClass) {
-				appliedRates = rates.filter((rate) => rate.class === shippingTaxClass);
-			}
 
-			if (appliedRates.length === 0) {
+			if (!shippingTaxClass || shippingTaxClass === 'inherit') {
 				appliedRates = rates.filter((rate) => rate.class === 'standard');
+			} else {
+				appliedRates = rates.filter((rate) => rate.class === shippingTaxClass);
 			}
 
 			// early return if no taxes

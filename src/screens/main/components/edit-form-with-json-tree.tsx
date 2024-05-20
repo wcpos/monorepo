@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
+
 import Box from '@wcpos/components/src/box';
 import Tabs from '@wcpos/components/src/tabs';
 import Tree from '@wcpos/components/src/tree';
@@ -13,6 +15,7 @@ import { useT } from '../../../contexts/translations';
 export const EditFormWithJSONTree = ({ json, schema, uiSchema, onChange }) => {
 	const [index, setIndex] = React.useState(0);
 	const t = useT();
+	const rootName = get(uiSchema, 'ui:rootFieldId', 'root');
 
 	/**
 	 *
@@ -27,12 +30,12 @@ export const EditFormWithJSONTree = ({ json, schema, uiSchema, onChange }) => {
 						</Box>
 					);
 				case 'json':
-					return <Tree data={json} />;
+					return <Tree data={json} rootName={rootName} />;
 				default:
 					return null;
 			}
 		},
-		[schema, uiSchema, json, onChange]
+		[schema, uiSchema, json, onChange, rootName]
 	);
 
 	/**

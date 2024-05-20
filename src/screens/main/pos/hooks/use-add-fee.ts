@@ -24,7 +24,7 @@ export const useAddFee = () => {
 
 			const newFeelLine = {
 				...data,
-				total_tax: tax.total,
+				total_tax: String(tax.total),
 				taxes: tax.taxes,
 			};
 

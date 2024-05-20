@@ -47,16 +47,6 @@ export const useUpdateLineItem = () => {
 	};
 
 	/**
-	 * Update name of line item
-	 */
-	const updateName = (lineItem: LineItem, name: string): LineItem => {
-		return {
-			...lineItem,
-			name,
-		};
-	};
-
-	/**
 	 * Update price of line item
 	 */
 	const updatePrice = (lineItem: LineItem, newPrice: number): LineItem => {

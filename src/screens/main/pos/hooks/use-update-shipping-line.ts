@@ -1,5 +1,9 @@
 import * as React from 'react';
 
+import { useObservableEagerState } from 'observable-hooks';
+
+import { getMetaDataValueByKey } from './utils';
+import { useAppState } from '../../../../contexts/app-state';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
 import { useTaxDisplay } from '../../hooks/taxes/use-tax-display';
@@ -40,9 +44,13 @@ export const useUpdateShippingLine = () => {
 	 */
 	const updateTotal = (shippingLine: ShippingLine, newTotal: number): ShippingLine => {
 		if (inclOrExcl === 'incl') {
+			/**
+			 * @TODO - this is not correct, shipping has taxClass in settings
+			 */
+			debugger;
 			const taxes = calculateTaxesFromValue({
 				value: newTotal,
-				taxClass: 'standard', // TODO: what to put here?
+				taxClass: 'standard',
 				taxStatus: 'taxable', // TODO: what to put here?
 				valueIncludesTax: true,
 			});

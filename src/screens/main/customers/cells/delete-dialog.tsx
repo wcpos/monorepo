@@ -39,7 +39,7 @@ const DeleteDialog = ({ customer, setDeleteDialogOpened }: DeleteDialogProps) =>
 			if (customer.id) {
 				await deleteDocument(customer.id, customer.collection, { force });
 			}
-			await customer.remove();
+			await customer.getLatest().remove();
 			setDeleteDialogOpened(false);
 		} finally {
 			setPrimaryAction((prev) => ({

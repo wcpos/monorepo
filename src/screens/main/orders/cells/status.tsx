@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
 import { useQueryManager } from '@wcpos/query';
@@ -55,7 +55,7 @@ const iconMap = {
  *
  */
 const Status = ({ item: order }: Props) => {
-	const status = useObservableState(order.status$, order.status);
+	const status = useObservableEagerState(order.status$);
 	const iconName = get(iconMap, [status, 'name'], 'circleQuestion');
 	const iconType = get(iconMap, [status, 'type'], 'disabled');
 	const manager = useQueryManager();

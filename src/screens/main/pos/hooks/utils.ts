@@ -50,6 +50,14 @@ export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
 };
 
 /**
+ * Get tax class from fee line meta data
+ */
+export const getMetaDataValueByKey = (metaData: CartLine['meta_data'], key: string) => {
+	const meta = metaData.find((m) => m.key === key);
+	return meta ? meta.value : undefined;
+};
+
+/**
  * Retrieves the UUID from a line item's meta data.
  */
 export const getUuidFromLineItem = (item: CartLine) => {

@@ -306,6 +306,7 @@
       },
       {
         "key": "customer_note",
+        "hideLabel": true,
         "width": 38,
         "show": true,
         "disableSort": true
@@ -323,6 +324,19 @@
         "key": "date_completed",
         "show": false,
         "disableSort": true
+      },
+      {
+        "key": "created_via",
+        "hideLabel": true,
+        "width": 38,
+        "align": "center",
+        "disableSort": true,
+        "show": true
+      },
+      {
+        "key": "cashier",
+        "disableSort": true,
+        "show": true
       },
       {
         "key": "payment_method",

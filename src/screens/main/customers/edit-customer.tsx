@@ -219,7 +219,7 @@ const EditCustomer = ({ resource }: Props) => {
 	/**
 	 *
 	 */
-	return <EditDocumentForm document={customer} fields={fields} uiSchema={uiSchema} />;
+	return <EditDocumentForm document={customer} fields={fields} uiSchema={uiSchema} withJSONTree />;
 };
 
 export default EditCustomer;

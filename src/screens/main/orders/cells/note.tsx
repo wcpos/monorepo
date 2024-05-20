@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Icon from '@wcpos/components/src/icon';
 
@@ -9,7 +9,7 @@ type OrderNoteProps = {
 };
 
 const Note = ({ item: order }: OrderNoteProps) => {
-	const note = useObservableState(order.customer_note$, order.customer_note);
+	const note = useObservableEagerState(order.customer_note$);
 
 	if (!note) {
 		return null;

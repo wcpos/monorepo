@@ -1,5 +1,8 @@
 import * as React from 'react';
 
+import { format as formatDate } from 'date-fns';
+import { fromZonedTime } from 'date-fns-tz';
+import get from 'lodash/get';
 import { isRxDocument, RxDocument, RxCollection } from 'rxdb';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
@@ -21,6 +24,45 @@ type Document = OrderDocument | ProductDocument | CustomerDocument | ProductVari
 interface Props {
 	collectionName: CollectionKey;
 	endpoint?: string;
+}
+
+/**
+ * This is a temporary hack. When new docs are created in RxDB, it should fill out the root fields?
+ */
+function generateEmptyJSON(schema) {
+	const result = {};
+
+	if (schema.type === 'object' && schema.properties) {
+		for (const key in schema.properties) {
+			if (key.startsWith('_')) {
+				continue;
+			}
+
+			const property = schema.properties[key];
+			switch (property.type) {
+				case 'string':
+					result[key] = '';
+					break;
+				case 'array':
+					result[key] = [];
+					break;
+				case 'object':
+					result[key] = {};
+					break;
+				case 'boolean':
+					result[key] = undefined;
+					break;
+				case 'number':
+				case 'integer':
+					result[key] = undefined;
+					break;
+				default:
+					result[key] = undefined;
+			}
+		}
+	}
+
+	return result;
 }
 
 /**
@@ -102,15 +144,27 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 		async ({ data }: { data: Record<string, unknown> }) => {
 			try {
 				// create local document
-				const doc = await collection.insert(data);
+				const emptyJSON = generateEmptyJSON(collection.schema.jsonSchema);
+				const hasCreatedDate = get(collection, 'schema.jsonSchema.properties.date_created_gmt');
+				const hasModifiedDate = get(collection, 'schema.jsonSchema.properties.date_modified_gmt');
+
+				if (hasCreatedDate) {
+					const nowUtc = fromZonedTime(new Date(), 'UTC');
+					emptyJSON.date_created_gmt = formatDate(nowUtc, "yyyy-MM-dd'T'HH:mm:ss");
+					if (hasModifiedDate) {
+						emptyJSON.date_modified_gmt = emptyJSON.date_created_gmt;
+					}
+				}
+				const doc = await collection.insert({ ...emptyJSON, ...data });
 
 				// create remote document
 				const updatedDoc = await replicationState.remoteCreate(doc.toJSON());
+
 				if (isRxDocument(updatedDoc)) {
 					handleSuccess(updatedDoc);
 					return updatedDoc;
 				} else {
-					doc.remove();
+					doc.getLatest().remove();
 					handleError(
 						new Error(t('{title} not created', { _tags: 'core', title: collectionLabel }))
 					);

@@ -9,6 +9,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 
 interface CurrentOrderContextProps {
 	currentOrder: OrderDocument;
+	openOrders: { id: string; document: OrderDocument }[];
 	setCurrentOrderID: (id: string) => void;
 }
 
@@ -16,15 +17,24 @@ export const CurrentOrderContext = React.createContext<CurrentOrderContextProps>
 
 interface CurrentOrderContextProviderProps {
 	children: React.ReactNode;
-	resource: ObservableResource<OrderDocument | null>;
+	resource: ObservableResource<{ id: string; document: OrderDocument }[]>;
+	currentOrderUUID?: string;
 }
 
 /**
  * Provider the active order by uuid, or a new order
  */
-export const CurrentOrderProvider = ({ children, resource }: CurrentOrderContextProviderProps) => {
+export const CurrentOrderProvider = ({
+	children,
+	resource,
+	currentOrderUUID,
+}: CurrentOrderContextProviderProps) => {
 	const { newOrder } = useNewOrder();
-	const currentOrder = useObservableSuspense(resource) ?? newOrder;
+	const openOrders = useObservableSuspense(resource);
+	let currentOrder = openOrders.find((order) => order.id === currentOrderUUID)?.document;
+	if (!currentOrder) {
+		currentOrder = newOrder;
+	}
 	const navigation = useNavigation();
 
 	/**
@@ -44,6 +54,7 @@ export const CurrentOrderProvider = ({ children, resource }: CurrentOrderContext
 		<CurrentOrderContext.Provider
 			value={{
 				currentOrder,
+				openOrders,
 				setCurrentOrderID,
 			}}
 		>

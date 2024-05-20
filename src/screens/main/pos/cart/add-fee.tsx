@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
@@ -29,21 +29,8 @@ const AddFee = () => {
 	const [data, setData] = React.useState(initialData);
 	const { currentOrder } = useCurrentOrder();
 	const { addFee } = useAddFee();
-	const currencySymbol = useObservableState(
-		currentOrder.currency_symbol$,
-		currentOrder.currency_symbol
-	);
+	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const t = useT();
-
-	/**
-	 *
-	 */
-	const handleChange = React.useCallback(
-		(newData) => {
-			setData((prev) => ({ ...prev, ...newData }));
-		},
-		[setData]
-	);
 
 	/**
 	 *
@@ -109,22 +96,31 @@ const AddFee = () => {
 					<Icon name="circlePlus" onPress={() => setOpened(true)} />
 				</Box>
 			</Box>
-			<Modal
-				opened={opened}
-				onClose={() => setOpened(false)}
-				title={t('Add Fee', { _tags: 'core' })}
-				primaryAction={{
-					label: t('Add to Cart', { _tags: 'core' }),
-					action: handleAddFee,
-				}}
-				secondaryActions={[
-					{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
-				]}
-			>
-				<Box space="small">
-					<Form formData={data} schema={schema} uiSchema={uiSchema} onChange={handleChange} />
-				</Box>
-			</Modal>
+			{opened && (
+				<Modal
+					opened={opened}
+					onClose={() => setOpened(false)}
+					title={t('Add Fee', { _tags: 'core' })}
+					primaryAction={{
+						label: t('Add to Cart', { _tags: 'core' }),
+						action: handleAddFee,
+					}}
+					secondaryActions={[
+						{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
+					]}
+				>
+					<Box space="small">
+						<Form
+							formData={data}
+							schema={schema}
+							uiSchema={uiSchema}
+							onChange={({ formData }) => {
+								setData(formData);
+							}}
+						/>
+					</Box>
+				</Modal>
+			)}
 		</>
 	);
 };

@@ -207,6 +207,11 @@ export const AddNewCustomerForm = ({ onAdd }) => {
 	}, [billingCountry, shippingCountry, t]);
 
 	return (
-		<Form formData={customerData} schema={schema} uiSchema={uiSchema} onChange={setCustomerData} />
+		<Form
+			formData={customerData}
+			schema={schema}
+			uiSchema={uiSchema}
+			onChange={({ formData }) => setCustomerData(formData)}
+		/>
 	);
 };

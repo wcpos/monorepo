@@ -9,6 +9,8 @@ import { useQuery } from '@wcpos/query';
 
 import Actions from './cells/actions';
 import Address from './cells/address';
+import { Cashier } from './cells/cashier';
+import { CreatedVia } from './cells/created-via';
 import Customer from './cells/customer';
 import CustomerNote from './cells/note';
 import PaymentMethod from './cells/payment-method';
@@ -36,6 +38,8 @@ const cells = {
 	date_modified: Date,
 	date_completed: Date,
 	payment_method: PaymentMethod,
+	created_via: CreatedVia,
+	cashier: Cashier,
 };
 
 /**

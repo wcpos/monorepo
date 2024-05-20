@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Text from '@wcpos/components/src/text';
 type CustomerEmailProps = {
@@ -8,7 +8,7 @@ type CustomerEmailProps = {
 };
 
 const CustomerEmail = ({ item: customer }: CustomerEmailProps) => {
-	const email = useObservableState(customer.email$, customer.email);
+	const email = useObservableEagerState(customer.email$);
 
 	return <Text numberOfLines={1}>{email}</Text>;
 };

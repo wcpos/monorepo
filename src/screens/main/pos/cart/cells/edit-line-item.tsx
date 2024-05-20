@@ -75,6 +75,7 @@ const EditButton = ({ uuid, item }: EditLineItemProps) => {
 						onChange={({ changes }) => updateLineItem(uuid, changes)}
 						schema={schema}
 						uiSchema={{
+							'ui:rootFieldId': 'line_item',
 							'ui:title': null,
 							'ui:description': null,
 							// name: {

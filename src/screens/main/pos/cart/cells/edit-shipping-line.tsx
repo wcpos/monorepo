@@ -70,6 +70,7 @@ const EditButton = ({ uuid, item }: EditShippingLineProps) => {
 						schema={schema}
 						onChange={({ changes }) => updateShippingLine(uuid, changes)}
 						uiSchema={{
+							'ui:rootFieldId': 'shipping_line',
 							'ui:title': null,
 							'ui:description': null,
 							// method_title: {
