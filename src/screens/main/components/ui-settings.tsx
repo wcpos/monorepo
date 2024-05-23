@@ -99,6 +99,9 @@ const UISettings = <T extends UISettingID>({ uiSettings, title }: Props<T>) => {
 						type: 'boolean',
 					},
 					..._schema.properties,
+					metaDataKeys: {
+						type: 'string',
+					},
 				},
 			};
 		}

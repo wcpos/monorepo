@@ -30,8 +30,8 @@ const newOrder$ = temporaryDB$.pipe(
 			filter((order) => isRxDocument(order))
 		)
 	),
-	distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid),
-	tap((order) => console.log('emitting new order', order))
+	distinctUntilChanged((prev, next) => prev?.uuid === next?.uuid)
+	// tap((order) => console.log('emitting new order', order))
 );
 
 /**
@@ -44,11 +44,11 @@ const newOrderResource = new ObservableResource(newOrder$);
  *
  */
 export const useNewOrder = () => {
-	const { store } = useAppState();
+	const { store, wpCredentials } = useAppState();
 	const { defaultCustomerResource } = useDefaultCustomer();
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
 	const currency = useObservableEagerState(store.currency$);
-	const prices_include_tax = useObservableEagerState(store.prices_include_tax$);
+	// const prices_include_tax = useObservableEagerState(store.prices_include_tax$);
 	const tax_based_on = useObservableEagerState(store.tax_based_on$);
 	const defaultCountry = useObservableEagerState(store.default_country$);
 	const [country, state] = defaultCountry.split(':');
@@ -64,16 +64,27 @@ export const useNewOrder = () => {
 		const data = transformCustomerJSONToOrderJSON(customer, country);
 		data.currency = currency;
 		data.currency_symbol = allCurrencies.find((c) => c.code === currency).symbol || '';
-		data.prices_include_tax = prices_include_tax === 'yes';
+		data.prices_include_tax = false; // This setting means nothing, WC REST API always returns prices excluding tax
 		data.meta_data = [
 			{
 				key: '_woocommerce_pos_tax_based_on',
 				value: tax_based_on,
 			},
+			{
+				key: '_pos_user',
+				value: String(wpCredentials.id),
+			},
 		];
 
+		if (store.id !== 0) {
+			data.meta_data.push({
+				key: '_pos_store',
+				value: String(store.id),
+			});
+		}
+
 		newOrder.incrementalPatch(data);
-	}, [newOrder, defaultCustomer, currency, prices_include_tax, tax_based_on, country]);
+	}, [newOrder, defaultCustomer, currency, tax_based_on, country]);
 
 	return { newOrder };
 };

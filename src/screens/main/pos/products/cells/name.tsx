@@ -6,6 +6,7 @@ import { useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
+import { MetaData } from './meta-data';
 import Attributes, { PlainAttributes } from '../../../components/product/attributes';
 import Categories from '../../../components/product/categories';
 import GroupedNames from '../../../components/product/grouped-names';
@@ -44,6 +45,7 @@ export const Name = ({ item: product, column }: Props) => {
 			{show('sku') && <Text size="small">{product.sku}</Text>}
 			{show('barcode') && <Text size="small">{product.barcode}</Text>}
 			{show('stock_quantity') && <StockQuantity product={product} size="small" />}
+			{show('meta_data') && <MetaData product={product} />}
 			{show('categories') && <Categories item={product} />}
 			{show('tags') && <Tags item={product} />}
 			{show('attributes') && <PlainAttributes product={product} />}

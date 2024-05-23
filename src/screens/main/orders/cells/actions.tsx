@@ -8,31 +8,58 @@ import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 
 import DeleteDialog from './delete-dialog';
+import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
-import { useMutation } from '../../hooks/mutations/use-mutation';
+import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 interface Props {
 	item: import('@wcpos/database').OrderDocument;
 }
 
+/**
+ * Helper function - @TODO move to utils
+ */
+const upsertMetaData = (metaDataArray, key, value) => {
+	const index = metaDataArray.findIndex((item) => item.key === key);
+	if (index !== -1) {
+		metaDataArray[index].value = value;
+	} else {
+		metaDataArray.push({ key, value });
+	}
+};
+
+/**
+ *
+ */
 const Actions = ({ item: order }: Props) => {
 	const navigation = useNavigation();
 	const [menuOpened, setMenuOpened] = React.useState(false);
 	// const status = useObservableState(order.status$, order.status);
 	const pullDocument = usePullDocument();
-	const { patch } = useMutation({ collectionName: 'orders' });
+	const { localPatch } = useLocalMutation();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
+	const { store, wpCredentials } = useAppState();
 
 	/**
-	 *
+	 * To re-open an order, we need to:
+	 * - change the status to 'pos-open'
+	 * - update _pos_user meta to current user
+	 * - update _pos_store meta to current store
+	 * - navigate to POS screen
 	 */
-	const handleOpen = React.useCallback(() => {
-		patch({ document: order, data: { status: 'pos-open' } });
+	const handleOpen = React.useCallback(async () => {
+		const meta_data = order.getLatest().toMutableJSON()?.meta_data || [];
+		upsertMetaData(meta_data, '_pos_user', String(wpCredentials.id));
+		if (store.id !== 0) {
+			upsertMetaData(meta_data, '_pos_store', String(store.id));
+		}
+
+		await localPatch({ document: order, data: { status: 'pos-open', meta_data } });
 		navigation.navigate('POSStack', { screen: 'POS', params: { orderID: order.uuid } });
-	}, [navigation, order, patch]);
+	}, [localPatch, navigation, order, store.id, wpCredentials.id]);
 
 	/**
 	 *

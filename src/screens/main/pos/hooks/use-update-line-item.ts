@@ -1,12 +1,11 @@
 import * as React from 'react';
 
-import { unset } from 'lodash';
+import set from 'lodash/set';
+import unset from 'lodash/unset';
 import { v4 as uuidv4 } from 'uuid';
 
-import { getTaxStatusFromMetaData } from './utils';
+import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
-import { useTaxDisplay } from '../../hooks/taxes/use-tax-display';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
@@ -16,99 +15,89 @@ type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
  */
 export const useUpdateLineItem = () => {
 	const { currentOrder } = useCurrentOrder();
-	const { inclOrExcl } = useTaxDisplay({ context: 'cart' });
-	const { calculateTaxesFromValue, calculateLineItemTaxes } = useTaxCalculator();
 	const { localPatch } = useLocalMutation();
+	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 
 	/**
 	 * Update quantity of line item
 	 */
 	const updateQuantity = (lineItem: LineItem, quantity: number): LineItem => {
-		const newQuantity = Number(quantity);
-		const newSubtotal =
-			(parseFloat(lineItem.subtotal ?? '0') / (lineItem.quantity ?? 1)) * newQuantity;
-		const newTotal = (parseFloat(lineItem.total ?? '0') / (lineItem.quantity ?? 1)) * newQuantity;
-
-		// recalculate taxes
-		const taxes = calculateLineItemTaxes({
-			total: String(newTotal),
-			subtotal: String(newSubtotal),
-			taxStatus: getTaxStatusFromMetaData(lineItem.meta_data),
-			taxClass: lineItem.tax_class ?? '',
-		});
-
-		return {
+		return calculateLineItemTaxesAndTotals({
 			...lineItem,
-			quantity: newQuantity,
-			subtotal: String(newSubtotal),
-			total: String(newTotal),
-			...taxes,
-		};
+			quantity: Number(quantity),
+		});
 	};
 
 	/**
 	 * Update price of line item
 	 */
 	const updatePrice = (lineItem: LineItem, newPrice: number): LineItem => {
-		const taxStatus = getTaxStatusFromMetaData(lineItem.meta_data);
+		const meta_data = lineItem.meta_data ?? [];
 
-		if (inclOrExcl === 'incl') {
-			const taxes = calculateTaxesFromValue({
-				value: newPrice,
-				taxClass: lineItem?.tax_class ?? '',
-				taxStatus,
-				valueIncludesTax: true,
-			});
-			newPrice -= taxes.total;
-		}
-
-		const newTotal = String((lineItem.quantity ?? 1) * newPrice);
-
-		// recalculate taxes
-		const taxes = calculateLineItemTaxes({
-			total: newTotal,
-			subtotal: lineItem.subtotal ?? '0',
-			taxStatus,
-			taxClass: lineItem.tax_class ?? '',
+		const updatedMetaData = meta_data.map((meta) => {
+			if (meta.key === '_woocommerce_pos_data') {
+				const posData = JSON.parse(meta.value);
+				posData.price = String(newPrice);
+				return {
+					...meta,
+					value: JSON.stringify(posData),
+				};
+			}
+			return meta;
 		});
 
-		return {
+		return calculateLineItemTaxesAndTotals({
 			...lineItem,
-			price: newPrice,
-			total: newTotal,
-			...taxes,
-		};
+			meta_data: updatedMetaData,
+		});
 	};
 
 	/**
 	 * Update subtotal of line item
 	 */
-	const updateSubtotal = (lineItem: LineItem, newSubtotal: number): LineItem => {
-		const taxStatus = getTaxStatusFromMetaData(lineItem.meta_data);
+	const updateRegularPrice = (lineItem: LineItem, newRegularPrice: number): LineItem => {
+		const meta_data = lineItem.meta_data ?? [];
 
-		if (inclOrExcl === 'incl') {
-			const taxes = calculateTaxesFromValue({
-				value: newSubtotal,
-				taxClass: lineItem?.tax_class ?? '',
-				taxStatus,
-				valueIncludesTax: true,
-			});
-			newSubtotal -= taxes.total;
-		}
-
-		// recalculate taxes
-		const taxes = calculateLineItemTaxes({
-			total: lineItem.total ?? '0',
-			subtotal: String(newSubtotal),
-			taxStatus,
-			taxClass: lineItem.tax_class ?? '',
+		const updatedMetaData = meta_data.map((meta) => {
+			if (meta.key === '_woocommerce_pos_data') {
+				const posData = JSON.parse(meta.value);
+				posData.regular_price = String(newRegularPrice);
+				return {
+					...meta,
+					value: JSON.stringify(posData),
+				};
+			}
+			return meta;
 		});
 
-		return {
+		return calculateLineItemTaxesAndTotals({
 			...lineItem,
-			subtotal: String(newSubtotal),
-			...taxes,
-		};
+			meta_data: updatedMetaData,
+		});
+	};
+
+	/**
+	 * Update tax status of line item
+	 */
+	const updateTaxStatus = (lineItem: LineItem, taxStatus: boolean): LineItem => {
+		const meta_data = lineItem.meta_data ?? [];
+
+		const updatedMetaData = meta_data.map((meta) => {
+			if (meta.key === '_woocommerce_pos_data') {
+				const posData = JSON.parse(meta.value);
+				posData.tax_status = taxStatus ? 'taxable' : 'none';
+				return {
+					...meta,
+					value: JSON.stringify(posData),
+				};
+			}
+			return meta;
+		});
+
+		return calculateLineItemTaxesAndTotals({
+			...lineItem,
+			meta_data: updatedMetaData,
+		});
 	};
 
 	/**
@@ -129,15 +118,25 @@ export const useUpdateLineItem = () => {
 			if (!isNaN(price)) updatedItem = updatePrice(updatedItem, price);
 		}
 
-		if (changes.subtotal !== undefined) {
-			const subtotal = Number(changes.subtotal);
-			if (!isNaN(subtotal)) updatedItem = updateSubtotal(updatedItem, subtotal);
+		if (changes.regular_price !== undefined) {
+			const regular_price = Number(changes.regular_price);
+			if (!isNaN(regular_price)) updatedItem = updateRegularPrice(updatedItem, regular_price);
+		}
+
+		if (changes.tax_status !== undefined) {
+			updatedItem = updateTaxStatus(updatedItem, changes.tax_status);
 		}
 
 		// Handle simpler properties by direct assignment
 		for (const key of Object.keys(changes)) {
-			if (!['quantity', 'price', 'subtotal'].includes(key)) {
-				updatedItem[key] = changes[key];
+			if (!['quantity', 'price', 'regular_price', 'tax_status'].includes(key)) {
+				// special case for nested changes, only meta_data at the momemnt
+				const nestedKey = key.split('.');
+				if (nestedKey.length === 1) {
+					updatedItem[key] = changes[key];
+				} else {
+					set(updatedItem, nestedKey, changes[key]);
+				}
 			}
 		}
 
@@ -151,9 +150,10 @@ export const useUpdateLineItem = () => {
 	 */
 	const updateLineItem = async (uuid: string, changes: Partial<LineItem>) => {
 		const order = currentOrder.getLatest();
+		const json = order.toMutableJSON();
 		let updated = false;
 
-		const updatedLineItems = order.line_items?.map((lineItem) => {
+		const updatedLineItems = json.line_items?.map((lineItem) => {
 			if (
 				updated ||
 				!lineItem.meta_data?.some((m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid)

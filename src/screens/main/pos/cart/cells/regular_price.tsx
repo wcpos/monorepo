@@ -36,7 +36,7 @@ function ensureNumberArray(input: string | number[]): number[] {
 /**
  *
  */
-export const Price = ({ uuid, item, column }: Props) => {
+export const RegularPrice = ({ uuid, item, column }: Props) => {
 	const { updateLineItem } = useUpdateLineItem();
 	const { display } = column;
 	const { store } = useAppState();
@@ -50,16 +50,16 @@ export const Price = ({ uuid, item, column }: Props) => {
 	 */
 	const { displayPrice, tax } = React.useMemo(() => {
 		const posData = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
-		const { price, tax_status } = JSON.parse(posData);
+		const { regular_price, tax_status } = JSON.parse(posData);
 
-		if (price && taxDisplayCart === 'incl' && pricesIncludeTax === 'yes') {
+		if (regular_price && taxDisplayCart === 'incl' && pricesIncludeTax === 'yes') {
 			const taxes = calculateTaxesFromValue({
-				value: price,
+				value: regular_price,
 				taxStatus: tax_status,
 				taxClass: item.tax_class,
 			});
 			return {
-				displayPrice: price,
+				displayPrice: regular_price,
 				tax: taxes.total,
 			};
 		}
@@ -89,7 +89,7 @@ export const Price = ({ uuid, item, column }: Props) => {
 		<>
 			<NumberInput
 				value={displayPrice}
-				onChange={(price) => updateLineItem(uuid, { price })}
+				onChange={(regular_price) => updateLineItem(uuid, { regular_price })}
 				showDecimals
 				showDiscounts={ensureNumberArray(quickDiscounts)}
 			/>

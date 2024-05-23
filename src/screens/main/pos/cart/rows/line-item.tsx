@@ -12,6 +12,7 @@ import { Price } from '../cells/price';
 import { ProductName } from '../cells/product-name';
 import { ProductTotal } from '../cells/product-total';
 import { Quantity } from '../cells/quantity';
+import { RegularPrice } from '../cells/regular_price';
 import { Subtotal } from '../cells/subtotal';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
@@ -21,6 +22,7 @@ const cells = {
 	actions: Actions,
 	name: ProductName,
 	price: Price,
+	regular_price: RegularPrice,
 	quantity: Quantity,
 	subtotal: Subtotal,
 	total: ProductTotal,

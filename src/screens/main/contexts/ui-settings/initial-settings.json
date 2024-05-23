@@ -40,6 +40,10 @@
           {
             "key": "attributes",
             "show": false
+          },
+          {
+            "key": "meta_data",
+            "show": false
           }
         ]
       },
@@ -82,7 +86,8 @@
         "hideLabel": true,
         "show": true
       }
-    ]
+    ],
+    "metaDataKeys": ""
   },
   "pos-cart": {
     "sortBy": "id",
@@ -118,7 +123,28 @@
       {
         "key": "price",
         "show": true,
-        "align": "right"
+        "align": "right",
+        "display": [
+          {
+            "key": "tax",
+            "show": false
+          },
+          {
+            "key": "on_sale",
+            "show": true
+          }
+        ]
+      },
+      {
+        "key": "regular_price",
+        "show": false,
+        "align": "right",
+        "display": [
+          {
+            "key": "tax",
+            "show": false
+          }
+        ]
       },
       {
         "key": "subtotal",
@@ -139,6 +165,10 @@
           {
             "key": "tax",
             "show": false
+          },
+          {
+            "key": "on_sale",
+            "show": true
           }
         ]
       },
@@ -254,11 +284,11 @@
         ]
       },
       {
-        "key": "date_created",
+        "key": "date_created_gmt",
         "show": false
       },
       {
-        "key": "date_modified",
+        "key": "date_modified_gmt",
         "show": false,
         "disableSort": true
       },
@@ -272,7 +302,7 @@
     ]
   },
   "orders": {
-    "sortBy": "date_created",
+    "sortBy": "date_created_gmt",
     "sortDirection": "desc",
     "columns": [
       {
@@ -312,16 +342,16 @@
         "disableSort": true
       },
       {
-        "key": "date_created",
+        "key": "date_created_gmt",
         "show": true
       },
       {
-        "key": "date_modified",
+        "key": "date_modified_gmt",
         "show": false,
         "disableSort": true
       },
       {
-        "key": "date_completed",
+        "key": "date_completed_gmt",
         "show": false,
         "disableSort": true
       },
@@ -404,7 +434,7 @@
         "disableSort": true
       },
       {
-        "key": "date_created",
+        "key": "date_created_gmt",
         "show": true
       },
       {

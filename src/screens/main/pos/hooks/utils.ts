@@ -1,7 +1,8 @@
 import { format as formatDate } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import isEmpty from 'lodash/isEmpty';
-import { count } from 'rxjs';
+
+import log from '@wcpos/utils/src/logger';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
@@ -16,7 +17,7 @@ export const priceToNumber = (price?: string) => parseFloat(isEmpty(price) ? '0'
 /**
  *
  */
-export const sanitizePrice = (price?: string) => (price && price !== '' ? price : '0');
+export const sanitizePrice = (price?: string) => (price && price !== '' ? String(price) : '0');
 
 /**
  * @returns {string} - Current GMT date
@@ -33,7 +34,11 @@ export const getCurrentGMTDate = () => {
  * Retrieves the UUID from a line item's meta data.
  */
 export const getUuidFromLineItemMetaData = (metaData: CartLine['meta_data']) => {
-	const uuidMeta = (metaData ?? []).find((meta) => meta.key === '_woocommerce_pos_uuid');
+	if (!Array.isArray(metaData)) {
+		log.error('metaData is not an array');
+		return;
+	}
+	const uuidMeta = metaData.find((meta) => meta.key === '_woocommerce_pos_uuid');
 	return uuidMeta ? uuidMeta.value : undefined;
 };
 
@@ -43,9 +48,11 @@ export const getUuidFromLineItemMetaData = (metaData: CartLine['meta_data']) => 
  * @TODO - default is 'taxable', is this correct?
  */
 export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
-	const taxStatusMetaData = (metaData ?? []).find(
-		(meta) => meta.key === '_woocommerce_pos_tax_status'
-	);
+	if (!Array.isArray(metaData)) {
+		log.error('metaData is not an array');
+		return;
+	}
+	const taxStatusMetaData = metaData.find((meta) => meta.key === '_woocommerce_pos_tax_status');
 	return (taxStatusMetaData?.value ?? 'taxable') as 'taxable' | 'none' | 'shipping';
 };
 
@@ -53,6 +60,10 @@ export const getTaxStatusFromMetaData = (metaData: CartLine['meta_data']) => {
  * Get tax class from fee line meta data
  */
 export const getMetaDataValueByKey = (metaData: CartLine['meta_data'], key: string) => {
+	if (!Array.isArray(metaData)) {
+		log.error('metaData is not an array');
+		return;
+	}
 	const meta = metaData.find((m) => m.key === key);
 	return meta ? meta.value : undefined;
 };
@@ -69,6 +80,10 @@ export const getUuidFromLineItem = (item: CartLine) => {
  */
 export function findByMetaDataUUID(items: CartLine[], uuid: string) {
 	for (const item of items) {
+		if (!Array.isArray(item.meta_data)) {
+			log.error('metaData is not an array');
+			return;
+		}
 		const uuidMetaData = item.meta_data.find(
 			(meta) => meta.key === '_woocommerce_pos_uuid' && meta.value === uuid
 		);
@@ -87,6 +102,10 @@ export const findByProductVariationID = (
 	productId: number,
 	variationId = 0
 ) => {
+	if (!Array.isArray(lineItems)) {
+		log.error('lineItems is not an array');
+		return;
+	}
 	const matchingItems = lineItems.filter(
 		(item) => item.product_id === productId && (item.variation_id ?? 0) === variationId
 	);
@@ -112,5 +131,43 @@ export const transformCustomerJSONToOrderJSON = (
 			country: customer?.billing?.country || defaultCountry,
 		},
 		shipping: customer.shipping || {},
+	};
+};
+
+/**
+ * Convert a product to the format expected by OrderDocument['line_items']
+ */
+type Product = import('@wcpos/database').ProductDocument;
+export const convertProductToLineItemWithoutTax = (
+	product: Product,
+	metaDataKeys?: string[]
+): LineItem => {
+	const price = sanitizePrice(product.price);
+	const regular_price = sanitizePrice(product.regular_price);
+	const tax_status = product.tax_status || 'taxable'; // is this correct? default to 'taxable'?
+
+	/**
+	 * Transfer meta_data from product to line item, allowed keys are set in UI Settings
+	 * - this allows users to choose which meta data to transfer, allowing all would be too much
+	 */
+	const meta_data = (product.meta_data || [])
+		.filter((item) => item.key && metaDataKeys.includes(item.key))
+		.map(({ key, value }) => ({ key, value }));
+
+	meta_data.push({
+		key: '_woocommerce_pos_data',
+		value: JSON.stringify({ price, regular_price, tax_status }),
+	});
+
+	/**
+	 * NOTE: uuid, price and totals will be added later in the process
+	 */
+	return {
+		product_id: product.id,
+		name: product.name,
+		quantity: 1,
+		sku: product.sku,
+		tax_class: product.tax_class,
+		meta_data,
 	};
 };

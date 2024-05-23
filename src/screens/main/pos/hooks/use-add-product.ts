@@ -1,21 +1,20 @@
 import * as React from 'react';
 
-import { isRxDocument } from 'rxdb';
+import { useObservableEagerState } from 'observable-hooks';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
+import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
-	priceToNumber,
 	findByProductVariationID,
 	getUuidFromLineItem,
-	sanitizePrice,
+	convertProductToLineItemWithoutTax,
 } from './utils';
 import { useT } from '../../../../contexts/translations';
-import { useTaxRates } from '../../contexts/tax-rates';
-import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
+import { useUISettings } from '../../contexts/ui-settings';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -27,59 +26,12 @@ type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 export const useAddProduct = () => {
 	const addSnackbar = useSnackbar();
 	const { addItemToOrder } = useAddItemToOrder();
-	const { pricesIncludeTax } = useTaxRates();
-	const { calculateTaxesFromValue } = useTaxCalculator();
+	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
 	const t = useT();
-
-	/**
-	 * Convert product document to line item schema
-	 *
-	 * NOTE: once price, subtotal, total etc go into the cart they are always without tax
-	 */
-	const convertProductToLineItem = React.useCallback(
-		(product: ProductDocument): LineItem => {
-			const price = sanitizePrice(product.price);
-			const regularPrice = sanitizePrice(product.regular_price);
-
-			let priceWithoutTax = priceToNumber(price);
-			const tax = calculateTaxesFromValue({
-				value: price,
-				taxClass: product.tax_class,
-				taxStatus: product.tax_status,
-			});
-
-			let regularPriceWithoutTax = priceToNumber(regularPrice);
-			const regularTax = calculateTaxesFromValue({
-				value: regularPrice,
-				taxClass: product.tax_class,
-				taxStatus: product.tax_status,
-			});
-
-			if (pricesIncludeTax) {
-				priceWithoutTax = priceToNumber(price) - tax.total;
-				regularPriceWithoutTax = priceToNumber(regularPrice) - regularTax.total;
-			}
-
-			return {
-				price: priceWithoutTax,
-				subtotal: String(regularPriceWithoutTax),
-				total: String(priceWithoutTax),
-				subtotal_tax: String(tax.total),
-				total_tax: String(tax.total),
-				taxes: tax.taxes,
-				product_id: product.id,
-				name: product.name,
-				quantity: 1,
-				sku: product.sku,
-				tax_class: product.tax_class,
-				meta_data: [{ key: '_woocommerce_pos_tax_status', value: product.tax_status }],
-				// meta_data: filteredMetaData(product.meta_data),
-			};
-		},
-		[calculateTaxesFromValue, pricesIncludeTax]
-	);
+	const { uiSettings } = useUISettings('pos-products');
+	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
 
 	/**
 	 * Add product to order, or increment quantity if already in order
@@ -102,12 +54,14 @@ export const useAddProduct = () => {
 
 			// if product is not in order, add it
 			if (!success) {
-				const newLineItem = convertProductToLineItem(product);
+				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
+				let newLineItem = convertProductToLineItemWithoutTax(product, keys);
+				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
 				success = await addItemToOrder('line_items', newLineItem);
 			}
 
 			// returned success should be the updated order
-			if (isRxDocument(success)) {
+			if (success) {
 				addSnackbar({
 					message: t('{name} added to cart', { _tags: 'core', name: product.name }),
 					type: 'success',
@@ -122,7 +76,15 @@ export const useAddProduct = () => {
 				});
 			}
 		},
-		[currentOrder, convertProductToLineItem, addItemToOrder, updateLineItem, addSnackbar, t]
+		[
+			currentOrder,
+			updateLineItem,
+			metaDataKeys,
+			calculateLineItemTaxesAndTotals,
+			addItemToOrder,
+			addSnackbar,
+			t,
+		]
 	);
 
 	return { addProduct };

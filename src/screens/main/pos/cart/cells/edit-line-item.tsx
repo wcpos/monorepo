@@ -10,6 +10,7 @@ import { useT } from '../../../../../contexts/translations';
 import { EditFormWithJSONTree } from '../../../components/edit-form-with-json-tree';
 import { useCollection } from '../../../hooks/use-collection';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
+import { getMetaDataValueByKey } from '../../hooks/utils';
 
 interface EditLineItemProps {
 	uuid: string;
@@ -26,6 +27,15 @@ const EditButton = ({ uuid, item }: EditLineItemProps) => {
 	const { updateLineItem } = useUpdateLineItem();
 
 	/**
+	 * We need to add the tax_status as a field for the Edit form
+	 */
+	const json = React.useMemo(() => {
+		const posData = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
+		const { tax_status } = JSON.parse(posData);
+		return { ...item, tax_status: tax_status === 'taxable' };
+	}, [item]);
+
+	/**
 	 * Get schema for line item
 	 */
 	const schema = React.useMemo(() => {
@@ -38,6 +48,7 @@ const EditButton = ({ uuid, item }: EditLineItemProps) => {
 			'sku',
 			// 'price',
 			// 'quantity',
+			'tax_status', // Insert tax_status before tax_class
 			'tax_class',
 			// 'subtotal',
 			// 'subtotal_tax',
@@ -46,8 +57,20 @@ const EditButton = ({ uuid, item }: EditLineItemProps) => {
 			// 'taxes',
 			'meta_data',
 		];
+
+		const properties = {
+			...pick(lineItemSchema, fields),
+			tax_status: { type: 'boolean' },
+		};
+
+		// Ensure the order is correct by explicitly setting it after spreading
 		return {
-			properties: pick(lineItemSchema, fields),
+			properties: {
+				sku: properties.sku,
+				tax_status: properties.tax_status,
+				tax_class: properties.tax_class,
+				meta_data: properties.meta_data,
+			},
 			title: null,
 			description: null,
 		};
@@ -71,7 +94,7 @@ const EditButton = ({ uuid, item }: EditLineItemProps) => {
 					onClose={() => setOpened(false)}
 				>
 					<EditFormWithJSONTree
-						json={item}
+						json={json}
 						onChange={({ changes }) => updateLineItem(uuid, changes)}
 						schema={schema}
 						uiSchema={{
@@ -90,6 +113,9 @@ const EditButton = ({ uuid, item }: EditLineItemProps) => {
 							// quantity: {
 							// 	'ui:label': t('Quantity', { _tags: 'core' }),
 							// },
+							tax_status: {
+								'ui:label': t('Taxable', { _tags: 'core' }),
+							},
 							tax_class: {
 								'ui:label': t('Tax Class', { _tags: 'core' }),
 							},

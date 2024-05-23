@@ -5,6 +5,9 @@ import { map } from 'rxjs/operators';
 
 import Text from '@wcpos/components/src/text';
 
+import { useCollection } from '../../hooks/use-collection';
+import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+
 type Props = {
 	item: import('@wcpos/database').OrderDocument;
 };
@@ -13,12 +16,33 @@ type Props = {
  *
  */
 export const Cashier = ({ item: order }: Props) => {
+	const { collection } = useCollection('customers');
 	const cashierID = useObservableEagerState(
 		order.meta_data$.pipe(
 			map((meta) => meta.find((m) => m.key === '_pos_user')),
 			map((m) => m?.value)
 		)
 	);
+	const [cashierName, setCashierName] = React.useState('');
+	const { format } = useCustomerNameFormat();
 
-	return <Text>{cashierID}</Text>;
+	/**
+	 * @TODO - it would be good to have a replication query which gets the cashier roles
+	 * But we'll just hack it for the moment
+	 */
+	React.useEffect(() => {
+		async function fetchUser(id) {
+			const user = await collection.findOne({ selector: { id } }).exec();
+			if (user) {
+				setCashierName(format(user));
+			} else {
+				setCashierName('ID: ' + id);
+			}
+		}
+		if (cashierID) {
+			fetchUser(parseInt(cashierID, 10));
+		}
+	}, [cashierID, collection, format]);
+
+	return <Text>{cashierName}</Text>;
 };

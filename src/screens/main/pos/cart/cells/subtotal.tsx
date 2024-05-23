@@ -1,19 +1,17 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import NumberInput from '../../../components/number-input';
-import { useTaxDisplayValues } from '../../../hooks/taxes/use-tax-display-values';
+import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
-import { useUpdateLineItem } from '../../hooks/use-update-line-item';
-import { getTaxStatusFromMetaData } from '../../hooks/utils';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+
 interface Props {
-	uuid: string;
 	item: LineItem;
 	column: import('@wcpos/components/src/table').ColumnProps<LineItem>;
 }
@@ -21,18 +19,22 @@ interface Props {
 /**
  *
  */
-export const Subtotal = ({ uuid, item, column }: Props) => {
-	const { updateLineItem } = useUpdateLineItem();
+export const Subtotal = ({ item, column }: Props) => {
 	const { format } = useCurrencyFormat();
 	const { display } = column;
-	const taxStatus = getTaxStatusFromMetaData(item.meta_data);
-	const { displayValue, inclOrExcl } = useTaxDisplayValues({
-		value: item.subtotal,
-		taxClass: item.tax_class,
-		taxStatus,
-		valueIncludesTax: false,
-		context: 'cart',
-	});
+	const { store } = useAppState();
+	const taxDisplayCart = useObservableEagerState(store.tax_display_cart$);
+
+	/**
+	 * Get display values if cart includes tax
+	 */
+	const displaySubtotal = React.useMemo(() => {
+		if (taxDisplayCart === 'incl') {
+			return parseFloat(item.subtotal) + parseFloat(item.subtotal_tax);
+		}
+
+		return item.subtotal;
+	}, [item.subtotal, item.subtotal_tax, taxDisplayCart]);
 
 	/**
 	 *
@@ -50,14 +52,10 @@ export const Subtotal = ({ uuid, item, column }: Props) => {
 	 */
 	return (
 		<Box space="xSmall" align="end">
-			<NumberInput
-				value={displayValue}
-				onChange={(subtotal) => updateLineItem(uuid, { subtotal })}
-				showDecimals
-			/>
+			<Text>{format(displaySubtotal || 0)}</Text>
 			{show('tax') && (
 				<Text type="textMuted" size="small">
-					{`${inclOrExcl} ${format(item.subtotal_tax) || 0} tax`}
+					{`${taxDisplayCart} ${format(item.subtotal_tax) || 0} tax`}
 				</Text>
 			)}
 		</Box>
