@@ -12,16 +12,16 @@ import { useCollection } from '../../../hooks/use-collection';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 import { getMetaDataValueByKey } from '../../hooks/utils';
 
-interface EditLineItemProps {
+interface Props {
 	uuid: string;
 	item: import('@wcpos/database').OrderDocument['line_items'][number];
+	onClose?: () => void;
 }
 
 /**
  *
  */
-const EditButton = ({ uuid, item }: EditLineItemProps) => {
-	const [opened, setOpened] = React.useState(false);
+export const EditLineItemModal = ({ uuid, item, onClose }: Props) => {
 	const t = useT();
 	const { collection } = useCollection('orders');
 	const { updateLineItem } = useUpdateLineItem();
@@ -80,64 +80,74 @@ const EditButton = ({ uuid, item }: EditLineItemProps) => {
 	 *
 	 */
 	return (
+		<Modal
+			title={t('Edit {name}', { _tags: 'core', name: item.name })}
+			size="large"
+			opened
+			onClose={onClose}
+		>
+			<EditFormWithJSONTree
+				json={json}
+				onChange={({ changes }) => updateLineItem(uuid, changes)}
+				schema={schema}
+				uiSchema={{
+					'ui:rootFieldId': 'line_item',
+					'ui:title': null,
+					'ui:description': null,
+					// name: {
+					// 	'ui:label': t('Name', { _tags: 'core' }),
+					// },
+					sku: {
+						'ui:label': t('SKU', { _tags: 'core' }),
+					},
+					// price: {
+					// 	'ui:label': t('Price', { _tags: 'core' }),
+					// },
+					// quantity: {
+					// 	'ui:label': t('Quantity', { _tags: 'core' }),
+					// },
+					tax_status: {
+						'ui:label': t('Taxable', { _tags: 'core' }),
+					},
+					tax_class: {
+						'ui:label': t('Tax Class', { _tags: 'core' }),
+					},
+					// subtotal: {
+					// 	'ui:label': t('Subtotal', { _tags: 'core' }),
+					// },
+					// taxes: {
+					// 	'ui:collapsible': 'closed',
+					// 	'ui:title': t('Taxes', { _tags: 'core' }),
+					// 	'ui:description': null,
+					// },
+					meta_data: {
+						'ui:collapsible': 'closed',
+						'ui:title': t('Meta Data', { _tags: 'core' }),
+						'ui:description': null,
+					},
+				}}
+			/>
+		</Modal>
+	);
+};
+
+/**
+ *
+ */
+export const EditButton = ({ uuid, item }: Props) => {
+	const [opened, setOpened] = React.useState(false);
+
+	/**
+	 *
+	 */
+	return (
 		<>
 			<Icon
 				name="ellipsisVertical"
 				onPress={() => setOpened(true)}
 				// tooltip={t('Edit', { _tags: 'core' })}
 			/>
-			{opened && (
-				<Modal
-					title={t('Edit {name}', { _tags: 'core', name: item.name })}
-					size="large"
-					opened
-					onClose={() => setOpened(false)}
-				>
-					<EditFormWithJSONTree
-						json={json}
-						onChange={({ changes }) => updateLineItem(uuid, changes)}
-						schema={schema}
-						uiSchema={{
-							'ui:rootFieldId': 'line_item',
-							'ui:title': null,
-							'ui:description': null,
-							// name: {
-							// 	'ui:label': t('Name', { _tags: 'core' }),
-							// },
-							sku: {
-								'ui:label': t('SKU', { _tags: 'core' }),
-							},
-							// price: {
-							// 	'ui:label': t('Price', { _tags: 'core' }),
-							// },
-							// quantity: {
-							// 	'ui:label': t('Quantity', { _tags: 'core' }),
-							// },
-							tax_status: {
-								'ui:label': t('Taxable', { _tags: 'core' }),
-							},
-							tax_class: {
-								'ui:label': t('Tax Class', { _tags: 'core' }),
-							},
-							// subtotal: {
-							// 	'ui:label': t('Subtotal', { _tags: 'core' }),
-							// },
-							// taxes: {
-							// 	'ui:collapsible': 'closed',
-							// 	'ui:title': t('Taxes', { _tags: 'core' }),
-							// 	'ui:description': null,
-							// },
-							meta_data: {
-								'ui:collapsible': 'closed',
-								'ui:title': t('Meta Data', { _tags: 'core' }),
-								'ui:description': null,
-							},
-						}}
-					/>
-				</Modal>
-			)}
+			{opened && <EditModal uuid={uuid} item={item} onClose={() => setOpened(false)} />}
 		</>
 	);
 };
-
-export default EditButton;

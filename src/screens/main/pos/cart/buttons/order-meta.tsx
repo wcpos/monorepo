@@ -16,8 +16,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
  * TODO - I either need to keep form data in sync with order.$, or better,
  * get fresh data everytime the modal is opened
  */
-const OrderMetaButton = () => {
-	const [opened, setOpened] = React.useState(false);
+const OrderMetaModal = ({ onClose }: { onClose: () => void }) => {
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
 	const { currentOrder } = useCurrentOrder();
@@ -126,6 +125,63 @@ const OrderMetaButton = () => {
 	 *
 	 */
 	return (
+		<Modal
+			opened
+			size="large"
+			onClose={onClose}
+			title={t('Edit Order', { _tags: 'core' })}
+			primaryAction={{
+				label: t('Save to Server', { _tags: 'core' }),
+				action: handleSyncToServer,
+			}}
+			secondaryActions={[
+				{
+					label: t('Cancel', { _tags: 'core' }),
+					action: onClose,
+				},
+			]}
+		>
+			<EditDocumentForm
+				document={currentOrder}
+				fields={[
+					'number',
+					// 'status',
+					// 'discount_total',
+					// 'discount_tax',
+					// 'shipping_total',
+					// 'shipping_tax',
+					// 'cart_tax',
+					// 'total',
+					// 'total_tax',
+					// 'prices_include_tax',
+					// 'customer_id',
+					// 'customer_note',
+					// 'billing',
+					// 'shipping',
+					// 'payment_method',
+					// 'payment_method_title',
+					// 'tax_lines',
+					// 'coupon_lines',
+					// 'refunds',
+					'currency',
+					'currency_symbol',
+					'meta_data',
+				]}
+				uiSchema={uiSchema}
+				withJSONTree
+			/>
+		</Modal>
+	);
+};
+
+/**
+ *
+ */
+export const OrderMetaButton = () => {
+	const [opened, setOpened] = React.useState(false);
+	const t = useT();
+
+	return (
 		<>
 			<Button
 				title={t('Order Meta', { _tags: 'core' })}
@@ -133,56 +189,7 @@ const OrderMetaButton = () => {
 				onPress={() => setOpened(true)}
 				style={{ flex: 1 }}
 			/>
-			{opened && (
-				<Modal
-					opened
-					size="large"
-					onClose={() => setOpened(false)}
-					title={t('Edit Order', { _tags: 'core' })}
-					primaryAction={{
-						label: t('Save to Server', { _tags: 'core' }),
-						action: handleSyncToServer,
-					}}
-					secondaryActions={[
-						{
-							label: t('Cancel', { _tags: 'core' }),
-							action: () => setOpened(false),
-						},
-					]}
-				>
-					<EditDocumentForm
-						document={currentOrder}
-						fields={[
-							'number',
-							// 'status',
-							// 'discount_total',
-							// 'discount_tax',
-							// 'shipping_total',
-							// 'shipping_tax',
-							// 'cart_tax',
-							// 'total',
-							// 'total_tax',
-							// 'prices_include_tax',
-							// 'customer_id',
-							// 'customer_note',
-							// 'billing',
-							// 'shipping',
-							// 'payment_method',
-							// 'payment_method_title',
-							// 'tax_lines',
-							// 'coupon_lines',
-							// 'refunds',
-							'currency',
-							'currency_symbol',
-							'meta_data',
-						]}
-						uiSchema={uiSchema}
-						withJSONTree
-					/>
-				</Modal>
-			)}
+			{opened && <OrderMetaModal onClose={() => setOpened(false)} />}
 		</>
 	);
 };
-
-export default OrderMetaButton;

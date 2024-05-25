@@ -1,109 +1,103 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import pick from 'lodash/pick';
+import { useObservableEagerState } from 'observable-hooks';
 
-import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
-// import Tooltip from '@wcpos/components/src/tooltip';
 
 import { useT } from '../../../../../contexts/translations';
+import { AmountWidget } from '../../../components/amount-widget';
 import { EditFormWithJSONTree } from '../../../components/edit-form-with-json-tree';
-import { useCollection } from '../../../hooks/use-collection';
+import { useTaxRates } from '../../../contexts/tax-rates';
+import { useCurrentOrder } from '../../contexts/current-order';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
-interface EditFeelLineProps {
+interface Props {
 	uuid: string;
 	item: import('@wcpos/database').OrderDocument['fee_lines'][number];
+	onClose?: () => void;
 }
 
 /**
  *
  */
-const EditButton = ({ uuid, item }: EditFeelLineProps) => {
-	const [opened, setOpened] = React.useState(false);
+export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 	const t = useT();
-	const { collection } = useCollection('orders');
 	const { updateFeeLine } = useUpdateFeeLine();
+	const { taxClasses } = useTaxRates();
+	const amountDataRef = React.useRef({ amount: '0', percent: false });
+	const { currentOrder } = useCurrentOrder();
+	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 
 	/**
 	 * Get schema for fee lines
 	 */
-	const schema = React.useMemo(() => {
-		const feeLineSchema = get(
-			collection,
-			'schema.jsonSchema.properties.fee_lines.items.properties'
-		);
-		const fields = [
-			// 'name',
-			// 'total',
-			// 'amount', // amount is weird, it's in the WC REST API, but always returns empty
-			'tax_class',
-			'tax_status',
-			// 'subtotal',
-			// 'subtotal_tax',
-			// 'total_tax',
-			// 'taxes',
-			'meta_data',
-		];
-		return {
-			properties: pick(feeLineSchema, fields),
-		};
-	}, [collection]);
+	const schema = React.useMemo(
+		() => ({
+			type: 'object',
+			properties: {
+				// name: { type: 'string', title: t('Fee Name', { _tags: 'core' }) },
+				amount: { type: 'string', title: t('Amount', { _tags: 'core' }) },
+				prices_include_tax: {
+					type: 'boolean',
+					title: t('Amount Includes Tax', { _tags: 'core' }),
+				},
+				tax_status: {
+					type: 'string',
+					title: t('Tax Status', { _tags: 'core' }),
+					enum: ['taxable', 'none'],
+					default: 'taxable',
+				},
+				tax_class: {
+					type: 'string',
+					title: t('Tax Class', { _tags: 'core' }),
+					enum: taxClasses,
+					default: taxClasses.includes('standard') ? 'standard' : taxClasses[0],
+				},
+				meta_data: {
+					type: 'array',
+					title: t('Meta Data', { _tags: 'core' }),
+					items: {
+						type: 'object',
+						properties: {
+							key: {
+								description: 'Meta key.',
+								type: 'string',
+							},
+							value: {
+								description: 'Meta value.',
+								type: 'string',
+							},
+						},
+					},
+				},
+			},
+		}),
+		[t, taxClasses]
+	);
 
 	/**
 	 *
 	 */
 	return (
-		<>
-			<Icon
-				name="ellipsisVertical"
-				onPress={() => setOpened(true)}
-				// tooltip={t('Edit', { _tags: 'core' })}
+		<Modal title={t('Edit {name}', { _tags: 'core', name: item.name })} opened onClose={onClose}>
+			<EditFormWithJSONTree
+				json={item}
+				onChange={({ changes }) => updateFeeLine(uuid, changes)}
+				schema={schema}
+				uiSchema={{
+					'ui:rootFieldId': 'fee_line',
+					'ui:title': null,
+					'ui:description': null,
+					amount: {
+						'ui:widget': () => (
+							<AmountWidget currencySymbol={currencySymbol} amountDataRef={amountDataRef} />
+						),
+					},
+					meta_data: {
+						'ui:collapsible': 'closed',
+					},
+				}}
 			/>
-			{opened && (
-				<Modal
-					title={t('Edit {name}', { _tags: 'core', name: item.name })}
-					size="large"
-					opened
-					onClose={() => setOpened(false)}
-				>
-					<EditFormWithJSONTree
-						json={item}
-						onChange={({ changes }) => updateFeeLine(uuid, changes)}
-						schema={schema}
-						uiSchema={{
-							'ui:rootFieldId': 'fee_line',
-							'ui:title': null,
-							'ui:description': null,
-							// name: {
-							// 	'ui:label': t('Name', { _tags: 'core' }),
-							// },
-							// total: {
-							// 	'ui:label': t('Total', { _tags: 'core' }),
-							// },
-							tax_class: {
-								'ui:label': t('Tax Class', { _tags: 'core' }),
-							},
-							tax_status: {
-								'ui:label': t('Tax Status', { _tags: 'core' }),
-							},
-							// taxes: {
-							// 	'ui:collapsible': 'closed',
-							// 	'ui:title': t('Taxes', { _tags: 'core' }),
-							// 	'ui:description': null,
-							// },
-							meta_data: {
-								'ui:collapsible': 'closed',
-								'ui:title': t('Meta Data', { _tags: 'core' }),
-								'ui:description': null,
-							},
-						}}
-					/>
-				</Modal>
-			)}
-		</>
+		</Modal>
 	);
 };
-
-export default EditButton;

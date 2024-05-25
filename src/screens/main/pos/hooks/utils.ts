@@ -171,3 +171,60 @@ export const convertProductToLineItemWithoutTax = (
 		meta_data,
 	};
 };
+
+/**
+ * Convert a variation to the format expected by OrderDocument['line_items']
+ */
+type Variation = import('@wcpos/database').ProductVariationDocument;
+export const convertVariationToLineItemWithoutTax = (
+	variation: Variation,
+	parent: Product,
+	metaData?: Partial<LineItem['meta_data'][number]>[],
+	metaDataKeys?: string[]
+): LineItem => {
+	const price = sanitizePrice(variation.price);
+	const regular_price = sanitizePrice(variation.regular_price);
+	const tax_status = variation.tax_status || 'taxable'; // is this correct? default to 'taxable'?
+	let attributes = metaData;
+
+	/**
+	 * Get attributes from variation if not passed in
+	 */
+	if (!attributes) {
+		attributes = variation.attributes.map((attr) => ({
+			key: attr.name,
+			value: attr.option,
+			attr_id: attr.id,
+			display_key: attr.name,
+			display_value: attr.option,
+		}));
+	}
+
+	/**
+	 * Transfer meta_data from product to line item, allowed keys are set in UI Settings
+	 * - this allows users to choose which meta data to transfer, allowing all would be too much
+	 */
+	const meta_data = (variation.meta_data || [])
+		.filter((item) => item.key && metaDataKeys.includes(item.key))
+		.map(({ key, value }) => ({ key, value }));
+
+	meta_data.push({
+		key: '_woocommerce_pos_data',
+		value: JSON.stringify({ price, regular_price, tax_status }),
+	});
+
+	meta_data.push(...attributes);
+
+	/**
+	 * NOTE: uuid, price and totals will be added later in the process
+	 */
+	return {
+		product_id: parent.id,
+		name: parent.name,
+		variation_id: variation.id,
+		quantity: 1,
+		sku: variation.sku,
+		tax_class: variation.tax_class,
+		meta_data,
+	};
+};

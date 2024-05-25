@@ -1,21 +1,20 @@
 import * as React from 'react';
 
-import { isRxDocument } from 'rxdb';
+import { useObservableEagerState } from 'observable-hooks';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
+import { useCalculateLineItemTaxAndTotals } from './use-calculate-line-item-tax-and-totals';
 import { useUpdateLineItem } from './use-update-line-item';
 import {
-	priceToNumber,
 	findByProductVariationID,
 	getUuidFromLineItem,
-	sanitizePrice,
+	convertVariationToLineItemWithoutTax,
 } from './utils';
 import { useT } from '../../../../contexts/translations';
-import { useTaxRates } from '../../contexts/tax-rates';
-import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
+import { useUISettings } from '../../contexts/ui-settings';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
@@ -32,77 +31,12 @@ interface MetaData {
 export const useAddVariation = () => {
 	const addSnackbar = useSnackbar();
 	const { addItemToOrder } = useAddItemToOrder();
-	const { pricesIncludeTax } = useTaxRates();
-	const { calculateTaxesFromValue } = useTaxCalculator();
 	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
 	const t = useT();
-
-	/**
-	 * Convert variations document to line item schema
-	 */
-	const convertVariationToLineItem = React.useCallback(
-		(
-			variation: ProductVariationDocument,
-			parent: ProductDocument,
-			metaData?: MetaData[]
-		): LineItem => {
-			const price = sanitizePrice(variation.price);
-			const regularPrice = sanitizePrice(variation.regular_price);
-
-			let priceWithoutTax = priceToNumber(price);
-			let attributes = metaData;
-
-			const tax = calculateTaxesFromValue({
-				value: price,
-				taxClass: variation.tax_class,
-				taxStatus: variation.tax_status,
-			});
-
-			let regularPriceWithoutTax = priceToNumber(regularPrice);
-			const regularTax = calculateTaxesFromValue({
-				value: regularPrice,
-				taxClass: variation.tax_class,
-				taxStatus: variation.tax_status,
-			});
-
-			if (pricesIncludeTax) {
-				priceWithoutTax = priceToNumber(price) - tax.total;
-				regularPriceWithoutTax = priceToNumber(regularPrice) - regularTax.total;
-			}
-
-			if (!attributes) {
-				attributes = variation.attributes.map((attr) => ({
-					key: attr.name,
-					value: attr.option,
-					attr_id: attr.id,
-					display_key: attr.name,
-					display_value: attr.option,
-				}));
-			}
-
-			return {
-				price: priceWithoutTax,
-				subtotal: String(regularPriceWithoutTax),
-				total: String(priceWithoutTax),
-				subtotal_tax: String(tax.total),
-				total_tax: String(tax.total),
-				taxes: tax.taxes,
-				product_id: parent.id,
-				name: parent.name,
-				variation_id: variation.id,
-				quantity: 1,
-				sku: variation.sku,
-				tax_class: variation.tax_class,
-				// meta_data: filteredMetaData(parent.meta_data).concat(metaData),
-				meta_data: [
-					...attributes,
-					{ key: '_woocommerce_pos_tax_status', value: variation.tax_status },
-				],
-			};
-		},
-		[calculateTaxesFromValue, pricesIncludeTax]
-	);
+	const { uiSettings } = useUISettings('pos-products');
+	const metaDataKeys = useObservableEagerState(uiSettings.metaDataKeys$);
+	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 
 	/**
 	 *
@@ -125,13 +59,15 @@ export const useAddVariation = () => {
 
 			// if variation is not in order, add it
 			if (!success) {
-				const newLineItem = convertVariationToLineItem(variation, parent, metaData);
+				const keys = metaDataKeys ? metaDataKeys.split(',') : [];
+				let newLineItem = convertVariationToLineItemWithoutTax(variation, parent, metaData, keys);
+				newLineItem = calculateLineItemTaxesAndTotals(newLineItem);
 				success = await addItemToOrder('line_items', newLineItem);
 			}
 
 			// returned success should be the updated order
 
-			if (isRxDocument(success)) {
+			if (success) {
 				addSnackbar({
 					message: t('{name} added to cart', { _tags: 'core', name: parent.name }),
 					type: 'success',
@@ -148,7 +84,15 @@ export const useAddVariation = () => {
 				});
 			}
 		},
-		[currentOrder, updateLineItem, convertVariationToLineItem, addItemToOrder, addSnackbar, t]
+		[
+			currentOrder,
+			updateLineItem,
+			metaDataKeys,
+			calculateLineItemTaxesAndTotals,
+			addItemToOrder,
+			addSnackbar,
+			t,
+		]
 	);
 
 	return { addVariation };

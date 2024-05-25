@@ -5,23 +5,23 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 
-import AddFee from './add-fee';
-import { AddMiscProduct } from './add-misc-product';
-import AddShipping from './add-shipping';
-import AddNoteButton from './buttons/add-note';
-import OrderMetaButton from './buttons/order-meta';
+import { AddCartItemButtons } from './add-cart-item-buttons';
+import { AddNoteButton } from './buttons/add-note';
+import { OrderMetaButton } from './buttons/order-meta';
 import PayButton from './buttons/pay';
 import SaveButton from './buttons/save-order';
 import VoidButton from './buttons/void';
 import CartHeader from './cart-header';
 import Table from './table';
 import Totals from './totals';
+import { useT } from '../../../../contexts/translations';
 
 /**
  *
  */
 const Cart = () => {
 	const theme = useTheme();
+	const t = useT();
 
 	return (
 		<Box
@@ -38,21 +38,7 @@ const Cart = () => {
 					<Table />
 				</ErrorBoundary>
 			</Box>
-			<Box>
-				<ErrorBoundary>
-					<AddMiscProduct />
-				</ErrorBoundary>
-			</Box>
-			<Box>
-				<ErrorBoundary>
-					<AddFee />
-				</ErrorBoundary>
-			</Box>
-			<Box>
-				<ErrorBoundary>
-					<AddShipping />
-				</ErrorBoundary>
-			</Box>
+			<AddCartItemButtons />
 			<Box>
 				<ErrorBoundary>
 					<Totals />

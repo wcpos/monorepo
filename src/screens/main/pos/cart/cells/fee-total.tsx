@@ -1,14 +1,13 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 
-import NumberInput from '../../../components/number-input';
-import { useTaxDisplayValues } from '../../../hooks/taxes/use-tax-display-values';
+import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
-import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 interface Props {
@@ -21,16 +20,21 @@ interface Props {
  * Changing the total actually updates the price, because the WC REST API makes no sense
  */
 export const FeeTotal = ({ uuid, item, column }: Props) => {
-	const { updateFeeLine } = useUpdateFeeLine();
 	const { format } = useCurrentOrderCurrencyFormat();
 	const { display } = column;
-	const { displayValue, inclOrExcl } = useTaxDisplayValues({
-		value: item.total,
-		taxClass: item.tax_class,
-		taxStatus: item.tax_status,
-		context: 'cart',
-		valueIncludesTax: false,
-	});
+	const { store } = useAppState();
+	const taxDisplayCart = useObservableEagerState(store.tax_display_cart$);
+
+	/**
+	 * Get display values if cart includes tax
+	 */
+	const displayTotal = React.useMemo(() => {
+		if (taxDisplayCart === 'incl') {
+			return parseFloat(item.total) + parseFloat(item.total_tax);
+		}
+
+		return item.total;
+	}, [item.total, item.total_tax, taxDisplayCart]);
 
 	/**
 	 *
@@ -48,14 +52,10 @@ export const FeeTotal = ({ uuid, item, column }: Props) => {
 	 */
 	return (
 		<Box space="xSmall" align="end">
-			<NumberInput
-				value={displayValue}
-				onChange={(total) => updateFeeLine(uuid, { total })}
-				showDecimals
-			/>
+			<Text>{format(displayTotal || 0)}</Text>
 			{show('tax') && (
 				<Text type="textMuted" size="small">
-					{`${inclOrExcl} ${format(item.total_tax) || 0} tax`}
+					{`${taxDisplayCart} ${format(item.total_tax) || 0} tax`}
 				</Text>
 			)}
 		</Box>

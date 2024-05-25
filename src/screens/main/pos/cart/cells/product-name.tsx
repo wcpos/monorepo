@@ -6,7 +6,8 @@ import Box from '@wcpos/components/src/box';
 import { EdittableText } from '@wcpos/components/src/edittable-text';
 import Text from '@wcpos/components/src/text';
 
-import EditLineItemButton from './edit-line-item';
+import { EditButton } from './edit-button';
+import { EditLineItemModal } from './edit-line-item';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
@@ -35,14 +36,18 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 	);
 
 	/**
-	 *  filter out the private meta data
+	 * filter out the private meta data
 	 */
-	const attributes = item.meta_data.filter((meta) => {
-		if (meta.key) {
-			return !meta.key.startsWith('_');
-		}
-		return true;
-	});
+	const attributes = React.useMemo(
+		() =>
+			item.meta_data.filter((meta) => {
+				if (meta.key) {
+					return !meta.key.startsWith('_');
+				}
+				return true;
+			}),
+		[item.meta_data]
+	);
 
 	/**
 	 *
@@ -57,7 +62,7 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 
 				{attributes.map((meta) => {
 					return (
-						<Box space="xxSmall" key={meta.display_key || meta.key} horizontal>
+						<Box space="xxSmall" key={meta.id || meta.display_key || meta.key} horizontal>
 							<Text size="small" type="secondary">{`${meta.display_key || meta.key}:`}</Text>
 							<Text size="small">{meta.display_value || meta.value}</Text>
 						</Box>
@@ -65,7 +70,7 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 				})}
 			</Box>
 			<Box distribution="center">
-				<EditLineItemButton uuid={uuid} item={item} />
+				<EditButton uuid={uuid} item={item} Modal={EditLineItemModal} />
 			</Box>
 		</Box>
 	);

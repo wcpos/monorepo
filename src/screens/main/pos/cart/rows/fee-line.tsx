@@ -9,6 +9,7 @@ import Text from '@wcpos/components/src/text';
 
 import { Actions } from '../cells/actions';
 import { FeeName } from '../cells/fee-name';
+import { FeePrice } from '../cells/fee-price';
 import { FeeTotal } from '../cells/fee-total';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
@@ -17,7 +18,7 @@ type RenderItem = TableProps<FeeLine>['renderItem'];
 const cells = {
 	actions: Actions,
 	name: FeeName,
-	price: () => null,
+	price: FeePrice,
 	subtotal: () => null,
 	total: FeeTotal,
 };

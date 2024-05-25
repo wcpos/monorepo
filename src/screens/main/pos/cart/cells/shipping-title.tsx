@@ -3,7 +3,8 @@ import * as React from 'react';
 import Box from '@wcpos/components/src/box';
 import { EdittableText } from '@wcpos/components/src/edittable-text';
 
-import EditShippingLineButton from './edit-shipping-line';
+import { EditButton } from './edit-button';
+import { EditShippingLineModal } from './edit-shipping-line';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
@@ -30,7 +31,7 @@ export const ShippingTitle = ({ uuid, item }: Props) => {
 				</EdittableText>
 			</Box>
 			<Box distribution="center">
-				<EditShippingLineButton uuid={uuid} item={item} />
+				<EditButton uuid={uuid} item={item} Modal={EditShippingLineModal} />
 			</Box>
 		</Box>
 	);

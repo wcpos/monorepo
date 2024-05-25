@@ -1,17 +1,11 @@
 import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
-import {
-	useObservableSuspense,
-	useObservableState,
-	useObservableEagerState,
-} from 'observable-hooks';
+import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
-import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 import Select from '@wcpos/components/src/select';
-import Text from '@wcpos/components/src/text';
 import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
@@ -50,7 +44,7 @@ const ShippingSelect = ({ shippingResource, selectedMethod, onSelect }) => {
 /**
  * @TODO - what tax_class should be used when tax settings are set to 'inherit'?
  */
-const AddShipping = () => {
+export const AddShippingModal = ({ onClose }: { onClose: () => void }) => {
 	const { store } = useAppState();
 	const shippingTaxClass = useObservableEagerState(store.shipping_tax_class$);
 	const [data, setData] = React.useState({
@@ -59,7 +53,6 @@ const AddShipping = () => {
 		total: '',
 		tax_class: shippingTaxClass === 'inherit' ? '' : shippingTaxClass,
 	});
-	const [opened, setOpened] = React.useState(false);
 	const { currentOrder } = useCurrentOrder();
 	const { addShipping } = useAddShipping();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
@@ -82,6 +75,22 @@ const AddShipping = () => {
 	// 	);
 	// }, [storeDB]);
 
+	/**
+	 *
+	 */
+	const handleClose = React.useCallback(() => {
+		setData({
+			method_title: '',
+			method_id: '',
+			total: '',
+			tax_class: shippingTaxClass === 'inherit' ? '' : shippingTaxClass,
+		});
+		onClose();
+	}, [onClose, shippingTaxClass]);
+
+	/**
+	 *
+	 */
 	const handleAddShipping = () => {
 		try {
 			const { method_title, method_id, total, tax_class } = data;
@@ -91,8 +100,7 @@ const AddShipping = () => {
 				total: isEmpty(total) ? '0' : total,
 				tax_class,
 			});
-			setData(initialData);
-			setOpened(false);
+			handleClose();
 		} catch (error) {
 			log.error(error);
 		}
@@ -137,42 +145,26 @@ const AddShipping = () => {
 	 *
 	 */
 	return (
-		<>
-			<Box horizontal space="small" padding="small" align="center">
-				<Box fill>
-					<Text>{t('Add Shipping', { _tags: 'core' })}</Text>
-				</Box>
-				<Box>
-					<Icon name="circlePlus" onPress={() => setOpened(true)} />
-				</Box>
-			</Box>
-			{opened && (
-				<Modal
-					opened
-					onClose={() => setOpened(false)}
-					title={t('Add Shipping', { _tags: 'core' })}
-					primaryAction={{
-						label: t('Add to Cart', { _tags: 'core' }),
-						action: handleAddShipping,
+		<Modal
+			opened
+			onClose={handleClose}
+			title={t('Add Shipping', { _tags: 'core' })}
+			primaryAction={{
+				label: t('Add to Cart', { _tags: 'core' }),
+				action: handleAddShipping,
+			}}
+			secondaryActions={[{ label: t('Cancel', { _tags: 'core' }), action: handleClose }]}
+		>
+			<Box space="small">
+				<Form
+					formData={data}
+					schema={schema}
+					uiSchema={uiSchema}
+					onChange={({ formData }) => {
+						setData(formData);
 					}}
-					secondaryActions={[
-						{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
-					]}
-				>
-					<Box space="small">
-						<Form
-							formData={data}
-							schema={schema}
-							uiSchema={uiSchema}
-							onChange={({ formData }) => {
-								setData(formData);
-							}}
-						/>
-					</Box>
-				</Modal>
-			)}
-		</>
+				/>
+			</Box>
+		</Modal>
 	);
 };
-
-export default AddShipping;

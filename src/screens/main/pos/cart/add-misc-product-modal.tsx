@@ -25,13 +25,20 @@ const initialData = {
 /**
  *
  */
-export const AddMiscProduct = () => {
-	const [opened, setOpened] = React.useState(false);
+export const AddMiscProductModal = ({ onClose }: { onClose: () => void }) => {
 	const [data, setData] = React.useState(initialData);
 	const { currentOrder } = useCurrentOrder();
 	const { addProduct } = useAddProduct();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const t = useT();
+
+	/**
+	 *
+	 */
+	const handleClose = React.useCallback(() => {
+		setData(initialData);
+		onClose();
+	}, [onClose]);
 
 	/**
 	 *
@@ -48,12 +55,11 @@ export const AddMiscProduct = () => {
 				tax_status: taxable ? 'taxable' : 'none',
 				tax_class,
 			});
-			setData(initialData);
-			setOpened(false);
+			handleClose();
 		} catch (error) {
 			log.error(error);
 		}
-	}, [addProduct, data, t]);
+	}, [addProduct, data, handleClose, t]);
 
 	/**
 	 *
@@ -92,40 +98,26 @@ export const AddMiscProduct = () => {
 	 *
 	 */
 	return (
-		<>
-			<Box horizontal space="small" padding="small" align="center">
-				<Box fill>
-					<Text>{t('Add Miscellaneous Product', { _tags: 'core' })}</Text>
-				</Box>
-				<Box>
-					<Icon name="circlePlus" onPress={() => setOpened(true)} />
-				</Box>
-			</Box>
-			{opened && (
-				<Modal
-					opened
-					onClose={() => setOpened(false)}
-					title={t('Add Miscellaneous Product', { _tags: 'core' })}
-					primaryAction={{
-						label: t('Add to Cart', { _tags: 'core' }),
-						action: handleAddMiscProduct,
+		<Modal
+			opened
+			onClose={handleClose}
+			title={t('Add Miscellaneous Product', { _tags: 'core' })}
+			primaryAction={{
+				label: t('Add to Cart', { _tags: 'core' }),
+				action: handleAddMiscProduct,
+			}}
+			secondaryActions={[{ label: t('Cancel', { _tags: 'core' }), action: handleClose }]}
+		>
+			<Box space="small">
+				<Form
+					formData={data}
+					schema={schema}
+					uiSchema={uiSchema}
+					onChange={({ formData }) => {
+						setData(formData);
 					}}
-					secondaryActions={[
-						{ label: t('Cancel', { _tags: 'core' }), action: () => setOpened(false) },
-					]}
-				>
-					<Box space="small">
-						<Form
-							formData={data}
-							schema={schema}
-							uiSchema={uiSchema}
-							onChange={({ formData }) => {
-								setData(formData);
-							}}
-						/>
-					</Box>
-				</Modal>
-			)}
-		</>
+				/>
+			</Box>
+		</Modal>
 	);
 };

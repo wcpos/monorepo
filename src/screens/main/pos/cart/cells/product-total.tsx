@@ -43,6 +43,11 @@ export const ProductTotal = ({ item, column }: Props) => {
 	}, [item.subtotal, item.subtotal_tax, item.total, item.total_tax, taxDisplayCart]);
 
 	/**
+	 * If subtotal and total are different, then item is on sale
+	 */
+	const onSale = parseFloat(item.total) !== parseFloat(item.subtotal);
+
+	/**
 	 * TODO - move this into the ui as a helper function
 	 */
 	const show = React.useCallback(
@@ -55,7 +60,7 @@ export const ProductTotal = ({ item, column }: Props) => {
 
 	return (
 		<Box space="xSmall" align="end">
-			{show('on_sale') && (
+			{onSale && show('on_sale') && (
 				<>
 					<Text
 						type="textMuted"

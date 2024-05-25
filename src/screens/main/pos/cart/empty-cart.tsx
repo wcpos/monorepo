@@ -3,9 +3,7 @@ import * as React from 'react';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 
-import AddFee from './add-fee';
-import { AddMiscProduct } from './add-misc-product';
-import AddShipping from './add-shipping';
+import { AddCartItemButtons } from './add-cart-item-buttons';
 import CartHeader from './cart-header';
 
 export interface CartProps {
@@ -23,22 +21,7 @@ const EmptyCart = ({ currentOrder }: CartProps) => {
 			<ErrorBoundary>
 				<CartHeader />
 			</ErrorBoundary>
-
-			<Box>
-				<ErrorBoundary>
-					<AddMiscProduct />
-				</ErrorBoundary>
-			</Box>
-			<Box>
-				<ErrorBoundary>
-					<AddFee />
-				</ErrorBoundary>
-			</Box>
-			<Box>
-				<ErrorBoundary>
-					<AddShipping />
-				</ErrorBoundary>
-			</Box>
+			<AddCartItemButtons />
 		</Box>
 	);
 };

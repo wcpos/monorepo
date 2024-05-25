@@ -3,7 +3,6 @@ import * as React from 'react';
 import get from 'lodash/get';
 import pick from 'lodash/pick';
 
-import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 // import Tooltip from '@wcpos/components/src/tooltip';
 
@@ -12,16 +11,16 @@ import { EditFormWithJSONTree } from '../../../components/edit-form-with-json-tr
 import { useCollection } from '../../../hooks/use-collection';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
-interface EditShippingLineProps {
+interface Props {
 	uuid: string;
 	item: import('@wcpos/database').OrderDocument['shipping_lines'][number];
+	onClose?: () => void;
 }
 
 /**
  *
  */
-const EditButton = ({ uuid, item }: EditShippingLineProps) => {
-	const [opened, setOpened] = React.useState(false);
+export const EditShippingLineModal = ({ uuid, item, onClose }: Props) => {
 	const t = useT();
 	const { collection } = useCollection('orders');
 	const { updateShippingLine } = useUpdateShippingLine();
@@ -52,55 +51,43 @@ const EditButton = ({ uuid, item }: EditShippingLineProps) => {
 	 *
 	 */
 	return (
-		<>
-			<Icon
-				name="ellipsisVertical"
-				onPress={() => setOpened(true)}
-				// tooltip={t('Edit', { _tags: 'core' })}
+		<Modal
+			title={t('Edit {name}', { _tags: 'core', name: item.method_title })}
+			opened
+			onClose={() => setOpened(false)}
+		>
+			<EditFormWithJSONTree
+				json={item}
+				schema={schema}
+				onChange={({ changes }) => updateShippingLine(uuid, changes)}
+				uiSchema={{
+					'ui:rootFieldId': 'shipping_line',
+					'ui:title': null,
+					'ui:description': null,
+					// method_title: {
+					// 	'ui:label': t('Shipping Method Title', { _tags: 'core' }),
+					// },
+					method_id: {
+						'ui:label': t('Shipping Method ID', { _tags: 'core' }),
+					},
+					instance_id: {
+						'ui:label': t('Instance ID', { _tags: 'core' }),
+					},
+					// total: {
+					// 	'ui:label': t('Total', { _tags: 'core' }),
+					// },
+					// taxes: {
+					// 	'ui:collapsible': 'closed',
+					// 	'ui:title': t('Taxes', { _tags: 'core' }),
+					// 	'ui:description': null,
+					// },
+					meta_data: {
+						'ui:collapsible': 'closed',
+						'ui:title': t('Meta Data', { _tags: 'core' }),
+						'ui:description': null,
+					},
+				}}
 			/>
-			{opened && (
-				<Modal
-					title={t('Edit {name}', { _tags: 'core', name: item.method_title })}
-					size="large"
-					opened
-					onClose={() => setOpened(false)}
-				>
-					<EditFormWithJSONTree
-						json={item}
-						schema={schema}
-						onChange={({ changes }) => updateShippingLine(uuid, changes)}
-						uiSchema={{
-							'ui:rootFieldId': 'shipping_line',
-							'ui:title': null,
-							'ui:description': null,
-							// method_title: {
-							// 	'ui:label': t('Shipping Method Title', { _tags: 'core' }),
-							// },
-							method_id: {
-								'ui:label': t('Shipping Method ID', { _tags: 'core' }),
-							},
-							instance_id: {
-								'ui:label': t('Instance ID', { _tags: 'core' }),
-							},
-							// total: {
-							// 	'ui:label': t('Total', { _tags: 'core' }),
-							// },
-							// taxes: {
-							// 	'ui:collapsible': 'closed',
-							// 	'ui:title': t('Taxes', { _tags: 'core' }),
-							// 	'ui:description': null,
-							// },
-							meta_data: {
-								'ui:collapsible': 'closed',
-								'ui:title': t('Meta Data', { _tags: 'core' }),
-								'ui:description': null,
-							},
-						}}
-					/>
-				</Modal>
-			)}
-		</>
+		</Modal>
 	);
 };
-
-export default EditButton;
