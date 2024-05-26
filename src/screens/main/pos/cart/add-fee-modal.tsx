@@ -123,7 +123,14 @@ export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
 		() => ({
 			amount: {
 				'ui:widget': () => (
-					<AmountWidget currencySymbol={currencySymbol} amountDataRef={amountDataRef} />
+					<AmountWidget
+						amount={amountDataRef.current.amount}
+						percent={amountDataRef.current.percent}
+						currencySymbol={currencySymbol}
+						onChange={(changes) => {
+							amountDataRef.current = { ...amountDataRef.current, ...changes };
+						}}
+					/>
 				),
 			},
 			name: {

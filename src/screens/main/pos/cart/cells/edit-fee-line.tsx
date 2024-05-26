@@ -24,9 +24,25 @@ export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 	const t = useT();
 	const { updateFeeLine } = useUpdateFeeLine();
 	const { taxClasses } = useTaxRates();
-	const amountDataRef = React.useRef({ amount: '0', percent: false });
 	const { currentOrder } = useCurrentOrder();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
+
+	/**
+	 *
+	 */
+	const { json, amount, percent } = React.useMemo(() => {
+		const posData = item.meta_data.find((meta) => meta.key === '_woocommerce_pos_data');
+		const { amount, percent, prices_include_tax } = JSON.parse(posData.value);
+
+		return {
+			json: {
+				...item,
+				prices_include_tax,
+			},
+			amount,
+			percent,
+		};
+	}, [item]);
 
 	/**
 	 * Get schema for fee lines
@@ -81,7 +97,7 @@ export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 	return (
 		<Modal title={t('Edit {name}', { _tags: 'core', name: item.name })} opened onClose={onClose}>
 			<EditFormWithJSONTree
-				json={item}
+				json={json}
 				onChange={({ changes }) => updateFeeLine(uuid, changes)}
 				schema={schema}
 				uiSchema={{
@@ -90,7 +106,12 @@ export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 					'ui:description': null,
 					amount: {
 						'ui:widget': () => (
-							<AmountWidget currencySymbol={currencySymbol} amountDataRef={amountDataRef} />
+							<AmountWidget
+								amount={amount}
+								percent={percent}
+								currencySymbol={currencySymbol}
+								onChange={(changes) => updateFeeLine(uuid, changes)}
+							/>
 						),
 					},
 					meta_data: {

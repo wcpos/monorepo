@@ -10,17 +10,28 @@ import Form from '@wcpos/react-native-jsonschema-form';
 import { EditFormWithJSONTree } from './edit-form-with-json-tree';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 
-interface Props {
+interface CommonProps {
 	document: RxDocument;
-	fields: string[];
 	uiSchema: any;
 	withJSONTree?: boolean;
 }
 
+interface FieldsProps extends CommonProps {
+	fields: string[];
+	schema?: never;
+}
+
+interface SchemaProps extends CommonProps {
+	schema: any;
+	fields?: never;
+}
+
+type Props = FieldsProps | SchemaProps;
+
 /**
  * A wrapper for the JSON form, which subscribes to changes and patches the document.
  */
-export const EditDocumentForm = ({ document, fields, uiSchema, withJSONTree }: Props) => {
+export const EditDocumentForm = ({ document, fields, uiSchema, withJSONTree, ...props }: Props) => {
 	if (!isRxDocument(document)) {
 		throw new Error('EditDocumentForm requires an RxDocument');
 	}
@@ -29,13 +40,17 @@ export const EditDocumentForm = ({ document, fields, uiSchema, withJSONTree }: P
 
 	/**
 	 * Get schema
+	 * - allow passing in a schema, otherwise use the collection schema
 	 */
 	const schema = React.useMemo(() => {
+		if (props.schema) {
+			return props.schema;
+		}
 		const orderSchema = get(document.collection, 'schema.jsonSchema.properties');
 		return {
 			properties: pick(orderSchema, fields),
 		};
-	}, [document, fields]);
+	}, [document.collection, fields, props.schema]);
 
 	/**
 	 * If we want to show the JSON tree

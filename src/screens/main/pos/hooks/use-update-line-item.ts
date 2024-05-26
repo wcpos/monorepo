@@ -85,7 +85,7 @@ export const useUpdateLineItem = () => {
 		const updatedMetaData = meta_data.map((meta) => {
 			if (meta.key === '_woocommerce_pos_data') {
 				const posData = JSON.parse(meta.value);
-				posData.tax_status = taxStatus ? 'taxable' : 'none';
+				posData.tax_status = taxStatus;
 				return {
 					...meta,
 					value: JSON.stringify(posData),
@@ -98,6 +98,14 @@ export const useUpdateLineItem = () => {
 			...lineItem,
 			meta_data: updatedMetaData,
 		});
+	};
+
+	/**
+	 * Update tax class of line item
+	 */
+	const updateTaxClass = (lineItem: LineItem, taxClass: string): LineItem => {
+		const updatedItem = { ...lineItem, tax_class: taxClass };
+		return calculateLineItemTaxesAndTotals(updatedItem);
 	};
 
 	/**
@@ -127,9 +135,13 @@ export const useUpdateLineItem = () => {
 			updatedItem = updateTaxStatus(updatedItem, changes.tax_status);
 		}
 
+		if (changes.tax_class !== undefined) {
+			updatedItem = updateTaxClass(updatedItem, changes.tax_class);
+		}
+
 		// Handle simpler properties by direct assignment
 		for (const key of Object.keys(changes)) {
-			if (!['quantity', 'price', 'regular_price', 'tax_status'].includes(key)) {
+			if (!['quantity', 'price', 'regular_price', 'tax_status', 'tax_class'].includes(key)) {
 				// special case for nested changes, only meta_data at the momemnt
 				const nestedKey = key.split('.');
 				if (nestedKey.length === 1) {

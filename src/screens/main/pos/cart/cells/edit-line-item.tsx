@@ -1,14 +1,10 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import pick from 'lodash/pick';
-
-import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 
 import { useT } from '../../../../../contexts/translations';
 import { EditFormWithJSONTree } from '../../../components/edit-form-with-json-tree';
-import { useCollection } from '../../../hooks/use-collection';
+import { useTaxRates } from '../../../contexts/tax-rates';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 import { getMetaDataValueByKey } from '../../hooks/utils';
 
@@ -23,8 +19,8 @@ interface Props {
  */
 export const EditLineItemModal = ({ uuid, item, onClose }: Props) => {
 	const t = useT();
-	const { collection } = useCollection('orders');
 	const { updateLineItem } = useUpdateLineItem();
+	const { taxClasses } = useTaxRates();
 
 	/**
 	 * We need to add the tax_status as a field for the Edit form
@@ -32,49 +28,63 @@ export const EditLineItemModal = ({ uuid, item, onClose }: Props) => {
 	const json = React.useMemo(() => {
 		const posData = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
 		const { tax_status } = JSON.parse(posData);
-		return { ...item, tax_status: tax_status === 'taxable' };
+		return { ...item, tax_status, tax_class: item.tax_class || 'standard' };
 	}, [item]);
 
 	/**
-	 * Get schema for line item
+	 * Get schema for fee lines
 	 */
-	const schema = React.useMemo(() => {
-		const lineItemSchema = get(
-			collection,
-			'schema.jsonSchema.properties.line_items.items.properties'
-		);
-		const fields = [
-			// 'name',
-			'sku',
-			// 'price',
-			// 'quantity',
-			'tax_status', // Insert tax_status before tax_class
-			'tax_class',
-			// 'subtotal',
-			// 'subtotal_tax',
-			// 'total',
-			// 'total_tax',
-			// 'taxes',
-			'meta_data',
-		];
-
-		const properties = {
-			...pick(lineItemSchema, fields),
-			tax_status: { type: 'boolean' },
-		};
-
-		// Ensure the order is correct by explicitly setting it after spreading
-		return {
+	const schema = React.useMemo(
+		() => ({
+			type: 'object',
 			properties: {
-				sku: properties.sku,
-				tax_status: properties.tax_status,
-				tax_class: properties.tax_class,
-				meta_data: properties.meta_data,
+				// name: { type: 'string', title: t('Fee Name', { _tags: 'core' }) },
+				sku: { type: 'string', title: t('SKU', { _tags: 'core' }) },
+				tax_status: {
+					type: 'string',
+					title: t('Tax Status', { _tags: 'core' }),
+					enum: ['taxable', 'none'],
+					default: 'taxable',
+				},
+				tax_class: {
+					type: 'string',
+					title: t('Tax Class', { _tags: 'core' }),
+					enum: taxClasses,
+					default: taxClasses.includes('standard') ? 'standard' : taxClasses[0],
+				},
+				meta_data: {
+					type: 'array',
+					title: t('Meta Data', { _tags: 'core' }),
+					items: {
+						type: 'object',
+						properties: {
+							id: {
+								description: t('Meta ID', { _tags: 'core' }),
+								type: 'integer',
+							},
+							key: {
+								description: t('Meta key', { _tags: 'core' }),
+								type: 'string',
+							},
+							value: {
+								description: t('Meta value', { _tags: 'core' }),
+								type: 'string',
+							},
+							display_key: {
+								description: t('Display key', { _tags: 'core' }),
+								type: 'string',
+							},
+							display_value: {
+								description: t('Display value', { _tags: 'core' }),
+								type: 'string',
+							},
+						},
+					},
+				},
 			},
-			title: null,
-			description: null,
-		};
-	}, [collection]);
+		}),
+		[t, taxClasses]
+	);
 
 	/**
 	 *
@@ -107,7 +117,7 @@ export const EditLineItemModal = ({ uuid, item, onClose }: Props) => {
 					// 	'ui:label': t('Quantity', { _tags: 'core' }),
 					// },
 					tax_status: {
-						'ui:label': t('Taxable', { _tags: 'core' }),
+						'ui:label': t('Tax Status', { _tags: 'core' }),
 					},
 					tax_class: {
 						'ui:label': t('Tax Class', { _tags: 'core' }),
@@ -128,26 +138,5 @@ export const EditLineItemModal = ({ uuid, item, onClose }: Props) => {
 				}}
 			/>
 		</Modal>
-	);
-};
-
-/**
- *
- */
-export const EditButton = ({ uuid, item }: Props) => {
-	const [opened, setOpened] = React.useState(false);
-
-	/**
-	 *
-	 */
-	return (
-		<>
-			<Icon
-				name="ellipsisVertical"
-				onPress={() => setOpened(true)}
-				// tooltip={t('Edit', { _tags: 'core' })}
-			/>
-			{opened && <EditModal uuid={uuid} item={item} onClose={() => setOpened(false)} />}
-		</>
 	);
 };

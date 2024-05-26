@@ -54,7 +54,7 @@ export const EditShippingLineModal = ({ uuid, item, onClose }: Props) => {
 		<Modal
 			title={t('Edit {name}', { _tags: 'core', name: item.method_title })}
 			opened
-			onClose={() => setOpened(false)}
+			onClose={onClose}
 		>
 			<EditFormWithJSONTree
 				json={item}

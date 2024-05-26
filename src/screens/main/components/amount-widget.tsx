@@ -7,29 +7,30 @@ import useTheme from '@wcpos/themes';
 
 import { useT } from '../../../contexts/translations';
 
+interface Props {
+	currencySymbol: string;
+	onChange: ({ amount, percent }: { amount?: string; percent?: boolean }) => void;
+	amount?: string;
+	percent?: boolean;
+}
+
 /**
  * Extracted widget for amount/percent input
  */
-export const AmountWidget = ({
-	currencySymbol,
-	amountDataRef,
-}: {
-	currencySymbol: string;
-	amountDataRef: React.MutableRefObject<{ amount: string; percent: boolean }>;
-}) => {
+export const AmountWidget = ({ currencySymbol, onChange, ...props }: Props) => {
 	const theme = useTheme();
-	const [amount, setAmount] = React.useState(amountDataRef.current.amount);
-	const [percent, setPercent] = React.useState(amountDataRef.current.percent);
 	const t = useT();
+	const [amount, setAmount] = React.useState(props.amount);
+	const [percent, setPercent] = React.useState(props.percent);
 
-	const handleAmountChange = (value) => {
+	const handleAmountChange = (value: string) => {
 		setAmount(value);
-		amountDataRef.current.amount = value;
+		onChange({ amount: value });
 	};
 
-	const handlePercentChange = (value) => {
+	const handlePercentChange = (value: boolean) => {
 		setPercent(value);
-		amountDataRef.current.percent = value;
+		onChange({ percent: value });
 	};
 
 	return (
