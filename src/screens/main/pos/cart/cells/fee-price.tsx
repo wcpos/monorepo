@@ -11,11 +11,11 @@ import { useTaxCalculator } from '../../../hooks/taxes/use-tax-calculator';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 import { getMetaDataValueByKey } from '../../hooks/utils';
 
-type LineItem = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 interface Props {
 	uuid: string;
-	item: LineItem;
-	column: import('@wcpos/components/src/table').ColumnProps<LineItem>;
+	item: FeeLine;
+	column: import('@wcpos/components/src/table').ColumnProps<FeeLine>;
 }
 
 /**

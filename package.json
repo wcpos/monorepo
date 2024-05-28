@@ -79,7 +79,7 @@
     "@testing-library/react-hooks": "8.0.1",
     "@types/core-js": "^2.5.8",
     "@types/jest": "^29.5.12",
-    "@types/lodash": "4.17.1",
+    "@types/lodash": "4.17.4",
     "@types/react": "^18.2.79",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",

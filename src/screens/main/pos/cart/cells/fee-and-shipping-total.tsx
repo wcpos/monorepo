@@ -10,16 +10,17 @@ import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 interface Props {
 	uuid: string;
-	item: FeeLine;
+	item: FeeLine | ShippingLine;
 	column: import('@wcpos/components/src/table').ColumnProps<FeeLine>;
 }
 
 /**
  * Changing the total actually updates the price, because the WC REST API makes no sense
  */
-export const FeeTotal = ({ uuid, item, column }: Props) => {
+export const FeeAndShippingTotal = ({ uuid, item, column }: Props) => {
 	const { format } = useCurrentOrderCurrencyFormat();
 	const { display } = column;
 	const { store } = useAppState();

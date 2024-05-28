@@ -4,6 +4,7 @@ import isEmpty from 'lodash/isEmpty';
 import { useObservableEagerState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
+import { InputWithLabel } from '@wcpos/components/src/form-layout';
 import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 import Text from '@wcpos/components/src/text';
@@ -11,6 +12,8 @@ import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../contexts/translations';
+import NumberInput from '../../components/number-input';
+import { useTaxRates } from '../../contexts/tax-rates';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useAddProduct } from '../hooks/use-add-product';
 
@@ -19,7 +22,7 @@ const initialData = {
 	price: '',
 	sku: '',
 	taxable: true,
-	tax_class: '',
+	tax_class: 'standard',
 };
 
 /**
@@ -31,6 +34,7 @@ export const AddMiscProductModal = ({ onClose }: { onClose: () => void }) => {
 	const { addProduct } = useAddProduct();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const t = useT();
+	const { taxClasses } = useTaxRates();
 
 	/**
 	 *
@@ -69,13 +73,23 @@ export const AddMiscProductModal = ({ onClose }: { onClose: () => void }) => {
 			type: 'object',
 			properties: {
 				name: { type: 'string', title: t('Name', { _tags: 'core' }) },
-				price: { type: 'string', title: t('Price', { _tags: 'core' }) },
 				sku: { type: 'string', title: t('SKU', { _tags: 'core' }) },
-				taxable: { type: 'boolean', title: t('Taxable', { _tags: 'core' }) },
-				tax_class: { type: 'string', title: t('Tax Class', { _tags: 'core' }) },
+				price: { type: 'string', title: t('Price', { _tags: 'core' }) },
+				tax_status: {
+					type: 'string',
+					title: t('Tax Status', { _tags: 'core' }),
+					enum: ['taxable', 'none'],
+					default: 'taxable',
+				},
+				tax_class: {
+					type: 'string',
+					title: t('Tax Class', { _tags: 'core' }),
+					enum: taxClasses,
+					default: taxClasses.includes('standrad') ? 'standard' : taxClasses[0],
+				},
 			},
 		}),
-		[t]
+		[t, taxClasses]
 	);
 
 	/**
@@ -87,8 +101,11 @@ export const AddMiscProductModal = ({ onClose }: { onClose: () => void }) => {
 				'ui:placeholder': t('Product', { _tags: 'core' }),
 			},
 			price: {
-				'ui:options': { prefix: currencySymbol },
-				'ui:placeholder': '0',
+				'ui:widget': (props) => (
+					<InputWithLabel label={props.label} style={{ width: 200 }}>
+						<NumberInput {...props} showDecimals prefix={currencySymbol} placement="right" />
+					</InputWithLabel>
+				),
 			},
 		}),
 		[currencySymbol, t]

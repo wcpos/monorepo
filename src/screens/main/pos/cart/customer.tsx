@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import pick from 'lodash/pick';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
@@ -25,9 +25,9 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 const Customer = ({ setShowCustomerSelect }) => {
 	const [editModalOpened, setEditModalOpened] = React.useState(false);
 	const { currentOrder } = useCurrentOrder();
-	const billing = useObservableState(currentOrder.billing$, currentOrder.billing);
-	const shipping = useObservableState(currentOrder.shipping$, currentOrder.shipping);
-	const customer_id = useObservableState(currentOrder.customer_id$, currentOrder.customer_id);
+	const billing = useObservableEagerState(currentOrder.billing$);
+	const shipping = useObservableEagerState(currentOrder.shipping$);
+	const customer_id = useObservableEagerState(currentOrder.customer_id$);
 	const { format } = useCustomerNameFormat();
 	const name = format({ billing, shipping, id: customer_id });
 	const billingCountry = get(billing, ['country']);

@@ -21,7 +21,6 @@ const initialData = {
 	name: '',
 	tax_status: 'taxable',
 	tax_class: 'standard',
-	meta_data: [],
 };
 
 /**
@@ -135,6 +134,9 @@ export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
 			},
 			name: {
 				'ui:placeholder': t('Fee', { _tags: 'core' }),
+			},
+			meta_data: {
+				'ui:collapsible': 'closed',
 			},
 		}),
 		[currencySymbol, t]

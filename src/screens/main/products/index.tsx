@@ -95,6 +95,15 @@ const EditProductWithProviders = ({
 		[collection, productID]
 	);
 
+	/**
+	 * I need tax provider just to get the tax classes
+	 * @TODO - tax classes should come from WC API
+	 */
+	const taxQuery = useQuery({
+		queryKeys: ['tax-rates'],
+		collectionName: 'taxes',
+	});
+
 	return (
 		<ModalLayout
 			title={t('Edit', { _tags: 'core' })}
@@ -106,7 +115,11 @@ const EditProductWithProviders = ({
 			]}
 		>
 			<Suspense>
-				<EditProduct resource={resource} />
+				<TaxRatesProvider taxQuery={taxQuery}>
+					<Suspense>
+						<EditProduct resource={resource} />
+					</Suspense>
+				</TaxRatesProvider>
 			</Suspense>
 		</ModalLayout>
 	);
@@ -129,6 +142,15 @@ const EditVariationWithProviders = ({
 	);
 
 	/**
+	 * I need tax provider just to get the tax classes
+	 * @TODO - tax classes should come from WC API
+	 */
+	const taxQuery = useQuery({
+		queryKeys: ['tax-rates'],
+		collectionName: 'taxes',
+	});
+
+	/**
 	 *
 	 */
 	return (
@@ -142,7 +164,11 @@ const EditVariationWithProviders = ({
 			]}
 		>
 			<Suspense>
-				<EditVariation resource={resource} />
+				<TaxRatesProvider taxQuery={taxQuery}>
+					<Suspense>
+						<EditVariation resource={resource} />
+					</Suspense>
+				</TaxRatesProvider>
 			</Suspense>
 		</ModalLayout>
 	);

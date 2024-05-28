@@ -18,6 +18,10 @@ interface TaxCalculatorProps {
 	 * Allow override of default store settings, ie; for cart calculations
 	 */
 	valueIncludesTax?: boolean;
+	/**
+	 * Shipping flag
+	 */
+	shipping?: boolean;
 }
 
 export interface CalculateLineItemTaxesProps {
@@ -38,11 +42,16 @@ export const useTaxCalculator = () => {
 	 * Returns a function that calculates the tax for a given value
 	 */
 	const calculateTaxesFromValue = React.useCallback(
-		({ value = 0, taxStatus = 'taxable', ...props }: TaxCalculatorProps) => {
+		({ value = 0, taxStatus = 'taxable', shipping = false, ...props }: TaxCalculatorProps) => {
 			const taxClass = isEmpty(props.taxClass) ? 'standard' : props.taxClass;
 			const valueIncludesTax = props.valueIncludesTax ?? pricesIncludeTax;
 			const valueAsNumber = typeof value === 'string' ? parseFloat(value) : value;
-			const appliedRates = rates.filter((rate) => rate.class === taxClass);
+			let appliedRates = rates.filter((rate) => rate.class === taxClass);
+
+			// if shipping, we need to filter by shipping flag
+			if (shipping) {
+				appliedRates = appliedRates.filter((rate) => rate.shipping === true);
+			}
 
 			// early return if no taxes
 			if (!calcTaxes || taxStatus === 'none' || appliedRates.length === 0) {

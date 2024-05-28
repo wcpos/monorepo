@@ -154,7 +154,12 @@ export const convertProductToLineItemWithoutTax = (
 		.filter((item) => item.key && metaDataKeys.includes(item.key))
 		.map(({ key, value }) => ({ key, value }));
 
-	meta_data.push({
+	/**
+	 * NOTE: be careful not to mutate the data object passed in, especially the meta_data array.
+	 */
+	const new_meta_data = [...meta_data];
+
+	new_meta_data.push({
 		key: '_woocommerce_pos_data',
 		value: JSON.stringify({ price, regular_price, tax_status }),
 	});
@@ -168,7 +173,7 @@ export const convertProductToLineItemWithoutTax = (
 		quantity: 1,
 		sku: product.sku,
 		tax_class: product.tax_class,
-		meta_data,
+		meta_data: new_meta_data,
 	};
 };
 
@@ -208,12 +213,17 @@ export const convertVariationToLineItemWithoutTax = (
 		.filter((item) => item.key && metaDataKeys.includes(item.key))
 		.map(({ key, value }) => ({ key, value }));
 
-	meta_data.push({
+	/**
+	 * NOTE: be careful not to mutate the data object passed in, especially the meta_data array.
+	 */
+	const new_meta_data = [...meta_data];
+
+	new_meta_data.push({
 		key: '_woocommerce_pos_data',
 		value: JSON.stringify({ price, regular_price, tax_status }),
 	});
 
-	meta_data.push(...attributes);
+	new_meta_data.push(...attributes);
 
 	/**
 	 * NOTE: uuid, price and totals will be added later in the process
@@ -225,6 +235,6 @@ export const convertVariationToLineItemWithoutTax = (
 		quantity: 1,
 		sku: variation.sku,
 		tax_class: variation.tax_class,
-		meta_data,
+		meta_data: new_meta_data,
 	};
 };

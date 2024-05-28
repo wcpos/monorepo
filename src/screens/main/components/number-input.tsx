@@ -1,12 +1,13 @@
 import * as React from 'react';
-import { View } from 'react-native';
+import { View, StyleProp, ViewStyle } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Numpad from '@wcpos/components/src/numpad';
-import Popover from '@wcpos/components/src/popover';
+import Popover, { PopoverProps } from '@wcpos/components/src/popover';
 import Text from '@wcpos/components/src/text';
+import { TextInputContainer } from '@wcpos/components/src/textinput';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -27,6 +28,27 @@ interface NumberInputProps {
 
 	/**  */
 	showDiscounts?: number[];
+	/**
+	 *
+	 */
+	leftAccessory?: React.ReactNode;
+	/**
+	 *
+	 */
+	prefix?: string;
+	/**
+	 *
+	 */
+	rightAccessory?: React.ReactNode;
+
+	/** */
+	size?: import('@wcpos/themes').FontSizeTypes;
+
+	/** */
+	placement?: PopoverProps['placement'];
+
+	/** */
+	style?: StyleProp<ViewStyle>;
 }
 
 /**
@@ -38,6 +60,12 @@ const NumberInput = ({
 	disabled,
 	showDecimals = false,
 	showDiscounts,
+	leftAccessory,
+	prefix,
+	rightAccessory,
+	size = 'normal',
+	placement = 'bottom',
+	style,
 }: NumberInputProps) => {
 	const { store } = useAppState();
 	const decimalSeparator = useObservableState(store.price_decimal_sep$, store.price_decimal_sep);
@@ -58,6 +86,26 @@ const NumberInput = ({
 	/**
 	 *
 	 */
+	const children =
+		leftAccessory || rightAccessory || prefix ? (
+			<TextInputContainer
+				prefix={prefix}
+				leftAccessory={leftAccessory}
+				rightAccessory={rightAccessory}
+				onPress={() => setOpened(true)}
+				style={style}
+			>
+				{displayValue}
+			</TextInputContainer>
+		) : (
+			<Box border paddingY="xSmall" paddingX="small" rounding="large" style={style}>
+				<Text>{displayValue}</Text>
+			</Box>
+		);
+
+	/**
+	 *
+	 */
 	return disabled ? (
 		<View style={{ flexDirection: 'row' }}>
 			<Box border paddingY="xSmall" paddingX="small" rounding="large">
@@ -74,13 +122,9 @@ const NumberInput = ({
 				label: t('Done', { _tags: 'core' }),
 				action: handleSubmit,
 			}}
+			placement={placement}
 		>
-			<Popover.Target>
-				<Box border paddingY="xSmall" paddingX="small" rounding="large">
-					<Text>{displayValue}</Text>
-				</Box>
-				{/* <TextInputContainer>{value}</TextInputContainer> */}
-			</Popover.Target>
+			<Popover.Target>{children}</Popover.Target>
 			<Popover.Content>
 				<Numpad
 					initialValue={displayValue}

@@ -320,7 +320,17 @@
       },
       {
         "key": "customer_id",
-        "show": true
+        "show": true,
+        "display": [
+          {
+            "key": "billing",
+            "show": false
+          },
+          {
+            "key": "shipping",
+            "show": false
+          }
+        ]
       },
       {
         "key": "billing",
@@ -375,7 +385,13 @@
       {
         "key": "total",
         "align": "right",
-        "show": true
+        "show": true,
+        "display": [
+          {
+            "key": "payment_method",
+            "show": false
+          }
+        ]
       },
       {
         "key": "actions",
