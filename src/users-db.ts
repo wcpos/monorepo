@@ -1,7 +1,7 @@
 import log from '@wcpos/utils/src/logger';
 
 import { userCollections, UserCollections } from './collections';
-import { createDB, removeDB } from './create-db';
+import { createDB } from './create-db';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -9,12 +9,12 @@ export type UserDatabase = RxDatabase<UserCollections>;
 
 const dbName = 'wcposusers_v2';
 
-/**
- *
- */
-export const removeUserDB = async () => {
-	return removeDB(dbName);
-};
+// /**
+//  *
+//  */
+// export const removeUserDB = async () => {
+// 	return removeDB(dbName);
+// };
 
 /**
  *

@@ -28,6 +28,9 @@ export const sitesLiteral = {
 		timezone_string: {
 			type: 'string',
 		},
+		site_icon_url: {
+			type: 'string',
+		},
 		wp_api_url: {
 			type: 'string',
 		},
@@ -45,6 +48,23 @@ export const sitesLiteral = {
 			ref: 'wp_credentials',
 			items: {
 				type: 'string',
+			},
+		},
+		license: {
+			type: 'object',
+			properties: {
+				key: {
+					type: 'string',
+				},
+				status: {
+					type: 'string',
+				},
+				instance: {
+					type: 'string',
+				},
+				expiration: {
+					type: 'string',
+				},
 			},
 		},
 	},

@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/database",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "Local database for @wcpos/core",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/database#readme",
@@ -17,28 +17,28 @@
     "test": "eslint --ext ts,tsx ./src"
   },
   "dependencies": {
-    "@orama/orama": "^2.0.17",
-    "@orama/plugin-data-persistence": "^2.0.17",
+    "@orama/orama": "^2.0.18",
+    "@orama/plugin-data-persistence": "^2.0.18",
     "c-promise2": "^0.13.12",
-    "expo-sqlite": "~13.4.0",
+    "expo-sqlite": "~14.0.3",
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.17.21",
     "observable-hooks": "4.2.3",
     "react": "18.2.0",
-    "rxdb": "^15.19.0",
-    "rxdb-premium": "^15.19.0",
+    "rxdb": "^15.23.0",
+    "rxdb-premium": "^15.22.0",
     "rxjs": "7.8.1",
     "uuid": "9.0.1"
   },
   "devDependencies": {
     "@faker-js/faker": "^8.4.1",
     "@types/jest": "^29.5.12",
-    "@types/lodash": "4.17.0",
+    "@types/lodash": "4.17.4",
     "@types/uuid": "9.0.8",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
     "jest": "^29.7.0",
-    "ts-jest": "^29.1.2",
+    "ts-jest": "^29.1.4",
     "typescript": "^5.4.5"
   },
   "eslintConfig": {

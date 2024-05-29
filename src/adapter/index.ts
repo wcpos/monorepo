@@ -1,11 +1,12 @@
 import { openDatabase } from 'expo-sqlite';
 // import { clone } from 'rxdb';
 
+import { getRxStorageSQLite, getSQLiteBasicsExpoSQLite } from 'rxdb-premium/plugins/storage-sqlite';
+
 import log from '@wcpos/utils/src/logger';
 
 // import { wrappedValidateAjvStorage } from '../plugins/validate';
 // import { mangoQuerySelectorToSQL } from './mangoQuerySelectorToSQL';
-import { getRxStorageSQLite, getSQLiteBasicsExpoSQLite } from 'rxdb-premium/plugins/storage-sqlite';
 // import { mangoQuerySortToSQL } from './plugins/storage-sqlite/sqlite-statics';
 
 /**

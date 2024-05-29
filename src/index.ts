@@ -1,8 +1,8 @@
-export { createUserDB, removeUserDB } from './users-db';
-export { createStoreDB, removeStoreDB } from './stores-db';
+export { createUserDB } from './users-db';
+export { createStoreDB } from './stores-db';
 export { createTemporaryDB } from './temporary-db';
-export { removeDB } from './create-db';
 export { userCollections, storeCollections } from './collections';
+export { clearAllDB } from './clear-all-db';
 
 export type { StoreDatabase } from './stores-db';
 export type { UserDatabase } from './users-db';

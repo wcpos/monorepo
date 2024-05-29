@@ -1,7 +1,7 @@
 import log from '@wcpos/utils/src/logger';
 
 import { storeCollections, StoreCollections } from './collections';
-import { createDB, removeDB } from './create-db';
+import { createDB } from './create-db';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -11,7 +11,7 @@ export type StoreDatabase = RxDatabase<StoreCollections>;
  * Database name needs to start with a letter, id is a short uuid
  */
 function sanitizeStoreName(id: string) {
-	return `store_${id}`;
+	return `store_v2_${id}`;
 }
 
 /**
@@ -30,7 +30,6 @@ export async function createStoreDB(id: string) {
 		return db;
 	} catch (error) {
 		log.error(error);
-		removeDB(name + '_v150');
 	}
 	// if (!registry.has(id)) {
 	// 	const name = sanitizeStoreName(id);
@@ -52,7 +51,7 @@ export async function createStoreDB(id: string) {
 /**
  * removes the Store database by name
  */
-export async function removeStoreDB(id: string) {
-	const name = sanitizeStoreName(id);
-	return removeDB(name + '_v150');
-}
+// export async function removeStoreDB(id: string) {
+// 	const name = sanitizeStoreName(id);
+// 	return removeDB(name + '_v150');
+// }

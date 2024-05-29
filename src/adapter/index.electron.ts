@@ -1,12 +1,13 @@
-import { getRxStorageSQLite } from 'rxdb-premium/plugins/storage-sqlite';
-
 import { getRxStorageSQLite, SQLiteQueryWithParams } from 'rxdb-premium/plugins/storage-sqlite';
+
+import log from '@wcpos/utils/src/logger';
 
 /**
  *
  */
 const config = {
 	storage: getRxStorageSQLite({
+		// storeAttachmentsAsBase64String: true,
 		sqliteBasics: {
 			open: async (name: string) => {
 				try {
@@ -51,7 +52,8 @@ const config = {
 							data: {
 								pragmaName: 'journal_mode',
 								pragmaValue: 'WAL',
-								description: 'Sets the SQLite journal mode to Write-Ahead Logging for better concurrency.',
+								description:
+									'Sets the SQLite journal mode to Write-Ahead Logging for better concurrency.',
 							},
 						},
 					});

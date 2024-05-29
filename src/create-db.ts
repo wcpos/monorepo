@@ -14,7 +14,7 @@ disableVersionCheck();
 export async function createDB<DBCollections>(name: string) {
 	try {
 		const db = await createRxDatabase<DBCollections>({
-			name: `${name}_v150`,
+			name: `${name}`,
 			...config,
 			password: 'posInstanceId',
 			ignoreDuplicate: true, // I think Expo enables HMR, so we need to ignore duplicate
@@ -27,9 +27,9 @@ export async function createDB<DBCollections>(name: string) {
 	}
 }
 
-/**
- * deletes the generic database
- */
-export function removeDB(name: string) {
-	return removeRxDatabase(name, config.storage);
-}
+// /**
+//  * deletes the generic database
+//  */
+// export function removeDB(name: string) {
+// 	return removeRxDatabase(name, config.storage);
+// }
