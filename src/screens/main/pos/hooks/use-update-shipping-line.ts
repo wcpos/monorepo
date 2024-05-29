@@ -1,12 +1,11 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
+import set from 'lodash/set';
 
-import { getMetaDataValueByKey } from './utils';
-import { useAppState } from '../../../../contexts/app-state';
+import { useCalculateShippingLineTaxAndTotals } from './use-calculate-shipping-line-tax-and-totals';
+import { updatePosDataMeta } from './utils';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
-import { useTaxDisplay } from '../../hooks/taxes/use-tax-display';
+import { useShippingLineData } from '../cart/cells/use-shipping-line-data';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -17,7 +16,11 @@ type ShippingLine = NonNullable<OrderDocument['shipping_lines']>[number];
  */
 interface Changes {
 	method_title?: string;
-	total?: string | number;
+	instance_id?: string;
+	amount?: string;
+	prices_include_tax?: boolean;
+	tax_status?: string;
+	tax_class?: string;
 }
 
 /**
@@ -25,48 +28,71 @@ interface Changes {
  */
 export const useUpdateShippingLine = () => {
 	const { currentOrder } = useCurrentOrder();
-	const { inclOrExcl } = useTaxDisplay({ context: 'cart' });
-	const { calculateTaxesFromValue, calculateShippingLineTaxes } = useTaxCalculator();
 	const { localPatch } = useLocalMutation();
+	const { calculateShippingLineTaxesAndTotals } = useCalculateShippingLineTaxAndTotals();
+	const { getShippingLineData } = useShippingLineData();
 
 	/**
-	 * Update name of line item
+	 * Applies updates to a line item based on provided changes.
+	 * Handles complex updates like quantity, price, and subtotal separately to ensure proper tax recalculation.
 	 */
-	const updateMethodTitle = (shippingLine: ShippingLine, method_title: string): ShippingLine => {
-		return {
-			...shippingLine,
-			method_title,
-		};
-	};
+	const applyChangesToLineItem = (lineItem: ShippingLine, changes: Changes): ShippingLine => {
+		const { amount, prices_include_tax, tax_class, tax_status } = getShippingLineData(lineItem);
+		let updatedItem = { ...lineItem };
 
-	/**
-	 * Update total of fee line
-	 */
-	const updateTotal = (shippingLine: ShippingLine, newTotal: number): ShippingLine => {
-		if (inclOrExcl === 'incl') {
-			/**
-			 * @TODO - this is not correct, shipping has taxClass in settings
-			 */
-			debugger;
-			const taxes = calculateTaxesFromValue({
-				value: newTotal,
-				taxClass: 'standard',
-				taxStatus: 'taxable', // TODO: what to put here?
-				valueIncludesTax: true,
-			});
-			newTotal -= taxes.total;
+		const newData: Partial<{
+			amount: string;
+			prices_include_tax: boolean;
+			tax_class: string;
+			tax_status: string;
+		}> = {};
+
+		if (changes.amount !== undefined) {
+			newData.amount = changes.amount;
+			newData.prices_include_tax = prices_include_tax;
+			newData.tax_class = tax_class;
+			newData.tax_status = tax_status;
 		}
 
-		// recalculate taxes
-		const taxes = calculateShippingLineTaxes({
-			total: String(newTotal),
-		});
+		if (changes.prices_include_tax !== undefined) {
+			newData.prices_include_tax = changes.prices_include_tax;
+			newData.amount = amount;
+			newData.tax_class = tax_class;
+			newData.tax_status = tax_status;
+		}
 
-		return {
-			...shippingLine,
-			total: String(newTotal),
-			...taxes,
-		};
+		if (changes.tax_class !== undefined) {
+			newData.tax_class = changes.tax_class;
+			newData.amount = amount;
+			newData.prices_include_tax = prices_include_tax;
+			newData.tax_status = tax_status;
+		}
+
+		if (changes.tax_status !== undefined) {
+			newData.tax_status = changes.tax_status;
+			newData.amount = amount;
+			newData.prices_include_tax = prices_include_tax;
+			newData.tax_class = tax_class;
+		}
+
+		if (Object.keys(newData).length > 0) {
+			updatedItem = updatePosDataMeta(updatedItem, newData);
+		}
+
+		// Handle simpler properties by direct assignment
+		for (const key of Object.keys(changes)) {
+			if (!['amount', 'prices_include_tax', 'tax_class', 'tax_status'].includes(key)) {
+				// Special case for nested changes, only meta_data at the moment
+				const nestedKey = key.split('.');
+				if (nestedKey.length === 1) {
+					(updatedItem as any)[key] = (changes as any)[key];
+				} else {
+					set(updatedItem, nestedKey, (changes as any)[key]);
+				}
+			}
+		}
+
+		return calculateShippingLineTaxesAndTotals(updatedItem);
 	};
 
 	/**
@@ -76,29 +102,18 @@ export const useUpdateShippingLine = () => {
 	 */
 	const updateShippingLine = async (uuid: string, changes: Changes) => {
 		const order = currentOrder.getLatest();
+		const json = order.toMutableJSON();
 		let updated = false;
 
-		const updatedShippingLines = order.shipping_lines?.map((lineItem) => {
-			const uuidMatch = lineItem.meta_data?.some(
-				(m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid
-			);
-
-			// early return if no match, or we have already updated a line item
-			if (updated || !uuidMatch) {
-				return lineItem;
+		const updatedShippingLines = json.shipping_lines?.map((shippingLine) => {
+			if (
+				updated ||
+				!shippingLine.meta_data?.some((m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid)
+			) {
+				return shippingLine;
 			}
 
-			let updatedItem = { ...lineItem };
-
-			if (changes.method_title !== undefined) {
-				updatedItem = updateMethodTitle(updatedItem, changes.method_title);
-			}
-
-			if (changes.total !== undefined) {
-				const total = typeof changes.total === 'number' ? changes.total : Number(changes.total);
-				if (!isNaN(total)) updatedItem = updateTotal(updatedItem, total);
-			}
-
+			const updatedItem = applyChangesToLineItem(shippingLine, changes);
 			updated = true;
 			return updatedItem;
 		});

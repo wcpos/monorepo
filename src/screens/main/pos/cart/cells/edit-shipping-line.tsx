@@ -1,14 +1,18 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
-import pick from 'lodash/pick';
+import { useObservableEagerState } from 'observable-hooks';
 
+import { InputWithLabel } from '@wcpos/components/src/form-layout';
 import Modal from '@wcpos/components/src/modal';
-// import Tooltip from '@wcpos/components/src/tooltip';
 
+// import Tooltip from '@wcpos/components/src/tooltip';
+import { useShippingLineData } from './use-shipping-line-data';
+import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { EditFormWithJSONTree } from '../../../components/edit-form-with-json-tree';
-import { useCollection } from '../../../hooks/use-collection';
+import NumberInput from '../../../components/number-input';
+import { useTaxRates } from '../../../contexts/tax-rates';
+import { useCurrentOrder } from '../../contexts/current-order';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
 interface Props {
@@ -22,30 +26,90 @@ interface Props {
  */
 export const EditShippingLineModal = ({ uuid, item, onClose }: Props) => {
 	const t = useT();
-	const { collection } = useCollection('orders');
 	const { updateShippingLine } = useUpdateShippingLine();
+	const { store } = useAppState();
+	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
+	const { taxClasses } = useTaxRates();
+	const { currentOrder } = useCurrentOrder();
+	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
+	const { getShippingLineData } = useShippingLineData();
+	const { amount, tax_status, tax_class, prices_include_tax } = getShippingLineData(item);
 
 	/**
-	 * Get schema for fee lines
+	 *
 	 */
-	const schema = React.useMemo(() => {
-		const shippingLineSchema = get(
-			collection,
-			'schema.jsonSchema.properties.shipping_lines.items.properties'
-		);
-		const fields = [
-			// 'method_title',
-			'method_id',
-			'instance_id',
-			// 'total',
-			// 'total_tax',
-			// 'taxes',
-			'meta_data',
-		];
+	const json = React.useMemo(() => {
 		return {
-			properties: pick(shippingLineSchema, fields),
+			...item,
+			amount,
+			tax_status,
+			tax_class,
+			prices_include_tax,
 		};
-	}, [collection]);
+	}, [amount, item, prices_include_tax, tax_class, tax_status]);
+
+	/**
+	 *
+	 */
+	const schema = React.useMemo(
+		() => ({
+			type: 'object',
+			properties: {
+				method_id: { type: 'string', title: t('Shipping Method ID', { _tags: 'core' }) },
+				instance_id: { type: 'string', title: t('Instance ID', { _tags: 'core' }) },
+				amount: { type: 'string', title: t('Amount', { _tags: 'core' }) },
+				prices_include_tax: {
+					type: 'boolean',
+					title: t('Amount Includes Tax', { _tags: 'core' }),
+					default: pricesIncludeTax === 'yes',
+				},
+				tax_status: {
+					type: 'string',
+					title: t('Tax Status', { _tags: 'core' }),
+					enum: ['taxable', 'none'],
+					default: 'taxable',
+				},
+				tax_class: {
+					type: 'string',
+					title: t('Tax Class', { _tags: 'core' }),
+					enum: taxClasses,
+				},
+				meta_data: {
+					type: 'array',
+					title: t('Meta Data', { _tags: 'core' }),
+					items: {
+						type: 'object',
+						properties: {
+							id: { type: 'number', title: t('ID', { _tags: 'core' }) },
+							key: { type: 'string', title: t('Key', { _tags: 'core' }) },
+							value: { type: 'string', title: t('Value', { _tags: 'core' }) },
+						},
+					},
+				},
+			},
+		}),
+		[pricesIncludeTax, t, taxClasses]
+	);
+
+	/**
+	 *
+	 */
+	const uiSchema = React.useMemo(
+		() => ({
+			'ui:rootFieldId': 'shipping_line',
+			amount: {
+				'ui:widget': (props) => (
+					<InputWithLabel label={props.label} style={{ width: 200 }}>
+						<NumberInput {...props} showDecimals prefix={currencySymbol} placement="right" />
+					</InputWithLabel>
+				),
+			},
+			meta_data: {
+				'ui:collapsible': 'closed',
+			},
+		}),
+		[currencySymbol]
+	);
 
 	/**
 	 *
@@ -57,36 +121,10 @@ export const EditShippingLineModal = ({ uuid, item, onClose }: Props) => {
 			onClose={onClose}
 		>
 			<EditFormWithJSONTree
-				json={item}
+				json={json}
 				schema={schema}
 				onChange={({ changes }) => updateShippingLine(uuid, changes)}
-				uiSchema={{
-					'ui:rootFieldId': 'shipping_line',
-					'ui:title': null,
-					'ui:description': null,
-					// method_title: {
-					// 	'ui:label': t('Shipping Method Title', { _tags: 'core' }),
-					// },
-					method_id: {
-						'ui:label': t('Shipping Method ID', { _tags: 'core' }),
-					},
-					instance_id: {
-						'ui:label': t('Instance ID', { _tags: 'core' }),
-					},
-					// total: {
-					// 	'ui:label': t('Total', { _tags: 'core' }),
-					// },
-					// taxes: {
-					// 	'ui:collapsible': 'closed',
-					// 	'ui:title': t('Taxes', { _tags: 'core' }),
-					// 	'ui:description': null,
-					// },
-					meta_data: {
-						'ui:collapsible': 'closed',
-						'ui:title': t('Meta Data', { _tags: 'core' }),
-						'ui:description': null,
-					},
-				}}
+				uiSchema={uiSchema}
 			/>
 		</Modal>
 	);

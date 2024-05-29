@@ -238,3 +238,39 @@ export const convertVariationToLineItemWithoutTax = (
 		meta_data: new_meta_data,
 	};
 };
+
+/**
+ * Updates or adds _woocommerce_pos_data meta_data
+ */
+export const updatePosDataMeta = (
+	item: FeeLine,
+	newData: Partial<{ amount: string; percent: boolean; prices_include_tax: boolean }>
+): FeeLine => {
+	const meta_data = item.meta_data ?? [];
+	let posDataFound = false;
+
+	const updatedMetaData = meta_data.map((meta) => {
+		if (meta.key === '_woocommerce_pos_data') {
+			const posData = JSON.parse(meta.value);
+			Object.assign(posData, newData);
+			posDataFound = true;
+			return {
+				...meta,
+				value: JSON.stringify(posData),
+			};
+		}
+		return meta;
+	});
+
+	if (!posDataFound) {
+		updatedMetaData.push({
+			key: '_woocommerce_pos_data',
+			value: JSON.stringify(newData),
+		});
+	}
+
+	return {
+		...item,
+		meta_data: updatedMetaData,
+	};
+};

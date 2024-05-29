@@ -4,6 +4,7 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import Modal from '@wcpos/components/src/modal';
 
+import { useFeeLineData } from './use-fee-line-data';
 import { useT } from '../../../../../contexts/translations';
 import { AmountWidget } from '../../../components/amount-widget';
 import { EditFormWithJSONTree } from '../../../components/edit-form-with-json-tree';
@@ -26,23 +27,18 @@ export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 	const { taxClasses } = useTaxRates();
 	const { currentOrder } = useCurrentOrder();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
+	const { getFeeLineData } = useFeeLineData();
+	const { amount, percent, prices_include_tax } = getFeeLineData(item);
 
 	/**
 	 *
 	 */
-	const { json, amount, percent } = React.useMemo(() => {
-		const posData = item.meta_data.find((meta) => meta.key === '_woocommerce_pos_data');
-		const { amount, percent, prices_include_tax } = JSON.parse(posData.value);
-
+	const json = React.useMemo(() => {
 		return {
-			json: {
-				...item,
-				prices_include_tax,
-			},
-			amount,
-			percent,
+			...item,
+			prices_include_tax,
 		};
-	}, [item]);
+	}, [item, prices_include_tax]);
 
 	/**
 	 * Get schema for fee lines

@@ -5,9 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import { InputWithLabel } from '@wcpos/components/src/form-layout';
-import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
-import Text from '@wcpos/components/src/text';
 import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 

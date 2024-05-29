@@ -1,7 +1,8 @@
 import * as React from 'react';
 
-import { getMetaDataValueByKey, priceToNumber } from './utils';
+import { priceToNumber } from './utils';
 import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
+import { useFeeLineData } from '../cart/cells/use-fee-line-data';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 
@@ -11,14 +12,14 @@ type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
  */
 export const useCalculateFeeLineTaxAndTotals = () => {
 	const { calculateTaxesFromValue } = useTaxCalculator();
+	const { getFeeLineData } = useFeeLineData();
 
 	/**
 	 *
 	 */
 	const calculateFeeLineTaxesAndTotals = React.useCallback(
 		(feeLine: Partial<FeeLine>) => {
-			const posData = getMetaDataValueByKey(feeLine.meta_data, '_woocommerce_pos_data');
-			const { amount, percent, prices_include_tax } = posData ? JSON.parse(posData) : null;
+			const { amount, percent, prices_include_tax } = getFeeLineData(feeLine);
 
 			const tax = calculateTaxesFromValue({
 				value: amount,
@@ -36,7 +37,7 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 				taxes: tax.taxes,
 			};
 		},
-		[calculateTaxesFromValue]
+		[calculateTaxesFromValue, getFeeLineData]
 	);
 
 	return { calculateFeeLineTaxesAndTotals };

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ScrollView } from 'react-native';
 
-import { removeDB } from '@wcpos/database';
+import { clearAllDB } from '@wcpos/database';
 import log from '@wcpos/utils/src/logger';
 
 import type { FallbackProps } from 'react-error-boundary';
@@ -41,19 +41,28 @@ const styles: any = StyleSheet.create({
 	},
 });
 
+/**
+ *
+ */
 const RootError = ({ error, resetErrorBoundary }: FallbackProps) => {
 	const handleReset = async () => {
 		// clear userDB to ensure clean start
-		await removeDB('wcposusers')
+		await clearAllDB()
 			.then(() => {
-				log.info('UserDB removed');
+				log.info('DB cleared successfully');
 			})
 			.catch((error) => {
 				log.error(error);
 			});
 
-		// try again
-		resetErrorBoundary();
+		/**
+		 * This won't work because createUserDB is called at the start of the app, not in the error boundary
+		 * I need to fix this, but in the meantime, we'll just reload the app
+		 */
+		// resetErrorBoundary();
+		if (window && window.location) {
+			window.location.reload();
+		}
 	};
 
 	return (

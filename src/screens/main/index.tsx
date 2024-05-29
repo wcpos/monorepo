@@ -60,6 +60,9 @@ const DrawerNavigator = ({ navigation }) => {
 	const theme = useTheme();
 	useKeyboardShortcuts(); // allows navigation by hotkeys
 	const t = useT();
+	const { site } = useAppState();
+	const license = useObservableEagerState(site.license$);
+	const [showUpgrade, setShowUpgrade] = React.useState(!license?.key);
 
 	const largeScreen = dimensions.width >= theme.screens.medium;
 
@@ -67,7 +70,9 @@ const DrawerNavigator = ({ navigation }) => {
 		<Drawer.Navigator
 			initialRouteName="POSStack"
 			screenOptions={{
-				header: (props) => <Header {...props} />,
+				header: (props) => (
+					<Header {...props} showUpgrade={showUpgrade} setShowUpgrade={setShowUpgrade} />
+				),
 				drawerType: largeScreen ? 'permanent' : 'front',
 				drawerStyle: {
 					backgroundColor: theme.colors.headerBackground,

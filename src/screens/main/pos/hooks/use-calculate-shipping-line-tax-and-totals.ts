@@ -1,7 +1,8 @@
 import * as React from 'react';
 
-import { getMetaDataValueByKey, priceToNumber } from './utils';
+import { priceToNumber } from './utils';
 import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
+import { useShippingLineData } from '../cart/cells/use-shipping-line-data';
 
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 
@@ -11,16 +12,15 @@ type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][nu
  */
 export const useCalculateShippingLineTaxAndTotals = () => {
 	const { calculateTaxesFromValue } = useTaxCalculator();
+	const { getShippingLineData } = useShippingLineData();
 
 	/**
 	 *
 	 */
 	const calculateShippingLineTaxesAndTotals = React.useCallback(
 		(shippingLine: Partial<ShippingLine>) => {
-			const posData = getMetaDataValueByKey(shippingLine.meta_data, '_woocommerce_pos_data');
-			const { amount, prices_include_tax, tax_status, tax_class } = posData
-				? JSON.parse(posData)
-				: null;
+			const { amount, prices_include_tax, tax_status, tax_class } =
+				getShippingLineData(shippingLine);
 
 			const tax = calculateTaxesFromValue({
 				value: amount,
@@ -39,7 +39,7 @@ export const useCalculateShippingLineTaxAndTotals = () => {
 				taxes: tax.taxes,
 			};
 		},
-		[calculateTaxesFromValue]
+		[calculateTaxesFromValue, getShippingLineData]
 	);
 
 	return { calculateShippingLineTaxesAndTotals };
