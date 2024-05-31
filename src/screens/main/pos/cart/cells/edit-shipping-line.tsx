@@ -6,13 +6,14 @@ import { InputWithLabel } from '@wcpos/components/src/form-layout';
 import Modal from '@wcpos/components/src/modal';
 
 // import Tooltip from '@wcpos/components/src/tooltip';
-import { useShippingLineData } from './use-shipping-line-data';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { EditFormWithJSONTree } from '../../../components/edit-form-with-json-tree';
 import NumberInput from '../../../components/number-input';
-import { useTaxRates } from '../../../contexts/tax-rates';
+import { ShippingMethodSelect } from '../../../components/shipping-method-select';
+import { TaxClassSelect } from '../../../components/tax-class-select';
 import { useCurrentOrder } from '../../contexts/current-order';
+import { useShippingLineData } from '../../hooks/use-shipping-line-data';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
 interface Props {
@@ -29,7 +30,6 @@ export const EditShippingLineModal = ({ uuid, item, onClose }: Props) => {
 	const { updateShippingLine } = useUpdateShippingLine();
 	const { store } = useAppState();
 	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
-	const { taxClasses } = useTaxRates();
 	const { currentOrder } = useCurrentOrder();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const { getShippingLineData } = useShippingLineData();
@@ -55,7 +55,7 @@ export const EditShippingLineModal = ({ uuid, item, onClose }: Props) => {
 		() => ({
 			type: 'object',
 			properties: {
-				method_id: { type: 'string', title: t('Shipping Method ID', { _tags: 'core' }) },
+				method_id: { type: 'string', title: t('Shipping Method', { _tags: 'core' }) },
 				instance_id: { type: 'string', title: t('Instance ID', { _tags: 'core' }) },
 				amount: { type: 'string', title: t('Amount', { _tags: 'core' }) },
 				prices_include_tax: {
@@ -72,7 +72,6 @@ export const EditShippingLineModal = ({ uuid, item, onClose }: Props) => {
 				tax_class: {
 					type: 'string',
 					title: t('Tax Class', { _tags: 'core' }),
-					enum: taxClasses,
 				},
 				meta_data: {
 					type: 'array',
@@ -88,7 +87,7 @@ export const EditShippingLineModal = ({ uuid, item, onClose }: Props) => {
 				},
 			},
 		}),
-		[pricesIncludeTax, t, taxClasses]
+		[pricesIncludeTax, t]
 	);
 
 	/**
@@ -103,6 +102,12 @@ export const EditShippingLineModal = ({ uuid, item, onClose }: Props) => {
 						<NumberInput {...props} showDecimals prefix={currencySymbol} placement="right" />
 					</InputWithLabel>
 				),
+			},
+			method_id: {
+				'ui:widget': (props) => <ShippingMethodSelect {...props} />,
+			},
+			tax_class: {
+				'ui:widget': (props) => <TaxClassSelect {...props} />,
 			},
 			meta_data: {
 				'ui:collapsible': 'closed',

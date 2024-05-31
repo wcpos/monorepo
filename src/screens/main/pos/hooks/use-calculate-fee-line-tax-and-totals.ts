@@ -1,8 +1,8 @@
 import * as React from 'react';
 
+import { useFeeLineData } from './use-fee-line-data';
 import { priceToNumber } from './utils';
 import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
-import { useFeeLineData } from '../cart/cells/use-fee-line-data';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 
@@ -28,7 +28,7 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 				valueIncludesTax: prices_include_tax,
 			});
 
-			const total = prices_include_tax ? priceToNumber(amount) - tax.total : tax.total;
+			const total = prices_include_tax ? priceToNumber(amount) - tax.total : amount;
 
 			return {
 				...feeLine,

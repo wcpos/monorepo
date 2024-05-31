@@ -1,48 +1,21 @@
 import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
-import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import { InputWithLabel } from '@wcpos/components/src/form-layout';
 import Modal from '@wcpos/components/src/modal';
-import Select from '@wcpos/components/src/select';
 import Form from '@wcpos/react-native-jsonschema-form';
 import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import NumberInput from '../../components/number-input';
-import { useTaxRates } from '../../contexts/tax-rates';
-import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { ShippingMethodSelect } from '../../components/shipping-method-select';
+import { TaxClassSelect } from '../../components/tax-class-select';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useAddShipping } from '../hooks/use-add-shipping';
-
-/**
- *
- */
-const ShippingSelect = ({ shippingResource, selectedMethod, onSelect }) => {
-	const options = useObservableSuspense(shippingResource);
-	const http = useRestHttpClient();
-	const { storeDB } = useAppState();
-
-	React.useEffect(() => {
-		async function fetchShippingMethods() {
-			try {
-				const { data } = await http.get('shipping_methods');
-				storeDB.upsertLocal('shipping', {
-					methods: data,
-				});
-			} catch (err) {
-				log.error(err);
-			}
-		}
-
-		fetchShippingMethods();
-	}, [http, storeDB]);
-
-	return <Select options={options} value={selectedMethod} onChange={onSelect} />;
-};
 
 /**
  * @TODO - what tax_class should be used when tax settings are set to 'inherit'?
@@ -50,36 +23,18 @@ const ShippingSelect = ({ shippingResource, selectedMethod, onSelect }) => {
 export const AddShippingModal = ({ onClose }: { onClose: () => void }) => {
 	const { store } = useAppState();
 	const shippingTaxClass = useObservableEagerState(store.shipping_tax_class$);
-	const { taxClasses } = useTaxRates();
 	const [data, setData] = React.useState({
 		method_title: '',
 		method_id: '',
 		amount: '0',
 		tax_status: 'taxable',
-		tax_class: shippingTaxClass === 'inherit' ? 'standard' : shippingTaxClass,
+		tax_class: shippingTaxClass === 'inherit' ? '' : shippingTaxClass,
 	});
 	const { currentOrder } = useCurrentOrder();
 	const { addShipping } = useAddShipping();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const t = useT();
 	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
-
-	/**
-	 * Create observable shipping resource
-	 */
-	// const shippingResource = React.useMemo(() => {
-	// 	return new ObservableResource(
-	// 		storeDB?.getLocal$('shipping').pipe(
-	// 			map((localDoc) => {
-	// 				const methods = localDoc?.get('methods') || [];
-	// 				return methods.map((method) => ({
-	// 					label: method.title,
-	// 					value: method.id,
-	// 				}));
-	// 			})
-	// 		)
-	// 	);
-	// }, [storeDB]);
 
 	/**
 	 *
@@ -90,7 +45,7 @@ export const AddShippingModal = ({ onClose }: { onClose: () => void }) => {
 			method_id: '',
 			amount: '0',
 			tax_status: 'taxable',
-			tax_class: shippingTaxClass === 'inherit' ? 'standard' : shippingTaxClass,
+			tax_class: shippingTaxClass === 'inherit' ? '' : shippingTaxClass,
 		});
 		onClose();
 	}, [onClose, shippingTaxClass]);
@@ -141,11 +96,10 @@ export const AddShippingModal = ({ onClose }: { onClose: () => void }) => {
 				tax_class: {
 					type: 'string',
 					title: t('Tax Class', { _tags: 'core' }),
-					enum: taxClasses,
 				},
 			},
 		}),
-		[pricesIncludeTax, t, taxClasses]
+		[pricesIncludeTax, t]
 	);
 
 	/**
@@ -164,7 +118,10 @@ export const AddShippingModal = ({ onClose }: { onClose: () => void }) => {
 				'ui:placeholder': t('Shipping', { _tags: 'core' }),
 			},
 			method_id: {
-				'ui:placeholder': 'local_pickup',
+				'ui:widget': (props) => <ShippingMethodSelect {...props} />,
+			},
+			tax_class: {
+				'ui:widget': (props) => <TaxClassSelect {...props} />,
 			},
 		}),
 		[currencySymbol, t]

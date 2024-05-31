@@ -24,6 +24,7 @@ export interface HydratedData {
 	wpCredentials: WPCredentialsDocument;
 	store: StoreDocument;
 	storeDB: StoreDatabase;
+	extraData: any;
 }
 
 export interface AppState extends HydratedData {
@@ -55,8 +56,17 @@ interface AppStateProviderProps {
  *
  */
 export const AppStateProvider = ({ children, initialProps }: AppStateProviderProps) => {
-	const { userDB, appState, translationsState, user, site, wpCredentials, store, storeDB } =
-		useUserDB();
+	const {
+		userDB,
+		appState,
+		translationsState,
+		user,
+		site,
+		wpCredentials,
+		store,
+		storeDB,
+		extraData,
+	} = useUserDB();
 	const [isReadyRef, isReady$] = useObservableRef(false);
 
 	/**
@@ -124,6 +134,7 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 			wpCredentials,
 			store,
 			storeDB,
+			extraData,
 			translationsState,
 			initialProps, // pass through initialProps
 			isWebApp,
@@ -145,6 +156,7 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 		wpCredentials,
 		store,
 		storeDB,
+		extraData,
 		translationsState,
 		initialProps,
 		login,

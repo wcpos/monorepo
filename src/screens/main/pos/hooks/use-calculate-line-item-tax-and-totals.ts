@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import round from 'lodash/round';
 
-import { getMetaDataValueByKey, priceToNumber } from './utils';
+import { useLineItemData } from './use-line-item-data';
+import { priceToNumber } from './utils';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
 
@@ -15,14 +16,14 @@ type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 export const useCalculateLineItemTaxAndTotals = () => {
 	const { pricesIncludeTax } = useTaxRates();
 	const { calculateTaxesFromValue, calculateLineItemTaxes } = useTaxCalculator();
+	const { getLineItemData } = useLineItemData();
 
 	/**
 	 *
 	 */
 	const calculateLineItemTaxesAndTotals = React.useCallback(
 		(lineItem: Partial<LineItem>) => {
-			const priceData = getMetaDataValueByKey(lineItem.meta_data, '_woocommerce_pos_data');
-			const { price, regular_price, tax_status } = priceData ? JSON.parse(priceData) : null;
+			const { price, regular_price, tax_status } = getLineItemData(lineItem);
 
 			let priceWithoutTax = priceToNumber(price);
 			const tax = calculateTaxesFromValue({
@@ -61,7 +62,7 @@ export const useCalculateLineItemTaxAndTotals = () => {
 				...totalTaxes,
 			};
 		},
-		[calculateLineItemTaxes, calculateTaxesFromValue, pricesIncludeTax]
+		[calculateLineItemTaxes, calculateTaxesFromValue, getLineItemData, pricesIncludeTax]
 	);
 
 	return { calculateLineItemTaxesAndTotals };

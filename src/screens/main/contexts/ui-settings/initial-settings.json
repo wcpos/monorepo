@@ -126,10 +126,6 @@
         "align": "right",
         "display": [
           {
-            "key": "tax",
-            "show": false
-          },
-          {
             "key": "on_sale",
             "show": true
           }
@@ -138,13 +134,7 @@
       {
         "key": "regular_price",
         "show": false,
-        "align": "right",
-        "display": [
-          {
-            "key": "tax",
-            "show": false
-          }
-        ]
+        "align": "right"
       },
       {
         "key": "subtotal",

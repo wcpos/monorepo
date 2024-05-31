@@ -39,6 +39,8 @@ export const useUILabel = () => {
 					name: t('Name', { _tags: 'core' }),
 					sku: t('SKU', { _tags: 'core' }),
 					price: t('Price', { _tags: 'core' }),
+					regular_price: t('Regular price', { _tags: 'core' }),
+					on_sale: t('On sale', { _tags: 'core' }),
 					total: t('Total', { _tags: 'core' }),
 					subtotal: t('Subtotal', { _tags: 'core' }),
 					tax: t('Tax', { _tags: 'core' }),

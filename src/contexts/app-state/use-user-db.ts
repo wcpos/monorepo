@@ -46,7 +46,7 @@ const obs$ = userDB$.pipe(
 	switchMap(({ userDB, appState }) => {
 		return appState.current$.pipe(
 			switchMap(async (current) => {
-				let site, wpCredentials, store, storeDB;
+				let site, wpCredentials, store, storeDB, extraData;
 				/**
 				 * Becareful! RxDB will return a value if primary ID is empty, it sucks, I hate it.
 				 */
@@ -61,8 +61,9 @@ const obs$ = userDB$.pipe(
 				}
 				if (isRxDocument(store)) {
 					storeDB = await createStoreDB(store.localID);
+					extraData = await storeDB.addState('data');
 				}
-				return { site, wpCredentials, store, storeDB };
+				return { site, wpCredentials, store, storeDB, extraData };
 			})
 		);
 	})
@@ -80,10 +81,20 @@ export const useUserDB = () => {
 	}
 
 	const user = useObservableSuspense(userResource);
-	const { site, wpCredentials, store, storeDB } = useObservableSuspense(resource);
+	const { site, wpCredentials, store, storeDB, extraData } = useObservableSuspense(resource);
 
 	/**
 	 *
 	 */
-	return { userDB, appState, translationsState, user, site, wpCredentials, store, storeDB };
+	return {
+		userDB,
+		appState,
+		translationsState,
+		user,
+		site,
+		wpCredentials,
+		store,
+		storeDB,
+		extraData,
+	};
 };

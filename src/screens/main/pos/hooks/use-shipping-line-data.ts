@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useAppState } from '../../../../../contexts/app-state';
-import { useTaxCalculator } from '../../../hooks/taxes/use-tax-calculator';
-import { getMetaDataValueByKey } from '../../hooks/utils';
+import { getMetaDataValueByKey } from './utils';
+import { useAppState } from '../../../../contexts/app-state';
+import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
 
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 
@@ -13,7 +13,6 @@ type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][nu
  */
 export const useShippingLineData = () => {
 	const { store } = useAppState();
-	const taxDisplayCart = useObservableEagerState(store.tax_display_cart$);
 	const { calculateTaxesFromValue } = useTaxCalculator();
 	const shippingTaxClass = useObservableEagerState(store.shipping_tax_class$);
 	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
@@ -24,7 +23,7 @@ export const useShippingLineData = () => {
 	const getShippingLineData = React.useCallback(
 		(item: ShippingLine) => {
 			const defaultPricesIncludeTax = pricesIncludeTax === 'yes';
-			const defaultTaxClass = shippingTaxClass === 'inherit' ? 'standard' : shippingTaxClass;
+			const defaultTaxClass = shippingTaxClass === 'inherit' ? '' : shippingTaxClass;
 			const defaultAmount = defaultPricesIncludeTax
 				? String(parseFloat(item.total) + parseFloat(item.total_tax))
 				: item.total;
@@ -63,43 +62,35 @@ export const useShippingLineData = () => {
 	/**
 	 * Calculates the display price for a shipping line item.
 	 */
-	const getShippingLineDisplayPrice = React.useCallback(
+	const getShippingLineDisplayPriceAndTax = React.useCallback(
 		(item: ShippingLine) => {
 			const { amount, tax_status, tax_class, prices_include_tax } = getShippingLineData(item);
-
-			let displayPrice = amount;
-
-			// mismatched tax settings
-			if (taxDisplayCart === 'excl' && prices_include_tax) {
-				const taxes = calculateTaxesFromValue({
-					value: amount,
-					taxStatus: tax_status,
-					taxClass: tax_class,
-					valueIncludesTax: true,
-				});
-
-				displayPrice = String(parseFloat(amount) - taxes.total);
-			}
+			const taxes = calculateTaxesFromValue({
+				value: amount,
+				taxStatus: tax_status,
+				taxClass: tax_class,
+				valueIncludesTax: prices_include_tax,
+			});
+			const displayPrice = amount;
+			const tax = taxes.total;
 
 			// mismatched tax settings
-			if (taxDisplayCart === 'incl' && !prices_include_tax) {
-				const taxes = calculateTaxesFromValue({
-					value: amount,
-					taxStatus: tax_status,
-					taxClass: tax_class,
-					valueIncludesTax: true,
-				});
+			// if (taxDisplayCart === 'excl' && prices_include_tax) {
+			// 	displayPrice = String(parseFloat(amount) - tax);
+			// }
 
-				displayPrice = String(parseFloat(amount) + taxes.total);
-			}
+			// // mismatched tax settings
+			// if (taxDisplayCart === 'incl' && !prices_include_tax) {
+			// 	displayPrice = String(parseFloat(amount) + tax);
+			// }
 
-			return displayPrice;
+			return { displayPrice, tax };
 		},
-		[calculateTaxesFromValue, getShippingLineData, taxDisplayCart]
+		[calculateTaxesFromValue, getShippingLineData]
 	);
 
 	return {
 		getShippingLineData,
-		getShippingLineDisplayPrice,
+		getShippingLineDisplayPriceAndTax,
 	};
 };

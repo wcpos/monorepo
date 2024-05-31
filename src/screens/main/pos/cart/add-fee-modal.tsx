@@ -10,7 +10,7 @@ import Form from '@wcpos/react-native-jsonschema-form';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { AmountWidget } from '../../components/amount-widget';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { TaxClassSelect } from '../../components/tax-class-select';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useAddFee } from '../hooks/use-add-fee';
 
@@ -20,7 +20,7 @@ import { useAddFee } from '../hooks/use-add-fee';
 const initialData = {
 	name: '',
 	tax_status: 'taxable',
-	tax_class: 'standard',
+	tax_class: '',
 };
 
 /**
@@ -34,15 +34,14 @@ export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
 	const t = useT();
 	const { store } = useAppState();
 	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
-	const amountDataRef = React.useRef({ amount: '0', percent: false });
-	const { taxClasses } = useTaxRates();
+	const [additionalData, setAdditionalData] = React.useState({ amount: '0', percent: false });
 
 	/**
 	 *
 	 */
 	const handleClose = React.useCallback(() => {
 		setData(initialData);
-		amountDataRef.current = { amount: '0', percent: false };
+		setAdditionalData({ amount: '0', percent: false });
 		onClose();
 	}, [onClose]);
 
@@ -50,21 +49,21 @@ export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
 	 *
 	 */
 	const handleAddFee = React.useCallback(async () => {
-		const { name, tax_status, tax_class, meta_data } = data;
+		const { name, tax_status, tax_class } = data;
+		const { amount, percent } = additionalData;
 		await addFee({
 			name: isEmpty(name) ? t('Fee', { _tags: 'core' }) : name,
 			// total: isEmpty(total) ? '0' : total,
-			amount: amountDataRef.current.amount,
+			amount,
 			tax_status,
 			tax_class,
-			meta_data,
-			percent: amountDataRef.current.percent,
+			percent,
 			prices_include_tax: isEmpty(data.prices_include_tax)
 				? pricesIncludeTax === 'yes'
 				: data.prices_include_tax,
 		});
 		onClose();
-	}, [addFee, data, onClose, pricesIncludeTax, t]);
+	}, [addFee, additionalData, data, onClose, pricesIncludeTax, t]);
 
 	/**
 	 *
@@ -78,7 +77,9 @@ export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
 				amount: { type: 'string', title: t('Amount', { _tags: 'core' }) },
 				prices_include_tax: {
 					type: 'boolean',
-					title: t('Amount Includes Tax', { _tags: 'core' }),
+					title: additionalData.percent
+						? t('Percent of Cart Including Tax', { _tags: 'core' })
+						: t('Amount Includes Tax', { _tags: 'core' }),
 					default: pricesIncludeTax === 'yes',
 				},
 				tax_status: {
@@ -90,29 +91,10 @@ export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
 				tax_class: {
 					type: 'string',
 					title: t('Tax Class', { _tags: 'core' }),
-					enum: taxClasses,
-					default: taxClasses.includes('standard') ? 'standard' : taxClasses[0],
-				},
-				meta_data: {
-					type: 'array',
-					title: t('Meta Data', { _tags: 'core' }),
-					items: {
-						type: 'object',
-						properties: {
-							key: {
-								description: 'Meta key.',
-								type: 'string',
-							},
-							value: {
-								description: 'Meta value.',
-								type: 'string',
-							},
-						},
-					},
 				},
 			},
 		}),
-		[pricesIncludeTax, t, taxClasses]
+		[additionalData.percent, pricesIncludeTax, t]
 	);
 
 	/**
@@ -123,11 +105,11 @@ export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
 			amount: {
 				'ui:widget': () => (
 					<AmountWidget
-						amount={amountDataRef.current.amount}
-						percent={amountDataRef.current.percent}
+						amount={additionalData.amount}
+						percent={additionalData.percent}
 						currencySymbol={currencySymbol}
 						onChange={(changes) => {
-							amountDataRef.current = { ...amountDataRef.current, ...changes };
+							setAdditionalData((prev) => ({ ...prev, ...changes }));
 						}}
 					/>
 				),
@@ -135,11 +117,11 @@ export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
 			name: {
 				'ui:placeholder': t('Fee', { _tags: 'core' }),
 			},
-			meta_data: {
-				'ui:collapsible': 'closed',
+			tax_class: {
+				'ui:widget': (props) => <TaxClassSelect {...props} />,
 			},
 		}),
-		[currencySymbol, t]
+		[additionalData, currencySymbol, t]
 	);
 
 	/**

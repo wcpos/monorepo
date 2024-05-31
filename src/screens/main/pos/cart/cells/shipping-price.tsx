@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { useShippingLineData } from './use-shipping-line-data';
 import NumberInput from '../../../components/number-input';
+import { useShippingLineData } from '../../hooks/use-shipping-line-data';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
@@ -16,8 +16,8 @@ interface Props {
  */
 export const ShippingPrice = ({ uuid, item, column }: Props) => {
 	const { updateShippingLine } = useUpdateShippingLine();
-	const { getShippingLineDisplayPrice } = useShippingLineData();
-	const displayPrice = getShippingLineDisplayPrice(item);
+	const { getShippingLineDisplayPriceAndTax } = useShippingLineData();
+	const { displayPrice } = getShippingLineDisplayPriceAndTax(item);
 
 	/**
 	 *

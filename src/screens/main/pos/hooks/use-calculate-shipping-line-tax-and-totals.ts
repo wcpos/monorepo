@@ -1,8 +1,8 @@
 import * as React from 'react';
 
+import { useShippingLineData } from './use-shipping-line-data';
 import { priceToNumber } from './utils';
 import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
-import { useShippingLineData } from '../cart/cells/use-shipping-line-data';
 
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 
@@ -30,7 +30,7 @@ export const useCalculateShippingLineTaxAndTotals = () => {
 				shipping: true,
 			});
 
-			const total = prices_include_tax ? priceToNumber(amount) - tax.total : tax.total;
+			const total = prices_include_tax ? priceToNumber(amount) - tax.total : amount;
 
 			return {
 				...shippingLine,

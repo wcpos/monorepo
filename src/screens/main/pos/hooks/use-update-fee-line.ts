@@ -1,11 +1,13 @@
 import * as React from 'react';
 
+import omit from 'lodash/omit';
+import pick from 'lodash/pick';
 import set from 'lodash/set';
 
 import { useCalculateFeeLineTaxAndTotals } from './use-calculate-fee-line-tax-and-totals';
+import { useFeeLineData } from './use-fee-line-data';
 import { updatePosDataMeta } from './utils';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
-import { useFeeLineData } from '../cart/cells/use-fee-line-data';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -33,46 +35,27 @@ export const useUpdateFeeLine = () => {
 
 	/**
 	 * Applies updates to a line item based on provided changes.
-	 * Handles complex updates like quantity, price, and subtotal separately to ensure proper tax recalculation.
 	 */
 	const applyChangesToLineItem = (lineItem: FeeLine, changes: Changes): FeeLine => {
 		const { amount, percent, prices_include_tax } = getFeeLineData(lineItem);
+
+		const newData = {
+			...{ amount, percent, prices_include_tax },
+			...pick(changes, ['amount', 'percent', 'prices_include_tax']),
+		};
+
 		let updatedItem = { ...lineItem };
+		updatedItem = updatePosDataMeta(updatedItem, newData);
 
-		const newData: Partial<{ amount: string; percent: boolean; prices_include_tax: boolean }> = {};
+		const remainingChanges = omit(changes, ['amount', 'percent', 'prices_include_tax']);
 
-		if (changes.amount !== undefined) {
-			newData.amount = changes.amount;
-			newData.percent = percent;
-			newData.prices_include_tax = prices_include_tax;
-		}
-
-		if (changes.percent !== undefined) {
-			newData.percent = changes.percent;
-			newData.amount = amount;
-			newData.prices_include_tax = prices_include_tax;
-		}
-
-		if (changes.prices_include_tax !== undefined) {
-			newData.prices_include_tax = changes.prices_include_tax;
-			newData.amount = amount;
-			newData.percent = percent;
-		}
-
-		if (Object.keys(newData).length > 0) {
-			updatedItem = updatePosDataMeta(updatedItem, newData);
-		}
-
-		// Handle simpler properties by direct assignment
-		for (const key of Object.keys(changes)) {
-			if (!['amount', 'percent', 'prices_include_tax'].includes(key)) {
-				// Special case for nested changes, only meta_data at the moment
-				const nestedKey = key.split('.');
-				if (nestedKey.length === 1) {
-					(updatedItem as any)[key] = (changes as any)[key];
-				} else {
-					set(updatedItem, nestedKey, (changes as any)[key]);
-				}
+		for (const key of Object.keys(remainingChanges)) {
+			// Special case for nested changes, only meta_data at the moment
+			const nestedKey = key.split('.');
+			if (nestedKey.length === 1) {
+				(updatedItem as any)[key] = remainingChanges[key];
+			} else {
+				set(updatedItem, nestedKey, remainingChanges[key]);
 			}
 		}
 

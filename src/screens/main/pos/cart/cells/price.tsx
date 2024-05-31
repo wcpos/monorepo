@@ -1,17 +1,11 @@
 import * as React from 'react';
 
-import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
-import Text from '@wcpos/components/src/text';
-
-import { useAppState } from '../../../../../contexts/app-state';
 import NumberInput from '../../../components/number-input';
 import { useUISettings } from '../../../contexts/ui-settings';
-import { useTaxCalculator } from '../../../hooks/taxes/use-tax-calculator';
-import { useCurrencyFormat } from '../../../hooks/use-currency-format';
+import { useLineItemData } from '../../hooks/use-line-item-data';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
-import { getMetaDataValueByKey } from '../../hooks/utils';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 interface Props {
@@ -38,32 +32,8 @@ function ensureNumberArray(input: string | number[]): number[] {
  */
 export const Price = ({ uuid, item, column }: Props) => {
 	const { updateLineItem } = useUpdateLineItem();
-	const { display } = column;
-	const { store } = useAppState();
-	const taxDisplayCart = useObservableEagerState(store.tax_display_cart$);
-	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
-	const { format } = useCurrencyFormat();
-	const { calculateTaxesFromValue } = useTaxCalculator();
-
-	/**
-	 *
-	 */
-	const { displayPrice, tax } = React.useMemo(() => {
-		const posData = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
-		const { price, tax_status } = JSON.parse(posData);
-
-		if (price && taxDisplayCart === 'incl' && pricesIncludeTax === 'yes') {
-			const taxes = calculateTaxesFromValue({
-				value: price,
-				taxStatus: tax_status,
-				taxClass: item.tax_class,
-			});
-			return {
-				displayPrice: price,
-				tax: taxes.total,
-			};
-		}
-	}, [calculateTaxesFromValue, item.meta_data, item.tax_class, pricesIncludeTax, taxDisplayCart]);
+	const { getLineItemDisplayPriceAndTax } = useLineItemData();
+	const { displayPrice } = getLineItemDisplayPriceAndTax(item);
 
 	/**
 	 * Discounts
@@ -74,30 +44,12 @@ export const Price = ({ uuid, item, column }: Props) => {
 	/**
 	 *
 	 */
-	const show = React.useCallback(
-		(key: string): boolean => {
-			const d = find(display, { key });
-			return !!(d && d.show);
-		},
-		[display]
-	);
-
-	/**
-	 *
-	 */
 	return (
-		<>
-			<NumberInput
-				value={displayPrice}
-				onChange={(price) => updateLineItem(uuid, { price })}
-				showDecimals
-				showDiscounts={ensureNumberArray(quickDiscounts)}
-			/>
-			{show('tax') && (
-				<Text type="textMuted" size="small">
-					{`${taxDisplayCart} ${format(tax) || 0} tax`}
-				</Text>
-			)}
-		</>
+		<NumberInput
+			value={displayPrice}
+			onChange={(price) => updateLineItem(uuid, { price })}
+			showDecimals
+			showDiscounts={ensureNumberArray(quickDiscounts)}
+		/>
 	);
 };

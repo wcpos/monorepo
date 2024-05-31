@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import isEmpty from 'lodash/isEmpty';
 import {
 	useObservableSuspense,
 	ObservableResource,
@@ -9,13 +8,12 @@ import {
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
-import { SelectWithLabel } from '@wcpos/components/src/select';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
 import { EditDocumentForm } from '../components/edit-document-form';
-import { useTaxRates } from '../contexts/tax-rates';
+import { TaxClassSelect } from '../components/tax-class-select';
 import usePushDocument from '../contexts/use-push-document';
 
 interface Props {
@@ -56,7 +54,6 @@ const EditVariation = ({ resource }: Props) => {
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
 	const t = useT();
-	const { taxClasses } = useTaxRates();
 
 	if (!variation) {
 		throw new Error(t('Variation not found', { _tags: 'core' }));
@@ -140,13 +137,7 @@ const EditVariation = ({ resource }: Props) => {
 			},
 			tax_class: {
 				'ui:label': t('Tax Class', { _tags: 'core' }),
-				'ui:widget': (props) => (
-					<SelectWithLabel
-						{...props}
-						value={isEmpty(props.value) ? 'standard' : props.value}
-						options={taxClasses.map((taxClass) => ({ label: taxClass, value: taxClass }))}
-					/>
-				),
+				'ui:widget': (props) => <TaxClassSelect {...props} />,
 			},
 			manage_stock: {
 				'ui:label': t('Manage Stock', { _tags: 'core' }),
@@ -158,7 +149,7 @@ const EditVariation = ({ resource }: Props) => {
 			},
 			meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data', { _tags: 'core' }) },
 		}),
-		[manageStock, t, taxClasses]
+		[manageStock, t]
 	);
 
 	/**

@@ -11,6 +11,7 @@ import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../contexts/translations';
 import NumberInput from '../../components/number-input';
+import { TaxClassSelect } from '../../components/tax-class-select';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useAddProduct } from '../hooks/use-add-product';
@@ -20,7 +21,7 @@ const initialData = {
 	price: '',
 	sku: '',
 	taxable: true,
-	tax_class: 'standard',
+	tax_class: '',
 };
 
 /**
@@ -104,6 +105,9 @@ export const AddMiscProductModal = ({ onClose }: { onClose: () => void }) => {
 						<NumberInput {...props} showDecimals prefix={currencySymbol} placement="right" />
 					</InputWithLabel>
 				),
+			},
+			tax_class: {
+				'ui:widget': (props) => <TaxClassSelect {...props} />,
 			},
 		}),
 		[currencySymbol, t]

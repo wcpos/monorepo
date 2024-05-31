@@ -4,12 +4,12 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import Modal from '@wcpos/components/src/modal';
 
-import { useFeeLineData } from './use-fee-line-data';
 import { useT } from '../../../../../contexts/translations';
 import { AmountWidget } from '../../../components/amount-widget';
 import { EditFormWithJSONTree } from '../../../components/edit-form-with-json-tree';
-import { useTaxRates } from '../../../contexts/tax-rates';
+import { TaxClassSelect } from '../../../components/tax-class-select';
 import { useCurrentOrder } from '../../contexts/current-order';
+import { useFeeLineData } from '../../hooks/use-fee-line-data';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 interface Props {
@@ -24,7 +24,6 @@ interface Props {
 export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 	const t = useT();
 	const { updateFeeLine } = useUpdateFeeLine();
-	const { taxClasses } = useTaxRates();
 	const { currentOrder } = useCurrentOrder();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const { getFeeLineData } = useFeeLineData();
@@ -51,7 +50,9 @@ export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 				amount: { type: 'string', title: t('Amount', { _tags: 'core' }) },
 				prices_include_tax: {
 					type: 'boolean',
-					title: t('Amount Includes Tax', { _tags: 'core' }),
+					title: percent
+						? t('Percent of Cart Including Tax', { _tags: 'core' })
+						: t('Amount Includes Tax', { _tags: 'core' }),
 				},
 				tax_status: {
 					type: 'string',
@@ -62,8 +63,6 @@ export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 				tax_class: {
 					type: 'string',
 					title: t('Tax Class', { _tags: 'core' }),
-					enum: taxClasses,
-					default: taxClasses.includes('standard') ? 'standard' : taxClasses[0],
 				},
 				meta_data: {
 					type: 'array',
@@ -84,7 +83,35 @@ export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 				},
 			},
 		}),
-		[t, taxClasses]
+		[percent, t]
+	);
+
+	/**
+	 *
+	 */
+	const uiSchema = React.useMemo(
+		() => ({
+			'ui:rootFieldId': 'fee_line',
+			'ui:title': null,
+			'ui:description': null,
+			amount: {
+				'ui:widget': () => (
+					<AmountWidget
+						amount={amount}
+						percent={percent}
+						currencySymbol={currencySymbol}
+						onChange={(changes) => updateFeeLine(uuid, changes)}
+					/>
+				),
+			},
+			tax_class: {
+				'ui:widget': (props) => <TaxClassSelect {...props} />,
+			},
+			meta_data: {
+				'ui:collapsible': 'closed',
+			},
+		}),
+		[amount, currencySymbol, percent, updateFeeLine, uuid]
 	);
 
 	/**
@@ -96,24 +123,7 @@ export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 				json={json}
 				onChange={({ changes }) => updateFeeLine(uuid, changes)}
 				schema={schema}
-				uiSchema={{
-					'ui:rootFieldId': 'fee_line',
-					'ui:title': null,
-					'ui:description': null,
-					amount: {
-						'ui:widget': () => (
-							<AmountWidget
-								amount={amount}
-								percent={percent}
-								currencySymbol={currencySymbol}
-								onChange={(changes) => updateFeeLine(uuid, changes)}
-							/>
-						),
-					},
-					meta_data: {
-						'ui:collapsible': 'closed',
-					},
-				}}
+				uiSchema={uiSchema}
 			/>
 		</Modal>
 	);

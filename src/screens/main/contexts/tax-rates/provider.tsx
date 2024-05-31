@@ -52,15 +52,6 @@ export const TaxRatesProvider = ({ children, taxQuery, order }: TaxRatesProvider
 	const baseLocation = useBaseTaxLocation();
 
 	/**
-	 * Get available tax classes
-	 * @TODO - fetch names https://woocommerce.github.io/woocommerce-rest-api-docs/#list-all-tax-classes
-	 */
-	const taxClasses = React.useMemo(() => {
-		const taxClasses = new Set(allRates.map((rate) => rate.class));
-		return Array.from(taxClasses);
-	}, [allRates]);
-
-	/**
 	 * Convert WooCommerce settings into sensible primatives
 	 */
 	const calcTaxes = useObservableEagerState(store.calc_taxes$.pipe(map((val) => val === 'yes')));
@@ -148,7 +139,6 @@ export const TaxRatesProvider = ({ children, taxQuery, order }: TaxRatesProvider
 				taxBasedOn,
 				location,
 				taxQuery, // pass through for easy access
-				taxClasses,
 			}}
 		>
 			{children}

@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useAppState } from '../../../../../contexts/app-state';
-import { useTaxCalculator } from '../../../hooks/taxes/use-tax-calculator';
-import { getMetaDataValueByKey } from '../../hooks/utils';
+import { getMetaDataValueByKey } from './utils';
+import { useAppState } from '../../../../contexts/app-state';
+import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 
@@ -13,7 +13,6 @@ type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
  */
 export const useFeeLineData = () => {
 	const { store } = useAppState();
-	const taxDisplayCart = useObservableEagerState(store.tax_display_cart$);
 	const { calculateTaxesFromValue } = useTaxCalculator();
 	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
 
@@ -58,43 +57,35 @@ export const useFeeLineData = () => {
 	/**
 	 * Calculates the display price for a fee line item.
 	 */
-	const getFeeLineDisplayPrice = React.useCallback(
+	const getFeeLineDisplayPriceAndTax = React.useCallback(
 		(item: FeeLine) => {
 			const { amount, prices_include_tax } = getFeeLineData(item);
-
-			let displayPrice = amount;
-
-			// mismatched tax settings
-			if (taxDisplayCart === 'excl' && prices_include_tax) {
-				const taxes = calculateTaxesFromValue({
-					value: amount,
-					taxStatus: item.tax_status,
-					taxClass: item.tax_class,
-					valueIncludesTax: true,
-				});
-
-				displayPrice = String(parseFloat(amount) - taxes.total);
-			}
+			const displayPrice = amount;
+			const taxes = calculateTaxesFromValue({
+				value: amount,
+				taxStatus: item.tax_status,
+				taxClass: item.tax_class,
+				valueIncludesTax: prices_include_tax,
+			});
+			const tax = taxes.total;
 
 			// mismatched tax settings
-			if (taxDisplayCart === 'incl' && !prices_include_tax) {
-				const taxes = calculateTaxesFromValue({
-					value: amount,
-					taxStatus: item.tax_status,
-					taxClass: item.tax_class,
-					valueIncludesTax: true,
-				});
+			// if (taxDisplayCart === 'excl' && prices_include_tax) {
+			// 	displayPrice = String(parseFloat(amount) - tax);
+			// }
 
-				displayPrice = String(parseFloat(amount) + taxes.total);
-			}
+			// // mismatched tax settings
+			// if (taxDisplayCart === 'incl' && !prices_include_tax) {
+			// 	displayPrice = String(parseFloat(amount) + tax);
+			// }
 
-			return displayPrice;
+			return { displayPrice, tax };
 		},
-		[calculateTaxesFromValue, getFeeLineData, taxDisplayCart]
+		[calculateTaxesFromValue, getFeeLineData]
 	);
 
 	return {
 		getFeeLineData,
-		getFeeLineDisplayPrice,
+		getFeeLineDisplayPriceAndTax,
 	};
 };

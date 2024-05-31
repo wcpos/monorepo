@@ -14,6 +14,7 @@ import { QueryProvider, QueryDevtools } from '@wcpos/query';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
+import { ExtraDataProvider } from './contexts/extra-data';
 import { UISettingsProvider } from './contexts/ui-settings';
 import CustomersNavigator from './customers';
 import { ErrorSnackbar } from './errors';
@@ -226,27 +227,29 @@ const MainNavigator = () => {
 	}
 
 	return (
-		<QueryProvider localDB={storeDB} http={http} locale={locale}>
-			<UISettingsProvider>
-				<OnlineStatusProvider wpAPIURL={wpAPIURL}>
-					{/** NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
-					<Portal.Provider>
-						<Stack.Navigator screenOptions={{ headerShown: false }}>
-							<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
-							<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-								<Stack.Screen name="Settings" component={SettingsScreen} />
-								<Stack.Screen name="Help" component={HelpScreen} />
-								<Stack.Screen name="Login" component={LoginScreen} />
-								<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
-							</Stack.Group>
-						</Stack.Navigator>
-						<Portal.Manager />
-					</Portal.Provider>
-				</OnlineStatusProvider>
-			</UISettingsProvider>
-			<ErrorSnackbar />
-			{/* <QueryDevtools /> */}
-		</QueryProvider>
+		<ExtraDataProvider>
+			<QueryProvider localDB={storeDB} http={http} locale={locale}>
+				<UISettingsProvider>
+					<OnlineStatusProvider wpAPIURL={wpAPIURL}>
+						{/** NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
+						<Portal.Provider>
+							<Stack.Navigator screenOptions={{ headerShown: false }}>
+								<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
+								<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
+									<Stack.Screen name="Settings" component={SettingsScreen} />
+									<Stack.Screen name="Help" component={HelpScreen} />
+									<Stack.Screen name="Login" component={LoginScreen} />
+									<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
+								</Stack.Group>
+							</Stack.Navigator>
+							<Portal.Manager />
+						</Portal.Provider>
+					</OnlineStatusProvider>
+				</UISettingsProvider>
+				<ErrorSnackbar />
+				{/* <QueryDevtools /> */}
+			</QueryProvider>
+		</ExtraDataProvider>
 	);
 };
 

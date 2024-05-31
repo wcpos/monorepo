@@ -1,16 +1,13 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
+import Box from '@wcpos/components/src/box';
+import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
 
-import { useFeeLineData } from './use-fee-line-data';
-import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import NumberInput from '../../../components/number-input';
-import { useTaxCalculator } from '../../../hooks/taxes/use-tax-calculator';
+import { useFeeLineData } from '../../hooks/use-fee-line-data';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
-import { getMetaDataValueByKey } from '../../hooks/utils';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 interface Props {
@@ -25,26 +22,22 @@ interface Props {
 export const FeePrice = ({ uuid, item, column }: Props) => {
 	const { updateFeeLine } = useUpdateFeeLine();
 	const t = useT();
-	const { getFeeLineData, getFeeLineDisplayPrice } = useFeeLineData();
+	const { getFeeLineData, getFeeLineDisplayPriceAndTax } = useFeeLineData();
 	const { percent } = getFeeLineData(item);
-	const displayPrice = getFeeLineDisplayPrice(item);
+	const { displayPrice } = getFeeLineDisplayPriceAndTax(item);
 
 	/**
 	 *
 	 */
 	return (
-		<>
+		<Box horizontal align="center" space="xSmall">
 			<NumberInput
 				value={displayPrice}
 				onChange={(amount) => updateFeeLine(uuid, { amount })}
 				showDecimals={!percent}
 				// showDiscounts={ensureNumberArray(quickDiscounts)}
 			/>
-			{percent && (
-				<Text type="textMuted" size="small">
-					{t('{percent}% of {total}', { percent: displayPrice, total: '0', _tags: 'core' })}
-				</Text>
-			)}
-		</>
+			{percent && <Icon name="percent" size="small" />}
+		</Box>
 	);
 };

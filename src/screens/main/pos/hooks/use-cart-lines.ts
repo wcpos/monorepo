@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { getUuidFromLineItem } from './utils';
+import { useFeeLineData } from './use-fee-line-data';
+import { useUpdateFeeLine } from './use-update-fee-line';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
@@ -22,6 +23,8 @@ export const useCartLines = () => {
 	const lineItems = useObservableEagerState(currentOrder.line_items$);
 	const feeLines = useObservableEagerState(currentOrder.fee_lines$);
 	const shippingLines = useObservableEagerState(currentOrder.shipping_lines$);
+	const { getFeeLineData } = useFeeLineData();
+	const { updateFeeLine } = useUpdateFeeLine();
 
 	/**
 	 * We need to filter out any items that have been 'removed', eg: product_id === null.
@@ -33,6 +36,33 @@ export const useCartLines = () => {
 			shipping_lines: (shippingLines || []).filter((item) => item.method_id !== null),
 		};
 	}, [lineItems, feeLines, shippingLines]);
+
+	/**
+	 * If line items change, and we have a percentage fee line, we need to recalculate the fee line total.
+	 */
+	// React.useEffect(() => {
+	// 	const percentageFeeLines = (cartLines.fee_lines || []).filter((item: FeeLine) => {
+	// 		const { percent } = getFeeLineData(item);
+	// 		return percent;
+	// 	});
+
+	// 	if (percentageFeeLines.length > 0) {
+	// 		// Sum the total and total_tax of all line items
+	// 		const { cart_total, cart_total_tax } = (cartLines.line_items || []).reduce(
+	// 			(acc, item) => {
+	// 				acc.cart_total += parseFloat(item.total);
+	// 				acc.cart_total_tax += parseFloat(item.total_tax);
+	// 				return acc;
+	// 			},
+	// 			{ cart_total: 0, cart_total_tax: 0 }
+	// 		);
+
+	// 		// Update each percentage fee line
+	// 		percentageFeeLines.forEach((feeLine: FeeLine) => {
+	// 			updateFeeLine(feeLine.uuid, { cart_total, cart_total_tax });
+	// 		});
+	// 	}
+	// }, [cartLines, getFeeLineData, updateFeeLine]);
 
 	return cartLines;
 };
