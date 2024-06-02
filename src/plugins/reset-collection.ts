@@ -17,6 +17,8 @@ const reset = new Subject<StoreDatabaseCollections[keyof StoreDatabaseCollection
  *
  * I'm using this to add a 'clear and sync' option so users can blast their local
  * storage in case something goes wrong.
+ *
+ * @TODO - rxdb has a new RxCollection.onRemove hook that could be used to re-add the collection
  */
 export const resetCollectionPlugin: RxPlugin = {
 	name: 'reset-collection',

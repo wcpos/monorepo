@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/database",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "Local database for @wcpos/core",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/database#readme",
@@ -17,8 +17,8 @@
     "test": "eslint --ext ts,tsx ./src"
   },
   "dependencies": {
-    "@orama/orama": "^2.0.18",
-    "@orama/plugin-data-persistence": "^2.0.18",
+    "@orama/orama": "^2.0.19",
+    "@orama/plugin-data-persistence": "^2.0.19",
     "c-promise2": "^0.13.12",
     "expo-sqlite": "~14.0.3",
     "fast-text-encoding": "^1.0.6",
