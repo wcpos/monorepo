@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { useForceUpdate, useSubscription } from 'observable-hooks';
 
 import { useQueryManager } from './provider';
 
@@ -19,6 +18,7 @@ export interface QueryOptions {
 export const useQuery = (queryOptions: QueryOptions) => {
 	const manager = useQueryManager();
 	const query = manager.registerQuery(queryOptions);
+	const forceUpdate = useForceUpdate();
 
 	/**
 	 *
@@ -34,7 +34,7 @@ export const useQuery = (queryOptions: QueryOptions) => {
 	 * - re-render components that use this query
 	 * - on re-render the query is recreated
 	 */
-	// const trigger = useObservableState(query.cancel$.pipe(map(() => trigger + 1)), 0);
+	useSubscription(query.cancel$, forceUpdate);
 
 	return query;
 };
