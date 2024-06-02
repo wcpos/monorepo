@@ -103,7 +103,7 @@ export const useRemoveLineItem = () => {
 			if (itemToRestore) {
 				addSnackbar({
 					message: t('{name} removed from cart', {
-						name: itemToRestore?.name || itemToRestore?.method_name,
+						name: itemToRestore?.name || itemToRestore?.method_title,
 						_tags: 'core',
 					}),
 					dismissable: true,

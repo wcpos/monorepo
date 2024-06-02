@@ -56,7 +56,7 @@ export const useLocalMutation = () => {
 				 * NOTE: rxdb only sets the root key
 				 */
 				const changes = {};
-				const doc = await latest.modify((old) => {
+				const doc = await latest.incrementalModify((old) => {
 					Object.keys(data).forEach((key) => {
 						const path = key.split('.');
 						const root = path.shift();

@@ -2,9 +2,7 @@ import * as React from 'react';
 
 import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
-import Text from '@wcpos/components/src/text';
 
-import { useT } from '../../../../../contexts/translations';
 import NumberInput from '../../../components/number-input';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
@@ -21,10 +19,8 @@ interface Props {
  */
 export const FeePrice = ({ uuid, item, column }: Props) => {
 	const { updateFeeLine } = useUpdateFeeLine();
-	const t = useT();
-	const { getFeeLineData, getFeeLineDisplayPriceAndTax } = useFeeLineData();
-	const { percent } = getFeeLineData(item);
-	const { displayPrice } = getFeeLineDisplayPriceAndTax(item);
+	const { getFeeLineData } = useFeeLineData();
+	const { percent, amount } = getFeeLineData(item);
 
 	/**
 	 *
@@ -32,7 +28,7 @@ export const FeePrice = ({ uuid, item, column }: Props) => {
 	return (
 		<Box horizontal align="center" space="xSmall">
 			<NumberInput
-				value={displayPrice}
+				value={amount}
 				onChange={(amount) => updateFeeLine(uuid, { amount })}
 				showDecimals={!percent}
 				// showDiscounts={ensureNumberArray(quickDiscounts)}

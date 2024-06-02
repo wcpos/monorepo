@@ -16,15 +16,15 @@ interface Props {
  */
 export const ShippingPrice = ({ uuid, item, column }: Props) => {
 	const { updateShippingLine } = useUpdateShippingLine();
-	const { getShippingLineDisplayPriceAndTax } = useShippingLineData();
-	const { displayPrice } = getShippingLineDisplayPriceAndTax(item);
+	const { getShippingLineData } = useShippingLineData();
+	const { amount } = getShippingLineData(item);
 
 	/**
 	 *
 	 */
 	return (
 		<NumberInput
-			value={displayPrice}
+			value={amount}
 			onChange={(amount) => updateShippingLine(uuid, { amount })}
 			showDecimals
 			// showDiscounts={ensureNumberArray(quickDiscounts)}

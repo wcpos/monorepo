@@ -32,8 +32,8 @@ function ensureNumberArray(input: string | number[]): number[] {
  */
 export const RegularPrice = ({ uuid, item, column }: Props) => {
 	const { updateLineItem } = useUpdateLineItem();
-	const { getLineItemDisplayRegularPriceAndTax } = useLineItemData();
-	const { displayPrice } = getLineItemDisplayRegularPriceAndTax(item);
+	const { getLineItemData } = useLineItemData();
+	const { regular_price: value } = getLineItemData(item);
 
 	/**
 	 * Discounts
@@ -46,7 +46,7 @@ export const RegularPrice = ({ uuid, item, column }: Props) => {
 	 */
 	return (
 		<NumberInput
-			value={displayPrice}
+			value={value}
 			onChange={(regular_price) => updateLineItem(uuid, { regular_price })}
 			showDecimals
 			showDiscounts={ensureNumberArray(quickDiscounts)}

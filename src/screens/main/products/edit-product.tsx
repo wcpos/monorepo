@@ -28,16 +28,16 @@ const fields = [
 	// 'short_description',
 	'sku',
 	'barcode',
-	'price',
-	'regular_price',
-	'sale_price',
+	// 'price',
+	// 'regular_price',
+	// 'sale_price',
 	// 'date_on_sale_from',
 	// 'date_on_sale_to',
-	'on_sale',
+	// 'on_sale',
 	'tax_status',
 	'tax_class',
-	'manage_stock',
-	'stock_quantity',
+	// 'manage_stock',
+	// 'stock_quantity',
 	// 'low_stock_amount',
 	// 'weight',
 	// 'dimensions',
@@ -61,7 +61,6 @@ const EditProduct = ({ resource }: Props) => {
 	}
 
 	const name = useObservableEagerState(product.name$);
-	const manageStock = useObservableEagerState(product.manage_stock$);
 
 	/**
 	 * Handle save button click
@@ -125,18 +124,6 @@ const EditProduct = ({ resource }: Props) => {
 			barcode: {
 				'ui:label': t('Barcode', { _tags: 'core' }),
 			},
-			price: {
-				'ui:label': t('Price', { _tags: 'core' }),
-			},
-			regular_price: {
-				'ui:label': t('Regular Price', { _tags: 'core' }),
-			},
-			sale_price: {
-				'ui:label': t('Sale Price', { _tags: 'core' }),
-			},
-			on_sale: {
-				'ui:label': t('On Sale', { _tags: 'core' }),
-			},
 			tax_status: {
 				'ui:label': t('Tax Status', { _tags: 'core' }),
 			},
@@ -144,17 +131,9 @@ const EditProduct = ({ resource }: Props) => {
 				'ui:label': t('Tax Class', { _tags: 'core' }),
 				'ui:widget': (props) => <TaxClassSelect {...props} />,
 			},
-			manage_stock: {
-				'ui:label': t('Manage Stock', { _tags: 'core' }),
-			},
-			stock_quantity: {
-				'ui:label': t('Stock Quantity', { _tags: 'core' }),
-				// TODO: only show if manage_stock is true
-				'ui:disabled': !manageStock,
-			},
 			meta_data: { 'ui:collapsible': 'closed', 'ui:title': t('Meta Data', { _tags: 'core' }) },
 		}),
-		[manageStock, t]
+		[t]
 	);
 
 	/**

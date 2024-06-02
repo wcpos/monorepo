@@ -4,7 +4,6 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { getMetaDataValueByKey } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
-import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
 
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 
@@ -13,7 +12,6 @@ type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][nu
  */
 export const useShippingLineData = () => {
 	const { store } = useAppState();
-	const { calculateTaxesFromValue } = useTaxCalculator();
 	const shippingTaxClass = useObservableEagerState(store.shipping_tax_class$);
 	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
 
@@ -59,38 +57,7 @@ export const useShippingLineData = () => {
 		[pricesIncludeTax, shippingTaxClass]
 	);
 
-	/**
-	 * Calculates the display price for a shipping line item.
-	 */
-	const getShippingLineDisplayPriceAndTax = React.useCallback(
-		(item: ShippingLine) => {
-			const { amount, tax_status, tax_class, prices_include_tax } = getShippingLineData(item);
-			const taxes = calculateTaxesFromValue({
-				value: amount,
-				taxStatus: tax_status,
-				taxClass: tax_class,
-				valueIncludesTax: prices_include_tax,
-			});
-			const displayPrice = amount;
-			const tax = taxes.total;
-
-			// mismatched tax settings
-			// if (taxDisplayCart === 'excl' && prices_include_tax) {
-			// 	displayPrice = String(parseFloat(amount) - tax);
-			// }
-
-			// // mismatched tax settings
-			// if (taxDisplayCart === 'incl' && !prices_include_tax) {
-			// 	displayPrice = String(parseFloat(amount) + tax);
-			// }
-
-			return { displayPrice, tax };
-		},
-		[calculateTaxesFromValue, getShippingLineData]
-	);
-
 	return {
 		getShippingLineData,
-		getShippingLineDisplayPriceAndTax,
 	};
 };

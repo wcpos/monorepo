@@ -4,7 +4,6 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { getMetaDataValueByKey } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
-import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 
@@ -13,7 +12,6 @@ type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
  */
 export const useFeeLineData = () => {
 	const { store } = useAppState();
-	const { calculateTaxesFromValue } = useTaxCalculator();
 	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
 
 	/**
@@ -30,6 +28,7 @@ export const useFeeLineData = () => {
 			let amount = defaultAmount;
 			let percent = defaultPercent;
 			let prices_include_tax = defaultPricesIncludeTax;
+			let percent_of_cart_total_with_tax = defaultPricesIncludeTax;
 
 			try {
 				const posData = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
@@ -39,6 +38,7 @@ export const useFeeLineData = () => {
 						amount = defaultAmount,
 						percent = defaultPercent,
 						prices_include_tax = defaultPricesIncludeTax,
+						percent_of_cart_total_with_tax = defaultPricesIncludeTax,
 					} = parsedData);
 				}
 			} catch (error) {
@@ -49,43 +49,13 @@ export const useFeeLineData = () => {
 				amount,
 				percent,
 				prices_include_tax,
+				percent_of_cart_total_with_tax,
 			};
 		},
 		[pricesIncludeTax]
 	);
 
-	/**
-	 * Calculates the display price for a fee line item.
-	 */
-	const getFeeLineDisplayPriceAndTax = React.useCallback(
-		(item: FeeLine) => {
-			const { amount, prices_include_tax } = getFeeLineData(item);
-			const displayPrice = amount;
-			const taxes = calculateTaxesFromValue({
-				value: amount,
-				taxStatus: item.tax_status,
-				taxClass: item.tax_class,
-				valueIncludesTax: prices_include_tax,
-			});
-			const tax = taxes.total;
-
-			// mismatched tax settings
-			// if (taxDisplayCart === 'excl' && prices_include_tax) {
-			// 	displayPrice = String(parseFloat(amount) - tax);
-			// }
-
-			// // mismatched tax settings
-			// if (taxDisplayCart === 'incl' && !prices_include_tax) {
-			// 	displayPrice = String(parseFloat(amount) + tax);
-			// }
-
-			return { displayPrice, tax };
-		},
-		[calculateTaxesFromValue, getFeeLineData]
-	);
-
 	return {
 		getFeeLineData,
-		getFeeLineDisplayPriceAndTax,
 	};
 };

@@ -9,15 +9,14 @@ import {
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
-import { SelectWithLabel } from '@wcpos/components/src/select';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
 import { CountrySelect, StateSelect } from '../components/country-state-select';
 import { EditDocumentForm } from '../components/edit-document-form';
+import { OrderStatusSelect } from '../components/order-status-select';
 import usePushDocument from '../contexts/use-push-document';
-import { useOrderStatusLabel } from '../hooks/use-order-status-label';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
@@ -81,7 +80,6 @@ const EditOrder = ({ resource }: Props) => {
 	const pushDocument = usePushDocument();
 	const addSnackbar = useSnackbar();
 	const t = useT();
-	const { items } = useOrderStatusLabel();
 
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));
@@ -141,24 +139,13 @@ const EditOrder = ({ resource }: Props) => {
 	}, [handleSave, setPrimaryAction, t]);
 
 	/**
-	 * Temporary hack until we fetch the order statuses from the server
-	 */
-	const options = React.useMemo(() => {
-		const exists = items.some((item) => item.value === order.status);
-		if (!exists) {
-			items.push({ label: order.status, value: order.status });
-		}
-		return items;
-	}, [items, order.status]);
-
-	/**
 	 *
 	 */
 	const uiSchema = React.useMemo(
 		() => ({
 			status: {
 				'ui:label': t('Status', { _tags: 'core' }),
-				'ui:widget': (props) => <SelectWithLabel {...props} options={options} />,
+				'ui:widget': (props) => <OrderStatusSelect {...props} />,
 			},
 			number: {
 				'ui:label': t('Order Number', { _tags: 'core' }),
@@ -303,7 +290,7 @@ const EditOrder = ({ resource }: Props) => {
 				'ui:description': null,
 			},
 		}),
-		[billingCountry, items, shippingCountry, t]
+		[billingCountry, shippingCountry, t]
 	);
 
 	return <EditDocumentForm document={order} fields={fields} uiSchema={uiSchema} withJSONTree />;

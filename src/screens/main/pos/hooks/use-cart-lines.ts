@@ -1,9 +1,11 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
+import { useObservableEagerState, useSubscription, useObservable } from 'observable-hooks';
+import { distinctUntilChanged, map, skip, tap } from 'rxjs/operators';
 
 import { useFeeLineData } from './use-fee-line-data';
 import { useUpdateFeeLine } from './use-update-fee-line';
+import { getUuidFromLineItem } from './utils';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
@@ -16,7 +18,7 @@ export type CartLine = {
 };
 
 /**
- *
+ * @NOTE - when current order is updated, eg: date_modified, the cart lines will re-subscribe.
  */
 export const useCartLines = () => {
 	const { currentOrder } = useCurrentOrder();
@@ -39,30 +41,45 @@ export const useCartLines = () => {
 
 	/**
 	 * If line items change, and we have a percentage fee line, we need to recalculate the fee line total.
+	 *
+	 * @TODO - this is a bit hacky, we should probably have a better way to handle this.
 	 */
-	// React.useEffect(() => {
-	// 	const percentageFeeLines = (cartLines.fee_lines || []).filter((item: FeeLine) => {
-	// 		const { percent } = getFeeLineData(item);
-	// 		return percent;
-	// 	});
+	const cartTotal$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				skip(1),
+				map(([items]) => {
+					// Sum the total and total_tax of all line items
+					const test = (items || []).reduce(
+						(acc, item) => {
+							acc.cart_total += parseFloat(item.total);
+							acc.cart_total_tax += parseFloat(item.total_tax);
+							return acc;
+						},
+						{ cart_total: 0, cart_total_tax: 0 }
+					);
+					return test;
+				}),
+				distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next))
+				// @TODO - this gets triggered twice, because if fee updates, line items will be a new array.
+			),
+		[lineItems]
+	);
 
-	// 	if (percentageFeeLines.length > 0) {
-	// 		// Sum the total and total_tax of all line items
-	// 		const { cart_total, cart_total_tax } = (cartLines.line_items || []).reduce(
-	// 			(acc, item) => {
-	// 				acc.cart_total += parseFloat(item.total);
-	// 				acc.cart_total_tax += parseFloat(item.total_tax);
-	// 				return acc;
-	// 			},
-	// 			{ cart_total: 0, cart_total_tax: 0 }
-	// 		);
+	useSubscription(cartTotal$, async () => {
+		const percentageFeeLines = (feeLines || []).filter((item: FeeLine) => {
+			const { percent } = getFeeLineData(item);
+			return percent;
+		});
 
-	// 		// Update each percentage fee line
-	// 		percentageFeeLines.forEach((feeLine: FeeLine) => {
-	// 			updateFeeLine(feeLine.uuid, { cart_total, cart_total_tax });
-	// 		});
-	// 	}
-	// }, [cartLines, getFeeLineData, updateFeeLine]);
+		if (percentageFeeLines.length > 0) {
+			// Update each percentage fee line
+			for (const feeLine of percentageFeeLines) {
+				const uuid = getUuidFromLineItem(feeLine);
+				await updateFeeLine(uuid, {});
+			}
+		}
+	});
 
 	return cartLines;
 };

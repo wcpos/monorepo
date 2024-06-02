@@ -30,6 +30,11 @@ export const ExtraDataProvider = ({ children }) => {
 				extraData.set('shippingMethods', () => response.data);
 			}
 		});
+		http.get('/data/order_statuses').then((response) => {
+			if (response.status === 200) {
+				extraData.set('orderStatuses', () => response.data);
+			}
+		});
 	}, []);
 
 	return <ExtraDataContext.Provider value={{ extraData }}>{children}</ExtraDataContext.Provider>;

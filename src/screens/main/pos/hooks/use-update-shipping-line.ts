@@ -37,68 +37,76 @@ export const useUpdateShippingLine = () => {
 	/**
 	 * Applies updates to a line item based on provided changes.
 	 */
-	const applyChangesToLineItem = (lineItem: ShippingLine, changes: Changes): ShippingLine => {
-		const { amount, prices_include_tax, tax_class, tax_status } = getShippingLineData(lineItem);
+	const applyChangesToLineItem = React.useCallback(
+		(lineItem: ShippingLine, changes: Changes): ShippingLine => {
+			const { amount, prices_include_tax, tax_class, tax_status } = getShippingLineData(lineItem);
 
-		const newData = {
-			...{ amount, prices_include_tax, tax_class, tax_status },
-			...pick(changes, ['amount', 'prices_include_tax', 'tax_class', 'tax_status']),
-		};
+			const newData = {
+				...{ amount, prices_include_tax, tax_class, tax_status },
+				...pick(changes, ['amount', 'prices_include_tax', 'tax_class', 'tax_status']),
+			};
 
-		let updatedItem = { ...lineItem };
-		updatedItem = updatePosDataMeta(updatedItem, newData);
+			let updatedItem = { ...lineItem };
+			updatedItem = updatePosDataMeta(updatedItem, newData);
 
-		const remainingChanges = omit(changes, [
-			'amount',
-			'prices_include_tax',
-			'tax_class',
-			'tax_status',
-		]);
+			const remainingChanges = omit(changes, [
+				'amount',
+				'prices_include_tax',
+				'tax_class',
+				'tax_status',
+			]);
 
-		for (const key of Object.keys(remainingChanges)) {
-			// Special case for nested changes, only meta_data at the moment
-			const nestedKey = key.split('.');
-			if (nestedKey.length === 1) {
-				(updatedItem as any)[key] = remainingChanges[key];
-			} else {
-				set(updatedItem, nestedKey, remainingChanges[key]);
+			for (const key of Object.keys(remainingChanges)) {
+				// Special case for nested changes, only meta_data at the moment
+				const nestedKey = key.split('.');
+				if (nestedKey.length === 1) {
+					(updatedItem as any)[key] = remainingChanges[key];
+				} else {
+					set(updatedItem, nestedKey, remainingChanges[key]);
+				}
 			}
-		}
 
-		return calculateShippingLineTaxesAndTotals(updatedItem);
-	};
+			return calculateShippingLineTaxesAndTotals(updatedItem);
+		},
+		[calculateShippingLineTaxesAndTotals, getShippingLineData]
+	);
 
 	/**
 	 * Update shipping line
 	 *
 	 * @TODO - what if more than one property is changed at once?
 	 */
-	const updateShippingLine = async (uuid: string, changes: Changes) => {
-		const order = currentOrder.getLatest();
-		const json = order.toMutableJSON();
-		let updated = false;
+	const updateShippingLine = React.useCallback(
+		async (uuid: string, changes: Changes) => {
+			const order = currentOrder.getLatest();
+			const json = order.toMutableJSON();
+			let updated = false;
 
-		const updatedShippingLines = json.shipping_lines?.map((shippingLine) => {
-			if (
-				updated ||
-				!shippingLine.meta_data?.some((m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid)
-			) {
-				return shippingLine;
-			}
+			const updatedShippingLines = json.shipping_lines?.map((shippingLine) => {
+				if (
+					updated ||
+					!shippingLine.meta_data?.some(
+						(m) => m.key === '_woocommerce_pos_uuid' && m.value === uuid
+					)
+				) {
+					return shippingLine;
+				}
 
-			const updatedItem = applyChangesToLineItem(shippingLine, changes);
-			updated = true;
-			return updatedItem;
-		});
-
-		// if we have updated a line item, patch the order
-		if (updated && updatedShippingLines) {
-			return localPatch({
-				document: order,
-				data: { shipping_lines: updatedShippingLines },
+				const updatedItem = applyChangesToLineItem(shippingLine, changes);
+				updated = true;
+				return updatedItem;
 			});
-		}
-	};
+
+			// if we have updated a line item, patch the order
+			if (updated && updatedShippingLines) {
+				return localPatch({
+					document: order,
+					data: { shipping_lines: updatedShippingLines },
+				});
+			}
+		},
+		[applyChangesToLineItem, currentOrder, localPatch]
+	);
 
 	return { updateShippingLine };
 };

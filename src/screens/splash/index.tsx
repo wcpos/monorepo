@@ -8,7 +8,6 @@ import Logo from '@wcpos/components/src/logo';
  * @TODO - should we have a timeout and a way to force clear the local DBs if it takes too long?
  */
 const Splash = () => {
-	console.log('Splash');
 	return (
 		<View
 			style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }]}

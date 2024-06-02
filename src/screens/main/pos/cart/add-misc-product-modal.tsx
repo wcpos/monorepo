@@ -12,7 +12,6 @@ import log from '@wcpos/utils/src/logger';
 import { useT } from '../../../../contexts/translations';
 import NumberInput from '../../components/number-input';
 import { TaxClassSelect } from '../../components/tax-class-select';
-import { useTaxRates } from '../../contexts/tax-rates';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useAddProduct } from '../hooks/use-add-product';
 
@@ -33,7 +32,6 @@ export const AddMiscProductModal = ({ onClose }: { onClose: () => void }) => {
 	const { addProduct } = useAddProduct();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const t = useT();
-	const { taxClasses } = useTaxRates();
 
 	/**
 	 *
@@ -83,12 +81,10 @@ export const AddMiscProductModal = ({ onClose }: { onClose: () => void }) => {
 				tax_class: {
 					type: 'string',
 					title: t('Tax Class', { _tags: 'core' }),
-					enum: taxClasses,
-					default: taxClasses.includes('standrad') ? 'standard' : taxClasses[0],
 				},
 			},
 		}),
-		[t, taxClasses]
+		[t]
 	);
 
 	/**

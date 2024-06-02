@@ -27,7 +27,8 @@ export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 	const { currentOrder } = useCurrentOrder();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const { getFeeLineData } = useFeeLineData();
-	const { amount, percent, prices_include_tax } = getFeeLineData(item);
+	const { amount, percent, prices_include_tax, percent_of_cart_total_with_tax } =
+		getFeeLineData(item);
 
 	/**
 	 *
@@ -36,54 +37,64 @@ export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 		return {
 			...item,
 			prices_include_tax,
+			percent_of_cart_total_with_tax,
 		};
-	}, [item, prices_include_tax]);
+	}, [item, percent_of_cart_total_with_tax, prices_include_tax]);
 
 	/**
 	 * Get schema for fee lines
 	 */
 	const schema = React.useMemo(
-		() => ({
-			type: 'object',
-			properties: {
-				// name: { type: 'string', title: t('Fee Name', { _tags: 'core' }) },
-				amount: { type: 'string', title: t('Amount', { _tags: 'core' }) },
-				prices_include_tax: {
-					type: 'boolean',
-					title: percent
-						? t('Percent of Cart Including Tax', { _tags: 'core' })
-						: t('Amount Includes Tax', { _tags: 'core' }),
-				},
-				tax_status: {
-					type: 'string',
-					title: t('Tax Status', { _tags: 'core' }),
-					enum: ['taxable', 'none'],
-					default: 'taxable',
-				},
-				tax_class: {
-					type: 'string',
-					title: t('Tax Class', { _tags: 'core' }),
-				},
-				meta_data: {
-					type: 'array',
-					title: t('Meta Data', { _tags: 'core' }),
-					items: {
-						type: 'object',
-						properties: {
-							key: {
-								description: 'Meta key.',
-								type: 'string',
-							},
-							value: {
-								description: 'Meta value.',
-								type: 'string',
+		() => {
+			const baseSchema = {
+				type: 'object',
+				properties: {
+					amount: { type: 'string', title: t('Amount', { _tags: 'core' }) },
+					prices_include_tax: {
+						type: 'boolean',
+						title: t('Amount Includes Tax', { _tags: 'core' }),
+					},
+					tax_status: {
+						type: 'string',
+						title: t('Tax Status', { _tags: 'core' }),
+						enum: ['taxable', 'none'],
+						default: 'taxable',
+					},
+					tax_class: {
+						type: 'string',
+						title: t('Tax Class', { _tags: 'core' }),
+					},
+					meta_data: {
+						type: 'array',
+						title: t('Meta Data', { _tags: 'core' }),
+						items: {
+							type: 'object',
+							properties: {
+								key: {
+									description: 'Meta key.',
+									type: 'string',
+								},
+								value: {
+									description: 'Meta value.',
+									type: 'string',
+								},
 							},
 						},
 					},
 				},
-			},
-		}),
-		[percent, t]
+			};
+
+			// Add the percent_of_cart_total_with_tax property conditionally
+			if (percent) {
+				baseSchema.properties.percent_of_cart_total_with_tax = {
+					type: 'boolean',
+					title: t('Percent of Cart Total Including Tax', { _tags: 'core' }),
+				};
+			}
+
+			return baseSchema;
+		},
+		[t, percent] // Ensure useMemo recalculates if t or percent changes
 	);
 
 	/**
@@ -94,6 +105,14 @@ export const EditFeeLineModal = ({ uuid, item, onClose }: Props) => {
 			'ui:rootFieldId': 'fee_line',
 			'ui:title': null,
 			'ui:description': null,
+			'ui:order': [
+				'amount',
+				'prices_include_tax',
+				'percent_of_cart_total_with_tax',
+				'tax_status',
+				'tax_class',
+				'meta_data',
+			],
 			amount: {
 				'ui:widget': () => (
 					<AmountWidget

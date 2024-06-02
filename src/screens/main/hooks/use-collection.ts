@@ -20,6 +20,8 @@ export type CollectionKey = keyof typeof storeCollections;
  *
  * This allows us to do a 'clear and sync' and update components
  * that are using the collection.
+ *
+ * @TODO - rxdb has a new RxCollection.onRemove hook that could be used to re-add the collection
  */
 export const useCollection = <K extends CollectionKey>(
 	key: K

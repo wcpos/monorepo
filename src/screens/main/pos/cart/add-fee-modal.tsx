@@ -15,41 +15,45 @@ import { useCurrentOrder } from '../contexts/current-order';
 import { useAddFee } from '../hooks/use-add-fee';
 
 /**
- * TODO: tax_status = taxable by default, perhaps put this as setting?
- */
-const initialData = {
-	name: '',
-	tax_status: 'taxable',
-	tax_class: '',
-};
-
-/**
  *
  */
 export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
-	const [data, setData] = React.useState(initialData);
+	const { store } = useAppState();
+	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
+	const [data, setData] = React.useState({
+		name: '',
+		tax_status: 'taxable',
+		tax_class: '',
+		prices_include_tax: pricesIncludeTax === 'yes',
+		percent_of_cart_total_with_tax: pricesIncludeTax === 'yes',
+	});
 	const { currentOrder } = useCurrentOrder();
 	const { addFee } = useAddFee();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const t = useT();
-	const { store } = useAppState();
-	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
 	const [additionalData, setAdditionalData] = React.useState({ amount: '0', percent: false });
 
 	/**
 	 *
 	 */
 	const handleClose = React.useCallback(() => {
-		setData(initialData);
+		setData({
+			name: '',
+			tax_status: 'taxable',
+			tax_class: '',
+			prices_include_tax: pricesIncludeTax === 'yes',
+			percent_of_cart_total_with_tax: pricesIncludeTax === 'yes',
+		});
 		setAdditionalData({ amount: '0', percent: false });
 		onClose();
-	}, [onClose]);
+	}, [onClose, pricesIncludeTax]);
 
 	/**
 	 *
 	 */
 	const handleAddFee = React.useCallback(async () => {
-		const { name, tax_status, tax_class } = data;
+		const { name, tax_status, tax_class, prices_include_tax, percent_of_cart_total_with_tax } =
+			data;
 		const { amount, percent } = additionalData;
 		await addFee({
 			name: isEmpty(name) ? t('Fee', { _tags: 'core' }) : name,
@@ -58,18 +62,17 @@ export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
 			tax_status,
 			tax_class,
 			percent,
-			prices_include_tax: isEmpty(data.prices_include_tax)
-				? pricesIncludeTax === 'yes'
-				: data.prices_include_tax,
+			prices_include_tax,
+			percent_of_cart_total_with_tax,
 		});
 		onClose();
-	}, [addFee, additionalData, data, onClose, pricesIncludeTax, t]);
+	}, [addFee, additionalData, data, onClose, t]);
 
 	/**
 	 *
 	 */
-	const schema = React.useMemo(
-		() => ({
+	const schema = React.useMemo(() => {
+		const baseSchema = {
 			type: 'object',
 			properties: {
 				name: { type: 'string', title: t('Fee Name', { _tags: 'core' }) },
@@ -77,9 +80,7 @@ export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
 				amount: { type: 'string', title: t('Amount', { _tags: 'core' }) },
 				prices_include_tax: {
 					type: 'boolean',
-					title: additionalData.percent
-						? t('Percent of Cart Including Tax', { _tags: 'core' })
-						: t('Amount Includes Tax', { _tags: 'core' }),
+					title: t('Amount Includes Tax', { _tags: 'core' }),
 					default: pricesIncludeTax === 'yes',
 				},
 				tax_status: {
@@ -93,15 +94,31 @@ export const AddFeeModal = ({ onClose }: { onClose: () => void }) => {
 					title: t('Tax Class', { _tags: 'core' }),
 				},
 			},
-		}),
-		[additionalData.percent, pricesIncludeTax, t]
-	);
+		};
+		// Add the percent_of_cart_total_with_tax property conditionally
+		if (additionalData.percent) {
+			baseSchema.properties.percent_of_cart_total_with_tax = {
+				type: 'boolean',
+				title: t('Percent of Cart Total Including Tax', { _tags: 'core' }),
+			};
+		}
+
+		return baseSchema;
+	}, [additionalData.percent, pricesIncludeTax, t]);
 
 	/**
 	 *
 	 */
 	const uiSchema = React.useMemo(
 		() => ({
+			'ui:order': [
+				'name',
+				'amount',
+				'prices_include_tax',
+				'percent_of_cart_total_with_tax',
+				'tax_status',
+				'tax_class',
+			],
 			amount: {
 				'ui:widget': () => (
 					<AmountWidget

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View, StyleProp, ViewStyle } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Numpad from '@wcpos/components/src/numpad';
@@ -53,6 +53,7 @@ interface NumberInputProps {
 
 /**
  * Note: value comes in as decimalSeparator = '.' we need to convert it to the correct decimal separator
+ * @TODO - We need a format helper numbers, not just currency, eg: quantity: 1,000.01
  */
 const NumberInput = ({
 	value = '0',
@@ -68,9 +69,9 @@ const NumberInput = ({
 	style,
 }: NumberInputProps) => {
 	const { store } = useAppState();
-	const decimalSeparator = useObservableState(store.price_decimal_sep$, store.price_decimal_sep);
+	const decimalSeparator = useObservableEagerState(store.price_decimal_sep$);
 	const { format } = useCurrencyFormat({ withSymbol: false });
-	const displayValue = showDecimals ? format(value) : value;
+	const displayValue = showDecimals ? format(value) : value.replace(/\./g, decimalSeparator);
 	const [opened, setOpened] = React.useState(false);
 	const valueRef = React.useRef(displayValue);
 	const t = useT();

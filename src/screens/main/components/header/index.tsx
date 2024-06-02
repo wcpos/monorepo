@@ -72,7 +72,7 @@ const Header = ({ options, showUpgrade, setShowUpgrade }: Props) => {
 			/>
 			<StatusBar style="light" />
 			{showUpgrade && (
-				<Box padding="xSmall" style={{ backgroundColor: theme.colors.attention }}>
+				<Box padding="xSmall" style={{ backgroundColor: theme.colors.attentionBackground }}>
 					<Box horizontal space="small" align="center">
 						<Box style={{ width: 12 }}></Box>
 						<Box fill align="center">

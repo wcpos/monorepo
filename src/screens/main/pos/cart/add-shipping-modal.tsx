@@ -14,6 +14,7 @@ import { useT } from '../../../../contexts/translations';
 import NumberInput from '../../components/number-input';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
+import { useExtraData } from '../../contexts/extra-data';
 import { useCurrentOrder } from '../contexts/current-order';
 import { useAddShipping } from '../hooks/use-add-shipping';
 
@@ -22,19 +23,22 @@ import { useAddShipping } from '../hooks/use-add-shipping';
  */
 export const AddShippingModal = ({ onClose }: { onClose: () => void }) => {
 	const { store } = useAppState();
+	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
+	const { extraData } = useExtraData();
+	const shippingMethods = useObservableEagerState(extraData.shippingMethods$);
 	const shippingTaxClass = useObservableEagerState(store.shipping_tax_class$);
 	const [data, setData] = React.useState({
 		method_title: '',
-		method_id: '',
+		method_id: shippingMethods[0]?.id || 'local_pickup',
 		amount: '0',
 		tax_status: 'taxable',
 		tax_class: shippingTaxClass === 'inherit' ? '' : shippingTaxClass,
+		prices_include_tax: pricesIncludeTax === 'yes',
 	});
 	const { currentOrder } = useCurrentOrder();
 	const { addShipping } = useAddShipping();
 	const currencySymbol = useObservableEagerState(currentOrder.currency_symbol$);
 	const t = useT();
-	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
 
 	/**
 	 *
@@ -42,29 +46,28 @@ export const AddShippingModal = ({ onClose }: { onClose: () => void }) => {
 	const handleClose = React.useCallback(() => {
 		setData({
 			method_title: '',
-			method_id: '',
+			method_id: shippingMethods[0]?.id || 'local_pickup',
 			amount: '0',
 			tax_status: 'taxable',
 			tax_class: shippingTaxClass === 'inherit' ? '' : shippingTaxClass,
+			prices_include_tax: pricesIncludeTax === 'yes',
 		});
 		onClose();
-	}, [onClose, shippingTaxClass]);
+	}, [onClose, pricesIncludeTax, shippingMethods, shippingTaxClass]);
 
 	/**
 	 *
 	 */
 	const handleAddShipping = () => {
 		try {
-			const { method_title, method_id, amount, tax_status, tax_class } = data;
+			const { method_title, method_id, amount, tax_status, tax_class, prices_include_tax } = data;
 			addShipping({
 				method_title: isEmpty(method_title) ? t('Shipping', { _tags: 'core' }) : method_title,
 				method_id: isEmpty(method_id) ? 'local_pickup' : method_id,
 				amount: isEmpty(amount) ? '0' : amount,
 				tax_status,
 				tax_class,
-				prices_include_tax: isEmpty(data.prices_include_tax)
-					? pricesIncludeTax === 'yes'
-					: data.prices_include_tax,
+				prices_include_tax,
 			});
 			handleClose();
 		} catch (error) {
@@ -80,7 +83,7 @@ export const AddShippingModal = ({ onClose }: { onClose: () => void }) => {
 			type: 'object',
 			properties: {
 				method_title: { type: 'string', title: t('Shipping Method Title', { _tags: 'core' }) },
-				method_id: { type: 'string', title: t('Shipping Method ID', { _tags: 'core' }) },
+				method_id: { type: 'string', title: t('Shipping Method', { _tags: 'core' }) },
 				amount: { type: 'string', title: t('Amount', { _tags: 'core' }) },
 				prices_include_tax: {
 					type: 'boolean',

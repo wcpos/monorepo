@@ -32,10 +32,19 @@ export const hydrateInitialProps = async ({ userDB, appState, user, initialProps
 	if (!initialProps) {
 		throw new Error('No initialProps found');
 	}
+	const oldState = await appState.get('current');
 	const siteDoc = await userDB.sites.upsert(initialProps.site);
 	const wpCredentialsDoc = await userDB.wp_credentials.upsert(initialProps.wp_credentials);
+
+	/**
+	 * If ?store=number is the in the URL use that as the initial store,
+	 * also, remove it from the URL so that it doesn't get used again.
+	 */
 	const urlParams = new URLSearchParams(window.location.search);
 	const initialStoreID = parseInt(urlParams.get('store'), 10);
+	urlParams.delete('store');
+	window.history.replaceState({}, '', `${window.location.pathname}?${urlParams}`);
+
 	let storeID;
 
 	/**
@@ -58,6 +67,16 @@ export const hydrateInitialProps = async ({ userDB, appState, user, initialProps
 			};
 		})
 	);
+	const storeLocalIDs = stores.map((store) => store.localID);
+
+	/**
+	 *
+	 */
+	if (!storeID && storeLocalIDs.includes(oldState.storeID)) {
+		storeID = oldState.storeID;
+	} else {
+		storeID = stores[0].localID; // default to first store?
+	}
 
 	/**
 	 * @TODO - how to handle conflicts between remote and local store settings?
@@ -65,14 +84,13 @@ export const hydrateInitialProps = async ({ userDB, appState, user, initialProps
 	 */
 	await userDB.stores.bulkInsert(stores); // will not overwrite existing data
 	await wpCredentialsDoc.patch({
-		stores: stores.map((store) => store.localID),
+		stores: storeLocalIDs,
 	});
 
-	const oldState = await appState.get('current');
 	const newState = {
 		siteID: siteDoc.uuid,
 		wpCredentialsID: wpCredentialsDoc.uuid,
-		storeID: storeID ? storeID : stores[0].localID, // default to first store
+		storeID,
 	};
 
 	if (JSON.stringify(oldState) !== JSON.stringify(newState)) {
