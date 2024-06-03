@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "@wcpos/managed-expo",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "main": "index.js",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": ".",
@@ -25,7 +25,7 @@
     "eas-build-on-error": "echo 'Error'",
     "eas-build-on-complete": "echo 'Complete'",
     "postinstall": "patch-package",
-    "preinstall": "chmod +x ./scripts/install-rxdb-license.ts && npx ts-node ./scripts/install-rxdb-license.ts"
+    "preinstall": "chmod +x ./scripts/install-rxdb-license.js && node ./scripts/install-rxdb-license.js"
   },
   "dependencies": {
     "@react-native-community/netinfo": "11.3.2",
