@@ -178,22 +178,17 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		const now = new Date().getTime();
 		if (this.lastFetchRemoteIDsTime < now - this.pollingTime) {
 			this.lastFetchRemoteIDsTime = now;
-			const remoteState = await this.fetchRemoteState();
-			await this.audit(remoteState);
+			await this.fetchRemoteState();
+			await this.audit();
 		}
 	}
 
 	/**
 	 *
 	 */
-	async audit(remoteState) {
-		if (isEmpty(remoteState)) {
-			return;
-		}
-
-		const localDocs = await this.collection.find().exec();
-		const localIDs = localDocs.map((doc) => doc.get('id')).filter((id) => Number.isInteger(id));
-		const remoteIDs = remoteState.map((doc) => doc.get('id')).filter((id) => Number.isInteger(id));
+	async audit() {
+		const localIDs = await this.getLocalIDs();
+		const remoteIDs = await this.getStoredRemoteIDs();
 
 		// Find all local docs that are not in the remote state
 		const remove = localIDs.filter((id) => !remoteIDs.includes(id));
@@ -204,9 +199,11 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		}
 
 		// Find all remote docs that have been updated
+		const localDocs = await this.getLocalDocs();
 		const localMap = new Map(localDocs.map((doc) => [doc.id, doc.date_modified_gmt]));
 
-		const updatedIds = remoteState
+		const remoteDocs = await this.getStoredRemoteDocs();
+		const updatedIds = remoteDocs
 			.filter((remoteDoc) => {
 				const localDate = localMap.get(remoteDoc.id);
 				return localDate && remoteDoc.date_modified_gmt > localDate;
@@ -241,19 +238,19 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			/**
 			 * Save the remote state to the sync collection
 			 * - we need to remove any orphaned ids, eg: doc deleted on server
-			 * - it's tempting to just bullk delete and insert, but it causes doc totals to flash in the UI
+			 * - it's tempting to just bulk delete and insert, but it causes doc totals to flash in the UI
 			 */
 			const data = response.data.map((doc) => ({ ...doc, endpoint: this.endpoint }));
 			const syncCollection = this.storeDB.collections.sync;
-			const ids = await syncCollection
-				.find({ selector: { endpoint: this.endpoint } })
-				.exec()
-				.then((docs) => docs.map((doc) => doc.id));
+			const ids = await this.getStoredRemoteIDs();
 			const orphanedIds = ids.filter((id) => !data.map((doc) => doc.id).includes(id));
-			await syncCollection
-				.find({ selector: { endpoint: this.endpoint, id: { $in: orphanedIds } } })
-				.remove();
-			const { success, error } = await this.storeDB.collections.sync.bulkUpsert(data);
+			if (orphanedIds.length > 0) {
+				log.warn('removing remote', orphanedIds, 'from', this.collection.name);
+				await syncCollection
+					.find({ selector: { endpoint: this.endpoint, id: { $in: orphanedIds } } })
+					.remove();
+			}
+			const { error } = await this.storeDB.collections.sync.bulkUpsert(data);
 
 			if (error.length > 0) {
 				log.error('Error saving remote state for ' + this.endpoint, error);
@@ -265,8 +262,6 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				this.firstSyncResolver();
 				this.firstSyncResolver = null; // Clear the resolver to prevent future calls
 			}
-
-			return success;
 		} catch (error) {
 			this.errorSubject.next(error);
 		} finally {
@@ -298,27 +293,33 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	/**
 	 *
 	 */
+	async getStoredRemoteDocs() {
+		return this.storeDB.collections.sync.find({ selector: { endpoint: this.endpoint } }).exec();
+	}
+
+	/**
+	 *
+	 */
+	async getLocalDocs() {
+		return this.collection.find().exec();
+	}
+
+	/**
+	 *
+	 */
 	async getStoredRemoteIDs() {
-		const remoteIDs = await this.storeDB.collections.sync
-			.find({ selector: { endpoint: this.endpoint } })
-			.exec()
+		return this.getStoredRemoteDocs()
 			.then((docs) => docs.map((doc) => doc.get('id')))
 			.then((ids) => ids.filter((id) => Number.isInteger(id)));
-
-		return remoteIDs;
 	}
 
 	/**
 	 *
 	 */
 	async getLocalIDs() {
-		const localIDs = await this.collection
-			.find()
-			.exec()
+		return this.getLocalDocs()
 			.then((docs) => docs.map((doc) => doc.get('id')))
 			.then((ids) => ids.filter((id) => Number.isInteger(id)));
-
-		return localIDs;
 	}
 
 	/**
