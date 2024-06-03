@@ -29,11 +29,11 @@
     ]
   },
   "devDependencies": {
-    "@babel/core": "^7.23.7",
-    "@babel/preset-env": "^7.23.8",
-    "@babel/preset-react": "^7.23.3",
-    "@transifex/cli": "^6.0.2",
-    "@types/jest": "^29.5.11",
+    "@babel/core": "^7.24.6",
+    "@babel/preset-env": "^7.24.6",
+    "@babel/preset-react": "^7.24.6",
+    "@transifex/cli": "^7.1.0",
+    "@types/jest": "^29.5.12",
     "@wcpos/eslint-config": "*",
     "babel-jest": "^29.7.0",
     "dotenv": "^16.4.5",
@@ -42,12 +42,15 @@
     "patch-package": "^8.0.0",
     "postinstall-postinstall": "^2.1.0",
     "prettier": "3.2.5",
-    "ts-jest": "^29.1.2",
+    "ts-jest": "^29.1.4",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.3"
+    "typescript": "^5.4.5"
   },
   "packageManager": "yarn@3.3.1",
   "eslintConfig": {
     "extends": "@wcpos/eslint-config"
+  },
+  "accessTokens": {
+    "rxdb-premium": "***REMOVED***"
   }
 }
