@@ -31,6 +31,18 @@ export const sitesLiteral = {
 		site_icon_url: {
 			type: 'string',
 		},
+		wp_version: {
+			type: 'string',
+		},
+		wc_version: {
+			type: 'string',
+		},
+		wcpos_version: {
+			type: 'string',
+		},
+		wcpos_pro_version: {
+			type: 'string',
+		},
 		wp_api_url: {
 			type: 'string',
 		},

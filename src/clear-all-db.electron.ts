@@ -1,4 +1,6 @@
 /**
- * @TODO - Add context handler for clearing all data
+ *
  */
-export const clearAllDB = async () => {};
+export const clearAllDB = async () => {
+	return window.ipcRenderer.send('clearData');
+};
