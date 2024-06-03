@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/utils",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Shared utils for WooCommerce POS",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/utils#readme",
