@@ -42,8 +42,10 @@ export const hydrateInitialProps = async ({ userDB, appState, user, initialProps
 	 */
 	const urlParams = new URLSearchParams(window.location.search);
 	const initialStoreID = parseInt(urlParams.get('store'), 10);
-	urlParams.delete('store');
-	window.history.replaceState({}, '', `${window.location.pathname}?${urlParams}`);
+	if(initialStoreID) {
+		urlParams.delete('store');
+		window.history.replaceState({}, '', `${window.location.pathname}?${urlParams}`);
+	}
 
 	let storeID;
 
@@ -72,7 +74,7 @@ export const hydrateInitialProps = async ({ userDB, appState, user, initialProps
 	/**
 	 *
 	 */
-	if (!storeID && storeLocalIDs.includes(oldState.storeID)) {
+	if (!storeID && oldState?.storeID && storeLocalIDs.includes(oldState?.storeID)) {
 		storeID = oldState.storeID;
 	} else {
 		storeID = stores[0].localID; // default to first store?

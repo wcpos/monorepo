@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
+
 import Avatar from '@wcpos/components/src/avatar';
 import Box from '@wcpos/components/src/box';
 import Dialog from '@wcpos/components/src/dialog';
@@ -7,9 +9,17 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
 import Suspense from '@wcpos/components/src/suspense';
 import Text from '@wcpos/components/src/text';
+import useHttpClient from '@wcpos/hooks/src/use-http-client';
 
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
+import { useVersionCheck } from '../../../hooks/use-version-check';
+
+interface Props {
+	user: import('@wcpos/database').UserDocument;
+	site: import('@wcpos/database').SiteDocument;
+	idx: number;
+}
 
 /**
  *
@@ -21,9 +31,29 @@ function getUrlWithoutProtocol(url: string) {
 /**
  *
  */
-export const Site = ({ user, site, idx }) => {
+export const Site = ({ user, site, idx }: Props) => {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
+	const { wcposVersionPass } = useVersionCheck({ site });
+	const http = useHttpClient();
+
+	/**
+	 * A bit of a hack to get the latest site info
+	 */
+	React.useEffect(() => {
+		const fetchSiteInfo = async () => {
+			const response = await http.get(site.wp_api_url, { params: { wcpos: 1 } });
+			const data = get(response, 'data', {});
+			site.incrementalPatch({
+				wp_version: data?.wp_version,
+				wc_version: data?.wc_version,
+				wcpos_version: data?.wcpos_version,
+				wcpos_pro_version: data?.wcpos_pro_version,
+				license: data?.license || {},
+			});
+		};
+		fetchSiteInfo();
+	}, []);
 
 	/**
 	 * Remove site
@@ -61,13 +91,20 @@ export const Site = ({ user, site, idx }) => {
 							{site.url}
 						</Text>
 					</Box>
-					<Box>
-						<ErrorBoundary>
-							<Suspense>
-								<WPUsers site={site} />
-							</Suspense>
-						</ErrorBoundary>
-					</Box>
+					{wcposVersionPass ? (
+						<Box>
+							<ErrorBoundary>
+								<Suspense>
+									<WPUsers site={site} />
+								</Suspense>
+							</ErrorBoundary>
+						</Box>
+					) : (
+						<Box horizontal space="small">
+							<Icon name="triangleExclamation" type="critical" />
+							<Text type="critical">{t('Please update your WooCommerce POS plugin')}</Text>
+						</Box>
+					)}
 				</Box>
 				<Box>
 					<Icon

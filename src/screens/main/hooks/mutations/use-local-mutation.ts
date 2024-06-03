@@ -79,7 +79,7 @@ export const useLocalMutation = () => {
 					});
 					return old;
 				});
-				console.log('changes', changes);
+
 				return { changes, document: doc };
 			} catch (error) {
 				log.error('Error patching document', error);

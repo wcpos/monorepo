@@ -24,7 +24,12 @@ const newOrder$ = temporaryDB$.pipe(
 		db.orders.findOne().$.pipe(
 			tap((order) => {
 				if (!isRxDocument(order)) {
-					db.orders.insert({ status: 'pos-open', billing: {}, shipping: {} });
+					db.orders.insert({
+						status: 'pos-open',
+						created_via: 'woocommerce-pos',
+						billing: {},
+						shipping: {},
+					});
 				}
 			}),
 			filter((order) => isRxDocument(order))

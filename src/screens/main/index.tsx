@@ -28,9 +28,11 @@ import ProductsNavigator from './products';
 import Settings from './settings';
 import Support from './support';
 import TaxRates from './tax-rates';
+import { UpgradeRequired } from './upgrade-required';
 import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';
 import { useLocale } from '../../hooks/use-locale';
+import { useVersionCheck } from '../../hooks/use-version-check';
 import { ModalLayout } from '../components/modal-layout';
 
 export type MainStackParamList = {
@@ -212,12 +214,20 @@ const MainNavigator = () => {
 	const { site, storeDB } = useAppState();
 	const wpAPIURL = useObservableEagerState(site.wp_api_url$);
 	const { locale } = useLocale();
+	const { wcposVersionPass } = useVersionCheck({ site });
 
 	/**
 	 * The http client should be smarter, ie: if offline or no auth, it should pause the replications
 	 * or put this as part of the OnlineStatusProvider
 	 */
 	const http = useRestHttpClient();
+
+	/**
+	 * If the version is not supported, we should show an error message
+	 */
+	if (!wcposVersionPass) {
+		return <UpgradeRequired />;
+	}
 
 	/**
 	 * Sanity check: we should not proceed if we don't have a storeDB
