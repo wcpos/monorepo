@@ -5,7 +5,6 @@ import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
 import Suspense from '@wcpos/components/src/suspense';
 import Tabs from '@wcpos/components/src/tabs';
-import { useQuery } from '@wcpos/query';
 
 import Cart from './cart';
 import EmptyCart from './empty-cart';
@@ -18,19 +17,6 @@ const OpenOrders = ({ isColumn = false }) => {
 	if (!currentOrder) {
 		throw new Error('Current order is not defined');
 	}
-
-	/**
-	 *
-	 */
-	const query = useQuery({
-		queryKeys: ['orders', { status: 'pos-open' }],
-		collectionName: 'orders',
-		initialParams: {
-			sortBy: 'date_created_gmt',
-			sortDirection: 'desc',
-			selector: { status: 'pos-open' },
-		},
-	});
 
 	/**
 	 *
@@ -58,7 +44,7 @@ const OpenOrders = ({ isColumn = false }) => {
 						/>
 					}
 				>
-					<OpenOrderTabs query={query} />
+					<OpenOrderTabs />
 				</Suspense>
 			</ErrorBoundary>
 		</Box>

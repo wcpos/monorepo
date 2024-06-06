@@ -12,6 +12,7 @@ import type {
 	WPCredentialsDocument,
 	StoreDocument,
 	StoreDatabase,
+	FastStoreDatabase,
 } from '@wcpos/database';
 
 import { hydrateInitialProps, isWebApp } from './hydrate';
@@ -24,6 +25,7 @@ export interface HydratedData {
 	wpCredentials: WPCredentialsDocument;
 	store: StoreDocument;
 	storeDB: StoreDatabase;
+	fastStoreDB: FastStoreDatabase;
 	extraData: any;
 }
 
@@ -65,6 +67,7 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 		wpCredentials,
 		store,
 		storeDB,
+		fastStoreDB,
 		extraData,
 	} = useUserDB();
 	const [isReadyRef, isReady$] = useObservableRef(false);
@@ -134,6 +137,7 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 			wpCredentials,
 			store,
 			storeDB,
+			fastStoreDB,
 			extraData,
 			translationsState,
 			initialProps, // pass through initialProps
@@ -156,6 +160,7 @@ export const AppStateProvider = ({ children, initialProps }: AppStateProviderPro
 		wpCredentials,
 		store,
 		storeDB,
+		fastStoreDB,
 		extraData,
 		translationsState,
 		initialProps,

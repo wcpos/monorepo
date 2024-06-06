@@ -211,7 +211,7 @@ const TaxRatesScreen = () => {
  *
  */
 const MainNavigator = () => {
-	const { site, storeDB } = useAppState();
+	const { site, storeDB, fastStoreDB } = useAppState();
 	const wpAPIURL = useObservableEagerState(site.wp_api_url$);
 	const { locale } = useLocale();
 	const { wcposVersionPass } = useVersionCheck({ site });
@@ -238,7 +238,7 @@ const MainNavigator = () => {
 
 	return (
 		<ExtraDataProvider>
-			<QueryProvider localDB={storeDB} http={http} locale={locale}>
+			<QueryProvider localDB={storeDB} fastLocalDB={fastStoreDB} http={http} locale={locale}>
 				<UISettingsProvider>
 					<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 						{/** NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}

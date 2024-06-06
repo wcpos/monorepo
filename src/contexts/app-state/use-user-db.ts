@@ -1,12 +1,9 @@
-import * as React from 'react';
-
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 import { from, shareReplay } from 'rxjs';
 import { distinctUntilChanged, tap, filter, switchMap } from 'rxjs/operators';
 
-import { createStoreDB } from '@wcpos/database/src/stores-db';
-import { createUserDB } from '@wcpos/database/src/users-db';
+import { createUserDB, createStoreDB, createFastStoreDB } from '@wcpos/database/src';
 
 /**
  * NOTE: The userDB promise will be called before the app is rendered
@@ -46,7 +43,7 @@ const obs$ = userDB$.pipe(
 	switchMap(({ userDB, appState }) => {
 		return appState.current$.pipe(
 			switchMap(async (current) => {
-				let site, wpCredentials, store, storeDB, extraData;
+				let site, wpCredentials, store, storeDB, fastStoreDB, extraData;
 				/**
 				 * Becareful! RxDB will return a value if primary ID is empty, it sucks, I hate it.
 				 */
@@ -61,9 +58,10 @@ const obs$ = userDB$.pipe(
 				}
 				if (isRxDocument(store)) {
 					storeDB = await createStoreDB(store.localID);
+					fastStoreDB = await createFastStoreDB(store.localID);
 					extraData = await storeDB.addState('data');
 				}
-				return { site, wpCredentials, store, storeDB, extraData };
+				return { site, wpCredentials, store, storeDB, fastStoreDB, extraData };
 			})
 		);
 	})
@@ -81,7 +79,8 @@ export const useUserDB = () => {
 	}
 
 	const user = useObservableSuspense(userResource);
-	const { site, wpCredentials, store, storeDB, extraData } = useObservableSuspense(resource);
+	const { site, wpCredentials, store, storeDB, fastStoreDB, extraData } =
+		useObservableSuspense(resource);
 
 	/**
 	 *
@@ -95,6 +94,7 @@ export const useUserDB = () => {
 		wpCredentials,
 		store,
 		storeDB,
+		fastStoreDB,
 		extraData,
 	};
 };

@@ -27,7 +27,8 @@ const Stack = createStackNavigator<RootStackParamList>();
  *
  */
 const RootNavigator = () => {
-	const { store, storeDB, initialProps, hydrationResource, isReadyResource } = useAppState();
+	const { store, storeDB, fastStoreDB, initialProps, hydrationResource, isReadyResource } =
+		useAppState();
 	useObservableSuspense(hydrationResource); // suspend until hydration is complete
 	useObservableSuspense(isReadyResource); // suspend until app is ready
 	const theme = useTheme();
@@ -154,7 +155,7 @@ const RootNavigator = () => {
 				// key={storeDB?.token}
 				screenOptions={{ headerShown: false }}
 			>
-				{storeDB ? (
+				{storeDB && fastStoreDB ? (
 					<Stack.Screen name="MainStack" component={MainNavigator} />
 				) : (
 					<Stack.Screen
