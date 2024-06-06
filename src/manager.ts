@@ -62,6 +62,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 	private constructor(
 		private localDB: TDatabase,
+		private fastLocalDB,
 		private httpClient,
 		private locale: string
 	) {
@@ -94,6 +95,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 
 	public static getInstance<TDatabase extends RxDatabase>(
 		localDB: TDatabase,
+		fastLocalDB,
 		httpClient,
 		locale: string
 	) {
@@ -101,6 +103,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		if (
 			Manager.instance &&
 			Manager.instance.localDB === localDB &&
+			Manager.instance.fastLocalDB === fastLocalDB &&
 			// Manager.instance.httpClient === httpClient && // @TODO - look into this
 			Manager.instance.locale === locale
 		) {
@@ -113,7 +116,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		}
 
 		// Create a new instance
-		Manager.instance = new Manager(localDB, httpClient, locale);
+		Manager.instance = new Manager(localDB, fastLocalDB, httpClient, locale);
 		return Manager.instance as Manager<TDatabase>;
 	}
 
@@ -207,6 +210,15 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		return this.localDB[collectionName];
 	}
 
+	getSyncCollection(collectionName: string) {
+		if (!this.fastLocalDB[collectionName]) {
+			this.subjects.error.next(
+				new Error(`Sync collection with name: ${collectionName} not found.`)
+			);
+		}
+		return this.fastLocalDB[collectionName];
+	}
+
 	getQuery(queryKeys: (string | number | object)[]) {
 		const key = this.stringify(queryKeys);
 		const query = this.queryStates.get(key);
@@ -298,10 +310,12 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	 */
 	registerCollectionReplication({ collection, endpoint }) {
 		const replicationState = this.replicationStates.get(endpoint);
+		const syncCollection = this.getSyncCollection(collection.name);
 		if (!replicationState || !(replicationState instanceof CollectionReplicationState)) {
 			const collectionReplication = new CollectionReplicationState({
 				httpClient: this.httpClient,
 				collection,
+				syncCollection,
 				endpoint,
 				errorSubject: this.subjects.error,
 			});

@@ -39,6 +39,7 @@ export interface QueryHooks {
 
 interface CollectionReplicationConfig<Collection> {
 	collection: Collection;
+	syncCollection: any;
 	httpClient: any;
 	hooks?: any;
 	endpoint: string;
@@ -49,6 +50,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	private hooks: CollectionReplicationConfig<T>['hooks'];
 	public readonly endpoint: string;
 	public readonly collection: T;
+	public readonly syncCollection: any;
 	public readonly storeDB: StoreDatabase;
 	public readonly httpClient: any;
 	private errorSubject: Subject<Error>;
@@ -88,6 +90,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 */
 	constructor({
 		collection,
+		syncCollection,
 		httpClient,
 		hooks,
 		endpoint,
@@ -95,6 +98,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	}: CollectionReplicationConfig<T>) {
 		super();
 		this.collection = collection;
+		this.syncCollection = syncCollection;
 		this.storeDB = collection.database;
 		this.httpClient = httpClient;
 		this.hooks = hooks || {};
@@ -118,12 +122,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 * Subscribe to remote and local collections to calculate the total number of documents
 	 */
 	private setupDocumentCount() {
-		const remoteCount$ = this.storeDB.collections.sync
-			.find({ selector: { endpoint: this.endpoint } })
-			.$.pipe(
-				map((docs) => docs?.length || 0),
-				distinctUntilChanged()
-			);
+		const remoteCount$ = this.syncCollection.find({ selector: { endpoint: this.endpoint } }).$.pipe(
+			map((docs) => docs?.length || 0),
+			distinctUntilChanged()
+		);
 
 		const newLocalCount$ = this.collection.find({ selector: { id: { $eq: null } } }).$.pipe(
 			map((docs) => docs?.length || 0),
@@ -184,6 +186,11 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	}
 
 	/**
+	 * @TODO - split audit into fullAudit and recentChanges
+	 */
+	async fullAudit() {}
+
+	/**
 	 *
 	 */
 	async audit() {
@@ -241,16 +248,15 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			 * - it's tempting to just bulk delete and insert, but it causes doc totals to flash in the UI
 			 */
 			const data = response.data.map((doc) => ({ ...doc, endpoint: this.endpoint }));
-			const syncCollection = this.storeDB.collections.sync;
 			const ids = await this.getStoredRemoteIDs();
 			const orphanedIds = ids.filter((id) => !data.map((doc) => doc.id).includes(id));
 			if (orphanedIds.length > 0) {
 				log.warn('removing remote', orphanedIds, 'from', this.collection.name);
-				await syncCollection
+				await this.syncCollection
 					.find({ selector: { endpoint: this.endpoint, id: { $in: orphanedIds } } })
 					.remove();
 			}
-			const { error } = await this.storeDB.collections.sync.bulkUpsert(data);
+			const { error } = await this.syncCollection.bulkUpsert(data);
 
 			if (error.length > 0) {
 				log.error('Error saving remote state for ' + this.endpoint, error);
@@ -294,7 +300,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 *
 	 */
 	async getStoredRemoteDocs() {
-		return this.storeDB.collections.sync.find({ selector: { endpoint: this.endpoint } }).exec();
+		return this.syncCollection.find({ selector: { endpoint: this.endpoint } }).exec();
 	}
 
 	/**
