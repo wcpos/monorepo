@@ -218,7 +218,17 @@ export type StoreCollections = {
 	// payment_gateways: GatewayCollection;
 	'products/categories': ProductCategoryCollection;
 	'products/tags': ProductTagCollection;
-	sync: SyncCollection;
+};
+
+export type SyncCollections = {
+	products: SyncCollection;
+	variations: SyncCollection;
+	orders: SyncCollection;
+	customers: SyncCollection;
+	taxes: SyncCollection;
+	// payment_gateways: GatewayCollection;
+	'products/categories': SyncCollection;
+	'products/tags': SyncCollection;
 };
 
 export const userCollections = {
@@ -238,5 +248,15 @@ export const storeCollections = {
 	// payment_gateways,
 	'products/categories': categories, // NOTE: WC REST API uses 'products/categories' endpoint
 	'products/tags': tags, // NOTE: WC REST API uses 'products/tags' endpoint
-	sync, // for remote sync data
+};
+
+export const syncCollections = {
+	products: sync,
+	variations: sync,
+	orders: sync,
+	customers: sync,
+	taxes: sync,
+	// payment_gateways: sync,
+	'products/categories': sync,
+	'products/tags': sync,
 };

@@ -4,6 +4,7 @@ import { disableVersionCheck } from 'rxdb-premium/plugins/shared';
 import log from '@wcpos/utils/src/logger';
 
 import config from './adapter';
+import { memorySyncedConfig } from './memory-synced-adapter';
 
 import './plugins';
 disableVersionCheck();
@@ -27,9 +28,21 @@ export async function createDB<DBCollections>(name: string) {
 	}
 }
 
-// /**
-//  * deletes the generic database
-//  */
-// export function removeDB(name: string) {
-// 	return removeRxDatabase(name, config.storage);
-// }
+/**
+ * creates the memory synced database
+ */
+export async function createMemorySyncedDB<DBCollections>(name: string) {
+	try {
+		const db = await createRxDatabase<DBCollections>({
+			name: `${name}`,
+			...memorySyncedConfig,
+			password: 'posInstanceId',
+			ignoreDuplicate: true, // I think Expo enables HMR, so we need to ignore duplicate
+			// multiInstance: false,
+		});
+
+		return db;
+	} catch (error) {
+		log.error(error);
+	}
+}
