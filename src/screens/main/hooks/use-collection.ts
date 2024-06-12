@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { filter } from 'rxjs/operators';
+import { debounceTime, filter } from 'rxjs/operators';
 
 import { storeCollections } from '@wcpos/database';
-import type { StoreDatabaseCollections } from '@wcpos/database';
+import type { StoreCollections } from '@wcpos/database';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -25,11 +25,18 @@ export type CollectionKey = keyof typeof storeCollections;
  */
 export const useCollection = <K extends CollectionKey>(
 	key: K
-): { collection: StoreDatabaseCollections[K]; collectionLabel: string } => {
+): { collection: StoreCollections[K]; collectionLabel: string } => {
 	const t = useT();
 	const { storeDB } = useAppState();
 	const collection = useObservableState(
-		storeDB.reset$.pipe(filter((collection) => collection.name === key)),
+		storeDB.reset$.pipe(
+			filter((collection) => collection.name === key),
+			/**
+			 * DebounceTime is a bit of a hack, we need to give useReplicationQuery
+			 * time to re-add both collections before we try to access them
+			 */
+			debounceTime(100)
+		),
 		storeDB.collections[key]
 	);
 

@@ -42,7 +42,7 @@ export const hydrateInitialProps = async ({ userDB, appState, user, initialProps
 	 */
 	const urlParams = new URLSearchParams(window.location.search);
 	const initialStoreID = parseInt(urlParams.get('store'), 10);
-	if(initialStoreID) {
+	if (initialStoreID) {
 		urlParams.delete('store');
 		window.history.replaceState({}, '', `${window.location.pathname}?${urlParams}`);
 	}

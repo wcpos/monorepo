@@ -16,15 +16,16 @@ const resetCollectionNames = {
  *
  */
 export const useCollectionReset = (key: CollectionKey) => {
-	const { storeDB } = useAppState();
+	const { storeDB, fastStoreDB } = useAppState();
 
 	/**
 	 *
 	 */
-	const clear = React.useCallback(() => {
+	const clear = React.useCallback(async () => {
 		const keys = resetCollectionNames[key] || [key];
+		fastStoreDB.reset(keys);
 		storeDB.reset(keys);
-	}, [storeDB, key]);
+	}, [fastStoreDB, key, storeDB]);
 
 	return { clear };
 };

@@ -101,6 +101,9 @@ const RootNavigator = () => {
 											EditCustomer: 'edit/:customerID',
 										},
 									},
+									LogsStack: {
+										path: 'logs',
+									},
 									SupportStack: {
 										path: 'support',
 									},

@@ -10,5 +10,6 @@ export default {
 	shipping: address,
 	actions,
 	email,
-	date_created: Date,
+	date_created_gmt: Date,
+	date_modified_gmt: Date,
 };

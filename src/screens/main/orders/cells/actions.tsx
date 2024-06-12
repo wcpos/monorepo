@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import Dropdown from '@wcpos/components/src/dropdown';
 import Icon from '@wcpos/components/src/icon';
@@ -42,6 +42,7 @@ const Actions = ({ item: order }: Props) => {
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
+	const orderHasID = useObservableEagerState(order.id$); // we need to update the menu with change to order.id
 
 	/**
 	 * To re-open an order, we need to:
@@ -86,7 +87,7 @@ const Actions = ({ item: order }: Props) => {
 		];
 
 		// if order has an id, then it can be synced
-		if (order.id) {
+		if (orderHasID) {
 			menu.splice(2, 0, {
 				label: t('Sync', { _tags: 'core' }),
 				action: () => {
@@ -99,7 +100,7 @@ const Actions = ({ item: order }: Props) => {
 		}
 
 		// if order has an id, then it has a receipt
-		if (order.id) {
+		if (orderHasID) {
 			menu.splice(1, 0, {
 				label: t('Receipt', { _tags: 'core' }),
 				icon: 'receipt',
@@ -108,7 +109,7 @@ const Actions = ({ item: order }: Props) => {
 		}
 
 		return menu;
-	}, [handleOpen, navigation, order.collection, order.id, order.uuid, pullDocument, t]);
+	}, [handleOpen, navigation, order.collection, order.id, order.uuid, orderHasID, pullDocument, t]);
 
 	/**
 	 *

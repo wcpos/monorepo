@@ -1,6 +1,13 @@
 import * as React from 'react';
 
-import { parseISO, format, differenceInMinutes, differenceInHours, isToday } from 'date-fns';
+import {
+	parseISO,
+	format,
+	differenceInMinutes,
+	differenceInHours,
+	isToday,
+	isValid,
+} from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import { useObservableState } from 'observable-hooks';
 import { switchMap, map, filter } from 'rxjs/operators';
@@ -18,13 +25,26 @@ export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', from
 	const heartbeat$ = useHeartbeatObservable(60000); // every minute
 	const { visibile$ } = usePageVisibility();
 	const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-	const gmtDateObject = parseISO(gmtDate.endsWith('Z') ? gmtDate : `${gmtDate}Z`);
+	let gmtDateObject;
+
+	// Determine if gmtDate is an ISO string or a Unix timestamp
+	if (typeof gmtDate === 'string') {
+		gmtDateObject = parseISO(gmtDate.endsWith('Z') ? gmtDate : `${gmtDate}Z`);
+	} else if (typeof gmtDate === 'number') {
+		gmtDateObject = new Date(gmtDate);
+	} else {
+		throw new Error('Invalid date format');
+	}
+
 	const localDate = toZonedTime(gmtDateObject, timeZone);
 
 	/**
 	 *
 	 */
 	const formatDate = React.useCallback(() => {
+		if (!isValid(localDate)) {
+			return null;
+		}
 		if (fromNow) {
 			const now = new Date();
 			const diffInMinutes = differenceInMinutes(now, localDate);

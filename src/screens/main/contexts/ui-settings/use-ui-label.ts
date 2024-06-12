@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
+import { timestamp } from 'rxjs';
 
 import { useT } from '../../../../contexts/translations';
 
@@ -33,6 +34,8 @@ export const useUILabel = () => {
 					metaDataKeys: t('Meta Data Keys', { _tags: 'core' }),
 				},
 				'pos-cart': {
+					autoShowReceipt: t('Automatically show receipt after checkout', { _tags: 'core' }),
+					autoPrintReceipt: t('Automatically print receipt after checkout', { _tags: 'core' }),
 					quickDiscounts: t('Quick Discounts', { _tags: 'core' }),
 					quantity: t('Qty', { _tags: 'core', _context: 'Short for quantity' }),
 					split: t('Split', { _tags: 'core', _context: 'Split quantity' }),
@@ -94,7 +97,15 @@ export const useUILabel = () => {
 					role: t('Role', { _tags: 'core' }),
 					username: t('Username', { _tags: 'core' }),
 					date_created_gmt: t('Date created', { _tags: 'core' }),
+					date_modified_gmt: t('Date modified', { _tags: 'core' }),
 					actions: t('Actions', { _tags: 'core' }),
+				},
+				logs: {
+					timestamp: t('Time', { _tags: 'core' }),
+					level: t('Level', { _tags: 'core' }),
+					message: t('Message', { _tags: 'core' }),
+					context: t('Context', { _tags: 'core' }),
+					code: t('Code', { _tags: 'core' }),
 				},
 			};
 

@@ -27,6 +27,7 @@ export interface UISettingsContextValue {
 		products: ObservableResource<UISettingState<'products'>>;
 		orders: ObservableResource<UISettingState<'orders'>>;
 		customers: ObservableResource<UISettingState<'customers'>>;
+		logs: ObservableResource<UISettingState<'logs'>>;
 	};
 	getLabel: (id: string, key: string) => string;
 	reset: (id: UISettingID) => Promise<void>;
@@ -109,6 +110,18 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 		[storeDB]
 	);
 
+	const logs$ = useObservable(
+		(inputs$) =>
+			inputs$.pipe(
+				switchMap(async ([db]) => {
+					const state = await db.addState<UISettingSchema<'logs'>>('logs');
+					await mergeWithInitalValues('logs', state);
+					return state;
+				})
+			),
+		[storeDB]
+	);
+
 	/**
 	 * Reset UI Settings
 	 */
@@ -142,12 +155,13 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 				products: new ObservableResource(products$),
 				orders: new ObservableResource(orders$),
 				customers: new ObservableResource(customers$),
+				logs: new ObservableResource(logs$),
 			},
 			getLabel,
 			reset,
 			patch,
 		}),
-		[customers$, getLabel, orders$, patch, posCart$, posProducts$, products$, reset]
+		[customers$, getLabel, logs$, orders$, patch, posCart$, posProducts$, products$, reset]
 	);
 
 	/**

@@ -3,7 +3,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createStackNavigator } from '@react-navigation/stack';
-import { useObservableEagerState } from 'observable-hooks';
+import { useForceUpdate, useObservableEagerState, useSubscription } from 'observable-hooks';
 import { isRxDatabase } from 'rxdb';
 import { useTheme } from 'styled-components/native';
 
@@ -11,6 +11,7 @@ import Icon from '@wcpos/components/src/icon';
 import Portal from '@wcpos/components/src/portal';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import { QueryProvider, QueryDevtools } from '@wcpos/query';
+import logger from '@wcpos/utils/src/logger';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
@@ -22,6 +23,7 @@ import Help from './help';
 import useKeyboardShortcuts from './hooks/use-keyboard-shortcuts';
 import { useRestHttpClient } from './hooks/use-rest-http-client';
 import Login from './login';
+import { LogsWithProviders } from './logs';
 import OrdersNavigator from './orders';
 import POSNavigator from './pos';
 import ProductsNavigator from './products';
@@ -50,6 +52,7 @@ export type DrawerParamList = {
 	ProductsStack: undefined;
 	OrdersStack: undefined;
 	CustomersStack: undefined;
+	LogsStack: undefined;
 	SupportStack: undefined;
 };
 
@@ -132,6 +135,18 @@ const DrawerNavigator = ({ navigation }) => {
 				}}
 			/>
 			<Drawer.Screen
+				name="LogsStack"
+				component={LogsWithProviders}
+				options={{
+					title: t('Logs', { _tags: 'core' }),
+					drawerLabel: t('Logs', { _tags: 'core' }),
+					drawerIcon: ({ focused }) => (
+						<Icon name="heartPulse" type={focused ? 'primary' : 'inverse'} size="large" />
+					),
+					drawerItemStyle: { marginTop: 'auto' },
+				}}
+			/>
+			<Drawer.Screen
 				name="SupportStack"
 				component={Support}
 				options={{
@@ -140,7 +155,7 @@ const DrawerNavigator = ({ navigation }) => {
 					drawerIcon: ({ focused }) => (
 						<Icon name="commentQuestion" type={focused ? 'primary' : 'inverse'} size="large" />
 					),
-					drawerItemStyle: { marginTop: 'auto' },
+					// drawerItemStyle: { marginTop: 'auto' },
 				}}
 			/>
 		</Drawer.Navigator>

@@ -13,6 +13,7 @@ import WebView from '@wcpos/components/src/webview';
 import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../../../../contexts/app-state';
+import { useUISettings } from '../../../contexts/ui-settings';
 import { useStockAdjustment } from '../../../hooks/use-stock-adjustment';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -33,6 +34,7 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 	const { wpCredentials } = useAppState();
 	const jwt = useObservableState(wpCredentials.jwt$, wpCredentials.jwt);
 	const { stockAdjustment } = useStockAdjustment();
+	const { uiSettings } = useUISettings('pos-cart');
 
 	/**
 	 *
@@ -65,11 +67,15 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 					const parsedData = latest.collection.parseRestResponse(payload);
 					const success = await latest.incrementalPatch(parsedData);
 					if (success) {
-						navigation.dispatch(
-							StackActions.replace('Receipt', {
-								orderID: order.uuid,
-							})
-						);
+						if (uiSettings.autoShowReceipt) {
+							navigation.dispatch(
+								StackActions.replace('Receipt', {
+									orderID: order.uuid,
+								})
+							);
+						} else {
+							navigation.navigate('POSStack', { screen: 'POS' });
+						}
 					}
 				} catch (err) {
 					log.error(err);
@@ -85,7 +91,7 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 				}
 			}
 		},
-		[addSnackbar, navigation, order, setPrimaryAction, stockAdjustment]
+		[addSnackbar, navigation, order, setPrimaryAction, stockAdjustment, uiSettings.autoShowReceipt]
 	);
 
 	/**

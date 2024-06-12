@@ -68,13 +68,15 @@ export const ProductTotal = ({ item, column }: Props) => {
 					>
 						{format(displaySubtotal || 0)}
 					</Text>
-					<Text
-						type="textMuted"
-						size="small"
-						style={{ textDecorationLine: 'line-through', textDecorationStyle: 'solid' }}
-					>
-						{`${taxDisplayCart} ${format(item.subtotal_tax || 0)} tax`}
-					</Text>
+					{show('tax') && (
+						<Text
+							type="textMuted"
+							size="small"
+							style={{ textDecorationLine: 'line-through', textDecorationStyle: 'solid' }}
+						>
+							{`${taxDisplayCart} ${format(item.subtotal_tax || 0)} tax`}
+						</Text>
+					)}
 				</>
 			)}
 			<Text>{format(displayTotal || 0)}</Text>

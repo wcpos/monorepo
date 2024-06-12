@@ -110,6 +110,12 @@ const UISettings = <T extends UISettingID>({ uiSettings, title }: Props<T>) => {
 			return {
 				..._schema,
 				properties: {
+					autoShowReceipt: {
+						type: 'boolean',
+					},
+					autoPrintReceipt: {
+						type: 'boolean',
+					},
 					quickDiscounts: {
 						type: 'string',
 					},

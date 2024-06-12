@@ -30,10 +30,13 @@ export const ReceiptModal = ({ resource }: Props) => {
 	const billingEmail = useObservableState(order.billing.email$, order.billing.email);
 
 	/**
-	 *
+	 * @TODO - I need to fix this mess with Modal actions
 	 */
-	setSecondaryActions((prev) =>
-		prev.map((p, index) => {
+	setSecondaryActions((prev) => {
+		if (typeof prev === 'function') {
+			return;
+		}
+		return prev.map((p, index) => {
 			if (index === 0) {
 				return {
 					...p,
@@ -42,8 +45,8 @@ export const ReceiptModal = ({ resource }: Props) => {
 			} else {
 				return p;
 			}
-		})
-	);
+		});
+	});
 
 	/**
 	 *
