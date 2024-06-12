@@ -2,6 +2,7 @@ import { Query, QueryHooks, QueryResult } from './query-state';
 
 export { QueryProvider, useQueryManager } from './provider';
 export { useQuery } from './use-query';
+export { useLocalQuery } from './use-local-query';
 export { useRelationalQuery } from './use-relational-query';
 export { useReplicationState } from './use-replication-state';
 export { QueryDevtools } from './devtools';

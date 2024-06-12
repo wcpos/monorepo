@@ -12,7 +12,7 @@ import {
 } from 'rxjs/operators';
 
 import { SubscribableBase } from './subscribable-base';
-import { getParamValueFromEndpoint, bulkUpsert } from './utils';
+import { getParamValueFromEndpoint } from './utils';
 
 import type { CollectionReplicationState } from './collection-replication-state';
 import type { RxCollection } from 'rxdb';
@@ -103,7 +103,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		}
 
 		// await this.collectionReplication.firstSync;
-		const saved = await this.fetchUnsynced();
+		const saved = await this.sync();
 
 		if (this.greedy && saved && saved.length > 0) {
 			/**
@@ -122,12 +122,24 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	/**
 	 *
 	 */
-	async fetchUnsynced() {
+	async sync() {
 		if (this.isStopped() || this.subjects.active.getValue()) {
 			return;
 		}
 
+		// If query sync is already completed, we go to the collection sync
+		if (this.syncCompleted) {
+			return this.collectionReplication.sync();
+		}
+
 		this.subjects.active.next(true);
+
+		// Create a sync promise to pause the collection sync, until we are finished
+		let resolveQueryPromise: () => void;
+		const queryPromise = new Promise<void>((resolve) => {
+			resolveQueryPromise = resolve;
+		});
+		this.collectionReplication.setQuerySyncPromise(queryPromise);
 
 		let include = await this.collectionReplication.getUnsyncedRemoteIDs();
 		let exclude = await this.collectionReplication.getSyncedRemoteIDs();
@@ -149,14 +161,6 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 			exclude = intersection(exclude, ids);
 		}
 
-		/**
-		 * If query sync is already completed, we go to the collection sync
-		 */
-		if (this.syncCompleted) {
-			this.subjects.active.next(false);
-			return this.collectionReplication.sync();
-		}
-
 		try {
 			let response;
 
@@ -166,65 +170,25 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 				response = { data: [] };
 			} else {
 				if (exclude?.length < include?.length) {
-					response = await this.fetchUnsyncedRemoteIDs({ exclude });
+					response = await this.fetchRemoteByIDs({ exclude });
 				} else {
-					response = await this.fetchUnsyncedRemoteIDs({ include });
+					response = await this.fetchRemoteByIDs({ include });
 				}
 			}
 
-			if (!Array.isArray(response?.data)) {
-				throw new Error('Invalid response data for query replication');
-			}
-
-			if (response.data.length === 0) {
+			if (Array.isArray(response?.data) && response.data.length === 0) {
 				this.syncCompleted = true;
 				return;
 			}
 
-			const documents = response.data.map((doc) => this.collection.parseRestResponse(doc));
-			await bulkUpsert(this.collection, documents);
+			await this.collectionReplication.bulkUpsertResponse(response);
 		} catch (error) {
 			this.errorSubject.next(error);
 		} finally {
+			// Resolve the query sync promise
+			resolveQueryPromise();
 			this.subjects.active.next(false);
 		}
-	}
-
-	/**
-	 *
-	 */
-	async fetchUnsyncedRemoteIDs({ include = undefined, exclude = undefined }) {
-		const response = await this.httpClient.post(
-			this.endpoint,
-			{
-				include,
-				exclude,
-			},
-			{
-				headers: {
-					'X-HTTP-Method-Override': 'GET',
-				},
-			}
-		);
-
-		return response;
-	}
-
-	/**
-	 *
-	 */
-	async fetchLastModified({ lastModified }) {
-		const response = await this.httpClient.get(this.endpoint, {
-			params: {
-				modified_after: lastModified,
-				/**
-				 * Modified after is always in GMT
-				 */
-				dates_are_gmt: true,
-			},
-		});
-
-		return response;
 	}
 
 	/**
@@ -247,5 +211,28 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 	isStopped() {
 		return this.isCanceled || this.subjects.paused.getValue();
+	}
+
+	/**
+	 * ------------------------------
+	 * Fetch methods
+	 * ------------------------------
+	 * @NOTE: this endpoint is different to the general collection endpoint, it has query params
+	 */
+	async fetchRemoteByIDs({ include = undefined, exclude = undefined }) {
+		const response = await this.httpClient.post(
+			this.endpoint,
+			{
+				include,
+				exclude,
+			},
+			{
+				headers: {
+					'X-HTTP-Method-Override': 'GET',
+				},
+			}
+		);
+
+		return response;
 	}
 }

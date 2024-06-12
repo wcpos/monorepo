@@ -14,7 +14,6 @@ import type { StoreDatabase } from '@wcpos/database';
 import log from '@wcpos/utils/src/logger';
 
 import { SubscribableBase } from './subscribable-base';
-import { bulkUpsert } from './utils';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 type ProductVariationCollection = import('@wcpos/database').ProductVariationCollection;
@@ -58,9 +57,10 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	/**
 	 * Internal State
 	 */
-	private lastFetchRemoteIDsTime = null;
-	private lastFetchUnsyncedTime = null;
-	private pollingTime = 1000 * 60 * 5; // 5 minutes
+	private lastFetchRemoteState = null;
+	private lastFetchRemoteUpdates = null;
+	private pollingInterval = 1000 * 60 * 5; // 5 minutes
+	private fullFetchInterval = 1000 * 60 * 60; // 1 hour
 	public readonly subs: Subscription[] = [];
 
 	/**
@@ -84,6 +84,15 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 */
 	private firstSyncResolver: (() => void) | null = null;
 	public readonly firstSync: Promise<void>;
+
+	/**
+	 * @TODO - I need a better pause/resume system which can pause mid process, then resume
+	 * This is a hack for now to allow the query sync to pause the collection sync
+	 */
+	private querySync: Promise<void> = Promise.resolve();
+	public setQuerySyncPromise = (promise: Promise<void>) => {
+		this.querySync = promise;
+	};
 
 	/**
 	 *
@@ -122,20 +131,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 * Subscribe to remote and local collections to calculate the total number of documents
 	 */
 	private setupDocumentCount() {
-		const remoteCount$ = this.syncCollection.find({ selector: { endpoint: this.endpoint } }).$.pipe(
-			map((docs) => docs?.length || 0),
-			distinctUntilChanged()
-		);
-
-		const newLocalCount$ = this.collection.find({ selector: { id: { $eq: null } } }).$.pipe(
-			map((docs) => docs?.length || 0),
-			distinctUntilChanged()
-		);
-
-		const totalCount$ = combineLatest([remoteCount$, newLocalCount$]).pipe(
-			map(([remoteCount, newLocalCount]) => remoteCount + newLocalCount),
-			startWith(0)
-		);
+		const totalCount$ = this.syncCollection
+			.count({ selector: { endpoint: this.endpoint, id: { $exists: true } } })
+			.$.pipe(startWith(0), distinctUntilChanged());
 
 		// Subscribe to the total count and update the subject
 		this.subs.push(totalCount$.subscribe((count) => this.subjects.total.next(count)));
@@ -160,10 +158,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	/**
 	 * Run the collection replication
 	 */
-	async run({ force }: { force?: boolean } = {}) {
+	run = async ({ force }: { force?: boolean } = {}) => {
 		if (force) {
-			this.lastFetchRemoteIDsTime = null;
-			this.lastFetchUnsyncedTime = null;
+			this.resetFetchTimes();
 		}
 
 		if (this.isStopped() && force) {
@@ -177,48 +174,72 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		 * Fetching the remote state will update the sync collection, which triggers other events
 		 * such as the total count, fetching updated documents, removing orphaned documents etc
 		 */
-		const now = new Date().getTime();
-		if (this.lastFetchRemoteIDsTime < now - this.pollingTime) {
-			this.lastFetchRemoteIDsTime = now;
-			await this.fetchRemoteState();
-			await this.audit();
+		if (this.shouldFetchRemoteState()) {
+			await this.fetchAndAuditRemoteState();
+		} else if (this.shouldFetchRemoteUpdates()) {
+			await this.fetchAndAuditRemoteUpdates();
 		}
-	}
+	};
 
-	/**
-	 * @TODO - split audit into fullAudit and recentChanges
-	 */
-	async fullAudit() {}
+	private resetFetchTimes = () => {
+		this.lastFetchRemoteState = null;
+		this.lastFetchRemoteUpdates = null;
+	};
+
+	private shouldFetchRemoteState = (): boolean => {
+		const now = Date.now();
+		return this.lastFetchRemoteState < now - this.fullFetchInterval;
+	};
+
+	private shouldFetchRemoteUpdates = (): boolean => {
+		const now = Date.now();
+		return this.lastFetchRemoteUpdates < now - this.pollingInterval;
+	};
+
+	private fetchAndAuditRemoteState = async () => {
+		this.lastFetchRemoteState = Date.now();
+		this.lastFetchRemoteUpdates = this.lastFetchRemoteState;
+		await this.fetchAllRemoteIds();
+		await this.audit();
+	};
+
+	private fetchAndAuditRemoteUpdates = async () => {
+		this.lastFetchRemoteUpdates = Date.now();
+		await this.fetchRecentRemoteUpdates();
+		await this.audit();
+	};
 
 	/**
 	 *
 	 */
 	async audit() {
-		const localIDs = await this.getLocalIDs();
-		const remoteIDs = await this.getStoredRemoteIDs();
+		const remove = await this.syncCollection
+			.find({ selector: { status: 'PULL_DELETE', endpoint: this.endpoint, id: { $exists: true } } })
+			.exec()
+			.then((docs) => docs.map((doc) => doc.id));
 
-		// Find all local docs that are not in the remote state
-		const remove = localIDs.filter((id) => !remoteIDs.includes(id));
 		if (remove.length > 0 && this.collection.name !== 'variations') {
 			// deletion should be rare, only when an item is deleted from the server
 			log.warn('removing', remove, 'from', this.collection.name);
+			await this.storeDB.collections.logs.insert({
+				level: 'warn',
+				timestamp: Date.now(),
+				message: 'Removing records from ' + this.collection.name,
+				context: remove,
+			});
 			await this.collection.find({ selector: { id: { $in: remove } } }).remove();
 		}
 
-		// Find all remote docs that have been updated
-		const localDocs = await this.getLocalDocs();
-		const localMap = new Map(localDocs.map((doc) => [doc.id, doc.date_modified_gmt]));
+		const updated = await this.syncCollection
+			.find({ selector: { status: 'PULL_UPDATE', endpoint: this.endpoint, id: { $exists: true } } })
+			.exec()
+			.then((docs) => docs.map((doc) => doc.id));
 
-		const remoteDocs = await this.getStoredRemoteDocs();
-		const updatedIds = remoteDocs
-			.filter((remoteDoc) => {
-				const localDate = localMap.get(remoteDoc.id);
-				return localDate && remoteDoc.date_modified_gmt > localDate;
-			})
-			.map((doc) => doc.id);
-
-		if (updatedIds.length > 0) {
-			await this.sync({ include: updatedIds, force: true });
+		// If there are updated records, sync them, else get any unsynced records
+		if (updated.length > 0) {
+			await this.sync({ include: updated, force: true });
+		} else {
+			await this.sync();
 		}
 	}
 
@@ -226,7 +247,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 * Makes a request the the endpoint to fetch all remote IDs
 	 * - this should be done as rarely as possible, getting all remote IDs is expensive on the server
 	 */
-	async fetchRemoteState() {
+	fetchAllRemoteIds = async () => {
 		if (this.isStopped() || this.subjects.active.getValue()) {
 			return;
 		}
@@ -239,29 +260,24 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			});
 
 			if (!Array.isArray(response?.data)) {
-				throw new Error('Invalid response data for remote IDs');
+				this.logInvalidResponse('Invalid response fetching remote state for ' + this.endpoint);
+				return;
 			}
+
+			this.logFetchStatus(this.endpoint, response.headers, 'all');
 
 			/**
 			 * Save the remote state to the sync collection
-			 * - we need to remove any orphaned ids, eg: doc deleted on server
-			 * - it's tempting to just bulk delete and insert, but it causes doc totals to flash in the UI
+			 * - compare to existing sync collection, insert or update as needed
 			 */
-			const data = response.data.map((doc) => ({ ...doc, endpoint: this.endpoint }));
-			const ids = await this.getStoredRemoteIDs();
-			const orphanedIds = ids.filter((id) => !data.map((doc) => doc.id).includes(id));
-			if (orphanedIds.length > 0) {
-				log.warn('removing remote', orphanedIds, 'from', this.collection.name);
-				await this.syncCollection
-					.find({ selector: { endpoint: this.endpoint, id: { $in: orphanedIds } } })
-					.remove();
-			}
-			const { error } = await this.syncCollection.bulkUpsert(data);
+			const remoteDataMap = new Map(response.data.map((doc) => [doc.id, doc]));
+			const syncData = await this.syncCollection
+				.find({ selector: { endpoint: this.endpoint } })
+				.exec();
+			const syncDataMap = new Map(syncData.map((doc) => [doc.id, doc]));
 
-			if (error.length > 0) {
-				log.error('Error saving remote state for ' + this.endpoint, error);
-				throw new Error('Error saving remote state for ' + this.endpoint);
-			}
+			// make sure we wait for the sync state to be updated before resolving the firstSync
+			await this.handleSyncState(remoteDataMap, syncDataMap, this.endpoint, 'all');
 
 			// Resolve the firstSync promise
 			if (this.firstSyncResolver) {
@@ -273,68 +289,138 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} finally {
 			this.subjects.active.next(false);
 		}
-	}
+	};
 
 	/**
-	 * TODO: when collection is reset, the remoteIDs subject is not updated before the
-	 * query is called again. I'm not really sure why.
+	 *
+	 */
+	fetchRecentRemoteUpdates = async () => {
+		if (this.isStopped() || this.subjects.active.getValue()) {
+			return;
+		}
+
+		this.subjects.active.next(true);
+
+		try {
+			if (!this.lastFetchRemoteUpdates) {
+				return;
+			}
+
+			const modified_after = new Date(this.lastFetchRemoteUpdates).toISOString().slice(0, 19);
+			const response = await this.httpClient.get(this.endpoint, {
+				params: {
+					fields: ['id', 'date_modified_gmt'],
+					posts_per_page: -1,
+					modified_after,
+				},
+			});
+
+			if (!Array.isArray(response?.data)) {
+				this.logInvalidResponse('Invalid response checking updates for ' + this.endpoint);
+				return;
+			}
+
+			this.logFetchStatus(this.endpoint, response.headers, 'updates');
+
+			/**
+			 * Save the remote state to the sync collection
+			 * - compare to existing sync collection, insert or update as needed
+			 */
+			const remoteDataMap = new Map(response.data.map((doc) => [doc.id, doc]));
+			const syncData = await this.syncCollection
+				.find({ selector: { endpoint: this.endpoint } })
+				.exec();
+			const syncDataMap = new Map(syncData.map((doc) => [doc.id, doc]));
+
+			await this.handleSyncState(remoteDataMap, syncDataMap, this.endpoint, 'updates');
+		} catch (error) {
+			this.errorSubject.next(error);
+		} finally {
+			this.subjects.active.next(false);
+		}
+	};
+
+	/**
+	 *
 	 */
 	async getUnsyncedRemoteIDs() {
 		await this.firstSync;
-		const remoteIDs = await this.getStoredRemoteIDs();
-		const localIDs = await this.getLocalIDs();
-		return remoteIDs.filter((id) => !localIDs.includes(id));
+		const unsyncedRemoteIDs = await this.syncCollection
+			.find({
+				selector: {
+					status: 'PULL_NEW',
+					endpoint: this.endpoint,
+					id: { $exists: true },
+				},
+			})
+			.exec()
+			.then((docs) => docs.map((doc) => doc.id));
+
+		return unsyncedRemoteIDs;
 	}
 
 	/**
-	 *
+	 * Synced in this case can mean anything not PULL_NEW, eg: PUSH_UPDATE_DEFERRED is synced
+	 * This list of ids is used to exclude items from a server fetch
 	 */
 	async getSyncedRemoteIDs() {
 		await this.firstSync;
-		const remoteIDs = await this.getStoredRemoteIDs();
-		const localIDs = await this.getLocalIDs();
-		return remoteIDs.filter((id) => localIDs.includes(id));
+		const syncedRemoteIDs = await this.syncCollection
+			.find({
+				selector: {
+					status: { $ne: 'PULL_NEW' },
+					endpoint: this.endpoint,
+					id: { $exists: true },
+				},
+			})
+			.exec()
+			.then((docs) => docs.map((doc) => doc.id));
+
+		return syncedRemoteIDs;
 	}
 
-	/**
-	 *
-	 */
-	async getStoredRemoteDocs() {
-		return this.syncCollection.find({ selector: { endpoint: this.endpoint } }).exec();
-	}
+	// /**
+	//  *
+	//  */
+	// async getStoredRemoteDocs() {
+	// 	return this.syncCollection
+	// 		.find({
+	// 			selector: {
+	// 				endpoint: this.endpoint,
+	// 				id: { $exists: true },
+	// 			},
+	// 		})
+	// 		.exec();
+	// }
+
+	// /**
+	//  *
+	//  */
+	// async getLocalDocs() {
+	// 	return this.collection.find().exec();
+	// }
+	//
+	// /**
+	//  *
+	//  */
+	// async getStoredRemoteIDs() {
+	// 	return this.getStoredRemoteDocs()
+	// 		.then((docs) => docs.map((doc) => doc.get('id')))
+	// 		.then((ids) => ids.filter((id) => Number.isInteger(id)));
+	// }
+
+	// /**
+	//  *
+	//  */
+	// async getLocalIDs() {
+	// 	return this.getLocalDocs()
+	// 		.then((docs) => docs.map((doc) => doc.get('id')))
+	// 		.then((ids) => ids.filter((id) => Number.isInteger(id)));
+	// }
 
 	/**
-	 *
-	 */
-	async getLocalDocs() {
-		return this.collection.find().exec();
-	}
-
-	/**
-	 *
-	 */
-	async getStoredRemoteIDs() {
-		return this.getStoredRemoteDocs()
-			.then((docs) => docs.map((doc) => doc.get('id')))
-			.then((ids) => ids.filter((id) => Number.isInteger(id)));
-	}
-
-	/**
-	 *
-	 */
-	async getLocalIDs() {
-		return this.getLocalDocs()
-			.then((docs) => docs.map((doc) => doc.get('id')))
-			.then((ids) => ids.filter((id) => Number.isInteger(id)));
-	}
-
-	/**
-	 *
-	 */
-	async getLocalLastModifiedDate() {}
-
-	/**
-	 *
+	 * @TODO - if there is include less than 10, it might be nice to check for any unsynced
+	 * and include those as well.
 	 */
 	async sync({
 		include,
@@ -342,7 +428,14 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		force,
 	}: { include?: number[]; greedy?: boolean; force?: boolean } = {}) {
 		if (!force && (this.isStopped() || this.subjects.active.getValue())) {
+			return;
 		}
+		const specificIncludes = !!include;
+		let exclude;
+
+		// Wait for the query replication to complete first if it's active
+		// @TODO - create a better pause/resume system
+		await this.querySync;
 
 		if (!include) {
 			include = await this.getUnsyncedRemoteIDs();
@@ -353,17 +446,21 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			return;
 		}
 
+		// If includes weren't passed, we should check whether excludes are shorter
+		if (!specificIncludes) {
+			exclude = await this.getSyncedRemoteIDs();
+		}
+
 		this.subjects.active.next(true);
 
 		try {
-			const response = await this.fetchRemoteByIDs({ include });
-
-			if (!Array.isArray(response?.data)) {
-				throw new Error('Invalid response data for collection replication');
+			let response;
+			if (exclude && exclude.length < include.length) {
+				response = await this.fetchRemoteByIDs({ exclude });
+			} else {
+				response = await this.fetchRemoteByIDs({ include });
 			}
-
-			const documents = response.data.map((doc) => this.collection.parseRestResponse(doc));
-			await bulkUpsert(this.collection, documents);
+			await this.bulkUpsertResponse(response);
 		} catch (error) {
 			this.errorSubject.next(error);
 		} finally {
@@ -374,11 +471,62 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	/**
 	 *
 	 */
-	async fetchRemoteByIDs({ include }) {
+	async bulkUpsertResponse(response) {
+		try {
+			if (!Array.isArray(response?.data)) {
+				this.logInvalidResponse('Invalid response from server for ' + this.endpoint);
+				return;
+			}
+			const documents = response.data.map((doc) => this.collection.parseRestResponse(doc));
+			if (documents.length === 0) {
+				return;
+			}
+
+			const primaryPath = this.collection.schema.primaryPath;
+			const ids = documents.map((doc) => doc[primaryPath]);
+			const localDocs = await this.collection.findByIds(ids).exec();
+
+			/**
+			 * Insert docs that are not in the local collection
+			 */
+			if (localDocs.size === 0) {
+				await this.insertNewDocuments(documents);
+			} else {
+				await this.updateExistingDocuments(documents, localDocs);
+			}
+		} catch (error) {
+			this.errorSubject.next(error);
+		} finally {
+			this.subjects.active.next(false);
+		}
+	}
+
+	/**
+	 * We need to a way to pause and start the replication, eg: when the user is offline
+	 */
+	start() {
+		this.subjects.paused.next(false);
+	}
+
+	pause() {
+		this.subjects.paused.next(true);
+	}
+
+	isStopped() {
+		return this.isCanceled || this.subjects.paused.getValue();
+	}
+
+	/**
+	 * ------------------------------
+	 * Fetch methods
+	 * ------------------------------
+	 */
+	async fetchRemoteByIDs({ include = undefined, exclude = undefined }) {
 		const response = await this.httpClient.post(
 			this.endpoint,
 			{
 				include,
+				exclude,
 			},
 			{
 				headers: {
@@ -391,26 +539,309 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	}
 
 	/**
-	 *
+	 * ------------------------------
+	 * Collection insert/update methods
+	 * ------------------------------
 	 */
-	async fetchLastModified({ lastModified }) {
-		const response = await this.httpClient.get(this.endpoint, {
-			params: {
-				modified_after: lastModified,
-				/**
-				 * Modified after is always in GMT
-				 */
-				dates_are_gmt: true,
-			},
+	private insertNewDocuments = async (documents) => {
+		let updateSync = [];
+		const result = await this.collection.bulkInsert(documents);
+
+		if (result?.success?.length > 0) {
+			this.logAddedDocuments(result.success.map((doc) => doc.id));
+		}
+
+		updateSync = documents.map((doc) => ({
+			id: doc.id,
+			endpoint: this.endpoint,
+			status: 'SYNCED',
+		}));
+
+		await this.batchBulkUpsertSyncState(updateSync);
+	};
+
+	private updateExistingDocuments = async (documents, localDocs) => {
+		let updateSync = [];
+		const updatedDocs = documents.filter((doc) => {
+			const localDoc = localDocs.get(doc[this.collection.schema.primaryPath]);
+			return localDoc && localDoc.date_modified_gmt < doc.date_modified_gmt;
 		});
 
-		return response;
-	}
+		if (updatedDocs.length > 0) {
+			const result = await this.collection.bulkUpsert(updatedDocs);
+
+			if (result?.success?.length > 0) {
+				this.logUpdatedDocuments(result.success.map((doc) => doc.id));
+			}
+
+			updateSync = updatedDocs.map((doc) => ({
+				id: doc.id,
+				endpoint: this.endpoint,
+				status: 'SYNCED',
+			}));
+
+			await this.batchBulkUpsertSyncState(updateSync);
+		}
+	};
 
 	/**
-	 * Remote mutations patch/create
-	 * I'm not 100% sure this is the right spot for these, but I'm thinking in the future
-	 * there will have to be some kind of queuing system for when the app is offline
+	 * ------------------------------
+	 * Sync state handlers
+	 * ------------------------------
+	 */
+	private handleSyncState = async (
+		remoteDataMap: Map<string, any>,
+		syncDataMap: Map<string, any>,
+		endpoint: string,
+		type: 'updates'
+	) => {
+		const newRecords = [];
+
+		for (const id of Array.from(remoteDataMap.keys())) {
+			if (!syncDataMap.has(id)) {
+				newRecords.push({
+					...remoteDataMap.get(id),
+					endpoint,
+					status: 'PULL_NEW',
+				});
+				remoteDataMap.delete(id);
+			}
+		}
+
+		if (newRecords.length > 0) {
+			await this.batchBulkInsertSyncState(newRecords);
+		}
+
+		/**
+		 * If we're processing updates, we only need to check against the local IDs
+		 */
+		if (remoteDataMap.size > 0) {
+			const localIDs = type === 'updates' ? Array.from(syncDataMap.keys()) : null;
+			await this.batchProcessSyncState(remoteDataMap, localIDs);
+		}
+	};
+
+	/**
+	 *
+	 */
+	batchBulkInsertSyncState = (docsData, batchSize = 1000) => {
+		return new Promise((resolve, reject) => {
+			const results = {
+				success: [],
+				error: [],
+			};
+
+			const processBatch = (index) => {
+				if (index >= docsData.length) {
+					resolve(results);
+					return;
+				}
+
+				const batch = docsData.slice(index, index + batchSize);
+				this.syncCollection
+					.bulkInsert(batch)
+					.then((result) => {
+						results.success.push(...result.success);
+						results.error.push(...result.error);
+
+						if (results.error.length > 0) {
+							log.error('Error saving remote state for ' + this.endpoint, results.error);
+							reject(new Error('Error saving remote state for ' + this.endpoint));
+							return;
+						}
+
+						requestIdleCallback(() => processBatch(index + batchSize));
+					})
+					.catch((err) => {
+						log.error('Error during bulk insert', err);
+						reject(err);
+					});
+			};
+
+			requestIdleCallback(() => processBatch(0));
+		});
+	};
+
+	/**
+	 *
+	 */
+	batchBulkUpsertSyncState = (docsData, batchSize = 1000) => {
+		return new Promise((resolve, reject) => {
+			const results = {
+				success: [],
+				error: [],
+			};
+
+			const processBatch = (index) => {
+				if (index >= docsData.length) {
+					resolve(results);
+					return;
+				}
+
+				const batch = docsData.slice(index, index + batchSize);
+				this.syncCollection
+					.bulkUpsert(batch)
+					.then((result) => {
+						results.success.push(...result.success);
+						results.error.push(...result.error);
+
+						if (results.error.length > 0) {
+							log.error('Error saving remote state for ' + this.endpoint, results.error);
+							reject(new Error('Error saving remote state for ' + this.endpoint));
+							return;
+						}
+
+						requestIdleCallback(() => processBatch(index + batchSize));
+					})
+					.catch((err) => {
+						log.error('Error during bulk upsert', err);
+						reject(err);
+					});
+			};
+
+			requestIdleCallback(() => processBatch(0));
+		});
+	};
+
+	/**
+	 * Batch upsert function to handle existing data and compare local and remote records
+	 */
+	batchProcessSyncState = async (
+		remoteDataMap: Map<string, unknown>,
+		localIDs = [],
+		batchSize = 1000
+	) => {
+		// Helper function to get local data in batches
+		const fetchLocalDataInBatches = async (skip, limit) => {
+			return this.collection
+				.find({
+					selector: { id: isEmpty(localIDs) ? { $exists: true } : { $in: localIDs } },
+					skip,
+					limit,
+					// sort: [{ id: 'asc' }],
+				})
+				.exec();
+		};
+
+		// Function to process each batch
+		const processBatch = async (batchIndex) => {
+			const localData = await fetchLocalDataInBatches(batchIndex * batchSize, batchSize);
+
+			if (localData.length === 0) {
+				// All batches processed
+				return;
+			}
+
+			const updates = [];
+
+			// Compare local and remote data
+			localData.forEach((localDoc) => {
+				if (!localDoc.id) {
+					return;
+				}
+
+				const remoteDoc = remoteDataMap.get(localDoc.id);
+
+				if (!remoteDoc) {
+					// No matching remote record, it has been deleted on the server
+					updates.push({
+						id: localDoc.id,
+						endpoint: this.endpoint,
+						status: 'PULL_DELETE',
+					});
+				} else if (remoteDoc.date_modified_gmt > localDoc.date_modified_gmt) {
+					// Remote record has a newer modification date
+					updates.push({
+						id: localDoc.id,
+						endpoint: this.endpoint,
+						status: 'PULL_UPDATE',
+					});
+				} else if (remoteDoc.date_modified_gmt < localDoc.date_modified_gmt) {
+					// Local record has a newer modification date
+					updates.push({
+						id: localDoc.id,
+						endpoint: this.endpoint,
+						status: 'PUSH_UPDATE_DEFERRED',
+					});
+				} else if (remoteDoc.date_modified_gmt === localDoc.date_modified_gmt) {
+					// Records are synced
+					updates.push({
+						id: localDoc.id,
+						endpoint: this.endpoint,
+						status: 'SYNCED',
+					});
+				}
+
+				// Remove processed remoteDoc from map
+				// remoteDataMap.delete(localDoc.id);
+			});
+
+			// Insert/Update the processed batch
+			this.batchBulkUpsertSyncState(updates);
+
+			// Process next batch
+			requestIdleCallback(() => processBatch(batchIndex + 1));
+		};
+
+		// Start processing the first batch
+		requestIdleCallback(() => processBatch(0));
+	};
+
+	/**
+	 * ------------------------------
+	 * Log helpers
+	 * ------------------------------
+	 */
+	private logInvalidResponse = async (message: string) => {
+		return this.storeDB.collections.logs.insert({
+			level: 'error',
+			timestamp: Date.now(),
+			message,
+			context: {
+				message: 'See console for more details',
+			},
+		});
+	};
+
+	private logFetchStatus = async (endpoint: string, headers: any, type) => {
+		const message = type === 'updates' ? 'Checked for updated' : 'Fetched all IDs for';
+
+		return this.storeDB.collections.logs.insert({
+			timestamp: Date.now(),
+			message: `${message} ${endpoint}`,
+			context: {
+				total: headers?.['x-wp-total'] ?? 'unknown',
+				execution_time: headers?.['x-execution-time'] ?? 'unknown',
+				server_load: headers?.['x-server-load'] ?? 'unknown',
+			},
+		});
+	};
+
+	private logAddedDocuments = async (ids) => {
+		return this.storeDB.collections.logs.insert({
+			timestamp: Date.now(),
+			message: 'Synced new ' + this.endpoint,
+			context: {
+				ids,
+			},
+		});
+	};
+
+	private logUpdatedDocuments = async (ids) => {
+		return this.storeDB.collections.logs.insert({
+			timestamp: Date.now(),
+			message: 'Synced updated ' + this.endpoint,
+			context: {
+				ids,
+			},
+		});
+	};
+
+	/**
+	 * ------------------------------
+	 * Remote Mutations
+	 * @TODO - these should be done with flags in the sync collection
+	 * ------------------------------
 	 */
 	async remotePatch(doc, data) {
 		try {
@@ -432,9 +863,6 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		}
 	}
 
-	/**
-	 *
-	 */
 	async remoteCreate(data) {
 		try {
 			const response = await this.httpClient.post(this.endpoint, data);
@@ -450,20 +878,5 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} catch (error) {
 			this.errorSubject.next(error);
 		}
-	}
-
-	/**
-	 * We need to a way to pause and start the replication, eg: when the user is offline
-	 */
-	start() {
-		this.subjects.paused.next(false);
-	}
-
-	pause() {
-		this.subjects.paused.next(true);
-	}
-
-	isStopped() {
-		return this.isCanceled || this.subjects.paused.getValue();
 	}
 }

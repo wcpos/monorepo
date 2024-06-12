@@ -61,10 +61,10 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 	private static instance: Manager<any>;
 
 	private constructor(
-		private localDB: TDatabase,
-		private fastLocalDB,
-		private httpClient,
-		private locale: string
+		public localDB: TDatabase,
+		public fastLocalDB,
+		public httpClient,
+		public locale: string
 	) {
 		super();
 		// Manager.instanceCount++;
@@ -80,12 +80,13 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		this.activeCollectionReplications = new Registry();
 		this.activeQueryReplications = new Registry();
 
-		this.subs.push(
-			/**
-			 * Subscribe to localDB to detect if collection is reset
-			 */
-			this.localDB.reset$.subscribe(this.onCollectionReset.bind(this))
-		);
+		// this.subs
+		// 	.push
+		// 	/**
+		// 	 * Subscribe to localDB to detect if collection is reset
+		// 	 */
+		// 	// this.localDB.reset$.subscribe(this.onCollectionReset.bind(this))
+		// 	();
 
 		/**
 		 * Subscribe to localDB to detect if db is destroyed
@@ -319,6 +320,8 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 				endpoint,
 				errorSubject: this.subjects.error,
 			});
+
+			collection.onRemove.push(() => this.onCollectionReset(collection));
 
 			this.replicationStates.set(endpoint, collectionReplication);
 		}

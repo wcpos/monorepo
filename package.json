@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/query",
-  "version": "1.5.6",
+  "version": "1.6.0",
   "description": "Query and Replication for WooCommerce POS",
   "author": "kilbot <paul@kilbot.com>",
   "license": "MIT",
