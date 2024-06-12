@@ -78,6 +78,6 @@ const storage = getMemoryMappedRxStorage({
 	storage: parentStorage,
 });
 
-export const memorySyncedConfig = {
+export const fastConfig = {
 	storage,
 };

@@ -1,13 +1,11 @@
 import { RxPlugin } from 'rxdb';
 import { Subject } from 'rxjs';
 
-import { storeCollections } from '../collections';
-
-import type { StoreDatabaseCollections } from '../stores-db';
+import { storeCollections, syncCollections, StoreCollections } from '../collections';
 
 type CollectionKey = keyof typeof storeCollections;
 
-const reset = new Subject<StoreDatabaseCollections[keyof StoreDatabaseCollections]>();
+const reset = new Subject<StoreCollections[keyof StoreCollections][]>();
 
 /**
  * This plugin adds a `reset` method to collections.
@@ -27,15 +25,26 @@ export const resetCollectionPlugin: RxPlugin = {
 		RxDatabase: (proto) => {
 			proto.reset$ = reset.asObservable();
 			proto.reset = async function (this, collectionKeys: CollectionKey[]) {
+				let collectionsConfig = storeCollections;
+				// @TODO - hacky way to check whether we're in sync db or not
+				if (this.name.startsWith('fast_store')) {
+					collectionsConfig = syncCollections;
+				}
+
 				const keys = Array.isArray(collectionKeys) ? collectionKeys : [collectionKeys];
 				const promises = keys.map(async (key) => {
 					const collection = this.collections[key];
 					await collection.remove();
-					const collections = await this.addCollections({ [key]: storeCollections[key] });
-					reset.next(collections[key]);
+					const collections = await this.addCollections({ [key]: collectionsConfig[key] });
 					return collections[key];
 				});
 				const collections = await Promise.all(promises);
+
+				// emit the new collections together
+				for (const collection of collections) {
+					reset.next(collection);
+				}
+
 				return collections;
 			};
 		},

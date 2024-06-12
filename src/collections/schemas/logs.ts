@@ -3,27 +3,33 @@ export const logsLiteral = {
 	version: 0,
 	description: 'Logs events for debugging and user record',
 	type: 'object',
-	primaryKey: 'uuid',
+	primaryKey: 'logId',
 	properties: {
-		uuid: {
+		logId: {
 			description: 'Unique identifier for the resource.',
 			type: 'string',
 			maxLength: 36,
 		},
-		dateCreatedGmt: {
-			type: 'string',
+		timestamp: {
+			type: 'integer',
+			description: 'The time the log entry was created.',
 		},
-		user: {
+		code: {
 			type: 'string',
+			description: 'A reference code for the log entry.',
 		},
 		level: {
 			type: 'string',
+			description: 'The severity level of the log entry.',
+			default: 'info',
 		},
 		message: {
 			type: 'string',
+			description: 'A human-readable message describing the log entry.',
 		},
-		meta: {
+		context: {
 			type: 'object',
+			additionalProperties: true,
 		},
 	},
 } as const;

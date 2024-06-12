@@ -11,7 +11,7 @@ export type FastStoreDatabase = RxDatabase<SyncCollections>;
  * Database name needs to start with a letter, id is a short uuid
  */
 function sanitizeStoreName(id: string) {
-	return `fast_store_v2_${id}`;
+	return `fast_store_v3_${id}`;
 }
 
 /**

@@ -1,3 +1,5 @@
+import { de } from '@faker-js/faker';
+
 export const syncLiteral = {
 	title: 'WooCommerce Sync schema',
 	version: 0,
@@ -5,17 +7,32 @@ export const syncLiteral = {
 	type: 'object',
 	primaryKey: {
 		key: 'syncId',
-		fields: ['endpoint', 'id'],
+		fields: ['endpoint', 'id', 'awaitingRemoteCreateUUID'],
 		separator: '|',
 	},
 	properties: {
 		syncId: {
 			type: 'string',
+			maxLength: 36,
+		},
+		awaitingRemoteCreateUUID: {
+			type: 'string',
+			maxLength: 36,
+			default: '',
+		},
+		status: {
+			type: 'string',
 			maxLength: 100,
 		},
 		id: {
 			type: 'integer',
-			final: true,
+			multipleOf: 1,
+			minimum: 0,
+			maximum: 2147483647, // 2^31-1 (max int in MySQL)
+		},
+		uuid: {
+			type: 'string',
+			maxLength: 36,
 		},
 		endpoint: {
 			type: 'string',
@@ -26,11 +43,11 @@ export const syncLiteral = {
 			type: 'string',
 			maxLength: 100,
 		},
-		conflicts: {
+		context: {
 			type: 'object',
 			additionalProperties: true,
 		},
 	},
-	required: ['id', 'endpoint'],
-	indexes: ['endpoint', 'date_modified_gmt'],
+	required: ['endpoint'],
+	indexes: ['id', 'status', 'endpoint', 'date_modified_gmt'],
 } as const;

@@ -4,6 +4,7 @@ import { categoriesLiteral } from './schemas/categories';
 import { customersLiteral } from './schemas/customers';
 // import { gatewaysLiteral } from './schemas/gateways';
 // import { logsLiteral } from './schemas/logs';
+import { logsLiteral } from './schemas/logs';
 import { ordersLiteral } from './schemas/orders';
 import { productsLiteral } from './schemas/products';
 import { sitesLiteral } from './schemas/sites';
@@ -201,6 +202,16 @@ export type SyncDocument = RxDocument<SyncDocumentType>;
 export type SyncCollection = RxCollection<SyncDocumentType>;
 const sync: RxCollectionCreator<SyncDocumentType> = { schema: syncSchema };
 
+/**
+ * Logs
+ */
+const logsTyped = toTypedRxJsonSchema(logsLiteral);
+const logSchema: RxJsonSchema<LogDocumentType> = logsLiteral;
+type LogDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof logsTyped>;
+export type LogDocument = RxDocument<LogDocumentType>;
+export type LogCollection = RxCollection<LogDocumentType>;
+const logs: RxCollectionCreator<LogDocumentType> = { schema: logSchema };
+
 export type UserCollections = {
 	users: UserCollection;
 	sites: SiteCollection;
@@ -218,6 +229,7 @@ export type StoreCollections = {
 	// payment_gateways: GatewayCollection;
 	'products/categories': ProductCategoryCollection;
 	'products/tags': ProductTagCollection;
+	logs: LogCollection;
 };
 
 export type SyncCollections = {
@@ -248,8 +260,10 @@ export const storeCollections = {
 	// payment_gateways,
 	'products/categories': categories, // NOTE: WC REST API uses 'products/categories' endpoint
 	'products/tags': tags, // NOTE: WC REST API uses 'products/tags' endpoint
+	logs,
 };
 
+// @NOTE: sync collection should have corresponding collections in storeCollections
 export const syncCollections = {
 	products: sync,
 	variations: sync,

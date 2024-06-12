@@ -4,7 +4,7 @@ import { disableVersionCheck } from 'rxdb-premium/plugins/shared';
 import log from '@wcpos/utils/src/logger';
 
 import config from './adapter';
-import { memorySyncedConfig } from './memory-synced-adapter';
+import { fastConfig } from './fast-adapter';
 
 import './plugins';
 disableVersionCheck();
@@ -17,6 +17,7 @@ export async function createDB<DBCollections>(name: string) {
 		const db = await createRxDatabase<DBCollections>({
 			name: `${name}`,
 			...config,
+			allowSlowCount: true,
 			password: 'posInstanceId',
 			ignoreDuplicate: true, // I think Expo enables HMR, so we need to ignore duplicate
 			// multiInstance: false,
@@ -30,12 +31,15 @@ export async function createDB<DBCollections>(name: string) {
 
 /**
  * creates the memory synced database
+ * NOTE: it's not actually memory synced anymore, it uses IndexedDB worker like the main database
+ * Memory Mapped Storage is probably quicker for small stores, but it is worse for large stores
  */
 export async function createMemorySyncedDB<DBCollections>(name: string) {
 	try {
 		const db = await createRxDatabase<DBCollections>({
 			name: `${name}`,
-			...memorySyncedConfig,
+			...fastConfig,
+			allowSlowCount: true,
 			password: 'posInstanceId',
 			ignoreDuplicate: true, // I think Expo enables HMR, so we need to ignore duplicate
 			// multiInstance: false,

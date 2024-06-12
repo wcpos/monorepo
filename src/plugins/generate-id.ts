@@ -19,8 +19,11 @@ export function generateID(this: RxCollection, data: Record<string, any>) {
 		data[primaryPath] = metaUUID;
 	} else if (!data[primaryPath]) {
 		const uuid = uuidv4();
+		//
 		if (primaryPath === 'uuid') {
 			data.uuid = uuid;
+		} else if (primaryPath === 'logId') {
+			data.logId = uuid;
 		} else if (primaryPath === 'localID') {
 			data.localID = uuid.slice(0, 8); // only short id required here
 		}
