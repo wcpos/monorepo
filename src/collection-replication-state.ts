@@ -650,7 +650,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 							return;
 						}
 
-						requestIdleCallback(() => processBatch(index + batchSize));
+						setTimeout(() => processBatch(index + batchSize), 0);
 					})
 					.catch((err) => {
 						log.error('Error during bulk insert', err);
@@ -658,7 +658,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 					});
 			};
 
-			requestIdleCallback(() => processBatch(0));
+			setTimeout(() => processBatch(0), 0);
 		});
 	};
 
@@ -691,7 +691,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 							return;
 						}
 
-						requestIdleCallback(() => processBatch(index + batchSize));
+						setTimeout(() => processBatch(index + batchSize), 0);
 					})
 					.catch((err) => {
 						log.error('Error during bulk upsert', err);
@@ -699,7 +699,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 					});
 			};
 
-			requestIdleCallback(() => processBatch(0));
+			setTimeout(() => processBatch(0), 0);
 		});
 	};
 
