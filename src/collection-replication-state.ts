@@ -780,11 +780,11 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			this.batchBulkUpsertSyncState(updates);
 
 			// Process next batch
-			requestIdleCallback(() => processBatch(batchIndex + 1));
+			setTimeout(() => processBatch(batchIndex + 1), 0);
 		};
 
 		// Start processing the first batch
-		requestIdleCallback(() => processBatch(0));
+		setTimeout(() => processBatch(0), 0);
 	};
 
 	/**
