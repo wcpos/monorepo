@@ -18,6 +18,7 @@
     "storybook": "yarn workspace @wcpos/storybook",
     "test": "yarn workspaces foreach run test",
     "themes": "yarn workspace @wcpos/themes",
+    "utils": "yarn workspace @wcpos/utils",
     "with-flipper": "yarn workspace @wcpos/app-with-flipper",
     "postinstall": "patch-package",
     "preinstall": "npx ts-node ./scripts/install-rxdb-license.ts"
