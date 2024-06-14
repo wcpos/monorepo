@@ -131,9 +131,18 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 * Subscribe to remote and local collections to calculate the total number of documents
 	 */
 	private setupDocumentCount() {
-		const totalCount$ = this.syncCollection
+		const remoteCount$ = this.syncCollection
 			.count({ selector: { endpoint: this.endpoint, id: { $exists: true } } })
-			.$.pipe(startWith(0), distinctUntilChanged());
+			.$.pipe(distinctUntilChanged());
+
+		const newLocalCount$ = this.collection
+			.count({ selector: { id: { $eq: null } } })
+			.$.pipe(distinctUntilChanged());
+
+		const totalCount$ = combineLatest([remoteCount$, newLocalCount$]).pipe(
+			map(([remoteCount, newLocalCount]) => remoteCount + newLocalCount),
+			startWith(0)
+		);
 
 		// Subscribe to the total count and update the subject
 		this.subs.push(totalCount$.subscribe((count) => this.subjects.total.next(count)));
@@ -596,7 +605,23 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		type: 'updates'
 	) => {
 		const newRecords = [];
+		const removeRecords = [];
 
+		// Collect syncIds for ids in syncDataMap that are not in remoteDataMap
+		if (type !== 'updates') {
+			for (const [id, record] of Array.from(syncDataMap.entries())) {
+				if (!remoteDataMap.has(id)) {
+					removeRecords.push(record.syncId);
+					syncDataMap.delete(id);
+				}
+			}
+
+			if (removeRecords.length > 0) {
+				await this.syncCollection.bulkRemove(removeRecords);
+			}
+		}
+
+		// Check for records in remoteDataMap that are not in syncDataMap
 		for (const id of Array.from(remoteDataMap.keys())) {
 			if (!syncDataMap.has(id)) {
 				newRecords.push({
