@@ -13,7 +13,7 @@ interface DeleteDialogProps {
 }
 
 /**
- * Note: deleting a custom requires a force param because they are permanently deleted
+ * Note: deleting a customer requires a force param because they are permanently deleted
  * There is no Trash for users to recover from.
  * https://woocommerce.github.io/woocommerce-rest-api-docs/#delete-a-customer
  */
@@ -27,15 +27,16 @@ const DeleteDialog = ({ order, setDeleteDialogOpened }: DeleteDialogProps) => {
 	 */
 	const handleDelete = React.useCallback(async () => {
 		try {
+			const latest = order.getLatest();
 			setPrimaryAction((prev) => ({
 				...prev,
 				loading: true,
 			}));
 
-			if (order.id) {
-				await deleteDocument(order.id, order.collection);
+			if (latest.id) {
+				await deleteDocument(latest.id, latest.collection);
 			}
-			await order.remove();
+			await latest.remove();
 			setDeleteDialogOpened(false);
 		} finally {
 			setPrimaryAction((prev) => ({
