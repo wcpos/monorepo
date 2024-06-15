@@ -132,11 +132,20 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 */
 	private setupDocumentCount() {
 		const remoteCount$ = this.syncCollection
-			.count({ selector: { endpoint: this.endpoint, id: { $exists: true } } })
+			.count({
+				selector: {
+					endpoint: { $eq: this.endpoint },
+					id: { $exists: true },
+				},
+			})
 			.$.pipe(distinctUntilChanged());
 
 		const newLocalCount$ = this.collection
-			.count({ selector: { id: { $eq: null } } })
+			.count({
+				selector: {
+					id: { $eq: null },
+				},
+			})
 			.$.pipe(distinctUntilChanged());
 
 		const totalCount$ = combineLatest([remoteCount$, newLocalCount$]).pipe(
@@ -221,26 +230,48 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	/**
 	 *
 	 */
-	async audit() {
+	audit = async () => {
 		const remove = await this.syncCollection
-			.find({ selector: { status: 'PULL_DELETE', endpoint: this.endpoint, id: { $exists: true } } })
-			.exec()
-			.then((docs) => docs.map((doc) => doc.id));
+			.find({
+				selector: {
+					id: { $exists: true },
+					status: { $eq: 'PULL_DELETE' }, // $eq seems to be required here
+					endpoint: this.endpoint,
+				},
+			})
+			.exec();
 
 		if (remove.length > 0 && this.collection.name !== 'variations') {
+			const removeLocalIDs = remove.map((doc) => doc.id);
+			const removeSyncIDs = remove.map((doc) => doc.syncId);
+
 			// deletion should be rare, only when an item is deleted from the server
-			log.warn('removing', remove, 'from', this.collection.name);
+			log.warn('removing', removeLocalIDs, 'from', this.collection.name);
 			await this.storeDB.collections.logs.insert({
 				level: 'warn',
 				timestamp: Date.now(),
 				message: 'Removing records from ' + this.collection.name,
 				context: remove,
 			});
-			await this.collection.find({ selector: { id: { $in: remove } } }).remove();
+
+			await this.collection
+				.find({
+					selector: {
+						id: { $in: removeLocalIDs },
+					},
+				})
+				.remove();
+			await this.syncCollection.bulkRemove(removeSyncIDs);
 		}
 
 		const updated = await this.syncCollection
-			.find({ selector: { status: 'PULL_UPDATE', endpoint: this.endpoint, id: { $exists: true } } })
+			.find({
+				selector: {
+					id: { $exists: true },
+					status: { $eq: 'PULL_UPDATE' },
+					endpoint: this.endpoint,
+				},
+			})
 			.exec()
 			.then((docs) => docs.map((doc) => doc.id));
 
@@ -250,7 +281,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} else {
 			await this.sync();
 		}
-	}
+	};
 
 	/**
 	 * Makes a request the the endpoint to fetch all remote IDs
@@ -281,7 +312,12 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			 */
 			const remoteDataMap = new Map(response.data.map((doc) => [doc.id, doc]));
 			const syncData = await this.syncCollection
-				.find({ selector: { endpoint: this.endpoint } })
+				.find({
+					selector: {
+						id: { $exists: true },
+						endpoint: { $eq: this.endpoint },
+					},
+				})
 				.exec();
 			const syncDataMap = new Map(syncData.map((doc) => [doc.id, doc]));
 
@@ -337,7 +373,12 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			 */
 			const remoteDataMap = new Map(response.data.map((doc) => [doc.id, doc]));
 			const syncData = await this.syncCollection
-				.find({ selector: { endpoint: this.endpoint } })
+				.find({
+					selector: {
+						id: { $exists: true },
+						endpoint: { $eq: this.endpoint },
+					},
+				})
 				.exec();
 			const syncDataMap = new Map(syncData.map((doc) => [doc.id, doc]));
 
@@ -357,9 +398,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		const unsyncedRemoteIDs = await this.syncCollection
 			.find({
 				selector: {
-					status: 'PULL_NEW',
-					endpoint: this.endpoint,
 					id: { $exists: true },
+					status: { $eq: 'PULL_NEW' },
+					endpoint: { $eq: this.endpoint },
 				},
 			})
 			.exec()
@@ -377,9 +418,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		const syncedRemoteIDs = await this.syncCollection
 			.find({
 				selector: {
-					status: { $ne: 'PULL_NEW' },
-					endpoint: this.endpoint,
 					id: { $exists: true },
+					status: { $ne: 'PULL_NEW' },
+					endpoint: { $eq: this.endpoint },
 				},
 			})
 			.exec()
