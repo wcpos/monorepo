@@ -235,8 +235,8 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			.find({
 				selector: {
 					id: { $exists: true },
-					status: { $eq: 'PULL_DELETE' }, // $eq seems to be required here
-					endpoint: this.endpoint,
+					status: { $eq: 'PULL_DELETE' },
+					endpoint: { $eq: this.endpoint },
 				},
 			})
 			.exec();
@@ -251,7 +251,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				level: 'warn',
 				timestamp: Date.now(),
 				message: 'Removing records from ' + this.collection.name,
-				context: remove,
+				context: removeLocalIDs,
 			});
 
 			await this.collection
@@ -269,7 +269,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				selector: {
 					id: { $exists: true },
 					status: { $eq: 'PULL_UPDATE' },
-					endpoint: this.endpoint,
+					endpoint: { $eq: this.endpoint },
 				},
 			})
 			.exec()
@@ -393,7 +393,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	/**
 	 *
 	 */
-	async getUnsyncedRemoteIDs() {
+	getUnsyncedRemoteIDs = async () => {
 		await this.firstSync;
 		const unsyncedRemoteIDs = await this.syncCollection
 			.find({
@@ -407,13 +407,13 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			.then((docs) => docs.map((doc) => doc.id));
 
 		return unsyncedRemoteIDs;
-	}
+	};
 
 	/**
 	 * Synced in this case can mean anything not PULL_NEW, eg: PUSH_UPDATE_DEFERRED is synced
 	 * This list of ids is used to exclude items from a server fetch
 	 */
-	async getSyncedRemoteIDs() {
+	getSyncedRemoteIDs = async () => {
 		await this.firstSync;
 		const syncedRemoteIDs = await this.syncCollection
 			.find({
@@ -427,7 +427,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			.then((docs) => docs.map((doc) => doc.id));
 
 		return syncedRemoteIDs;
-	}
+	};
 
 	// /**
 	//  *
@@ -472,11 +472,11 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 * @TODO - if there is include less than 10, it might be nice to check for any unsynced
 	 * and include those as well.
 	 */
-	async sync({
+	sync = async ({
 		include,
 		greedy,
 		force,
-	}: { include?: number[]; greedy?: boolean; force?: boolean } = {}) {
+	}: { include?: number[]; greedy?: boolean; force?: boolean } = {}) => {
 		if (!force && (this.isStopped() || this.subjects.active.getValue())) {
 			return;
 		}
@@ -516,12 +516,12 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} finally {
 			this.subjects.active.next(false);
 		}
-	}
+	};
 
 	/**
 	 *
 	 */
-	async bulkUpsertResponse(response) {
+	bulkUpsertResponse = async (response) => {
 		try {
 			if (!Array.isArray(response?.data)) {
 				this.logInvalidResponse('Invalid response from server for ' + this.endpoint);
@@ -549,7 +549,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} finally {
 			this.subjects.active.next(false);
 		}
-	}
+	};
 
 	/**
 	 * We need to a way to pause and start the replication, eg: when the user is offline
@@ -571,7 +571,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 * Fetch methods
 	 * ------------------------------
 	 */
-	async fetchRemoteByIDs({ include = undefined, exclude = undefined }) {
+	fetchRemoteByIDs = async ({ include = undefined, exclude = undefined }) => {
 		const response = await this.httpClient.post(
 			this.endpoint,
 			{
@@ -586,7 +586,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		);
 
 		return response;
-	}
+	};
 
 	/**
 	 * ------------------------------
@@ -909,7 +909,7 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 * @TODO - these should be done with flags in the sync collection
 	 * ------------------------------
 	 */
-	async remotePatch(doc, data) {
+	remotePatch = async (doc, data) => {
 		try {
 			if (!doc.id) {
 				throw new Error('document does not have an id');
@@ -927,9 +927,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} catch (error) {
 			this.errorSubject.next(error);
 		}
-	}
+	};
 
-	async remoteCreate(data) {
+	remoteCreate = async (data) => {
 		try {
 			const response = await this.httpClient.post(this.endpoint, data);
 
@@ -944,5 +944,5 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		} catch (error) {
 			this.errorSubject.next(error);
 		}
-	}
+	};
 }
