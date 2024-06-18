@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/database",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Local database for @wcpos/core",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/database#readme",
@@ -17,8 +17,8 @@
     "test": "eslint --ext ts,tsx ./src"
   },
   "dependencies": {
-    "@orama/orama": "^2.0.19",
-    "@orama/plugin-data-persistence": "^2.0.19",
+    "@orama/orama": "^2.0.20",
+    "@orama/plugin-data-persistence": "^2.0.20",
     "c-promise2": "^0.13.12",
     "expo-sqlite": "~14.0.3",
     "fast-text-encoding": "^1.0.6",
@@ -28,7 +28,7 @@
     "rxdb": "^15.24.0",
     "rxdb-premium": "^15.24.0",
     "rxjs": "7.8.1",
-    "uuid": "9.0.1"
+    "uuid": "10.0.0"
   },
   "devDependencies": {
     "@faker-js/faker": "^8.4.1",
@@ -38,7 +38,7 @@
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
     "jest": "^29.7.0",
-    "ts-jest": "^29.1.4",
+    "ts-jest": "^29.1.5",
     "typescript": "^5.4.5"
   },
   "eslintConfig": {
