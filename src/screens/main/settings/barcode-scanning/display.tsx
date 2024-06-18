@@ -7,6 +7,7 @@ import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import { useHotkeys, RNKeyboardEvent, getKeyFromEvent } from '@wcpos/hooks/src/use-hotkeys';
 
+import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection } from '../../hooks/barcodes';
 
 const BarcodeDisplay = () => {
@@ -14,6 +15,7 @@ const BarcodeDisplay = () => {
 	const { barcode$ } = useBarcodeDetection();
 	const barcode = useObservableState(barcode$);
 	const theme = useTheme();
+	const t = useT();
 
 	/**
 	 *
@@ -31,7 +33,7 @@ const BarcodeDisplay = () => {
 		<Box space="normal">
 			<Box space="xSmall">
 				<Text uppercase size="small" numberOfLines={1} type="textMuted">
-					Keypress Event
+					{t('Keypress Event', { _tags: 'core' })}
 				</Text>
 				<Box
 					border
@@ -44,7 +46,7 @@ const BarcodeDisplay = () => {
 			</Box>
 			<Box space="xSmall">
 				<Text uppercase size="small" numberOfLines={1} type="textMuted">
-					Detected Barcode
+					{t('Detected Barcode', { _tags: 'core' })}
 				</Text>
 				<Box
 					border

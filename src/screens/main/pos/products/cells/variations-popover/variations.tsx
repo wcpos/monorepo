@@ -79,7 +79,7 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	React.useEffect(() => {
 		if (selectedVariation) {
 			// convert attributes to meta_data
-			const selectedAttributesMetaData = selectedAttributes.map((a) => ({
+			const selectedAttributesMetaData = (selectedAttributes || []).map((a) => ({
 				attr_id: a.id,
 				display_key: a.name,
 				display_value: a.option,

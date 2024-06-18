@@ -1,11 +1,13 @@
 import * as React from 'react';
 
+import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 import { useReplicationState } from '@wcpos/query';
 
+import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
 import { useCollectionReset } from '../../../hooks/use-collection-reset';
 import SyncButton from '../../sync-button';
@@ -15,9 +17,18 @@ import SyncButton from '../../sync-button';
  */
 const VariationFooterTableRow = ({ query, parent, count, loading }) => {
 	const theme = useTheme();
+	const { fastStoreDB } = useAppState();
 	const { sync } = useReplicationState(query);
 	const { clear } = useCollectionReset(query.collection.name);
-	const total = parent.variations.length;
+	/**
+	 * Get total from sync collection
+	 */
+	const total = useObservableState(
+		fastStoreDB.collections.variations.count({
+			selector: { endpoint: 'products/' + parent.id + '/variations' },
+		}).$,
+		0
+	);
 	const t = useT();
 
 	return (

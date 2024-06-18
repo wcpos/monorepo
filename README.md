@@ -11,7 +11,7 @@
       <img src="https://github.com/wcpos/core/actions/workflows/codeql-analysis.yml/badge.svg" alt="Hooks docs" />
     </a>
     <a href="https://wcpos.com/discord">
-      <img src="https://img.shields.io/discord/711884517081612298?color=%237289DA&label=WCPOS&logo=discord&logoColor=white" alt="Discord chat" />
+      <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Finvites%2FGCEeEVpEvX%3Fwith_counts%3Dtrue&query=%24.approximate_presence_count&logo=discord&logoColor=white&label=users%20online&color=green" alt="Discord chat" />
     </a>
   </p>
   <p>
@@ -42,7 +42,7 @@ The folder structure is designed to segregate concerns while maintaining modular
   - **`/screens`** - contains various screen sub-folders, each representing a 'screen'
     - `index.tsx` - route navigator component
     - **`/components`** - shared components
-    - **`/screen-1-folder`** - 
+    - **`/screen-1-folder`** -
       - `index.tsx` - route navigator component
       - **`/components`** - shared components
       - **`/contexts`** - context providers for state management
@@ -68,10 +68,10 @@ Simplifed, we have:
     - `navigator`
     - ...
 
-
 ## 👷 Workflows
 
 ### Prerequisites
+
 - [Node.js](https://nodejs.org/)
 - [Yarn package manager](https://yarnpkg.com/getting-started/install)
 
@@ -92,4 +92,3 @@ yarn install
 ## 🚀 How to use it
 
 This repository contains only the core components and will not build a complete, renderable project. To build the complete project, you should clone the [monorepo](https://github.com/wcpos/monorepo).
-

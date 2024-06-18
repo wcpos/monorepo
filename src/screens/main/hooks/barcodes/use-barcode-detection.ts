@@ -8,10 +8,6 @@ import { useHotkeys, RNKeyboardEvent, getKeyFromEvent } from '@wcpos/hooks/src/u
 
 import { useAppState } from '../../../../contexts/app-state';
 
-// Constants
-const BUFFER = 500;
-const CHARCOUNT = 8;
-
 /**
  * Custom hook for detecting barcode input.
  *
@@ -23,8 +19,8 @@ export const useBarcodeDetection = (
 	callback = () => {},
 	options = {
 		enabled: true,
-		buffer: BUFFER,
-		minLength: CHARCOUNT,
+		buffer: 500,
+		minLength: 8,
 		prefix: '',
 		suffix: '',
 	}
