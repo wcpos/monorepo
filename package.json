@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/hooks",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Hooks for WooCommerce POS",
   "author": "kilbot <paul@kilbot.com>",
   "homepage": "https://github.com/wcpos/hooks#readme",
@@ -61,7 +61,7 @@
     "react-native-storybook-loader": "2.0.5",
     "react-scripts": "5.0.1",
     "react-test-renderer": "18.2.0",
-    "ts-jest": "^29.1.4",
+    "ts-jest": "^29.1.5",
     "typescript": "^5.4.5"
   },
   "eslintConfig": {
