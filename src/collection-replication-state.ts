@@ -218,255 +218,20 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		this.lastFetchRemoteState = Date.now();
 		this.lastFetchRemoteUpdates = this.lastFetchRemoteState;
 		await this.fetchAllRemoteIds();
-		await this.audit();
+		await this.remove();
+		await this.update();
 	};
 
 	private fetchAndAuditRemoteUpdates = async () => {
-		this.lastFetchRemoteUpdates = Date.now();
-		await this.fetchRecentRemoteUpdates();
-		await this.audit();
-	};
-
-	/**
-	 *
-	 */
-	audit = async () => {
-		const remove = await this.syncCollection
-			.find({
-				selector: {
-					id: { $exists: true },
-					status: { $eq: 'PULL_DELETE' },
-					endpoint: { $eq: this.endpoint },
-				},
-			})
-			.exec();
-
-		if (remove.length > 0 && this.collection.name !== 'variations') {
-			const removeLocalIDs = remove.map((doc) => doc.id);
-			const removeSyncIDs = remove.map((doc) => doc.syncId);
-
-			// deletion should be rare, only when an item is deleted from the server
-			log.warn('removing', removeLocalIDs, 'from', this.collection.name);
-			await this.storeDB.collections.logs.insert({
-				level: 'warn',
-				timestamp: Date.now(),
-				message: 'Removing records from ' + this.collection.name,
-				context: removeLocalIDs,
-			});
-
-			await this.collection
-				.find({
-					selector: {
-						id: { $in: removeLocalIDs },
-					},
-				})
-				.remove();
-			await this.syncCollection.bulkRemove(removeSyncIDs);
-		}
-
-		const updated = await this.syncCollection
-			.find({
-				selector: {
-					id: { $exists: true },
-					status: { $eq: 'PULL_UPDATE' },
-					endpoint: { $eq: this.endpoint },
-				},
-			})
-			.exec()
-			.then((docs) => docs.map((doc) => doc.id));
-
-		// If there are updated records, sync them, else get any unsynced records
-		if (updated.length > 0) {
-			await this.sync({ include: updated, force: true });
-		} else {
-			await this.sync();
-		}
-	};
-
-	/**
-	 * Makes a request the the endpoint to fetch all remote IDs
-	 * - this should be done as rarely as possible, getting all remote IDs is expensive on the server
-	 */
-	fetchAllRemoteIds = async () => {
-		if (this.isStopped() || this.subjects.active.getValue()) {
-			return;
-		}
-
-		this.subjects.active.next(true);
-
-		try {
-			const response = await this.httpClient.get(this.endpoint, {
-				params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
-			});
-
-			if (!Array.isArray(response?.data)) {
-				this.logInvalidResponse('Invalid response fetching remote state for ' + this.endpoint);
-				return;
-			}
-
-			this.logFetchStatus(this.endpoint, response.headers, 'all');
-
-			/**
-			 * Save the remote state to the sync collection
-			 * - compare to existing sync collection, insert or update as needed
-			 */
-			const remoteDataMap = new Map(response.data.map((doc) => [doc.id, doc]));
-			const syncData = await this.syncCollection
-				.find({
-					selector: {
-						id: { $exists: true },
-						endpoint: { $eq: this.endpoint },
-					},
-				})
-				.exec();
-			const syncDataMap = new Map(syncData.map((doc) => [doc.id, doc]));
-
-			// make sure we wait for the sync state to be updated before resolving the firstSync
-			await this.handleSyncState(remoteDataMap, syncDataMap, this.endpoint, 'all');
-
-			// Resolve the firstSync promise
-			if (this.firstSyncResolver) {
-				this.firstSyncResolver();
-				this.firstSyncResolver = null; // Clear the resolver to prevent future calls
-			}
-		} catch (error) {
-			this.errorSubject.next(error);
-		} finally {
-			this.subjects.active.next(false);
-		}
-	};
-
-	/**
-	 *
-	 */
-	fetchRecentRemoteUpdates = async () => {
-		if (this.isStopped() || this.subjects.active.getValue()) {
-			return;
-		}
-
-		this.subjects.active.next(true);
-
-		try {
-			if (!this.lastFetchRemoteUpdates) {
-				return;
-			}
-
+		if (this.lastFetchRemoteUpdates) {
 			const modified_after = new Date(this.lastFetchRemoteUpdates).toISOString().slice(0, 19);
-			const response = await this.httpClient.get(this.endpoint, {
-				params: {
-					fields: ['id', 'date_modified_gmt'],
-					posts_per_page: -1,
-					modified_after,
-				},
-			});
-
-			if (!Array.isArray(response?.data)) {
-				this.logInvalidResponse('Invalid response checking updates for ' + this.endpoint);
-				return;
-			}
-
-			this.logFetchStatus(this.endpoint, response.headers, 'updates');
-
-			/**
-			 * Save the remote state to the sync collection
-			 * - compare to existing sync collection, insert or update as needed
-			 */
-			const remoteDataMap = new Map(response.data.map((doc) => [doc.id, doc]));
-			const syncData = await this.syncCollection
-				.find({
-					selector: {
-						id: { $exists: true },
-						endpoint: { $eq: this.endpoint },
-					},
-				})
-				.exec();
-			const syncDataMap = new Map(syncData.map((doc) => [doc.id, doc]));
-
-			await this.handleSyncState(remoteDataMap, syncDataMap, this.endpoint, 'updates');
-		} catch (error) {
-			this.errorSubject.next(error);
-		} finally {
-			this.subjects.active.next(false);
+			this.lastFetchRemoteUpdates = Date.now();
+			await this.fetchRecentRemoteUpdates(modified_after);
+			await this.update();
+		} else {
+			this.lastFetchRemoteUpdates = Date.now();
 		}
 	};
-
-	/**
-	 *
-	 */
-	getUnsyncedRemoteIDs = async () => {
-		await this.firstSync;
-		const unsyncedRemoteIDs = await this.syncCollection
-			.find({
-				selector: {
-					id: { $exists: true },
-					status: { $eq: 'PULL_NEW' },
-					endpoint: { $eq: this.endpoint },
-				},
-			})
-			.exec()
-			.then((docs) => docs.map((doc) => doc.id));
-
-		return unsyncedRemoteIDs;
-	};
-
-	/**
-	 * Synced in this case can mean anything not PULL_NEW, eg: PUSH_UPDATE_DEFERRED is synced
-	 * This list of ids is used to exclude items from a server fetch
-	 */
-	getSyncedRemoteIDs = async () => {
-		await this.firstSync;
-		const syncedRemoteIDs = await this.syncCollection
-			.find({
-				selector: {
-					id: { $exists: true },
-					status: { $ne: 'PULL_NEW' },
-					endpoint: { $eq: this.endpoint },
-				},
-			})
-			.exec()
-			.then((docs) => docs.map((doc) => doc.id));
-
-		return syncedRemoteIDs;
-	};
-
-	// /**
-	//  *
-	//  */
-	// async getStoredRemoteDocs() {
-	// 	return this.syncCollection
-	// 		.find({
-	// 			selector: {
-	// 				endpoint: this.endpoint,
-	// 				id: { $exists: true },
-	// 			},
-	// 		})
-	// 		.exec();
-	// }
-
-	// /**
-	//  *
-	//  */
-	// async getLocalDocs() {
-	// 	return this.collection.find().exec();
-	// }
-	//
-	// /**
-	//  *
-	//  */
-	// async getStoredRemoteIDs() {
-	// 	return this.getStoredRemoteDocs()
-	// 		.then((docs) => docs.map((doc) => doc.get('id')))
-	// 		.then((ids) => ids.filter((id) => Number.isInteger(id)));
-	// }
-
-	// /**
-	//  *
-	//  */
-	// async getLocalIDs() {
-	// 	return this.getLocalDocs()
-	// 		.then((docs) => docs.map((doc) => doc.get('id')))
-	// 		.then((ids) => ids.filter((id) => Number.isInteger(id)));
-	// }
 
 	/**
 	 * @TODO - if there is include less than 10, it might be nice to check for any unsynced
@@ -521,6 +286,162 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	/**
 	 *
 	 */
+	remove = async () => {
+		const remove = await this.syncCollection
+			.find({
+				selector: {
+					id: { $exists: true },
+					status: { $eq: 'PULL_DELETE' },
+					endpoint: { $eq: this.endpoint },
+				},
+			})
+			.exec();
+
+		if (remove.length > 0) {
+			const removeLocalIDs = remove.map((doc) => doc.id);
+			const removeSyncIDs = remove.map((doc) => doc.syncId);
+
+			// deletion should be rare, only when an item is deleted from the server
+			log.warn('removing', removeLocalIDs, 'from', this.collection.name);
+			await this.storeDB.collections.logs.insert({
+				level: 'warn',
+				timestamp: Date.now(),
+				message: 'Removing records from ' + this.collection.name,
+				context: removeLocalIDs,
+			});
+
+			await this.collection
+				.find({
+					selector: {
+						id: { $in: removeLocalIDs },
+					},
+				})
+				.remove();
+
+			await this.syncCollection.bulkRemove(removeSyncIDs);
+		}
+	};
+
+	/**
+	 *
+	 */
+	update = async () => {
+		const updated = await this.syncCollection
+			.find({
+				selector: {
+					id: { $exists: true },
+					status: { $eq: 'PULL_UPDATE' },
+					endpoint: { $eq: this.endpoint },
+				},
+			})
+			.exec()
+			.then((docs) => docs.map((doc) => doc.id));
+
+		// If there are updated records, sync them, else get any unsynced records
+		if (updated.length > 0) {
+			await this.sync({ include: updated, force: true });
+		} else {
+			await this.sync();
+		}
+	};
+
+	/**
+	 * Makes a request the the endpoint to fetch all remote IDs
+	 * - this should be done as rarely as possible, getting all remote IDs is expensive on the server
+	 */
+	fetchAllRemoteIds = async () => {
+		if (this.isStopped() || this.subjects.active.getValue()) {
+			return;
+		}
+
+		this.subjects.active.next(true);
+
+		try {
+			const response = await this.httpClient.get(this.endpoint, {
+				params: { fields: ['id', 'date_modified_gmt'], posts_per_page: -1 },
+			});
+
+			if (!Array.isArray(response?.data)) {
+				this.logInvalidResponse('Invalid response fetching remote state for ' + this.endpoint);
+				return;
+			}
+
+			this.logFetchStatus(this.endpoint, response.headers, 'all');
+
+			// @TODO - what to do in cases where there are no remote records?
+			// - this could possibly due to a server issue and would cause the deletion of all local records
+			if (isEmpty(response.data)) {
+				return this.storeDB.collections.logs.insert({
+					level: 'warn',
+					timestamp: Date.now(),
+					message: 'Server returned no records for ' + this.endpoint,
+					context: {
+						message: 'This could be a server issue, or there are no records to sync.',
+					},
+				});
+			}
+
+			// make sure we wait for the sync state to be updated before resolving the firstSync
+			await this.handleSyncState(response.data, 'all');
+
+			// Resolve the firstSync promise
+			if (this.firstSyncResolver) {
+				this.firstSyncResolver();
+				this.firstSyncResolver = null; // Clear the resolver to prevent future calls
+			}
+		} catch (error) {
+			this.errorSubject.next(error);
+		} finally {
+			this.subjects.active.next(false);
+		}
+	};
+
+	/**
+	 *
+	 */
+	fetchRecentRemoteUpdates = async (modified_after) => {
+		if (this.isStopped() || this.subjects.active.getValue()) {
+			return;
+		}
+
+		this.subjects.active.next(true);
+
+		try {
+			if (!modified_after) {
+				return;
+			}
+
+			const response = await this.httpClient.get(this.endpoint, {
+				params: {
+					fields: ['id', 'date_modified_gmt'],
+					posts_per_page: -1,
+					modified_after,
+				},
+			});
+
+			if (!Array.isArray(response?.data)) {
+				this.logInvalidResponse('Invalid response checking updates for ' + this.endpoint);
+				return;
+			}
+
+			this.logFetchStatus(this.endpoint, response.headers, 'updates');
+
+			// If there are no updates, we can skip the sync state update
+			if (isEmpty(response.data)) {
+				return;
+			}
+
+			await this.handleSyncState(response.data, 'updates');
+		} catch (error) {
+			this.errorSubject.next(error);
+		} finally {
+			this.subjects.active.next(false);
+		}
+	};
+
+	/**
+	 *
+	 */
 	bulkUpsertResponse = async (response) => {
 		try {
 			if (!Array.isArray(response?.data)) {
@@ -565,6 +486,67 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	isStopped() {
 		return this.isCanceled || this.subjects.paused.getValue();
 	}
+
+	/**
+	 * ------------------------------
+	 * Local fetch helpers
+	 * ------------------------------
+	 */
+	/**
+	 * Get list of IDs taht have not been downloaded from the server
+	 */
+	getUnsyncedRemoteIDs = async () => {
+		await this.firstSync;
+		const unsyncedRemoteIDs = await this.syncCollection
+			.find({
+				selector: {
+					id: { $exists: true },
+					status: { $eq: 'PULL_NEW' },
+					endpoint: { $eq: this.endpoint },
+				},
+			})
+			.exec()
+			.then((docs) => docs.map((doc) => doc.id));
+
+		return unsyncedRemoteIDs;
+	};
+
+	/**
+	 * Synced in this case can mean anything not PULL_NEW, eg: PUSH_UPDATE_DEFERRED is synced
+	 * This list of ids is used to exclude items from a server fetch
+	 */
+	getSyncedRemoteIDs = async () => {
+		await this.firstSync;
+		const syncedRemoteIDs = await this.syncCollection
+			.find({
+				selector: {
+					id: { $exists: true },
+					status: { $ne: 'PULL_NEW' },
+					endpoint: { $eq: this.endpoint },
+				},
+			})
+			.exec()
+			.then((docs) => docs.map((doc) => doc.id));
+
+		return syncedRemoteIDs;
+	};
+
+	/**
+	 * For processing, it's handy to have a map of the synced records, eg:
+	 * Map<id, { syndID, id, endpoint, status }>
+	 */
+	getMappedSyncedStateRecords = async () => {
+		const syncData = await this.syncCollection
+			.find({
+				selector: {
+					id: { $exists: true },
+					endpoint: { $eq: this.endpoint },
+				},
+			})
+			.exec();
+
+		return new Map(syncData.map((doc) => [doc.id, doc]));
+	};
 
 	/**
 	 * ------------------------------
@@ -639,35 +621,24 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	 * Sync state handlers
 	 * ------------------------------
 	 */
-	private handleSyncState = async (
-		remoteDataMap: Map<string, any>,
-		syncDataMap: Map<string, any>,
-		endpoint: string,
-		type: 'updates'
-	) => {
+	/**
+	 * Save the remote state to the sync collection
+	 * - compare to existing sync collection, insert or update as needed
+	 */
+	private handleSyncState = async (data: any[], type: string) => {
+		const remoteDataMap = new Map(data.map((doc) => [doc.id, doc]));
+		const syncDataMap = await this.getMappedSyncedStateRecords();
 		const newRecords = [];
-		const removeRecords = [];
 
-		// Collect syncIds for ids in syncDataMap that are not in remoteDataMap
-		if (type !== 'updates') {
-			for (const [id, record] of Array.from(syncDataMap.entries())) {
-				if (!remoteDataMap.has(id)) {
-					removeRecords.push(record.syncId);
-					syncDataMap.delete(id);
-				}
-			}
-
-			if (removeRecords.length > 0) {
-				await this.syncCollection.bulkRemove(removeRecords);
-			}
-		}
-
-		// Check for records in remoteDataMap that are not in syncDataMap
+		/**
+		 * Check for records in remoteDataMap that are not in syncDataMap
+		 * - if new records are found, remove them from remoteDataMap because they are dealt with
+		 */
 		for (const id of Array.from(remoteDataMap.keys())) {
 			if (!syncDataMap.has(id)) {
 				newRecords.push({
-					...remoteDataMap.get(id),
-					endpoint,
+					...remoteDataMap.get(id), // { id, date_modified_gmt }
+					endpoint: this.endpoint,
 					status: 'PULL_NEW',
 				});
 				remoteDataMap.delete(id);
@@ -682,8 +653,11 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 		 * If we're processing updates, we only need to check against the local IDs
 		 */
 		if (remoteDataMap.size > 0) {
-			const localIDs = type === 'updates' ? Array.from(syncDataMap.keys()) : null;
-			await this.batchProcessSyncState(remoteDataMap, localIDs);
+			if (type === 'updates') {
+				await this.batchProcessUpdatesSyncState(remoteDataMap);
+			} else {
+				await this.batchProcessFullSyncState(remoteDataMap);
+			}
 		}
 	};
 
@@ -772,22 +746,40 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 	/**
 	 * Batch upsert function to handle existing data and compare local and remote records
 	 */
-	batchProcessSyncState = async (
-		remoteDataMap: Map<string, unknown>,
-		localIDs = [],
-		batchSize = 1000
-	) => {
+	batchProcessFullSyncState = async (remoteDataMap: Map<string, unknown>, batchSize = 1000) => {
 		// Helper function to get local data in batches
-		const fetchLocalDataInBatches = async (skip, limit) => {
+		let fetchLocalDataInBatches = async (skip, limit) => {
 			return this.collection
 				.find({
-					selector: { id: isEmpty(localIDs) ? { $exists: true } : { $in: localIDs } },
+					selector: { id: { $exists: true } },
 					skip,
 					limit,
-					// sort: [{ id: 'asc' }],
+					sort: [{ id: 'asc' }],
 				})
 				.exec();
 		};
+
+		// Special case for products/ID/variations endpoint, we only want to check against parent_id=ID
+		if (this.endpoint.match(/^products\/(\d+)\/variations$/)) {
+			const idMatch = this.endpoint.match(/^products\/(\d+)\/variations$/);
+			const parentId = idMatch ? parseInt(idMatch[1], 10) : null;
+
+			if (parentId !== null) {
+				fetchLocalDataInBatches = async (skip: number, limit: number) => {
+					return this.collection
+						.find({
+							selector: {
+								id: { $exists: true },
+								parent_id: parentId,
+							},
+							skip,
+							limit,
+							sort: [{ id: 'asc' }],
+						})
+						.exec();
+				};
+			}
+		}
 
 		// Function to process each batch
 		const processBatch = async (batchIndex) => {
@@ -816,6 +808,82 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 						status: 'PULL_DELETE',
 					});
 				} else if (remoteDoc.date_modified_gmt > localDoc.date_modified_gmt) {
+					// Remote record has a newer modification date
+					updates.push({
+						id: localDoc.id,
+						endpoint: this.endpoint,
+						status: 'PULL_UPDATE',
+					});
+				} else if (remoteDoc.date_modified_gmt < localDoc.date_modified_gmt) {
+					// Local record has a newer modification date
+					updates.push({
+						id: localDoc.id,
+						endpoint: this.endpoint,
+						status: 'PUSH_UPDATE_DEFERRED',
+					});
+				} else if (remoteDoc.date_modified_gmt === localDoc.date_modified_gmt) {
+					// Records are synced
+					updates.push({
+						id: localDoc.id,
+						endpoint: this.endpoint,
+						status: 'SYNCED',
+					});
+				}
+
+				// Remove processed remoteDoc from map
+				// remoteDataMap.delete(localDoc.id);
+			});
+
+			// Insert/Update the processed batch
+			this.batchBulkUpsertSyncState(updates);
+
+			// Process next batch
+			setTimeout(() => processBatch(batchIndex + 1), 0);
+		};
+
+		// Start processing the first batch
+		setTimeout(() => processBatch(0), 0);
+	};
+
+	/**
+	 * Batch upsert function to handle existing data and compare local and remote records
+	 */
+	batchProcessUpdatesSyncState = async (remoteDataMap: Map<string, unknown>, batchSize = 1000) => {
+		// we're only interested in local records that have been updated
+		const localIDs = Array.from(remoteDataMap.keys());
+
+		// Helper function to get local data in batches
+		const fetchLocalDataInBatches = async (skip, limit) => {
+			return this.collection
+				.find({
+					selector: { id: { $in: localIDs } },
+					skip,
+					limit,
+					sort: [{ id: 'asc' }],
+				})
+				.exec();
+		};
+
+		// Function to process each batch
+		const processBatch = async (batchIndex) => {
+			const localData = await fetchLocalDataInBatches(batchIndex * batchSize, batchSize);
+
+			if (localData.length === 0) {
+				// All batches processed
+				return;
+			}
+
+			const updates = [];
+
+			// Compare local and remote data
+			localData.forEach((localDoc) => {
+				if (!localDoc.id) {
+					return;
+				}
+
+				const remoteDoc = remoteDataMap.get(localDoc.id);
+
+				if (remoteDoc.date_modified_gmt > localDoc.date_modified_gmt) {
 					// Remote record has a newer modification date
 					updates.push({
 						id: localDoc.id,
