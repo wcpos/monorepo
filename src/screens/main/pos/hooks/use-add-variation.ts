@@ -42,8 +42,16 @@ export const useAddVariation = () => {
 	 *
 	 */
 	const addVariation = React.useCallback(
-		async (variation: ProductVariationDocument, parent: ProductDocument, metaData?: MetaData[]) => {
+		async (
+			variationDoc: ProductVariationDocument,
+			parentDoc: ProductDocument,
+			metaData?: MetaData[]
+		) => {
 			let success;
+
+			// always make sure we have the latest product document
+			const variation = variationDoc.getLatest();
+			const parent = parentDoc.getLatest();
 
 			// check if variation is already in order, if so increment quantity
 			if (!currentOrder.isNew && parent.id !== 0) {

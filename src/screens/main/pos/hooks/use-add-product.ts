@@ -37,8 +37,11 @@ export const useAddProduct = () => {
 	 * Add product to order, or increment quantity if already in order
 	 */
 	const addProduct = React.useCallback(
-		async (product: ProductDocument) => {
+		async (productDoc: ProductDocument) => {
 			let success;
+
+			// always make sure we have the latest product document
+			const product = productDoc.getLatest();
 
 			// check if product is already in order, if so increment quantity
 			if (!currentOrder.isNew && product.id !== 0) {
