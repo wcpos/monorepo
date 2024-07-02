@@ -1,6 +1,6 @@
 {
   "name": "@wcpos/query",
-  "version": "1.6.6",
+  "version": "1.6.7",
   "description": "Query and Replication for WooCommerce POS",
   "author": "kilbot <paul@kilbot.com>",
   "license": "MIT",
@@ -18,7 +18,7 @@
   },
   "packageManager": "yarn@3.5.0",
   "dependencies": {
-    "@orama/orama": "^2.0.20",
+    "@orama/orama": "^2.0.21",
     "@shelf/fast-natural-order-by": "^2.0.0",
     "@wcpos/components": "*",
     "lodash": "^4.17.21",

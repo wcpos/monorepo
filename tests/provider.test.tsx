@@ -3,24 +3,25 @@ import * as React from 'react';
 import { render, cleanup } from '@testing-library/react';
 
 import httpClientMock from './__mocks__/http';
-import { MockRxDatabase } from './__mocks__/rxdb';
+import { createStoreDatabase, createSyncDatabase } from './helpers/db';
 import { QueryProvider, useQueryManager } from '../src/provider';
 import { useQuery } from '../src/use-query';
 
 import type { RxDatabase } from 'rxdb';
 
 describe('QueryProvider', () => {
-	let mockDatabase: RxDatabase;
+	let storeDatabase: RxDatabase;
+	let syncDatabase: RxDatabase;
 
-	beforeEach(() => {
-		mockDatabase = new MockRxDatabase() as unknown as RxDatabase;
-		mockDatabase.addCollections({
-			testCollection: { schema: {} },
-		});
+	beforeEach(async () => {
+		storeDatabase = await createStoreDatabase();
+		syncDatabase = await createSyncDatabase();
 	});
 
 	afterEach(() => {
 		// jest.clearAllMocks();
+		storeDatabase.remove();
+		syncDatabase.remove();
 		cleanup();
 	});
 
@@ -32,7 +33,12 @@ describe('QueryProvider', () => {
 		};
 
 		render(
-			<QueryProvider localDB={mockDatabase} http={httpClientMock}>
+			<QueryProvider
+				localDB={storeDatabase}
+				fastLocalDB={syncDatabase}
+				http={httpClientMock}
+				locale=""
+			>
 				<TestComponent />
 			</QueryProvider>
 		);
@@ -41,7 +47,7 @@ describe('QueryProvider', () => {
 	it('should create and retrieve a query instance', () => {
 		// TestComponent1 uses useQuery to create a query
 		const TestComponent1 = () => {
-			const query = useQuery({ queryKey: ['myQuery'], collectionName: 'testCollection' });
+			const query = useQuery({ queryKeys: ['myQuery'], collectionName: 'products' });
 			expect(query).toBeDefined();
 			return <div />;
 		};
@@ -55,7 +61,12 @@ describe('QueryProvider', () => {
 		};
 
 		render(
-			<QueryProvider localDB={mockDatabase} http={httpClientMock}>
+			<QueryProvider
+				localDB={storeDatabase}
+				fastLocalDB={syncDatabase}
+				http={httpClientMock}
+				locale=""
+			>
 				<TestComponent1 />
 				<TestComponent2 />
 			</QueryProvider>
@@ -64,19 +75,19 @@ describe('QueryProvider', () => {
 
 	it('should have initial values for query.params$ and query.result$', (done) => {
 		const TestComponent = () => {
-			const query = useQuery({ queryKey: ['myQuery'], collectionName: 'testCollection' });
+			const query = useQuery({ queryKeys: ['myQuery'], collectionName: 'products' });
 
 			const paramsPromise = new Promise((resolve) => {
-				const paramsSubscription = query.params$.subscribe((params) => {
+				const paramsSubscription = query?.params$.subscribe((params) => {
 					resolve(params);
-					paramsSubscription.unsubscribe();
+					paramsSubscription?.unsubscribe();
 				});
 			});
 
 			const dataPromise = new Promise((resolve) => {
-				const querySubscription = query.result$.subscribe((data) => {
+				const querySubscription = query?.result$.subscribe((data) => {
 					resolve(data);
-					querySubscription.unsubscribe();
+					querySubscription?.unsubscribe();
 				});
 			});
 
@@ -94,7 +105,12 @@ describe('QueryProvider', () => {
 		};
 
 		render(
-			<QueryProvider localDB={mockDatabase} http={httpClientMock}>
+			<QueryProvider
+				localDB={storeDatabase}
+				fastLocalDB={syncDatabase}
+				http={httpClientMock}
+				locale=""
+			>
 				<TestComponent />
 			</QueryProvider>
 		);

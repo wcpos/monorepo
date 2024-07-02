@@ -383,16 +383,19 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 
 			// make sure we wait for the sync state to be updated before resolving the firstSync
 			await this.handleSyncState(response.data, 'all');
-
-			// Resolve the firstSync promise
-			if (this.firstSyncResolver) {
-				this.firstSyncResolver();
-				this.firstSyncResolver = null; // Clear the resolver to prevent future calls
-			}
 		} catch (error) {
 			this.errorSubject.next(error);
 		} finally {
 			this.subjects.active.next(false);
+
+			/**
+			 * Resolve the firstSync promise
+			 * NOTE: - this will resolve even if there is an error, or no records are returned
+			 */
+			if (this.firstSyncResolver) {
+				this.firstSyncResolver();
+				this.firstSyncResolver = null; // Clear the resolver to prevent future calls
+			}
 		}
 	};
 
