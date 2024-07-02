@@ -9,6 +9,9 @@ import { useQuery } from '../src/use-query';
 
 import type { RxDatabase } from 'rxdb';
 
+// Mock the logger module
+jest.mock('@wcpos/utils/src/logger');
+
 describe('QueryProvider', () => {
 	let storeDatabase: RxDatabase;
 	let syncDatabase: RxDatabase;
@@ -19,7 +22,7 @@ describe('QueryProvider', () => {
 	});
 
 	afterEach(() => {
-		// jest.clearAllMocks();
+		jest.clearAllMocks();
 		storeDatabase.remove();
 		syncDatabase.remove();
 		cleanup();

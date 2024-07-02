@@ -1,4 +1,4 @@
-import { orderBy } from '@shelf/fast-natural-order-by';
+import { orderBy } from 'natural-orderby';
 import cloneDeep from 'lodash/cloneDeep';
 import debounce from 'lodash/debounce';
 import forEach from 'lodash/forEach';
@@ -6,7 +6,6 @@ import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
 import { ObservableResource } from 'observable-hooks';
-import { doc } from 'prettier';
 import {
 	BehaviorSubject,
 	Observable,

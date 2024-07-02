@@ -61,7 +61,7 @@ const SPLITTERS: Record<string, RegExp> = {
 	chinese: /[^a-zA-Z0-9\u4e00-\u9fff]+/gim,
 };
 
-function getTokenizer(locale) {
+function getTokenizer(locale = '') {
 	const langCode = locale.split('_')[0];
 	const lang = localeToLangMap[langCode] || 'english';
 	const splitRule = SPLITTERS[lang];
@@ -97,7 +97,7 @@ const searchDBs: Map<string, any> = new Map();
 /**
  *
  */
-export async function maybeCreateSearchDB(collection, locale) {
+export async function maybeCreateSearchDB(collection, locale = '') {
 	const langCode = locale.split('_')[0];
 	const language = localeToLangMap[langCode] || 'english';
 	const key = collection.name + '-' + language;

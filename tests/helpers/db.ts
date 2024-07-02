@@ -6,7 +6,7 @@ import {
 	ExtractDocumentTypeFromTypedRxJsonSchema,
 	RxJsonSchema,
 } from 'rxdb';
-import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
+// import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { logsLiteral } from './schemas/logs';
@@ -16,7 +16,7 @@ import { variationsLiteral } from './schemas/variations';
 
 import type { RxCollectionCreator, RxCollection, RxDocument } from 'rxdb';
 
-addRxPlugin(RxDBDevModePlugin);
+// addRxPlugin(RxDBDevModePlugin);
 
 /**
  * Products
@@ -78,6 +78,7 @@ export async function createStoreDatabase(): Promise<RxDatabase> {
 		name: 'storedb',
 		storage: getRxStorageMemory(),
 		ignoreDuplicate: true,
+		allowSlowCount: true,
 	});
 
 	const collections = await db.addCollections({ products, variations, logs });
@@ -93,6 +94,7 @@ export async function createSyncDatabase(): Promise<RxDatabase> {
 		name: 'syncdb',
 		storage: getRxStorageMemory(),
 		ignoreDuplicate: true,
+		allowSlowCount: true,
 	});
 
 	const collections = await db.addCollections({ products: sync, variations: sync });

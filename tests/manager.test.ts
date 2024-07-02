@@ -1,6 +1,6 @@
 import httpClientMock from './__mocks__/http';
-import { MockRxDatabase } from './__mocks__/rxdb';
 import { Manager } from '../src/manager';
+import { createStoreDatabase, createSyncDatabase } from './helpers/db';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -8,18 +8,19 @@ import type { RxDatabase } from 'rxdb';
 
 describe('Manager', () => {
 	let manager: Manager<RxDatabase>;
-	let mockDatabase: RxDatabase;
+	let storeDatabase: RxDatabase;
+	let syncDatabase: RxDatabase;
 
-	beforeEach(() => {
-		mockDatabase = new MockRxDatabase() as unknown as RxDatabase;
-		mockDatabase.addCollections({
-			testCollection: { schema: {} },
-		}); // Mock collection
-		manager = new Manager(mockDatabase, httpClientMock);
+	beforeEach(async () => {
+		storeDatabase = await createStoreDatabase();
+		syncDatabase = await createSyncDatabase();
+		manager = new Manager(storeDatabase, httpClientMock);
 	});
 
 	afterEach(() => {
 		jest.clearAllMocks();
+		storeDatabase.remove();
+		syncDatabase.remove();
 	});
 
 	describe('Query States', () => {
@@ -59,14 +60,14 @@ describe('Manager', () => {
 			const queryKeys = ['newQuery'];
 			manager.registerQuery({
 				queryKeys,
-				collectionName: 'testCollection',
+				collectionName: 'products',
 				initialParams: {},
 			});
 			expect(manager.queries.has(JSON.stringify(queryKeys))).toBe(true);
 		});
 
 		it('should return the specified collection', () => {
-			expect(manager.getCollection('testCollection')).toBeDefined();
+			expect(manager.getCollection('products')).toBeDefined();
 		});
 
 		it('should handle non-existent collections', (done) => {
@@ -83,7 +84,7 @@ describe('Manager', () => {
 			const queryKeys = ['existingQuery'];
 			manager.registerQuery({
 				queryKeys,
-				collectionName: 'testCollection',
+				collectionName: 'products',
 				initialParams: {},
 			});
 			expect(manager.getQuery(queryKeys)).toBeDefined();
@@ -103,7 +104,7 @@ describe('Manager', () => {
 			const queryKey = ['queryToRemove'];
 			manager.registerQuery({
 				queryKey,
-				collectionName: 'removableCollection',
+				collectionName: 'products',
 				initialParams: {},
 			});
 			manager.deregisterQuery(queryKey);
@@ -122,17 +123,17 @@ describe('Manager', () => {
 		it('should register a collection replication state with a new query', () => {
 			manager.registerQuery({
 				queryKeys: ['newQuery'],
-				collectionName: 'testCollection',
+				collectionName: 'products',
 				initialParams: {},
 			});
 
-			expect(manager.replicationStates.has('testCollection')).toBe(true);
+			expect(manager.replicationStates.has('products')).toBe(true);
 		});
 
 		it('should register a collection replication state with a given endpoint', () => {
 			manager.registerQuery({
 				queryKeys: ['newQuery'],
-				collectionName: 'testCollection',
+				collectionName: 'products',
 				initialParams: {},
 				endpoint: 'testEndpoint',
 			});
@@ -143,14 +144,14 @@ describe('Manager', () => {
 		it('should share a collection replication state between queries with the same endpoint', () => {
 			manager.registerQuery({
 				queryKeys: ['newQuery1'],
-				collectionName: 'testCollection',
+				collectionName: 'products',
 				initialParams: {},
 				endpoint: 'testEndpoint',
 			});
 
 			manager.registerQuery({
 				queryKeys: ['newQuery2'],
-				collectionName: 'testCollection',
+				collectionName: 'products',
 				initialParams: {},
 				endpoint: 'testEndpoint',
 			});

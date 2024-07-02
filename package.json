@@ -10,19 +10,19 @@
   ],
   "scripts": {
     "clean": "shx rm -rf dist && rm -rf node_modules",
-    "test": "jest",
-    "clear-jest": "jest --clearCache"
+    "test": "node --experimental-vm-modules ./node_modules/.bin/jest"
   },
   "eslintConfig": {
     "extends": "@wcpos/eslint-config"
   },
-  "packageManager": "yarn@3.5.0",
+  "packageManager": "yarn@4.3.1",
   "dependencies": {
     "@orama/orama": "^2.0.21",
-    "@shelf/fast-natural-order-by": "^2.0.0",
     "@wcpos/components": "*",
     "lodash": "^4.17.21",
+    "natural-orderby": "^3.0.2",
     "observable-hooks": "^4.2.3",
+    "rxdb": "15.24.0",
     "rxjs": "^7.8.1",
     "typescript": "^5.4.5"
   },

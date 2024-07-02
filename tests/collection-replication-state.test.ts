@@ -1,38 +1,23 @@
 import httpClientMock from './__mocks__/http';
-import { MockRxCollection } from './__mocks__/rxdb';
 import { CollectionReplicationState } from '../src/collection-replication-state';
+import { createStoreDatabase, createSyncDatabase } from './helpers/db';
 
-import type { RxCollection } from 'rxdb';
+import type { RxDatabase } from 'rxdb';
 
 describe('CollectionReplicationState', () => {
-	beforeEach(() => {});
+	let storeDatabase: RxDatabase;
+	let syncDatabase: RxDatabase;
 
-	// it('should return the default endpoint', () => {
-	// 	const mockCollection = new MockRxCollection({ name: 'testCollection' });
-	// 	const replicationState = new CollectionReplicationState({
-	// 		collection: mockCollection,
-	// 		httpClient: {},
-	// 	});
+	beforeEach(async () => {
+		storeDatabase = await createStoreDatabase();
+		syncDatabase = await createSyncDatabase();
+	});
 
-	// 	expect(replicationState.getEndpoint()).toBe('testCollection');
-	// 	expect(replicationState.endpoint).toBe('testCollection');
-	// });
-
-	// it('should return a custom endpoint from preEndpoint hook', () => {
-	// 	const mockCollection = new MockRxCollection({ name: 'testCollection' });
-	// 	const customEndpoint = 'customEndpoint';
-	// 	const hooks = {
-	// 		preEndpoint: jest.fn().mockReturnValue(customEndpoint),
-	// 	};
-	// 	const replicationState = new CollectionReplicationState({
-	// 		collection: mockCollection,
-	// 		httpClient: {},
-	// 		hooks,
-	// 	});
-
-	// 	expect(replicationState.getEndpoint()).toBe(customEndpoint);
-	// 	expect(hooks.preEndpoint).toHaveBeenCalledWith(mockCollection);
-	// });
+	afterEach(() => {
+		jest.clearAllMocks();
+		storeDatabase.remove();
+		syncDatabase.remove();
+	});
 
 	describe('fetchRemoteIDs', () => {
 		it('fetches remote IDs successfully', async () => {
@@ -40,7 +25,7 @@ describe('CollectionReplicationState', () => {
 			httpClientMock.get.mockResolvedValue({ data: expectedIds.map((id) => ({ id })) });
 
 			const replicationState = new CollectionReplicationState({
-				collection: new MockRxCollection({}),
+				collection: storeDatabase.collections.products,
 				httpClient: httpClientMock,
 			});
 
@@ -51,7 +36,7 @@ describe('CollectionReplicationState', () => {
 			httpClientMock.get.mockResolvedValue({ data: null });
 
 			const replicationState = new CollectionReplicationState({
-				collection: new MockRxCollection({}),
+				collection: storeDatabase.collections.products,
 				httpClient: httpClientMock,
 			});
 
