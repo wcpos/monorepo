@@ -1,3 +1,6 @@
+/**
+ * Jest runs Babel synchronously so we need to use the CommonJS module system.
+ */
 module.exports = function (api) {
 	api.cache(true);
 	return {

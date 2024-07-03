@@ -50,6 +50,7 @@ const localeToLangMap: { [key: string]: string } = {
 	th: 'thai',
 	vi: 'vietnamese',
 	zh: 'chinese',
+	he: 'hebrew',
 	// Default to English for any other locale
 };
 
@@ -59,6 +60,7 @@ const SPLITTERS: Record<string, RegExp> = {
 	thai: /[^a-zA-Z0-9ก-๙]+/gim,
 	vietnamese: /[^a-zA-Z0-9àáâãèéêìíòóôõùúýăđĩũơưạảấầẩẫậắằẳẵặẹẻẽếềễểệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]+/gim,
 	chinese: /[^a-zA-Z0-9\u4e00-\u9fff]+/gim,
+	hebrew: /[^a-zA-Z0-9\u0590-\u05FF]+/gim,
 };
 
 function getTokenizer(locale = '') {

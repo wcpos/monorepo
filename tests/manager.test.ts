@@ -14,7 +14,7 @@ describe('Manager', () => {
 	beforeEach(async () => {
 		storeDatabase = await createStoreDatabase();
 		syncDatabase = await createSyncDatabase();
-		manager = new Manager(storeDatabase, httpClientMock);
+		manager = new Manager(storeDatabase, syncDatabase, httpClientMock);
 	});
 
 	afterEach(() => {

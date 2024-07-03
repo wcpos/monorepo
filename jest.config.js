@@ -1,6 +1,6 @@
 const TEST_REGEX = '(/__tests__/.*|(\\.|/)(test|spec))\\.(tsx?|ts?)$';
 
-module.exports = {
+export default {
   roots: ['<rootDir>/tests'],
   displayName: '@wcpos/query',
   preset: 'ts-jest',
