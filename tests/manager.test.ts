@@ -18,9 +18,10 @@ describe('Manager', () => {
 	});
 
 	afterEach(() => {
-		jest.clearAllMocks();
 		storeDatabase.remove();
 		syncDatabase.remove();
+		manager.cancel();
+		jest.clearAllMocks();
 	});
 
 	describe('Query States', () => {

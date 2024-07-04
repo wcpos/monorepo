@@ -1,8 +1,9 @@
 import * as React from 'react';
 
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, waitFor } from '@testing-library/react';
+import { marbles } from 'rxjs-marbles/jest';
 
-import httpClientMock from './__mocks__/http';
+import { httpClientMock } from './__mocks__/http';
 import { createStoreDatabase, createSyncDatabase } from './helpers/db';
 import { QueryProvider, useQueryManager } from '../src/provider';
 import { useQuery } from '../src/use-query';
@@ -21,11 +22,11 @@ describe('QueryProvider', () => {
 		syncDatabase = await createSyncDatabase();
 	});
 
-	afterEach(() => {
-		jest.clearAllMocks();
-		storeDatabase.remove();
-		syncDatabase.remove();
+	afterEach(async () => {
+		await storeDatabase.destroy();
+		await syncDatabase.destroy();
 		cleanup();
+		jest.clearAllMocks();
 	});
 
 	it('should provide a Manager instance', () => {
@@ -47,7 +48,7 @@ describe('QueryProvider', () => {
 		);
 	});
 
-	it('should create and retrieve a query instance', () => {
+	it('should create and retrieve a query instance', async () => {
 		// TestComponent1 uses useQuery to create a query
 		const TestComponent1 = () => {
 			const query = useQuery({ queryKeys: ['myQuery'], collectionName: 'products' });
@@ -74,34 +75,34 @@ describe('QueryProvider', () => {
 				<TestComponent2 />
 			</QueryProvider>
 		);
+
+		/**
+		 * It's important to wait for the render to complete before making assertions.
+		 * In this case the 'maybeCreateSearchDB' is created asynchronously and cleanup is called
+		 * before the searchDB is created.
+		 * 
+		 * @TODO - find a better way to handle this
+		 */
+		await waitFor(() => {
+			expect(true).toBe(true); // Placeholder to wait for render
+		});
 	});
 
 	it('should have initial values for query.params$ and query.result$', (done) => {
 		const TestComponent = () => {
 			const query = useQuery({ queryKeys: ['myQuery'], collectionName: 'products' });
 
-			const paramsPromise = new Promise((resolve) => {
-				const paramsSubscription = query?.params$.subscribe((params) => {
-					resolve(params);
-					paramsSubscription?.unsubscribe();
-				});
+			query.params$.subscribe((params) => {
+				expect(params).toEqual({});
 			});
 
-			const dataPromise = new Promise((resolve) => {
-				const querySubscription = query?.result$.subscribe((data) => {
-					resolve(data);
-					querySubscription?.unsubscribe();
-				});
-			});
-
-			Promise.all([paramsPromise, dataPromise]).then(([params, data]) => {
-				try {
-					expect(params).toEqual({}); // Expect params to be an empty object
-					expect(data).toEqual([]); // Expect data to be an empty array
-					done();
-				} catch (error) {
-					done(error);
-				}
+			query.result$.subscribe((result) => {
+				expect(result).toEqual(expect.objectContaining({
+					searchActive: false,
+					hits: [],
+					count: 0
+				}));				
+				done();
 			});
 
 			return <div />;

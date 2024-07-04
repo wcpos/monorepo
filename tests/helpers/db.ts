@@ -8,6 +8,7 @@ import {
 } from 'rxdb';
 // import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
+import { RxDBGenerateIdPlugin } from './generate-id';
 
 import { logsLiteral } from './schemas/logs';
 import { productsLiteral } from './schemas/products';
@@ -17,6 +18,7 @@ import { variationsLiteral } from './schemas/variations';
 import type { RxCollectionCreator, RxCollection, RxDocument } from 'rxdb';
 
 // addRxPlugin(RxDBDevModePlugin);
+addRxPlugin(RxDBGenerateIdPlugin);
 
 /**
  * Products

@@ -15,7 +15,7 @@ import {
 	combineLatest,
 	catchError,
 } from 'rxjs';
-import { map, switchMap, distinctUntilChanged, debounceTime, tap } from 'rxjs/operators';
+import { map, switchMap, distinctUntilChanged, debounceTime, tap, startWith } from 'rxjs/operators';
 
 import { SubscribableBase } from './subscribable-base';
 
@@ -144,6 +144,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 			this.find$
 				.pipe(
 					distinctUntilChanged((prev, next) => {
+						console.log('DistinctUntilChanged', prev, next);
 						// Check if search is active and searchTerm has changed
 						if (prev.searchActive !== next.searchActive || prev.searchTerm !== next.searchTerm) {
 							return false;
