@@ -18,8 +18,8 @@ import {
 import { map, switchMap, distinctUntilChanged, debounceTime, tap, startWith } from 'rxjs/operators';
 
 import { SubscribableBase } from './subscribable-base';
+import { Search } from './search-state';
 
-import type { Search } from './search-state';
 import type { RxCollection, RxDocument } from 'rxdb';
 
 // This type utility extracts the document type from a collection
@@ -50,10 +50,10 @@ export interface QueryConfig<T> {
 	collection: T;
 	initialParams?: QueryParams;
 	hooks?: QueryHooks;
-	searchService: Search;
 	endpoint?: string;
 	errorSubject: Subject<Error>;
 	greedy?: boolean;
+	locale?: string;
 }
 
 type WhereClause = { field: string; value: any };
@@ -111,20 +111,27 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		collection,
 		initialParams = {},
 		hooks,
-		searchService,
 		endpoint,
 		errorSubject,
 		greedy = false,
+		locale,
 	}: QueryConfig<T>) {
 		super();
 		this.id = id;
 		this.collection = collection;
 		this.hooks = hooks || {};
-		this.searchService = searchService;
-		this.endpoint = endpoint;
+		this.endpoint = endpoint; // @TODO - do we need this?
 		this.errorSubject = errorSubject;
 		this.primaryKey = collection.schema.primaryPath;
 		this.greedy = greedy;
+
+		/**
+		 * Search service
+		 * 
+		 * @TODO - we only need a full text search service for some collections and fields
+		 * @TODO - we have full text search, but we need partial string search as well
+		 */
+		this.searchService = new Search({ collection, locale });
 
 		/**
 		 * Set initial params
@@ -144,7 +151,6 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 			this.find$
 				.pipe(
 					distinctUntilChanged((prev, next) => {
-						console.log('DistinctUntilChanged', prev, next);
 						// Check if search is active and searchTerm has changed
 						if (prev.searchActive !== next.searchActive || prev.searchTerm !== next.searchTerm) {
 							return false;

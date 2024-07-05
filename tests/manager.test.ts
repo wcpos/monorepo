@@ -17,9 +17,9 @@ describe('Manager', () => {
 		manager = new Manager(storeDatabase, syncDatabase, httpClientMock);
 	});
 
-	afterEach(() => {
-		storeDatabase.remove();
-		syncDatabase.remove();
+	afterEach(async () => {
+		await storeDatabase.destroy();
+		await syncDatabase.destroy();
 		manager.cancel();
 		jest.clearAllMocks();
 	});
@@ -47,7 +47,7 @@ describe('Manager', () => {
 			const queryKeys = ['testQuery'];
 			manager.registerQuery({
 				queryKeys,
-				collectionName: 'testCollection',
+				collectionName: 'products',
 				initialParams: {},
 			});
 			expect(manager.hasQuery(queryKeys)).toBe(true);
@@ -55,16 +55,6 @@ describe('Manager', () => {
 
 		it('should return false if query does not exist', () => {
 			expect(manager.hasQuery(['nonExistentQuery'])).toBe(false);
-		});
-
-		it('should register a new query', () => {
-			const queryKeys = ['newQuery'];
-			manager.registerQuery({
-				queryKeys,
-				collectionName: 'products',
-				initialParams: {},
-			});
-			expect(manager.queries.has(JSON.stringify(queryKeys))).toBe(true);
 		});
 
 		it('should return the specified collection', () => {
@@ -109,7 +99,7 @@ describe('Manager', () => {
 				initialParams: {},
 			});
 			manager.deregisterQuery(queryKey);
-			expect(manager.queries.has(JSON.stringify(queryKey))).toBe(false);
+			expect(manager.hasQuery(['queryToRemove'])).toBe(false);
 		});
 
 		it('should cancel all queries and subscriptions', () => {
@@ -159,27 +149,9 @@ describe('Manager', () => {
 
 			expect(manager.replicationStates.has('testEndpoint')).toBe(true);
 
-			const replicationStatesForQuery1 = manager.getReplicationStatesByQueryKeys(['newQuery1']);
-			const replicationStatesForQuery2 = manager.getReplicationStatesByQueryKeys(['newQuery2']);
-			expect(replicationStatesForQuery1).toEqual(replicationStatesForQuery2);
+			const queryReplication1 = manager.getQuery(['newQuery1']);
+			const queryReplication2 = manager.getQuery(['newQuery2']);
+			expect(queryReplication1.collectionReplication).toEqual(queryReplication2.collectionReplication);
 		});
 	});
-
-	// describe('Query Replication States', () => {
-	// 	it('should register a new query replication states', () => {
-	// 		const query = manager.registerQuery({
-	// 			queryKeys: ['newQuery'],
-	// 			collectionName: 'testCollection',
-	// 			initialParams: {},
-	// 		});
-
-	// 		expect(manager.replicationStates.has('testCollection')).toBe(true);
-
-	// 		const queryReplicationStates = manager.queryReplicationStates.get('testCollection');
-	// 		expect(queryReplicationStates.size).toEqual(1);
-
-	// 		query?.where('status', 'completed');
-	// 		expect(queryReplicationStates.size).toEqual(2);
-	// 	});
-	// });
 });

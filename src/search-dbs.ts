@@ -146,6 +146,14 @@ export async function maybeCreateSearchDB(collection, locale = '') {
 	searchDBs.set(key, searchDB);
 
 	/**
+	 * This is async, there is a small chance that the collection has been destroyed before the searchDB is created
+	 */
+	if(collection.destroyed) {
+		searchDBs.delete(key);
+		return searchDB;
+	}
+
+	/**
 	 * Populate the searchDB with the stored records
 	 */
 	const docs = await collection.find().exec();

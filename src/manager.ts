@@ -8,7 +8,6 @@ import { QueryReplicationState } from './query-replication-state';
 import { Query } from './query-state';
 import { Registry } from './registry';
 import { RelationalQuery } from './relational-query-state';
-import { Search } from './search-state';
 import { SubscribableBase } from './subscribable-base';
 import { buildEndpointWithParams } from './utils';
 
@@ -148,16 +147,15 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		if (!this.queryStates.has(key)) {
 			const collection = this.getCollection(collectionName);
 			if (collection) {
-				const searchService = new Search({ collection, locale: this.locale });
 				const queryState = new Query<typeof collection>({
 					id: key,
 					collection,
 					initialParams,
 					hooks,
-					searchService,
 					endpoint,
 					errorSubject: this.subjects.error,
 					greedy,
+					locale: this.locale,
 				});
 
 				this.queryStates.set(key, queryState);
@@ -180,17 +178,16 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		if (!this.queryStates.has(key)) {
 			const collection = this.getCollection(collectionName);
 			if (collection) {
-				const searchService = new Search({ collection, locale: this.locale });
 				const queryState = new RelationalQuery<typeof collection>(
 					{
 						id: key,
 						collection,
 						initialParams,
 						hooks,
-						searchService,
 						endpoint,
 						errorSubject: this.subjects.error,
 						greedy,
+						locale: this.locale,
 					},
 					childQuery,
 					parentLookupQuery

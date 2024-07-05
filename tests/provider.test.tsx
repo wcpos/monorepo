@@ -75,17 +75,6 @@ describe('QueryProvider', () => {
 				<TestComponent2 />
 			</QueryProvider>
 		);
-
-		/**
-		 * It's important to wait for the render to complete before making assertions.
-		 * In this case the 'maybeCreateSearchDB' is created asynchronously and cleanup is called
-		 * before the searchDB is created.
-		 * 
-		 * @TODO - find a better way to handle this
-		 */
-		await waitFor(() => {
-			expect(true).toBe(true); // Placeholder to wait for render
-		});
 	});
 
 	it('should have initial values for query.params$ and query.result$', (done) => {
