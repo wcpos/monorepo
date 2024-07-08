@@ -28,6 +28,3 @@
 [submodule "packages/query"]
 	path = packages/query
 	url = https://github.com/wcpos/query.git
-[submodule "apps/expo-router"]
-	path = apps/expo-router
-	url = https://github.com/wcpos/expo-router
