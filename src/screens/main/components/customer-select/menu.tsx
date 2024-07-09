@@ -42,12 +42,13 @@ const convertHexToRGBA = (hexCode, opacity = 1) => {
 interface CustomerSelectMenuProps {
 	query: any;
 	onChange: (item: CustomerDocument) => void;
+	withGuest?: boolean;
 }
 
 /**
  *
  */
-const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
+const CustomerSelectMenu = ({ query, onChange, withGuest = true }: CustomerSelectMenuProps) => {
 	const theme = useTheme();
 	const result = useInfiniteScroll(query);
 	const { active$ } = useReplicationState(query.id);
@@ -130,7 +131,7 @@ const CustomerSelectMenu = ({ query, onChange }: CustomerSelectMenuProps) => {
 				data={result.hits}
 				renderItem={renderItem}
 				estimatedItemSize={50}
-				ListHeaderComponent={renderGuestItem}
+				ListHeaderComponent={withGuest ? renderGuestItem : undefined}
 				onEndReached={() => result.nextPage()}
 				ListFooterComponent={<Table.LoadingRow loading={loading} style={{ padding: 0 }} />}
 			/>

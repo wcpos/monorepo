@@ -1,10 +1,13 @@
 import * as React from 'react';
 
+import defaults from 'lodash/defaults';
+
 import Popover from '@wcpos/components/src/popover';
 import { useQuery } from '@wcpos/query';
 
 import Menu from './menu';
-import SearchInput from './search-input';
+import SearchInput, { SearchInputProps } from './search-input';
+import { useT } from '../../../../contexts/translations';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
@@ -14,7 +17,11 @@ interface CustomerSelectProps {
 	value?: CustomerDocument;
 	onBlur?: () => void;
 	size?: 'small' | 'normal';
-	style?: React.CSSProperties;
+	style?: SearchInputProps['style'];
+	initialParams?: any;
+	queryKey?: string;
+	placeholder?: string;
+	withGuest?: boolean;
 }
 
 /**
@@ -27,19 +34,27 @@ const CustomerSelect = ({
 	onBlur = () => {},
 	size = 'normal',
 	style,
+	initialParams,
+	queryKey = 'select',
+	placeholder,
+	withGuest,
 }: CustomerSelectProps) => {
 	const [opened, setOpened] = React.useState(false);
+	const t = useT();
 
 	/**
 	 *
 	 */
 	const query = useQuery({
-		queryKeys: ['customers', 'select'],
+		queryKeys: ['customers', queryKey],
 		collectionName: 'customers',
-		initialParams: {
-			sortBy: 'last_name',
-			sortDirection: 'asc',
-		},
+		initialParams: defaults(
+			{
+				sortBy: 'last_name',
+				sortDirection: 'asc',
+			},
+			initialParams
+		),
 	});
 
 	/**
@@ -80,7 +95,7 @@ const CustomerSelect = ({
 		>
 			<Popover.Target>
 				<SearchInput
-					// placeholder={placeholder}
+					placeholder={placeholder ? placeholder : t('Search Customers', { _tags: 'core' })}
 					onSearch={onSearch}
 					autoFocus={autoFocus}
 					setOpened={setOpened}
@@ -92,7 +107,7 @@ const CustomerSelect = ({
 				/>
 			</Popover.Target>
 			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
-				<Menu query={query} onChange={onSelectCustomer} />
+				<Menu query={query} onChange={onSelectCustomer} withGuest={withGuest} />
 			</Popover.Content>
 		</Popover>
 	);

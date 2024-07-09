@@ -51,8 +51,8 @@ const StatusPill = ({ query }: Props) => {
 			opened={open}
 			onClose={() => setOpen(false)}
 			withArrow={false}
-			matchWidth
 			onSelect={(val) => query.where('status', val)}
+			placement="bottom-start"
 		>
 			<Pill
 				icon="cartCircleCheck"

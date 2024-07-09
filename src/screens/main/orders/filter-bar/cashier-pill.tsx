@@ -10,7 +10,7 @@ import { useT } from '../../../../contexts/translations';
 import CustomerSelect from '../../components/customer-select';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
-interface CustomerPillProps {
+interface CashierPillProps {
 	query: Query<CustomerCollection>;
 	resource: ObservableResource<CustomerDocument>;
 }
@@ -18,9 +18,9 @@ interface CustomerPillProps {
 /**
  *
  */
-const CustomerPill = ({ query, resource }: CustomerPillProps) => {
+export const CashierPill = ({ query, resource }: CashierPillProps) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
-	const customer = useObservableSuspense(resource);
+	const cashier = useObservableSuspense(resource);
 	const { format } = useCustomerNameFormat();
 	const t = useT();
 
@@ -28,9 +28,11 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 	 *
 	 */
 	const handleSelect = React.useCallback(
-		(customer) => {
-			if (customer && customer.id) {
-				query.where('customer_id', customer.id);
+		(cashier) => {
+			if (cashier && cashier.id) {
+				query.where('meta_data', {
+					$elemMatch: { key: '_pos_user', value: String(cashier.id) },
+				});
 			}
 		},
 		[query]
@@ -40,16 +42,16 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 	 *
 	 */
 	const handleRemove = React.useCallback(() => {
-		query.where('customer_id', null);
+		query.where('meta_data', null);
 	}, [query]);
 
 	/**
 	 *
 	 */
-	if (customer) {
+	if (cashier) {
 		return (
-			<Pill size="small" removable onRemove={handleRemove} icon="user">
-				{format(customer)}
+			<Pill size="small" removable onRemove={handleRemove} icon="userCrown">
+				{format(cashier)}
 			</Pill>
 		);
 	}
@@ -64,12 +66,18 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 			autoFocus={true}
 			size="small"
 			style={{ minWidth: 200 }}
+			initialParams={{
+				selector: {
+					role: { $in: ['administrator', 'shop_manager', 'cashier'] },
+				},
+			}}
+			placeholder={t('Search Cashier', { _tags: 'core' })}
+			queryKey="cashier-select"
+			withGuest={false}
 		/>
 	) : (
-		<Pill icon="user" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
-			{t('Select Customer', { _tags: 'core' })}
+		<Pill icon="userCrown" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
+			{t('Select Cashier', { _tags: 'core' })}
 		</Pill>
 	);
 };
-
-export default CustomerPill;

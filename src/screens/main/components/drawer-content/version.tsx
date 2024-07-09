@@ -11,7 +11,7 @@ const Version = ({ largeScreen }) => {
 	return (
 		<Box paddingY="xxSmall" paddingX={largeScreen ? 'none' : 'large'}>
 			<Text type="darkestGrey" size="xSmall" align={largeScreen ? 'center' : 'left'}>
-				{largeScreen ? 'v 1.6.1' : 'Version 1.6.1'}
+				{largeScreen ? 'v 1.6.2' : 'Version 1.6.2'}
 			</Text>
 		</Box>
 	);

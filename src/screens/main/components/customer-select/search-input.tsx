@@ -3,10 +3,21 @@ import { TextInput as RNTextInput } from 'react-native';
 
 import delay from 'lodash/delay';
 
-import TextInput from '@wcpos/components/src/textinput';
+import TextInput, { TextInputProps } from '@wcpos/components/src/textinput';
 
-import { useT } from '../../../../contexts/translations';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+
+export interface SearchInputProps {
+	onSearch: (search: string) => void;
+	setOpened: (opened: boolean) => void;
+	autoFocus?: boolean;
+	selectedCustomer?: any;
+	onBlur: () => void;
+	size?: 'small' | 'normal';
+	style?: TextInputProps['style'];
+	opened: boolean;
+	placeholder?: string;
+}
 
 /**
  *
@@ -20,10 +31,10 @@ const SearchInput = ({
 	size,
 	style,
 	opened,
-}) => {
+	placeholder,
+}: SearchInputProps) => {
 	const [search, setSearch] = React.useState('');
 	const { format } = useCustomerNameFormat();
-	const t = useT();
 	const inputRef = React.useRef<RNTextInput>();
 
 	/**
@@ -36,17 +47,6 @@ const SearchInput = ({
 		},
 		[onSearch]
 	);
-
-	/**
-	 *
-	 */
-	const placeholder = React.useMemo(() => {
-		if (selectedCustomer) {
-			return format(selectedCustomer);
-		}
-
-		return t('Search Customers', { _tags: 'core' });
-	}, [selectedCustomer, t, format]);
 
 	/**
 	 * Focus input when opened
@@ -68,7 +68,7 @@ const SearchInput = ({
 			containerStyle={{ flex: 1 }}
 			clearable
 			autoFocus={autoFocus}
-			placeholder={placeholder}
+			placeholder={selectedCustomer ? format(selectedCustomer) : placeholder}
 			size={size}
 			style={style}
 			/**
