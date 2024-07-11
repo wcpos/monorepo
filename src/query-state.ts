@@ -392,7 +392,25 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		return !!clause;
 	}
 
-	findElementSelectorID(field: string): any {}
+	findElementSelectorID(field: string): any {
+		for (const clause of this.whereClauses) {
+			if (clause.field === field && clause.value?.$elemMatch) {
+				const match = clause.value.$elemMatch.id;
+				if (match !== undefined) return match;
+			}
+		}
+		return undefined;
+	}
+
+	hasElementSelectorID(field: string, id: any): boolean {
+		for (const clause of this.whereClauses) {
+			if (clause.field === field && clause.value?.$elemMatch) {
+				const match = clause.value.$elemMatch.id;
+				if (match === id) return true;
+			}
+		}
+		return false;
+	}
 
 	findMetaDataSelector(key: string): any {
 		for (const clause of this.whereClauses) {

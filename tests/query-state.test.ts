@@ -755,5 +755,184 @@ describe('Query', () => {
 			});
 		});
 
+		/**
+		 * 
+		 */
+		it('finds a category by ID', async () => {
+			const data = [
+				{ uuid: '1', name: 'Item 1', categories: [
+					{
+						"id": 21,
+						"name": "Music",
+						"slug": "music"
+					}
+				] },
+				{ uuid: '2', name: 'Item 2', categories: [
+					{
+						"id": 17,
+						"name": "Clothing",
+						"slug": "clothing"
+					},
+					{
+						"id": 21,
+						"name": "Music",
+						"slug": "music"
+					}
+				] },
+				{ uuid: '3', name: 'Item 3', categories: [
+					{
+						"id": 17,
+						"name": "Clothing",
+						"slug": "clothing"
+					}
+				] },
+				{ uuid: '4', name: 'Item 4', categories: [
+					{
+						"id": 21,
+						"name": "Music",
+						"slug": "music"
+					}
+				] },
+				{ uuid: '5', name: 'Item 5', categories: [
+					{
+						"id": 17,
+						"name": "Clothing",
+						"slug": "clothing"
+					},
+					{
+						"id": 21,
+						"name": "Music",
+						"slug": "music"
+					}
+				] },
+			];
+
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
+
+			const query = new Query({ 
+				collection: storeDatabase.collections.products, 
+				initialParams: {
+					sortBy: 'name',
+					sortDirection: 'asc',
+				} 
+			});
+
+			query.where('categories', { $elemMatch: { id: 17 } });
+			expect(query.getParams()).toEqual({
+				selector: { $and: [ { categories: { $elemMatch: { id: 17 } } } ] },
+				sortBy: 'name',
+				sortDirection: 'asc',
+			});
+
+			return new Promise((resolve) => {
+				query.result$.subscribe((result) => {
+					expect(result).toEqual(expect.objectContaining({
+						elapsed: expect.any(Number),
+						searchActive: false,
+						count: 3,
+						hits: expect.arrayContaining([
+							expect.objectContaining({ id: '2', document: expect.any(Object) }),
+							expect.objectContaining({ id: '3', document: expect.any(Object) }),
+							expect.objectContaining({ id: '5', document: expect.any(Object) })
+						])
+					}));
+
+					resolve();
+				});
+			});
+		});
+
+		/**
+		 * 
+		 */
+		it('replaces a category selector by ID', async () => {
+			const data = [
+				{ uuid: '1', name: 'Item 1', categories: [
+					{
+						"id": 21,
+						"name": "Music",
+						"slug": "music"
+					}
+				] },
+				{ uuid: '2', name: 'Item 2', categories: [
+					{
+						"id": 17,
+						"name": "Clothing",
+						"slug": "clothing"
+					},
+					{
+						"id": 21,
+						"name": "Music",
+						"slug": "music"
+					}
+				] },
+				{ uuid: '3', name: 'Item 3', categories: [
+					{
+						"id": 17,
+						"name": "Clothing",
+						"slug": "clothing"
+					}
+				] },
+				{ uuid: '4', name: 'Item 4', categories: [
+					{
+						"id": 21,
+						"name": "Music",
+						"slug": "music"
+					}
+				] },
+				{ uuid: '5', name: 'Item 5', categories: [
+					{
+						"id": 17,
+						"name": "Clothing",
+						"slug": "clothing"
+					},
+					{
+						"id": 21,
+						"name": "Music",
+						"slug": "music"
+					}
+				] },
+			];
+
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
+
+			const query = new Query({ 
+				collection: storeDatabase.collections.products, 
+				initialParams: {
+					sortBy: 'name',
+					sortDirection: 'asc',
+					selector: {
+						categories: { $elemMatch: { id: 21 } }
+					}
+				} 
+			});
+
+			query.where('categories', { $elemMatch: { id: 17 } });
+			expect(query.getParams()).toEqual({
+				selector: { $and: [ { categories: { $elemMatch: { id: 17 } } } ] },
+				sortBy: 'name',
+				sortDirection: 'asc',
+			});
+
+			return new Promise((resolve) => {
+				query.result$.subscribe((result) => {
+					expect(result).toEqual(expect.objectContaining({
+						elapsed: expect.any(Number),
+						searchActive: false,
+						count: 3,
+						hits: expect.arrayContaining([
+							expect.objectContaining({ id: '2', document: expect.any(Object) }),
+							expect.objectContaining({ id: '3', document: expect.any(Object) }),
+							expect.objectContaining({ id: '5', document: expect.any(Object) })
+						])
+					}));
+
+					resolve();
+				});
+			});
+		});
+
 	});
 });
