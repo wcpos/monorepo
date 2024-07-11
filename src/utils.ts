@@ -113,3 +113,42 @@ export function getParamValueFromEndpoint(endpoint: string, param: string) {
 	const params = new URLSearchParams(url.search);
 	return params.get(param);
 }
+
+/**
+ * 
+ */
+type WhereClause = { field: string; value: any };
+export function normalizeWhereClauses(clauses: WhereClause[]): WhereClause[] {
+	const fieldMap = new Map<string, WhereClause>();
+	const fieldsToRemove = new Set<string>();
+
+	for (const clause of clauses) {
+		if (clause.value === null) {
+			// Mark the field for removal
+			fieldsToRemove.add(clause.field);
+			fieldMap.delete(clause.field);
+		} else if (clause.value?.$elemMatch) {
+			const key = `${clause.field}_${clause.value.$elemMatch.key || clause.value.$elemMatch.name}`;
+			if (clause.value.$elemMatch.value === null || clause.value.$elemMatch.option === null) {
+				fieldMap.delete(key);
+			} else {
+				fieldMap.set(key, clause);
+			}
+		} else if (!fieldsToRemove.has(clause.field)) {
+			fieldMap.set(clause.field, clause);
+		}
+	}
+
+	// Ensure fields marked for removal are not in the final output
+	fieldsToRemove.forEach(field => {
+		for (const key of fieldMap.keys()) {
+			if (key.startsWith(field)) {
+				fieldMap.delete(key);
+			}
+		}
+	});
+
+	return Array.from(fieldMap.values());
+}
+
+

@@ -73,13 +73,20 @@ export type LogCollection = RxCollection<LogDocumentType>;
 const logs: RxCollectionCreator<LogDocumentType> = { schema: logSchema };
 
 /**
+ * Generate a unique database name
+ */
+function generateUniqueDbName(baseName: string): string {
+	return `${baseName}_${Date.now()}`;
+}
+
+/**
  *
  */
 export async function createStoreDatabase(): Promise<RxDatabase> {
 	const db = await createRxDatabase({
-		name: 'storedb',
+		name: generateUniqueDbName('storedb'),
 		storage: getRxStorageMemory(),
-		ignoreDuplicate: true,
+		// ignoreDuplicate: true,
 		allowSlowCount: true,
 	});
 
@@ -93,9 +100,9 @@ export async function createStoreDatabase(): Promise<RxDatabase> {
  */
 export async function createSyncDatabase(): Promise<RxDatabase> {
 	const db = await createRxDatabase({
-		name: 'syncdb',
+		name: generateUniqueDbName('syncdb'),
 		storage: getRxStorageMemory(),
-		ignoreDuplicate: true,
+		// ignoreDuplicate: true,
 		allowSlowCount: true,
 	});
 

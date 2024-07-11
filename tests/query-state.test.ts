@@ -1,4 +1,5 @@
 import { of, BehaviorSubject } from 'rxjs';
+import { skip } from 'rxjs/operators';
 
 import { Query, QueryParams } from '../src/query-state'; // Adjust the import based on your file structure
 import { createStoreDatabase, createSyncDatabase } from './helpers/db';
@@ -23,13 +24,14 @@ describe('Query', () => {
 		await new Promise(resolve => setTimeout(resolve, 100));
 
 		await storeDatabase.destroy();
+		expect(storeDatabase.destroyed).toBe(true);
 		jest.clearAllMocks();
 	});
 
 	/**
 	 * 
 	 */
-	it('query.getParams() should return the initialParams', () => {
+	it('query.getParams() should return the initialParams', async () => {
 		const initialParams = {
 			sortBy: 'name',
 			sortDirection: 'asc',
@@ -71,8 +73,8 @@ describe('Query', () => {
 			{ uuid: '4', name: 'Item 4', price: '-9.50' },
 			{ uuid: '5', name: 'Item 5', price: '4.00' },
 		];
-
-		await storeDatabase.collections.products.bulkInsert(data);
+		const { success } = await storeDatabase.collections.products.bulkInsert(data);
+		expect(success.length).toBe(5);
 
 		const query = new Query({ collection: storeDatabase.collections.products, initialParams: {} });
 
@@ -99,6 +101,7 @@ describe('Query', () => {
 	 * 
 	 */
 	describe('query.sort()', () => {
+	
 		/**
 		 * 
 		 */
@@ -120,7 +123,8 @@ describe('Query', () => {
 				{ uuid: '4', name: 'Item 4', price: '-9.50' },
 				{ uuid: '5', name: 'Item 5', price: '4.00' },
 			];
-			await storeDatabase.collections.products.bulkInsert(data);
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
 
 			const query = new Query({ collection: storeDatabase.collections.products, initialParams });
 
@@ -175,49 +179,581 @@ describe('Query', () => {
 		/**
 		 * 
 		 */
-		it('correctly sets a single where clause', () => {
-			const query = new Query({ collection: storeDatabase.collections.products, initialParams: {} });
-			query.where('status', 'completed');
-			expect(query.getParams()).toEqual({
-				selector: { status: 'completed' },
-			});
-		});
+		it('sets a single where clause', async () => {
+			const data = [
+				{ uuid: '1', name: 'Item 1', stock_status: 'outofstock' },
+				{ uuid: '2', name: 'Item 2', stock_status: 'instock' },
+				{ uuid: '3', name: 'Item 3', stock_status: 'onbackorder' },
+				{ uuid: '4', name: 'Item 4', stock_status: 'instock' },
+				{ uuid: '5', name: 'Item 5', stock_status: 'lowstock' },
+			];
 
-		/**
-		 * 
-		 */
-		it('overwrites an existing where clause', () => {
-			const query = new Query({ collection: storeDatabase.collections.products, initialParams: {} });
-			query.where('status', 'completed');
-			query.where('status', 'pending');
-			expect(query.getParams()).toEqual({
-				selector: { status: 'pending' },
-			});
-		});
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
 
-		/**
-		 * 
-		 */
-		it('removes a where clause when value is null', () => {
-			const query = new Query({ collection: storeDatabase.collections.products, initialParams: {} });
-			query.where('status', 'completed');
-			query.where('status', null);
-			expect(query.getParams()).toEqual({
-				selector: {},
+			const query = new Query({ 
+				collection: storeDatabase.collections.products, 
+				initialParams: {
+					sortBy: 'name',
+					sortDirection: 'asc',
+				} 
 			});
-		});
 
-		/**
-		 * 
-		 */
-		it('combines where and sort clauses correctly', () => {
-			const query = new Query({ collection: storeDatabase.collections.products, initialParams: {} });
-			query.where('status', 'completed').sort('price', 'asc');
+			query.where('stock_status', 'instock');
 			expect(query.getParams()).toEqual({
-				selector: { status: 'completed' },
-				sortBy: 'price',
+				selector: { $and: [ { stock_status: 'instock' } ] },
+				sortBy: 'name',
 				sortDirection: 'asc',
 			});
+
+			return new Promise((resolve) => {
+				query.result$.subscribe((result) => {
+					expect(result).toEqual(expect.objectContaining({
+						elapsed: expect.any(Number),
+						searchActive: false,
+						count: 2,
+						hits: expect.arrayContaining([
+							expect.objectContaining({ id: '2', document: expect.any(Object) }),
+							expect.objectContaining({ id: '4', document: expect.any(Object) })
+						])
+					}));
+
+					resolve();
+				});
+			});
 		});
+
+		/**
+		 * 
+		 */
+		it('overwrites an existing where clause', async () => {
+			const data = [
+				{ uuid: '1', name: 'Item 1', stock_status: 'outofstock' },
+				{ uuid: '2', name: 'Item 2', stock_status: 'instock' },
+				{ uuid: '3', name: 'Item 3', stock_status: 'onbackorder' },
+				{ uuid: '4', name: 'Item 4', stock_status: 'instock' },
+				{ uuid: '5', name: 'Item 5', stock_status: 'lowstock' },
+			];
+
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
+
+			const query = new Query({ 
+				collection: storeDatabase.collections.products, 
+				initialParams: {
+					sortBy: 'name',
+					sortDirection: 'asc',
+					selector: {
+						stock_status: 'instock'
+					}
+				} 
+			});
+
+			query.where('stock_status', 'outofstock');
+			expect(query.getParams()).toEqual({
+				selector: { $and: [ { stock_status: 'outofstock' } ] },
+				sortBy: 'name',
+				sortDirection: 'asc',
+			});
+
+			return new Promise((resolve) => {
+				query.result$.subscribe((result) => {
+					expect(result).toEqual(expect.objectContaining({
+						elapsed: expect.any(Number),
+						searchActive: false,
+						count: 1,
+						hits: expect.arrayContaining([
+							expect.objectContaining({ id: '1', document: expect.any(Object) }),
+						])
+					}));
+
+					resolve();
+				});
+			});
+		});
+
+		/**
+		 * 
+		 */
+		it('removes a where clause when value is null', async () => {
+			const data = [
+				{ uuid: '1', name: 'Item 1', stock_status: 'outofstock' },
+				{ uuid: '2', name: 'Item 2', stock_status: 'instock' },
+				{ uuid: '3', name: 'Item 3', stock_status: 'onbackorder' },
+				{ uuid: '4', name: 'Item 4', stock_status: 'instock' },
+				{ uuid: '5', name: 'Item 5', stock_status: 'lowstock' },
+			];
+
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
+
+			const query = new Query({ 
+				collection: storeDatabase.collections.products, 
+				initialParams: {
+					sortBy: 'name',
+					sortDirection: 'asc',
+					selector: {
+						stock_status: 'instock'
+					}
+				} 
+			});
+
+			let count = 0;
+
+			// next sort
+			const promise = new Promise((resolve) => {
+				query.result$.subscribe((result) => {
+					if(count === 0) {
+						count++;
+						expect(result).toEqual(expect.objectContaining({
+							elapsed: expect.any(Number),
+							searchActive: false,
+							count: 2,
+							hits: expect.arrayContaining([
+								expect.objectContaining({ id: '2', document: expect.any(Object) }),
+								expect.objectContaining({ id: '4', document: expect.any(Object) })
+							])
+						}));
+
+						// remove selector
+						query.where('stock_status', null);
+					} else {
+						expect(result).toEqual(expect.objectContaining({
+							elapsed: expect.any(Number),
+							searchActive: false,
+							count: 5,
+							hits: expect.arrayContaining([
+								expect.objectContaining({ id: '1', document: expect.any(Object) }),
+								expect.objectContaining({ id: '2', document: expect.any(Object) }),
+								expect.objectContaining({ id: '3', document: expect.any(Object) }),
+								expect.objectContaining({ id: '4', document: expect.any(Object) }),
+								expect.objectContaining({ id: '5', document: expect.any(Object) })
+							])
+						}));
+						resolve();
+					}
+				})
+			});
+
+			return promise;
+		});
+
+		/**
+		 * 
+		 */
+		it('finds a meta data element', async () => {
+			const data = [
+				{ uuid: '1', name: 'Item 1', meta_data: [{ key: 'key', value: 'value' }, { key: '_pos_store', value: '64' }] },
+				{ uuid: '2', name: 'Item 2', meta_data: [{ key: 'key', value: 'value' }] },
+				{ uuid: '3', name: 'Item 3', meta_data: [{ key: 'key', value: 'value' }, { key: '_pos_store', value: '40' }] },
+				{ uuid: '4', name: 'Item 4', meta_data: [{ key: 'key', value: 'value' }] },
+				{ uuid: '5', name: 'Item 5', meta_data: [{ key: 'key', value: 'value' }, { key: '_pos_store', value: '64' }] },
+			];
+
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
+
+			const query = new Query({ 
+				collection: storeDatabase.collections.products, 
+				initialParams: {
+					sortBy: 'name',
+					sortDirection: 'asc',
+				} 
+			});
+
+			query.where('meta_data', { $elemMatch: { key: '_pos_store', value: '64' } });
+			expect(query.getParams()).toEqual({
+				selector: { $and: [ { meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } } ] },
+				sortBy: 'name',
+				sortDirection: 'asc',
+			});
+
+			return new Promise((resolve) => {
+				query.result$.subscribe((result) => {
+					expect(result).toEqual(expect.objectContaining({
+						elapsed: expect.any(Number),
+						searchActive: false,
+						count: 2,
+						hits: expect.arrayContaining([
+							expect.objectContaining({ id: '1', document: expect.any(Object) }),
+							expect.objectContaining({ id: '5', document: expect.any(Object) })
+						])
+					}));
+
+					resolve();
+				});
+			});
+		});
+
+		/**
+		 * 
+		 */
+		it('finds multiple meta data elements', async () => {
+			const data = [
+				{ uuid: '1', name: 'Item 1', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '5' },
+						{ key: '_pos_store', value: '64' }
+					] 
+				},
+				{ uuid: '2', name: 'Item 2', meta_data: 
+					[
+					] 
+				},
+				{ uuid: '3', name: 'Item 3', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '3' }, 
+						{ key: '_pos_store', value: '40' }
+					] 
+				},
+				{ uuid: '4', name: 'Item 4', meta_data: 
+					[
+						{ key: 'key', value: 'value' },
+						{ key: '_pos_store', value: '40' }
+					] 
+				},
+				{ uuid: '5', name: 'Item 5', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '3' },  
+						{ key: '_pos_store', value: '64' }
+					] 
+				},
+			];
+
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
+
+			const query = new Query({ 
+				collection: storeDatabase.collections.products, 
+				initialParams: {
+					sortBy: 'name',
+					sortDirection: 'asc',
+					selector: {
+						meta_data: { $elemMatch: { key: '_pos_user', value: '3' } }
+					}
+				} 
+			});
+
+			query.where('meta_data', { $elemMatch: { key: '_pos_store', value: '64' } });
+			expect(query.getParams()).toEqual({
+				selector: { 
+					$and: 
+					[ 
+						{ meta_data: { $elemMatch: { key: '_pos_user', value: '3' } } },
+						{ meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } }
+					] 
+				},
+				sortBy: 'name',
+				sortDirection: 'asc',
+			});
+
+			return new Promise((resolve) => {
+				query.result$.subscribe((result) => {
+					expect(result).toEqual(expect.objectContaining({
+						elapsed: expect.any(Number),
+						searchActive: false,
+						count: 1,
+						hits: expect.arrayContaining([
+							expect.objectContaining({ id: '5', document: expect.any(Object) })
+						])
+					}));
+
+					resolve();
+				});
+			});
+		});
+
+		/**
+		 * 
+		 */
+		it('overwrites an existing meta data selector', async () => {
+			const data = [
+				{ uuid: '1', name: 'Item 1', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '5' },
+						{ key: '_pos_store', value: '64' }
+					] 
+				},
+				{ uuid: '2', name: 'Item 2', meta_data: 
+					[
+					] 
+				},
+				{ uuid: '3', name: 'Item 3', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '3' }, 
+						{ key: '_pos_store', value: '40' }
+					] 
+				},
+				{ uuid: '4', name: 'Item 4', meta_data: 
+					[
+						{ key: 'key', value: 'value' },
+						{ key: '_pos_store', value: '40' }
+					] 
+				},
+				{ uuid: '5', name: 'Item 5', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '3' },  
+						{ key: '_pos_store', value: '64' }
+					] 
+				},
+			];
+
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
+
+			const query = new Query({ 
+				collection: storeDatabase.collections.products, 
+				initialParams: {
+					sortBy: 'name',
+					sortDirection: 'asc',
+					selector: {
+						meta_data: { $elemMatch: { key: '_pos_user', value: '3' } }
+					}
+				} 
+			});
+
+			query.where('meta_data', { $elemMatch: { key: '_pos_user', value: '5' }  });
+			expect(query.getParams()).toEqual({
+				selector: { 
+					$and: 
+					[ 
+						{ meta_data: { $elemMatch: { key: '_pos_user', value: '5' } } },
+					] 
+				},
+				sortBy: 'name',
+				sortDirection: 'asc',
+			});
+
+			return new Promise((resolve) => {
+				query.result$.subscribe((result) => {
+					expect(result).toEqual(expect.objectContaining({
+						elapsed: expect.any(Number),
+						searchActive: false,
+						count: 1,
+						hits: expect.arrayContaining([
+							expect.objectContaining({ id: '1', document: expect.any(Object) })
+						])
+					}));
+
+					resolve();
+				});
+			});
+		});
+
+		/**
+		 * 
+		 */
+		it('removes a single meta data selector', async () => {
+			const data = [
+				{ uuid: '1', name: 'Item 1', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '5' },
+						{ key: '_pos_store', value: '64' }
+					] 
+				},
+				{ uuid: '2', name: 'Item 2', meta_data: 
+					[
+					] 
+				},
+				{ uuid: '3', name: 'Item 3', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '3' }, 
+						{ key: '_pos_store', value: '40' }
+					] 
+				},
+				{ uuid: '4', name: 'Item 4', meta_data: 
+					[
+						{ key: 'key', value: 'value' },
+						{ key: '_pos_store', value: '40' }
+					] 
+				},
+				{ uuid: '5', name: 'Item 5', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '3' },  
+						{ key: '_pos_store', value: '64' }
+					] 
+				},
+			];
+
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
+
+			const query = new Query({ 
+				collection: storeDatabase.collections.products, 
+				initialParams: {
+					sortBy: 'name',
+					sortDirection: 'asc',
+					selector: {
+						meta_data: { $elemMatch: { key: '_pos_user', value: '3' } },
+						meta_data: { $elemMatch: { key: '_pos_store', value: '64' } },
+					}
+				} 
+			});
+
+			query.where('meta_data', { $elemMatch: { key: '_pos_user', value: null }  });
+			expect(query.getParams()).toEqual({
+				selector: { 
+					$and: 
+					[ 
+						{ meta_data: { $elemMatch: { key: '_pos_store', value: '64' } } },
+					] 
+				},
+				sortBy: 'name',
+				sortDirection: 'asc',
+			});
+
+			return new Promise((resolve) => {
+				query.result$.subscribe((result) => {
+					expect(result).toEqual(expect.objectContaining({
+						elapsed: expect.any(Number),
+						searchActive: false,
+						count: 2,
+						hits: expect.arrayContaining([
+							expect.objectContaining({ id: '1', document: expect.any(Object) }),
+							expect.objectContaining({ id: '5', document: expect.any(Object) })
+						])
+					}));
+
+					resolve();
+				});
+			});
+		});
+
+		/**
+		 * 
+		 */
+		it('removes all meta data selectors', async () => {
+			const data = [
+				{ uuid: '1', name: 'Item 1', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '5' },
+						{ key: '_pos_store', value: '64' }
+					] 
+				},
+				{ uuid: '2', name: 'Item 2', meta_data: 
+					[
+					] 
+				},
+				{ uuid: '3', name: 'Item 3', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '3' }, 
+						{ key: '_pos_store', value: '40' }
+					] 
+				},
+				{ uuid: '4', name: 'Item 4', meta_data: 
+					[
+						{ key: 'key', value: 'value' },
+						{ key: '_pos_store', value: '40' }
+					] 
+				},
+				{ uuid: '5', name: 'Item 5', meta_data: 
+					[
+						{ key: 'key', value: 'value' }, 
+						{ key: '_pos_user', value: '3' },  
+						{ key: '_pos_store', value: '64' }
+					] 
+				},
+			];
+
+			const { success } = await storeDatabase.collections.products.bulkInsert(data);
+			expect(success.length).toBe(5);
+
+			const query = new Query({ 
+				collection: storeDatabase.collections.products, 
+				initialParams: {
+					sortBy: 'name',
+					sortDirection: 'asc',
+					selector: {
+						meta_data: { $elemMatch: { key: '_pos_user', value: '3' } },
+						meta_data: { $elemMatch: { key: '_pos_store', value: '64' } },
+					}
+				} 
+			});
+
+			query.where('meta_data', null);
+			expect(query.getParams()).toEqual({
+				selector: {},
+				sortBy: 'name',
+				sortDirection: 'asc',
+			});
+
+			return new Promise((resolve) => {
+				query.result$.subscribe((result) => {
+					expect(result).toEqual(expect.objectContaining({
+						elapsed: expect.any(Number),
+						searchActive: false,
+						count: 5,
+						hits: expect.arrayContaining([
+							expect.objectContaining({ id: '1', document: expect.any(Object) }),
+							expect.objectContaining({ id: '2', document: expect.any(Object) }),
+							expect.objectContaining({ id: '3', document: expect.any(Object) }),
+							expect.objectContaining({ id: '4', document: expect.any(Object) }),
+							expect.objectContaining({ id: '5', document: expect.any(Object) })
+						])
+					}));
+
+					resolve();
+				});
+			});
+		});
+
+		/**
+		 * 
+		 */
+		it('finds an attributes element', async () => {
+			const data = [
+				{ uuid: '1', name: 'Item 1', attributes: [{ name: 'name', option: 'option' }, { name: 'Color', option: 'Blue' }] },
+				{ uuid: '2', name: 'Item 2', attributes: [{ name: 'name', option: 'option' }] },
+				{ uuid: '3', name: 'Item 3', attributes: [{ name: 'name', option: 'option' }, { name: 'Color', option: 'Red' }] },
+				{ uuid: '4', name: 'Item 4', attributes: [{ name: 'name', option: 'option' }] },
+				{ uuid: '5', name: 'Item 5', attributes: [{ name: 'name', option: 'option' }, { name: 'Color', option: 'Blue' }] },
+			];
+
+			const { success } = await storeDatabase.collections.variations.bulkInsert(data);
+			expect(success.length).toBe(5);
+
+			const query = new Query({ 
+				collection: storeDatabase.collections.variations, 
+				initialParams: {
+					sortBy: 'name',
+					sortDirection: 'asc',
+				} 
+			});
+
+			query.where('attributes', { $elemMatch: { name: 'Color', option: 'Blue' } });
+			expect(query.getParams()).toEqual({
+				selector: { $and: [ { attributes: { $elemMatch: { name: 'Color', option: 'Blue' } } } ] },
+				sortBy: 'name',
+				sortDirection: 'asc',
+			});
+
+			return new Promise((resolve) => {
+				query.result$.subscribe((result) => {
+					expect(result).toEqual(expect.objectContaining({
+						elapsed: expect.any(Number),
+						searchActive: false,
+						count: 2,
+						hits: expect.arrayContaining([
+							expect.objectContaining({ id: '1', document: expect.any(Object) }),
+							expect.objectContaining({ id: '5', document: expect.any(Object) })
+						])
+					}));
+
+					resolve();
+				});
+			});
+		});
+
 	});
 });

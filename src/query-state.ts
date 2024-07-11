@@ -3,6 +3,7 @@ import cloneDeep from 'lodash/cloneDeep';
 import debounce from 'lodash/debounce';
 import forEach from 'lodash/forEach';
 import get from 'lodash/get';
+import find from 'lodash/find';
 import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
 import { ObservableResource } from 'observable-hooks';
@@ -19,6 +20,7 @@ import { map, switchMap, distinctUntilChanged, debounceTime, tap, startWith } fr
 
 import { SubscribableBase } from './subscribable-base';
 import { Search } from './search-state';
+import { normalizeWhereClauses } from './utils';
 
 import type { RxCollection, RxDocument } from 'rxdb';
 
@@ -289,18 +291,8 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	 * Selector helpers
 	 */
 	where(field: string, value: any): this {
-		if (value === undefined || value === null) {
-			// Remove the clause if value is null or undefined
-			// @TODO - what about empty string, array or object?
-			this.whereClauses = this.whereClauses.filter((clause) => clause.field !== field);
-		} else {
-			const existingClause = this.whereClauses.find((clause) => clause.field === field);
-			if (existingClause) {
-				existingClause.value = value;
-			} else {
-				this.whereClauses.push({ field, value });
-			}
-		}
+		this.whereClauses.push({ field, value });
+		this.whereClauses = normalizeWhereClauses(this.whereClauses);
 		this.updateParams();
 		return this;
 	}
@@ -337,61 +329,29 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	debouncedSearch = debounce(this.search, 250);
 
 	/**
-	 * Handle attribute selection
-	 * Attributes queries have the form:
-	 * {
-	 * 	selector: {
-	 * 		attributes: {
-	 * 			$allMatch: [
-	 * 				{
-	 * 					name: 'Color',
-	 * 					option: 'Blue',
-	 * 				},
-	 * 			],
-	 * 		},
-	 * 	}
-	 *
-	 * Note: $allMatch is an array so we need to check if it exists and add/remove to it
-	 */
-	updateVariationAttributeSelector(attribute: { id: number; name: string; option: string }) {
-		// this is only a helper for variations
-		if (this.collection.name !== 'variations') {
-			throw new Error('updateVariationAttributeSearch is only for variations');
-		}
-
-		// add attribute to query
-		const $allMatch = get(this.getParams(), ['selector', 'attributes', '$allMatch'], []);
-		const index = $allMatch.findIndex((a) => a.name === attribute.name);
-		if (index > -1) {
-			$allMatch[index] = attribute;
-		} else {
-			$allMatch.push(attribute);
-		}
-
-		this.whereClauses.push({ field: 'attributes', value: { $allMatch: [...$allMatch] } });
-		this.updateParams();
-	}
-
-	resetVariationAttributeSelector() {
-		if (get(this.getParams(), ['selector', 'attributes'])) {
-			this.whereClauses = this.whereClauses.filter((clause) => clause.field !== 'attributes');
-			this.updateParams();
-		}
-	}
-
-	/**
 	 *
 	 */
 	private updateParams(additionalParams: Partial<QueryParams> = {}): void {
-		// Construct the selector from where clauses
-		const selector = this.whereClauses.reduce((acc, clause) => {
-			acc[clause.field] = clause.value;
-			return acc;
-		}, {});
+		let selector;
+
+		// Construct the $and selector from where clauses
+		const andClauses = this.whereClauses.map((clause) => ({
+			[clause.field]: clause.value,
+		}));
+		
+		if (andClauses.length > 0) {
+			selector = { $and: andClauses };
+		} else {
+			selector = {};
+		}
 
 		// Get current params and merge them with additionalParams
 		const currentParams = this.getParams() || {};
-		const newParams: QueryParams = { ...currentParams, ...additionalParams, selector };
+		const newParams: QueryParams = {
+			...currentParams,
+			...additionalParams,
+			selector
+		};
 
 		// Update the BehaviorSubject
 		this.subjects.params.next(newParams);
@@ -409,5 +369,48 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 			map((result) => result.count),
 			distinctUntilChanged()
 		);
+	}
+
+	/**
+	 * Helper methods to see if $elemMatch is active
+	 */
+	findMetaDataSelector(key: string): any {
+		for (const clause of this.whereClauses) {
+			if (clause.field === 'meta_data' && clause.value?.$elemMatch) {
+				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], { key });
+				if (match) return match.value;
+			}
+		}
+		return undefined;
+	}
+
+	hasMetaDataSelector(key: string, value: any): boolean {
+		for (const clause of this.whereClauses) {
+			if (clause.field === 'meta_data' && clause.value?.$elemMatch) {
+				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], { key, value });
+				if (match) return true;
+			}
+		}
+		return false;
+	}
+
+	findAttributesSelector(name: string): any {
+		for (const clause of this.whereClauses) {
+			if (clause.field === 'attributes' && clause.value?.$elemMatch) {
+				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], { name });
+				if (match) return match.option;
+			}
+		}
+		return undefined;
+	}
+
+	hasAttributesSelector(name: string, option: any): boolean {
+		for (const clause of this.whereClauses) {
+			if (clause.field === 'attributes' && clause.value?.$elemMatch) {
+				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], { name, option });
+				if (match) return true;
+			}
+		}
+		return false;
 	}
 }
