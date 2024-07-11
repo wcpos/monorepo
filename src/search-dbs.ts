@@ -148,7 +148,7 @@ export async function maybeCreateSearchDB(collection, locale = '') {
 	/**
 	 * This is async, there is a small chance that the collection has been destroyed before the searchDB is created
 	 */
-	if(collection.destroyed) {
+	if (collection.destroyed) {
 		searchDBs.delete(key);
 		return searchDB;
 	}

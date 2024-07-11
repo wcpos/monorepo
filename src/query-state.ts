@@ -1,11 +1,11 @@
-import { orderBy } from 'natural-orderby';
 import cloneDeep from 'lodash/cloneDeep';
 import debounce from 'lodash/debounce';
+import find from 'lodash/find';
 import forEach from 'lodash/forEach';
 import get from 'lodash/get';
-import find from 'lodash/find';
 import isEmpty from 'lodash/isEmpty';
 import isEqual from 'lodash/isEqual';
+import { orderBy } from 'natural-orderby';
 import { ObservableResource } from 'observable-hooks';
 import {
 	BehaviorSubject,
@@ -18,8 +18,8 @@ import {
 } from 'rxjs';
 import { map, switchMap, distinctUntilChanged, debounceTime, tap, startWith } from 'rxjs/operators';
 
-import { SubscribableBase } from './subscribable-base';
 import { Search } from './search-state';
+import { SubscribableBase } from './subscribable-base';
 import { normalizeWhereClauses } from './utils';
 
 import type { RxCollection, RxDocument } from 'rxdb';
@@ -129,7 +129,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 
 		/**
 		 * Search service
-		 * 
+		 *
 		 * @TODO - we only need a full text search service for some collections and fields
 		 * @TODO - we have full text search, but we need partial string search as well
 		 */
@@ -138,9 +138,17 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		/**
 		 * Set initial params
 		 */
-		forEach(initialParams.selector, (value, key) => {
-			this.whereClauses.push({ field: key, value });
-		});
+		if (initialParams.selector?.$and) {
+			forEach(initialParams.selector.$and, (condition) => {
+				forEach(condition, (value, key) => {
+					this.whereClauses.push({ field: key, value });
+				});
+			});
+		} else {
+			forEach(initialParams.selector, (value, key) => {
+				this.whereClauses.push({ field: key, value });
+			});
+		}
 		this.subjects.params.next(initialParams);
 
 		/**
@@ -338,7 +346,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		const andClauses = this.whereClauses.map((clause) => ({
 			[clause.field]: clause.value,
 		}));
-		
+
 		if (andClauses.length > 0) {
 			selector = { $and: andClauses };
 		} else {
@@ -350,7 +358,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		const newParams: QueryParams = {
 			...currentParams,
 			...additionalParams,
-			selector
+			selector,
 		};
 
 		// Update the BehaviorSubject
@@ -374,6 +382,18 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	/**
 	 * Helper methods to see if $elemMatch is active
 	 */
+	findSelector(field: string): any {
+		const clause = find(this.whereClauses, { field });
+		return clause ? clause.value : undefined;
+	}
+
+	hasSelector(field: string, value: any): boolean {
+		const clause = find(this.whereClauses, { field, value });
+		return !!clause;
+	}
+
+	findElementSelectorID(field: string): any {}
+
 	findMetaDataSelector(key: string): any {
 		for (const clause of this.whereClauses) {
 			if (clause.field === 'meta_data' && clause.value?.$elemMatch) {
@@ -387,7 +407,10 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	hasMetaDataSelector(key: string, value: any): boolean {
 		for (const clause of this.whereClauses) {
 			if (clause.field === 'meta_data' && clause.value?.$elemMatch) {
-				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], { key, value });
+				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], {
+					key,
+					value,
+				});
 				if (match) return true;
 			}
 		}
@@ -407,7 +430,10 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	hasAttributesSelector(name: string, option: any): boolean {
 		for (const clause of this.whereClauses) {
 			if (clause.field === 'attributes' && clause.value?.$elemMatch) {
-				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], { name, option });
+				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], {
+					name,
+					option,
+				});
 				if (match) return true;
 			}
 		}
