@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
 import { useObservableSuspense, ObservableResource, useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
@@ -9,8 +8,7 @@ import Pill from '@wcpos/components/src/pill';
 import type { ProductCollection, StoreDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 
-import { findMetaDataSelector } from './utils';
-import { useT } from '../../../../contexts/translations';
+import { useT } from '../../../../../contexts/translations';
 
 interface Props {
 	query: Query<ProductCollection>;
@@ -23,15 +21,15 @@ interface Props {
 export const StorePill = ({ resource, query }: Props) => {
 	const stores = useObservableSuspense(resource);
 	const selectedCreatedVia = useObservableState(
-		query.params$.pipe(map((params) => get(params, ['selector', 'created_via']))),
-		get(query.getParams(), ['selector', 'created_via'])
+		query.params$.pipe(map(() => query.findSelector('created_via'))),
+		query.findSelector('created_via')
 	) as string | undefined;
 	/**
 	 * Selected store ID as a string
 	 */
 	const selectedStoreID = useObservableState(
-		query.params$.pipe(map((params) => findMetaDataSelector(params, '_pos_store'))),
-		findMetaDataSelector(query.getParams(), '_pos_store')
+		query.params$.pipe(map(() => query.findMetaDataSelector('_pos_store'))),
+		query.findMetaDataSelector('_pos_store')
 	);
 	const t = useT();
 	const isActive = !!(selectedCreatedVia || selectedStoreID);
@@ -115,7 +113,7 @@ export const StorePill = ({ resource, query }: Props) => {
 	 */
 	const handleRemove = React.useCallback(() => {
 		query.where('created_via', null);
-		query.where('meta_data', null);
+		query.where('meta_data', { $elemMatch: { key: '_pos_store', value: null } });
 	}, [query]);
 
 	/**

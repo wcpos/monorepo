@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
@@ -9,8 +8,8 @@ import Pill from '@wcpos/components/src/pill';
 import type { ProductCollection } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 
-import { useT } from '../../../../contexts/translations';
-import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
+import { useT } from '../../../../../contexts/translations';
+import { useOrderStatusLabel } from '../../../hooks/use-order-status-label';
 
 interface Props {
 	query: Query<ProductCollection>;
@@ -21,8 +20,8 @@ interface Props {
  */
 const StatusPill = ({ query }: Props) => {
 	const selected = useObservableState(
-		query.params$.pipe(map((params) => get(params, ['selector', 'status']))),
-		get(query.getParams(), ['selector', 'status'])
+		query.params$.pipe(map(() => query.findSelector('status'))),
+		query.findSelector('status')
 	) as string | undefined;
 	const t = useT();
 	const isActive = !!selected;

@@ -9,18 +9,19 @@ import { useQuery } from '@wcpos/query';
 
 import Actions from './cells/actions';
 import Address from './cells/address';
-import { Cashier } from './cells/cashier';
-import { CreatedVia } from './cells/created-via';
-import Customer from './cells/customer';
 import CustomerNote from './cells/note';
-import PaymentMethod from './cells/payment-method';
-import Status from './cells/status';
-import Total from './cells/total';
 import FilterBar from './filter-bar';
 import SearchBar from './search-bar';
+import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import DataTable from '../components/data-table';
 import { Date } from '../components/date';
+import { Cashier } from '../components/order/cashier';
+import { CreatedVia } from '../components/order/created-via';
+import Customer from '../components/order/customer';
+import PaymentMethod from '../components/order/payment-method';
+import Status from '../components/order/status';
+import Total from '../components/order/total';
 import UiSettings from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
@@ -37,6 +38,7 @@ const cells = {
 	date_created_gmt: Date,
 	date_modified_gmt: Date,
 	date_completed_gmt: Date,
+	date_paid_gmt: Date,
 	payment_method: PaymentMethod,
 	created_via: CreatedVia,
 	cashier: Cashier,
@@ -49,6 +51,7 @@ const Orders = () => {
 	const { uiSettings } = useUISettings('orders');
 	const theme = useTheme();
 	const t = useT();
+	const { wpCredentials, store } = useAppState();
 
 	/**
 	 *
@@ -59,6 +62,12 @@ const Orders = () => {
 		initialParams: {
 			sortBy: uiSettings.sortBy,
 			sortDirection: uiSettings.sortDirection,
+			selector: {
+				$and: [
+					{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } },
+					{ meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } } },
+				],
+			},
 		},
 	});
 

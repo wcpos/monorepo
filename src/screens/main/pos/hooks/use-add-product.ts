@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import useSnackbar from '@wcpos/components/src/snackbar';
+import { isRxDocument } from '@wcpos/database';
 import log from '@wcpos/utils/src/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
@@ -35,13 +36,19 @@ export const useAddProduct = () => {
 
 	/**
 	 * Add product to order, or increment quantity if already in order
+	 *
+	 * NOTE: for the miscellaneous product we pass in an object!! Not a document
 	 */
 	const addProduct = React.useCallback(
-		async (productDoc: ProductDocument) => {
+		async (data: ProductDocument | { id: number; [key: string]: any }) => {
 			let success;
+			let product = data;
 
 			// always make sure we have the latest product document
-			const product = productDoc.getLatest();
+			if (isRxDocument(data)) {
+				const latest = data.getLatest();
+				product = latest.toMutableJSON();
+			}
 
 			// check if product is already in order, if so increment quantity
 			if (!currentOrder.isNew && product.id !== 0) {

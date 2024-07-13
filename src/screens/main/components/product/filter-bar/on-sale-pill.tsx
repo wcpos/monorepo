@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
@@ -10,8 +9,8 @@ import { useT } from '../../../../../contexts/translations';
 
 const OnSalePill = ({ query }) => {
 	const isActive = useObservableState(
-		query.params$.pipe(map((params) => get(params, ['selector', 'on_sale']))),
-		get(query.getParams(), ['selector', 'on_sale'])
+		query.params$.pipe(map(() => query.findSelector('on_sale'))),
+		query.findSelector('on_sale')
 	);
 	const t = useT();
 

@@ -33,14 +33,14 @@ const Variations = ({ item, initialSelectedAttributes, parentSearchTerm }) => {
 	 * initialSelectedAttributes can change when the user quick selects variation
 	 * so we can't just use the initial value, we need to update the query
 	 */
-	React.useEffect(() => {
-		const hasSelectedAttributes = get(query.getParams(), ['selector', 'attributes']);
-		if (initialSelectedAttributes) {
-			query.updateVariationAttributeSelector(initialSelectedAttributes);
-		} else if (hasSelectedAttributes) {
-			query.resetVariationAttributeSelector();
-		}
-	}, [initialSelectedAttributes, query]);
+	// React.useEffect(() => {
+	// 	const hasSelectedAttributes = get(query.getParams(), ['selector', 'attributes']);
+	// 	if (initialSelectedAttributes) {
+	// 		query.updateVariationAttributeSelector(initialSelectedAttributes);
+	// 	} else if (hasSelectedAttributes) {
+	// 		query.resetVariationAttributeSelector();
+	// 	}
+	// }, [initialSelectedAttributes, query]);
 
 	/**
 	 *

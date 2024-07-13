@@ -358,6 +358,11 @@
         "disableSort": true
       },
       {
+        "key": "date_paid_gmt",
+        "show": false,
+        "disableSort": true
+      },
+      {
         "key": "created_via",
         "hideLabel": true,
         "width": 38,
@@ -455,6 +460,76 @@
         "width": 38,
         "hideLabel": true,
         "show": true
+      }
+    ]
+  },
+  "reports-orders": {
+    "sortBy": "date_created_gmt",
+    "sortDirection": "desc",
+    "columns": [
+      {
+        "key": "status",
+        "width": 45,
+        "align": "center",
+        "hideLabel": true,
+        "show": true
+      },
+      {
+        "key": "number",
+        "align": "center",
+        "hideLabel": true,
+        "show": true
+      },
+      {
+        "key": "customer_id",
+        "show": false
+      },
+      {
+        "key": "date_created_gmt",
+        "show": true
+      },
+      {
+        "key": "date_modified_gmt",
+        "show": false,
+        "disableSort": true
+      },
+      {
+        "key": "date_completed_gmt",
+        "show": false,
+        "disableSort": true
+      },
+      {
+        "key": "date_paid_gmt",
+        "show": true,
+        "disableSort": true
+      },
+      {
+        "key": "created_via",
+        "hideLabel": true,
+        "width": 38,
+        "align": "center",
+        "disableSort": true,
+        "show": false
+      },
+      {
+        "key": "cashier",
+        "disableSort": true,
+        "show": false
+      },
+      {
+        "key": "payment_method",
+        "show": false
+      },
+      {
+        "key": "total",
+        "align": "right",
+        "show": true,
+        "display": [
+          {
+            "key": "payment_method",
+            "show": false
+          }
+        ]
       }
     ]
   },

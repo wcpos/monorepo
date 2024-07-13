@@ -6,9 +6,9 @@ import Pill from '@wcpos/components/src/pill';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 
-import { useT } from '../../../../contexts/translations';
-import CustomerSelect from '../../components/customer-select';
-import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useT } from '../../../../../contexts/translations';
+import CustomerSelect from '../../../components/customer-select';
+import useCustomerNameFormat from '../../../hooks/use-customer-name-format';
 
 interface CustomerPillProps {
 	query: Query<CustomerCollection>;

@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
@@ -22,8 +21,8 @@ interface Props {
  */
 export const StockStatusPill = ({ query }: Props) => {
 	const selected = useObservableState(
-		query.params$.pipe(map((params) => get(params, ['selector', 'stock_status']))),
-		get(query.getParams(), ['selector', 'stock_status'])
+		query.params$.pipe(map(() => query.findSelector('stock_status'))),
+		query.findSelector('stock_status')
 	) as string | undefined;
 	const t = useT();
 	const isActive = !!selected;

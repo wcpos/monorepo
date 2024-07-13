@@ -1,8 +1,8 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
@@ -30,17 +30,24 @@ const VariationsFilterBar = ({ parent, query, parentSearchTerm }: Props) => {
 	const { setExpanded } = useVariationTable();
 
 	// new array is being created every time
-	const selectedAttributes = useObservableState(
-		query.params$.pipe(map((params) => get(params, ['selector', 'attributes', '$allMatch']))),
-		get(query.getParams(), ['selector', 'attributes', '$allMatch'])
+	const selectedAttributes = useObservableEagerState(
+		query.params$.pipe(
+			map(() => query.findSelector('attributes')),
+			distinctUntilChanged((prev, next) => {
+				const test = JSON.stringify(prev) === JSON.stringify(next);
+				debugger;
+				return test;
+			})
+		)
 	);
+	console.log('selectedAttributes', selectedAttributes);
 
 	/**
 	 *
 	 */
 	const handleSelect = React.useCallback(
 		(attribute) => {
-			query.updateVariationAttributeSelector(attribute);
+			query.where('attributes', { $elemMatch: { name: attribute.name, option: attribute.option } });
 		},
 		[query]
 	);

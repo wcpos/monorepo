@@ -27,6 +27,7 @@ import { LogsWithProviders } from './logs';
 import OrdersNavigator from './orders';
 import POSNavigator from './pos';
 import ProductsNavigator from './products';
+import ReportsNavigator from './reports';
 import Settings from './settings';
 import Support from './support';
 import TaxRates from './tax-rates';
@@ -52,6 +53,7 @@ export type DrawerParamList = {
 	ProductsStack: undefined;
 	OrdersStack: undefined;
 	CustomersStack: undefined;
+	ReportsStack: undefined;
 	LogsStack: undefined;
 	SupportStack: undefined;
 };
@@ -131,6 +133,21 @@ const DrawerNavigator = ({ navigation }) => {
 					drawerLabel: t('Customers', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
 						<Icon name="users" type={focused ? 'primary' : 'inverse'} size="large" />
+					),
+				}}
+			/>
+			<Drawer.Screen
+				name="ReportsStack"
+				component={ReportsNavigator}
+				options={{
+					title: t('Reports', { _tags: 'core' }),
+					drawerLabel: t('Reports', { _tags: 'core' }),
+					drawerIcon: ({ focused }) => (
+						<Icon
+							name="chartMixedUpCircleDollar"
+							type={focused ? 'primary' : 'inverse'}
+							size="large"
+						/>
 					),
 				}}
 			/>

@@ -66,10 +66,12 @@ const ProductAttributes = ({ product }: Props) => {
 			} else {
 				const query = manager.getQuery(['variations', { parentID: product.id }]);
 				if (query) {
-					query.updateVariationAttributeSelector({
-						id: attribute.id,
-						name: attribute.name,
-						option,
+					query.where('attributes', {
+						$elemMatch: {
+							id: attribute.id,
+							name: attribute.name,
+							option,
+						},
 					});
 				}
 			}

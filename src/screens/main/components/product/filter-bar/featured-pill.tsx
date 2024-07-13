@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
@@ -20,8 +19,8 @@ interface Props {
  */
 const FeaturedPill = ({ query }: Props) => {
 	const isActive = useObservableState(
-		query.params$.pipe(map((params) => get(params, ['selector', 'featured']))),
-		get(query.getParams(), ['selector', 'featured'])
+		query.params$.pipe(map(() => query.findSelector('featured'))),
+		query.findSelector('featured')
 	);
 	const t = useT();
 

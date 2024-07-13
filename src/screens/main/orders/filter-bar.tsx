@@ -1,8 +1,12 @@
 import * as React from 'react';
 
 import { useFocusEffect } from '@react-navigation/native';
-import get from 'lodash/get';
-import { useObservableState, ObservableResource, useObservable } from 'observable-hooks';
+import {
+	useObservableState,
+	ObservableResource,
+	useObservable,
+	useSubscription,
+} from 'observable-hooks';
 import { of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
@@ -10,13 +14,12 @@ import Box from '@wcpos/components/src/box';
 import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
 
-import { CashierPill } from './cashier-pill';
-import CustomerPill from './customer-pill';
-import StatusPill from './status-pill';
-import { StorePill } from './store-pill';
-import { findMetaDataSelector } from './utils';
-import { useAppState } from '../../../../contexts/app-state';
-import { useGuestCustomer } from '../../hooks/use-guest-customer';
+import { useAppState } from '../../../contexts/app-state';
+import { CashierPill } from '../components/order/filter-bar/cashier-pill';
+import CustomerPill from '../components/order/filter-bar/customer-pill';
+import StatusPill from '../components/order/filter-bar/status-pill';
+import { StorePill } from '../components/order/filter-bar/store-pill';
+import { useGuestCustomer } from '../hooks/use-guest-customer';
 
 /**
  *
@@ -24,12 +27,12 @@ import { useGuestCustomer } from '../../hooks/use-guest-customer';
 const FilterBar = ({ query }) => {
 	const guestCustomer = useGuestCustomer();
 	const customerID = useObservableState(
-		query.params$.pipe(map((params) => get(params, ['selector', 'customer_id']))),
-		get(query.getParams(), ['selector', 'customer_id'])
+		query.params$.pipe(map(() => query.findSelector('customer_id'))),
+		query.findSelector('customer_id')
 	);
 	const cashierID = useObservableState(
-		query.params$.pipe(map((params) => findMetaDataSelector(params, '_pos_user'))),
-		findMetaDataSelector(query.getParams(), '_pos_user')
+		query.params$.pipe(map(() => query.findMetaDataSelector('_pos_user'))),
+		query.findMetaDataSelector('_pos_user')
 	);
 	const { wpCredentials } = useAppState();
 
