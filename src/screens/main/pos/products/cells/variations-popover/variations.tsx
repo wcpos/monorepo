@@ -41,7 +41,7 @@ export const getAttributesWithCharacterCount = (attributes: ProductDocument['att
  *
  */
 const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
-	const { setPrimaryAction } = usePopover();
+	// const { setPrimaryAction } = usePopover();
 	const result = useObservableSuspense(query.resource);
 	const selectedAttributes = useObservableState(
 		query.params$.pipe(map((params) => get(params, ['selector', 'attributes', '$allMatch']))),
@@ -76,22 +76,22 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	/**
 	 *
 	 */
-	React.useEffect(() => {
-		if (selectedVariation) {
-			// convert attributes to meta_data
-			const selectedAttributesMetaData = (selectedAttributes || []).map((a) => ({
-				attr_id: a.id,
-				display_key: a.name,
-				display_value: a.option,
-			}));
-			setPrimaryAction({
-				label: t('Add to Cart') + ': ' + format(selectedVariation.price),
-				action: () => addToCart(selectedVariation, selectedAttributesMetaData),
-			});
-		} else {
-			setPrimaryAction(undefined);
-		}
-	}, [addToCart, format, parent, selectedAttributes, selectedVariation, setPrimaryAction, t]);
+	// React.useEffect(() => {
+	// 	if (selectedVariation) {
+	// 		// convert attributes to meta_data
+	// 		const selectedAttributesMetaData = (selectedAttributes || []).map((a) => ({
+	// 			attr_id: a.id,
+	// 			display_key: a.name,
+	// 			display_value: a.option,
+	// 		}));
+	// 		setPrimaryAction({
+	// 			label: t('Add to Cart') + ': ' + format(selectedVariation.price),
+	// 			action: () => addToCart(selectedVariation, selectedAttributesMetaData),
+	// 		});
+	// 	} else {
+	// 		setPrimaryAction(undefined);
+	// 	}
+	// }, [addToCart, format, parent, selectedAttributes, selectedVariation, setPrimaryAction, t]);
 
 	/**
 	 *

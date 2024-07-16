@@ -24,6 +24,9 @@ import 'setimmediate'; // https://github.com/software-mansion/react-native-reani
 // enable freeze
 // enableFreeze(true);
 
+// import global styles for web
+// import '@wcpos/tailwind/dist/styles.css';
+
 /**
  * Initial Props
  * - only web at the moment, but may be useful for other platforms in the future

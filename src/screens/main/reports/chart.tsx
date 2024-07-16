@@ -8,9 +8,10 @@ import {
 	eachWeekOfInterval,
 	eachMonthOfInterval,
 	addHours,
-	addDays,
-	addWeeks,
-	addMonths,
+	startOfWeek,
+	startOfMonth,
+	startOfDay,
+	startOfHour,
 } from 'date-fns';
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import {
@@ -20,14 +21,17 @@ import {
 	XAxis,
 	YAxis,
 	CartesianGrid,
-	Tooltip,
-	Legend,
+	Tooltip as RechartsTooltip,
 	ResponsiveContainer,
 } from 'recharts';
 import { useTheme } from 'styled-components/native';
 
+import Box from '@wcpos/components/src/box';
+import Text from '@wcpos/components/src/text';
+
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+import { useCurrencyFormat } from '../hooks/use-currency-format';
 
 // Helper function to aggregate data
 const aggregateData = (hits, interval, allDates) => {
@@ -73,7 +77,7 @@ const determineInterval = (hits) => {
 	if (diff > ONE_MONTH) {
 		return { format: 'yyyy-MM', interval: 'months' }; // Aggregate by month
 	} else if (diff > ONE_WEEK) {
-		return { format: 'yyyy-ww', interval: 'weeks' }; // Aggregate by week
+		return { format: 'yyyy-MM-dd', interval: 'weeks' }; // Aggregate by week, use start date of week
 	} else if (diff > ONE_DAY) {
 		return { format: 'yyyy-MM-dd', interval: 'days' }; // Aggregate by day
 	} else if (diff > ONE_HOUR) {
@@ -85,22 +89,62 @@ const determineInterval = (hits) => {
 
 const generateAllDates = (minDate, maxDate, interval) => {
 	if (interval === 'months') {
-		return eachMonthOfInterval({ start: minDate, end: maxDate });
+		return eachMonthOfInterval({ start: startOfMonth(minDate), end: maxDate });
 	} else if (interval === 'weeks') {
-		return eachWeekOfInterval({ start: minDate, end: maxDate });
+		return eachWeekOfInterval({ start: startOfWeek(minDate), end: maxDate });
 	} else if (interval === 'days') {
-		return eachDayOfInterval({ start: minDate, end: maxDate });
+		return eachDayOfInterval({ start: startOfDay(minDate), end: maxDate });
 	} else if (interval === '6hours') {
 		const dates = [];
-		for (let date = minDate; date <= maxDate; date = addHours(date, 6)) {
+		for (let date = startOfHour(minDate); date <= maxDate; date = addHours(date, 6)) {
 			dates.push(date);
 		}
 		return dates;
 	} else {
-		return eachHourOfInterval({ start: minDate, end: maxDate });
+		return eachHourOfInterval({ start: startOfHour(minDate), end: maxDate });
 	}
 };
 
+/**
+ *
+ */
+const CustomTooltip = ({ active, payload, label }) => {
+	const t = useT();
+	const { format } = useCurrencyFormat();
+
+	const getLabel = React.useCallback(
+		(value) => {
+			switch (value) {
+				case 'total':
+					return t('Total', { _tags: 'core' });
+				case 'total_tax':
+					return t('Total Tax', { _tags: 'core' });
+				case 'order_count':
+					return t('Orders', { _tags: 'core' });
+				default:
+					return value;
+			}
+		},
+		[t]
+	);
+
+	if (active && payload && payload.length) {
+		return (
+			<Box style={{ backgroundColor: 'white' }} rounding="small" padding="xSmall">
+				<Text weight="semiBold">{`${label}`}</Text>
+				<Text type="primary">{`${getLabel(payload[0].name)}: ${format(payload[0].value)}`}</Text>
+				<Text type="secondary">{`${getLabel(payload[1].name)}: ${format(payload[1].value)}`}</Text>
+				<Text type="textMuted">{`${getLabel(payload[2].name)}: ${payload[2].value}`}</Text>
+			</Box>
+		);
+	}
+
+	return null;
+};
+
+/**
+ *
+ */
 export const Chart = ({ query }) => {
 	const t = useT();
 	const theme = useTheme();
@@ -124,8 +168,7 @@ export const Chart = ({ query }) => {
 		() => aggregateData(result.hits, dateFormat, allDates),
 		[result.hits, dateFormat, allDates]
 	);
-
-	console.log(data);
+	console.log('data', data);
 
 	return (
 		<ResponsiveContainer width="100%" height="100%">
@@ -135,18 +178,21 @@ export const Chart = ({ query }) => {
 				data={data}
 				margin={{
 					top: 20,
-					right: 80,
-					bottom: 20,
+					right: 20,
+					bottom: 60,
 					left: 20,
 				}}
 			>
 				<CartesianGrid stroke="#f5f5f5" />
 				<XAxis
 					dataKey="date"
-					// label={{ value: 'Pages', position: 'insideBottomRight', offset: 0 }}
 					scale="band"
 					fontFamily="sans-serif"
 					fontSize={12}
+					stroke={theme.colors.text}
+					tick={{ fill: theme.colors.text }}
+					interval={0}
+					dy={10}
 				/>
 				<YAxis
 					yAxisId="total"
@@ -156,9 +202,12 @@ export const Chart = ({ query }) => {
 						position: 'insideLeft',
 						fontFamily: 'sans-serif',
 						fontSize: 12,
+						fill: theme.colors.text,
 					}}
 					fontFamily="sans-serif"
 					fontSize={12}
+					stroke={theme.colors.text}
+					tick={{ fill: theme.colors.text }}
 				/>
 				<YAxis
 					yAxisId="orders"
@@ -169,12 +218,14 @@ export const Chart = ({ query }) => {
 						position: 'insideRight',
 						fontFamily: 'sans-serif',
 						fontSize: 12,
+						fill: theme.colors.text,
 					}}
 					fontFamily="sans-serif"
 					fontSize={12}
+					stroke={theme.colors.text}
+					tick={{ fill: theme.colors.text }}
 				/>
-				<Tooltip />
-				<Legend />
+				<RechartsTooltip content={<CustomTooltip />} />
 				<Bar yAxisId="total" dataKey="total" stackId="a" fill={theme.colors.primary} />
 				<Bar yAxisId="total" dataKey="total_tax" stackId="a" fill={theme.colors.secondary} />
 				<Line

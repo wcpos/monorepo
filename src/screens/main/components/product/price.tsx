@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
-import Tooltip from '@wcpos/components/src/tooltip';
+import { Text as TWText } from '@wcpos/tailwind/src/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useTaxDisplayValues } from '../../hooks/taxes/use-tax-display-values';
@@ -39,16 +40,20 @@ export const Price = ({
 	if (taxDisplay === 'tooltip' && taxable) {
 		return (
 			<Tooltip content={`${inclOrExcl} ${format(taxTotal)} tax`}>
-				<Text
-					style={
-						strikethrough
-							? { textDecorationLine: 'line-through', textDecorationStyle: 'solid' }
-							: {}
-					}
-					type={strikethrough ? 'secondary' : undefined}
-				>
-					{format(displayValue)}
-				</Text>
+				<TooltipTrigger asChild>
+					<TWText>{format(displayValue)}</TWText>
+				</TooltipTrigger>
+				<TooltipContent>
+					<TWText>test</TWText>
+					{/* <Text
+						style={
+							strikethrough
+								? { textDecorationLine: 'line-through', textDecorationStyle: 'solid' }
+								: {}
+						}
+						type={strikethrough ? 'secondary' : undefined}
+					></Text> */}
+				</TooltipContent>
 			</Tooltip>
 		);
 	}

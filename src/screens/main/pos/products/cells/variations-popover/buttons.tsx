@@ -1,23 +1,25 @@
 import * as React from 'react';
 
-import Button from '@wcpos/components/src/button';
+import { Text } from '@wcpos/tailwind/src/text';
+import { ToggleGroup, ToggleGroupItem } from '@wcpos/tailwind/src/toggle-group';
 
 /**
  *
  */
 const VariationButtons = ({ attribute, onSelect, selectedOption }) => {
 	return (
-		<Button.Group>
+		<ToggleGroup value={selectedOption} onValueChange={onSelect} type="single">
 			{attribute.options?.map((option) => (
-				<Button
+				<ToggleGroupItem
 					key={option}
-					type={option === selectedOption ? 'success' : 'secondary'}
-					onPress={() => onSelect(attribute, option === selectedOption ? null : option)}
+					value={option}
+					// type={option === selectedOption ? 'success' : 'secondary'}
+					// onPress={() => onSelect(attribute, option === selectedOption ? null : option)}
 				>
-					{option}
-				</Button>
+					<Text>{option}</Text>
+				</ToggleGroupItem>
 			))}
-		</Button.Group>
+		</ToggleGroup>
 	);
 };
 

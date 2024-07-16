@@ -15,6 +15,7 @@ import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
 
 import { useAppState } from '../../../contexts/app-state';
+import { DateRange } from '../components/order/date-range';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import CustomerPill from '../components/order/filter-bar/customer-pill';
 import StatusPill from '../components/order/filter-bar/status-pill';
@@ -153,6 +154,7 @@ const FilterBar = ({ query }) => {
 				<CashierPill resource={cashierResource} query={query} />
 			</Suspense>
 			<StorePill resource={storesResource} query={query} />
+			<DateRange query={query} />
 		</Box>
 	);
 };

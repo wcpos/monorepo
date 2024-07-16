@@ -6,6 +6,7 @@ import { useTheme } from 'styled-components/native';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
+import { PortalHost } from '@wcpos/tailwind/src/portal';
 
 import POSColumns from './columns';
 import { useCurrentOrder } from './contexts/current-order';
@@ -13,7 +14,7 @@ import POSTabs from './tabs';
 import { TaxRatesProvider } from '../contexts/tax-rates';
 
 /**
- * 
+ *
  */
 const POS = () => {
 	const theme = useTheme();
@@ -29,13 +30,18 @@ const POS = () => {
 	});
 
 	return (
-		<ErrorBoundary>
-			<TaxRatesProvider taxQuery={taxQuery} order={currentOrder}>
-				<Suspense>
-					{dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />}
-				</Suspense>
-			</TaxRatesProvider>
-		</ErrorBoundary>
+		<>
+			<ErrorBoundary>
+				<TaxRatesProvider taxQuery={taxQuery} order={currentOrder}>
+					<Suspense>
+						{dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />}
+					</Suspense>
+				</TaxRatesProvider>
+			</ErrorBoundary>
+			<ErrorBoundary>
+				<PortalHost />
+			</ErrorBoundary>
+		</>
 	);
 };
 
