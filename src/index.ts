@@ -10,6 +10,11 @@ export type { UserDatabase } from './users-db';
 export type { FastStoreDatabase } from './fast-store-db';
 
 /**
+ * Re-export some rxdb helpers
+ */
+export { isRxDocument, isRxQuery, isRxCollection, isRxDatabase } from 'rxdb';
+
+/**
  * Re-export types
  */
 export type {

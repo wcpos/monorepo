@@ -1,5 +1,3 @@
-import { de } from '@faker-js/faker';
-
 export const syncLiteral = {
 	title: 'WooCommerce Sync schema',
 	version: 0,
