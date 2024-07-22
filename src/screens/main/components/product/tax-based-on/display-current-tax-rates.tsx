@@ -4,11 +4,11 @@ import { useNavigation } from '@react-navigation/native';
 import isEmpty from 'lodash/isEmpty';
 
 import Box from '@wcpos/components/src/box';
-import Button from '@wcpos/components/src/button';
 import InlineError from '@wcpos/components/src/inline-error';
 import SimpleTable from '@wcpos/components/src/simple-table';
-import Text from '@wcpos/components/src/text';
 import { TaxRateDocument } from '@wcpos/database';
+import { Button } from '@wcpos/tailwind/src/button';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { useT } from '../../../../../contexts/translations';
 
@@ -18,7 +18,6 @@ interface DisplayCurrentTaxRatesProps {
 	state: string;
 	city: string;
 	postcode: string;
-	setOpened: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 /**
@@ -30,7 +29,6 @@ const DisplayCurrentTaxRates = ({
 	state,
 	city,
 	postcode,
-	setOpened,
 }: DisplayCurrentTaxRatesProps) => {
 	const navigation = useNavigation();
 	const t = useT();
@@ -41,7 +39,7 @@ const DisplayCurrentTaxRates = ({
 	return (
 		<Box space="normal" padding="small">
 			<Box space="xSmall" style={{ width: '100%' }}>
-				<Text weight="bold">{t('Calculate tax based on', { _tags: 'core' })}:</Text>
+				<Text className="font-bold">{t('Calculate tax based on', { _tags: 'core' })}:</Text>
 				<SimpleTable
 					columns={[
 						{ key: 'country', label: t('Country', { _tags: 'core' }) },
@@ -60,7 +58,7 @@ const DisplayCurrentTaxRates = ({
 				/>
 			</Box>
 			<Box space="xSmall" style={{ width: '100%' }}>
-				<Text weight="bold">{t('Matched rates', { _tags: 'core' })}:</Text>
+				<Text className="font-bold">{t('Matched rates', { _tags: 'core' })}:</Text>
 				{Array.isArray(rates) && rates.length > 0 ? (
 					<SimpleTable
 						columns={[
@@ -76,14 +74,13 @@ const DisplayCurrentTaxRates = ({
 			</Box>
 			<Box horizontal>
 				<Button
-					type="secondary"
-					size="small"
-					title={t('View all tax rates', { _tags: 'core' })}
+					variant="secondary"
 					onPress={() => {
-						setOpened(false);
 						navigation.navigate('TaxRates');
 					}}
-				/>
+				>
+					<Text>{t('View all tax rates', { _tags: 'core' })}</Text>
+				</Button>
 			</Box>
 		</Box>
 	);

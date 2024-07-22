@@ -4,10 +4,23 @@ import find from 'lodash/find';
 
 import Box from '@wcpos/components/src/box';
 import { EdittableText } from '@wcpos/components/src/edittable-text';
+import Icon from '@wcpos/components/src/icon';
 import Text from '@wcpos/components/src/text';
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from '@wcpos/tailwind/src/dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
 import { EditButton } from './edit-button';
 import { EditLineItemModal } from './edit-line-item';
+import { useT } from '../../../../../contexts/translations';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
@@ -23,6 +36,7 @@ interface Props {
 export const ProductName = ({ uuid, item, column }: Props) => {
 	const { display } = column;
 	const { updateLineItem } = useUpdateLineItem();
+	const t = useT();
 
 	/**
 	 *
@@ -70,7 +84,24 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 				})}
 			</Box>
 			<Box distribution="center">
-				<EditButton uuid={uuid} item={item} Modal={EditLineItemModal} />
+				<Dialog>
+					<DialogTrigger>
+						<Tooltip delayDuration={150}>
+							<TooltipTrigger>
+								<Icon name="ellipsisVertical" />
+							</TooltipTrigger>
+							<TooltipContent>
+								<Text>{t('Edit {name}', { _tags: 'core', name: item.name })}</Text>
+							</TooltipContent>
+						</Tooltip>
+					</DialogTrigger>
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle>{t('Edit {name}', { _tags: 'core', name: item.name })}</DialogTitle>
+						</DialogHeader>
+						<EditLineItemModal uuid={uuid} item={item} />
+					</DialogContent>
+				</Dialog>
 			</Box>
 		</Box>
 	);

@@ -7,8 +7,8 @@ import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import Box from '@wcpos/components/src/box';
 import Modal from '@wcpos/components/src/modal';
 import Pill from '@wcpos/components/src/pill';
-import Text from '@wcpos/components/src/text';
 import Form from '@wcpos/react-native-jsonschema-form';
+import { Text } from '@wcpos/tailwind/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../contexts/translations';
@@ -34,20 +34,6 @@ const Customer = ({ setShowCustomerSelect }) => {
 	const shippingCountry = get(shipping, ['country']);
 	const t = useT();
 	const { localPatch } = useLocalMutation();
-
-	/**
-	 *
-	 */
-	const handleSaveCustomer = React.useCallback(
-		async ({ changes }) => {
-			try {
-				await localPatch({ document: currentOrder, data: changes });
-			} catch (error) {
-				log.error(error);
-			}
-		},
-		[currentOrder, localPatch]
-	);
 
 	/**
 	 *
@@ -177,7 +163,7 @@ const Customer = ({ setShowCustomerSelect }) => {
 	 */
 	return (
 		<Box horizontal align="center" space="small">
-			<Text weight="bold">{t('Customer', { _tags: 'core' })}:</Text>
+			<Text className="font-bold">{t('Customer', { _tags: 'core' })}:</Text>
 			<Pill
 				removable
 				onRemove={() => {

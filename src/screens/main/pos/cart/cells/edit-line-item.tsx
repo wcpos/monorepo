@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { InputWithLabel } from '@wcpos/components/src/form-layout';
-import Modal from '@wcpos/components/src/modal';
 
 import { useT } from '../../../../../contexts/translations';
 import { EditFormWithJSONTree } from '../../../components/edit-form-with-json-tree';
@@ -16,13 +15,12 @@ import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 interface Props {
 	uuid: string;
 	item: import('@wcpos/database').OrderDocument['line_items'][number];
-	onClose?: () => void;
 }
 
 /**
  *
  */
-export const EditLineItemModal = ({ uuid, item, onClose }: Props) => {
+export const EditLineItemModal = ({ uuid, item }: Props) => {
 	const t = useT();
 	const { updateLineItem } = useUpdateLineItem();
 	const { getLineItemData } = useLineItemData();
@@ -133,18 +131,11 @@ export const EditLineItemModal = ({ uuid, item, onClose }: Props) => {
 	 *
 	 */
 	return (
-		<Modal
-			title={t('Edit {name}', { _tags: 'core', name: item.name })}
-			// size="large"
-			opened
-			onClose={onClose}
-		>
-			<EditFormWithJSONTree
-				json={json}
-				onChange={({ changes }) => updateLineItem(uuid, changes)}
-				schema={schema}
-				uiSchema={uiSchema}
-			/>
-		</Modal>
+		<EditFormWithJSONTree
+			json={json}
+			onChange={({ changes }) => updateLineItem(uuid, changes)}
+			schema={schema}
+			uiSchema={uiSchema}
+		/>
 	);
 };
