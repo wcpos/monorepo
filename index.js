@@ -3,6 +3,8 @@ import { registerRootComponent } from 'expo';
 import * as Sentry from 'sentry-expo';
 // import * as React from 'react';
 
+import './global.css';
+
 import App from '@wcpos/core';
 
 // const StrictApp = () => {

@@ -1,6 +1,7 @@
 const path = require('path');
 
 const { getDefaultConfig } = require('expo/metro-config');
+const { withNativeWind } = require('nativewind/metro');
 
 // Find the project and workspace directories
 const projectRoot = __dirname;
@@ -44,4 +45,4 @@ if (process.env.ELECTRON === 'true') {
 	];
 }
 
-module.exports = config;
+module.exports = withNativeWind(config, { input: './global.css' });

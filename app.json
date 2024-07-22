@@ -10,6 +10,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "backgroundColor": "#F0F4F8",
+    "userInterfaceStyle": "automatic",
     "scheme": "wcpos",
     "splash": {
       "image": "./assets/splash.png",
