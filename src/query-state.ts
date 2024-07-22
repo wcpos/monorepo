@@ -383,8 +383,26 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	 * Helper methods to see if $elemMatch is active
 	 */
 	findSelector(field: string): any {
-		const clause = find(this.whereClauses, { field });
-		return clause ? clause.value : undefined;
+		const matchingClauses = this.whereClauses
+			.filter((clause) => clause.field === field)
+			.map((clause) => clause.value);
+
+		if (matchingClauses.length === 0) {
+			return undefined;
+		}
+
+		// If any matching clause is an object, return all as an array
+		if (matchingClauses.some((value) => typeof value === 'object')) {
+			return matchingClauses;
+		}
+
+		// If there is only one matching clause and it's not an object, return it directly
+		if (matchingClauses.length === 1) {
+			return matchingClauses[0];
+		}
+
+		// Otherwise, return all matching clauses as an array
+		return matchingClauses;
 	}
 
 	hasSelector(field: string, value: any): boolean {
