@@ -1,18 +1,18 @@
 import * as React from 'react';
 
-import Box from '@wcpos/components/src/box';
+import { HStack } from '@wcpos/tailwind/src/hstack';
 
 import Notifications from './notifications';
 import Online from './online';
-import UserMenu from './user-menu';
+import { UserMenu } from './user-menu';
 
 const HeaderRight = () => {
 	return (
-		<Box horizontal space="small" padding="small" align="center">
+		<HStack>
 			<Online />
 			{/* <Notifications /> */}
 			<UserMenu />
-		</Box>
+		</HStack>
 	);
 };
 

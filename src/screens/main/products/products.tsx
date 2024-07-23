@@ -6,6 +6,8 @@ import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import { useRelationalQuery } from '@wcpos/query';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
@@ -102,8 +104,8 @@ const Products = () => {
 						borderTopRightRadius: theme.rounding.medium,
 					}}
 				>
-					<Box fill space="small">
-						<Box horizontal align="center" padding="small" paddingBottom="none" space="small">
+					<VStack>
+						<HStack>
 							<ErrorBoundary>
 								<Search query={query} />
 							</ErrorBoundary>
@@ -118,13 +120,13 @@ const Products = () => {
 									title={t('Product Settings', { _tags: 'core' })}
 								/>
 							</ErrorBoundary>
-						</Box>
+						</HStack>
 						<Box horizontal padding="small" paddingTop="none">
 							<ErrorBoundary>
 								<FilterBar query={query} />
 							</ErrorBoundary>
 						</Box>
-					</Box>
+					</VStack>
 				</Box>
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 					<ErrorBoundary>

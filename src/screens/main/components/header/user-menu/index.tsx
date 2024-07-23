@@ -11,7 +11,6 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useTheme } from 'styled-components/native';
 
 import Avatar from '@wcpos/components/src/avatar';
-import Box from '@wcpos/components/src/box';
 import Icon from '@wcpos/components/src/icon';
 import {
 	DropdownMenu,

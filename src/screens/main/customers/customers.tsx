@@ -6,6 +6,7 @@ import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
+import { HStack } from '@wcpos/tailwind/src/hstack';
 
 import cells from './cells';
 import SearchBar from './search-bar';
@@ -47,7 +48,7 @@ const Customers = () => {
 				rounding="medium"
 				style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
 			>
-				<Box
+				{/* <Box
 					horizontal
 					space="small"
 					padding="small"
@@ -57,11 +58,13 @@ const Customers = () => {
 						borderTopLeftRadius: theme.rounding.medium,
 						borderTopRightRadius: theme.rounding.medium,
 					}}
-				>
+				> */}
+				<HStack className="p-2">
 					<SearchBar query={query} />
 					<AddNewCustomer />
 					<UiSettings uiSettings={uiSettings} title={t('Customer Settings', { _tags: 'core' })} />
-				</Box>
+				</HStack>
+				{/* </Box> */}
 				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
 					<ErrorBoundary>
 						<Suspense>

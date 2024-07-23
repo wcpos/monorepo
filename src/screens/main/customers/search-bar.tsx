@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import TextInput from '@wcpos/components/src/textinput';
+import { Input } from '@wcpos/tailwind/src/input';
 
 import { useT } from '../../../contexts/translations';
 
@@ -17,12 +17,12 @@ const SearchBar = ({ query }) => {
 	);
 
 	return (
-		<TextInput
+		<Input
 			placeholder={t('Search Customers', { _tags: 'core' })}
 			value={search}
 			onChangeText={onSearch}
-			containerStyle={{ flex: 1 }}
-			clearable
+			// containerStyle={{ flex: 1 }}
+			// clearable
 		/>
 	);
 };
