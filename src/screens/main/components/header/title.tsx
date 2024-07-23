@@ -3,7 +3,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { HeaderTitleProps } from '@react-navigation/elements';
 
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
 
 /**
  * TODO - text trucation doesn't trigger when screen size changes
@@ -12,7 +12,7 @@ const HeaderTitle = ({ children }: HeaderTitleProps) => {
 	// useWindowDimensions();
 
 	return (
-		<Text size="large" type="inverse" numberOfLines={1}>
+		<Text className="text-primary-foreground text-xl" numberOfLines={1}>
 			{children}
 		</Text>
 	);

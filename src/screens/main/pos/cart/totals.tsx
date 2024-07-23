@@ -4,7 +4,9 @@ import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Text from '@wcpos/components/src/text';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { CustomerNote } from './totals/customer-note';
 import { Taxes } from './totals/taxes';
@@ -60,62 +62,36 @@ const Totals = () => {
 	return (
 		<>
 			{hasTotals ? (
-				<Box
-					padding="small"
-					space="small"
-					border
-					style={{
-						borderLeftWidth: 0,
-						borderRightWidth: 0,
-						borderColor: theme.colors.lightGrey,
-						backgroundColor: theme.colors.lightestGrey,
-					}}
-				>
-					<Box horizontal>
-						<Box fill>
-							<Text>{t('Subtotal', { _tags: 'core' })}:</Text>
-						</Box>
-						<Box>
-							<Text>{format(displaySubtotal)}</Text>
-						</Box>
-					</Box>
+				<VStack className="p-2 border-t">
+					<HStack>
+						<Text className="grow">{t('Subtotal', { _tags: 'core' })}:</Text>
+						<Text>{format(displaySubtotal)}</Text>
+					</HStack>
 					{
 						// Discounts
 						hasDiscount && (
-							<Box horizontal>
-								<Box fill>
-									<Text>{t('Discount', { _tags: 'core' })}:</Text>
-								</Box>
-								<Box>
-									<Text>{format(`-${displayDiscountTotal}`)}</Text>
-								</Box>
-							</Box>
+							<HStack>
+								<Text className="grow">{t('Discount', { _tags: 'core' })}:</Text>
+								<Text>{format(`-${displayDiscountTotal}`)}</Text>
+							</HStack>
 						)
 					}
 					{
 						// Fees
 						hasFee && (
-							<Box horizontal>
-								<Box fill>
-									<Text>{t('Fees', { _tags: 'core' })}:</Text>
-								</Box>
-								<Box>
-									<Text>{format(displayFeeTotal)}</Text>
-								</Box>
-							</Box>
+							<HStack>
+								<Text className="grow">{t('Fees', { _tags: 'core' })}:</Text>
+								<Text>{format(displayFeeTotal)}</Text>
+							</HStack>
 						)
 					}
 					{
 						// Shipping
 						hasShipping && (
-							<Box horizontal>
-								<Box fill>
-									<Text>{t('Shipping', { _tags: 'core' })}:</Text>
-								</Box>
-								<Box>
-									<Text>{format(displayShippingTotal)}</Text>
-								</Box>
-							</Box>
+							<HStack>
+								<Text className="grow">{t('Shipping', { _tags: 'core' })}:</Text>
+								<Text>{format(displayShippingTotal)}</Text>
+							</HStack>
 						)
 					}
 					{hasTax ? (
@@ -123,7 +99,7 @@ const Totals = () => {
 							<Taxes totalTax={total_tax} taxLines={tax_lines} />
 						</ErrorBoundary>
 					) : null}
-				</Box>
+				</VStack>
 			) : null}
 			<CustomerNote />
 		</>

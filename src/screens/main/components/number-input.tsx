@@ -4,9 +4,9 @@ import { View, StyleProp, ViewStyle } from 'react-native';
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
-import Numpad from '@wcpos/components/src/numpad';
 import Text from '@wcpos/components/src/text';
 import { TextInputContainer } from '@wcpos/components/src/textinput';
+import { Numpad } from '@wcpos/tailwind/src/numpad';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/tailwind/src/popover';
 
 import { useAppState } from '../../../contexts/app-state';

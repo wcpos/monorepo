@@ -3,7 +3,9 @@ import React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
@@ -27,47 +29,33 @@ export const Taxes = ({ totalTax, taxLines = [] }: Props) => {
 
 	if (taxTotalDisplay === 'itemized') {
 		return (
-			<Box horizontal>
-				<Box>
-					<Text>{t('Taxes', { _tags: 'core' })}:</Text>
-				</Box>
-				<Box fill space="xxSmall">
+			<HStack>
+				<Text className="grow">{t('Taxes', { _tags: 'core' })}:</Text>
+				<VStack>
 					{taxLines.map((tax) => {
 						// tax_total and shipping_tax_total are separate, but we will display together
 						const displayTax = parseFloat(tax.tax_total) + parseFloat(tax.shipping_tax_total);
 						return (
-							<Box key={tax.rate_id}>
-								<Box horizontal space="normal">
-									<Box fill align="end">
-										<Text>
-											{inclOrExcl} {tax.label}
-										</Text>
-									</Box>
-									<Box>
-										<Text>{format(displayTax || 0)}</Text>
-									</Box>
-								</Box>
-							</Box>
+							<HStack>
+								<Text>
+									{inclOrExcl} {tax.label}
+								</Text>
+								<Text>{format(displayTax || 0)}</Text>
+							</HStack>
 						);
 					})}
-				</Box>
-			</Box>
+				</VStack>
+			</HStack>
 		);
 	}
 
 	return (
-		<Box horizontal>
-			<Box fill>
-				<Text>{t('Total Tax', { _tags: 'core' })}:</Text>
-			</Box>
-			<Box horizontal space="normal">
-				<Box fill align="end">
-					<Text>{inclOrExcl}</Text>
-				</Box>
-				<Box>
-					<Text>{format(totalTax || 0)}</Text>
-				</Box>
-			</Box>
-		</Box>
+		<HStack>
+			<Text className="grow">{t('Total Tax', { _tags: 'core' })}:</Text>
+			<HStack>
+				<Text>{inclOrExcl}</Text>
+				<Text>{format(totalTax || 0)}</Text>
+			</HStack>
+		</HStack>
 	);
 };
