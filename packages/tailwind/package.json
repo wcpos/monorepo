@@ -8,6 +8,7 @@
     "tailwindcss": "^3.4.6"
   },
   "dependencies": {
+    "@rn-primitives/alert-dialog": "^1.0.3",
     "@rn-primitives/checkbox": "^1.0.3",
     "@rn-primitives/context-menu": "^1.0.3",
     "@rn-primitives/dialog": "^1.0.3",
@@ -16,8 +17,10 @@
     "@rn-primitives/label": "^1.0.3",
     "@rn-primitives/popover": "^1.0.3",
     "@rn-primitives/portal": "^1.0.3",
+    "@rn-primitives/radio-group": "^1.0.3",
     "@rn-primitives/select": "^1.0.4",
     "@rn-primitives/slot": "^1.0.3",
+    "@rn-primitives/switch": "^1.0.3",
     "@rn-primitives/tabs": "^1.0.3",
     "@rn-primitives/toggle": "^1.0.3",
     "@rn-primitives/toggle-group": "^1.0.3",
@@ -27,6 +30,7 @@
     "date-fns": "^3.6.0",
     "lucide-react": "^0.408.0",
     "react-day-picker": "^8.10.1",
+    "react-hook-form": "^7.52.1",
     "tailwind-merge": "^2.4.0",
     "tailwindcss-animate": "^1.0.7"
   },
