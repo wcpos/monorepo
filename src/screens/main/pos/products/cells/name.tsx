@@ -3,8 +3,8 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { MetaData } from './meta-data';
 import Attributes, { PlainAttributes } from '../../../components/product/attributes';
@@ -40,10 +40,10 @@ export const Name = ({ item: product, column }: Props) => {
 	 */
 
 	return (
-		<Box space="xSmall" style={{ width: '100%' }}>
-			<Text weight="bold">{name}</Text>
-			{show('sku') && <Text size="small">{product.sku}</Text>}
-			{show('barcode') && <Text size="small">{product.barcode}</Text>}
+		<VStack space="xs">
+			<Text className="font-bold">{name}</Text>
+			{show('sku') && <Text className="text-small">{product.sku}</Text>}
+			{show('barcode') && <Text className="text-small">{product.barcode}</Text>}
 			{show('stock_quantity') && <StockQuantity product={product} size="small" />}
 			{show('meta_data') && <MetaData product={product} />}
 			{show('categories') && <Categories item={product} />}
@@ -59,6 +59,6 @@ export const Name = ({ item: product, column }: Props) => {
 			)}
 
 			{product.type === 'grouped' && <GroupedNames parent={product} />}
-		</Box>
+		</VStack>
 	);
 };

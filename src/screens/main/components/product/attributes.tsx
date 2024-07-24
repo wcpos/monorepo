@@ -4,8 +4,10 @@ import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
 import Link from '@wcpos/components/src/link';
-import Text from '@wcpos/components/src/text';
 import { useQueryManager } from '@wcpos/query';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useVariationTable } from './variation-table-rows/context';
 import { useT } from '../../../../contexts/translations';
@@ -110,26 +112,26 @@ const ProductAttributes = ({ product }: Props) => {
 	 *
 	 */
 	return (
-		<Box space="xxSmall">
+		<VStack space="xs">
 			{attributes
 				.filter((attr: any) => attr.variation)
 				.map((attr: any) => (
-					<Text key={`${attr.name}-${attr.id}`}>
-						<Text size="small" type="secondary">{`${attr.name}: `}</Text>
+					<React.Fragment key={`${attr.name}-${attr.id}`}>
+						<Text className="text-sm">{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
 							<React.Fragment key={option}>
-								<Link size="small" onPress={() => handleSelect(attr, option)}>
-									{option}
-								</Link>
+								<Button variant="link" onPress={() => handleSelect(attr, option)}>
+									<ButtonText className="text-sm">{option}</ButtonText>
+								</Button>
 								{index < attr.options.length - 1 && ', '}
 							</React.Fragment>
 						))}
-					</Text>
+					</React.Fragment>
 				))}
-			<Link size="small" onPress={() => setExpanded(!expanded)}>
-				{expandText}
-			</Link>
-		</Box>
+			<Button variant="link" onPress={() => setExpanded(!expanded)}>
+				<ButtonText className="text-sm">{expandText}</ButtonText>
+			</Button>
+		</VStack>
 	);
 };
 
