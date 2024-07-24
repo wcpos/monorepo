@@ -1,14 +1,13 @@
 import * as React from 'react';
 
-import Icon from '@wcpos/components/src/icon';
 import Loader from '@wcpos/components/src/loader';
 import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
-	ContextMenuSeparator,
 	ContextMenuTrigger,
 } from '@wcpos/tailwind/src/context-menu';
+import { Icon } from '@wcpos/tailwind/src/icon';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
@@ -46,7 +45,7 @@ const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 						}}
 						onPress={sync}
 					>
-						<Icon name="arrowRotateRight" size="small" />
+						<Icon name="arrowRotateRight" className="text-sm" />
 					</TooltipTrigger>
 					<TooltipContent>
 						<Text>{t('Press to sync, long press for more options', { _tags: 'core' })}</Text>

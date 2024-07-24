@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 
-import Icon from '@wcpos/components/src/icon';
 import {
 	Dialog,
 	DialogClose,
@@ -20,6 +19,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/tailwind/src/dropdown-menu';
+import { Icon } from '@wcpos/tailwind/src/icon';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import { DeleteDialog } from './delete-dialog';
@@ -65,8 +65,11 @@ const Actions = ({ item: customer }: Props) => {
 						</DropdownMenuItem>
 					)}
 					<DropdownMenuSeparator />
-					<DropdownMenuItem onPress={() => setDeleteDialogOpened(true)}>
-						<Icon name="trash" />
+					<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
+						<Icon
+							name="trash"
+							className="fill-destructive web:group-focus:fill-accent-foreground"
+						/>
 						<Text>{t('Delete', { _tags: 'core' })}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>

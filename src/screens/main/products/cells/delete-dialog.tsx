@@ -13,9 +13,7 @@ interface DeleteDialogProps {
 }
 
 /**
- * Note: deleting a custom requires a force param because they are permanently deleted
- * There is no Trash for users to recover from.
- * https://woocommerce.github.io/woocommerce-rest-api-docs/#delete-a-customer
+ *
  */
 const DeleteDialog = ({ product, setDeleteDialogOpened }: DeleteDialogProps) => {
 	const { setPrimaryAction } = useModal();

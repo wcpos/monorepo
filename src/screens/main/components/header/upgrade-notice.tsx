@@ -27,7 +27,7 @@ export const UpgradeNotice = ({ setShowUpgrade }) => {
 	}, [t]);
 
 	return (
-		<HStack className="bg-amber-50">
+		<HStack className="bg-attention">
 			<Box className="grow justify-center p-0">
 				<Button size="sm" variant="link" onPress={() => Linking.openURL('https://wcpos.com/pro')}>
 					<ButtonText className="text-sm">{upgradeToProText}</ButtonText>
