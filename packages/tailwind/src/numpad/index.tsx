@@ -184,9 +184,9 @@ export const Numpad = ({
 				// 	</Box>
 				// }
 			/>
-			<HStack>
-				<VStack>
-					<HStack>
+			<HStack space="xs">
+				<VStack space="xs">
+					<HStack space="xs">
 						<Button onPress={() => addDigit('1')}>
 							<ButtonText>1</ButtonText>
 						</Button>
@@ -197,7 +197,7 @@ export const Numpad = ({
 							<ButtonText>3</ButtonText>
 						</Button>
 					</HStack>
-					<HStack>
+					<HStack space="xs">
 						<Button onPress={() => addDigit('4')}>
 							<ButtonText>4</ButtonText>
 						</Button>
@@ -208,7 +208,7 @@ export const Numpad = ({
 							<ButtonText>6</ButtonText>
 						</Button>
 					</HStack>
-					<HStack>
+					<HStack space="xs">
 						<Button onPress={() => addDigit('7')}>
 							<ButtonText>7</ButtonText>
 						</Button>
@@ -219,7 +219,7 @@ export const Numpad = ({
 							<ButtonText>9</ButtonText>
 						</Button>
 					</HStack>
-					<HStack>
+					<HStack space="xs">
 						<Button onPress={() => dispatch({ type: ACTIONS.SWITCH_SIGN })}>
 							<Icon name="plusMinus" size="xSmall" type="inverse" />
 						</Button>
@@ -232,7 +232,7 @@ export const Numpad = ({
 					</HStack>
 				</VStack>
 				{discounts && (
-					<VStack>
+					<VStack space="xs">
 						{discounts.map((discount) => (
 							<Button
 								key={discount}
@@ -249,7 +249,7 @@ export const Numpad = ({
 					</VStack>
 				)}
 				{calculator && (
-					<VStack>
+					<VStack space="xs">
 						<Button onPress={() => chooseOperation('÷')}>
 							<Icon name="divide" size="xSmall" type="inverse" />
 						</Button>
@@ -266,7 +266,7 @@ export const Numpad = ({
 				)}
 			</HStack>
 			{calculator && (
-				<HStack>
+				<HStack space="xs">
 					<Button onPress={() => dispatch({ type: ACTIONS.CLEAR })}>
 						<ButtonText>Clear</ButtonText>
 					</Button>
