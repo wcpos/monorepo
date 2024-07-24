@@ -116,27 +116,6 @@ const DropdownMenuContent = React.forwardRef<
 });
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
-const DropdownMenuItem = React.forwardRef<
-	React.ElementRef<typeof DropdownMenuPrimitive.Item>,
-	React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
-		inset?: boolean;
-	}
->(({ className, inset, ...props }, ref) => (
-	<TextClassContext.Provider value="select-none text-sm native:text-lg text-popover-foreground web:group-focus:text-accent-foreground">
-		<DropdownMenuPrimitive.Item
-			ref={ref}
-			className={cn(
-				'relative flex flex-row web:cursor-default gap-2 items-center rounded-sm px-2 py-1.5 native:py-2 web:outline-none web:focus:bg-accent active:bg-accent web:hover:bg-accent group',
-				inset && 'pl-8',
-				props.disabled && 'opacity-50 web:pointer-events-none',
-				className
-			)}
-			{...props}
-		/>
-	</TextClassContext.Provider>
-));
-DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
-
 const DropdownMenuCheckboxItem = React.forwardRef<
 	React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
 	React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
@@ -194,7 +173,7 @@ const DropdownMenuLabel = React.forwardRef<
 	<DropdownMenuPrimitive.Label
 		ref={ref}
 		className={cn(
-			'px-2 py-1.5 text-sm native:text-base font-semibold text-foreground web:cursor-default',
+			'px-2 py-1.5 text-base native:text-base font-semibold text-foreground web:cursor-default',
 			inset && 'pl-8',
 			className
 		)}
@@ -231,12 +210,12 @@ const DropdownMenuShortcut = ({
 };
 DropdownMenuShortcut.displayName = 'DropdownMenuShortcut';
 
+export { DropdownMenuItem } from './item';
 export {
 	DropdownMenu,
 	DropdownMenuCheckboxItem,
 	DropdownMenuContent,
 	DropdownMenuGroup,
-	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuPortal,
 	DropdownMenuRadioGroup,

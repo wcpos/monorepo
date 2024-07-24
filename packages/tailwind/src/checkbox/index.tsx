@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 
 import * as CheckboxPrimitive from '@rn-primitives/checkbox';
 
-import Icon from '@wcpos/components/src/icon';
+import { Icon } from '../icon';
 
 // import { Check } from '../../lib/icons/Check';
 import { cn } from '../lib/utils';
@@ -23,12 +23,7 @@ const Checkbox = React.forwardRef<
 			{...props}
 		>
 			<CheckboxPrimitive.Indicator className={cn('items-center justify-center h-full w-full')}>
-				{/* <Check
-					size={12}
-					strokeWidth={Platform.OS === 'web' ? 2.5 : 3.5}
-					className="text-primary-foreground"
-				/> */}
-				<Icon name="check" />
+				<Icon name="check" className="w-3 h-3 fill-primary-foreground" />
 			</CheckboxPrimitive.Indicator>
 		</CheckboxPrimitive.Root>
 	);
