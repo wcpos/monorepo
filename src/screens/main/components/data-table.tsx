@@ -5,12 +5,10 @@ import { useObservableState, useSubscription, useObservableEagerState } from 'ob
 import { debounceTime, skip } from 'rxjs';
 import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Loader from '@wcpos/components/src/loader';
 import Suspense from '@wcpos/components/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
-import Text from '@wcpos/components/src/text';
 import type {
 	ProductDocument,
 	OrderDocument,
@@ -18,7 +16,8 @@ import type {
 	TaxRateDocument,
 } from '@wcpos/database';
 import { useReplicationState, Query, useInfiniteScroll } from '@wcpos/query';
-import logger from '@wcpos/utils/src/logger';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import EmptyTableRow from './empty-table-row';
 import SyncButton from './sync-button';
@@ -52,23 +51,25 @@ const DataTableFooter = ({ query, children, count }) => {
 	const t = useT();
 
 	return (
-		<Box
-			horizontal
-			style={{
-				width: '100%',
-				backgroundColor: theme.colors.lightGrey,
-				borderBottomLeftRadius: theme.rounding.medium,
-				borderBottomRightRadius: theme.rounding.medium,
-				borderTopWidth: 1,
-				borderTopColor: theme.colors.grey,
-			}}
+		<HStack
+			className="p-2 border-t"
+			// style={{
+			// 	width: '100%',
+			// 	backgroundColor: theme.colors.lightGrey,
+			// 	borderBottomLeftRadius: theme.rounding.medium,
+			// 	borderBottomRightRadius: theme.rounding.medium,
+			// 	borderTopWidth: 1,
+			// 	borderTopColor: theme.colors.grey,
+			// }}
 		>
 			{children}
-			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">
-				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
+			<HStack className="justify-end">
+				<Text className="text-sm">
+					{t('Showing {count} of {total}', { count, total, _tags: 'core' })}
+				</Text>
 				<SyncButton sync={sync} clear={clear} active={loading} />
-			</Box>
-		</Box>
+			</HStack>
+		</HStack>
 	);
 };
 
