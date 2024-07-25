@@ -13,8 +13,9 @@ import { FList } from './flist';
 import Header from './header';
 import { LoadingRow } from './loading';
 import Row from './row';
-import * as Styled from './styles';
-import ErrorBoundary from '../error-boundary';
+import { Box } from '../box';
+import { ErrorBoundary } from '../error-boundary';
+import { VStack } from '../vstack';
 
 // const AnimatedFList = Animated.createAnimatedComponent(FList);
 // const AnimatedCellContainer = Animated.createAnimatedComponent(CellContainer);
@@ -109,7 +110,7 @@ const Table = React.forwardRef(
 		 */
 		return (
 			<TableContext.Provider value={context}>
-				<Styled.Table style={style} onLayout={handleContainerLayout}>
+				<VStack className="gap-0 w-full h-full" style={style} onLayout={handleContainerLayout}>
 					{!hideHeader && (
 						<ErrorBoundary>
 							<Header />
@@ -137,7 +138,7 @@ const Table = React.forwardRef(
 					/>
 					{/* </View> */}
 					<ErrorBoundary>{footer}</ErrorBoundary>
-				</Styled.Table>
+				</VStack>
 			</TableContext.Provider>
 		);
 	}

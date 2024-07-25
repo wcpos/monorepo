@@ -1,8 +1,8 @@
 import * as React from 'react';
 import { StyleProp, ViewStyle } from 'react-native';
 
-import Box from '../box';
-import Loader from '../loader';
+import { Box } from '../box';
+import { Loader } from '../loader';
 
 interface Props {
 	loading: boolean;
@@ -11,7 +11,7 @@ interface Props {
 
 export const LoadingRow = ({ loading = false, style }: Props) => {
 	return (
-		<Box padding="small" style={[{ height: 16 }, style]}>
+		<Box className="p-2 h-4" style={style}>
 			{loading ? <Loader /> : null}
 		</Box>
 	);
