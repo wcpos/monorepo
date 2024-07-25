@@ -2,10 +2,11 @@ import * as React from 'react';
 
 import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 
 import cells from './cells';
@@ -42,30 +43,16 @@ const Customers = () => {
 	 *
 	 */
 	return (
-		<Box padding="small" style={{ height: '100%' }}>
-			<Box
-				raised
-				rounding="medium"
-				style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
-			>
-				{/* <Box
-					horizontal
-					space="small"
-					padding="small"
-					align="center"
-					style={{
-						backgroundColor: theme.colors.grey,
-						borderTopLeftRadius: theme.rounding.medium,
-						borderTopRightRadius: theme.rounding.medium,
-					}}
-				> */}
-				<HStack className="p-2">
-					<SearchBar query={query} />
-					<AddNewCustomer />
-					<UiSettings uiSettings={uiSettings} title={t('Customer Settings', { _tags: 'core' })} />
-				</HStack>
-				{/* </Box> */}
-				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+		<Box className="h-full p-2">
+			<Card className="flex-1">
+				<CardHeader className="p-0 bg-input">
+					<HStack className="p-2">
+						<SearchBar query={query} />
+						<AddNewCustomer />
+						<UiSettings uiSettings={uiSettings} title={t('Customer Settings', { _tags: 'core' })} />
+					</HStack>
+				</CardHeader>
+				<CardContent className="flex-1 p-0">
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable<CustomerDocument>
@@ -77,8 +64,8 @@ const Customers = () => {
 							/>
 						</Suspense>
 					</ErrorBoundary>
-				</Box>
-			</Box>
+				</CardContent>
+			</Card>
 		</Box>
 	);
 };

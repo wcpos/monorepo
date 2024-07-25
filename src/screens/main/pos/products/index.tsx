@@ -17,7 +17,7 @@ import { useT } from '../../../../contexts/translations';
 import DataTable from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
 import Search from '../../components/product/search';
-import TaxBasedOn from '../../components/product/tax-based-on';
+import { TaxBasedOn } from '../../components/product/tax-based-on';
 import UISettings from '../../components/ui-settings';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';

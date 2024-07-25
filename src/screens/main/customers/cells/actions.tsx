@@ -66,8 +66,10 @@ const Actions = ({ item: customer }: Props) => {
 	return (
 		<>
 			<DropdownMenu>
-				<DropdownMenuTrigger>
-					<Icon name="ellipsisVertical" />
+				<DropdownMenuTrigger asChild>
+					<Button variant="ghost" size="xs" className="rounded-full">
+						<Icon name="ellipsisVertical" />
+					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem

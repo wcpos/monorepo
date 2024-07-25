@@ -52,7 +52,7 @@ const DataTableFooter = ({ query, children, count }) => {
 
 	return (
 		<HStack
-			className="p-2 border-t"
+			className="p-2 border-t bg-muted"
 			// style={{
 			// 	width: '100%',
 			// 	backgroundColor: theme.colors.lightGrey,

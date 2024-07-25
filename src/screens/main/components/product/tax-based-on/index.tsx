@@ -12,7 +12,7 @@ import { useTaxRates } from '../../../contexts/tax-rates';
 /**
  *
  */
-const TaxBasedOn = () => {
+export const TaxBasedOn = () => {
 	const { rates, taxBasedOn, location } = useTaxRates();
 	const t = useT();
 
@@ -39,7 +39,7 @@ const TaxBasedOn = () => {
 					)}
 				</Button>
 			</HoverCardTrigger>
-			<HoverCardContent side="top" align="start" className="w-80 native:w-96">
+			<HoverCardContent side="top" align="start" className="w-96">
 				<DisplayCurrentTaxRates
 					rates={rates}
 					country={location.country}
@@ -51,5 +51,3 @@ const TaxBasedOn = () => {
 		</HoverCard>
 	);
 };
-
-export default TaxBasedOn;
