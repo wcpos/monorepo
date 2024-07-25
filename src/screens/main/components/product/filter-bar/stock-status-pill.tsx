@@ -6,6 +6,15 @@ import { map } from 'rxjs/operators';
 import Dropdown from '@wcpos/components/src/dropdown';
 import Pill from '@wcpos/components/src/pill';
 import { Query } from '@wcpos/query';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@wcpos/tailwind/src/select';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { useT } from '../../../../../contexts/translations';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
@@ -46,24 +55,37 @@ export const StockStatusPill = ({ query }: Props) => {
 	}, [getLabel, selected, t]);
 
 	return (
-		<Dropdown
-			items={items}
-			opened={open}
-			onClose={() => setOpen(false)}
-			onSelect={(val) => query.where('stock_status', val)}
-			withArrow={false}
-			matchWidth
-		>
-			<Pill
-				icon="warehouseFull"
-				size="small"
-				color={isActive ? 'primary' : 'lightGrey'}
-				onPress={() => setOpen(true)}
-				removable={isActive}
-				onRemove={() => query.where('stock_status', null)}
-			>
-				{label}
-			</Pill>
-		</Dropdown>
+		<Select>
+			<SelectTrigger>
+				<Text>Test</Text>
+			</SelectTrigger>
+			<SelectContent>
+				{items.map((item) => (
+					<SelectItem key={item.label} label={item.label} value={item.value} />
+				))}
+			</SelectContent>
+		</Select>
 	);
+
+	// return (
+	// 	<Dropdown
+	// 		items={items}
+	// 		opened={open}
+	// 		onClose={() => setOpen(false)}
+	// 		onSelect={(val) => query.where('stock_status', val)}
+	// 		withArrow={false}
+	// 		matchWidth
+	// 	>
+	// 		<Pill
+	// 			icon="warehouseFull"
+	// 			size="small"
+	// 			color={isActive ? 'primary' : 'lightGrey'}
+	// 			onPress={() => setOpen(true)}
+	// 			removable={isActive}
+	// 			onRemove={() => query.where('stock_status', null)}
+	// 		>
+	// 			{label}
+	// 		</Pill>
+	// 	</Dropdown>
+	// );
 };
