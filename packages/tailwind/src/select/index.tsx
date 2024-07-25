@@ -179,4 +179,5 @@ export {
 	SelectTrigger,
 	SelectValue,
 	type Option,
+	SelectPrimitive,
 };
