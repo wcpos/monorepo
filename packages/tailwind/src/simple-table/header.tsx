@@ -22,7 +22,7 @@ const alignItemsMap = {
  */
 const Header = ({ columns }: SimpleTableHeaderProps) => {
 	return (
-		<HStack className="border-b bg-gray-300">
+		<HStack className="border-b bg-muted">
 			{columns.map((column) => {
 				const { flex = 1, align = 'left', width } = column;
 
@@ -35,7 +35,7 @@ const Header = ({ columns }: SimpleTableHeaderProps) => {
 						// width={width}
 						// align={alignItemsMap[align]}
 					>
-						<Text className="text-sm text-secondary uppercase" numberOfLines={1}>
+						<Text className="text-xs text-muted-foreground uppercase" numberOfLines={1}>
 							{column.label}
 						</Text>
 					</Box>
