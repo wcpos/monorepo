@@ -4,8 +4,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import * as SelectPrimitive from '@rn-primitives/select';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import Icon from '@wcpos/components/src/icon';
-
+import { Icon } from '../icon';
 import { cn } from '../lib/utils';
 
 type Option = SelectPrimitive.Option;
