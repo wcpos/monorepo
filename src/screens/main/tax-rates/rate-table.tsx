@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import Icon from '@wcpos/components/src/icon';
-import SimpleTable from '@wcpos/components/src/simple-table';
-import Text from '@wcpos/components/src/text';
+import { Icon } from '@wcpos/tailwind/src/icon';
+import { SimpleTable } from '@wcpos/tailwind/src/simple-table';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { useT } from '../../../contexts/translations';
 
@@ -25,7 +25,7 @@ const TaxRateTable = ({ rates }: TaxRateTableProps) => {
 			value = item[column.key].join(', ');
 		}
 		if (typeof value === 'boolean') {
-			return <Icon name={value ? 'check' : 'xmark'} size="small" />;
+			return <Icon name={value ? 'check' : 'xmark'} className="text-sm" />;
 		}
 		return <Text>{value || '*'}</Text>;
 	}, []);

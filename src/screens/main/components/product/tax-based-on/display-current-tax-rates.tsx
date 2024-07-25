@@ -5,9 +5,9 @@ import isEmpty from 'lodash/isEmpty';
 
 import Box from '@wcpos/components/src/box';
 import InlineError from '@wcpos/components/src/inline-error';
-import SimpleTable from '@wcpos/components/src/simple-table';
 import { TaxRateDocument } from '@wcpos/database';
-import { Button } from '@wcpos/tailwind/src/button';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { SimpleTable } from '@wcpos/tailwind/src/simple-table';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import { useT } from '../../../../../contexts/translations';
@@ -79,7 +79,7 @@ const DisplayCurrentTaxRates = ({
 						navigation.navigate('TaxRates');
 					}}
 				>
-					<Text>{t('View all tax rates', { _tags: 'core' })}</Text>
+					<ButtonText>{t('View all tax rates', { _tags: 'core' })}</ButtonText>
 				</Button>
 			</Box>
 		</Box>

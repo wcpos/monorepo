@@ -1,83 +1,60 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Tabs from '@wcpos/components/src/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/tailwind/src/tabs';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import TaxRatesFooter from './footer';
 import TaxRateTable from './rate-table';
+import { useExtraData } from '../contexts/extra-data';
 
 /**
  *
  */
 export const TaxRatesTabs = ({ query }) => {
-	const [index, setIndex] = React.useState(0);
 	const result = useObservableSuspense(query.resource);
 	const rates = result.hits.map(({ document }) => document);
+	const { extraData } = useExtraData();
+	const taxClasses = useObservableEagerState(extraData.taxClasses$);
+	const [value, setValue] = React.useState(get(taxClasses, [0, 'slug'], ''));
 
 	/**
 	 *
 	 */
-	const routes = React.useMemo(() => {
+	const grouped = React.useMemo(() => {
 		const ratesByClass = groupBy(rates, 'class');
-		const defaultOrder = ['standard', 'reduced-rate', 'zero-rate'];
 
-		// sort by default order
-		const sortedGroupedTaxRates = [];
-
-		// For each class in the default order, if it exists in the groups, add it to the sorted groups
-		defaultOrder.forEach((taxClass) => {
-			if (ratesByClass[taxClass]) {
-				sortedGroupedTaxRates.push({
-					class: taxClass,
-					rates: ratesByClass[taxClass],
-				});
-				delete ratesByClass[taxClass];
-			}
-		});
-
-		// For each remaining group, add it to the sorted groups
-		for (const taxClass in ratesByClass) {
-			sortedGroupedTaxRates.push({
-				class: taxClass,
-				rates: ratesByClass[taxClass],
-			});
-		}
-
-		// now create the tabs
-		return sortedGroupedTaxRates.map((group) => ({
-			key: group.class,
-			title: group.class,
-			Component: <TaxRateTable rates={group.rates} />,
+		return (taxClasses || []).map((taxClass) => ({
+			name: taxClass.name,
+			slug: taxClass.slug,
+			rates: ratesByClass[taxClass.slug] || [],
 		}));
-	}, [rates]);
-
-	/**
-	 *
-	 */
-	const renderScene = React.useCallback(({ route }) => {
-		return <Box paddingTop="small">{route.Component}</Box>;
-	}, []);
+	}, [rates, taxClasses]);
 
 	/**
 	 * TODO - add empty state
 	 */
 	return (
-		<Box space="large">
-			{Array.isArray(rates) && rates.length > 0 ? (
-				<Tabs
-					navigationState={{
-						index,
-						routes,
-					}}
-					renderScene={renderScene}
-					onIndexChange={setIndex}
-				/>
-			) : null}
+		<>
+			<Tabs value={value} onValueChange={setValue}>
+				<TabsList className="flex-row w-full">
+					{grouped.map((group) => (
+						<TabsTrigger key={group.slug} value={group.slug}>
+							<Text>{group.name}</Text>
+						</TabsTrigger>
+					))}
+				</TabsList>
+				{grouped.map((group) => (
+					<TabsContent key={group.slug} value={group.slug}>
+						<TaxRateTable rates={group.rates} />
+					</TabsContent>
+				))}
+			</Tabs>
 			<TaxRatesFooter count={rates.length} query={query} />
-		</Box>
+		</>
 	);
 };
 
