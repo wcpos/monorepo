@@ -4,8 +4,8 @@ import get from 'lodash/get';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
-import Table, { CellRenderer } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
+import Table, { CellRenderer } from '@wcpos/tailwind/src/table';
 import log from '@wcpos/utils/src/logger';
 
 import { Date } from '../../components/date';

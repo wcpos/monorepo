@@ -1,11 +1,12 @@
 import * as React from 'react';
 
-import { useTheme } from 'styled-components/native';
-
-import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import Actions from './cells/actions';
 import Address from './cells/address';
@@ -49,7 +50,6 @@ const cells = {
  */
 const Orders = () => {
 	const { uiSettings } = useUISettings('orders');
-	const theme = useTheme();
 	const t = useT();
 	const { wpCredentials, store } = useAppState();
 
@@ -75,22 +75,11 @@ const Orders = () => {
 	 *
 	 */
 	return (
-		<Box padding="small" style={{ height: '100%' }}>
-			<Box
-				raised
-				rounding="medium"
-				style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
-			>
-				<Box
-					horizontal
-					style={{
-						backgroundColor: theme.colors.grey,
-						borderTopLeftRadius: theme.rounding.medium,
-						borderTopRightRadius: theme.rounding.medium,
-					}}
-				>
-					<Box fill space="small">
-						<Box horizontal align="center" padding="small" paddingBottom="none" space="small">
+		<Box className="p-2 h-full">
+			<Card className="flex-1">
+				<CardHeader className="p-2 bg-input">
+					<VStack>
+						<HStack>
 							<ErrorBoundary>
 								<SearchBar query={query} />
 							</ErrorBoundary>
@@ -100,13 +89,13 @@ const Orders = () => {
 									title={t('Order Settings', { _tags: 'core' })}
 								/>
 							</ErrorBoundary>
-						</Box>
-						<Box horizontal padding="small" paddingTop="none">
+						</HStack>
+						<ErrorBoundary>
 							<FilterBar query={query} />
-						</Box>
-					</Box>
-				</Box>
-				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+						</ErrorBoundary>
+					</VStack>
+				</CardHeader>
+				<CardContent className="flex-1 p-0">
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable<OrderDocument>
@@ -118,8 +107,8 @@ const Orders = () => {
 							/>
 						</Suspense>
 					</ErrorBoundary>
-				</Box>
-			</Box>
+				</CardContent>
+			</Card>
 		</Box>
 	);
 };

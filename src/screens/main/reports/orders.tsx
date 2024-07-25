@@ -4,12 +4,14 @@ import get from 'lodash/get';
 import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
-import Table, { CellRenderer } from '@wcpos/components/src/table';
-import Text from '@wcpos/components/src/text';
 import type { OrderDocument } from '@wcpos/database';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import Table, { CellRenderer } from '@wcpos/tailwind/src/table';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { useT } from '../../../contexts/translations';
 import { Date } from '../components/date';
@@ -88,30 +90,17 @@ export const Orders = ({ query }) => {
 	 *
 	 */
 	return (
-		<Box padding="small" paddingRight="none" style={{ height: '100%' }}>
-			<Box
-				raised
-				rounding="medium"
-				style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
-			>
-				<Box
-					horizontal
-					style={{
-						backgroundColor: theme.colors.grey,
-						borderTopLeftRadius: theme.rounding.medium,
-						borderTopRightRadius: theme.rounding.medium,
-					}}
-				>
-					<Box horizontal fill align="center" padding="small" space="small">
-						<Box horizontal fill>
-							<Text size="medium">{t('Orders', { _tags: 'core' })}</Text>
-						</Box>
+		<Box className="p-2 pt-0 pr-0 h-full">
+			<Card className="flex-1">
+				<CardHeader className="p-2 bg-input">
+					<HStack>
+						<Text className="text-lg flex-1">{t('Orders', { _tags: 'core' })}</Text>
 						<ErrorBoundary>
 							<UiSettings uiSettings={uiSettings} title={t('Order Settings', { _tags: 'core' })} />
 						</ErrorBoundary>
-					</Box>
-				</Box>
-				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+					</HStack>
+				</CardHeader>
+				<CardContent className="flex-1 p-0">
 					<ErrorBoundary>
 						<Suspense>
 							<Table
@@ -147,8 +136,8 @@ export const Orders = ({ query }) => {
 							/>
 						</Suspense>
 					</ErrorBoundary>
-				</Box>
-			</Box>
+				</CardContent>
+			</Card>
 		</Box>
 	);
 };

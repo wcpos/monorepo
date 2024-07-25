@@ -15,7 +15,7 @@ import Tags from '../../../components/product/tags';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;
-	column: import('@wcpos/components/src/table').ColumnProps<
+	column: import('@wcpos/tailwind/src/table').ColumnProps<
 		import('@wcpos/database').ProductDocument
 	>;
 }

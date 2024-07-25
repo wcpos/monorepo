@@ -4,7 +4,7 @@ import { useObservable, useObservableState } from 'observable-hooks';
 import { switchMap } from 'rxjs/operators';
 
 import Select from '@wcpos/components/src/select';
-import Table from '@wcpos/components/src/table';
+import Table from '@wcpos/tailwind/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 

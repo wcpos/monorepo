@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Table, { TableContextProps } from '@wcpos/components/src/table';
+import Table, { TableContextProps } from '@wcpos/tailwind/src/table';
 
 import { FeeLineRow } from './rows/fee-line';
 import { LineItemRow } from './rows/line-item';

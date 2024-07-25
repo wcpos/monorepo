@@ -5,7 +5,7 @@ import { useObservableSuspense, useObservableState, useSubscription } from 'obse
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
-import Table, { CellRenderer, useTable } from '@wcpos/components/src/table';
+import Table, { CellRenderer, useTable } from '@wcpos/tailwind/src/table';
 import Text from '@wcpos/components/src/text';
 import { useReplicationState } from '@wcpos/query';
 import log from '@wcpos/utils/src/logger';

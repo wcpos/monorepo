@@ -3,7 +3,8 @@ import * as React from 'react';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 
 import { AddCartItemButtons } from './add-cart-item-buttons';
 import { AddNoteButton } from './buttons/add-note';
@@ -24,46 +25,45 @@ const Cart = () => {
 	const t = useT();
 
 	return (
-		<Box
-			raised
-			rounding="medium"
-			// style={{ backgroundColor: 'white' }}
-			style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
-		>
-			<ErrorBoundary>
-				<CartHeader />
-			</ErrorBoundary>
-			<Box fill>
+		<Card className="flex-1">
+			<CardHeader className="p-2 bg-input">
 				<ErrorBoundary>
-					<Table />
+					<CartHeader />
 				</ErrorBoundary>
-			</Box>
-			<AddCartItemButtons />
-			<Box>
-				<ErrorBoundary>
-					<Totals />
-				</ErrorBoundary>
-			</Box>
-			<Box
-				horizontal
-				space="small"
-				padding="small"
-				align="center"
-				style={{ backgroundColor: theme.colors.lightGrey }}
-			>
-				<ErrorBoundary>
-					<AddNoteButton />
-					<OrderMetaButton />
-					<SaveButton />
-				</ErrorBoundary>
-			</Box>
-			<Box horizontal>
-				<ErrorBoundary>
-					<VoidButton />
-					<PayButton />
-				</ErrorBoundary>
-			</Box>
-		</Box>
+			</CardHeader>
+			<CardContent className="flex-1 p-0">
+				<Box fill>
+					<ErrorBoundary>
+						<Table />
+					</ErrorBoundary>
+				</Box>
+				<AddCartItemButtons />
+				<Box>
+					<ErrorBoundary>
+						<Totals />
+					</ErrorBoundary>
+				</Box>
+				<Box
+					horizontal
+					space="small"
+					padding="small"
+					align="center"
+					style={{ backgroundColor: theme.colors.lightGrey }}
+				>
+					<ErrorBoundary>
+						<AddNoteButton />
+						<OrderMetaButton />
+						<SaveButton />
+					</ErrorBoundary>
+				</Box>
+				<Box horizontal>
+					<ErrorBoundary>
+						<VoidButton />
+						<PayButton />
+					</ErrorBoundary>
+				</Box>
+			</CardContent>
+		</Card>
 	);
 };
 

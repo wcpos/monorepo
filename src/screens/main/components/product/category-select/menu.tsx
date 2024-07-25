@@ -6,7 +6,7 @@ import { useTheme } from 'styled-components/native';
 
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
-import Table from '@wcpos/components/src/table';
+import Table from '@wcpos/tailwind/src/table';
 import { useInfiniteScroll, useReplicationState } from '@wcpos/query';
 
 import CategorySelectItem, { EmptyTableRow } from './item';

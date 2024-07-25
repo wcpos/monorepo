@@ -10,7 +10,7 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 
 type Props = {
 	item: ProductDocument | ProductVariationDocument;
-	column: import('@wcpos/components/src/table').ColumnProps<ProductDocument>;
+	column: import('@wcpos/tailwind/src/table').ColumnProps<ProductDocument>;
 	onChange: (product: ProductDocument, data: Record<string, unknown>) => void;
 };
 

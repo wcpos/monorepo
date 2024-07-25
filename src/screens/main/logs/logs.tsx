@@ -7,7 +7,7 @@ import { useTheme } from 'styled-components/native';
 import Box from '@wcpos/components/src/box';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
-import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
+import Table, { TableContextProps, CellRenderer } from '@wcpos/tailwind/src/table';
 import { Query, useInfiniteScroll } from '@wcpos/query';
 
 import { Context } from './cells/context';

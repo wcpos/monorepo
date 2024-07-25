@@ -7,7 +7,7 @@ import Animated, { useAnimatedStyle, withTiming, Easing } from 'react-native-rea
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
-import Table, { CellRenderer } from '@wcpos/components/src/table';
+import Table, { CellRenderer } from '@wcpos/tailwind/src/table';
 import Text from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 

@@ -10,9 +10,9 @@ import {
 import { of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import Box from '@wcpos/components/src/box';
 import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
+import { HStack } from '@wcpos/tailwind/src/hstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { DateRange } from '../components/order/date-range';
@@ -145,7 +145,7 @@ const FilterBar = ({ query }) => {
 	 *
 	 */
 	return (
-		<Box space="small" horizontal>
+		<HStack>
 			<StatusPill query={query} />
 			<Suspense>
 				<CustomerPill resource={customerResource} query={query} />
@@ -155,7 +155,7 @@ const FilterBar = ({ query }) => {
 			</Suspense>
 			<StorePill resource={storesResource} query={query} />
 			<DateRange query={query} />
-		</Box>
+		</HStack>
 	);
 };
 

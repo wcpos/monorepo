@@ -12,7 +12,7 @@ type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 interface Props {
 	uuid: string;
 	item: FeeLine;
-	column: import('@wcpos/components/src/table').ColumnProps<FeeLine>;
+	column: import('@wcpos/tailwind/src/table').ColumnProps<FeeLine>;
 }
 
 /**

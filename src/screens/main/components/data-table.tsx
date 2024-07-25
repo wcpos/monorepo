@@ -3,12 +3,9 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableState, useSubscription, useObservableEagerState } from 'observable-hooks';
 import { debounceTime, skip } from 'rxjs';
-import { useTheme } from 'styled-components/native';
 
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Loader from '@wcpos/components/src/loader';
 import Suspense from '@wcpos/components/src/suspense';
-import Table, { TableContextProps, CellRenderer } from '@wcpos/components/src/table';
 import type {
 	ProductDocument,
 	OrderDocument,
@@ -16,7 +13,9 @@ import type {
 	TaxRateDocument,
 } from '@wcpos/database';
 import { useReplicationState, Query, useInfiniteScroll } from '@wcpos/query';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import Table, { TableContextProps, CellRenderer } from '@wcpos/tailwind/src/table';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import EmptyTableRow from './empty-table-row';
@@ -43,7 +42,6 @@ interface CommonTableProps<T> {
  *
  */
 const DataTableFooter = ({ query, children, count }) => {
-	const theme = useTheme();
 	const { sync, active$, total$ } = useReplicationState(query);
 	const { clear } = useCollectionReset(query.collection.name);
 	const loading = useObservableState(active$, false);

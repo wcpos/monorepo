@@ -4,15 +4,15 @@ import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
-import { useTable } from '@wcpos/components/src/table';
 import Text from '@wcpos/components/src/text';
+import { useTable } from '@wcpos/tailwind/src/table';
 import log from '@wcpos/utils/src/logger';
 
 import PriceWithTax from './price';
 
 interface Props {
 	item: import('@wcpos/database').ProductDocument;
-	column: import('@wcpos/components/src/table').ColumnProps<
+	column: import('@wcpos/tailwind/src/table').ColumnProps<
 		import('@wcpos/database').ProductDocument
 	>;
 }

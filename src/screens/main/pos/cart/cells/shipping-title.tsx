@@ -11,7 +11,7 @@ type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][nu
 interface Props {
 	uuid: string;
 	item: ShippingLine;
-	column: import('@wcpos/components/src/table').ColumnProps<ShippingLine>;
+	column: import('@wcpos/tailwind/src/table').ColumnProps<ShippingLine>;
 }
 
 /**

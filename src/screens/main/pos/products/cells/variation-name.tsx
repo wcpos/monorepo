@@ -10,7 +10,7 @@ import StockQuantity from '../../../components/product/stock-quantity';
 
 interface Props {
 	item: import('@wcpos/database').ProductVariationDocument;
-	column: import('@wcpos/components/src/table').ColumnProps<
+	column: import('@wcpos/tailwind/src/table').ColumnProps<
 		import('@wcpos/database').ProductVariationDocument
 	>;
 	expandVariations?: () => void;

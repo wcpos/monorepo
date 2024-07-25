@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import Pill from '@wcpos/components/src/pill';
-import { useTable } from '@wcpos/components/src/table';
+import { useTable } from '@wcpos/tailwind/src/table';
 
 type ProductTagsProps = {
 	item: import('@wcpos/database').ProductDocument;

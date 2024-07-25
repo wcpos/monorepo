@@ -1,14 +1,14 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
-import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
-import Text from '@wcpos/components/src/text';
 import { useRelationalQuery } from '@wcpos/query';
-import log from '@wcpos/utils/src/logger';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
@@ -36,7 +36,6 @@ const TABLE_ROW_COMPONENTS = {
  *
  */
 const POSProducts = ({ isColumn = false }) => {
-	const theme = useTheme();
 	const { uiSettings } = useUISettings('pos-products');
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
@@ -103,23 +102,12 @@ const POSProducts = ({ isColumn = false }) => {
 	 *
 	 */
 	return (
-		<Box padding="small" paddingRight={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
-			<Box
-				raised
-				rounding="medium"
-				style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
-			>
-				<Box
-					horizontal
-					style={{
-						backgroundColor: theme.colors.grey,
-						borderTopLeftRadius: theme.rounding.medium,
-						borderTopRightRadius: theme.rounding.medium,
-					}}
-				>
+		<Box className={`p-2 h-full ${isColumn && 'pr-0'}`}>
+			<Card className="flex-1">
+				<CardHeader className="p-2 bg-input">
 					<ErrorBoundary>
-						<Box fill space="small">
-							<Box horizontal align="center" padding="small" paddingBottom="none" space="small">
+						<VStack>
+							<HStack>
 								<ErrorBoundary>
 									<Search query={query} addProduct={addProduct} addVariation={addVariation} />
 								</ErrorBoundary>
@@ -129,16 +117,14 @@ const POSProducts = ({ isColumn = false }) => {
 										title={t('Product Settings', { _tags: 'core' })}
 									/>
 								</ErrorBoundary>
-							</Box>
-							<Box horizontal padding="small" paddingTop="none">
-								<ErrorBoundary>
-									<FilterBar query={query} />
-								</ErrorBoundary>
-							</Box>
-						</Box>
+							</HStack>
+							<ErrorBoundary>
+								<FilterBar query={query} />
+							</ErrorBoundary>
+						</VStack>
 					</ErrorBoundary>
-				</Box>
-				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+				</CardHeader>
+				<CardContent className="flex-1 p-0">
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable<ProductDocument>
@@ -152,8 +138,8 @@ const POSProducts = ({ isColumn = false }) => {
 							/>
 						</Suspense>
 					</ErrorBoundary>
-				</Box>
-			</Box>
+				</CardContent>
+			</Card>
 		</Box>
 	);
 };

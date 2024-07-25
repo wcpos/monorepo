@@ -9,6 +9,7 @@ import { startWith, switchMap, tap } from 'rxjs/operators';
 import Box from '@wcpos/components/src/box';
 import Suspense from '@wcpos/components/src/suspense';
 import type { Query } from '@wcpos/query';
+import { HStack } from '@wcpos/tailwind/src/hstack';
 
 import CategoryPill from './category-pill';
 import FeaturedPill from './featured-pill';
@@ -84,7 +85,7 @@ const FilterBar = ({ query }: Props) => {
 	 *
 	 */
 	return (
-		<Box space="small" horizontal style={{ flexWrap: 'wrap', width: '100%' }}>
+		<HStack className="w-full flex-wrap">
 			<StockStatusPill query={query} />
 			<FeaturedPill query={query} />
 			<OnSalePill query={query} />
@@ -94,7 +95,7 @@ const FilterBar = ({ query }: Props) => {
 			<Suspense>
 				<TagPill query={query} resource={selectedTagResource} />
 			</Suspense>
-		</Box>
+		</HStack>
 	);
 };
 

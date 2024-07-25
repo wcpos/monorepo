@@ -13,7 +13,7 @@ type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 
 interface Props {
 	item: LineItem;
-	column: import('@wcpos/components/src/table').ColumnProps<LineItem>;
+	column: import('@wcpos/tailwind/src/table').ColumnProps<LineItem>;
 }
 
 /**

@@ -5,9 +5,11 @@ import { of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
 import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Card } from '@wcpos/tailwind/src/card';
+import { HStack } from '@wcpos/tailwind/src/hstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
@@ -140,27 +142,19 @@ export const FilterBar = ({ query }) => {
 	 *
 	 */
 	return (
-		<Box padding="small">
-			<Box
-				raised
-				rounding="medium"
-				horizontal
-				padding="small"
-				space="small"
-				style={{
-					backgroundColor: theme.colors.grey,
-					// borderRadius: theme.rounding.medium,
-				}}
-			>
-				<StatusPill query={query} />
-				<Suspense>
-					<CustomerPill resource={customerResource} query={query} />
-				</Suspense>
-				<Suspense>
-					<CashierPill resource={cashierResource} query={query} />
-				</Suspense>
-				<StorePill resource={storesResource} query={query} />
-			</Box>
+		<Box>
+			<Card className="p-2 w-full bg-input">
+				<HStack>
+					<StatusPill query={query} />
+					<Suspense>
+						<CustomerPill resource={customerResource} query={query} />
+					</Suspense>
+					<Suspense>
+						<CashierPill resource={cashierResource} query={query} />
+					</Suspense>
+					<StorePill resource={storesResource} query={query} />
+				</HStack>
+			</Card>
 		</Box>
 	);
 };

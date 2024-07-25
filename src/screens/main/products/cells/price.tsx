@@ -3,13 +3,13 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
-import { useTable } from '@wcpos/components/src/table';
+import { useTable } from '@wcpos/tailwind/src/table';
 
 import PriceWithTax from '../../components/product/price';
 
 type Props = {
 	item: import('@wcpos/database').ProductDocument;
-	column: import('@wcpos/components/src/table').ColumnProps<
+	column: import('@wcpos/tailwind/src/table').ColumnProps<
 		import('@wcpos/database').ProductDocument
 	>;
 };

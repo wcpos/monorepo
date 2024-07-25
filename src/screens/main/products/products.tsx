@@ -1,11 +1,10 @@
 import * as React from 'react';
 
-import { useTheme } from 'styled-components/native';
-
-import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import { useRelationalQuery } from '@wcpos/query';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
@@ -34,7 +33,6 @@ const TABLE_ROW_COMPONENTS = {
  */
 const Products = () => {
 	const { uiSettings } = useUISettings('products');
-	const theme = useTheme();
 	const { calcTaxes } = useTaxRates();
 	const t = useT();
 
@@ -90,20 +88,9 @@ const Products = () => {
 	 *
 	 */
 	return (
-		<Box padding="small" style={{ height: '100%' }}>
-			<Box
-				raised
-				rounding="medium"
-				style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
-			>
-				<Box
-					horizontal
-					style={{
-						backgroundColor: theme.colors.grey,
-						borderTopLeftRadius: theme.rounding.medium,
-						borderTopRightRadius: theme.rounding.medium,
-					}}
-				>
+		<Box className="p-2 h-full">
+			<Card className="flex-1">
+				<CardHeader className="p-2 bg-input">
 					<VStack>
 						<HStack>
 							<ErrorBoundary>
@@ -121,14 +108,12 @@ const Products = () => {
 								/>
 							</ErrorBoundary>
 						</HStack>
-						<Box horizontal padding="small" paddingTop="none">
-							<ErrorBoundary>
-								<FilterBar query={query} />
-							</ErrorBoundary>
-						</Box>
+						<ErrorBoundary>
+							<FilterBar query={query} />
+						</ErrorBoundary>
 					</VStack>
-				</Box>
-				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+				</CardHeader>
+				<CardContent className="flex-1 p-0">
 					<ErrorBoundary>
 						<Suspense>
 							<DataTable<ProductDocument>
@@ -142,8 +127,8 @@ const Products = () => {
 							/>
 						</Suspense>
 					</ErrorBoundary>
-				</Box>
-			</Box>
+				</CardContent>
+			</Card>
 		</Box>
 	);
 };

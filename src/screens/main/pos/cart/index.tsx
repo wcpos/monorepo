@@ -1,10 +1,11 @@
 import * as React from 'react';
 
-import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
 import Suspense from '@wcpos/components/src/suspense';
 import Tabs from '@wcpos/components/src/tabs';
+import { Box } from '@wcpos/tailwind/src/box';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import Cart from './cart';
 import EmptyCart from './empty-cart';
@@ -22,16 +23,14 @@ const OpenOrders = ({ isColumn = false }) => {
 	 *
 	 */
 	return (
-		<Box padding="small" paddingLeft={isColumn ? 'none' : 'small'} style={{ height: '100%' }}>
-			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
-				<ErrorBoundary>
-					{currentOrder.isNew ? (
-						<EmptyCart currentOrder={currentOrder} />
-					) : (
-						<Cart currentOrder={currentOrder} />
-					)}
-				</ErrorBoundary>
-			</Box>
+		<VStack className={`gap-0 p-2 h-full ${isColumn && 'pl-0'}`}>
+			<ErrorBoundary>
+				{currentOrder.isNew ? (
+					<EmptyCart currentOrder={currentOrder} />
+				) : (
+					<Cart currentOrder={currentOrder} />
+				)}
+			</ErrorBoundary>
 			<ErrorBoundary>
 				<Suspense
 					fallback={
@@ -47,7 +46,7 @@ const OpenOrders = ({ isColumn = false }) => {
 					<OpenOrderTabs />
 				</Suspense>
 			</ErrorBoundary>
-		</Box>
+		</VStack>
 	);
 };
 

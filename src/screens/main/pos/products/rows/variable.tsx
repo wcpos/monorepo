@@ -5,7 +5,7 @@ import get from 'lodash/get';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
-import Table, { CellRenderer } from '@wcpos/components/src/table';
+import Table, { CellRenderer } from '@wcpos/tailwind/src/table';
 import Text from '@wcpos/components/src/text';
 
 import { VariableProductImage } from '../../../components/product/variable-image';

@@ -13,7 +13,7 @@ type Document =
 
 interface Props {
 	item: Document;
-	column: import('@wcpos/components/src/table').ColumnProps<Document>;
+	column: import('@wcpos/tailwind/src/table').ColumnProps<Document>;
 }
 
 /**

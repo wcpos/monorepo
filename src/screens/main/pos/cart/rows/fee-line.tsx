@@ -4,7 +4,7 @@ import get from 'lodash/get';
 
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
-import Table, { CellRenderer, TableProps } from '@wcpos/components/src/table';
+import Table, { CellRenderer, TableProps } from '@wcpos/tailwind/src/table';
 import Text from '@wcpos/components/src/text';
 
 import { Actions } from '../cells/actions';
