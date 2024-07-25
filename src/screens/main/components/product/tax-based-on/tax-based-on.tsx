@@ -31,7 +31,7 @@ const TaxBasedOn = () => {
 	return (
 		<HoverCard>
 			<HoverCardTrigger>
-				<Button variant="link" className="">
+				<Button variant="link">
 					{rates.length > 0 ? (
 						<Text className="text-sm">{taxBasedOnLabel}</Text>
 					) : (

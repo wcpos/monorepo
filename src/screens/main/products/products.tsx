@@ -138,13 +138,7 @@ const Products = () => {
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
 								extraContext={{ taxLocation: 'base' }}
-								footer={
-									calcTaxes && (
-										<Box fill padding="small" space="xSmall" horizontal>
-											<TaxBasedOn />
-										</Box>
-									)
-								}
+								footer={calcTaxes && <TaxBasedOn />}
 							/>
 						</Suspense>
 					</ErrorBoundary>

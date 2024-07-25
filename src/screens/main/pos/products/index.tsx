@@ -148,13 +148,7 @@ const POSProducts = ({ isColumn = false }) => {
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
 								extraContext={{ taxLocation: 'pos' }}
-								footer={
-									calcTaxes && (
-										<Box fill padding="small" space="xSmall" horizontal>
-											<TaxBasedOn />
-										</Box>
-									)
-								}
+								footer={calcTaxes && <TaxBasedOn />}
 							/>
 						</Suspense>
 					</ErrorBoundary>

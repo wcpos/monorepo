@@ -2,17 +2,16 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 
-import Icon from '@wcpos/components/src/icon';
 import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from '@wcpos/tailwind/src/dialog';
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from '@wcpos/tailwind/src/alert-dialog';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -20,10 +19,11 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@wcpos/tailwind/src/dropdown-menu';
+import { Icon } from '@wcpos/tailwind/src/icon';
 import { Text } from '@wcpos/tailwind/src/text';
 
-import DeleteDialog from './delete-dialog';
 import { useT } from '../../../../contexts/translations';
+import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
 
 type Props = {
@@ -35,6 +35,21 @@ const Actions = ({ item: product }: Props) => {
 	const navigation = useNavigation();
 	const pullDocument = usePullDocument();
 	const t = useT();
+	const deleteDocument = useDeleteDocument();
+
+	/**
+	 * Handle delete button click
+	 */
+	const handleDelete = React.useCallback(async () => {
+		try {
+			if (product.id) {
+				await deleteDocument(product.id, product.collection);
+			}
+			await product.remove();
+		} finally {
+			//
+		}
+	}, [product, deleteDocument]);
 
 	/**
 	 *
@@ -66,16 +81,33 @@ const Actions = ({ item: product }: Props) => {
 					)}
 					<DropdownMenuSeparator />
 					<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
-						<Icon name="trash" />
+						<Icon
+							name="trash"
+							className="fill-destructive web:group-focus:fill-accent-foreground"
+						/>
 						<Text>{t('Delete', { _tags: 'core' })}</Text>
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
-			<Dialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
-				<DialogContent>
-					<DeleteDialog product={product} />
-				</DialogContent>
-			</Dialog>
+			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							{t('You are about to delete {product}', { _tags: 'core', product: product.name })}
+						</AlertDialogTitle>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>
+							<Text>{t('Cancel', { _tags: 'core' })}</Text>
+						</AlertDialogCancel>
+						<AlertDialogAction asChild onPress={handleDelete}>
+							<Button variant="destructive">
+								<ButtonText>{t('Delete', { _tags: 'core' })}</ButtonText>
+							</Button>
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</>
 	);
 };
