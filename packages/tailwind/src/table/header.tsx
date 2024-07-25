@@ -2,11 +2,11 @@ import * as React from 'react';
 import { GestureResponderEvent } from 'react-native';
 
 import { useTable } from './context';
-import * as Styled from './styles';
-import Box from '../box';
-import Pressable from '../pressable';
-import SortIcon from '../sort-icon';
-import Text from '../text';
+import { Box } from '../box';
+import { Button } from '../button';
+import { HStack } from '../hstack';
+import { SortIcon } from '../sort-icon';
+import { Text } from '../text';
 // import { useTableContext } from './context';
 
 /**
@@ -56,18 +56,16 @@ const TableHeader = () => {
 			};
 
 			return (
-				<Styled.HeaderCell
+				<Box
 					key={key}
-					padding="small"
-					flex={flex}
-					width={width}
-					align={alignItemsMap[align]}
+					className="p-2 flex-1"
+					//flex={flex} width={width} align={alignItemsMap[align]}
 				>
 					{sortable ? (
-						<Pressable onPress={handlePress} style={{ width: '100%', flexDirection: 'column' }}>
+						<Button variant="ghost" onPress={handlePress}>
 							{({ hovered }: any) => (
-								<Box horizontal space="xxSmall" align="center" distribution={alignItemsMap[align]}>
-									<Text uppercase size="small" numberOfLines={1} type="textMuted">
+								<HStack space="xs" className={`justify-${alignItemsMap[align]}`}>
+									<Text className="text-xs text-muted-foreground uppercase" numberOfLines={1}>
 										{headerLabel({ column })}
 									</Text>
 									{(showSortIndicator || hovered) && (
@@ -76,17 +74,17 @@ const TableHeader = () => {
 											direction={showSortIndicator ? sortDirection : undefined}
 										/>
 									)}
-								</Box>
+								</HStack>
 							)}
-						</Pressable>
+						</Button>
 					) : (
 						!hideLabel && (
-							<Text uppercase size="small" numberOfLines={1} type="textMuted">
+							<Text className="text-xs text-muted-foreground uppercase" numberOfLines={1}>
 								{headerLabel({ column })}
 							</Text>
 						)
 					)}
-				</Styled.HeaderCell>
+				</Box>
 			);
 		},
 		[headerLabel, sort, sortBy, sortDirection]
@@ -95,11 +93,7 @@ const TableHeader = () => {
 	/**
 	 *
 	 */
-	return (
-		<Styled.HeaderRow horizontal align="center">
-			{columns.map(renderHeaderCell)}
-		</Styled.HeaderRow>
-	);
+	return <HStack className="gap-0 border-b bg-muted">{columns.map(renderHeaderCell)}</HStack>;
 };
 
 export default TableHeader;

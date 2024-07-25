@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import Header from './header';
 import Row from './row';
-import { Box } from '../box';
 import { VStack } from '../vstack';
 
 interface SimpleTableProps {

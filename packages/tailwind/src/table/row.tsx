@@ -2,8 +2,8 @@ import * as React from 'react';
 import { ViewStyle } from 'react-native';
 
 import { useTable } from './context';
-import * as Styled from './styles';
-import Box from '../box';
+import { Box } from '../box';
+import { HStack } from '../hstack';
 
 import type { ListRenderItemInfo } from '@shopify/flash-list';
 
@@ -63,17 +63,17 @@ const TableRow = <T extends object>({
 			const { flex = 1, align = 'left', width } = column;
 
 			return (
-				<Styled.Cell
+				<Box
 					key={column.key}
-					padding="small"
-					flex={flex}
-					width={width}
-					align={alignItemsMap[align]}
+					className="p-2 flex-1"
+					// flex={flex}
+					// width={width}
+					// align={alignItemsMap[align]}
 					style={[cellStyle]}
 					onLayout={(event) => onLayout(event, column.key)}
 				>
 					{cellRenderer({ item, column, index: idx, cellWidth: cellWidths[column.key] })}
-				</Styled.Cell>
+				</Box>
 			);
 		},
 		[cellRenderer, cellStyle, cellWidths, item, onLayout]
@@ -83,9 +83,9 @@ const TableRow = <T extends object>({
 	 *
 	 */
 	return (
-		<Styled.Row horizontal align="center" style={rowStyle} alt={index % 2 !== 0}>
+		<HStack style={rowStyle} alt={index % 2 !== 0}>
 			{columns.map(renderCell)}
-		</Styled.Row>
+		</HStack>
 	);
 };
 
