@@ -3,6 +3,8 @@ import { Pressable } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
+import { HStack } from '../hstack';
+import { Icon, IconName } from '../icon';
 import { cn } from '../lib/utils';
 import { Text, TextClassContext } from '../text';
 
@@ -88,14 +90,17 @@ const buttonTextVariants = cva(
 	}
 );
 
-type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
-	VariantProps<typeof buttonVariants>;
-
 /**
  *
  */
+type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
+	VariantProps<typeof buttonVariants> & {
+		leftIcon?: IconName;
+		rightIcon?: IconName;
+	};
+
 const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>(
-	({ className, variant, size, ...props }, ref) => {
+	({ className, variant, size, leftIcon, rightIcon, children, ...props }, ref) => {
 		return (
 			<TextClassContext.Provider
 				value={buttonTextVariants({ variant, size, className: 'web:pointer-events-none' })}
@@ -108,12 +113,93 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
 					ref={ref}
 					role="button"
 					{...props}
-				/>
+				>
+					{leftIcon || rightIcon ? (
+						<HStack>
+							{leftIcon && <Icon name={leftIcon} />}
+							{children}
+							{rightIcon && <Icon name={rightIcon} />}
+						</HStack>
+					) : (
+						children
+					)}
+				</Pressable>
 			</TextClassContext.Provider>
 		);
 	}
 );
 Button.displayName = 'Button';
 
-export { Button, Text as ButtonText, buttonTextVariants, buttonVariants };
+/**
+ *
+ */
+type ButtonGroupProps = {
+	children: React.ReactElement<ButtonProps>[];
+};
+
+const ButtonGroup: React.FC<ButtonGroupProps> = ({ children }) => {
+	const buttons = React.Children.toArray(children);
+
+	return (
+		<HStack className="gap-0">
+			{buttons.map((button, index) => {
+				let classNames = button.props.className || '';
+
+				if (index === 0) {
+					classNames = cn(
+						classNames,
+						'pr-2 rounded-r-none border-r border-gray-300 border-opacity-50'
+					);
+				} else if (index === buttons.length - 1) {
+					classNames = cn(classNames, 'pl-2 rounded-l-none');
+				} else {
+					classNames = cn(
+						classNames,
+						'px-2 rounded-none border-r border-gray-700 border-opacity-50'
+					);
+				}
+
+				return React.cloneElement(button, {
+					className: classNames,
+				});
+			})}
+		</HStack>
+	);
+};
+
+ButtonGroup.displayName = 'ButtonGroup';
+
+/**
+ *
+ */
+type ButtonPillProps = React.ComponentPropsWithoutRef<typeof Pressable> &
+	VariantProps<typeof buttonVariants> & {
+		leftIcon?: IconName;
+		rightIcon?: IconName;
+		removable?: boolean;
+		onRemove?: () => void;
+	};
+
+const ButtonPill = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonPillProps>(
+	({ className, removable, onRemove, ...props }, ref) => {
+		return removable ? (
+			<ButtonGroup>
+				<Button className={cn(className, 'rounded-full')} {...props} />
+				<Button
+					className={cn(className, 'rounded-full')}
+					{...props}
+					leftIcon="xmark"
+					rightIcon={undefined}
+					children={undefined}
+					onPress={onRemove}
+				/>
+			</ButtonGroup>
+		) : (
+			<Button className={cn(className, 'rounded-full')} {...props} />
+		);
+	}
+);
+ButtonPill.displayName = 'ButtonPill';
+
+export { Button, Text as ButtonText, ButtonGroup, ButtonPill, buttonTextVariants, buttonVariants };
 export type { ButtonProps };
