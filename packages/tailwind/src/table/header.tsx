@@ -62,7 +62,7 @@ const TableHeader = () => {
 					//flex={flex} width={width} align={alignItemsMap[align]}
 				>
 					{sortable ? (
-						<Button variant="ghost" onPress={handlePress}>
+						<Button variant="ghost" className="p-0 h-3.5" onPress={handlePress}>
 							{({ hovered }: any) => (
 								<HStack space="xs" className={`justify-${alignItemsMap[align]}`}>
 									<Text className="text-xs text-muted-foreground uppercase" numberOfLines={1}>

@@ -13,7 +13,6 @@ import { FList } from './flist';
 import Header from './header';
 import { LoadingRow } from './loading';
 import Row from './row';
-import { Box } from '../box';
 import { ErrorBoundary } from '../error-boundary';
 import { VStack } from '../vstack';
 
