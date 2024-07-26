@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { Linking } from 'react-native';
 
-import Icon from '@wcpos/components/src/icon';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
 
 import { useT } from '../../../../contexts/translations';
 
@@ -28,12 +28,19 @@ export const UpgradeNotice = ({ setShowUpgrade }) => {
 
 	return (
 		<HStack className="bg-attention">
-			<Box className="grow justify-center p-0">
+			<Box className="grow justify-center p-0 pl-7">
 				<Button size="sm" variant="link" onPress={() => Linking.openURL('https://wcpos.com/pro')}>
 					<ButtonText className="text-sm">{upgradeToProText}</ButtonText>
 				</Button>
 			</Box>
-			<Icon name="xmark" size="xSmall" onPress={() => setShowUpgrade(false)} />
+			<Button
+				size="icon"
+				variant="ghost"
+				className="rounded-full h-5 w-5"
+				onPress={() => setShowUpgrade(false)}
+			>
+				<Icon name="xmark" size="xSmall" />
+			</Button>
 		</HStack>
 	);
 };

@@ -15,6 +15,7 @@
     "build": "bob build"
   },
   "dependencies": {
+    "@hookform/resolvers": "^3.9.0",
     "@react-native-community/masked-view": "0.1.11",
     "@react-native-community/netinfo": "11.3.2",
     "@react-navigation/bottom-tabs": "^6.5.20",
@@ -43,7 +44,7 @@
     "expo-haptics": "~13.0.1",
     "expo-linking": "6.3.1",
     "expo-localization": "^15.0.3",
-    "expo-sqlite": "~14.0.4",
+    "expo-sqlite": "~14.0.5",
     "expo-status-bar": "~1.12.1",
     "heapify": "^0.6.0",
     "html-entities": "2.5.2",
@@ -72,7 +73,8 @@
     "semver": "^7.6.2",
     "styled-components": "6.1.11",
     "stylis": "^4.3.2",
-    "use-deep-compare-effect": "^1.8.1"
+    "use-deep-compare-effect": "^1.8.1",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "6.4.5",

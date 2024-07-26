@@ -1,12 +1,8 @@
 import * as React from 'react';
-import { View, StyleProp, ViewStyle, TextStyle } from 'react-native';
+import { StyleProp, ViewStyle, TextStyle } from 'react-native';
 
 import { DrawerProps } from '@react-navigation/drawer/src/types';
-import { Link } from '@react-navigation/native';
-import { useTheme } from 'styled-components/native';
 
-import Icon from '@wcpos/components/src/icon';
-import Pressable from '@wcpos/components/src/pressable';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Text } from '@wcpos/tailwind/src/text';
@@ -78,22 +74,22 @@ type Props = {
  *
  */
 const DrawItem = ({ label, icon, focused, onPress, drawerType, style, ...rest }: Props) => {
-	const theme = useTheme();
-
 	return drawerType === 'permanent' ? (
-		<Button onPress={onPress} style={style}>
-			<Tooltip>
-				<TooltipTrigger>{icon({ focused })}</TooltipTrigger>
-				<TooltipContent side="right">
-					<Text>{label}</Text>
-				</TooltipContent>
-			</Tooltip>
-		</Button>
+		<Tooltip style={style}>
+			<TooltipTrigger asChild onPress={onPress}>
+				<Button variant="ghost" className="rounded-none">
+					{icon({ focused })}
+				</Button>
+			</TooltipTrigger>
+			<TooltipContent side="right">
+				<Text>{label}</Text>
+			</TooltipContent>
+		</Tooltip>
 	) : (
-		<Button onPress={onPress} style={style}>
+		<Button variant="ghost" onPress={onPress} className="rounded-none" style={style}>
 			<HStack>
 				{icon({ focused })}
-				<ButtonText>{label}</ButtonText>
+				<ButtonText className="text-xl">{label}</ButtonText>
 			</HStack>
 		</Button>
 	);

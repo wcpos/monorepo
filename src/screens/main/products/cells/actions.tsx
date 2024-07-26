@@ -58,7 +58,9 @@ const Actions = ({ item: product }: Props) => {
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger>
-					<Icon name="ellipsisVertical" />
+					<Button variant="ghost" size="icon" className="rounded-full">
+						<Icon name="ellipsisVertical" />
+					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem

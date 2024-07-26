@@ -4,11 +4,13 @@ import get from 'lodash/get';
 import { useObservableState, useObservableEagerState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
-import Table, { TableContextProps, CellRenderer } from '@wcpos/tailwind/src/table';
 import { Query, useInfiniteScroll } from '@wcpos/query';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import Table, { TableContextProps, CellRenderer } from '@wcpos/tailwind/src/table';
 
 import { Context } from './cells/context';
 import { Date } from './cells/date';
@@ -79,27 +81,14 @@ export const Logs = ({ query }) => {
 	 *
 	 */
 	return (
-		<Box padding="small" style={{ height: '100%' }}>
-			<Box
-				raised
-				rounding="medium"
-				style={{ backgroundColor: 'white', flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}
-			>
-				<Box
-					horizontal
-					space="small"
-					padding="small"
-					align="center"
-					style={{
-						backgroundColor: theme.colors.grey,
-						borderTopLeftRadius: theme.rounding.medium,
-						borderTopRightRadius: theme.rounding.medium,
-					}}
-				>
-					<Box fill></Box>
-					<UISettings uiSettings={uiSettings} title={t('Log Settings', { _tags: 'core' })} />
-				</Box>
-				<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+		<Box className="h-full p-2">
+			<Card className="flex-1">
+				<CardHeader className="p-2 bg-input">
+					<HStack className="justify-end">
+						<UISettings uiSettings={uiSettings} title={t('Log Settings', { _tags: 'core' })} />
+					</HStack>
+				</CardHeader>
+				<CardContent className="flex-1 p-0">
 					<ErrorBoundary>
 						<Suspense>
 							<Table
@@ -115,8 +104,8 @@ export const Logs = ({ query }) => {
 							/>
 						</Suspense>
 					</ErrorBoundary>
-				</Box>
-			</Box>
+				</CardContent>
+			</Card>
 		</Box>
 	);
 };

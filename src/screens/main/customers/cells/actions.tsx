@@ -67,7 +67,7 @@ const Actions = ({ item: customer }: Props) => {
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<Button variant="ghost" size="xs" className="rounded-full">
+					<Button variant="ghost" size="icon" className="rounded-full">
 						<Icon name="ellipsisVertical" />
 					</Button>
 				</DropdownMenuTrigger>

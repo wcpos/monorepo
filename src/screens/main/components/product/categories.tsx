@@ -1,6 +1,9 @@
 import * as React from 'react';
 
-import Pill from '@wcpos/components/src/pill';
+import { useObservableEagerState } from 'observable-hooks';
+
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { HStack } from '@wcpos/tailwind/src/hstack';
 import { useTable } from '@wcpos/tailwind/src/table';
 
 interface ProductCategoriesProps {
@@ -8,7 +11,7 @@ interface ProductCategoriesProps {
 }
 
 const ProductCategories = ({ item: product }: ProductCategoriesProps) => {
-	const { categories } = product;
+	const categories = useObservableEagerState(product.categories$);
 	const { query } = useTable();
 
 	/**
@@ -24,23 +27,20 @@ const ProductCategories = ({ item: product }: ProductCategoriesProps) => {
 	/**
 	 *
 	 */
-	const catArray = React.useMemo(() => {
-		if (Array.isArray(categories)) {
-			return categories.map((cat: any) => {
-				return {
-					key: cat.id,
-					label: cat.name,
-					action: () => handleSelectCategory(cat),
-				};
-			});
-		}
-		return [];
-	}, [categories, handleSelectCategory]);
-
-	/**
-	 *
-	 */
-	return <Pill.Group pills={catArray} size="small" color="secondary" />;
+	return (
+		<HStack>
+			{(categories || []).map((cat) => (
+				<Button
+					size="xs"
+					className="rounded-full"
+					key={cat.id}
+					onPress={() => handleSelectCategory(cat)}
+				>
+					<ButtonText>{cat.name}</ButtonText>
+				</Button>
+			))}
+		</HStack>
+	);
 };
 
 export default ProductCategories;
