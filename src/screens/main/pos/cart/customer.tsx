@@ -5,9 +5,11 @@ import pick from 'lodash/pick';
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
+import Icon from '@wcpos/components/src/icon';
 import Modal from '@wcpos/components/src/modal';
 import Pill from '@wcpos/components/src/pill';
 import Form from '@wcpos/react-native-jsonschema-form';
+import { Button, ButtonGroup, ButtonText } from '@wcpos/tailwind/src/button';
 import { Text } from '@wcpos/tailwind/src/text';
 import log from '@wcpos/utils/src/logger';
 
@@ -164,15 +166,20 @@ const Customer = ({ setShowCustomerSelect }) => {
 	return (
 		<Box horizontal align="center" space="small">
 			<Text className="font-bold">{t('Customer', { _tags: 'core' })}:</Text>
-			<Pill
-				removable
-				onRemove={() => {
-					setShowCustomerSelect(true);
-				}}
-				onPress={() => setEditModalOpened(true)}
-			>
-				{name}
-			</Pill>
+			<ButtonGroup>
+				<Button size="sm" className="rounded-full" onPress={() => setEditModalOpened(true)}>
+					<ButtonText>{name}</ButtonText>
+				</Button>
+				<Button
+					size="sm"
+					className="rounded-full"
+					onPress={() => {
+						setShowCustomerSelect(true);
+					}}
+				>
+					<Icon name="xmark" />
+				</Button>
+			</ButtonGroup>
 
 			{editModalOpened && (
 				<Modal

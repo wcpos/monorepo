@@ -46,14 +46,21 @@ export const StockStatusPill = ({ query }: Props) => {
 		return String(selected);
 	}, [getLabel, selected, t]);
 
+	/**
+	 *
+	 */
 	return (
 		<Select
 			onOpenChange={setOpen}
 			onValueChange={({ value }) => query.where('stock_status', value)}
 		>
 			<SelectPrimitive.Trigger asChild>
-				<Button onPress={() => setOpen(!open)}>
-					<Icon name="warehouseFull" />
+				<Button
+					size="xs"
+					className="rounded-full"
+					leftIcon="warehouseFull"
+					onPress={() => setOpen(!open)}
+				>
 					<ButtonText>{label}</ButtonText>
 				</Button>
 			</SelectPrimitive.Trigger>

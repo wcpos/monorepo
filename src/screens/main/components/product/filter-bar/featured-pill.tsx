@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import Pill from '@wcpos/components/src/pill';
-import { Query } from '@wcpos/query';
+import type { Query } from '@wcpos/query';
+import { ButtonText, ButtonPill } from '@wcpos/tailwind/src/button';
 
 import { useT } from '../../../../../contexts/translations';
 
@@ -25,16 +25,16 @@ const FeaturedPill = ({ query }: Props) => {
 	const t = useT();
 
 	return (
-		<Pill
-			icon="star"
-			size="small"
-			color={isActive ? 'primary' : 'lightGrey'}
+		<ButtonPill
+			leftIcon="star"
+			size="xs"
+			variant={isActive ? 'default' : 'secondary'}
 			onPress={() => query.where('featured', isActive ? null : true)}
 			removable={isActive}
 			onRemove={() => query.where('featured', null)}
 		>
-			{t('Featured', { _tags: 'core' })}
-		</Pill>
+			<ButtonText>{t('Featured', { _tags: 'core' })}</ButtonText>
+		</ButtonPill>
 	);
 };
 
