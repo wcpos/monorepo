@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { useT } from '../../../contexts/translations';
 
@@ -13,7 +13,7 @@ const EmptyTableRow = ({ message }: EmptyTableRowProps) => {
 	const t = useT();
 
 	return (
-		<Box padding="small">
+		<Box>
 			<Text>{message || t('No results found', { _tags: 'core' })}</Text>
 		</Box>
 	);

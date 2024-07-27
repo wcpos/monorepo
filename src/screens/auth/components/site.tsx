@@ -8,8 +8,10 @@ import Dialog from '@wcpos/components/src/dialog';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
 import Suspense from '@wcpos/components/src/suspense';
-import Text from '@wcpos/components/src/text';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
@@ -74,23 +76,13 @@ export const Site = ({ user, site, idx }: Props) => {
 
 	return (
 		<>
-			<Box
-				horizontal
-				padding="medium"
-				space="medium"
-				align="center"
-				style={{ borderTopWidth: idx === 0 ? 0 : 1 }}
-			>
-				<Box>
-					<Avatar source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url)}`} />
-				</Box>
-				<Box fill space="small">
-					<Box space="xSmall">
-						<Text weight="bold">{site.name}</Text>
-						<Text size="small" type="secondary">
-							{site.url}
-						</Text>
-					</Box>
+			<HStack className="p-2" style={{ borderTopWidth: idx === 0 ? 0 : 1 }}>
+				<Avatar source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url)}`} />
+				<VStack className="grow">
+					<VStack className="gap-1">
+						<Text className="font-bold">{site.name}</Text>
+						<Text className="text-sm">{site.url}</Text>
+					</VStack>
 					{wcposVersionPass ? (
 						<Box>
 							<ErrorBoundary>
@@ -105,16 +97,14 @@ export const Site = ({ user, site, idx }: Props) => {
 							<Text type="critical">{t('Please update your WooCommerce POS plugin')}</Text>
 						</Box>
 					)}
-				</Box>
-				<Box>
-					<Icon
-						name="circleXmark"
-						size="large"
-						type="critical"
-						onPress={() => setDeleteDialogOpened(true)}
-					/>
-				</Box>
-			</Box>
+				</VStack>
+				<Icon
+					name="circleXmark"
+					size="large"
+					type="critical"
+					onPress={() => setDeleteDialogOpened(true)}
+				/>
+			</HStack>
 
 			<Dialog
 				opened={deleteDialogOpened}

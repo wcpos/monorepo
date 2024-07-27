@@ -1,12 +1,18 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Query } from '@wcpos/query';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Icon } from '@wcpos/tailwind/src/icon';
-import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectPrimitive,
+	SelectTrigger,
+} from '@wcpos/tailwind/src/select';
 
 import { useT } from '../../../../../contexts/translations';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
@@ -55,14 +61,18 @@ export const StockStatusPill = ({ query }: Props) => {
 			onValueChange={({ value }) => query.where('stock_status', value)}
 		>
 			<SelectPrimitive.Trigger asChild>
-				<Button
-					size="xs"
-					className="rounded-full"
-					leftIcon="warehouseFull"
-					onPress={() => setOpen(!open)}
-				>
-					<ButtonText>{label}</ButtonText>
-				</Button>
+				<View>
+					<ButtonPill
+						size="xs"
+						leftIcon="warehouseFull"
+						variant={isActive ? 'default' : 'secondary'}
+						onPress={() => setOpen(!open)}
+						removable={isActive}
+						onRemove={() => query.where('stock_status', null)}
+					>
+						<ButtonText>{label}</ButtonText>
+					</ButtonPill>
+				</View>
 			</SelectPrimitive.Trigger>
 			<SelectContent>
 				{items.map((item) => (
@@ -71,26 +81,4 @@ export const StockStatusPill = ({ query }: Props) => {
 			</SelectContent>
 		</Select>
 	);
-
-	// return (
-	// 	<Dropdown
-	// 		items={items}
-	// 		opened={open}
-	// 		onClose={() => setOpen(false)}
-	// 		onSelect={(val) => query.where('stock_status', val)}
-	// 		withArrow={false}
-	// 		matchWidth
-	// 	>
-	// 		<Pill
-	// 			icon="warehouseFull"
-	// 			size="small"
-	// 			color={isActive ? 'primary' : 'lightGrey'}
-	// 			onPress={() => setOpen(true)}
-	// 			removable={isActive}
-	// 			onRemove={() => query.where('stock_status', null)}
-	// 		>
-	// 			{label}
-	// 		</Pill>
-	// 	</Dropdown>
-	// );
 };

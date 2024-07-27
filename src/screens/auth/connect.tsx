@@ -1,10 +1,12 @@
 import * as React from 'react';
 import { KeyboardAvoidingView, StyleSheet } from 'react-native';
 
-import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Logo from '@wcpos/components/src/logo';
-import Suspense from '@wcpos/components/src/suspense';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Card } from '@wcpos/tailwind/src/card';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { Logo } from '@wcpos/tailwind/src/logo';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import DemoButton from './components/demo-button';
 import { Sites } from './components/sites';
@@ -21,32 +23,19 @@ const Connect = () => {
 			style={[{ flex: 1 }, StyleSheet.absoluteFill]}
 		>
 			{/* <View nativeID="titlebar" style={{ height: 30 }} /> */}
-			<Box
-				// as={KeyboardAvoidingView}
-				// behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-				distribution="center"
-				align="center"
-				fill
-			>
-				<Box space="medium" align="center" style={{ width: '90%', maxWidth: 460 }}>
+			<Box className="min-h-screen w-full justify-center items-center">
+				<VStack className="gap-3 max-w-[460px] items-center">
 					<Logo />
-					<Box
-						raised
-						rounding="medium"
-						padding="medium"
-						style={{ width: '100%', backgroundColor: 'white' }}
-					>
+					<Card className="p-3 w-full">
 						<UrlInput />
-					</Box>
+					</Card>
 					<ErrorBoundary>
 						<Suspense>
 							<Sites user={user} />
 						</Suspense>
 					</ErrorBoundary>
-					<Box>
-						<DemoButton />
-					</Box>
-				</Box>
+					<DemoButton />
+				</VStack>
 			</Box>
 		</KeyboardAvoidingView>
 	);

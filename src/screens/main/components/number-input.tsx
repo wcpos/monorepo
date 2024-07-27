@@ -1,11 +1,9 @@
 import * as React from 'react';
-import { View, StyleProp, ViewStyle } from 'react-native';
+import { StyleProp, ViewStyle } from 'react-native';
 
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
-import { TextInputContainer } from '@wcpos/components/src/textinput';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Numpad } from '@wcpos/tailwind/src/numpad';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/tailwind/src/popover';
 
@@ -87,35 +85,13 @@ const NumberInput = ({
 	/**
 	 *
 	 */
-	const children =
-		leftAccessory || rightAccessory || prefix ? (
-			<TextInputContainer
-				prefix={prefix}
-				leftAccessory={leftAccessory}
-				rightAccessory={rightAccessory}
-				onPress={() => setOpened(true)}
-				style={style}
-			>
-				{displayValue}
-			</TextInputContainer>
-		) : (
-			<Box border paddingY="xSmall" paddingX="small" rounding="large" style={style}>
-				<Text>{displayValue}</Text>
-			</Box>
-		);
-
-	/**
-	 *
-	 */
-	return disabled ? (
-		<View style={{ flexDirection: 'row' }}>
-			<Box border paddingY="xSmall" paddingX="small" rounding="large">
-				<Text type="disabled">{displayValue}</Text>
-			</Box>
-		</View>
-	) : (
+	return (
 		<Popover>
-			<PopoverTrigger>{children}</PopoverTrigger>
+			<PopoverTrigger asChild>
+				<Button variant="outline">
+					<ButtonText>{displayValue}</ButtonText>
+				</Button>
+			</PopoverTrigger>
 			<PopoverContent side={placement}>
 				<Numpad
 					initialValue={displayValue}
@@ -131,6 +107,54 @@ const NumberInput = ({
 			</PopoverContent>
 		</Popover>
 	);
+
+	/**
+	 *
+	 */
+	// const children =
+	// 	leftAccessory || rightAccessory || prefix ? (
+	// 		<TextInputContainer
+	// 			prefix={prefix}
+	// 			leftAccessory={leftAccessory}
+	// 			rightAccessory={rightAccessory}
+	// 			onPress={() => setOpened(true)}
+	// 			style={style}
+	// 		>
+	// 			{displayValue}
+	// 		</TextInputContainer>
+	// 	) : (
+	// 		<Box border paddingY="xSmall" paddingX="small" rounding="large" style={style}>
+	// 			<Text>{displayValue}</Text>
+	// 		</Box>
+	// 	);
+
+	/**
+	 *
+	 */
+	// return disabled ? (
+	// 	<View style={{ flexDirection: 'row' }}>
+	// 		<Box border paddingY="xSmall" paddingX="small" rounding="large">
+	// 			<Text type="disabled">{displayValue}</Text>
+	// 		</Box>
+	// 	</View>
+	// ) : (
+	// 	<Popover>
+	// 		<PopoverTrigger>{children}</PopoverTrigger>
+	// 		<PopoverContent side={placement}>
+	// 			<Numpad
+	// 				initialValue={displayValue}
+	// 				onChange={(newValue: string) => {
+	// 					valueRef.current = newValue;
+	// 				}}
+	// 				onSubmitEditing={() => {
+	// 					handleSubmit();
+	// 				}}
+	// 				decimalSeparator={decimalSeparator}
+	// 				discounts={showDiscounts}
+	// 			/>
+	// 		</PopoverContent>
+	// 	</Popover>
+	// );
 };
 
 export default NumberInput;

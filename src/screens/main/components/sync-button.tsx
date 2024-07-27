@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import Loader from '@wcpos/components/src/loader';
 import {
 	ContextMenu,
 	ContextMenuContent,
@@ -8,6 +7,7 @@ import {
 	ContextMenuTrigger,
 } from '@wcpos/tailwind/src/context-menu';
 import { Icon } from '@wcpos/tailwind/src/icon';
+import { Loader } from '@wcpos/tailwind/src/loader';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 

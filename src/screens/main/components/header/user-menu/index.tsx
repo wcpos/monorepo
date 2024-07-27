@@ -136,7 +136,7 @@ export const UserMenu = () => {
 						<Text>{t('WordPress Admin', { _tags: 'core' })}</Text>
 					</DropdownMenuItem>
 				)}
-				<DropdownMenuItem onPress={logout}>
+				<DropdownMenuItem onPress={logout} variant="destructive">
 					<Icon name="arrowRightFromBracket" />
 					<Text>{t('Logout', { _tags: 'core' })}</Text>
 				</DropdownMenuItem>
