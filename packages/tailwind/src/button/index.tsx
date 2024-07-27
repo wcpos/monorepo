@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
@@ -90,6 +90,30 @@ const buttonTextVariants = cva(
 	}
 );
 
+const buttonIconVariants = cva('fill-current text-sm', {
+	variants: {
+		variant: {
+			default: 'text-primary-foreground',
+			destructive: 'fill-destructive-foreground',
+			outline: 'fill-accent-foreground',
+			secondary: 'fill-secondary-foreground',
+			ghost: 'fill-accent-foreground',
+			link: 'fill-accent-foreground',
+		},
+		size: {
+			default: '',
+			xs: 'text-xs',
+			sm: '',
+			lg: 'native:text-lg',
+			icon: '',
+		},
+	},
+	defaultVariants: {
+		variant: 'default',
+		size: 'default',
+	},
+});
+
 /**
  *
  */
@@ -116,9 +140,13 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
 				>
 					{leftIcon || rightIcon ? (
 						<HStack>
-							{leftIcon && <Icon name={leftIcon} />}
+							{leftIcon && (
+								<Icon name={leftIcon} className={buttonIconVariants({ variant, size })} />
+							)}
 							{children}
-							{rightIcon && <Icon name={rightIcon} />}
+							{rightIcon && (
+								<Icon name={rightIcon} className={buttonIconVariants({ variant, size })} />
+							)}
 						</HStack>
 					) : (
 						children
@@ -129,6 +157,29 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
 	}
 );
 Button.displayName = 'Button';
+
+/**
+ *
+ */
+const separatorVariants = cva('w-px self-stretch opacity-80', {
+	variants: {
+		variant: {
+			default: 'bg-primary',
+			destructive: 'bg-destructive',
+			outline: 'bg-background',
+			secondary: 'bg-secondary',
+			ghost: 'bg-accent',
+			link: '',
+		},
+	},
+	defaultVariants: {
+		variant: 'default',
+	},
+});
+
+const ButtonGroupSeparator: React.FC = ({ variant }: ButtonProps) => {
+	return <View className={separatorVariants({ variant })} />;
+};
 
 /**
  *
@@ -146,22 +197,24 @@ const ButtonGroup: React.FC<ButtonGroupProps> = ({ children }) => {
 				let classNames = button.props.className || '';
 
 				if (index === 0) {
-					classNames = cn(
-						classNames,
-						'pr-2 rounded-r-none border-r border-gray-300 border-opacity-50'
-					);
+					// first
+					classNames = cn(classNames, 'pr-2 rounded-r-none');
 				} else if (index === buttons.length - 1) {
+					// last
 					classNames = cn(classNames, 'pl-2 rounded-l-none');
 				} else {
-					classNames = cn(
-						classNames,
-						'px-2 rounded-none border-r border-gray-700 border-opacity-50'
-					);
+					// middle
+					classNames = cn(classNames, 'px-2 rounded-none');
 				}
 
-				return React.cloneElement(button, {
-					className: classNames,
-				});
+				return (
+					<React.Fragment key={index}>
+						{index > 0 && <ButtonGroupSeparator {...button.props} />}
+						{React.cloneElement(button, {
+							className: classNames,
+						})}
+					</React.Fragment>
+				);
 			})}
 		</HStack>
 	);

@@ -7,8 +7,8 @@ import Icon, { IconName } from '@wcpos/components/src/icon';
 import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
 
 import { reducer, ACTIONS, Action, Config, CalculatorState } from './reducer';
+import { Box } from '../box';
 import { Button, ButtonText } from '../button';
-import { HStack } from '../hstack';
 import { Input } from '../input';
 import { VStack } from '../vstack';
 
@@ -177,103 +177,56 @@ export const Numpad = ({
 				}}
 				readonly
 				onKeyPress={handleKeyPress}
-				onChangeText={() => {}} // NOTE: needs onChangeText to become controlled
-				// rightAccessory={
-				// 	<Box paddingRight="small">
-				// 		<Icon name="deleteLeft" onPress={() => dispatch({ type: ACTIONS.DELETE_DIGIT })} />
-				// 	</Box>
-				// }
+				onChangeText={() => {}}
 			/>
-			<HStack space="xs">
-				<VStack space="xs">
-					<HStack space="xs">
-						<Button onPress={() => addDigit('1')}>
-							<ButtonText>1</ButtonText>
+			<Box className={`grid  gap-1 ${discounts ? 'grid-cols-4' : 'grid-cols-3'}`}>
+				{[
+					['1', '2', '3'],
+					['4', '5', '6'],
+					['7', '8', '9'],
+					['+/-', '0', decimalSeparator],
+				].map((row, rowIndex) =>
+					row.map((value, colIndex) => (
+						<Button
+							key={`${rowIndex}-${colIndex}`}
+							onPress={() =>
+								value === '+/-' ? dispatch({ type: ACTIONS.SWITCH_SIGN }) : addDigit(value)
+							}
+						>
+							<ButtonText>{value}</ButtonText>
 						</Button>
-						<Button onPress={() => addDigit('2')}>
-							<ButtonText>2</ButtonText>
-						</Button>
-						<Button onPress={() => addDigit('3')}>
-							<ButtonText>3</ButtonText>
-						</Button>
-					</HStack>
-					<HStack space="xs">
-						<Button onPress={() => addDigit('4')}>
-							<ButtonText>4</ButtonText>
-						</Button>
-						<Button onPress={() => addDigit('5')}>
-							<ButtonText>5</ButtonText>
-						</Button>
-						<Button onPress={() => addDigit('6')}>
-							<ButtonText>6</ButtonText>
-						</Button>
-					</HStack>
-					<HStack space="xs">
-						<Button onPress={() => addDigit('7')}>
-							<ButtonText>7</ButtonText>
-						</Button>
-						<Button onPress={() => addDigit('8')}>
-							<ButtonText>8</ButtonText>
-						</Button>
-						<Button onPress={() => addDigit('9')}>
-							<ButtonText>9</ButtonText>
-						</Button>
-					</HStack>
-					<HStack space="xs">
-						<Button onPress={() => dispatch({ type: ACTIONS.SWITCH_SIGN })}>
-							<Icon name="plusMinus" size="xSmall" type="inverse" />
-						</Button>
-						<Button onPress={() => addDigit('0')}>
-							<ButtonText>0</ButtonText>
-						</Button>
-						<Button onPress={() => addDigit(decimalSeparator)}>
-							<ButtonText>{decimalSeparator}</ButtonText>
-						</Button>
-					</HStack>
-				</VStack>
-				{discounts && (
-					<VStack space="xs">
-						{discounts.map((discount) => (
-							<Button
-								key={discount}
-								onPress={() =>
-									dispatch({
-										type: ACTIONS.APPLY_DISCOUNT,
-										payload: { discount },
-									})
-								}
-							>
-								<ButtonText>{`${discount}%`}</ButtonText>
-							</Button>
-						))}
-					</VStack>
+					))
 				)}
-				{calculator && (
-					<VStack space="xs">
-						<Button onPress={() => chooseOperation('÷')}>
-							<Icon name="divide" size="xSmall" type="inverse" />
+				{calculator &&
+					['÷', '*', '+', '-'].map((op) => (
+						<Button key={op} onPress={() => chooseOperation(op)}>
+							<Icon name={iconMap[op]} size="xSmall" type="inverse" />
 						</Button>
-						<Button onPress={() => chooseOperation('*')}>
-							<Icon name="xmark" size="xSmall" type="inverse" />
+					))}
+				{discounts &&
+					discounts.map((discount) => (
+						<Button
+							key={discount}
+							onPress={() =>
+								dispatch({
+									type: ACTIONS.APPLY_DISCOUNT,
+									payload: { discount },
+								})
+							}
+						>
+							<ButtonText>{`${discount}%`}</ButtonText>
 						</Button>
-						<Button onPress={() => chooseOperation('+')}>
-							<Icon name="plus" size="xSmall" type="inverse" />
-						</Button>
-						<Button onPress={() => chooseOperation('-')}>
-							<Icon name="minus" size="xSmall" type="inverse" />
-						</Button>
-					</VStack>
-				)}
-			</HStack>
+					))}
+			</Box>
 			{calculator && (
-				<HStack space="xs">
+				<Box className="grid grid-cols-2 gap-1">
 					<Button onPress={() => dispatch({ type: ACTIONS.CLEAR })}>
 						<ButtonText>Clear</ButtonText>
 					</Button>
 					<Button onPress={() => dispatch({ type: ACTIONS.EVALUATE })}>
 						<Icon name="equals" size="xSmall" />
 					</Button>
-				</HStack>
+				</Box>
 			)}
 		</VStack>
 	);
