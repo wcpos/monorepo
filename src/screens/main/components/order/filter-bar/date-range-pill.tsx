@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { ButtonGroup, Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { Button, ButtonText, ButtonGroupSeparator } from '@wcpos/tailwind/src/button';
+import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/tailwind/src/popover';
 import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
 
@@ -11,34 +12,29 @@ export const DateRangePill = () => {
 	const t = useT();
 
 	return (
-		<ButtonGroup>
+		<HStack className="gap-0">
 			<Select>
 				<SelectPrimitive.Trigger asChild>
-					<Button size="xs" className="rounded-full" leftIcon="calendarDays">
+					<Button size="xs" className="rounded-full pr-2 rounded-r-none" leftIcon="calendarDays">
 						<ButtonText>{t('Date Range', { _tags: 'core' })}</ButtonText>
 					</Button>
 				</SelectPrimitive.Trigger>
 				<SelectContent>
-					<SelectItem label="Apple" value="apple">
-						Apple
+					<SelectItem label={t('Date Created', { _tags: 'core' })} value="date_created_gmt">
+						{t('Date Created', { _tags: 'core' })}
 					</SelectItem>
-					<SelectItem label="Banana" value="banana">
-						Banana
+					<SelectItem label={t('Date Completed', { _tags: 'core' })} value="date_completed_gmt">
+						{t('Date Completed', { _tags: 'core' })}
 					</SelectItem>
-					<SelectItem label="Blueberry" value="blueberry">
-						Blueberry
-					</SelectItem>
-					<SelectItem label="Grapes" value="grapes">
-						Grapes
-					</SelectItem>
-					<SelectItem label="Pineapple" value="pineapple">
-						Pineapple
+					<SelectItem label={t('Date Paid', { _tags: 'core' })} value="date_paid_gmt">
+						{t('Date Paid', { _tags: 'core' })}
 					</SelectItem>
 				</SelectContent>
 			</Select>
+			<ButtonGroupSeparator />
 			<Popover>
 				<PopoverTrigger asChild>
-					<Button size="xs" className="rounded-full">
+					<Button size="xs" className="px-2 rounded-none">
 						<ButtonText>{t('Today', { _tags: 'core' })}</ButtonText>
 					</Button>
 				</PopoverTrigger>
@@ -46,7 +42,8 @@ export const DateRangePill = () => {
 					<DateRangeCalendar />
 				</PopoverContent>
 			</Popover>
-			<Button className="rounded-full" size="xs" leftIcon="xmark" />
-		</ButtonGroup>
+			<ButtonGroupSeparator />
+			<Button className="rounded-full pl-2 rounded-l-none" size="xs" leftIcon="xmark" />
+		</HStack>
 	);
 };

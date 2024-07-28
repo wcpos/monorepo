@@ -18,7 +18,7 @@ import { useAppState } from '../../../contexts/app-state';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import CustomerPill from '../components/order/filter-bar/customer-pill';
 import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
-import StatusPill from '../components/order/filter-bar/status-pill';
+import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 

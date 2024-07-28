@@ -1,12 +1,21 @@
 import * as React from 'react';
 
+import isString from 'lodash/isString';
 import { useObservableSuspense, ObservableResource, useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import Dropdown from '@wcpos/components/src/dropdown';
-import Pill from '@wcpos/components/src/pill';
 import type { ProductCollection, StoreDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectPrimitive,
+	SelectGroup,
+	SelectLabel,
+	SelectSeparator,
+} from '@wcpos/tailwind/src/select';
 
 import { useT } from '../../../../../contexts/translations';
 
@@ -39,74 +48,43 @@ export const StorePill = ({ resource, query }: Props) => {
 	/**
 	 *
 	 */
-	const getLabel = React.useCallback(
-		(id) => {
-			const number = Number(id);
-			if (Number.isInteger(number) && !isNaN(number)) {
-				const store = stores.find((s) => s.id === number);
-				return store ? store.name : null;
+	const value = React.useMemo(() => {
+		const number = Number(selected);
+		if (Number.isInteger(number) && !isNaN(number)) {
+			const store = (stores || []).find((s) => s.id === number);
+			if (store) {
+				return { value: number, label: store.name };
+			}
+			return store ? store.name : null;
+		} else {
+			switch (selected) {
+				case 'woocommerce-pos':
+					return { value: 'woocommerce-pos', label: t('POS', { _tags: 'core' }) };
+				case 'checkout':
+					return { value: 'checkout', label: t('Online Store', { _tags: 'core' }) };
+				case 'admin':
+					return { value: 'admin', label: t('WP Admin', { _tags: 'core' }) };
+			}
+		}
+	}, [selected, stores, t]);
+
+	/**
+	 *
+	 */
+	const handleSelect = React.useCallback(
+		({ value, label }) => {
+			if (isString(value)) {
+				query.where('meta_data', { $elemMatch: { key: '_pos_store', value: null } });
+				query.where('created_via', value);
 			} else {
-				switch (id) {
-					case 'woocommerce-pos':
-						return t('POS', { _tags: 'core' });
-					case 'checkout':
-						return t('Online Store', { _tags: 'core' });
-					case 'admin':
-						return t('WP Admin', { _tags: 'core' });
-				}
+				query.where('created_via', null);
+				query.where('meta_data', {
+					$elemMatch: { key: '_pos_store', value: String(value) },
+				});
 			}
 		},
-		[stores, t]
+		[query]
 	);
-
-	/**
-	 *
-	 */
-	const items = React.useMemo(() => {
-		const items = [
-			{
-				label: getLabel('woocommerce-pos'),
-				value: 'woocommerce-pos',
-				action: () => query.where('created_via', 'woocommerce-pos'),
-			},
-			{
-				label: getLabel('checkout'),
-				value: 'checkout',
-				action: () => query.where('created_via', 'checkout'),
-			},
-			{
-				label: getLabel('admin'),
-				value: 'admin',
-				action: () => query.where('created_via', 'admin'),
-			},
-			{ label: '__' },
-		];
-
-		stores.map((store) => {
-			items.push({
-				label: store.name,
-				value: store.id,
-				action: (id) => {
-					query.where('meta_data', {
-						$elemMatch: { key: '_pos_store', value: String(id) },
-					});
-				},
-			});
-		});
-
-		return items;
-	}, [getLabel, stores, query]);
-
-	/**
-	 *
-	 */
-	const label = React.useMemo(() => {
-		if (!selected) {
-			return t('Select Store', { _tags: 'core' });
-		}
-
-		return getLabel(selected);
-	}, [getLabel, selected, t]);
 
 	/**
 	 *
@@ -120,24 +98,44 @@ export const StorePill = ({ resource, query }: Props) => {
 	 *
 	 */
 	return (
-		<Dropdown
-			items={items}
-			opened={open}
-			onClose={() => setOpen(false)}
-			withArrow={false}
-			onSelect={() => {}}
-			placement="bottom-start"
-		>
-			<Pill
-				icon="shop"
-				size="small"
-				color={isActive ? 'primary' : 'lightGrey'}
-				onPress={() => setOpen(true)}
-				removable={isActive}
-				onRemove={handleRemove}
-			>
-				{label}
-			</Pill>
-		</Dropdown>
+		<Select value={value} onOpenChange={setOpen} onValueChange={handleSelect}>
+			<SelectPrimitive.Trigger asChild>
+				<ButtonPill
+					size="xs"
+					leftIcon="shop"
+					variant={isActive ? 'default' : 'secondary'}
+					onPress={() => setOpen(!open)}
+					removable={isActive}
+					onRemove={handleRemove}
+				>
+					<ButtonText>{value?.label || t('Created via', { _tags: 'core' })}</ButtonText>
+				</ButtonPill>
+			</SelectPrimitive.Trigger>
+			<SelectContent className="min-w-[12rem]">
+				<SelectGroup>
+					<SelectLabel>{t('Created via', { _tags: 'core' })}</SelectLabel>
+					<SelectItem value="woocommerce-pos" label={t('POS', { _tags: 'core' })}>
+						{t('POS', { _tags: 'core' })}
+					</SelectItem>
+					<SelectItem value="checkout" label={t('Online Store', { _tags: 'core' })}>
+						{t('Online Store', { _tags: 'core' })}
+					</SelectItem>
+					<SelectItem value="admin" label={t('WP Admin', { _tags: 'core' })}>
+						{t('WP Admin', { _tags: 'core' })}
+					</SelectItem>
+				</SelectGroup>
+				<SelectSeparator />
+				<SelectGroup>
+					<SelectLabel>{t('Store', { _tags: 'core' })}</SelectLabel>
+					{(stores || []).map((store) => {
+						return (
+							<SelectItem key={store.id} value={store.id} label={store.name}>
+								{store.name}
+							</SelectItem>
+						);
+					})}
+				</SelectGroup>
+			</SelectContent>
+		</Select>
 	);
 };

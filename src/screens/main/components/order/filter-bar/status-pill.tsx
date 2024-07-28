@@ -3,22 +3,22 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import Dropdown from '@wcpos/components/src/dropdown';
-import Pill from '@wcpos/components/src/pill';
-import type { ProductCollection } from '@wcpos/database';
+import type { OrderCollection } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
 
 import { useT } from '../../../../../contexts/translations';
 import { useOrderStatusLabel } from '../../../hooks/use-order-status-label';
 
 interface Props {
-	query: Query<ProductCollection>;
+	query: Query<OrderCollection>;
 }
 
 /**
  *
  */
-const StatusPill = ({ query }: Props) => {
+export const StatusPill = ({ query }: Props) => {
 	const selected = useObservableState(
 		query.params$.pipe(map(() => query.findSelector('status'))),
 		query.findSelector('status')
@@ -26,45 +26,35 @@ const StatusPill = ({ query }: Props) => {
 	const t = useT();
 	const isActive = !!selected;
 	const [open, setOpen] = React.useState(false);
-	const { items, getLabel } = useOrderStatusLabel();
+	const { items } = useOrderStatusLabel();
+	const value = items.find((item) => item.value === selected);
 
 	/**
 	 *
 	 */
-	const label = React.useMemo(() => {
-		if (!selected) {
-			return t('Select Status', { _tags: 'core' });
-		}
-
-		const label = getLabel(selected);
-		if (label) {
-			return label;
-		}
-
-		return String(selected);
-	}, [getLabel, selected, t]);
-
 	return (
-		<Dropdown
-			items={items}
-			opened={open}
-			onClose={() => setOpen(false)}
-			withArrow={false}
-			onSelect={(val) => query.where('status', val)}
-			placement="bottom-start"
+		<Select
+			value={value}
+			onOpenChange={setOpen}
+			onValueChange={({ value }) => query.where('status', value)}
 		>
-			<Pill
-				icon="cartCircleCheck"
-				size="small"
-				color={isActive ? 'primary' : 'lightGrey'}
-				onPress={() => setOpen(true)}
-				removable={isActive}
-				onRemove={() => query.where('status', null)}
-			>
-				{label}
-			</Pill>
-		</Dropdown>
+			<SelectPrimitive.Trigger asChild>
+				<ButtonPill
+					size="xs"
+					leftIcon="cartCircleCheck"
+					variant={isActive ? 'default' : 'secondary'}
+					onPress={() => setOpen(!open)}
+					removable={isActive}
+					onRemove={() => query.where('status', null)}
+				>
+					<ButtonText>{value?.label || t('Status', { _tags: 'core' })}</ButtonText>
+				</ButtonPill>
+			</SelectPrimitive.Trigger>
+			<SelectContent>
+				{items.map((item) => (
+					<SelectItem key={item.label} label={item.label} value={item.value} />
+				))}
+			</SelectContent>
+		</Select>
 	);
 };
-
-export default StatusPill;
