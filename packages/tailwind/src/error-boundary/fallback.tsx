@@ -15,11 +15,11 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 	return (
 		<HStack className="p-2 bg-error">
 			<Icon name="triangleExclamation" className="w-7 h-7 fill-error-foreground" />
-			<VStack>
+			<VStack className="grow gap-1">
 				<Text className="text-error-foreground font-bold">Something went wrong:</Text>
 				<Text className="text-error-foreground">{error.message}</Text>
 			</VStack>
-			<Button variant="ghost" onPress={resetErrorBoundary}>
+			<Button variant="ghost" size="icon" className="rounded-full" onPress={resetErrorBoundary}>
 				<Icon name="xmark" className="fill-error-foreground" />
 			</Button>
 		</HStack>

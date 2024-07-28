@@ -147,7 +147,7 @@ const SelectItem = React.forwardRef<
 	>
 		<View className="absolute left-2 native:left-3.5 flex h-3.5 native:pt-px w-3.5 items-center justify-center">
 			<SelectPrimitive.ItemIndicator>
-				<Icon name="check" size={16} strokeWidth={3} className="text-popover-foreground" />
+				<Icon name="check" className="text-popover-foreground" />
 			</SelectPrimitive.ItemIndicator>
 		</View>
 		<SelectPrimitive.ItemText className="text-sm native:text-lg text-popover-foreground native:text-base web:group-focus:text-accent-foreground" />
