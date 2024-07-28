@@ -18,7 +18,7 @@ const buttonVariants = cva(
 				outline:
 					'border border-input bg-background web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent',
 				secondary: 'bg-secondary web:hover:opacity-80 active:opacity-80',
-				ghost: 'web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent',
+				ghost: 'web:hover:bg-accent/90 web:hover:text-accent-foreground active:bg-accent',
 				link: 'web:hover:underline web:focus:underline',
 			},
 			size: {
@@ -237,22 +237,29 @@ const ButtonPill = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonPi
 	({ className, removable, onRemove, ...props }, ref) => {
 		return removable ? (
 			<ButtonGroup>
-				<Button className={cn(className, 'rounded-full')} {...props} />
+				<Button className={cn(className, 'rounded-full')} ref={ref} {...props} />
 				<Button
 					className={cn(className, 'rounded-full')}
-					{...props}
+					variant={props.variant}
+					size={props.size}
 					leftIcon="xmark"
-					rightIcon={undefined}
-					children={undefined}
 					onPress={onRemove}
 				/>
 			</ButtonGroup>
 		) : (
-			<Button className={cn(className, 'rounded-full')} {...props} />
+			<Button className={cn(className, 'rounded-full')} ref={ref} {...props} />
 		);
 	}
 );
 ButtonPill.displayName = 'ButtonPill';
 
-export { Button, Text as ButtonText, ButtonGroup, ButtonPill, buttonTextVariants, buttonVariants };
+export {
+	Button,
+	Text as ButtonText,
+	ButtonGroup,
+	ButtonPill,
+	ButtonGroupSeparator,
+	buttonTextVariants,
+	buttonVariants,
+};
 export type { ButtonProps };
