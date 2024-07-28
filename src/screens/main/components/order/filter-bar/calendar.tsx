@@ -11,10 +11,16 @@ import {
 } from 'date-fns';
 import * as Locales from 'date-fns/locale';
 
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Calendar } from '@wcpos/tailwind/src/calendar';
 import type { DateRange } from '@wcpos/tailwind/src/calendar';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { VStack } from '@wcpos/tailwind/src/vstack';
+
+import { useT } from '../../../../../contexts/translations';
 
 export const DateRangeCalendar = () => {
+	const t = useT();
 	const today = new Date();
 	const [date, setDate] = React.useState<DateRange | undefined>({
 		from: today,
@@ -56,15 +62,27 @@ export const DateRangeCalendar = () => {
 	};
 
 	return (
-		<>
-			<div className="button-group">
-				<button onClick={setToday}>Today</button>
-				<button onClick={setYesterday}>Yesterday</button>
-				<button onClick={setThisWeek}>This Week</button>
-				<button onClick={setLastWeek}>Last Week</button>
-				<button onClick={setThisMonth}>This Month</button>
-				<button onClick={setLastMonth}>Last Month</button>
-			</div>
+		<HStack>
+			<VStack>
+				<Button onPress={setToday}>
+					<ButtonText>{t('Today', { _tags: 'core' })}</ButtonText>
+				</Button>
+				<Button onPress={setYesterday}>
+					<ButtonText>{t('Yesterday', { _tags: 'core' })}</ButtonText>
+				</Button>
+				<Button onPress={setThisWeek}>
+					<ButtonText>{t('This Week', { _tags: 'core' })}</ButtonText>
+				</Button>
+				<Button onPress={setLastWeek}>
+					<ButtonText>{t('Last Week', { _tags: 'core' })}</ButtonText>
+				</Button>
+				<Button onPress={setThisMonth}>
+					<ButtonText>{t('This Month', { _tags: 'core' })}</ButtonText>
+				</Button>
+				<Button onPress={setLastMonth}>
+					<ButtonText>{t('Last Month', { _tags: 'core' })}</ButtonText>
+				</Button>
+			</VStack>
 			<Calendar
 				locale={Locales.es}
 				initialFocus
@@ -77,6 +95,6 @@ export const DateRangeCalendar = () => {
 				onSelect={setDate}
 				selected={date}
 			/>
-		</>
+		</HStack>
 	);
 };

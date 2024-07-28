@@ -15,9 +15,9 @@ import { useQuery } from '@wcpos/query';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 
 import { useAppState } from '../../../contexts/app-state';
-import { DateRange } from '../components/order/date-range';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import CustomerPill from '../components/order/filter-bar/customer-pill';
+import { DateRangePill } from '../components/order/filter-bar/date-range-pill';
 import StatusPill from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
@@ -154,7 +154,7 @@ const FilterBar = ({ query }) => {
 				<CashierPill resource={cashierResource} query={query} />
 			</Suspense>
 			<StorePill resource={storesResource} query={query} />
-			<DateRange query={query} />
+			<DateRangePill query={query} />
 		</HStack>
 	);
 };

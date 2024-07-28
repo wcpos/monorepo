@@ -1,18 +1,11 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectPrimitive,
-	SelectTrigger,
-} from '@wcpos/tailwind/src/select';
+import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
 
 import { useT } from '../../../../../contexts/translations';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';
@@ -33,46 +26,30 @@ export const StockStatusPill = ({ query }: Props) => {
 	) as string | undefined;
 	const t = useT();
 	const isActive = !!selected;
-	const { items, getLabel } = useStockStatusLabel();
+	const { items } = useStockStatusLabel();
 	const [open, setOpen] = React.useState(false);
-
-	/**
-	 *
-	 */
-	const label = React.useMemo(() => {
-		if (!selected) {
-			return t('Stock Status', { _tags: 'core' });
-		}
-
-		const label = getLabel(selected);
-		if (label) {
-			return label;
-		}
-
-		return String(selected);
-	}, [getLabel, selected, t]);
+	const value = items.find((item) => item.value === selected);
 
 	/**
 	 *
 	 */
 	return (
 		<Select
+			value={value}
 			onOpenChange={setOpen}
 			onValueChange={({ value }) => query.where('stock_status', value)}
 		>
 			<SelectPrimitive.Trigger asChild>
-				<View>
-					<ButtonPill
-						size="xs"
-						leftIcon="warehouseFull"
-						variant={isActive ? 'default' : 'secondary'}
-						onPress={() => setOpen(!open)}
-						removable={isActive}
-						onRemove={() => query.where('stock_status', null)}
-					>
-						<ButtonText>{label}</ButtonText>
-					</ButtonPill>
-				</View>
+				<ButtonPill
+					size="xs"
+					leftIcon="warehouseFull"
+					variant={isActive ? 'default' : 'secondary'}
+					onPress={() => setOpen(!open)}
+					removable={isActive}
+					onRemove={() => query.where('stock_status', null)}
+				>
+					<ButtonText>{value?.label || t('Stock Status', { _tags: 'core' })}</ButtonText>
+				</ButtonPill>
 			</SelectPrimitive.Trigger>
 			<SelectContent>
 				{items.map((item) => (
