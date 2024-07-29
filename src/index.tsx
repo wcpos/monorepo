@@ -5,9 +5,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // import { enableFreeze } from 'react-native-screens';
 import { ThemeProvider } from 'styled-components/native';
 
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Portal from '@wcpos/components/src/portal';
 import { SnackbarProvider } from '@wcpos/components/src/snackbar';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { PortalHost } from '@wcpos/tailwind/src/portal';
 import getTheme from '@wcpos/themes';
 
 import { AppStateProvider } from './contexts/app-state';
@@ -79,11 +79,11 @@ const App = () => {
 									<TranslationProvider>
 										<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
 											<SnackbarProvider>
-												<Portal.Provider>
-													<RootNavigator />
-													<Portal.Manager />
-												</Portal.Provider>
+												<RootNavigator />
 											</SnackbarProvider>
+											<ErrorBoundary>
+												<PortalHost />
+											</ErrorBoundary>
 										</SafeAreaProviderCompat>
 									</TranslationProvider>
 								</ErrorBoundary>

@@ -23,7 +23,7 @@ import Customer from '../components/order/customer';
 import PaymentMethod from '../components/order/payment-method';
 import Status from '../components/order/status';
 import Total from '../components/order/total';
-import UiSettings from '../components/ui-settings';
+import { UISettings } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -83,12 +83,7 @@ const Orders = () => {
 							<ErrorBoundary>
 								<SearchBar query={query} />
 							</ErrorBoundary>
-							<ErrorBoundary>
-								<UiSettings
-									uiSettings={uiSettings}
-									title={t('Order Settings', { _tags: 'core' })}
-								/>
-							</ErrorBoundary>
+							<UISettings uiSettings={uiSettings} title={t('Order Settings', { _tags: 'core' })} />
 						</HStack>
 						<ErrorBoundary>
 							<FilterBar query={query} />

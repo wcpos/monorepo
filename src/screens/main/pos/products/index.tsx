@@ -18,7 +18,7 @@ import DataTable from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
 import Search from '../../components/product/search';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
-import UISettings from '../../components/ui-settings';
+import { UISettings } from '../../components/ui-settings';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useAddProduct } from '../hooks/use-add-product';
@@ -111,12 +111,10 @@ const POSProducts = ({ isColumn = false }) => {
 								<ErrorBoundary>
 									<Search query={query} addProduct={addProduct} addVariation={addVariation} />
 								</ErrorBoundary>
-								<ErrorBoundary>
-									<UISettings
-										uiSettings={uiSettings}
-										title={t('Product Settings', { _tags: 'core' })}
-									/>
-								</ErrorBoundary>
+								<UISettings
+									uiSettings={uiSettings}
+									title={t('Product Settings', { _tags: 'core' })}
+								/>
 							</HStack>
 							<ErrorBoundary>
 								<FilterBar query={query} />

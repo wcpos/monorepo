@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 
-import Button from '@wcpos/components/src/button';
 import useSnackbar from '@wcpos/components/src/snackbar';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../../contexts/translations';
@@ -57,18 +57,13 @@ const VoidButton = () => {
 	 */
 	return (
 		<Button
-			fill
-			size="large"
-			title={t('Void', { _tags: 'core' })}
+			size="lg"
 			onPress={handleRemove}
-			type="critical"
-			style={{
-				flex: 1,
-				borderTopLeftRadius: 0,
-				borderTopRightRadius: 0,
-				borderBottomRightRadius: 0,
-			}}
-		/>
+			variant="destructive"
+			className="basis-1/4 rounded-t-none rounded-br-none"
+		>
+			<ButtonText>{t('Void', { _tags: 'core' })}</ButtonText>
+		</Button>
 	);
 };
 

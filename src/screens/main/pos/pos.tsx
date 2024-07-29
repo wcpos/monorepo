@@ -6,7 +6,6 @@ import { useTheme } from 'styled-components/native';
 import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
-import { PortalHost } from '@wcpos/tailwind/src/portal';
 
 import POSColumns from './columns';
 import { useCurrentOrder } from './contexts/current-order';
@@ -37,9 +36,6 @@ const POS = () => {
 						{dimensions.width >= theme.screens.small ? <POSColumns /> : <POSTabs />}
 					</Suspense>
 				</TaxRatesProvider>
-			</ErrorBoundary>
-			<ErrorBoundary>
-				<PortalHost />
 			</ErrorBoundary>
 		</>
 	);

@@ -7,44 +7,33 @@ import { Icon } from '@wcpos/tailwind/src/icon';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/tailwind/src/tooltip';
 
-import { useT } from '../../../../../contexts/translations';
+import { useT } from '../../../../contexts/translations';
+import { UISettingID, UISettingState, useUISettings } from '../../contexts/ui-settings';
 
-interface Props {
-	onAdd?: (doc: import('@wcpos/database').CustomerDocument) => void;
+interface Props<T extends UISettingID> {
+	uiSettings: UISettingState<T>;
+	title: string;
 }
 
-export const AddNewCustomer = ({ onAdd }: Props) => {
+export const UISettings = <T extends UISettingID>({ uiSettings, title }: Props<T>) => {
 	const [open, setOpen] = React.useState(false);
 	const t = useT();
-
-	/**
-	 * Close onAdd
-	 */
-	const handleAdd = React.useCallback(
-		(doc) => {
-			if (onAdd) {
-				onAdd(doc);
-			}
-			setOpen(false);
-		},
-		[onAdd]
-	);
 
 	return (
 		<ErrorBoundary>
 			<Tooltip delayDuration={150}>
 				<TooltipTrigger asChild>
 					<Button variant="ghost" className="rounded-full" onPress={() => setOpen(true)}>
-						<Icon name="userPlus" />
+						<Icon name="sliders" />
 					</Button>
 				</TooltipTrigger>
 				<TooltipContent>
-					<Text>{t('Add new customer', { _tags: 'core' })}</Text>
+					<Text>{title}</Text>
 				</TooltipContent>
 			</Tooltip>
 			<Dialog open={open} onOpenChange={setOpen}>
 				{/* <DialogTitle>{t('Add new customer', { _tags: 'core' })}</DialogTitle> */}
-				<DialogContent>Test</DialogContent>
+				<DialogContent>{title}</DialogContent>
 			</Dialog>
 		</ErrorBoundary>
 	);

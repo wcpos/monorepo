@@ -14,7 +14,7 @@ import SearchBar from './search-bar';
 import { useT } from '../../../contexts/translations';
 import { AddNewCustomer } from '../components/customer/add-new';
 import DataTable from '../components/data-table';
-import UiSettings from '../components/ui-settings';
+import { UISettings } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -49,7 +49,7 @@ const Customers = () => {
 					<HStack className="p-2">
 						<SearchBar query={query} />
 						<AddNewCustomer />
-						<UiSettings uiSettings={uiSettings} title={t('Customer Settings', { _tags: 'core' })} />
+						<UISettings uiSettings={uiSettings} title={t('Customer Settings', { _tags: 'core' })} />
 					</HStack>
 				</CardHeader>
 				<CardContent className="flex-1 p-0">

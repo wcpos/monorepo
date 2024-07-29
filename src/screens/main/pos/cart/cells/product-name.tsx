@@ -2,23 +2,16 @@ import * as React from 'react';
 
 import find from 'lodash/find';
 
-import Box from '@wcpos/components/src/box';
 import { EdittableText } from '@wcpos/components/src/edittable-text';
 import Icon from '@wcpos/components/src/icon';
-import Text from '@wcpos/components/src/text';
-import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from '@wcpos/tailwind/src/dialog';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/tailwind/src/dialog';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import { EditButton } from './edit-button';
 import { EditLineItemModal } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
@@ -37,6 +30,7 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 	const { display } = column;
 	const { updateLineItem } = useUpdateLineItem();
 	const t = useT();
+	const [openEditDialog, setOpenEditDialog] = React.useState(false);
 
 	/**
 	 *
@@ -67,42 +61,56 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 	 *
 	 */
 	return (
-		<Box horizontal space="xSmall" style={{ width: '100%' }}>
-			<Box fill space="xSmall">
-				<EdittableText weight="bold" onChange={(name) => updateLineItem(uuid, { name })}>
-					{item.name}
-				</EdittableText>
-				{show('sku') && <Text size="small">{item.sku}</Text>}
+		<VStack className="w-full">
+			<HStack>
+				<Button
+					variant="outline"
+					//onChange={(name) => updateLineItem(uuid, { name })}
+				>
+					<ButtonText className="font-bold">{item.name}</ButtonText>
+				</Button>
+				<Tooltip delayDuration={150}>
+					<TooltipTrigger asChild>
+						<Button
+							variant="ghost"
+							className="rounded-full"
+							onPress={() => setOpenEditDialog(true)}
+						>
+							<Icon name="ellipsisVertical" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent>
+						<Text>{t('Edit {name}', { _tags: 'core', name: item.name })}</Text>
+					</TooltipContent>
+				</Tooltip>
+			</HStack>
+			{show('sku') && <Text size="small">{item.sku}</Text>}
+			{attributes.length > 0 && (
+				<VStack className="gap-1">
+					{attributes.map((meta) => {
+						return (
+							<HStack key={meta.id || meta.display_key || meta.key}>
+								<Text
+									className="text-sm text-muted"
+									numberOfLines={1}
+								>{`${meta.display_key || meta.key}:`}</Text>
+								<Text className="text-sm" numberOfLines={1}>
+									{meta.display_value || meta.value}
+								</Text>
+							</HStack>
+						);
+					})}
+				</VStack>
+			)}
 
-				{attributes.map((meta) => {
-					return (
-						<Box space="xxSmall" key={meta.id || meta.display_key || meta.key} horizontal>
-							<Text size="small" type="secondary">{`${meta.display_key || meta.key}:`}</Text>
-							<Text size="small">{meta.display_value || meta.value}</Text>
-						</Box>
-					);
-				})}
-			</Box>
-			<Box distribution="center">
-				<Dialog>
-					<DialogTrigger>
-						<Tooltip delayDuration={150}>
-							<TooltipTrigger>
-								<Icon name="ellipsisVertical" />
-							</TooltipTrigger>
-							<TooltipContent>
-								<Text>{t('Edit {name}', { _tags: 'core', name: item.name })}</Text>
-							</TooltipContent>
-						</Tooltip>
-					</DialogTrigger>
-					<DialogContent>
-						<DialogHeader>
-							<DialogTitle>{t('Edit {name}', { _tags: 'core', name: item.name })}</DialogTitle>
-						</DialogHeader>
-						<EditLineItemModal uuid={uuid} item={item} />
-					</DialogContent>
-				</Dialog>
-			</Box>
-		</Box>
+			<Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>{t('Edit {name}', { _tags: 'core', name: item.name })}</DialogTitle>
+					</DialogHeader>
+					<EditLineItemModal uuid={uuid} item={item} />
+				</DialogContent>
+			</Dialog>
+		</VStack>
 	);
 };

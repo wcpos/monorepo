@@ -4,8 +4,8 @@ import { useNavigation, StackActions } from '@react-navigation/native';
 import { useObservableEagerState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
-import Button from '@wcpos/components/src/button';
 import { useSnackbar } from '@wcpos/components/src/snackbar/use-snackbar';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 
 import { useT } from '../../../../../contexts/translations';
 import usePushDocument from '../../../contexts/use-push-document';
@@ -50,19 +50,16 @@ const PayButton = () => {
 	 */
 	return (
 		<Button
-			fill
-			size="large"
-			title={t('Checkout {order_total}', { order_total: format(total || 0), _tags: 'core' })}
+			size="lg"
 			onPress={handlePay}
-			type="success"
-			style={{
-				flex: 3,
-				borderTopLeftRadius: 0,
-				borderTopRightRadius: 0,
-				borderBottomLeftRadius: 0,
-			}}
+			variant="success"
+			className="basis-3/4 rounded-t-none rounded-bl-none"
 			loading={loading}
-		/>
+		>
+			<ButtonText>
+				{t('Checkout {order_total}', { order_total: format(total || 0), _tags: 'core' })}
+			</ButtonText>
+		</Button>
 	);
 };
 

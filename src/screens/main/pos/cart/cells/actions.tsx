@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import Icon from '@wcpos/components/src/icon';
+import { Button } from '@wcpos/tailwind/src/button';
+import { Icon } from '@wcpos/tailwind/src/icon';
 
 import { useRemoveLineItem } from '../../hooks/use-remove-line-item';
 
@@ -20,11 +21,8 @@ export const Actions = ({ uuid, type, item }: ActionProps) => {
 	 *
 	 */
 	return (
-		<Icon
-			name="circleXmark"
-			size="xLarge"
-			onPress={() => removeLineItem(uuid, type)}
-			type="critical"
-		/>
+		<Button variant="ghost" className="rounded-full" onPress={() => removeLineItem(uuid, type)}>
+			<Icon name="circleXmark" className="fill-destructive h-7 w-7" />
+		</Button>
 	);
 };

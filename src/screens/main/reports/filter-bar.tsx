@@ -14,7 +14,7 @@ import { HStack } from '@wcpos/tailwind/src/hstack';
 import { useAppState } from '../../../contexts/app-state';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';
 import CustomerPill from '../components/order/filter-bar/customer-pill';
-import StatusPill from '../components/order/filter-bar/status-pill';
+import { StatusPill } from '../components/order/filter-bar/status-pill';
 import { StorePill } from '../components/order/filter-bar/store-pill';
 import { useGuestCustomer } from '../hooks/use-guest-customer';
 

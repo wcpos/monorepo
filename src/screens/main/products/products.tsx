@@ -16,7 +16,7 @@ import DataTable from '../components/data-table';
 import FilterBar from '../components/product/filter-bar';
 import Search from '../components/product/search';
 import { TaxBasedOn } from '../components/product/tax-based-on';
-import UISettings from '../components/ui-settings';
+import { UISettings } from '../components/ui-settings';
 import { useTaxRates } from '../contexts/tax-rates';
 import { useUISettings } from '../contexts/ui-settings';
 
@@ -96,17 +96,15 @@ const Products = () => {
 							<ErrorBoundary>
 								<Search query={query} />
 							</ErrorBoundary>
-							<ErrorBoundary>
-								{/* <Icon
+							{/* <Icon
 						name="plus"
 						onPress={() => navigation.navigate('AddProduct')}
 						tooltip={t('Add new customer', { _tags: 'core' })}
 					/> */}
-								<UISettings
-									uiSettings={uiSettings}
-									title={t('Product Settings', { _tags: 'core' })}
-								/>
-							</ErrorBoundary>
+							<UISettings
+								uiSettings={uiSettings}
+								title={t('Product Settings', { _tags: 'core' })}
+							/>
 						</HStack>
 						<ErrorBoundary>
 							<FilterBar query={query} />

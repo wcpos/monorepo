@@ -4,12 +4,12 @@ import get from 'lodash/get';
 import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import Suspense from '@wcpos/components/src/suspense';
 import type { OrderDocument } from '@wcpos/database';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import Table, { CellRenderer } from '@wcpos/tailwind/src/table';
 import { Text } from '@wcpos/tailwind/src/text';
 
@@ -22,7 +22,7 @@ import PaymentMethod from '../components/order/payment-method';
 import Status from '../components/order/status';
 import Total from '../components/order/total';
 import TextCell from '../components/text-cell';
-import UiSettings from '../components/ui-settings';
+import { UISettings } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
 const cells = {
@@ -95,9 +95,7 @@ export const Orders = ({ query }) => {
 				<CardHeader className="p-2 bg-input">
 					<HStack>
 						<Text className="text-lg flex-1">{t('Orders', { _tags: 'core' })}</Text>
-						<ErrorBoundary>
-							<UiSettings uiSettings={uiSettings} title={t('Order Settings', { _tags: 'core' })} />
-						</ErrorBoundary>
+						<UISettings uiSettings={uiSettings} title={t('Order Settings', { _tags: 'core' })} />
 					</HStack>
 				</CardHeader>
 				<CardContent className="flex-1 p-0">

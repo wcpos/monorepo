@@ -3,8 +3,10 @@ import * as React from 'react';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
+import { ButtonGroupSeparator } from '@wcpos/tailwind/src/button';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { HStack } from '@wcpos/tailwind/src/hstack';
 
 import { AddCartItemButtons } from './add-cart-item-buttons';
 import { AddNoteButton } from './buttons/add-note';
@@ -43,25 +45,20 @@ const Cart = () => {
 						<Totals />
 					</ErrorBoundary>
 				</Box>
-				<Box
-					horizontal
-					space="small"
-					padding="small"
-					align="center"
-					style={{ backgroundColor: theme.colors.lightGrey }}
-				>
+				<HStack className="p-2 bg-secondary">
 					<ErrorBoundary>
 						<AddNoteButton />
 						<OrderMetaButton />
 						<SaveButton />
 					</ErrorBoundary>
-				</Box>
-				<Box horizontal>
+				</HStack>
+				<HStack className="gap-0">
 					<ErrorBoundary>
 						<VoidButton />
+						<ButtonGroupSeparator variant="success" />
 						<PayButton />
 					</ErrorBoundary>
-				</Box>
+				</HStack>
 			</CardContent>
 		</Card>
 	);
