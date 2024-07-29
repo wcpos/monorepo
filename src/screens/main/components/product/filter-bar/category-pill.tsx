@@ -2,11 +2,12 @@ import * as React from 'react';
 
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
-import Pill from '@wcpos/components/src/pill';
 import { Query } from '@wcpos/query';
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/tailwind/src/popover';
 
 import { useT } from '../../../../../contexts/translations';
-import CategorySelect from '../category-select';
+import { CategorySearch } from '../category-search';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 
@@ -22,13 +23,16 @@ const CategoryPill = ({ query, resource }: Props) => {
 	const [openSelect, setOpenSelect] = React.useState(false);
 	const category = useObservableSuspense(resource);
 	const t = useT();
+	const [open, setOpen] = React.useState(false);
+	const [value, setValue] = React.useState('');
+	const isActive = false;
 
 	/**
 	 *
 	 */
 	const handleSelect = React.useCallback(
-		(category) => {
-			query.where('categories', { $elemMatch: { id: category.id } });
+		(id) => {
+			query.where('categories', { $elemMatch: { id } });
 		},
 		[query]
 	);
@@ -43,24 +47,47 @@ const CategoryPill = ({ query, resource }: Props) => {
 	/**
 	 *
 	 */
-	if (category) {
-		return (
-			<Pill size="small" removable onRemove={handleRemove} icon="folder">
-				{category.name}
-			</Pill>
-		);
-	}
+	return (
+		<Popover value={value} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<ButtonPill
+					size="xs"
+					leftIcon="folder"
+					variant={isActive ? 'default' : 'secondary'}
+					// onPress={() => setOpen(!open)}
+					removable={isActive}
+					onRemove={() => query.where('stock_status', null)}
+				>
+					<ButtonText>{t('Category', { _tags: 'core' })}</ButtonText>
+				</ButtonPill>
+			</PopoverTrigger>
+			<PopoverContent className="p-0">
+				<CategorySearch onSelect={handleSelect} />
+			</PopoverContent>
+		</Popover>
+	);
 
 	/**
 	 *
 	 */
-	return openSelect ? (
-		<CategorySelect onBlur={() => setOpenSelect(false)} onSelect={handleSelect} />
-	) : (
-		<Pill icon="folder" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
-			{t('Select Category', { _tags: 'core' })}
-		</Pill>
-	);
+	// if (category) {
+	// 	return (
+	// 		<Pill size="small" removable onRemove={handleRemove} icon="folder">
+	// 			{category.name}
+	// 		</Pill>
+	// 	);
+	// }
+
+	/**
+	 *
+	 */
+	// return openSelect ? (
+	// 	<CategorySelect onBlur={() => setOpenSelect(false)} onSelect={handleSelect} />
+	// ) : (
+	// 	<Pill icon="folder" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
+	// 		{t('Select Category', { _tags: 'core' })}
+	// 	</Pill>
+	// );
 };
 
 export default CategoryPill;
