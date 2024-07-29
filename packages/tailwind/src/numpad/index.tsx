@@ -179,7 +179,7 @@ export const Numpad = ({
 				onKeyPress={handleKeyPress}
 				onChangeText={() => {}}
 			/>
-			<Box className={`grid  gap-1 ${discounts ? 'grid-cols-4' : 'grid-cols-3'}`}>
+			<Box className={`grid gap-1 ${discounts ? 'grid-cols-4' : 'grid-cols-3'}`}>
 				{[
 					['1', '2', '3'],
 					['4', '5', '6'],
