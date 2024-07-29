@@ -32,11 +32,11 @@ export const Taxes = ({ totalTax, taxLines = [] }: Props) => {
 			<HStack>
 				<Text className="grow">{t('Taxes', { _tags: 'core' })}:</Text>
 				<VStack>
-					{taxLines.map((tax) => {
+					{taxLines.map((tax, index) => {
 						// tax_total and shipping_tax_total are separate, but we will display together
 						const displayTax = parseFloat(tax.tax_total) + parseFloat(tax.shipping_tax_total);
 						return (
-							<HStack>
+							<HStack key={index}>
 								<Text>
 									{inclOrExcl} {tax.label}
 								</Text>

@@ -3,11 +3,11 @@ import * as React from 'react';
 import find from 'lodash/find';
 
 import { EdittableText } from '@wcpos/components/src/edittable-text';
-import Icon from '@wcpos/components/src/icon';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/tailwind/src/dialog';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 import { VStack } from '@wcpos/tailwind/src/vstack';
@@ -84,23 +84,25 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 					</TooltipContent>
 				</Tooltip>
 			</HStack>
-			{show('sku') && <Text size="small">{item.sku}</Text>}
+
+			{show('sku') && <Text className="text-sm">{item.sku}</Text>}
+
 			{attributes.length > 0 && (
-				<VStack className="gap-1">
+				<Box className="grid gap-1 grid-cols-2">
 					{attributes.map((meta) => {
 						return (
-							<HStack key={meta.id || meta.display_key || meta.key}>
+							<React.Fragment key={meta.id || meta.display_key || meta.key}>
 								<Text
-									className="text-sm text-muted"
+									className="text-sm"
 									numberOfLines={1}
 								>{`${meta.display_key || meta.key}:`}</Text>
 								<Text className="text-sm" numberOfLines={1}>
 									{meta.display_value || meta.value}
 								</Text>
-							</HStack>
+							</React.Fragment>
 						);
 					})}
-				</VStack>
+				</Box>
 			)}
 
 			<Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>

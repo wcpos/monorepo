@@ -45,7 +45,7 @@ const Cart = () => {
 						<Totals />
 					</ErrorBoundary>
 				</Box>
-				<HStack className="p-2 bg-secondary">
+				<HStack className="p-2 bg-secondary [&>*]:flex-grow">
 					<ErrorBoundary>
 						<AddNoteButton />
 						<OrderMetaButton />

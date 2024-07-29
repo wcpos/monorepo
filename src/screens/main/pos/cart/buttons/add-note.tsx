@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import Modal from '@wcpos/components/src/modal';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import {
 	Dialog,
@@ -12,7 +11,6 @@ import {
 	DialogTitle,
 	DialogDescription,
 	DialogFooter,
-	DialogClose,
 } from '@wcpos/tailwind/src/dialog';
 import { Textarea } from '@wcpos/tailwind/src/textarea';
 
@@ -48,16 +46,16 @@ export const AddNoteButton = () => {
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
 				<Button variant="outline">
-					<ButtonText>{t('Order Note', { _tags: 'core' })}</ButtonText>
+					<ButtonText numberOfLines={1}>{t('Order Note', { _tags: 'core' })}</ButtonText>
 				</Button>
 			</DialogTrigger>
-			<DialogContent className="sm:max-w-[425px]">
+			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>{t('Order Note', { _tags: 'core' })}</DialogTitle>
-					<DialogDescription>
-						<Textarea autoFocus value={text} onChangeText={onChangeText} />
-					</DialogDescription>
 				</DialogHeader>
+				<DialogDescription>
+					<Textarea autoFocus value={text} onChangeText={onChangeText} />
+				</DialogDescription>
 				<DialogFooter>
 					<Button onPress={handleSave}>
 						<ButtonText>{t('Add Note', { _tags: 'core' })}</ButtonText>
