@@ -6,6 +6,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { HStack } from '../hstack';
 import { Icon, IconName } from '../icon';
 import { cn } from '../lib/utils';
+import { Loader } from '../loader';
 import { Text, TextClassContext } from '../text';
 
 const buttonVariants = cva(
@@ -123,10 +124,11 @@ type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 	VariantProps<typeof buttonVariants> & {
 		leftIcon?: IconName;
 		rightIcon?: IconName;
+		loading?: boolean;
 	};
 
 const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>(
-	({ className, variant, size, leftIcon, rightIcon, children, ...props }, ref) => {
+	({ className, variant, size, leftIcon, rightIcon, loading, children, ...props }, ref) => {
 		return (
 			<TextClassContext.Provider
 				value={buttonTextVariants({ variant, size, className: 'web:pointer-events-none' })}
@@ -140,10 +142,14 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
 					role="button"
 					{...props}
 				>
-					{leftIcon || rightIcon ? (
+					{leftIcon || rightIcon || loading ? (
 						<HStack>
-							{leftIcon && (
-								<Icon name={leftIcon} className={buttonIconVariants({ variant, size })} />
+							{loading ? (
+								<Loader />
+							) : (
+								leftIcon && (
+									<Icon name={leftIcon} className={buttonIconVariants({ variant, size })} />
+								)
 							)}
 							{children}
 							{rightIcon && (
