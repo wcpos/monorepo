@@ -15,7 +15,7 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 	return (
 		<HStack className="p-2 bg-error">
 			<Icon name="triangleExclamation" className="w-7 h-7 fill-error-foreground" />
-			<VStack className="grow gap-1">
+			<VStack className="gap-1 flex-1">
 				<Text className="text-error-foreground font-bold">Something went wrong:</Text>
 				<Text className="text-error-foreground">{error.message}</Text>
 			</VStack>

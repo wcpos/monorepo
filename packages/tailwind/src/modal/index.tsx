@@ -12,7 +12,7 @@ const ModalOverlayWeb = React.forwardRef<
 	return (
 		<View
 			className={cn(
-				'z-50 bg-black/80 flex justify-center items-center p-2 absolute top-0 right-0 bottom-0 left-0',
+				'z-50 bg-black/70 flex justify-center items-center p-2 absolute top-0 right-0 bottom-0 left-0',
 				'web:animate-in web:fade-in-0',
 				className
 			)}
@@ -31,7 +31,7 @@ const ModalOverlayNative = React.forwardRef<
 	return (
 		<View
 			style={StyleSheet.absoluteFill}
-			className={cn('z-50 flex bg-black/80 justify-center items-center p-2', className)}
+			className={cn('z-50 flex bg-black/70 justify-center items-center p-2', className)}
 			{...props}
 			ref={ref}
 		>

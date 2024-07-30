@@ -521,7 +521,8 @@ const FormSelect = React.forwardRef<
 				aria-invalid={!!error}
 				open={open}
 				onOpenChange={setOpen}
-				value={value ? { label: value?.label ?? '', value: value?.label ?? '' } : undefined}
+				// value={value ? { label: value?.label ?? '', value: value?.label ?? '' } : undefined}
+				value={value ? { value } : undefined}
 				onValueChange={onChange}
 				{...props}
 			/>
