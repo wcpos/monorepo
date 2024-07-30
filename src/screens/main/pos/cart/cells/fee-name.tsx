@@ -47,42 +47,44 @@ export const FeeName = ({ uuid, item }: Props) => {
 	 *
 	 */
 	return (
-		<VStack className="w-full">
-			<HStack>
-				<Button
-					variant="outline"
-					//onChange={(name) => updateLineItem(uuid, { name })}
-				>
-					<ButtonText className="font-bold">{item.name}</ButtonText>
-				</Button>
-				<Tooltip delayDuration={150}>
-					<TooltipTrigger asChild>
-						<Button
-							variant="ghost"
-							className="rounded-full"
-							onPress={() => setOpenEditDialog(true)}
-						>
-							<Icon name="ellipsisVertical" />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent>
-						<Text>{t('Edit {name}', { _tags: 'core', name: item.name })}</Text>
-					</TooltipContent>
-				</Tooltip>
-			</HStack>
+		<>
+			<VStack className="w-full">
+				<HStack>
+					<Button
+						variant="outline"
+						//onChange={(name) => updateLineItem(uuid, { name })}
+					>
+						<ButtonText className="font-bold">{item.name}</ButtonText>
+					</Button>
+					<Tooltip delayDuration={150}>
+						<TooltipTrigger asChild>
+							<Button
+								variant="ghost"
+								className="rounded-full"
+								onPress={() => setOpenEditDialog(true)}
+							>
+								<Icon name="ellipsisVertical" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>
+							<Text>{t('Edit {name}', { _tags: 'core', name: item.name })}</Text>
+						</TooltipContent>
+					</Tooltip>
+				</HStack>
 
-			{metaData.length > 0 && (
-				<Box className="grid gap-1 grid-cols-2">
-					{metaData.map((meta) => {
-						return (
-							<React.Fragment key={meta.id || meta.display_key || meta.key}>
-								<Text className="text-sm">{`${meta.key}:`}</Text>
-								<Text className="text-sm">{meta.value}</Text>
-							</React.Fragment>
-						);
-					})}
-				</Box>
-			)}
+				{metaData.length > 0 && (
+					<Box className="grid gap-1 grid-cols-2">
+						{metaData.map((meta) => {
+							return (
+								<React.Fragment key={meta.id || meta.display_key || meta.key}>
+									<Text className="text-sm">{`${meta.key}:`}</Text>
+									<Text className="text-sm">{meta.value}</Text>
+								</React.Fragment>
+							);
+						})}
+					</Box>
+				)}
+			</VStack>
 
 			<Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
 				<DialogContent>
@@ -92,6 +94,6 @@ export const FeeName = ({ uuid, item }: Props) => {
 					<EditFeeLine uuid={uuid} item={item} />
 				</DialogContent>
 			</Dialog>
-		</VStack>
+		</>
 	);
 };

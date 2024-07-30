@@ -1,41 +1,39 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import isEmpty from 'lodash/isEmpty';
-import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput } from '@wcpos/tailwind/src/form';
+import { Form, FormField, FormInput, FormSwitch } from '@wcpos/tailwind/src/form';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
-import NumberInput from '../../components/number-input';
+import { AmountWidget } from '../../components/amount-widget';
+import { ShippingMethodSelect } from '../../components/shipping-method-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
-import { useCurrentOrder } from '../contexts/current-order';
-import { useAddProduct } from '../hooks/use-add-product';
 
-export interface MiscProductFormValues {
-	name?: string;
-	price?: string;
-	sku?: string;
+export interface ShippingFormValues {
+	method_title?: string;
+	method_id?: string;
+	amount?: number;
+	prices_include_tax?: boolean;
 	tax_status?: string;
 	tax_class?: string;
 }
 
-export interface AddMiscProductHandle {
+export interface AddShippingHandle {
 	submit: () => void;
 }
 
-interface AddMiscProductProps {
-	onSubmit: (data: MiscProductFormValues) => void;
+interface AddShippingProps {
+	onSubmit: (data: ShippingFormValues) => void;
 }
 
 /**
  *
  */
-export const AddMiscProduct = React.forwardRef<AddMiscProductHandle, AddMiscProductProps>(
+export const AddShipping = React.forwardRef<AddShippingHandle, AddShippingProps>(
 	({ onSubmit }, ref) => {
 		const t = useT();
 
@@ -45,28 +43,15 @@ export const AddMiscProduct = React.forwardRef<AddMiscProductHandle, AddMiscProd
 		const formSchema = React.useMemo(
 			() =>
 				z.object({
-					name: z.string().optional(),
-					price: z.string().optional(),
-					sku: z.string().optional(),
+					method_title: z.string().optional(),
+					method_id: z.string().optional(),
+					amount: z.number().optional(),
+					prices_include_tax: z.boolean().optional(),
 					tax_status: z.string().optional(),
 					tax_class: z.string().optional(),
 				}),
 			[]
 		);
-
-		/**
-		 *
-		 */
-		const form = useForm<z.infer<typeof formSchema>>({
-			resolver: zodResolver(formSchema),
-			defaultValues: {
-				name: '',
-				price: '',
-				sku: '',
-				tax_status: 'taxable',
-				tax_class: '',
-			},
-		});
 
 		/**
 		 *
@@ -78,30 +63,56 @@ export const AddMiscProduct = React.forwardRef<AddMiscProductHandle, AddMiscProd
 		/**
 		 *
 		 */
+		const form = useForm<z.infer<typeof formSchema>>({
+			resolver: zodResolver(formSchema),
+			defaultValues: {
+				method_title: '',
+				method_id: '',
+				amount: 0,
+				prices_include_tax: true,
+				tax_status: 'taxable',
+				tax_class: 'standard',
+			},
+		});
+
+		/**
+		 *
+		 */
 		return (
 			<Form {...form}>
 				<VStack>
 					<FormField
 						control={form.control}
-						name="name"
+						name="method_title"
 						render={({ field }) => (
 							<FormInput
-								label={t('Name', { _tags: 'core' })}
-								placeholder={t('Product', { _tags: 'core' })}
+								label={t('Shipping Method Title', { _tags: 'core' })}
+								placeholder={t('Shipping', { _tags: 'core' })}
 								{...field}
 							/>
 						)}
 					/>
 					<FormField
 						control={form.control}
-						name="sku"
-						render={({ field }) => <FormInput label={t('SKU', { _tags: 'core' })} {...field} />}
+						name="method_id"
+						render={({ field }) => <ShippingMethodSelect field={field} />}
 					/>
 					<FormField
 						control={form.control}
-						name="price"
+						name="amount"
 						render={({ field }) => (
-							<FormInput label={t('Price', { _tags: 'core' })} placeholder="0" {...field} />
+							<AmountWidget label={t('Amount', { _tags: 'core' })} {...field} />
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="prices_include_tax"
+						render={({ field }) => (
+							<FormSwitch
+								label={t('Amount Includes Tax', { _tags: 'core' })}
+								description="Description"
+								{...field}
+							/>
 						)}
 					/>
 					<FormField

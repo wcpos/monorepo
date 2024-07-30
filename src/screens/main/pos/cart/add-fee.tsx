@@ -1,57 +1,38 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import isEmpty from 'lodash/isEmpty';
-import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import {
-	Form,
-	FormField,
-	FormInput,
-	FormSwitch,
-	FormRadioGroup,
-	FormSelect,
-} from '@wcpos/tailwind/src/form';
-import { Label } from '@wcpos/tailwind/src/label';
-import { cn } from '@wcpos/tailwind/src/lib/utils';
-import { RadioGroupItem } from '@wcpos/tailwind/src/radio-group';
-import {
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@wcpos/tailwind/src/select';
-import { Text } from '@wcpos/tailwind/src/text';
+import { Form, FormField, FormInput, FormSwitch } from '@wcpos/tailwind/src/form';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import { AmountWidget } from '../../components/amount-widget';
 import { TaxClassSelect } from '../../components/tax-class-select';
-import { useCurrentOrder } from '../contexts/current-order';
-import { useAddFee } from '../hooks/use-add-fee';
+import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
 
-const emails = [
-	{ value: 'tom@cruise.com', label: 'tom@cruise.com' },
-	{ value: 'napoleon@dynamite.com', label: 'napoleon@dynamite.com' },
-	{ value: 'kunfu@panda.com', label: 'kunfu@panda.com' },
-	{ value: 'bruce@lee.com', label: 'bruce@lee.com' },
-	{ value: 'harry@potter.com', label: 'harry@potter.com' },
-	{ value: 'jane@doe.com', label: 'jane@doe.com' },
-	{ value: 'elon@musk.com', label: 'elon@musk.com' },
-	{ value: 'lara@croft.com', label: 'lara@croft.com' },
-];
+export interface FeeFormValues {
+	name?: string;
+	amount?: number;
+	prices_include_tax?: boolean;
+	tax_status?: string;
+	tax_class?: string;
+}
+
+export interface AddFeeHandle {
+	submit: () => void;
+}
+
+interface AddFeeProps {
+	onSubmit: (data: FeeFormValues) => void;
+}
 
 /**
  *
  */
-export const AddFee = () => {
+export const AddFee = React.forwardRef<AddFeeHandle, AddFeeProps>(({ onSubmit }, ref) => {
 	const t = useT();
-	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 
 	/**
 	 *
@@ -78,9 +59,16 @@ export const AddFee = () => {
 			amount: 0,
 			prices_include_tax: true,
 			tax_status: 'taxable',
-			tax_class: '',
+			tax_class: 'standard',
 		},
 	});
+
+	/**
+	 *
+	 */
+	React.useImperativeHandle(ref, () => ({
+		submit: () => form.handleSubmit(onSubmit)(),
+	}));
 
 	/**
 	 *
@@ -118,68 +106,14 @@ export const AddFee = () => {
 				<FormField
 					control={form.control}
 					name="tax_status"
-					defaultValue="staff"
-					render={({ field }) => {
-						function onLabelPress(label: 'taxable' | 'none') {
-							return () => {
-								form.setValue('tax_status', label);
-							};
-						}
-						return (
-							<FormRadioGroup
-								label={t('Tax Status', { _tags: 'core' })}
-								className="gap-4"
-								{...field}
-							>
-								{(['taxable', 'none'] as const).map((value) => {
-									return (
-										<View key={value} className={'flex-row gap-2 items-center'}>
-											<RadioGroupItem aria-labelledby={`label-for-${value}`} value={value} />
-											<Label
-												nativeID={`label-for-${value}`}
-												className="capitalize"
-												onPress={onLabelPress(value)}
-											>
-												{value}
-											</Label>
-										</View>
-									);
-								})}
-							</FormRadioGroup>
-						);
-					}}
+					render={({ field }) => <TaxStatusRadioGroup form={form} field={field} />}
 				/>
 				<FormField
 					control={form.control}
 					name="tax_class"
-					render={({ field }) => (
-						<FormSelect label={t('Tax Class', { _tags: 'core' })} {...field}>
-							<SelectTrigger
-								onLayout={(ev) => {
-									setSelectTriggerWidth(ev.nativeEvent.layout.width);
-								}}
-							>
-								<SelectValue
-									className={cn(
-										'text-sm native:text-lg',
-										field.value ? 'text-foreground' : 'text-muted-foreground'
-									)}
-									placeholder="Select a verified email"
-								/>
-							</SelectTrigger>
-							<SelectContent className="z-[100]" style={{ width: selectTriggerWidth }}>
-								<SelectGroup>
-									{emails.map((email) => (
-										<SelectItem key={email.value} label={email.label} value={email.value}>
-											<Text>{email.label}</Text>
-										</SelectItem>
-									))}
-								</SelectGroup>
-							</SelectContent>
-						</FormSelect>
-					)}
+					render={({ field }) => <TaxClassSelect field={field} />}
 				/>
 			</VStack>
 		</Form>
 	);
-};
+});

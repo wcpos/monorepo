@@ -2,11 +2,26 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { SelectWithLabel, SelectProps } from '@wcpos/components/src/select';
+import { FormSelect } from '@wcpos/tailwind/src/form';
+import { cn } from '@wcpos/tailwind/src/lib/utils';
+import {
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@wcpos/tailwind/src/select';
+import { Text } from '@wcpos/tailwind/src/text';
 
+import { useT } from '../../../contexts/translations';
 import { useExtraData } from '../contexts/extra-data';
 
-export const TaxClassSelect = (props: SelectProps) => {
+/**
+ *
+ */
+export const TaxClassSelect = ({ field }) => {
+	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
+	const t = useT();
 	const { extraData } = useExtraData();
 	const taxClasses = useObservableEagerState(extraData.taxClasses$);
 
@@ -17,9 +32,37 @@ export const TaxClassSelect = (props: SelectProps) => {
 	const options = React.useMemo(() => {
 		return (taxClasses || []).map((taxClass) => ({
 			label: taxClass.name,
-			value: taxClass.slug === 'standard' ? '' : taxClass.slug,
+			value: taxClass.slug,
 		}));
 	}, [taxClasses]);
 
-	return <SelectWithLabel {...props} options={options} />;
+	/**
+	 *
+	 */
+	return (
+		<FormSelect label={t('Tax Class', { _tags: 'core' })} {...field}>
+			<SelectTrigger
+				onLayout={(ev) => {
+					setSelectTriggerWidth(ev.nativeEvent.layout.width);
+				}}
+			>
+				<SelectValue
+					className={cn(
+						'text-sm native:text-lg',
+						field.value ? 'text-foreground' : 'text-muted-foreground'
+					)}
+					placeholder={t('Select Tax Class', { _tags: 'core' })}
+				/>
+			</SelectTrigger>
+			<SelectContent style={{ width: selectTriggerWidth }}>
+				<SelectGroup>
+					{options.map((option) => (
+						<SelectItem key={option.value} label={option.label} value={option.value}>
+							<Text>{option.label}</Text>
+						</SelectItem>
+					))}
+				</SelectGroup>
+			</SelectContent>
+		</FormSelect>
+	);
 };

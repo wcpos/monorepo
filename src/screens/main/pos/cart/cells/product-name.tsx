@@ -61,49 +61,53 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 	 *
 	 */
 	return (
-		<VStack className="w-full">
-			<HStack>
-				<Button
-					variant="outline"
-					//onChange={(name) => updateLineItem(uuid, { name })}
-				>
-					<ButtonText className="font-bold">{item.name}</ButtonText>
-				</Button>
-				<Tooltip delayDuration={150}>
-					<TooltipTrigger asChild>
-						<Button
-							variant="ghost"
-							className="rounded-full"
-							onPress={() => setOpenEditDialog(true)}
-						>
-							<Icon name="ellipsisVertical" />
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent>
-						<Text>{t('Edit {name}', { _tags: 'core', name: item.name })}</Text>
-					</TooltipContent>
-				</Tooltip>
-			</HStack>
+		<>
+			<VStack className="w-full">
+				<HStack>
+					<Button
+						variant="outline"
+						//onChange={(name) => updateLineItem(uuid, { name })}
+					>
+						<ButtonText className="font-bold" numberOfLines={1}>
+							{item.name}
+						</ButtonText>
+					</Button>
+					<Tooltip delayDuration={150}>
+						<TooltipTrigger asChild>
+							<Button
+								variant="ghost"
+								className="rounded-full"
+								onPress={() => setOpenEditDialog(true)}
+							>
+								<Icon name="ellipsisVertical" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>
+							<Text>{t('Edit {name}', { _tags: 'core', name: item.name })}</Text>
+						</TooltipContent>
+					</Tooltip>
+				</HStack>
 
-			{show('sku') && <Text className="text-sm">{item.sku}</Text>}
+				{show('sku') && <Text className="text-sm">{item.sku}</Text>}
 
-			{attributes.length > 0 && (
-				<Box className="grid gap-1 grid-cols-2">
-					{attributes.map((meta) => {
-						return (
-							<React.Fragment key={meta.id || meta.display_key || meta.key}>
-								<Text
-									className="text-sm"
-									numberOfLines={1}
-								>{`${meta.display_key || meta.key}:`}</Text>
-								<Text className="text-sm" numberOfLines={1}>
-									{meta.display_value || meta.value}
-								</Text>
-							</React.Fragment>
-						);
-					})}
-				</Box>
-			)}
+				{attributes.length > 0 && (
+					<Box className="grid gap-1 grid-cols-2">
+						{attributes.map((meta) => {
+							return (
+								<React.Fragment key={meta.id || meta.display_key || meta.key}>
+									<Text
+										className="text-sm"
+										numberOfLines={1}
+									>{`${meta.display_key || meta.key}:`}</Text>
+									<Text className="text-sm" numberOfLines={1}>
+										{meta.display_value || meta.value}
+									</Text>
+								</React.Fragment>
+							);
+						})}
+					</Box>
+				)}
+			</VStack>
 
 			<Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
 				<DialogContent>
@@ -113,6 +117,6 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 					<EditLineItemModal uuid={uuid} item={item} />
 				</DialogContent>
 			</Dialog>
-		</VStack>
+		</>
 	);
 };
