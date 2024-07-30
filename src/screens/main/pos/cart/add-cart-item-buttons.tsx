@@ -15,6 +15,7 @@ import {
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Icon } from '@wcpos/tailwind/src/icon';
+import { ModalContent } from '@wcpos/tailwind/src/modal';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
@@ -128,12 +129,8 @@ export const AddCartItemButtons = () => {
 					<DialogContent>
 						<DialogHeader>
 							<DialogTitle>{t('Add Miscellaneous Product', { _tags: 'core' })}</DialogTitle>
-							<DialogDescription>
-								<ErrorBoundary>
-									<AddMiscProduct ref={addMiscProductRef} onSubmit={handleMiscProductFormSubmit} />
-								</ErrorBoundary>
-							</DialogDescription>
 						</DialogHeader>
+						<AddMiscProduct ref={addMiscProductRef} onSubmit={handleMiscProductFormSubmit} />
 						<DialogFooter>
 							<Button
 								onPress={() => {
