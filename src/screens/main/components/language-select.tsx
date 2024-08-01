@@ -10,7 +10,9 @@ import {
 	CommandList,
 	CommandItem,
 } from '@wcpos/tailwind/src/command';
+import { Label } from '@wcpos/tailwind/src/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/tailwind/src/popover';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../contexts/translations';
 import { useLocale } from '../../../hooks/use-locale';
@@ -43,26 +45,37 @@ export const LanguageSelect = ({ label, value = 'en_US', onChange }) => {
 	/**
 	 *
 	 */
+	const displayLabel = React.useMemo(() => {
+		const selected = options.find((option) => option.value === value);
+		return selected ? selected.label : '';
+	}, [options, value]);
+
+	/**
+	 *
+	 */
 	return (
-		<Popover>
-			<PopoverTrigger asChild>
-				<Button variant="outline">
-					<ButtonText>{value}</ButtonText>
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent className="p-0">
-				<Command>
-					<CommandInput placeholder={t('Search Languages', { _tags: 'core' })} />
-					<CommandEmpty>{t('No language found', { _tags: 'core' })}</CommandEmpty>
-					<CommandList>
-						{options.map((option) => (
-							<CommandItem key={option.value} onSelect={() => onChange(option.value)}>
-								{option.label}
-							</CommandItem>
-						))}
-					</CommandList>
-				</Command>
-			</PopoverContent>
-		</Popover>
+		<VStack>
+			<Label nativeID="language">{label}</Label>
+			<Popover>
+				<PopoverTrigger asChild>
+					<Button variant="outline">
+						<ButtonText>{displayLabel}</ButtonText>
+					</Button>
+				</PopoverTrigger>
+				<PopoverContent className="p-0">
+					<Command>
+						<CommandInput placeholder={t('Search Languages', { _tags: 'core' })} />
+						<CommandEmpty>{t('No language found', { _tags: 'core' })}</CommandEmpty>
+						<CommandList>
+							{options.map((option) => (
+								<CommandItem key={option.value} onSelect={() => onChange(option.value)}>
+									{option.label}
+								</CommandItem>
+							))}
+						</CommandList>
+					</Command>
+				</PopoverContent>
+			</Popover>
+		</VStack>
 	);
 };

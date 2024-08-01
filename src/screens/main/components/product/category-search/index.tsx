@@ -30,7 +30,7 @@ export const CategorySearch = ({ onSelect }) => {
 	 *
 	 */
 	const onSearch = React.useCallback(
-		(value) => {
+		(value: string) => {
 			setSearch(value);
 			query.debouncedSearch(value);
 		},

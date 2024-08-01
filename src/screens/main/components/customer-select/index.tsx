@@ -2,11 +2,15 @@ import * as React from 'react';
 
 import defaults from 'lodash/defaults';
 
-import Popover from '@wcpos/components/src/popover';
 import { useQuery } from '@wcpos/query';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { Command, CommandInput, CommandEmpty } from '@wcpos/tailwind/src/command';
+import { Label } from '@wcpos/tailwind/src/label';
+import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/tailwind/src/popover';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import Menu from './menu';
-import SearchInput, { SearchInputProps } from './search-input';
+import { CustomerList } from './list';
 import { useT } from '../../../../contexts/translations';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -17,30 +21,27 @@ interface CustomerSelectProps {
 	value?: CustomerDocument;
 	onBlur?: () => void;
 	size?: 'small' | 'normal';
-	style?: SearchInputProps['style'];
 	initialParams?: any;
 	queryKey?: string;
 	placeholder?: string;
 	withGuest?: boolean;
+	label?: string;
 }
 
 /**
  *
  */
-const CustomerSelect = ({
+export const CustomerSelect = ({
 	onSelectCustomer,
-	autoFocus = false,
 	value,
-	onBlur = () => {},
-	size = 'normal',
-	style,
 	initialParams,
 	queryKey = 'select',
 	placeholder,
 	withGuest,
+	label,
 }: CustomerSelectProps) => {
-	const [opened, setOpened] = React.useState(false);
 	const t = useT();
+	const [search, setSearch] = React.useState('');
 
 	/**
 	 *
@@ -61,8 +62,9 @@ const CustomerSelect = ({
 	 *
 	 */
 	const onSearch = React.useCallback(
-		(search) => {
-			query.debouncedSearch(search);
+		(value: string) => {
+			setSearch(value);
+			query.debouncedSearch(value);
 		},
 		[query]
 	);
@@ -80,37 +82,28 @@ const CustomerSelect = ({
 	 *
 	 */
 	return (
-		<Popover
-			opened={opened}
-			onClose={() => {
-				/**
-				 * If popover closes, go back to selected customer
-				 */
-				onSelectCustomer(value);
-				setOpened(false);
-			}}
-			withArrow={false}
-			matchWidth
-			withinPortal={false}
-		>
-			<Popover.Target>
-				<SearchInput
-					placeholder={placeholder ? placeholder : t('Search Customers', { _tags: 'core' })}
-					onSearch={onSearch}
-					autoFocus={autoFocus}
-					setOpened={setOpened}
-					opened={opened}
-					selectedCustomer={value}
-					onBlur={onBlur}
-					size={size}
-					style={style}
-				/>
-			</Popover.Target>
-			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
-				<Menu query={query} onChange={onSelectCustomer} withGuest={withGuest} />
-			</Popover.Content>
-		</Popover>
+		<VStack>
+			{label && <Label nativeID="customer">{label}</Label>}
+			<Popover>
+				<PopoverTrigger asChild>
+					<Button variant="outline">
+						<ButtonText>Test</ButtonText>
+					</Button>
+				</PopoverTrigger>
+				<PopoverContent className="p-0">
+					<Command shouldFilter={false}>
+						<CommandInput
+							placeholder={t('Search Customers', { _tags: 'core' })}
+							value={search}
+							onValueChange={onSearch}
+						/>
+						<CommandEmpty>{t('No customer found', { _tags: 'core' })}</CommandEmpty>
+						<Suspense>
+							<CustomerList query={query} onSelect={onSelectCustomer} withGuest={withGuest} />
+						</Suspense>
+					</Command>
+				</PopoverContent>
+			</Popover>
+		</VStack>
 	);
 };
-
-export default CustomerSelect;

@@ -20,8 +20,8 @@ import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import CurrencySelect from '../components/currency-select';
-import CustomerSelect from '../components/customer-select';
+import { CurrencySelect } from '../components/currency-select';
+import { CustomerSelect } from '../components/customer-select';
 import { EditDocumentForm } from '../components/edit-document-form';
 import { LanguageSelect } from '../components/language-select';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
@@ -132,7 +132,7 @@ export const GeneralSettings = () => {
 						control={form.control}
 						name="default_customer"
 						render={({ field }) => (
-							<FormInput label={t('Default Customer', { _tags: 'core' })} {...field} />
+							<CustomerSelect label={t('Default Customer', { _tags: 'core' })} {...field} />
 						)}
 					/>
 					<FormField
@@ -146,7 +146,9 @@ export const GeneralSettings = () => {
 				<FormField
 					control={form.control}
 					name="currency"
-					render={({ field }) => <FormInput label={t('Currency', { _tags: 'core' })} {...field} />}
+					render={({ field }) => (
+						<CurrencySelect label={t('Currency', { _tags: 'core' })} {...field} />
+					)}
 				/>
 				<FormField
 					control={form.control}
