@@ -1,28 +1,46 @@
 import * as React from 'react';
 import { ActivityIndicator, ActivityIndicatorProps } from 'react-native';
 
-export type LoaderProps = {
-	/** */
-	type?: import('@wcpos/themes').ColorTypes;
+import { cva, type VariantProps } from 'class-variance-authority';
+import { cssInterop } from 'nativewind';
 
-	/** Make ActivityIndicator size compatible with Icon component */
-	size?: import('@wcpos/themes').IconSizesTypes;
-} & Omit<ActivityIndicatorProps, 'size'>;
+const loaderVariants = cva('', {
+	variants: {
+		variant: {
+			default: 'foreground',
+			primary: 'primary',
+			destructive: 'destructive',
+			secondary: 'secondary',
+			success: 'success',
+		},
+		size: {
+			default: 'size-3.5',
+			xs: 'size-2.5',
+			sm: 'size-3',
+			lg: 'size-5',
+			xl: 'size-6',
+		},
+	},
+	defaultVariants: {
+		variant: 'default',
+		size: 'default',
+	},
+});
+
+type LoaderProps = VariantProps<typeof loaderVariants>;
 
 /**
  *
  */
-export const Loader = ({ type, size = 'normal', ...props }: LoaderProps) => {
-	// const theme = useTheme();
-	// const color = theme.colors[type || 'primary'];
+export const Loader = ({ variant, size }: LoaderProps) => {
+	const LoaderIcon = React.useMemo(() => {
+		return cssInterop(ActivityIndicator, {
+			className: {
+				target: 'style',
+				nativeStyleToProp: { width: true, height: true, color: true },
+			},
+		});
+	}, []);
 
-	return (
-		<ActivityIndicator
-			size="small"
-			// color={color}
-			// // FIXME: I don't know if this will work in native, I think I need a better spinner
-			// size={parseFloat(theme.iconSizes[size])}
-			{...props}
-		/>
-	);
+	return <LoaderIcon className={loaderVariants({ variant, size })} />;
 };
