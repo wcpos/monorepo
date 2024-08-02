@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
+import { ControllerRenderProps, FieldValues } from 'react-hook-form';
 
 import { FormSelect } from '@wcpos/tailwind/src/form';
 import { cn } from '@wcpos/tailwind/src/lib/utils';
@@ -16,10 +17,18 @@ import { Text } from '@wcpos/tailwind/src/text';
 import { useT } from '../../../contexts/translations';
 import { useExtraData } from '../contexts/extra-data';
 
+interface Props<TFieldValues extends FieldValues> {
+	field: ControllerRenderProps<TFieldValues, any>;
+	label?: string;
+}
+
 /**
  *
  */
-export const TaxClassSelect = ({ field }) => {
+export const TaxClassSelect = <TFieldValues extends FieldValues>({
+	field,
+	label,
+}: Props<TFieldValues>) => {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 	const { extraData } = useExtraData();
@@ -40,7 +49,7 @@ export const TaxClassSelect = ({ field }) => {
 	 *
 	 */
 	return (
-		<FormSelect label={t('Tax Class', { _tags: 'core' })} {...field}>
+		<FormSelect label={label ? label : t('Tax Class', { _tags: 'core' })} {...field}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);

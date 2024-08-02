@@ -15,6 +15,7 @@ import {
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Icon } from '@wcpos/tailwind/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { ModalContent } from '@wcpos/tailwind/src/modal';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
@@ -117,14 +118,12 @@ export const AddCartItemButtons = () => {
 	 *
 	 */
 	return (
-		<VStack className="p-2">
+		<VStack className="p-2 gap-1">
 			<HStack>
 				<Text className="grow">{t('Add Miscellaneous Product', { _tags: 'core' })}</Text>
 				<Dialog open={addMiscProductDialogOpen} onOpenChange={setAddMiscProductDialogOpen}>
 					<DialogTrigger asChild>
-						<Button variant="ghost" size="icon" className="rounded-full">
-							<Icon name="circlePlus" />
-						</Button>
+						<IconButton name="circlePlus" />
 					</DialogTrigger>
 					<DialogContent>
 						<DialogHeader>
@@ -149,9 +148,7 @@ export const AddCartItemButtons = () => {
 				<Text className="grow">{t('Add Fee', { _tags: 'core' })}</Text>
 				<Dialog open={addFeeDialogOpen} onOpenChange={setAddFeeDialogOpen}>
 					<DialogTrigger asChild>
-						<Button variant="ghost" size="icon" className="rounded-full">
-							<Icon name="circlePlus" />
-						</Button>
+						<IconButton name="circlePlus" />
 					</DialogTrigger>
 					<DialogContent>
 						<DialogHeader>
@@ -180,9 +177,7 @@ export const AddCartItemButtons = () => {
 				<Text className="grow">{t('Add Shipping', { _tags: 'core' })}</Text>
 				<Dialog open={addShippingDialogOpen} onOpenChange={setAddShippingDialogOpen}>
 					<DialogTrigger asChild>
-						<Button variant="ghost" size="icon" className="rounded-full">
-							<Icon name="circlePlus" />
-						</Button>
+						<IconButton name="circlePlus" />
 					</DialogTrigger>
 					<DialogContent>
 						<DialogHeader>

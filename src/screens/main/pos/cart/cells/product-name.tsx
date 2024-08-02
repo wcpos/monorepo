@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import find from 'lodash/find';
 
@@ -8,6 +9,7 @@ import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/tailwind/src/dialog';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Icon } from '@wcpos/tailwind/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 import { VStack } from '@wcpos/tailwind/src/vstack';
@@ -62,25 +64,21 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 	 */
 	return (
 		<>
-			<VStack className="w-full">
+			<VStack>
 				<HStack>
-					<Button
-						variant="outline"
-						//onChange={(name) => updateLineItem(uuid, { name })}
-					>
-						<ButtonText className="font-bold" numberOfLines={1}>
-							{item.name}
-						</ButtonText>
-					</Button>
+					<View className="flex-row grow">
+						<Button
+							variant="outline"
+							//onChange={(name) => updateLineItem(uuid, { name })}
+						>
+							<ButtonText className="font-bold" numberOfLines={1}>
+								{item.name}
+							</ButtonText>
+						</Button>
+					</View>
 					<Tooltip delayDuration={150}>
 						<TooltipTrigger asChild>
-							<Button
-								variant="ghost"
-								className="rounded-full"
-								onPress={() => setOpenEditDialog(true)}
-							>
-								<Icon name="ellipsisVertical" />
-							</Button>
+							<IconButton name="ellipsisVertical" onPress={() => setOpenEditDialog(true)} />
 						</TooltipTrigger>
 						<TooltipContent>
 							<Text>{t('Edit {name}', { _tags: 'core', name: item.name })}</Text>
@@ -91,7 +89,7 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 				{show('sku') && <Text className="text-sm">{item.sku}</Text>}
 
 				{attributes.length > 0 && (
-					<Box className="grid gap-1 grid-cols-2">
+					<Box className="grid gap-1 grid-cols-2 p-0">
 						{attributes.map((meta) => {
 							return (
 								<React.Fragment key={meta.id || meta.display_key || meta.key}>

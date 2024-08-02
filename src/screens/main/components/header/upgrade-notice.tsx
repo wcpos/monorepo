@@ -4,7 +4,7 @@ import { Linking } from 'react-native';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Icon } from '@wcpos/tailwind/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
 
 import { useT } from '../../../../contexts/translations';
 
@@ -33,14 +33,7 @@ export const UpgradeNotice = ({ setShowUpgrade }) => {
 					<ButtonText className="text-sm">{upgradeToProText}</ButtonText>
 				</Button>
 			</Box>
-			<Button
-				size="icon"
-				variant="ghost"
-				className="rounded-full h-5 w-5"
-				onPress={() => setShowUpgrade(false)}
-			>
-				<Icon name="xmark" size="xSmall" />
-			</Button>
+			<IconButton name="xmark" size="sm" onPress={() => setShowUpgrade(false)} />
 		</HStack>
 	);
 };

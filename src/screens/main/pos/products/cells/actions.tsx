@@ -1,8 +1,6 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
-import { Button } from '@wcpos/tailwind/src/button';
-import { Icon } from '@wcpos/tailwind/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
 
 import { useAddProduct } from '../../hooks/use-add-product';
 
@@ -20,8 +18,6 @@ export const Actions = ({ item: product }: Props) => {
 	 *
 	 */
 	return (
-		<Button variant="ghost" size="lg" className="rounded-full" onPress={() => addProduct(product)}>
-			<Icon name="circlePlus" className="fill-success w-7 h-7" />
-		</Button>
+		<IconButton name="circlePlus" variant="success" size="xl" onPress={() => addProduct(product)} />
 	);
 };

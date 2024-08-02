@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import { Button } from '@wcpos/tailwind/src/button';
 import { Dialog, DialogContent, DialogTitle } from '@wcpos/tailwind/src/dialog';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { Icon } from '@wcpos/tailwind/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/tailwind/src/tooltip';
 
@@ -56,9 +55,7 @@ export const AddNewCustomer = ({ onAdd }: Props) => {
 		<ErrorBoundary>
 			<Tooltip delayDuration={150}>
 				<TooltipTrigger asChild>
-					<Button variant="ghost" className="rounded-full" onPress={() => setOpen(true)}>
-						<Icon name="userPlus" />
-					</Button>
+					<IconButton name="userPlus" onPress={() => setOpen(true)} />
 				</TooltipTrigger>
 				<TooltipContent>
 					<Text>{t('Add new customer', { _tags: 'core' })}</Text>

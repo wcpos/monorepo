@@ -22,7 +22,6 @@ import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
-import { EditDocumentForm } from '../components/edit-document-form';
 import { LanguageSelect } from '../components/language-select';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
@@ -161,7 +160,7 @@ export const GeneralSettings = () => {
 										'text-sm native:text-lg',
 										field.value ? 'text-foreground' : 'text-muted-foreground'
 									)}
-									placeholder="Select a verified email"
+									placeholder={t('Select a currency position', { _tags: 'core' })}
 								/>
 							</SelectTrigger>
 							<SelectContent>

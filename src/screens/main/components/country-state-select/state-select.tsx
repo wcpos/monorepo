@@ -7,7 +7,12 @@ import { TextInputWithLabel } from '@wcpos/components/src/textinput';
 
 import useCountries, { CountriesProvider } from '../../../../contexts/countries';
 
-export const StateSelect = ({ label, value, onChange }) => {
+/**
+ *
+ * @param param0
+ * @returns
+ */
+const _StateSelect = ({ label, value, onChange }) => {
 	const country = useCountries();
 	const options = React.useMemo(
 		() =>
@@ -15,7 +20,7 @@ export const StateSelect = ({ label, value, onChange }) => {
 				? country.states.map((state) => ({
 						label: state.name,
 						value: state.code,
-				  }))
+					}))
 				: [],
 		[country.states]
 	);
@@ -40,12 +45,13 @@ export const StateSelect = ({ label, value, onChange }) => {
 	return <ComboboxWithLabel label={label} options={options} value={value} onChange={onChange} />;
 };
 
-const StateSelectWithProvider = ({ country, ...props }) => {
+/**
+ *
+ */
+export const StateSelect = ({ country, ...props }) => {
 	return (
 		<CountriesProvider countryCode={country}>
-			<StateSelect {...props} />
+			<_StateSelect {...props} />
 		</CountriesProvider>
 	);
 };
-
-export default StateSelectWithProvider;

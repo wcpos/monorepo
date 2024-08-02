@@ -7,6 +7,7 @@ import {
 	ContextMenuTrigger,
 } from '@wcpos/tailwind/src/context-menu';
 import { Icon } from '@wcpos/tailwind/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Loader } from '@wcpos/tailwind/src/loader';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
@@ -34,7 +35,7 @@ const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 	 *
 	 */
 	return active ? (
-		<Loader size="small" />
+		<Loader size="sm" />
 	) : (
 		<ContextMenu>
 			<ContextMenuTrigger>
@@ -44,8 +45,9 @@ const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 							console.log('test');
 						}}
 						onPress={sync}
+						asChild
 					>
-						<Icon name="arrowRotateRight" className="text-sm" />
+						<IconButton name="arrowRotateRight" size="sm" />
 					</TooltipTrigger>
 					<TooltipContent>
 						<Text>{t('Press to sync, long press for more options', { _tags: 'core' })}</Text>

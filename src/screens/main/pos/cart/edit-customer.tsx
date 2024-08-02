@@ -11,6 +11,7 @@ import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
+import { CountrySelect, StateSelect } from '../../components/country-state-select';
 
 export interface CustomerFormValues {
 	billing: {
@@ -64,7 +65,7 @@ export const CustomerForm = React.forwardRef<SubmitCustomerHandle, AddCustomerPr
 					billing: z.object({
 						first_name: z.string().optional(),
 						last_name: z.string().optional(),
-						email: z.string().email(),
+						email: z.string().optional(),
 						phone: z.string().optional(),
 						company: z.string().optional(),
 						address_1: z.string().optional(),
@@ -209,7 +210,7 @@ export const CustomerForm = React.forwardRef<SubmitCustomerHandle, AddCustomerPr
 							control={form.control}
 							name="billing.country"
 							render={({ field }) => (
-								<FormInput label={t('Country', { _tags: 'core' })} {...field} />
+								<CountrySelect label={t('Country', { _tags: 'core' })} {...field} />
 							)}
 						/>
 						<FormField

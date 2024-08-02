@@ -5,13 +5,12 @@ import pick from 'lodash/pick';
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import Box from '@wcpos/components/src/box';
-import Modal from '@wcpos/components/src/modal';
-import Form from '@wcpos/react-native-jsonschema-form';
 import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import { Dialog, DialogContent } from '@wcpos/tailwind/src/dialog';
 import { Text } from '@wcpos/tailwind/src/text';
 
+import { CustomerForm, CustomerFormValues, SubmitCustomerHandle } from './edit-customer';
 import { useT } from '../../../../contexts/translations';
-import { CountrySelect, StateSelect } from '../../components/country-state-select';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -22,7 +21,7 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  *
  */
 const Customer = ({ setShowCustomerSelect }) => {
-	const [editModalOpened, setEditModalOpened] = React.useState(false);
+	const [editModalOpen, setEditModalOpen] = React.useState(false);
 	const { currentOrder } = useCurrentOrder();
 	const billing = useObservableEagerState(currentOrder.billing$);
 	const shipping = useObservableEagerState(currentOrder.shipping$);
@@ -33,129 +32,14 @@ const Customer = ({ setShowCustomerSelect }) => {
 	const shippingCountry = get(shipping, ['country']);
 	const t = useT();
 	const { localPatch } = useLocalMutation();
+	const editCustomerAddressRef = React.useRef<SubmitCustomerHandle>();
 
 	/**
 	 *
 	 */
-	const schema = React.useMemo(() => {
-		const _schema = {
-			...currentOrder.collection.schema.jsonSchema,
-			properties: pick(currentOrder.collection.schema.jsonSchema.properties, [
-				'billing',
-				'shipping',
-			]),
-		};
-
-		return _schema;
-	}, [currentOrder.collection.schema.jsonSchema]);
-
-	/**
-	 *
-	 */
-	const uiSchema = React.useMemo(() => {
-		return {
-			'ui:title': null,
-			'ui:description': null,
-			billing: {
-				'ui:title': t('Billing Address', { _tags: 'core' }),
-				'ui:description': null,
-				'ui:collapsible': 'opened',
-				'ui:order': [
-					'first_name',
-					'last_name',
-					'email',
-					'company',
-					'phone',
-					'address_1',
-					'address_2',
-					'city',
-					'postcode',
-					'state',
-					'country',
-				],
-				first_name: {
-					'ui:label': t('First Name', { _tags: 'core' }),
-				},
-				last_name: {
-					'ui:label': t('Last Name', { _tags: 'core' }),
-				},
-				email: {
-					'ui:label': t('Email', { _tags: 'core' }),
-				},
-				address_1: {
-					'ui:label': t('Address 1', { _tags: 'core' }),
-				},
-				address_2: {
-					'ui:label': t('Address 2', { _tags: 'core' }),
-				},
-				city: {
-					'ui:label': t('City', { _tags: 'core' }),
-				},
-				state: {
-					'ui:label': t('State', { _tags: 'core' }),
-					'ui:widget': (props) => <StateSelect country={billingCountry} {...props} />,
-				},
-				postcode: {
-					'ui:label': t('Postcode', { _tags: 'core' }),
-				},
-				country: {
-					'ui:label': t('Country', { _tags: 'core' }),
-					'ui:widget': CountrySelect,
-				},
-				company: {
-					'ui:label': t('Company', { _tags: 'core' }),
-				},
-				phone: {
-					'ui:label': t('Phone', { _tags: 'core' }),
-				},
-			},
-			shipping: {
-				'ui:title': t('Shipping Address', { _tags: 'core' }),
-				'ui:description': null,
-				'ui:collapsible': 'closed',
-				'ui:order': [
-					'first_name',
-					'last_name',
-					'company',
-					'address_1',
-					'address_2',
-					'city',
-					'postcode',
-					'state',
-					'country',
-				],
-				first_name: {
-					'ui:label': t('First Name', { _tags: 'core' }),
-				},
-				last_name: {
-					'ui:label': t('Last Name', { _tags: 'core' }),
-				},
-				address_1: {
-					'ui:label': t('Address 1', { _tags: 'core' }),
-				},
-				address_2: {
-					'ui:label': t('Address 2', { _tags: 'core' }),
-				},
-				city: {
-					'ui:label': t('City', { _tags: 'core' }),
-				},
-				state: {
-					'ui:label': t('State', { _tags: 'core' }),
-					'ui:widget': (props) => <StateSelect country={shippingCountry} {...props} />,
-				},
-				postcode: {
-					'ui:label': t('Postcode', { _tags: 'core' }),
-				},
-				country: {
-					'ui:label': t('Country', { _tags: 'core' }),
-					'ui:widget': CountrySelect,
-				},
-				company: {
-					'ui:label': t('Company', { _tags: 'core' }),
-				},
-			},
-		};
-	}, [billingCountry, shippingCountry, t]);
+	const handleEditCustomerAddress = React.useCallback((data: CustomerFormValues) => {
+		// localPatch({ document: currentOrder, data: changes });
+	}, []);
 
 	/**
 	 *
@@ -165,30 +49,22 @@ const Customer = ({ setShowCustomerSelect }) => {
 			<Text className="font-bold">{t('Customer', { _tags: 'core' })}:</Text>
 			<ButtonPill
 				size="xs"
-				onPress={() => () => setEditModalOpened(true)}
+				onPress={() => setEditModalOpen(true)}
 				removable={true}
 				onRemove={() => setShowCustomerSelect(true)}
 			>
 				<ButtonText>{name}</ButtonText>
 			</ButtonPill>
 
-			{editModalOpened && (
-				<Modal
-					size="large"
-					opened
-					onClose={() => setEditModalOpened(false)}
-					title={t('Edit Customer Address', { _tags: 'core' })}
-				>
-					<Form
-						formData={{ billing, shipping }}
-						schema={schema}
-						uiSchema={uiSchema}
-						onChange={({ changes }) => {
-							localPatch({ document: currentOrder, data: changes });
-						}}
-					/>
-				</Modal>
-			)}
+			<Dialog
+				open={editModalOpen}
+				onOpenChange={setEditModalOpen}
+				title={t('Edit Customer Address', { _tags: 'core' })}
+			>
+				<DialogContent>
+					<CustomerForm ref={editCustomerAddressRef} onSubmit={handleEditCustomerAddress} />
+				</DialogContent>
+			</Dialog>
 		</Box>
 	);
 };

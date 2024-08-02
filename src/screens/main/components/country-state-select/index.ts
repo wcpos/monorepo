@@ -1,4 +1,2 @@
-import CountrySelect from './country-select';
-import StateSelect from './state-select';
-
-export { CountrySelect, StateSelect };
+export { CountrySelect } from './country-select';
+export { StateSelect } from './state-select';

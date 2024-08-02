@@ -7,7 +7,7 @@ import { HStack } from '@wcpos/tailwind/src/hstack';
 import Customer from './customer';
 import { useT } from '../../../../contexts/translations';
 import { AddNewCustomer } from '../../components/customer/add-new';
-import CustomerSelect from '../../components/customer-select';
+import { CustomerSelect } from '../../components/customer-select';
 import { UISettings } from '../../components/ui-settings';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useAddCustomer } from '../hooks/use-add-customer';
@@ -42,7 +42,7 @@ const CartHeader = () => {
 			<Box className="p-0 flex-1">
 				<ErrorBoundary>
 					{showCustomerSelect ? (
-						<CustomerSelect onSelectCustomer={handleSelectCustomer} autoFocus />
+						<CustomerSelect />
 					) : (
 						<Customer setShowCustomerSelect={setShowCustomerSelect} />
 					)}

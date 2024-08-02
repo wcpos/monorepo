@@ -18,11 +18,7 @@ export const SettingsTabs = () => {
 	const t = useT();
 
 	return (
-		<Tabs
-			value={value}
-			onValueChange={setValue}
-			className="w-full max-w-[400px] mx-auto flex-col gap-1.5"
-		>
+		<Tabs value={value} onValueChange={setValue}>
 			<TabsList className="flex-row w-full">
 				<TabsTrigger value="general" className="flex-1">
 					<Text>{t('General Settings', { _tags: 'core' })}</Text>
