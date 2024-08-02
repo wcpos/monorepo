@@ -37,10 +37,11 @@ type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 	VariantProps<typeof buttonVariants> & {
 		name: IconName;
 		loading?: boolean;
+		iconClassName?: string;
 	};
 
 const IconButton = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>(
-	({ className, name, variant, size, loading, ...props }, ref) => {
+	({ className, iconClassName, name, variant, size, loading, ...props }, ref) => {
 		return (
 			<Pressable
 				className={cn(
@@ -51,7 +52,7 @@ const IconButton = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonPr
 				role="button"
 				{...props}
 			>
-				<Icon name={name} variant={variant} size={size} />
+				<Icon name={name} variant={variant} size={size} className={iconClassName} />
 			</Pressable>
 		);
 	}

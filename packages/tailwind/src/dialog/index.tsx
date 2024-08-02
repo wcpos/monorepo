@@ -6,6 +6,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Button } from '../button';
 import { Icon } from '../icon';
+import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
 
 const Dialog = DialogPrimitive.Root;
@@ -87,14 +88,7 @@ const DialogContent = React.forwardRef<
 						}
 						asChild
 					>
-						<Button variant="ghost" className="rounded-full">
-							<Icon
-								name="xmark"
-								width={Platform.OS === 'web' ? 16 : 18}
-								height={Platform.OS === 'web' ? 16 : 18}
-								className={cn('text-muted-foreground', open && 'text-accent-foreground')}
-							/>
-						</Button>
+						<IconButton name="xmark" />
 					</DialogPrimitive.Close>
 				</DialogPrimitive.Content>
 			</DialogOverlay>
