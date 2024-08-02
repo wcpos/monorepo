@@ -8,13 +8,12 @@ import { Box } from '@wcpos/tailwind/src/box';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/tailwind/src/dialog';
 import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Icon } from '@wcpos/tailwind/src/icon';
 import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import { EditLineItemModal } from './edit-line-item';
+import { EditLineItem } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
@@ -65,10 +64,11 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 	return (
 		<>
 			<VStack>
-				<HStack>
-					<View className="flex-row grow">
+				<HStack className="w-full">
+					<View className="flex-row flex-1 w-full">
 						<Button
 							variant="outline"
+							className="max-w-full items-start"
 							//onChange={(name) => updateLineItem(uuid, { name })}
 						>
 							<ButtonText className="font-bold" numberOfLines={1}>
@@ -112,7 +112,7 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 					<DialogHeader>
 						<DialogTitle>{t('Edit {name}', { _tags: 'core', name: item.name })}</DialogTitle>
 					</DialogHeader>
-					<EditLineItemModal uuid={uuid} item={item} />
+					<EditLineItem uuid={uuid} item={item} />
 				</DialogContent>
 			</Dialog>
 		</>

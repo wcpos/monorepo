@@ -20,7 +20,7 @@ interface Props {
 /**
  *
  */
-export const EditLineItemModal = ({ uuid, item }: Props) => {
+export const EditLineItem = ({ uuid, item }: Props) => {
 	const t = useT();
 	const { updateLineItem } = useUpdateLineItem();
 	const { getLineItemData } = useLineItemData();

@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Suspense from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import Table, { CellRenderer, TableProps } from '@wcpos/tailwind/src/table';
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { Actions } from '../cells/actions';
 import { Price } from '../cells/price';

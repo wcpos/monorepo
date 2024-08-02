@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
@@ -42,11 +43,13 @@ const Name = ({ item: product, column, onChange }: Props) => {
 	 */
 	return (
 		<VStack space="xs" className="w-full">
-			<Button variant="outline">
-				<ButtonText className="font-bold" numberOfLines={1}>
-					{name}
-				</ButtonText>
-			</Button>
+			<View className="flex-row flex-1 w-full">
+				<Button variant="outline" className="max-w-full items-start">
+					<ButtonText className="font-bold" numberOfLines={1}>
+						{name}
+					</ButtonText>
+				</Button>
+			</View>
 			{/* <EdittableText weight="bold" onChange={(name: string) => onChange(product, { name })}>
 				{name}
 			</EdittableText> */}

@@ -2,9 +2,8 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Checkbox from '@wcpos/components/src/checkbox';
-import Text from '@wcpos/components/src/text';
+import { SwitchWithLabel } from '@wcpos/tailwind/src/switch';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import NumberInput from '../../components/number-input';
@@ -25,20 +24,20 @@ const StockQuantity = ({ item: product, onChange }: Props) => {
 	const t = useT();
 
 	return (
-		<Box space="small">
+		<VStack>
 			<NumberInput
 				value={String(stockQuantity || 0)}
 				onChange={(stock_quantity) => onChange(product, { stock_quantity })}
 				disabled={!manageStock}
 			/>
-			<Checkbox
+			<SwitchWithLabel
+				nativeID="manage_stock"
 				label={t('Manage', { _tags: 'core' })}
-				value={manageStock}
-				onChange={(manage_stock) => onChange(product, { manage_stock })}
-				type="secondary"
-				size="small"
+				checked={manageStock}
+				onCheckedChange={(manage_stock) => onChange(product, { manage_stock })}
+				size="xs"
 			/>
-		</Box>
+		</VStack>
 	);
 };
 
