@@ -28,7 +28,6 @@ const buttonVariants = cva(
 				xs: 'h-6 rounded-md px-2',
 				sm: 'h-9 rounded-md px-3',
 				lg: 'h-11 rounded-md px-8 native:h-14',
-				icon: 'h-10 w-10',
 			},
 		},
 		defaultVariants: {
@@ -56,17 +55,12 @@ const buttonVariants = cva(
 				size: 'lg',
 				className: 'h-auto p-0 rounded-none',
 			},
-			{
-				variant: 'link',
-				size: 'icon',
-				className: 'h-auto p-0 rounded-none',
-			},
 		],
 	}
 );
 
 const buttonTextVariants = cva(
-	'web:whitespace-nowrap text-sm native:text-base font-medium text-foreground web:transition-colors',
+	'web:whitespace-nowrap truncate text-base native:text-base font-medium text-foreground web:transition-colors',
 	{
 		variants: {
 			variant: {
@@ -81,9 +75,8 @@ const buttonTextVariants = cva(
 			size: {
 				default: '',
 				xs: 'text-xs',
-				sm: '',
+				sm: 'text-sm',
 				lg: 'text-lg',
-				icon: '',
 			},
 		},
 		defaultVariants: {
@@ -93,22 +86,22 @@ const buttonTextVariants = cva(
 	}
 );
 
-const buttonIconVariants = cva('fill-current text-sm', {
+const buttonIconVariants = cva('', {
 	variants: {
 		variant: {
-			default: 'text-primary-foreground',
+			default: 'fill-primary-foreground',
 			destructive: 'fill-destructive-foreground',
 			outline: 'fill-accent-foreground',
 			secondary: 'fill-secondary-foreground',
+			success: 'fill-success-foreground',
 			ghost: 'fill-accent-foreground',
 			link: 'fill-accent-foreground',
 		},
 		size: {
-			default: '',
-			xs: 'text-xs',
-			sm: '',
-			lg: 'native:text-lg',
-			icon: '',
+			default: 'size-4',
+			xs: 'size-3',
+			sm: 'size-3.5',
+			lg: 'size-5',
 		},
 	},
 	defaultVariants: {

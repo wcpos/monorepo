@@ -65,11 +65,8 @@ const TableRow = <T extends object>({
 			return (
 				<Box
 					key={column.key}
-					className="p-2 flex-1"
-					// flex={flex}
-					// width={width}
-					// align={alignItemsMap[align]}
-					style={[cellStyle]}
+					className={`p-2 justify-${alignItemsMap[align]}`}
+					style={[{ flex: width ? `0 0 ${width}px` : flex }, cellStyle]}
 					onLayout={(event) => onLayout(event, column.key)}
 				>
 					{cellRenderer({ item, column, index: idx, cellWidth: cellWidths[column.key] })}
@@ -83,7 +80,7 @@ const TableRow = <T extends object>({
 	 *
 	 */
 	return (
-		<HStack style={rowStyle} alt={index % 2 !== 0}>
+		<HStack className="gap-0" style={rowStyle} alt={index % 2 !== 0}>
 			{columns.map(renderCell)}
 		</HStack>
 	);

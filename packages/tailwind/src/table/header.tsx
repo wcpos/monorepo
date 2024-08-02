@@ -58,8 +58,8 @@ const TableHeader = () => {
 			return (
 				<Box
 					key={key}
-					className="p-2 flex-1"
-					//flex={flex} width={width} align={alignItemsMap[align]}
+					className={`p-2 justify-${alignItemsMap[align]}`}
+					style={{ flex: width ? `0 0 ${width}px` : flex }}
 				>
 					{sortable ? (
 						<Button variant="ghost" className="p-0 h-3.5" onPress={handlePress}>
