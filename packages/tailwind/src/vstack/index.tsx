@@ -6,7 +6,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../lib/utils';
 
-const vstackVariants = cva('flex-col w-full', {
+const vstackVariants = cva('flex-col', {
 	variants: {
 		space: {
 			xs: 'gap-1',

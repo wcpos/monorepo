@@ -11,7 +11,7 @@ interface Props {
 
 export const LoadingRow = ({ loading = false, style }: Props) => {
 	return (
-		<Box className="p-2 h-4" style={style}>
+		<Box className="p-2 h-4 justify-center" style={style}>
 			{loading ? <Loader /> : null}
 		</Box>
 	);
