@@ -15,7 +15,7 @@ import FilterBar from './filter-bar';
 import SearchBar from './search-bar';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import DataTable from '../components/data-table';
+import { DataTable } from '../components/data-table';
 import { Date } from '../components/date';
 import { Cashier } from '../components/order/cashier';
 import { CreatedVia } from '../components/order/created-via';

@@ -12,7 +12,7 @@ import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
-import DataTable from '../components/data-table';
+import { DataTable } from '../components/data-table';
 import FilterBar from '../components/product/filter-bar';
 import Search from '../components/product/search';
 import { TaxBasedOn } from '../components/product/tax-based-on';

@@ -13,7 +13,7 @@ import cells from './cells';
 import SearchBar from './search-bar';
 import { useT } from '../../../contexts/translations';
 import { AddNewCustomer } from '../components/customer/add-new';
-import DataTable from '../components/data-table';
+import { DataTable } from '../components/data-table';
 import { UISettings } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 

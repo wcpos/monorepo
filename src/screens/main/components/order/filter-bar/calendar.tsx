@@ -11,6 +11,7 @@ import {
 } from 'date-fns';
 import * as Locales from 'date-fns/locale';
 
+import { Box } from '@wcpos/tailwind/src/box';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Calendar } from '@wcpos/tailwind/src/calendar';
 import type { DateRange } from '@wcpos/tailwind/src/calendar';
@@ -62,39 +63,43 @@ export const DateRangeCalendar = () => {
 	};
 
 	return (
-		<HStack>
-			<VStack>
-				<Button onPress={setToday}>
-					<ButtonText>{t('Today', { _tags: 'core' })}</ButtonText>
+		<VStack>
+			<HStack className="items-start">
+				<VStack>
+					<Button onPress={setToday} size="sm">
+						<ButtonText>{t('Today', { _tags: 'core' })}</ButtonText>
+					</Button>
+					<Button onPress={setYesterday} size="sm">
+						<ButtonText>{t('Yesterday', { _tags: 'core' })}</ButtonText>
+					</Button>
+					<Button onPress={setThisWeek} size="sm">
+						<ButtonText>{t('This Week', { _tags: 'core' })}</ButtonText>
+					</Button>
+					<Button onPress={setLastWeek} size="sm">
+						<ButtonText>{t('Last Week', { _tags: 'core' })}</ButtonText>
+					</Button>
+					<Button onPress={setThisMonth} size="sm">
+						<ButtonText>{t('This Month', { _tags: 'core' })}</ButtonText>
+					</Button>
+					<Button onPress={setLastMonth} size="sm">
+						<ButtonText>{t('Last Month', { _tags: 'core' })}</ButtonText>
+					</Button>
+				</VStack>
+				<Calendar
+					locale={Locales.es}
+					mode="range"
+					defaultMonth={date?.from}
+					endMonth={today}
+					hidden={[{ after: today }]}
+					onSelect={setDate}
+					selected={date}
+				/>
+			</HStack>
+			<Box className="p-0 justify-end">
+				<Button>
+					<ButtonText>Done</ButtonText>
 				</Button>
-				<Button onPress={setYesterday}>
-					<ButtonText>{t('Yesterday', { _tags: 'core' })}</ButtonText>
-				</Button>
-				<Button onPress={setThisWeek}>
-					<ButtonText>{t('This Week', { _tags: 'core' })}</ButtonText>
-				</Button>
-				<Button onPress={setLastWeek}>
-					<ButtonText>{t('Last Week', { _tags: 'core' })}</ButtonText>
-				</Button>
-				<Button onPress={setThisMonth}>
-					<ButtonText>{t('This Month', { _tags: 'core' })}</ButtonText>
-				</Button>
-				<Button onPress={setLastMonth}>
-					<ButtonText>{t('Last Month', { _tags: 'core' })}</ButtonText>
-				</Button>
-			</VStack>
-			<Calendar
-				locale={Locales.es}
-				initialFocus
-				mode="range"
-				defaultMonth={date?.from}
-				toDate={today}
-				modifiers={{
-					disabled: [{ after: today }],
-				}}
-				onSelect={setDate}
-				selected={date}
-			/>
-		</HStack>
+			</Box>
+		</VStack>
 	);
 };
