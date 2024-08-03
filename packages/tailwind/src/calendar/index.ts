@@ -1,3 +1,3 @@
-export * from './Calendar';
+export * from './calendar';
 
 export type { DateRange } from 'react-day-picker';
