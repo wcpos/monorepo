@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+	<script>
+		function onMessage({data}) {
+			const textarea = document.getElementById('message');
+			textarea.value += data + '\n';
+		}
+		window.addEventListener('message', onMessage);
+</script>
+</html>
+<body>
+	<textarea id="message" rows="10"></textarea>
+</body>
+</html>
