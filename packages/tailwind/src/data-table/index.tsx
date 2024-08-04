@@ -84,47 +84,45 @@ const DataTable = <TData, TValue>({
 					<ActivityIndicator size="small" className="text-foreground" />
 				</Animated.View>
 			)}
-			<ScrollView>
-				<Table>
-					<TableHeader>
-						{table.getHeaderGroups().map((headerGroup) => (
-							<TableRow key={headerGroup.id}>
-								{headerGroup.headers.map((header) => {
-									return (
-										<TableHead key={header.id}>
-											{header.isPlaceholder
-												? null
-												: flexRender(header.column.columnDef.header, header.getContext())}
-										</TableHead>
-									);
-								})}
-							</TableRow>
-						))}
-					</TableHeader>
-					<TableBody>
-						<FlashList
-							data={table.getRowModel().rows}
-							estimatedItemSize={estimatedItemSize}
-							ListEmptyComponent={ListEmptyComponent}
-							ListFooterComponent={ListFooterComponent}
-							showsVerticalScrollIndicator={false}
-							contentContainerStyle={{
-								paddingBottom: insets.bottom,
-							}}
-							refreshControl={
-								<RefreshControl
-									refreshing={isRefreshing}
-									onRefresh={onRefresh}
-									style={{ opacity: 0 }}
-								/>
-							}
-							renderItem={renderItem || defaultRenderRow}
-							onEndReached={onEndReached}
-							onEndReachedThreshold={onEndReachedThreshold}
-						/>
-					</TableBody>
-				</Table>
-			</ScrollView>
+			<Table className="flex-1">
+				<TableHeader>
+					{table.getHeaderGroups().map((headerGroup) => (
+						<TableRow key={headerGroup.id}>
+							{headerGroup.headers.map((header) => {
+								return (
+									<TableHead key={header.id}>
+										{header.isPlaceholder
+											? null
+											: flexRender(header.column.columnDef.header, header.getContext())}
+									</TableHead>
+								);
+							})}
+						</TableRow>
+					))}
+				</TableHeader>
+				<TableBody>
+					<FlashList
+						data={table.getRowModel().rows}
+						estimatedItemSize={estimatedItemSize}
+						ListEmptyComponent={ListEmptyComponent}
+						ListFooterComponent={ListFooterComponent}
+						showsVerticalScrollIndicator={false}
+						contentContainerStyle={{
+							paddingBottom: insets.bottom,
+						}}
+						refreshControl={
+							<RefreshControl
+								refreshing={isRefreshing}
+								onRefresh={onRefresh}
+								style={{ opacity: 0 }}
+							/>
+						}
+						renderItem={renderItem || defaultRenderRow}
+						onEndReached={onEndReached}
+						onEndReachedThreshold={onEndReachedThreshold}
+					/>
+				</TableBody>
+			</Table>
 		</>
 	);
 };
