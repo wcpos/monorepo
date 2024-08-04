@@ -3,7 +3,7 @@
 // https://github.com/shadcn-ui/ui
 
 import * as React from 'react';
-import { View } from 'react-native';
+import { View, TextInputProps } from 'react-native';
 
 import {
 	Controller,
@@ -174,12 +174,24 @@ type FormItemProps<T extends React.ElementType<any>, U> = Override<
 > & {
 	label?: string;
 	description?: string;
+	type?:
+		| 'text'
+		| 'numeric'
+		| 'email'
+		| 'phone'
+		| 'decimal'
+		| 'url'
+		| 'ascii'
+		| 'numbers'
+		| 'name-phone'
+		| 'twitter'
+		| 'web-search';
 };
 
 const FormInput = React.forwardRef<
 	React.ElementRef<typeof Input>,
-	FormItemProps<typeof Input, string>
->(({ label, description, onChange, ...props }, ref) => {
+	FormItemProps<typeof Input, string | number>
+>(({ label, description, onChange, type = 'text', ...props }, ref) => {
 	const inputRef = React.useRef<React.ComponentRef<typeof Input>>(null);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
@@ -205,6 +217,15 @@ const FormInput = React.forwardRef<
 		}
 	}
 
+	function handleChangeText(value: string) {
+		if (type === 'numeric' || type === 'decimal') {
+			const numericValue = parseFloat(value.replace(/[^0-9.]/g, ''));
+			onChange && onChange(numericValue);
+		} else {
+			onChange && onChange(value);
+		}
+	}
+
 	return (
 		<FormItem>
 			{!!label && (
@@ -222,7 +243,8 @@ const FormInput = React.forwardRef<
 						: `${formDescriptionNativeID} ${formMessageNativeID}`
 				}
 				aria-invalid={!!error}
-				onChangeText={onChange}
+				onChangeText={handleChangeText}
+				type={type}
 				{...props}
 			/>
 			{!!description && <FormDescription>{description}</FormDescription>}

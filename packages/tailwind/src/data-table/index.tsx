@@ -4,20 +4,20 @@ import { ActivityIndicator, Dimensions, RefreshControl, ScrollView } from 'react
 import { FlashList, type FlashListProps } from '@shopify/flash-list';
 import {
 	ColumnDef,
-	Row,
 	SortingState,
 	flexRender,
 	getCoreRowModel,
 	getSortedRowModel,
 	useReactTable,
+	Row,
 } from '@tanstack/react-table';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { cn } from '../lib/utils';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../table2';
+import { DataTableRow } from './row';
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table2';
 
-interface DataTableProps<TData, TValue> {
+export interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
 	data: TData[];
 	onRowPress?: (row: Row<TData>) => void;
@@ -28,13 +28,13 @@ interface DataTableProps<TData, TValue> {
 	onRefresh?: () => void;
 	onEndReached?: FlashListProps<TData>['onEndReached'];
 	onEndReachedThreshold?: FlashListProps<TData>['onEndReachedThreshold'];
+	renderItem?: FlashListProps<TData>['renderItem'];
 }
 
 /**
  * @docs https://tanstack.com/table
  */
-
-export function DataTable<TData, TValue>({
+const DataTable = <TData, TValue>({
 	columns,
 	data,
 	onRowPress,
@@ -45,7 +45,8 @@ export function DataTable<TData, TValue>({
 	onRefresh,
 	onEndReached,
 	onEndReachedThreshold,
-}: DataTableProps<TData, TValue>) {
+	renderItem,
+}: DataTableProps<TData, TValue>) => {
 	const insets = useSafeAreaInsets();
 	const [sorting, setSorting] = React.useState<SortingState>([]);
 	const table = useReactTable({
@@ -59,6 +60,19 @@ export function DataTable<TData, TValue>({
 		},
 	});
 
+	/**
+	 *
+	 */
+	const defaultRenderRow = React.useCallback(
+		({ item: row, index }: { item: Row<TData>; index: number }) => (
+			<DataTableRow row={row} index={index} onRowPress={onRowPress} columns={columns} />
+		),
+		[onRowPress, columns]
+	);
+
+	/**
+	 *
+	 */
 	return (
 		<>
 			{isRefreshing && (
@@ -104,29 +118,7 @@ export function DataTable<TData, TValue>({
 									style={{ opacity: 0 }}
 								/>
 							}
-							renderItem={({ item: row, index }) => {
-								return (
-									<TableRow
-										className={cn(
-											'active:opacity-70',
-											index % 2 && 'bg-zinc-100/50 dark:bg-zinc-900/50'
-										)}
-										onPress={
-											onRowPress
-												? () => {
-														onRowPress(row);
-													}
-												: undefined
-										}
-									>
-										{row.getVisibleCells().map((cell) => (
-											<TableCell key={cell.id}>
-												{flexRender(cell.column.columnDef.cell, cell.getContext())}
-											</TableCell>
-										))}
-									</TableRow>
-								);
-							}}
+							renderItem={renderItem || defaultRenderRow}
 							onEndReached={onEndReached}
 							onEndReachedThreshold={onEndReachedThreshold}
 						/>
@@ -135,4 +127,6 @@ export function DataTable<TData, TValue>({
 			</ScrollView>
 		</>
 	);
-}
+};
+
+export { DataTable, DataTableRow };
