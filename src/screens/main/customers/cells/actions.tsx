@@ -23,6 +23,7 @@ import {
 } from '@wcpos/tailwind/src/dropdown-menu';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Icon } from '@wcpos/tailwind/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Label } from '@wcpos/tailwind/src/label';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
@@ -67,9 +68,7 @@ const Actions = ({ item: customer }: Props) => {
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<Button variant="ghost" size="icon" className="rounded-full">
-						<Icon name="ellipsisVertical" />
-					</Button>
+					<IconButton name="ellipsisVertical" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem

@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import Icon from '@wcpos/components/src/icon';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
 import { Loader } from '@wcpos/tailwind/src/loader';
 import log from '@wcpos/utils/src/logger';
 
@@ -40,11 +40,7 @@ const DemoButton = () => {
 		<Button variant="ghost">
 			<HStack>
 				<ButtonText>{t('Enter Demo Store', { _tags: 'core' })}</ButtonText>
-				{loading ? (
-					<Loader size="small" type="secondary" />
-				) : (
-					<Icon name="arrowRight" width={12} height={12} />
-				)}
+				{loading ? <Loader size="sm" /> : <Icon name="arrowRight" size="sm" />}
 			</HStack>
 		</Button>
 	);

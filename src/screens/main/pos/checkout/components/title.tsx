@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { useT } from '../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
@@ -25,7 +25,7 @@ const CheckoutTitle = ({ order }: CheckoutTitleProps) => {
 	}
 
 	return (
-		<Text size="large" align="center" weight="bold">
+		<Text className="text-lg font-bold text-center">
 			{t('Amount to Pay', { _tags: 'core' })}
 			{`: ${format(total || 0)}`}
 		</Text>

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import Suspense from '@wcpos/components/src/suspense';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/tailwind/src/tabs';
 import { Text } from '@wcpos/tailwind/src/text';
 
@@ -17,42 +17,39 @@ export const SettingsTabs = () => {
 	const [value, setValue] = React.useState('general');
 	const t = useT();
 
+	const tabs = [
+		{
+			value: 'general',
+			label: t('General Settings', { _tags: 'core' }),
+			component: <GeneralSettings />,
+		},
+		{ value: 'tax', label: t('Tax Settings', { _tags: 'core' }), component: <TaxSettings /> },
+		{
+			value: 'barcode',
+			label: t('Barcode Scanning', { _tags: 'core' }),
+			component: <BarcodeScanning />,
+		},
+		{
+			value: 'shortcuts',
+			label: t('Keyboard Shortcuts', { _tags: 'core' }),
+			component: <KeyboardShortcuts />,
+		},
+	];
+
 	return (
 		<Tabs value={value} onValueChange={setValue}>
 			<TabsList className="flex-row w-full">
-				<TabsTrigger value="general" className="flex-1">
-					<Text>{t('General Settings', { _tags: 'core' })}</Text>
-				</TabsTrigger>
-				<TabsTrigger value="tax" className="flex-1">
-					<Text>{t('Tax Settings', { _tags: 'core' })}</Text>
-				</TabsTrigger>
-				<TabsTrigger value="barcode" className="flex-1">
-					<Text>{t('Barcode Scanning', { _tags: 'core' })}</Text>
-				</TabsTrigger>
-				<TabsTrigger value="shortcuts" className="flex-1">
-					<Text>{t('Keyboard Shortcuts', { _tags: 'core' })}</Text>
-				</TabsTrigger>
+				{tabs.map((tab) => (
+					<TabsTrigger key={tab.value} value={tab.value} className="flex-1">
+						<Text>{tab.label}</Text>
+					</TabsTrigger>
+				))}
 			</TabsList>
-			<TabsContent value="general">
-				<Suspense>
-					<GeneralSettings />
-				</Suspense>
-			</TabsContent>
-			<TabsContent value="tax">
-				<Suspense>
-					<TaxSettings />
-				</Suspense>
-			</TabsContent>
-			<TabsContent value="barcode">
-				<Suspense>
-					<BarcodeScanning />
-				</Suspense>
-			</TabsContent>
-			<TabsContent value="shortcuts">
-				<Suspense>
-					<KeyboardShortcuts />
-				</Suspense>
-			</TabsContent>
+			{tabs.map((tab) => (
+				<TabsContent key={tab.value} value={tab.value}>
+					<Suspense>{tab.component}</Suspense>
+				</TabsContent>
+			))}
 		</Tabs>
 	);
 };

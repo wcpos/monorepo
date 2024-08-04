@@ -1,5 +1,6 @@
 import * as React from 'react';
-import Text from '@wcpos/components/src/text';
+
+import { Text } from '@wcpos/tailwind/src/text';
 
 interface Props {}
 

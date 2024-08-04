@@ -1,20 +1,22 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
 import { useHotkeys, RNKeyboardEvent, getKeyFromEvent } from '@wcpos/hooks/src/use-hotkeys';
+import { Input } from '@wcpos/tailwind/src/input';
+import { Label } from '@wcpos/tailwind/src/label';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection } from '../../hooks/barcodes';
 
-const BarcodeDisplay = () => {
+/**
+ *
+ */
+export const BarcodeDisplay = () => {
 	const [allKeys, setKeyPress] = React.useState('');
 	const { barcode$ } = useBarcodeDetection();
 	const barcode = useObservableState(barcode$);
-	const theme = useTheme();
 	const t = useT();
 
 	/**
@@ -30,35 +32,15 @@ const BarcodeDisplay = () => {
 	useHotkeys('*', onKeyboardEvent);
 
 	return (
-		<Box space="normal">
-			<Box space="xSmall">
-				<Text uppercase size="small" numberOfLines={1} type="textMuted">
-					{t('Keypress Event', { _tags: 'core' })}
-				</Text>
-				<Box
-					border
-					rounding="small"
-					padding="xSmall"
-					style={{ backgroundColor: theme.colors.lightGrey, minHeight: 26 }}
-				>
-					<Text style={{ fontFamily: 'monospace' }}>{allKeys}</Text>
-				</Box>
-			</Box>
-			<Box space="xSmall">
-				<Text uppercase size="small" numberOfLines={1} type="textMuted">
-					{t('Detected Barcode', { _tags: 'core' })}
-				</Text>
-				<Box
-					border
-					rounding="small"
-					padding="xSmall"
-					style={{ backgroundColor: theme.colors.lightGrey, minHeight: 26 }}
-				>
-					<Text style={{ fontFamily: 'monospace' }}>{barcode}</Text>
-				</Box>
-			</Box>
-		</Box>
+		<VStack>
+			<VStack space="sm">
+				<Label nativeID="keypress-event">{t('Keypress Event', { _tags: 'core' })}</Label>
+				<Input className="font-mono bg-accent" value={allKeys} editable={false} aria-disabled />
+			</VStack>
+			<VStack space="sm">
+				<Label nativeID="detected-barcode">{t('Detected Barcode', { _tags: 'core' })}</Label>
+				<Input className="font-mono bg-accent" value={barcode} editable={false} aria-disabled />
+			</VStack>
+		</VStack>
 	);
 };
-
-export default BarcodeDisplay;

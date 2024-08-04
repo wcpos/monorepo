@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
 
 type SKUProps = {
 	item: import('@wcpos/database').ProductDocument;

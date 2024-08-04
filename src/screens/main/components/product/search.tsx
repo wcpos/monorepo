@@ -2,11 +2,10 @@ import * as React from 'react';
 
 import { useSubscription } from 'observable-hooks';
 
-import TextInput from '@wcpos/components/src/textinput';
-
 import { useT } from '../../../../contexts/translations';
 import { useBarcodeDetection, useBarcodeSearch } from '../../hooks/barcodes';
 import { useCollection } from '../../hooks/use-collection';
+import { SearchInput } from '../search-input';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
@@ -65,13 +64,10 @@ const ProductSearch = ({ query }) => {
 	 *
 	 */
 	return (
-		<TextInput
+		<SearchInput
 			placeholder={t('Search Products', { _tags: 'core' })}
 			value={search}
-			onChangeText={onSearch}
-			containerStyle={{ flex: 1 }}
-			clearable
-			// onKeyPress={onKeyboardEvent}
+			onSearch={onSearch}
 		/>
 	);
 };

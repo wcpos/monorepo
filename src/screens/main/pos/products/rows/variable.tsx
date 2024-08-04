@@ -3,10 +3,10 @@ import * as React from 'react';
 import get from 'lodash/get';
 // import { useObservableState } from 'observable-hooks';
 
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Suspense from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import Table, { CellRenderer } from '@wcpos/tailwind/src/table';
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { VariableProductImage } from '../../../components/product/variable-image';
 import VariablePrice from '../../../components/product/variable-price';

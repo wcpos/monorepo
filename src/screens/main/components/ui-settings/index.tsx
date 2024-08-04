@@ -27,11 +27,10 @@ export const UISettings = <T extends UISettingID>({ uiSettings, title }: Props<T
 				<TooltipContent>
 					<Text>{title}</Text>
 				</TooltipContent>
+				<Dialog open={open} onOpenChange={setOpen} title={t('Add new customer', { _tags: 'core' })}>
+					<DialogContent>{title}</DialogContent>
+				</Dialog>
 			</Tooltip>
-			<Dialog open={open} onOpenChange={setOpen}>
-				{/* <DialogTitle>{t('Add new customer', { _tags: 'core' })}</DialogTitle> */}
-				<DialogContent>{title}</DialogContent>
-			</Dialog>
 		</ErrorBoundary>
 	);
 };

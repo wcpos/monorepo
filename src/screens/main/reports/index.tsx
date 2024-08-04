@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { createStackNavigator } from '@react-navigation/stack';
 
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Suspense from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import { Reports } from './reports';
 

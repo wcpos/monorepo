@@ -60,13 +60,12 @@ export const AddNewCustomer = ({ onAdd }: Props) => {
 				<TooltipContent>
 					<Text>{t('Add new customer', { _tags: 'core' })}</Text>
 				</TooltipContent>
+				<Dialog open={open} onOpenChange={setOpen} title={t('Add new customer', { _tags: 'core' })}>
+					<DialogContent>
+						<CustomerForm ref={addMiscProductRef} onSubmit={handleAddCustomer} />
+					</DialogContent>
+				</Dialog>
 			</Tooltip>
-			<Dialog open={open} onOpenChange={setOpen}>
-				{/* <DialogTitle>{t('Add new customer', { _tags: 'core' })}</DialogTitle> */}
-				<DialogContent>
-					<CustomerForm ref={addMiscProductRef} onSubmit={handleAddCustomer} />
-				</DialogContent>
-			</Dialog>
 		</ErrorBoundary>
 	);
 };

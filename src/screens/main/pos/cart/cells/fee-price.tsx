@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import Box from '@wcpos/components/src/box';
-import Icon from '@wcpos/components/src/icon';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
 
 import NumberInput from '../../../components/number-input';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';
@@ -26,14 +26,14 @@ export const FeePrice = ({ uuid, item, column }: Props) => {
 	 *
 	 */
 	return (
-		<Box horizontal align="center" space="xSmall">
+		<HStack space="xs" className="justify-center">
 			<NumberInput
 				value={amount}
 				onChange={(amount) => updateFeeLine(uuid, { amount })}
 				showDecimals={!percent}
 				// showDiscounts={ensureNumberArray(quickDiscounts)}
 			/>
-			{percent && <Icon name="percent" size="small" />}
-		</Box>
+			{percent && <Icon name="percent" size="sm" />}
+		</HStack>
 	);
 };

@@ -11,7 +11,7 @@ import type {
 	TaxRateDocument,
 } from '@wcpos/database';
 import { useInfiniteScroll, Query } from '@wcpos/query';
-import { DataTable as FlashList } from '@wcpos/tailwind/src/data-table';
+import { DataTable as FlashList, DataTableProps } from '@wcpos/tailwind/src/data-table';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { TableRow } from '@wcpos/tailwind/src/table2';
@@ -24,16 +24,23 @@ import { TextCell } from '../text-cell';
 
 type DocumentType = ProductDocument | OrderDocument | CustomerDocument | TaxRateDocument;
 
-interface Props {
+interface Props extends DataTableProps<any, any> {
 	id: UISettingID;
 	query: Query<any>;
 	cells: Record<string, any>;
+	renderItem?: (props: any) => React.ReactNode;
 }
 
 /**
  *
  */
-export const DataTable = <T extends DocumentType>({ id, query, cells }: Props) => {
+export const DataTable = <T extends DocumentType>({
+	id,
+	query,
+	cells,
+	renderItem,
+	...props
+}: Props) => {
 	const { uiSettings, getUILabel } = useUISettings(id);
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const result = useInfiniteScroll(query);
@@ -92,7 +99,8 @@ export const DataTable = <T extends DocumentType>({ id, query, cells }: Props) =
 						</TableRow>
 					);
 				}}
-				// ListFooterComponent={}
+				renderItem={renderItem ? (props) => renderItem({ ...props, columns }) : undefined}
+				{...props}
 			/>
 			<Footer query={query} count={result.hits.length} />
 		</>

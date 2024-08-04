@@ -3,8 +3,8 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
@@ -51,13 +51,13 @@ export const Subtotal = ({ item, column }: Props) => {
 	 *
 	 */
 	return (
-		<Box space="xSmall" align="end">
+		<VStack space="xs" className="justify-end">
 			<Text>{format(displaySubtotal || 0)}</Text>
 			{show('tax') && (
-				<Text type="textMuted" size="small">
+				<Text className="text-sm text-muted">
 					{`${taxDisplayCart} ${format(item.subtotal_tax) || 0} tax`}
 				</Text>
 			)}
-		</Box>
+		</VStack>
 	);
 };

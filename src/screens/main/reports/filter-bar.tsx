@@ -5,11 +5,11 @@ import { of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 import { useTheme } from 'styled-components/native';
 
-import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card } from '@wcpos/tailwind/src/card';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import { useAppState } from '../../../contexts/app-state';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';

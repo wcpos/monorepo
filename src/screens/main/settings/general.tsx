@@ -26,25 +26,9 @@ import { LanguageSelect } from '../components/language-select';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 
-const fields = [
-	'name',
-	'locale',
-	'default_customer',
-	'default_customer_is_cashier',
-	// 'store_address',
-	// 'store_address_2',
-	// 'store_city',
-	// 'default_country',
-	// 'store_postcode',
-	// 'enable_coupons',
-	// 'calc_discounts_sequentially',
-	'currency',
-	'currency_pos',
-	'price_thousand_sep',
-	'price_decimal_sep',
-	'price_num_decimals',
-];
-
+/**
+ *
+ */
 export const GeneralSettings = () => {
 	const { store } = useAppState();
 	const { defaultCustomerResource } = useDefaultCustomer();

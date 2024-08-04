@@ -3,8 +3,8 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
 import { useTable } from '@wcpos/tailwind/src/table';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import PriceWithTax from '../../../components/product/price';
 
@@ -40,7 +40,7 @@ export const Price = ({ item: product, column }: Props) => {
 	 *
 	 */
 	return showRegularPrice ? (
-		<Box space="xSmall" align="end">
+		<VStack space="xs" className="justify-end">
 			<PriceWithTax
 				price={regular_price}
 				taxStatus={taxStatus}
@@ -56,7 +56,7 @@ export const Price = ({ item: product, column }: Props) => {
 				taxDisplay={show('tax') ? 'text' : 'tooltip'}
 				taxLocation={context?.taxLocation}
 			/>
-		</Box>
+		</VStack>
 	) : (
 		<PriceWithTax
 			price={price}

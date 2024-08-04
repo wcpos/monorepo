@@ -5,10 +5,9 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
 
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Suspense from '@wcpos/components/src/suspense';
-import Text from '@wcpos/components/src/text';
 import { useQuery } from '@wcpos/query';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import AddProduct from './add-product';
 import EditProduct from './edit-product';

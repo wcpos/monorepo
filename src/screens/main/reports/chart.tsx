@@ -26,8 +26,8 @@ import {
 } from 'recharts';
 import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';

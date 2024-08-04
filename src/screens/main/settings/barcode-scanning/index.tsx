@@ -1,23 +1,21 @@
 import * as React from 'react';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import BarcodeDisplay from './display';
-import BarcodeSettings from './settings';
+import { BarcodeDisplay } from './display';
+import { BarcodeSettings } from './settings';
 import { useT } from '../../../../contexts/translations';
 
 const BarcodeScanning = () => {
 	const t = useT();
 
 	return (
-		<Box space="normal">
+		<VStack>
 			<BarcodeSettings />
-			<Text size="medium" weight="medium">
-				{t('Barcode Scanning Test', { _tags: 'core' })}
-			</Text>
+			<Text className="text-md font-bold">{t('Barcode Scanning Test', { _tags: 'core' })}</Text>
 			<BarcodeDisplay />
-		</Box>
+		</VStack>
 	);
 };
 

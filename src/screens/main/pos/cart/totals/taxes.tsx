@@ -2,7 +2,6 @@ import React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';

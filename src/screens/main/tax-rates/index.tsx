@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import TaxRatesTabs from './tabs';
 

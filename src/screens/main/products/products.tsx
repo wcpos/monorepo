@@ -1,11 +1,12 @@
 import * as React from 'react';
 
-import Suspense from '@wcpos/components/src/suspense';
 import { useRelationalQuery } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
+import { DataTableRow } from '@wcpos/tailwind/src/data-table';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import SimpleProductTableRow from './rows/simple';
@@ -68,21 +69,12 @@ const Products = () => {
 	/**
 	 *
 	 */
-	const renderItem = React.useCallback((props) => {
-		let Component = TABLE_ROW_COMPONENTS[props.item.document.type];
-
-		// If we still didn't find a component, use SimpleProductTableRow as a fallback
-		// eg: Grouped products
-		if (!Component) {
-			Component = SimpleProductTableRow;
-		}
-
-		return (
-			<ErrorBoundary>
-				<Component {...props} />
-			</ErrorBoundary>
-		);
-	}, []);
+	const renderItem = React.useCallback(
+		({ item: row, index, columns }: { item: any; index: number; columns: any }) => (
+			<DataTableRow row={row} index={index} columns={[columns]} />
+		),
+		[]
+	);
 
 	/**
 	 *

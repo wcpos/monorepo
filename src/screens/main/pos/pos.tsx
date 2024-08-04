@@ -3,9 +3,9 @@ import { useWindowDimensions } from 'react-native';
 
 import { useTheme } from 'styled-components/native';
 
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import POSColumns from './columns';
 import { useCurrentOrder } from './contexts/current-order';
