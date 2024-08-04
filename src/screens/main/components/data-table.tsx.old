@@ -5,7 +5,7 @@ import { useObservableState, useSubscription, useObservableEagerState } from 'ob
 import { debounceTime, skip } from 'rxjs';
 
 import Loader from '@wcpos/components/src/loader';
-import Suspense from '@wcpos/components/src/suspense';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import type {
 	ProductDocument,
 	OrderDocument,

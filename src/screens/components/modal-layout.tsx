@@ -3,11 +3,11 @@ import { View } from 'react-native';
 
 import { useNavigation, StackActions } from '@react-navigation/native';
 
-import Suspense from '@wcpos/components/src/suspense';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { ModalOverlay, ModalContent } from '@wcpos/tailwind/src/modal';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 

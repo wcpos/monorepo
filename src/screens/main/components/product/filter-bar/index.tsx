@@ -7,7 +7,7 @@ import { of } from 'rxjs';
 import { startWith, switchMap, tap } from 'rxjs/operators';
 
 import Box from '@wcpos/components/src/box';
-import Suspense from '@wcpos/components/src/suspense';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import type { Query } from '@wcpos/query';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 

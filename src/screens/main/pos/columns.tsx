@@ -5,9 +5,9 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 
 import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import Gutter from '@wcpos/components/src/gutter';
-import Suspense from '@wcpos/components/src/suspense';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import OpenOrders from './cart';
 import Products from './products';

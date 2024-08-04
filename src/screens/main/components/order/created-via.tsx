@@ -3,7 +3,9 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import Icon from '@wcpos/components/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
+import { Text } from '@wcpos/tailwind/src/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
 import { useT } from '../../../../contexts/translations';
 
@@ -14,15 +16,15 @@ type Props = {
 const iconMap = {
 	'woocommerce-pos': {
 		name: 'wcpos',
-		type: 'secondary',
+		type: 'muted',
 	},
 	admin: {
 		name: 'wordpress',
-		type: 'secondary',
+		type: 'muted',
 	},
 	checkout: {
 		name: 'globe',
-		type: 'secondary',
+		type: 'muted',
 	},
 };
 
@@ -32,7 +34,7 @@ const iconMap = {
 export const CreatedVia = ({ item: order }: Props) => {
 	const createdVia = useObservableEagerState(order.created_via$);
 	const iconName = get(iconMap, [createdVia, 'name'], 'circleQuestion');
-	const iconType = get(iconMap, [createdVia, 'type'], 'secondary');
+	const iconType = get(iconMap, [createdVia, 'type'], 'muted');
 	const t = useT();
 
 	/**
@@ -54,5 +56,14 @@ export const CreatedVia = ({ item: order }: Props) => {
 	/**
 	 *
 	 */
-	return <Icon name={iconName} type={iconType} tooltip={label} tooltipPlacement="top" />;
+	return (
+		<Tooltip delayDuration={150}>
+			<TooltipTrigger asChild>
+				<IconButton name={iconName} variant={iconType} />
+			</TooltipTrigger>
+			<TooltipContent>
+				<Text>{label}</Text>
+			</TooltipContent>
+		</Tooltip>
+	);
 };

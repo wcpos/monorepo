@@ -16,13 +16,11 @@ import { useBarcode } from './use-barcode';
 import { useT } from '../../../../contexts/translations';
 import { DataTable } from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
-import Search from '../../components/product/search';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
+import { QuerySearchInput } from '../../components/query-search-input';
 import { UISettings } from '../../components/ui-settings';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
-import { useAddProduct } from '../hooks/use-add-product';
-import { useAddVariation } from '../hooks/use-add-variation';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -37,8 +35,6 @@ const TABLE_ROW_COMPONENTS = {
  */
 const POSProducts = ({ isColumn = false }) => {
 	const { uiSettings } = useUISettings('pos-products');
-	const { addProduct } = useAddProduct();
-	const { addVariation } = useAddVariation();
 	const { calcTaxes } = useTaxRates();
 	const showOutOfStock = useObservableEagerState(uiSettings.showOutOfStock$);
 	const t = useT();
@@ -109,7 +105,10 @@ const POSProducts = ({ isColumn = false }) => {
 						<VStack>
 							<HStack>
 								<ErrorBoundary>
-									<Search query={query} addProduct={addProduct} addVariation={addVariation} />
+									<QuerySearchInput
+										query={query}
+										placeholder={t('Search Products', { _tags: 'core' })}
+									/>
 								</ErrorBoundary>
 								<UISettings
 									uiSettings={uiSettings}

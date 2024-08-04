@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
 
-import WebView from '@wcpos/components/src/webview';
+import { WebView } from '@wcpos/tailwind/src/webview';
 import log from '@wcpos/utils/src/logger';
 
 interface LoginProps {

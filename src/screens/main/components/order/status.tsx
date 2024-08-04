@@ -3,8 +3,10 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import Icon from '@wcpos/components/src/icon';
 import { useQueryManager } from '@wcpos/query';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
+import { Text } from '@wcpos/tailwind/src/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
@@ -54,7 +56,7 @@ const iconMap = {
 /**
  *
  */
-const Status = ({ item: order }: Props) => {
+export const Status = ({ item: order }: Props) => {
 	const status = useObservableEagerState(order.status$);
 	const iconName = get(iconMap, [status, 'name'], 'circleQuestion');
 	const iconType = get(iconMap, [status, 'type'], 'disabled');
@@ -66,14 +68,17 @@ const Status = ({ item: order }: Props) => {
 	 *
 	 */
 	return (
-		<Icon
-			name={iconName}
-			type={iconType}
-			tooltip={getLabel(status)}
-			tooltipPlacement="right"
-			onPress={() => query.where('status', status)}
-		/>
+		<Tooltip delayDuration={150}>
+			<TooltipTrigger asChild>
+				<IconButton
+					name={iconName}
+					variant={iconType}
+					onPress={() => query.where('status', status)}
+				/>
+			</TooltipTrigger>
+			<TooltipContent side="right">
+				<Text>{getLabel(status)}</Text>
+			</TooltipContent>
+		</Tooltip>
 	);
 };
-
-export default Status;

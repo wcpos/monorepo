@@ -20,6 +20,7 @@ import {
 	DropdownMenuTrigger,
 } from '@wcpos/tailwind/src/dropdown-menu';
 import { Icon } from '@wcpos/tailwind/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import { useT } from '../../../../contexts/translations';
@@ -57,10 +58,8 @@ const Actions = ({ item: product }: Props) => {
 	return (
 		<>
 			<DropdownMenu>
-				<DropdownMenuTrigger>
-					<Button variant="ghost" size="icon" className="rounded-full">
-						<Icon name="ellipsisVertical" />
-					</Button>
+				<DropdownMenuTrigger asChild>
+					<IconButton name="ellipsisVertical" />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem

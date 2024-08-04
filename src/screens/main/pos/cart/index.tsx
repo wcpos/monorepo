@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import Icon from '@wcpos/components/src/icon';
-import Suspense from '@wcpos/components/src/suspense';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import Tabs from '@wcpos/components/src/tabs';
 import { Box } from '@wcpos/tailwind/src/box';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';

@@ -3,8 +3,8 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableSuspense, useObservableState, useSubscription } from 'observable-hooks';
 
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Suspense from '@wcpos/components/src/suspense';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import Table, { CellRenderer, useTable } from '@wcpos/tailwind/src/table';
 import Text from '@wcpos/components/src/text';
 import { useReplicationState } from '@wcpos/query';

@@ -5,9 +5,9 @@ import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
 import Button from '@wcpos/components/src/button';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
-import Suspense from '@wcpos/components/src/suspense';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import Text from '@wcpos/components/src/text';
 
 import Cart from './cart';

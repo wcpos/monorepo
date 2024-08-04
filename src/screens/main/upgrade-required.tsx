@@ -1,10 +1,12 @@
 import * as React from 'react';
 import { View, StyleSheet } from 'react-native';
 
-import Box from '@wcpos/components/src/box';
-import Button from '@wcpos/components/src/button';
-import Icon from '@wcpos/components/src/icon';
-import Text from '@wcpos/components/src/text';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';
@@ -17,15 +19,17 @@ export const UpgradeRequired = () => {
 		<View
 			style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }]}
 		>
-			<Box space="normal">
-				<Box horizontal space="small">
-					<Icon name="triangleExclamation" type="critical" />
-					<Text type="critical">{t('Please update your WooCommerce POS plugin')}</Text>
+			<VStack>
+				<HStack>
+					<Icon name="triangleExclamation" variant="destructive" />
+					<Text className="text-destructive">{t('Please update your WooCommerce POS plugin')}</Text>
+				</HStack>
+				<Box className="justify-center">
+					<Button onPress={logout}>
+						<ButtonText>{t('Logout')}</ButtonText>
+					</Button>
 				</Box>
-				<Box align="center">
-					<Button onPress={logout}>{t('Logout')}</Button>
-				</Box>
-			</Box>
+			</VStack>
 		</View>
 	);
 };

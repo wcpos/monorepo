@@ -8,7 +8,7 @@ import { useObservableState } from 'observable-hooks';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from 'styled-components/native';
 
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 
 import Left from './left';
 import Right from './right';

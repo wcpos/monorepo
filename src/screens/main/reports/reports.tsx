@@ -3,11 +3,11 @@ import * as React from 'react';
 import { useTheme } from 'styled-components/native';
 
 import Box from '@wcpos/components/src/box';
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
 import Gutter from '@wcpos/components/src/gutter';
 import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/src/panels';
-import Suspense from '@wcpos/components/src/suspense';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { useQuery } from '@wcpos/query';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 
 import { Chart } from './chart';
 import { FilterBar } from './filter-bar';

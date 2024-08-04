@@ -1,13 +1,29 @@
 import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
-import Dropdown from '@wcpos/components/src/dropdown';
-import Icon from '@wcpos/components/src/icon';
-import Modal from '@wcpos/components/src/modal';
+import {
+	AlertDialog,
+	AlertDialogContent,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogCancel,
+	AlertDialogAction,
+	AlertDialogFooter,
+} from '@wcpos/tailwind/src/alert-dialog';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import {
+	DropdownMenu,
+	DropdownMenuTrigger,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+} from '@wcpos/tailwind/src/dropdown-menu';
+import { Icon } from '@wcpos/tailwind/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
+import { Text } from '@wcpos/tailwind/src/text';
 
-import DeleteDialog from './delete-dialog';
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
@@ -33,9 +49,8 @@ const upsertMetaData = (metaDataArray, key, value) => {
 /**
  *
  */
-const Actions = ({ item: order }: Props) => {
+export const Actions = ({ item: order }: Props) => {
 	const navigation = useNavigation();
-	const [menuOpened, setMenuOpened] = React.useState(false);
 	// const status = useObservableState(order.status$, order.status);
 	const pullDocument = usePullDocument();
 	const { localPatch } = useLocalMutation();
@@ -43,6 +58,7 @@ const Actions = ({ item: order }: Props) => {
 	const t = useT();
 	const { store, wpCredentials } = useAppState();
 	const orderHasID = useObservableEagerState(order.id$); // we need to update the menu with change to order.id
+	const deleteDocument = useDeleteDocument();
 
 	/**
 	 * To re-open an order, we need to:
@@ -63,74 +79,87 @@ const Actions = ({ item: order }: Props) => {
 	}, [localPatch, navigation, order, store.id, wpCredentials.id]);
 
 	/**
-	 *
+	 * Handle delete button click
 	 */
-	const menuItems = React.useMemo(() => {
-		const menu = [
-			{
-				label: t('Edit', { _tags: 'core' }),
-				action: () => navigation.navigate('EditOrder', { orderID: order.uuid }),
-				icon: 'penToSquare',
-			},
-			{
-				label: t('Re-open', { _tags: 'core', _context: 'Re-open completed order' }),
-				action: handleOpen,
-				icon: 'cartShopping',
-			},
-			{ label: '__' },
-			{
-				label: t('Delete', { _tags: 'core' }),
-				action: () => setDeleteDialogOpened(true),
-				icon: 'trash',
-				type: 'critical',
-			},
-		];
+	const handleDelete = React.useCallback(async () => {
+		try {
+			const latest = order.getLatest();
 
-		// if order has an id, then it can be synced
-		if (orderHasID) {
-			menu.splice(2, 0, {
-				label: t('Sync', { _tags: 'core' }),
-				action: () => {
-					if (order.id) {
-						pullDocument(order.id, order.collection);
-					}
-				},
-				icon: 'arrowRotateRight',
-			});
+			if (latest.id) {
+				await deleteDocument(latest.id, latest.collection);
+			}
+			await latest.remove();
+		} finally {
+			//
 		}
-
-		// if order has an id, then it has a receipt
-		if (orderHasID) {
-			menu.splice(1, 0, {
-				label: t('Receipt', { _tags: 'core' }),
-				icon: 'receipt',
-				action: () => navigation.navigate('Receipt', { orderID: order.uuid }),
-			});
-		}
-
-		return menu;
-	}, [handleOpen, navigation, order.collection, order.id, order.uuid, orderHasID, pullDocument, t]);
+	}, [deleteDocument, order]);
 
 	/**
 	 *
 	 */
 	return (
 		<>
-			<Dropdown
-				opened={menuOpened}
-				onClose={() => setMenuOpened(false)}
-				placement="bottom-end"
-				items={menuItems}
-				withinPortal
-			>
-				<Icon name="ellipsisVertical" onPress={() => setMenuOpened(true)} />
-			</Dropdown>
-
-			<Modal opened={deleteDialogOpened} onClose={() => setDeleteDialogOpened(false)}>
-				<DeleteDialog order={order} setDeleteDialogOpened={setDeleteDialogOpened} />
-			</Modal>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<IconButton name="ellipsisVertical" />
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					<DropdownMenuItem
+						onPress={() => navigation.navigate('EditOrder', { orderID: order.uuid })}
+					>
+						<Icon name="penToSquare" />
+						<Text>{t('Edit', { _tags: 'core' })}</Text>
+					</DropdownMenuItem>
+					<DropdownMenuItem onPress={handleOpen}>
+						<Icon name="cartShopping" />
+						<Text>{t('Re-open', { _tags: 'core' })}</Text>
+					</DropdownMenuItem>
+					{orderHasID && (
+						<>
+							<DropdownMenuItem
+								onPress={() => navigation.navigate('Receipt', { orderID: order.uuid })}
+							>
+								<Icon name="receipt" />
+								<Text>{t('Receipt', { _tags: 'core' })}</Text>
+							</DropdownMenuItem>
+							<DropdownMenuItem onPress={() => pullDocument(order.id, order.collection)}>
+								<Icon name="arrowRotateRight" />
+								<Text>{t('Sync', { _tags: 'core' })}</Text>
+							</DropdownMenuItem>
+						</>
+					)}
+					<DropdownMenuSeparator />
+					<DropdownMenuItem variant="destructive" onPress={() => setDeleteDialogOpened(true)}>
+						<Icon
+							name="trash"
+							className="fill-destructive web:group-focus:fill-accent-foreground"
+						/>
+						<Text>{t('Delete', { _tags: 'core' })}</Text>
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							{t('You are about to delete order {id}', {
+								_tags: 'core',
+								id: order.id || order.uuid,
+							})}
+						</AlertDialogTitle>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>
+							<Text>{t('Cancel', { _tags: 'core' })}</Text>
+						</AlertDialogCancel>
+						<AlertDialogAction asChild onPress={handleDelete}>
+							<Button variant="destructive">
+								<ButtonText>{t('Delete', { _tags: 'core' })}</ButtonText>
+							</Button>
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</>
 	);
 };
-
-export default Actions;

@@ -1,19 +1,17 @@
 import * as React from 'react';
 
-import { useTheme } from 'styled-components/native';
-
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
-import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import cells from './cells';
-import SearchBar from './search-bar';
 import { useT } from '../../../contexts/translations';
 import { AddNewCustomer } from '../components/customer/add-new';
 import { DataTable } from '../components/data-table';
+import { QuerySearchInput } from '../components/query-search-input';
 import { UISettings } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
@@ -24,7 +22,6 @@ type CustomerDocument = import('@wcpos/database').CustomerDocument;
  */
 const Customers = () => {
 	const { uiSettings } = useUISettings('customers');
-	const theme = useTheme();
 	const t = useT();
 
 	/**
@@ -47,7 +44,10 @@ const Customers = () => {
 			<Card className="flex-1">
 				<CardHeader className="p-0 bg-input">
 					<HStack className="p-2">
-						<SearchBar query={query} />
+						<QuerySearchInput
+							query={query}
+							placeholder={t('Search Customers', { _tags: 'core' })}
+						/>
 						<AddNewCustomer />
 						<UISettings uiSettings={uiSettings} title={t('Customer Settings', { _tags: 'core' })} />
 					</HStack>

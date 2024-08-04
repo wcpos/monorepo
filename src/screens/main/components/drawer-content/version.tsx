@@ -1,16 +1,18 @@
 import * as React from 'react';
 
-import { useTheme } from 'styled-components/native';
+import { Box } from '@wcpos/tailwind/src/box';
+import { Text } from '@wcpos/tailwind/src/text';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
-
+/**
+ *
+ */
 const Version = ({ largeScreen }) => {
-	const theme = useTheme();
-
 	return (
-		<Box paddingY="xxSmall" paddingX={largeScreen ? 'none' : 'large'}>
-			<Text type="darkestGrey" size="xSmall" align={largeScreen ? 'center' : 'left'}>
+		<Box
+			className={`p-1 px-${largeScreen ? '0' : '4'} justify-${largeScreen ? 'center' : 'left'}`}
+			paddingY="xxSmall"
+		>
+			<Text className="text-3xs text-primary-foreground opacity-50">
 				{largeScreen ? 'v 1.6.3' : 'Version 1.6.3'}
 			</Text>
 		</Box>

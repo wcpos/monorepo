@@ -1,4 +1,4 @@
-import Suspense from '@wcpos/components/src/suspense';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { useQuery } from '@wcpos/query';
 
 import Menu from './menu';

@@ -19,9 +19,9 @@ import { Cashier } from '../components/order/cashier';
 import { CreatedVia } from '../components/order/created-via';
 import Customer from '../components/order/customer';
 import PaymentMethod from '../components/order/payment-method';
-import Status from '../components/order/status';
+import { Status } from '../components/order/status';
 import Total from '../components/order/total';
-import TextCell from '../components/text-cell';
+import { TextCell } from '../components/text-cell';
 import { UISettings } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 

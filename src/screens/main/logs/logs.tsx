@@ -4,7 +4,7 @@ import get from 'lodash/get';
 import { useObservableState, useObservableEagerState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import Suspense from '@wcpos/components/src/suspense';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { Query, useInfiniteScroll } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';

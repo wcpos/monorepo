@@ -6,7 +6,7 @@ import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import ErrorBoundary from '@wcpos/components/src/error-boundary';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { useModal } from '@wcpos/components/src/modal';
 import useSnackbar from '@wcpos/components/src/snackbar';
 import WebView from '@wcpos/components/src/webview';

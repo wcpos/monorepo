@@ -90,7 +90,7 @@ export const DataTable = <T extends DocumentType>({
 				// onRefresh={onRefresh}
 				data={result.hits}
 				columns={columns}
-				onEndReached={() => result.nextPage()}
+				onEndReached={result.nextPage}
 				onEndReachedThreshold={0.5}
 				ListEmptyComponent={() => {
 					return (

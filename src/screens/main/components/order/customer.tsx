@@ -3,11 +3,10 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Format from '@wcpos/components/src/format';
-import Pill from '@wcpos/components/src/pill';
-import Text from '@wcpos/components/src/text';
 import { useQueryManager } from '@wcpos/query';
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import { FormatAddress } from '@wcpos/tailwind/src/format';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
@@ -36,13 +35,13 @@ const Customer = ({ item: order, column }: Props) => {
 	);
 
 	return (
-		<Box space="small">
-			<Pill onPress={() => query.where('customer_id', customerID)}>
-				{format({ billing, shipping, id: customerID })}
-			</Pill>
-			{show('billing') && <Format.Address address={billing} showName={false} />}
-			{show('shipping') && <Format.Address address={shipping} showName={false} />}
-		</Box>
+		<VStack>
+			<ButtonPill size="xs" onPress={() => query.where('customer_id', customerID)}>
+				<ButtonText>{format({ billing, shipping, id: customerID })}</ButtonText>
+			</ButtonPill>
+			{show('billing') && <FormatAddress address={billing} showName={false} />}
+			{show('shipping') && <FormatAddress address={shipping} showName={false} />}
+		</VStack>
 	);
 };
 

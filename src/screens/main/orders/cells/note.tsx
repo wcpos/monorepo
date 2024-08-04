@@ -2,20 +2,32 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import Icon from '@wcpos/components/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
+import { Text } from '@wcpos/tailwind/src/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
 type OrderNoteProps = {
 	item: import('@wcpos/database').OrderDocument;
 };
 
-const Note = ({ item: order }: OrderNoteProps) => {
+/**
+ *
+ */
+export const Note = ({ item: order }: OrderNoteProps) => {
 	const note = useObservableEagerState(order.customer_note$);
 
 	if (!note) {
 		return null;
 	}
 
-	return <Icon name="messageLines" tooltip={note} />;
+	return (
+		<Tooltip delayDuration={150}>
+			<TooltipTrigger asChild>
+				<IconButton name="messageLines" />
+			</TooltipTrigger>
+			<TooltipContent>
+				<Text>{note}</Text>
+			</TooltipContent>
+		</Tooltip>
+	);
 };
-
-export default Note;

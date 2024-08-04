@@ -15,8 +15,8 @@ import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
 import FilterBar from '../components/product/filter-bar';
-import Search from '../components/product/search';
 import { TaxBasedOn } from '../components/product/tax-based-on';
+import { QuerySearchInput } from '../components/query-search-input';
 import { UISettings } from '../components/ui-settings';
 import { useTaxRates } from '../contexts/tax-rates';
 import { useUISettings } from '../contexts/ui-settings';
@@ -86,7 +86,10 @@ const Products = () => {
 					<VStack>
 						<HStack>
 							<ErrorBoundary>
-								<Search query={query} />
+								<QuerySearchInput
+									query={query}
+									placeholder={t('Search Products', { _tags: 'core' })}
+								/>
 							</ErrorBoundary>
 							{/* <Icon
 						name="plus"

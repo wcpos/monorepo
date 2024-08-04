@@ -1,18 +1,17 @@
 import * as React from 'react';
 
-import Suspense from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import Actions from './cells/actions';
-import Address from './cells/address';
-import CustomerNote from './cells/note';
+import { Actions } from './cells/actions';
+import { Address } from './cells/address';
+import { Note } from './cells/note';
 import FilterBar from './filter-bar';
-import SearchBar from './search-bar';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
@@ -21,8 +20,9 @@ import { Cashier } from '../components/order/cashier';
 import { CreatedVia } from '../components/order/created-via';
 import Customer from '../components/order/customer';
 import PaymentMethod from '../components/order/payment-method';
-import Status from '../components/order/status';
+import { Status } from '../components/order/status';
 import Total from '../components/order/total';
+import { QuerySearchInput } from '../components/query-search-input';
 import { UISettings } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
@@ -33,7 +33,7 @@ const cells = {
 	billing: Address,
 	shipping: Address,
 	customer_id: Customer,
-	customer_note: CustomerNote,
+	customer_note: Note,
 	status: Status,
 	total: Total,
 	date_created_gmt: Date,
@@ -65,7 +65,7 @@ const Orders = () => {
 			selector: {
 				$and: [
 					{ meta_data: { $elemMatch: { key: '_pos_user', value: String(wpCredentials?.id) } } },
-					{ meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } } },
+					// { meta_data: { $elemMatch: { key: '_pos_store', value: String(store?.id) } } },
 				],
 			},
 		},
@@ -80,9 +80,7 @@ const Orders = () => {
 				<CardHeader className="p-2 bg-input">
 					<VStack>
 						<HStack>
-							<ErrorBoundary>
-								<SearchBar query={query} />
-							</ErrorBoundary>
+							<QuerySearchInput query={query} placeholder={t('Search Orders', { _tags: 'core' })} />
 							<UISettings uiSettings={uiSettings} title={t('Order Settings', { _tags: 'core' })} />
 						</HStack>
 						<ErrorBoundary>
