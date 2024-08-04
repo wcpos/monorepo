@@ -3,7 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
@@ -16,7 +16,6 @@ type RxDocument = import('rxdb').RxDocument;
  */
 const usePushDocument = () => {
 	const http = useRestHttpClient();
-	const addSnackbar = useSnackbar();
 	const t = useT();
 
 	/**
@@ -67,13 +66,13 @@ const usePushDocument = () => {
 				// return latestDoc.patch(parsedData);
 			} catch (err) {
 				log.error(err);
-				addSnackbar({
-					message: t('There was an error: {error}', { _tags: 'core', error: err.message }),
+				Toast.show({
+					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
 					type: 'critical',
 				});
 			}
 		},
-		[addSnackbar, http, t]
+		[http, t]
 	);
 };
 

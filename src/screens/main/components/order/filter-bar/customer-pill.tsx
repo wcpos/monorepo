@@ -5,9 +5,10 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 import Pill from '@wcpos/components/src/pill';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
 
 import { useT } from '../../../../../contexts/translations';
-import CustomerSelect from '../../../components/customer-select';
+import { CustomerSelect } from '../../../components/customer-select';
 import useCustomerNameFormat from '../../../hooks/use-customer-name-format';
 
 interface CustomerPillProps {
@@ -48,27 +49,26 @@ const CustomerPill = ({ query, resource }: CustomerPillProps) => {
 	 */
 	if (customer) {
 		return (
-			<Pill size="small" removable onRemove={handleRemove} icon="user">
-				{format(customer)}
-			</Pill>
+			<ButtonPill
+				size="xs"
+				leftIcon="user"
+				removable={true}
+				onRemove={() => query.where('customer_id', null)}
+			>
+				<ButtonText>{format(customer)}</ButtonText>
+			</ButtonPill>
 		);
 	}
 
 	/**
 	 *
 	 */
-	return openSelect ? (
-		<CustomerSelect
-			onBlur={() => setOpenSelect(false)}
-			onSelectCustomer={handleSelect}
-			autoFocus={true}
-			size="small"
-			style={{ minWidth: 200 }}
-		/>
-	) : (
-		<Pill icon="user" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
-			{t('Select Customer', { _tags: 'core' })}
-		</Pill>
+	return (
+		<CustomerSelect onSelectCustomer={handleSelect}>
+			<ButtonPill size="xs" leftIcon="user" variant="secondary">
+				<ButtonText>{t('Select Customer', { _tags: 'core' })}</ButtonText>
+			</ButtonPill>
+		</CustomerSelect>
 	);
 };
 

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
@@ -22,7 +22,6 @@ interface FeeData {
  */
 export const useAddFee = () => {
 	const { addItemToOrder } = useAddItemToOrder();
-	const addSnackbar = useSnackbar();
 	const t = useT();
 	const { calculateFeeLineTaxesAndTotals } = useCalculateFeeLineTaxAndTotals();
 
@@ -53,13 +52,13 @@ export const useAddFee = () => {
 				await addItemToOrder('fee_lines', newFeeLine);
 			} catch (error) {
 				log.error(error);
-				addSnackbar({
-					message: t('Error adding Fee to cart', { _tags: 'core' }),
+				Toast.show({
+					text1: t('Error adding Fee to cart', { _tags: 'core' }),
 					type: 'error',
 				});
 			}
 		},
-		[calculateFeeLineTaxesAndTotals, addItemToOrder, addSnackbar, t]
+		[calculateFeeLineTaxesAndTotals, addItemToOrder, t]
 	);
 
 	return { addFee };

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
@@ -22,7 +22,6 @@ interface ShippingData {
  */
 export const useAddShipping = () => {
 	const { addItemToOrder } = useAddItemToOrder();
-	const addSnackbar = useSnackbar();
 	const t = useT();
 	const { calculateShippingLineTaxesAndTotals } = useCalculateShippingLineTaxAndTotals();
 
@@ -53,13 +52,13 @@ export const useAddShipping = () => {
 				await addItemToOrder('shipping_lines', newShippingLine);
 			} catch (error) {
 				log.error(error);
-				addSnackbar({
-					message: t('Error adding Shipping to cart', { _tags: 'core' }),
+				Toast.show({
+					text1: t('Error adding Shipping to cart', { _tags: 'core' }),
 					type: 'error',
 				});
 			}
 		},
-		[addItemToOrder, addSnackbar, calculateShippingLineTaxesAndTotals, t]
+		[addItemToOrder, calculateShippingLineTaxesAndTotals, t]
 	);
 
 	return { addShipping };

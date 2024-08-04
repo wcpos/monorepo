@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import Pill from '@wcpos/components/src/pill';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
 
 import { useT } from '../../../../../contexts/translations';
-import CustomerSelect from '../../../components/customer-select';
+import { CustomerSelect } from '../../../components/customer-select';
 import useCustomerNameFormat from '../../../hooks/use-customer-name-format';
 
 interface CashierPillProps {
@@ -41,25 +41,23 @@ export const CashierPill = ({ query, resource }: CashierPillProps) => {
 	/**
 	 *
 	 */
-	const handleRemove = React.useCallback(() => {
-		query.where('meta_data', { $elemMatch: { key: '_pos_user', value: null } });
-	}, [query]);
-
-	/**
-	 *
-	 */
 	if (cashier) {
 		return (
-			<Pill size="small" removable onRemove={handleRemove} icon="userCrown">
-				{format(cashier)}
-			</Pill>
+			<ButtonPill
+				size="xs"
+				leftIcon="userCrown"
+				removable={true}
+				onRemove={() => query.where('meta_data', { $elemMatch: { key: '_pos_user', value: null } })}
+			>
+				<ButtonText>{format(cashier)}</ButtonText>
+			</ButtonPill>
 		);
 	}
 
 	/**
 	 *
 	 */
-	return openSelect ? (
+	return (
 		<CustomerSelect
 			onBlur={() => setOpenSelect(false)}
 			onSelectCustomer={handleSelect}
@@ -74,10 +72,10 @@ export const CashierPill = ({ query, resource }: CashierPillProps) => {
 			placeholder={t('Search Cashier', { _tags: 'core' })}
 			queryKey="cashier-select"
 			withGuest={false}
-		/>
-	) : (
-		<Pill icon="userCrown" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
-			{t('Select Cashier', { _tags: 'core' })}
-		</Pill>
+		>
+			<ButtonPill size="xs" leftIcon="userCrown">
+				<ButtonText>{t('Select Cashier', { _tags: 'core' })}</ButtonText>
+			</ButtonPill>
+		</CustomerSelect>
 	);
 };

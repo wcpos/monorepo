@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
@@ -14,7 +14,6 @@ interface DeleteDocumentFunction {
 
 const useDeleteDocument = () => {
 	const http = useRestHttpClient();
-	const addSnackbar = useSnackbar();
 	const t = useT();
 
 	return React.useCallback<DeleteDocumentFunction>(
@@ -23,19 +22,20 @@ const useDeleteDocument = () => {
 			try {
 				const { data } = await http.delete((endpoint += `/${id}`), { params });
 				if (data.id === id) {
-					addSnackbar({
-						message: t('Item deleted', { _tags: 'core' }),
+					Toast.show({
+						text1: t('Item deleted', { _tags: 'core' }),
+						type: 'success',
 					});
 				}
 			} catch (err) {
 				log.error(err);
-				addSnackbar({
-					message: t('There was an error: {error}', { _tags: 'core', error: err.message }),
-					type: 'critical',
+				Toast.show({
+					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
+					type: 'error',
 				});
 			}
 		},
-		[addSnackbar, http, t]
+		[http, t]
 	);
 };
 

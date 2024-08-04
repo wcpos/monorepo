@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
@@ -18,7 +18,6 @@ type LineItem =
 export const useRemoveLineItem = () => {
 	const { currentOrder } = useCurrentOrder();
 	const { localPatch } = useLocalMutation();
-	const addSnackbar = useSnackbar();
 	const t = useT();
 
 	/**
@@ -101,8 +100,8 @@ export const useRemoveLineItem = () => {
 			});
 
 			if (itemToRestore) {
-				addSnackbar({
-					message: t('{name} removed from cart', {
+				Toast.show({
+					text1: t('{name} removed from cart', {
 						name: itemToRestore?.name || itemToRestore?.method_title,
 						_tags: 'core',
 					}),
@@ -116,7 +115,7 @@ export const useRemoveLineItem = () => {
 				// should we show a snackbar if the item was not found?
 			}
 		},
-		[addSnackbar, currentOrder, localPatch, t, undoRemove]
+		[currentOrder, localPatch, t, undoRemove]
 	);
 
 	return { removeLineItem };

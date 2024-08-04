@@ -1,6 +1,6 @@
 import { useSubscription } from 'observable-hooks';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 
 import { useT } from '../../../contexts/translations';
 import { useBarcodeDetection, useBarcodeSearch } from '../hooks/barcodes';
@@ -11,7 +11,6 @@ type Query = import('@wcpos/query').RelationalQuery<ProductCollection>;
 export const useBarcode = (productQuery: Query) => {
 	const { barcode$ } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
-	const showSnackbar = useSnackbar();
 	const t = useT();
 
 	/**
@@ -30,7 +29,7 @@ export const useBarcode = (productQuery: Query) => {
 				', ' + t('{count} products found locally', { count: results.length, _tags: 'core' });
 		}
 
-		showSnackbar({ message });
+		Toast.show({ text1: message, type: 'info' });
 		productQuery.search(barcode);
 	});
 };

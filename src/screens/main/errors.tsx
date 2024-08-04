@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useSubscription } from 'observable-hooks';
 
-import { useSnackbar } from '@wcpos/components/src/snackbar/use-snackbar';
 import { useQueryManager } from '@wcpos/query';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 /**
@@ -12,16 +12,15 @@ import log from '@wcpos/utils/src/logger';
  */
 export const ErrorSnackbar = () => {
 	const manager = useQueryManager();
-	const addSnackbar = useSnackbar();
 
 	/**
 	 *
 	 */
 	useSubscription(manager.error$, (error) => {
 		log.error(error);
-		addSnackbar({
-			message: error.message,
-			type: 'critical',
+		Toast.show({
+			text1: error.message,
+			type: 'error',
 		});
 	});
 

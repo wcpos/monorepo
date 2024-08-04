@@ -6,13 +6,13 @@ import cloneDeep from 'lodash/cloneDeep';
 import get from 'lodash/get';
 import set from 'lodash/set';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
 import type {
 	OrderDocument,
 	ProductDocument,
 	CustomerDocument,
 	ProductVariationDocument,
 } from '@wcpos/database';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../contexts/translations';
@@ -29,7 +29,6 @@ interface LocalPatchProps<T extends Document> {
  * Hook that provides a function for locally mutating documents and ensuring the date_modified_gmt is updated.
  */
 export const useLocalMutation = () => {
-	const addSnackbar = useSnackbar();
 	const t = useT();
 
 	/**
@@ -87,12 +86,13 @@ export const useLocalMutation = () => {
 				if (error?.rxdb) {
 					message = 'rxdb ' + error.code;
 				}
-				addSnackbar({
-					message: t('There was an error: {message}', { _tags: 'core', message }),
+				Toast.show({
+					type: 'error',
+					text1: t('There was an error: {message}', { _tags: 'core', message }),
 				});
 			}
 		},
-		[addSnackbar, t]
+		[t]
 	);
 
 	return { localPatch };

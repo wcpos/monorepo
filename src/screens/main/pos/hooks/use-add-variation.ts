@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
@@ -29,7 +29,6 @@ interface MetaData {
 }
 
 export const useAddVariation = () => {
-	const addSnackbar = useSnackbar();
 	const { addItemToOrder } = useAddItemToOrder();
 	const { currentOrder } = useCurrentOrder();
 	const { updateLineItem } = useUpdateLineItem();
@@ -76,8 +75,8 @@ export const useAddVariation = () => {
 			// returned success should be the updated order
 
 			if (success) {
-				addSnackbar({
-					message: t('{name} added to cart', { _tags: 'core', name: parent.name }),
+				Toast.show({
+					text1: t('{name} added to cart', { _tags: 'core', name: parent.name }),
 					type: 'success',
 				});
 			} else {
@@ -86,21 +85,13 @@ export const useAddVariation = () => {
 					parent: parent.id,
 					metaData,
 				});
-				addSnackbar({
-					message: t('Error adding {name} to cart', { _tags: 'core', name: parent.name }),
+				Toast.show({
+					text1: t('Error adding {name} to cart', { _tags: 'core', name: parent.name }),
 					type: 'critical',
 				});
 			}
 		},
-		[
-			currentOrder,
-			updateLineItem,
-			metaDataKeys,
-			calculateLineItemTaxesAndTotals,
-			addItemToOrder,
-			addSnackbar,
-			t,
-		]
+		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t]
 	);
 
 	return { addVariation };

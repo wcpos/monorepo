@@ -8,7 +8,7 @@ import {
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
@@ -30,7 +30,6 @@ const EditCustomer = ({ resource }: Props) => {
 	const customer = useObservableSuspense(resource);
 	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
-	const addSnackbar = useSnackbar();
 	const billingCountry = useObservableEagerState(customer.billing.country$);
 	const shippingCountry = useObservableEagerState(customer.shipping.country$);
 	const { format } = useCustomerNameFormat();
@@ -68,8 +67,9 @@ const EditCustomer = ({ resource }: Props) => {
 			}
 			const success = await pushDocument(customer);
 			if (isRxDocument(success)) {
-				addSnackbar({
-					message: t('Customer {id} saved', { _tags: 'core', id: success.id }),
+				Toast.show({
+					text1: t('Customer {id} saved', { _tags: 'core', id: success.id }),
+					type: 'success',
 				});
 			}
 		} catch (error) {
@@ -82,7 +82,7 @@ const EditCustomer = ({ resource }: Props) => {
 				};
 			});
 		}
-	}, [addSnackbar, customer, pushDocument, setPrimaryAction, t]);
+	}, [customer, pushDocument, setPrimaryAction, t]);
 
 	/**
 	 *

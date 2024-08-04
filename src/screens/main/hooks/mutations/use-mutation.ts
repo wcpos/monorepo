@@ -5,7 +5,6 @@ import { fromZonedTime } from 'date-fns-tz';
 import get from 'lodash/get';
 import { isRxDocument, RxDocument, RxCollection } from 'rxdb';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
 import type {
 	OrderDocument,
 	ProductDocument,
@@ -13,6 +12,7 @@ import type {
 	ProductVariationDocument,
 } from '@wcpos/database';
 import { useQueryManager } from '@wcpos/query';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useLocalMutation } from './use-local-mutation';
@@ -70,7 +70,6 @@ function generateEmptyJSON(schema) {
  */
 export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const manager = useQueryManager();
-	const addSnackbar = useSnackbar();
 	const t = useT();
 	const { collection, collectionLabel } = useCollection(collectionName);
 	const { localPatch } = useLocalMutation();
@@ -94,11 +93,12 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 			if (error?.rxdb) {
 				message = 'rxdb ' + error.code;
 			}
-			addSnackbar({
-				message: t('There was an error: {message}', { _tags: 'core', message }),
+			Toast.show({
+				text1: t('There was an error: {message}', { _tags: 'core', message }),
+				type: 'error',
 			});
 		},
-		[addSnackbar, t]
+		[t]
 	);
 
 	/**
@@ -106,11 +106,12 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	 */
 	const handleSuccess = React.useCallback(
 		(doc: RxDocument) => {
-			addSnackbar({
-				message: t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }),
+			Toast.show({
+				text1: t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }),
+				type: 'success',
 			});
 		},
-		[addSnackbar, collectionLabel, t]
+		[collectionLabel, t]
 	);
 
 	/**

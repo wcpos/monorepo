@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
 import { isRxDocument } from '@wcpos/database';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';
@@ -25,7 +25,6 @@ type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
  *
  */
 export const useAddProduct = () => {
-	const addSnackbar = useSnackbar();
 	const { addItemToOrder } = useAddItemToOrder();
 	const { calculateLineItemTaxesAndTotals } = useCalculateLineItemTaxAndTotals();
 	const { currentOrder } = useCurrentOrder();
@@ -72,29 +71,21 @@ export const useAddProduct = () => {
 
 			// returned success should be the updated order
 			if (success) {
-				addSnackbar({
-					message: t('{name} added to cart', { _tags: 'core', name: product.name }),
+				Toast.show({
+					text1: t('{name} added to cart', { _tags: 'core', name: product.name }),
 					type: 'success',
 				});
 			} else {
 				log.error('Error adding product to order', {
 					product: product.id,
 				});
-				addSnackbar({
-					message: t('Error adding {name} to cart', { _tags: 'core', name: product.name }),
+				Toast.show({
+					text1: t('Error adding {name} to cart', { _tags: 'core', name: product.name }),
 					type: 'error',
 				});
 			}
 		},
-		[
-			currentOrder,
-			updateLineItem,
-			metaDataKeys,
-			calculateLineItemTaxesAndTotals,
-			addItemToOrder,
-			addSnackbar,
-			t,
-		]
+		[currentOrder, updateLineItem, metaDataKeys, calculateLineItemTaxesAndTotals, addItemToOrder, t]
 	);
 
 	return { addProduct };

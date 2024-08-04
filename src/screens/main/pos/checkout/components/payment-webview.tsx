@@ -6,10 +6,10 @@ import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { useModal } from '@wcpos/components/src/modal';
-import useSnackbar from '@wcpos/components/src/snackbar';
-import WebView from '@wcpos/components/src/webview';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { Toast } from '@wcpos/tailwind/src/toast';
+import { WebView } from '@wcpos/tailwind/src/webview';
 import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../../../../contexts/app-state';
@@ -23,7 +23,6 @@ export interface PaymentWebviewProps {
 }
 
 const PaymentWebview = ({ order }: PaymentWebviewProps) => {
-	const addSnackbar = useSnackbar();
 	const { setPrimaryAction } = useModal();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
 	const navigation = useNavigation();
@@ -79,7 +78,7 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 					}
 				} catch (err) {
 					log.error(err);
-					addSnackbar({ message: err?.message, type: 'error' });
+					Toast.show({ text1: err?.message, type: 'error' });
 				} finally {
 					setPrimaryAction((prev) => {
 						return {
@@ -91,7 +90,7 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 				}
 			}
 		},
-		[addSnackbar, navigation, order, setPrimaryAction, stockAdjustment, uiSettings.autoShowReceipt]
+		[navigation, order, setPrimaryAction, stockAdjustment, uiSettings.autoShowReceipt]
 	);
 
 	/**
@@ -147,7 +146,7 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 						onLoad={onWebViewLoaded}
 						onMessage={(event) => {
 							if (event?.data?.payload?.data) {
-								addSnackbar({ message: event?.data?.payload?.message });
+								Toast.show({ text1: event?.data?.payload?.message, type: 'error' });
 							} else {
 								handlePaymentReceived(event);
 							}

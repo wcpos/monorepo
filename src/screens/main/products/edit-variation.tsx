@@ -4,7 +4,7 @@ import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
@@ -48,7 +48,6 @@ const EditVariation = ({ resource }: Props) => {
 	const variation = useObservableSuspense(resource);
 	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
-	const addSnackbar = useSnackbar();
 	const t = useT();
 
 	if (!variation) {
@@ -68,8 +67,9 @@ const EditVariation = ({ resource }: Props) => {
 			});
 			const success = await pushDocument(variation);
 			if (isRxDocument(success)) {
-				addSnackbar({
-					message: t('Variation {id} saved', { _tags: 'core', id: success.id }),
+				Toast.show({
+					text1: t('Variation {id} saved', { _tags: 'core', id: success.id }),
+					type: 'success',
 				});
 			}
 		} catch (error) {
@@ -82,7 +82,7 @@ const EditVariation = ({ resource }: Props) => {
 				};
 			});
 		}
-	}, [setPrimaryAction, pushDocument, variation, addSnackbar, t]);
+	}, [setPrimaryAction, pushDocument, variation, t]);
 
 	/**
 	 *

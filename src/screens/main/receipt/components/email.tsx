@@ -3,8 +3,8 @@ import * as React from 'react';
 import Box from '@wcpos/components/src/box';
 import Checkbox from '@wcpos/components/src/checkbox';
 import Modal from '@wcpos/components/src/modal';
-import useSnackbar from '@wcpos/components/src/snackbar';
 import { TextInputWithLabel } from '@wcpos/components/src/textinput';
+import { Toast } from '@wcpos/tailwind/src/toast';
 
 import { useT } from '../../../../contexts/translations';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';
@@ -17,7 +17,6 @@ export const EmailModal = ({ defaultEmail = '', id, setShowEmailModal }) => {
 	const [saveEmail, setSaveEmail] = React.useState(false);
 	const http = useRestHttpClient();
 	const [loading, setLoading] = React.useState(false);
-	const addSnackbar = useSnackbar();
 	const t = useT();
 
 	/**
@@ -32,8 +31,9 @@ export const EmailModal = ({ defaultEmail = '', id, setShowEmailModal }) => {
 			});
 			if (data && data.success) {
 				setShowEmailModal(false);
-				addSnackbar({
-					message: t('Email sent', { _tags: 'core' }),
+				Toast.show({
+					text1: t('Email sent', { _tags: 'core' }),
+					type: 'success',
 				});
 			}
 		} catch (error) {
@@ -41,7 +41,7 @@ export const EmailModal = ({ defaultEmail = '', id, setShowEmailModal }) => {
 		} finally {
 			setLoading(false);
 		}
-	}, [addSnackbar, email, http, id, saveEmail, setShowEmailModal, t]);
+	}, [email, http, id, saveEmail, setShowEmailModal, t]);
 
 	/**
 	 *

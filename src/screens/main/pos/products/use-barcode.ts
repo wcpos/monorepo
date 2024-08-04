@@ -1,6 +1,6 @@
 import { useSubscription, useObservableEagerState } from 'observable-hooks';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';
@@ -17,7 +17,6 @@ export const useBarcode = (productQuery: Query) => {
 	const { barcodeSearch } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
-	const showSnackbar = useSnackbar();
 	const t = useT();
 	const { collection: productCollection } = useCollection('products');
 	const { uiSettings } = useUISettings('pos-products');
@@ -34,14 +33,14 @@ export const useBarcode = (productQuery: Query) => {
 			message +=
 				', ' + t('{count} products found locally', { count: results.length, _tags: 'core' });
 
-			showSnackbar({ message });
+			Toast.show({ text1: message, type: 'error' });
 			productQuery.search(barcode);
 			return;
 		}
 
 		message += ', ' + t('1 product found locally', { _tags: 'core' });
 
-		showSnackbar({ message });
+		Toast.show({ text1: message, type: 'success' });
 		const [product] = results;
 
 		/**

@@ -5,7 +5,7 @@ import { useObservableSuspense } from 'observable-hooks';
 import Dialog from '@wcpos/components/src/dialog';
 import Modal from '@wcpos/components/src/modal';
 import Pill from '@wcpos/components/src/pill';
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 
 import StoreSelect from './store-select';
 import { useAppState } from '../../../contexts/app-state';
@@ -20,7 +20,6 @@ const WpUser = ({ site, wpUser }: Props) => {
 	const { login } = useAppState();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const [storeSelectModalOpened, setStoreSelectModalOpened] = React.useState(false);
-	const addSnackbar = useSnackbar();
 	const stores = useObservableSuspense(wpUser.populateResource('stores'));
 	const t = useT();
 
@@ -49,11 +48,12 @@ const WpUser = ({ site, wpUser }: Props) => {
 			// show store select modal
 			setStoreSelectModalOpened(true);
 		} else {
-			addSnackbar({
-				message: t('No stores found for this user', { _tags: 'core' }),
+			Toast.show({
+				text1: t('No stores found for this user', { _tags: 'core' }),
+				type: 'error',
 			});
 		}
-	}, [addSnackbar, handleLogin, stores, t]);
+	}, [handleLogin, stores, t]);
 
 	/**
 	 * Remove user

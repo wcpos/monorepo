@@ -3,7 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { isRxDocument } from 'rxdb';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
@@ -19,7 +19,6 @@ type RxCollection = import('rxdb').RxCollection;
  */
 const usePullDocument = () => {
 	const http = useRestHttpClient();
-	const addSnackbar = useSnackbar();
 	const t = useT();
 
 	return React.useCallback(
@@ -45,13 +44,13 @@ const usePullDocument = () => {
 				}
 			} catch (err) {
 				log.error(err);
-				addSnackbar({
-					message: t('There was an error: {error}', { _tags: 'core', error: err.message }),
+				Toast.show({
+					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
 					type: 'critical',
 				});
 			}
 		},
-		[addSnackbar, http, t]
+		[http, t]
 	);
 };
 

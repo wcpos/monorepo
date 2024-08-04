@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../../contexts/translations';
@@ -15,7 +15,6 @@ import { useCurrentOrder } from '../../contexts/current-order';
  */
 const VoidButton = () => {
 	const { currentOrder } = useCurrentOrder();
-	const addSnackbar = useSnackbar();
 	const navigation = useNavigation();
 	const deleteDocument = useDeleteDocument();
 	const t = useT();
@@ -45,12 +44,13 @@ const VoidButton = () => {
 			deleteDocument(latest.id, latest.collection);
 		}
 		latest.remove();
-		addSnackbar({
-			message: t('Order removed', { _tags: 'core' }),
+		Toast.show({
+			text1: t('Order removed', { _tags: 'core' }),
+			type: 'success',
 			dismissable: true,
 			action: { label: t('Undo', { _tags: 'core' }), action: () => undoRemove(orderJson) },
 		});
-	}, [currentOrder, addSnackbar, t, deleteDocument, undoRemove]);
+	}, [currentOrder, t, deleteDocument, undoRemove]);
 
 	/**
 	 *
