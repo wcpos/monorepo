@@ -3,14 +3,14 @@ import * as React from 'react';
 import isFinite from 'lodash/isFinite';
 import { useObservableEagerState } from 'observable-hooks';
 
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
 
 interface Props {
 	product: import('@wcpos/database').ProductDocument;
-	size?: import('@wcpos/components/src/text').TextProps['size'];
+	className?: string;
 }
 
 const StockQuantity = ({ product, size }: Props) => {
@@ -29,7 +29,7 @@ const StockQuantity = ({ product, size }: Props) => {
 	}
 
 	return (
-		<Text size={size}>
+		<Text className={className}>
 			{t('{quantity} in stock', { quantity: displayStockQuantity, _tags: 'core' })}
 		</Text>
 	);

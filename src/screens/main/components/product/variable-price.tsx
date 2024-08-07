@@ -3,9 +3,9 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
+import { Box } from '@wcpos/tailwind/src/box';
 import { useTable } from '@wcpos/tailwind/src/table';
+import { Text } from '@wcpos/tailwind/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import PriceWithTax from './price';
@@ -87,7 +87,7 @@ const VariablePrice = ({ item: product, column }: Props) => {
 
 	// default, min and max are different
 	return (
-		<Box align="end">
+		<Box className="justify-end">
 			<PriceWithTax
 				price={variablePrices[column.key].min}
 				taxStatus={taxStatus}

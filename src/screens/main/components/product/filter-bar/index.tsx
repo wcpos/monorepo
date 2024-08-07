@@ -6,10 +6,9 @@ import { isRxDocument } from 'rxdb';
 import { of } from 'rxjs';
 import { startWith, switchMap, tap } from 'rxjs/operators';
 
-import Box from '@wcpos/components/src/box';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
 import type { Query } from '@wcpos/query';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import CategoryPill from './category-pill';
 import FeaturedPill from './featured-pill';

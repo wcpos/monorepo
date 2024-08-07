@@ -8,7 +8,6 @@ import { from } from 'rxjs';
 
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
-import Text from '@wcpos/components/src/text';
 
 import AddCustomer from './add-customer';
 import Customers from './customers';

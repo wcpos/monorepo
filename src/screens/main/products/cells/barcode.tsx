@@ -1,9 +1,8 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
-import TextInput from '@wcpos/components/src/textinput';
+import { Input } from '@wcpos/tailwind/src/input';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -14,7 +13,7 @@ type Props = {
 };
 
 const Barcode = ({ item: product, column, onChange }: Props) => {
-	const barcode = useObservableState(product.barcode$, product.barcode);
+	const barcode = useObservableEagerState(product.barcode$);
 	const [value, setValue] = React.useState(barcode);
 
 	/**
@@ -41,11 +40,7 @@ const Barcode = ({ item: product, column, onChange }: Props) => {
 	/**
 	 *
 	 */
-	return (
-		<View style={{ width: '100%' }}>
-			<TextInput value={value} onChangeText={handleChangeText} onBlur={handleOnBlur} />
-		</View>
-	);
+	return <Input value={value} onChangeText={handleChangeText} onBlur={handleOnBlur} />;
 };
 
 export default Barcode;

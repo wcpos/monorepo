@@ -8,7 +8,7 @@ import Animated, { useAnimatedStyle, withTiming, Easing } from 'react-native-rea
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 import Table, { CellRenderer } from '@wcpos/tailwind/src/table';
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import { Date } from '../../components/date';

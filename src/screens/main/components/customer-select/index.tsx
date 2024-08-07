@@ -3,11 +3,11 @@ import * as React from 'react';
 import defaults from 'lodash/defaults';
 
 import { useQuery } from '@wcpos/query';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Command, CommandInput, CommandEmpty } from '@wcpos/tailwind/src/command';
+import { Command, CommandInput, CommandEmpty, CommandButton } from '@wcpos/tailwind/src/command';
 import { Label } from '@wcpos/tailwind/src/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/tailwind/src/popover';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { CustomerList } from './list';
@@ -86,9 +86,9 @@ export const CustomerSelect = ({
 			{label && <Label nativeID="customer">{label}</Label>}
 			<Popover>
 				<PopoverTrigger asChild>
-					<Button variant="outline">
-						<ButtonText>Test</ButtonText>
-					</Button>
+					<CommandButton>
+						<Text>Test</Text>
+					</CommandButton>
 				</PopoverTrigger>
 				<PopoverContent className="p-0">
 					<Command shouldFilter={false}>

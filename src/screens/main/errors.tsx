@@ -10,7 +10,7 @@ import log from '@wcpos/utils/src/logger';
  * TODO - we need a app-wide event bus to channel errors to the snackbar
  * This should be part of a app-wide event logging system
  */
-export const ErrorSnackbar = () => {
+export const Errors = () => {
 	const manager = useQueryManager();
 
 	/**

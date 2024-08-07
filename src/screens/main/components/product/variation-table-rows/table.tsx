@@ -3,11 +3,11 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableSuspense, useObservableState, useSubscription } from 'observable-hooks';
 
+import { useReplicationState } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 import Table, { CellRenderer, useTable } from '@wcpos/tailwind/src/table';
-import Text from '@wcpos/components/src/text';
-import { useReplicationState } from '@wcpos/query';
+import { Text } from '@wcpos/tailwind/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import { useVariationTable } from './context';

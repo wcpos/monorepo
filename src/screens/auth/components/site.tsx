@@ -5,11 +5,11 @@ import get from 'lodash/get';
 import Avatar from '@wcpos/components/src/avatar';
 import Box from '@wcpos/components/src/box';
 import Dialog from '@wcpos/components/src/dialog';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import Icon from '@wcpos/components/src/icon';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 

@@ -7,18 +7,16 @@ import { useForceUpdate, useObservableEagerState, useSubscription } from 'observ
 import { isRxDatabase } from 'rxdb';
 import { useTheme } from 'styled-components/native';
 
-import Icon from '@wcpos/components/src/icon';
-import Portal from '@wcpos/components/src/portal';
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import { QueryProvider, QueryDevtools } from '@wcpos/query';
-import logger from '@wcpos/utils/src/logger';
+import { Icon } from '@wcpos/tailwind/src/icon';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
 import { ExtraDataProvider } from './contexts/extra-data';
 import { UISettingsProvider } from './contexts/ui-settings';
 import CustomersNavigator from './customers';
-import { ErrorSnackbar } from './errors';
+import { Errors } from './errors';
 import Help from './help';
 import useKeyboardShortcuts from './hooks/use-keyboard-shortcuts';
 import { useRestHttpClient } from './hooks/use-rest-http-client';
@@ -99,7 +97,11 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('POS', { _tags: 'core' }),
 					drawerLabel: t('POS', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon name="cashRegister" type={focused ? 'primary' : 'inverse'} size="large" />
+						<Icon
+							name="cashRegister"
+							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
+							size="lg"
+						/>
 					),
 				}}
 			/>
@@ -110,7 +112,11 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Products', { _tags: 'core' }),
 					drawerLabel: t('Products', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon name="gifts" type={focused ? 'primary' : 'inverse'} size="large" />
+						<Icon
+							name="gifts"
+							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
+							size="lg"
+						/>
 					),
 				}}
 			/>
@@ -121,7 +127,11 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Orders', { _tags: 'core' }),
 					drawerLabel: t('Orders', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon name="receipt" type={focused ? 'primary' : 'inverse'} size="large" />
+						<Icon
+							name="receipt"
+							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
+							size="lg"
+						/>
 					),
 				}}
 			/>
@@ -132,7 +142,11 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Customers', { _tags: 'core' }),
 					drawerLabel: t('Customers', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon name="users" type={focused ? 'primary' : 'inverse'} size="large" />
+						<Icon
+							name="users"
+							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
+							size="lg"
+						/>
 					),
 				}}
 			/>
@@ -145,8 +159,8 @@ const DrawerNavigator = ({ navigation }) => {
 					drawerIcon: ({ focused }) => (
 						<Icon
 							name="chartMixedUpCircleDollar"
-							type={focused ? 'primary' : 'inverse'}
-							size="large"
+							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
+							size="lg"
 						/>
 					),
 				}}
@@ -158,7 +172,11 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Logs', { _tags: 'core' }),
 					drawerLabel: t('Logs', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon name="heartPulse" type={focused ? 'primary' : 'inverse'} size="large" />
+						<Icon
+							name="heartPulse"
+							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
+							size="lg"
+						/>
 					),
 					drawerItemStyle: { marginTop: 'auto' },
 				}}
@@ -170,7 +188,11 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Support', { _tags: 'core' }),
 					drawerLabel: t('Support', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon name="commentQuestion" type={focused ? 'primary' : 'inverse'} size="large" />
+						<Icon
+							name="commentQuestion"
+							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
+							size="lg"
+						/>
 					),
 					// drawerItemStyle: { marginTop: 'auto' },
 				}}
@@ -274,21 +296,18 @@ const MainNavigator = () => {
 				<UISettingsProvider>
 					<OnlineStatusProvider wpAPIURL={wpAPIURL}>
 						{/** NOTE - we need a portal provider inside main navigator, eg: to access useRestHttpClient  */}
-						<Portal.Provider>
-							<Stack.Navigator screenOptions={{ headerShown: false }}>
-								<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
-								<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-									<Stack.Screen name="Settings" component={SettingsScreen} />
-									<Stack.Screen name="Help" component={HelpScreen} />
-									<Stack.Screen name="Login" component={LoginScreen} />
-									<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
-								</Stack.Group>
-							</Stack.Navigator>
-							<Portal.Manager />
-						</Portal.Provider>
+						<Stack.Navigator screenOptions={{ headerShown: false }}>
+							<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
+							<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
+								<Stack.Screen name="Settings" component={SettingsScreen} />
+								<Stack.Screen name="Help" component={HelpScreen} />
+								<Stack.Screen name="Login" component={LoginScreen} />
+								<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
+							</Stack.Group>
+						</Stack.Navigator>
 					</OnlineStatusProvider>
 				</UISettingsProvider>
-				<ErrorSnackbar />
+				<Errors /> {/* TODO - we need a app-wide event bus to channel errors to the snackbar */}
 				{/* <QueryDevtools /> */}
 			</QueryProvider>
 		</ExtraDataProvider>

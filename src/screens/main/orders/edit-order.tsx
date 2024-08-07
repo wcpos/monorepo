@@ -1,82 +1,46 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
+import { zodResolver } from '@hookform/resolvers/zod';
 import get from 'lodash/get';
 import {
 	useObservableSuspense,
 	ObservableResource,
 	useObservableEagerState,
 } from 'observable-hooks';
+import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
+import * as z from 'zod';
 
-import { useModal } from '@wcpos/components/src/modal';
+import {
+	Accordion,
+	AccordionContent,
+	AccordionTrigger,
+	AccordionItem,
+} from '@wcpos/tailwind/src/accordian';
+import { Form, FormField, FormInput, FormSelect, FormSwitch } from '@wcpos/tailwind/src/form';
+import { Text } from '@wcpos/tailwind/src/text';
 import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';
+import { BillingAddressForm, billingAddressSchema } from '../components/billing-address-form';
 import { CountrySelect, StateSelect } from '../components/country-state-select';
-import { EditDocumentForm } from '../components/edit-document-form';
-import { OrderStatusSelect } from '../components/order-status-select';
+import { CurrencySelect } from '../components/currency-select';
+import { CustomerSelect } from '../components/customer-select';
+import { OrderStatusSelect } from '../components/order/order-status-select';
+import { ShippingAddressForm } from '../components/shipping-address-form';
 import usePushDocument from '../contexts/use-push-document';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
 }
 
-const fields = [
-	// 'id',
-	'status',
-	'number',
-	'parent_id',
-	// 'order_key',
-	// 'created_via',
-	// 'version',
-	'currency',
-	'currency_symbol',
-	// 'date_created',
-	'date_created_gmt',
-	// 'date_modified',
-	// 'date_modified_gmt',
-	// 'discount_total',
-	// 'discount_tax',
-	// 'shipping_total',
-	// 'shipping_tax',
-	// 'cart_tax',
-	// 'total',
-	// 'total_tax',
-	// 'prices_include_tax',
-	'customer_id',
-	// 'customer_ip_address',
-	// 'customer_user_agent',
-	'customer_note',
-	'billing',
-	'shipping',
-	// 'is_editable',
-	// 'needs_payment',
-	// 'needs_processing',
-	'payment_method',
-	'payment_method_title',
-	'transaction_id',
-	// 'date_paid',
-	'date_paid_gmt',
-	// 'date_completed',
-	'date_completed_gmt',
-	// 'cart_hash',
-	// 'line_items',
-	// 'tax_lines',
-	// 'shipping_lines',
-	// 'fee_lines',
-	// 'coupon_lines',
-	// 'refunds',
-	// 'payment_url',
-	'meta_data',
-];
-
 /**
  *
  */
 const EditOrder = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
-	const { setPrimaryAction, setTitle } = useModal();
 	const pushDocument = usePushDocument();
 	const t = useT();
 
@@ -90,25 +54,11 @@ const EditOrder = ({ resource }: Props) => {
 	const billingCountry = get(billing, ['country']);
 	const shippingCountry = get(shipping, ['country']);
 
-	React.useEffect(() => {
-		setTitle(() =>
-			number
-				? t('Edit Order #{number}', { _tags: 'core', number, _context: 'Checkout Order title' })
-				: t('Edit Order', { _tags: 'core' })
-		);
-	}, [number, setTitle, t]);
-
 	/**
 	 * Handle save button click
 	 */
 	const handleSave = React.useCallback(async () => {
 		try {
-			setPrimaryAction((prev) => {
-				return {
-					...prev,
-					loading: true,
-				};
-			});
 			const success = await pushDocument(order);
 			if (isRxDocument(success)) {
 				Toast.show({
@@ -119,181 +69,198 @@ const EditOrder = ({ resource }: Props) => {
 		} catch (error) {
 			log.error(error);
 		} finally {
-			setPrimaryAction((prev) => {
-				return {
-					...prev,
-					loading: false,
-				};
-			});
+			//
 		}
-	}, [order, pushDocument, setPrimaryAction, t]);
+	}, [order, pushDocument, t]);
 
 	/**
 	 *
 	 */
-	React.useEffect(() => {
-		setPrimaryAction({
-			label: t('Save to Server', { _tags: 'core' }),
-			action: handleSave,
-		});
-	}, [handleSave, setPrimaryAction, t]);
+	// React.useEffect(() => {
+	// 	setPrimaryAction({
+	// 		label: t('Save to Server', { _tags: 'core' }),
+	// 		action: handleSave,
+	// 	});
+	// }, [handleSave, setPrimaryAction, t]);
 
 	/**
 	 *
 	 */
-	const uiSchema = React.useMemo(
-		() => ({
-			status: {
-				'ui:label': t('Status', { _tags: 'core' }),
-				'ui:widget': (props) => <OrderStatusSelect {...props} />,
-			},
-			number: {
-				'ui:label': t('Order Number', { _tags: 'core' }),
-			},
-			parent_id: {
-				'ui:label': t('Parent ID', { _tags: 'core' }),
-			},
-			currency: {
-				'ui:label': t('Currency', { _tags: 'core' }),
-			},
-			currency_symbol: {
-				'ui:label': t('Currency Symbol', { _tags: 'core' }),
-			},
-			date_created_gmt: {
-				'ui:label': t('Date Created', { _tags: 'core' }),
-				// 'ui:widget': 'date',
-			},
-			customer_id: {
-				'ui:label': t('Customer ID', { _tags: 'core' }),
-			},
-			customer_note: {
-				'ui:label': t('Customer Note', { _tags: 'core' }),
-			},
-			billing: {
-				'ui:title': t('Billing Address', { _tags: 'core' }),
-				'ui:description': null,
-				'ui:collapsible': 'closed',
-				'ui:order': [
-					'first_name',
-					'last_name',
-					'email',
-					'company',
-					'phone',
-					'address_1',
-					'address_2',
-					'city',
-					'postcode',
-					'state',
-					'country',
-				],
-				first_name: {
-					'ui:label': t('First Name', { _tags: 'core' }),
-				},
-				last_name: {
-					'ui:label': t('Last Name', { _tags: 'core' }),
-				},
-				email: {
-					'ui:label': t('Email', { _tags: 'core' }),
-				},
-				address_1: {
-					'ui:label': t('Address 1', { _tags: 'core' }),
-				},
-				address_2: {
-					'ui:label': t('Address 2', { _tags: 'core' }),
-				},
-				city: {
-					'ui:label': t('City', { _tags: 'core' }),
-				},
-				state: {
-					'ui:label': t('State', { _tags: 'core' }),
-					'ui:widget': (props) => <StateSelect country={billingCountry} {...props} />,
-				},
-				postcode: {
-					'ui:label': t('Postcode', { _tags: 'core' }),
-				},
-				country: {
-					'ui:label': t('Country', { _tags: 'core' }),
-					'ui:widget': CountrySelect,
-				},
-				company: {
-					'ui:label': t('Company', { _tags: 'core' }),
-				},
-				phone: {
-					'ui:label': t('Phone', { _tags: 'core' }),
-				},
-			},
-			shipping: {
-				'ui:title': t('Shipping Address', { _tags: 'core' }),
-				'ui:description': null,
-				'ui:collapsible': 'closed',
-				'ui:order': [
-					'first_name',
-					'last_name',
-					'company',
-					'address_1',
-					'address_2',
-					'city',
-					'postcode',
-					'state',
-					'country',
-				],
-				first_name: {
-					'ui:label': t('First Name', { _tags: 'core' }),
-				},
-				last_name: {
-					'ui:label': t('Last Name', { _tags: 'core' }),
-				},
-				address_1: {
-					'ui:label': t('Address 1', { _tags: 'core' }),
-				},
-				address_2: {
-					'ui:label': t('Address 2', { _tags: 'core' }),
-				},
-				city: {
-					'ui:label': t('City', { _tags: 'core' }),
-				},
-				state: {
-					'ui:label': t('State', { _tags: 'core' }),
-					'ui:widget': (props) => <StateSelect country={shippingCountry} {...props} />,
-				},
-				postcode: {
-					'ui:label': t('Postcode', { _tags: 'core' }),
-				},
-				country: {
-					'ui:label': t('Country', { _tags: 'core' }),
-					'ui:widget': CountrySelect,
-				},
-				company: {
-					'ui:label': t('Company', { _tags: 'core' }),
-				},
-			},
-			payment_method: {
-				'ui:label': t('Payment Method ID', { _tags: 'core' }),
-			},
-			payment_method_title: {
-				'ui:label': t('Payment Method Title', { _tags: 'core' }),
-			},
-			transaction_id: {
-				'ui:label': t('Transaction ID', { _tags: 'core' }),
-			},
-			date_paid_gmt: {
-				'ui:label': t('Date Paid', { _tags: 'core' }),
-				// 'ui:widget': 'date',
-			},
-			date_completed_gmt: {
-				'ui:label': t('Date Completed', { _tags: 'core' }),
-				// 'ui:widget': 'date',
-			},
-			meta_data: {
-				'ui:collapsible': 'closed',
-				'ui:title': t('Meta Data', { _tags: 'core' }),
-				'ui:description': null,
-			},
-		}),
-		[billingCountry, shippingCountry, t]
+	const formSchema = React.useMemo(
+		() =>
+			z.object({
+				status: z.string(),
+				number: z.string().optional(),
+				parent_id: z.number().optional(),
+				currency: z.string().optional(),
+				currency_symbol: z.string().optional(),
+				date_created_gmt: z.string().optional(),
+				customer_id: z.number().default(0),
+				customer_note: z.string().optional(),
+				billing: billingAddressSchema,
+				shipping: z.object({
+					first_name: z.string().optional(),
+					last_name: z.string().optional(),
+					company: z.string().optional(),
+					address_1: z.string().optional(),
+					address_2: z.string().optional(),
+					city: z.string().optional(),
+					state: z.string().optional(),
+					postcode: z.string().optional(),
+					country: z.string().optional(),
+				}),
+				payment_method: z.string().optional(),
+				payment_method_title: z.string().optional(),
+				transaction_id: z.string().optional(),
+				date_paid_gmt: z.string().optional(),
+				date_completed_gmt: z.string().optional(),
+				meta_data: z.array(z.object({ key: z.string(), value: z.any() })).optional(),
+			}),
+		[]
 	);
 
-	return <EditDocumentForm document={order} fields={fields} uiSchema={uiSchema} withJSONTree />;
+	/**
+	 *
+	 */
+	const form = useForm<z.infer<typeof formSchema>>({
+		resolver: zodResolver(formSchema),
+		defaultValues: {
+			status: order.status,
+			number,
+			parent_id: order.parent_id,
+			currency: order.currency,
+			currency_symbol: order.currency_symbol,
+			date_created_gmt: order.date_created_gmt,
+			customer_id: order.customer_id,
+			customer_note: order.customer_note,
+			billing: {
+				first_name: billing?.first_name,
+				last_name: billing?.last_name,
+				company: billing?.company,
+				address_1: billing?.address_1,
+				address_2: billing?.address_2,
+				city: billing?.city,
+				state: billing?.state,
+				postcode: billing?.postcode,
+				country: billingCountry,
+				email: billing?.email,
+				phone: billing?.phone,
+			},
+			shipping: {
+				first_name: shipping?.first_name,
+				last_name: shipping?.last_name,
+				company: shipping?.company,
+				address_1: shipping?.address_1,
+				address_2: shipping?.address_2,
+				city: shipping?.city,
+				state: shipping?.state,
+				postcode: shipping?.postcode,
+				country: shippingCountry,
+			},
+			payment_method: order.payment_method,
+			payment_method_title: order.payment_method_title,
+			transaction_id: order.transaction_id,
+			date_paid_gmt: order.date_paid_gmt,
+			date_completed_gmt: order.date_completed_gmt,
+			meta_data: order.meta_data,
+		},
+	});
+
+	/**
+	 *
+	 */
+	return (
+		<Form {...form}>
+			<View className="grid grid-cols-3 gap-4">
+				<FormField
+					control={form.control}
+					name="status"
+					render={({ field }) => (
+						<FormSelect
+							label={t('Status', { _tags: 'core' })}
+							customComponent={OrderStatusSelect}
+							{...field}
+						/>
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="number"
+					render={({ field }) => (
+						<FormInput label={t('Order Number', { _tags: 'core' })} {...field} />
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="parent_id"
+					render={({ field }) => <FormInput label={t('Parent ID', { _tags: 'core' })} {...field} />}
+				/>
+				<FormField
+					control={form.control}
+					name="currency"
+					render={({ field }) => (
+						<FormSelect
+							customComponent={CurrencySelect}
+							label={t('Currency', { _tags: 'core' })}
+							{...field}
+						/>
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="currency_symbol"
+					render={({ field }) => (
+						<FormInput label={t('Currency Symbol', { _tags: 'core' })} {...field} />
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="date_created_gmt"
+					render={({ field }) => (
+						<FormInput label={t('Date Created', { _tags: 'core' })} {...field} />
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="customer_id"
+					render={({ field }) => (
+						<FormSelect
+							customComponent={CustomerSelect}
+							label={t('Customer', { _tags: 'core' })}
+							{...field}
+						/>
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="customer_note"
+					render={({ field }) => (
+						<FormInput label={t('Customer Note', { _tags: 'core' })} {...field} />
+					)}
+				/>
+				<View className="col-span-3">
+					<Accordion type="multiple" collapsible className="w-full">
+						<AccordionItem value="billing">
+							<AccordionTrigger>
+								<Text>{t('Billing Address', { _tags: 'core' })}</Text>
+							</AccordionTrigger>
+							<AccordionContent>
+								<BillingAddressForm />
+							</AccordionContent>
+						</AccordionItem>
+						<AccordionItem value="shipping">
+							<AccordionTrigger>
+								<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
+							</AccordionTrigger>
+							<AccordionContent>
+								<ShippingAddressForm />
+							</AccordionContent>
+						</AccordionItem>
+					</Accordion>
+				</View>
+			</View>
+		</Form>
+	);
 };
 
 export default EditOrder;
