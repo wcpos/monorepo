@@ -174,6 +174,7 @@ type FormItemProps<T extends React.ElementType<any>, U> = Override<
 > & {
 	label?: string;
 	description?: string;
+	customComponent?: React.ElementType<any>;
 	type?:
 		| 'text'
 		| 'numeric'
@@ -525,34 +526,40 @@ FormRadioGroup.displayName = 'FormRadioGroup';
 const FormSelect = React.forwardRef<
 	React.ElementRef<typeof Select>,
 	Omit<FormItemProps<typeof Select, Partial<Option>>, 'open' | 'onOpenChange' | 'onValueChange'>
->(({ label, description, onChange, value, ...props }, ref) => {
-	const [open, setOpen] = React.useState(false);
-	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
+>(
+	(
+		{ label, description, onChange, value, customComponent: CustomComponent = Select, ...props },
+		ref
+	) => {
+		const [open, setOpen] = React.useState(false);
+		const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } =
+			useFormField();
 
-	return (
-		<FormItem>
-			{!!label && <FormLabel nativeID={formItemNativeID}>{label}</FormLabel>}
-			<Select
-				ref={ref}
-				aria-labelledby={formItemNativeID}
-				aria-describedby={
-					!error
-						? `${formDescriptionNativeID}`
-						: `${formDescriptionNativeID} ${formMessageNativeID}`
-				}
-				aria-invalid={!!error}
-				open={open}
-				onOpenChange={setOpen}
-				// value={value ? { label: value?.label ?? '', value: value?.label ?? '' } : undefined}
-				value={value ? { value } : undefined}
-				onValueChange={onChange}
-				{...props}
-			/>
-			{!!description && <FormDescription>{description}</FormDescription>}
-			<FormMessage />
-		</FormItem>
-	);
-});
+		return (
+			<FormItem>
+				{!!label && <FormLabel nativeID={formItemNativeID}>{label}</FormLabel>}
+				<CustomComponent
+					ref={ref}
+					aria-labelledby={formItemNativeID}
+					aria-describedby={
+						!error
+							? `${formDescriptionNativeID}`
+							: `${formDescriptionNativeID} ${formMessageNativeID}`
+					}
+					aria-invalid={!!error}
+					open={open}
+					onOpenChange={setOpen}
+					// value={value ? { label: value?.label ?? '', value: value?.label ?? '' } : undefined}
+					value={value ? { value } : undefined}
+					onValueChange={onChange}
+					{...props}
+				/>
+				{!!description && <FormDescription>{description}</FormDescription>}
+				<FormMessage />
+			</FormItem>
+		);
+	}
+);
 
 FormSelect.displayName = 'FormSelect';
 
