@@ -6,6 +6,10 @@ import { Command as CommandPrimitive } from 'cmdk';
 import { Dialog, DialogContent } from '../dialog';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
+import { SelectButton } from '../select';
+
+const CommandButton = SelectButton;
+CommandButton.displayName = 'CommandButton';
 
 const Command = React.forwardRef<
 	React.ElementRef<typeof CommandPrimitive>,
@@ -141,4 +145,5 @@ export {
 	CommandItem,
 	CommandShortcut,
 	CommandSeparator,
+	CommandButton,
 };

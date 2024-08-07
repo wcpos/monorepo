@@ -4,6 +4,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import * as SelectPrimitive from '@rn-primitives/select';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { Button, type ButtonProps } from '../button';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
 
@@ -29,7 +30,7 @@ const SelectTrigger = React.forwardRef<
 		{...props}
 	>
 		<>{children}</>
-		<Icon name="chevronDown" size={16} aria-hidden={true} className="text-foreground opacity-50" />
+		<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
 	</SelectPrimitive.Trigger>
 ));
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
@@ -49,7 +50,7 @@ const SelectScrollUpButton = ({
 			className={cn('flex web:cursor-default items-center justify-center py-1', className)}
 			{...props}
 		>
-			<Icon name="chevronUp" size={14} className="text-foreground" />
+			<Icon name="chevronUp" className="text-foreground" />
 		</SelectPrimitive.ScrollUpButton>
 	);
 };
@@ -69,7 +70,7 @@ const SelectScrollDownButton = ({
 			className={cn('flex web:cursor-default items-center justify-center py-1', className)}
 			{...props}
 		>
-			<Icon name="chevronDown" size={14} className="text-foreground" />
+			<Icon name="chevronDown" className="text-foreground" />
 		</SelectPrimitive.ScrollDownButton>
 	);
 };
@@ -167,6 +168,29 @@ const SelectSeparator = React.forwardRef<
 ));
 SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
 
+/**
+ *
+ */
+const SelectButton = React.forwardRef<React.ElementRef<typeof Button>, ButtonProps>(
+	({ className, children, ...props }, ref) => (
+		<Button
+			ref={ref}
+			className={cn(
+				'flex flex-row h-10 native:h-12 items-center text-sm justify-between rounded-md border border-input bg-background px-3 py-2 web:ring-offset-background text-muted-foreground web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 [&>span]:line-clamp-1',
+				props.disabled && 'web:cursor-not-allowed opacity-50',
+				className
+			)}
+			variant="ghost"
+			{...props}
+		>
+			<>{children}</>
+			<Icon name="chevronDown" aria-hidden={true} className="text-foreground opacity-50" />
+		</Button>
+	)
+);
+
+SelectButton.displayName = 'SelectButton';
+
 export {
 	Select,
 	SelectContent,
@@ -180,4 +204,5 @@ export {
 	SelectValue,
 	type Option,
 	SelectPrimitive,
+	SelectButton,
 };

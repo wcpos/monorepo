@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.1",
+    "@rn-primitives/accordion": "^1.0.3",
     "@rn-primitives/alert-dialog": "^1.0.3",
     "@rn-primitives/checkbox": "^1.0.3",
     "@rn-primitives/context-menu": "^1.0.3",

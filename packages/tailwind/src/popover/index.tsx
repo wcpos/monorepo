@@ -32,7 +32,7 @@ const PopoverContent = React.forwardRef<
 							{...props}
 						>
 							{children}
-							<Arrow className={cn('fill-white')} />
+							{/* <Arrow className={cn('fill-white')} /> */}
 						</PopoverPrimitive.Content>
 					</TextClassContext.Provider>
 				</Animated.View>
