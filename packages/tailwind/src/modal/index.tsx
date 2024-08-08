@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, ScrollView } from 'react-native';
 
+import { Primitive } from '@radix-ui/react-primitive';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { cn } from '../lib/utils';
@@ -49,24 +50,61 @@ const ModalOverlay = Platform.select({
 	default: ModalOverlayNative,
 });
 
-const ModalContent = React.forwardRef<
+const ModalContainer = React.forwardRef<
 	React.ElementRef<typeof View>,
 	React.ComponentPropsWithoutRef<typeof View>
 >(({ className, children, ...props }, ref) => {
 	return (
-		<View
-			ref={ref}
-			className={cn(
-				'z-50 max-w-lg gap-4 border border-border web:cursor-default bg-background p-6 shadow-lg web:duration-200 rounded-lg',
-				'web:animate-in web:fade-in-0 web:zoom-in-95',
-				className
-			)}
-			{...props}
-		>
-			{children}
-		</View>
+		<ModalOverlay>
+			<View
+				ref={ref}
+				className={cn(
+					'z-50 max-w-lg max-h-full gap-4 border border-border web:cursor-default bg-background p-6 shadow-lg web:duration-200 rounded-lg',
+					'web:animate-in web:fade-in-0 web:zoom-in-95',
+					className
+				)}
+				{...props}
+			>
+				{children}
+			</View>
+		</ModalOverlay>
 	);
 });
+ModalContainer.displayName = 'ModalContainer';
+
+const ModalContent = ({
+	className,
+	children,
+	...props
+}: React.ComponentPropsWithoutRef<typeof View>) => (
+	<ScrollView {...props} className={cn(className)}>
+		{children}
+	</ScrollView>
+);
 ModalContent.displayName = 'ModalContent';
 
-export { ModalOverlay, ModalContent };
+const ModalHeader = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
+	<View className={cn('flex flex-col gap-1.5 text-center sm:text-left', className)} {...props} />
+);
+ModalHeader.displayName = 'ModalHeader';
+
+const ModalFooter = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
+	<View
+		className={cn('flex flex-col-reverse sm:flex-row sm:justify-end gap-2', className)}
+		{...props}
+	/>
+);
+ModalFooter.displayName = 'ModalFooter';
+
+type ModalTitleElement = React.ElementRef<typeof Primitive.h2>;
+type PrimitiveHeading2Props = React.ComponentPropsWithoutRef<typeof Primitive.h2>;
+interface ModalTitleProps extends PrimitiveHeading2Props {}
+
+const ModalTitle = React.forwardRef<ModalTitleElement, ModalTitleProps>(
+	({ className, ...props }, ref) => {
+		return <Primitive.h2 id="" {...props} ref={ref} />;
+	}
+);
+ModalTitle.displayName = 'ModalTitle';
+
+export { ModalOverlay, ModalContainer, ModalContent, ModalHeader, ModalFooter, ModalTitle };
