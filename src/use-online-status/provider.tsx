@@ -6,7 +6,7 @@ import NetInfo, {
 	NetInfoStateType,
 } from '@react-native-community/netinfo';
 
-import useSnackbar from '@wcpos/components/src/snackbar';
+import { Toast } from '@wcpos/tailwind/src/toast';
 
 const initialState: NetInfoState = {
 	type: NetInfoStateType.unknown,
@@ -23,7 +23,6 @@ interface Props {
 }
 
 const OnlineStatusProvider = ({ children, wpAPIURL }: Props) => {
-	const addSnackbar = useSnackbar();
 	const [status, setStatus] = React.useState<NetInfoState>(initialState);
 
 	/**
@@ -47,16 +46,16 @@ const OnlineStatusProvider = ({ children, wpAPIURL }: Props) => {
 			setStatus((prev) => {
 				if (prev.isInternetReachable === true && netInfo.isInternetReachable === false) {
 					if (netInfo.isConnected === false) {
-						addSnackbar({ message: 'No internet connection' });
+						Toast.show({ type: 'error', text1: 'No internet connection' });
 					} else {
-						addSnackbar({ message: 'Your website is down' });
+						Toast.show({ type: 'error', text1: 'Your website is down' });
 					}
 				}
 				if (prev.isInternetReachable === false && netInfo.isInternetReachable === true) {
 					if (prev.isConnected === false && netInfo.isConnected === true) {
-						addSnackbar({ message: 'Internet reconnected' });
+						Toast.show({ type: 'success', text1: 'Internet reconnected' });
 					} else {
-						addSnackbar({ message: 'Your website is up' });
+						Toast.show({ type: 'success', text1: 'Your website is up' });
 					}
 				}
 				return netInfo;
@@ -69,7 +68,7 @@ const OnlineStatusProvider = ({ children, wpAPIURL }: Props) => {
 		return () => {
 			unsubscribe();
 		};
-	}, [addSnackbar, wpAPIURL]);
+	}, [wpAPIURL]);
 
 	return <OnlineStatusContext.Provider value={status}>{children}</OnlineStatusContext.Provider>;
 };
