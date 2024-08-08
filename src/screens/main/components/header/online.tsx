@@ -1,7 +1,8 @@
 import * as React from 'react';
 
-import Icon from '@wcpos/components/src/icon';
 import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
+import { Icon } from '@wcpos/tailwind/src/icon';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
 import { useT } from '../../../../contexts/translations';
 
@@ -39,13 +40,12 @@ const Online = () => {
 	}
 
 	return (
-		<Icon
-			name="circle"
-			size="small"
-			type={state.type}
-			tooltip={state.tooltip}
-			tooltipPlacement="bottom"
-		/>
+		<Tooltip>
+			<TooltipTrigger>
+				<Icon name="circle" className={`fill-${state.type}`} />
+			</TooltipTrigger>
+			<TooltipContent side="bottom">{state.tooltip}</TooltipContent>
+		</Tooltip>
 	);
 };
 

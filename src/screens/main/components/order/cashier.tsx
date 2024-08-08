@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { useCollection } from '../../hooks/use-collection';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';

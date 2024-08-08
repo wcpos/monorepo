@@ -9,9 +9,10 @@ import { from } from 'rxjs';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 
-import EditOrder from './edit-order';
+import { EditOrder } from './edit-order';
 import Orders from './orders';
 import { useT } from '../../../contexts/translations';
+import useModalRefreshFix from '../../../hooks/use-modal-refresh-fix';
 import { ModalLayout } from '../../components/modal-layout';
 import { useCollection } from '../hooks/use-collection';
 import Receipt from '../receipt';
@@ -48,7 +49,7 @@ const EditOrderWithProviders = ({
 }: NativeStackScreenProps<OrdersStackParamList, 'EditOrder'>) => {
 	const orderID = get(route, ['params', 'orderID']);
 	const { collection } = useCollection('orders');
-	const t = useT();
+	useModalRefreshFix();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
@@ -56,21 +57,29 @@ const EditOrderWithProviders = ({
 	);
 
 	return (
-		<ModalLayout
-			title={t('Edit Order', { _tags: 'core' })}
-			primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
-			secondaryActions={[
-				{
-					label: t('Cancel', { _tags: 'core' }),
-					action: () => navigation.dispatch(StackActions.pop(1)),
-				},
-			]}
-		>
+		<ErrorBoundary>
 			<Suspense>
 				<EditOrder resource={resource} />
 			</Suspense>
-		</ModalLayout>
+		</ErrorBoundary>
 	);
+
+	// return (
+	// 	<ModalLayout
+	// 		title={t('Edit Order', { _tags: 'core' })}
+	// 		primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
+	// 		secondaryActions={[
+	// 			{
+	// 				label: t('Cancel', { _tags: 'core' }),
+	// 				action: () => navigation.dispatch(StackActions.pop(1)),
+	// 			},
+	// 		]}
+	// 	>
+	// 		<Suspense>
+	// 			<EditOrder resource={resource} />
+	// 		</Suspense>
+	// 	</ModalLayout>
+	// );
 };
 
 /**

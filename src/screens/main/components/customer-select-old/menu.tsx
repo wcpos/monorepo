@@ -8,9 +8,9 @@ import { Avatar } from '@wcpos/components/src/avatar/avatar';
 import Box from '@wcpos/components/src/box';
 import { usePopover } from '@wcpos/components/src/popover/context';
 import Pressable from '@wcpos/components/src/pressable';
-import Table from '@wcpos/tailwind/src/table';
 import Text from '@wcpos/components/src/text';
 import { useInfiniteScroll, useReplicationState } from '@wcpos/query';
+import Table from '@wcpos/tailwind/src/table';
 
 import CustomerSelectItem from './item';
 import { useT } from '../../../../contexts/translations';

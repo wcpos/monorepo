@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { Avatar } from '@wcpos/components/src/avatar/avatar';
 import Box from '@wcpos/components/src/box';
 import Text from '@wcpos/components/src/text';
 

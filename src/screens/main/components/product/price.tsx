@@ -1,9 +1,8 @@
 import * as React from 'react';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
-import { Text as TWText } from '@wcpos/tailwind/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useTaxDisplayValues } from '../../hooks/taxes/use-tax-display-values';
@@ -39,20 +38,12 @@ export const Price = ({
 	 */
 	if (taxDisplay === 'tooltip' && taxable) {
 		return (
-			<Tooltip content={`${inclOrExcl} ${format(taxTotal)} tax`}>
-				<TooltipTrigger asChild>
-					<TWText>{format(displayValue)}</TWText>
+			<Tooltip>
+				<TooltipTrigger>
+					<Text className={strikethrough ?? 'line-through	text-muted'}>{format(displayValue)}</Text>
 				</TooltipTrigger>
 				<TooltipContent>
-					<TWText>test</TWText>
-					{/* <Text
-						style={
-							strikethrough
-								? { textDecorationLine: 'line-through', textDecorationStyle: 'solid' }
-								: {}
-						}
-						type={strikethrough ? 'secondary' : undefined}
-					></Text> */}
+					<Text>{`${inclOrExcl} ${format(taxTotal)} tax`}</Text>
 				</TooltipContent>
 			</Tooltip>
 		);
@@ -63,21 +54,10 @@ export const Price = ({
 	 */
 	if (taxDisplay === 'text' && taxable) {
 		return (
-			<Box space="xSmall" align="end">
-				<Text
-					style={
-						strikethrough
-							? { textDecorationLine: 'line-through', textDecorationStyle: 'solid' }
-							: {}
-					}
-					type={strikethrough ? 'textMuted' : undefined}
-				>
-					{format(displayValue)}
-				</Text>
-				<Text type="textMuted" size="small">
-					{`${inclOrExcl} ${format(taxTotal)} tax`}
-				</Text>
-			</Box>
+			<VStack className="justify-end">
+				<Text className={strikethrough ?? 'line-through	text-muted'}>{format(displayValue)}</Text>
+				<Text className="text-sm text-muted">{`${inclOrExcl} ${format(taxTotal)} tax`}</Text>
+			</VStack>
 		);
 	}
 

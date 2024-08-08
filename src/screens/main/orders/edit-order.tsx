@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { StackActions, useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
 import {
 	useObservableSuspense,
@@ -18,7 +19,9 @@ import {
 	AccordionTrigger,
 	AccordionItem,
 } from '@wcpos/tailwind/src/accordian';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Form, FormField, FormInput, FormSelect, FormSwitch } from '@wcpos/tailwind/src/form';
+import { ModalContent, ModalTitle, ModalFooter, ModalContainer } from '@wcpos/tailwind/src/modal';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Toast } from '@wcpos/tailwind/src/toast';
 import log from '@wcpos/utils/src/logger';
@@ -28,6 +31,7 @@ import { BillingAddressForm, billingAddressSchema } from '../components/billing-
 import { CountrySelect, StateSelect } from '../components/country-state-select';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
+import { MetaDataForm } from '../components/meta-data-form';
 import { OrderStatusSelect } from '../components/order/order-status-select';
 import { ShippingAddressForm } from '../components/shipping-address-form';
 import usePushDocument from '../contexts/use-push-document';
@@ -39,10 +43,11 @@ interface Props {
 /**
  *
  */
-const EditOrder = ({ resource }: Props) => {
+export const EditOrder = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
 	const pushDocument = usePushDocument();
 	const t = useT();
+	const navigation = useNavigation();
 
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));
@@ -57,21 +62,25 @@ const EditOrder = ({ resource }: Props) => {
 	/**
 	 * Handle save button click
 	 */
-	const handleSave = React.useCallback(async () => {
-		try {
-			const success = await pushDocument(order);
-			if (isRxDocument(success)) {
-				Toast.show({
-					text1: t('Order {id} saved', { _tags: 'core', id: success.id }),
-					type: 'success',
-				});
+	const handleSave = React.useCallback(
+		async (data) => {
+			try {
+				console.log('data', data);
+				// const success = await pushDocument(order);
+				// if (isRxDocument(success)) {
+				// 	Toast.show({
+				// 		text1: t('Order {id} saved', { _tags: 'core', id: success.id }),
+				// 		type: 'success',
+				// 	});
+				// }
+			} catch (error) {
+				log.error(error);
+			} finally {
+				//
 			}
-		} catch (error) {
-			log.error(error);
-		} finally {
-			//
-		}
-	}, [order, pushDocument, t]);
+		},
+		[order, pushDocument, t]
+	);
 
 	/**
 	 *
@@ -166,101 +175,163 @@ const EditOrder = ({ resource }: Props) => {
 		},
 	});
 
+	console.log('form', form.formState);
+
 	/**
 	 *
 	 */
 	return (
-		<Form {...form}>
-			<View className="grid grid-cols-3 gap-4">
-				<FormField
-					control={form.control}
-					name="status"
-					render={({ field }) => (
-						<FormSelect
-							label={t('Status', { _tags: 'core' })}
-							customComponent={OrderStatusSelect}
-							{...field}
+		<ModalContainer>
+			<ModalTitle>{t('Edit Order', { _tags: 'core' })}</ModalTitle>
+			<ModalContent>
+				<Form {...form}>
+					<View className="grid grid-cols-3 gap-4">
+						<FormField
+							control={form.control}
+							name="status"
+							render={({ field }) => (
+								<FormSelect
+									label={t('Status', { _tags: 'core' })}
+									customComponent={OrderStatusSelect}
+									{...field}
+								/>
+							)}
 						/>
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="number"
-					render={({ field }) => (
-						<FormInput label={t('Order Number', { _tags: 'core' })} {...field} />
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="parent_id"
-					render={({ field }) => <FormInput label={t('Parent ID', { _tags: 'core' })} {...field} />}
-				/>
-				<FormField
-					control={form.control}
-					name="currency"
-					render={({ field }) => (
-						<FormSelect
-							customComponent={CurrencySelect}
-							label={t('Currency', { _tags: 'core' })}
-							{...field}
+						<FormField
+							control={form.control}
+							name="number"
+							render={({ field }) => (
+								<FormInput label={t('Order Number', { _tags: 'core' })} {...field} />
+							)}
 						/>
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="currency_symbol"
-					render={({ field }) => (
-						<FormInput label={t('Currency Symbol', { _tags: 'core' })} {...field} />
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="date_created_gmt"
-					render={({ field }) => (
-						<FormInput label={t('Date Created', { _tags: 'core' })} {...field} />
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="customer_id"
-					render={({ field }) => (
-						<FormSelect
-							customComponent={CustomerSelect}
-							label={t('Customer', { _tags: 'core' })}
-							{...field}
+						<FormField
+							control={form.control}
+							name="parent_id"
+							render={({ field }) => (
+								<FormInput label={t('Parent ID', { _tags: 'core' })} {...field} />
+							)}
 						/>
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="customer_note"
-					render={({ field }) => (
-						<FormInput label={t('Customer Note', { _tags: 'core' })} {...field} />
-					)}
-				/>
-				<View className="col-span-3">
-					<Accordion type="multiple" collapsible className="w-full">
-						<AccordionItem value="billing">
-							<AccordionTrigger>
-								<Text>{t('Billing Address', { _tags: 'core' })}</Text>
-							</AccordionTrigger>
-							<AccordionContent>
-								<BillingAddressForm />
-							</AccordionContent>
-						</AccordionItem>
-						<AccordionItem value="shipping">
-							<AccordionTrigger>
-								<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
-							</AccordionTrigger>
-							<AccordionContent>
-								<ShippingAddressForm />
-							</AccordionContent>
-						</AccordionItem>
-					</Accordion>
-				</View>
-			</View>
-		</Form>
+						<FormField
+							control={form.control}
+							name="currency"
+							render={({ field }) => (
+								<FormSelect
+									customComponent={CurrencySelect}
+									label={t('Currency', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="currency_symbol"
+							render={({ field }) => (
+								<FormInput label={t('Currency Symbol', { _tags: 'core' })} {...field} />
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="date_created_gmt"
+							render={({ field }) => (
+								<FormInput label={t('Date Created', { _tags: 'core' })} {...field} />
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="customer_id"
+							render={({ field }) => (
+								<FormSelect
+									customComponent={CustomerSelect}
+									label={t('Customer', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="customer_note"
+							render={({ field }) => (
+								<FormInput label={t('Customer Note', { _tags: 'core' })} {...field} />
+							)}
+						/>
+						<View className="col-span-3">
+							<Accordion type="multiple" collapsible className="w-full">
+								<AccordionItem value="billing">
+									<AccordionTrigger>
+										<Text>{t('Billing Address', { _tags: 'core' })}</Text>
+									</AccordionTrigger>
+									<AccordionContent>
+										<BillingAddressForm />
+									</AccordionContent>
+								</AccordionItem>
+								<AccordionItem value="shipping">
+									<AccordionTrigger>
+										<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
+									</AccordionTrigger>
+									<AccordionContent>
+										<ShippingAddressForm />
+									</AccordionContent>
+								</AccordionItem>
+							</Accordion>
+						</View>
+						<FormField
+							control={form.control}
+							name="payment_method"
+							render={({ field }) => (
+								<FormInput label={t('Payment Method ID', { _tags: 'core' })} {...field} />
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="payment_method_title"
+							render={({ field }) => (
+								<FormInput label={t('Payment Method Title', { _tags: 'core' })} {...field} />
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="transaction_id"
+							render={({ field }) => (
+								<FormInput label={t('Transaction ID', { _tags: 'core' })} {...field} />
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="date_paid_gmt"
+							render={({ field }) => (
+								<FormInput label={t('Date Paid', { _tags: 'core' })} {...field} />
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="date_completed_gmt"
+							render={({ field }) => (
+								<FormInput label={t('Date Completed', { _tags: 'core' })} {...field} />
+							)}
+						/>
+						<View className="col-span-3">
+							<Accordion type="multiple" collapsible className="w-full">
+								<AccordionItem value="meta_data">
+									<AccordionTrigger>
+										<Text>{t('Meta Data', { _tags: 'core' })}</Text>
+									</AccordionTrigger>
+									<AccordionContent>
+										<MetaDataForm name="meta_data" />
+									</AccordionContent>
+								</AccordionItem>
+							</Accordion>
+						</View>
+					</View>
+				</Form>
+			</ModalContent>
+			<ModalFooter className="justify-end">
+				<Button variant="secondary" onPress={() => navigation.dispatch(StackActions.pop(1))}>
+					<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
+				</Button>
+				<Button onPress={form.handleSubmit(handleSave)}>
+					<ButtonText>{t('Save to Server', { _tags: 'core' })}</ButtonText>
+				</Button>
+			</ModalFooter>
+		</ModalContainer>
 	);
 };
-
-export default EditOrder;

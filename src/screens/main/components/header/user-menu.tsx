@@ -8,10 +8,8 @@ import {
 	useObservableSuspense,
 } from 'observable-hooks';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { useTheme } from 'styled-components/native';
 
-import Avatar from '@wcpos/components/src/avatar';
-import Icon from '@wcpos/components/src/icon';
+import { Avatar } from '@wcpos/tailwind/src/avatar';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -23,11 +21,12 @@ import {
 	DropdownMenuTrigger,
 } from '@wcpos/tailwind/src/dropdown-menu';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
 import { Text } from '@wcpos/tailwind/src/text';
 
-import { useAppState } from '../../../../../contexts/app-state';
-import { useT } from '../../../../../contexts/translations';
-import { useImageAttachment } from '../../../hooks/use-image-attachment';
+import { useAppState } from '../../../../contexts/app-state';
+import { useT } from '../../../../contexts/translations';
+import { useImageAttachment } from '../../hooks/use-image-attachment';
 
 type StoreDocument = import('@wcpos/database').StoreDocument;
 
@@ -59,12 +58,11 @@ const StoreSubMenu = ({ storesResource, switchStore, currentStoreID }: StoreSubM
 };
 
 /**
- *
+ * @TODO - remove hardcoded screensize
  */
 export const UserMenu = () => {
 	const { wpCredentials, isWebApp, site, store, logout, switchStore } = useAppState();
 	const navigation = useNavigation();
-	const theme = useTheme();
 	const dimensions = useWindowDimensions();
 	const avatarUrl = useObservableEagerState(wpCredentials?.avatar_url$);
 	const stores = useObservableEagerState(wpCredentials?.stores$);
@@ -86,12 +84,11 @@ export const UserMenu = () => {
 					<Avatar
 						source={avatarSource}
 						// placeholder="PK"
-						size="small"
 					/>
-					{dimensions.width >= theme.screens.small ? (
+					{dimensions.width >= 640 ? (
 						<Text className="text-primary-foreground">{wpCredentials?.display_name}</Text>
 					) : null}
-					<Icon name="caretDown" type="inverse" size="small" />
+					<Icon name="caretDown" className="fill-primary-foreground" />
 				</HStack>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
@@ -137,7 +134,7 @@ export const UserMenu = () => {
 					</DropdownMenuItem>
 				)}
 				<DropdownMenuItem onPress={logout} variant="destructive">
-					<Icon name="arrowRightFromBracket" />
+					<Icon name="arrowRightFromBracket" className="fill-destructive" />
 					<Text>{t('Logout', { _tags: 'core' })}</Text>
 				</DropdownMenuItem>
 			</DropdownMenuContent>

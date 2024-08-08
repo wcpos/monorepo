@@ -2,8 +2,10 @@ import * as React from 'react';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import Text from '@wcpos/components/src/text';
 import { useQuery } from '@wcpos/query';
+import { Text } from '@wcpos/tailwind/src/text';
+
+import { useT } from '../../../../contexts/translations';
 
 /**
  *
@@ -11,13 +13,12 @@ import { useQuery } from '@wcpos/query';
 const GroupedNames = ({ query }) => {
 	const result = useObservableSuspense(query.resource);
 	const names = result.hits.map(({ document }) => document.name);
+	const t = useT();
 
 	return (
 		<Text>
-			<Text size="small" type="secondary">
-				Grouped:{' '}
-			</Text>
-			<Text size="small">{names.join(', ')}</Text>
+			<Text className="text-sm text-muted">{`${t('Grouped', { _tags: 'core' })}: `}</Text>
+			<Text className="text-sm">{names.join(', ')}</Text>
 		</Text>
 	);
 };
