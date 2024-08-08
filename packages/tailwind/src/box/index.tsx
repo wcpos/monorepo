@@ -6,7 +6,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../lib/utils';
 
-const boxVariants = cva('flex-row bg-transparent', {
+const boxVariants = cva('flex-column bg-transparent', {
 	variants: {
 		padding: {
 			none: 'p-0',

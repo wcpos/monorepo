@@ -60,3 +60,5 @@ export const Icon = ({ name, variant, size, className }: IconProps) => {
 		</View>
 	);
 };
+
+Icon.displayName = 'Icon';

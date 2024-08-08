@@ -4,8 +4,6 @@ import { Platform, StyleSheet, View } from 'react-native';
 import * as DialogPrimitive from '@rn-primitives/dialog';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import { Button } from '../button';
-import { Icon } from '../icon';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
 
