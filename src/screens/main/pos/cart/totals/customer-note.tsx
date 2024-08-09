@@ -1,16 +1,17 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import isEmpty from 'lodash/isEmpty';
 import { useObservableEagerState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
-// import { EdittableText } from '@wcpos/components/src/edittable-text';
-import Icon from '@wcpos/components/src/icon';
-import Pressable from '@wcpos/components/src/pressable';
-import Text from '@wcpos/components/src/text';
-import TextArea from '@wcpos/components/src/textarea';
-import Tooltip from '@wcpos/components/src/tooltip';
+import { Box } from '@wcpos/tailwind/src/box';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
+import { Pressable } from '@wcpos/tailwind/src/pressable';
+import { Text } from '@wcpos/tailwind/src/text';
+import { Textarea } from '@wcpos/tailwind/src/textarea';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/tailwind/src/tooltip';
 
 import { useT } from '../../../../../contexts/translations';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
@@ -57,40 +58,30 @@ export const CustomerNote = () => {
 	 *
 	 */
 	return (
-		<Box
-			padding="small"
-			space="small"
-			border
-			style={{
-				borderLeftWidth: 0,
-				borderRightWidth: 0,
-				borderColor: theme.colors.lightGrey,
-				backgroundColor: theme.colors.lightestGrey,
-			}}
-		>
-			<Box horizontal space="small">
-				<Box paddingTop="xxSmall">
-					<Tooltip content={t('Customer Note', { _tags: 'core' })}>
-						<Icon name="messageLines" type="secondary" />
-					</Tooltip>
-				</Box>
-
-				<Box fill>
-					{isEditing ? (
-						<TextArea
-							value={value}
-							onChangeText={setValue}
-							onBlur={handleSaveNote}
-							autoFocus
-							onReturnKeyPress={handleSaveNote}
-						/>
-					) : (
-						<Pressable onPress={() => setIsEditing(true)}>
-							<Text style={{ lineHeight: theme.font.lineHeight.large }}>{value}</Text>
-						</Pressable>
-					)}
-				</Box>
-			</Box>
-		</Box>
+		<HStack className="p-2 border-y-1 bg-gray-50 items-start">
+			<Tooltip>
+				<TooltipTrigger>
+					<Icon name="messageLines" className="fill-secondary-foreground" />
+				</TooltipTrigger>
+				<TooltipContent>
+					<Text>{t('Customer Note', { _tags: 'core' })}</Text>
+				</TooltipContent>
+			</Tooltip>
+			<View className="flex-1">
+				{isEditing ? (
+					<Textarea
+						value={value}
+						onChangeText={setValue}
+						onBlur={handleSaveNote}
+						autoFocus
+						onReturnKeyPress={handleSaveNote}
+					/>
+				) : (
+					<Pressable onPress={() => setIsEditing(true)}>
+						<Text>{value}</Text>
+					</Pressable>
+				)}
+			</View>
+		</HStack>
 	);
 };

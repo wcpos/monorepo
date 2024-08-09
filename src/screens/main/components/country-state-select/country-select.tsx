@@ -1,16 +1,15 @@
 import * as React from 'react';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import {
 	Command,
 	CommandInput,
 	CommandEmpty,
 	CommandList,
 	CommandItem,
+	CommandButton,
 } from '@wcpos/tailwind/src/command';
-import { Label } from '@wcpos/tailwind/src/label';
 import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/tailwind/src/popover';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import useCountries, { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
@@ -18,7 +17,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-const _CountrySelect = ({ label, value, onChange }) => {
+const _CountrySelect = ({ value, onChange }) => {
 	const allCountries = useCountries();
 	const t = useT();
 
@@ -39,36 +38,33 @@ const _CountrySelect = ({ label, value, onChange }) => {
 	 */
 	const displayLabel = React.useMemo(() => {
 		const selected = options.find((option) => option.value === value);
-		return selected ? selected.label : '';
-	}, [options, value]);
+		return selected ? selected.label : t('Select Country', { _tags: 'core' });
+	}, [options, t, value]);
 
 	/**
 	 *
 	 */
 	return (
-		<VStack>
-			<Label nativeID="country">{label}</Label>
-			<Popover>
-				<PopoverTrigger asChild>
-					<Button variant="outline">
-						<ButtonText>{displayLabel}</ButtonText>
-					</Button>
-				</PopoverTrigger>
-				<PopoverContent className="p-0">
-					<Command>
-						<CommandInput placeholder={t('Search Countries', { _tags: 'core' })} />
-						<CommandEmpty>{t('No country found', { _tags: 'core' })}</CommandEmpty>
-						<CommandList>
-							{options.map((option) => (
-								<CommandItem key={option.value} onSelect={() => onChange(option.value)}>
-									{option.label}
-								</CommandItem>
-							))}
-						</CommandList>
-					</Command>
-				</PopoverContent>
-			</Popover>
-		</VStack>
+		<Popover>
+			<PopoverTrigger asChild>
+				<CommandButton>
+					<Text>{displayLabel}</Text>
+				</CommandButton>
+			</PopoverTrigger>
+			<PopoverContent className="p-0">
+				<Command>
+					<CommandInput placeholder={t('Search Countries', { _tags: 'core' })} />
+					<CommandEmpty>{t('No country found', { _tags: 'core' })}</CommandEmpty>
+					<CommandList>
+						{options.map((option) => (
+							<CommandItem key={option.value} onSelect={() => onChange(option.value)}>
+								{option.label}
+							</CommandItem>
+						))}
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
 	);
 };
 

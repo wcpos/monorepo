@@ -4,7 +4,7 @@ import get from 'lodash/get';
 import { useObservableState, useSubscription, useObservableEagerState } from 'observable-hooks';
 import { debounceTime, skip } from 'rxjs';
 
-import Loader from '@wcpos/components/src/loader';
+import {Loader} from '@wcpos/tailwind/src/loader';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 import type {
 	ProductDocument,

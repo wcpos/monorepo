@@ -4,8 +4,9 @@ import { View } from 'react-native';
 import { useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
-import { FormField, FormInput } from '@wcpos/tailwind/src/form';
+import { FormField, FormInput, FormSelect } from '@wcpos/tailwind/src/form';
 
+import { CountrySelect, StateSelect } from './country-state-select';
 import { useT } from '../../../contexts/translations';
 
 /**
@@ -85,12 +86,24 @@ export const BillingAddressForm = () => {
 			<FormField
 				control={control}
 				name="billing.state"
-				render={({ field }) => <FormInput label={t('State', { _tags: 'core' })} {...field} />}
+				render={({ field }) => (
+					<FormSelect
+						customComponent={StateSelect}
+						label={t('State', { _tags: 'core' })}
+						{...field}
+					/>
+				)}
 			/>
 			<FormField
 				control={control}
 				name="billing.country"
-				render={({ field }) => <FormInput label={t('Country', { _tags: 'core' })} {...field} />}
+				render={({ field }) => (
+					<FormSelect
+						customComponent={CountrySelect}
+						label={t('Country', { _tags: 'core' })}
+						{...field}
+					/>
+				)}
 			/>
 			<FormField
 				control={control}

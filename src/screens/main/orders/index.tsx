@@ -98,22 +98,24 @@ const ReceiptWithProviders = ({
 	);
 
 	return (
-		<ModalLayout
-			title={t('Receipt', { _tags: 'core' })}
-			primaryAction={{
-				label: t('Print Receipt', { _tags: 'core' }),
-			}}
-			secondaryActions={[
-				{
-					label: t('Email Receipt', { _tags: 'core' }),
-				},
-			]}
-			style={{ height: '100%' }}
-		>
+		// <ModalLayout
+		// 	title={t('Receipt', { _tags: 'core' })}
+		// 	primaryAction={{
+		// 		label: t('Print Receipt', { _tags: 'core' }),
+		// 	}}
+		// 	secondaryActions={[
+		// 		{
+		// 			label: t('Email Receipt', { _tags: 'core' }),
+		// 		},
+		// 	]}
+		// 	style={{ height: '100%' }}
+		// >
+		<ErrorBoundary>
 			<Suspense>
 				<Receipt resource={resource} />
 			</Suspense>
-		</ModalLayout>
+		</ErrorBoundary>
+		// </ModalLayout>
 	);
 };
 

@@ -80,10 +80,10 @@ const App = () => {
 										<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
 											<RootNavigator />
 											<ErrorBoundary>
-												<Toast />
+												<PortalHost />
 											</ErrorBoundary>
 											<ErrorBoundary>
-												<PortalHost />
+												<Toast />
 											</ErrorBoundary>
 										</SafeAreaProviderCompat>
 									</TranslationProvider>

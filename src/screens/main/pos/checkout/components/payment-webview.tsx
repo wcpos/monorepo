@@ -6,7 +6,6 @@ import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { useModal } from '@wcpos/components/src/modal';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Toast } from '@wcpos/tailwind/src/toast';
 import { WebView } from '@wcpos/tailwind/src/webview';
@@ -23,7 +22,6 @@ export interface PaymentWebviewProps {
 }
 
 const PaymentWebview = ({ order }: PaymentWebviewProps) => {
-	const { setPrimaryAction } = useModal();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
 	const navigation = useNavigation();
 	const paymentURL = useObservableState(
@@ -80,17 +78,11 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 					log.error(err);
 					Toast.show({ text1: err?.message, type: 'error' });
 				} finally {
-					setPrimaryAction((prev) => {
-						return {
-							...prev,
-							loading: false,
-							disabled: false,
-						};
-					});
+					//
 				}
 			}
 		},
-		[navigation, order, setPrimaryAction, stockAdjustment, uiSettings.autoShowReceipt]
+		[navigation, order, stockAdjustment, uiSettings.autoShowReceipt]
 	);
 
 	/**
@@ -100,38 +92,14 @@ const PaymentWebview = ({ order }: PaymentWebviewProps) => {
 		if (iframeRef.current && iframeRef.current.contentWindow) {
 			iframeRef.current.contentWindow.postMessage({ action: 'wcpos-process-payment' }, '*');
 		}
-		setPrimaryAction((prev) => {
-			return {
-				...prev,
-				loading: true,
-				disabled: true,
-			};
-		});
-	}, [setPrimaryAction]);
+	}, []);
 
 	/**
 	 *
 	 */
-	setPrimaryAction((prev) => ({
-		...prev,
-		action: handleProcessPayment,
-	}));
-
-	/**
-	 *
-	 */
-	const onWebViewLoaded = React.useCallback(
-		(event) => {
-			setPrimaryAction((prev) => {
-				return {
-					...prev,
-					loading: false,
-					disabled: false,
-				};
-			});
-		},
-		[setPrimaryAction]
-	);
+	const onWebViewLoaded = React.useCallback((event) => {
+		//
+	}, []);
 
 	/**
 	 *

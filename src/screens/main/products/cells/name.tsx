@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
-import { EdittableText } from '@wcpos/components/src/edittable-text';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';

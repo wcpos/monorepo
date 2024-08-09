@@ -2,8 +2,7 @@ import * as React from 'react';
 
 import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import { useModal } from '@wcpos/components/src/modal';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import PaymentWebview from './components/payment-webview';
 import CheckoutTitle from './components/title';
@@ -25,7 +24,7 @@ const Checkout = ({ resource }: Props) => {
 	}
 
 	const number = useObservableState(order.number$, order.number);
-	const { setTitle } = useModal();
+	// const { setTitle } = useModal();
 
 	/**
 	 * Update title with order number
@@ -39,17 +38,17 @@ const Checkout = ({ resource }: Props) => {
 				_context: 'Checkout Order title',
 			});
 		}
-		setTitle(() => title);
+		// setTitle(() => title);
 	}, [number, setTitle, t]);
 
 	/**
 	 *
 	 */
 	return (
-		<Box fill space="small">
+		<VStack>
 			<CheckoutTitle order={order} />
 			<PaymentWebview order={order} />
-		</Box>
+		</VStack>
 	);
 };
 

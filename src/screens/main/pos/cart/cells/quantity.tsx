@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import find from 'lodash/find';
 
-import Box from '@wcpos/components/src/box';
-import Link from '@wcpos/components/src/link';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../../../contexts/translations';
 import NumberInput from '../../../components/number-input';
@@ -35,16 +35,16 @@ export const Quantity = ({ uuid, item, column }: Props) => {
 	 *
 	 */
 	return (
-		<Box space="small" align="center">
+		<VStack className="justify-center">
 			<NumberInput
 				value={String(item.quantity)}
 				onChange={(quantity) => updateLineItem(uuid, { quantity })}
 			/>
 			{show('split') && item.quantity > 1 && (
-				<Link size="small" onPress={() => splitLineItem(uuid)}>
-					{t('Split', { _tags: 'core', _context: 'Split quantity' })}
-				</Link>
+				<Button variant="link" size="sm" onPress={() => splitLineItem(uuid)}>
+					<ButtonText>{t('Split', { _tags: 'core', _context: 'Split quantity' })}</ButtonText>
+				</Button>
 			)}
-		</Box>
+		</VStack>
 	);
 };

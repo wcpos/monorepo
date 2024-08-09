@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
@@ -59,21 +59,12 @@ export const ProductTotal = ({ item, column }: Props) => {
 	);
 
 	return (
-		<Box space="xSmall" align="end">
+		<VStack space="xs" className="justify-end">
 			{onSale && show('on_sale') && (
 				<>
-					<Text
-						type="textMuted"
-						style={{ textDecorationLine: 'line-through', textDecorationStyle: 'solid' }}
-					>
-						{format(displaySubtotal || 0)}
-					</Text>
+					<Text className="text-muted-foreground line-through">{format(displaySubtotal || 0)}</Text>
 					{show('tax') && (
-						<Text
-							type="textMuted"
-							size="small"
-							style={{ textDecorationLine: 'line-through', textDecorationStyle: 'solid' }}
-						>
+						<Text className="text-sm text-muted-foreground line-through">
 							{`${taxDisplayCart} ${format(item.subtotal_tax || 0)} tax`}
 						</Text>
 					)}
@@ -81,10 +72,10 @@ export const ProductTotal = ({ item, column }: Props) => {
 			)}
 			<Text>{format(displayTotal || 0)}</Text>
 			{show('tax') && (
-				<Text type="textMuted" size="small">
+				<Text className="text-sm text-muted-foreground">
 					{`${taxDisplayCart} ${format(item.total_tax || 0)} tax`}
 				</Text>
 			)}
-		</Box>
+		</VStack>
 	);
 };

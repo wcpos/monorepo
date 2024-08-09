@@ -8,7 +8,6 @@ import {
 } from '@react-navigation/drawer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// import Icon from '@wcpos/components/src/icon';
 import DrawerItemList from './drawer-item-list';
 import Version from './version';
 

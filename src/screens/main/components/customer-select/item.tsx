@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Avatar } from '@wcpos/components/src/avatar/avatar';
+import { Avatar } from '@wcpos/tailwind/src/avatar';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
@@ -20,7 +20,6 @@ export const CustomerSelectItem = ({ customer }: CustomerSelectItemProps) => {
 		return (
 			<HStack className="items-start">
 				<Avatar
-					size="small"
 					source="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
 					recyclingKey="guest"
 				/>
@@ -31,7 +30,7 @@ export const CustomerSelectItem = ({ customer }: CustomerSelectItemProps) => {
 
 	return (
 		<HStack className="items-start">
-			<Avatar source={customer.avatar_url} size="small" recyclingKey={customer.uuid} />
+			<Avatar source={customer.avatar_url} recyclingKey={customer.uuid} />
 			<VStack space="sm">
 				<Text>
 					{customer.first_name} {customer.last_name}

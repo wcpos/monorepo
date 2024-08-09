@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { EdittableText } from '@wcpos/components/src/edittable-text';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/tailwind/src/dialog';

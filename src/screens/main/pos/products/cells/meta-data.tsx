@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useUISettings } from '../../../contexts/ui-settings';
 
@@ -37,13 +37,13 @@ export const MetaData = ({ product }: Props) => {
 	}
 
 	return (
-		<Box space="xxSmall">
+		<VStack space="xs">
 			{metaData.map((m: any) => (
-				<Text size="small" key={`${m.id}`}>
-					<Text size="small" type="secondary">{`${m.key}: `}</Text>
+				<Text className="text-sm" key={`${m.id}`}>
+					<Text className="text-secondary-foreground">{`${m.key}: `}</Text>
 					{m.value}
 				</Text>
 			))}
-		</Box>
+		</VStack>
 	);
 };
