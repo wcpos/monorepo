@@ -20,29 +20,16 @@ config.resolver.nodeModulesPaths = [
 
 //
 if (process.env.ELECTRON === 'true') {
-	config.resolver.sourceExts = [
+	config.resolver.sourceExts = config.resolver.sourceExts || [];
+	config.resolver.sourceExts.unshift(
 		'electron.ts',
 		'electron.tsx',
 		'electron.js',
 		'electron.jsx',
 		'electron.json',
 		'electron.cjs',
-		'electron.mjs',
-		'web.ts',
-		'web.tsx',
-		'web.js',
-		'web.jsx',
-		'web.json',
-		'web.cjs',
-		'web.mjs',
-		'ts',
-		'tsx',
-		'js',
-		'jsx',
-		'json',
-		'cjs',
-		'mjs',
-	];
+		'electron.mjs'
+	);
 }
 
 module.exports = withNativeWind(config, { input: './global.css' });
