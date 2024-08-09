@@ -37,7 +37,7 @@ const DemoButton = () => {
 	};
 
 	return (
-		<Button variant="ghost">
+		<Button variant="link">
 			<HStack>
 				<ButtonText>{t('Enter Demo Store', { _tags: 'core' })}</ButtonText>
 				{loading ? <Loader size="sm" /> : <Icon name="arrowRight" size="sm" />}

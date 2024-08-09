@@ -3,12 +3,13 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { useObservableSuspense } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Button from '@wcpos/components/src/button';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import Pill from '@wcpos/components/src/pill';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import WPUser from './wp-user';
 import { useT } from '../../../contexts/translations';
@@ -26,18 +27,9 @@ export const WPUsers = ({ site }: WpUserProps) => {
 	const t = useT();
 
 	return (
-		<Box space="xSmall">
-			<Box horizontal align="center" space="medium">
-				<Text>{t('Logged in users', { _tags: 'core' })}</Text>
-				<Button
-					size="small"
-					title={t('Add new user', { _tags: 'core' })}
-					type="secondary"
-					background="outline"
-					onPress={() => navigation.navigate('Login', { siteID: site.uuid })}
-				/>
-			</Box>
-			<Pill.Group>
+		<VStack space="xs">
+			<Text className="text-sm">{t('Logged in users', { _tags: 'core' })}:</Text>
+			<HStack>
 				{wpCreds.map((wpCred) => (
 					<ErrorBoundary key={wpCred.uuid}>
 						<Suspense>
@@ -45,7 +37,19 @@ export const WPUsers = ({ site }: WpUserProps) => {
 						</Suspense>
 					</ErrorBoundary>
 				))}
-			</Pill.Group>
-		</Box>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<IconButton
+							name="circlePlus"
+							size="lg"
+							onPress={() => navigation.navigate('Login', { siteID: site.uuid })}
+						/>
+					</TooltipTrigger>
+					<TooltipContent>
+						<Text>{t('Add new user', { _tags: 'core' })}</Text>
+					</TooltipContent>
+				</Tooltip>
+			</HStack>
+		</VStack>
 	);
 };

@@ -24,9 +24,9 @@ const Connect = () => {
 		>
 			{/* <View nativeID="titlebar" style={{ height: 30 }} /> */}
 			<Box className="min-h-screen w-full justify-center items-center">
-				<VStack className="gap-3 max-w-[460px] items-center">
-					<Logo />
-					<Card className="p-3 w-full">
+				<VStack space="lg" className="w-full max-w-[460px] items-center">
+					<Logo width={120} height={120} />
+					<Card className="p-4 w-full">
 						<UrlInput />
 					</Card>
 					<ErrorBoundary>

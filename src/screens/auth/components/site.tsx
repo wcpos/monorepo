@@ -2,15 +2,23 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import Avatar from '@wcpos/components/src/avatar';
-import Box from '@wcpos/components/src/box';
-import Dialog from '@wcpos/components/src/dialog';
-import Icon from '@wcpos/components/src/icon';
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
+import { Avatar } from '@wcpos/tailwind/src/avatar';
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '@wcpos/tailwind/src/dialog';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { Text } from '@wcpos/tailwind/src/text';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/tailwind/src/tooltip';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { WPUsers } from './wp-users';
@@ -76,42 +84,58 @@ export const Site = ({ user, site, idx }: Props) => {
 
 	return (
 		<>
-			<HStack className="p-2" style={{ borderTopWidth: idx === 0 ? 0 : 1 }}>
-				<Avatar source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url)}`} />
-				<VStack className="grow">
-					<VStack className="gap-1">
+			<HStack space="lg" className="p-4" style={{ borderTopWidth: idx === 0 ? 0 : 1 }}>
+				<Avatar
+					source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url)}`}
+					className="w-10 h-10"
+				/>
+				<VStack className="flex-1">
+					<VStack space="xs">
 						<Text className="font-bold">{site.name}</Text>
 						<Text className="text-sm">{site.url}</Text>
 					</VStack>
 					{wcposVersionPass ? (
-						<Box>
-							<ErrorBoundary>
-								<Suspense>
-									<WPUsers site={site} />
-								</Suspense>
-							</ErrorBoundary>
-						</Box>
+						<ErrorBoundary>
+							<Suspense>
+								<WPUsers site={site} />
+							</Suspense>
+						</ErrorBoundary>
 					) : (
-						<Box horizontal space="small">
-							<Icon name="triangleExclamation" type="critical" />
-							<Text type="critical">{t('Please update your WooCommerce POS plugin')}</Text>
-						</Box>
+						<HStack>
+							<Icon name="triangleExclamation" className="fill-warning" />
+							<Text className="text-warning">{t('Please update your WooCommerce POS plugin')}</Text>
+						</HStack>
 					)}
 				</VStack>
-				<Icon
-					name="circleXmark"
-					size="large"
-					type="critical"
-					onPress={() => setDeleteDialogOpened(true)}
-				/>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<IconButton
+							name="circleXmark"
+							size="lg"
+							variant="destructive"
+							onPress={() => setDeleteDialogOpened(true)}
+						/>
+					</TooltipTrigger>
+					<TooltipContent>
+						<Text>{t('Remove site', { _tags: 'core' })}</Text>
+					</TooltipContent>
+				</Tooltip>
 			</HStack>
 
 			<Dialog
-				opened={deleteDialogOpened}
+				open={deleteDialogOpened}
 				onAccept={handleRemoveSite}
-				onClose={() => setDeleteDialogOpened(false)}
+				onOpenChange={setDeleteDialogOpened}
 			>
-				{t('Remove store and associated users?', { _tags: 'core' })}
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>{t('Remove site', { _tags: 'core' })}</DialogTitle>
+					</DialogHeader>
+					{t('Remove store and associated users?', { _tags: 'core' })}
+					<DialogFooter>
+						<DialogClose />
+					</DialogFooter>
+				</DialogContent>
 			</Dialog>
 		</>
 	);

@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 import { Icon } from '@wcpos/tailwind/src/icon';
+import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
 import { useT } from '../../../../contexts/translations';
@@ -44,7 +45,9 @@ const Online = () => {
 			<TooltipTrigger>
 				<Icon name="circle" className={`fill-${state.type}`} />
 			</TooltipTrigger>
-			<TooltipContent side="bottom">{state.tooltip}</TooltipContent>
+			<TooltipContent side="bottom">
+				<Text>{state.tooltip}</Text>
+			</TooltipContent>
 		</Tooltip>
 	);
 };

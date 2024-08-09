@@ -1,13 +1,14 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
+import get from 'lodash/get';
 import { useObservableSuspense } from 'observable-hooks';
 
-import Dialog from '@wcpos/components/src/dialog';
-import Modal from '@wcpos/components/src/modal';
-import Pill from '@wcpos/components/src/pill';
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import { Dialog, DialogContent } from '@wcpos/tailwind/src/dialog';
+import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
 import { Toast } from '@wcpos/tailwind/src/toast';
 
-import StoreSelect from './store-select';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 
@@ -19,7 +20,6 @@ interface Props {
 const WpUser = ({ site, wpUser }: Props) => {
 	const { login } = useAppState();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
-	const [storeSelectModalOpened, setStoreSelectModalOpened] = React.useState(false);
 	const stores = useObservableSuspense(wpUser.populateResource('stores'));
 	const t = useT();
 
@@ -27,33 +27,21 @@ const WpUser = ({ site, wpUser }: Props) => {
 	 *
 	 */
 	const handleLogin = React.useCallback(
-		async (storeID) => {
+		async (storeID: string) => {
+			if (!storeID) {
+				Toast.show({
+					text1: t('No store selected', { _tags: 'core' }),
+					type: 'error',
+				});
+			}
 			login({
 				siteID: site.uuid,
 				wpCredentialsID: wpUser.uuid,
 				storeID,
 			});
 		},
-		[login, site.uuid, wpUser.uuid]
+		[login, site.uuid, t, wpUser.uuid]
 	);
-
-	/**
-	 *
-	 */
-	const handleStoreSelect = React.useCallback(async () => {
-		if (stores.length === 1) {
-			// simple login
-			return handleLogin(stores[0].localID);
-		} else if (stores.length > 1) {
-			// show store select modal
-			setStoreSelectModalOpened(true);
-		} else {
-			Toast.show({
-				text1: t('No stores found for this user', { _tags: 'core' }),
-				type: 'error',
-			});
-		}
-	}, [handleLogin, stores, t]);
 
 	/**
 	 * Remove user
@@ -75,27 +63,42 @@ const WpUser = ({ site, wpUser }: Props) => {
 	 *
 	 */
 	return (
-		<>
-			<Pill removable onPress={handleStoreSelect} onRemove={() => setDeleteDialogOpened(true)}>
-				{wpUser.display_name ? wpUser.display_name : 'No name?'}
-			</Pill>
+		<View>
+			{stores.length > 1 ? (
+				<Select onValueChange={({ value }) => handleLogin(value)}>
+					<SelectPrimitive.Trigger asChild>
+						<ButtonPill size="xs" removable onRemove={() => setDeleteDialogOpened(true)}>
+							<ButtonText>{wpUser.display_name ? wpUser.display_name : 'No name?'}</ButtonText>
+						</ButtonPill>
+					</SelectPrimitive.Trigger>
+					<SelectContent>
+						{stores.map((store) => (
+							<SelectItem key={store.localID} label={store.name} value={store.localID} />
+						))}
+					</SelectContent>
+				</Select>
+			) : (
+				<ButtonPill
+					size="xs"
+					onPress={() => {
+						const storeID = get(stores, [0, 'localID']);
+						handleLogin(storeID);
+					}}
+					removable
+					onRemove={() => setDeleteDialogOpened(true)}
+				>
+					<ButtonText>{wpUser.display_name ? wpUser.display_name : 'No name?'}</ButtonText>
+				</ButtonPill>
+			)}
 
 			<Dialog
-				opened={deleteDialogOpened}
+				open={deleteDialogOpened}
 				onAccept={handleRemoveWpUser}
-				onClose={() => setDeleteDialogOpened(false)}
+				onOpenChange={setDeleteDialogOpened}
 			>
-				{t('Remove user?', { _tags: 'core' })}
+				<DialogContent>{t('Remove user?', { _tags: 'core' })}</DialogContent>
 			</Dialog>
-
-			<Modal
-				title={t('Select a Store', { _tags: 'core' })}
-				onClose={() => setStoreSelectModalOpened(false)}
-				opened={storeSelectModalOpened}
-			>
-				<StoreSelect stores={stores} onSelect={handleLogin} />
-			</Modal>
-		</>
+		</View>
 	);
 };
 

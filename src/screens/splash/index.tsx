@@ -12,7 +12,7 @@ const Splash = () => {
 		<View
 			style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }]}
 		>
-			<Logo width={150} height={150} />
+			<Logo width={120} height={120} />
 		</View>
 	);
 };
