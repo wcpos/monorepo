@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import Pressable from '@wcpos/components/src/pressable';
+import { Pressable } from '@wcpos/tailwind/src/pressable';
 
 import { ProductImage } from './image';
 import { useVariationTable } from './variation-table-rows/context';

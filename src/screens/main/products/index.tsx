@@ -9,12 +9,10 @@ import { useQuery } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 
-import AddProduct from './add-product';
-import EditProduct from './edit-product';
-import EditVariation from './edit-variation';
+import { AddProduct } from './add-product';
+import { EditProduct } from './edit-product';
+import { EditVariation } from './edit-variation';
 import Products from './products';
-import { useT } from '../../../contexts/translations';
-import { ModalLayout } from '../../components/modal-layout';
 import { TaxRatesProvider } from '../contexts/tax-rates';
 import { useCollection } from '../hooks/use-collection';
 
@@ -60,22 +58,7 @@ const ProductsWithProviders = () => {
 const AddProductModal = ({
 	navigation,
 }: NativeStackScreenProps<ProductsStackParamList, 'AddProduct'>) => {
-	const t = useT();
-
-	return (
-		<ModalLayout
-			title={t('Add Product', { _tags: 'core' })}
-			primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
-			secondaryActions={[
-				{
-					label: t('Cancel', { _tags: 'core' }),
-					action: () => navigation.dispatch(StackActions.pop(1)),
-				},
-			]}
-		>
-			<AddProduct />
-		</ModalLayout>
-	);
+	return <AddProduct />;
 };
 
 /**
@@ -87,40 +70,18 @@ const EditProductWithProviders = ({
 }: NativeStackScreenProps<ProductsStackParamList, 'EditProduct'>) => {
 	const { productID } = route.params;
 	const { collection } = useCollection('products');
-	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(productID).exec())),
 		[collection, productID]
 	);
 
-	/**
-	 * I need tax provider just to get the tax classes
-	 * @TODO - tax classes should come from WC API
-	 */
-	const taxQuery = useQuery({
-		queryKeys: ['tax-rates'],
-		collectionName: 'taxes',
-	});
-
 	return (
-		<ModalLayout
-			title={t('Edit', { _tags: 'core' })}
-			secondaryActions={[
-				{
-					label: t('Cancel', { _tags: 'core' }),
-					action: () => navigation.dispatch(StackActions.pop(1)),
-				},
-			]}
-		>
+		<ErrorBoundary>
 			<Suspense>
-				<TaxRatesProvider taxQuery={taxQuery}>
-					<Suspense>
-						<EditProduct resource={resource} />
-					</Suspense>
-				</TaxRatesProvider>
+				<EditProduct resource={resource} />
 			</Suspense>
-		</ModalLayout>
+		</ErrorBoundary>
 	);
 };
 
@@ -133,7 +94,6 @@ const EditVariationWithProviders = ({
 }: NativeStackScreenProps<ProductsStackParamList, 'EditVariation'>) => {
 	const { variationID, parentID } = route.params;
 	const { collection } = useCollection('variations');
-	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(variationID).exec())),
@@ -141,35 +101,14 @@ const EditVariationWithProviders = ({
 	);
 
 	/**
-	 * I need tax provider just to get the tax classes
-	 * @TODO - tax classes should come from WC API
-	 */
-	const taxQuery = useQuery({
-		queryKeys: ['tax-rates'],
-		collectionName: 'taxes',
-	});
-
-	/**
 	 *
 	 */
 	return (
-		<ModalLayout
-			title={t('Edit Variation', { _tags: 'core' })}
-			secondaryActions={[
-				{
-					label: t('Cancel', { _tags: 'core' }),
-					action: () => navigation.dispatch(StackActions.pop(1)),
-				},
-			]}
-		>
+		<ErrorBoundary>
 			<Suspense>
-				<TaxRatesProvider taxQuery={taxQuery}>
-					<Suspense>
-						<EditVariation resource={resource} />
-					</Suspense>
-				</TaxRatesProvider>
+				<EditVariation resource={resource} />
 			</Suspense>
-		</ModalLayout>
+		</ErrorBoundary>
 	);
 };
 

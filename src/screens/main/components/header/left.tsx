@@ -6,7 +6,6 @@ import { useTheme } from 'styled-components/native';
 
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Icon } from '@wcpos/tailwind/src/icon';
-// import Logo from '@wcpos/components/src/logo';
 
 import { useT } from '../../../../contexts/translations';
 

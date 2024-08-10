@@ -11,7 +11,7 @@ import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import AddCustomer from './add-customer';
 import Customers from './customers';
-import EditCustomer from './edit-customer';
+import { EditCustomer } from './edit-customer';
 import { useT } from '../../../contexts/translations';
 import { ModalLayout } from '../../components/modal-layout';
 import { useCollection } from '../hooks/use-collection';
@@ -72,7 +72,6 @@ const EditCustomerWithProviders = ({
 }: NativeStackScreenProps<CustomersStackParamList, 'EditCustomer'>) => {
 	const customerID = get(route, ['params', 'customerID']);
 	const { collection } = useCollection('customers');
-	const t = useT();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(customerID).exec())),
@@ -80,20 +79,11 @@ const EditCustomerWithProviders = ({
 	);
 
 	return (
-		<ModalLayout
-			title={t('Edit Customer', { _tags: 'core' })}
-			primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
-			secondaryActions={[
-				{
-					label: t('Cancel', { _tags: 'core' }),
-					action: () => navigation.dispatch(StackActions.pop(1)),
-				},
-			]}
-		>
+		<ErrorBoundary>
 			<Suspense>
 				<EditCustomer resource={resource} />
 			</Suspense>
-		</ModalLayout>
+		</ErrorBoundary>
 	);
 };
 

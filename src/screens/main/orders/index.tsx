@@ -62,23 +62,6 @@ const EditOrderWithProviders = ({
 			</Suspense>
 		</ErrorBoundary>
 	);
-
-	// return (
-	// 	<ModalLayout
-	// 		title={t('Edit Order', { _tags: 'core' })}
-	// 		primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
-	// 		secondaryActions={[
-	// 			{
-	// 				label: t('Cancel', { _tags: 'core' }),
-	// 				action: () => navigation.dispatch(StackActions.pop(1)),
-	// 			},
-	// 		]}
-	// 	>
-	// 		<Suspense>
-	// 			<EditOrder resource={resource} />
-	// 		</Suspense>
-	// 	</ModalLayout>
-	// );
 };
 
 /**

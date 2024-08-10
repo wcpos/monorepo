@@ -1,11 +1,11 @@
 import * as React from 'react';
 
-import TextInput from '@wcpos/components/src/textinput';
+import { Input } from '@wcpos/tailwind/src/input';
 
 const EditableName = ({ name, saveOnBlur }) => {
 	const [newName, setNewName] = React.useState(name);
 
-	return <TextInput value={newName} onChangeText={setNewName} onBlur={() => saveOnBlur(newName)} />;
+	return <Input value={newName} onChangeText={setNewName} onBlur={() => saveOnBlur(newName)} />;
 };
 
 export default EditableName;

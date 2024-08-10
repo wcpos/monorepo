@@ -2,34 +2,34 @@ import * as React from 'react';
 
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
-import Pill from '@wcpos/components/src/pill';
 import { Query } from '@wcpos/query';
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/tailwind/src/popover';
 
 import { useT } from '../../../../../contexts/translations';
-import TagSelect from '../tag-select';
+import { TagSelect } from '../tag-select';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
-type ProductTagDocument = import('@wcpos/database').ProductTagDocument;
 
 interface Props {
 	query: Query<ProductCollection>;
-	resource: ObservableResource<ProductTagDocument>;
+	resource: ObservableResource<import('@wcpos/database').ProductTagDocument>;
 }
 
 /**
  *
  */
-const TagPill = ({ query, resource }: Props) => {
-	const [openSelect, setOpenSelect] = React.useState(false);
+export const TagPill = ({ query, resource }: Props) => {
 	const tag = useObservableSuspense(resource);
 	const t = useT();
+	const isActive = false;
 
 	/**
 	 *
 	 */
 	const handleSelect = React.useCallback(
-		(tag) => {
-			query.where('tags', { $elemMatch: { id: tag.id } });
+		(id) => {
+			query.where('tags', { $elemMatch: { id } });
 		},
 		[query]
 	);
@@ -37,31 +37,23 @@ const TagPill = ({ query, resource }: Props) => {
 	/**
 	 *
 	 */
-	const handleRemove = React.useCallback(() => {
-		query.where('tags', null);
-	}, [query]);
-
-	/**
-	 *
-	 */
-	if (tag) {
-		return (
-			<Pill size="small" removable onRemove={handleRemove} icon="tag">
-				{tag.name}
-			</Pill>
-		);
-	}
-
-	/**
-	 *
-	 */
-	return openSelect ? (
-		<TagSelect onBlur={() => setOpenSelect(false)} onSelect={handleSelect} />
-	) : (
-		<Pill icon="tag" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
-			{t('Select Tag', { _tags: 'core' })}
-		</Pill>
+	return (
+		<Popover>
+			<PopoverTrigger asChild>
+				<ButtonPill
+					size="xs"
+					leftIcon="folder"
+					variant={isActive ? 'default' : 'secondary'}
+					// onPress={() => setOpen(!open)}
+					removable={isActive}
+					onRemove={() => query.where('tags', null)}
+				>
+					<ButtonText>{tag ? tag.name : t('Tag', { _tags: 'core' })}</ButtonText>
+				</ButtonPill>
+			</PopoverTrigger>
+			<PopoverContent className="p-0">
+				<TagSelect onSelect={handleSelect} />
+			</PopoverContent>
+		</Popover>
 	);
 };
-
-export default TagPill;

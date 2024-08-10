@@ -1,16 +1,18 @@
 import * as React from 'react';
 
-import Popover from '@wcpos/components/src/popover';
 import { useQuery } from '@wcpos/query';
+import { Command, CommandInput, CommandEmpty } from '@wcpos/tailwind/src/command';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 
-import Menu from './menu';
-import SearchInput from './search-input';
+import { CategoryList } from './list';
+import { useT } from '../../../../../contexts/translations';
 
 /**
  *
  */
-const CategorySelectSearch = ({ onBlur, onSelect }) => {
-	const [opened, setOpened] = React.useState(false);
+export const CategorySelect = ({ onSelect }) => {
+	const t = useT();
+	const [search, setSearch] = React.useState('');
 
 	/**
 	 *
@@ -28,43 +30,27 @@ const CategorySelectSearch = ({ onBlur, onSelect }) => {
 	 *
 	 */
 	const onSearch = React.useCallback(
-		(search) => {
-			query.debouncedSearch(search);
+		(value: string) => {
+			setSearch(value);
+			query.debouncedSearch(value);
 		},
 		[query]
 	);
 
 	/**
-	 * Reset search when unmounting
-	 */
-	React.useEffect(() => {
-		return () => {
-			onSearch('');
-		};
-	}, [onSearch]);
-
-	/**
 	 *
 	 */
 	return (
-		<Popover
-			opened={opened}
-			//onOpen={() => setOpened(true)}
-			onClose={() => {
-				setOpened(false);
-			}}
-			withArrow={false}
-			matchWidth
-			withinPortal={false}
-		>
-			<Popover.Target>
-				<SearchInput setOpened={setOpened} onBlur={onBlur} onSearch={onSearch} />
-			</Popover.Target>
-			<Popover.Content style={{ paddingLeft: 0, paddingRight: 0, maxHeight: 300 }}>
-				<Menu query={query} onSelect={onSelect} />
-			</Popover.Content>
-		</Popover>
+		<Command shouldFilter={false}>
+			<CommandInput
+				placeholder={t('Search Categories', { _tags: 'core' })}
+				value={search}
+				onValueChange={onSearch}
+			/>
+			<CommandEmpty>{t('No category found', { _tags: 'core' })}</CommandEmpty>
+			<Suspense>
+				<CategoryList query={query} onSelect={onSelect} />
+			</Suspense>
+		</Command>
 	);
 };
-
-export default CategorySelectSearch;

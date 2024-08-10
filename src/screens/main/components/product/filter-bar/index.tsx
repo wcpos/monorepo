@@ -10,11 +10,11 @@ import type { Query } from '@wcpos/query';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 
-import CategoryPill from './category-pill';
+import { CategoryPill } from './category-pill';
 import FeaturedPill from './featured-pill';
 import OnSalePill from './on-sale-pill';
 import { StockStatusPill } from './stock-status-pill';
-import TagPill from './tag-pill';
+import { TagPill } from './tag-pill';
 import usePullDocument from '../../../contexts/use-pull-document';
 import { useCollection } from '../../../hooks/use-collection';
 
