@@ -1,8 +1,8 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
 import { ButtonGroupSeparator } from '@wcpos/tailwind/src/button';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
@@ -34,17 +34,15 @@ const Cart = () => {
 				</ErrorBoundary>
 			</CardHeader>
 			<CardContent className="flex-1 p-0">
-				<Box fill>
+				<View className="flex-1">
 					<ErrorBoundary>
 						<Table />
 					</ErrorBoundary>
-				</Box>
+				</View>
 				<AddCartItemButtons />
-				<Box>
-					<ErrorBoundary>
-						<Totals />
-					</ErrorBoundary>
-				</Box>
+				<ErrorBoundary>
+					<Totals />
+				</ErrorBoundary>
 				<HStack className="p-2 bg-secondary [&>*]:flex-grow">
 					<ErrorBoundary>
 						<AddNoteButton />

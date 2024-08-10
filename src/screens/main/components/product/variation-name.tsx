@@ -3,8 +3,8 @@ import { View } from 'react-native';
 
 import find from 'lodash/find';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import StockQuantity from './stock-quantity';
 
@@ -35,18 +35,18 @@ export const ProductVariationName = ({ item: variation, column }: Props) => {
 	 */
 
 	return (
-		<Box space="xSmall" style={{ width: '100%' }}>
-			<View>
-				{variation.attributes.map((attr: any) => (
-					<Text key={`${attr.name}-${attr.id}`}>
-						<Text type="secondary">{`${attr.name}: `}</Text>
-						<Text weight="bold">{attr.option}</Text>
+		<VStack>
+			{variation.attributes.map((attr: any) => (
+				<Text key={`${attr.name}-${attr.id}`}>
+					<Text className="text-secondary-foreground">{`${attr.name}: `}</Text>
+					<Text className="font-bold" weight="bold">
+						{attr.option}
 					</Text>
-				))}
-			</View>
-			{show('sku') && <Text size="small">{variation.sku}</Text>}
-			{show('barcode') && <Text size="small">{variation.barcode}</Text>}
-			{show('stock_quantity') && <StockQuantity product={variation} size="small" />}
-		</Box>
+				</Text>
+			))}
+			{show('sku') && <Text className="text-sm">{variation.sku}</Text>}
+			{show('barcode') && <Text className="text-sm">{variation.barcode}</Text>}
+			{show('stock_quantity') && <StockQuantity product={variation} size="sm" />}
+		</VStack>
 	);
 };

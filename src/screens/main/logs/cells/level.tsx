@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import Pill from '@wcpos/components/src/pill';
-import Text from '@wcpos/components/src/text';
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
 
 const colorMap = {
 	error: 'critical',
@@ -14,8 +13,8 @@ export const Level = ({ item: log }) => {
 	const color = colorMap[log.level];
 
 	return (
-		<Pill color={color}>
-			<Text type="inverse">{log.level}</Text>
-		</Pill>
+		<ButtonPill variant={color}>
+			<ButtonText>{log.level}</ButtonText>
+		</ButtonPill>
 	);
 };

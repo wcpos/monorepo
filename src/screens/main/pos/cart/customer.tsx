@@ -4,9 +4,9 @@ import get from 'lodash/get';
 import pick from 'lodash/pick';
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
 import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
 import { Dialog, DialogContent } from '@wcpos/tailwind/src/dialog';
+import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import { CustomerForm, CustomerFormValues, SubmitCustomerHandle } from './edit-customer';
@@ -45,7 +45,7 @@ const Customer = ({ setShowCustomerSelect }) => {
 	 *
 	 */
 	return (
-		<Box horizontal align="center" space="small">
+		<HStack>
 			<Text className="font-bold">{t('Customer', { _tags: 'core' })}:</Text>
 			<ButtonPill
 				size="xs"
@@ -65,7 +65,7 @@ const Customer = ({ setShowCustomerSelect }) => {
 					<CustomerForm ref={editCustomerAddressRef} onSubmit={handleEditCustomerAddress} />
 				</DialogContent>
 			</Dialog>
-		</Box>
+		</HStack>
 	);
 };
 

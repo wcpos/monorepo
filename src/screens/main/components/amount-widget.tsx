@@ -1,82 +1,84 @@
 import * as React from 'react';
 
-import Button from '@wcpos/components/src/button';
-import { InputWithLabel } from '@wcpos/components/src/form-layout';
-import Icon from '@wcpos/components/src/icon';
-import useTheme from '@wcpos/themes';
+import { useController, useFormContext } from 'react-hook-form';
+import * as z from 'zod';
+
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
 
 import NumberInput from './number-input';
-import { useT } from '../../../contexts/translations';
+
+/**
+ *
+ */
+export const amountWidgetSchema = z.object({
+	amount: z.string().optional(),
+	percent: z.boolean().optional(),
+});
 
 interface Props {
 	currencySymbol: string;
-	onChange: ({ amount, percent }: { amount?: string; percent?: boolean }) => void;
-	amount?: string;
-	percent?: boolean;
+	nameAmount: string;
+	namePercent: string;
 }
 
 /**
  * Extracted widget for amount/percent input
  */
-export const AmountWidget = ({ currencySymbol, onChange, ...props }: Props) => {
-	const theme = useTheme();
-	const t = useT();
-	const [amount, setAmount] = React.useState(props.amount);
-	const [percent, setPercent] = React.useState(props.percent);
+export const AmountWidget = ({ currencySymbol, nameAmount, namePercent, ...props }: Props) => {
+	const { control } = useFormContext();
 
-	const handleAmountChange = (value: string) => {
-		setAmount(value);
-		onChange({ amount: value });
+	/**
+	 *
+	 */
+	const { field: amountField } = useController({
+		name: nameAmount,
+		control,
+	});
+
+	const { field: percentField } = useController({
+		name: namePercent,
+		control,
+	});
+
+	/**
+	 *
+	 */
+	const handleAmountChange = (newAmount: string) => {
+		amountField.onChange(newAmount);
 	};
 
-	const handlePercentChange = (value: boolean) => {
-		setPercent(value);
-		onChange({ percent: value });
+	const handlePercentChange = (isPercent: boolean) => {
+		percentField.onChange(isPercent);
 	};
 
+	/**
+	 *
+	 */
 	return (
-		<InputWithLabel label={t('Amount', { _tags: 'core' })} style={{ width: 200 }}>
+		<HStack className="gap-0">
+			<Button
+				disabled={percentField.value}
+				onPress={() => handlePercentChange(false)}
+				className="rounded-r-none"
+			>
+				<ButtonText>{currencySymbol}</ButtonText>
+			</Button>
 			<NumberInput
-				value={amount}
+				value={amountField.value}
 				placement="right"
 				onChange={handleAmountChange}
 				showDecimals
-				leftAccessory={
-					<Button
-						title={currencySymbol}
-						type={!percent ? 'primary' : 'disabled'}
-						onPress={() => handlePercentChange(false)}
-						style={{
-							borderTopLeftRadius: theme.rounding.small,
-							borderBottomLeftRadius: theme.rounding.small,
-							borderTopRightRadius: 0,
-							borderBottomRightRadius: 0,
-						}}
-					/>
-				}
-				rightAccessory={
-					<Button
-						title={<Icon name="percent" type="inverse" />}
-						type={percent ? 'primary' : 'disabled'}
-						onPress={() => handlePercentChange(true)}
-						style={{
-							borderTopLeftRadius: 0,
-							borderBottomLeftRadius: 0,
-							borderTopRightRadius: theme.rounding.small,
-							borderBottomRightRadius: theme.rounding.small,
-						}}
-					/>
-				}
+				buttonClassName="rounded-none"
 			/>
-		</InputWithLabel>
+			<Button
+				disabled={!percentField.value}
+				onPress={() => handlePercentChange(true)}
+				className="rounded-l-none"
+			>
+				<Icon name="percent" className="fill-primary-foreground" />
+			</Button>
+		</HStack>
 	);
-
-	// return (
-	// 	<TextInputWithLabel
-	// 		label={t('Amount', { _tags: 'core' })}
-	// 		value={amount}
-	// 		onChangeText={handleAmountChange}
-	// 		selectTextOnFocus
-	// 	/>
-	// );
 };

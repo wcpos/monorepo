@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
@@ -21,7 +21,7 @@ const CartTabTitle = ({ focused, order }: Props) => {
 	const t = useT();
 
 	return (
-		<Text type={focused ? 'inverse' : 'primary'}>
+		<Text className={`text-${focused ? 'inverse' : 'primary'}`}>
 			{t('Cart {order_total}', { order_total: format(total || 0), _tags: 'core' })}
 		</Text>
 	);

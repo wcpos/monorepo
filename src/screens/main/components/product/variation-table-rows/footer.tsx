@@ -3,9 +3,9 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
 import { useReplicationState } from '@wcpos/query';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Text } from '@wcpos/tailwind/src/text';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
@@ -32,22 +32,12 @@ const VariationFooterTableRow = ({ query, parent, count, loading }) => {
 	const t = useT();
 
 	return (
-		<Box
-			horizontal
-			style={{
-				width: '100%',
-				backgroundColor: theme.colors.lightGrey,
-				// borderBottomLeftRadius: theme.rounding.medium,
-				// borderBottomRightRadius: theme.rounding.medium,
-				borderWidth: 1,
-				borderColor: theme.colors.grey,
-			}}
-		>
-			<Box fill horizontal padding="small" space="xSmall" align="center" distribution="end">
-				<Text size="small">{t('Showing {count} of {total}', { count, total, _tags: 'core' })}</Text>
-				<SyncButton sync={sync} clear={clear} active={loading} />
-			</Box>
-		</Box>
+		<HStack space="xs" className="p-2 justify-end border-t-1 bg-grey-100">
+			<Text className="text-sm">
+				{t('Showing {count} of {total}', { count, total, _tags: 'core' })}
+			</Text>
+			<SyncButton sync={sync} clear={clear} active={loading} />
+		</HStack>
 	);
 };
 

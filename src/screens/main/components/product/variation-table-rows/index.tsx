@@ -1,11 +1,12 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import get from 'lodash/get';
 
-import Box from '@wcpos/components/src/box';
+import { useQuery } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { useQuery } from '@wcpos/query';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import VariationsFilterBar from './filter-bar';
 import Table from './table';
@@ -46,18 +47,18 @@ const Variations = ({ item, initialSelectedAttributes, parentSearchTerm }) => {
 	 *
 	 */
 	return (
-		<Box>
+		<VStack>
 			<ErrorBoundary>
 				<VariationsFilterBar parent={parent} query={query} parentSearchTerm={parentSearchTerm} />
 			</ErrorBoundary>
-			<Box style={{ flexGrow: 1, flexShrink: 1, flexBasis: '0%' }}>
+			<View className="flex-1">
 				<ErrorBoundary>
 					<Suspense>
 						<Table parent={parent} query={query} />
 					</Suspense>
 				</ErrorBoundary>
-			</Box>
-		</Box>
+			</View>
+		</VStack>
 	);
 };
 

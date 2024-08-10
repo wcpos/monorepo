@@ -8,9 +8,20 @@ import { Form, FormField, FormInput, FormSwitch } from '@wcpos/tailwind/src/form
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
-import { AmountWidget } from '../../components/amount-widget';
+import { AmountWidget, amountWidgetSchema } from '../../components/amount-widget';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
+
+/**
+ *
+ */
+const formSchema = z.object({
+	name: z.string().optional(),
+	prices_include_tax: z.boolean().optional(),
+	tax_status: z.string().optional(),
+	tax_class: z.string().optional(),
+	...amountWidgetSchema.shape,
+});
 
 export interface FeeFormValues {
 	name?: string;
@@ -33,21 +44,6 @@ interface AddFeeProps {
  */
 export const AddFee = React.forwardRef<AddFeeHandle, AddFeeProps>(({ onSubmit }, ref) => {
 	const t = useT();
-
-	/**
-	 *
-	 */
-	const formSchema = React.useMemo(
-		() =>
-			z.object({
-				name: z.string().optional(),
-				amount: z.number().optional(),
-				prices_include_tax: z.boolean().optional(),
-				tax_status: z.string().optional(),
-				tax_class: z.string().optional(),
-			}),
-		[]
-	);
 
 	/**
 	 *
@@ -90,17 +86,16 @@ export const AddFee = React.forwardRef<AddFeeHandle, AddFeeProps>(({ onSubmit },
 				<FormField
 					control={form.control}
 					name="amount"
-					render={({ field }) => <AmountWidget label={t('Amount', { _tags: 'core' })} {...field} />}
+					// render={({ field }) => <AmountWidget label={t('Amount', { _tags: 'core' })} {...field} />}
+					render={() => (
+						<AmountWidget nameAmount="amount" namePercent="percent" currencySymbol="$" />
+					)}
 				/>
 				<FormField
 					control={form.control}
 					name="prices_include_tax"
 					render={({ field }) => (
-						<FormSwitch
-							label={t('Amount Includes Tax', { _tags: 'core' })}
-							description="Description"
-							{...field}
-						/>
+						<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
 					)}
 				/>
 				<FormField

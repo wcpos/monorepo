@@ -44,7 +44,7 @@
     "expo-haptics": "~13.0.1",
     "expo-linking": "6.3.1",
     "expo-localization": "^15.0.3",
-    "expo-sqlite": "~14.0.5",
+    "expo-sqlite": "~14.0.6",
     "expo-status-bar": "~1.12.1",
     "heapify": "^0.6.0",
     "html-entities": "2.5.2",

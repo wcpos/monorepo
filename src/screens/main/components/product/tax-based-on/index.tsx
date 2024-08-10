@@ -1,8 +1,9 @@
 import * as React from 'react';
 
-import { InlineError } from '@wcpos/components/src/inline-error/inline-error';
 import { Button } from '@wcpos/tailwind/src/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@wcpos/tailwind/src/hover-card';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import DisplayCurrentTaxRates from './display-current-tax-rates';
@@ -35,7 +36,10 @@ export const TaxBasedOn = () => {
 					{rates.length > 0 ? (
 						<Text className="text-sm">{taxBasedOnLabel}</Text>
 					) : (
-						<InlineError className="text-sm" message={taxBasedOnLabel} />
+						<HStack space="xs">
+							<Icon name="triangleExclamation" className="fill-destructive" />
+							<Text className="text-sm text-destructive">{taxBasedOnLabel}</Text>
+						</HStack>
 					)}
 				</Button>
 			</HoverCardTrigger>

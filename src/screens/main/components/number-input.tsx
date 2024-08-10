@@ -47,6 +47,8 @@ interface NumberInputProps {
 
 	/** */
 	style?: StyleProp<ViewStyle>;
+
+	buttonClassName?: string;
 }
 
 /**
@@ -65,6 +67,7 @@ const NumberInput = ({
 	size = 'normal',
 	placement = 'bottom',
 	style,
+	buttonClassName,
 }: NumberInputProps) => {
 	const { store } = useAppState();
 	const decimalSeparator = useObservableEagerState(store.price_decimal_sep$);
@@ -88,7 +91,7 @@ const NumberInput = ({
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
-				<Button variant="outline">
+				<Button variant="outline" className={buttonClassName}>
 					<ButtonText>{displayValue}</ButtonText>
 				</Button>
 			</PopoverTrigger>

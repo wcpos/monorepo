@@ -17,7 +17,6 @@ import { ExtraDataProvider } from './contexts/extra-data';
 import { UISettingsProvider } from './contexts/ui-settings';
 import CustomersNavigator from './customers';
 import { Errors } from './errors';
-import Help from './help';
 import useKeyboardShortcuts from './hooks/use-keyboard-shortcuts';
 import { useRestHttpClient } from './hooks/use-rest-http-client';
 import Login from './login';
@@ -39,7 +38,6 @@ import { ModalLayout } from '../components/modal-layout';
 export type MainStackParamList = {
 	MainDrawer: undefined;
 	Settings: undefined;
-	Help: undefined;
 	Login: undefined;
 	TaxRates: undefined;
 };
@@ -217,19 +215,6 @@ const SettingsScreen = () => {
 /**
  *
  */
-const HelpScreen = () => {
-	const t = useT();
-
-	return (
-		<ModalLayout title={t('Help', { _tags: 'core' })}>
-			<Help />
-		</ModalLayout>
-	);
-};
-
-/**
- *
- */
 const LoginScreen = () => {
 	const { site, wpCredentials } = useAppState();
 	const t = useT();
@@ -300,7 +285,6 @@ const MainNavigator = () => {
 							<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
 							<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
 								<Stack.Screen name="Settings" component={SettingsScreen} />
-								<Stack.Screen name="Help" component={HelpScreen} />
 								<Stack.Screen name="Login" component={LoginScreen} />
 								<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
 							</Stack.Group>

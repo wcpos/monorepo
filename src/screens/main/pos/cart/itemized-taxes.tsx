@@ -1,7 +1,8 @@
 import * as React from 'react';
 
-import Box from '@wcpos/components/src/box';
-import Text from '@wcpos/components/src/text';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
@@ -14,31 +15,23 @@ const ItemizedTaxes = ({ taxLines = [], taxDisplayCart }) => {
 	const t = useT();
 
 	return (
-		<Box horizontal>
-			<Box>
-				<Text>{t('Taxes', { _tags: 'core' })}:</Text>
-			</Box>
-			<Box fill space="xxSmall">
+		<HStack>
+			<Text>{t('Taxes', { _tags: 'core' })}:</Text>
+			<VStack space="xs" className="flex-1">
 				{taxLines.map((tax) => {
 					// tax_total and shipping_tax_total are separate, but we will display together
 					const displayTax = parseFloat(tax.tax_total) + parseFloat(tax.shipping_tax_total);
 					return (
-						<Box key={tax.rate_id}>
-							<Box horizontal space="normal">
-								<Box fill align="end">
-									<Text>
-										{taxDisplayCart} {tax.label}
-									</Text>
-								</Box>
-								<Box>
-									<Text>{format(displayTax || 0)}</Text>
-								</Box>
-							</Box>
-						</Box>
+						<HStack key={tax.rate_id}>
+							<Text className="flex-1 text-right">
+								{taxDisplayCart} {tax.label}
+							</Text>
+							<Text>{format(displayTax || 0)}</Text>
+						</HStack>
 					);
 				})}
-			</Box>
-		</Box>
+			</VStack>
+		</HStack>
 	);
 };
 
