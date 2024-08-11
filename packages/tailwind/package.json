@@ -28,7 +28,7 @@
     "@rn-primitives/toggle": "^1.0.3",
     "@rn-primitives/toggle-group": "^1.0.3",
     "@rn-primitives/tooltip": "^1.0.3",
-    "@shopify/flash-list": "^1.7.0",
+    "@shopify/flash-list": "^1.7.1",
     "@tanstack/react-table": "^8.20.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
