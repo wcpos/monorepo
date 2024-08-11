@@ -32,7 +32,7 @@
     "@babel/core": "^7.24.6",
     "@babel/preset-env": "^7.24.6",
     "@babel/preset-react": "^7.24.6",
-    "@transifex/cli": "^7.1.1",
+    "@transifex/cli": "^7.1.2",
     "@types/jest": "^29.5.12",
     "@wcpos/eslint-config": "*",
     "babel-jest": "^29.7.0",
