@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import debounce from 'lodash/debounce';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { useQueryManager } from './provider';
@@ -15,7 +16,7 @@ export const useInfiniteScroll = (
 	config = {
 		pageSize: 10,
 	}
-) => {
+): InfiniteScrollResult<any> => {
 	const result = useObservableSuspense(query.resource);
 	const [pageNumber, setPageNumber] = React.useState(1);
 	const manager = useQueryManager();
@@ -31,6 +32,11 @@ export const useInfiniteScroll = (
 			return currentPage + 1;
 		});
 	}, [config.pageSize, result.count]);
+
+	/**
+	 * Debounced version of nextPage
+	 */
+	const debouncedNextPage = React.useMemo(() => debounce(nextPage, 200), [nextPage]);
 
 	/**
 	 *
@@ -60,8 +66,8 @@ export const useInfiniteScroll = (
 	 *
 	 */
 	return {
-		...result,
+		count: result.count,
 		hits: paginatedResult,
-		nextPage,
+		nextPage: debouncedNextPage,
 	} as InfiniteScrollResult<(typeof result.hits)[0]>;
 };
