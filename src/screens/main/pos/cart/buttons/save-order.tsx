@@ -12,7 +12,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
 /**
  *
  */
-const SaveButton = () => {
+export const SaveButton = () => {
 	const { currentOrder } = useCurrentOrder();
 	const pushDocument = usePushDocument();
 	const [loading, setLoading] = React.useState(false);
@@ -54,5 +54,3 @@ const SaveButton = () => {
 		</Button>
 	);
 };
-
-export default SaveButton;

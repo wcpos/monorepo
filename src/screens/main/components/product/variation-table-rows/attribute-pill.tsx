@@ -1,14 +1,20 @@
 import * as React from 'react';
 
-import Pill from '@wcpos/components/src/pill';
-import Select from '@wcpos/components/src/select';
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
 
-import { useT } from '../../../../../contexts/translations';
+interface Props {
+	attribute: import('@wcpos/database').ProductDocument['attributes'][number];
+	selected: string;
+	onSelect: (attribute: { name: string; option: string | null }) => void;
+}
 
-const VariationAttributePill = ({ attribute, onSelect, ...props }) => {
-	const [openSelect, setOpenSelect] = React.useState(false);
+/**
+ *
+ */
+export const VariationAttributePill = ({ attribute, onSelect, ...props }: Props) => {
 	const [selected, setSelected] = React.useState(props.selected);
-	const t = useT();
+	const isActive = !!selected;
 
 	/**
 	 * @TODO - this works, but it's ugly as hell, need to choose controlled or uncontrolled
@@ -32,39 +38,30 @@ const VariationAttributePill = ({ attribute, onSelect, ...props }) => {
 	 *
 	 */
 	const handleRemove = React.useCallback(() => {
-		setSelected(null);
-		setOpenSelect(false);
 		onSelect && onSelect({ name: attribute.name, option: null });
 	}, [attribute.name, onSelect]);
 
 	/**
-	 *
+	 * @TODO - if attribute options is less than 10, show select, otherwise show combobox
 	 */
-	if (selected) {
-		return (
-			<Pill size="small" removable onRemove={handleRemove} icon="check">
-				{`${attribute.name}: ${selected}`}
-			</Pill>
-		);
-	}
-
-	/**
-	 *
-	 */
-	return openSelect ? (
-		<Select
-			size="small"
-			options={attribute.options}
-			onChange={handleSelect}
-			placeholder={t('Select {attribute}', { _tags: 'core', attribute: attribute.name })}
-			style={{ minWidth: 150 }}
-			opened
-		/>
-	) : (
-		<Pill icon="check" size="small" color="lightGrey" onPress={() => setOpenSelect(true)}>
-			{t('Select {attribute}', { _tags: 'core', attribute: attribute.name })}
-		</Pill>
+	return (
+		<Select onValueChange={({ value }) => query.where('stock_status', value)}>
+			<SelectPrimitive.Trigger asChild>
+				<ButtonPill
+					size="xs"
+					leftIcon="check"
+					variant={isActive ? 'default' : 'secondary'}
+					removable={isActive}
+					onRemove={handleRemove}
+				>
+					<ButtonText>{`${attribute.name}: ${selected}` || attribute.name}</ButtonText>
+				</ButtonPill>
+			</SelectPrimitive.Trigger>
+			<SelectContent>
+				{attribute.options.map((option) => (
+					<SelectItem key={option} label={option} value={option} />
+				))}
+			</SelectContent>
+		</Select>
 	);
 };
-
-export default VariationAttributePill;

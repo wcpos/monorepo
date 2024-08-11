@@ -8,7 +8,7 @@ import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import VariationsFilterBar from './filter-bar';
+import { VariationsFilterBar } from './filter-bar';
 import Table from './table';
 
 /**

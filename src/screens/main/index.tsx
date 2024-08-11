@@ -5,7 +5,6 @@ import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useForceUpdate, useObservableEagerState, useSubscription } from 'observable-hooks';
 import { isRxDatabase } from 'rxdb';
-import { useTheme } from 'styled-components/native';
 
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import { QueryProvider, QueryDevtools } from '@wcpos/query';
@@ -61,14 +60,13 @@ const Drawer = createDrawerNavigator<DrawerParamList>();
  */
 const DrawerNavigator = ({ navigation }) => {
 	const dimensions = useWindowDimensions();
-	const theme = useTheme();
 	useKeyboardShortcuts(); // allows navigation by hotkeys
 	const t = useT();
 	const { site } = useAppState();
 	const license = useObservableEagerState(site.license$);
 	const [showUpgrade, setShowUpgrade] = React.useState(!license?.key);
 
-	const largeScreen = dimensions.width >= theme.screens.medium;
+	const largeScreen = dimensions.width >= 768;
 
 	return (
 		<Drawer.Navigator
@@ -79,7 +77,7 @@ const DrawerNavigator = ({ navigation }) => {
 				),
 				drawerType: largeScreen ? 'permanent' : 'front',
 				drawerStyle: {
-					backgroundColor: theme.colors.headerBackground,
+					backgroundColor: '#243B53',
 					width: largeScreen ? 'auto' : undefined,
 					borderRightColor: 'rgba(0, 0, 0, 0.2)',
 					// borderRightWidth: 0,

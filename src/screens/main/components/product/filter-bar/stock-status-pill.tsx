@@ -27,24 +27,18 @@ export const StockStatusPill = ({ query }: Props) => {
 	const t = useT();
 	const isActive = !!selected;
 	const { items } = useStockStatusLabel();
-	const [open, setOpen] = React.useState(false);
 	const value = items.find((item) => item.value === selected);
 
 	/**
 	 *
 	 */
 	return (
-		<Select
-			value={value}
-			onOpenChange={setOpen}
-			onValueChange={({ value }) => query.where('stock_status', value)}
-		>
+		<Select onValueChange={({ value }) => query.where('stock_status', value)}>
 			<SelectPrimitive.Trigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="warehouseFull"
 					variant={isActive ? 'default' : 'secondary'}
-					onPress={() => setOpen(!open)}
 					removable={isActive}
 					onRemove={() => query.where('stock_status', null)}
 				>

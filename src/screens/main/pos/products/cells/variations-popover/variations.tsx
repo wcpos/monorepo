@@ -4,9 +4,8 @@ import get from 'lodash/get';
 import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import Box from '@wcpos/components/src/box';
-import { usePopover } from '@wcpos/components/src/popover';
-import Text from '@wcpos/components/src/text';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import VariationButtons from './buttons';
 import VariationSelect from './select';
@@ -97,13 +96,13 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	 *
 	 */
 	return (
-		<Box space="xSmall" style={{ minWidth: 200 }}>
+		<VStack>
 			{attributes.map((attribute) => {
 				// find selected option
 				const selected = selectedAttributes?.find((a) => a.name === attribute.name);
 
 				return (
-					<Box key={attribute.name} space="xSmall">
+					<VStack key={attribute.name} space="xs">
 						<Text>{attribute.name}</Text>
 						{attribute.characterCount < 15 ? (
 							<VariationButtons
@@ -118,10 +117,10 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 								selectedOption={selected?.option}
 							/>
 						)}
-					</Box>
+					</VStack>
 				);
 			})}
-		</Box>
+		</VStack>
 	);
 };
 

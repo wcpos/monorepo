@@ -10,7 +10,10 @@ export interface CartProps {
 	currentOrder: import('@wcpos/database').OrderDocument;
 }
 
-const EmptyCart = ({ currentOrder }: CartProps) => {
+/**
+ *
+ */
+export const EmptyCart = ({ currentOrder }: CartProps) => {
 	return (
 		<Card className="flex-1">
 			<CardHeader className="p-2 bg-input">
@@ -24,5 +27,3 @@ const EmptyCart = ({ currentOrder }: CartProps) => {
 		</Card>
 	);
 };
-
-export default EmptyCart;

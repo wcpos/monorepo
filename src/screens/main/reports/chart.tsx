@@ -24,7 +24,6 @@ import {
 	Tooltip as RechartsTooltip,
 	ResponsiveContainer,
 } from 'recharts';
-import { useTheme } from 'styled-components/native';
 
 import { Box } from '@wcpos/tailwind/src/box';
 import { Text } from '@wcpos/tailwind/src/text';
@@ -147,7 +146,6 @@ const CustomTooltip = ({ active, payload, label }) => {
  */
 export const Chart = ({ query }) => {
 	const t = useT();
-	const theme = useTheme();
 	const { store } = useAppState();
 	const currency = useObservableEagerState(store.currency$);
 	const result = useObservableSuspense(query.resource);
@@ -189,8 +187,8 @@ export const Chart = ({ query }) => {
 					scale="band"
 					fontFamily="sans-serif"
 					fontSize={12}
-					stroke={theme.colors.text}
-					tick={{ fill: theme.colors.text }}
+					stroke="#243B53"
+					tick={{ fill: '#243B53' }}
 					interval={0}
 					dy={10}
 				/>
@@ -202,12 +200,12 @@ export const Chart = ({ query }) => {
 						position: 'insideLeft',
 						fontFamily: 'sans-serif',
 						fontSize: 12,
-						fill: theme.colors.text,
+						fill: '#243B53',
 					}}
 					fontFamily="sans-serif"
 					fontSize={12}
-					stroke={theme.colors.text}
-					tick={{ fill: theme.colors.text }}
+					stroke="#243B53"
+					tick={{ fill: '#243B53' }}
 				/>
 				<YAxis
 					yAxisId="orders"
@@ -218,22 +216,17 @@ export const Chart = ({ query }) => {
 						position: 'insideRight',
 						fontFamily: 'sans-serif',
 						fontSize: 12,
-						fill: theme.colors.text,
+						fill: '#243B53',
 					}}
 					fontFamily="sans-serif"
 					fontSize={12}
-					stroke={theme.colors.text}
-					tick={{ fill: theme.colors.text }}
+					stroke="#243B53"
+					tick={{ fill: '#243B53' }}
 				/>
 				<RechartsTooltip content={<CustomTooltip />} />
-				<Bar yAxisId="total" dataKey="total" stackId="a" fill={theme.colors.primary} />
-				<Bar yAxisId="total" dataKey="total_tax" stackId="a" fill={theme.colors.secondary} />
-				<Line
-					yAxisId="orders"
-					type="monotone"
-					dataKey="order_count"
-					stroke={theme.colors.darkestGrey}
-				/>
+				<Bar yAxisId="total" dataKey="total" stackId="a" fill="#127FBF" />
+				<Bar yAxisId="total" dataKey="total_tax" stackId="a" fill="#627D98" />
+				<Line yAxisId="orders" type="monotone" dataKey="order_count" stroke="#829AB1" />
 			</ComposedChart>
 		</ResponsiveContainer>
 	);

@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { NativeSyntheticEvent, TextInputKeyPressEventData, TextInput } from 'react-native';
 
-import { useTheme } from 'styled-components/native';
-
 import { Input } from '@wcpos/tailwind/src/input';
 import { Label } from '@wcpos/tailwind/src/label';
 import { VStack } from '@wcpos/tailwind/src/vstack';
@@ -13,7 +11,6 @@ import useSiteConnect from '../hooks/use-site-connect';
 export default function UrlInput() {
 	const { onConnect, loading, error } = useSiteConnect();
 	const [url, setURL] = React.useState('');
-	const theme = useTheme();
 	const t = useT();
 
 	/**

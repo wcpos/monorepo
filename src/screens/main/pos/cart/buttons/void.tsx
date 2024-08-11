@@ -13,7 +13,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
 /**
  *
  */
-const VoidButton = () => {
+export const VoidButton = () => {
 	const { currentOrder } = useCurrentOrder();
 	const navigation = useNavigation();
 	const deleteDocument = useDeleteDocument();
@@ -66,5 +66,3 @@ const VoidButton = () => {
 		</Button>
 	);
 };
-
-export default VoidButton;

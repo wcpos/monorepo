@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useTheme } from 'styled-components/native';
-
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Text } from '@wcpos/tailwind/src/text';
@@ -17,8 +15,7 @@ import { useOrderTotals } from '../hooks/use-order-totals';
 /**
  *
  */
-const Totals = () => {
-	const theme = useTheme();
+export const Totals = () => {
 	const t = useT();
 	const { format } = useCurrentOrderCurrencyFormat();
 	const { inclOrExcl } = useTaxDisplay({ context: 'cart' });
@@ -104,5 +101,3 @@ const Totals = () => {
 		</>
 	);
 };
-
-export default Totals;

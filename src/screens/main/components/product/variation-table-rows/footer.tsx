@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
-import { useTheme } from 'styled-components/native';
 
 import { useReplicationState } from '@wcpos/query';
 import { HStack } from '@wcpos/tailwind/src/hstack';
@@ -16,7 +15,6 @@ import SyncButton from '../../sync-button';
  *
  */
 const VariationFooterTableRow = ({ query, parent, count, loading }) => {
-	const theme = useTheme();
 	const { fastStoreDB } = useAppState();
 	const { sync } = useReplicationState(query);
 	const { clear } = useCollectionReset(query.collection.name);

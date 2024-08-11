@@ -2,8 +2,6 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import Box from '@wcpos/components/src/box';
-import Link from '@wcpos/components/src/link';
 import { useQueryManager } from '@wcpos/query';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Text } from '@wcpos/tailwind/src/text';
@@ -23,21 +21,21 @@ export const PlainAttributes = ({ product }: Props) => {
 	 *
 	 */
 	return (
-		<Box space="xxSmall">
+		<VStack>
 			{attributes
 				.filter((attr: any) => !attr.variation)
 				.map((attr: any) => (
 					<Text key={`${attr.name}-${attr.id}`}>
-						<Text size="small" type="secondary">{`${attr.name}: `}</Text>
+						<Text className="text-sm text-secondary-foreground">{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
-							<Text size="small" key={option}>
+							<Text className="text-sm" key={option}>
 								{option}
 								{index < attr.options.length - 1 && ', '}
 							</Text>
 						))}
 					</Text>
 				))}
-		</Box>
+		</VStack>
 	);
 };
 

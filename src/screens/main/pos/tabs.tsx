@@ -1,14 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useTheme } from 'styled-components/native';
-
-import Box from '@wcpos/components/src/box';
-import Button from '@wcpos/components/src/button';
-import Icon from '@wcpos/components/src/icon';
-import Text from '@wcpos/components/src/text';
+import { Button } from '@wcpos/tailwind/src/button';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import Cart from './cart';
 import Products from './products';
@@ -18,13 +17,12 @@ import { useT } from '../../../contexts/translations';
  *
  */
 const POSTabs = () => {
-	const theme = useTheme();
 	const [activeTab, setActiveTab] = React.useState('products');
 	const t = useT();
 
 	return (
-		<View style={{ flex: 1 }}>
-			<Box fill>
+		<VStack>
+			<View className="flex-1">
 				{activeTab === 'products' ? (
 					<Suspense>
 						<ErrorBoundary>
@@ -38,28 +36,35 @@ const POSTabs = () => {
 						</ErrorBoundary>
 					</Suspense>
 				)}
-			</Box>
-			<Box horizontal style={{ backgroundColor: '#FFFFFF', borderTopColor: theme.colors.border }}>
-				<Button.Group background="clear" fill>
-					<Button onPress={() => setActiveTab('products')}>
-						<Box space="xxSmall" align="center">
-							<Icon name="gifts" type={activeTab === 'products' ? 'primary' : 'text'} />
-							<Text size="xSmall" type={activeTab === 'products' ? 'primary' : 'text'} uppercase>
-								{t('Products', { _tags: 'core' })}
-							</Text>
-						</Box>
-					</Button>
-					<Button onPress={() => setActiveTab('cart')}>
-						<Box space="xxSmall" align="center">
-							<Icon name="cartShopping" type={activeTab === 'cart' ? 'primary' : 'text'} />
-							<Text size="xSmall" type={activeTab === 'cart' ? 'primary' : 'text'} uppercase>
-								{t('Cart', { _tags: 'core' })}
-							</Text>
-						</Box>
-					</Button>
-				</Button.Group>
-			</Box>
-		</View>
+			</View>
+			<HStack className="bg-white border-t">
+				<Button variant="ghost" onPress={() => setActiveTab('products')}>
+					<Icon
+						name="gifts"
+						//  type={activeTab === 'products' ? 'primary' : 'text'}
+					/>
+					<Text
+						className="text-xs uppercase"
+						//type={activeTab === 'products' ? 'primary' : 'text'}
+					>
+						{t('Products', { _tags: 'core' })}
+					</Text>
+				</Button>
+				<Button variant="ghost" onPress={() => setActiveTab('cart')}>
+					<Icon
+						name="cartShopping"
+						// type={activeTab === 'cart' ? 'primary' : 'text'}
+					/>
+					<Text
+						className="text-xs uppercase"
+						size="xSmall"
+						// type={activeTab === 'cart' ? 'primary' : 'text'}
+					>
+						{t('Cart', { _tags: 'core' })}
+					</Text>
+				</Button>
+			</HStack>
+		</VStack>
 	);
 };
 

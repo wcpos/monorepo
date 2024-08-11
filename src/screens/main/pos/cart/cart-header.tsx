@@ -15,7 +15,7 @@ import { useAddCustomer } from '../hooks/use-add-customer';
 /**
  *
  */
-const CartHeader = () => {
+export const CartHeader = () => {
 	const { uiSettings } = useUISettings('pos-cart');
 	const { addCustomer } = useAddCustomer();
 	const [showCustomerSelect, setShowCustomerSelect] = React.useState(false);
@@ -53,5 +53,3 @@ const CartHeader = () => {
 		</HStack>
 	);
 };
-
-export default CartHeader;

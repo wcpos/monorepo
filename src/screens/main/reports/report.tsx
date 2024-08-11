@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { useReactToPrint } from 'react-to-print';
-import { useTheme } from 'styled-components/native';
 
 import { Box } from '@wcpos/tailwind/src/box';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
@@ -19,7 +18,6 @@ import { Text } from '@wcpos/tailwind/src/text';
 import { useT } from '../../../contexts/translations';
 
 export const Report = () => {
-	const theme = useTheme();
 	const t = useT();
 	const reportRef = React.useRef();
 

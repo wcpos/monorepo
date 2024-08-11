@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useObservableState, ObservableResource, useObservable } from 'observable-hooks';
 import { of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
-import { useTheme } from 'styled-components/native';
 
 import { useQuery } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
@@ -32,7 +31,6 @@ export const FilterBar = ({ query }) => {
 		query.findMetaDataSelector('_pos_user')
 	);
 	const { wpCredentials } = useAppState();
-	const theme = useTheme();
 
 	/**
 	 *

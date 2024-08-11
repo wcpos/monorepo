@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import Pill from '@wcpos/components/src/pill';
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';

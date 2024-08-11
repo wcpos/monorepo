@@ -6,7 +6,6 @@ import { Header as ReactNavigationHeader } from '@react-navigation/elements';
 import { StatusBar } from 'expo-status-bar';
 import { useObservableState } from 'observable-hooks';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from 'styled-components/native';
 
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 
@@ -29,7 +28,6 @@ const Header = ({ options, showUpgrade, setShowUpgrade }: Props) => {
 	const insets = useSafeAreaInsets();
 	const { store } = useAppState();
 	const storeName = useObservableState(store.name$, store.name);
-	const theme = useTheme();
 
 	/**
 	 *
@@ -42,7 +40,7 @@ const Header = ({ options, showUpgrade, setShowUpgrade }: Props) => {
 					headerTitle={(props) => <HeaderTitle {...props} />}
 					headerTitleAlign="center"
 					headerStyle={{
-						backgroundColor: theme.colors.headerBackground,
+						backgroundColor: '#243B53',
 						height: 40 + insets.top,
 						borderBottomColor: 'rgba(0, 0, 0, 0.2)',
 						/**

@@ -3,12 +3,13 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import isEmpty from 'lodash/isEmpty';
 
-import Box from '@wcpos/components/src/box';
-import InlineError from '@wcpos/components/src/inline-error';
 import { TaxRateDocument } from '@wcpos/database';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Icon } from '@wcpos/tailwind/src/icon';
 import { SimpleTable } from '@wcpos/tailwind/src/simple-table';
 import { Text } from '@wcpos/tailwind/src/text';
+import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../../../contexts/translations';
 
@@ -37,8 +38,8 @@ const DisplayCurrentTaxRates = ({
 	 *
 	 */
 	return (
-		<Box space="normal" padding="small">
-			<Box space="xSmall" style={{ width: '100%' }}>
+		<VStack>
+			<VStack space="xs">
 				<Text className="font-bold">{t('Calculate tax based on', { _tags: 'core' })}:</Text>
 				<SimpleTable
 					columns={[
@@ -56,8 +57,8 @@ const DisplayCurrentTaxRates = ({
 						},
 					]}
 				/>
-			</Box>
-			<Box space="xSmall" style={{ width: '100%' }}>
+			</VStack>
+			<VStack space="xs">
 				<Text className="font-bold">{t('Matched rates', { _tags: 'core' })}:</Text>
 				{Array.isArray(rates) && rates.length > 0 ? (
 					<SimpleTable
@@ -69,20 +70,23 @@ const DisplayCurrentTaxRates = ({
 						data={rates}
 					/>
 				) : (
-					<InlineError message={t('No rates matched', { _tags: 'core' })} />
+					<HStack space="xs">
+						<Icon name="triangleExclamation" className="fill-destructive" />
+						<Text className="text-sm text-destructive">
+							{t('No rates matched', { _tags: 'core' })}
+						</Text>
+					</HStack>
 				)}
-			</Box>
-			<Box horizontal>
-				<Button
-					variant="secondary"
-					onPress={() => {
-						navigation.navigate('TaxRates');
-					}}
-				>
-					<ButtonText>{t('View all tax rates', { _tags: 'core' })}</ButtonText>
-				</Button>
-			</Box>
-		</Box>
+			</VStack>
+			<Button
+				variant="secondary"
+				onPress={() => {
+					navigation.navigate('TaxRates');
+				}}
+			>
+				<ButtonText>{t('View all tax rates', { _tags: 'core' })}</ButtonText>
+			</Button>
+		</VStack>
 	);
 };
 

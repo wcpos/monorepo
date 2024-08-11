@@ -1,15 +1,14 @@
 import * as React from 'react';
 
-import Icon from '@wcpos/components/src/icon';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import Tabs from '@wcpos/components/src/tabs';
-import { Box } from '@wcpos/tailwind/src/box';
+import { Button } from '@wcpos/tailwind/src/button';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { Icon } from '@wcpos/tailwind/src/icon';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import Cart from './cart';
-import EmptyCart from './empty-cart';
-import OpenOrderTabs from './tabs';
+import { Cart } from './cart';
+import { EmptyCart } from './empty-cart';
+import { OpenOrderTabs } from './tabs';
 import { useCurrentOrder } from '../contexts/current-order';
 
 const OpenOrders = ({ isColumn = false }) => {
@@ -34,13 +33,9 @@ const OpenOrders = ({ isColumn = false }) => {
 			<ErrorBoundary>
 				<Suspense
 					fallback={
-						// Fallback is the 'new cart' button
-						<Tabs.TabBarSkeleton
-							numberOfTabs={1}
-							paddingLeft="none"
-							paddingBottom="none"
-							buttonText={<Icon name="plus" type="inverse" />}
-						/>
+						<Button disabled>
+							<Icon name="plus" />
+						</Button>
 					}
 				>
 					<OpenOrderTabs />

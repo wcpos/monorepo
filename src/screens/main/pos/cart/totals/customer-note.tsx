@@ -3,9 +3,7 @@ import { View } from 'react-native';
 
 import isEmpty from 'lodash/isEmpty';
 import { useObservableEagerState } from 'observable-hooks';
-import { useTheme } from 'styled-components/native';
 
-import { Box } from '@wcpos/tailwind/src/box';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Icon } from '@wcpos/tailwind/src/icon';
 import { Pressable } from '@wcpos/tailwind/src/pressable';
@@ -25,7 +23,6 @@ export const CustomerNote = () => {
 	const { currentOrder } = useCurrentOrder();
 	const note = useObservableEagerState(currentOrder.customer_note$);
 	const [value, setValue] = React.useState(note);
-	const theme = useTheme();
 	const t = useT();
 	const { localPatch } = useLocalMutation();
 

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import Tree from '@wcpos/components/src/tree';
+import { Tree } from '@wcpos/tailwind/src/tree';
 
 interface Props {
 	item: import('@wcpos/database').LogDocument;
@@ -8,5 +8,7 @@ interface Props {
 }
 
 export const Context = ({ item: log, column }: Props) => {
-	return <Tree rootName="data" data={log.context} rawToggle={false} isCollapsed={() => true} />;
+	return (
+		<Tree data={log.context} hideRoot shouldExpandNodeInitially={() => false} rawToggle={false} />
+	);
 };

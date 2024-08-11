@@ -3,12 +3,11 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
-import { useTheme } from 'styled-components/native';
 
-import Box from '@wcpos/components/src/box';
-import Icon from '@wcpos/components/src/icon';
+import { HStack } from '@wcpos/tailwind/src/hstack';
+import { IconButton } from '@wcpos/tailwind/src/icon-button';
 
-import AttributePill from './attribute-pill';
+import { VariationAttributePill } from './attribute-pill';
 import { useVariationTable } from './context';
 import { VariationSearchPill } from './search-pill';
 
@@ -25,8 +24,7 @@ interface Props {
 /**
  *
  */
-const VariationsFilterBar = ({ parent, query, parentSearchTerm }: Props) => {
-	const theme = useTheme();
+export const VariationsFilterBar = ({ parent, query, parentSearchTerm }: Props) => {
 	const { setExpanded } = useVariationTable();
 
 	// new array is being created every time
@@ -75,15 +73,8 @@ const VariationsFilterBar = ({ parent, query, parentSearchTerm }: Props) => {
 	 *
 	 */
 	return (
-		<Box
-			horizontal
-			align="center"
-			padding="small"
-			style={{
-				backgroundColor: theme.colors.grey,
-			}}
-		>
-			<Box fill horizontal space="small" style={{ flexWrap: 'wrap', width: '100%' }}>
+		<HStack className="bg-gray-100">
+			<HStack className="flex-wrap">
 				<VariationSearchPill onSearch={handleSearch} parentSearchTerm={parentSearchTerm} />
 				{(parent.attributes || [])
 					.filter((attribute) => attribute.variation)
@@ -94,7 +85,7 @@ const VariationsFilterBar = ({ parent, query, parentSearchTerm }: Props) => {
 							selected = selectedAttributes.find((a) => a.name === attribute.name);
 						}
 						return (
-							<AttributePill
+							<VariationAttributePill
 								key={`${index}-${attribute.name}`}
 								attribute={attribute}
 								onSelect={handleSelect}
@@ -102,12 +93,8 @@ const VariationsFilterBar = ({ parent, query, parentSearchTerm }: Props) => {
 							/>
 						);
 					})}
-			</Box>
-			<Box>
-				<Icon name="chevronUp" size="small" onPress={() => setExpanded(false)} />
-			</Box>
-		</Box>
+			</HStack>
+			<IconButton name="chevronUp" onPress={() => setExpanded(false)} />
+		</HStack>
 	);
 };
-
-export default React.memo(VariationsFilterBar);

@@ -66,7 +66,7 @@ const cells = {
 /**
  *
  */
-const CartTable = () => {
+export const CartTable = () => {
 	const { uiSettings, getUILabel } = useUISettings('pos-cart');
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const t = useT();
@@ -164,5 +164,3 @@ const CartTable = () => {
 		</Table>
 	);
 };
-
-export default CartTable;

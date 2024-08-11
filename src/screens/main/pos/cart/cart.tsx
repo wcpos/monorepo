@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useTheme } from 'styled-components/native';
-
 import { ButtonGroupSeparator } from '@wcpos/tailwind/src/button';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
@@ -11,21 +9,17 @@ import { HStack } from '@wcpos/tailwind/src/hstack';
 import { AddCartItemButtons } from './add-cart-item-buttons';
 import { AddNoteButton } from './buttons/add-note';
 import { OrderMetaButton } from './buttons/order-meta';
-import PayButton from './buttons/pay';
-import SaveButton from './buttons/save-order';
-import VoidButton from './buttons/void';
-import CartHeader from './cart-header';
-import Table from './table';
-import Totals from './totals';
-import { useT } from '../../../../contexts/translations';
+import { PayButton } from './buttons/pay';
+import { SaveButton } from './buttons/save-order';
+import { VoidButton } from './buttons/void';
+import { CartHeader } from './cart-header';
+import { CartTable } from './table';
+import { Totals } from './totals';
 
 /**
  *
  */
-const Cart = () => {
-	const theme = useTheme();
-	const t = useT();
-
+export const Cart = () => {
 	return (
 		<Card className="flex-1">
 			<CardHeader className="p-2 bg-input">
@@ -36,7 +30,7 @@ const Cart = () => {
 			<CardContent className="flex-1 p-0">
 				<View className="flex-1">
 					<ErrorBoundary>
-						<Table />
+						<CartTable />
 					</ErrorBoundary>
 				</View>
 				<AddCartItemButtons />
@@ -61,5 +55,3 @@ const Cart = () => {
 		</Card>
 	);
 };
-
-export default Cart;

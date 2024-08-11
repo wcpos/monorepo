@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
-import { useTheme } from 'styled-components/native';
 
 import type { OrderDocument } from '@wcpos/database';
 import { Box } from '@wcpos/tailwind/src/box';
@@ -46,7 +45,6 @@ export const Orders = ({ query }) => {
 	const { uiSettings, getUILabel } = useUISettings('reports-orders');
 	const columns = useObservableEagerState(uiSettings.columns$);
 	const { sortBy, sortDirection } = useObservableEagerState(query.params$);
-	const theme = useTheme();
 	const t = useT();
 
 	/**
@@ -107,14 +105,14 @@ export const Orders = ({ query }) => {
 								footer={
 									<Box
 										horizontal
-										style={{
-											width: '100%',
-											backgroundColor: theme.colors.lightGrey,
-											borderBottomLeftRadius: theme.rounding.medium,
-											borderBottomRightRadius: theme.rounding.medium,
-											borderTopWidth: 1,
-											borderTopColor: theme.colors.grey,
-										}}
+										// style={{
+										// 	width: '100%',
+										// 	backgroundColor: theme.colors.lightGrey,
+										// 	borderBottomLeftRadius: theme.rounding.medium,
+										// 	borderBottomRightRadius: theme.rounding.medium,
+										// 	borderTopWidth: 1,
+										// 	borderTopColor: theme.colors.grey,
+										// }}
 									>
 										<Box
 											fill

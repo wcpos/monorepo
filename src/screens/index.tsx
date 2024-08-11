@@ -6,7 +6,6 @@ import * as Linking from 'expo-linking';
 import get from 'lodash/get';
 import { useObservableEagerState, useObservableSuspense } from 'observable-hooks';
 import { of } from 'rxjs';
-import { useTheme } from 'styled-components/native';
 
 import AuthNavigator from './auth';
 import MainNavigator from './main';
@@ -31,7 +30,6 @@ const RootNavigator = () => {
 		useAppState();
 	useObservableSuspense(hydrationResource); // suspend until hydration is complete
 	useObservableSuspense(isReadyResource); // suspend until app is ready
-	const theme = useTheme();
 	const homepage = get(initialProps, 'homepage');
 	const t = useT();
 
@@ -132,11 +130,11 @@ const RootNavigator = () => {
 			theme={{
 				dark: false,
 				colors: {
-					primary: theme.colors.primary,
-					background: theme.colors.bodyBackground,
+					primary: '#127FBF',
+					background: '#F0F4F8',
 					card: 'rgb(255, 255, 255)',
-					text: theme.colors.text,
-					border: theme.colors.border,
+					text: '#243B53',
+					border: '#D9E2EC',
 					notification: 'rgb(255, 69, 58)',
 				},
 			}}

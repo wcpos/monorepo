@@ -15,7 +15,7 @@ import { useCurrentOrder } from '../../contexts/current-order';
 /**
  *
  */
-const PayButton = () => {
+export const PayButton = () => {
 	const { currentOrder } = useCurrentOrder();
 	const total = useObservableEagerState(currentOrder.total$);
 	const { format } = useCurrentOrderCurrencyFormat();
@@ -62,5 +62,3 @@ const PayButton = () => {
 		</Button>
 	);
 };
-
-export default PayButton;

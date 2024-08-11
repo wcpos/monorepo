@@ -2,14 +2,13 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 import { useObservableState, useObservableEagerState } from 'observable-hooks';
-import { useTheme } from 'styled-components/native';
 
-import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { Query, useInfiniteScroll } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 import Table, { TableContextProps, CellRenderer } from '@wcpos/tailwind/src/table';
 
 import { Context } from './cells/context';
@@ -17,7 +16,7 @@ import { Date } from './cells/date';
 import { Level } from './cells/level';
 import { useT } from '../../../contexts/translations';
 import EmptyTableRow from '../components/empty-table-row';
-import TextCell from '../components/text-cell';
+import { TextCell } from '../components/text-cell';
 import { UISettings } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
@@ -32,7 +31,6 @@ const cells = {
  */
 export const Logs = ({ query }) => {
 	const { uiSettings, getUILabel } = useUISettings('logs');
-	const theme = useTheme();
 	const t = useT();
 	const result = useInfiniteScroll(query);
 	const columns = useObservableEagerState(uiSettings.columns$);

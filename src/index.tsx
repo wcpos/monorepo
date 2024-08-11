@@ -3,12 +3,10 @@ import * as React from 'react';
 import { SafeAreaProviderCompat } from '@react-navigation/elements';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // import { enableFreeze } from 'react-native-screens';
-import { ThemeProvider } from 'styled-components/native';
 
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { PortalHost } from '@wcpos/tailwind/src/portal';
 import { Toast } from '@wcpos/tailwind/src/toast';
-import getTheme from '@wcpos/themes';
 
 import { AppStateProvider } from './contexts/app-state';
 import { TranslationProvider } from './contexts/translations';
@@ -40,15 +38,6 @@ if (window && window.initialProps) {
  *
  */
 const App = () => {
-	const theme = React.useMemo(
-		() =>
-			getTheme({
-				name: 'default',
-				mode: 'light',
-			}),
-		[]
-	);
-
 	/**
 	 * NOTE:
 	 * The first ErrorBoundary is a catchall, it should use only pure React Native,
@@ -74,21 +63,19 @@ const App = () => {
 							 */
 							fallback={<Splash />}
 						>
-							<ThemeProvider theme={theme}>
-								<ErrorBoundary>
-									<TranslationProvider>
-										<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
-											<RootNavigator />
-											<ErrorBoundary>
-												<PortalHost />
-											</ErrorBoundary>
-											<ErrorBoundary>
-												<Toast />
-											</ErrorBoundary>
-										</SafeAreaProviderCompat>
-									</TranslationProvider>
-								</ErrorBoundary>
-							</ThemeProvider>
+							<ErrorBoundary>
+								<TranslationProvider>
+									<SafeAreaProviderCompat style={{ overflow: 'hidden' }}>
+										<RootNavigator />
+										<ErrorBoundary>
+											<PortalHost />
+										</ErrorBoundary>
+										<ErrorBoundary>
+											<Toast />
+										</ErrorBoundary>
+									</SafeAreaProviderCompat>
+								</TranslationProvider>
+							</ErrorBoundary>
 						</React.Suspense>
 					</AppStateProvider>
 				</React.Suspense>
