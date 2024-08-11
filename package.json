@@ -17,13 +17,13 @@
     "test": "eslint --ext ts,tsx ./src"
   },
   "dependencies": {
-    "@orama/orama": "^2.0.21",
-    "@orama/plugin-data-persistence": "^2.0.21",
+    "@orama/orama": "^2.0.22",
+    "@orama/plugin-data-persistence": "^2.0.22",
     "c-promise2": "^0.13.12",
-    "expo-sqlite": "~14.0.4",
+    "expo-sqlite": "~14.0.6",
     "fast-text-encoding": "^1.0.6",
     "lodash": "^4.17.21",
-    "observable-hooks": "4.2.3",
+    "observable-hooks": "4.2.4",
     "react": "18.2.0",
     "rxdb": "15.24.0",
     "rxdb-premium": "15.24.0",
@@ -33,7 +33,7 @@
   "devDependencies": {
     "@faker-js/faker": "^8.4.1",
     "@types/jest": "^29.5.12",
-    "@types/lodash": "4.17.4",
+    "@types/lodash": "4.17.7",
     "@types/uuid": "9.0.8",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
