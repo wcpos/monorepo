@@ -3,8 +3,8 @@ import { NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
 
 import get from 'lodash/get';
 
-import Icon, { IconName } from '@wcpos/components/src/icon';
 import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
+import { Icon, IconName } from '@wcpos/tailwind/src/icon';
 
 import { reducer, ACTIONS, Action, Config, CalculatorState } from './reducer';
 import { Box } from '../box';
@@ -200,7 +200,7 @@ export const Numpad = ({
 				{calculator &&
 					['÷', '*', '+', '-'].map((op) => (
 						<Button key={op} onPress={() => chooseOperation(op)}>
-							<Icon name={iconMap[op]} size="xSmall" type="inverse" />
+							<Icon name={iconMap[op]} />
 						</Button>
 					))}
 				{discounts &&
@@ -224,7 +224,7 @@ export const Numpad = ({
 						<ButtonText>Clear</ButtonText>
 					</Button>
 					<Button onPress={() => dispatch({ type: ACTIONS.EVALUATE })}>
-						<Icon name="equals" size="xSmall" />
+						<Icon name="equals" />
 					</Button>
 				</Box>
 			)}
