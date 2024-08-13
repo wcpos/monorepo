@@ -1,6 +1,19 @@
-import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { type ClassValue, clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+	return twMerge(clsx(inputs));
 }
+
+export const getTailwindJustifyClass = (align: 'left' | 'right' | 'center') => {
+	switch (align) {
+		case 'left':
+			return 'justify-start';
+		case 'right':
+			return 'justify-end';
+		case 'center':
+			return 'justify-center';
+		default:
+			return '';
+	}
+};
