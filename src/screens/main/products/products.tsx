@@ -7,9 +7,10 @@ import { DataTableRow } from '@wcpos/tailwind/src/data-table';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import SimpleProductTableRow from './rows/simple';
+import { SimpleProductTableRow, cells } from './rows/simple';
 import VariableProductTableRow from './rows/variable';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
@@ -69,12 +70,26 @@ const Products = () => {
 	/**
 	 *
 	 */
-	const renderItem = React.useCallback(
-		({ item: row, index, columns }: { item: any; index: number; columns: any }) => (
-			<DataTableRow row={row} index={index} columns={[columns]} />
-		),
-		[]
-	);
+	const renderItem = React.useCallback(({ item: row, index }) => {
+		if (row.original.type === 'variable') {
+			return (
+				<React.Fragment key={row.id}>
+					<DataTableRow row={row} index={index} />
+					{row.getIsExpanded() && (
+						<Box>
+							<Text>test</Text>
+						</Box>
+					)}
+				</React.Fragment>
+			);
+		}
+		return <DataTableRow row={row} index={index} />;
+	}, []);
+
+	/**
+	 *
+	 */
+	const context = React.useMemo(() => ({ taxLocation: 'base' }), []);
 
 	/**
 	 *
@@ -112,11 +127,13 @@ const Products = () => {
 							<DataTable<ProductDocument>
 								id="products"
 								query={query}
+								cells={cells}
 								renderItem={renderItem}
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
-								extraContext={{ taxLocation: 'base' }}
+								extraContext={context}
 								footer={calcTaxes && <TaxBasedOn />}
+								getItemType={({ original }) => original.type}
 							/>
 						</Suspense>
 					</ErrorBoundary>

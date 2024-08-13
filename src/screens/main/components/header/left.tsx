@@ -21,7 +21,14 @@ const HeaderLeft = () => {
 	}, [navigation]);
 
 	/**
-	 *
+	 * Large screen
+	 */
+	if (width > 1024) {
+		return null;
+	}
+
+	/**
+	 * Small screen
 	 */
 	if (width < 640) {
 		return (
@@ -34,15 +41,11 @@ const HeaderLeft = () => {
 	/**
 	 *
 	 */
-	if (width < 768) {
-		return (
-			<Button onPress={handleOpenDrawer} className="rounded-none" leftIcon="bars">
-				<ButtonText>{t('Menu', { _tags: 'core' })}</ButtonText>
-			</Button>
-		);
-	}
-
-	return null;
+	return (
+		<Button onPress={handleOpenDrawer} className="rounded-none" leftIcon="bars">
+			<ButtonText>{t('Menu', { _tags: 'core' })}</ButtonText>
+		</Button>
+	);
 };
 
 export default HeaderLeft;

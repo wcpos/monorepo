@@ -1,7 +1,8 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
+import { CellContext } from '@wcpos/tailwind/src/data-table';
 import { SwitchWithLabel } from '@wcpos/tailwind/src/switch';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
@@ -10,17 +11,13 @@ import NumberInput from '../../components/number-input';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
-type Props = {
-	item: ProductDocument;
-	onChange: (product: ProductDocument, data: Record<string, unknown>) => void;
-};
-
 /**
  *
  */
-const StockQuantity = ({ item: product, onChange }: Props) => {
-	const stockQuantity = useObservableState(product.stock_quantity$, product.stock_quantity);
-	const manageStock = useObservableState(product.manage_stock$, product.manage_stock);
+export const StockQuantity = ({ row }: CellContext<ProductDocument, 'stock_quantity'>) => {
+	const product = row.original;
+	const stockQuantity = useObservableEagerState(product.stock_quantity$);
+	const manageStock = useObservableEagerState(product.manage_stock$);
 	const t = useT();
 
 	return (
@@ -40,5 +37,3 @@ const StockQuantity = ({ item: product, onChange }: Props) => {
 		</VStack>
 	);
 };
-
-export default StockQuantity;

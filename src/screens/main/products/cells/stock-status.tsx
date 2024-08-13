@@ -1,20 +1,20 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
+import { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
-type Props = {
-	item: ProductDocument;
-	onChange: (product: ProductDocument, data: Record<string, unknown>) => void;
-};
-
-export const StockStatus = ({ item: product, onChange }: Props) => {
-	const stockStatus = useObservableState(product.stock_status$, product.stock_status);
+/**
+ *
+ */
+export const StockStatus = ({ row }: CellContext<ProductDocument, 'stock_status'>) => {
+	const product = row.original;
+	const stockStatus = useObservableEagerState(product.stock_status$);
 	const { getLabel } = useStockStatusLabel();
 
 	const classNames = React.useMemo(() => {

@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 
 import { useReplicationState, Query } from '@wcpos/query';
+import { useDataTable } from '@wcpos/tailwind/src/data-table';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Text } from '@wcpos/tailwind/src/text';
 
@@ -19,7 +20,8 @@ interface Props {
 /**
  *
  */
-export const Footer = ({ query, children, count }: Props) => {
+export const Footer = ({ children }: Props) => {
+	const { query, count, ...rest } = useDataTable();
 	const { sync, active$, total$ } = useReplicationState(query);
 	const { clear } = useCollectionReset(query.collection.name);
 	const loading = useObservableState(active$, false);

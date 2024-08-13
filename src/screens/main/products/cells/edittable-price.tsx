@@ -1,22 +1,25 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
+
+import { CellContext } from '@wcpos/tailwind/src/data-table';
 
 import NumberInput from '../../components/number-input';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
-type Props = {
-	item: ProductDocument | ProductVariationDocument;
-	column: import('@wcpos/tailwind/src/table').ColumnProps<ProductDocument>;
-	onChange: (product: ProductDocument, data: Record<string, unknown>) => void;
-};
-
-const EdittablePrice = ({ item, column, onChange }: Props) => {
-	const price = useObservableState(item[`${column.key}$`], item[column.key]);
-	const { display } = column;
+/**
+ *
+ */
+const EdittablePrice = ({
+	row,
+	column,
+}: CellContext<ProductDocument | ProductVariationDocument, 'sale_price' | 'regular_price'>) => {
+	const item = row.original;
+	const price = useObservableEagerState(item[`${column.id}$`]);
+	const { display } = column.columnDef.meta;
 
 	/**
 	 *
@@ -35,8 +38,8 @@ const EdittablePrice = ({ item, column, onChange }: Props) => {
 	return (
 		<NumberInput
 			value={price || '0'}
-			onChange={(price) => onChange(item, { [column.key]: price })}
-			disabled={column.key === 'sale_price' && !item.on_sale}
+			onChange={(price) => onChange(item, { [column.id]: price })}
+			disabled={column.id === 'sale_price' && !item.on_sale}
 			showDecimals
 		/>
 	);

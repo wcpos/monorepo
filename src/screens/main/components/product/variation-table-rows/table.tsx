@@ -4,9 +4,10 @@ import get from 'lodash/get';
 import { useObservableSuspense, useObservableState, useSubscription } from 'observable-hooks';
 
 import { useReplicationState } from '@wcpos/query';
+import { useDataTable } from '@wcpos/tailwind/src/data-table';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
-import Table, { CellRenderer, useTable } from '@wcpos/tailwind/src/table';
+import Table, { CellRenderer } from '@wcpos/tailwind/src/table';
 import { Text } from '@wcpos/tailwind/src/text';
 import log from '@wcpos/utils/src/logger';
 
@@ -33,7 +34,7 @@ const sharedCells = {
  */
 const VariationsTable = ({ query, parent }) => {
 	const result = useObservableSuspense(query.resource);
-	const context = useTable(); // get context from parent product, ie: columns
+	const context = useDataTable(); // get context from parent product, ie: columns
 	const { cells } = useVariationTable();
 	const { active$ } = useReplicationState(query);
 	const loading = useObservableState(active$, false);

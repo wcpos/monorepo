@@ -3,19 +3,18 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
+import { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Image } from '@wcpos/tailwind/src/image';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 
-type Props = {
-	item: import('@wcpos/database').ProductDocument;
-	cellWidth: number;
-};
+type ProductDocument = import('@wcpos/database').ProductDocument;
 
 /**
  *
  */
-export const ProductImage = ({ item: product, cellWidth }: Props) => {
+export const ProductImage = ({ row }: CellContext<ProductDocument, 'image'>) => {
+	const product = row.original;
 	const images = useObservableEagerState(product.images$);
 	const imageURL = get(images, [0, 'src'], undefined);
 	const source = useImageAttachment(product, imageURL);

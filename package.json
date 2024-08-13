@@ -11,8 +11,7 @@
   "scripts": {
     "clean": "shx rm -rf dist && rm -rf node_modules",
     "test": "jest",
-    "clear-jest": "jest --clearCache",
-    "build": "bob build"
+    "clear-jest": "jest --clearCache"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -27,12 +26,9 @@
     "@shelf/fast-natural-order-by": "^2.0.0",
     "@transifex/native": "^7.1.2",
     "@transifex/react": "^7.1.2",
-    "@wcpos/components": "*",
     "@wcpos/database": "*",
     "@wcpos/hooks": "*",
     "@wcpos/query": "*",
-    "@wcpos/react-native-jsonschema-form": "*",
-    "@wcpos/themes": "*",
     "@wcpos/utils": "*",
     "@widgetbot/react-embed": "^1.9.0",
     "axios": "1.7.3",
@@ -71,8 +67,6 @@
     "recharts": "^2.12.7",
     "rxjs": "7.8.1",
     "semver": "^7.6.2",
-    "styled-components": "6.1.11",
-    "stylis": "^4.3.2",
     "use-deep-compare-effect": "^1.8.1",
     "zod": "^3.23.8"
   },
@@ -88,7 +82,6 @@
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
     "jest": "^29.7.0",
-    "react-native-builder-bob": "0.23.2",
     "ts-jest": "^29.1.5",
     "tsup": "^8.1.0",
     "typescript": "^5.4.5"

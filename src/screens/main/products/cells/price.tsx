@@ -1,25 +1,24 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
-import { useTable } from '@wcpos/tailwind/src/table';
+import { useDataTable, CellContext } from '@wcpos/tailwind/src/data-table';
 
 import PriceWithTax from '../../components/product/price';
 
-type Props = {
-	item: import('@wcpos/database').ProductDocument;
-	column: import('@wcpos/tailwind/src/table').ColumnProps<
-		import('@wcpos/database').ProductDocument
-	>;
-};
+type ProductDocument = import('@wcpos/database').ProductDocument;
 
-const Price = ({ item: product, column }: Props) => {
-	const price = useObservableState(product.price$, product.price);
-	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
-	const taxClass = useObservableState(product.tax_class$, product.tax_class);
+/**
+ *
+ */
+const Price = ({ row, column }: CellContext<ProductDocument, 'price'>) => {
+	const product = row.original;
+	const price = useObservableEagerState(product.price$);
+	const taxStatus = useObservableEagerState(product.tax_status$);
+	const taxClass = useObservableEagerState(product.tax_class$);
 	const { display } = column;
-	const context = useTable();
+	const context = useDataTable();
 
 	/**
 	 *

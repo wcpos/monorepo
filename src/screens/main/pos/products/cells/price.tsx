@@ -3,7 +3,7 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
-import { useTable } from '@wcpos/tailwind/src/table';
+import { useDataTable } from '@wcpos/tailwind/src/data-table';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import PriceWithTax from '../../../components/product/price';
@@ -21,7 +21,7 @@ export const Price = ({ item: product, column }: Props) => {
 	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
 	const taxClass = useObservableState(product.tax_class$, product.tax_class);
 	const { display } = column;
-	const context = useTable();
+	const context = useDataTable();
 
 	/**
 	 * TODO - move this into the ui as a helper function

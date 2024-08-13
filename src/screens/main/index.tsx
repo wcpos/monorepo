@@ -7,7 +7,7 @@ import { useForceUpdate, useObservableEagerState, useSubscription } from 'observ
 import { isRxDatabase } from 'rxdb';
 
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
-import { QueryProvider, QueryDevtools } from '@wcpos/query';
+import { QueryProvider } from '@wcpos/query';
 import { Icon } from '@wcpos/tailwind/src/icon';
 
 import DrawerContent from './components/drawer-content';
@@ -66,7 +66,7 @@ const DrawerNavigator = ({ navigation }) => {
 	const license = useObservableEagerState(site.license$);
 	const [showUpgrade, setShowUpgrade] = React.useState(!license?.key);
 
-	const largeScreen = dimensions.width >= 768;
+	const largeScreen = dimensions.width >= 1024;
 
 	return (
 		<Drawer.Navigator

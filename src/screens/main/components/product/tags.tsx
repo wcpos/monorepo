@@ -1,18 +1,19 @@
 import * as React from 'react';
 
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import { useTable } from '@wcpos/tailwind/src/table';
+import { useObservableEagerState } from 'observable-hooks';
 
-type ProductTagsProps = {
-	item: import('@wcpos/database').ProductDocument;
-};
+import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import { useDataTable, CellContext } from '@wcpos/tailwind/src/data-table';
+
+type ProductDocument = import('@wcpos/database').ProductDocument;
 
 /**
  *
  */
-export const ProductTags = ({ item: product }: ProductTagsProps) => {
-	const { tags } = product;
-	const query = useTable();
+export const ProductTags = ({ row }: CellContext<ProductDocument, 'tags'>) => {
+	const product = row.original;
+	const tags = useObservableEagerState(product.tags$);
+	const query = useDataTable();
 
 	/**
 	 *

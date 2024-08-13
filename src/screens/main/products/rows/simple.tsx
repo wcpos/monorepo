@@ -9,24 +9,24 @@ import { Text } from '@wcpos/tailwind/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import { Date } from '../../components/date';
-import Categories from '../../components/product/categories';
+import { ProductCategories } from '../../components/product/categories';
 import { ProductImage } from '../../components/product/image';
-import Tags from '../../components/product/tags';
+import { ProductTags } from '../../components/product/tags';
 import { useMutation } from '../../hooks/mutations/use-mutation';
-import Actions from '../cells/actions';
+import { Actions } from '../cells/actions';
 import Barcode from '../cells/barcode';
 import EdittablePrice from '../cells/edittable-price';
 import Name from '../cells/name';
 import Price from '../cells/price';
-import StockQuanity from '../cells/stock-quantity';
+import { StockQuantity } from '../cells/stock-quantity';
 import { StockStatus } from '../cells/stock-status';
 
 import type { ListRenderItemInfo } from '@shopify/flash-list';
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
-const cells = {
+export const cells = {
 	actions: Actions,
-	categories: Categories,
+	categories: ProductCategories,
 	image: ProductImage,
 	name: Name,
 	barcode: Barcode,
@@ -35,15 +35,15 @@ const cells = {
 	sale_price: EdittablePrice,
 	date_created: Date,
 	date_modified: Date,
-	stock_quantity: StockQuanity,
-	tags: Tags,
+	stock_quantity: StockQuantity,
+	tags: ProductTags,
 	stock_status: StockStatus,
 };
 
 /**
  *
  */
-const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
+export const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocument>) => {
 	const { patch } = useMutation({ collectionName: 'products' });
 
 	/**
@@ -90,5 +90,3 @@ const SimpleProductTableRow = ({ item, index }: ListRenderItemInfo<ProductDocume
 
 	return <Table.Row item={item} index={index} cellRenderer={cellRenderer} />;
 };
-
-export default SimpleProductTableRow;

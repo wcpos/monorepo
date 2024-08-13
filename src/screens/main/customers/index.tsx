@@ -12,8 +12,6 @@ import { Suspense } from '@wcpos/tailwind/src/suspense';
 import AddCustomer from './add-customer';
 import Customers from './customers';
 import { EditCustomer } from './edit-customer';
-import { useT } from '../../../contexts/translations';
-import { ModalLayout } from '../../components/modal-layout';
 import { useCollection } from '../hooks/use-collection';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -45,21 +43,10 @@ const CustomersWithProviders = () => {
 const AddCustomerWithProviders = ({
 	navigation,
 }: NativeStackScreenProps<CustomersStackParamList, 'AddCustomer'>) => {
-	const t = useT();
-
 	return (
-		<ModalLayout
-			title={t('Add Customer', { _tags: 'core' })}
-			primaryAction={{ label: t('Save to Server', { _tags: 'core' }) }}
-			secondaryActions={[
-				{
-					label: t('Cancel', { _tags: 'core' }),
-					action: () => navigation.dispatch(StackActions.pop(1)),
-				},
-			]}
-		>
+		<ErrorBoundary>
 			<AddCustomer />
-		</ModalLayout>
+		</ErrorBoundary>
 	);
 };
 

@@ -4,7 +4,7 @@ import find from 'lodash/find';
 import { useObservableState } from 'observable-hooks';
 
 import { Box } from '@wcpos/tailwind/src/box';
-import { useTable } from '@wcpos/tailwind/src/table';
+import { useDataTable } from '@wcpos/tailwind/src/data-table';
 import { Text } from '@wcpos/tailwind/src/text';
 import log from '@wcpos/utils/src/logger';
 
@@ -49,7 +49,7 @@ const VariablePrice = ({ item: product, column }: Props) => {
 	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
 	const taxClass = useObservableState(product.tax_class$, product.tax_class);
 	const { display } = column;
-	const context = useTable();
+	const context = useDataTable();
 
 	const metaData = useObservableState(product.meta_data$, product.meta_data);
 	const variablePrices = getVariablePrices(metaData);
