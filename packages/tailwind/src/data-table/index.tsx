@@ -4,20 +4,22 @@ import { ActivityIndicator, Dimensions, RefreshControl, ScrollView } from 'react
 import { FlashList, type FlashListProps } from '@shopify/flash-list';
 import {
 	ColumnDef,
-	SortingState,
 	flexRender,
 	getCoreRowModel,
-	getSortedRowModel,
 	useReactTable,
 	Row,
+	getExpandedRowModel,
+	CellContext,
+	ExpandedState,
 } from '@tanstack/react-table';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DataTableRow } from './row';
+import { cn } from '../lib/utils';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table2';
 
-export interface DataTableProps<TData, TValue> {
+interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
 	data: TData[];
 	onRowPress?: (row: Row<TData>) => void;
@@ -29,10 +31,23 @@ export interface DataTableProps<TData, TValue> {
 	onEndReached?: FlashListProps<TData>['onEndReached'];
 	onEndReachedThreshold?: FlashListProps<TData>['onEndReachedThreshold'];
 	renderItem?: FlashListProps<TData>['renderItem'];
+	extraContext?: Record<string, any>;
+	TableFooterComponent?: React.ComponentType<any>;
 }
+
+const DataTableContext = React.createContext<any | undefined>(undefined);
+
+const useDataTable = () => {
+	const context = React.useContext(DataTableContext);
+	if (!context) {
+		throw new Error('useDataTable must be used within a DataTableContext.Provider');
+	}
+	return context;
+};
 
 /**
  * @docs https://tanstack.com/table
+ * @docs https://shopify.github.io/flash-list/
  */
 const DataTable = <TData, TValue>({
 	columns,
@@ -46,18 +61,25 @@ const DataTable = <TData, TValue>({
 	onEndReached,
 	onEndReachedThreshold,
 	renderItem,
+	extraContext,
+	TableFooterComponent,
+	...props
 }: DataTableProps<TData, TValue>) => {
+	const [expanded, setExpanded] = React.useState<ExpandedState>({});
+	console.log('expanded', expanded);
+
 	const insets = useSafeAreaInsets();
-	const [sorting, setSorting] = React.useState<SortingState>([]);
 	const table = useReactTable({
 		data,
 		columns,
+		state: { expanded },
 		getCoreRowModel: getCoreRowModel(),
-		onSortingChange: setSorting,
-		getSortedRowModel: getSortedRowModel(),
-		state: {
-			sorting,
-		},
+		getRowId: (row: TData) => row.uuid,
+		getExpandedRowModel: getExpandedRowModel(),
+		onExpandedChange: setExpanded,
+		getRowCanExpand: (row) => row.original.type === 'variable',
+		debugTable: true,
+		// manualExpanding: true,
 	});
 
 	/**
@@ -73,8 +95,13 @@ const DataTable = <TData, TValue>({
 	/**
 	 *
 	 */
+	const context = React.useMemo(() => ({ table, ...extraContext }), [table, extraContext]);
+
+	/**
+	 *
+	 */
 	return (
-		<>
+		<DataTableContext.Provider value={context}>
 			{isRefreshing && (
 				<Animated.View
 					entering={FadeInUp}
@@ -89,9 +116,20 @@ const DataTable = <TData, TValue>({
 					{table.getHeaderGroups().map((headerGroup) => (
 						<TableRow key={headerGroup.id}>
 							{headerGroup.headers.map((header) => {
+								const meta = header.column.columnDef.meta;
+								console.log(meta);
+
 								return (
-									<TableHead key={header.id}>
-										{header.isPlaceholder
+									<TableHead
+										key={header.id}
+										className={cn(
+											meta?.flex && `flex-${meta.flex}`,
+											meta?.width && 'flex-none',
+											meta?.align && `text-${meta.flex}`
+										)}
+										style={{ width: meta?.width ? meta.width : undefined }}
+									>
+										{header.isPlaceholder || meta?.hideLabel
 											? null
 											: flexRender(header.column.columnDef.header, header.getContext())}
 									</TableHead>
@@ -120,11 +158,15 @@ const DataTable = <TData, TValue>({
 						renderItem={renderItem || defaultRenderRow}
 						onEndReached={onEndReached}
 						onEndReachedThreshold={onEndReachedThreshold}
+						extraData={expanded}
+						{...props}
 					/>
 				</TableBody>
 			</Table>
-		</>
+			{TableFooterComponent && <TableFooterComponent />}
+		</DataTableContext.Provider>
 	);
 };
 
-export { DataTable, DataTableRow };
+export { DataTable, DataTableRow, useDataTable };
+export type { CellContext, DataTableProps };
