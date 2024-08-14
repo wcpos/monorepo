@@ -10,8 +10,8 @@ import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import { SimpleProductTableRow, cells } from './rows/simple';
-import VariableProductTableRow from './rows/variable';
+import { cells } from './rows/simple';
+import { VariableProductRow } from './rows/variable';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
@@ -25,10 +25,10 @@ import { useUISettings } from '../contexts/ui-settings';
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
 // Table Rows
-const TABLE_ROW_COMPONENTS = {
-	simple: SimpleProductTableRow,
-	variable: VariableProductTableRow,
-};
+// const TABLE_ROW_COMPONENTS = {
+// 	simple: SimpleProductTableRow,
+// 	variable: VariableProductTableRow,
+// };
 
 /**
  *
@@ -72,16 +72,7 @@ const Products = () => {
 	 */
 	const renderItem = React.useCallback(({ item: row, index }) => {
 		if (row.original.type === 'variable') {
-			return (
-				<React.Fragment key={row.id}>
-					<DataTableRow row={row} index={index} />
-					{row.getIsExpanded() && (
-						<Box>
-							<Text>test</Text>
-						</Box>
-					)}
-				</React.Fragment>
-			);
+			return <VariableProductRow row={row} index={index} />;
 		}
 		return <DataTableRow row={row} index={index} />;
 	}, []);

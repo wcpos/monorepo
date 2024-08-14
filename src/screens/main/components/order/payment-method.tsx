@@ -2,17 +2,17 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
+import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Text } from '@wcpos/tailwind/src/text';
 
-type Props = {
-	item: import('@wcpos/database').OrderDocument;
-};
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
-const PaymentMethod = ({ item }: Props) => {
-	// const paymentMethod = useObservableEagerState(item.payment_method$);
-	const paymentMethodTitle = useObservableEagerState(item.payment_method_title$);
+/**
+ *
+ */
+export const PaymentMethod = ({ row }: CellContext<OrderDocument, 'payment_method'>) => {
+	const order = row.original;
+	const paymentMethodTitle = useObservableEagerState(order.payment_method_title$);
 
 	return paymentMethodTitle ? <Text>{paymentMethodTitle}</Text> : null;
 };
-
-export default PaymentMethod;

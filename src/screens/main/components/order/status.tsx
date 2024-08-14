@@ -4,15 +4,14 @@ import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
+import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
-type Props = {
-	item: import('@wcpos/database').OrderDocument;
-};
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 const iconMap = {
 	pending: {
@@ -56,7 +55,8 @@ const iconMap = {
 /**
  *
  */
-export const Status = ({ item: order }: Props) => {
+export const Status = ({ row }: CellContext<OrderDocument, 'status'>) => {
+	const order = row.original;
 	const status = useObservableEagerState(order.status$);
 	const iconName = get(iconMap, [status, 'name'], 'circleQuestion');
 	const iconType = get(iconMap, [status, 'type'], 'disabled');

@@ -5,17 +5,19 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { FormatAddress } from '@wcpos/tailwind/src/format';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
-type Props = {
-	item: import('@wcpos/database').OrderDocument;
-	column: any;
-};
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
-const Customer = ({ item: order, column }: Props) => {
+/**
+ *
+ */
+export const Customer = ({ row, column }: CellContext<OrderDocument, 'customer_id'>) => {
+	const order = row.original;
 	const manager = useQueryManager();
 	const query = manager.getQuery(['orders']);
 	const { format } = useCustomerNameFormat();
@@ -44,5 +46,3 @@ const Customer = ({ item: order, column }: Props) => {
 		</VStack>
 	);
 };
-
-export default Customer;

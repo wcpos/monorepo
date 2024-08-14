@@ -19,5 +19,5 @@ export const ProductImage = ({ row }: CellContext<ProductDocument, 'image'>) => 
 	const imageURL = get(images, [0, 'src'], undefined);
 	const source = useImageAttachment(product, imageURL);
 
-	return <Image source={source} recyclingKey={product.uuid} />;
+	return <Image source={source} recyclingKey={product.uuid} className="w-full h-20" />;
 };

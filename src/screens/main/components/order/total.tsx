@@ -3,19 +3,18 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
+import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
-type Props = {
-	item: import('@wcpos/database').OrderDocument;
-	column: any;
-};
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 /**
  *
  */
-const Total = ({ item: order, column }: Props) => {
+export const Total = ({ row, column }: CellContext<OrderDocument, 'total'>) => {
+	const order = row.original;
 	const total = useObservableEagerState(order.total$);
 	const currencySymbol = useObservableEagerState(order.currency_symbol$);
 	const payment_method_title = useObservableEagerState(order.payment_method_title$);
@@ -39,5 +38,3 @@ const Total = ({ item: order, column }: Props) => {
 		</>
 	);
 };
-
-export default Total;

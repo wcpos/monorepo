@@ -2,17 +2,17 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
+import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { FormatAddress } from '@wcpos/tailwind/src/format';
 
-type Props = {
-	item: import('@wcpos/database').CustomerDocument;
-	column: import('@wcpos/tailwind/src/table').ColumnProps;
-};
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
-const Address = ({ item: customer, column }: Props) => {
-	const address = useObservableEagerState(customer[`${column.key}$`]);
+/**
+ *
+ */
+export const Address = ({ row, column }: CellContext<CustomerDocument, 'billing' | 'shipping'>) => {
+	const customer = row.original;
+	const address = useObservableEagerState(customer[`${column.id}$`]);
 
 	return <FormatAddress address={address} showName={true} />;
 };
-
-export default Address;

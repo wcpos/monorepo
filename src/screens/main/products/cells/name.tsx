@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { CellContext } from '@wcpos/tailwind/src/data-table';
@@ -17,10 +18,13 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-const Name = ({ row, column }: CellContext<ProductDocument, 'name'>) => {
+const Name = ({ row, column, table }: CellContext<ProductDocument, 'name'>) => {
 	const product = row.original;
 	const name = useObservableEagerState(product.name$);
 	const { display } = column.columnDef.meta;
+	const isExpanded = useObservableEagerState(
+		table.options.meta.expanded$.pipe(map((expanded) => !!expanded[row.id]))
+	);
 
 	/**
 	 *
@@ -54,7 +58,7 @@ const Name = ({ row, column }: CellContext<ProductDocument, 'name'>) => {
 			{/* {product.type === 'variable' && <ProductAttributes product={product} />} */}
 			{product.type === 'variable' && (
 				<Button onPress={() => row.toggleExpanded()}>
-					<ButtonText>{row.getIsExpanded() ? 'Collapse' : 'Expand'}</ButtonText>
+					<ButtonText>{isExpanded ? 'Collapse' : 'Expand'}</ButtonText>
 				</Button>
 			)}
 			{product.type === 'grouped' && <GroupedNames parent={product} />}

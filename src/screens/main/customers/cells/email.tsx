@@ -2,16 +2,17 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
+import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Text } from '@wcpos/tailwind/src/text';
 
-type CustomerEmailProps = {
-	item: import('@wcpos/database').CustomerDocument;
-};
+type CustomerDocument = import('@wcpos/database').CustomerDocument;
 
-const CustomerEmail = ({ item: customer }: CustomerEmailProps) => {
+/**
+ *
+ */
+export const CustomerEmail = ({ row }: CellContext<CustomerDocument, 'email'>) => {
+	const customer = row.original;
 	const email = useObservableEagerState(customer.email$);
 
 	return <Text numberOfLines={1}>{email}</Text>;
 };
-
-export default CustomerEmail;

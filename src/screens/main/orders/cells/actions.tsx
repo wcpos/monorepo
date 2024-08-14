@@ -13,6 +13,7 @@ import {
 	AlertDialogFooter,
 } from '@wcpos/tailwind/src/alert-dialog';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import {
 	DropdownMenu,
 	DropdownMenuTrigger,
@@ -30,9 +31,7 @@ import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
-interface Props {
-	item: import('@wcpos/database').OrderDocument;
-}
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 /**
  * Helper function - @TODO move to utils
@@ -49,7 +48,8 @@ const upsertMetaData = (metaDataArray, key, value) => {
 /**
  *
  */
-export const Actions = ({ item: order }: Props) => {
+export const Actions = ({ row }: CellContext<OrderDocument, 'actions'>) => {
+	const order = row.original;
 	const navigation = useNavigation();
 	// const status = useObservableState(order.status$, order.status);
 	const pullDocument = usePullDocument();

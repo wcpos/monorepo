@@ -3,15 +3,14 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
+import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
 import { useT } from '../../../../contexts/translations';
 
-type Props = {
-	item: import('@wcpos/database').OrderDocument;
-};
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 const iconMap = {
 	'woocommerce-pos': {
@@ -31,7 +30,8 @@ const iconMap = {
 /**
  *
  */
-export const CreatedVia = ({ item: order }: Props) => {
+export const CreatedVia = ({ row }: CellContext<OrderDocument, 'created_via'>) => {
+	const order = row.original;
 	const createdVia = useObservableEagerState(order.created_via$);
 	const iconName = get(iconMap, [createdVia, 'name'], 'circleQuestion');
 	const iconType = get(iconMap, [createdVia, 'type'], 'muted');
