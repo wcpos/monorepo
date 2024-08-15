@@ -13,7 +13,7 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 /**
  *
  */
-const EdittablePrice = ({
+export const EdittablePrice = ({
 	row,
 	column,
 }: CellContext<ProductDocument | ProductVariationDocument, 'sale_price' | 'regular_price'>) => {
@@ -44,5 +44,3 @@ const EdittablePrice = ({
 		/>
 	);
 };
-
-export default EdittablePrice;

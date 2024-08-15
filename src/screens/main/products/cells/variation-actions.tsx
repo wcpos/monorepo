@@ -12,6 +12,7 @@ import {
 	AlertDialogTitle,
 } from '@wcpos/tailwind/src/alert-dialog';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { CellContext } from '@wcpos/tailwind/src/data-table';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -26,15 +27,14 @@ import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
 
-type Props = {
-	item: import('@wcpos/database').ProductVariationDocument;
-	parent: import('@wcpos/database').ProductDocument;
-};
+type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
 /**
  *
  */
-const Actions = ({ item: variation, parent }: Props) => {
+export const VariationActions = ({ row }: CellContext<ProductVariationDocument, 'actions'>) => {
+	const variation = row.original;
+	const parent = row.parent;
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const navigation = useNavigation();
 	const pullDocument = usePullDocument();
@@ -125,5 +125,3 @@ const Actions = ({ item: variation, parent }: Props) => {
 		</>
 	);
 };
-
-export default Actions;

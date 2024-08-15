@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 
 import { AddCartItemButtons } from './add-cart-item-buttons';
-import CartHeader from './cart-header';
+import { CartHeader } from './cart-header';
 
 export interface CartProps {
 	currentOrder: import('@wcpos/database').OrderDocument;

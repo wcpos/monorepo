@@ -1,11 +1,20 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
+import Animated, {
+	useAnimatedStyle,
+	useDerivedValue,
+	useSharedValue,
+	withTiming,
+	runOnJS,
+} from 'react-native-reanimated';
 import { map } from 'rxjs/operators';
 
-import { Box } from '@wcpos/tailwind/src/box';
 import { DataTableRow, useDataTable } from '@wcpos/tailwind/src/data-table';
-import { Text } from '@wcpos/tailwind/src/text';
+
+import { Variations } from './variations';
+
+const duration = 500;
 
 /**
  *
@@ -16,13 +25,53 @@ export const VariableProductRow = ({ row, index }) => {
 		table.options.meta.expanded$.pipe(map((expanded) => !!expanded[row.id]))
 	);
 
+	/**
+	 * Animation setup
+	 */
+	const height = useSharedValue(0);
+	const [shouldRender, setShouldRender] = React.useState(isExpanded);
+
+	const derivedHeight = useDerivedValue(() => {
+		// Handle mounting when expanding
+		if (isExpanded && !shouldRender) {
+			runOnJS(setShouldRender)(true);
+		}
+
+		// Handle height animation
+		return withTiming(
+			isExpanded ? height.value : 0,
+			{
+				duration,
+			},
+			(isFinished) => {
+				// Handle unmounting after collapsing
+				if (!isExpanded && isFinished) {
+					runOnJS(setShouldRender)(false);
+				}
+			}
+		);
+	}, [isExpanded]);
+
+	const animatedStyle = useAnimatedStyle(() => ({
+		height: derivedHeight.value,
+		opacity: derivedHeight.value === 0 ? 0 : 1,
+	}));
+
+	/**
+	 * Render the row and the animated Variations component
+	 */
 	return (
 		<React.Fragment>
 			<DataTableRow row={row} index={index} />
-			{isExpanded && (
-				<Box>
-					<Text>test</Text>
-				</Box>
+			{shouldRender && (
+				<Animated.View style={[animatedStyle, { overflow: 'hidden' }]}>
+					<Variations
+						row={row}
+						onLayout={(e) => {
+							height.value = e.nativeEvent.layout.height;
+						}}
+					/>
+				</Animated.View>
 			)}
 		</React.Fragment>
 	);

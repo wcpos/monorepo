@@ -12,7 +12,10 @@ type Props = {
 	onChange: (product: ProductDocument, data: Record<string, unknown>) => void;
 };
 
-const Barcode = ({ item: product, column, onChange }: Props) => {
+/**
+ *
+ */
+export const Barcode = ({ item: product, column, onChange }: Props) => {
 	const barcode = useObservableEagerState(product.barcode$);
 	const [value, setValue] = React.useState(barcode);
 
@@ -42,5 +45,3 @@ const Barcode = ({ item: product, column, onChange }: Props) => {
 	 */
 	return <Input value={value} onChangeText={handleChangeText} onBlur={handleOnBlur} />;
 };
-
-export default Barcode;
