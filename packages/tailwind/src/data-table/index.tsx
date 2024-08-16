@@ -12,6 +12,7 @@ import {
 	CellContext,
 	ExpandedState,
 } from '@tanstack/react-table';
+import { useObservableRef } from 'observable-hooks';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -31,7 +32,14 @@ interface DataTableProps<TData, TValue> {
 	onEndReached?: FlashListProps<TData>['onEndReached'];
 	onEndReachedThreshold?: FlashListProps<TData>['onEndReachedThreshold'];
 	renderItem?: FlashListProps<TData>['renderItem'];
+	/**
+	 * Made available to any children via the DataTableContext
+	 */
 	extraContext?: Record<string, any>;
+	/**
+	 * Made available to the table instance
+	 */
+	tableMeta?: Record<string, any>;
 	TableFooterComponent?: React.ComponentType<any>;
 }
 
@@ -46,6 +54,8 @@ const useDataTable = () => {
 };
 
 /**
+ * Tables are expensive to render, so memoize all props.
+ *
  * @docs https://tanstack.com/table
  * @docs https://shopify.github.io/flash-list/
  */
@@ -62,24 +72,34 @@ const DataTable = <TData, TValue>({
 	onEndReachedThreshold,
 	renderItem,
 	extraContext,
+	tableMeta,
 	TableFooterComponent,
 	...props
 }: DataTableProps<TData, TValue>) => {
-	const [expanded, setExpanded] = React.useState<ExpandedState>({});
-	console.log('expanded', expanded);
+	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
 
 	const insets = useSafeAreaInsets();
 	const table = useReactTable({
 		data,
 		columns,
-		state: { expanded },
 		getCoreRowModel: getCoreRowModel(),
 		getRowId: (row: TData) => row.uuid,
 		getExpandedRowModel: getExpandedRowModel(),
-		onExpandedChange: setExpanded,
+		onExpandedChange: (updater) => {
+			const value = typeof updater === 'function' ? updater(expandedRef.current) : updater;
+			expandedRef.current = value;
+		},
 		getRowCanExpand: (row) => row.original.type === 'variable',
 		debugTable: true,
 		// manualExpanding: true,
+		meta: {
+			expanded$,
+			expandedRef,
+			onChange: (data: any) => {
+				console.log('onChange called without handler', data);
+			},
+			...tableMeta,
+		},
 	});
 
 	/**
@@ -117,7 +137,6 @@ const DataTable = <TData, TValue>({
 						<TableRow key={headerGroup.id}>
 							{headerGroup.headers.map((header) => {
 								const meta = header.column.columnDef.meta;
-								console.log(meta);
 
 								return (
 									<TableHead
@@ -158,7 +177,7 @@ const DataTable = <TData, TValue>({
 						renderItem={renderItem || defaultRenderRow}
 						onEndReached={onEndReached}
 						onEndReachedThreshold={onEndReachedThreshold}
-						extraData={expanded}
+						keyExtractor={(row) => row.original.uuid}
 						{...props}
 					/>
 				</TableBody>
@@ -169,4 +188,4 @@ const DataTable = <TData, TValue>({
 };
 
 export { DataTable, DataTableRow, useDataTable };
-export type { CellContext, DataTableProps };
+export type { CellContext, DataTableProps, Row };
