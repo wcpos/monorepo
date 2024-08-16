@@ -5,13 +5,15 @@
   },
   "devDependencies": {
     "@rn-primitives/types": "^1.0.3",
-    "tailwindcss": "^3.4.7"
+    "tailwindcss": "^3.4.10"
   },
   "dependencies": {
+    "@mgcrea/react-native-dnd": "^2.2.0",
     "@radix-ui/react-dialog": "^1.1.1",
     "@rn-primitives/accordion": "^1.0.3",
     "@rn-primitives/alert-dialog": "^1.0.3",
     "@rn-primitives/checkbox": "^1.0.3",
+    "@rn-primitives/collapsible": "^1.0.3",
     "@rn-primitives/context-menu": "^1.0.3",
     "@rn-primitives/dialog": "^1.0.3",
     "@rn-primitives/dropdown-menu": "^1.0.3",
@@ -34,12 +36,12 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
-    "react-day-picker": "^9.0.6",
+    "react-day-picker": "^9.0.8",
     "react-hook-form": "^7.52.2",
     "react-json-tree": "^0.19.0",
     "react-native-toast-message": "^2.2.0",
     "recharts": "^2.12.7",
-    "tailwind-merge": "^2.4.0",
+    "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7"
   },
   "packageManager": "yarn@3.3.1"

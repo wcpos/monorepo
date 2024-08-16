@@ -29,7 +29,7 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 	 */
 	if (containerWidth < 200 || error.message.length > 200) {
 		return (
-			<HStack className="p-2 bg-error w-full items-start justify-between" onLayout={handleLayout}>
+			<HStack className="p-2 bg-error items-start justify-between" onLayout={handleLayout}>
 				<Tooltip>
 					<TooltipTrigger>
 						<Icon name="triangleExclamation" className="w-7 h-7 fill-error-foreground" />
