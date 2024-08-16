@@ -30,15 +30,15 @@ export const SaveButton = () => {
 				 */
 				if (isRxDocument(savedDoc)) {
 					Toast.show({
-						text1: t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
 						type: 'success',
+						text1: t('Order #{number} saved', { _tags: 'core', number: savedDoc.number }),
 					});
 				}
 			});
 		} catch (error) {
 			Toast.show({
-				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
 				type: 'error',
+				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
 			});
 		} finally {
 			setLoading(false);

@@ -45,10 +45,12 @@ export const VoidButton = () => {
 		}
 		latest.remove();
 		Toast.show({
-			text1: t('Order removed', { _tags: 'core' }),
 			type: 'success',
-			dismissable: true,
-			action: { label: t('Undo', { _tags: 'core' }), action: () => undoRemove(orderJson) },
+			text1: t('Order removed', { _tags: 'core' }),
+			props: {
+				dismissable: true,
+				action: { label: t('Undo', { _tags: 'core' }), action: () => undoRemove(orderJson) },
+			},
 		});
 	}, [currentOrder, t, deleteDocument, undoRemove]);
 

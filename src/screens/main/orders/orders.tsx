@@ -23,7 +23,7 @@ import { PaymentMethod } from '../components/order/payment-method';
 import { Status } from '../components/order/status';
 import { Total } from '../components/order/total';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UISettings } from '../components/ui-settings';
+import { UISettings } from '../components/ui-settings/button';
 import { useUISettings } from '../contexts/ui-settings';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;

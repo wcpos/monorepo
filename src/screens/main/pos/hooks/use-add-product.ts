@@ -72,16 +72,16 @@ export const useAddProduct = () => {
 			// returned success should be the updated order
 			if (success) {
 				Toast.show({
-					text1: t('{name} added to cart', { _tags: 'core', name: product.name }),
 					type: 'success',
+					text1: t('{name} added to cart', { _tags: 'core', name: product.name }),
 				});
 			} else {
 				log.error('Error adding product to order', {
 					product: product.id,
 				});
 				Toast.show({
-					text1: t('Error adding {name} to cart', { _tags: 'core', name: product.name }),
 					type: 'error',
+					text1: t('Error adding {name} to cart', { _tags: 'core', name: product.name }),
 				});
 			}
 		},

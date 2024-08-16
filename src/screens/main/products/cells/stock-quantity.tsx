@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { CellContext } from '@wcpos/tailwind/src/data-table';
 import { SwitchWithLabel } from '@wcpos/tailwind/src/switch';
@@ -14,7 +14,7 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const StockQuantity = ({ row }: CellContext<ProductDocument, 'stock_quantity'>) => {
+export const StockQuantity = ({ row, table }: CellContext<ProductDocument, 'stock_quantity'>) => {
 	const product = row.original;
 	const stockQuantity = useObservableEagerState(product.stock_quantity$);
 	const manageStock = useObservableEagerState(product.manage_stock$);
@@ -24,15 +24,19 @@ export const StockQuantity = ({ row }: CellContext<ProductDocument, 'stock_quant
 		<VStack>
 			<NumberInput
 				value={String(stockQuantity || 0)}
-				onChange={(stock_quantity) => onChange(product, { stock_quantity })}
+				onChange={(stock_quantity) =>
+					table.options.meta.onChange({ row, changes: { stock_quantity } })
+				}
 				disabled={!manageStock}
 			/>
 			<SwitchWithLabel
 				nativeID="manage_stock"
 				label={t('Manage', { _tags: 'core' })}
 				checked={manageStock}
-				onCheckedChange={(manage_stock) => onChange(product, { manage_stock })}
-				size="xs"
+				onCheckedChange={(manage_stock) =>
+					table.options.meta.onChange({ row, changes: { manage_stock } })
+				}
+				size="sm"
 			/>
 		</VStack>
 	);

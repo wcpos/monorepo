@@ -68,7 +68,7 @@ const EditVariation = ({ resource }: Props) => {
 			const success = await pushDocument(variation);
 			if (isRxDocument(success)) {
 				Toast.show({
-					text1: t('Variation {id} saved', { _tags: 'core', id: success.id }),
+					title: t('Variation {id} saved', { _tags: 'core', id: success.id }),
 					type: 'success',
 				});
 			}

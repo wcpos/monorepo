@@ -101,14 +101,17 @@ export const useRemoveLineItem = () => {
 
 			if (itemToRestore) {
 				Toast.show({
+					type: 'success',
 					text1: t('{name} removed from cart', {
 						name: itemToRestore?.name || itemToRestore?.method_title,
 						_tags: 'core',
 					}),
-					dismissable: true,
-					action: {
-						label: t('Undo', { _tags: 'core' }),
-						action: () => undoRemove(uuid, type, itemToRestore),
+					props: {
+						dismissable: true,
+						action: {
+							label: t('Undo', { _tags: 'core' }),
+							action: () => undoRemove(uuid, type, itemToRestore),
+						},
 					},
 				});
 			} else {

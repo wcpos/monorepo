@@ -68,8 +68,8 @@ const EditCustomer = ({ resource }: Props) => {
 			const success = await pushDocument(customer);
 			if (isRxDocument(success)) {
 				Toast.show({
-					text1: t('Customer {id} saved', { _tags: 'core', id: success.id }),
 					type: 'success',
+					text1: t('Customer {id} saved', { _tags: 'core', id: success.id }),
 				});
 			}
 		} catch (error) {

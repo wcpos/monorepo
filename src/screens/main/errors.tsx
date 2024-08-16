@@ -19,8 +19,8 @@ export const Errors = () => {
 	useSubscription(manager.error$, (error) => {
 		log.error(error);
 		Toast.show({
-			text1: error.message,
 			type: 'error',
+			text1: error.message,
 		});
 	});
 

@@ -21,7 +21,7 @@ import PaymentMethod from '../components/order/payment-method';
 import { Status } from '../components/order/status';
 import Total from '../components/order/total';
 import { TextCell } from '../components/text-cell';
-import { UISettings } from '../components/ui-settings';
+import { UISettings } from '../components/ui-settings/button';
 import { useUISettings } from '../contexts/ui-settings';
 
 const cells = {

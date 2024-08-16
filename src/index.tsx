@@ -6,7 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { PortalHost } from '@wcpos/tailwind/src/portal';
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Toast, toastConfig } from '@wcpos/tailwind/src/toast';
 
 import { AppStateProvider } from './contexts/app-state';
 import { TranslationProvider } from './contexts/translations';
@@ -71,7 +71,7 @@ const App = () => {
 											<PortalHost />
 										</ErrorBoundary>
 										<ErrorBoundary>
-											<Toast />
+											<Toast config={toastConfig} />
 										</ErrorBoundary>
 									</SafeAreaProviderCompat>
 								</TranslationProvider>

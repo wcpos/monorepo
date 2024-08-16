@@ -37,8 +37,8 @@ export const PayButton = () => {
 			});
 		} catch (error) {
 			Toast.show({
-				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
 				type: 'error',
+				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
 			});
 		} finally {
 			setLoading(false);

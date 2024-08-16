@@ -18,7 +18,7 @@ import { DataTable } from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
 import { QuerySearchInput } from '../../components/query-search-input';
-import { UISettings } from '../../components/ui-settings';
+import { UISettings } from '../../components/ui-settings/button';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
 

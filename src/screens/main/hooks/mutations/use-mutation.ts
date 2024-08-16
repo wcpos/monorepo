@@ -94,8 +94,8 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				message = 'rxdb ' + error.code;
 			}
 			Toast.show({
-				text1: t('There was an error: {message}', { _tags: 'core', message }),
 				type: 'error',
+				text1: t('There was an error: {message}', { _tags: 'core', message }),
 			});
 		},
 		[t]
@@ -107,8 +107,8 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 	const handleSuccess = React.useCallback(
 		(doc: RxDocument) => {
 			Toast.show({
-				text1: t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }),
 				type: 'success',
+				text1: t('{title} #{id} saved', { _tags: 'core', id: doc.id, title: collectionLabel }),
 			});
 		},
 		[collectionLabel, t]

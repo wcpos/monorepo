@@ -3,13 +3,11 @@ import { View } from 'react-native';
 
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
-import Svg, { Line, Rect } from 'react-native-svg';
+import Svg, { Line } from 'react-native-svg';
 
 import type { ProductVariationDocument } from '@wcpos/database';
 import type { CellContext } from '@wcpos/tailwind/src/data-table';
-import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Image } from '@wcpos/tailwind/src/image';
-import { TableCell } from '@wcpos/tailwind/src/table2';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 

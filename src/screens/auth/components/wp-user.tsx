@@ -30,8 +30,8 @@ const WpUser = ({ site, wpUser }: Props) => {
 		async (storeID: string) => {
 			if (!storeID) {
 				Toast.show({
-					text1: t('No store selected', { _tags: 'core' }),
 					type: 'error',
+					text1: t('No store selected', { _tags: 'core' }),
 				});
 			}
 			login({

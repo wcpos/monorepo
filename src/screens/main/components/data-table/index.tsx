@@ -14,12 +14,10 @@ import { useInfiniteScroll, Query } from '@wcpos/query';
 import { DataTable as Table, DataTableProps } from '@wcpos/tailwind/src/data-table';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { TableRow } from '@wcpos/tailwind/src/table2';
-import { Text } from '@wcpos/tailwind/src/text';
 
+import { ListEmptyComponent } from './empty';
 import { Footer } from './footer';
 import { Header } from './header';
-import { useT } from '../../../../contexts/translations';
 import { useUISettings, UISettingID } from '../../contexts/ui-settings';
 import { TextCell } from '../text-cell';
 
@@ -34,7 +32,7 @@ interface Props<TDocument> extends DataTableProps<TDocument, any> {
 }
 
 /**
- *
+ * Tables are expensive to render, so memoize all props.
  */
 export const DataTable = <TDocument extends DocumentType>({
 	id,
@@ -49,7 +47,6 @@ export const DataTable = <TDocument extends DocumentType>({
 	const { uiSettings, getUILabel } = useUISettings(id);
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const result = useInfiniteScroll(query);
-	const t = useT();
 
 	/**
 	 *
@@ -112,15 +109,7 @@ export const DataTable = <TDocument extends DocumentType>({
 				columns={columns}
 				onEndReached={result.nextPage}
 				onEndReachedThreshold={0.5}
-				ListEmptyComponent={() => {
-					return (
-						<TableRow className="justify-center p-2">
-							<Text>
-								{noDataMessage ? noDataMessage : t('No results found', { _tags: 'core' })}
-							</Text>
-						</TableRow>
-					);
-				}}
+				ListEmptyComponent={<ListEmptyComponent message={noDataMessage} />}
 				TableFooterComponent={TableFooterComponent ? TableFooterComponent : Footer}
 				renderItem={renderItem ? (props) => renderItem(props) : undefined}
 				extraContext={context}

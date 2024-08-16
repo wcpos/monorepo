@@ -12,7 +12,7 @@ import { useT } from '../../../contexts/translations';
 import { AddNewCustomer } from '../components/customer/add-new';
 import { DataTable } from '../components/data-table';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UISettings } from '../components/ui-settings';
+import { UISettings } from '../components/ui-settings/button';
 import { useUISettings } from '../contexts/ui-settings';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;

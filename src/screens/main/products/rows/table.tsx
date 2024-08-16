@@ -6,12 +6,12 @@ import { useObservableSuspense } from 'observable-hooks';
 import type { ProductDocument } from '@wcpos/database';
 import type { Row } from '@wcpos/tailwind/src/data-table';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { HStack } from '@wcpos/tailwind/src/hstack';
 import { cn, getTailwindJustifyClass } from '@wcpos/tailwind/src/lib/utils';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { TableRow, TableCell } from '@wcpos/tailwind/src/table2';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
+import { VariationTableFooter } from './footer';
 import { Date } from '../../components/date';
 import { ProductVariationImage } from '../../components/product/variation-image';
 import { TextCell } from '../../components/text-cell';
@@ -81,12 +81,16 @@ export const VariationsTable = ({ query, row }: Props) => {
 						{row.getVisibleCells().map((cell) => {
 							const meta = cell.column.columnDef.meta;
 
-							// Create a context for the subrow using the parent's cell definitions
+							/**
+							 * Create a context for the subrow using the parent's cell definitions
+							 * - https://tanstack.com/table/latest/docs/guide/rows#sub-rows
+							 */
 							const subrowCellContext = {
 								...cell.getContext(),
 								row: {
 									...row,
-									parent: row.original,
+									parentId: row.id,
+									getParentRow: () => row.original,
 									original: document,
 								},
 							};
@@ -109,7 +113,7 @@ export const VariationsTable = ({ query, row }: Props) => {
 					</TableRow>
 				);
 			})}
-			<HStack className="p-2 bg-input"></HStack>
+			<VariationTableFooter query={query} parent={row.original} count={result.hits.length} />
 		</VStack>
 	);
 };

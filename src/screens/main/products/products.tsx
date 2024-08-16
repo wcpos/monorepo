@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
+
 import { useRelationalQuery } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
@@ -7,7 +9,6 @@ import { DataTableRow } from '@wcpos/tailwind/src/data-table';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { cells } from './rows/simple';
@@ -18,9 +19,10 @@ import { DataTable } from '../components/data-table';
 import FilterBar from '../components/product/filter-bar';
 import { TaxBasedOn } from '../components/product/tax-based-on';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UISettings } from '../components/ui-settings';
+import { UISettingsButton, UISettingsForm } from '../components/ui-settings';
 import { useTaxRates } from '../contexts/tax-rates';
 import { useUISettings } from '../contexts/ui-settings';
+import { useMutation } from '../hooks/mutations/use-mutation';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
@@ -31,12 +33,14 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 // };
 
 /**
- *
+ * Tables are expensive to render, so memoize all props.
  */
 const Products = () => {
 	const { uiSettings } = useUISettings('products');
 	const { calcTaxes } = useTaxRates();
 	const t = useT();
+	const { patch: productsPatch } = useMutation({ collectionName: 'products' });
+	const { patch: variationsPatch } = useMutation({ collectionName: 'variations' });
 
 	/**
 	 *
@@ -78,9 +82,26 @@ const Products = () => {
 	}, []);
 
 	/**
-	 *
+	 * Table context
 	 */
 	const context = React.useMemo(() => ({ taxLocation: 'base' }), []);
+
+	/**
+	 * Table meta
+	 */
+	const tableMeta = React.useMemo(
+		() => ({
+			onChange: ({ row, changes }) => {
+				const type = get(row, 'original.type');
+				if (type === 'variation') {
+					variationsPatch({ document: row.original, data: changes });
+				} else {
+					productsPatch({ document: row.original, data: changes });
+				}
+			},
+		}),
+		[productsPatch, variationsPatch]
+	);
 
 	/**
 	 *
@@ -102,10 +123,9 @@ const Products = () => {
 						onPress={() => navigation.navigate('AddProduct')}
 						tooltip={t('Add new customer', { _tags: 'core' })}
 					/> */}
-							<UISettings
-								uiSettings={uiSettings}
-								title={t('Product Settings', { _tags: 'core' })}
-							/>
+							<UISettingsButton title={t('Product Settings', { _tags: 'core' })}>
+								<UISettingsForm uiSettings={uiSettings} />
+							</UISettingsButton>
 						</HStack>
 						<ErrorBoundary>
 							<FilterBar query={query} />
@@ -125,6 +145,7 @@ const Products = () => {
 								extraContext={context}
 								footer={calcTaxes && <TaxBasedOn />}
 								getItemType={({ original }) => original.type}
+								tableMeta={tableMeta}
 							/>
 						</Suspense>
 					</ErrorBoundary>

@@ -23,15 +23,15 @@ const useDeleteDocument = () => {
 				const { data } = await http.delete((endpoint += `/${id}`), { params });
 				if (data.id === id) {
 					Toast.show({
-						text1: t('Item deleted', { _tags: 'core' }),
 						type: 'success',
+						text1: t('Item deleted', { _tags: 'core' }),
 					});
 				}
 			} catch (err) {
 				log.error(err);
 				Toast.show({
-					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
 					type: 'error',
+					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
 				});
 			}
 		},

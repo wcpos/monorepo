@@ -76,8 +76,8 @@ export const useAddVariation = () => {
 
 			if (success) {
 				Toast.show({
-					text1: t('{name} added to cart', { _tags: 'core', name: parent.name }),
 					type: 'success',
+					text1: t('{name} added to cart', { _tags: 'core', name: parent.name }),
 				});
 			} else {
 				log.error('Error adding variation to order', {
@@ -86,8 +86,8 @@ export const useAddVariation = () => {
 					metaData,
 				});
 				Toast.show({
+					type: 'error',
 					text1: t('Error adding {name} to cart', { _tags: 'core', name: parent.name }),
-					type: 'critical',
 				});
 			}
 		},

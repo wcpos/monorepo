@@ -17,7 +17,7 @@ import { Level } from './cells/level';
 import { useT } from '../../../contexts/translations';
 import EmptyTableRow from '../components/empty-table-row';
 import { TextCell } from '../components/text-cell';
-import { UISettings } from '../components/ui-settings';
+import { UISettings } from '../components/ui-settings/button';
 import { useUISettings } from '../contexts/ui-settings';
 
 const cells = {

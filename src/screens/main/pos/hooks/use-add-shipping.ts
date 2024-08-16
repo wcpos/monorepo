@@ -53,8 +53,8 @@ export const useAddShipping = () => {
 			} catch (error) {
 				log.error(error);
 				Toast.show({
-					text1: t('Error adding Shipping to cart', { _tags: 'core' }),
 					type: 'error',
+					text1: t('Error adding Shipping to cart', { _tags: 'core' }),
 				});
 			}
 		},

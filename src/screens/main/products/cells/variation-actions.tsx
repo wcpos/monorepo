@@ -34,7 +34,7 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
  */
 export const VariationActions = ({ row }: CellContext<ProductVariationDocument, 'actions'>) => {
 	const variation = row.original;
-	const parent = row.parent;
+	const parent = row.getParentRow();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const navigation = useNavigation();
 	const pullDocument = usePullDocument();

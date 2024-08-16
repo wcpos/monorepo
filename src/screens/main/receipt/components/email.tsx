@@ -44,8 +44,8 @@ export const EmailForm = ({ defaultEmail = '', orderID }: Props) => {
 				});
 				if (data && data.success) {
 					Toast.show({
-						text1: t('Email sent', { _tags: 'core' }),
 						type: 'success',
+						text1: t('Email sent', { _tags: 'core' }),
 					});
 				}
 			} catch (error) {

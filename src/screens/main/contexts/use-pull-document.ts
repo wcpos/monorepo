@@ -45,8 +45,8 @@ const usePullDocument = () => {
 			} catch (err) {
 				log.error(err);
 				Toast.show({
+					type: 'error',
 					text1: t('There was an error: {error}', { _tags: 'core', error: err.message }),
-					type: 'critical',
 				});
 			}
 		},

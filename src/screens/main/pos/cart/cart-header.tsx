@@ -8,7 +8,7 @@ import Customer from './customer';
 import { useT } from '../../../../contexts/translations';
 import { AddNewCustomer } from '../../components/customer/add-new';
 import { CustomerSelect } from '../../components/customer-select';
-import { UISettings } from '../../components/ui-settings';
+import { UISettings } from '../../components/ui-settings/button';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useAddCustomer } from '../hooks/use-add-customer';
 
