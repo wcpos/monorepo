@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/tailwind/src/ta
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tree } from '@wcpos/tailwind/src/tree';
 
-import { EditLineItemForm } from './form';
+import { EditOrderMetaForm } from './form';
 import { useT } from '../../../../../../contexts/translations';
 // import { AmountWidget } from '../../../components/amount-widget';
 // import { TaxClassSelect } from '../../../components/tax-class-select';
@@ -16,14 +16,14 @@ import { useT } from '../../../../../../contexts/translations';
 
 interface Props {
 	uuid: string;
-	item: import('@wcpos/database').OrderDocument['line_items'][number];
+	item: import('@wcpos/database').OrderDocument['fee_lines'][number];
 	onClose?: () => void;
 }
 
 /**
  *
  */
-export const EditLineItem = ({ uuid, item, onClose }: Props) => {
+export const EditOrderMeta = ({ uuid, item, onClose }: Props) => {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 
@@ -38,7 +38,7 @@ export const EditLineItem = ({ uuid, item, onClose }: Props) => {
 				</TabsTrigger>
 			</TabsList>
 			<TabsContent value="form">
-				<EditLineItemForm />
+				<EditOrderMetaForm />
 			</TabsContent>
 			<TabsContent value="json">
 				<Tree data={item} />

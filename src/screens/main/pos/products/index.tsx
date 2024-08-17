@@ -12,13 +12,14 @@ import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import SimpleProductTableRow from './rows/simple';
 import VariableProductTableRow from './rows/variable';
+import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../../contexts/translations';
 import { DataTable } from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
 import { QuerySearchInput } from '../../components/query-search-input';
-import { UISettings } from '../../components/ui-settings/button';
+import { UISettingsButton } from '../../components/ui-settings';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
 
@@ -110,10 +111,9 @@ const POSProducts = ({ isColumn = false }) => {
 										placeholder={t('Search Products', { _tags: 'core' })}
 									/>
 								</ErrorBoundary>
-								<UISettings
-									uiSettings={uiSettings}
-									title={t('Product Settings', { _tags: 'core' })}
-								/>
+								<UISettingsButton title={t('Product Settings', { _tags: 'core' })}>
+									<UISettingsForm />
+								</UISettingsButton>
 							</HStack>
 							<ErrorBoundary>
 								<FilterBar query={query} />

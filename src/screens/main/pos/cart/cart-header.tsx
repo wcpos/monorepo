@@ -5,10 +5,11 @@ import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 
 import Customer from './customer';
+import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../../contexts/translations';
 import { AddNewCustomer } from '../../components/customer/add-new';
 import { CustomerSelect } from '../../components/customer-select';
-import { UISettings } from '../../components/ui-settings/button';
+import { UISettingsButton } from '../../components/ui-settings';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useAddCustomer } from '../hooks/use-add-customer';
 
@@ -49,7 +50,9 @@ export const CartHeader = () => {
 				</ErrorBoundary>
 			</Box>
 			<AddNewCustomer onAdd={(customer) => addCustomer(customer)} />
-			<UISettings uiSettings={uiSettings} title={t('Cart Settings', { _tags: 'core' })} />
+			<UISettingsButton title={t('Cart Settings', { _tags: 'core' })}>
+				<UISettingsForm />
+			</UISettingsButton>
 		</HStack>
 	);
 };

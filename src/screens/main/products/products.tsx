@@ -13,13 +13,14 @@ import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { cells } from './rows/simple';
 import { VariableProductRow } from './rows/variable';
+import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
 import FilterBar from '../components/product/filter-bar';
 import { TaxBasedOn } from '../components/product/tax-based-on';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UISettingsButton, UISettingsForm } from '../components/ui-settings';
+import { UISettingsButton } from '../components/ui-settings';
 import { useTaxRates } from '../contexts/tax-rates';
 import { useUISettings } from '../contexts/ui-settings';
 import { useMutation } from '../hooks/mutations/use-mutation';
@@ -124,7 +125,7 @@ const Products = () => {
 						tooltip={t('Add new customer', { _tags: 'core' })}
 					/> */}
 							<UISettingsButton title={t('Product Settings', { _tags: 'core' })}>
-								<UISettingsForm uiSettings={uiSettings} />
+								<UISettingsForm />
 							</UISettingsButton>
 						</HStack>
 						<ErrorBoundary>

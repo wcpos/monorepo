@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/tailwind/src/ta
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tree } from '@wcpos/tailwind/src/tree';
 
+import { EditShippingLineForm } from './form';
 import { useT } from '../../../../../../contexts/translations';
 // import { AmountWidget } from '../../../components/amount-widget';
 // import { TaxClassSelect } from '../../../components/tax-class-select';
@@ -36,7 +37,9 @@ export const EditShippingLine = ({ uuid, item, onClose }: Props) => {
 					<Text>{t('JSON', { _tags: 'core' })}</Text>
 				</TabsTrigger>
 			</TabsList>
-			<TabsContent value="form"></TabsContent>
+			<TabsContent value="form">
+				<EditShippingLineForm />
+			</TabsContent>
 			<TabsContent value="json">
 				<Tree data={item} />
 			</TabsContent>

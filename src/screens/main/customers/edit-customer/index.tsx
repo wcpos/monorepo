@@ -8,6 +8,7 @@ import { Text } from '@wcpos/tailwind/src/text';
 import { Tree } from '@wcpos/tailwind/src/tree';
 
 // import { EditOrderForm } from './form';
+import { EditCustomerForm } from './form';
 import { useT } from '../../../../contexts/translations';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
@@ -34,7 +35,9 @@ export const EditCustomer = ({ resource }: Props) => {
 							<Text>{t('JSON', { _tags: 'core' })}</Text>
 						</TabsTrigger>
 					</TabsList>
-					<TabsContent value="form">{/* <EditOrderForm order={order} /> */}</TabsContent>
+					<TabsContent value="form">
+						<EditCustomerForm defaultValues={customer.toJSON()} />
+					</TabsContent>
 					<TabsContent value="json">
 						<Tree data={customer.toJSON()} hideRoot />
 					</TabsContent>

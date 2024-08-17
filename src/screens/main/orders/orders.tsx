@@ -12,6 +12,7 @@ import { Actions } from './cells/actions';
 import { Address } from './cells/address';
 import { Note } from './cells/note';
 import FilterBar from './filter-bar';
+import { UISettingsForm } from './ui-settings-form';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
@@ -23,7 +24,7 @@ import { PaymentMethod } from '../components/order/payment-method';
 import { Status } from '../components/order/status';
 import { Total } from '../components/order/total';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UISettings } from '../components/ui-settings/button';
+import { UISettings, UISettingsButton } from '../components/ui-settings/button';
 import { useUISettings } from '../contexts/ui-settings';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -81,7 +82,9 @@ const Orders = () => {
 					<VStack>
 						<HStack>
 							<QuerySearchInput query={query} placeholder={t('Search Orders', { _tags: 'core' })} />
-							<UISettings uiSettings={uiSettings} title={t('Order Settings', { _tags: 'core' })} />
+							<UISettingsButton title={t('Order Settings', { _tags: 'core' })}>
+								<UISettingsForm />
+							</UISettingsButton>
 						</HStack>
 						<ErrorBoundary>
 							<FilterBar query={query} />

@@ -8,11 +8,12 @@ import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import cells from './cells';
+import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { AddNewCustomer } from '../components/customer/add-new';
 import { DataTable } from '../components/data-table';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UISettings } from '../components/ui-settings/button';
+import { UISettings, UISettingsButton } from '../components/ui-settings/button';
 import { useUISettings } from '../contexts/ui-settings';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -49,7 +50,9 @@ const Customers = () => {
 							placeholder={t('Search Customers', { _tags: 'core' })}
 						/>
 						<AddNewCustomer />
-						<UISettings uiSettings={uiSettings} title={t('Customer Settings', { _tags: 'core' })} />
+						<UISettingsButton title={t('Customer Settings', { _tags: 'core' })}>
+							<UISettingsForm />
+						</UISettingsButton>
 					</HStack>
 				</CardHeader>
 				<CardContent className="flex-1 p-0">

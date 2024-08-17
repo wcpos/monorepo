@@ -1,2 +1,2 @@
 export { UISettingsButton } from './button';
-export { UISettingsForm } from './form';
+export { columnsFormSchema, UISettingsColumnsForm } from './columns-form';

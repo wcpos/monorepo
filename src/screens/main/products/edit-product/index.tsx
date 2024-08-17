@@ -2,13 +2,15 @@ import * as React from 'react';
 
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
-import { ModalContent, ModalTitle, ModalContainer } from '@wcpos/tailwind/src/modal';
+import { ModalContent, ModalTitle, ModalContainer, ModalHeader } from '@wcpos/tailwind/src/modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/tailwind/src/tabs';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tree } from '@wcpos/tailwind/src/tree';
 
 // import { EditOrderForm } from './form';
+import { EditProductForm } from './form';
 import { useT } from '../../../../contexts/translations';
+import useModalRefreshFix from '../../../../hooks/use-modal-refresh-fix';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').ProductDocument>;
@@ -18,10 +20,13 @@ export const EditProduct = ({ resource }: Props) => {
 	const product = useObservableSuspense(resource);
 	const t = useT();
 	const [value, setValue] = React.useState('form');
+	useModalRefreshFix();
 
 	return (
 		<ModalContainer>
-			<ModalTitle>{t('Edit #{name}', { name: product.name, _tags: 'core' })}</ModalTitle>
+			<ModalHeader>
+				<ModalTitle>{t('Edit #{name}', { name: product.name, _tags: 'core' })}</ModalTitle>
+			</ModalHeader>
 			<ModalContent>
 				<Tabs value={value} onValueChange={setValue}>
 					<TabsList className="flex-row w-full">
@@ -32,7 +37,9 @@ export const EditProduct = ({ resource }: Props) => {
 							<Text>{t('JSON', { _tags: 'core' })}</Text>
 						</TabsTrigger>
 					</TabsList>
-					<TabsContent value="form">{/* <EditOrderForm order={order} /> */}</TabsContent>
+					<TabsContent value="form">
+						<EditProductForm product={product} />
+					</TabsContent>
 					<TabsContent value="json">
 						<Tree data={product.toJSON()} hideRoot />
 					</TabsContent>

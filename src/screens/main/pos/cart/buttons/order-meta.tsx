@@ -14,6 +14,7 @@ import {
 } from '@wcpos/tailwind/src/dialog';
 import { Textarea } from '@wcpos/tailwind/src/textarea';
 
+import { EditOrderMeta } from './edit-order-meta';
 import { useT } from '../../../../../contexts/translations';
 import { useLocalMutation } from '../../../hooks/mutations/use-local-mutation';
 import { useCurrentOrder } from '../../contexts/current-order';
@@ -33,7 +34,9 @@ export const OrderMetaButton = () => {
 					<ButtonText>{t('Order Meta', { _tags: 'core' })}</ButtonText>
 				</Button>
 			</DialogTrigger>
-			<DialogContent>Test</DialogContent>
+			<DialogContent>
+				<EditOrderMeta />
+			</DialogContent>
 		</Dialog>
 	);
 };

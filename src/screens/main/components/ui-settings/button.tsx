@@ -1,6 +1,12 @@
 import * as React from 'react';
 
-import { Dialog, DialogContent, DialogTrigger } from '@wcpos/tailwind/src/dialog';
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from '@wcpos/tailwind/src/dialog';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Text } from '@wcpos/tailwind/src/text';
@@ -19,11 +25,18 @@ export const UISettingsButton = ({ title, children }: Props) => {
 		<ErrorBoundary>
 			<Tooltip delayDuration={150}>
 				<TooltipTrigger asChild>
-					<Dialog title={title}>
+					<Dialog>
 						<DialogTrigger asChild>
 							<IconButton name="sliders" />
 						</DialogTrigger>
-						<DialogContent>{children}</DialogContent>
+						<DialogContent>
+							<DialogHeader>
+								<DialogTitle>
+									<Text>{title}</Text>
+								</DialogTitle>
+							</DialogHeader>
+							{children}
+						</DialogContent>
 					</Dialog>
 				</TooltipTrigger>
 				<TooltipContent>
