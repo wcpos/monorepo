@@ -9,7 +9,7 @@ import { VStack } from '../vstack';
 import type { ToastConfigParams } from 'react-native-toast-message';
 
 const toastVariants = cva(
-	'min-w-64 rounded-md border-l-4 bg-popover p-2 shadow-md shadow-foreground/5 web:outline-none web:cursor-auto',
+	'min-w-64 rounded-md border-l-4 bg-popover p-4 shadow-md shadow-foreground/5 web:outline-none web:cursor-auto',
 	{
 		variants: {
 			variant: {

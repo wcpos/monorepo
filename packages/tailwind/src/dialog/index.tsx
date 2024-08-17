@@ -2,10 +2,12 @@ import * as React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import * as DialogPrimitive from '@rn-primitives/dialog';
+import { cva, type VariantProps } from 'class-variance-authority';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
+import { TextClassContext } from '../text';
 
 const Dialog = DialogPrimitive.Root;
 
@@ -60,10 +62,29 @@ const DialogOverlay = Platform.select({
 	default: DialogOverlayNative,
 });
 
+const dialogContentVariants = cva(
+	'z-50 max-w-lg gap-4 p-4 border border-border web:cursor-default bg-background shadow-lg web:duration-200 rounded-lg',
+	{
+		variants: {
+			size: {
+				default: 'w-96',
+				xs: 'w-64',
+				sm: 'w-80',
+				lg: 'w-128',
+			},
+		},
+		defaultVariants: {
+			size: 'default',
+		},
+	}
+);
+
 const DialogContent = React.forwardRef<
 	React.ElementRef<typeof DialogPrimitive.Content>,
-	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { portalHost?: string }
->(({ className, children, portalHost, ...props }, ref) => {
+	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+		portalHost?: string;
+	} & VariantProps<typeof dialogContentVariants>
+>(({ className, size, children, portalHost, ...props }, ref) => {
 	const { open } = DialogPrimitive.useRootContext();
 	return (
 		<DialogPortal hostName={portalHost}>
@@ -71,7 +92,7 @@ const DialogContent = React.forwardRef<
 				<DialogPrimitive.Content
 					ref={ref}
 					className={cn(
-						'z-50 max-w-lg gap-4 p-4 border border-border web:cursor-default bg-background shadow-lg web:duration-200 rounded-lg',
+						dialogContentVariants({ size }),
 						open
 							? 'web:animate-in web:fade-in-0 web:zoom-in-95'
 							: 'web:animate-out web:fade-out-0 web:zoom-out-95',
@@ -81,9 +102,10 @@ const DialogContent = React.forwardRef<
 				>
 					{children}
 					<DialogPrimitive.Close
-						className={
-							'absolute right-4 top-4 p-0.5 web:group rounded-sm opacity-70 web:ring-offset-background web:transition-opacity web:hover:opacity-100 web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 web:disabled:pointer-events-none'
-						}
+						// className={
+						// 	'absolute right-2 top-2 web:group rounded-sm opacity-70 web:ring-offset-background web:transition-opacity web:hover:opacity-100 web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 web:disabled:pointer-events-none'
+						// }
+						className="absolute right-2 top-2 flex-row opacity-70 web:transition-opacity web:hover:opacity-100"
 						asChild
 					>
 						<IconButton name="xmark" />
@@ -96,7 +118,10 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
-	<View className={cn('flex flex-col gap-1.5 text-center sm:text-left', className)} {...props} />
+	<View
+		className={cn('flex flex-col pr-4 gap-1.5 text-center sm:text-left', className)}
+		{...props}
+	/>
 );
 DialogHeader.displayName = 'DialogHeader';
 
@@ -112,14 +137,9 @@ const DialogTitle = React.forwardRef<
 	React.ElementRef<typeof DialogPrimitive.Title>,
 	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
-	<DialogPrimitive.Title
-		ref={ref}
-		className={cn(
-			'text-lg native:text-xl text-foreground font-semibold leading-none tracking-tight',
-			className
-		)}
-		{...props}
-	/>
+	<TextClassContext.Provider value="text-lg native:text-xl text-foreground font-semibold leading-none">
+		<DialogPrimitive.Title ref={ref} className={cn(className)} {...props} />
+	</TextClassContext.Provider>
 ));
 DialogTitle.displayName = DialogPrimitive.Title.displayName;
 

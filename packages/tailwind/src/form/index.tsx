@@ -16,8 +16,7 @@ import {
 } from 'react-hook-form';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 
-// import { X } from '../../lib/icons/X';
-// import { Button, buttonTextVariants } from '../button';
+import { useFormChangeHandler } from './use-form-change-handler';
 import { Checkbox } from '../checkbox';
 import { Input } from '../input';
 import { Label } from '../label';
@@ -196,16 +195,12 @@ const FormInput = React.forwardRef<
 	const inputRef = React.useRef<React.ComponentRef<typeof Input>>(null);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
-	React.useImperativeHandle(
-		ref,
-		() => {
-			if (!inputRef.current) {
-				return {} as React.ComponentRef<typeof Input>;
-			}
-			return inputRef.current;
-		},
-		[inputRef.current]
-	);
+	React.useImperativeHandle(ref, () => {
+		if (!inputRef.current) {
+			return {} as React.ComponentRef<typeof Input>;
+		}
+		return inputRef.current;
+	}, [inputRef.current]);
 
 	function handleOnLabelPress() {
 		if (!inputRef.current) {
@@ -263,16 +258,12 @@ const FormTextarea = React.forwardRef<
 	const textareaRef = React.useRef<React.ComponentRef<typeof Textarea>>(null);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
-	React.useImperativeHandle(
-		ref,
-		() => {
-			if (!textareaRef.current) {
-				return {} as React.ComponentRef<typeof Textarea>;
-			}
-			return textareaRef.current;
-		},
-		[textareaRef.current]
-	);
+	React.useImperativeHandle(ref, () => {
+		if (!textareaRef.current) {
+			return {} as React.ComponentRef<typeof Textarea>;
+		}
+		return textareaRef.current;
+	}, [textareaRef.current]);
 
 	function handleOnLabelPress() {
 		if (!textareaRef.current) {
@@ -570,16 +561,12 @@ const FormSwitch = React.forwardRef<
 	const switchRef = React.useRef<React.ComponentRef<typeof Switch>>(null);
 	const { error, formItemNativeID, formDescriptionNativeID, formMessageNativeID } = useFormField();
 
-	React.useImperativeHandle(
-		ref,
-		() => {
-			if (!switchRef.current) {
-				return {} as React.ComponentRef<typeof Switch>;
-			}
-			return switchRef.current;
-		},
-		[switchRef.current]
-	);
+	React.useImperativeHandle(ref, () => {
+		if (!switchRef.current) {
+			return {} as React.ComponentRef<typeof Switch>;
+		}
+		return switchRef.current;
+	}, [switchRef.current]);
 
 	function handleOnLabelPress() {
 		onChange?.(!value);
@@ -631,4 +618,5 @@ export {
 	FormSwitch,
 	FormTextarea,
 	useFormField,
+	useFormChangeHandler,
 };

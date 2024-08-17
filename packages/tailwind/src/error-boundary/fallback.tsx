@@ -27,7 +27,7 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 	/**
 	 *
 	 */
-	if (containerWidth < 200 || error.message.length > 200) {
+	if (containerWidth < 200 || error.message.length > 1000) {
 		return (
 			<HStack className="p-2 bg-error items-start justify-between" onLayout={handleLayout}>
 				<Tooltip>
