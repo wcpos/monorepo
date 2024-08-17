@@ -29,7 +29,7 @@ const Text = React.forwardRef<TextRef, TextProps>(
 		const Component = asChild ? Slot.Text : RNText;
 		return (
 			<Component
-				className={textVariants({ variant, className: cn(textClass, className) })}
+				className={cn(textVariants({ variant }), textClass, className)}
 				ref={ref}
 				{...props}
 			/>

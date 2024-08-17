@@ -6,15 +6,16 @@ import get from 'lodash/get';
 import { cssInterop } from 'nativewind';
 
 import * as Svgs from './components/fontawesome/solid';
+import { cn } from '../lib/utils';
 
 import type { SvgProps } from 'react-native-svg';
 
 export type IconName = Extract<keyof typeof Svgs, string>;
 
-const iconVariants = cva('', {
+const iconVariants = cva('fill-foreground', {
 	variants: {
 		variant: {
-			default: 'fill-current',
+			default: '',
 			primary: 'fill-primary',
 			destructive: 'fill-destructive',
 			secondary: 'fill-secondary',
@@ -56,7 +57,7 @@ export const Icon = ({ name, variant, size, className }: IconProps) => {
 
 	return (
 		<View className="inset-0 items-center content-center">
-			<SvgIcon className={iconVariants({ variant, size, className })} />
+			<SvgIcon className={cn(iconVariants({ variant, size }), className)} />
 		</View>
 	);
 };
