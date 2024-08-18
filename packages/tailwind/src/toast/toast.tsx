@@ -34,7 +34,6 @@ export type ToastProps = ToastConfigParams<{
  *
  */
 export const Toast = ({ variant, text1, text2, props, ...rest }: ToastProps) => {
-	console.log('Toast', rest);
 	return (
 		<View className={toastVariants({ variant })} role="alert">
 			<VStack>
