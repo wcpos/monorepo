@@ -16,7 +16,7 @@ import { useMutation } from '../../hooks/mutations/use-mutation';
 import { Actions } from '../cells/actions';
 import { Barcode } from '../cells/barcode';
 import { EdittablePrice } from '../cells/edittable-price';
-import Name from '../cells/name';
+import { ProductName } from '../cells/name';
 import Price from '../cells/price';
 import { StockQuantity } from '../cells/stock-quantity';
 import { StockStatus } from '../cells/stock-status';
@@ -28,7 +28,7 @@ export const cells = {
 	actions: Actions,
 	categories: ProductCategories,
 	image: ProductImage,
-	name: Name,
+	name: ProductName,
 	barcode: Barcode,
 	price: Price,
 	regular_price: EdittablePrice,

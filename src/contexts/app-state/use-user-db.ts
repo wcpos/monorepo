@@ -11,8 +11,8 @@ import { createUserDB, createStoreDB, createFastStoreDB } from '@wcpos/database/
  * - translations state for language translations
  */
 const userDBPromise = createUserDB().then(async (userDB) => {
-	const appState = await userDB.addState();
-	const translationsState = await userDB.addState('translations');
+	const appState = await userDB.addState('v2');
+	const translationsState = await userDB.addState('translations_v2');
 	return { userDB, appState, translationsState };
 });
 export const userDB$ = from(userDBPromise).pipe(shareReplay(1));
@@ -59,7 +59,7 @@ const obs$ = userDB$.pipe(
 				if (isRxDocument(store)) {
 					storeDB = await createStoreDB(store.localID);
 					fastStoreDB = await createFastStoreDB(store.localID);
-					extraData = await storeDB.addState('data');
+					extraData = await storeDB.addState('data_v2');
 				}
 				return { site, wpCredentials, store, storeDB, fastStoreDB, extraData };
 			})

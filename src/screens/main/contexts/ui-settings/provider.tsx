@@ -55,7 +55,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'pos-products'>>('pos-products');
+					const state = await db.addState<UISettingSchema<'pos-products'>>('pos-products_v2');
 					await mergeWithInitalValues('pos-products', state);
 					return state;
 				})
@@ -67,7 +67,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'pos-cart'>>('pos-cart');
+					const state = await db.addState<UISettingSchema<'pos-cart'>>('pos-cart_v2');
 					await mergeWithInitalValues('pos-cart', state);
 					return state;
 				})
@@ -79,7 +79,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'products'>>('products');
+					const state = await db.addState<UISettingSchema<'products'>>('products_v2');
 					await mergeWithInitalValues('products', state);
 					return state;
 				})
@@ -91,7 +91,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'orders'>>('orders');
+					const state = await db.addState<UISettingSchema<'orders'>>('orders_v2');
 					await mergeWithInitalValues('orders', state);
 					return state;
 				})
@@ -103,7 +103,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'customers'>>('customers');
+					const state = await db.addState<UISettingSchema<'customers'>>('customers_v2');
 					await mergeWithInitalValues('customers', state);
 					return state;
 				})
@@ -115,7 +115,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'reports-orders'>>('reports-orders');
+					const state = await db.addState<UISettingSchema<'reports-orders'>>('reports-orders_v2');
 					await mergeWithInitalValues('reports-orders', state);
 					return state;
 				})
@@ -127,7 +127,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 		(inputs$) =>
 			inputs$.pipe(
 				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'logs'>>('logs');
+					const state = await db.addState<UISettingSchema<'logs'>>('logs_v2');
 					await mergeWithInitalValues('logs', state);
 					return state;
 				})
@@ -140,7 +140,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 	 */
 	const reset = React.useCallback(
 		async (id: UISettingID) => {
-			const state = await storeDB.addState(id);
+			const state = await storeDB.addState(id + '_v2');
 			await resetToInitialValues(id, state);
 		},
 		[storeDB]
@@ -151,7 +151,7 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 	 */
 	const patch = React.useCallback(
 		async (id: UISettingID, data: Partial<UISettingSchema<UISettingID>>) => {
-			const state = await storeDB.addState(id);
+			const state = await storeDB.addState(id + '_v2');
 			await patchState(state, data);
 		},
 		[storeDB]

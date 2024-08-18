@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { Column, ColumnDef } from '@tanstack/react-table';
+import find from 'lodash/find';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
@@ -81,6 +82,10 @@ export const DataTable = <TDocument extends DocumentType>({
 					},
 					meta: {
 						...col,
+						show: (key: string) => {
+							const d = find(col.display, { key });
+							return !!(d && d.show);
+						},
 					},
 				};
 			});

@@ -27,13 +27,21 @@ export const StockStatusPill = ({ query }: Props) => {
 	const t = useT();
 	const isActive = !!selected;
 	const { items } = useStockStatusLabel();
-	const value = items.find((item) => item.value === selected);
+
+	/**
+	 * NOTE: if value changes from { value: 'example', label: 'example' } to undefined,
+	 * it won't clear the previous value, so we need to make sure we return { value: '', label: '' }
+	 */
+	const value = React.useMemo(() => {
+		const val = items.find((item) => item.value === selected);
+		return val ? val : { value: '', label: '' };
+	}, [items, selected]);
 
 	/**
 	 *
 	 */
 	return (
-		<Select onValueChange={({ value }) => query.where('stock_status', value)}>
+		<Select value={value} onValueChange={({ value }) => query.where('stock_status', value)}>
 			<SelectPrimitive.Trigger asChild>
 				<ButtonPill
 					size="xs"

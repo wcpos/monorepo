@@ -6,6 +6,13 @@ import {
 	ContextMenuItem,
 	ContextMenuTrigger,
 } from '@wcpos/tailwind/src/context-menu';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from '@wcpos/tailwind/src/dropdown-menu';
 import { Icon } from '@wcpos/tailwind/src/icon';
 import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Loader } from '@wcpos/tailwind/src/loader';
@@ -22,6 +29,7 @@ interface SyncButtonProps {
 
 const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 	const t = useT();
+	const [open, setOpen] = React.useState(false);
 
 	/**
 	 *
@@ -37,34 +45,27 @@ const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 	return active ? (
 		<Loader size="sm" />
 	) : (
-		<ContextMenu>
-			<ContextMenuTrigger>
-				<Tooltip delayDuration={150}>
-					<TooltipTrigger
-						onLongPress={() => {
-							console.log('test');
-						}}
-						onPress={sync}
-						asChild
-					>
-						<IconButton name="arrowRotateRight" size="sm" />
-					</TooltipTrigger>
-					<TooltipContent>
-						<Text>{t('Press to sync, long press for more options', { _tags: 'core' })}</Text>
-					</TooltipContent>
-				</Tooltip>
-			</ContextMenuTrigger>
-			<ContextMenuContent side="top" align="end">
-				<ContextMenuItem onPress={sync}>
+		<DropdownMenu onOpenChange={setOpen}>
+			<Tooltip delayDuration={150}>
+				<TooltipTrigger onLongPress={() => setOpen(true)} onPress={sync} asChild>
+					<IconButton name="arrowRotateRight" size="sm" />
+				</TooltipTrigger>
+				<TooltipContent>
+					<Text>{t('Press to sync, long press for more options', { _tags: 'core' })}</Text>
+				</TooltipContent>
+			</Tooltip>
+			<DropdownMenuContent side="top" align="end">
+				<DropdownMenuItem onPress={sync}>
 					<Icon name="arrowRotateRight" />
 					<Text>{t('Sync', { _tags: 'core' })}</Text>
-				</ContextMenuItem>
-				<ContextMenuItem onPress={handleClearAndSync}>
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem variant="destructive" onPress={handleClearAndSync}>
 					<Icon name="trash" />
 					<Text>{t('Clear and Refresh', { _tags: 'core' })}</Text>
-				</ContextMenuItem>
-			</ContextMenuContent>
-		</ContextMenu>
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 };
 

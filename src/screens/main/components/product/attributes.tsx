@@ -1,9 +1,12 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import { useQueryManager } from '@wcpos/query';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
@@ -15,7 +18,7 @@ type Props = {
 };
 
 export const PlainAttributes = ({ product }: Props) => {
-	const attributes = useObservableState(product.attributes$, product.attributes);
+	const attributes = useObservableEagerState(product.attributes$);
 
 	/**
 	 *
@@ -39,98 +42,105 @@ export const PlainAttributes = ({ product }: Props) => {
 	);
 };
 
-const ProductAttributes = ({ product }: Props) => {
-	const attributes = useObservableState(product.attributes$, product.attributes);
-	const {
-		expanded,
-		setExpanded,
-		setInitialSelectedAttributes,
-		childrenSearchCount,
-		parentSearchTerm,
-	} = useVariationTable();
+/**
+ *
+ */
+export const ProductAttributes = ({ row, table }) => {
+	const product = row.original;
+	const attributes = useObservableEagerState(product.attributes$);
+	const isExpanded = useObservableEagerState(
+		table.options.meta.expanded$.pipe(map((expanded) => !!expanded[row.id]))
+	);
+
+	// const {
+	// 	expanded,
+	// 	setExpanded,
+	// 	setInitialSelectedAttributes,
+	// 	childrenSearchCount,
+	// 	parentSearchTerm,
+	// } = useVariationTable();
 	const manager = useQueryManager();
 	const t = useT();
 
 	/**
 	 *
 	 */
-	const handleSelect = React.useCallback(
-		(attribute, option) => {
-			if (!expanded) {
-				setInitialSelectedAttributes({
-					id: attribute.id,
-					name: attribute.name,
-					option,
-				});
-				setExpanded(true);
-			} else {
-				const query = manager.getQuery(['variations', { parentID: product.id }]);
-				if (query) {
-					query.where('attributes', {
-						$elemMatch: {
-							id: attribute.id,
-							name: attribute.name,
-							option,
-						},
-					});
-				}
-			}
-		},
-		[expanded, manager, product.id, setExpanded, setInitialSelectedAttributes]
-	);
+	const handleSelect = React.useCallback((attribute, option) => {
+		// if (!expanded) {
+		// 	setInitialSelectedAttributes({
+		// 		id: attribute.id,
+		// 		name: attribute.name,
+		// 		option,
+		// 	});
+		// 	setExpanded(true);
+		// } else {
+		// 	const query = manager.getQuery(['variations', { parentID: product.id }]);
+		// 	if (query) {
+		// 		query.where('attributes', {
+		// 			$elemMatch: {
+		// 				id: attribute.id,
+		// 				name: attribute.name,
+		// 				option,
+		// 			},
+		// 		});
+		// 	}
+		// }
+	}, []);
 
 	/**
 	 * Expand text string
 	 */
-	const expandText = React.useMemo(() => {
-		let text = '';
-		if (expanded) {
-			text += t('Collapse', { _tags: 'core' });
-		} else {
-			text += t('Expand', { _tags: 'core' });
-		}
-		if (childrenSearchCount === 1) {
-			text += ' - ';
-			text += t('1 variation found for {term}', {
-				term: parentSearchTerm,
-				_tags: 'core',
-			});
-		} else if (childrenSearchCount > 0) {
-			text += ' - ';
-			text += t('{count} variations found for {term}', {
-				count: childrenSearchCount,
-				term: parentSearchTerm,
-				_tags: 'core',
-			});
-		}
-		return text;
-	}, [childrenSearchCount, expanded, parentSearchTerm, t]);
+	// const expandText = React.useMemo(() => {
+	// 	let text = '';
+	// 	if (expanded) {
+	// 		text += t('Collapse', { _tags: 'core' });
+	// 	} else {
+	// 		text += t('Expand', { _tags: 'core' });
+	// 	}
+	// 	if (childrenSearchCount === 1) {
+	// 		text += ' - ';
+	// 		text += t('1 variation found for {term}', {
+	// 			term: parentSearchTerm,
+	// 			_tags: 'core',
+	// 		});
+	// 	} else if (childrenSearchCount > 0) {
+	// 		text += ' - ';
+	// 		text += t('{count} variations found for {term}', {
+	// 			count: childrenSearchCount,
+	// 			term: parentSearchTerm,
+	// 			_tags: 'core',
+	// 		});
+	// 	}
+	// 	return text;
+	// }, [childrenSearchCount, expanded, parentSearchTerm, t]);
 
 	/**
 	 *
 	 */
 	return (
 		<VStack space="xs">
-			{attributes
+			{(attributes || [])
 				.filter((attr: any) => attr.variation)
 				.map((attr: any) => (
-					<React.Fragment key={`${attr.name}-${attr.id}`}>
-						<Text className="text-sm">{`${attr.name}: `}</Text>
+					<HStack key={`${attr.name}-${attr.id}`} className="flex-wrap gap-0">
+						<Text className="text-xs">{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
 							<React.Fragment key={option}>
-								<Button variant="link" onPress={() => handleSelect(attr, option)}>
-									<ButtonText className="text-sm">{option}</ButtonText>
-								</Button>
-								{index < attr.options.length - 1 && ', '}
+								<Text
+									className="text-xs text-primary"
+									variant="link"
+									onPress={() => handleSelect(attr, option)}
+								>
+									{option}
+								</Text>
+								<Text className="text-xs">{index < attr.options.length - 1 && ', '}</Text>
 							</React.Fragment>
 						))}
-					</React.Fragment>
+					</HStack>
 				))}
-			<Button variant="link" onPress={() => setExpanded(!expanded)}>
-				<ButtonText className="text-sm">{expandText}</ButtonText>
-			</Button>
+			<Text className="text-xs text-primary" variant="link" onPress={() => row.toggleExpanded()}>
+				{isExpanded ? 'Collapse' : 'Expand'}
+			</Text>
 		</VStack>
 	);
 };
-
-export default ProductAttributes;

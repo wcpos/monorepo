@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Form } from '@wcpos/tailwind/src/form';
+import { Form, useFormChangeHandler } from '@wcpos/tailwind/src/form';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
@@ -46,24 +46,7 @@ export const UISettingsForm = () => {
 	/**
 	 * Handle form changes and patch UI
 	 */
-	React.useEffect(() => {
-		// Ignore the first render after formData changes
-		const subscription = form.watch((values) => {
-			const changes = {};
-
-			Object.keys(values).forEach((key) => {
-				if (JSON.stringify(values[key]) !== JSON.stringify(formData[key])) {
-					changes[key] = values[key];
-				}
-			});
-
-			if (Object.keys(changes).length > 0) {
-				patchUI(changes);
-			}
-		});
-
-		return () => subscription.unsubscribe();
-	}, [formData, patchUI, form]);
+	useFormChangeHandler({ form, onChange: patchUI });
 
 	/**
 	 *

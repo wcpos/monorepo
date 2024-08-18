@@ -5,7 +5,7 @@ import { useObservableState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form } from '@wcpos/tailwind/src/form';
+import { Form, useFormChangeHandler } from '@wcpos/tailwind/src/form';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../contexts/translations';
@@ -20,7 +20,7 @@ export const schema = z.object({
  *
  */
 export const UISettingsForm = () => {
-	const { uiSettings, getUILabel } = useUISettings('products');
+	const { uiSettings, getUILabel, patchUI } = useUISettings('products');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
 	const t = useT();
 
@@ -33,6 +33,18 @@ export const UISettingsForm = () => {
 			...formData,
 		},
 	});
+
+	/**
+	 * Track formData changes and reset form
+	 */
+	React.useEffect(() => {
+		form.reset({ ...formData });
+	}, [formData, form]);
+
+	/**
+	 * Handle form changes and patch UI
+	 */
+	useFormChangeHandler({ form, onChange: patchUI });
 
 	/**
 	 *

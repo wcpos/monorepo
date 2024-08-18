@@ -16,6 +16,11 @@ import {
 	AccordionItem,
 } from '@wcpos/tailwind/src/accordian';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import {
+	Collapsible,
+	CollapsibleTrigger,
+	CollapsibleContent,
+} from '@wcpos/tailwind/src/collapsible';
 import { Form, FormField, FormInput, FormSelect, FormSwitch } from '@wcpos/tailwind/src/form';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Text } from '@wcpos/tailwind/src/text';
@@ -245,24 +250,24 @@ export const EditOrderForm = ({ order }: Props) => {
 					)}
 				/>
 				<View className="col-span-3">
-					<Accordion type="multiple" collapsible className="w-full">
-						<AccordionItem value="billing">
-							<AccordionTrigger>
-								<Text>{t('Billing Address', { _tags: 'core' })}</Text>
-							</AccordionTrigger>
-							<AccordionContent>
-								<BillingAddressForm />
-							</AccordionContent>
-						</AccordionItem>
-						<AccordionItem value="shipping">
-							<AccordionTrigger>
-								<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
-							</AccordionTrigger>
-							<AccordionContent>
-								<ShippingAddressForm />
-							</AccordionContent>
-						</AccordionItem>
-					</Accordion>
+					<Collapsible>
+						<CollapsibleTrigger>
+							<Text>{t('Billing Address', { _tags: 'core' })}</Text>
+						</CollapsibleTrigger>
+						<CollapsibleContent>
+							<BillingAddressForm />
+						</CollapsibleContent>
+					</Collapsible>
+				</View>
+				<View className="col-span-3">
+					<Collapsible>
+						<CollapsibleTrigger>
+							<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
+						</CollapsibleTrigger>
+						<CollapsibleContent>
+							<ShippingAddressForm />
+						</CollapsibleContent>
+					</Collapsible>
 				</View>
 				<FormField
 					control={form.control}
@@ -298,16 +303,7 @@ export const EditOrderForm = ({ order }: Props) => {
 					)}
 				/>
 				<View className="col-span-3">
-					<Accordion type="multiple" collapsible className="w-full">
-						<AccordionItem value="meta_data">
-							<AccordionTrigger>
-								<Text>{t('Meta Data', { _tags: 'core' })}</Text>
-							</AccordionTrigger>
-							<AccordionContent>
-								<MetaDataForm name="meta_data" />
-							</AccordionContent>
-						</AccordionItem>
-					</Accordion>
+					<MetaDataForm name="meta_data" />
 				</View>
 			</View>
 			<HStack className="justify-end">

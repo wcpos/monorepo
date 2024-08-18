@@ -4,6 +4,7 @@ import { useFieldArray, useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Box } from '@wcpos/tailwind/src/box';
+import { ButtonText, Button } from '@wcpos/tailwind/src/button';
 import {
 	Collapsible,
 	CollapsibleTrigger,
@@ -94,7 +95,11 @@ export const MetaDataForm: React.FC<MetaDataFormProps> = ({
 							</Box>
 						</HStack>
 					))}
-					<IconButton name="circlePlus" onPress={() => append({ key: '', value: '' })} />
+					<HStack>
+						<Button variant="outline" onPress={() => append({ key: '', value: '' })}>
+							<ButtonText>{t('Add meta data', { _tags: 'core' })}</ButtonText>
+						</Button>
+					</HStack>
 				</VStack>
 			</CollapsibleContent>
 		</Collapsible>

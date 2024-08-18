@@ -1,12 +1,6 @@
 import * as React from 'react';
 
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from '@wcpos/tailwind/src/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/tailwind/src/dialog';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Text } from '@wcpos/tailwind/src/text';
@@ -21,28 +15,28 @@ interface Props {
  *
  */
 export const UISettingsButton = ({ title, children }: Props) => {
+	const [openDialog, setOpenDialog] = React.useState(false);
+
 	return (
 		<ErrorBoundary>
-			<Tooltip delayDuration={150}>
-				<TooltipTrigger asChild>
-					<Dialog>
-						<DialogTrigger asChild>
-							<IconButton name="sliders" />
-						</DialogTrigger>
-						<DialogContent>
-							<DialogHeader>
-								<DialogTitle>
-									<Text>{title}</Text>
-								</DialogTitle>
-							</DialogHeader>
-							{children}
-						</DialogContent>
-					</Dialog>
-				</TooltipTrigger>
-				<TooltipContent>
-					<Text>{title}</Text>
-				</TooltipContent>
-			</Tooltip>
+			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
+				<Tooltip delayDuration={150}>
+					<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
+						<IconButton name="sliders" />
+					</TooltipTrigger>
+					<TooltipContent>
+						<Text>{title}</Text>
+					</TooltipContent>
+				</Tooltip>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>
+							<Text>{title}</Text>
+						</DialogTitle>
+					</DialogHeader>
+					{children}
+				</DialogContent>
+			</Dialog>
 		</ErrorBoundary>
 	);
 };
