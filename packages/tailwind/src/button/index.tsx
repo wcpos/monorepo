@@ -10,7 +10,10 @@ import { Loader } from '../loader';
 import { Text, TextClassContext } from '../text';
 
 const buttonVariants = cva(
-	'group flex items-center justify-center rounded-md web:ring-offset-background web:transition-colors web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
+	[
+		'group flex items-center justify-center rounded-md web:transition-colors',
+		'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
+	],
 	{
 		variants: {
 			variant: {
@@ -19,9 +22,9 @@ const buttonVariants = cva(
 				outline:
 					'border border-input bg-background web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent',
 				secondary: 'bg-secondary web:hover:opacity-80 active:opacity-80',
+				muted: 'bg-muted web:hover:opacity-80 active:opacity-80',
 				success: 'bg-success web:hover:opacity-90 active:opacity-90',
 				ghost: 'web:hover:bg-accent/90 web:hover:text-accent-foreground active:bg-accent',
-				link: 'web:hover:underline web:focus:underline',
 			},
 			size: {
 				default: 'h-10 px-4 py-2 native:h-12 native:px-5 native:py-3',
@@ -34,28 +37,7 @@ const buttonVariants = cva(
 			variant: 'default',
 			size: 'default',
 		},
-		compoundVariants: [
-			{
-				variant: 'link',
-				size: 'default',
-				className: 'h-auto p-0 rounded-none',
-			},
-			{
-				variant: 'link',
-				size: 'xs',
-				className: 'h-auto p-0 rounded-none',
-			},
-			{
-				variant: 'link',
-				size: 'sm',
-				className: 'h-auto p-0 rounded-none',
-			},
-			{
-				variant: 'link',
-				size: 'lg',
-				className: 'h-auto p-0 rounded-none',
-			},
-		],
+		compoundVariants: [],
 	}
 );
 
@@ -68,9 +50,9 @@ const buttonTextVariants = cva(
 				destructive: 'text-destructive-foreground',
 				outline: 'group-active:text-accent-foreground',
 				secondary: 'text-secondary-foreground group-active:text-secondary-foreground',
+				muted: 'text-muted-foreground group-active:text-muted-foreground',
 				success: 'text-success-foreground',
 				ghost: 'group-active:text-accent-foreground',
-				link: 'text-base group-active:underline',
 			},
 			size: {
 				default: '',
@@ -93,9 +75,9 @@ const buttonIconVariants = cva('', {
 			destructive: 'fill-destructive-foreground',
 			outline: 'fill-accent-foreground',
 			secondary: 'fill-secondary-foreground',
+			muted: 'fill-muted-foreground',
 			success: 'fill-success-foreground',
 			ghost: 'fill-accent-foreground',
-			link: 'fill-accent-foreground',
 		},
 		size: {
 			default: 'size-4',
@@ -169,9 +151,9 @@ const separatorVariants = cva('w-px self-stretch opacity-80', {
 			destructive: 'bg-destructive',
 			outline: 'bg-background',
 			secondary: 'bg-secondary',
+			muted: 'bg-muted',
 			success: 'bg-success',
 			ghost: 'bg-accent',
-			link: '',
 		},
 	},
 	defaultVariants: {
