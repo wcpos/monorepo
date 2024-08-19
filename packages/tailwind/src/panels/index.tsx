@@ -108,8 +108,8 @@ const PanelResizeHandle = () => {
 				<View
 					className={cn(
 						direction === 'horizontal'
-							? 'absolute top-0 bottom-0 w-px bg-gray-300'
-							: 'absolute left-0 right-0 h-px bg-gray-300',
+							? 'absolute top-0 bottom-0 w-px bg-gray-200'
+							: 'absolute left-0 right-0 h-px bg-gray-200',
 						'opacity-0 group-hover:opacity-100'
 					)}
 				/>
@@ -121,7 +121,10 @@ const PanelResizeHandle = () => {
 						'group-hover:scale-95 group-hover:animate-fadeIn'
 					)}
 				>
-					<Icon name={direction === 'horizontal' ? 'gripLinesVertical' : 'gripLines'} />
+					<Icon
+						name={direction === 'horizontal' ? 'gripLinesVertical' : 'gripLines'}
+						className={direction === 'horizontal' ? '-mx-0.5' : '-my-0.5'}
+					/>
 				</View>
 			</View>
 		</GestureDetector>
