@@ -12,16 +12,17 @@ import { Suspense } from '@wcpos/tailwind/src/suspense';
 import Table, { CellRenderer } from '@wcpos/tailwind/src/table';
 import { Text } from '@wcpos/tailwind/src/text';
 
+import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { Date } from '../components/date';
 import { Cashier } from '../components/order/cashier';
 import { CreatedVia } from '../components/order/created-via';
-import Customer from '../components/order/customer';
-import PaymentMethod from '../components/order/payment-method';
+import { Customer } from '../components/order/customer';
+import { PaymentMethod } from '../components/order/payment-method';
 import { Status } from '../components/order/status';
-import Total from '../components/order/total';
+import { Total } from '../components/order/total';
 import { TextCell } from '../components/text-cell';
-import { UISettings } from '../components/ui-settings/button';
+import { UISettingsButton } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
 const cells = {
@@ -93,7 +94,9 @@ export const Orders = ({ query }) => {
 				<CardHeader className="p-2 bg-input">
 					<HStack>
 						<Text className="text-lg flex-1">{t('Orders', { _tags: 'core' })}</Text>
-						<UISettings uiSettings={uiSettings} title={t('Order Settings', { _tags: 'core' })} />
+						<UISettingsButton title={t('Order Settings', { _tags: 'core' })}>
+							<UISettingsForm />
+						</UISettingsButton>
 					</HStack>
 				</CardHeader>
 				<CardContent className="flex-1 p-0">

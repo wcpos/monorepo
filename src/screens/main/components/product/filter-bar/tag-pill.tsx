@@ -43,7 +43,7 @@ export const TagPill = ({ query, resource }: Props) => {
 				<ButtonPill
 					size="xs"
 					leftIcon="folder"
-					variant={isActive ? 'default' : 'secondary'}
+					variant={isActive ? 'default' : 'muted'}
 					// onPress={() => setOpen(!open)}
 					removable={isActive}
 					onRemove={() => query.where('tags', null)}

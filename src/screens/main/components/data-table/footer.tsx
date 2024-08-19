@@ -41,7 +41,7 @@ export const Footer = ({ children }: Props) => {
 			// }}
 		>
 			<HStack className="justify-start flex-1">{children}</HStack>
-			<HStack className="justify-end flex-1">
+			<HStack className="justify-end flex-1 gap-0">
 				<Text className="text-sm">
 					{t('Showing {count} of {total}', { count, total, _tags: 'core' })}
 				</Text>

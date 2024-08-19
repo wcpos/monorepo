@@ -1,20 +1,22 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
-
-import { Query } from '@wcpos/query';
+import { ProductDocument } from '@wcpos/database';
 import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
 import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
 
 import { useT } from '../../../../contexts/translations';
 
-type ProductCollection = import('@wcpos/database').ProductCollection;
+interface Props {
+	attribute: ProductDocument['attributes'][number];
+	selected: string;
+	onSelect: ({ id, name, option }: { id: number; name: string; option: string }) => void;
+	onRemove: () => void;
+}
 
 /**
  *
  */
-export const VariationSelect = ({ attribute, selected }) => {
+export const VariationSelect = ({ attribute, selected = '', onSelect, onRemove }: Props) => {
 	const t = useT();
 	const isActive = !!selected;
 
@@ -24,17 +26,19 @@ export const VariationSelect = ({ attribute, selected }) => {
 	return (
 		<Select
 			value={{ value: selected, label: selected }}
-			onValueChange={({ value }) => console.log(value)}
+			onValueChange={({ value }) =>
+				onSelect({ id: attribute.id, name: attribute.name, option: value })
+			}
 		>
 			<SelectPrimitive.Trigger asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="check"
-					variant={isActive ? 'default' : 'secondary'}
+					variant={isActive ? 'default' : 'muted'}
 					removable={isActive}
-					onRemove={() => {}}
+					onRemove={onRemove}
 				>
-					<ButtonText>{attribute.name}</ButtonText>
+					<ButtonText>{isActive ? `${attribute.name}: ${selected}` : attribute.name}</ButtonText>
 				</ButtonPill>
 			</SelectPrimitive.Trigger>
 			<SelectContent>

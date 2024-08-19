@@ -42,7 +42,7 @@ export const Variations = ({ row, onLayout }: Props) => {
 	return (
 		<VStack onLayout={onLayout} className="gap-0">
 			<ErrorBoundary>
-				<VariationsFilterBar row={row} />
+				<VariationsFilterBar row={row} query={query} />
 			</ErrorBoundary>
 			<View className="flex-1">
 				<ErrorBoundary>

@@ -20,18 +20,6 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 export const ProductName = ({ row, column, table }: CellContext<ProductDocument, 'name'>) => {
 	const product = row.original;
 	const name = useObservableEagerState(product.name$);
-	// const { display } = column.columnDef.meta;
-
-	// /**
-	//  *
-	//  */
-	// const show = React.useCallback(
-	// 	(key: string): boolean => {
-	// 		const d = find(display, { key });
-	// 		return !!(d && d.show);
-	// 	},
-	// 	[display]
-	// );
 
 	/**
 	 *

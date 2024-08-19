@@ -28,15 +28,15 @@ export const PlainAttributes = ({ product }: Props) => {
 			{attributes
 				.filter((attr: any) => !attr.variation)
 				.map((attr: any) => (
-					<Text key={`${attr.name}-${attr.id}`}>
-						<Text className="text-sm text-secondary-foreground">{`${attr.name}: `}</Text>
+					<HStack key={`${attr.name}-${attr.id}`} className="flex-wrap gap-0">
+						<Text className="text-xs text-muted-foreground">{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
-							<Text className="text-sm" key={option}>
+							<Text className="text-xs" key={option}>
 								{option}
 								{index < attr.options.length - 1 && ', '}
 							</Text>
 						))}
-					</Text>
+					</HStack>
 				))}
 		</VStack>
 	);
@@ -123,7 +123,7 @@ export const ProductAttributes = ({ row, table }) => {
 				.filter((attr: any) => attr.variation)
 				.map((attr: any) => (
 					<HStack key={`${attr.name}-${attr.id}`} className="flex-wrap gap-0">
-						<Text className="text-xs">{`${attr.name}: `}</Text>
+						<Text className="text-xs text-muted-foreground">{`${attr.name}: `}</Text>
 						{attr.options.map((option: string, index: number) => (
 							<React.Fragment key={option}>
 								<Text

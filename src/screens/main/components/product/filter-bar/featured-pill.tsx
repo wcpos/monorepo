@@ -28,7 +28,7 @@ const FeaturedPill = ({ query }: Props) => {
 		<ButtonPill
 			leftIcon="star"
 			size="xs"
-			variant={isActive ? 'default' : 'secondary'}
+			variant={isActive ? 'default' : 'muted'}
 			onPress={() => query.where('featured', isActive ? null : true)}
 			removable={isActive}
 			onRemove={() => query.where('featured', null)}

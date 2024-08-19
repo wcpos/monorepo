@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { Button, ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
 import { useDataTable, CellContext } from '@wcpos/tailwind/src/data-table';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 
@@ -22,14 +22,14 @@ export const ProductCategories = ({ row }: CellContext<ProductDocument, 'categor
 	return (
 		<HStack>
 			{(categories || []).map((cat) => (
-				<Button
+				<ButtonPill
+					variant="secondary"
 					size="xs"
-					className="rounded-full"
 					key={cat.id}
 					onPress={() => query.where('categories', { $elemMatch: { id: cat.id } })}
 				>
 					<ButtonText>{cat.name}</ButtonText>
-				</Button>
+				</ButtonPill>
 			))}
 		</HStack>
 	);

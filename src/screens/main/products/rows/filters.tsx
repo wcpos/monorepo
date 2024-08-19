@@ -1,17 +1,37 @@
 import * as React from 'react';
 
+import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import { distinctUntilChanged, map, skip, tap } from 'rxjs/operators';
+
+import type { ProductDocument, ProductVariationCollection } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
+import type { Row } from '@wcpos/tailwind/src/data-table';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { IconButton } from '@wcpos/tailwind/src/icon-button';
 
 import { VariationSelect } from './variation-select';
 
+interface Props {
+	row: Row<ProductDocument>;
+	query: Query<ProductVariationCollection>;
+}
+
 /**
  *
  */
-export const VariationsFilterBar = ({ row }) => {
+export const VariationsFilterBar = ({ row, query }: Props) => {
 	const parent = row.original;
-	const selectedAttributes = [];
 
+	/**
+	 * We need to trigger a re-render when the selected attributes change.
+	 * - @TODO - filter for only changes to attributes to reduce re-renders?
+	 */
+	const params = useObservableState(query.params$, query.getParams());
+	console.log('params', params);
+
+	/**
+	 *
+	 */
 	return (
 		<HStack className="p-2 bg-input">
 			<HStack className="flex-1">
@@ -19,16 +39,17 @@ export const VariationsFilterBar = ({ row }) => {
 					.filter((attribute) => attribute.variation)
 					.sort((a, b) => (a.position || 0) - (b.position || 0))
 					.map((attribute, index) => {
-						let selected;
-						if (Array.isArray(selectedAttributes)) {
-							selected = selectedAttributes.find((a) => a.name === attribute.name);
-						}
 						return (
 							<VariationSelect
 								key={`${index}-${attribute.name}`}
 								attribute={attribute}
-								// onSelect={handleSelect}
-								selected={selected?.option}
+								onSelect={(attribute) => query.where('attributes', { $elemMatch: attribute })}
+								selected={query.findAttributesSelector({ id: attribute.id, name: attribute.name })}
+								onRemove={() =>
+									query.where('attributes', {
+										$elemMatch: { id: attribute.id, name: attribute.name, option: null },
+									})
+								}
 							/>
 						);
 					})}

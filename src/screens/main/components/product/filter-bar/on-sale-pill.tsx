@@ -28,7 +28,7 @@ const OnSalePill = ({ query }: Props) => {
 		<ButtonPill
 			leftIcon="badgeDollar"
 			size="xs"
-			variant={isActive ? 'default' : 'secondary'}
+			variant={isActive ? 'default' : 'muted'}
 			onPress={() => query.where('on_sale', isActive ? null : true)}
 			removable={isActive}
 			onRemove={() => query.where('on_sale', null)}
