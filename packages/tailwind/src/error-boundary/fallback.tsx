@@ -32,7 +32,7 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 			<HStack className="p-2 bg-error items-start justify-between" onLayout={handleLayout}>
 				<Tooltip>
 					<TooltipTrigger>
-						<Icon name="triangleExclamation" className="w-7 h-7 fill-error-foreground" />
+						<Icon name="triangleExclamation" size="4xl" className="text-error-foreground" />
 					</TooltipTrigger>
 					<TooltipContent>
 						<VStack className="gap-1 flex-1 w-full">
@@ -41,12 +41,7 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 						</VStack>
 					</TooltipContent>
 				</Tooltip>
-				<IconButton
-					name="xmark"
-					size="sm"
-					iconClassName="fill-destructive-foreground"
-					onPress={resetErrorBoundary}
-				/>
+				<IconButton name="xmark" size="sm" variant="destructive" onPress={resetErrorBoundary} />
 			</HStack>
 		);
 	}
@@ -56,17 +51,12 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 	 */
 	return (
 		<HStack className="p-2 bg-error w-full items-start" onLayout={handleLayout}>
-			<Icon name="triangleExclamation" className="w-7 h-7 fill-error-foreground" />
+			<Icon name="triangleExclamation" size="4xl" className="text-error-foreground" />
 			<VStack className="gap-1 flex-1 w-full">
 				<Text className="text-error-foreground font-bold">Something went wrong:</Text>
 				<Text className="text-error-foreground">{error.message}</Text>
 			</VStack>
-			<IconButton
-				name="xmark"
-				size="sm"
-				iconClassName="fill-destructive-foreground"
-				onPress={resetErrorBoundary}
-			/>
+			<IconButton name="xmark" size="sm" variant="destructive" onPress={resetErrorBoundary} />
 		</HStack>
 	);
 };

@@ -31,6 +31,7 @@ const buttonVariants = cva(
 				xs: 'h-6 rounded-md px-2',
 				sm: 'h-9 rounded-md px-3',
 				lg: 'h-11 rounded-md px-8 native:h-14',
+				xl: 'h-14 rounded-md px-10',
 			},
 		},
 		defaultVariants: {
@@ -42,7 +43,7 @@ const buttonVariants = cva(
 );
 
 const buttonTextVariants = cva(
-	'web:whitespace-nowrap truncate text-base native:text-base font-medium text-foreground web:transition-colors',
+	'web:whitespace-nowrap truncate text-base native:text-base text-foreground web:transition-colors',
 	{
 		variants: {
 			variant: {
@@ -59,6 +60,7 @@ const buttonTextVariants = cva(
 				xs: 'text-xs',
 				sm: 'text-sm',
 				lg: 'text-lg',
+				xl: 'text-xl',
 			},
 		},
 		defaultVariants: {
@@ -67,30 +69,6 @@ const buttonTextVariants = cva(
 		},
 	}
 );
-
-const buttonIconVariants = cva('', {
-	variants: {
-		variant: {
-			default: 'fill-primary-foreground',
-			destructive: 'fill-destructive-foreground',
-			outline: 'fill-accent-foreground',
-			secondary: 'fill-secondary-foreground',
-			muted: 'fill-muted-foreground',
-			success: 'fill-success-foreground',
-			ghost: 'fill-accent-foreground',
-		},
-		size: {
-			default: 'size-4',
-			xs: 'size-3',
-			sm: 'size-3.5',
-			lg: 'size-5',
-		},
-	},
-	defaultVariants: {
-		variant: 'default',
-		size: 'default',
-	},
-});
 
 /**
  *
@@ -120,16 +98,12 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
 					{leftIcon || rightIcon || loading ? (
 						<HStack>
 							{loading ? (
-								<Loader />
+								<Loader variant={variant} size={size} />
 							) : (
-								leftIcon && (
-									<Icon name={leftIcon} className={buttonIconVariants({ variant, size })} />
-								)
+								leftIcon && <Icon name={leftIcon} variant={variant} size={size} />
 							)}
 							{children}
-							{rightIcon && (
-								<Icon name={rightIcon} className={buttonIconVariants({ variant, size })} />
-							)}
+							{rightIcon && <Icon name={rightIcon} variant={variant} size={size} />}
 						</HStack>
 					) : (
 						children
