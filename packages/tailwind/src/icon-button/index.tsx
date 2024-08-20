@@ -5,7 +5,6 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { Icon, IconName } from '../icon';
 import { cn } from '../lib/utils';
-import { Loader } from '../loader';
 
 /**
  *
@@ -48,7 +47,7 @@ type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 	};
 
 const IconButton = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>(
-	({ className, iconClassName, name, variant, size, loading, ...props }, ref) => {
+	({ className, name, variant, size, loading, ...props }, ref) => {
 		return (
 			<Pressable
 				className={cn(
@@ -59,7 +58,7 @@ const IconButton = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonPr
 				role="button"
 				{...props}
 			>
-				<Icon name={name} variant={variant} size={size} className={iconClassName} />
+				<Icon name={name} variant={variant} size={size} loading={loading} />
 			</Pressable>
 		);
 	}

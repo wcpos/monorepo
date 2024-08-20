@@ -1,24 +1,41 @@
-import * as React from 'react';
-import { ActivityIndicator, ActivityIndicatorProps } from 'react-native';
+import React from 'react';
+import { View, ViewProps } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cssInterop } from 'nativewind';
+import Animated, {
+	Easing,
+	useAnimatedStyle,
+	useSharedValue,
+	withRepeat,
+	withTiming,
+} from 'react-native-reanimated';
+import Svg, { Circle } from 'react-native-svg';
 
-const loaderVariants = cva('', {
+import { cn } from '../lib/utils';
+import { TextClassContext } from '../text';
+
+/**
+ * Should match text and icon variants
+ */
+const loaderVariants = cva('inset-0 items-center content-center', {
 	variants: {
 		variant: {
-			default: 'foreground',
-			primary: 'primary',
-			destructive: 'destructive',
-			secondary: 'secondary',
-			success: 'success',
+			default: '',
+			primary: 'text-primary',
+			destructive: 'text-destructive',
+			secondary: 'text-secondary',
+			muted: 'text-muted',
+			success: 'text-success',
 		},
 		size: {
-			default: 'size-3.5',
-			xs: 'size-2.5',
-			sm: 'size-3',
-			lg: 'size-5',
-			xl: 'size-6',
+			default: 'size-3.5', // 14px
+			xs: 'size-3', // 12px
+			sm: 'size-[0.8125rem]', // 13px
+			lg: 'size-4', // 16px
+			xl: 'size-[1.125rem]', // 18px
+			'2xl': 'size-5', // 20px
+			'3xl': 'size-6', // 24px
+			'4xl': 'size-7', // 28px
 		},
 	},
 	defaultVariants: {
@@ -27,20 +44,55 @@ const loaderVariants = cva('', {
 	},
 });
 
-type LoaderProps = VariantProps<typeof loaderVariants>;
+type LoaderProps = ViewProps & VariantProps<typeof loaderVariants>;
 
 /**
  *
  */
-export const Loader = ({ variant, size }: LoaderProps) => {
-	const LoaderIcon = React.useMemo(() => {
-		return cssInterop(ActivityIndicator, {
-			className: {
-				target: 'style',
-				nativeStyleToProp: { width: true, height: true, color: true },
-			},
-		});
-	}, []);
+export const Loader = ({ className, variant, size, ...props }: LoaderProps) => {
+	const textClass = React.useContext(TextClassContext);
+	const rotation = useSharedValue(0);
 
-	return <LoaderIcon className={loaderVariants({ variant, size })} />;
+	React.useEffect(() => {
+		rotation.value = withRepeat(
+			withTiming(360, {
+				duration: 750,
+				easing: Easing.linear,
+			}),
+			-1,
+			false
+		);
+	}, [rotation]);
+
+	const animatedStyle = useAnimatedStyle(() => ({
+		transform: [{ rotate: `${rotation.value}deg` }],
+	}));
+
+	return (
+		<View className={cn(loaderVariants({ variant, size }), textClass, className)} {...props}>
+			<Animated.View style={[{ width: '100%', height: '100%' }, animatedStyle]}>
+				<Svg viewBox="0 0 32 32" width="100%" height="100%">
+					<Circle
+						cx="16"
+						cy="16"
+						fill="none"
+						r="14"
+						strokeWidth="4"
+						stroke="currentColor"
+						opacity="0.2"
+					/>
+					<Circle
+						cx="16"
+						cy="16"
+						fill="none"
+						r="14"
+						strokeWidth="4"
+						strokeDasharray="80"
+						strokeDashoffset="60"
+						stroke="currentColor"
+					/>
+				</Svg>
+			</Animated.View>
+		</View>
+	);
 };

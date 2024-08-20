@@ -3,30 +3,35 @@ import { View } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 import get from 'lodash/get';
-import { cssInterop } from 'nativewind';
 
 import * as Svgs from './components/fontawesome/solid';
 import { cn } from '../lib/utils';
+import { Loader } from '../loader';
+import { TextClassContext } from '../text';
 
 import type { SvgProps } from 'react-native-svg';
 
 export type IconName = Extract<keyof typeof Svgs, string>;
 
-const iconVariants = cva('fill-foreground', {
+const iconVariants = cva('inset-0 items-center content-center', {
 	variants: {
 		variant: {
 			default: '',
-			primary: 'fill-primary',
-			destructive: 'fill-destructive',
-			secondary: 'fill-secondary',
-			success: 'fill-success',
+			primary: 'text-primary',
+			destructive: 'text-destructive',
+			secondary: 'text-secondary',
+			muted: 'text-muted',
+			success: 'text-success',
 		},
 		size: {
-			default: 'size-3.5',
-			xs: 'size-2.5',
-			sm: 'size-3',
-			lg: 'size-5',
-			xl: 'size-6',
+			default: 'size-3.5', // 14px
+			xs: 'size-3', // 12px
+			sm: 'size-[0.8125rem]', // 13px
+			lg: 'size-4', // 16px
+			xl: 'size-[1.125rem]', // 18px
+			'2xl': 'size-5', // 20px
+			'3xl': 'size-6', // 24px
+			'4xl': 'size-7', // 28px
 		},
 	},
 	defaultVariants: {
@@ -43,21 +48,17 @@ type IconProps = VariantProps<typeof iconVariants> & {
 /**
  *
  */
-export const Icon = ({ name, variant, size, className }: IconProps) => {
-	const SvgIcon = React.useMemo(() => {
-		const Svg = get(Svgs, name, Svgs.circleExclamation) as React.FC<SvgProps>;
+export const Icon = ({ name, variant, size, loading, className, ...props }: IconProps) => {
+	const Svg = get(Svgs, name, Svgs.circleExclamation) as React.FC<SvgProps>;
+	const textClass = React.useContext(TextClassContext);
 
-		return cssInterop(Svg, {
-			className: {
-				target: 'style',
-				nativeStyleToProp: { width: true, height: true, fill: true },
-			},
-		});
-	}, [name]);
+	if (loading) {
+		return <Loader variant={variant} size={size} className={className} {...props} />;
+	}
 
 	return (
-		<View className="inset-0 items-center content-center">
-			<SvgIcon className={cn(iconVariants({ variant, size }), className)} />
+		<View className={cn(iconVariants({ variant, size }), textClass, className)} {...props}>
+			<Svg width="100%" height="100%" fill="currentColor" />
 		</View>
 	);
 };
