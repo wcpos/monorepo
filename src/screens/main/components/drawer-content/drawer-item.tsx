@@ -5,6 +5,7 @@ import { DrawerProps } from '@react-navigation/drawer/src/types';
 
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+import { cn } from '@wcpos/tailwind/src/lib/utils';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
@@ -77,7 +78,14 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, style, ...rest }:
 	return drawerType === 'permanent' ? (
 		<Tooltip style={style}>
 			<TooltipTrigger asChild onPress={onPress}>
-				<Button variant="ghost" className="rounded-none">
+				<Button
+					size="xl"
+					className={cn(
+						'rounded-none bg-transparent px-3 border-x-4 border-transparent h-10',
+						focused && 'border-l-primary text-primary',
+						!focused && 'hover:bg-white/10'
+					)}
+				>
 					{icon({ focused })}
 				</Button>
 			</TooltipTrigger>
@@ -86,62 +94,22 @@ const DrawItem = ({ label, icon, focused, onPress, drawerType, style, ...rest }:
 			</TooltipContent>
 		</Tooltip>
 	) : (
-		<Button variant="ghost" onPress={onPress} className="rounded-none" style={style}>
-			<HStack>
+		<Button
+			onPress={onPress}
+			size="xl"
+			className={cn(
+				'rounded-none bg-transparent px-3 border-x-4 border-transparent items-start h-10',
+				focused && 'border-l-primary text-primary',
+				!focused && 'hover:bg-white/10'
+			)}
+			style={style}
+		>
+			<HStack className="gap-3">
 				{icon({ focused })}
-				<ButtonText className="text-xl">{label}</ButtonText>
+				<ButtonText className={cn('pr-2', focused && 'text-primary')}>{label}</ButtonText>
 			</HStack>
 		</Button>
 	);
-
-	// const iconNode = icon ? icon({ focused }) : null;
-
-	// const labelNode =
-	// 	typeof label === 'string' ? (
-	// 		<Text
-	// 			type={focused ? 'primary' : 'inverse'}
-	// 			size="large"
-	// 			style={{ marginLeft: 10, minWidth: 130 }}
-	// 		>
-	// 			{label}
-	// 		</Text>
-	// 	) : (
-	// 		label({ focused })
-	// 	);
-
-	// const buttonNode = (
-	// 	<Pressable
-	// 		onPress={onPress}
-	// 		style={({ hovered }) => {
-	// 			return {
-	// 				flexDirection: 'row',
-	// 				alignItems: 'center',
-	// 				paddingHorizontal: drawerType === 'permanent' ? 10 : 20,
-	// 				paddingVertical: 10,
-	// 				backgroundColor: hovered && !focused ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-	// 				borderLeftWidth: 5,
-	// 				borderRightWidth: 5,
-	// 				borderColor: 'transparent',
-	// 				borderLeftColor: focused ? theme.colors.primary : 'transparent',
-	// 			};
-	// 		}}
-	// 	>
-	// 		{iconNode}
-	// 		{drawerType !== 'permanent' && labelNode}
-	// 	</Pressable>
-	// );
-
-	// return (
-	// 	<View style={style}>
-	// 		{drawerType === 'permanent' ? (
-	// 			<Tooltip content={label} placement="right">
-	// 				{buttonNode}
-	// 			</Tooltip>
-	// 		) : (
-	// 			buttonNode
-	// 		)}
-	// 	</View>
-	// );
 };
 
 export default DrawItem;

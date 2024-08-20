@@ -93,11 +93,7 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('POS', { _tags: 'core' }),
 					drawerLabel: t('POS', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon
-							name="cashRegister"
-							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
-							size="lg"
-						/>
+						<Icon size="xl" name="cashRegister" className={focused && 'text-primary'} />
 					),
 				}}
 			/>
@@ -108,11 +104,7 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Products', { _tags: 'core' }),
 					drawerLabel: t('Products', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon
-							name="gifts"
-							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
-							size="lg"
-						/>
+						<Icon size="xl" name="gifts" className={focused && 'text-primary'} />
 					),
 				}}
 			/>
@@ -123,11 +115,7 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Orders', { _tags: 'core' }),
 					drawerLabel: t('Orders', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon
-							name="receipt"
-							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
-							size="lg"
-						/>
+						<Icon size="xl" name="receipt" className={focused && 'text-primary'} />
 					),
 				}}
 			/>
@@ -138,11 +126,7 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Customers', { _tags: 'core' }),
 					drawerLabel: t('Customers', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon
-							name="users"
-							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
-							size="lg"
-						/>
+						<Icon size="xl" name="users" className={focused && 'text-primary'} />
 					),
 				}}
 			/>
@@ -153,11 +137,7 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Reports', { _tags: 'core' }),
 					drawerLabel: t('Reports', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon
-							name="chartMixedUpCircleDollar"
-							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
-							size="lg"
-						/>
+						<Icon size="xl" name="chartMixedUpCircleDollar" className={focused && 'text-primary'} />
 					),
 				}}
 			/>
@@ -168,11 +148,7 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Logs', { _tags: 'core' }),
 					drawerLabel: t('Logs', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon
-							name="heartPulse"
-							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
-							size="lg"
-						/>
+						<Icon size="xl" name="heartPulse" className={focused && 'text-primary'} />
 					),
 					drawerItemStyle: { marginTop: 'auto' },
 				}}
@@ -184,11 +160,7 @@ const DrawerNavigator = ({ navigation }) => {
 					title: t('Support', { _tags: 'core' }),
 					drawerLabel: t('Support', { _tags: 'core' }),
 					drawerIcon: ({ focused }) => (
-						<Icon
-							name="commentQuestion"
-							className={focused ? 'fill-primary' : 'fill-primary-foreground'}
-							size="lg"
-						/>
+						<Icon size="xl" name="commentQuestion" className={focused && 'text-primary'} />
 					),
 					// drawerItemStyle: { marginTop: 'auto' },
 				}}

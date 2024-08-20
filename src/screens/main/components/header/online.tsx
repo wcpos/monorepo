@@ -43,7 +43,7 @@ const Online = () => {
 	return (
 		<Tooltip>
 			<TooltipTrigger>
-				<Icon name="circle" className={`fill-${state.type}`} />
+				<Icon name="circle" className={`text-${state.type}`} />
 			</TooltipTrigger>
 			<TooltipContent side="bottom">
 				<Text>{state.tooltip}</Text>

@@ -65,27 +65,22 @@ export const ProductAttributes = ({ row, table }) => {
 	/**
 	 *
 	 */
-	const handleSelect = React.useCallback((attribute, option) => {
-		// if (!expanded) {
-		// 	setInitialSelectedAttributes({
-		// 		id: attribute.id,
-		// 		name: attribute.name,
-		// 		option,
-		// 	});
-		// 	setExpanded(true);
-		// } else {
-		// 	const query = manager.getQuery(['variations', { parentID: product.id }]);
-		// 	if (query) {
-		// 		query.where('attributes', {
-		// 			$elemMatch: {
-		// 				id: attribute.id,
-		// 				name: attribute.name,
-		// 				option,
-		// 			},
-		// 		});
-		// 	}
-		// }
-	}, []);
+	const handleSelect = React.useCallback(
+		(attribute, option) => {
+			row.toggleExpanded(true);
+			const query = manager.getQuery(['variations', { parentID: product.id }]);
+			if (query) {
+				query.where('attributes', {
+					$elemMatch: {
+						id: attribute.id,
+						name: attribute.name,
+						option,
+					},
+				});
+			}
+		},
+		[manager, product.id, row]
+	);
 
 	/**
 	 * Expand text string

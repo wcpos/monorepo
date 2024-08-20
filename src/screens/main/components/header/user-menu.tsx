@@ -10,6 +10,7 @@ import {
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Avatar } from '@wcpos/tailwind/src/avatar';
+import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -79,17 +80,19 @@ export const UserMenu = () => {
 
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger>
-				<HStack space="xs" align="center">
-					<Avatar
-						source={avatarSource}
-						// placeholder="PK"
-					/>
-					{dimensions.width >= 640 ? (
-						<Text className="text-primary-foreground">{wpCredentials?.display_name}</Text>
-					) : null}
-					<Icon name="caretDown" className="fill-primary-foreground" />
-				</HStack>
+			<DropdownMenuTrigger asChild>
+				<Button className="rounded-none bg-transparent hover:bg-white/10">
+					<HStack>
+						<Avatar
+							source={avatarSource}
+							// placeholder="PK"
+						/>
+						{dimensions.width >= 640 ? (
+							<ButtonText>{wpCredentials?.display_name}</ButtonText>
+						) : null}
+						<Icon name="caretDown" />
+					</HStack>
+				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent>
 				<DropdownMenuItem onPress={() => navigation.navigate('Settings')}>

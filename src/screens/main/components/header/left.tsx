@@ -32,8 +32,8 @@ const HeaderLeft = () => {
 	 */
 	if (width < 640) {
 		return (
-			<Button onPress={handleOpenDrawer}>
-				<Icon name="bars" onPress={handleOpenDrawer} />
+			<Button onPress={handleOpenDrawer} className="rounded-none bg-transparent hover:bg-white/10">
+				<Icon name="bars" />
 			</Button>
 		);
 	}
@@ -42,7 +42,11 @@ const HeaderLeft = () => {
 	 *
 	 */
 	return (
-		<Button onPress={handleOpenDrawer} className="rounded-none" leftIcon="bars">
+		<Button
+			onPress={handleOpenDrawer}
+			className="rounded-none bg-transparent hover:bg-white/10"
+			leftIcon="bars"
+		>
 			<ButtonText>{t('Menu', { _tags: 'core' })}</ButtonText>
 		</Button>
 	);

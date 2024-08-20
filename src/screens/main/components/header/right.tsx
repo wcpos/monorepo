@@ -7,7 +7,7 @@ import { UserMenu } from './user-menu';
 
 const HeaderRight = () => {
 	return (
-		<HStack className="mr-2">
+		<HStack>
 			<Online />
 			<UserMenu />
 		</HStack>

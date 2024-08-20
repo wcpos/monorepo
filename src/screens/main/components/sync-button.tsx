@@ -42,13 +42,11 @@ const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 	/**
 	 *
 	 */
-	return active ? (
-		<Loader size="sm" />
-	) : (
+	return (
 		<DropdownMenu onOpenChange={setOpen}>
 			<Tooltip delayDuration={150}>
 				<TooltipTrigger onLongPress={() => setOpen(true)} onPress={sync} asChild>
-					<IconButton name="arrowRotateRight" size="sm" />
+					<IconButton name="arrowRotateRight" size="sm" loading={active} />
 				</TooltipTrigger>
 				<TooltipContent>
 					<Text>{t('Press to sync, long press for more options', { _tags: 'core' })}</Text>
