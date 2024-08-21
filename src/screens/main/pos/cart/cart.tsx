@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { ButtonGroupSeparator } from '@wcpos/tailwind/src/button';
+import { ButtonGroupSeparator, ButtonGroup } from '@wcpos/tailwind/src/button';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
@@ -37,17 +37,17 @@ export const Cart = () => {
 				<ErrorBoundary>
 					<Totals />
 				</ErrorBoundary>
-				<HStack className="p-2 bg-secondary [&>*]:flex-grow">
+				<HStack className="p-2 bg-input [&>*]:flex-grow">
 					<ErrorBoundary>
 						<AddNoteButton />
 						<OrderMetaButton />
 						<SaveButton />
 					</ErrorBoundary>
 				</HStack>
-				<HStack className="gap-0">
+				<HStack className="gap-0 w-full">
 					<ErrorBoundary>
 						<VoidButton />
-						<ButtonGroupSeparator variant="success" />
+						<ButtonGroupSeparator className="bg-input" />
 						<PayButton />
 					</ErrorBoundary>
 				</HStack>

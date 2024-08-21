@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/tailwind/src/text';
@@ -9,20 +8,22 @@ import { VStack } from '@wcpos/tailwind/src/vstack';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
 
+import type { CellContext } from '@tanstack/react-table';
+
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 interface Props {
 	uuid: string;
 	item: FeeLine | ShippingLine;
-	column: import('@wcpos/tailwind/src/table').ColumnProps<FeeLine>;
+	type: 'line_items';
 }
 
 /**
  * Changing the total actually updates the price, because the WC REST API makes no sense
  */
-export const FeeAndShippingTotal = ({ uuid, item, column }: Props) => {
+export const FeeAndShippingTotal = ({ row, column }: CellContext<Props, 'total'>) => {
+	const item = row.original.item;
 	const { format } = useCurrentOrderCurrencyFormat();
-	const { display } = column;
 	const { store } = useAppState();
 	const taxDisplayCart = useObservableEagerState(store.tax_display_cart$);
 
@@ -40,21 +41,10 @@ export const FeeAndShippingTotal = ({ uuid, item, column }: Props) => {
 	/**
 	 *
 	 */
-	const show = React.useCallback(
-		(key: string): boolean => {
-			const d = find(display, { key });
-			return !!(d && d.show);
-		},
-		[display]
-	);
-
-	/**
-	 *
-	 */
 	return (
 		<VStack space="xs" className="justify-end">
 			<Text>{format(displayTotal || 0)}</Text>
-			{show('tax') && (
+			{column.columnDef.meta.show('tax') && (
 				<Text className="text-sm text-muted">
 					{`${taxDisplayCart} ${format(item.total_tax) || 0} tax`}
 				</Text>

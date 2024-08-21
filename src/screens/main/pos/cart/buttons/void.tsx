@@ -62,7 +62,7 @@ export const VoidButton = () => {
 			size="lg"
 			onPress={handleRemove}
 			variant="destructive"
-			className="basis-1/4 rounded-t-none rounded-br-none"
+			className="rounded-t-none rounded-br-none flex-1"
 		>
 			<ButtonText>{t('Void', { _tags: 'core' })}</ButtonText>
 		</Button>

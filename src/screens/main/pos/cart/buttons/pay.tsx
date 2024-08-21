@@ -53,7 +53,7 @@ export const PayButton = () => {
 			size="lg"
 			onPress={handlePay}
 			variant="success"
-			className="basis-3/4 rounded-t-none rounded-bl-none"
+			className="rounded-t-none rounded-bl-none flex-[3]"
 			loading={loading}
 		>
 			<ButtonText>

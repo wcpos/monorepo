@@ -287,7 +287,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 38,
+        "width": 46,
         "hideLabel": true,
         "show": true
       }
@@ -339,7 +339,7 @@
       {
         "key": "customer_note",
         "hideLabel": true,
-        "width": 38,
+        "width": 46,
         "show": true,
         "disableSort": true
       },
@@ -365,7 +365,7 @@
       {
         "key": "created_via",
         "hideLabel": true,
-        "width": 38,
+        "width": 46,
         "align": "center",
         "disableSort": true,
         "show": true
@@ -393,7 +393,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 38,
+        "width": 46,
         "hideLabel": true,
         "show": true
       }
@@ -457,7 +457,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 38,
+        "width": 46,
         "hideLabel": true,
         "show": true
       }
@@ -469,7 +469,7 @@
     "columns": [
       {
         "key": "status",
-        "width": 45,
+        "width": 46,
         "align": "center",
         "hideLabel": true,
         "show": true
@@ -506,7 +506,7 @@
       {
         "key": "created_via",
         "hideLabel": true,
-        "width": 38,
+        "width": 46,
         "align": "center",
         "disableSort": true,
         "show": false

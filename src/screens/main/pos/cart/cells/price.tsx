@@ -7,11 +7,13 @@ import { useUISettings } from '../../../contexts/ui-settings';
 import { useLineItemData } from '../../hooks/use-line-item-data';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
+import type { CellContext } from '@tanstack/react-table';
+
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 interface Props {
 	uuid: string;
 	item: LineItem;
-	column: import('@wcpos/tailwind/src/table').ColumnProps<LineItem>;
+	type: 'line_items';
 }
 
 function ensureNumberArray(input: string | number[]): number[] {
@@ -30,7 +32,8 @@ function ensureNumberArray(input: string | number[]): number[] {
 /**
  *
  */
-export const Price = ({ uuid, item, column }: Props) => {
+export const Price = ({ row }: CellContext<Props, 'price'>) => {
+	const { item, uuid } = row.original;
 	const { updateLineItem } = useUpdateLineItem();
 	const { getLineItemData } = useLineItemData();
 	const { price: value } = getLineItemData(item);

@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/tailwind/src/text';
@@ -9,19 +8,21 @@ import { VStack } from '@wcpos/tailwind/src/vstack';
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrencyFormat } from '../../../hooks/use-currency-format';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+import type { CellContext } from '@tanstack/react-table';
 
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 interface Props {
+	uuid: string;
 	item: LineItem;
-	column: import('@wcpos/tailwind/src/table').ColumnProps<LineItem>;
+	type: 'line_items';
 }
 
 /**
  *
  */
-export const Subtotal = ({ item, column }: Props) => {
+export const Subtotal = ({ row, column }: CellContext<Props, 'subtotal'>) => {
+	const item = row.original.item;
 	const { format } = useCurrencyFormat();
-	const { display } = column;
 	const { store } = useAppState();
 	const taxDisplayCart = useObservableEagerState(store.tax_display_cart$);
 
@@ -39,21 +40,10 @@ export const Subtotal = ({ item, column }: Props) => {
 	/**
 	 *
 	 */
-	const show = React.useCallback(
-		(key: string): boolean => {
-			const d = find(display, { key });
-			return !!(d && d.show);
-		},
-		[display]
-	);
-
-	/**
-	 *
-	 */
 	return (
 		<VStack space="xs" className="justify-end">
 			<Text>{format(displaySubtotal || 0)}</Text>
-			{show('tax') && (
+			{column.columnDef.meta.show('tax') && (
 				<Text className="text-sm text-muted">
 					{`${taxDisplayCart} ${format(item.subtotal_tax) || 0} tax`}
 				</Text>

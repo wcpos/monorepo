@@ -12,17 +12,20 @@ import { EditShippingLine } from './edit-shipping-line';
 import { useT } from '../../../../../contexts/translations';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 
+import type { CellContext } from '@tanstack/react-table';
+
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 interface Props {
 	uuid: string;
 	item: ShippingLine;
-	column: import('@wcpos/tailwind/src/table').ColumnProps<ShippingLine>;
+	type: 'line_items';
 }
 
 /**
  *
  */
-export const ShippingTitle = ({ uuid, item }: Props) => {
+export const ShippingTitle = ({ row }: CellContext<Props, 'name'>) => {
+	const { item, uuid } = row.original;
 	const { updateShippingLine } = useUpdateShippingLine();
 	const t = useT();
 

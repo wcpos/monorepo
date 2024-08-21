@@ -13,17 +13,20 @@ import { EditFeeLine } from './edit-fee-line';
 import { useT } from '../../../../../contexts/translations';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
+import type { CellContext } from '@tanstack/react-table';
+
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 interface Props {
 	uuid: string;
 	item: FeeLine;
-	column: import('@wcpos/tailwind/src/table').ColumnProps<FeeLine>;
+	type: 'line_items';
 }
 
 /**
  *
  */
-export const FeeName = ({ uuid, item }: Props) => {
+export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
+	const { item, uuid } = row.original;
 	const { updateFeeLine } = useUpdateFeeLine();
 	const [openEditDialog, setOpenEditDialog] = React.useState(false);
 	const t = useT();

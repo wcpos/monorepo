@@ -6,9 +6,7 @@ import { of } from 'rxjs';
 import { startWith, switchMap, tap } from 'rxjs/operators';
 
 import type { Query } from '@wcpos/query';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Loader } from '@wcpos/tailwind/src/loader';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import { CategoryPill } from './category-pill';
@@ -95,9 +93,6 @@ const FilterBar = ({ query }: Props) => {
 			<Suspense>
 				<TagPill query={query} resource={selectedTagResource} />
 			</Suspense>
-			<ErrorBoundary>
-				<Loader />
-			</ErrorBoundary>
 		</HStack>
 	);
 };

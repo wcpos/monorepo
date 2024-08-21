@@ -81,7 +81,7 @@ export const UserMenu = () => {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button className="rounded-none bg-transparent hover:bg-white/10">
+				<Button className="px-3 rounded-none bg-transparent hover:bg-white/10">
 					<HStack>
 						<Avatar
 							source={avatarSource}

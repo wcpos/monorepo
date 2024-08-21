@@ -1,8 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import find from 'lodash/find';
-
 import { Box } from '@wcpos/tailwind/src/box';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/tailwind/src/dialog';
@@ -16,32 +14,23 @@ import { EditLineItem } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
+import type { CellContext } from '@tanstack/react-table';
+
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 interface Props {
 	uuid: string;
 	item: LineItem;
-	column: import('@wcpos/tailwind/src/table').ColumnProps<LineItem>;
+	type: 'line_items';
 }
 
 /**
  *
  */
-export const ProductName = ({ uuid, item, column }: Props) => {
-	const { display } = column;
+export const ProductName = ({ row, column }: CellContext<Props, 'name'>) => {
+	const { item, uuid } = row.original;
 	const { updateLineItem } = useUpdateLineItem();
 	const t = useT();
 	const [openEditDialog, setOpenEditDialog] = React.useState(false);
-
-	/**
-	 *
-	 */
-	const show = React.useCallback(
-		(key: string): boolean => {
-			const d = find(display, { key });
-			return !!(d && d.show);
-		},
-		[display]
-	);
 
 	/**
 	 * filter out the private meta data
@@ -85,7 +74,7 @@ export const ProductName = ({ uuid, item, column }: Props) => {
 					</Tooltip>
 				</HStack>
 
-				{show('sku') && <Text className="text-sm">{item.sku}</Text>}
+				{column.columnDef.meta.show('sku') && <Text className="text-sm">{item.sku}</Text>}
 
 				{attributes.length > 0 && (
 					<Box className="grid gap-1 grid-cols-2 p-0">
