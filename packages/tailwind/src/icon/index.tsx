@@ -20,7 +20,7 @@ const iconVariants = cva('inset-0 items-center content-center', {
 			primary: 'text-primary',
 			destructive: 'text-destructive',
 			secondary: 'text-secondary',
-			muted: 'text-muted',
+			muted: 'text-muted-foreground',
 			success: 'text-success',
 		},
 		size: {
@@ -56,8 +56,11 @@ export const Icon = ({ name, variant, size, loading, className, ...props }: Icon
 		return <Loader variant={variant} size={size} className={className} {...props} />;
 	}
 
+	/**
+	 * Put the iconVariants after the inherited textClass
+	 */
 	return (
-		<View className={cn(iconVariants({ variant, size }), textClass, className)} {...props}>
+		<View className={cn(textClass, iconVariants({ variant, size }), className)} {...props}>
 			<Svg width="100%" height="100%" fill="currentColor" />
 		</View>
 	);

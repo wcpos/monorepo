@@ -92,6 +92,7 @@ const WebViewBase = (
 			onLoad={onLoad}
 			frameBorder="0"
 			style={style}
+			sandbox="allow-scripts allow-forms"
 		/>
 	);
 };

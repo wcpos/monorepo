@@ -1,9 +1,14 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
+import * as Slot from '@rn-primitives/slot';
 import * as TablePrimitive from '@rn-primitives/table';
 
+import { PulseTableRow } from './pulse-row';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
+
+import type { SlottableViewProps, ViewRef } from '@rn-primitives/types';
 
 const Table = React.forwardRef<
 	React.ElementRef<typeof TablePrimitive.Root>,
@@ -54,7 +59,7 @@ const TableFooter = React.forwardRef<
 ));
 TableFooter.displayName = 'TableFooter';
 
-const TableRow = React.forwardRef<
+const PressableTableRow = React.forwardRef<
 	React.ElementRef<typeof TablePrimitive.Row>,
 	React.ComponentPropsWithoutRef<typeof TablePrimitive.Row>
 >(({ className, ...props }, ref) => (
@@ -67,6 +72,24 @@ const TableRow = React.forwardRef<
 		{...props}
 	/>
 ));
+PressableTableRow.displayName = 'PressableTableRow';
+
+const TableRow = React.forwardRef<ViewRef, SlottableViewProps>(
+	({ asChild, className, ...props }, ref) => {
+		const Component = asChild ? Slot.View : View;
+		return (
+			<Component
+				role="row"
+				ref={ref}
+				className={cn(
+					'flex-row border-border border-b web:transition-colors web:hover:bg-muted/50 web:data-[state=selected]:bg-muted',
+					className
+				)}
+				{...props}
+			/>
+		);
+	}
+);
 TableRow.displayName = 'TableRow';
 
 const TableHead = React.forwardRef<
@@ -98,4 +121,14 @@ const TableCell = React.forwardRef<
 ));
 TableCell.displayName = 'TableCell';
 
-export { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow };
+export {
+	Table,
+	TableBody,
+	TableCell,
+	TableFooter,
+	TableHead,
+	TableHeader,
+	TableRow,
+	PressableTableRow,
+	PulseTableRow,
+};

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, View, ViewProps } from 'react-native';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
@@ -135,8 +135,10 @@ const separatorVariants = cva('w-px self-stretch opacity-80', {
 	},
 });
 
-const ButtonGroupSeparator: React.FC = ({ variant }: ButtonProps) => {
-	return <View className={separatorVariants({ variant })} />;
+type ButtonSeparatorProps = ViewProps & VariantProps<typeof separatorVariants>;
+
+const ButtonGroupSeparator: React.FC = ({ variant, className, ...props }: ButtonSeparatorProps) => {
+	return <View className={cn(separatorVariants({ variant }), className)} {...props} />;
 };
 
 /**
