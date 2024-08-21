@@ -56,7 +56,12 @@ const Fallback = ({ error, resetErrorBoundary }: FallbackProps) => {
 				<Text className="text-error-foreground font-bold">Something went wrong:</Text>
 				<Text className="text-error-foreground">{error.message}</Text>
 			</VStack>
-			<IconButton name="xmark" size="sm" variant="destructive" onPress={resetErrorBoundary} />
+			<IconButton
+				name="xmark"
+				size="sm"
+				className="text-destructive-foreground"
+				onPress={resetErrorBoundary}
+			/>
 		</HStack>
 	);
 };

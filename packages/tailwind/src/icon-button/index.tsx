@@ -58,7 +58,7 @@ const IconButton = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonPr
 				role="button"
 				{...props}
 			>
-				<Icon name={name} variant={variant} size={size} loading={loading} />
+				<Icon name={name} variant={variant} size={size} loading={loading} className={className} />
 			</Pressable>
 		);
 	}
