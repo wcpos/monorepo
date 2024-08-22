@@ -37,10 +37,8 @@ export const PulseTableRow = React.forwardRef<
 				backgroundColor.value = withTiming('transparent');
 			});
 		},
-		pulseRemove() {
-			backgroundColor.value = withTiming('rgba(239, 68, 68, 0.5)', { duration: 500 }, () => {
-				runOnJS(onRemove)();
-			});
+		pulseRemove(callback) {
+			backgroundColor.value = withTiming('rgba(239, 68, 68, 0.5)', { duration: 500 }, callback);
 		},
 	}));
 
