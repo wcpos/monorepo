@@ -65,7 +65,11 @@ const CommandList = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<CommandPrimitive.List
 		ref={ref}
-		className={cn('max-h-[300px] overflow-y-auto overflow-x-hidden', className)}
+		className={cn(
+			'max-h-[300px] overflow-y-auto overflow-x-hidden group',
+			'[&>*:first-child]:gap-2 [&>*:first-child]:p-2',
+			className
+		)}
 		{...props}
 	/>
 ));
@@ -88,7 +92,8 @@ const CommandGroup = React.forwardRef<
 	<CommandPrimitive.Group
 		ref={ref}
 		className={cn(
-			'overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground',
+			'overflow-hidden p-1 text-foreground',
+			'[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground',
 			className
 		)}
 		{...props}
@@ -112,16 +117,21 @@ CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
 const CommandItem = React.forwardRef<
 	React.ElementRef<typeof CommandPrimitive.Item>,
 	React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item>
->(({ className, ...props }, ref) => (
-	<CommandPrimitive.Item
-		ref={ref}
-		className={cn(
-			'relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none aria-selected:bg-accent aria-selected:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-			className
-		)}
-		{...props}
-	/>
-));
+>(({ className, ...props }, ref) => {
+	return (
+		<CommandPrimitive.Item
+			ref={ref}
+			className={cn(
+				'relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none',
+				'web:outline-none web:focus:bg-accent active:bg-accent web:hover:bg-accent group',
+				'aria-selected:bg-accent aria-selected:text-accent-foreground',
+				props.disabled && 'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+				className
+			)}
+			{...props}
+		/>
+	);
+});
 
 CommandItem.displayName = CommandPrimitive.Item.displayName;
 

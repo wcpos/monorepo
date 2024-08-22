@@ -7,7 +7,10 @@ import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
 const itemVariants = cva(
-	'relative flex flex-row web:cursor-default gap-2 items-center rounded-sm px-2 py-1.5 native:py-2 web:outline-none web:focus:bg-accent active:bg-accent web:hover:bg-accent group',
+	[
+		'relative flex flex-row web:cursor-default gap-2 items-center rounded-sm px-2 py-1.5 native:py-2',
+		'web:outline-none web:focus:bg-accent active:bg-accent web:hover:bg-accent group',
+	],
 	{
 		variants: {
 			variant: {
