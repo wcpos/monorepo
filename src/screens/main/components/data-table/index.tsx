@@ -17,8 +17,8 @@ import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import { ListEmptyComponent } from './empty';
-import { Footer } from './footer';
-import { Header } from './header';
+import { DataTableFooter } from './footer';
+import { DataTableHeader } from './header';
 import { useUISettings, UISettingID } from '../../contexts/ui-settings';
 import { TextCell } from '../text-cell';
 
@@ -35,13 +35,13 @@ interface Props<TDocument> extends DataTableProps<TDocument, any> {
 /**
  * Tables are expensive to render, so memoize all props.
  */
-export const DataTable = <TDocument extends DocumentType>({
+const DataTable = <TDocument extends DocumentType>({
 	id,
 	query,
 	cells,
 	renderItem,
 	noDataMessage,
-	TableFooterComponent,
+	TableFooterComponent = DataTableFooter,
 	extraContext,
 	...props
 }: Props<TDocument>) => {
@@ -65,7 +65,7 @@ export const DataTable = <TDocument extends DocumentType>({
 
 				return {
 					accessorKey: col.key,
-					header: ({ column }) => <Header title={title} column={column} />,
+					header: ({ column }) => <DataTableHeader title={title} column={column} />,
 					// size: column.size,
 					cell: (props) => {
 						if (Cell) {
@@ -115,7 +115,7 @@ export const DataTable = <TDocument extends DocumentType>({
 				onEndReached={result.nextPage}
 				onEndReachedThreshold={0.5}
 				ListEmptyComponent={<ListEmptyComponent message={noDataMessage} />}
-				TableFooterComponent={TableFooterComponent ? TableFooterComponent : Footer}
+				TableFooterComponent={TableFooterComponent}
 				renderItem={renderItem ? (props) => renderItem(props) : undefined}
 				extraContext={context}
 				{...props}
@@ -123,3 +123,5 @@ export const DataTable = <TDocument extends DocumentType>({
 		</>
 	);
 };
+
+export { DataTable, DataTableFooter, DataTableHeader };

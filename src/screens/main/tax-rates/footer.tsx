@@ -10,7 +10,10 @@ import { useT } from '../../../contexts/translations';
 import SyncButton from '../components/sync-button';
 import { useCollectionReset } from '../hooks/use-collection-reset';
 
-const TaxRatesFooter = ({ count, query }) => {
+/**
+ *
+ */
+export const TaxRatesFooter = ({ count, query }) => {
 	const { sync, active$, total$ } = useReplicationState(query);
 	const { clear } = useCollectionReset(query.collection.name);
 	const active = useObservableState(active$, false);
@@ -18,13 +21,11 @@ const TaxRatesFooter = ({ count, query }) => {
 	const t = useT();
 
 	return (
-		<HStack className="justify-end">
-			<Text className="text-sm">
+		<HStack className="p-2 gap-0 border-border border-t bg-muted justify-end">
+			<Text className="text-xs">
 				{t('Showing {count} of {total}', { count, total, _tags: 'core' })}
 			</Text>
 			<SyncButton sync={sync} clear={clear} active={active} />
 		</HStack>
 	);
 };
-
-export default TaxRatesFooter;

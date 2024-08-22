@@ -16,7 +16,7 @@ import { VariableProductRow } from './rows/variable';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
-import { DataTable } from '../components/data-table';
+import { DataTable, DataTableFooter } from '../components/data-table';
 import FilterBar from '../components/product/filter-bar';
 import { TaxBasedOn } from '../components/product/tax-based-on';
 import { QuerySearchInput } from '../components/query-search-input';
@@ -27,11 +27,13 @@ import { useMutation } from '../hooks/mutations/use-mutation';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
-// Table Rows
-// const TABLE_ROW_COMPONENTS = {
-// 	simple: SimpleProductTableRow,
-// 	variable: VariableProductTableRow,
-// };
+const TableFooter = () => {
+	return (
+		<DataTableFooter>
+			<TaxBasedOn />
+		</DataTableFooter>
+	);
+};
 
 /**
  * Tables are expensive to render, so memoize all props.
@@ -144,7 +146,7 @@ const Products = () => {
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
 								extraContext={context}
-								footer={calcTaxes && <TaxBasedOn />}
+								TableFooterComponent={calcTaxes && TableFooter}
 								getItemType={({ original }) => original.type}
 								tableMeta={tableMeta}
 							/>

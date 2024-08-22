@@ -7,8 +7,10 @@ import { useForceUpdate, useObservableEagerState, useSubscription } from 'observ
 import { isRxDatabase } from 'rxdb';
 
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
-import { QueryProvider } from '@wcpos/query';
+import { QueryProvider, useQuery } from '@wcpos/query';
+import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Icon } from '@wcpos/tailwind/src/icon';
+import { Suspense } from '@wcpos/tailwind/src/suspense';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
@@ -26,7 +28,7 @@ import ProductsNavigator from './products';
 import ReportsNavigator from './reports';
 import Settings from './settings';
 import Support from './support';
-import TaxRates from './tax-rates';
+import { TaxRates } from './tax-rates';
 import { UpgradeRequired } from './upgrade-required';
 import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';
@@ -207,12 +209,18 @@ const LoginScreen = () => {
  *
  */
 const TaxRatesScreen = () => {
-	const t = useT();
+	const query = useQuery({
+		queryKeys: ['tax-rates'],
+		collectionName: 'taxes',
+		initialParams: {},
+	});
 
 	return (
-		<ModalLayout title={t('Tax Rates', { _tags: 'core' })} size="xxLarge">
-			<TaxRates />
-		</ModalLayout>
+		<ErrorBoundary>
+			<Suspense>
+				<TaxRates query={query} />
+			</Suspense>
+		</ErrorBoundary>
 	);
 };
 

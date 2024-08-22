@@ -80,6 +80,7 @@ export const CartTable = () => {
 	const { uiSettings, getUILabel } = useUISettings('pos-cart');
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
+	const rowRefs = React.useRef<Map<string, React.RefObject<View>>>(new Map());
 
 	/**
 	 * @TODO - add sorting?
@@ -155,6 +156,7 @@ export const CartTable = () => {
 			onChange: (data: any) => {
 				console.log('onChange called without handler', data);
 			},
+			rowRefs,
 		},
 	});
 
@@ -194,7 +196,7 @@ export const CartTable = () => {
 					{table.getRowModel().rows.map((row, index) => {
 						return (
 							<PulseTableRow
-								ref={(ref) => {}}
+								ref={(ref) => rowRefs.current.set(row.id, ref)}
 								key={row.id}
 								className={cn(
 									'active:opacity-70',

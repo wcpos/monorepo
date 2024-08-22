@@ -15,19 +15,26 @@ interface Props {
 		| import('@wcpos/database').OrderDocument['shipping_lines'];
 }
 
-export const Actions = ({ row }: CellContext<Props, 'actions'>) => {
+export const Actions = ({ row, table }: CellContext<Props, 'actions'>) => {
 	const { uuid, type } = row.original;
 	const { removeLineItem } = useRemoveLineItem();
 
 	/**
 	 *
 	 */
+	const handleRemoveLineItem = React.useCallback(() => {
+		const rowRef = table.options.meta.rowRefs.current.get(row.id);
+		if (rowRef) {
+			rowRef.pulseRemove(() => {
+				removeLineItem(uuid, type);
+			});
+		}
+	}, [removeLineItem, row.id, table.options.meta.rowRefs, type, uuid]);
+
+	/**
+	 *
+	 */
 	return (
-		<IconButton
-			name="circleXmark"
-			variant="destructive"
-			size="xl"
-			onPress={() => removeLineItem(uuid, type)}
-		/>
+		<IconButton name="circleXmark" variant="destructive" size="xl" onPress={handleRemoveLineItem} />
 	);
 };

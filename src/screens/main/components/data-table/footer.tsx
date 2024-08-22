@@ -12,15 +12,13 @@ import { useCollectionReset } from '../../hooks/use-collection-reset';
 import SyncButton from '../sync-button';
 
 interface Props {
-	query: Query<any>;
 	children: React.ReactNode;
-	count: number;
 }
 
 /**
  *
  */
-export const Footer = ({ children }: Props) => {
+export const DataTableFooter = ({ children }: Props) => {
 	const { query, count, ...rest } = useDataTable();
 	const { sync, active$, total$ } = useReplicationState(query);
 	const { clear } = useCollectionReset(query.collection.name);
@@ -29,20 +27,10 @@ export const Footer = ({ children }: Props) => {
 	const t = useT();
 
 	return (
-		<HStack
-			className="p-2 border-t bg-muted"
-			// style={{
-			// 	width: '100%',
-			// 	backgroundColor: theme.colors.lightGrey,
-			// 	borderBottomLeftRadius: theme.rounding.medium,
-			// 	borderBottomRightRadius: theme.rounding.medium,
-			// 	borderTopWidth: 1,
-			// 	borderTopColor: theme.colors.grey,
-			// }}
-		>
+		<HStack className="p-2 border-border border-t bg-muted">
 			<HStack className="justify-start flex-1">{children}</HStack>
 			<HStack className="justify-end flex-1 gap-0">
-				<Text className="text-sm">
+				<Text className="text-xs">
 					{t('Showing {count} of {total}', { count, total, _tags: 'core' })}
 				</Text>
 				<SyncButton sync={sync} clear={clear} active={loading} />
