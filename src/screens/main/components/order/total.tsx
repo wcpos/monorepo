@@ -3,10 +3,11 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
-import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

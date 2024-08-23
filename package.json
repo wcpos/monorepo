@@ -24,6 +24,7 @@
     "@react-navigation/native-stack": "^6.9.26",
     "@react-navigation/stack": "6.3.29",
     "@shelf/fast-natural-order-by": "^2.0.0",
+    "@tanstack/react-table": "^8.20.1",
     "@transifex/native": "^7.1.2",
     "@transifex/react": "^7.1.2",
     "@wcpos/database": "*",

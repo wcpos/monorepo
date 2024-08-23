@@ -1,8 +1,6 @@
 import * as React from 'react';
 
-import { Column, ColumnDef } from '@tanstack/react-table';
 import find from 'lodash/find';
-import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
 import type {
@@ -22,13 +20,15 @@ import { DataTableHeader } from './header';
 import { useUISettings, UISettingID } from '../../contexts/ui-settings';
 import { TextCell } from '../text-cell';
 
+import type { CellContext, ColumnDef } from '@tanstack/react-table';
+
 type DocumentType = ProductDocument | OrderDocument | CustomerDocument | TaxRateDocument;
 type CollectionFromDocument<T> = T extends { collection: infer C } ? C : never;
 
 interface Props<TDocument> extends DataTableProps<TDocument, any> {
 	id: UISettingID;
 	query: Query<CollectionFromDocument<TDocument>>;
-	cells: Record<string, React.ComponentType<any>>;
+	renderCell: (props: CellContext<TDocument, unknown>) => React.ComponentType<any>;
 	noDataMessage?: string;
 }
 
@@ -38,7 +38,7 @@ interface Props<TDocument> extends DataTableProps<TDocument, any> {
 const DataTable = <TDocument extends DocumentType>({
 	id,
 	query,
-	cells,
+	renderCell,
 	renderItem,
 	noDataMessage,
 	TableFooterComponent = DataTableFooter,
@@ -60,14 +60,13 @@ const DataTable = <TDocument extends DocumentType>({
 		return uiColumns
 			.filter((column) => column.show)
 			.map((col) => {
-				const title = getUILabel(col.key);
-				const Cell = get(cells, [col.key]);
-
 				return {
 					accessorKey: col.key,
-					header: ({ column }) => <DataTableHeader title={title} column={column} />,
+					header: ({ column }) => <DataTableHeader title={getUILabel(column.id)} column={column} />,
 					// size: column.size,
 					cell: (props) => {
+						const Cell = renderCell && renderCell(props);
+
 						if (Cell) {
 							return (
 								<ErrorBoundary>
@@ -89,7 +88,7 @@ const DataTable = <TDocument extends DocumentType>({
 					},
 				};
 			});
-	}, [cells, uiColumns, getUILabel]);
+	}, [uiColumns, getUILabel, renderCell]);
 
 	/**
 	 * Pass down

@@ -4,7 +4,6 @@ import { flexRender } from '@tanstack/react-table';
 import { useObservableSuspense } from 'observable-hooks';
 
 import type { ProductDocument } from '@wcpos/database';
-import type { Row } from '@wcpos/tailwind/src/data-table';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { cn, getTailwindJustifyClass } from '@wcpos/tailwind/src/lib/utils';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
@@ -12,37 +11,17 @@ import { TableRow, TableCell } from '@wcpos/tailwind/src/table2';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { VariationTableFooter } from './footer';
-import { Date } from '../../components/date';
-import { ProductVariationImage } from '../../components/product/variation-image';
-import { TextCell } from '../../components/text-cell';
-import { Barcode } from '../cells/barcode';
-import { EdittablePrice } from '../cells/edittable-price';
-import { StockQuantity } from '../cells/stock-quantity';
-import { StockStatus } from '../cells/stock-status';
-import { VariationActions } from '../cells/variation-actions';
+import { TextCell } from '../../../../components/text-cell';
+
+import type { Row } from '@tanstack/react-table';
 
 interface Props {
 	query: any;
 	row: Row<ProductDocument>;
 }
 
-const cells = {
-	actions: VariationActions,
-	price: EdittablePrice,
-	sale_price: EdittablePrice,
-	regular_price: EdittablePrice,
-	stock_quantity: StockQuantity,
-	date_created: Date,
-	date_modified: Date,
-	barcode: Barcode,
-	stock_status: StockStatus,
-	image: ProductVariationImage,
-	categories: () => {},
-	tags: () => {},
-};
-
 const cellRenderer = (props) => {
-	const Cell = cells[props.column.id];
+	const Cell = props.table.options.meta.variationRenderCell(props);
 
 	if (Cell) {
 		return (
@@ -70,13 +49,6 @@ export const VariationsTable = ({ query, row }: Props) => {
 					<TableRow
 						key={id}
 						className={cn('active:opacity-70', index % 2 && 'bg-zinc-100/50 dark:bg-zinc-900/50')}
-						// onPress={
-						// 	onRowPress
-						// 		? () => {
-						// 				onRowPress(row);
-						// 			}
-						// 		: undefined
-						// }
 					>
 						{row.getVisibleCells().map((cell) => {
 							const meta = cell.column.columnDef.meta;

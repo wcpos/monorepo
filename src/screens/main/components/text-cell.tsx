@@ -3,8 +3,9 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { Observable, of } from 'rxjs';
 
-import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Text } from '@wcpos/tailwind/src/text';
+
+import type { CellContext } from '@tanstack/react-table';
 
 /**
  *

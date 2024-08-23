@@ -6,10 +6,10 @@ import { useReplicationState } from '@wcpos/query';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Text } from '@wcpos/tailwind/src/text';
 
-import { useAppState } from '../../../../contexts/app-state';
-import { useT } from '../../../../contexts/translations';
-import SyncButton from '../../components/sync-button';
-import { useCollectionReset } from '../../hooks/use-collection-reset';
+import { useAppState } from '../../../../../../contexts/app-state';
+import { useT } from '../../../../../../contexts/translations';
+import SyncButton from '../../../../components/sync-button';
+import { useCollectionReset } from '../../../../hooks/use-collection-reset';
 
 /**
  *

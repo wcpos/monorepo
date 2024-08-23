@@ -5,11 +5,12 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { FormatAddress } from '@wcpos/tailwind/src/format';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

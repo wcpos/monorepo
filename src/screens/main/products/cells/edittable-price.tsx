@@ -3,9 +3,9 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { CellContext } from '@wcpos/tailwind/src/data-table';
-
 import NumberInput from '../../components/number-input';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;

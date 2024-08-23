@@ -5,12 +5,13 @@ import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { PlainAttributes, ProductAttributes } from '../../components/product/attributes';
 import GroupedNames from '../../components/product/grouped-names';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

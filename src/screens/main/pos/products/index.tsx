@@ -1,23 +1,34 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { useRelationalQuery } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
+import { DataTableRow } from '@wcpos/tailwind/src/data-table';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import SimpleProductTableRow from './rows/simple';
-import VariableProductTableRow from './rows/variable';
+import { Actions } from './cells/actions';
+import { Name } from './cells/name';
+import { Price } from './cells/price';
+import { SKU } from './cells/sku';
+import { StockQuantity } from './cells/stock-quantity';
+import { VariableActions } from './cells/variable-actions';
+import { ProductVariationActions } from './cells/variation-actions';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../../contexts/translations';
 import { DataTable } from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
+import { ProductImage } from '../../components/product/image';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
+import { VariableProductImage } from '../../components/product/variable-image';
+import { VariableProductPrice } from '../../components/product/variable-price';
+import { VariableProductRow } from '../../components/product/variable-product-row';
 import { QuerySearchInput } from '../../components/query-search-input';
 import { UISettingsButton } from '../../components/ui-settings';
 import { useTaxRates } from '../../contexts/tax-rates';
@@ -25,10 +36,59 @@ import { useUISettings } from '../../contexts/ui-settings';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
-// Table Rows
-const TABLE_ROW_COMPONENTS = {
-	simple: SimpleProductTableRow,
-	variable: VariableProductTableRow,
+const cells = {
+	simple: {
+		actions: Actions,
+		image: ProductImage,
+		name: Name,
+		price: Price,
+		sku: SKU,
+		stock_quantity: StockQuantity,
+	},
+	variable: {
+		actions: VariableActions,
+		image: VariableProductImage,
+		name: Name,
+		price: VariableProductPrice,
+		stock_quantity: StockQuantity,
+		sku: SKU,
+	},
+};
+
+const variationCells = {
+	actions: ProductVariationActions,
+	stock_quantity: StockQuantity,
+	price: Price,
+	sku: SKU,
+};
+
+/**
+ *
+ */
+const renderCell = ({ column, row }) => {
+	// just simple and variable for now
+	let type = 'simple';
+	if (row.original.type === 'variable') {
+		type = 'variable';
+	}
+	return get(cells, [type, column.id]);
+};
+
+/**
+ *
+ */
+const variationRenderCell = ({ column, row }) => {
+	return get(variationCells, column.id);
+};
+
+/**
+ *
+ */
+const renderItem = ({ item: row, index }) => {
+	if (row.original.type === 'variable') {
+		return <VariableProductRow row={row} index={index} />;
+	}
+	return <DataTableRow row={row} index={index} />;
 };
 
 /**
@@ -77,23 +137,14 @@ const POSProducts = ({ isColumn = false }) => {
 	}, [query, showOutOfStock]);
 
 	/**
-	 *
+	 * Table meta
 	 */
-	const renderItem = React.useCallback((props) => {
-		let Component = TABLE_ROW_COMPONENTS[props.item.document.type];
-
-		// If we still didn't find a component, use SimpleProductTableRow as a fallback
-		// eg: Grouped products
-		if (!Component) {
-			Component = SimpleProductTableRow;
-		}
-
-		return (
-			<ErrorBoundary>
-				<Component {...props} />
-			</ErrorBoundary>
-		);
-	}, []);
+	const tableMeta = React.useMemo(
+		() => ({
+			variationRenderCell,
+		}),
+		[]
+	);
 
 	/**
 	 *
@@ -127,11 +178,14 @@ const POSProducts = ({ isColumn = false }) => {
 							<DataTable<ProductDocument>
 								id="pos-products"
 								query={query}
+								renderCell={renderCell}
 								renderItem={renderItem}
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
 								extraContext={{ taxLocation: 'pos' }}
-								footer={calcTaxes && <TaxBasedOn />}
+								TableFooterComponent={calcTaxes && TaxBasedOn}
+								getItemType={({ original }) => original.type}
+								tableMeta={tableMeta}
 							/>
 						</Suspense>
 					</ErrorBoundary>

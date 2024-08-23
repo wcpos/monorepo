@@ -6,10 +6,11 @@ import { useObservableEagerState } from 'observable-hooks';
 import Svg, { Line } from 'react-native-svg';
 
 import type { ProductVariationDocument } from '@wcpos/database';
-import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Image } from '@wcpos/tailwind/src/image';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
+
+import type { CellContext } from '@tanstack/react-table';
 
 /**
  *

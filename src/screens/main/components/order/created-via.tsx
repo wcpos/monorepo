@@ -3,12 +3,13 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
 import { useT } from '../../../../contexts/translations';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

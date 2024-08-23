@@ -1,40 +1,29 @@
 import * as React from 'react';
 
-import find from 'lodash/find';
-import { useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { useDataTable } from '@wcpos/tailwind/src/data-table';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import PriceWithTax from '../../../components/product/price';
 
-interface Props {
-	item: import('@wcpos/database').ProductDocument;
-	column: import('@wcpos/tailwind/src/table').ColumnProps<
-		import('@wcpos/database').ProductDocument
-	>;
-}
+import type { CellContext } from '@tanstack/react-table';
 
-export const Price = ({ item: product, column }: Props) => {
-	const price = useObservableState(product.price$, product.price);
-	const regular_price = useObservableState(product.regular_price$, product.regular_price);
-	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
-	const taxClass = useObservableState(product.tax_class$, product.tax_class);
-	const { display } = column;
+type ProductDocument = import('@wcpos/database').ProductDocument;
+
+/**
+ *
+ */
+export const Price = ({ row, column }: CellContext<ProductDocument, 'price'>) => {
+	const product = row.original;
+	const price = useObservableEagerState(product.price$);
+	const regular_price = useObservableEagerState(product.regular_price$);
+	const taxStatus = useObservableEagerState(product.tax_status$);
+	const taxClass = useObservableEagerState(product.tax_class$);
 	const context = useDataTable();
 
-	/**
-	 * TODO - move this into the ui as a helper function
-	 */
-	const show = React.useCallback(
-		(key: string): boolean => {
-			const d = find(display, { key });
-			return !!(d && d.show);
-		},
-		[display]
-	);
-
-	const showRegularPrice = show('on_sale') && parseFloat(price) !== parseFloat(regular_price);
+	const showRegularPrice =
+		column.columnDef.meta.show('on_sale') && parseFloat(price) !== parseFloat(regular_price);
 
 	/**
 	 *
@@ -45,7 +34,7 @@ export const Price = ({ item: product, column }: Props) => {
 				price={regular_price}
 				taxStatus={taxStatus}
 				taxClass={taxClass}
-				taxDisplay={show('tax') ? 'text' : 'tooltip'}
+				taxDisplay={column.columnDef.meta.show('tax') ? 'text' : 'tooltip'}
 				taxLocation={context?.taxLocation}
 				strikethrough
 			/>
@@ -53,7 +42,7 @@ export const Price = ({ item: product, column }: Props) => {
 				price={price}
 				taxStatus={taxStatus}
 				taxClass={taxClass}
-				taxDisplay={show('tax') ? 'text' : 'tooltip'}
+				taxDisplay={column.columnDef.meta.show('tax') ? 'text' : 'tooltip'}
 				taxLocation={context?.taxLocation}
 			/>
 		</VStack>
@@ -62,10 +51,8 @@ export const Price = ({ item: product, column }: Props) => {
 			price={price}
 			taxStatus={taxStatus}
 			taxClass={taxClass}
-			taxDisplay={show('tax') ? 'text' : 'tooltip'}
+			taxDisplay={column.columnDef.meta.show('tax') ? 'text' : 'tooltip'}
 			taxLocation={context?.taxLocation}
 		/>
 	);
 };
-
-export default Price;

@@ -4,12 +4,13 @@ import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
-import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
 
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

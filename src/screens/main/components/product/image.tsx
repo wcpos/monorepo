@@ -3,10 +3,11 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Image } from '@wcpos/tailwind/src/image';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

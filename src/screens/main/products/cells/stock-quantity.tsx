@@ -2,12 +2,13 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { CellContext } from '@wcpos/tailwind/src/data-table';
 import { SwitchWithLabel } from '@wcpos/tailwind/src/switch';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import NumberInput from '../../components/number-input';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

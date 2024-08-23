@@ -11,14 +11,28 @@ import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
-import { cells } from './rows/simple';
-import { VariableProductRow } from './rows/variable';
+import { Actions } from './cells/actions';
+import { Barcode } from './cells/barcode';
+import { EdittablePrice } from './cells/edittable-price';
+import { ProductName } from './cells/name';
+import { Price } from './cells/price';
+import { StockQuantity } from './cells/stock-quantity';
+import { StockStatus } from './cells/stock-status';
+import { VariationActions } from './cells/variation-actions';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
 import { DataTable, DataTableFooter } from '../components/data-table';
+import { Date } from '../components/date';
+import { ProductCategories } from '../components/product/categories';
 import FilterBar from '../components/product/filter-bar';
+import { ProductImage } from '../components/product/image';
+import { ProductTags } from '../components/product/tags';
 import { TaxBasedOn } from '../components/product/tax-based-on';
+import { VariableProductImage } from '../components/product/variable-image';
+import { VariableProductPrice } from '../components/product/variable-price';
+import { VariableProductRow } from '../components/product/variable-product-row';
+import { ProductVariationImage } from '../components/product/variation-image';
 import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsButton } from '../components/ui-settings';
 import { useTaxRates } from '../contexts/tax-rates';
@@ -27,6 +41,86 @@ import { useMutation } from '../hooks/mutations/use-mutation';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
+const cells = {
+	simple: {
+		actions: Actions,
+		image: ProductImage,
+		name: ProductName,
+		barcode: Barcode,
+		price: Price,
+		regular_price: EdittablePrice,
+		sale_price: EdittablePrice,
+		date_created: Date,
+		date_modified: Date,
+		stock_quantity: StockQuantity,
+		stock_status: StockStatus,
+		categories: ProductCategories,
+		tags: ProductTags,
+	},
+	variable: {
+		actions: Actions,
+		image: VariableProductImage,
+		name: ProductName,
+		barcode: Barcode,
+		regular_price: VariableProductPrice,
+		price: VariableProductPrice,
+		sale_price: VariableProductPrice,
+		date_created: Date,
+		date_modified: Date,
+		stock_quantity: StockQuantity,
+		stock_status: StockStatus,
+		categories: ProductCategories,
+		tags: ProductTags,
+	},
+};
+
+const variationCells = {
+	actions: VariationActions,
+	price: Price,
+	sale_price: EdittablePrice,
+	regular_price: EdittablePrice,
+	stock_quantity: StockQuantity,
+	date_created: Date,
+	date_modified: Date,
+	barcode: Barcode,
+	stock_status: StockStatus,
+	image: ProductVariationImage,
+	categories: () => {},
+	tags: () => {},
+};
+
+/**
+ *
+ */
+const renderCell = ({ column, row }) => {
+	// just simple and variable for now
+	let type = 'simple';
+	if (row.original.type === 'variable') {
+		type = 'variable';
+	}
+	return get(cells, [type, column.id]);
+};
+
+/**
+ *
+ */
+const variationRenderCell = ({ column, row }) => {
+	return get(variationCells, column.id);
+};
+
+/**
+ *
+ */
+const renderItem = ({ item: row, index }) => {
+	if (row.original.type === 'variable') {
+		return <VariableProductRow row={row} index={index} />;
+	}
+	return <DataTableRow row={row} index={index} />;
+};
+
+/**
+ *
+ */
 const TableFooter = () => {
 	return (
 		<DataTableFooter>
@@ -75,16 +169,6 @@ const Products = () => {
 	useBarcode(query);
 
 	/**
-	 *
-	 */
-	const renderItem = React.useCallback(({ item: row, index }) => {
-		if (row.original.type === 'variable') {
-			return <VariableProductRow row={row} index={index} />;
-		}
-		return <DataTableRow row={row} index={index} />;
-	}, []);
-
-	/**
 	 * Table context
 	 */
 	const context = React.useMemo(() => ({ taxLocation: 'base' }), []);
@@ -102,6 +186,7 @@ const Products = () => {
 					productsPatch({ document: row.original, data: changes });
 				}
 			},
+			variationRenderCell,
 		}),
 		[productsPatch, variationsPatch]
 	);
@@ -141,7 +226,7 @@ const Products = () => {
 							<DataTable<ProductDocument>
 								id="products"
 								query={query}
-								cells={cells}
+								renderCell={renderCell}
 								renderItem={renderItem}
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}

@@ -1,23 +1,28 @@
 import * as React from 'react';
 
+import { CellContext } from '@tanstack/react-table';
+
 import { IconButton } from '@wcpos/tailwind/src/icon-button';
 
 import { useAddProduct } from '../../hooks/use-add-product';
 
-interface Props {
-	item: import('@wcpos/database').ProductDocument;
-}
+type ProductDocument = import('@wcpos/database').ProductDocument;
 
 /**
  *
  */
-export const Actions = ({ item: product }: Props) => {
+export const Actions = ({ row }: CellContext<ProductDocument, 'actions'>) => {
 	const { addProduct } = useAddProduct();
 
 	/**
 	 *
 	 */
 	return (
-		<IconButton name="circlePlus" variant="success" size="xl" onPress={() => addProduct(product)} />
+		<IconButton
+			name="circlePlus"
+			variant="success"
+			size="xl"
+			onPress={() => addProduct(row.original)}
+		/>
 	);
 };

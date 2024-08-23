@@ -2,10 +2,11 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Image } from '@wcpos/tailwind/src/image';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 

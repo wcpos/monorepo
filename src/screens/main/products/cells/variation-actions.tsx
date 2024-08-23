@@ -12,7 +12,6 @@ import {
 	AlertDialogTitle,
 } from '@wcpos/tailwind/src/alert-dialog';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { CellContext } from '@wcpos/tailwind/src/data-table';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -26,6 +25,8 @@ import { Text } from '@wcpos/tailwind/src/text';
 import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 

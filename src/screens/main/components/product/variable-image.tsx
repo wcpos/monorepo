@@ -1,26 +1,29 @@
 import * as React from 'react';
+import { Pressable } from 'react-native';
 
-import { Pressable } from '@wcpos/tailwind/src/pressable';
+import get from 'lodash/get';
+import { useObservableEagerState } from 'observable-hooks';
 
-import { ProductImage } from './image';
-import { useVariationTable } from './variation-table-rows/context';
+import { Image } from '@wcpos/tailwind/src/image';
 
-type Props = {
-	item: import('@wcpos/database').ProductDocument;
-	cellWidth: number;
-};
+import { useImageAttachment } from '../../hooks/use-image-attachment';
 
-export const VariableProductImage = ({ item: product, cellWidth }: Props) => {
-	const { setExpanded } = useVariationTable();
+import type { CellContext } from '@tanstack/react-table';
+
+type ProductDocument = import('@wcpos/database').ProductDocument;
+
+/**
+ *
+ */
+export const VariableProductImage = ({ row }: CellContext<ProductDocument, 'image'>) => {
+	const product = row.original;
+	const images = useObservableEagerState(product.images$);
+	const imageURL = get(images, [0, 'src'], undefined);
+	const source = useImageAttachment(product, imageURL);
 
 	return (
-		<Pressable
-			onPress={() => {
-				setExpanded((prev) => !prev);
-			}}
-			style={{ width: '100%', height: '100%' }}
-		>
-			<ProductImage item={product} cellWidth={cellWidth} />
+		<Pressable onPress={() => row.toggleExpanded()} className="w-full h-20">
+			<Image source={source} recyclingKey={product.uuid} className="w-full h-full" />
 		</Pressable>
 	);
 };

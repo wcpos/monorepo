@@ -22,7 +22,8 @@ interface Props {
 export const CategoryPill = ({ query, resource }: Props) => {
 	const category = useObservableSuspense(resource);
 	const t = useT();
-	const isActive = false;
+	const isActive = !!category;
+	const triggerRef = React.useRef(null);
 
 	/**
 	 *
@@ -30,6 +31,9 @@ export const CategoryPill = ({ query, resource }: Props) => {
 	const handleSelect = React.useCallback(
 		(id) => {
 			query.where('categories', { $elemMatch: { id } });
+			if (triggerRef.current) {
+				triggerRef.current.close();
+			}
 		},
 		[query]
 	);
@@ -39,12 +43,11 @@ export const CategoryPill = ({ query, resource }: Props) => {
 	 */
 	return (
 		<Popover>
-			<PopoverTrigger asChild>
+			<PopoverTrigger ref={triggerRef} asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="folder"
 					variant={isActive ? 'default' : 'muted'}
-					// onPress={() => setOpen(!open)}
 					removable={isActive}
 					onRemove={() => query.where('categories', null)}
 				>

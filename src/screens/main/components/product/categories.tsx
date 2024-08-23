@@ -3,8 +3,10 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Button, ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import { useDataTable, CellContext } from '@wcpos/tailwind/src/data-table';
+import { useDataTable } from '@wcpos/tailwind/src/data-table';
 import { HStack } from '@wcpos/tailwind/src/hstack';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

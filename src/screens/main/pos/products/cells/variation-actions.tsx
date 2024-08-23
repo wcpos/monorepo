@@ -4,15 +4,17 @@ import { IconButton } from '@wcpos/tailwind/src/icon-button';
 
 import { useAddVariation } from '../../hooks/use-add-variation';
 
-interface Props {
-	item: import('@wcpos/database').ProductVariationDocument;
-	parent: import('@wcpos/database').ProductDocument;
-}
+import type { CellContext } from '@tanstack/react-table';
+
+type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
 /**
  *
  */
-export const ProductVariationActions = ({ item: variation, parent }: Props) => {
+export const ProductVariationActions = ({
+	row,
+}: CellContext<ProductVariationDocument, 'actions'>) => {
+	const variation = row.original;
 	const { addVariation } = useAddVariation();
 
 	/**

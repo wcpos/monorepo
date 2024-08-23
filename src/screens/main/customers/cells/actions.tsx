@@ -14,7 +14,6 @@ import {
 } from '@wcpos/tailwind/src/alert-dialog';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
 import { Checkbox } from '@wcpos/tailwind/src/checkbox';
-import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -33,6 +32,8 @@ import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
 

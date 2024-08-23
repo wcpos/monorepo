@@ -1,7 +1,6 @@
 import * as React from 'react';
 
 import { Icon } from '@wcpos/tailwind/src/icon';
-import { SimpleTable } from '@wcpos/tailwind/src/simple-table';
 import {
 	Table,
 	TableHeader,
@@ -23,20 +22,6 @@ interface TaxRateTableProps {
  */
 export const TaxRateTable = ({ rates }: TaxRateTableProps) => {
 	const t = useT();
-
-	/**
-	 *
-	 */
-	const cellRenderer = React.useCallback(({ column, item }) => {
-		let value = item[column.key];
-		if (Array.isArray(item[column.key])) {
-			value = item[column.key].join(', ');
-		}
-		if (typeof value === 'boolean') {
-			return <Icon name={value ? 'check' : 'xmark'} className="text-sm" />;
-		}
-		return <Text>{value || '*'}</Text>;
-	}, []);
 
 	return (
 		<Table>

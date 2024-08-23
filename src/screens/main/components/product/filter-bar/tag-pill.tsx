@@ -22,7 +22,8 @@ interface Props {
 export const TagPill = ({ query, resource }: Props) => {
 	const tag = useObservableSuspense(resource);
 	const t = useT();
-	const isActive = false;
+	const isActive = !!tag;
+	const triggerRef = React.useRef(null);
 
 	/**
 	 *
@@ -30,6 +31,9 @@ export const TagPill = ({ query, resource }: Props) => {
 	const handleSelect = React.useCallback(
 		(id) => {
 			query.where('tags', { $elemMatch: { id } });
+			if (triggerRef.current) {
+				triggerRef.current.close();
+			}
 		},
 		[query]
 	);
@@ -39,12 +43,11 @@ export const TagPill = ({ query, resource }: Props) => {
 	 */
 	return (
 		<Popover>
-			<PopoverTrigger asChild>
+			<PopoverTrigger ref={triggerRef} asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="folder"
 					variant={isActive ? 'default' : 'muted'}
-					// onPress={() => setOpen(!open)}
 					removable={isActive}
 					onRemove={() => query.where('tags', null)}
 				>

@@ -2,10 +2,11 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import { useDateFormat } from '../hooks/use-date-format';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type Document =
 	| import('@wcpos/database').ProductDocument

@@ -13,7 +13,6 @@ import {
 	AlertDialogFooter,
 } from '@wcpos/tailwind/src/alert-dialog';
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import type { CellContext } from '@wcpos/tailwind/src/data-table';
 import {
 	DropdownMenu,
 	DropdownMenuTrigger,
@@ -30,6 +29,8 @@ import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';
 import usePullDocument from '../../contexts/use-pull-document';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+
+import type { CellContext } from '@tanstack/react-table';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 

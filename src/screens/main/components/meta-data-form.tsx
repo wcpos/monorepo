@@ -23,7 +23,7 @@ import { useT } from '../../../contexts/translations';
  */
 export const metaDataSchema = z.array(
 	z.object({
-		id: z.string().optional(),
+		id: z.number().optional(),
 		key: z.string(),
 		value: z.string(),
 		display_key: z.string().optional(),
