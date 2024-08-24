@@ -4,13 +4,11 @@ import { Icon } from '../icon';
 import { cn } from '../lib/utils';
 import { VStack } from '../vstack';
 
-type SortDirection = import('../table').SortDirection;
-
 export interface SortIconProps {
 	/**
 	 *
 	 */
-	direction?: SortDirection;
+	direction?: 'asc' | 'desc';
 	/**
 	 *
 	 */

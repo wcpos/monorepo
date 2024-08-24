@@ -9,7 +9,6 @@ import {
 	useReactTable,
 	Row,
 	getExpandedRowModel,
-	CellContext,
 	ExpandedState,
 } from '@tanstack/react-table';
 import { useObservableRef } from 'observable-hooks';
@@ -188,4 +187,4 @@ const DataTable = <TData, TValue>({
 };
 
 export { DataTable, DataTableRow, useDataTable };
-export type { CellContext, DataTableProps, Row };
+export type { DataTableProps };
