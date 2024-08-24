@@ -105,21 +105,19 @@ const DataTable = <TDocument extends DocumentType>({
 	 *
 	 */
 	return (
-		<>
-			<Table
-				// isRefreshing={isRefreshing}
-				// onRefresh={onRefresh}
-				data={result.hits.map(({ document }) => document)}
-				columns={columns}
-				onEndReached={result.nextPage}
-				onEndReachedThreshold={0.5}
-				ListEmptyComponent={<ListEmptyComponent message={noDataMessage} />}
-				TableFooterComponent={TableFooterComponent}
-				renderItem={renderItem ? (props) => renderItem(props) : undefined}
-				extraContext={context}
-				{...props}
-			/>
-		</>
+		<Table
+			// isRefreshing={isRefreshing}
+			// onRefresh={onRefresh}
+			data={result.hits.map(({ document }) => document)}
+			columns={columns}
+			onEndReached={result.nextPage}
+			onEndReachedThreshold={0.5}
+			ListEmptyComponent={<ListEmptyComponent message={noDataMessage} />}
+			TableFooterComponent={TableFooterComponent}
+			renderItem={renderItem ? (props) => renderItem(props) : undefined}
+			extraContext={context}
+			{...props}
+		/>
 	);
 };
 

@@ -57,8 +57,8 @@ export const TaxRateTable = ({ rates }: TaxRateTableProps) => {
 				</TableRow>
 			</TableHeader>
 			<TableBody>
-				{rates.map((rate) => (
-					<TableRow key={rate._id}>
+				{rates.map((rate, index) => (
+					<TableRow key={rate.id} index={index}>
 						<TableCell>
 							<Text>{rate.country}</Text>
 						</TableCell>

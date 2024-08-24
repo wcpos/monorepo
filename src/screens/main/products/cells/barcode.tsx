@@ -1,21 +1,17 @@
 import * as React from 'react';
 
+import { CellContext } from '@tanstack/react-table';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Input } from '@wcpos/tailwind/src/input';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
-type Props = {
-	item: ProductDocument;
-	column: import('@wcpos/tailwind/src/table').ColumnProps<ProductDocument>;
-	onChange: (product: ProductDocument, data: Record<string, unknown>) => void;
-};
-
 /**
  *
  */
-export const Barcode = ({ item: product, column, onChange }: Props) => {
+export const Barcode = ({ row }: CellContext<ProductDocument, 'name'>) => {
+	const product = row.original;
 	const barcode = useObservableEagerState(product.barcode$);
 	const [value, setValue] = React.useState(barcode);
 
@@ -29,9 +25,9 @@ export const Barcode = ({ item: product, column, onChange }: Props) => {
 	/**
 	 *
 	 */
-	const handleOnBlur = React.useCallback(() => {
-		onChange(product, { barcode: value });
-	}, [onChange, product, value]);
+	// const handleOnBlur = React.useCallback(() => {
+	// 	onChange(product, { barcode: value });
+	// }, [onChange, product, value]);
 
 	/**
 	 *
@@ -43,5 +39,11 @@ export const Barcode = ({ item: product, column, onChange }: Props) => {
 	/**
 	 *
 	 */
-	return <Input value={value} onChangeText={handleChangeText} onBlur={handleOnBlur} />;
+	return (
+		<Input
+			value={value}
+			onChangeText={handleChangeText}
+			//onBlur={handleOnBlur}
+		/>
+	);
 };

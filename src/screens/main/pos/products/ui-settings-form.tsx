@@ -5,11 +5,18 @@ import { useObservableState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormSwitch, FormInput } from '@wcpos/tailwind/src/form';
+import {
+	Form,
+	FormField,
+	FormSwitch,
+	FormInput,
+	useFormChangeHandler,
+} from '@wcpos/tailwind/src/form';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { columnsFormSchema, UISettingsColumnsForm } from '../../components/ui-settings';
+import { ResetUISettingsButton } from '../../components/ui-settings/reset-button';
 import { useUISettings } from '../../contexts/ui-settings';
 
 export const schema = z.object({
@@ -22,7 +29,7 @@ export const schema = z.object({
  *
  */
 export const UISettingsForm = () => {
-	const { uiSettings, getUILabel } = useUISettings('pos-products');
+	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('pos-products');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
 	const t = useT();
 
@@ -37,31 +44,46 @@ export const UISettingsForm = () => {
 	});
 
 	/**
+	 * Track formData changes and reset form
+	 */
+	React.useEffect(() => {
+		form.reset({ ...formData });
+	}, [formData, form]);
+
+	/**
+	 *
+	 */
+	useFormChangeHandler({ form, onChange: patchUI });
+
+	/**
 	 *
 	 */
 	return (
-		<Form {...form}>
-			<VStack>
-				<FormField
-					control={form.control}
-					name="showOutOfStock"
-					render={({ field }) => <FormSwitch label={getUILabel('showOutOfStock')} {...field} />}
-				/>
-				<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
-				<FormField
-					control={form.control}
-					name="metaDataKeys"
-					render={({ field }) => (
-						<FormInput
-							label={getUILabel('metaDataKeys')}
-							description={t('A list of product meta keys that should be copied to the cart', {
-								_tags: 'core',
-							})}
-							{...field}
-						/>
-					)}
-				/>
-			</VStack>
-		</Form>
+		<VStack>
+			<Form {...form}>
+				<VStack>
+					<FormField
+						control={form.control}
+						name="showOutOfStock"
+						render={({ field }) => <FormSwitch label={getUILabel('showOutOfStock')} {...field} />}
+					/>
+					<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
+					<FormField
+						control={form.control}
+						name="metaDataKeys"
+						render={({ field }) => (
+							<FormInput
+								label={getUILabel('metaDataKeys')}
+								description={t('A list of product meta keys that should be copied to the cart', {
+									_tags: 'core',
+								})}
+								{...field}
+							/>
+						)}
+					/>
+				</VStack>
+			</Form>
+			<ResetUISettingsButton onPress={resetUI} />
+		</VStack>
 	);
 };

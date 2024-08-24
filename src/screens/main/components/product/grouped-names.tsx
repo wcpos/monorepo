@@ -1,11 +1,14 @@
 import * as React from 'react';
 
+import { CellContext } from '@tanstack/react-table';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { useQuery } from '@wcpos/query';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import { useT } from '../../../../contexts/translations';
+
+type ProductDocument = import('@wcpos/database').ProductDocument;
 
 /**
  *
@@ -17,7 +20,7 @@ const GroupedNames = ({ query }) => {
 
 	return (
 		<Text>
-			<Text className="text-sm text-muted">{`${t('Grouped', { _tags: 'core' })}: `}</Text>
+			<Text className="text-sm text-muted-foreground">{`${t('Grouped', { _tags: 'core' })}: `}</Text>
 			<Text className="text-sm">{names.join(', ')}</Text>
 		</Text>
 	);
@@ -26,7 +29,9 @@ const GroupedNames = ({ query }) => {
 /**
  *
  */
-const WrappedQuery = ({ parent }) => {
+const WrappedQuery = ({ row }: CellContext<ProductDocument, 'name'>) => {
+	const parent = row.original;
+
 	/**
 	 *
 	 */

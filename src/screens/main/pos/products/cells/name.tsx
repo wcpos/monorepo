@@ -20,8 +20,9 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const Name = ({ row, column }: CellContext<ProductDocument, 'name'>) => {
-	const product = row.original;
+export const Name = (props: CellContext<ProductDocument, 'name'>) => {
+	const product = props.row.original;
+	const show = props.column.columnDef.meta.show;
 	const name = useObservableEagerState(product.name$);
 
 	/**
@@ -31,27 +32,23 @@ export const Name = ({ row, column }: CellContext<ProductDocument, 'name'>) => {
 	return (
 		<VStack space="xs">
 			<Text className="font-bold">{name}</Text>
-			{column.columnDef.meta.show('sku') && <Text className="text-small">{product.sku}</Text>}
-			{column.columnDef.meta.show('barcode') && (
-				<Text className="text-small">{product.barcode}</Text>
-			)}
-			{column.columnDef.meta.show('stock_quantity') && (
-				<StockQuantity product={product} size="small" />
-			)}
-			{column.columnDef.meta.show('meta_data') && <MetaData product={product} />}
-			{column.columnDef.meta.show('categories') && <ProductCategories row={row} />}
-			{column.columnDef.meta.show('tags') && <ProductTags row={row} />}
-			{column.columnDef.meta.show('attributes') && <PlainAttributes product={product} />}
+			{show('sku') && <Text className="text-small">{product.sku}</Text>}
+			{show('barcode') && <Text className="text-small">{product.barcode}</Text>}
+			{show('stock_quantity') && <StockQuantity {...props} className="text-sm" />}
+			{show('meta_data') && <MetaData product={product} />}
+			{show('categories') && <ProductCategories {...props} />}
+			{show('tags') && <ProductTags {...props} />}
+			{show('attributes') && <PlainAttributes {...props} />}
 
 			{product.type === 'variable' && (
 				<ProductAttributes
-					product={product}
+					{...props}
 					// variationQuery={variationQuery}
 					// setVariationQuery={setVariationQuery}
 				/>
 			)}
 
-			{product.type === 'grouped' && <GroupedNames parent={product} />}
+			{product.type === 'grouped' && <GroupedNames {...props} />}
 		</VStack>
 	);
 };

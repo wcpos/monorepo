@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
+import { CellContext } from '@tanstack/react-table';
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
@@ -13,11 +14,13 @@ import { VStack } from '@wcpos/tailwind/src/vstack';
 import { useVariationTable } from './variation-table-rows/context';
 import { useT } from '../../../../contexts/translations';
 
-type Props = {
-	product: import('@wcpos/database').ProductDocument;
-};
+type ProductDocument = import('@wcpos/database').ProductDocument;
 
-export const PlainAttributes = ({ product }: Props) => {
+/**
+ *
+ */
+export const PlainAttributes = ({ row }: CellContext<ProductDocument, 'name'>) => {
+	const product = row.original;
 	const attributes = useObservableEagerState(product.attributes$);
 
 	/**

@@ -1,8 +1,8 @@
 import * as React from 'react';
 
+import { useLocalQuery } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { useLocalQuery } from '@wcpos/query';
 
 import { Logs } from './logs';
 import { useUISettings } from '../contexts/ui-settings';

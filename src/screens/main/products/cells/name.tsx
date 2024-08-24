@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/tailwind/src/button';
@@ -18,8 +17,9 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const ProductName = ({ row, column, table }: CellContext<ProductDocument, 'name'>) => {
-	const product = row.original;
+export const ProductName = (props: CellContext<ProductDocument, 'name'>) => {
+	const product = props.row.original;
+	const show = props.column.columnDef.meta.show;
 	const name = useObservableEagerState(product.name$);
 
 	/**
@@ -37,11 +37,11 @@ export const ProductName = ({ row, column, table }: CellContext<ProductDocument,
 			{/* <EdittableText weight="bold" onChange={(name: string) => onChange(product, { name })}>
 				{name}
 			</EdittableText> */}
-			{column.columnDef.meta.show('sku') && <Text className="text-sm">{product.sku}</Text>}
-			{column.columnDef.meta.show('barcode') && <Text className="text-sm">{product.barcode}</Text>}
-			{column.columnDef.meta.show('attributes') && <PlainAttributes product={product} />}
-			{product.type === 'variable' && <ProductAttributes row={row} column={column} table={table} />}
-			{product.type === 'grouped' && <GroupedNames parent={product} />}
+			{show('sku') && <Text className="text-sm">{product.sku}</Text>}
+			{show('barcode') && <Text className="text-sm">{product.barcode}</Text>}
+			{show('attributes') && <PlainAttributes {...props} />}
+			{product.type === 'variable' && <ProductAttributes {...props} />}
+			{product.type === 'grouped' && <GroupedNames {...props} />}
 		</VStack>
 	);
 };

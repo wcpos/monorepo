@@ -103,7 +103,7 @@ export const DisplayCurrentTaxRates = ({
 						</TableHeader>
 						<TableBody>
 							{rates.map((rate, index) => (
-								<TableRow index={index}>
+								<TableRow key={rate.id} index={index}>
 									<TableCell>
 										<Text>{rate.name}</Text>
 									</TableCell>

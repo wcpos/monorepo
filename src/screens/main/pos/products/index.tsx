@@ -22,7 +22,7 @@ import { ProductVariationActions } from './cells/variation-actions';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../../contexts/translations';
-import { DataTable } from '../../components/data-table';
+import { DataTable, DataTableFooter } from '../../components/data-table';
 import FilterBar from '../../components/product/filter-bar';
 import { ProductImage } from '../../components/product/image';
 import { TaxBasedOn } from '../../components/product/tax-based-on';
@@ -89,6 +89,17 @@ const renderItem = ({ item: row, index }) => {
 		return <VariableProductRow row={row} index={index} />;
 	}
 	return <DataTableRow row={row} index={index} />;
+};
+
+/**
+ *
+ */
+const TableFooter = () => {
+	return (
+		<DataTableFooter>
+			<TaxBasedOn />
+		</DataTableFooter>
+	);
 };
 
 /**
@@ -183,7 +194,7 @@ const POSProducts = ({ isColumn = false }) => {
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
 								extraContext={{ taxLocation: 'pos' }}
-								TableFooterComponent={calcTaxes && TaxBasedOn}
+								TableFooterComponent={calcTaxes && TableFooter}
 								getItemType={({ original }) => original.type}
 								tableMeta={tableMeta}
 							/>

@@ -9,7 +9,11 @@ import { Form, useFormChangeHandler } from '@wcpos/tailwind/src/form';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../contexts/translations';
-import { columnsFormSchema, UISettingsColumnsForm } from '../components/ui-settings';
+import {
+	columnsFormSchema,
+	UISettingsColumnsForm,
+	ResetUISettingsButton,
+} from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
 export const schema = z.object({
@@ -20,7 +24,7 @@ export const schema = z.object({
  *
  */
 export const UISettingsForm = () => {
-	const { uiSettings, getUILabel, patchUI } = useUISettings('products');
+	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('products');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
 	const t = useT();
 
@@ -50,10 +54,13 @@ export const UISettingsForm = () => {
 	 *
 	 */
 	return (
-		<Form {...form}>
-			<VStack>
-				<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
-			</VStack>
-		</Form>
+		<VStack>
+			<Form {...form}>
+				<VStack>
+					<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
+				</VStack>
+			</Form>
+			<ResetUISettingsButton onPress={resetUI} />
+		</VStack>
 	);
 };

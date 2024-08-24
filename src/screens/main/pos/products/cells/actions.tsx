@@ -21,7 +21,7 @@ export const Actions = ({ row }: CellContext<ProductDocument, 'actions'>) => {
 		<IconButton
 			name="circlePlus"
 			variant="success"
-			size="xl"
+			size="4xl"
 			onPress={() => addProduct(row.original)}
 		/>
 	);
