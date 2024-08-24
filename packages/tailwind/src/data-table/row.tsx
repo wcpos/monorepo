@@ -8,24 +8,15 @@ import { TableRow, TableCell } from '../table2';
 interface Props<TData> {
 	row: Row<TData>;
 	index: number;
-	onRowPress?: (row: Row<TData>) => void;
+	className?: string;
 }
 
 /**
  * @TODO - it might be good to have a local state for visibility of columns to make the UI more responsive
  */
-export const DataTableRow = <TData,>({ row, index, onRowPress }: Props<TData>) => {
+export const DataTableRow = <TData,>({ row, index, className }: Props<TData>) => {
 	return (
-		<TableRow
-			className={cn('active:opacity-70', index % 2 && 'bg-zinc-100/50 dark:bg-zinc-900/50')}
-			// onPress={
-			// 	onRowPress
-			// 		? () => {
-			// 				onRowPress(row);
-			// 			}
-			// 		: undefined
-			// }
-		>
+		<TableRow index={index} className={className}>
 			{row.getVisibleCells().map((cell) => {
 				const meta = cell.column.columnDef.meta;
 

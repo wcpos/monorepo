@@ -74,8 +74,8 @@ const PressableTableRow = React.forwardRef<
 ));
 PressableTableRow.displayName = 'PressableTableRow';
 
-const TableRow = React.forwardRef<ViewRef, SlottableViewProps>(
-	({ asChild, className, ...props }, ref) => {
+const TableRow = React.forwardRef<ViewRef, SlottableViewProps & { index?: number }>(
+	({ asChild, className, index = 0, ...props }, ref) => {
 		const Component = asChild ? Slot.View : View;
 		return (
 			<Component
@@ -83,6 +83,7 @@ const TableRow = React.forwardRef<ViewRef, SlottableViewProps>(
 				ref={ref}
 				className={cn(
 					'flex-row border-border border-b web:transition-colors web:hover:bg-muted/50 web:data-[state=selected]:bg-muted',
+					index % 2 && 'bg-zinc-100/50 dark:bg-zinc-900/50',
 					className
 				)}
 				{...props}
@@ -96,11 +97,11 @@ const TableHead = React.forwardRef<
 	React.ElementRef<typeof TablePrimitive.Head>,
 	React.ComponentPropsWithoutRef<typeof TablePrimitive.Head>
 >(({ className, ...props }, ref) => (
-	<TextClassContext.Provider value="text-muted-foreground">
+	<TextClassContext.Provider value="text-muted-foreground text-xs uppercase text-left font-medium">
 		<TablePrimitive.Head
 			ref={ref}
 			className={cn(
-				'flex-1 h-8 px-2 text-left justify-center font-medium [&:has([role=checkbox])]:pr-0',
+				'flex-1 h-8 px-2 bg-muted justify-center [&:has([role=checkbox])]:pr-0',
 				className
 			)}
 			{...props}
