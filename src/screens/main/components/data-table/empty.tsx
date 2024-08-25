@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { TableRow } from '@wcpos/tailwind/src/table2';
+import { TableRow } from '@wcpos/tailwind/src/table';
 import { Text } from '@wcpos/tailwind/src/text';
 
 import { useT } from '../../../../contexts/translations';

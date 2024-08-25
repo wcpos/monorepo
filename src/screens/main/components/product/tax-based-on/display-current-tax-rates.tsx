@@ -15,7 +15,7 @@ import {
 	TableRow,
 	TableCell,
 	TableBody,
-} from '@wcpos/tailwind/src/table2';
+} from '@wcpos/tailwind/src/table';
 import { Text } from '@wcpos/tailwind/src/text';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 

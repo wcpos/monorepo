@@ -1,104 +1,80 @@
 import * as React from 'react';
 
 import get from 'lodash/get';
-import { useObservableState, useObservableEagerState } from 'observable-hooks';
 
-import { Query, useInfiniteScroll } from '@wcpos/query';
+import { useLocalQuery } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
-import Table, { TableContextProps, CellRenderer } from '@wcpos/tailwind/src/table';
 
 import { Context } from './cells/context';
 import { Date } from './cells/date';
 import { Level } from './cells/level';
+import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
-import EmptyTableRow from '../components/empty-table-row';
-import { TextCell } from '../components/text-cell';
-import { UISettings } from '../components/ui-settings/button';
+import { DataTable } from '../components/data-table';
+import { UISettingsButton } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
+type LogDocument = import('@wcpos/database').LogDocument;
+
 const cells = {
-	timestamp: Date,
-	level: Level,
 	context: Context,
+	date: Date,
+	level: Level,
+};
+
+const renderCell = (props) => get(cells, props.column.id);
+
+const TableFooter = () => {
+	return null;
 };
 
 /**
  *
  */
-export const Logs = ({ query }) => {
-	const { uiSettings, getUILabel } = useUISettings('logs');
+export const Logs = () => {
+	const { uiSettings } = useUISettings('logs');
 	const t = useT();
-	const result = useInfiniteScroll(query);
-	const columns = useObservableEagerState(uiSettings.columns$);
-	const { sortBy, sortDirection } = useObservableState(query.params$, query.getParams());
 
 	/**
 	 *
 	 */
-	const cellRenderer = React.useCallback<CellRenderer<{ document: T }>>(
-		({ item, column, index }) => {
-			const Cell = get(cells, [column.key]);
-
-			if (Cell) {
-				return (
-					<ErrorBoundary>
-						<Suspense>
-							<Cell item={item.document} column={column} index={index} />
-						</Suspense>
-					</ErrorBoundary>
-				);
-			}
-
-			return <TextCell item={item.document} column={column} />;
+	const query = useLocalQuery({
+		queryKeys: ['logs'],
+		collectionName: 'logs',
+		initialParams: {
+			sortBy: uiSettings.sortBy,
+			sortDirection: uiSettings.sortDirection,
 		},
-		[]
-	);
-
-	/**
-	 *
-	 */
-	const context = React.useMemo(() => {
-		return {
-			columns: columns.filter((column) => column.show),
-			sort: result.searchActive
-				? null
-				: ({ sortBy, sortDirection }) => query.sort(sortBy, sortDirection),
-			sortBy,
-			sortDirection,
-			cellRenderer,
-			headerLabel: ({ column }) => getUILabel(column.key),
-			query,
-		};
-	}, [columns, result.searchActive, sortBy, sortDirection, cellRenderer, query, getUILabel]);
+	});
 
 	/**
 	 *
 	 */
 	return (
-		<Box className="h-full p-2">
+		<Box className="p-2 h-full">
 			<Card className="flex-1">
 				<CardHeader className="p-2 bg-input">
 					<HStack className="justify-end">
-						<UISettings uiSettings={uiSettings} title={t('Log Settings', { _tags: 'core' })} />
+						<UISettingsButton title={t('Logs Settings', { _tags: 'core' })}>
+							<UISettingsForm />
+						</UISettingsButton>
 					</HStack>
 				</CardHeader>
 				<CardContent className="flex-1 p-0">
 					<ErrorBoundary>
 						<Suspense>
-							<Table
-								data={result.hits}
-								// renderItem={renderItem}
-								estimatedItemSize={50}
-								context={context}
-								ListEmptyComponent={
-									<EmptyTableRow message={t('No logs found', { _tags: 'core' })} />
-								}
-								onEndReached={() => result.nextPage()}
-								onEndReachedThreshold={0.5}
+							<DataTable<LogDocument>
+								id="logs"
+								query={query}
+								renderCell={renderCell}
+								noDataMessage={t('No logs found', { _tags: 'core' })}
+								estimatedItemSize={100}
+								TableFooterComponent={TableFooter}
+								keyExtractor={(row) => row.original.logId}
 							/>
 						</Suspense>
 					</ErrorBoundary>

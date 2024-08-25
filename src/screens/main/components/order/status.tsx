@@ -3,7 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useQueryManager } from '@wcpos/query';
+import { useDataTable } from '@wcpos/tailwind/src/data-table';
 import { IconButton } from '@wcpos/tailwind/src/icon-button';
 import { Text } from '@wcpos/tailwind/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
@@ -61,8 +61,7 @@ export const Status = ({ row }: CellContext<OrderDocument, 'status'>) => {
 	const status = useObservableEagerState(order.status$);
 	const iconName = get(iconMap, [status, 'name'], 'circleQuestion');
 	const iconType = get(iconMap, [status, 'type'], 'disabled');
-	const manager = useQueryManager();
-	const query = manager.getQuery(['orders']);
+	const { query } = useDataTable();
 	const { getLabel } = useOrderStatusLabel();
 
 	/**

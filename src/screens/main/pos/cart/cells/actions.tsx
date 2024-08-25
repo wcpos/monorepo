@@ -35,6 +35,11 @@ export const Actions = ({ row, table }: CellContext<Props, 'actions'>) => {
 	 *
 	 */
 	return (
-		<IconButton name="circleXmark" variant="destructive" size="xl" onPress={handleRemoveLineItem} />
+		<IconButton
+			name="circleXmark"
+			variant="destructive"
+			size="4xl"
+			onPress={handleRemoveLineItem}
+		/>
 	);
 };

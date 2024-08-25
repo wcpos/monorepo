@@ -8,6 +8,7 @@ import type {
 	OrderDocument,
 	CustomerDocument,
 	TaxRateDocument,
+	LogDocument,
 } from '@wcpos/database';
 import { useInfiniteScroll, Query } from '@wcpos/query';
 import { DataTable as Table, DataTableProps } from '@wcpos/tailwind/src/data-table';
@@ -22,7 +23,12 @@ import { TextCell } from '../text-cell';
 
 import type { CellContext, ColumnDef } from '@tanstack/react-table';
 
-type DocumentType = ProductDocument | OrderDocument | CustomerDocument | TaxRateDocument;
+type DocumentType =
+	| ProductDocument
+	| OrderDocument
+	| CustomerDocument
+	| TaxRateDocument
+	| LogDocument;
 type CollectionFromDocument<T> = T extends { collection: infer C } ? C : never;
 
 interface Props<TDocument> extends DataTableProps<TDocument, any> {

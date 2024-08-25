@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
+
 import { useQuery } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
@@ -24,7 +26,7 @@ import { PaymentMethod } from '../components/order/payment-method';
 import { Status } from '../components/order/status';
 import { Total } from '../components/order/total';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UISettings, UISettingsButton } from '../components/ui-settings/button';
+import { UISettingsButton } from '../components/ui-settings/button';
 import { useUISettings } from '../contexts/ui-settings';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -45,6 +47,8 @@ const cells = {
 	created_via: CreatedVia,
 	cashier: Cashier,
 };
+
+const renderCell = (props) => get(cells, props.column.id);
 
 /**
  *
@@ -97,7 +101,7 @@ const Orders = () => {
 							<DataTable<OrderDocument>
 								id="orders"
 								query={query}
-								cells={cells}
+								renderCell={renderCell}
 								noDataMessage={t('No orders found', { _tags: 'core' })}
 								estimatedItemSize={100}
 							/>

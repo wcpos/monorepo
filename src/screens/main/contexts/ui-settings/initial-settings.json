@@ -82,7 +82,7 @@
       {
         "key": "actions",
         "disableSort": true,
-        "width": 46,
+        "width": 60,
         "hideLabel": true,
         "show": true
       }
@@ -166,7 +166,7 @@
       },
       {
         "key": "actions",
-        "width": 46,
+        "width": 60,
         "hideLabel": true,
         "show": true
       }

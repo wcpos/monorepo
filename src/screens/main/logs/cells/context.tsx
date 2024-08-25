@@ -1,13 +1,15 @@
 import * as React from 'react';
 
+import { CellContext } from '@tanstack/react-table';
+
 import { Tree } from '@wcpos/tailwind/src/tree';
 
-interface Props {
-	item: import('@wcpos/database').LogDocument;
-	column: import('@wcpos/tailwind/src/table').ColumnProps;
-}
+type LogDocument = import('@wcpos/database').LogDocument;
 
-export const Context = ({ item: log, column }: Props) => {
+/**
+ *
+ */
+export const Context = ({ row }: CellContext<LogDocument, 'context'>) => {
 	return (
 		<Tree data={log.context} hideRoot shouldExpandNodeInitially={() => false} rawToggle={false} />
 	);

@@ -9,7 +9,11 @@ import { Form, FormField, FormSwitch, FormInput } from '@wcpos/tailwind/src/form
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
-import { columnsFormSchema, UISettingsColumnsForm } from '../../components/ui-settings';
+import {
+	columnsFormSchema,
+	UISettingsColumnsForm,
+	ResetUISettingsButton,
+} from '../../components/ui-settings';
 import { useUISettings } from '../../contexts/ui-settings';
 
 export const schema = z.object({
@@ -24,7 +28,7 @@ export const schema = z.object({
  *
  */
 export const UISettingsForm = () => {
-	const { uiSettings, getUILabel } = useUISettings('pos-cart');
+	const { uiSettings, getUILabel, resetUI } = useUISettings('pos-cart');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
 	const t = useT();
 
@@ -42,25 +46,28 @@ export const UISettingsForm = () => {
 	 *
 	 */
 	return (
-		<Form {...form}>
-			<VStack>
-				<FormField
-					control={form.control}
-					name="autoShowReceipt"
-					render={({ field }) => <FormSwitch label={getUILabel('autoShowReceipt')} {...field} />}
-				/>
-				<FormField
-					control={form.control}
-					name="autoPrintReceipt"
-					render={({ field }) => <FormSwitch label={getUILabel('autoPrintReceipt')} {...field} />}
-				/>
-				<FormField
-					control={form.control}
-					name="quickDiscounts"
-					render={({ field }) => <FormInput label={getUILabel('quickDiscounts')} {...field} />}
-				/>
-				<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
-			</VStack>
-		</Form>
+		<VStack space="lg">
+			<Form {...form}>
+				<VStack>
+					<FormField
+						control={form.control}
+						name="autoShowReceipt"
+						render={({ field }) => <FormSwitch label={getUILabel('autoShowReceipt')} {...field} />}
+					/>
+					<FormField
+						control={form.control}
+						name="autoPrintReceipt"
+						render={({ field }) => <FormSwitch label={getUILabel('autoPrintReceipt')} {...field} />}
+					/>
+					<FormField
+						control={form.control}
+						name="quickDiscounts"
+						render={({ field }) => <FormInput label={getUILabel('quickDiscounts')} {...field} />}
+					/>
+					<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
+				</VStack>
+			</Form>
+			<ResetUISettingsButton onPress={resetUI} />
+		</VStack>
 	);
 };

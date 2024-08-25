@@ -7,7 +7,7 @@ import type { ProductDocument } from '@wcpos/database';
 import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { cn, getTailwindJustifyClass } from '@wcpos/tailwind/src/lib/utils';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { TableRow, TableCell } from '@wcpos/tailwind/src/table2';
+import { TableRow, TableCell } from '@wcpos/tailwind/src/table';
 import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { VariationTableFooter } from './footer';

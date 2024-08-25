@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import get from 'lodash/get';
+
 import { useQuery } from '@wcpos/query';
 import { Box } from '@wcpos/tailwind/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
@@ -7,16 +9,32 @@ import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
 import { HStack } from '@wcpos/tailwind/src/hstack';
 import { Suspense } from '@wcpos/tailwind/src/suspense';
 
-import cells from './cells';
+import { Actions } from './cells/actions';
+import { Address } from './cells/address';
+import { Avatar } from './cells/avatar';
+import { CustomerEmail } from './cells/email';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { AddNewCustomer } from '../components/customer/add-new';
 import { DataTable } from '../components/data-table';
+import { Date } from '../components/date';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UISettings, UISettingsButton } from '../components/ui-settings/button';
+import { UISettingsButton } from '../components/ui-settings/button';
 import { useUISettings } from '../contexts/ui-settings';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
+
+const cells = {
+	avatar_url: Avatar,
+	billing: Address,
+	shipping: Address,
+	actions: Actions,
+	email: CustomerEmail,
+	date_created_gmt: Date,
+	date_modified_gmt: Date,
+};
+
+const renderCell = (props) => get(cells, props.column.id);
 
 /**
  *
@@ -61,7 +79,7 @@ const Customers = () => {
 							<DataTable<CustomerDocument>
 								id="customers"
 								query={query}
-								cells={cells}
+								renderCell={renderCell}
 								noDataMessage={t('No customers found', { _tags: 'core' })}
 								estimatedItemSize={100}
 							/>
