@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DataTableRow } from './row';
 import { cn } from '../lib/utils';
-import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table2';
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table';
 
 interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
@@ -89,7 +89,7 @@ const DataTable = <TData, TValue>({
 			expandedRef.current = value;
 		},
 		getRowCanExpand: (row) => row.original.type === 'variable',
-		debugTable: true,
+		// debugTable: true,
 		// manualExpanding: true,
 		meta: {
 			expanded$,
