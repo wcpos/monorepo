@@ -3,7 +3,9 @@ import * as React from 'react';
 import { flexRender, Row } from '@tanstack/react-table';
 
 import { cn, getTailwindJustifyClass } from '../lib/utils';
-import { TableRow, TableCell } from '../table2';
+import { TableRow, TableCell } from '../table';
+
+export type Renderable<TProps> = React.ReactNode | React.ComponentType<TProps>;
 
 interface Props<TData> {
 	row: Row<TData>;
