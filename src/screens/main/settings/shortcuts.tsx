@@ -7,8 +7,8 @@ import {
 	TableRow,
 	TableCell,
 	TableBody,
-} from '@wcpos/tailwind/src/table';
-import { Text } from '@wcpos/tailwind/src/text';
+} from '@wcpos/components/src/table';
+import { Text } from '@wcpos/components/src/text';
 
 import { useT } from '../../../contexts/translations';
 

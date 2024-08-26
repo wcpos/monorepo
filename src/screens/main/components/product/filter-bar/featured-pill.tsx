@@ -4,7 +4,7 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import type { Query } from '@wcpos/query';
-import { ButtonText, ButtonPill } from '@wcpos/tailwind/src/button';
+import { ButtonText, ButtonPill } from '@wcpos/components/src/button';
 
 import { useT } from '../../../../../contexts/translations';
 

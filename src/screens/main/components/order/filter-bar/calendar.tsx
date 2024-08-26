@@ -11,12 +11,12 @@ import {
 } from 'date-fns';
 import * as Locales from 'date-fns/locale';
 
-import { Box } from '@wcpos/tailwind/src/box';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Calendar } from '@wcpos/tailwind/src/calendar';
-import type { DateRange } from '@wcpos/tailwind/src/calendar';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Box } from '@wcpos/components/src/box';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Calendar } from '@wcpos/components/src/calendar';
+import type { DateRange } from '@wcpos/components/src/calendar';
+import { HStack } from '@wcpos/components/src/hstack';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../contexts/translations';
 

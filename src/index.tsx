@@ -4,9 +4,9 @@ import { SafeAreaProviderCompat } from '@react-navigation/elements';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // import { enableFreeze } from 'react-native-screens';
 
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { PortalHost } from '@wcpos/tailwind/src/portal';
-import { Toast, toastConfig } from '@wcpos/tailwind/src/toast';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { PortalHost } from '@wcpos/components/src/portal';
+import { Toast, toastConfig } from '@wcpos/components/src/toast';
 
 import { AppStateProvider } from './contexts/app-state';
 import { TranslationProvider } from './contexts/translations';

@@ -3,10 +3,10 @@ import * as React from 'react';
 import defaults from 'lodash/defaults';
 
 import { useQuery } from '@wcpos/query';
-import { Command, CommandInput, CommandEmpty, CommandButton } from '@wcpos/tailwind/src/command';
-import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/tailwind/src/popover';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { Text } from '@wcpos/tailwind/src/text';
+import { Command, CommandInput, CommandEmpty, CommandButton } from '@wcpos/components/src/command';
+import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/components/src/popover';
+import { Suspense } from '@wcpos/components/src/suspense';
+import { Text } from '@wcpos/components/src/text';
 
 import { CustomerList } from './list';
 import { useT } from '../../../../contexts/translations';

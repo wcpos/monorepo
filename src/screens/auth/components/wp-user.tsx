@@ -4,10 +4,10 @@ import { View } from 'react-native';
 import get from 'lodash/get';
 import { useObservableSuspense } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import { Dialog, DialogContent } from '@wcpos/tailwind/src/dialog';
-import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { Dialog, DialogContent } from '@wcpos/components/src/dialog';
+import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/components/src/select';
+import { Toast } from '@wcpos/components/src/toast';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';

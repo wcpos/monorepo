@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
 import { useObservableSuspense } from 'observable-hooks';
 
-import { WebView } from '@wcpos/tailwind/src/webview';
+import { WebView } from '@wcpos/components/src/webview';
 import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../contexts/app-state';

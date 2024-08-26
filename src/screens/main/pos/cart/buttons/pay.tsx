@@ -4,8 +4,8 @@ import { useNavigation, StackActions } from '@react-navigation/native';
 import { useObservableEagerState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Toast } from '@wcpos/components/src/toast';
 
 import { useT } from '../../../../../contexts/translations';
 import usePushDocument from '../../../contexts/use-push-document';

@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { Box } from '@wcpos/tailwind/src/box';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Box } from '@wcpos/components/src/box';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { HStack } from '@wcpos/components/src/hstack';
 
 import Customer from './customer';
 import { UISettingsForm } from './ui-settings-form';

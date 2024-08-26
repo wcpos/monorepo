@@ -5,8 +5,8 @@ import { map } from 'rxjs/operators';
 
 import type { OrderCollection } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/components/src/select';
 
 import { useT } from '../../../../../contexts/translations';
 import { useOrderStatusLabel } from '../../../hooks/use-order-status-label';

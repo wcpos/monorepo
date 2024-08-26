@@ -3,8 +3,8 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { MetaData } from './meta-data';
 import { ProductAttributes, PlainAttributes } from '../../../components/product/attributes';

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import { CommandList, CommandItem } from '@wcpos/tailwind/src/command';
+import { CommandList, CommandItem } from '@wcpos/components/src/command';
 
 /**
  *

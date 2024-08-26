@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Icon } from '@wcpos/tailwind/src/icon';
-import { Input } from '@wcpos/tailwind/src/input';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Icon } from '@wcpos/components/src/icon';
+import { Input } from '@wcpos/components/src/input';
 
 import { useT } from '../../../../../contexts/translations';
 

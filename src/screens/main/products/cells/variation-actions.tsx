@@ -10,17 +10,17 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-} from '@wcpos/tailwind/src/alert-dialog';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+} from '@wcpos/components/src/alert-dialog';
+import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from '@wcpos/tailwind/src/dropdown-menu';
-import { Icon } from '@wcpos/tailwind/src/icon';
-import { Text } from '@wcpos/tailwind/src/text';
+} from '@wcpos/components/src/dropdown-menu';
+import { Icon } from '@wcpos/components/src/icon';
+import { Text } from '@wcpos/components/src/text';
 
 import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';

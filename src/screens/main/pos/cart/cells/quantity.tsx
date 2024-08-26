@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../contexts/translations';
 import NumberInput from '../../../components/number-input';

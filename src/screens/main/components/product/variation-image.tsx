@@ -6,7 +6,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import Svg, { Line } from 'react-native-svg';
 
 import type { ProductVariationDocument } from '@wcpos/database';
-import { Image } from '@wcpos/tailwind/src/image';
+import { Image } from '@wcpos/components/src/image';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 

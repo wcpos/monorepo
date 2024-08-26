@@ -1,8 +1,8 @@
 import * as React from 'react';
 
 import { ProductDocument } from '@wcpos/database';
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/components/src/select';
 
 import { useT } from '../../../../contexts/translations';
 

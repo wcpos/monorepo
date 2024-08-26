@@ -4,8 +4,8 @@ import get from 'lodash/get';
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { IconButton } from '@wcpos/tailwind/src/icon-button';
+import { HStack } from '@wcpos/components/src/hstack';
+import { IconButton } from '@wcpos/components/src/icon-button';
 
 import { VariationAttributePill } from './attribute-pill';
 import { useVariationTable } from './context';

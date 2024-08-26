@@ -6,8 +6,8 @@ import { useObservableState } from 'observable-hooks';
 import { useReactToPrint } from 'react-to-print';
 import { map } from 'rxjs/operators';
 
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { WebView } from '@wcpos/tailwind/src/webview';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { WebView } from '@wcpos/components/src/webview';
 
 import { useUISettings } from '../../contexts/ui-settings';
 

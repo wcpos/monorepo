@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
 
-import { Tree } from '@wcpos/tailwind/src/tree';
+import { Tree } from '@wcpos/components/src/tree';
 
 type LogDocument = import('@wcpos/database').LogDocument;
 
@@ -10,7 +10,7 @@ type LogDocument = import('@wcpos/database').LogDocument;
  *
  */
 export const Context = ({ row }: CellContext<LogDocument, 'context'>) => {
-	return (
-		<Tree data={log.context} hideRoot shouldExpandNodeInitially={() => false} rawToggle={false} />
-	);
+	const log = row.original;
+
+	return <Tree value={log.context} collapsed />;
 };

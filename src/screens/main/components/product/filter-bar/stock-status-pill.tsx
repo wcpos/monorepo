@@ -4,8 +4,8 @@ import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { Query } from '@wcpos/query';
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/components/src/select';
 
 import { useT } from '../../../../../contexts/translations';
 import { useStockStatusLabel } from '../../../hooks/use-stock-status-label';

@@ -3,7 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
-import { Avatar } from '@wcpos/tailwind/src/avatar';
+import { Avatar } from '@wcpos/components/src/avatar';
 import {
 	Dialog,
 	DialogClose,
@@ -11,15 +11,15 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from '@wcpos/tailwind/src/dialog';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Icon } from '@wcpos/tailwind/src/icon';
-import { IconButton } from '@wcpos/tailwind/src/icon-button';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { Text } from '@wcpos/tailwind/src/text';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/tailwind/src/tooltip';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+} from '@wcpos/components/src/dialog';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Icon } from '@wcpos/components/src/icon';
+import { IconButton } from '@wcpos/components/src/icon-button';
+import { Suspense } from '@wcpos/components/src/suspense';
+import { Text } from '@wcpos/components/src/text';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/src/tooltip';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';

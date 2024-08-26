@@ -4,11 +4,11 @@ import get from 'lodash/get';
 import { useObservableSuspense, useObservableState, useSubscription } from 'observable-hooks';
 
 import { useReplicationState } from '@wcpos/query';
-import { useDataTable } from '@wcpos/tailwind/src/data-table';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import Table, { CellRenderer } from '@wcpos/tailwind/src/table';
-import { Text } from '@wcpos/tailwind/src/text';
+import { useDataTable } from '@wcpos/components/src/data-table';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Suspense } from '@wcpos/components/src/suspense';
+import Table, { CellRenderer } from '@wcpos/components/src/table';
+import { Text } from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import { useVariationTable } from './context';

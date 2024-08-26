@@ -8,7 +8,7 @@ import {
 import { isRxDocument } from 'rxdb';
 
 import { useModal } from '@wcpos/components/src/modal';
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Toast } from '@wcpos/components/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';

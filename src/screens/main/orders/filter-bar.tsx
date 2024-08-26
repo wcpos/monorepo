@@ -10,9 +10,9 @@ import {
 import { of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
-import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { Suspense } from '@wcpos/components/src/suspense';
 import { useQuery } from '@wcpos/query';
-import { HStack } from '@wcpos/tailwind/src/hstack';
+import { HStack } from '@wcpos/components/src/hstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';

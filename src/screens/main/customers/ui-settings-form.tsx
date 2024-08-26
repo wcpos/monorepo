@@ -5,10 +5,10 @@ import { useObservableState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Form, useFormChangeHandler } from '@wcpos/tailwind/src/form';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Form, useFormChangeHandler } from '@wcpos/components/src/form';
+import { HStack } from '@wcpos/components/src/hstack';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../contexts/translations';
 import { columnsFormSchema, UISettingsColumnsForm } from '../components/ui-settings';

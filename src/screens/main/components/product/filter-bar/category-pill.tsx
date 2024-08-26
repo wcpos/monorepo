@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
 import { Query } from '@wcpos/query';
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/tailwind/src/popover';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/components/src/popover';
 
 import { useT } from '../../../../../contexts/translations';
 import { CategorySelect } from '../category-select';

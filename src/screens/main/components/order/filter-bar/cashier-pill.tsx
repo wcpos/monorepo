@@ -4,7 +4,7 @@ import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 
 import { useT } from '../../../../../contexts/translations';
 import { CustomerSelect } from '../../../components/customer-select';

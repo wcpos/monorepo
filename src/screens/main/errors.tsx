@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useSubscription } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Toast } from '@wcpos/components/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 /**

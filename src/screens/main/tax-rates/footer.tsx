@@ -3,8 +3,8 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 
 import { useReplicationState } from '@wcpos/query';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Text } from '@wcpos/tailwind/src/text';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Text } from '@wcpos/components/src/text';
 
 import { useT } from '../../../contexts/translations';
 import SyncButton from '../components/sync-button';

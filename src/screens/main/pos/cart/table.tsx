@@ -13,9 +13,9 @@ import get from 'lodash/get';
 import { useObservableEagerState, useObservableRef, useSubscription } from 'observable-hooks';
 import { skip, debounceTime } from 'rxjs/operators';
 
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { cn } from '@wcpos/tailwind/src/lib/utils';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { cn } from '@wcpos/components/src/lib/utils';
+import { Suspense } from '@wcpos/components/src/suspense';
 import {
 	Table,
 	TableHeader,
@@ -24,8 +24,8 @@ import {
 	TableBody,
 	TableCell,
 	PulseTableRow,
-} from '@wcpos/tailwind/src/table';
-import { Text } from '@wcpos/tailwind/src/text';
+} from '@wcpos/components/src/table';
+import { Text } from '@wcpos/components/src/text';
 
 import { Actions } from './cells/actions';
 import { FeeAndShippingTotal } from './cells/fee-and-shipping-total';

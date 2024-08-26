@@ -6,7 +6,7 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from '@wcpos/tailwind/src/select';
+} from '@wcpos/components/src/select';
 
 import { useT } from '../../../../contexts/translations';
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';

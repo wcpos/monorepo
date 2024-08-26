@@ -4,7 +4,7 @@ import { CellContext } from '@tanstack/react-table';
 import isFinite from 'lodash/isFinite';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Text } from '@wcpos/tailwind/src/text';
+import { Text } from '@wcpos/components/src/text';
 
 import { useAppState } from '../../../../../contexts/app-state';
 

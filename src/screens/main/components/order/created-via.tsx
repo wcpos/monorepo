@@ -3,9 +3,9 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { IconButton } from '@wcpos/tailwind/src/icon-button';
-import { Text } from '@wcpos/tailwind/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
+import { IconButton } from '@wcpos/components/src/icon-button';
+import { Text } from '@wcpos/components/src/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
 
 import { useT } from '../../../../contexts/translations';
 

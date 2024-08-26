@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useSubscription } from 'observable-hooks';
 
 import type { Query } from '@wcpos/query';
-import { Input } from '@wcpos/tailwind/src/input';
+import { Input } from '@wcpos/components/src/input';
 
 interface Props {
 	query: Query<any>;

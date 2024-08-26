@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Icon } from '@wcpos/tailwind/src/icon';
+import { Icon } from '@wcpos/components/src/icon';
 import {
 	Table,
 	TableHeader,
@@ -8,8 +8,8 @@ import {
 	TableBody,
 	TableRow,
 	TableCell,
-} from '@wcpos/tailwind/src/table';
-import { Text } from '@wcpos/tailwind/src/text';
+} from '@wcpos/components/src/table';
+import { Text } from '@wcpos/components/src/text';
 
 import { useT } from '../../../contexts/translations';
 

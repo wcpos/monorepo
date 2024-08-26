@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
-import { FormField, FormInput, FormSelect } from '@wcpos/tailwind/src/form';
+import { FormField, FormInput, FormSelect } from '@wcpos/components/src/form';
 
 import { CountrySelect, StateSelect } from './country-state-select';
 import { useT } from '../../../contexts/translations';

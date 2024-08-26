@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { map } from 'rxjs/operators';
 
-import { DataTableRow, useDataTable } from '@wcpos/tailwind/src/data-table';
+import { DataTableRow, useDataTable } from '@wcpos/components/src/data-table';
 
 import { Variations } from './variations';
 

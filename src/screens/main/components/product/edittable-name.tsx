@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Input } from '@wcpos/tailwind/src/input';
+import { Input } from '@wcpos/components/src/input';
 
 const EditableName = ({ name, saveOnBlur }) => {
 	const [newName, setNewName] = React.useState(name);

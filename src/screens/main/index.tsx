@@ -8,9 +8,9 @@ import { isRxDatabase } from 'rxdb';
 
 import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
 import { QueryProvider, useQuery } from '@wcpos/query';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { Icon } from '@wcpos/tailwind/src/icon';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Icon } from '@wcpos/components/src/icon';
+import { Suspense } from '@wcpos/components/src/suspense';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';

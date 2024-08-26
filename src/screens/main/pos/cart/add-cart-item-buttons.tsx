@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	Dialog,
 	DialogTrigger,
@@ -11,14 +11,14 @@ import {
 	DialogTitle,
 	DialogDescription,
 	DialogFooter,
-} from '@wcpos/tailwind/src/dialog';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Icon } from '@wcpos/tailwind/src/icon';
-import { IconButton } from '@wcpos/tailwind/src/icon-button';
-import { ModalContent } from '@wcpos/tailwind/src/modal';
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+} from '@wcpos/components/src/dialog';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Icon } from '@wcpos/components/src/icon';
+import { IconButton } from '@wcpos/components/src/icon-button';
+import { ModalContent } from '@wcpos/components/src/modal';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { AddFee, AddFeeHandle, FeeFormValues } from './add-fee';
 import { AddMiscProduct, AddMiscProductHandle, MiscProductFormValues } from './add-misc-product';

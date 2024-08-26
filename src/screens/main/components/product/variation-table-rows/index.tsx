@@ -2,9 +2,9 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { useQuery } from '@wcpos/query';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Suspense } from '@wcpos/components/src/suspense';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { VariationsFilterBar } from './filter-bar';
 import Table from './table';

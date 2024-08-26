@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { BarcodeDisplay } from './display';
 import { BarcodeSettings } from './settings';

@@ -9,11 +9,11 @@ import {
 	CommandList,
 	CommandItem,
 	CommandButton,
-} from '@wcpos/tailwind/src/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/tailwind/src/popover';
-import { Select } from '@wcpos/tailwind/src/select';
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+} from '@wcpos/components/src/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
+import { Select } from '@wcpos/components/src/select';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import useCurrencies, { CurrenciesProvider } from '../../../contexts/currencies';
 import { useT } from '../../../contexts/translations';

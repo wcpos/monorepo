@@ -3,12 +3,12 @@ import * as React from 'react';
 import { flexRender } from '@tanstack/react-table';
 import { useObservableSuspense } from 'observable-hooks';
 
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { cn, getTailwindJustifyClass } from '@wcpos/components/src/lib/utils';
+import { Suspense } from '@wcpos/components/src/suspense';
+import { TableRow, TableCell } from '@wcpos/components/src/table';
+import { VStack } from '@wcpos/components/src/vstack';
 import type { ProductDocument } from '@wcpos/database';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { cn, getTailwindJustifyClass } from '@wcpos/tailwind/src/lib/utils';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { TableRow, TableCell } from '@wcpos/tailwind/src/table';
-import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { VariationTableFooter } from './footer';
 import { TextCell } from '../../../../components/text-cell';

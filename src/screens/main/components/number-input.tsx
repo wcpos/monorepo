@@ -3,9 +3,9 @@ import { StyleProp, ViewStyle } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Numpad } from '@wcpos/tailwind/src/numpad';
-import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/tailwind/src/popover';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Numpad } from '@wcpos/components/src/numpad';
+import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';

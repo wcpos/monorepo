@@ -1,6 +1,6 @@
 import { useSubscription, useObservableEagerState } from 'observable-hooks';
 
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Toast } from '@wcpos/components/src/toast';
 
 import { useT } from '../../../../contexts/translations';
 import { useUISettings } from '../../contexts/ui-settings';

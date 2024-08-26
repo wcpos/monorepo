@@ -4,8 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput, FormSwitch } from '@wcpos/tailwind/src/form';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/src/form';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { AmountWidget } from '../../components/amount-widget';

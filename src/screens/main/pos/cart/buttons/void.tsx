@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Toast } from '@wcpos/components/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../../contexts/translations';

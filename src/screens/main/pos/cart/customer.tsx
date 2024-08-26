@@ -4,10 +4,10 @@ import get from 'lodash/get';
 import pick from 'lodash/pick';
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import { Dialog, DialogContent } from '@wcpos/tailwind/src/dialog';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Text } from '@wcpos/tailwind/src/text';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { Dialog, DialogContent } from '@wcpos/components/src/dialog';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Text } from '@wcpos/components/src/text';
 
 import { CustomerForm, CustomerFormValues, SubmitCustomerHandle } from './edit-customer';
 import { useT } from '../../../../contexts/translations';

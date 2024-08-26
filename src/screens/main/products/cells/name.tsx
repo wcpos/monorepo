@@ -3,9 +3,9 @@ import { View } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { PlainAttributes, ProductAttributes } from '../../components/product/attributes';
 import GroupedNames from '../../components/product/grouped-names';

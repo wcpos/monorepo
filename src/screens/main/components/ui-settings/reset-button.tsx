@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { Button, ButtonText } from '@wcpos/components/src/button';
 
 import { useT } from '../../../../contexts/translations';
 

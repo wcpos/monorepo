@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Toast } from '@wcpos/components/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';

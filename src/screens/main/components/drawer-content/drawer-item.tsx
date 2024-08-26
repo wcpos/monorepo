@@ -3,11 +3,11 @@ import { StyleProp, ViewStyle, TextStyle } from 'react-native';
 
 import { DrawerProps } from '@react-navigation/drawer/src/types';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { cn } from '@wcpos/tailwind/src/lib/utils';
-import { Text } from '@wcpos/tailwind/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { HStack } from '@wcpos/components/src/hstack';
+import { cn } from '@wcpos/components/src/lib/utils';
+import { Text } from '@wcpos/components/src/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
 
 type Props = {
 	/**

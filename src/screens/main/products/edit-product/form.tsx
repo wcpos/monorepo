@@ -9,11 +9,11 @@ import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Form, FormField, FormInput, FormSelect, FormSwitch } from '@wcpos/tailwind/src/form';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Text } from '@wcpos/tailwind/src/text';
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Form, FormField, FormInput, FormSelect, FormSwitch } from '@wcpos/components/src/form';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Text } from '@wcpos/components/src/text';
+import { Toast } from '@wcpos/components/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../contexts/translations';

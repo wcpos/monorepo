@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { Button } from '@wcpos/tailwind/src/button';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Icon } from '@wcpos/tailwind/src/icon';
+import { Button } from '@wcpos/components/src/button';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Icon } from '@wcpos/components/src/icon';
 
 import { CartTabTitle } from './tab-title';
 import { useCurrentOrder } from '../contexts/current-order';

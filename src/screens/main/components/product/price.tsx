@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { Text } from '@wcpos/tailwind/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Text } from '@wcpos/components/src/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useTaxDisplayValues } from '../../hooks/taxes/use-tax-display-values';

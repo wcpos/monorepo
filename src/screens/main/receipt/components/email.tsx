@@ -4,11 +4,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Form, FormInput, FormField, FormSwitch } from '@wcpos/tailwind/src/form';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Toast } from '@wcpos/tailwind/src/toast';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Form, FormInput, FormField, FormSwitch } from '@wcpos/components/src/form';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Toast } from '@wcpos/components/src/toast';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { useRestHttpClient } from '../../hooks/use-rest-http-client';

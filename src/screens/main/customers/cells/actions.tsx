@@ -11,22 +11,22 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
-} from '@wcpos/tailwind/src/alert-dialog';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Checkbox } from '@wcpos/tailwind/src/checkbox';
+} from '@wcpos/components/src/alert-dialog';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Checkbox } from '@wcpos/components/src/checkbox';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from '@wcpos/tailwind/src/dropdown-menu';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Icon } from '@wcpos/tailwind/src/icon';
-import { IconButton } from '@wcpos/tailwind/src/icon-button';
-import { Label } from '@wcpos/tailwind/src/label';
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+} from '@wcpos/components/src/dropdown-menu';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Icon } from '@wcpos/components/src/icon';
+import { IconButton } from '@wcpos/components/src/icon-button';
+import { Label } from '@wcpos/components/src/label';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import useDeleteDocument from '../../contexts/use-delete-document';

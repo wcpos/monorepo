@@ -7,7 +7,7 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from '@wcpos/tailwind/src/select';
+} from '@wcpos/components/src/select';
 
 import { useT } from '../../../../../../contexts/translations';
 /**

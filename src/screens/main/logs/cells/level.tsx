@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { CellContext } from '@tanstack/react-table';
 
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 
 type LogDocument = import('@wcpos/database').LogDocument;
 

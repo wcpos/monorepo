@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { View, StyleSheet } from 'react-native';
 
-import { Logo } from '@wcpos/tailwind/src/logo';
+import { Logo } from '@wcpos/components/src/logo';
 
 /**
  * NOTE: the ThemeProvider is not loaded yet, so we can't use any theme related components here

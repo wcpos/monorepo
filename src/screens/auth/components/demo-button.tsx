@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 import useHttpClient from '@wcpos/hooks/src/use-http-client';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Icon } from '@wcpos/tailwind/src/icon';
-import { Loader } from '@wcpos/tailwind/src/loader';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Icon } from '@wcpos/components/src/icon';
+import { Loader } from '@wcpos/components/src/loader';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';

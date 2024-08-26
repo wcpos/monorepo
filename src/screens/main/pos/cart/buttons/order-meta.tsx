@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	Dialog,
 	DialogTrigger,
@@ -11,8 +11,8 @@ import {
 	DialogTitle,
 	DialogDescription,
 	DialogFooter,
-} from '@wcpos/tailwind/src/dialog';
-import { Textarea } from '@wcpos/tailwind/src/textarea';
+} from '@wcpos/components/src/dialog';
+import { Textarea } from '@wcpos/components/src/textarea';
 
 import { EditOrderMeta } from './edit-order-meta';
 import { useT } from '../../../../../contexts/translations';

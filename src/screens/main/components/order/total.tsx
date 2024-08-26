@@ -3,7 +3,7 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Text } from '@wcpos/tailwind/src/text';
+import { Text } from '@wcpos/components/src/text';
 
 import { useCurrencyFormat } from '../../hooks/use-currency-format';
 

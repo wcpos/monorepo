@@ -2,18 +2,18 @@ import * as React from 'react';
 
 import { useReactToPrint } from 'react-to-print';
 
-import { Box } from '@wcpos/tailwind/src/box';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Card, CardContent, CardHeader, CardFooter } from '@wcpos/tailwind/src/card';
-import { HStack } from '@wcpos/tailwind/src/hstack';
+import { Box } from '@wcpos/components/src/box';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Card, CardContent, CardHeader, CardFooter } from '@wcpos/components/src/card';
+import { HStack } from '@wcpos/components/src/hstack';
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from '@wcpos/tailwind/src/select';
-import { Text } from '@wcpos/tailwind/src/text';
+} from '@wcpos/components/src/select';
+import { Text } from '@wcpos/components/src/text';
 
 import { useT } from '../../../contexts/translations';
 

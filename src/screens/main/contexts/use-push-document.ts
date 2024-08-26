@@ -3,7 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import isEmpty from 'lodash/isEmpty';
 
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Toast } from '@wcpos/components/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../contexts/translations';

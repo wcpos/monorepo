@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import WidgetBot from '@widgetbot/react-embed';
 
-import { Box } from '@wcpos/tailwind/src/box';
+import { Box } from '@wcpos/components/src/box';
 
 const Support = () => {
 	return (

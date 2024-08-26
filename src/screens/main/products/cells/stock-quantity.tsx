@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { SwitchWithLabel } from '@wcpos/tailwind/src/switch';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { SwitchWithLabel } from '@wcpos/components/src/switch';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import NumberInput from '../../components/number-input';

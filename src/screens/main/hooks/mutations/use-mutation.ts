@@ -12,7 +12,7 @@ import type {
 	ProductVariationDocument,
 } from '@wcpos/database';
 import { useQueryManager } from '@wcpos/query';
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Toast } from '@wcpos/components/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useLocalMutation } from './use-local-mutation';

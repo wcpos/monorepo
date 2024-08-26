@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import { Box } from '@wcpos/tailwind/src/box';
-import { useDataTable } from '@wcpos/tailwind/src/data-table';
-import { Text } from '@wcpos/tailwind/src/text';
+import { Box } from '@wcpos/components/src/box';
+import { useDataTable } from '@wcpos/components/src/data-table';
+import { Text } from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
 import PriceWithTax from './price';

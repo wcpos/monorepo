@@ -7,9 +7,9 @@ import {
 	CommandList,
 	CommandItem,
 	CommandButton,
-} from '@wcpos/tailwind/src/command';
-import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/tailwind/src/popover';
-import { Text } from '@wcpos/tailwind/src/text';
+} from '@wcpos/components/src/command';
+import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/components/src/popover';
+import { Text } from '@wcpos/components/src/text';
 
 import useCountries, { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';

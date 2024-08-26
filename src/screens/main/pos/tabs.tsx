@@ -1,13 +1,14 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Button } from '@wcpos/tailwind/src/button';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Icon } from '@wcpos/tailwind/src/icon';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Button } from '@wcpos/components/src/button';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Icon } from '@wcpos/components/src/icon';
+import { cn } from '@wcpos/components/src/lib/utils';
+import { Suspense } from '@wcpos/components/src/suspense';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import Cart from './cart';
 import Products from './products';
@@ -21,7 +22,7 @@ const POSTabs = () => {
 	const t = useT();
 
 	return (
-		<VStack>
+		<VStack className="h-full gap-0">
 			<View className="flex-1">
 				{activeTab === 'products' ? (
 					<Suspense>
@@ -37,28 +38,31 @@ const POSTabs = () => {
 					</Suspense>
 				)}
 			</View>
-			<HStack className="bg-white border-t">
-				<Button variant="ghost" onPress={() => setActiveTab('products')}>
+			<HStack className="bg-white border-border border-t gap-0">
+				<Button variant="ghost" onPress={() => setActiveTab('products')} className="flex-1 h-11">
 					<Icon
 						name="gifts"
-						//  type={activeTab === 'products' ? 'primary' : 'text'}
+						className={activeTab === 'products' ? 'text-primary' : 'text-muted-foreground'}
 					/>
 					<Text
-						className="text-xs uppercase"
-						//type={activeTab === 'products' ? 'primary' : 'text'}
+						className={cn(
+							'text-xs uppercase',
+							activeTab === 'products' ? 'text-primary' : 'text-muted-foreground'
+						)}
 					>
 						{t('Products', { _tags: 'core' })}
 					</Text>
 				</Button>
-				<Button variant="ghost" onPress={() => setActiveTab('cart')}>
+				<Button variant="ghost" onPress={() => setActiveTab('cart')} className="flex-1 h-11">
 					<Icon
 						name="cartShopping"
-						// type={activeTab === 'cart' ? 'primary' : 'text'}
+						className={activeTab === 'cart' ? 'text-primary' : 'text-muted-foreground'}
 					/>
 					<Text
-						className="text-xs uppercase"
-						size="xSmall"
-						// type={activeTab === 'cart' ? 'primary' : 'text'}
+						className={cn(
+							'text-xs uppercase',
+							activeTab === 'cart' ? 'text-primary' : 'text-muted-foreground'
+						)}
 					>
 						{t('Cart', { _tags: 'core' })}
 					</Text>

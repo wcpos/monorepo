@@ -6,9 +6,9 @@ import get from 'lodash/get';
 import { useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { Toast } from '@wcpos/tailwind/src/toast';
-import { WebView } from '@wcpos/tailwind/src/webview';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Toast } from '@wcpos/components/src/toast';
+import { WebView } from '@wcpos/components/src/webview';
 import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../../../../contexts/app-state';

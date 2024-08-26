@@ -7,8 +7,8 @@ import { ObservableResource, useObservableEagerState } from 'observable-hooks';
 import { from } from 'rxjs';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Suspense } from '@wcpos/components/src/suspense';
 // import { useQuery } from '@wcpos/query';
 
 import Checkout from './checkout';

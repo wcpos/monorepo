@@ -6,17 +6,17 @@ import { useObservableSuspense } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput, FormSwitch, FormSelect } from '@wcpos/tailwind/src/form';
-import { cn } from '@wcpos/tailwind/src/lib/utils';
+import { Form, FormField, FormInput, FormSwitch, FormSelect } from '@wcpos/components/src/form';
+import { cn } from '@wcpos/components/src/lib/utils';
 import {
 	SelectTrigger,
 	SelectContent,
 	SelectGroup,
 	SelectItem,
 	SelectValue,
-} from '@wcpos/tailwind/src/select';
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+} from '@wcpos/components/src/select';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';

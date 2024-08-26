@@ -1,9 +1,9 @@
 import * as React from 'react';
 
 import { useQuery } from '@wcpos/query';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/tailwind/src/panels';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/src/panels';
+import { Suspense } from '@wcpos/components/src/suspense';
 
 import { Chart } from './chart';
 import { FilterBar } from './filter-bar';

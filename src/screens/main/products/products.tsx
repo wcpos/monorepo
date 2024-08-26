@@ -2,14 +2,14 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
+import { Box } from '@wcpos/components/src/box';
+import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
+import { DataTableRow } from '@wcpos/components/src/data-table';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Suspense } from '@wcpos/components/src/suspense';
+import { VStack } from '@wcpos/components/src/vstack';
 import { useRelationalQuery } from '@wcpos/query';
-import { Box } from '@wcpos/tailwind/src/box';
-import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
-import { DataTableRow } from '@wcpos/tailwind/src/data-table';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { VStack } from '@wcpos/tailwind/src/vstack';
 
 import { Actions } from './cells/actions';
 import { Barcode } from './cells/barcode';
@@ -33,6 +33,7 @@ import { VariableProductImage } from '../components/product/variable-image';
 import { VariableProductPrice } from '../components/product/variable-price';
 import { VariableProductRow } from '../components/product/variable-product-row';
 import { ProductVariationImage } from '../components/product/variation-image';
+import { ProductVariationName } from '../components/product/variation-name';
 import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsButton } from '../components/ui-settings';
 import { useTaxRates } from '../contexts/tax-rates';
@@ -77,6 +78,7 @@ const cells = {
 const variationCells = {
 	actions: VariationActions,
 	price: Price,
+	name: ProductVariationName,
 	sale_price: EdittablePrice,
 	regular_price: EdittablePrice,
 	stock_quantity: StockQuantity,

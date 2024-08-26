@@ -5,9 +5,9 @@ import { useNavigation } from '@react-navigation/native';
 import isEmpty from 'lodash/isEmpty';
 
 import { TaxRateDocument } from '@wcpos/database';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Icon } from '@wcpos/tailwind/src/icon';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Icon } from '@wcpos/components/src/icon';
 import {
 	Table,
 	TableHeader,
@@ -15,9 +15,9 @@ import {
 	TableRow,
 	TableCell,
 	TableBody,
-} from '@wcpos/tailwind/src/table';
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+} from '@wcpos/components/src/table';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../contexts/translations';
 

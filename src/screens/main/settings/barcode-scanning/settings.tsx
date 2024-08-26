@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput } from '@wcpos/tailwind/src/form';
+import { Form, FormField, FormInput } from '@wcpos/components/src/form';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';

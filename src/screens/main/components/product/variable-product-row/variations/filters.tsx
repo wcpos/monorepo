@@ -4,9 +4,9 @@ import { useObservableState } from 'observable-hooks';
 
 import type { ProductDocument, ProductVariationCollection } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
-import type { Row } from '@wcpos/tailwind/src/data-table';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { IconButton } from '@wcpos/tailwind/src/icon-button';
+import type { Row } from '@wcpos/components/src/data-table';
+import { HStack } from '@wcpos/components/src/hstack';
+import { IconButton } from '@wcpos/components/src/icon-button';
 
 import { VariationSelect } from '../../variation-select';
 

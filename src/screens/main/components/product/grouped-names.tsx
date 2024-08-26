@@ -4,7 +4,7 @@ import { CellContext } from '@tanstack/react-table';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { useQuery } from '@wcpos/query';
-import { Text } from '@wcpos/tailwind/src/text';
+import { Text } from '@wcpos/components/src/text';
 
 import { useT } from '../../../../contexts/translations';
 

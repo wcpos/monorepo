@@ -5,10 +5,10 @@ import { of } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 
 import { useQuery } from '@wcpos/query';
-import { Box } from '@wcpos/tailwind/src/box';
-import { Card } from '@wcpos/tailwind/src/card';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { Box } from '@wcpos/components/src/box';
+import { Card } from '@wcpos/components/src/card';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Suspense } from '@wcpos/components/src/suspense';
 
 import { useAppState } from '../../../contexts/app-state';
 import { CashierPill } from '../components/order/filter-bar/cashier-pill';

@@ -3,9 +3,9 @@ import * as React from 'react';
 import { useObservableState } from 'observable-hooks';
 
 import { useReplicationState, Query } from '@wcpos/query';
-import { useDataTable } from '@wcpos/tailwind/src/data-table';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Text } from '@wcpos/tailwind/src/text';
+import { useDataTable } from '@wcpos/components/src/data-table';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Text } from '@wcpos/components/src/text';
 
 import { useT } from '../../../../contexts/translations';
 import { useCollectionReset } from '../../hooks/use-collection-reset';

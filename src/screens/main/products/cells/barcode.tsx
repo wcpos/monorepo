@@ -3,7 +3,7 @@ import * as React from 'react';
 import { CellContext } from '@tanstack/react-table';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Input } from '@wcpos/tailwind/src/input';
+import { Input } from '@wcpos/components/src/input';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 

@@ -1,8 +1,8 @@
 import * as React from 'react';
 
 import { useQuery } from '@wcpos/query';
-import { Command, CommandInput, CommandEmpty } from '@wcpos/tailwind/src/command';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { Command, CommandInput, CommandEmpty } from '@wcpos/components/src/command';
+import { Suspense } from '@wcpos/components/src/suspense';
 
 import { CategoryList } from './list';
 import { useT } from '../../../../../contexts/translations';

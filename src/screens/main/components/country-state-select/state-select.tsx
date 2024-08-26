@@ -9,17 +9,17 @@ import {
 	CommandItem,
 	CommandList,
 	CommandInput,
-} from '@wcpos/tailwind/src/command';
-import { Input } from '@wcpos/tailwind/src/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/tailwind/src/popover';
+} from '@wcpos/components/src/command';
+import { Input } from '@wcpos/components/src/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
 import {
 	Select,
 	SelectContent,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from '@wcpos/tailwind/src/select';
-import { Text } from '@wcpos/tailwind/src/text';
+} from '@wcpos/components/src/select';
+import { Text } from '@wcpos/components/src/text';
 
 import useCountries, { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';

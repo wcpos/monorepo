@@ -4,8 +4,8 @@ import get from 'lodash/get';
 import { useObservableSuspense, useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import VariationButtons from './buttons';
 import VariationSelect from './select';

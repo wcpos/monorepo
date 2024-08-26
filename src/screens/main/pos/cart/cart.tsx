@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { ButtonGroupSeparator, ButtonGroup } from '@wcpos/tailwind/src/button';
-import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { HStack } from '@wcpos/tailwind/src/hstack';
+import { ButtonGroupSeparator, ButtonGroup } from '@wcpos/components/src/button';
+import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { HStack } from '@wcpos/components/src/hstack';
 
 import { AddCartItemButtons } from './add-cart-item-buttons';
 import { AddNoteButton } from './buttons/add-note';

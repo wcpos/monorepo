@@ -3,18 +3,18 @@ import * as React from 'react';
 import { useFieldArray, useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Box } from '@wcpos/tailwind/src/box';
-import { ButtonText, Button } from '@wcpos/tailwind/src/button';
+import { Box } from '@wcpos/components/src/box';
+import { ButtonText, Button } from '@wcpos/components/src/button';
 import {
 	Collapsible,
 	CollapsibleTrigger,
 	CollapsibleContent,
-} from '@wcpos/tailwind/src/collapsible';
-import { FormField, FormInput } from '@wcpos/tailwind/src/form';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { IconButton } from '@wcpos/tailwind/src/icon-button';
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+} from '@wcpos/components/src/collapsible';
+import { FormField, FormInput } from '@wcpos/components/src/form';
+import { HStack } from '@wcpos/components/src/hstack';
+import { IconButton } from '@wcpos/components/src/icon-button';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../contexts/translations';
 

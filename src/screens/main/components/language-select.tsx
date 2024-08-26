@@ -2,17 +2,17 @@ import * as React from 'react';
 
 import map from 'lodash/map';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	Command,
 	CommandInput,
 	CommandEmpty,
 	CommandList,
 	CommandItem,
-} from '@wcpos/tailwind/src/command';
-import { Label } from '@wcpos/tailwind/src/label';
-import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/tailwind/src/popover';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+} from '@wcpos/components/src/command';
+import { Label } from '@wcpos/components/src/label';
+import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/components/src/popover';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../contexts/translations';
 import { useLocale } from '../../../hooks/use-locale';

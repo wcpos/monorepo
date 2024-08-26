@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/tailwind/src/tabs';
-import { Text } from '@wcpos/tailwind/src/text';
+import { Suspense } from '@wcpos/components/src/suspense';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/src/tabs';
+import { Text } from '@wcpos/components/src/text';
 
 import BarcodeScanning from './barcode-scanning';
 import { GeneralSettings } from './general';

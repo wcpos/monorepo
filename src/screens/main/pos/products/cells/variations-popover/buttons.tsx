@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { Text } from '@wcpos/tailwind/src/text';
-import { ToggleGroup, ToggleGroupItem } from '@wcpos/tailwind/src/toggle-group';
+import { Text } from '@wcpos/components/src/text';
+import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/src/toggle-group';
 
 /**
  *

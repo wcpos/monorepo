@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Icon } from '@wcpos/tailwind/src/icon';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Icon } from '@wcpos/components/src/icon';
 
 import NumberInput from '../../../components/number-input';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';

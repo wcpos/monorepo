@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';

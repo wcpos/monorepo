@@ -3,16 +3,16 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { ControllerRenderProps, FieldValues } from 'react-hook-form';
 
-import { FormSelect } from '@wcpos/tailwind/src/form';
-import { cn } from '@wcpos/tailwind/src/lib/utils';
+import { FormSelect } from '@wcpos/components/src/form';
+import { cn } from '@wcpos/components/src/lib/utils';
 import {
 	SelectContent,
 	SelectGroup,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
-} from '@wcpos/tailwind/src/select';
-import { Text } from '@wcpos/tailwind/src/text';
+} from '@wcpos/components/src/select';
+import { Text } from '@wcpos/components/src/text';
 
 import { useT } from '../../../contexts/translations';
 import { useExtraData } from '../contexts/extra-data';

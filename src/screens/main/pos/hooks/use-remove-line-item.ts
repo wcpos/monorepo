@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Toast } from '@wcpos/components/src/toast';
 
 import { useT } from '../../../../contexts/translations';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';

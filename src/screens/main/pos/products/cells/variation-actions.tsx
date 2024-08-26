@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { IconButton } from '@wcpos/tailwind/src/icon-button';
+import { IconButton } from '@wcpos/components/src/icon-button';
 
 import { useAddVariation } from '../../hooks/use-add-variation';
 
@@ -36,7 +36,7 @@ export const ProductVariationActions = ({
 	return (
 		<IconButton
 			name="circlePlus"
-			size="xl"
+			size="4xl"
 			onPress={() => addVariation(variation, parent, metaData)}
 			variant="success"
 		/>

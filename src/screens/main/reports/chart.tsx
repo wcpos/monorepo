@@ -25,8 +25,8 @@ import {
 	ResponsiveContainer,
 } from 'recharts';
 
-import { Box } from '@wcpos/tailwind/src/box';
-import { Text } from '@wcpos/tailwind/src/text';
+import { Box } from '@wcpos/components/src/box';
+import { Text } from '@wcpos/components/src/text';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';

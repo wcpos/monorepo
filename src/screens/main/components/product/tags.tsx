@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import { useDataTable } from '@wcpos/tailwind/src/data-table';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { useDataTable } from '@wcpos/components/src/data-table';
 
 import type { CellContext } from '@tanstack/react-table';
 

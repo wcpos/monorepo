@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { Button, ButtonText, ButtonGroupSeparator } from '@wcpos/tailwind/src/button';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/tailwind/src/popover';
-import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/tailwind/src/select';
+import { Button, ButtonText, ButtonGroupSeparator } from '@wcpos/components/src/button';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
+import { Select, SelectContent, SelectItem, SelectPrimitive } from '@wcpos/components/src/select';
 
 import { DateRangeCalendar } from './calendar';
 import { useT } from '../../../../../contexts/translations';

@@ -2,10 +2,10 @@ import * as React from 'react';
 
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
-import { ModalContent, ModalTitle, ModalContainer } from '@wcpos/tailwind/src/modal';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/tailwind/src/tabs';
-import { Text } from '@wcpos/tailwind/src/text';
-import { Tree } from '@wcpos/tailwind/src/tree';
+import { ModalContent, ModalTitle, ModalContainer } from '@wcpos/components/src/modal';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/src/tabs';
+import { Text } from '@wcpos/components/src/text';
+import { Tree } from '@wcpos/components/src/tree';
 
 // import { EditOrderForm } from './form';
 import { EditCustomerForm } from './form';
@@ -39,7 +39,7 @@ export const EditCustomer = ({ resource }: Props) => {
 						<EditCustomerForm defaultValues={customer.toJSON()} />
 					</TabsContent>
 					<TabsContent value="json">
-						<Tree data={customer.toJSON()} hideRoot />
+						<Tree value={customer.toJSON()} />
 					</TabsContent>
 				</Tabs>
 			</ModalContent>

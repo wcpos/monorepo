@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { Column } from '@tanstack/react-table';
 
-import { Text } from '@wcpos/tailwind/src/text';
+import { Text } from '@wcpos/components/src/text';
 
 interface Props {
 	title: string;

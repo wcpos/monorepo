@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/tailwind/src/tabs';
-import { Text } from '@wcpos/tailwind/src/text';
-import { Tree } from '@wcpos/tailwind/src/tree';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/components/src/tabs';
+import { Text } from '@wcpos/components/src/text';
+import { Tree } from '@wcpos/components/src/tree';
 
 import { EditOrderMetaForm } from './form';
 import { useT } from '../../../../../../contexts/translations';
@@ -41,7 +41,7 @@ export const EditOrderMeta = ({ uuid, item, onClose }: Props) => {
 				<EditOrderMetaForm />
 			</TabsContent>
 			<TabsContent value="json">
-				<Tree data={item} />
+				<Tree value={item} />
 			</TabsContent>
 		</Tabs>
 	);

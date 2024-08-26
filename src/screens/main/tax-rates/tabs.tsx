@@ -4,8 +4,8 @@ import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
 import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/tailwind/src/tabs';
-import { Text } from '@wcpos/tailwind/src/text';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/src/tabs';
+import { Text } from '@wcpos/components/src/text';
 
 import TaxRatesFooter from './footer';
 import TaxRateTable from './rate-table';

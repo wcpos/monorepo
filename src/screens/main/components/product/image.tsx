@@ -3,7 +3,7 @@ import * as React from 'react';
 import get from 'lodash/get';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Image } from '@wcpos/tailwind/src/image';
+import { Image } from '@wcpos/components/src/image';
 
 import { useImageAttachment } from '../../hooks/use-image-attachment';
 

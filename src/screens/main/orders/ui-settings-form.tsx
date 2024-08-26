@@ -5,8 +5,8 @@ import { useObservableState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form } from '@wcpos/tailwind/src/form';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Form } from '@wcpos/components/src/form';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../contexts/translations';
 import { columnsFormSchema, UISettingsColumnsForm } from '../components/ui-settings';

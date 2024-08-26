@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
 
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import PaymentWebview from './components/payment-webview';
 import CheckoutTitle from './components/title';

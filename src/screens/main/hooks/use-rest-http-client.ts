@@ -84,7 +84,11 @@ export const useRestHttpClient = (endpoint = '') => {
 	 */
 	const request = React.useCallback(
 		async (reqConfig: RequestConfig = {}) => {
-			const shouldUseJwtAsParam = get(window, ['initialProps', 'site', 'use_jwt_as_param']);
+			const shouldUseJwtAsParam = get(
+				window,
+				['initialProps', 'site', 'use_jwt_as_param'],
+				site.use_jwt_as_param
+			);
 
 			let apiURL = site.wcpos_api_url;
 

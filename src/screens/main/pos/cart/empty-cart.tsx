@@ -1,7 +1,7 @@
 import * as React from 'react';
 
-import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
+import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 
 import { AddCartItemButtons } from './add-cart-item-buttons';
 import { CartHeader } from './cart-header';

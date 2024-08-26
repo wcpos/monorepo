@@ -6,10 +6,10 @@ import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
 import { useQueryManager } from '@wcpos/query';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useVariationTable } from './variation-table-rows/context';
 import { useT } from '../../../../contexts/translations';

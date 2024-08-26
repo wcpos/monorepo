@@ -3,11 +3,11 @@ import * as React from 'react';
 import get from 'lodash/get';
 
 import { useLocalQuery } from '@wcpos/query';
-import { Box } from '@wcpos/tailwind/src/box';
-import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { Box } from '@wcpos/components/src/box';
+import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Suspense } from '@wcpos/components/src/suspense';
 
 import { Context } from './cells/context';
 import { Date } from './cells/date';
@@ -24,6 +24,7 @@ const cells = {
 	context: Context,
 	date: Date,
 	level: Level,
+	code: () => null,
 };
 
 const renderCell = (props) => get(cells, props.column.id);

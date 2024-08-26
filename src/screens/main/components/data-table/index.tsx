@@ -11,9 +11,9 @@ import type {
 	LogDocument,
 } from '@wcpos/database';
 import { useInfiniteScroll, Query } from '@wcpos/query';
-import { DataTable as Table, DataTableProps } from '@wcpos/tailwind/src/data-table';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { DataTable as Table, DataTableProps } from '@wcpos/components/src/data-table';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Suspense } from '@wcpos/components/src/suspense';
 
 import { ListEmptyComponent } from './empty';
 import { DataTableFooter } from './footer';

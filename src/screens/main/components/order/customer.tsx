@@ -4,9 +4,9 @@ import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { useQueryManager } from '@wcpos/query';
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
-import { FormatAddress } from '@wcpos/tailwind/src/format';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { FormatAddress } from '@wcpos/components/src/format';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 

@@ -7,9 +7,9 @@ import {
 	useObservableEagerState,
 } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@wcpos/tailwind/src/dialog';
-import { ModalContainer, ModalContent, ModalFooter, ModalTitle } from '@wcpos/tailwind/src/modal';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@wcpos/components/src/dialog';
+import { ModalContainer, ModalContent, ModalFooter, ModalTitle } from '@wcpos/components/src/modal';
 
 import { EmailForm } from './components/email';
 import { ReceiptTemplate } from './components/template-webview';

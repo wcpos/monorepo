@@ -14,17 +14,17 @@ import {
 	AccordionContent,
 	AccordionTrigger,
 	AccordionItem,
-} from '@wcpos/tailwind/src/accordian';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
+} from '@wcpos/components/src/accordian';
+import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	Collapsible,
 	CollapsibleTrigger,
 	CollapsibleContent,
-} from '@wcpos/tailwind/src/collapsible';
-import { Form, FormField, FormInput, FormSelect, FormSwitch } from '@wcpos/tailwind/src/form';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Text } from '@wcpos/tailwind/src/text';
-import { Toast } from '@wcpos/tailwind/src/toast';
+} from '@wcpos/components/src/collapsible';
+import { Form, FormField, FormInput, FormSelect, FormSwitch } from '@wcpos/components/src/form';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Text } from '@wcpos/components/src/text';
+import { Toast } from '@wcpos/components/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../contexts/translations';

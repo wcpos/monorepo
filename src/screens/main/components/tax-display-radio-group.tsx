@@ -3,9 +3,9 @@ import { View } from 'react-native';
 
 import { Control, ControllerRenderProps, FieldValues } from 'react-hook-form';
 
-import { FormRadioGroup } from '@wcpos/tailwind/src/form';
-import { Label } from '@wcpos/tailwind/src/label';
-import { RadioGroupItem } from '@wcpos/tailwind/src/radio-group';
+import { FormRadioGroup } from '@wcpos/components/src/form';
+import { Label } from '@wcpos/components/src/label';
+import { RadioGroupItem } from '@wcpos/components/src/radio-group';
 
 import { useT } from '../../../contexts/translations';
 

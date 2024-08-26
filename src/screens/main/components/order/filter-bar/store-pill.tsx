@@ -6,7 +6,7 @@ import { map } from 'rxjs/operators';
 
 import type { ProductCollection, StoreDocument } from '@wcpos/database';
 import type { Query } from '@wcpos/query';
-import { ButtonPill, ButtonText } from '@wcpos/tailwind/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 import {
 	Select,
 	SelectContent,
@@ -15,7 +15,7 @@ import {
 	SelectGroup,
 	SelectLabel,
 	SelectSeparator,
-} from '@wcpos/tailwind/src/select';
+} from '@wcpos/components/src/select';
 
 import { useT } from '../../../../../contexts/translations';
 

@@ -3,11 +3,11 @@ import * as React from 'react';
 import get from 'lodash/get';
 
 import { useQuery } from '@wcpos/query';
-import { Box } from '@wcpos/tailwind/src/box';
-import { Card, CardContent, CardHeader } from '@wcpos/tailwind/src/card';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
+import { Box } from '@wcpos/components/src/box';
+import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { HStack } from '@wcpos/components/src/hstack';
+import { Suspense } from '@wcpos/components/src/suspense';
 
 import { UISettingsForm } from './ui-settings-form';
 import { useAppState } from '../../../contexts/app-state';

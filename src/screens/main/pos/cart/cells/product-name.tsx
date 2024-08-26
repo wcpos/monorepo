@@ -1,14 +1,14 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { Box } from '@wcpos/tailwind/src/box';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/tailwind/src/dialog';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { IconButton } from '@wcpos/tailwind/src/icon-button';
-import { Text } from '@wcpos/tailwind/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/tailwind/src/tooltip';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Box } from '@wcpos/components/src/box';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/src/dialog';
+import { HStack } from '@wcpos/components/src/hstack';
+import { IconButton } from '@wcpos/components/src/icon-button';
+import { Text } from '@wcpos/components/src/text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { EditLineItem } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';

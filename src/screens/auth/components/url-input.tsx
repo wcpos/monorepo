@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { NativeSyntheticEvent, TextInputKeyPressEventData, TextInput } from 'react-native';
 
-import { Input } from '@wcpos/tailwind/src/input';
-import { Label } from '@wcpos/tailwind/src/label';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Input } from '@wcpos/components/src/input';
+import { Label } from '@wcpos/components/src/label';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../contexts/translations';
 import useSiteConnect from '../hooks/use-site-connect';

@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { KeyboardAvoidingView, StyleSheet } from 'react-native';
 
-import { Box } from '@wcpos/tailwind/src/box';
-import { Card } from '@wcpos/tailwind/src/card';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { Logo } from '@wcpos/tailwind/src/logo';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Box } from '@wcpos/components/src/box';
+import { Card } from '@wcpos/components/src/card';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Logo } from '@wcpos/components/src/logo';
+import { Suspense } from '@wcpos/components/src/suspense';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import DemoButton from './components/demo-button';
 import { Sites } from './components/sites';

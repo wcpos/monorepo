@@ -3,13 +3,13 @@ import { View } from 'react-native';
 
 import { useNavigation, StackActions } from '@react-navigation/native';
 
-import { Box } from '@wcpos/tailwind/src/box';
-import { Button, ButtonText } from '@wcpos/tailwind/src/button';
-import { HStack } from '@wcpos/tailwind/src/hstack';
-import { ModalOverlay, ModalContent } from '@wcpos/tailwind/src/modal';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { Text } from '@wcpos/tailwind/src/text';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Box } from '@wcpos/components/src/box';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import { HStack } from '@wcpos/components/src/hstack';
+import { ModalOverlay, ModalContent } from '@wcpos/components/src/modal';
+import { Suspense } from '@wcpos/components/src/suspense';
+import { Text } from '@wcpos/components/src/text';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import useModalRefreshFix from '../../hooks/use-modal-refresh-fix';
 

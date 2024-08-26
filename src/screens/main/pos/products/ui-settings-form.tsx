@@ -11,8 +11,8 @@ import {
 	FormSwitch,
 	FormInput,
 	useFormChangeHandler,
-} from '@wcpos/tailwind/src/form';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+} from '@wcpos/components/src/form';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { columnsFormSchema, UISettingsColumnsForm } from '../../components/ui-settings';

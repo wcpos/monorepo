@@ -1,10 +1,10 @@
 import * as React from 'react';
 
-import { Button } from '@wcpos/tailwind/src/button';
-import { ErrorBoundary } from '@wcpos/tailwind/src/error-boundary';
-import { Icon } from '@wcpos/tailwind/src/icon';
-import { Suspense } from '@wcpos/tailwind/src/suspense';
-import { VStack } from '@wcpos/tailwind/src/vstack';
+import { Button } from '@wcpos/components/src/button';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Icon } from '@wcpos/components/src/icon';
+import { Suspense } from '@wcpos/components/src/suspense';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { Cart } from './cart';
 import { EmptyCart } from './empty-cart';
