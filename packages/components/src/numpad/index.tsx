@@ -4,11 +4,11 @@ import { NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
 import get from 'lodash/get';
 
 import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
-import { Icon, IconName } from '@wcpos/tailwind/src/icon';
 
 import { reducer, ACTIONS, Action, Config, CalculatorState } from './reducer';
 import { Box } from '../box';
 import { Button, ButtonText } from '../button';
+import { Icon, IconName } from '../icon';
 import { Input } from '../input';
 import { VStack } from '../vstack';
 
