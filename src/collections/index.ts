@@ -36,7 +36,15 @@ const siteSchema: RxJsonSchema<SiteDocumentType> = sitesLiteral;
 type SiteDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof sitesTyped>;
 export type SiteDocument = RxDocument<SiteDocumentType>;
 export type SiteCollection = RxCollection<SiteDocumentType>;
-const sites: RxCollectionCreator<SiteDocumentType> = { schema: siteSchema };
+const sites: RxCollectionCreator<SiteDocumentType> = {
+	schema: siteSchema,
+	migrationStrategies: {
+		1(oldDoc) {
+			oldDoc.use_jwt_as_param = false;
+			return oldDoc;
+		},
+	},
+};
 
 /**
  * Stores
@@ -100,6 +108,12 @@ const variations: RxCollectionCreator<ProductVariationDocumentType> = {
 	schema: productVariationSchema,
 	options: {
 		searchFields: ['sku', 'barcode'],
+	},
+	migrationStrategies: {
+		1(oldDoc) {
+			oldDoc.type = 'variation';
+			return oldDoc;
+		},
 	},
 };
 

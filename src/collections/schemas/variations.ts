@@ -1,6 +1,6 @@
 export const variationsLiteral = {
 	title: 'WooCommerce Product Variation schema',
-	version: 0,
+	version: 1,
 	description: 'WooCommerce Product Variation schema',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -58,6 +58,10 @@ export const variationsLiteral = {
 			type: 'string',
 		},
 		date_on_sale_to_gmt: {
+			type: 'string',
+		},
+		type: {
+			default: 'variation',
 			type: 'string',
 		},
 		on_sale: {

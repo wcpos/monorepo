@@ -1,6 +1,6 @@
 export const sitesLiteral = {
 	title: 'Site schema',
-	version: 0,
+	version: 1,
 	description: 'WordPress site',
 	type: 'object',
 	primaryKey: 'uuid',
@@ -78,6 +78,9 @@ export const sitesLiteral = {
 					type: 'string',
 				},
 			},
+		},
+		use_jwt_as_param: {
+			type: 'boolean',
 		},
 	},
 } as const;
