@@ -11,6 +11,7 @@ import { cn } from '../lib/utils';
 
 type PulseTableRowProps = React.ComponentPropsWithoutRef<typeof Animated.View> & {
 	onRemove?: () => void;
+	index?: number;
 };
 
 /**
@@ -19,7 +20,7 @@ type PulseTableRowProps = React.ComponentPropsWithoutRef<typeof Animated.View> &
 export const PulseTableRow = React.forwardRef<
 	React.ElementRef<typeof Animated.View>,
 	PulseTableRowProps
->(({ className, onRemove = () => {}, ...props }, ref) => {
+>(({ className, index = 0, onRemove = () => {}, ...props }, ref) => {
 	const backgroundColor = useSharedValue('transparent');
 
 	const animatedStyle = useAnimatedStyle(() => {
@@ -46,7 +47,8 @@ export const PulseTableRow = React.forwardRef<
 		<Animated.View
 			ref={ref}
 			className={cn(
-				'flex-row border-border border-b web:transition-colors web:hover:bg-muted/50 web:data-[state=selected]:bg-muted',
+				'flex-row web:transition-colors web:data-[state=selected]:bg-muted',
+				index % 2 && 'bg-muted/40 dark:bg-zinc-900/50',
 				className
 			)}
 			style={animatedStyle}
