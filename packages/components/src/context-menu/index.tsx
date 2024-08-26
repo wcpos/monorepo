@@ -3,8 +3,7 @@ import { Platform, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-na
 
 import * as ContextMenuPrimitive from '@rn-primitives/context-menu';
 
-import { Icon } from '@wcpos/tailwind/src/icon';
-
+import { Icon } from '../icon';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 
