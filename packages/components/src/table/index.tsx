@@ -61,12 +61,14 @@ TableFooter.displayName = 'TableFooter';
 
 const PressableTableRow = React.forwardRef<
 	React.ElementRef<typeof TablePrimitive.Row>,
-	React.ComponentPropsWithoutRef<typeof TablePrimitive.Row>
->(({ className, ...props }, ref) => (
+	React.ComponentPropsWithoutRef<typeof TablePrimitive.Row> & { index?: number }
+>(({ className, index = 0, ...props }, ref) => (
 	<TablePrimitive.Row
+		role="row"
 		ref={ref}
 		className={cn(
-			'flex-row border-border border-b web:transition-colors web:hover:bg-muted/50 web:data-[state=selected]:bg-muted',
+			'flex-row web:transition-colors web:data-[state=selected]:bg-muted',
+			index % 2 && 'bg-muted/40 dark:bg-zinc-900/50',
 			className
 		)}
 		{...props}
@@ -82,8 +84,8 @@ const TableRow = React.forwardRef<ViewRef, SlottableViewProps & { index?: number
 				role="row"
 				ref={ref}
 				className={cn(
-					'flex-row border-border border-b web:transition-colors web:hover:bg-muted/50 web:data-[state=selected]:bg-muted',
-					index % 2 && 'bg-zinc-100/50 dark:bg-zinc-900/50',
+					'flex-row web:transition-colors web:data-[state=selected]:bg-muted',
+					index % 2 && 'bg-muted/40 dark:bg-zinc-900/50',
 					className
 				)}
 				{...props}
