@@ -1,10 +1,12 @@
 import * as React from 'react';
 
+import { Row, Table } from '@tanstack/react-table';
 import Animated, {
 	useSharedValue,
 	useAnimatedStyle,
 	withTiming,
-	runOnJS,
+	withSequence,
+	cancelAnimation,
 } from 'react-native-reanimated';
 
 import { cn } from '../lib/utils';
@@ -12,48 +14,73 @@ import { cn } from '../lib/utils';
 type PulseTableRowProps = React.ComponentPropsWithoutRef<typeof Animated.View> & {
 	onRemove?: () => void;
 	index?: number;
+	row: Row<any>;
+	table: Table<any>;
+};
+
+type PulseTableRowHandle = {
+	pulseAdd: (callback?: () => void) => void;
+	pulseRemove: (callback?: () => void) => void;
 };
 
 /**
  *
  */
-export const PulseTableRow = React.forwardRef<
-	React.ElementRef<typeof Animated.View>,
-	PulseTableRowProps
->(({ className, index = 0, onRemove = () => {}, ...props }, ref) => {
-	const backgroundColor = useSharedValue('transparent');
+export const PulseTableRow = React.forwardRef<PulseTableRowHandle, PulseTableRowProps>(
+	({ className, index = 0, onRemove = () => {}, ...props }, ref) => {
+		const localRef = React.useRef<Animated.View>(null);
 
-	const animatedStyle = useAnimatedStyle(() => {
-		return {
-			backgroundColor: backgroundColor.value,
-		};
-	});
+		const backgroundColor = useSharedValue(
+			index % 2 === 0 ? 'transparent' : 'hsla(210, 40%, 96%, 0.4)'
+		);
 
-	/**
-	 * Expose methods via the ref to trigger animations
-	 */
-	React.useImperativeHandle(ref, () => ({
-		pulseAdd() {
-			backgroundColor.value = withTiming('rgba(34, 197, 94, 0.5)', { duration: 500 }, () => {
-				backgroundColor.value = withTiming('transparent');
-			});
-		},
-		pulseRemove(callback) {
-			backgroundColor.value = withTiming('rgba(239, 68, 68, 0.5)', { duration: 500 }, callback);
-		},
-	}));
+		React.useEffect(() => {
+			backgroundColor.value = index % 2 === 0 ? 'transparent' : 'hsla(210, 40%, 96%, 0.4)';
+		}, [index]);
 
-	return (
-		<Animated.View
-			ref={ref}
-			className={cn(
-				'flex-row web:transition-colors web:data-[state=selected]:bg-muted',
-				index % 2 && 'bg-muted/40 dark:bg-zinc-900/50',
-				className
-			)}
-			style={animatedStyle}
-			{...props}
-		/>
-	);
-});
+		const animatedStyle = useAnimatedStyle(() => {
+			return {
+				backgroundColor: backgroundColor.value,
+			};
+		});
+
+		React.useImperativeHandle(ref, () => ({
+			...localRef.current,
+			pulseAdd(callback?: () => void) {
+				props.table.options.meta?.scrollToRow(props.row.id);
+				cancelAnimation(backgroundColor);
+				backgroundColor.value = withSequence(
+					withTiming('hsla(162, 63%, 41%, 0.8)', { duration: 500 }),
+					withTiming(
+						index % 2 === 0 ? 'transparent' : 'hsla(210, 40%, 96%, 0.4)',
+						{ duration: 500 },
+						() => {
+							if (callback) callback();
+						}
+					)
+				);
+			},
+			pulseRemove(callback?: () => void) {
+				cancelAnimation(backgroundColor);
+				backgroundColor.value = withTiming('hsl(356, 75%, 53%)', { duration: 500 }, () => {
+					backgroundColor.value = index % 2 === 0 ? 'transparent' : 'hsla(210, 40%, 96%, 0.4)';
+					if (callback) callback();
+				});
+			},
+		}));
+
+		return (
+			<Animated.View
+				ref={localRef}
+				className={cn(
+					'flex-row web:transition-colors web:data-[state=selected]:bg-muted',
+					className
+				)}
+				style={animatedStyle}
+				{...props}
+			/>
+		);
+	}
+);
+
 PulseTableRow.displayName = 'PulseTableRow';
