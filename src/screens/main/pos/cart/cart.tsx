@@ -37,7 +37,7 @@ export const Cart = () => {
 				<ErrorBoundary>
 					<Totals />
 				</ErrorBoundary>
-				<HStack className="p-2 bg-input [&>*]:flex-grow">
+				<HStack className="p-2 bg-muted [&>*]:flex-grow">
 					<ErrorBoundary>
 						<AddNoteButton />
 						<OrderMetaButton />

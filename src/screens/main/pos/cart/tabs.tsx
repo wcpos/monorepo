@@ -1,10 +1,12 @@
 import * as React from 'react';
 
-import { Button } from '@wcpos/components/src/button';
-import { HStack } from '@wcpos/components/src/hstack';
 import { Icon } from '@wcpos/components/src/icon';
+import { Tabs, ScrollableTabsList, TabsTrigger } from '@wcpos/components/src/tabs';
+import { Text } from '@wcpos/components/src/text';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/src/tooltip';
 
 import { CartTabTitle } from './tab-title';
+import { useT } from '../../../../contexts/translations';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -14,28 +16,60 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  */
 export const OpenOrderTabs = () => {
 	const { currentOrder, openOrders, setCurrentOrderID } = useCurrentOrder();
-	const orders = openOrders.map((res) => res.document);
+	const t = useT();
+
+	/**
+	 *
+	 */
+	const handleTabPress = React.useCallback(
+		(orderID: string) => {
+			if (orderID === 'new') {
+				setCurrentOrderID('');
+			} else {
+				setCurrentOrderID(orderID);
+			}
+		},
+		[setCurrentOrderID]
+	);
 
 	/**
 	 *
 	 */
 	return (
-		<HStack>
-			{orders.map((order) => (
-				<Button
-					key="order.uuid"
-					variant={order.uuid === currentOrder.uuid ? 'default' : 'secondary'}
-					onPress={() => {
-						setCurrentOrderID(order.uuid);
-					}}
-					disabled={order.uuid === currentOrder.uuid}
+		<Tabs
+			value={currentOrder.isNew ? 'new' : currentOrder.uuid}
+			onValueChange={handleTabPress}
+			orientation="horizontal"
+		>
+			<ScrollableTabsList className="flex-row w-full pb-0">
+				{openOrders.map(({ id, document }) => (
+					<TabsTrigger
+						key={id}
+						value={id}
+						// variant={order.uuid === currentOrder.uuid ? 'default' : 'secondary'}
+						// onPress={() => {
+						// 	setCurrentOrderID(order.uuid);
+						// }}
+						// disabled={order.uuid === currentOrder.uuid}
+					>
+						<CartTabTitle order={document} />
+					</TabsTrigger>
+				))}
+				<TabsTrigger
+					value="new"
+					asChild
+					// variant={currentOrder.isNew ? 'default' : 'secondary'}
 				>
-					<CartTabTitle order={order} />
-				</Button>
-			))}
-			<Button variant={currentOrder.isNew ? 'default' : 'secondary'}>
-				<Icon name="plus" />
-			</Button>
-		</HStack>
+					<Tooltip>
+						<TooltipTrigger>
+							<Icon name="plus" />
+						</TooltipTrigger>
+						<TooltipContent>
+							<Text>{t('Open new order', { _tags: 'core' })}</Text>
+						</TooltipContent>
+					</Tooltip>
+				</TabsTrigger>
+			</ScrollableTabsList>
+		</Tabs>
 	);
 };

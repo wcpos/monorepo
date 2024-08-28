@@ -23,13 +23,13 @@ export const Actions = ({ row, table }: CellContext<Props, 'actions'>) => {
 	 *
 	 */
 	const handleRemoveLineItem = React.useCallback(() => {
-		const rowRef = table.options.meta.rowRefs.current.get(row.id);
-		if (rowRef) {
+		const rowRef = table.options.meta.rowRefs.current.get(uuid);
+		if (rowRef && rowRef?.pulseRemove) {
 			rowRef.pulseRemove(() => {
 				removeLineItem(uuid, type);
 			});
 		}
-	}, [removeLineItem, row.id, table.options.meta.rowRefs, type, uuid]);
+	}, [removeLineItem, table.options.meta.rowRefs, type, uuid]);
 
 	/**
 	 *

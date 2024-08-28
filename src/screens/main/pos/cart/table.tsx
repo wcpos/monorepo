@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import {
 	Column,
@@ -42,8 +42,12 @@ import { Subtotal } from './cells/subtotal';
 import EmptyTableRow from '../../components/empty-table-row';
 import { TextCell } from '../../components/text-cell';
 import { useUISettings } from '../../contexts/ui-settings';
-import { useCartLines, CartLine } from '../hooks/use-cart-lines';
-import { getUuidFromLineItemMetaData } from '../hooks/utils';
+import { useCartLines } from '../hooks/use-cart-lines';
+import { getUuidFromLineItem } from '../hooks/utils';
+
+type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
+type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 
 const cells = {
 	line_items: {
@@ -76,6 +80,24 @@ const cells = {
 /**
  *
  */
+const formatCartItems = (
+	items: LineItem[] | FeeLine[] | ShippingLine[],
+	type: 'line_items' | 'fee_lines' | 'shipping_lines'
+) => {
+	return items.map((item) => {
+		const uuid = getUuidFromLineItem(item);
+
+		return {
+			item,
+			uuid,
+			type,
+		};
+	});
+};
+
+/**
+ *
+ */
 export const CartTable = () => {
 	const { uiSettings, getUILabel } = useUISettings('pos-cart');
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
@@ -83,27 +105,15 @@ export const CartTable = () => {
 	const rowRefs = React.useRef<Map<string, React.RefObject<View>>>(new Map());
 
 	/**
-	 * @TODO - add sorting?
-	 * @NOTE - this a slight different format than the other data tables
+	 * Flatten line items, fee lines and shipping lines into a single array.
 	 */
-	const mapItems = React.useCallback((items, type) => {
-		return items.map((item) => ({
-			item,
-			uuid: getUuidFromLineItemMetaData(item.meta_data),
-			type,
-		}));
-	}, []);
-
-	/**
-	 *
-	 */
-	const data: CartLine[] = React.useMemo(() => {
+	const data = React.useMemo(() => {
 		return [
-			...mapItems(line_items, 'line_items'),
-			...mapItems(fee_lines, 'fee_lines'),
-			...mapItems(shipping_lines, 'shipping_lines'),
+			...formatCartItems(line_items, 'line_items'),
+			...formatCartItems(fee_lines, 'fee_lines'),
+			...formatCartItems(shipping_lines, 'shipping_lines'),
 		];
-	}, [mapItems, line_items, fee_lines, shipping_lines]);
+	}, [line_items, fee_lines, shipping_lines]);
 
 	/**
 	 *
@@ -150,8 +160,8 @@ export const CartTable = () => {
 		data,
 		columns,
 		getCoreRowModel: getCoreRowModel(),
-		getRowId: (row: CartLine) => row.uuid,
-		debugTable: true,
+		getRowId: (line) => line.uuid,
+		// debugTable: true,
 		meta: {
 			onChange: (data: any) => {
 				console.log('onChange called without handler', data);
@@ -198,10 +208,7 @@ export const CartTable = () => {
 							<PulseTableRow
 								ref={(ref) => rowRefs.current.set(row.id, ref)}
 								key={row.id}
-								className={cn(
-									'active:opacity-70',
-									index % 2 && 'bg-zinc-100/50 dark:bg-zinc-900/50'
-								)}
+								index={index}
 							>
 								{row.getVisibleCells().map((cell) => {
 									const meta = cell.column.columnDef.meta;

@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useObservableEagerState, useSubscription, useObservable } from 'observable-hooks';
-import { distinctUntilChanged, map, skip, tap } from 'rxjs/operators';
+import { distinctUntilChanged, map, skip } from 'rxjs/operators';
 
 import { useFeeLineData } from './use-fee-line-data';
 import { useUpdateFeeLine } from './use-update-fee-line';
@@ -11,11 +11,6 @@ import { useCurrentOrder } from '../contexts/current-order';
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
-export type CartLine = {
-	item: LineItem | FeeLine | ShippingLine;
-	id: string;
-	type: 'line_items' | 'fee_lines' | 'shipping_lines';
-};
 
 /**
  * @NOTE - when current order is updated, eg: date_modified, the cart lines will re-subscribe.

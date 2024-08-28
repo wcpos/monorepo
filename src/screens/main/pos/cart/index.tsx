@@ -22,7 +22,7 @@ const OpenOrders = ({ isColumn = false }) => {
 	 *
 	 */
 	return (
-		<VStack className={`gap-0 p-2 h-full ${isColumn && 'pl-0'}`}>
+		<VStack className={`gap-1 p-2 h-full ${isColumn && 'pl-0'}`}>
 			<ErrorBoundary>
 				{currentOrder.isNew ? (
 					<EmptyCart currentOrder={currentOrder} />
