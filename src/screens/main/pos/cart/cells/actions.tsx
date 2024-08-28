@@ -32,6 +32,19 @@ export const Actions = ({ row, table }: CellContext<Props, 'actions'>) => {
 	}, [removeLineItem, table.options.meta.rowRefs, type, uuid]);
 
 	/**
+	 * Use pulse effect for new rows
+	 */
+	const isNew = table.options.meta.newRowUUIDs.includes(uuid);
+	if (isNew) {
+		const rowRef = table.options.meta.rowRefs.current.get(uuid);
+		if (rowRef && rowRef?.pulseAdd) {
+			rowRef.pulseAdd(() => {
+				table.options.meta.newRowUUIDs = table.options.meta.newRowUUIDs.filter((id) => id !== uuid);
+			});
+		}
+	}
+
+	/**
 	 *
 	 */
 	return (

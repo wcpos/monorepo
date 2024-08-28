@@ -10,8 +10,8 @@ import {
 } from '@tanstack/react-table';
 import find from 'lodash/find';
 import get from 'lodash/get';
-import { useObservableEagerState, useObservableRef, useSubscription } from 'observable-hooks';
-import { skip, debounceTime } from 'rxjs/operators';
+import isEqual from 'lodash/isEqual';
+import { useObservableEagerState } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { cn } from '@wcpos/components/src/lib/utils';
@@ -42,6 +42,7 @@ import { Subtotal } from './cells/subtotal';
 import EmptyTableRow from '../../components/empty-table-row';
 import { TextCell } from '../../components/text-cell';
 import { useUISettings } from '../../contexts/ui-settings';
+import { useCurrentOrder } from '../contexts/current-order';
 import { useCartLines } from '../hooks/use-cart-lines';
 import { getUuidFromLineItem } from '../hooks/utils';
 
@@ -103,17 +104,60 @@ export const CartTable = () => {
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const { line_items, fee_lines, shipping_lines } = useCartLines();
 	const rowRefs = React.useRef<Map<string, React.RefObject<View>>>(new Map());
+	const scrollViewRef = React.useRef<ScrollView>(null);
+	const { currentOrder } = useCurrentOrder();
+
+	// Track previous cart data
+	const prevDataRef = React.useRef<CartLine[]>([]);
+	const prevOrderUuidRef = React.useRef<string | null>(null);
 
 	/**
 	 * Flatten line items, fee lines and shipping lines into a single array.
 	 */
 	const data = React.useMemo(() => {
-		return [
+		const flattenedArray = [
 			...formatCartItems(line_items, 'line_items'),
 			...formatCartItems(fee_lines, 'fee_lines'),
 			...formatCartItems(shipping_lines, 'shipping_lines'),
 		];
+		return flattenedArray;
 	}, [line_items, fee_lines, shipping_lines]);
+
+	/**
+	 * Compute new UUIDs whenever `data` or `currentOrder.uuid` changes.
+	 */
+	const newRowUUIDs = React.useMemo(() => {
+		if (!currentOrder?.uuid) {
+			return [];
+		}
+
+		if (currentOrder.uuid !== prevOrderUuidRef.current) {
+			prevOrderUuidRef.current = currentOrder.uuid;
+			prevDataRef.current = data;
+			return [];
+		}
+
+		const detectedNewUUIDs = data.reduce<string[]>((acc, newItem) => {
+			const prevItem = prevDataRef.current.find((prevItem) => prevItem.uuid === newItem.uuid);
+
+			if (!prevItem) {
+				acc.push(newItem.uuid);
+			} else if (
+				newItem.type === 'line_items' &&
+				newItem.item.quantity !== prevItem.item.quantity
+			) {
+				acc.push(newItem.uuid);
+			}
+
+			return acc;
+		}, []);
+
+		if (detectedNewUUIDs.length > 0) {
+			prevDataRef.current = data;
+		}
+
+		return detectedNewUUIDs;
+	}, [data, currentOrder?.uuid]);
 
 	/**
 	 *
@@ -167,6 +211,30 @@ export const CartTable = () => {
 				console.log('onChange called without handler', data);
 			},
 			rowRefs,
+			newRowUUIDs,
+			scrollToRow: (uuid: string) => {
+				const rowRef = rowRefs.current.get(uuid);
+				const scrollView = scrollViewRef.current;
+
+				if (rowRef && scrollView) {
+					rowRef.measureLayout(
+						scrollView,
+						(x, y, width, height) => {
+							scrollView.measure((scrollX, scrollY, scrollWidth, scrollHeight) => {
+								const isRowAboveView = y < scrollY;
+								const isRowBelowView = y + height > scrollY + scrollHeight;
+
+								if (isRowAboveView || isRowBelowView) {
+									scrollView.scrollTo({ y, animated: true });
+								}
+							});
+						},
+						(error) => {
+							console.error('Measure layout failed', error);
+						}
+					);
+				}
+			},
 		},
 	});
 
@@ -201,7 +269,7 @@ export const CartTable = () => {
 					);
 				})}
 			</TableHeader>
-			<ScrollView>
+			<ScrollView ref={scrollViewRef}>
 				<TableBody>
 					{table.getRowModel().rows.map((row, index) => {
 						return (
@@ -209,6 +277,8 @@ export const CartTable = () => {
 								ref={(ref) => rowRefs.current.set(row.id, ref)}
 								key={row.id}
 								index={index}
+								table={table}
+								row={row}
 							>
 								{row.getVisibleCells().map((cell) => {
 									const meta = cell.column.columnDef.meta;
