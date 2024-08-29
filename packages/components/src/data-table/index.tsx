@@ -16,7 +16,7 @@ import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DataTableRow } from './row';
-import { cn } from '../lib/utils';
+import { cn, getTailwindJustifyClass } from '../lib/utils';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table';
 
 interface DataTableProps<TData, TValue> {
@@ -73,6 +73,9 @@ const DataTable = <TData, TValue>({
 	extraContext,
 	tableMeta,
 	TableFooterComponent,
+	tableState,
+	enableRowSelection,
+	onRowSelectionChange,
 	...props
 }: DataTableProps<TData, TValue>) => {
 	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
@@ -99,6 +102,11 @@ const DataTable = <TData, TValue>({
 			},
 			...tableMeta,
 		},
+		state: {
+			...tableState,
+		},
+		enableRowSelection: !!enableRowSelection,
+		onRowSelectionChange: onRowSelectionChange ? onRowSelectionChange : undefined,
 	});
 
 	/**
@@ -143,7 +151,7 @@ const DataTable = <TData, TValue>({
 										className={cn(
 											meta?.flex && `flex-${meta.flex}`,
 											meta?.width && 'flex-none',
-											meta?.align && `text-${meta.flex}`
+											meta?.align && getTailwindJustifyClass(meta.align)
 										)}
 										style={{ width: meta?.width ? meta.width : undefined }}
 									>
