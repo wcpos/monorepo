@@ -20,7 +20,7 @@ type TPanelGroupContext = {
 	onLayout: (size: { width: number }) => void;
 };
 
-const PanelGroupContext = React.createContext<TPanelGroupContext | null>(null);
+const PanelGroupContext = React.createContext<TPanelGroupContext>(null);
 
 PanelGroupContext.displayName = 'PanelGroupContext';
 
@@ -136,7 +136,7 @@ PanelResizeHandle.displayName = 'PanelResizeHandle';
 /**
  *
  */
-const Panel = ({ children, index }) => {
+const Panel = ({ children, index, defaultSize = 50 }) => {
 	const { columnWidth, rowHeight, direction } = React.useContext(PanelGroupContext);
 
 	/**
@@ -144,9 +144,9 @@ const Panel = ({ children, index }) => {
 	 */
 	const animatedStyle = useAnimatedStyle(() => {
 		if (direction === 'horizontal') {
-			return { width: `${columnWidth.value}%` };
+			return { width: columnWidth.value ? `${columnWidth.value}%` : `${defaultSize}%` };
 		} else {
-			return { height: `${rowHeight.value}%` };
+			return { height: rowHeight.value ? `${rowHeight.value}%` : `${defaultSize}%` };
 		}
 	});
 
@@ -160,9 +160,9 @@ Panel.displayName = 'Panel';
 /**
  *
  */
-const PanelGroup = ({ children, defaultSize = 50, onLayout, direction = 'horizontal' }) => {
-	const columnWidth = useSharedValue(defaultSize);
-	const rowHeight = useSharedValue(defaultSize);
+const PanelGroup = ({ children, onLayout, direction = 'horizontal' }) => {
+	const columnWidth = useSharedValue(null);
+	const rowHeight = useSharedValue(null);
 	const startValue = useSharedValue(columnWidth.value);
 	const isActivePanGesture = useSharedValue(false);
 	const containerWidth = useSharedValue(800);

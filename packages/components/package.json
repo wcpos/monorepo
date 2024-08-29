@@ -17,6 +17,7 @@
     "@rn-primitives/context-menu": "^1.0.3",
     "@rn-primitives/dialog": "^1.0.3",
     "@rn-primitives/dropdown-menu": "^1.0.3",
+    "@rn-primitives/hooks": "^1.0.3",
     "@rn-primitives/hover-card": "^1.0.3",
     "@rn-primitives/label": "^1.0.3",
     "@rn-primitives/popover": "^1.0.3",
