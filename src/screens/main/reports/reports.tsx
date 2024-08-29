@@ -1,9 +1,9 @@
 import * as React from 'react';
 
-import { useQuery } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { Panel, PanelGroup, PanelResizeHandle } from '@wcpos/components/src/panels';
 import { Suspense } from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import { Chart } from './chart';
 import { FilterBar } from './filter-bar';
@@ -44,7 +44,7 @@ export const Reports = () => {
 	 *
 	 */
 	return (
-		<PanelGroup direction="vertical" onLayout={console.log}>
+		<PanelGroup direction="vertical">
 			<Panel defaultSize={40}>
 				<FilterBar query={query} />
 				<Chart query={query} />

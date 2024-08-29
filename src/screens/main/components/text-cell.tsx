@@ -15,5 +15,5 @@ export const TextCell = ({ row, column }: CellContext<any, string>) => {
 	const textObservable = item[column.id + '$'] as Observable<string> | undefined;
 	const text = useObservableEagerState(textObservable ? textObservable : of(null));
 
-	return <Text>{String(text)}</Text>;
+	return <Text>{text ? String(text) : ''}</Text>;
 };

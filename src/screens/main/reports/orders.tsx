@@ -2,13 +2,15 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import { useQuery } from '@wcpos/query';
 import { Box } from '@wcpos/components/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Suspense } from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
+import { TableRowSelect } from './cells/select';
+import { TableHeaderSelect } from './headers/select';
 import { UISettingsForm } from './ui-settings-form';
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
@@ -25,6 +27,7 @@ import { UISettingsButton } from '../components/ui-settings';
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
 const cells = {
+	select: TableRowSelect,
 	customer_id: Customer,
 	status: Status,
 	total: Total,
@@ -39,11 +42,18 @@ const cells = {
 
 const renderCell = (props) => get(cells, props.column.id);
 
+const headers = {
+	select: TableHeaderSelect,
+};
+
+const renderHeader = (props) => get(headers, props.column.id);
+
 /**
  *
  */
 export const Orders = ({ query }) => {
 	const t = useT();
+	const [rowSelection, setRowSelection] = React.useState({});
 
 	/**
 	 *
@@ -53,7 +63,7 @@ export const Orders = ({ query }) => {
 			<Card className="flex-1">
 				<CardHeader className="p-2 bg-input">
 					<HStack className="justify-end">
-						<UISettingsButton title={t('Logs Settings', { _tags: 'core' })}>
+						<UISettingsButton title={t('Orders Settings', { _tags: 'core' })}>
 							<UISettingsForm />
 						</UISettingsButton>
 					</HStack>
@@ -65,8 +75,12 @@ export const Orders = ({ query }) => {
 								id="reports-orders"
 								query={query}
 								renderCell={renderCell}
+								renderHeader={renderHeader}
 								noDataMessage={t('No orders found', { _tags: 'core' })}
 								estimatedItemSize={100}
+								enableRowSelection
+								tableState={{ rowSelection }}
+								onRowSelectionChange={setRowSelection}
 							/>
 						</Suspense>
 					</ErrorBoundary>

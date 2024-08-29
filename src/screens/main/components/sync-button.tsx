@@ -29,7 +29,6 @@ interface SyncButtonProps {
 
 const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 	const t = useT();
-	const [open, setOpen] = React.useState(false);
 
 	/**
 	 *
@@ -43,15 +42,28 @@ const SyncButton = ({ sync, clear, active }: SyncButtonProps) => {
 	 *
 	 */
 	return (
-		<DropdownMenu onOpenChange={setOpen}>
-			<Tooltip delayDuration={150}>
-				<TooltipTrigger onLongPress={() => setOpen(true)} onPress={sync} asChild>
-					<IconButton name="arrowRotateRight" size="sm" loading={active} />
-				</TooltipTrigger>
-				<TooltipContent>
-					<Text>{t('Press to sync, long press for more options', { _tags: 'core' })}</Text>
-				</TooltipContent>
-			</Tooltip>
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<IconButton
+							name="arrowRotateRight"
+							size="sm"
+							loading={active}
+							onLongPress={(event) => {
+								event.preventDefault();
+							}}
+							onPress={(event) => {
+								event.preventDefault();
+								sync();
+							}}
+						/>
+					</TooltipTrigger>
+					<TooltipContent>
+						<Text>{t('Press to sync, long press for more options', { _tags: 'core' })}</Text>
+					</TooltipContent>
+				</Tooltip>
+			</DropdownMenuTrigger>
 			<DropdownMenuContent side="top" align="end">
 				<DropdownMenuItem onPress={sync}>
 					<Icon name="arrowRotateRight" />

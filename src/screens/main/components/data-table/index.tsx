@@ -3,6 +3,9 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
+import { DataTable as Table, DataTableProps } from '@wcpos/components/src/data-table';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
+import { Suspense } from '@wcpos/components/src/suspense';
 import type {
 	ProductDocument,
 	OrderDocument,
@@ -11,9 +14,6 @@ import type {
 	LogDocument,
 } from '@wcpos/database';
 import { useInfiniteScroll, Query } from '@wcpos/query';
-import { DataTable as Table, DataTableProps } from '@wcpos/components/src/data-table';
-import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { Suspense } from '@wcpos/components/src/suspense';
 
 import { ListEmptyComponent } from './empty';
 import { DataTableFooter } from './footer';
@@ -21,7 +21,7 @@ import { DataTableHeader } from './header';
 import { useUISettings, UISettingID } from '../../contexts/ui-settings';
 import { TextCell } from '../text-cell';
 
-import type { CellContext, ColumnDef } from '@tanstack/react-table';
+import type { CellContext, ColumnDef, HeaderContext } from '@tanstack/react-table';
 
 type DocumentType =
 	| ProductDocument
@@ -35,6 +35,7 @@ interface Props<TDocument> extends DataTableProps<TDocument, any> {
 	id: UISettingID;
 	query: Query<CollectionFromDocument<TDocument>>;
 	renderCell: (props: CellContext<TDocument, unknown>) => React.ComponentType<any>;
+	renderHeader: (props: HeaderContext<TDocument, unknown>) => React.ComponentType<any>;
 	noDataMessage?: string;
 }
 
@@ -44,6 +45,7 @@ interface Props<TDocument> extends DataTableProps<TDocument, any> {
 const DataTable = <TDocument extends DocumentType>({
 	id,
 	query,
+	renderHeader,
 	renderCell,
 	renderItem,
 	noDataMessage,
@@ -68,7 +70,21 @@ const DataTable = <TDocument extends DocumentType>({
 			.map((col) => {
 				return {
 					accessorKey: col.key,
-					header: ({ column }) => <DataTableHeader title={getUILabel(column.id)} column={column} />,
+					header: (props) => {
+						const Header = renderHeader && renderHeader(props);
+
+						if (Header) {
+							return (
+								<ErrorBoundary>
+									<Suspense>
+										<Header {...props} />
+									</Suspense>
+								</ErrorBoundary>
+							);
+						}
+
+						return <DataTableHeader title={getUILabel(props.column.id)} column={props.column} />;
+					},
 					// size: column.size,
 					cell: (props) => {
 						const Cell = renderCell && renderCell(props);

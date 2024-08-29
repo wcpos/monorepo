@@ -101,6 +101,7 @@ export const useUILabel = () => {
 					actions: t('Actions', { _tags: 'core' }),
 				},
 				'reports-orders': {
+					select: t('Select', { _tags: 'core' }),
 					status: t('Status', { _tags: 'core' }),
 					number: t('Order Number', { _tags: 'core' }),
 					created_via: t('Created Via', { _tags: 'core' }),

@@ -468,6 +468,12 @@
     "sortDirection": "desc",
     "columns": [
       {
+        "key": "select",
+        "width": 46,
+        "align": "center",
+        "show": true
+      },
+      {
         "key": "status",
         "width": 46,
         "align": "center",

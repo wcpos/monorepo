@@ -49,6 +49,7 @@ import { getUuidFromLineItem } from '../hooks/utils';
 type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+type OrderDocument = import('@wcpos/database').OrderDocument;
 
 const cells = {
 	line_items: {
@@ -109,7 +110,9 @@ export const CartTable = () => {
 
 	// Track previous cart data
 	const prevDataRef = React.useRef<CartLine[]>([]);
-	const prevOrderUuidRef = React.useRef<string | null>(null);
+	const prevOrderRef = React.useRef<OrderDocument>(null);
+	const currentOrderRef = React.useRef<OrderDocument>(null);
+	currentOrderRef.current = currentOrder;
 
 	/**
 	 * Flatten line items, fee lines and shipping lines into a single array.
@@ -127,12 +130,12 @@ export const CartTable = () => {
 	 * Compute new UUIDs whenever `data` or `currentOrder.uuid` changes.
 	 */
 	const newRowUUIDs = React.useMemo(() => {
-		if (!currentOrder?.uuid) {
+		if (!currentOrderRef?.current.uuid) {
 			return [];
 		}
 
-		if (currentOrder.uuid !== prevOrderUuidRef.current) {
-			prevOrderUuidRef.current = currentOrder.uuid;
+		if (currentOrderRef.current.uuid !== prevOrderRef?.current?.uuid) {
+			prevOrderRef.current = currentOrderRef.current;
 			prevDataRef.current = data;
 			return [];
 		}
@@ -157,7 +160,7 @@ export const CartTable = () => {
 		}
 
 		return detectedNewUUIDs;
-	}, [data, currentOrder?.uuid]);
+	}, [data]);
 
 	/**
 	 *

@@ -59,7 +59,7 @@ export const Report = () => {
 				<CardContent ref={reportRef} className="flex-1 p-0">
 					<Text>Test</Text>
 				</CardContent>
-				<CardFooter className="p-2 border-t bg-muted justify-end">
+				<CardFooter className="p-2 border-border border-t bg-muted justify-end">
 					<Button onPress={handlePrint}>
 						<ButtonText>{t('Print', { _tags: 'core' })}</ButtonText>
 					</Button>
