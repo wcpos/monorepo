@@ -134,20 +134,11 @@ const CheckoutWithProviders = ({
 	);
 
 	return (
-		<ModalLayout
-			size="xLarge"
-			title={t('Checkout', { _tags: 'core' })}
-			primaryAction={{
-				disabled: true,
-				loading: true,
-				label: t('Process Payment', { _tags: 'core' }),
-			}}
-			style={{ minHeight: '80%' }}
-		>
+		<ErrorBoundary>
 			<Suspense>
 				<Checkout resource={resource} />
 			</Suspense>
-		</ModalLayout>
+		</ErrorBoundary>
 	);
 };
 

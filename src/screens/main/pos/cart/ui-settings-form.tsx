@@ -5,14 +5,19 @@ import { useObservableState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormSwitch, FormInput } from '@wcpos/components/src/form';
+import {
+	Form,
+	FormField,
+	FormSwitch,
+	FormInput,
+	useFormChangeHandler,
+} from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
-import { useT } from '../../../../contexts/translations';
 import {
 	columnsFormSchema,
 	UISettingsColumnsForm,
-	ResetUISettingsButton,
+	useDialogContext,
 } from '../../components/ui-settings';
 import { useUISettings } from '../../contexts/ui-settings';
 
@@ -28,9 +33,10 @@ export const schema = z.object({
  *
  */
 export const UISettingsForm = () => {
-	const { uiSettings, getUILabel, resetUI } = useUISettings('pos-cart');
+	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings('pos-cart');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
-	const t = useT();
+	const { buttonPressHandlerRef } = useDialogContext();
+	buttonPressHandlerRef.current = resetUI;
 
 	/**
 	 *
@@ -41,6 +47,18 @@ export const UISettingsForm = () => {
 			...formData,
 		},
 	});
+
+	/**
+	 * Track formData changes and reset form
+	 */
+	React.useEffect(() => {
+		form.reset({ ...formData });
+	}, [formData, form]);
+
+	/**
+	 *
+	 */
+	useFormChangeHandler({ form, onChange: patchUI });
 
 	/**
 	 *
@@ -67,7 +85,6 @@ export const UISettingsForm = () => {
 					<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
 				</VStack>
 			</Form>
-			<ResetUISettingsButton onPress={resetUI} />
 		</VStack>
 	);
 };

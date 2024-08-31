@@ -2,13 +2,13 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import { useQuery } from '@wcpos/query';
 import { Box } from '@wcpos/components/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Suspense } from '@wcpos/components/src/suspense';
 import { VStack } from '@wcpos/components/src/vstack';
+import { useQuery } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Address } from './cells/address';
@@ -26,7 +26,7 @@ import { PaymentMethod } from '../components/order/payment-method';
 import { Status } from '../components/order/status';
 import { Total } from '../components/order/total';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UISettingsButton } from '../components/ui-settings/button';
+import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -86,9 +86,9 @@ const Orders = () => {
 					<VStack>
 						<HStack>
 							<QuerySearchInput query={query} placeholder={t('Search Orders', { _tags: 'core' })} />
-							<UISettingsButton title={t('Order Settings', { _tags: 'core' })}>
+							<UISettingsDialog title={t('Order Settings', { _tags: 'core' })}>
 								<UISettingsForm />
-							</UISettingsButton>
+							</UISettingsDialog>
 						</HStack>
 						<ErrorBoundary>
 							<FilterBar query={query} />

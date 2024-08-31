@@ -8,11 +8,10 @@ import * as z from 'zod';
 import { Form, useFormChangeHandler } from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
-import { useT } from '../../../contexts/translations';
 import {
 	columnsFormSchema,
 	UISettingsColumnsForm,
-	ResetUISettingsButton,
+	useDialogContext,
 } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
@@ -26,7 +25,8 @@ export const schema = z.object({
 export const UISettingsForm = () => {
 	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('products');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
-	const t = useT();
+	const { buttonPressHandlerRef } = useDialogContext();
+	buttonPressHandlerRef.current = resetUI;
 
 	/**
 	 *
@@ -54,13 +54,10 @@ export const UISettingsForm = () => {
 	 *
 	 */
 	return (
-		<VStack>
-			<Form {...form}>
-				<VStack>
-					<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
-				</VStack>
-			</Form>
-			<ResetUISettingsButton onPress={resetUI} />
-		</VStack>
+		<Form {...form}>
+			<VStack>
+				<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
+			</VStack>
+		</Form>
 	);
 };

@@ -32,7 +32,7 @@ import { VariableProductRow } from '../../components/product/variable-product-ro
 import { ProductVariationImage } from '../../components/product/variation-image';
 import { ProductVariationName } from '../../components/product/variation-name';
 import { QuerySearchInput } from '../../components/query-search-input';
-import { UISettingsButton } from '../../components/ui-settings';
+import { UISettingsDialog } from '../../components/ui-settings';
 import { useTaxRates } from '../../contexts/tax-rates';
 import { useUISettings } from '../../contexts/ui-settings';
 
@@ -177,9 +177,9 @@ const POSProducts = ({ isColumn = false }) => {
 										placeholder={t('Search Products', { _tags: 'core' })}
 									/>
 								</ErrorBoundary>
-								<UISettingsButton title={t('Product Settings', { _tags: 'core' })}>
+								<UISettingsDialog title={t('Product Settings', { _tags: 'core' })}>
 									<UISettingsForm />
-								</UISettingsButton>
+								</UISettingsDialog>
 							</HStack>
 							<ErrorBoundary>
 								<FilterBar query={query} />

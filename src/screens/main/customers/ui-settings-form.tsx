@@ -5,13 +5,14 @@ import { useObservableState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import { Form, useFormChangeHandler } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
-import { useT } from '../../../contexts/translations';
-import { columnsFormSchema, UISettingsColumnsForm } from '../components/ui-settings';
+import {
+	columnsFormSchema,
+	UISettingsColumnsForm,
+	useDialogContext,
+} from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
 export const schema = z.object({
@@ -24,7 +25,8 @@ export const schema = z.object({
 export const UISettingsForm = () => {
 	const { uiSettings, getUILabel, resetUI, patchUI } = useUISettings('customers');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
-	const t = useT();
+	const { buttonPressHandlerRef } = useDialogContext();
+	buttonPressHandlerRef.current = resetUI;
 
 	/**
 	 *
@@ -56,11 +58,6 @@ export const UISettingsForm = () => {
 			<VStack>
 				<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
 			</VStack>
-			<HStack>
-				<Button variant="destructive" onPress={resetUI}>
-					<ButtonText>{t('Restore Default Settings', { _tags: 'core' })}</ButtonText>
-				</Button>
-			</HStack>
 		</Form>
 	);
 };

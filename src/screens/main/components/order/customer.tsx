@@ -3,10 +3,10 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { useQueryManager } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 import { FormatAddress } from '@wcpos/components/src/format';
 import { VStack } from '@wcpos/components/src/vstack';
+import { useQueryManager } from '@wcpos/query';
 
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 
@@ -39,7 +39,11 @@ export const Customer = ({ row, column }: CellContext<OrderDocument, 'customer_i
 
 	return (
 		<VStack>
-			<ButtonPill size="xs" onPress={() => query.where('customer_id', customerID)}>
+			<ButtonPill
+				variant="ghost-primary"
+				size="xs"
+				onPress={() => query.where('customer_id', customerID)}
+			>
 				<ButtonText>{format({ billing, shipping, id: customerID })}</ButtonText>
 			</ButtonPill>
 			{show('billing') && <FormatAddress address={billing} showName={false} />}

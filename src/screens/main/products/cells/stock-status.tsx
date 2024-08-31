@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Text } from '@wcpos/components/src/text';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { useDataTable } from '@wcpos/components/src/data-table';
 
 import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
 
@@ -17,21 +18,30 @@ export const StockStatus = ({ row }: CellContext<ProductDocument, 'stock_status'
 	const product = row.original;
 	const stockStatus = useObservableEagerState(product.stock_status$);
 	const { getLabel } = useStockStatusLabel();
+	const { query } = useDataTable();
 
-	const classNames = React.useMemo(() => {
+	const variant = React.useMemo(() => {
 		switch (stockStatus) {
 			case 'instock':
-				return 'text-success';
+				return 'ghost-success';
 			case 'outofstock':
-				return 'text-destructive';
+				return 'ghost-destructive';
 			case 'onbackorder':
-				return 'text-warning';
+				return 'ghost-warning';
 			case 'lowstock':
-				return 'text-warning';
+				return 'ghost-warning';
 			default:
-				return '';
+				return 'ghost';
 		}
 	}, [stockStatus]);
 
-	return <Text className={`text-sm text-center ${classNames}`}>{getLabel(stockStatus)}</Text>;
+	return (
+		<ButtonPill
+			size="xs"
+			variant={variant}
+			onPress={() => query.where('stock_status', stockStatus)}
+		>
+			<ButtonText>{getLabel(stockStatus)}</ButtonText>
+		</ButtonPill>
+	);
 };

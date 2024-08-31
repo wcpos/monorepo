@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import { useLocalQuery } from '@wcpos/query';
 import { Box } from '@wcpos/components/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Suspense } from '@wcpos/components/src/suspense';
+import { useLocalQuery } from '@wcpos/query';
 
 import { Context } from './cells/context';
 import { Date } from './cells/date';
@@ -15,7 +15,7 @@ import { Level } from './cells/level';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../contexts/translations';
 import { DataTable } from '../components/data-table';
-import { UISettingsButton } from '../components/ui-settings';
+import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
 type LogDocument = import('@wcpos/database').LogDocument;
@@ -60,9 +60,9 @@ export const Logs = () => {
 			<Card className="flex-1">
 				<CardHeader className="p-2 bg-input">
 					<HStack className="justify-end">
-						<UISettingsButton title={t('Logs Settings', { _tags: 'core' })}>
+						<UISettingsDialog title={t('Logs Settings', { _tags: 'core' })}>
 							<UISettingsForm />
-						</UISettingsButton>
+						</UISettingsDialog>
 					</HStack>
 				</CardHeader>
 				<CardContent className="flex-1 p-0">

@@ -9,7 +9,7 @@ import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../../contexts/translations';
 import { AddNewCustomer } from '../../components/customer/add-new';
 import { CustomerSelect } from '../../components/customer-select';
-import { UISettingsButton } from '../../components/ui-settings';
+import { UISettingsDialog } from '../../components/ui-settings';
 import { useUISettings } from '../../contexts/ui-settings';
 import { useAddCustomer } from '../hooks/use-add-customer';
 
@@ -50,9 +50,9 @@ export const CartHeader = () => {
 				</ErrorBoundary>
 			</Box>
 			<AddNewCustomer onAdd={(customer) => addCustomer(customer)} />
-			<UISettingsButton title={t('Cart Settings', { _tags: 'core' })}>
+			<UISettingsDialog title={t('Cart Settings', { _tags: 'core' })}>
 				<UISettingsForm />
-			</UISettingsButton>
+			</UISettingsDialog>
 		</HStack>
 	);
 };

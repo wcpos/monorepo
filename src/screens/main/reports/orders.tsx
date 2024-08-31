@@ -22,7 +22,7 @@ import { Customer } from '../components/order/customer';
 import { PaymentMethod } from '../components/order/payment-method';
 import { Status } from '../components/order/status';
 import { Total } from '../components/order/total';
-import { UISettingsButton } from '../components/ui-settings';
+import { UISettingsDialog } from '../components/ui-settings';
 
 type OrderDocument = import('@wcpos/database').OrderDocument;
 
@@ -63,9 +63,9 @@ export const Orders = ({ query }) => {
 			<Card className="flex-1">
 				<CardHeader className="p-2 bg-input">
 					<HStack className="justify-end">
-						<UISettingsButton title={t('Orders Settings', { _tags: 'core' })}>
+						<UISettingsDialog title={t('Orders Settings', { _tags: 'core' })}>
 							<UISettingsForm />
-						</UISettingsButton>
+						</UISettingsDialog>
 					</HStack>
 				</CardHeader>
 				<CardContent className="flex-1 p-0">

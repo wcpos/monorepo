@@ -25,6 +25,7 @@ export const ProductTags = ({ row }: CellContext<ProductDocument, 'tags'>) => {
 			<ButtonPill
 				key={tag.id}
 				size="xs"
+				variant="ghost-secondary"
 				onPress={() => query.where('tags', { $elemMatch: { id: tag.id } })}
 			>
 				<ButtonText>{tag.name}</ButtonText>

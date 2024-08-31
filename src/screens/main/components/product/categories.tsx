@@ -25,7 +25,7 @@ export const ProductCategories = ({ row }: CellContext<ProductDocument, 'categor
 		<HStack>
 			{(categories || []).map((cat) => (
 				<ButtonPill
-					variant="secondary"
+					variant="ghost-primary"
 					size="xs"
 					key={cat.id}
 					onPress={() => query.where('categories', { $elemMatch: { id: cat.id } })}

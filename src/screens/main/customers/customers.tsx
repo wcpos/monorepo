@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import { useQuery } from '@wcpos/query';
 import { Box } from '@wcpos/components/src/box';
 import { Card, CardContent, CardHeader } from '@wcpos/components/src/card';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Suspense } from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Address } from './cells/address';
@@ -19,7 +19,7 @@ import { AddNewCustomer } from '../components/customer/add-new';
 import { DataTable } from '../components/data-table';
 import { Date } from '../components/date';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UISettingsButton } from '../components/ui-settings/button';
+import { UISettingsDialog } from '../components/ui-settings';
 import { useUISettings } from '../contexts/ui-settings';
 
 type CustomerDocument = import('@wcpos/database').CustomerDocument;
@@ -68,9 +68,9 @@ const Customers = () => {
 							placeholder={t('Search Customers', { _tags: 'core' })}
 						/>
 						<AddNewCustomer />
-						<UISettingsButton title={t('Customer Settings', { _tags: 'core' })}>
+						<UISettingsDialog title={t('Customer Settings', { _tags: 'core' })}>
 							<UISettingsForm />
-						</UISettingsButton>
+						</UISettingsDialog>
 					</HStack>
 				</CardHeader>
 				<CardContent className="flex-1 p-0">

@@ -15,8 +15,11 @@ import {
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
-import { columnsFormSchema, UISettingsColumnsForm } from '../../components/ui-settings';
-import { ResetUISettingsButton } from '../../components/ui-settings/reset-button';
+import {
+	columnsFormSchema,
+	UISettingsColumnsForm,
+	useDialogContext,
+} from '../../components/ui-settings';
 import { useUISettings } from '../../contexts/ui-settings';
 
 export const schema = z.object({
@@ -31,6 +34,8 @@ export const schema = z.object({
 export const UISettingsForm = () => {
 	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('pos-products');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
+	const { buttonPressHandlerRef } = useDialogContext();
+	buttonPressHandlerRef.current = resetUI;
 	const t = useT();
 
 	/**
@@ -83,7 +88,6 @@ export const UISettingsForm = () => {
 					/>
 				</VStack>
 			</Form>
-			<ResetUISettingsButton onPress={resetUI} />
 		</VStack>
 	);
 };
