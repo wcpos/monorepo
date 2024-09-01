@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { cn } from '../lib/utils';
+
 import type { WebViewSharedProps } from 'react-native-webview/lib/WebViewTypes';
 
 export interface WebViewProps extends Omit<WebViewSharedProps, 'style'> {
@@ -28,6 +30,7 @@ const WebViewBase = (
 		onNavigationStateChange,
 		onError,
 		srcDoc,
+		className,
 	}: WebViewProps,
 	ref
 ) => {
@@ -91,8 +94,8 @@ const WebViewBase = (
 			srcDoc={srcDoc}
 			onLoad={onLoad}
 			frameBorder="0"
-			style={style}
-			sandbox="allow-scripts allow-forms"
+			sandbox="allow-scripts allow-forms allow-popups allow-same-origin"
+			className={cn('w-full h-full', className)}
 		/>
 	);
 };
