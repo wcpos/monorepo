@@ -41,7 +41,7 @@ export const OpenOrderTabs = () => {
 			onValueChange={handleTabPress}
 			orientation="horizontal"
 		>
-			<ScrollableTabsList className="flex-row w-full pb-0">
+			<ScrollableTabsList className="p-0">
 				{openOrders.map(({ id, document }) => (
 					<TabsTrigger
 						key={id}

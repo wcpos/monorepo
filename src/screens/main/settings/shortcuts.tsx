@@ -41,7 +41,9 @@ export const KeyboardShortcuts = () => {
 				{shortcuts.map((shortcut) => (
 					<TableRow key={shortcut.key}>
 						<TableCell>
-							<Text className="p-2 border rounded bg-accent font-mono text-sm">{shortcut.key}</Text>
+							<Text className="p-2 border border-border rounded bg-muted font-mono text-sm">
+								{shortcut.key}
+							</Text>
 						</TableCell>
 						<TableCell>
 							<Text>{shortcut.description}</Text>

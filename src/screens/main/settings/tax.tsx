@@ -77,7 +77,7 @@ export const TaxSettings = () => {
 	return (
 		<VStack>
 			<View className="flex-row">
-				<Button onPress={() => navigation.navigate('TaxRates')}>
+				<Button variant="muted" onPress={() => navigation.navigate('TaxRates')}>
 					<ButtonText>{t('View all tax rates', { _tags: 'core' })}</ButtonText>
 				</Button>
 			</View>

@@ -1,14 +1,25 @@
 import * as React from 'react';
 
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import {
+	Modal,
+	ModalContent,
+	ModalHeader,
+	ModalTitle,
+	ModalBody,
+	ModalFooter,
+	ModalClose,
+} from '@wcpos/components/src/modal';
 import { Suspense } from '@wcpos/components/src/suspense';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/src/tabs';
 import { Text } from '@wcpos/components/src/text';
 
-import BarcodeScanning from './barcode-scanning';
+import { BarcodeScanning } from './barcode-scanning';
 import { GeneralSettings } from './general';
 import { KeyboardShortcuts } from './shortcuts';
 import { TaxSettings } from './tax';
 import { useT } from '../../../contexts/translations';
+import useModalRefreshFix from '../../../hooks/use-modal-refresh-fix';
 
 /**
  *
@@ -16,6 +27,7 @@ import { useT } from '../../../contexts/translations';
 export const SettingsTabs = () => {
 	const [value, setValue] = React.useState('general');
 	const t = useT();
+	useModalRefreshFix();
 
 	const tabs = [
 		{
@@ -37,21 +49,35 @@ export const SettingsTabs = () => {
 	];
 
 	return (
-		<Tabs value={value} onValueChange={setValue}>
-			<TabsList className="flex-row w-full">
-				{tabs.map((tab) => (
-					<TabsTrigger key={tab.value} value={tab.value} className="flex-1">
-						<Text>{tab.label}</Text>
-					</TabsTrigger>
-				))}
-			</TabsList>
-			{tabs.map((tab) => (
-				<TabsContent key={tab.value} value={tab.value}>
-					<Suspense>{tab.component}</Suspense>
-				</TabsContent>
-			))}
-		</Tabs>
+		<Modal>
+			<ModalContent size="xl">
+				<ModalHeader>
+					<ModalTitle>{t('Settings', { _tags: 'core' })}</ModalTitle>
+				</ModalHeader>
+				<ModalBody>
+					<Tabs value={value} onValueChange={setValue}>
+						<TabsList className="flex-row w-full">
+							{tabs.map((tab) => (
+								<TabsTrigger key={tab.value} value={tab.value} className="flex-1">
+									<Text>{tab.label}</Text>
+								</TabsTrigger>
+							))}
+						</TabsList>
+						{tabs.map((tab) => (
+							<TabsContent key={tab.value} value={tab.value}>
+								<Suspense>{tab.component}</Suspense>
+							</TabsContent>
+						))}
+					</Tabs>
+				</ModalBody>
+				<ModalFooter>
+					<ModalClose asChild>
+						<Button variant="muted">
+							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
+						</Button>
+					</ModalClose>
+				</ModalFooter>
+			</ModalContent>
+		</Modal>
 	);
 };
-
-export default SettingsTabs;

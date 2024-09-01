@@ -5,7 +5,7 @@ import isEmpty from 'lodash/isEmpty';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput } from '@wcpos/components/src/form';
+import { Form, FormField, FormInput, FormSelect } from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useDialogContext } from './add-cart-item-button';
@@ -113,7 +113,13 @@ export const AddMiscProduct = () => {
 				<FormField
 					control={form.control}
 					name="tax_class"
-					render={({ field }) => <TaxClassSelect field={field} />}
+					render={({ field }) => (
+						<FormSelect
+							customComponent={TaxClassSelect}
+							label={t('Tax Class', { _tags: 'core' })}
+							{...field}
+						/>
+					)}
 				/>
 			</VStack>
 		</Form>

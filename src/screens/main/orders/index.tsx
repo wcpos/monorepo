@@ -12,7 +12,6 @@ import { Suspense } from '@wcpos/components/src/suspense';
 import { EditOrder } from './edit-order';
 import Orders from './orders';
 import { useT } from '../../../contexts/translations';
-import useModalRefreshFix from '../../../hooks/use-modal-refresh-fix';
 import { useCollection } from '../hooks/use-collection';
 import Receipt from '../receipt';
 
@@ -48,7 +47,6 @@ const EditOrderWithProviders = ({
 }: NativeStackScreenProps<OrdersStackParamList, 'EditOrder'>) => {
 	const orderID = get(route, ['params', 'orderID']);
 	const { collection } = useCollection('orders');
-	useModalRefreshFix();
 
 	const resource = React.useMemo(
 		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),

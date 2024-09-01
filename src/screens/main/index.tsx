@@ -6,11 +6,11 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { useForceUpdate, useObservableEagerState, useSubscription } from 'observable-hooks';
 import { isRxDatabase } from 'rxdb';
 
-import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
-import { QueryProvider, useQuery } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { Icon } from '@wcpos/components/src/icon';
 import { Suspense } from '@wcpos/components/src/suspense';
+import { OnlineStatusProvider } from '@wcpos/hooks/src/use-online-status';
+import { QueryProvider, useQuery } from '@wcpos/query';
 
 import DrawerContent from './components/drawer-content';
 import Header from './components/header';
@@ -26,7 +26,7 @@ import OrdersNavigator from './orders';
 import POSNavigator from './pos';
 import ProductsNavigator from './products';
 import ReportsNavigator from './reports';
-import Settings from './settings';
+import { SettingsTabs } from './settings';
 import Support from './support';
 import { TaxRates } from './tax-rates';
 import { UpgradeRequired } from './upgrade-required';
@@ -174,19 +174,6 @@ const DrawerNavigator = ({ navigation }) => {
 /**
  *
  */
-const SettingsScreen = () => {
-	const t = useT();
-
-	return (
-		<ModalLayout title={t('Settings', { _tags: 'core' })}>
-			<Settings />
-		</ModalLayout>
-	);
-};
-
-/**
- *
- */
 const LoginScreen = () => {
 	const { site, wpCredentials } = useAppState();
 	const t = useT();
@@ -262,7 +249,7 @@ const MainNavigator = () => {
 						<Stack.Navigator screenOptions={{ headerShown: false }}>
 							<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
 							<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
-								<Stack.Screen name="Settings" component={SettingsScreen} />
+								<Stack.Screen name="Settings" component={SettingsTabs} />
 								<Stack.Screen name="Login" component={LoginScreen} />
 								<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
 							</Stack.Group>

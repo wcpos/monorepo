@@ -1,11 +1,10 @@
 import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
-import { ControllerRenderProps, FieldValues } from 'react-hook-form';
 
-import { FormSelect } from '@wcpos/components/src/form';
 import { cn } from '@wcpos/components/src/lib/utils';
 import {
+	Select,
 	SelectContent,
 	SelectGroup,
 	SelectItem,
@@ -17,18 +16,10 @@ import { Text } from '@wcpos/components/src/text';
 import { useT } from '../../../contexts/translations';
 import { useExtraData } from '../contexts/extra-data';
 
-interface Props<TFieldValues extends FieldValues> {
-	field: ControllerRenderProps<TFieldValues, any>;
-	label?: string;
-}
-
 /**
  *
  */
-export const TaxClassSelect = <TFieldValues extends FieldValues>({
-	field,
-	label,
-}: Props<TFieldValues>) => {
+export const TaxClassSelect = ({ value, onValueChange }) => {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 	const { extraData } = useExtraData();
@@ -49,7 +40,7 @@ export const TaxClassSelect = <TFieldValues extends FieldValues>({
 	 *
 	 */
 	return (
-		<FormSelect label={label ? label : t('Tax Class', { _tags: 'core' })} {...field}>
+		<Select onValueChange={(val) => onValueChange(val.value)}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
@@ -58,7 +49,7 @@ export const TaxClassSelect = <TFieldValues extends FieldValues>({
 				<SelectValue
 					className={cn(
 						'text-sm native:text-lg',
-						field.value ? 'text-foreground' : 'text-muted-foreground'
+						value ? 'text-foreground' : 'text-muted-foreground'
 					)}
 					placeholder={t('Select Tax Class', { _tags: 'core' })}
 				/>
@@ -72,6 +63,6 @@ export const TaxClassSelect = <TFieldValues extends FieldValues>({
 					))}
 				</SelectGroup>
 			</SelectContent>
-		</FormSelect>
+		</Select>
 	);
 };

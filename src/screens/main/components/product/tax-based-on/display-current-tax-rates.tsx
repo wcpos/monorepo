@@ -126,7 +126,7 @@ export const DisplayCurrentTaxRates = ({
 			</VStack>
 			<View className="flex-row">
 				<Button
-					variant="ghost"
+					variant="muted"
 					onPress={() => {
 						navigation.navigate('TaxRates');
 					}}

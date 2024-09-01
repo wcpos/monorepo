@@ -4,8 +4,17 @@ import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
 import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
 
-import { ModalContent, ModalTitle, ModalContainer, ModalHeader } from '@wcpos/components/src/modal';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/src/tabs';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import {
+	Modal,
+	ModalContent,
+	ModalTitle,
+	ModalHeader,
+	ModalBody,
+	ModalFooter,
+	ModalClose,
+} from '@wcpos/components/src/modal';
+import { Tabs, TabsContent, ScrollableTabsList, TabsTrigger } from '@wcpos/components/src/tabs';
 import { Text } from '@wcpos/components/src/text';
 
 import { TaxRatesFooter } from './footer';
@@ -44,27 +53,38 @@ export const TaxRates = ({ query }: Props) => {
 	 *
 	 */
 	return (
-		<ModalContainer size="">
-			<ModalHeader>
-				<ModalTitle>{t('Tax Rates', { _tags: 'core' })}</ModalTitle>
-			</ModalHeader>
-			<ModalContent>
-				<Tabs value={value} onValueChange={setValue}>
-					<TabsList className="flex-row w-full">
+		<Modal>
+			<ModalContent size="xl">
+				<ModalHeader>
+					<ModalTitle>
+						<Text>{t('Tax Rates', { _tags: 'core' })}</Text>
+					</ModalTitle>
+				</ModalHeader>
+				<ModalBody>
+					<Tabs value={value} onValueChange={setValue} orientation="horizontal">
+						<ScrollableTabsList>
+							{grouped.map((group) => (
+								<TabsTrigger key={group.slug} value={group.slug}>
+									<Text>{group.name}</Text>
+								</TabsTrigger>
+							))}
+						</ScrollableTabsList>
 						{grouped.map((group) => (
-							<TabsTrigger key={group.slug} value={group.slug}>
-								<Text>{group.name}</Text>
-							</TabsTrigger>
+							<TabsContent key={group.slug} value={group.slug}>
+								<TaxRateTable rates={group.rates} />
+							</TabsContent>
 						))}
-					</TabsList>
-					{grouped.map((group) => (
-						<TabsContent key={group.slug} value={group.slug}>
-							<TaxRateTable rates={group.rates} />
-						</TabsContent>
-					))}
-				</Tabs>
-				<TaxRatesFooter count={rates.length} query={query} />
+					</Tabs>
+					<TaxRatesFooter count={rates.length} query={query} />
+				</ModalBody>
+				<ModalFooter>
+					<ModalClose asChild>
+						<Button variant="muted">
+							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
+						</Button>
+					</ModalClose>
+				</ModalFooter>
 			</ModalContent>
-		</ModalContainer>
+		</Modal>
 	);
 };

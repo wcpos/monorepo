@@ -35,7 +35,7 @@ import { VariableProductRow } from '../components/product/variable-product-row';
 import { ProductVariationImage } from '../components/product/variation-image';
 import { ProductVariationName } from '../components/product/variation-name';
 import { QuerySearchInput } from '../components/query-search-input';
-import { UISettingsButton } from '../components/ui-settings';
+import { UISettingsDialog } from '../components/ui-settings';
 import { useTaxRates } from '../contexts/tax-rates';
 import { useUISettings } from '../contexts/ui-settings';
 import { useMutation } from '../hooks/mutations/use-mutation';
@@ -213,9 +213,9 @@ const Products = () => {
 						onPress={() => navigation.navigate('AddProduct')}
 						tooltip={t('Add new customer', { _tags: 'core' })}
 					/> */}
-							<UISettingsButton title={t('Product Settings', { _tags: 'core' })}>
+							<UISettingsDialog title={t('Product Settings', { _tags: 'core' })}>
 								<UISettingsForm />
-							</UISettingsButton>
+							</UISettingsDialog>
 						</HStack>
 						<ErrorBoundary>
 							<FilterBar query={query} />
