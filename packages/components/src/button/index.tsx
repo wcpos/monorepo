@@ -17,14 +17,42 @@ const buttonVariants = cva(
 	{
 		variants: {
 			variant: {
+				/**
+				 * Solid buttons
+				 */
 				default: 'bg-primary web:hover:opacity-90 active:opacity-90',
 				destructive: 'bg-destructive web:hover:opacity-90 active:opacity-90',
-				outline:
-					'border border-input bg-background web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent',
 				secondary: 'bg-secondary web:hover:opacity-80 active:opacity-80',
 				muted: 'bg-muted web:hover:opacity-80 active:opacity-80',
 				success: 'bg-success web:hover:opacity-90 active:opacity-90',
+				/**
+				 * Outline buttons
+				 */
+				outline:
+					'border border-input bg-background web:hover:bg-accent web:hover:text-accent-foreground active:bg-accent',
+				'outline-primary':
+					'border border-primary bg-background web:hover:bg-primary/90 web:hover:text-primary-foreground active:bg-primary',
+				'outline-secondary':
+					'border border-secondary bg-background web:hover:bg-secondary/90 web:hover:text-secondary-foreground active:bg-secondary',
+				'outline-muted':
+					'border border-muted bg-background web:hover:bg-muted/90 web:hover:text-muted-foreground active:bg-muted',
+				'outline-success':
+					'border border-success bg-background web:hover:bg-success/90 web:hover:text-success-foreground active:bg-success',
+				'outline-destructive':
+					'border border-destructive bg-background web:hover:bg-destructive/90 web:hover:text-destructive-foreground active:bg-destructive',
+				/**
+				 * Ghost buttons
+				 */
 				ghost: 'web:hover:bg-accent/90 web:hover:text-accent-foreground active:bg-accent',
+				'ghost-primary':
+					'bg-primary/15 web:hover:bg-primary active:bg-primary text-primary-foreground',
+				'ghost-secondary':
+					'bg-secondary/15 web:hover:bg-secondary active:bg-secondary text-secondary-foreground',
+				'ghost-muted': 'bg-muted/15 web:hover:bg-muted active:bg-muted text-muted-foreground',
+				'ghost-success':
+					'bg-success/15 web:hover:bg-success active:bg-success text-success-foreground',
+				'ghost-destructive':
+					'bg-destructive/15 web:hover:bg-destructive active:bg-destructive text-destructive-foreground',
 			},
 			size: {
 				default: 'h-10 px-4 py-2 native:h-12 native:px-5 native:py-3',
@@ -47,13 +75,32 @@ const buttonTextVariants = cva(
 	{
 		variants: {
 			variant: {
+				/**
+				 * Solid buttons
+				 */
 				default: 'text-primary-foreground',
 				destructive: 'text-destructive-foreground',
-				outline: 'group-active:text-accent-foreground',
 				secondary: 'text-secondary-foreground group-active:text-secondary-foreground',
 				muted: 'text-muted-foreground group-active:text-muted-foreground',
 				success: 'text-success-foreground',
-				ghost: 'group-active:text-accent-foreground',
+				/**
+				 * Outline buttons
+				 */
+				outline: 'group-active:text-accent-foreground',
+				'outline-primary': 'group-active:text-primary-foreground',
+				'outline-secondary': 'group-active:text-secondary-foreground',
+				'outline-muted': 'group-active:text-muted-foreground',
+				'outline-success': 'group-active:text-success-foreground',
+				'outline-destructive': 'group-active:text-destructive-foreground',
+				/**
+				 * Ghost buttons
+				 */
+				ghost: 'group-hover:text-accent-foreground',
+				'ghost-primary': 'text-primary group-hover:text-primary-foreground',
+				'ghost-secondary': 'text-secondary group-hover:text-secondary-foreground',
+				'ghost-muted': 'text-muted group-hover:text-muted-foreground',
+				'ghost-success': 'text-success group-hover:text-success-foreground',
+				'ghost-destructive': 'text-destructive group-hover:text-destructive-foreground',
 			},
 			size: {
 				default: '',

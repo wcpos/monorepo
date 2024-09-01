@@ -1,10 +1,14 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { type DialogProps } from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive } from 'cmdk';
 
+import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
+
 import { Dialog, DialogContent } from '../dialog';
 import { Icon } from '../icon';
+import { Input } from '../input';
 import { cn } from '../lib/utils';
 import { SelectButton } from '../select';
 
@@ -43,19 +47,26 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
 const CommandInput = React.forwardRef<
 	React.ElementRef<typeof CommandPrimitive.Input>,
 	React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, ...props }, ref) => (
-	<div className="flex items-center border-b px-3" cmdk-input-wrapper="">
-		<Icon name="magnifyingGlass" className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-		<CommandPrimitive.Input
-			ref={ref}
-			className={cn(
-				'flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
-				className
-			)}
-			{...props}
-		/>
-	</div>
-));
+>(({ className, ...props }, ref) => {
+	const focusTrapRef = useFocusTrap();
+
+	return (
+		<View className="flex items-center p-2" cmdk-input-wrapper="">
+			{/* <Icon name="magnifyingGlass" className="mr-2 h-4 w-4 shrink-0 opacity-50" /> */}
+			<CommandPrimitive.Input
+				ref={ref}
+				className={cn(
+					'flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
+					className
+				)}
+				{...props}
+				asChild
+			>
+				<Input ref={focusTrapRef} />
+			</CommandPrimitive.Input>
+		</View>
+	);
+});
 
 CommandInput.displayName = CommandPrimitive.Input.displayName;
 
@@ -67,7 +78,7 @@ const CommandList = React.forwardRef<
 		ref={ref}
 		className={cn(
 			'max-h-[300px] overflow-y-auto overflow-x-hidden group',
-			'[&>*:first-child]:gap-2 [&>*:first-child]:p-2',
+			'[&>*:first-child]:gap-2 [&>*:first-child]:p-2 [&>*:first-child]:pt-0',
 			className
 		)}
 		{...props}

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, ScrollView } from 'react-native';
 
 import * as DialogPrimitive from '@rn-primitives/dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -25,8 +25,9 @@ const DialogOverlayWeb = React.forwardRef<
 	return (
 		<DialogPrimitive.Overlay
 			className={cn(
-				'z-50 bg-black/70 flex justify-center items-center p-2 absolute top-0 right-0 bottom-0 left-0',
+				'bg-black/70 flex justify-center items-center p-2 absolute top-0 right-0 bottom-0 left-0',
 				open ? 'web:animate-in web:fade-in-0' : 'web:animate-out web:fade-out-0',
+				'[&>*:first-child]:max-w-full [&>*:first-child]:max-h-full',
 				className
 			)}
 			{...props}
@@ -44,7 +45,11 @@ const DialogOverlayNative = React.forwardRef<
 	return (
 		<DialogPrimitive.Overlay
 			style={StyleSheet.absoluteFill}
-			className={cn('z-50 flex bg-black/70 justify-center items-center p-2', className)}
+			className={cn(
+				'flex bg-black/70 justify-center items-center p-2',
+				'[&>*:first-child]:max-w-full [&>*:first-child]:max-h-full',
+				className
+			)}
 			{...props}
 			ref={ref}
 		>
@@ -63,7 +68,7 @@ const DialogOverlay = Platform.select({
 });
 
 const dialogContentVariants = cva(
-	'z-50 max-w-lg gap-4 p-4 border border-border web:cursor-default bg-background shadow-lg web:duration-200 rounded-lg',
+	'z-50 max-w-lg max-h-full gap-4 py-4 border border-border web:cursor-default bg-background shadow-lg web:duration-200 rounded-lg',
 	{
 		variants: {
 			size: {
@@ -71,6 +76,8 @@ const dialogContentVariants = cva(
 				xs: 'w-64',
 				sm: 'w-80',
 				lg: 'w-128',
+				xl: 'w-160',
+				full: 'w-full',
 			},
 		},
 		defaultVariants: {
@@ -101,15 +108,14 @@ const DialogContent = React.forwardRef<
 					{...props}
 				>
 					{children}
-					<DialogPrimitive.Close
-						// className={
-						// 	'absolute right-2 top-2 web:group rounded-sm opacity-70 web:ring-offset-background web:transition-opacity web:hover:opacity-100 web:focus:outline-none web:focus:ring-2 web:focus:ring-ring web:focus:ring-offset-2 web:disabled:pointer-events-none'
-						// }
-						className="absolute right-2 top-2 flex-row opacity-70 web:transition-opacity web:hover:opacity-100"
-						asChild
-					>
-						<IconButton name="xmark" />
-					</DialogPrimitive.Close>
+					<View className="absolute right-2 top-2">
+						<DialogPrimitive.Close
+							className="opacity-70 web:transition-opacity web:hover:opacity-100"
+							asChild
+						>
+							<IconButton name="xmark" />
+						</DialogPrimitive.Close>
+					</View>
 				</DialogPrimitive.Content>
 			</DialogOverlay>
 		</DialogPortal>
@@ -119,7 +125,7 @@ DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
 	<View
-		className={cn('flex flex-col pr-4 gap-1.5 text-center sm:text-left', className)}
+		className={cn('flex flex-col px-4 gap-1.5 text-center sm:text-left', className)}
 		{...props}
 	/>
 );
@@ -127,7 +133,7 @@ DialogHeader.displayName = 'DialogHeader';
 
 const DialogFooter = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
 	<View
-		className={cn('flex flex-col-reverse sm:flex-row sm:justify-end gap-2', className)}
+		className={cn('flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-4', className)}
 		{...props}
 	/>
 );
@@ -155,6 +161,15 @@ const DialogDescription = React.forwardRef<
 ));
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
 
+const DialogBody = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof ScrollView>) => (
+	<ScrollView
+		horizontal={false}
+		className={cn('flex flex-col gap-2 px-4 py-1', className)}
+		{...props}
+	/>
+);
+DialogBody.displayName = 'DialogBody';
+
 export {
 	Dialog,
 	DialogClose,
@@ -166,4 +181,5 @@ export {
 	DialogPortal,
 	DialogTitle,
 	DialogTrigger,
+	DialogBody,
 };

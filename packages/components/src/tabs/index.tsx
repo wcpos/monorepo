@@ -137,7 +137,7 @@ const ScrollableTabsList = React.forwardRef<
 				<TabsPrimitive.List
 					ref={ref}
 					className={cn(
-						'web:inline-flex items-center justify-center rounded-md bg-muted',
+						'flex-row w-full p-2 web:inline-flex items-center justify-center rounded-md bg-muted',
 						className
 					)}
 					{...props}
@@ -200,6 +200,7 @@ const TabsContent = React.forwardRef<
 	<TabsPrimitive.Content
 		ref={ref}
 		className={cn(
+			'pt-4',
 			'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-2',
 			className
 		)}
