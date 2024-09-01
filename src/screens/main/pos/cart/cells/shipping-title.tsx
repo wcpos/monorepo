@@ -2,12 +2,9 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Button, ButtonText } from '@wcpos/components/src/button';
-import { Dialog, DialogContent, DialogTrigger } from '@wcpos/components/src/dialog';
 import { HStack } from '@wcpos/components/src/hstack';
-import { IconButton } from '@wcpos/components/src/icon-button';
-import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
 
+import { EditCartItemButton } from './edit-cart-item-button';
 import { EditShippingLine } from './edit-shipping-line';
 import { useT } from '../../../../../contexts/translations';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
@@ -36,21 +33,9 @@ export const ShippingTitle = ({ row }: CellContext<Props, 'name'>) => {
 					<ButtonText className="font-bold">{item.method_title}</ButtonText>
 				</Button>
 			</View>
-			<Tooltip delayDuration={150}>
-				<TooltipTrigger asChild>
-					<Dialog>
-						<DialogTrigger asChild>
-							<IconButton name="ellipsisVertical" />
-						</DialogTrigger>
-						<DialogContent>
-							<EditShippingLine uuid={uuid} item={item} />
-						</DialogContent>
-					</Dialog>
-				</TooltipTrigger>
-				<TooltipContent>
-					<Text>{t('Edit {name}', { _tags: 'core', name: item.method_title })}</Text>
-				</TooltipContent>
-			</Tooltip>
+			<EditCartItemButton title={t('Edit {name}', { _tags: 'core', name: item.method_title })}>
+				<EditShippingLine uuid={uuid} item={item} />
+			</EditCartItemButton>
 		</HStack>
 	);
 };

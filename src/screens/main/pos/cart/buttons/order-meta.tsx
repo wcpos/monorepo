@@ -9,10 +9,9 @@ import {
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-	DialogDescription,
-	DialogFooter,
+	DialogBody,
 } from '@wcpos/components/src/dialog';
-import { Textarea } from '@wcpos/components/src/textarea';
+import { Text } from '@wcpos/components/src/text';
 
 import { EditOrderMeta } from './edit-order-meta';
 import { useT } from '../../../../../contexts/translations';
@@ -35,7 +34,14 @@ export const OrderMetaButton = () => {
 				</Button>
 			</DialogTrigger>
 			<DialogContent>
-				<EditOrderMeta />
+				<DialogHeader>
+					<DialogTitle>
+						<Text>{t('Order Meta', { _tags: 'core' })}</Text>
+					</DialogTitle>
+				</DialogHeader>
+				<DialogBody>
+					<EditOrderMeta />
+				</DialogBody>
 			</DialogContent>
 		</Dialog>
 	);

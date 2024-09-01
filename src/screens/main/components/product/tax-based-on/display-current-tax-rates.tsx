@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import isEmpty from 'lodash/isEmpty';
 
-import { TaxRateDocument } from '@wcpos/database';
 import { Button, ButtonText } from '@wcpos/components/src/button';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Icon } from '@wcpos/components/src/icon';
@@ -18,6 +17,7 @@ import {
 } from '@wcpos/components/src/table';
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
+import { TaxRateDocument } from '@wcpos/database';
 
 import { useT } from '../../../../../contexts/translations';
 
@@ -126,7 +126,7 @@ export const DisplayCurrentTaxRates = ({
 			</VStack>
 			<View className="flex-row">
 				<Button
-					variant="secondary"
+					variant="ghost"
 					onPress={() => {
 						navigation.navigate('TaxRates');
 					}}

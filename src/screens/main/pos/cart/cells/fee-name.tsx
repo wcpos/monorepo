@@ -2,13 +2,11 @@ import * as React from 'react';
 
 import { Box } from '@wcpos/components/src/box';
 import { Button, ButtonText } from '@wcpos/components/src/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@wcpos/components/src/dialog';
 import { HStack } from '@wcpos/components/src/hstack';
-import { Icon } from '@wcpos/components/src/icon';
 import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
 import { VStack } from '@wcpos/components/src/vstack';
 
+import { EditCartItemButton } from './edit-cart-item-button';
 import { EditFeeLine } from './edit-fee-line';
 import { useT } from '../../../../../contexts/translations';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
@@ -28,7 +26,6 @@ interface Props {
 export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
 	const { item, uuid } = row.original;
 	const { updateFeeLine } = useUpdateFeeLine();
-	const [openEditDialog, setOpenEditDialog] = React.useState(false);
 	const t = useT();
 
 	/**
@@ -49,53 +46,31 @@ export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
 	 *
 	 */
 	return (
-		<>
-			<VStack className="w-full">
-				<HStack>
-					<Button
-						variant="outline"
-						//onChange={(name) => updateLineItem(uuid, { name })}
-					>
-						<ButtonText className="font-bold">{item.name}</ButtonText>
-					</Button>
-					<Tooltip delayDuration={150}>
-						<TooltipTrigger asChild>
-							<Button
-								variant="ghost"
-								className="rounded-full"
-								onPress={() => setOpenEditDialog(true)}
-							>
-								<Icon name="ellipsisVertical" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent>
-							<Text>{t('Edit {name}', { _tags: 'core', name: item.name })}</Text>
-						</TooltipContent>
-					</Tooltip>
-				</HStack>
-
-				{metaData.length > 0 && (
-					<Box className="grid gap-1 grid-cols-2">
-						{metaData.map((meta) => {
-							return (
-								<React.Fragment key={meta.id || meta.display_key || meta.key}>
-									<Text className="text-sm">{`${meta.key}:`}</Text>
-									<Text className="text-sm">{meta.value}</Text>
-								</React.Fragment>
-							);
-						})}
-					</Box>
-				)}
-			</VStack>
-
-			<Dialog open={openEditDialog} onOpenChange={setOpenEditDialog}>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>{t('Edit {name}', { _tags: 'core', name: item.name })}</DialogTitle>
-					</DialogHeader>
+		<VStack className="w-full">
+			<HStack>
+				<Button
+					variant="outline"
+					//onChange={(name) => updateLineItem(uuid, { name })}
+				>
+					<ButtonText className="font-bold">{item.name}</ButtonText>
+				</Button>
+				<EditCartItemButton title={t('Edit {name}', { _tags: 'core', name: item.name })}>
 					<EditFeeLine uuid={uuid} item={item} />
-				</DialogContent>
-			</Dialog>
-		</>
+				</EditCartItemButton>
+			</HStack>
+
+			{metaData.length > 0 && (
+				<Box className="grid gap-1 grid-cols-2">
+					{metaData.map((meta) => {
+						return (
+							<React.Fragment key={meta.id || meta.display_key || meta.key}>
+								<Text className="text-sm">{`${meta.key}:`}</Text>
+								<Text className="text-sm">{meta.value}</Text>
+							</React.Fragment>
+						);
+					})}
+				</Box>
+			)}
+		</VStack>
 	);
 };

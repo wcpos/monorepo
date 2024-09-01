@@ -1,16 +1,19 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import isEmpty from 'lodash/isEmpty';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
+import { useDialogContext } from './add-cart-item-button';
 import { useT } from '../../../../contexts/translations';
 import { AmountWidget, amountWidgetSchema } from '../../components/amount-widget';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
+import { useAddFee } from '../hooks/use-add-fee';
 
 /**
  *
@@ -23,27 +26,13 @@ const formSchema = z.object({
 	...amountWidgetSchema.shape,
 });
 
-export interface FeeFormValues {
-	name?: string;
-	amount?: number;
-	prices_include_tax?: boolean;
-	tax_status?: string;
-	tax_class?: string;
-}
-
-export interface AddFeeHandle {
-	submit: () => void;
-}
-
-interface AddFeeProps {
-	onSubmit: (data: FeeFormValues) => void;
-}
-
 /**
  *
  */
-export const AddFee = React.forwardRef<AddFeeHandle, AddFeeProps>(({ onSubmit }, ref) => {
+export const AddFee = () => {
 	const t = useT();
+	const { buttonPressHandlerRef, setOpenDialog } = useDialogContext();
+	const { addFee } = useAddFee();
 
 	/**
 	 *
@@ -62,9 +51,28 @@ export const AddFee = React.forwardRef<AddFeeHandle, AddFeeProps>(({ onSubmit },
 	/**
 	 *
 	 */
-	React.useImperativeHandle(ref, () => ({
-		submit: () => form.handleSubmit(onSubmit)(),
-	}));
+	buttonPressHandlerRef.current = React.useCallback(() => {
+		const {
+			name,
+			amount,
+			percent,
+			tax_status,
+			tax_class,
+			prices_include_tax,
+			percent_of_cart_total_with_tax,
+		} = form.getValues();
+		addFee({
+			name: isEmpty(name) ? t('Fee', { _tags: 'core' }) : name,
+			// total: isEmpty(total) ? '0' : total,
+			amount,
+			tax_status,
+			tax_class,
+			percent,
+			prices_include_tax,
+			percent_of_cart_total_with_tax,
+		});
+		setOpenDialog(false);
+	}, [addFee, form, setOpenDialog, t]);
 
 	/**
 	 *
@@ -111,4 +119,4 @@ export const AddFee = React.forwardRef<AddFeeHandle, AddFeeProps>(({ onSubmit },
 			</VStack>
 		</Form>
 	);
-});
+};

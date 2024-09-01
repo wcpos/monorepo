@@ -5,7 +5,14 @@ import pick from 'lodash/pick';
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
-import { Dialog, DialogContent } from '@wcpos/components/src/dialog';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogTitle,
+	DialogTrigger,
+	DialogHeader,
+} from '@wcpos/components/src/dialog';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
 
@@ -47,22 +54,21 @@ const Customer = ({ setShowCustomerSelect }) => {
 	return (
 		<HStack>
 			<Text className="font-bold">{t('Customer', { _tags: 'core' })}:</Text>
-			<ButtonPill
-				size="xs"
-				onPress={() => setEditModalOpen(true)}
-				removable={true}
-				onRemove={() => setShowCustomerSelect(true)}
-			>
-				<ButtonText>{name}</ButtonText>
-			</ButtonPill>
-
-			<Dialog
-				open={editModalOpen}
-				onOpenChange={setEditModalOpen}
-				title={t('Edit Customer Address', { _tags: 'core' })}
-			>
-				<DialogContent>
-					<CustomerForm ref={editCustomerAddressRef} onSubmit={handleEditCustomerAddress} />
+			<Dialog>
+				<DialogTrigger asChild>
+					<ButtonPill size="xs" removable={true} onRemove={() => setShowCustomerSelect(true)}>
+						<ButtonText>{name}</ButtonText>
+					</ButtonPill>
+				</DialogTrigger>
+				<DialogContent size="lg">
+					<DialogHeader>
+						<DialogTitle>
+							<Text>{t('Edit Customer Address', { _tags: 'core' })}</Text>
+						</DialogTitle>
+					</DialogHeader>
+					<DialogBody>
+						<CustomerForm ref={editCustomerAddressRef} onSubmit={handleEditCustomerAddress} />
+					</DialogBody>
 				</DialogContent>
 			</Dialog>
 		</HStack>

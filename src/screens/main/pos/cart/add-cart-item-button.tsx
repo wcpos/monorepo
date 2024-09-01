@@ -3,6 +3,7 @@ import * as React from 'react';
 import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	Dialog,
+	DialogTrigger,
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
@@ -12,13 +13,12 @@ import {
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { IconButton } from '@wcpos/components/src/icon-button';
 import { Text } from '@wcpos/components/src/text';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/src/tooltip';
 
-import { columnsFormSchema, UISettingsColumnsForm } from './columns-form';
 import { useT } from '../../../../contexts/translations';
 
 interface DialogContextProps {
 	buttonPressHandlerRef: React.MutableRefObject<(() => void) | null>;
+	setOpenDialog: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const DialogContext = React.createContext<DialogContextProps | undefined>(undefined);
@@ -39,7 +39,7 @@ interface Props {
 /**
  *
  */
-const UISettingsDialog = ({ title, children }: Props) => {
+const AddCartItemButton = ({ title, children }: Props) => {
 	const [openDialog, setOpenDialog] = React.useState(false);
 	const t = useT();
 	const buttonPressHandlerRef = React.useRef<() => void>(() => {});
@@ -56,15 +56,10 @@ const UISettingsDialog = ({ title, children }: Props) => {
 	return (
 		<ErrorBoundary>
 			<Dialog open={openDialog} onOpenChange={setOpenDialog}>
-				<Tooltip>
-					<TooltipTrigger asChild onPress={() => setOpenDialog(true)}>
-						<IconButton name="sliders" />
-					</TooltipTrigger>
-					<TooltipContent>
-						<Text>{title}</Text>
-					</TooltipContent>
-				</Tooltip>
-				<DialogContext.Provider value={{ buttonPressHandlerRef }}>
+				<DialogTrigger asChild>
+					<IconButton name="circlePlus" />
+				</DialogTrigger>
+				<DialogContext.Provider value={{ buttonPressHandlerRef, setOpenDialog }}>
 					<DialogContent>
 						<DialogHeader>
 							<DialogTitle>
@@ -73,8 +68,8 @@ const UISettingsDialog = ({ title, children }: Props) => {
 						</DialogHeader>
 						<DialogBody>{children}</DialogBody>
 						<DialogFooter>
-							<Button variant="destructive" onPress={handleButtonPress}>
-								<ButtonText>{t('Restore Default Settings', { _tags: 'core' })}</ButtonText>
+							<Button onPress={handleButtonPress}>
+								<ButtonText>{t('Add to Cart', { _tags: 'core' })}</ButtonText>
 							</Button>
 						</DialogFooter>
 					</DialogContent>
@@ -84,4 +79,4 @@ const UISettingsDialog = ({ title, children }: Props) => {
 	);
 };
 
-export { UISettingsDialog, columnsFormSchema, UISettingsColumnsForm, useDialogContext };
+export { AddCartItemButton, useDialogContext };

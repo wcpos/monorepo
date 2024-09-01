@@ -9,9 +9,10 @@ import {
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
-	DialogDescription,
+	DialogBody,
 	DialogFooter,
 } from '@wcpos/components/src/dialog';
+import { Text } from '@wcpos/components/src/text';
 import { Textarea } from '@wcpos/components/src/textarea';
 
 import { useT } from '../../../../../contexts/translations';
@@ -51,11 +52,13 @@ export const AddNoteButton = () => {
 			</DialogTrigger>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>{t('Order Note', { _tags: 'core' })}</DialogTitle>
+					<DialogTitle>
+						<Text>{t('Order Note', { _tags: 'core' })}</Text>
+					</DialogTitle>
 				</DialogHeader>
-				<DialogDescription>
+				<DialogBody>
 					<Textarea autoFocus value={text} onChangeText={onChangeText} />
-				</DialogDescription>
+				</DialogBody>
 				<DialogFooter>
 					<Button onPress={handleSave}>
 						<ButtonText>{t('Add Note', { _tags: 'core' })}</ButtonText>
