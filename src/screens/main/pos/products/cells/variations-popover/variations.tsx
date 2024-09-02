@@ -1,9 +1,10 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
-import get from 'lodash/get';
 import { useObservableSuspense, useObservableState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { map, skip } from 'rxjs/operators';
 
+import { Button, ButtonText } from '@wcpos/components/src/button';
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
 
@@ -40,11 +41,13 @@ export const getAttributesWithCharacterCount = (attributes: ProductDocument['att
  *
  */
 const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
-	// const { setPrimaryAction } = usePopover();
 	const result = useObservableSuspense(query.resource);
 	const selectedAttributes = useObservableState(
-		query.params$.pipe(map((params) => get(params, ['selector', 'attributes', '$allMatch']))),
-		get(query.getParams(), ['selector', 'attributes', '$allMatch'])
+		query.params$.pipe(
+			skip(1), // @FIXME: there's an infinite loop if I don't skip the first one
+			map(() => query.getAllAttributesSelectors())
+		),
+		query.getAllAttributesSelectors()
 	);
 	const selectedVariation = result.count === 1 && result.hits[0].document;
 	const { format } = useCurrencyFormat();
@@ -63,11 +66,7 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	 */
 	const handleSelect = React.useCallback(
 		(attribute, option) => {
-			query.updateVariationAttributeSelector({
-				id: attribute.id,
-				name: attribute.name,
-				option,
-			});
+			query.where('attributes', { $elemMatch: { id: attribute.id, name: attribute.name, option } });
 		},
 		[query]
 	);
@@ -75,22 +74,16 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	/**
 	 *
 	 */
-	// React.useEffect(() => {
-	// 	if (selectedVariation) {
-	// 		// convert attributes to meta_data
-	// 		const selectedAttributesMetaData = (selectedAttributes || []).map((a) => ({
-	// 			attr_id: a.id,
-	// 			display_key: a.name,
-	// 			display_value: a.option,
-	// 		}));
-	// 		setPrimaryAction({
-	// 			label: t('Add to Cart') + ': ' + format(selectedVariation.price),
-	// 			action: () => addToCart(selectedVariation, selectedAttributesMetaData),
-	// 		});
-	// 	} else {
-	// 		setPrimaryAction(undefined);
-	// 	}
-	// }, [addToCart, format, parent, selectedAttributes, selectedVariation, setPrimaryAction, t]);
+	const handleAddToCart = React.useCallback(() => {
+		if (selectedVariation) {
+			const selectedAttributesMetaData = (selectedAttributes || []).map((a) => ({
+				attr_id: a.id,
+				display_key: a.name,
+				display_value: a.option,
+			}));
+			addToCart(selectedVariation, selectedAttributesMetaData);
+		}
+	}, [addToCart, selectedAttributes, selectedVariation]);
 
 	/**
 	 *
@@ -107,19 +100,26 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 						{attribute.characterCount < 15 ? (
 							<VariationButtons
 								attribute={attribute}
-								onSelect={handleSelect}
+								onSelect={(option) => handleSelect(attribute, option)}
 								selectedOption={selected?.option}
 							/>
 						) : (
 							<VariationSelect
 								attribute={attribute}
-								onSelect={handleSelect}
+								onSelect={(option) => handleSelect(attribute, option)}
 								selectedOption={selected?.option}
 							/>
 						)}
 					</VStack>
 				);
 			})}
+			{selectedVariation && (
+				<View className="flex-row justify-end">
+					<Button onPress={handleAddToCart}>
+						<ButtonText>{t('Add to Cart') + ': ' + format(selectedVariation.price)}</ButtonText>
+					</Button>
+				</View>
+			)}
 		</VStack>
 	);
 };

@@ -16,14 +16,17 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 export const VariableActions = ({ row }: CellContext<ProductDocument, 'actions'>) => {
 	const parent = row.original;
 	const { addVariation } = useAddVariation();
+	const triggerRef = React.useRef(null);
 
-	// /**
-	//  *
-	//  */
+	/**
+	 *
+	 */
 	const addToCart = React.useCallback(
 		(variation, metaData) => {
 			addVariation(variation, parent, metaData);
-			// setOpened(false);
+			if (triggerRef.current) {
+				triggerRef.current.close();
+			}
 		},
 		[addVariation, parent]
 	);
@@ -33,10 +36,10 @@ export const VariableActions = ({ row }: CellContext<ProductDocument, 'actions'>
 	 */
 	return (
 		<Popover>
-			<PopoverTrigger asChild>
+			<PopoverTrigger ref={triggerRef} asChild>
 				<IconButton name="circleChevronRight" variant="success" size="4xl" />
 			</PopoverTrigger>
-			<PopoverContent side="right">
+			<PopoverContent side="right" className="w-auto p-2">
 				<VariationsPopover parent={parent} addToCart={addToCart} />
 			</PopoverContent>
 		</Popover>

@@ -5,11 +5,11 @@ import { CellContext } from '@tanstack/react-table';
 import { useObservableEagerState, useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { useQueryManager } from '@wcpos/query';
 import { Button, ButtonText } from '@wcpos/components/src/button';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
+import { useQueryManager } from '@wcpos/query';
 
 import { useVariationTable } from './variation-table-rows/context';
 import { useT } from '../../../../contexts/translations';
@@ -80,6 +80,8 @@ export const ProductAttributes = ({ row, table }) => {
 						option,
 					},
 				});
+			} else {
+				// we need to pass the attribute/option down so it can be used in the table
 			}
 		},
 		[manager, product.id, row]

@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { useQuery } from '@wcpos/query';
 import type { Row } from '@wcpos/components/src/data-table';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { Suspense } from '@wcpos/components/src/suspense';
 import { VStack } from '@wcpos/components/src/vstack';
+import { useQuery } from '@wcpos/query';
 
 import { VariationsFilterBar } from './filters';
 import { VariationsTable } from './table';
@@ -35,6 +35,15 @@ export const Variations = ({ row, onLayout }: Props) => {
 		endpoint: `products/${parent.id}/variations`,
 		greedy: true,
 	});
+
+	/**
+	 * Clear the query when the table unmounts
+	 */
+	React.useEffect(() => {
+		return () => {
+			query.where('attributes', null);
+		};
+	}, [query]);
 
 	/**
 	 *

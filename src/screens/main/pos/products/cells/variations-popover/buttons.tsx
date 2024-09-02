@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { Text } from '@wcpos/components/src/text';
 import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/src/toggle-group';
@@ -6,20 +7,27 @@ import { ToggleGroup, ToggleGroupItem } from '@wcpos/components/src/toggle-group
 /**
  *
  */
-const VariationButtons = ({ attribute, onSelect, selectedOption }) => {
+const VariationButtons = ({ attribute, onSelect, selectedOption = '' }) => {
+	const [value, setValue] = React.useState<string>(selectedOption);
+
+	/**
+	 *
+	 */
+	const handleSelect = (option: string) => {
+		setValue(option);
+		onSelect && onSelect(option);
+	};
+
 	return (
-		<ToggleGroup value={selectedOption} onValueChange={onSelect} type="single">
-			{attribute.options?.map((option) => (
-				<ToggleGroupItem
-					key={option}
-					value={option}
-					// type={option === selectedOption ? 'success' : 'secondary'}
-					// onPress={() => onSelect(attribute, option === selectedOption ? null : option)}
-				>
-					<Text>{option}</Text>
-				</ToggleGroupItem>
-			))}
-		</ToggleGroup>
+		<View className="flex-row">
+			<ToggleGroup value={value} onValueChange={handleSelect} type="single">
+				{attribute.options?.map((option) => (
+					<ToggleGroupItem key={option} value={option}>
+						<Text>{option}</Text>
+					</ToggleGroupItem>
+				))}
+			</ToggleGroup>
+		</View>
 	);
 };
 

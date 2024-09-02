@@ -2,13 +2,14 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import type { ProductDocument, ProductVariationCollection } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
-import type { Row } from '@wcpos/components/src/data-table';
 import { HStack } from '@wcpos/components/src/hstack';
 import { IconButton } from '@wcpos/components/src/icon-button';
+import type { ProductDocument, ProductVariationCollection } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
 
 import { VariationSelect } from '../../variation-select';
+
+import type { Row } from '@tanstack/react-table';
 
 interface Props {
 	row: Row<ProductDocument>;
@@ -26,7 +27,6 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 	 * - @TODO - filter for only changes to attributes to reduce re-renders?
 	 */
 	const params = useObservableState(query.params$, query.getParams());
-	console.log('params', params);
 
 	/**
 	 *

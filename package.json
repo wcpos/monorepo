@@ -32,7 +32,7 @@
     "@wcpos/query": "*",
     "@wcpos/utils": "*",
     "@widgetbot/react-embed": "^1.9.0",
-    "axios": "1.7.6",
+    "axios": "1.7.7",
     "bottleneck": "^2.19.5",
     "date-fns": "3.6.0",
     "date-fns-tz": "^3.1.3",
