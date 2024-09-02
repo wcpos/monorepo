@@ -3,6 +3,7 @@ import { Platform, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-na
 
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
 
+import { DropdownMenuItem } from './item';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
@@ -31,10 +32,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
 	// const Icon = Platform.OS === 'web' ? ChevronRight : open ? ChevronUp : ChevronDown;
 	return (
 		<TextClassContext.Provider
-			value={cn(
-				'select-none text-sm native:text-lg text-primary',
-				open && 'native:text-accent-foreground'
-			)}
+			value={cn('select-none native:text-lg', open && 'native:text-accent-foreground')}
 		>
 			<DropdownMenuPrimitive.SubTrigger
 				ref={ref}
@@ -46,7 +44,7 @@ const DropdownMenuSubTrigger = React.forwardRef<
 				)}
 				{...props}
 			>
-				<>{children}</>
+				<View className="flex-1 flex-row gap-2 items-center">{children}</View>
 				{/* <Icon size={18} className="ml-auto text-foreground" /> */}
 				<Icon name="chevronRight" />
 			</DropdownMenuPrimitive.SubTrigger>
@@ -211,7 +209,6 @@ const DropdownMenuShortcut = ({
 };
 DropdownMenuShortcut.displayName = 'DropdownMenuShortcut';
 
-export { DropdownMenuItem } from './item';
 export {
 	DropdownMenu,
 	DropdownMenuCheckboxItem,
@@ -228,4 +225,5 @@ export {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 	useRootContext,
+	DropdownMenuItem,
 };
