@@ -7,23 +7,41 @@ import { cn } from '../lib/utils';
 import { TextClassContext } from '../text';
 import { toggleTextVariants, toggleVariants } from '../toggle';
 
-// import type { LucideIcon } from 'lucide-react-native';
-
 const ToggleGroupContext = React.createContext<VariantProps<typeof toggleVariants> | null>(null);
 
 const ToggleGroup = React.forwardRef<
 	React.ElementRef<typeof ToggleGroupPrimitive.Root>,
 	React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> &
 		VariantProps<typeof toggleVariants>
->(({ className, variant, size, children, ...props }, ref) => (
-	<ToggleGroupPrimitive.Root
-		ref={ref}
-		className={cn('flex flex-row items-center justify-center gap-1', className)}
-		{...props}
-	>
-		<ToggleGroupContext.Provider value={{ variant, size }}>{children}</ToggleGroupContext.Provider>
-	</ToggleGroupPrimitive.Root>
-));
+>(({ className, variant, size, children, ...props }, ref) => {
+	const childrenArray = React.Children.toArray(children);
+
+	return (
+		<ToggleGroupPrimitive.Root
+			ref={ref}
+			className={cn(
+				'flex flex-row items-center gap-0',
+				'border border-border rounded-md',
+				className
+			)}
+			{...props}
+		>
+			<ToggleGroupContext.Provider value={{ variant, size }}>
+				{childrenArray.map((child, index) => {
+					if (!React.isValidElement(child)) return child;
+
+					const isFirstItem = index === 0;
+					const isLastItem = index === childrenArray.length - 1;
+
+					return React.cloneElement(child, {
+						isFirstItem,
+						isLastItem,
+					});
+				})}
+			</ToggleGroupContext.Provider>
+		</ToggleGroupPrimitive.Root>
+	);
+});
 
 ToggleGroup.displayName = ToggleGroupPrimitive.Root.displayName;
 
@@ -40,8 +58,8 @@ function useToggleGroupContext() {
 const ToggleGroupItem = React.forwardRef<
 	React.ElementRef<typeof ToggleGroupPrimitive.Item>,
 	React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item> &
-		VariantProps<typeof toggleVariants>
->(({ className, children, variant, size, ...props }, ref) => {
+		VariantProps<typeof toggleVariants> & { isFirstItem: boolean; isLastItem: boolean }
+>(({ className, children, variant, size, isFirstItem, isLastItem, ...props }, ref) => {
 	const context = useToggleGroupContext();
 	const { value } = ToggleGroupPrimitive.useRootContext();
 
@@ -63,6 +81,9 @@ const ToggleGroupItem = React.forwardRef<
 					}),
 					props.disabled && 'web:pointer-events-none opacity-50',
 					ToggleGroupPrimitive.utils.getIsSelected(value, props.value) && 'bg-accent',
+					isFirstItem && 'rounded-r-none',
+					!isLastItem && 'border-r border-border rounded-none',
+					isLastItem && 'rounded-l-none',
 					className
 				)}
 				{...props}
@@ -75,19 +96,4 @@ const ToggleGroupItem = React.forwardRef<
 
 ToggleGroupItem.displayName = ToggleGroupPrimitive.Item.displayName;
 
-// function ToggleGroupIcon({
-// 	className,
-// 	icon: Icon,
-// 	...props
-// }: React.ComponentPropsWithoutRef<LucideIcon> & {
-// 	icon: LucideIcon;
-// }) {
-// 	const textClass = React.useContext(TextClassContext);
-// 	return <Icon className={cn(textClass, className)} {...props} />;
-// }
-
-export {
-	ToggleGroup,
-	//ToggleGroupIcon,
-	ToggleGroupItem,
-};
+export { ToggleGroup, ToggleGroupItem };

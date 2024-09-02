@@ -30,7 +30,8 @@ const itemTextVariants = cva(
 		variants: {
 			variant: {
 				default: '',
-				destructive: 'text-destructive',
+				destructive:
+					'text-destructive web:group-hover:text-destructive-foreground web:group-focus:text-destructive-foreground',
 			},
 		},
 		defaultVariants: {
@@ -46,17 +47,19 @@ type ItemProps = React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Ite
 export const DropdownMenuItem = React.forwardRef<
 	React.ElementRef<typeof DropdownMenuPrimitive.Item>,
 	ItemProps
->(({ className, variant, inset, ...props }, ref) => (
-	<TextClassContext.Provider value={itemTextVariants({ variant })}>
-		<DropdownMenuPrimitive.Item
-			ref={ref}
-			className={cn(
-				inset && 'pl-8',
-				props.disabled && 'opacity-50 web:pointer-events-none',
-				itemVariants({ variant, className })
-			)}
-			{...props}
-		/>
-	</TextClassContext.Provider>
-));
+>(({ className, variant, inset, ...props }, ref) => {
+	return (
+		<TextClassContext.Provider value={itemTextVariants({ variant })}>
+			<DropdownMenuPrimitive.Item
+				ref={ref}
+				className={cn(
+					inset && 'pl-8',
+					props.disabled && 'opacity-50 web:pointer-events-none',
+					itemVariants({ variant, className })
+				)}
+				{...props}
+			/>
+		</TextClassContext.Provider>
+	);
+});
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
