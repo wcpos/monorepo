@@ -4,8 +4,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormSwitch } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
+import {
+	Form,
+	FormField,
+	FormSwitch,
+	FormRadioGroup,
+	FormSelect,
+	FormInput,
+} from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -44,12 +50,17 @@ export const EditFeeLineForm = () => {
 	 */
 	return (
 		<Form {...form}>
-			<VStack>
+			<VStack className="gap-4">
 				<FormField
 					control={form.control}
 					name="amount"
-					render={() => (
-						<AmountWidget nameAmount="amount" namePercent="percent" currencySymbol="$" />
+					render={({ field }) => (
+						<FormInput
+							customComponent={AmountWidget}
+							label={t('Amount', { _tags: 'core' })}
+							currencySymbol="$"
+							{...field}
+						/>
 					)}
 				/>
 				<FormField
@@ -62,12 +73,24 @@ export const EditFeeLineForm = () => {
 				<FormField
 					control={form.control}
 					name="tax_status"
-					render={({ field }) => <TaxStatusRadioGroup form={form} field={field} />}
+					render={({ field }) => (
+						<FormRadioGroup
+							label={t('Tax Status', { _tags: 'core' })}
+							customComponent={TaxStatusRadioGroup}
+							{...field}
+						/>
+					)}
 				/>
 				<FormField
 					control={form.control}
 					name="tax_class"
-					render={({ field }) => <TaxClassSelect field={field} />}
+					render={({ field }) => (
+						<FormSelect
+							label={t('Tax Class', { _tags: 'core' })}
+							customComponent={TaxClassSelect}
+							{...field}
+						/>
+					)}
 				/>
 				<MetaDataForm />
 			</VStack>

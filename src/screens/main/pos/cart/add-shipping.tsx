@@ -5,12 +5,19 @@ import isEmpty from 'lodash/isEmpty';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/src/form';
+import {
+	Form,
+	FormField,
+	FormInput,
+	FormSwitch,
+	FormRadioGroup,
+	FormSelect,
+} from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useDialogContext } from './add-cart-item-button';
 import { useT } from '../../../../contexts/translations';
-import { AmountWidget } from '../../components/amount-widget';
+import { NumberInput } from '../../components/number-input';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
@@ -71,7 +78,7 @@ export const AddShipping = () => {
 	 */
 	return (
 		<Form {...form}>
-			<VStack>
+			<VStack className="gap-4">
 				<FormField
 					control={form.control}
 					name="method_title"
@@ -91,7 +98,14 @@ export const AddShipping = () => {
 				<FormField
 					control={form.control}
 					name="amount"
-					render={({ field }) => <AmountWidget label={t('Amount', { _tags: 'core' })} {...field} />}
+					render={({ field }) => (
+						<FormInput
+							customComponent={NumberInput}
+							label={t('Amount', { _tags: 'core' })}
+							placeholder="0"
+							{...field}
+						/>
+					)}
 				/>
 				<FormField
 					control={form.control}
@@ -107,12 +121,24 @@ export const AddShipping = () => {
 				<FormField
 					control={form.control}
 					name="tax_status"
-					render={({ field }) => <TaxStatusRadioGroup form={form} field={field} />}
+					render={({ field }) => (
+						<FormRadioGroup
+							label={t('Tax Status', { _tags: 'core' })}
+							customComponent={TaxStatusRadioGroup}
+							{...field}
+						/>
+					)}
 				/>
 				<FormField
 					control={form.control}
 					name="tax_class"
-					render={({ field }) => <TaxClassSelect field={field} />}
+					render={({ field }) => (
+						<FormSelect
+							label={t('Tax Class', { _tags: 'core' })}
+							customComponent={TaxClassSelect}
+							{...field}
+						/>
+					)}
 				/>
 			</VStack>
 		</Form>

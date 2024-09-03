@@ -3,7 +3,7 @@ import * as React from 'react';
 import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
-import NumberInput from '../../components/number-input';
+import { NumberInput } from '../../components/number-input';
 
 import type { CellContext } from '@tanstack/react-table';
 

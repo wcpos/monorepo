@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/src/button';
+import { DialogClose } from '@wcpos/components/src/dialog';
 import { Form, FormInput, FormField, FormSwitch } from '@wcpos/components/src/form';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Toast } from '@wcpos/components/src/toast';
@@ -72,28 +73,38 @@ export const EmailForm = ({ defaultEmail = '', orderID }: Props) => {
 	 *
 	 */
 	return (
-		<Form {...form}>
-			<VStack>
-				<FormField
-					control={form.control}
-					name="email"
-					render={({ field }) => (
-						<FormInput label={t('Email Address', { _tags: 'core' })} {...field} />
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="saveEmail"
-					render={({ field }) => (
-						<FormSwitch label={t('Save email to Billing Address', { _tags: 'core' })} {...field} />
-					)}
-				/>
-			</VStack>
+		<VStack className="gap-4">
+			<Form {...form}>
+				<VStack>
+					<FormField
+						control={form.control}
+						name="email"
+						render={({ field }) => (
+							<FormInput label={t('Email Address', { _tags: 'core' })} {...field} />
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="saveEmail"
+						render={({ field }) => (
+							<FormSwitch
+								label={t('Save email to Billing Address', { _tags: 'core' })}
+								{...field}
+							/>
+						)}
+					/>
+				</VStack>
+			</Form>
 			<HStack className="justify-end">
+				<DialogClose asChild>
+					<Button variant="muted">
+						<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
+					</Button>
+				</DialogClose>
 				<Button onPress={form.handleSubmit(handleSendEmail)} loading={loading}>
 					<ButtonText>{t('Send', { _tags: 'core' })}</ButtonText>
 				</Button>
 			</HStack>
-		</Form>
+		</VStack>
 	);
 };

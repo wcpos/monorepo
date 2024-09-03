@@ -4,11 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput } from '@wcpos/components/src/form';
+import { Form, FormField, FormInput, FormRadioGroup, FormSelect } from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
+import { NumberInput } from '../../../../components/number-input';
 import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 
@@ -43,7 +44,7 @@ export const EditLineItemForm = () => {
 	 */
 	return (
 		<Form {...form}>
-			<VStack>
+			<VStack className="gap-4">
 				<FormField
 					control={form.control}
 					name="sku"
@@ -53,25 +54,47 @@ export const EditLineItemForm = () => {
 					control={form.control}
 					name="price"
 					render={({ field }) => (
-						<FormInput label={t('Price', { _tags: 'core' })} placeholder="0" {...field} />
+						<FormInput
+							customComponent={NumberInput}
+							label={t('Price', { _tags: 'core' })}
+							placeholder="0"
+							{...field}
+						/>
 					)}
 				/>
 				<FormField
 					control={form.control}
 					name="regular_price"
 					render={({ field }) => (
-						<FormInput label={t('Regular Price', { _tags: 'core' })} placeholder="0" {...field} />
+						<FormInput
+							customComponent={NumberInput}
+							label={t('Regular Price', { _tags: 'core' })}
+							placeholder="0"
+							{...field}
+						/>
 					)}
 				/>
 				<FormField
 					control={form.control}
 					name="tax_status"
-					render={({ field }) => <TaxStatusRadioGroup form={form} field={field} />}
+					render={({ field }) => (
+						<FormRadioGroup
+							label={t('Tax Status', { _tags: 'core' })}
+							customComponent={TaxStatusRadioGroup}
+							{...field}
+						/>
+					)}
 				/>
 				<FormField
 					control={form.control}
 					name="tax_class"
-					render={({ field }) => <TaxClassSelect field={field} />}
+					render={({ field }) => (
+						<FormSelect
+							label={t('Tax Class', { _tags: 'core' })}
+							customComponent={TaxClassSelect}
+							{...field}
+						/>
+					)}
 				/>
 				<MetaDataForm />
 			</VStack>

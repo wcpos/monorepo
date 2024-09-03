@@ -1,38 +1,38 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
-import { FormRadioGroup } from '@wcpos/components/src/form';
+import { useFormContext } from 'react-hook-form';
+
+import type { FormItemProps } from '@wcpos/components/src/form';
+import { HStack } from '@wcpos/components/src/hstack';
 import { Label } from '@wcpos/components/src/label';
-import { RadioGroupItem } from '@wcpos/components/src/radio-group';
-
-import { useT } from '../../../contexts/translations';
+import { RadioGroup, RadioGroupItem } from '@wcpos/components/src/radio-group';
 
 /**
  *
  */
-export const TaxStatusRadioGroup = ({ form, field }) => {
-	const t = useT();
+export const TaxStatusRadioGroup = React.forwardRef<
+	React.ElementRef<typeof RadioGroup>,
+	Omit<FormItemProps<typeof RadioGroup, string>, 'onValueChange'>
+>(({ value, onChange, ...props }, ref) => {
+	const { setValue } = useFormContext(); // Access form methods
 
-	/**
-	 *
-	 */
 	const onLabelPress = React.useCallback(
 		(label: 'taxable' | 'none') => {
 			return () => {
-				form.setValue('tax_status', label);
+				setValue('tax_status', label);
 			};
 		},
-		[form]
+		[setValue]
 	);
 
 	/**
 	 *
 	 */
 	return (
-		<FormRadioGroup label={t('Tax Status', { _tags: 'core' })} className="gap-2" {...field}>
+		<RadioGroup ref={ref} onValueChange={onChange} value={value} {...props}>
 			{(['taxable', 'none'] as const).map((value) => {
 				return (
-					<View key={value} className={'flex-row gap-2 items-center'}>
+					<HStack key={value} className="gap-3">
 						<RadioGroupItem aria-labelledby={`label-for-${value}`} value={value} />
 						<Label
 							nativeID={`label-for-${value}`}
@@ -41,9 +41,9 @@ export const TaxStatusRadioGroup = ({ form, field }) => {
 						>
 							{value}
 						</Label>
-					</View>
+					</HStack>
 				);
 			})}
-		</FormRadioGroup>
+		</RadioGroup>
 	);
-};
+});

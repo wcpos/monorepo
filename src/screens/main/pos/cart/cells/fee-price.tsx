@@ -3,7 +3,7 @@ import * as React from 'react';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Icon } from '@wcpos/components/src/icon';
 
-import NumberInput from '../../../components/number-input';
+import { NumberInput } from '../../../components/number-input';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 

@@ -43,18 +43,18 @@ const schema = z.object({
 });
 
 interface Props {
-	product: import('@wcpos/database').ProductDocument;
+	variation: import('@wcpos/database').ProductVariationDocument;
 }
 
 /**
  *
  */
-export const EditProductForm = ({ product }: Props) => {
+export const EditVariationForm = ({ variation }: Props) => {
 	const pushDocument = usePushDocument();
 	const t = useT();
 	const navigation = useNavigation();
 
-	if (!product) {
+	if (!variation) {
 		throw new Error(t('Product not found', { _tags: 'core' }));
 	}
 
@@ -78,7 +78,7 @@ export const EditProductForm = ({ product }: Props) => {
 				//
 			}
 		},
-		[product, pushDocument, t]
+		[variation, pushDocument, t]
 	);
 
 	/**
@@ -87,14 +87,13 @@ export const EditProductForm = ({ product }: Props) => {
 	const form = useForm<z.infer<typeof schema>>({
 		resolver: zodResolver(schema),
 		defaultValues: {
-			name: product.name,
-			status: product.status,
-			featured: product.featured,
-			sku: product.sku,
-			barcode: product.barcode,
-			tax_status: product.tax_status,
-			tax_class: product.tax_class,
-			meta_data: product.meta_data,
+			status: variation.status,
+			featured: variation.featured,
+			sku: variation.sku,
+			barcode: variation.barcode,
+			tax_status: variation.tax_status,
+			tax_class: variation.tax_class,
+			meta_data: variation.meta_data,
 		},
 	});
 
@@ -105,13 +104,6 @@ export const EditProductForm = ({ product }: Props) => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<View className="grid grid-cols-2 gap-4">
-					<View className="col-span-2">
-						<FormField
-							control={form.control}
-							name="name"
-							render={({ field }) => <FormInput label={t('Name', { _tags: 'core' })} {...field} />}
-						/>
-					</View>
 					<FormField
 						control={form.control}
 						name="status"

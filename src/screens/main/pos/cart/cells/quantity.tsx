@@ -4,7 +4,7 @@ import { Button, ButtonText } from '@wcpos/components/src/button';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../contexts/translations';
-import NumberInput from '../../../components/number-input';
+import { NumberInput } from '../../../components/number-input';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 import type { CellContext } from '@tanstack/react-table';

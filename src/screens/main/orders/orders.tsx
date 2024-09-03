@@ -13,6 +13,7 @@ import { useQuery } from '@wcpos/query';
 import { Actions } from './cells/actions';
 import { Address } from './cells/address';
 import { Note } from './cells/note';
+import { Receipt } from './cells/receipt';
 import FilterBar from './filter-bar';
 import { UISettingsForm } from './ui-settings-form';
 import { useAppState } from '../../../contexts/app-state';
@@ -46,6 +47,7 @@ const cells = {
 	payment_method: PaymentMethod,
 	created_via: CreatedVia,
 	cashier: Cashier,
+	receipt: Receipt,
 };
 
 const renderCell = (props) => get(cells, props.column.id);

@@ -5,7 +5,14 @@ import isEmpty from 'lodash/isEmpty';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput, FormSwitch } from '@wcpos/components/src/form';
+import {
+	Form,
+	FormField,
+	FormInput,
+	FormSwitch,
+	FormSelect,
+	FormRadioGroup,
+} from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useDialogContext } from './add-cart-item-button';
@@ -79,7 +86,7 @@ export const AddFee = () => {
 	 */
 	return (
 		<Form {...form}>
-			<VStack>
+			<VStack className="gap-4">
 				<FormField
 					control={form.control}
 					name="name"
@@ -94,9 +101,13 @@ export const AddFee = () => {
 				<FormField
 					control={form.control}
 					name="amount"
-					// render={({ field }) => <AmountWidget label={t('Amount', { _tags: 'core' })} {...field} />}
-					render={() => (
-						<AmountWidget nameAmount="amount" namePercent="percent" currencySymbol="$" />
+					render={({ field }) => (
+						<FormInput
+							customComponent={AmountWidget}
+							label={t('Amount', { _tags: 'core' })}
+							currencySymbol="$"
+							{...field}
+						/>
 					)}
 				/>
 				<FormField
@@ -109,12 +120,24 @@ export const AddFee = () => {
 				<FormField
 					control={form.control}
 					name="tax_status"
-					render={({ field }) => <TaxStatusRadioGroup form={form} field={field} />}
+					render={({ field }) => (
+						<FormRadioGroup
+							label={t('Tax Status', { _tags: 'core' })}
+							customComponent={TaxStatusRadioGroup}
+							{...field}
+						/>
+					)}
 				/>
 				<FormField
 					control={form.control}
 					name="tax_class"
-					render={({ field }) => <TaxClassSelect field={field} />}
+					render={({ field }) => (
+						<FormSelect
+							label={t('Tax Class', { _tags: 'core' })}
+							customComponent={TaxClassSelect}
+							{...field}
+						/>
+					)}
 				/>
 			</VStack>
 		</Form>

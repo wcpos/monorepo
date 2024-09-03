@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import { useNavigation, StackActions } from '@react-navigation/native';
 import {
 	useObservableSuspense,
 	ObservableResource,
@@ -8,8 +7,24 @@ import {
 } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/src/button';
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@wcpos/components/src/dialog';
-import { ModalContainer, ModalContent, ModalFooter, ModalTitle } from '@wcpos/components/src/modal';
+import {
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogTrigger,
+} from '@wcpos/components/src/dialog';
+import {
+	Modal,
+	ModalContent,
+	ModalFooter,
+	ModalTitle,
+	ModalBody,
+	ModalClose,
+	ModalHeader,
+} from '@wcpos/components/src/modal';
+import { Text } from '@wcpos/components/src/text';
 
 import { EmailForm } from './components/email';
 import { ReceiptTemplate } from './components/template-webview';
@@ -27,7 +42,6 @@ export const ReceiptModal = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	useModalRefreshFix();
-	const navigation = useNavigation();
 
 	if (!order) {
 		throw new Error(t('Order not found', { _tags: 'core' }));
@@ -40,31 +54,45 @@ export const ReceiptModal = ({ resource }: Props) => {
 	 *
 	 */
 	return (
-		<ModalContainer>
-			<ModalTitle>{t('Receipt', { _tags: 'core' })}</ModalTitle>
-			<ModalContent>
-				<ReceiptTemplate order={order} />
-			</ModalContent>
-			<ModalFooter>
-				<Button variant="secondary" onPress={() => navigation.dispatch(StackActions.pop(1))}>
-					<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
-				</Button>
-				<Dialog>
-					<DialogTrigger asChild>
-						<Button>
-							<ButtonText>{t('Email Receipt', { _tags: 'core' })}</ButtonText>
+		<Modal>
+			<ModalContent size="xl" className="h-5/6">
+				<ModalHeader>
+					<ModalTitle>
+						<Text>{t('Receipt', { _tags: 'core' })}</Text>
+					</ModalTitle>
+				</ModalHeader>
+				<ModalBody>
+					<ReceiptTemplate order={order} />
+				</ModalBody>
+				<ModalFooter>
+					<ModalClose asChild>
+						<Button variant="muted">
+							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
 						</Button>
-					</DialogTrigger>
-					<DialogContent>
-						<DialogTitle>{t('Email Receipt', { _tags: 'core' })}</DialogTitle>
-						<EmailForm defaultEmail={billingEmail} orderID={orderID} />
-					</DialogContent>
-				</Dialog>
-				<Button>
-					<ButtonText>{t('Print Receipt', { _tags: 'core' })}</ButtonText>
-				</Button>
-			</ModalFooter>
-		</ModalContainer>
+					</ModalClose>
+					<Dialog>
+						<DialogTrigger asChild>
+							<Button>
+								<ButtonText>{t('Email Receipt', { _tags: 'core' })}</ButtonText>
+							</Button>
+						</DialogTrigger>
+						<DialogContent>
+							<DialogHeader>
+								<DialogTitle>
+									<Text>{t('Email Receipt', { _tags: 'core' })}</Text>
+								</DialogTitle>
+							</DialogHeader>
+							<DialogBody>
+								<EmailForm defaultEmail={billingEmail} orderID={orderID} />
+							</DialogBody>
+						</DialogContent>
+					</Dialog>
+					<Button>
+						<ButtonText>{t('Print Receipt', { _tags: 'core' })}</ButtonText>
+					</Button>
+				</ModalFooter>
+			</ModalContent>
+		</Modal>
 	);
 };
 

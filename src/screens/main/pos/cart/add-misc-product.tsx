@@ -5,11 +5,12 @@ import isEmpty from 'lodash/isEmpty';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput, FormSelect } from '@wcpos/components/src/form';
+import { Form, FormField, FormInput, FormSelect, FormRadioGroup } from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useDialogContext } from './add-cart-item-button';
 import { useT } from '../../../../contexts/translations';
+import { NumberInput } from '../../components/number-input';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
 import { useAddProduct } from '../hooks/use-add-product';
@@ -81,7 +82,7 @@ export const AddMiscProduct = () => {
 	 */
 	return (
 		<Form {...form}>
-			<VStack>
+			<VStack className="gap-4">
 				<FormField
 					control={form.control}
 					name="name"
@@ -102,13 +103,24 @@ export const AddMiscProduct = () => {
 					control={form.control}
 					name="price"
 					render={({ field }) => (
-						<FormInput label={t('Price', { _tags: 'core' })} placeholder="0" {...field} />
+						<FormInput
+							customComponent={NumberInput}
+							label={t('Price', { _tags: 'core' })}
+							placeholder="0"
+							{...field}
+						/>
 					)}
 				/>
 				<FormField
 					control={form.control}
 					name="tax_status"
-					render={({ field }) => <TaxStatusRadioGroup form={form} field={field} />}
+					render={({ field }) => (
+						<FormRadioGroup
+							label={t('Tax Status', { _tags: 'core' })}
+							customComponent={TaxStatusRadioGroup}
+							{...field}
+						/>
+					)}
 				/>
 				<FormField
 					control={form.control}

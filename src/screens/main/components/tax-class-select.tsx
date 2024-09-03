@@ -19,50 +19,52 @@ import { useExtraData } from '../contexts/extra-data';
 /**
  *
  */
-export const TaxClassSelect = ({ value, onValueChange }) => {
-	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
-	const t = useT();
-	const { extraData } = useExtraData();
-	const taxClasses = useObservableEagerState(extraData.taxClasses$);
+export const TaxClassSelect = React.forwardRef<React.ElementRef<typeof Select>, any>(
+	({ onChange, value, ...props }, ref) => {
+		const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
+		const t = useT();
+		const { extraData } = useExtraData();
+		const taxClasses = useObservableEagerState(extraData.taxClasses$);
 
-	/**
-	 * @NOTE: Because the WC REST API is trash, it won't accept 'standard' as a tax class,
-	 * so we need to send an empty string instead.
-	 */
-	const options = React.useMemo(() => {
-		return (taxClasses || []).map((taxClass) => ({
-			label: taxClass.name,
-			value: taxClass.slug,
-		}));
-	}, [taxClasses]);
+		/**
+		 * @NOTE: Because the WC REST API is trash, it won't accept 'standard' as a tax class,
+		 * so we need to send an empty string instead.
+		 */
+		const options = React.useMemo(() => {
+			return (taxClasses || []).map((taxClass) => ({
+				label: taxClass.name,
+				value: taxClass.slug,
+			}));
+		}, [taxClasses]);
 
-	/**
-	 *
-	 */
-	return (
-		<Select onValueChange={(val) => onValueChange(val.value)}>
-			<SelectTrigger
-				onLayout={(ev) => {
-					setSelectTriggerWidth(ev.nativeEvent.layout.width);
-				}}
-			>
-				<SelectValue
-					className={cn(
-						'text-sm native:text-lg',
-						value ? 'text-foreground' : 'text-muted-foreground'
-					)}
-					placeholder={t('Select Tax Class', { _tags: 'core' })}
-				/>
-			</SelectTrigger>
-			<SelectContent style={{ width: selectTriggerWidth }}>
-				<SelectGroup>
-					{options.map((option) => (
-						<SelectItem key={option.value} label={option.label} value={option.value}>
-							<Text>{option.label}</Text>
-						</SelectItem>
-					))}
-				</SelectGroup>
-			</SelectContent>
-		</Select>
-	);
-};
+		/**
+		 *
+		 */
+		return (
+			<Select onValueChange={onChange}>
+				<SelectTrigger
+					onLayout={(ev) => {
+						setSelectTriggerWidth(ev.nativeEvent.layout.width);
+					}}
+				>
+					<SelectValue
+						className={cn(
+							'text-sm native:text-lg',
+							value ? 'text-foreground' : 'text-muted-foreground'
+						)}
+						placeholder={t('Select Tax Class', { _tags: 'core' })}
+					/>
+				</SelectTrigger>
+				<SelectContent style={{ width: selectTriggerWidth }}>
+					<SelectGroup>
+						{options.map((option) => (
+							<SelectItem key={option.value} label={option.label} value={option.value}>
+								<Text>{option.label}</Text>
+							</SelectItem>
+						))}
+					</SelectGroup>
+				</SelectContent>
+			</Select>
+		);
+	}
+);

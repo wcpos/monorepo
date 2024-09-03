@@ -33,7 +33,7 @@ export const EditProduct = ({ resource }: Props) => {
 			<ModalContent size="lg">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('Edit #{name}', { name: product.name, _tags: 'core' })}</Text>
+						<Text>{t('Edit {name}', { name: product.name, _tags: 'core' })}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>

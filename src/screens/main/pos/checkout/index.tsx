@@ -69,7 +69,7 @@ const Checkout = ({ resource }: Props) => {
 	 *
 	 */
 	return (
-		<ModalContainer className="w-full h-5/6 max-w-screen-md	">
+		<ModalContainer className="w-full h-5/6 max-w-screen-md">
 			<ModalHeader>
 				<ModalTitle>{t('Checkout', { _tags: 'core' })}</ModalTitle>
 			</ModalHeader>

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import NumberInput from '../../../components/number-input';
+import { NumberInput } from '../../../components/number-input';
 import { useShippingLineData } from '../../hooks/use-shipping-line-data';
 import { useUpdateShippingLine } from '../../hooks/use-update-shipping-line';
 

@@ -9,6 +9,7 @@ import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
+import { NumberInput } from '../../../../components/number-input';
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
 import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
@@ -45,7 +46,7 @@ export const EditShippingLineForm = () => {
 	 */
 	return (
 		<Form {...form}>
-			<VStack>
+			<VStack className="gap-4">
 				<FormField
 					control={form.control}
 					name="method_id"
@@ -60,6 +61,18 @@ export const EditShippingLineForm = () => {
 				/>
 				<FormField
 					control={form.control}
+					name="amount"
+					render={({ field }) => (
+						<FormInput
+							customComponent={NumberInput}
+							label={t('Amount', { _tags: 'core' })}
+							placeholder="0"
+							{...field}
+						/>
+					)}
+				/>
+				<FormField
+					control={form.control}
 					name="prices_include_tax"
 					render={({ field }) => (
 						<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
@@ -68,12 +81,24 @@ export const EditShippingLineForm = () => {
 				<FormField
 					control={form.control}
 					name="tax_status"
-					render={({ field }) => <TaxStatusRadioGroup form={form} field={field} />}
+					render={({ field }) => (
+						<FormRadioGroup
+							label={t('Tax Status', { _tags: 'core' })}
+							customComponent={TaxStatusRadioGroup}
+							{...field}
+						/>
+					)}
 				/>
 				<FormField
 					control={form.control}
 					name="tax_class"
-					render={({ field }) => <TaxClassSelect field={field} />}
+					render={({ field }) => (
+						<FormSelect
+							label={t('Tax Class', { _tags: 'core' })}
+							customComponent={TaxClassSelect}
+							{...field}
+						/>
+					)}
 				/>
 				<MetaDataForm />
 			</VStack>

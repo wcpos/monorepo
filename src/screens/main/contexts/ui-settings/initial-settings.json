@@ -391,6 +391,13 @@
         ]
       },
       {
+        "key": "receipt",
+        "disableSort": true,
+        "width": 46,
+        "hideLabel": true,
+        "show": false
+      },
+      {
         "key": "actions",
         "disableSort": true,
         "width": 46,

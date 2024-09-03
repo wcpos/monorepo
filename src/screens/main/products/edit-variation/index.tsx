@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/src/
 import { Text } from '@wcpos/components/src/text';
 import { Tree } from '@wcpos/components/src/tree';
 
-// import { EditOrderForm } from './form';
+import { EditVariationForm } from './form';
 import { useT } from '../../../../contexts/translations';
 import useModalRefreshFix from '../../../../hooks/use-modal-refresh-fix';
 
@@ -29,10 +29,10 @@ export const EditVariation = ({ resource }: Props) => {
 
 	return (
 		<Modal>
-			<ModalContent>
+			<ModalContent size="lg">
 				<ModalHeader>
 					<ModalTitle>
-						<Text>{t('Edit #{name}', { name: variation.name, _tags: 'core' })}</Text>
+						<Text>{t('Edit {name}', { name: variation.name, _tags: 'core' })}</Text>
 					</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
@@ -45,7 +45,9 @@ export const EditVariation = ({ resource }: Props) => {
 								<Text>{t('JSON', { _tags: 'core' })}</Text>
 							</TabsTrigger>
 						</TabsList>
-						<TabsContent value="form">{/* <EditOrderForm order={order} /> */}</TabsContent>
+						<TabsContent value="form">
+							<EditVariationForm variation={variation} />
+						</TabsContent>
 						<TabsContent value="json">
 							<Tree value={variation.toJSON()} />
 						</TabsContent>

@@ -84,6 +84,7 @@ export const useUILabel = () => {
 					cashier: t('Cashier', { _tags: 'core' }),
 					payment_method: t('Payment Method', { _tags: 'core' }),
 					total: t('Total', { _tags: 'core' }),
+					receipt: t('Receipt', { _tags: 'core' }),
 					actions: t('Actions', { _tags: 'core' }),
 				},
 				customers: {

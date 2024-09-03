@@ -7,7 +7,7 @@ import { Button, ButtonText } from '@wcpos/components/src/button';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Icon } from '@wcpos/components/src/icon';
 
-import NumberInput from './number-input';
+import { NumberInput } from './number-input';
 
 /**
  *
@@ -26,59 +26,62 @@ interface Props {
 /**
  * Extracted widget for amount/percent input
  */
-export const AmountWidget = ({ currencySymbol, nameAmount, namePercent, ...props }: Props) => {
-	const { control } = useFormContext();
+export const AmountWidget = React.forwardRef<React.ElementRef<any>, any>(
+	({ onChange, currencySymbol = '', ...props }, ref) => {
+		const { control } = useFormContext();
 
-	/**
-	 *
-	 */
-	const { field: amountField } = useController({
-		name: nameAmount,
-		control,
-	});
+		/**
+		 *
+		 */
+		const { field: amountField } = useController({
+			name: 'amount',
+			control,
+		});
 
-	const { field: percentField } = useController({
-		name: namePercent,
-		control,
-	});
+		const { field: percentField } = useController({
+			name: 'percent',
+			control,
+		});
 
-	/**
-	 *
-	 */
-	const handleAmountChange = (newAmount: string) => {
-		amountField.onChange(newAmount);
-	};
+		/**
+		 *
+		 */
+		const handleAmountChange = (newAmount: string) => {
+			amountField.onChange(newAmount);
+		};
 
-	const handlePercentChange = (isPercent: boolean) => {
-		percentField.onChange(isPercent);
-	};
+		const handlePercentChange = (isPercent: boolean) => {
+			percentField.onChange(isPercent);
+		};
 
-	/**
-	 *
-	 */
-	return (
-		<HStack className="gap-0">
-			<Button
-				disabled={percentField.value}
-				onPress={() => handlePercentChange(false)}
-				className="rounded-r-none"
-			>
-				<ButtonText>{currencySymbol}</ButtonText>
-			</Button>
-			<NumberInput
-				value={amountField.value}
-				placement="right"
-				onChange={handleAmountChange}
-				showDecimals
-				buttonClassName="rounded-none"
-			/>
-			<Button
-				disabled={!percentField.value}
-				onPress={() => handlePercentChange(true)}
-				className="rounded-l-none"
-			>
-				<Icon name="percent" className="fill-primary-foreground" />
-			</Button>
-		</HStack>
-	);
-};
+		/**
+		 *
+		 */
+		return (
+			<HStack className="gap-0">
+				<Button
+					disabled={percentField.value}
+					onPress={() => handlePercentChange(false)}
+					className="rounded-r-none"
+				>
+					<ButtonText>{currencySymbol}</ButtonText>
+				</Button>
+				<NumberInput
+					ref={ref}
+					value={amountField.value}
+					placement="right"
+					onChange={handleAmountChange}
+					showDecimals
+					buttonClassName="rounded-none"
+				/>
+				<Button
+					disabled={!percentField.value}
+					onPress={() => handlePercentChange(true)}
+					className="rounded-l-none"
+				>
+					<Icon name="percent" className="fill-primary-foreground" />
+				</Button>
+			</HStack>
+		);
+	}
+);

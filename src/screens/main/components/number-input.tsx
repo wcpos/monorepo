@@ -55,7 +55,7 @@ interface NumberInputProps {
  * Note: value comes in as decimalSeparator = '.' we need to convert it to the correct decimal separator
  * @TODO - We need a format helper numbers, not just currency, eg: quantity: 1,000.01
  */
-const NumberInput = ({
+export const NumberInput = ({
 	value = '0',
 	onChange,
 	disabled,
@@ -159,5 +159,3 @@ const NumberInput = ({
 	// 	</Popover>
 	// );
 };
-
-export default NumberInput;
