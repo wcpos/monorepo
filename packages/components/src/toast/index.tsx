@@ -1,6 +1,6 @@
 import Toast, { ToastConfig } from 'react-native-toast-message';
 
-import { Toast as BaseToast } from './toast';
+import { BaseToast } from './toast';
 
 const toastConfig: ToastConfig = {
 	success: (props) => <BaseToast variant="success" {...props} />,
