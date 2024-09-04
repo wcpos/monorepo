@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Collapsible, CollapsibleContent } from '@wcpos/components/src/collapsible';
@@ -37,9 +38,10 @@ export const columnsFormSchema = z.object({
 /**
  *
  */
-export const UISettingsColumnsForm = ({ form, columns, getUILabel }) => {
+export const UISettingsColumnsForm = ({ columns, getUILabel }) => {
 	const t = useT();
 	const [openColumns, setOpenColumns] = React.useState({});
+	const form = useFormContext();
 
 	const toggleColumn = (columnKey) => {
 		setOpenColumns((prevState) => ({

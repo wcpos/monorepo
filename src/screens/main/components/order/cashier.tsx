@@ -3,7 +3,8 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { Text } from '@wcpos/components/src/text';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { useDataTable } from '@wcpos/components/src/data-table';
 
 import { useCollection } from '../../hooks/use-collection';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
@@ -26,6 +27,7 @@ export const Cashier = ({ row }: CellContext<OrderDocument, 'cashier'>) => {
 	);
 	const [cashierName, setCashierName] = React.useState('');
 	const { format } = useCustomerNameFormat();
+	const { query } = useDataTable();
 
 	/**
 	 * @TODO - it would be good to have a replication query which gets the cashier roles
@@ -45,5 +47,17 @@ export const Cashier = ({ row }: CellContext<OrderDocument, 'cashier'>) => {
 		}
 	}, [cashierID, collection, format]);
 
-	return <Text>{cashierName}</Text>;
+	return (
+		<ButtonPill
+			variant="ghost-secondary"
+			size="xs"
+			onPress={() =>
+				query.where('meta_data', {
+					$elemMatch: { key: '_pos_user', value: String(cashierID) },
+				})
+			}
+		>
+			<ButtonText>{cashierName}</ButtonText>
+		</ButtonPill>
+	);
 };

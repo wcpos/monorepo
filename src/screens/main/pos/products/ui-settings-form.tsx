@@ -72,7 +72,7 @@ export const UISettingsForm = () => {
 						name="showOutOfStock"
 						render={({ field }) => <FormSwitch label={getUILabel('showOutOfStock')} {...field} />}
 					/>
-					<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
+					<UISettingsColumnsForm columns={formData.columns} getUILabel={getUILabel} />
 					<FormField
 						control={form.control}
 						name="metaDataKeys"

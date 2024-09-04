@@ -4,6 +4,7 @@ import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { useDataTable } from '@wcpos/components/src/data-table';
 import { FormatAddress } from '@wcpos/components/src/format';
 import { VStack } from '@wcpos/components/src/vstack';
 import { useQueryManager } from '@wcpos/query';
@@ -19,23 +20,12 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
  */
 export const Customer = ({ row, column }: CellContext<OrderDocument, 'customer_id'>) => {
 	const order = row.original;
-	const manager = useQueryManager();
-	const query = manager.getQuery(['orders']);
+	const { query } = useDataTable();
 	const { format } = useCustomerNameFormat();
 	const customerID = useObservableEagerState(order.customer_id$);
 	const billing = useObservableEagerState(order.billing$);
 	const shipping = useObservableEagerState(order.shipping$);
-
-	/**
-	 *
-	 */
-	const show = React.useCallback(
-		(key: string): boolean => {
-			const d = find(column.display, { key });
-			return !!(d && d.show);
-		},
-		[column.display]
-	);
+	const { show } = column.columnDef.meta;
 
 	return (
 		<VStack>

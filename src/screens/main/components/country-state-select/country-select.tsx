@@ -17,7 +17,8 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-const _CountrySelect = ({ value, onChange }) => {
+const _CountrySelect = ({ onValueChange, ...props }) => {
+	const value = props.value?.value ? props.value.value : props.value;
 	const allCountries = useCountries();
 	const t = useT();
 
@@ -57,7 +58,7 @@ const _CountrySelect = ({ value, onChange }) => {
 					<CommandEmpty>{t('No country found', { _tags: 'core' })}</CommandEmpty>
 					<CommandList>
 						{options.map((option) => (
-							<CommandItem key={option.value} onSelect={() => onChange(option.value)}>
+							<CommandItem key={option.value} onSelect={() => onValueChange(option.value)}>
 								{option.label}
 							</CommandItem>
 						))}

@@ -56,7 +56,7 @@ export const UISettingsForm = () => {
 	return (
 		<Form {...form}>
 			<VStack>
-				<UISettingsColumnsForm form={form} columns={formData.columns} getUILabel={getUILabel} />
+				<UISettingsColumnsForm columns={formData.columns} getUILabel={getUILabel} />
 			</VStack>
 		</Form>
 	);

@@ -2,11 +2,19 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useObservableSuspense } from 'observable-hooks';
+import { useObservablePickState, useObservableSuspense } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
+import { map } from 'rxjs/operators';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput, FormSwitch, FormSelect } from '@wcpos/components/src/form';
+import {
+	Form,
+	FormField,
+	FormInput,
+	FormSwitch,
+	FormSelect,
+	useFormChangeHandler,
+} from '@wcpos/components/src/form';
 import { cn } from '@wcpos/components/src/lib/utils';
 import {
 	SelectTrigger,
@@ -29,8 +37,46 @@ import { useDefaultCustomer } from '../hooks/use-default-customer';
 /**
  *
  */
+const formSchema = z.object({
+	name: z.string().optional(),
+	locale: z.string().optional(),
+	default_customer: z.string().optional(),
+	default_customer_is_cashier: z.boolean().optional(),
+	currency: z.string().optional(),
+	currency_pos: z.string().optional(),
+	price_thousand_sep: z.string().optional(),
+	price_decimal_sep: z.string().optional(),
+	price_num_decimals: z.number().optional(),
+});
+
+/**
+ *
+ */
 export const GeneralSettings = () => {
 	const { store } = useAppState();
+	const formData = useObservablePickState(
+		store.$,
+		() => ({
+			name: store.name,
+			locale: store.locale,
+			default_customer: store.default_customer,
+			default_customer_is_cashier: store.default_customer_is_cashier,
+			currency: store.currency,
+			currency_pos: store.currency_pos,
+			price_thousand_sep: store.price_thousand_sep,
+			price_decimal_sep: store.price_decimal_sep,
+			price_num_decimals: store.price_num_decimals,
+		}),
+		'name',
+		'locale',
+		'default_customer',
+		'default_customer_is_cashier',
+		'currency',
+		'currency_pos',
+		'price_thousand_sep',
+		'price_decimal_sep',
+		'price_num_decimals'
+	);
 	const { defaultCustomerResource } = useDefaultCustomer();
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
 	const t = useT();
@@ -54,39 +100,35 @@ export const GeneralSettings = () => {
 	/**
 	 *
 	 */
-	const formSchema = React.useMemo(
-		() =>
-			z.object({
-				name: z.string().optional(),
-				locale: z.string().optional(),
-				default_customer: z.string().optional(),
-				default_customer_is_cashier: z.boolean().optional(),
-				currency: z.string().optional(),
-				currency_pos: z.string().optional(),
-				price_thousand_sep: z.string().optional(),
-				price_decimal_sep: z.string().optional(),
-				price_num_decimals: z.number().optional(),
-			}),
-		[]
-	);
+	const form = useForm<z.infer<typeof formSchema>>({
+		resolver: zodResolver(formSchema),
+		defaultValues: {
+			...formData,
+		},
+	});
 
 	/**
 	 *
 	 */
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
-		defaultValues: {
-			name: store.name,
-			locale: store.locale,
-			default_customer: defaultCustomer.id,
-			default_customer_is_cashier: store.default_customer_is_cashier,
-			currency: store.currency,
-			currency_pos: store.currency_pos,
-			price_thousand_sep: store.price_thousand_sep,
-			price_decimal_sep: store.price_decimal_sep,
-			price_num_decimals: store.price_num_decimals,
+	const handleChange = React.useCallback(
+		async (data) => {
+			console.log('data', data);
+			await localPatch({
+				document: store,
+				data,
+			});
 		},
-	});
+		[localPatch, store]
+	);
+
+	useFormChangeHandler({ form, onChange: handleChange });
+
+	/**
+	 * Track formData changes and reset form
+	 */
+	React.useEffect(() => {
+		form.reset({ ...formData });
+	}, [formData, form]);
 
 	/**
 	 *
@@ -107,7 +149,11 @@ export const GeneralSettings = () => {
 					control={form.control}
 					name="locale"
 					render={({ field }) => (
-						<LanguageSelect label={t('Language', { _tags: 'core' })} {...field} />
+						<FormSelect
+							customComponent={LanguageSelect}
+							label={t('Language', { _tags: 'core' })}
+							{...field}
+						/>
 					)}
 				/>
 				<VStack>
