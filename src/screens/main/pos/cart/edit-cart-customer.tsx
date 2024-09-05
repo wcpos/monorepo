@@ -3,7 +3,6 @@ import * as React from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
-import { map } from 'rxjs/operators';
 import * as z from 'zod';
 
 import { Form, FormField, FormSwitch } from '@wcpos/components/src/form';
@@ -12,6 +11,7 @@ import { useAugmentedRef } from '@wcpos/components/src/lib/utils';
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
 
+import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
@@ -104,12 +104,14 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 		<Form {...form}>
 			<VStack ref={formRef} className="gap-4">
 				<VStack>
-					<Text className="text-lg font-bold">{t('Billing Address', { _tags: 'core' })}</Text>
-					<BillingAddressForm />
+					<Text className="font-medium">{t('Billing Address', { _tags: 'core' })}</Text>
+					<CountriesProvider>
+						<BillingAddressForm />
+					</CountriesProvider>
 				</VStack>
 				<VStack>
 					<HStack>
-						<Text className="text-lg font-bold">{t('Shipping Address', { _tags: 'core' })}</Text>
+						<Text className="font-medium">{t('Shipping Address', { _tags: 'core' })}</Text>
 						<FormField
 							control={form.control}
 							name="copyBillingToShipping"
@@ -121,7 +123,11 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 							)}
 						/>
 					</HStack>
-					{!toggleShipping && <ShippingAddressForm />}
+					{!toggleShipping && (
+						<CountriesProvider>
+							<ShippingAddressForm />
+						</CountriesProvider>
+					)}
 				</VStack>
 			</VStack>
 		</Form>

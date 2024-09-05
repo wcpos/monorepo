@@ -11,14 +11,13 @@ import {
 import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/components/src/popover';
 import { Text } from '@wcpos/components/src/text';
 
-import useCountries, { CountriesProvider } from '../../../../contexts/countries';
-import { useT } from '../../../../contexts/translations';
+import { useCountries } from '../../../contexts/countries';
+import { useT } from '../../../contexts/translations';
 
 /**
  *
  */
-const _CountrySelect = ({ onValueChange, ...props }) => {
-	const value = props.value?.value ? props.value.value : props.value;
+export const CountryCombobox = ({ value, onValueChange, ...props }) => {
 	const allCountries = useCountries();
 	const t = useT();
 
@@ -66,13 +65,5 @@ const _CountrySelect = ({ onValueChange, ...props }) => {
 				</Command>
 			</PopoverContent>
 		</Popover>
-	);
-};
-
-export const CountrySelect = (props) => {
-	return (
-		<CountriesProvider>
-			<_CountrySelect {...props} />
-		</CountriesProvider>
 	);
 };
