@@ -3,7 +3,7 @@ import * as React from 'react';
 import { isCancel } from 'axios';
 import get from 'lodash/get';
 
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Toast } from '@wcpos/components/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 type AxiosResponse = import('axios').AxiosResponse;

@@ -6,7 +6,7 @@ import NetInfo, {
 	NetInfoStateType,
 } from '@react-native-community/netinfo';
 
-import { Toast } from '@wcpos/tailwind/src/toast';
+import { Toast } from '@wcpos/components/src/toast';
 
 const initialState: NetInfoState = {
 	type: NetInfoStateType.unknown,
