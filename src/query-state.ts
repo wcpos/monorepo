@@ -27,7 +27,7 @@ import type { RxCollection, RxDocument } from 'rxdb';
 // This type utility extracts the document type from a collection
 type DocumentType<C> = C extends RxCollection<infer D> ? RxDocument<D, object> : never;
 
-type SortDirection = import('@wcpos/components/src/table').SortDirection;
+type SortDirection = 'asc' | 'desc';
 
 export interface QueryParams {
 	search?: string | Record<string, any>;
@@ -100,7 +100,9 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	/**
 	 *
 	 */
-	public readonly params$ = this.subjects.params.asObservable();
+	public readonly params$ = this.subjects.params
+		.asObservable()
+		.pipe(distinctUntilChanged((prev, next) => JSON.stringify(prev) === JSON.stringify(next)));
 	public readonly result$ = this.subjects.result.asObservable();
 
 	public readonly resource = new ObservableResource(this.result$);
@@ -453,20 +455,39 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		return false;
 	}
 
-	findAttributesSelector(name: string): any {
+	getAllAttributesSelectors() {
+		const attributeSelectors = this.findSelector('attributes');
+		if (Array.isArray(attributeSelectors)) {
+			return attributeSelectors
+				.map((selector) => selector?.$elemMatch)
+				.filter((attribute) => !!attribute.option);
+		}
+		return [];
+	}
+
+	findAttributesSelector({ id, name }: { id: number; name: string }) {
 		for (const clause of this.whereClauses) {
 			if (clause.field === 'attributes' && clause.value?.$elemMatch) {
-				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], { name });
-				if (match) return match.option;
+				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], { id, name });
+				if (match) return match.option as string;
 			}
 		}
 		return undefined;
 	}
 
-	hasAttributesSelector(name: string, option: any): boolean {
+	hasAttributesSelector({
+		id,
+		name,
+		option,
+	}: {
+		id: number;
+		name: string;
+		option: string;
+	}): boolean {
 		for (const clause of this.whereClauses) {
 			if (clause.field === 'attributes' && clause.value?.$elemMatch) {
 				const match = find(clause.value.$elemMatch.$and || [clause.value.$elemMatch], {
+					id,
 					name,
 					option,
 				});

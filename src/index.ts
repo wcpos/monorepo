@@ -5,7 +5,7 @@ export { useQuery } from './use-query';
 export { useLocalQuery } from './use-local-query';
 export { useRelationalQuery } from './use-relational-query';
 export { useReplicationState } from './use-replication-state';
-export { QueryDevtools } from './devtools';
+// export { QueryDevtools } from './devtools';
 export { useInfiniteScroll } from './use-infinite-scroll';
 export type { RelationalQuery } from './relational-query-state';
 export type { Query, QueryHooks, QueryResult };

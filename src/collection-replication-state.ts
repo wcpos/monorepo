@@ -985,7 +985,13 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 			if (!doc.id) {
 				throw new Error('document does not have an id');
 			}
-			const response = await this.httpClient.patch(this.endpoint + '/' + doc.id, data);
+
+			// @TODO - I should use the link property to get the endpoint
+			let endpoint = this.endpoint + '/' + doc.id;
+			if (this.endpoint === 'variations') {
+				endpoint = `products/${doc.parent_id}/variations/${doc.id}`;
+			}
+			const response = await this.httpClient.patch(endpoint, data);
 
 			if (!response?.data) {
 				throw new Error('Invalid response data for remote patch');
