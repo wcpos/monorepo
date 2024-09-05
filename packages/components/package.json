@@ -33,7 +33,7 @@
     "@rn-primitives/tooltip": "^1.0.3",
     "@shopify/flash-list": "^1.7.1",
     "@tanstack/react-table": "^8.20.5",
-    "@uiw/react-json-view": "^2.0.0-alpha.26",
+    "@uiw/react-json-view": "^2.0.0-alpha.27",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
