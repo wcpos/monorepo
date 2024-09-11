@@ -7,39 +7,35 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { Label } from '@wcpos/components/src/label';
 import { RadioGroup, RadioGroupItem } from '@wcpos/components/src/radio-group';
 
+import { useT } from '../../../contexts/translations';
+
 /**
  *
  */
 export const TaxStatusRadioGroup = React.forwardRef<
 	React.ElementRef<typeof RadioGroup>,
-	Omit<FormItemProps<typeof RadioGroup, string>, 'onValueChange'>
->(({ value, onChange, ...props }, ref) => {
-	const { setValue } = useFormContext(); // Access form methods
-
-	const onLabelPress = React.useCallback(
-		(label: 'taxable' | 'none') => {
-			return () => {
-				setValue('tax_status', label);
-			};
-		},
-		[setValue]
-	);
+	Omit<FormItemProps<typeof RadioGroup, string>, 'type'>
+>((props, ref) => {
+	const { setValue } = useFormContext();
+	const t = useT();
 
 	/**
 	 *
 	 */
 	return (
-		<RadioGroup ref={ref} onValueChange={onChange} value={value} {...props}>
-			{(['taxable', 'none'] as const).map((value) => {
+		<RadioGroup ref={ref} {...props}>
+			{[
+				{ label: t('Taxable', { _tags: 'core' }), value: 'taxable' },
+				{ label: t('None', { _tags: 'core' }), value: 'none' },
+			].map((option) => {
 				return (
-					<HStack key={value} className="gap-3">
-						<RadioGroupItem aria-labelledby={`label-for-${value}`} value={value} />
+					<HStack key={option.value}>
+						<RadioGroupItem aria-labelledby={`label-for-${option.value}`} value={option.value} />
 						<Label
-							nativeID={`label-for-${value}`}
-							className="capitalize"
-							onPress={onLabelPress(value)}
+							nativeID={`label-for-${option.value}`}
+							onPress={() => setValue(props.name, option.value)}
 						>
-							{value}
+							{option.label}
 						</Label>
 					</HStack>
 				);

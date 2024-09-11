@@ -6,11 +6,11 @@ import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 
 type LogDocument = import('@wcpos/database').LogDocument;
 
-const colorMap = {
-	error: 'critical',
-	warn: 'warning',
-	info: 'secondary',
-	debug: 'success',
+const variantMap = {
+	error: 'ghost-error',
+	warn: 'ghost-warning',
+	info: 'ghost-secondary',
+	debug: 'ghost-success',
 };
 
 /**
@@ -20,10 +20,9 @@ const colorMap = {
  */
 export const Level = ({ row }: CellContext<LogDocument, 'level'>) => {
 	const log = row.original;
-	const color = colorMap[log.level];
 
 	return (
-		<ButtonPill variant={color}>
+		<ButtonPill variant={variantMap[log.level]} size="xs">
 			<ButtonText>{log.level}</ButtonText>
 		</ButtonPill>
 	);

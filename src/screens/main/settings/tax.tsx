@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/src/button';
-import { Form, FormField, FormInput, FormSelect } from '@wcpos/components/src/form';
+import { Form, FormField, FormInput, FormSelect, FormRadioGroup } from '@wcpos/components/src/form';
 import { cn } from '@wcpos/components/src/lib/utils';
 import {
 	SelectTrigger,
@@ -87,10 +87,10 @@ export const TaxSettings = () => {
 						control={form.control}
 						name="calc_taxes"
 						render={({ field }) => (
-							<YesNoRadioGroup
+							<FormRadioGroup
+								customComponent={YesNoRadioGroup}
 								label={t('Enable taxes', { _tags: 'core' })}
-								form={form}
-								field={field}
+								{...field}
 							/>
 						)}
 					/>
@@ -98,10 +98,10 @@ export const TaxSettings = () => {
 						control={form.control}
 						name="prices_include_tax"
 						render={({ field }) => (
-							<YesNoRadioGroup
+							<FormRadioGroup
+								customComponent={YesNoRadioGroup}
 								label={t('Prices entered with tax', { _tags: 'core' })}
-								form={form}
-								field={field}
+								{...field}
 							/>
 						)}
 					/>
@@ -146,17 +146,21 @@ export const TaxSettings = () => {
 						control={form.control}
 						name="shipping_tax_class"
 						render={({ field }) => (
-							<TaxClassSelect field={field} label={t('Shipping tax class', { _tags: 'core' })} />
+							<FormSelect
+								customComponent={TaxClassSelect}
+								label={t('Shipping tax class', { _tags: 'core' })}
+								{...field}
+							/>
 						)}
 					/>
 					<FormField
 						control={form.control}
 						name="tax_total_display"
 						render={({ field }) => (
-							<TaxDisplayRadioGroup
+							<FormRadioGroup
+								customComponent={TaxDisplayRadioGroup}
 								label={t('Display tax totals', { _tags: 'core' })}
-								form={form}
-								field={field}
+								{...field}
 							/>
 						)}
 					/>
@@ -164,10 +168,10 @@ export const TaxSettings = () => {
 						control={form.control}
 						name="tax_round_at_subtotal"
 						render={({ field }) => (
-							<YesNoRadioGroup
+							<FormRadioGroup
+								customComponent={YesNoRadioGroup}
 								label={t('Round tax at subtotal level', { _tags: 'core' })}
-								form={form}
-								field={field}
+								{...field}
 							/>
 						)}
 					/>
@@ -175,10 +179,10 @@ export const TaxSettings = () => {
 						control={form.control}
 						name="tax_display_shop"
 						render={({ field }) => (
-							<InclExclRadioGroup
+							<FormRadioGroup
+								customComponent={InclExclRadioGroup}
 								label={t('Display prices in the shop', { _tags: 'core' })}
-								form={form}
-								field={field}
+								{...field}
 							/>
 						)}
 					/>
@@ -186,10 +190,10 @@ export const TaxSettings = () => {
 						control={form.control}
 						name="tax_display_cart"
 						render={({ field }) => (
-							<InclExclRadioGroup
+							<FormRadioGroup
+								customComponent={InclExclRadioGroup}
 								label={t('Display prices during cart and checkout', { _tags: 'core' })}
-								form={form}
-								field={field}
+								{...field}
 							/>
 						)}
 					/>

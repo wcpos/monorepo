@@ -22,7 +22,7 @@ type LogDocument = import('@wcpos/database').LogDocument;
 
 const cells = {
 	context: Context,
-	date: Date,
+	timestamp: Date,
 	level: Level,
 	code: () => null,
 };

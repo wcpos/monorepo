@@ -4,6 +4,7 @@ import { StyleProp, ViewStyle } from 'react-native';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/src/button';
+import { HStack } from '@wcpos/components/src/hstack';
 import { Numpad } from '@wcpos/components/src/numpad';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
 
@@ -95,7 +96,7 @@ export const NumberInput = ({
 					<ButtonText>{displayValue}</ButtonText>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent side={placement}>
+			<PopoverContent side={placement} className="p-2 w-48">
 				<Numpad
 					initialValue={displayValue}
 					onChange={(newValue: string) => {
@@ -107,6 +108,11 @@ export const NumberInput = ({
 					decimalSeparator={decimalSeparator}
 					discounts={showDiscounts}
 				/>
+				<HStack className="justify-end">
+					<Button>
+						<ButtonText>{t('Done', { _tags: 'core' })}</ButtonText>
+					</Button>
+				</HStack>
 			</PopoverContent>
 		</Popover>
 	);

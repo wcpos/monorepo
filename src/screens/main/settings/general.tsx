@@ -13,6 +13,7 @@ import {
 	FormInput,
 	FormSwitch,
 	FormSelect,
+	FormCombobox,
 	useFormChangeHandler,
 } from '@wcpos/components/src/form';
 import { cn } from '@wcpos/components/src/lib/utils';
@@ -161,7 +162,11 @@ export const GeneralSettings = () => {
 						control={form.control}
 						name="default_customer"
 						render={({ field }) => (
-							<CustomerSelect label={t('Default Customer', { _tags: 'core' })} {...field} />
+							<FormCombobox
+								customComponent={CustomerSelect}
+								label={t('Default Customer', { _tags: 'core' })}
+								{...field}
+							/>
 						)}
 					/>
 					<FormField
@@ -176,7 +181,11 @@ export const GeneralSettings = () => {
 					control={form.control}
 					name="currency"
 					render={({ field }) => (
-						<CurrencySelect label={t('Currency', { _tags: 'core' })} {...field} />
+						<FormCombobox
+							customComponent={CurrencySelect}
+							label={t('Currency', { _tags: 'core' })}
+							{...field}
+						/>
 					)}
 				/>
 				<FormField

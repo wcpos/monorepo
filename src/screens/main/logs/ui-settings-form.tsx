@@ -23,7 +23,7 @@ export const schema = z.object({
  *
  */
 export const UISettingsForm = () => {
-	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('products');
+	const { uiSettings, getUILabel, patchUI, resetUI } = useUISettings('logs');
 	const formData = useObservableState(uiSettings.$, uiSettings.get());
 	const { buttonPressHandlerRef } = useDialogContext();
 	buttonPressHandlerRef.current = resetUI;
