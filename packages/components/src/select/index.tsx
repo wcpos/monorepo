@@ -12,6 +12,8 @@ type Option = SelectPrimitive.Option;
 
 const Select = SelectPrimitive.Root;
 
+const useRootContext = SelectPrimitive.useRootContext;
+
 const SelectGroup = SelectPrimitive.Group;
 
 const SelectValue = SelectPrimitive.Value;
@@ -80,11 +82,21 @@ const SelectContent = React.forwardRef<
 	React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content> & { portalHost?: string }
 >(({ className, children, position = 'popper', portalHost, ...props }, ref) => {
 	const { open } = SelectPrimitive.useRootContext();
+	console.log('SelectContent', open);
+
+	/**
+	 * FIXME: I though the SelectPrimitive.Content already handled mounting and unmounting via Radix presence.
+	 * However, select contents are being rendered on page load, which is not what we want.
+	 */
+	if (!open) return null;
 
 	return (
 		<SelectPrimitive.Portal hostName={portalHost}>
 			<SelectPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
-				<Animated.View entering={FadeIn} exiting={FadeOut}>
+				<Animated.View
+				// FIXME: There's a weird thing when the content is being unmounted, it flashes before it's removed.
+				//entering={FadeIn} exiting={FadeOut}
+				>
 					<SelectPrimitive.Content
 						ref={ref}
 						className={cn(
@@ -99,7 +111,7 @@ const SelectContent = React.forwardRef<
 						position={position}
 						{...props}
 					>
-						<SelectScrollUpButton />
+						{/* <SelectScrollUpButton /> */}
 						<SelectPrimitive.Viewport
 							className={cn(
 								'p-1',
@@ -109,7 +121,7 @@ const SelectContent = React.forwardRef<
 						>
 							{children}
 						</SelectPrimitive.Viewport>
-						<SelectScrollDownButton />
+						{/* <SelectScrollDownButton /> */}
 					</SelectPrimitive.Content>
 				</Animated.View>
 			</SelectPrimitive.Overlay>
@@ -205,4 +217,5 @@ export {
 	type Option,
 	SelectPrimitive,
 	SelectButton,
+	useRootContext,
 };

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
+import { View, NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
 
 import get from 'lodash/get';
 
@@ -184,7 +184,7 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Input>, any>(
 					onKeyPress={handleKeyPress}
 					onChangeText={() => {}}
 				/>
-				<Box className={`grid gap-1 ${discounts ? 'grid-cols-4' : 'grid-cols-3'}`}>
+				<View className={`grid gap-1 ${discounts ? 'grid-cols-4' : 'grid-cols-3'}`}>
 					{[
 						['1', '2', '3'],
 						['4', '5', '6'],
@@ -193,6 +193,7 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Input>, any>(
 					].map((row, rowIndex) =>
 						row.map((value, colIndex) => (
 							<Button
+								variant="muted"
 								key={`${rowIndex}-${colIndex}`}
 								onPress={() =>
 									value === '+/-' ? dispatch({ type: ACTIONS.SWITCH_SIGN }) : addDigit(value)
@@ -222,7 +223,7 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Input>, any>(
 								<ButtonText>{`${discount}%`}</ButtonText>
 							</Button>
 						))}
-				</Box>
+				</View>
 				{calculator && (
 					<Box className="grid grid-cols-2 gap-1">
 						<Button onPress={() => dispatch({ type: ACTIONS.CLEAR })}>
