@@ -1,23 +1,28 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
-import { Box } from '@wcpos/components/src/box';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import {
+	Combobox,
+	ComboboxContent,
+	ComboboxTriggerPrimitive,
+} from '@wcpos/components/src/combobox';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { HStack } from '@wcpos/components/src/hstack';
+import { Text } from '@wcpos/components/src/text';
 
 import { Customer } from './customer';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../../contexts/translations';
 import { AddNewCustomer } from '../../components/customer/add-new';
-import { CustomerSelect } from '../../components/customer-select';
+import { CustomerSearch } from '../../components/customer-select';
 import { UISettingsDialog } from '../../components/ui-settings';
-import { useUISettings } from '../../contexts/ui-settings';
 import { useAddCustomer } from '../hooks/use-add-customer';
 
 /**
  *
  */
 export const CartHeader = () => {
-	const { uiSettings } = useUISettings('pos-cart');
 	const { addCustomer } = useAddCustomer();
 	const [showCustomerSelect, setShowCustomerSelect] = React.useState(false);
 	const t = useT();
@@ -26,7 +31,7 @@ export const CartHeader = () => {
 	 *
 	 */
 	const handleSelectCustomer = React.useCallback(
-		(customer) => {
+		({ item: customer }) => {
 			if (customer) {
 				addCustomer(customer);
 			}
@@ -40,15 +45,25 @@ export const CartHeader = () => {
 	 */
 	return (
 		<HStack>
-			<Box className="p-0 flex-1">
+			<Text className="font-bold">{t('Customer', { _tags: 'core' })}:</Text>
+			<View className="flex-1 flex-row items-center">
 				<ErrorBoundary>
 					{showCustomerSelect ? (
-						<CustomerSelect />
+						<Combobox onValueChange={handleSelectCustomer}>
+							<ComboboxTriggerPrimitive asChild>
+								<ButtonPill size="xs" leftIcon="user" variant="muted">
+									<ButtonText>{t('Select Customer', { _tags: 'core' })}</ButtonText>
+								</ButtonPill>
+							</ComboboxTriggerPrimitive>
+							<ComboboxContent>
+								<CustomerSearch />
+							</ComboboxContent>
+						</Combobox>
 					) : (
 						<Customer setShowCustomerSelect={setShowCustomerSelect} />
 					)}
 				</ErrorBoundary>
-			</Box>
+			</View>
 			<AddNewCustomer onAdd={(customer) => addCustomer(customer)} />
 			<UISettingsDialog title={t('Cart Settings', { _tags: 'core' })}>
 				<UISettingsForm />

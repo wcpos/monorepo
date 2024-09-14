@@ -13,7 +13,6 @@ import {
 	DialogFooter,
 	DialogClose,
 } from '@wcpos/components/src/dialog';
-import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
 
 import { EditCartCustomerForm } from './edit-cart-customer';
@@ -41,49 +40,51 @@ export const Customer = ({ setShowCustomerSelect }) => {
 	 *
 	 */
 	return (
-		<HStack>
-			<Text className="font-bold">{t('Customer', { _tags: 'core' })}:</Text>
-			<Dialog open={open} onOpenChange={setOpen}>
-				<DialogTrigger asChild>
-					<ButtonPill size="xs" removable={true} onRemove={() => setShowCustomerSelect(true)}>
-						<ButtonText>{name}</ButtonText>
-					</ButtonPill>
-				</DialogTrigger>
-				<DialogContent size="lg">
-					<DialogHeader>
-						<DialogTitle>
-							<Text>{t('Edit Customer Address', { _tags: 'core' })}</Text>
-						</DialogTitle>
-					</DialogHeader>
-					<DialogBody>
-						<EditCartCustomerForm ref={formRef} />
-					</DialogBody>
-					<DialogFooter>
-						<DialogClose asChild>
-							<Button variant="muted">
-								<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
-							</Button>
-						</DialogClose>
-						<Button
-							// variant="secondary"
-							onPress={async () => {
-								await formRef.current?.handleSaveToOrderAndToCustomer();
-								setOpen(false);
-							}}
-						>
-							<ButtonText>{t('Save to Order & Customer', { _tags: 'core' })}</ButtonText>
+		<Dialog open={open} onOpenChange={setOpen}>
+			<DialogTrigger asChild>
+				<ButtonPill
+					size="xs"
+					leftIcon="user"
+					removable={true}
+					onRemove={() => setShowCustomerSelect(true)}
+				>
+					<ButtonText>{name}</ButtonText>
+				</ButtonPill>
+			</DialogTrigger>
+			<DialogContent size="lg">
+				<DialogHeader>
+					<DialogTitle>
+						<Text>{t('Edit Customer Address', { _tags: 'core' })}</Text>
+					</DialogTitle>
+				</DialogHeader>
+				<DialogBody>
+					<EditCartCustomerForm ref={formRef} />
+				</DialogBody>
+				<DialogFooter>
+					<DialogClose asChild>
+						<Button variant="muted">
+							<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
 						</Button>
-						<Button
-							onPress={async () => {
-								await formRef.current?.handleSaveToOrder();
-								setOpen(false);
-							}}
-						>
-							<ButtonText>{t('Save to Order', { _tags: 'core' })}</ButtonText>
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
-		</HStack>
+					</DialogClose>
+					<Button
+						// variant="secondary"
+						onPress={async () => {
+							await formRef.current?.handleSaveToOrderAndToCustomer();
+							setOpen(false);
+						}}
+					>
+						<ButtonText>{t('Save to Order & Customer', { _tags: 'core' })}</ButtonText>
+					</Button>
+					<Button
+						onPress={async () => {
+							await formRef.current?.handleSaveToOrder();
+							setOpen(false);
+						}}
+					>
+						<ButtonText>{t('Save to Order', { _tags: 'core' })}</ButtonText>
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 };

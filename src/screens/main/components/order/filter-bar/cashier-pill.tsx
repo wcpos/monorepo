@@ -2,13 +2,22 @@ import * as React from 'react';
 
 import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
-import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import {
+	Combobox,
+	ComboboxTriggerPrimitive,
+	ComboboxSearch,
+	ComboboxInput,
+	ComboboxEmpty,
+	ComboboxContent,
+} from '@wcpos/components/src/combobox';
+import { Suspense } from '@wcpos/components/src/suspense';
+import type { CustomerCollection, CustomerDocument } from '@wcpos/database';
+import { useQuery, Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-import { CustomerSelect } from '../../../components/customer-select';
 import useCustomerNameFormat from '../../../hooks/use-customer-name-format';
+import { CustomerList } from '../../customer-select';
 
 interface CashierPillProps {
 	query: Query<CustomerCollection>;
@@ -16,24 +25,34 @@ interface CashierPillProps {
 }
 
 /**
- *
+ * Cashier Search
  */
-export const CashierPill = ({ query, resource }: CashierPillProps) => {
-	const [openSelect, setOpenSelect] = React.useState(false);
-	const cashier = useObservableSuspense(resource);
-	const { format } = useCustomerNameFormat();
+const CashierSearch = () => {
 	const t = useT();
+	const [search, setSearch] = React.useState('');
+
+	/**
+	 * Query for cashiers
+	 */
+	const query = useQuery({
+		queryKeys: ['customers', 'cashier-select'],
+		collectionName: 'customers',
+		initialParams: {
+			sortBy: 'last_name',
+			sortDirection: 'asc',
+			selector: {
+				role: { $in: ['administrator', 'shop_manager', 'cashier'] },
+			},
+		},
+	});
 
 	/**
 	 *
 	 */
-	const handleSelect = React.useCallback(
-		(cashier) => {
-			if (cashier && cashier.id) {
-				query.where('meta_data', {
-					$elemMatch: { key: '_pos_user', value: String(cashier.id) },
-				});
-			}
+	const onSearch = React.useCallback(
+		(value: string) => {
+			setSearch(value);
+			query.debouncedSearch(value);
 		},
 		[query]
 	);
@@ -41,41 +60,61 @@ export const CashierPill = ({ query, resource }: CashierPillProps) => {
 	/**
 	 *
 	 */
-	if (cashier) {
-		return (
-			<ButtonPill
-				size="xs"
-				leftIcon="userCrown"
-				removable={true}
-				onRemove={() => query.where('meta_data', { $elemMatch: { key: '_pos_user', value: null } })}
-			>
-				<ButtonText>{format(cashier)}</ButtonText>
-			</ButtonPill>
-		);
-	}
+	return (
+		<ComboboxSearch shouldFilter={false}>
+			<ComboboxInput
+				placeholder={t('Search Cashiers', { _tags: 'core' })}
+				value={search}
+				onValueChange={onSearch}
+			/>
+			<ComboboxEmpty>{t('No cashiers found', { _tags: 'core' })}</ComboboxEmpty>
+			<Suspense>
+				<CustomerList query={query} />
+			</Suspense>
+		</ComboboxSearch>
+	);
+};
+
+/**
+ *
+ */
+export const CashierPill = ({ query, resource }: CashierPillProps) => {
+	const cashier = useObservableSuspense(resource);
+	const { format } = useCustomerNameFormat();
+	const t = useT();
 
 	/**
-	 *
+	 * value is always a string when dealing with comboboxes
 	 */
 	return (
-		<CustomerSelect
-			onBlur={() => setOpenSelect(false)}
-			onSelectCustomer={handleSelect}
-			autoFocus={true}
-			size="small"
-			style={{ minWidth: 200 }}
-			initialParams={{
-				selector: {
-					role: { $in: ['administrator', 'shop_manager', 'cashier'] },
-				},
+		<Combobox
+			onValueChange={({ value }) => {
+				query.where('meta_data', {
+					$elemMatch: { key: '_pos_user', value },
+				});
 			}}
-			placeholder={t('Search Cashier', { _tags: 'core' })}
-			queryKey="cashier-select"
-			withGuest={false}
 		>
-			<ButtonPill size="xs" leftIcon="userCrown">
-				<ButtonText>{t('Select Cashier', { _tags: 'core' })}</ButtonText>
-			</ButtonPill>
-		</CustomerSelect>
+			<ComboboxTriggerPrimitive asChild>
+				{cashier ? (
+					<ButtonPill
+						size="xs"
+						leftIcon="userCrown"
+						removable={true}
+						onRemove={() =>
+							query.where('meta_data', { $elemMatch: { key: '_pos_user', value: null } })
+						}
+					>
+						<ButtonText>{format(cashier)}</ButtonText>
+					</ButtonPill>
+				) : (
+					<ButtonPill size="xs" leftIcon="userCrown" variant="muted">
+						<ButtonText>{t('Select Cashier', { _tags: 'core' })}</ButtonText>
+					</ButtonPill>
+				)}
+			</ComboboxTriggerPrimitive>
+			<ComboboxContent>
+				<CashierSearch />
+			</ComboboxContent>
+		</Combobox>
 	);
 };

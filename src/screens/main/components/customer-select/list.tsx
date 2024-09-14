@@ -2,38 +2,38 @@ import * as React from 'react';
 
 import { useObservableSuspense } from 'observable-hooks';
 
-import { CommandList, CommandItem } from '@wcpos/components/src/command';
+import { ComboboxList, ComboboxItem, useRootContext } from '@wcpos/components/src/combobox';
 
 import { CustomerSelectItem } from './item';
 
 interface Props {
 	query: any;
-	onSelect: (customerId: number) => void;
 	withGuest?: boolean;
 }
 
 /**
  *
  */
-export const CustomerList = ({ query, onSelect, withGuest }: Props) => {
+export const CustomerList = ({ query, withGuest }: Props) => {
 	const result = useObservableSuspense(query.resource);
+	const { onValueChange } = useRootContext();
 
 	return (
-		<CommandList>
+		<ComboboxList>
 			{result.hits.map(({ id, document }) => {
 				return (
-					<CommandItem
+					<ComboboxItem
 						key={id}
 						/**
 						 * value has to be a string, which we then transform back to an int, which is stupid
 						 */
 						value={String(document.id)}
-						onSelect={(val) => onSelect(parseInt(val, 10))}
+						onSelect={(value) => onValueChange({ value, item: document })}
 					>
 						<CustomerSelectItem customer={document} />
-					</CommandItem>
+					</ComboboxItem>
 				);
 			})}
-		</CommandList>
+		</ComboboxList>
 	);
 };
