@@ -2,7 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { type DialogProps } from '@radix-ui/react-dialog';
-import { Command as CommandPrimitive } from 'cmdk';
+import { Command as CommandPrimitive, useCommandState } from 'cmdk';
 
 import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
 
@@ -51,19 +51,18 @@ const CommandInput = React.forwardRef<
 	const focusTrapRef = useFocusTrap();
 
 	return (
-		<View className="flex items-center p-2" cmdk-input-wrapper="">
+		<View className="flex items-center p-1" cmdk-input-wrapper="">
 			{/* <Icon name="magnifyingGlass" className="mr-2 h-4 w-4 shrink-0 opacity-50" /> */}
 			<CommandPrimitive.Input
-				ref={ref}
+				ref={focusTrapRef}
 				className={cn(
-					'flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
+					'web:flex h-10 native:h-12 web:w-full rounded-md border border-input bg-background px-3 web:py-2 text-base lg:text-sm native:text-lg native:leading-[1.25] text-foreground placeholder:text-muted-foreground file:border-0 file:bg-transparent file:font-medium',
+					'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
 					className
 				)}
+				autoFocus
 				{...props}
-				asChild
-			>
-				<Input ref={focusTrapRef} />
-			</CommandPrimitive.Input>
+			/>
 		</View>
 	);
 });
@@ -78,7 +77,7 @@ const CommandList = React.forwardRef<
 		ref={ref}
 		className={cn(
 			'max-h-[300px] overflow-y-auto overflow-x-hidden group',
-			'[&>*:first-child]:gap-2 [&>*:first-child]:p-2 [&>*:first-child]:pt-0',
+			'[&>*:first-child]:gap-2 [&>*:first-child]:pt-2',
 			className
 		)}
 		{...props}
@@ -167,4 +166,5 @@ export {
 	CommandShortcut,
 	CommandSeparator,
 	CommandButton,
+	useCommandState,
 };
