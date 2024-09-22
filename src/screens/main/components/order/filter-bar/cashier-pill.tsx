@@ -61,7 +61,7 @@ const CashierSearch = () => {
 	 *
 	 */
 	return (
-		<ComboboxSearch shouldFilter={false}>
+		<ComboboxSearch shouldFilter={false} className="min-w-64">
 			<ComboboxInput
 				placeholder={t('Search Cashiers', { _tags: 'core' })}
 				value={search}

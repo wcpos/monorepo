@@ -41,7 +41,7 @@ export const CustomerSearch = () => {
 	 *
 	 */
 	return (
-		<ComboboxSearch shouldFilter={false}>
+		<ComboboxSearch shouldFilter={false} className="min-w-64">
 			<ComboboxInput
 				placeholder={t('Search Customers', { _tags: 'core' })}
 				value={search}

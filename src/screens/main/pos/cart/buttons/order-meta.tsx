@@ -10,6 +10,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 	DialogBody,
+	DialogFooter,
+	DialogClose,
 } from '@wcpos/components/src/dialog';
 import { Text } from '@wcpos/components/src/text';
 
@@ -42,6 +44,13 @@ export const OrderMetaButton = () => {
 				<DialogBody>
 					<EditOrderMeta />
 				</DialogBody>
+				<DialogFooter>
+					<DialogClose asChild>
+						<Button variant="muted">
+							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
+						</Button>
+					</DialogClose>
+				</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	);

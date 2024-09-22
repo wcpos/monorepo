@@ -2,15 +2,17 @@ import * as React from 'react';
 
 import map from 'lodash/map';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
-	Command,
-	CommandInput,
-	CommandEmpty,
-	CommandList,
-	CommandItem,
-} from '@wcpos/components/src/command';
-import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/components/src/popover';
+	Combobox,
+	ComboboxContent,
+	ComboboxEmpty,
+	ComboboxInput,
+	ComboboxItem,
+	ComboboxList,
+	ComboboxSearch,
+	ComboboxTrigger,
+	ComboboxValue,
+} from '@wcpos/components/src/combobox';
 
 import { useT } from '../../../contexts/translations';
 import { useLocale } from '../../../hooks/use-locale';
@@ -18,9 +20,8 @@ import { useLocale } from '../../../hooks/use-locale';
 /**
  *
  */
-export const LanguageSelect = React.forwardRef<React.ElementRef<typeof Command>, any>(
-	({ onValueChange, ...props }, ref) => {
-		const value = props.value?.value ? props.value.value : props.value;
+export const LanguageSelect = React.forwardRef<React.ElementRef<typeof Combobox>, any>(
+	({ value, onValueChange, ...props }, ref) => {
 		const { locales } = useLocale();
 		const t = useT();
 
@@ -45,8 +46,8 @@ export const LanguageSelect = React.forwardRef<React.ElementRef<typeof Command>,
 		/**
 		 *
 		 */
-		const displayLabel = React.useMemo(() => {
-			const selected = options.find((option) => option.value === value);
+		const label = React.useMemo(() => {
+			const selected = options.find((option) => option.value === value.value);
 			return selected ? selected.label : t('Select Language', { _tags: 'core' });
 		}, [options, t, value]);
 
@@ -54,26 +55,22 @@ export const LanguageSelect = React.forwardRef<React.ElementRef<typeof Command>,
 		 *
 		 */
 		return (
-			<Popover>
-				<PopoverTrigger asChild>
-					<Button variant="outline" className="items-start">
-						<ButtonText>{displayLabel}</ButtonText>
-					</Button>
-				</PopoverTrigger>
-				<PopoverContent className="p-0">
-					<Command ref={ref}>
-						<CommandInput placeholder={t('Search Languages', { _tags: 'core' })} />
-						<CommandEmpty>{t('No language found', { _tags: 'core' })}</CommandEmpty>
-						<CommandList>
+			<Combobox ref={ref} defaultValue={{ ...value, label }} onValueChange={onValueChange}>
+				<ComboboxTrigger>
+					<ComboboxValue placeholder={t('Select Language', { _tags: 'core' })} />
+				</ComboboxTrigger>
+				<ComboboxContent>
+					<ComboboxSearch>
+						<ComboboxInput placeholder={t('Search Languages', { _tags: 'core' })} />
+						<ComboboxEmpty>{t('No language found', { _tags: 'core' })}</ComboboxEmpty>
+						<ComboboxList>
 							{options.map((option) => (
-								<CommandItem key={option.value} onSelect={() => onValueChange(option.value)}>
-									{option.label}
-								</CommandItem>
+								<ComboboxItem key={option.value}>{option.label}</ComboboxItem>
 							))}
-						</CommandList>
-					</Command>
-				</PopoverContent>
-			</Popover>
+						</ComboboxList>
+					</ComboboxSearch>
+				</ComboboxContent>
+			</Combobox>
 		);
 	}
 );

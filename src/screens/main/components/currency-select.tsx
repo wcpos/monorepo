@@ -3,45 +3,27 @@ import * as React from 'react';
 import { decode } from 'html-entities';
 
 import {
-	Command,
-	CommandInput,
-	CommandEmpty,
-	CommandList,
-	CommandItem,
-	CommandButton,
-} from '@wcpos/components/src/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
-import { Select } from '@wcpos/components/src/select';
-import { Text } from '@wcpos/components/src/text';
-import { VStack } from '@wcpos/components/src/vstack';
+	Combobox,
+	ComboboxTrigger,
+	ComboboxValue,
+	ComboboxContent,
+	ComboboxSearch,
+	ComboboxEmpty,
+	ComboboxList,
+	ComboboxInput,
+	ComboboxItem,
+} from '@wcpos/components/src/combobox';
 
 import useCurrencies, { CurrenciesProvider } from '../../../contexts/currencies';
 import { useT } from '../../../contexts/translations';
 
-interface CurrencySelectProps {
-	value?: string;
-	onChange?: (value: string) => void;
-	[key: string]: any;
-}
-
 /**
  *
  */
-const _CurrencySelect = React.forwardRef<React.ElementRef<typeof Select>, CurrencySelectProps>(
-	({ onChange, ...props }, ref) => {
-		const allCurrencies = useCurrencies();
+const _CurrencySelect = React.forwardRef<React.ElementRef<typeof Combobox>, any>(
+	({ value, onValueChange, ...props }, ref) => {
 		const t = useT();
-
-		/**
-		 * React hook form passes in value as an object, but our data is usually a string
-		 * so we need to convert it.
-		 */
-		const value = React.useMemo(() => {
-			if (typeof props.value === 'object' && props.value !== null) {
-				return props.value.value;
-			}
-			return props.value;
-		}, [props.value]);
+		const allCurrencies = useCurrencies();
 
 		/**
 		 *
@@ -49,7 +31,7 @@ const _CurrencySelect = React.forwardRef<React.ElementRef<typeof Select>, Curren
 		const options = React.useMemo(
 			() =>
 				allCurrencies.map((currency) => ({
-					label: `${currency.name} (${decode(currency.symbol)})`,
+					label: `${decode(currency.name)} (${decode(currency.symbol)})`,
 					value: currency.code,
 				})),
 			[allCurrencies]
@@ -58,8 +40,8 @@ const _CurrencySelect = React.forwardRef<React.ElementRef<typeof Select>, Curren
 		/**
 		 *
 		 */
-		const displayLabel = React.useMemo(() => {
-			const selected = options.find((option) => option.value === value);
+		const label = React.useMemo(() => {
+			const selected = options.find((option) => option.value === value.value);
 			return selected ? selected.label : '';
 		}, [options, value]);
 
@@ -67,42 +49,33 @@ const _CurrencySelect = React.forwardRef<React.ElementRef<typeof Select>, Curren
 		 *
 		 */
 		return (
-			<VStack>
-				<Popover>
-					<PopoverTrigger asChild>
-						<CommandButton>
-							<Text>{displayLabel}</Text>
-						</CommandButton>
-					</PopoverTrigger>
-					<PopoverContent className="p-0">
-						<Command>
-							<CommandInput placeholder={t('Search Currencies', { _tags: 'core' })} />
-							<CommandEmpty>{t('No currency found', { _tags: 'core' })}</CommandEmpty>
-							<CommandList>
-								{options.map((option) => (
-									<CommandItem key={option.value} onSelect={() => onChange(option.value)}>
-										{option.label}
-									</CommandItem>
-								))}
-							</CommandList>
-						</Command>
-					</PopoverContent>
-				</Popover>
-			</VStack>
+			<Combobox ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
+				<ComboboxTrigger>
+					<ComboboxValue placeholder={t('Select Currency', { _tags: 'core' })} />
+				</ComboboxTrigger>
+				<ComboboxContent>
+					<ComboboxSearch>
+						<ComboboxInput placeholder={t('Search Currencies', { _tags: 'core' })} />
+						<ComboboxEmpty>{t('No currency found', { _tags: 'core' })}</ComboboxEmpty>
+						<ComboboxList>
+							{options.map((option) => (
+								<ComboboxItem key={option.value}>{option.label}</ComboboxItem>
+							))}
+						</ComboboxList>
+					</ComboboxSearch>
+				</ComboboxContent>
+			</Combobox>
 		);
 	}
 );
 
 /**
- *
+ * We need the provider before the combobox list so that we can display the label
  */
-export const CurrencySelect = React.forwardRef<
-	React.ElementRef<typeof Select>,
-	CurrencySelectProps
->((props, ref) => {
+export const CurrencySelect = (props) => {
 	return (
 		<CurrenciesProvider>
-			<_CurrencySelect ref={ref} {...props} />
+			<_CurrencySelect {...props} />
 		</CurrenciesProvider>
 	);
-});
+};
