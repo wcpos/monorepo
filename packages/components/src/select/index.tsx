@@ -82,7 +82,6 @@ const SelectContent = React.forwardRef<
 	React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content> & { portalHost?: string }
 >(({ className, children, position = 'popper', portalHost, ...props }, ref) => {
 	const { open } = SelectPrimitive.useRootContext();
-	console.log('SelectContent', open);
 
 	/**
 	 * FIXME: I though the SelectPrimitive.Content already handled mounting and unmounting via Radix presence.

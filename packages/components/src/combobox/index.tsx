@@ -3,7 +3,7 @@ import * as React from 'react';
 import * as SelectPrimitive from '@rn-primitives/select';
 
 import { Command, CommandEmpty, CommandInput, CommandList, CommandItem } from '../command';
-import { Select, SelectContent } from '../select';
+import { Select, SelectContent, SelectTrigger, SelectValue } from '../select';
 
 /**
  * We'll follow the same API as the `Select` component from `@rn-primitives/select`.
@@ -47,6 +47,15 @@ ComboboxEmpty.displayName = 'EmptyWebCombobox';
 
 const ComboboxTriggerPrimitive = SelectPrimitive.Trigger;
 
+const ComboboxTrigger = SelectTrigger;
+ComboboxTrigger.displayName = 'TriggerWebCombobox';
+
+// const ComboboxValue = (props: React.ComponentProps<typeof SelectValue>) => {
+// 	return <SelectValue {...props} />;
+// };
+const ComboboxValue = SelectValue;
+ComboboxValue.displayName = 'ValueWebCombobox';
+
 export {
 	Combobox,
 	ComboboxContent,
@@ -57,4 +66,6 @@ export {
 	ComboboxTriggerPrimitive,
 	ComboboxItem,
 	useRootContext,
+	ComboboxValue,
+	ComboboxTrigger,
 };
