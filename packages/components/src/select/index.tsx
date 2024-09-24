@@ -2,11 +2,15 @@ import * as React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
 import * as SelectPrimitive from '@rn-primitives/select';
+import * as Slot from '@rn-primitives/slot';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Button, type ButtonProps } from '../button';
 import { Icon } from '../icon';
 import { cn } from '../lib/utils';
+import { Text, TextClassContext } from '../text';
+
+import type { SlottableTextProps, TextRef } from '@rn-primitives/types';
 
 type Option = SelectPrimitive.Option;
 
@@ -16,7 +20,32 @@ const useRootContext = SelectPrimitive.useRootContext;
 
 const SelectGroup = SelectPrimitive.Group;
 
-const SelectValue = SelectPrimitive.Value;
+/**
+ * I was having problems with the Select.Value component from Radix, so I created this SelectValue component.
+ * I think it has something to do with the Presense not working as expected below in SelectContent.
+ * Something is not quite right??
+ */
+const SelectValue = React.forwardRef<TextRef, SlottableTextProps & { placeholder: string }>(
+	({ asChild, placeholder, className, ...props }, ref) => {
+		const { value } = useRootContext();
+		const Component = asChild ? Slot.Text : Text;
+
+		return (
+			<TextClassContext.Provider
+				value={cn(
+					'text-sm native:text-lg',
+					value?.value ? 'text-foreground' : 'text-muted-foreground',
+					className
+				)}
+			>
+				<Component ref={ref} {...props}>
+					{value?.label ?? placeholder}
+				</Component>
+			</TextClassContext.Provider>
+		);
+	}
+);
+SelectValue.displayName = 'ValueNativeSelect';
 
 const SelectTrigger = React.forwardRef<
 	React.ElementRef<typeof SelectPrimitive.Trigger>,
@@ -84,7 +113,7 @@ const SelectContent = React.forwardRef<
 	const { open } = SelectPrimitive.useRootContext();
 
 	/**
-	 * FIXME: I though the SelectPrimitive.Content already handled mounting and unmounting via Radix presence.
+	 * FIXME: I thought the SelectPrimitive.Content already handled mounting and unmounting via Radix presence.
 	 * However, select contents are being rendered on page load, which is not what we want.
 	 */
 	if (!open) return null;
@@ -94,7 +123,8 @@ const SelectContent = React.forwardRef<
 			<SelectPrimitive.Overlay style={Platform.OS !== 'web' ? StyleSheet.absoluteFill : undefined}>
 				<Animated.View
 				// FIXME: There's a weird thing when the content is being unmounted, it flashes before it's removed.
-				//entering={FadeIn} exiting={FadeOut}
+				// entering={FadeIn}
+				// exiting={FadeOut}
 				>
 					<SelectPrimitive.Content
 						ref={ref}

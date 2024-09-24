@@ -25,20 +25,35 @@ ComboboxInput.displayName = 'InputWebCombobox';
 const ComboboxList = CommandList;
 ComboboxList.displayName = 'ListWebCombobox';
 
-const ComboboxItem = (props: React.ComponentProps<typeof CommandItem>) => {
+/**
+ * We'll follow the same API as the `Select.Item` component from `@rn-primitives/select`.
+ */
+const ComboboxItem = (props: React.ComponentProps<typeof CommandItem> & { label: string }) => {
+	const { value = '', label = '', children } = props;
 	const { onValueChange, onOpenChange } = useRootContext();
-	const handleSelect = React.useCallback(
-		(value) => {
-			if (props.onSelect) {
-				props.onSelect(value);
-			} else {
-				onValueChange({ value });
-			}
-			onOpenChange(false);
-		},
-		[onOpenChange, onValueChange, props]
+
+	/**
+	 * Handle the `onSelect` event from the `CommandItem` component.
+	 * If the `onSelect` prop is provided, we'll call it with the `value`.
+	 * Otherwise, we'll call the `onValueChange` with the `value` and `label`, like the `Select.Item` component.
+	 */
+	const handleSelect = React.useCallback(() => {
+		if (props.onSelect) {
+			props.onSelect(value);
+		} else {
+			onValueChange({ value, label });
+		}
+		onOpenChange(false);
+	}, [label, onOpenChange, onValueChange, props, value]);
+
+	/**
+	 * Note: we need to pass the `label` and `value` as keywords to the `CommandItem` component for filtering
+	 */
+	return (
+		<CommandItem {...props} onSelect={handleSelect} keywords={[label, value]}>
+			{children ?? label}
+		</CommandItem>
 	);
-	return <CommandItem {...props} onSelect={handleSelect} />;
 };
 ComboboxItem.displayName = 'ItemWebCombobox';
 
