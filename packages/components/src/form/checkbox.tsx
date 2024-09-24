@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { FormItemProps, FormItem, FormLabel, FormDescription, FormMessage } from './common';
+import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
 import { useFormField } from './context';
 import { Checkbox } from '../checkbox';
+
+import type { FormItemProps } from './common';
 
 const FormCheckbox = React.forwardRef<
 	React.ElementRef<typeof Checkbox>,

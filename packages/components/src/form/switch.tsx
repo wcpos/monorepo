@@ -1,9 +1,11 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { FormItemProps, FormItem, FormLabel, FormDescription, FormMessage } from './common';
+import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
 import { useFormField } from './context';
 import { Switch } from '../switch';
+
+import type { FormItemProps } from './common';
 
 const FormSwitch = React.forwardRef<
 	React.ElementRef<typeof Switch>,

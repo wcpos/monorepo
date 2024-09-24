@@ -1,8 +1,10 @@
 import * as React from 'react';
 
-import { FormItemProps, FormItem, FormLabel, FormDescription, FormMessage } from './common';
+import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
 import { useFormField } from './context';
 import { Textarea } from '../textarea';
+
+import type { FormItemProps } from './common';
 
 const FormTextarea = React.forwardRef<
 	React.ElementRef<typeof Textarea>,
