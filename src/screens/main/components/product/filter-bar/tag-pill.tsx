@@ -2,12 +2,16 @@ import * as React from 'react';
 
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 
-import { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
-import { Popover, PopoverTrigger, PopoverContent } from '@wcpos/components/src/popover';
+import {
+	Combobox,
+	ComboboxContent,
+	ComboboxTriggerPrimitive,
+} from '@wcpos/components/src/combobox';
+import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
-import { TagSelect } from '../tag-select';
+import { TagSearch } from '../tag-select';
 
 type ProductCollection = import('@wcpos/database').ProductCollection;
 
@@ -23,17 +27,13 @@ export const TagPill = ({ query, resource }: Props) => {
 	const tag = useObservableSuspense(resource);
 	const t = useT();
 	const isActive = !!tag;
-	const triggerRef = React.useRef(null);
 
 	/**
 	 *
 	 */
 	const handleSelect = React.useCallback(
-		(id) => {
-			query.where('tags', { $elemMatch: { id } });
-			if (triggerRef.current) {
-				triggerRef.current.close();
-			}
+		({ value }) => {
+			query.where('tags', { $elemMatch: { id: parseInt(value, 10) } });
 		},
 		[query]
 	);
@@ -42,8 +42,8 @@ export const TagPill = ({ query, resource }: Props) => {
 	 *
 	 */
 	return (
-		<Popover>
-			<PopoverTrigger ref={triggerRef} asChild>
+		<Combobox onValueChange={handleSelect}>
+			<ComboboxTriggerPrimitive asChild>
 				<ButtonPill
 					size="xs"
 					leftIcon="folder"
@@ -53,10 +53,10 @@ export const TagPill = ({ query, resource }: Props) => {
 				>
 					<ButtonText>{tag ? tag.name : t('Tag', { _tags: 'core' })}</ButtonText>
 				</ButtonPill>
-			</PopoverTrigger>
-			<PopoverContent className="p-0">
-				<TagSelect onSelect={handleSelect} />
-			</PopoverContent>
-		</Popover>
+			</ComboboxTriggerPrimitive>
+			<ComboboxContent>
+				<TagSearch />
+			</ComboboxContent>
+		</Combobox>
 	);
 };

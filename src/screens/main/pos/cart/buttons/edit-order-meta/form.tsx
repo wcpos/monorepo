@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput } from '@wcpos/components/src/form';
+import { Form, FormField, FormInput, useFormChangeHandler } from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -23,7 +23,7 @@ const formSchema = z.object({
 /**
  *
  */
-export const EditOrderMetaForm = () => {
+export const EditOrderMetaForm = ({ order, onChange }) => {
 	const t = useT();
 
 	/**
@@ -31,8 +31,18 @@ export const EditOrderMetaForm = () => {
 	 */
 	const form = useForm<z.infer<typeof formSchema>>({
 		resolver: zodResolver(formSchema),
-		defaultValues: {},
+		defaultValues: {
+			number: order.number,
+			currency: order.currency,
+			currency_symbol: order.currency_symbol,
+			meta_data: order.meta_data,
+		},
 	});
+
+	/**
+	 * Handle form changes and patch UI
+	 */
+	useFormChangeHandler({ form, onChange });
 
 	/**
 	 *

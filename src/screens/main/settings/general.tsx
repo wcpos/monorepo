@@ -192,7 +192,11 @@ export const GeneralSettings = () => {
 					control={form.control}
 					name="currency_pos"
 					render={({ field }) => (
-						<FormSelect label={t('Currency Position', { _tags: 'core' })} {...field}>
+						<FormSelect
+							label={t('Currency Position', { _tags: 'core' })}
+							defaultValue={{ value: 'left', label: 'Left' }}
+							{...field}
+						>
 							<SelectTrigger>
 								<SelectValue
 									className={cn(

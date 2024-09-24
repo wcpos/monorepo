@@ -1,16 +1,16 @@
 import * as React from 'react';
 
-import { useQuery } from '@wcpos/query';
-import { Command, CommandInput, CommandEmpty } from '@wcpos/components/src/command';
+import { ComboboxSearch, ComboboxInput, ComboboxEmpty } from '@wcpos/components/src/combobox';
 import { Suspense } from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
-import { CategoryList } from './list';
+import { TagList } from './list';
 import { useT } from '../../../../../contexts/translations';
 
 /**
  *
  */
-export const CategorySelect = ({ onSelect }) => {
+export const TagSearch = () => {
 	const t = useT();
 	const [search, setSearch] = React.useState('');
 
@@ -18,8 +18,8 @@ export const CategorySelect = ({ onSelect }) => {
 	 *
 	 */
 	const query = useQuery({
-		queryKeys: ['products/categories'],
-		collectionName: 'products/categories',
+		queryKeys: ['products/tags'],
+		collectionName: 'products/tags',
 		initialParams: {
 			sortBy: 'name',
 			sortDirection: 'asc',
@@ -41,16 +41,16 @@ export const CategorySelect = ({ onSelect }) => {
 	 *
 	 */
 	return (
-		<Command shouldFilter={false}>
-			<CommandInput
-				placeholder={t('Search Categories', { _tags: 'core' })}
+		<ComboboxSearch shouldFilter={false} className="min-w-64">
+			<ComboboxInput
+				placeholder={t('Search Tags', { _tags: 'core' })}
 				value={search}
 				onValueChange={onSearch}
 			/>
-			<CommandEmpty>{t('No category found', { _tags: 'core' })}</CommandEmpty>
+			<ComboboxEmpty>{t('No tag found', { _tags: 'core' })}</ComboboxEmpty>
 			<Suspense>
-				<CategoryList query={query} onSelect={onSelect} />
+				<TagList query={query} />
 			</Suspense>
-		</Command>
+		</ComboboxSearch>
 	);
 };

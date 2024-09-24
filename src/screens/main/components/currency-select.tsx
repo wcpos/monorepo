@@ -72,10 +72,12 @@ const _CurrencySelect = React.forwardRef<React.ElementRef<typeof Combobox>, any>
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export const CurrencySelect = (props) => {
-	return (
-		<CurrenciesProvider>
-			<_CurrencySelect {...props} />
-		</CurrenciesProvider>
-	);
-};
+export const CurrencySelect = React.forwardRef<React.ElementRef<typeof _CurrencySelect>, any>(
+	(props, ref) => {
+		return (
+			<CurrenciesProvider>
+				<_CurrencySelect ref={ref} {...props} />
+			</CurrenciesProvider>
+		);
+	}
+);

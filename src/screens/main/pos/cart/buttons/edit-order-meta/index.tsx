@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
+import { map } from 'rxjs/operators';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/components/src/tabs';
 import { Text } from '@wcpos/components/src/text';
@@ -8,24 +9,18 @@ import { Tree } from '@wcpos/components/src/tree';
 
 import { EditOrderMetaForm } from './form';
 import { useT } from '../../../../../../contexts/translations';
-// import { AmountWidget } from '../../../components/amount-widget';
-// import { TaxClassSelect } from '../../../components/tax-class-select';
-// import { useCurrentOrder } from '../../contexts/current-order';
-// import { useFeeLineData } from '../../hooks/use-fee-line-data';
-// import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 interface Props {
-	uuid: string;
-	item: import('@wcpos/database').OrderDocument['fee_lines'][number];
-	onClose?: () => void;
+	order: import('@wcpos/database').OrderDocument;
 }
 
 /**
  *
  */
-export const EditOrderMeta = ({ uuid, item, onClose }: Props) => {
+export const EditOrderMeta = ({ order }: Props) => {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
+	const json = useObservableState(order.$.pipe(map((o) => o.toJSON())), order.toJSON());
 
 	return (
 		<Tabs value={value} onValueChange={setValue}>
@@ -38,10 +33,10 @@ export const EditOrderMeta = ({ uuid, item, onClose }: Props) => {
 				</TabsTrigger>
 			</TabsList>
 			<TabsContent value="form">
-				<EditOrderMetaForm />
+				<EditOrderMetaForm order={json} />
 			</TabsContent>
 			<TabsContent value="json">
-				<Tree value={item} />
+				<Tree value={json} />
 			</TabsContent>
 		</Tabs>
 	);

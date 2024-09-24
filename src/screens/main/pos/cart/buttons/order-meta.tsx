@@ -42,15 +42,8 @@ export const OrderMetaButton = () => {
 					</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
-					<EditOrderMeta />
+					<EditOrderMeta order={currentOrder} />
 				</DialogBody>
-				<DialogFooter>
-					<DialogClose asChild>
-						<Button variant="muted">
-							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
-						</Button>
-					</DialogClose>
-				</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	);
