@@ -1,8 +1,10 @@
 import * as React from 'react';
 
-import { FormItem, FormLabel, FormDescription, FormMessage, FormItemProps } from './common';
+import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
 import { useFormField } from './context';
 import { Command } from '../command';
+
+import type { FormItemProps } from './common';
 
 /**
  * NOTE: combobox is a bit different from the other form components

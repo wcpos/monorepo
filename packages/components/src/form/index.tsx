@@ -4,7 +4,7 @@ import { Controller, ControllerProps, FieldPath, FieldValues, FormProvider } fro
 
 import { FormCheckbox } from './checkbox';
 import { FormCombobox } from './combobox';
-import { FormItem, FormLabel, FormDescription, FormMessage, FormItemProps } from './common';
+import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
 import { FormFieldContext, useFormField } from './context';
 import { FormInput } from './input';
 import { FormRadioGroup } from './radio-group';
@@ -12,6 +12,8 @@ import { FormSelect } from './select';
 import { FormSwitch } from './switch';
 import { FormTextarea } from './textarea';
 import { useFormChangeHandler } from './use-form-change-handler';
+
+import type { FormItemProps } from './common';
 
 const Form = FormProvider;
 

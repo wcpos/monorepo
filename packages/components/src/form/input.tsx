@@ -1,8 +1,10 @@
 import * as React from 'react';
 
-import { FormItemProps, FormItem, FormLabel, FormDescription, FormMessage } from './common';
+import { FormItem, FormLabel, FormDescription, FormMessage } from './common';
 import { useFormField } from './context';
 import { Input } from '../input';
+
+import type { FormItemProps } from './common';
 
 const FormInput = React.forwardRef<
 	React.ElementRef<typeof Input>,
