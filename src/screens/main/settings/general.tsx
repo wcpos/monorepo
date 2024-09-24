@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservablePickState, useObservableSuspense } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
-import { map } from 'rxjs/operators';
 import * as z from 'zod';
 
 import {
@@ -20,7 +19,6 @@ import { cn } from '@wcpos/components/src/lib/utils';
 import {
 	SelectTrigger,
 	SelectContent,
-	SelectGroup,
 	SelectItem,
 	SelectValue,
 } from '@wcpos/components/src/select';
@@ -29,6 +27,7 @@ import { VStack } from '@wcpos/components/src/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+import { CurrencyPositionSelect } from '../components/currency-position-select';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
 import { LanguageSelect } from '../components/language-select';
@@ -113,7 +112,6 @@ export const GeneralSettings = () => {
 	 */
 	const handleChange = React.useCallback(
 		async (data) => {
-			console.log('data', data);
 			await localPatch({
 				document: store,
 				data,
@@ -193,34 +191,10 @@ export const GeneralSettings = () => {
 					name="currency_pos"
 					render={({ field }) => (
 						<FormSelect
+							customComponent={CurrencyPositionSelect}
 							label={t('Currency Position', { _tags: 'core' })}
-							defaultValue={{ value: 'left', label: 'Left' }}
 							{...field}
-						>
-							<SelectTrigger>
-								<SelectValue
-									className={cn(
-										'text-sm native:text-lg',
-										field.value ? 'text-foreground' : 'text-muted-foreground'
-									)}
-									placeholder={t('Select a currency position', { _tags: 'core' })}
-								/>
-							</SelectTrigger>
-							<SelectContent>
-								<SelectGroup>
-									{[
-										{ value: 'left', label: t('Left', { _tags: 'core' }) },
-										{ value: 'right', label: t('Right', { _tags: 'core' }) },
-										{ value: 'left_space', label: t('Left with space', { _tags: 'core' }) },
-										{ value: 'right_space', label: t('Right with space', { _tags: 'core' }) },
-									].map((position) => (
-										<SelectItem key={position.value} label={position.label} value={position.value}>
-											<Text>{position.label}</Text>
-										</SelectItem>
-									))}
-								</SelectGroup>
-							</SelectContent>
-						</FormSelect>
+						/>
 					)}
 				/>
 				<View className="col-span-2 grid grid-cols-3  gap-4">

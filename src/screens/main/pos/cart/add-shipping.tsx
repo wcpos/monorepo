@@ -93,7 +93,13 @@ export const AddShipping = () => {
 				<FormField
 					control={form.control}
 					name="method_id"
-					render={({ field }) => <ShippingMethodSelect field={field} />}
+					render={({ field }) => (
+						<FormSelect
+							customComponent={ShippingMethodSelect}
+							label={t('Shipping Method', { _tags: 'core' })}
+							{...field}
+						/>
+					)}
 				/>
 				<FormField
 					control={form.control}

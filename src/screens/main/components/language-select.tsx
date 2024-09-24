@@ -47,7 +47,7 @@ export const LanguageSelect = React.forwardRef<React.ElementRef<typeof Combobox>
 		 *
 		 */
 		const label = React.useMemo(() => {
-			const selected = options.find((option) => option.value === value.value);
+			const selected = options.find((option) => option.value === value?.value);
 			return selected ? selected.label : t('Select Language', { _tags: 'core' });
 		}, [options, t, value]);
 
@@ -55,7 +55,7 @@ export const LanguageSelect = React.forwardRef<React.ElementRef<typeof Combobox>
 		 *
 		 */
 		return (
-			<Combobox ref={ref} defaultValue={{ ...value, label }} onValueChange={onValueChange}>
+			<Combobox ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
 				<ComboboxTrigger>
 					<ComboboxValue placeholder={t('Select Language', { _tags: 'core' })} />
 				</ComboboxTrigger>
@@ -65,7 +65,7 @@ export const LanguageSelect = React.forwardRef<React.ElementRef<typeof Combobox>
 						<ComboboxEmpty>{t('No language found', { _tags: 'core' })}</ComboboxEmpty>
 						<ComboboxList>
 							{options.map((option) => (
-								<ComboboxItem key={option.value}>{option.label}</ComboboxItem>
+								<ComboboxItem key={option.value} value={option.value} label={option.label} />
 							))}
 						</ComboboxList>
 					</ComboboxSearch>

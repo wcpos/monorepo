@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import {
 	Select,
 	SelectContent,
@@ -13,28 +11,26 @@ import {
 import { Text } from '@wcpos/components/src/text';
 
 import { useT } from '../../../contexts/translations';
-import { useExtraData } from '../contexts/extra-data';
 
 /**
  *
  */
-export const TaxClassSelect = React.forwardRef<React.ElementRef<typeof Select>, any>(
+export const CurrencyPositionSelect = React.forwardRef<React.ElementRef<typeof Select>, any>(
 	({ onValueChange, value, ...props }, ref) => {
 		const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 		const t = useT();
-		const { extraData } = useExtraData();
-		const taxClasses = useObservableEagerState(extraData.taxClasses$);
 
 		/**
-		 * @NOTE: Because the WC REST API is trash, it won't accept 'standard' as a tax class,
-		 * so we need to send an empty string instead.
+		 *
 		 */
 		const options = React.useMemo(() => {
-			return (taxClasses || []).map((taxClass) => ({
-				label: taxClass.name,
-				value: taxClass.slug,
-			}));
-		}, [taxClasses]);
+			return [
+				{ value: 'left', label: t('Left', { _tags: 'core' }) },
+				{ value: 'right', label: t('Right', { _tags: 'core' }) },
+				{ value: 'left_space', label: t('Left with space', { _tags: 'core' }) },
+				{ value: 'right_space', label: t('Right with space', { _tags: 'core' }) },
+			];
+		}, [t]);
 
 		/**
 		 *
@@ -51,7 +47,7 @@ export const TaxClassSelect = React.forwardRef<React.ElementRef<typeof Select>, 
 						setSelectTriggerWidth(ev.nativeEvent.layout.width);
 					}}
 				>
-					<SelectValue placeholder={t('Select Tax Class', { _tags: 'core' })} />
+					<SelectValue placeholder={t('Select a currency position', { _tags: 'core' })} />
 				</SelectTrigger>
 				<SelectContent style={{ width: selectTriggerWidth }}>
 					<SelectGroup>

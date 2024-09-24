@@ -59,7 +59,7 @@ const _CurrencySelect = React.forwardRef<React.ElementRef<typeof Combobox>, any>
 						<ComboboxEmpty>{t('No currency found', { _tags: 'core' })}</ComboboxEmpty>
 						<ComboboxList>
 							{options.map((option) => (
-								<ComboboxItem key={option.value}>{option.label}</ComboboxItem>
+								<ComboboxItem key={option.value} value={option.value} label={option.label} />
 							))}
 						</ComboboxList>
 					</ComboboxSearch>
