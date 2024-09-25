@@ -16,7 +16,7 @@ const FormCombobox = React.forwardRef<
 	Omit<FormItemProps<typeof Command, string>, 'onValueChange'>
 >(
 	(
-		{ label, description, onChange, value, customComponent: Component = Command, ...props },
+		{ label, description, value, onChange, customComponent: Component = Command, ...props },
 		ref
 	) => {
 		const [open, setOpen] = React.useState(false);
@@ -37,7 +37,7 @@ const FormCombobox = React.forwardRef<
 					aria-invalid={!!error}
 					open={open}
 					onOpenChange={setOpen}
-					value={value ? { value } : undefined}
+					value={typeof value === 'string' ? { value, label: value } : value}
 					onValueChange={(val: any) => onChange?.(val?.value || '')}
 					{...props}
 				/>
