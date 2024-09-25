@@ -11,7 +11,6 @@ import { useAugmentedRef } from '@wcpos/components/src/lib/utils';
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
 
-import { CountriesProvider } from '../../../../contexts/countries';
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
@@ -105,9 +104,7 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 			<VStack ref={formRef} className="gap-4">
 				<VStack>
 					<Text className="font-medium">{t('Billing Address', { _tags: 'core' })}</Text>
-					<CountriesProvider>
-						<BillingAddressForm />
-					</CountriesProvider>
+					<BillingAddressForm />
 				</VStack>
 				<VStack>
 					<HStack>
@@ -123,11 +120,7 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 							)}
 						/>
 					</HStack>
-					{!toggleShipping && (
-						<CountriesProvider>
-							<ShippingAddressForm />
-						</CountriesProvider>
-					)}
+					{!toggleShipping && <ShippingAddressForm />}
 				</VStack>
 			</VStack>
 		</Form>

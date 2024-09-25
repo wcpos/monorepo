@@ -20,7 +20,7 @@ interface Props {
 export const EditOrderMeta = ({ order }: Props) => {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
-	const json = useObservableState(order.$.pipe(map((o) => o.toJSON())), order.toJSON());
+	const json = order.toJSON();
 
 	return (
 		<Tabs value={value} onValueChange={setValue}>

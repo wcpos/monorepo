@@ -10,7 +10,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-export const CustomerSearch = ({ withGuest = false }: { withGuest: boolean }) => {
+export const CustomerSearch = ({ withGuest = false }: { withGuest?: boolean }) => {
 	const t = useT();
 	const [search, setSearch] = React.useState('');
 

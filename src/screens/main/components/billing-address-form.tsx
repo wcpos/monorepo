@@ -4,12 +4,10 @@ import { View } from 'react-native';
 import { useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
-import { FormCombobox, FormField, FormInput, FormSelect } from '@wcpos/components/src/form';
+import { FormCombobox, FormField, FormInput } from '@wcpos/components/src/form';
 
-import { CountryCombobox } from './country-combobox';
-import { StateCombobox } from './state-combobox';
-import { StateSelect } from './state-select';
-import { useCountries, StatesProvider } from '../../../contexts/countries';
+import { CountryCombobox } from './country-state-select/country-combobox';
+import { StateFormInput } from './country-state-select/state-forminput';
 import { useT } from '../../../contexts/translations';
 
 /**
@@ -37,13 +35,8 @@ export const billingAddressSchema = z.object({
 export const BillingAddressForm = () => {
 	const { control, watch, getValues } = useFormContext();
 	const t = useT();
-	const allCountries = useCountries();
 
-	/**
-	 *
-	 */
-	const country = watch('billing.country', getValues('billing.country'));
-	const states = allCountries.find((c) => c.code === country)?.states || [];
+	const countryCode = watch('billing.country', getValues('billing.country'));
 
 	/**
 	 *
@@ -96,50 +89,27 @@ export const BillingAddressForm = () => {
 				name="billing.city"
 				render={({ field }) => <FormInput label={t('City', { _tags: 'core' })} {...field} />}
 			/>
-			{states.length === 0 ? (
-				<FormField
-					control={control}
-					name="billing.state"
-					render={({ field }) => <FormInput label={t('State', { _tags: 'core' })} {...field} />}
-				/>
-			) : states.length > 10 ? (
-				<FormField
-					control={control}
-					name="billing.state"
-					render={({ field }) => (
-						<FormCombobox
-							customComponent={StateCombobox}
-							label={t('Country', { _tags: 'core' })}
-							{...field}
-						/>
-					)}
-				/>
-			) : (
-				<FormField
-					control={control}
-					name="billing.state"
-					render={({ field }) => (
-						<StatesProvider countryCode={country}>
-							<FormSelect
-								customComponent={StateSelect}
-								label={t('State', { _tags: 'core' })}
-								{...field}
-							/>
-						</StatesProvider>
-					)}
-				/>
-			)}
+			<FormField
+				control={control}
+				name="billing.state"
+				render={({ field }) => (
+					<FormInput
+						customComponent={StateFormInput}
+						label={t('State', { _tags: 'core' })}
+						{...field}
+						countryCode={countryCode}
+					/>
+				)}
+			/>
 			<FormField
 				control={control}
 				name="billing.country"
 				render={({ field }) => (
-					<StatesProvider countryCode={country}>
-						<FormCombobox
-							customComponent={CountryCombobox}
-							label={t('Country', { _tags: 'core' })}
-							{...field}
-						/>
-					</StatesProvider>
+					<FormCombobox
+						customComponent={CountryCombobox}
+						label={t('Country', { _tags: 'core' })}
+						{...field}
+					/>
 				)}
 			/>
 			<FormField

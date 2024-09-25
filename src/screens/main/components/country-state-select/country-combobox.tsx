@@ -1,40 +1,38 @@
 import * as React from 'react';
 
-import { decode } from 'html-entities';
-
 import {
 	Combobox,
-	ComboboxTrigger,
-	ComboboxValue,
 	ComboboxContent,
-	ComboboxSearch,
 	ComboboxEmpty,
-	ComboboxList,
 	ComboboxInput,
 	ComboboxItem,
+	ComboboxList,
+	ComboboxSearch,
+	ComboboxTrigger,
+	ComboboxValue,
 } from '@wcpos/components/src/combobox';
 
-import useCurrencies, { CurrenciesProvider } from '../../../contexts/currencies';
-import { useT } from '../../../contexts/translations';
+import { CountriesProvider, useCountries } from '../../../../contexts/countries';
+import { useT } from '../../../../contexts/translations';
 
 /**
  *
  */
-const _CurrencySelect = React.forwardRef<React.ElementRef<typeof Combobox>, any>(
+const _CountryCombobox = React.forwardRef<React.ElementRef<typeof Combobox>, any>(
 	({ value, onValueChange, ...props }, ref) => {
+		const allCountries = useCountries();
 		const t = useT();
-		const allCurrencies = useCurrencies();
 
 		/**
 		 *
 		 */
 		const options = React.useMemo(
 			() =>
-				allCurrencies.map((currency) => ({
-					label: `${decode(currency.name)} (${decode(currency.symbol)})`,
-					value: currency.code,
+				allCountries.map((country) => ({
+					label: country.name,
+					value: country.code,
 				})),
-			[allCurrencies]
+			[allCountries]
 		);
 
 		/**
@@ -51,12 +49,12 @@ const _CurrencySelect = React.forwardRef<React.ElementRef<typeof Combobox>, any>
 		return (
 			<Combobox ref={ref} value={{ ...value, label }} onValueChange={onValueChange}>
 				<ComboboxTrigger>
-					<ComboboxValue placeholder={t('Select Currency', { _tags: 'core' })} />
+					<ComboboxValue placeholder={t('Select Country', { _tags: 'core' })} />
 				</ComboboxTrigger>
 				<ComboboxContent>
 					<ComboboxSearch>
-						<ComboboxInput placeholder={t('Search Currencies', { _tags: 'core' })} />
-						<ComboboxEmpty>{t('No currency found', { _tags: 'core' })}</ComboboxEmpty>
+						<ComboboxInput placeholder={t('Search Countries', { _tags: 'core' })} />
+						<ComboboxEmpty>{t('No country found', { _tags: 'core' })}</ComboboxEmpty>
 						<ComboboxList>
 							{options.map((option) => (
 								<ComboboxItem key={option.value} value={option.value} label={option.label} />
@@ -72,12 +70,12 @@ const _CurrencySelect = React.forwardRef<React.ElementRef<typeof Combobox>, any>
 /**
  * We need the provider before the combobox list so that we can display the label
  */
-export const CurrencySelect = React.forwardRef<React.ElementRef<typeof _CurrencySelect>, any>(
+export const CountryCombobox = React.forwardRef<React.ElementRef<typeof _CountryCombobox>, any>(
 	(props, ref) => {
 		return (
-			<CurrenciesProvider>
-				<_CurrencySelect ref={ref} {...props} />
-			</CurrenciesProvider>
+			<CountriesProvider>
+				<_CountryCombobox ref={ref} {...props} />
+			</CountriesProvider>
 		);
 	}
 );

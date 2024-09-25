@@ -4,8 +4,10 @@ import { View } from 'react-native';
 import { useFormContext } from 'react-hook-form';
 import * as z from 'zod';
 
-import { FormField, FormInput } from '@wcpos/components/src/form';
+import { FormField, FormInput, FormCombobox } from '@wcpos/components/src/form';
 
+import { CountryCombobox } from './country-state-select/country-combobox';
+import { StateFormInput } from './country-state-select/state-forminput';
 import { useT } from '../../../contexts/translations';
 
 /**
@@ -29,8 +31,10 @@ export const shippingAddressSchema = z.object({
  *
  */
 export const ShippingAddressForm = () => {
-	const { control } = useFormContext();
+	const { control, watch, getValues } = useFormContext();
 	const t = useT();
+
+	const countryCode = watch('shipping.country', getValues('shipping.country'));
 
 	return (
 		<View className="grid grid-cols-2 gap-4">
@@ -78,12 +82,25 @@ export const ShippingAddressForm = () => {
 			<FormField
 				control={control}
 				name="shipping.state"
-				render={({ field }) => <FormInput label={t('State', { _tags: 'core' })} {...field} />}
+				render={({ field }) => (
+					<FormInput
+						customComponent={StateFormInput}
+						label={t('State', { _tags: 'core' })}
+						{...field}
+						countryCode={countryCode}
+					/>
+				)}
 			/>
 			<FormField
 				control={control}
 				name="shipping.country"
-				render={({ field }) => <FormInput label={t('Country', { _tags: 'core' })} {...field} />}
+				render={({ field }) => (
+					<FormCombobox
+						customComponent={CountryCombobox}
+						label={t('Country', { _tags: 'core' })}
+						{...field}
+					/>
+				)}
 			/>
 			<FormField
 				control={control}

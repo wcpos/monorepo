@@ -48,8 +48,8 @@ export const LanguageSelect = React.forwardRef<React.ElementRef<typeof Combobox>
 		 */
 		const label = React.useMemo(() => {
 			const selected = options.find((option) => option.value === value?.value);
-			return selected ? selected.label : t('Select Language', { _tags: 'core' });
-		}, [options, t, value]);
+			return selected?.label;
+		}, [options, value]);
 
 		/**
 		 *

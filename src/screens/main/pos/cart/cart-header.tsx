@@ -26,19 +26,42 @@ export const CartHeader = () => {
 	const { addCustomer } = useAddCustomer();
 	const [showCustomerSelect, setShowCustomerSelect] = React.useState(false);
 	const t = useT();
+	const triggerRef = React.useRef(null);
 
 	/**
 	 *
 	 */
 	const handleSelectCustomer = React.useCallback(
-		({ item: customer }) => {
+		async ({ item: customer }) => {
 			if (customer) {
-				addCustomer(customer);
+				await addCustomer(customer);
 			}
 			setShowCustomerSelect(false);
 		},
 		[addCustomer]
 	);
+
+	/**
+	 *
+	 */
+	React.useEffect(() => {
+		if (showCustomerSelect && triggerRef?.current) {
+			triggerRef.current.open();
+		}
+	}, [showCustomerSelect]);
+
+	/**
+	 * HACK: If the combobox closes without selecting a customer, we need to go back to the customer pill.
+	 * But! If we go back to the customer pill on select, the previous customer will flash before the new one is set.
+	 * So we delay the close handler by 10ms to allow the new customer to be set before hiding the combobox.
+	 */
+	const delayedCloseHandler = React.useCallback((opened) => {
+		if (!opened) {
+			setTimeout(() => {
+				setShowCustomerSelect(false);
+			}, 10);
+		}
+	}, []);
 
 	/**
 	 *
@@ -49,14 +72,14 @@ export const CartHeader = () => {
 			<View className="flex-1 flex-row items-center">
 				<ErrorBoundary>
 					{showCustomerSelect ? (
-						<Combobox onValueChange={handleSelectCustomer}>
-							<ComboboxTriggerPrimitive asChild>
+						<Combobox onValueChange={handleSelectCustomer} onOpenChange={delayedCloseHandler}>
+							<ComboboxTriggerPrimitive ref={triggerRef} asChild>
 								<ButtonPill size="xs" leftIcon="user" variant="muted">
 									<ButtonText>{t('Select Customer', { _tags: 'core' })}</ButtonText>
 								</ButtonPill>
 							</ComboboxTriggerPrimitive>
 							<ComboboxContent>
-								<CustomerSearch />
+								<CustomerSearch withGuest />
 							</ComboboxContent>
 						</Combobox>
 					) : (
