@@ -15,14 +15,6 @@ import {
 	FormCombobox,
 	useFormChangeHandler,
 } from '@wcpos/components/src/form';
-import { cn } from '@wcpos/components/src/lib/utils';
-import {
-	SelectTrigger,
-	SelectContent,
-	SelectItem,
-	SelectValue,
-} from '@wcpos/components/src/select';
-import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -32,6 +24,7 @@ import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
 import { LanguageSelect } from '../components/language-select';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
+import useCustomerNameFormat from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
 
 /**
@@ -40,13 +33,13 @@ import { useDefaultCustomer } from '../hooks/use-default-customer';
 const formSchema = z.object({
 	name: z.string().optional(),
 	locale: z.string().optional(),
-	default_customer: z.string().optional(),
-	default_customer_is_cashier: z.boolean().optional(),
-	currency: z.string().optional(),
-	currency_pos: z.string().optional(),
-	price_thousand_sep: z.string().optional(),
-	price_decimal_sep: z.string().optional(),
-	price_num_decimals: z.number().optional(),
+	default_customer: z.number().default(0),
+	default_customer_is_cashier: z.boolean().default(false),
+	currency: z.string().default('USD'),
+	currency_pos: z.string().default('left'),
+	price_thousand_sep: z.string().default(','),
+	price_decimal_sep: z.string().default('.'),
+	price_num_decimals: z.number().default(2),
 });
 
 /**
@@ -81,21 +74,7 @@ export const GeneralSettings = () => {
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
 	const t = useT();
 	const { localPatch } = useLocalMutation();
-
-	/**
-	 *
-	 */
-	const handleCustomerSelect = React.useCallback(
-		(customer) => {
-			if (customer.id !== defaultCustomer.id) {
-				localPatch({
-					document: store,
-					data: { default_customer: customer.id },
-				});
-			}
-		},
-		[defaultCustomer.id, localPatch, store]
-	);
+	const { format } = useCustomerNameFormat();
 
 	/**
 	 *
@@ -128,6 +107,11 @@ export const GeneralSettings = () => {
 	React.useEffect(() => {
 		form.reset({ ...formData });
 	}, [formData, form]);
+
+	/**
+	 * Toggle customer select
+	 */
+	const toggleCustomerSelect = form.watch('default_customer_is_cashier');
 
 	/**
 	 *
@@ -163,7 +147,11 @@ export const GeneralSettings = () => {
 							<FormCombobox
 								customComponent={CustomerSelect}
 								label={t('Default Customer', { _tags: 'core' })}
+								withGuest
 								{...field}
+								// override value with defaultCustomer
+								value={{ value: field.value, label: format(defaultCustomer) }}
+								disabled={toggleCustomerSelect}
 							/>
 						)}
 					/>

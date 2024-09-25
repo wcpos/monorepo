@@ -10,7 +10,7 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-export const CustomerSearch = () => {
+export const CustomerSearch = ({ withGuest = false }: { withGuest: boolean }) => {
 	const t = useT();
 	const [search, setSearch] = React.useState('');
 
@@ -49,7 +49,7 @@ export const CustomerSearch = () => {
 			/>
 			<ComboboxEmpty>{t('No customers found', { _tags: 'core' })}</ComboboxEmpty>
 			<Suspense>
-				<CustomerList query={query} />
+				<CustomerList query={query} withGuest={withGuest} />
 			</Suspense>
 		</ComboboxSearch>
 	);

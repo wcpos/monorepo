@@ -18,7 +18,7 @@ export const CustomerSelectItem = ({ customer }: CustomerSelectItemProps) => {
 
 	if (customer.id === 0) {
 		return (
-			<HStack className="items-start">
+			<HStack className="items-center">
 				<Avatar
 					source="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y"
 					recyclingKey="guest"
@@ -26,23 +26,23 @@ export const CustomerSelectItem = ({ customer }: CustomerSelectItemProps) => {
 				<Text className="flex-1">{t('Guest', { _tags: 'core' })}</Text>
 			</HStack>
 		);
-	}
-
-	return (
-		<HStack className="items-start">
-			<Avatar source={customer.avatar_url} recyclingKey={customer.uuid} />
-			<VStack space="sm">
-				<Text>
-					{customer.first_name} {customer.last_name}
-				</Text>
-
-				<Text className="text-sm">{customer.email}</Text>
-				{(customer.company || customer.phone) && (
-					<Text className="text-sm">
-						{customer.company} {customer.phone ? `• ${customer.phone}` : ''}
+	} else {
+		return (
+			<HStack className="items-start">
+				<Avatar source={customer.avatar_url} recyclingKey={customer.uuid} />
+				<VStack space="sm">
+					<Text>
+						{customer.first_name} {customer.last_name}
 					</Text>
-				)}
-			</VStack>
-		</HStack>
-	);
+
+					<Text className="text-sm">{customer.email}</Text>
+					{(customer.company || customer.phone) && (
+						<Text className="text-sm">
+							{customer.company} {customer.phone ? `• ${customer.phone}` : ''}
+						</Text>
+					)}
+				</VStack>
+			</HStack>
+		);
+	}
 };

@@ -18,9 +18,20 @@ export const CustomerList = ({ query, withGuest }: Props) => {
 	const result = useObservableSuspense(query.resource);
 	const { onValueChange } = useRootContext();
 
+	/**
+	 *
+	 */
+	const hits = React.useMemo(
+		() =>
+			withGuest
+				? [{ id: 'guest', document: { id: 0 } }, ...result.hits.filter((hit) => hit.id !== 'guest')]
+				: result.hits,
+		[result.hits, withGuest]
+	);
+
 	return (
 		<ComboboxList>
-			{result.hits.map(({ id, document }) => {
+			{hits.map(({ id, document }) => {
 				return (
 					<ComboboxItem
 						key={id}
@@ -28,7 +39,7 @@ export const CustomerList = ({ query, withGuest }: Props) => {
 						 * value has to be a string, which we then transform back to an int, which is stupid
 						 */
 						value={String(document.id)}
-						onSelect={(value) => onValueChange({ value, item: document })}
+						onSelect={(value) => onValueChange({ value: parseInt(value, 10), item: document })}
 					>
 						<CustomerSelectItem customer={document} />
 					</ComboboxItem>

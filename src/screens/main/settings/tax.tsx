@@ -3,28 +3,41 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigation } from '@react-navigation/native';
+import { useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Button, ButtonText } from '@wcpos/components/src/button';
-import { Form, FormField, FormInput, FormSelect, FormRadioGroup } from '@wcpos/components/src/form';
-import { cn } from '@wcpos/components/src/lib/utils';
 import {
-	SelectTrigger,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectValue,
-} from '@wcpos/components/src/select';
-import { Text } from '@wcpos/components/src/text';
+	Form,
+	FormField,
+	FormInput,
+	FormSelect,
+	FormRadioGroup,
+	useFormChangeHandler,
+} from '@wcpos/components/src/form';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
 import { InclExclRadioGroup } from '../components/incl-excl-tax-radio-group';
+import { TaxBasedOnSelect } from '../components/tax-based-on-select';
 import { TaxClassSelect } from '../components/tax-class-select';
 import { TaxDisplayRadioGroup } from '../components/tax-display-radio-group';
 import { YesNoRadioGroup } from '../components/yes-no-radio-group';
+import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
+
+const formSchema = z.object({
+	calc_taxes: z.enum(['yes', 'no']),
+	prices_include_tax: z.enum(['yes', 'no']),
+	tax_based_on: z.enum(['shipping', 'billing', 'base']).default('base'),
+	shipping_tax_class: z.string(),
+	tax_round_at_subtotal: z.enum(['yes', 'no']),
+	tax_display_shop: z.enum(['incl', 'excl']).default('excl'),
+	tax_display_cart: z.enum(['incl', 'excl']).default('excl'),
+	price_display_suffix: z.string().optional(),
+	tax_total_display: z.enum(['single', 'itemized']).default('itemized'),
+});
 
 /**
  *
@@ -33,32 +46,14 @@ export const TaxSettings = () => {
 	const { store } = useAppState();
 	const t = useT();
 	const navigation = useNavigation();
+	const { localPatch } = useLocalMutation();
 
 	/**
 	 *
 	 */
-	const formSchema = React.useMemo(
-		() =>
-			z.object({
-				calc_taxes: z.enum(['yes', 'no']),
-				prices_include_tax: z.enum(['yes', 'no']),
-				tax_based_on: z.enum(['shipping', 'billing', 'base']).default('base'),
-				shipping_tax_class: z.string(),
-				tax_round_at_subtotal: z.enum(['yes', 'no']),
-				tax_display_shop: z.enum(['incl', 'excl']).default('excl'),
-				tax_display_cart: z.enum(['incl', 'excl']).default('excl'),
-				price_display_suffix: z.string().optional(),
-				tax_total_display: z.enum(['single', 'itemized']).default('itemized'),
-			}),
-		[]
-	);
-
-	/**
-	 *
-	 */
-	const form = useForm<z.infer<typeof formSchema>>({
-		resolver: zodResolver(formSchema),
-		defaultValues: {
+	const formData = useObservablePickState(
+		store.$,
+		() => ({
 			calc_taxes: store.calc_taxes,
 			prices_include_tax: store.prices_include_tax,
 			tax_based_on: store.tax_based_on,
@@ -68,8 +63,49 @@ export const TaxSettings = () => {
 			tax_display_cart: store.tax_display_cart,
 			price_display_suffix: store.price_display_suffix,
 			tax_total_display: store.tax_total_display,
+		}),
+		'calc_taxes',
+		'prices_include_tax',
+		'tax_based_on',
+		'shipping_tax_class',
+		'tax_round_at_subtotal',
+		'tax_display_shop',
+		'tax_display_cart',
+		'price_display_suffix',
+		'tax_total_display'
+	);
+
+	/**
+	 *
+	 */
+	const form = useForm<z.infer<typeof formSchema>>({
+		resolver: zodResolver(formSchema),
+		defaultValues: {
+			...formData,
 		},
 	});
+
+	/**
+	 *
+	 */
+	const handleChange = React.useCallback(
+		async (data) => {
+			await localPatch({
+				document: store,
+				data,
+			});
+		},
+		[localPatch, store]
+	);
+
+	useFormChangeHandler({ form, onChange: handleChange });
+
+	/**
+	 * Track formData changes and reset form
+	 */
+	React.useEffect(() => {
+		form.reset({ ...formData });
+	}, [formData, form]);
 
 	/**
 	 *
@@ -109,37 +145,11 @@ export const TaxSettings = () => {
 						control={form.control}
 						name="tax_based_on"
 						render={({ field }) => (
-							<FormSelect label={t('Calculate tax based on', { _tags: 'core' })} {...field}>
-								<SelectTrigger>
-									<SelectValue
-										className={cn(
-											'text-sm native:text-lg',
-											field.value ? 'text-foreground' : 'text-muted-foreground'
-										)}
-										placeholder={t('Select tax based on', { _tags: 'core' })}
-									/>
-								</SelectTrigger>
-								<SelectContent>
-									<SelectGroup>
-										{[
-											{
-												value: 'shipping',
-												label: t('Customer shipping address', { _tags: 'core' }),
-											},
-											{ value: 'billing', label: t('Customer billing address', { _tags: 'core' }) },
-											{ value: 'base', label: t('Shop base address', { _tags: 'core' }) },
-										].map((position) => (
-											<SelectItem
-												key={position.value}
-												label={position.label}
-												value={position.value}
-											>
-												<Text>{position.label}</Text>
-											</SelectItem>
-										))}
-									</SelectGroup>
-								</SelectContent>
-							</FormSelect>
+							<FormSelect
+								customComponent={TaxBasedOnSelect}
+								label={t('Calculate tax based on', { _tags: 'core' })}
+								{...field}
+							/>
 						)}
 					/>
 					<FormField

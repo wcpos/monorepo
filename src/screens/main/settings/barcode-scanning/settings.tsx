@@ -2,20 +2,22 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Form, FormField, FormInput } from '@wcpos/components/src/form';
+import { Form, FormField, FormInput, useFormChangeHandler } from '@wcpos/components/src/form';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
-const fields = [
-	'barcode_scanning_buffer',
-	'barcode_scanning_min_chars',
-	'barcode_scanning_prefix',
-	'barcode_scanning_suffix',
-];
+const formSchema = z.object({
+	barcode_scanning_buffer: z.number().default(500),
+	barcode_scanning_min_chars: z.number().default(8),
+	barcode_scanning_prefix: z.string().optional(),
+	barcode_scanning_suffix: z.string().optional(),
+});
 
 /**
  *
@@ -23,19 +25,23 @@ const fields = [
 export const BarcodeSettings = () => {
 	const { store } = useAppState();
 	const t = useT();
+	const { localPatch } = useLocalMutation();
 
 	/**
 	 *
 	 */
-	const formSchema = React.useMemo(
-		() =>
-			z.object({
-				barcode_scanning_buffer: z.number().default(500),
-				barcode_scanning_min_chars: z.number().default(8),
-				barcode_scanning_prefix: z.string().default(''),
-				barcode_scanning_suffix: z.string().default(''),
-			}),
-		[]
+	const formData = useObservablePickState(
+		store.$,
+		() => ({
+			barcode_scanning_buffer: store.barcode_scanning_buffer,
+			barcode_scanning_min_chars: store.barcode_scanning_min_chars,
+			barcode_scanning_prefix: store.barcode_scanning_prefix,
+			barcode_scanning_suffix: store.barcode_scanning_suffix,
+		}),
+		'barcode_scanning_buffer',
+		'barcode_scanning_min_chars',
+		'barcode_scanning_prefix',
+		'barcode_scanning_suffix'
 	);
 
 	/**
@@ -44,36 +50,31 @@ export const BarcodeSettings = () => {
 	const form = useForm<z.infer<typeof formSchema>>({
 		resolver: zodResolver(formSchema),
 		defaultValues: {
-			barcode_scanning_buffer: store.barcode_scanning_buffer ?? 500,
-			barcode_scanning_min_chars: store.barcode_scanning_min_chars ?? 8,
-			barcode_scanning_prefix: store.barcode_scanning_prefix ?? '',
-			barcode_scanning_suffix: store.barcode_scanning_suffix ?? '',
+			...formData,
 		},
 	});
 
-	// Watch all form fields
-	const watchedValues = form.watch();
+	/**
+	 *
+	 */
+	const handleChange = React.useCallback(
+		async (data) => {
+			await localPatch({
+				document: store,
+				data,
+			});
+		},
+		[localPatch, store]
+	);
+
+	useFormChangeHandler({ form, onChange: handleChange });
 
 	/**
-	 * Function to get the patched changes
+	 * Track formData changes and reset form
 	 */
-	const getPatchedChanges = () => {
-		const currentValues = form.getValues();
-		const patchedChanges = {};
-
-		fields.forEach((field) => {
-			if (store[field] !== currentValues[field]) {
-				patchedChanges[field] = currentValues[field];
-			}
-		});
-
-		return patchedChanges;
-	};
-
 	React.useEffect(() => {
-		// Example: Log patched changes whenever form values change
-		console.log('Patched Changes:', getPatchedChanges());
-	}, [watchedValues]);
+		form.reset({ ...formData });
+	}, [formData, form]);
 
 	/**
 	 *

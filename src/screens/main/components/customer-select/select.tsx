@@ -28,18 +28,19 @@ interface CustomerSelectProps {
  *
  */
 export const CustomerSelect = React.forwardRef<HTMLElement, CustomerSelectProps>(
-	({ value, onValueChange, withGuest }, ref) => {
+	({ value, onValueChange, withGuest, disabled }, ref) => {
 		const t = useT();
+
 		/**
 		 *
 		 */
 		return (
-			<Combobox onValueChange={onValueChange}>
-				<ComboboxTrigger>
+			<Combobox value={value} onValueChange={onValueChange}>
+				<ComboboxTrigger disabled={disabled}>
 					<ComboboxValue placeholder={t('Select Customer', { _tags: 'core' })} />
 				</ComboboxTrigger>
 				<ComboboxContent>
-					<CustomerSearch />
+					<CustomerSearch withGuest={withGuest} />
 				</ComboboxContent>
 			</Combobox>
 		);
