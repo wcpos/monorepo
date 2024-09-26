@@ -31,6 +31,13 @@ export const AddNoteButton = () => {
 	const [text, onChangeText] = React.useState(note);
 
 	/**
+	 * Keep text in sync with note
+	 */
+	React.useEffect(() => {
+		onChangeText(note);
+	}, [note]);
+
+	/**
 	 *
 	 */
 	const handleSave = React.useCallback(async () => {
@@ -43,6 +50,9 @@ export const AddNoteButton = () => {
 		setOpen(false);
 	}, [currentOrder, localPatch, text]);
 
+	/**
+	 *
+	 */
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>

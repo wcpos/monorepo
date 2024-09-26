@@ -18,7 +18,7 @@ import { ShippingAddressForm, shippingAddressSchema } from '../../components/shi
 const formSchema = z.object({
 	first_name: z.string().optional(),
 	last_name: z.string().optional(),
-	email: z.string().optional(),
+	email: z.string().email(),
 	role: z.string().optional(),
 	username: z.string().optional(),
 	password: z.string().optional(),

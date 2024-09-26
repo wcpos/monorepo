@@ -1,14 +1,14 @@
 import * as React from 'react';
 
-import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 import { Icon } from '@wcpos/components/src/icon';
 import { Text } from '@wcpos/components/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
+import useOnlineStatus from '@wcpos/hooks/src/use-online-status';
 
 import { useT } from '../../../../contexts/translations';
 
 type OnlineState = {
-	type: 'success' | 'warning' | 'critical';
+	type: 'success' | 'warning' | 'destructive';
 	tooltip: string;
 };
 
@@ -19,7 +19,7 @@ const Online = () => {
 	const state: OnlineState = React.useMemo(() => {
 		if (!isConnected) {
 			return {
-				type: 'critical',
+				type: 'destructive',
 				tooltip: t('No internet connection', { _tags: 'core' }),
 			};
 		}

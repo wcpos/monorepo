@@ -24,7 +24,7 @@ const usePushDocument = () => {
 	 * "Document update conflict. When changing a document you must work on the previous revision"
 	 */
 	return React.useCallback(
-		async (doc: RxDocument, parent: RxDocument) => {
+		async (doc: RxDocument, parent?: RxDocument) => {
 			const latestDoc = doc.getLatest();
 			// const latestDoc = doc;
 			const collection = doc.collection;

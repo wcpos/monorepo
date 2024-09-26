@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { useObservableState } from 'observable-hooks';
-import { map } from 'rxjs/operators';
+import { useObservablePickState } from 'observable-hooks';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/components/src/tabs';
 import { Text } from '@wcpos/components/src/text';
@@ -20,7 +19,21 @@ interface Props {
 export const EditOrderMeta = ({ order }: Props) => {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
-	const json = order.toJSON();
+
+	/**
+	 * We need to refresh the component when the order data changes
+	 */
+	const formData = useObservablePickState(
+		order.$,
+		() => ({
+			currency: order.currency,
+			transaction_id: order.transaction_id,
+			meta_data: order.meta_data,
+		}),
+		'currency',
+		'transaction_id',
+		'meta_data'
+	);
 
 	return (
 		<Tabs value={value} onValueChange={setValue}>
@@ -33,10 +46,10 @@ export const EditOrderMeta = ({ order }: Props) => {
 				</TabsTrigger>
 			</TabsList>
 			<TabsContent value="form">
-				<EditOrderMetaForm order={json} />
+				<EditOrderMetaForm order={order} formData={formData} />
 			</TabsContent>
 			<TabsContent value="json">
-				<Tree value={json} />
+				<Tree value={order.getLatest().toJSON()} />
 			</TabsContent>
 		</Tabs>
 	);
