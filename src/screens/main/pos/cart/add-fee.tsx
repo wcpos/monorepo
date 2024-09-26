@@ -21,6 +21,7 @@ import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { AmountWidget, amountWidgetSchema } from '../../components/amount-widget';
+import { FormErrors } from '../../components/form-errors';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
 import { useAddFee } from '../hooks/use-add-fee';
@@ -93,6 +94,7 @@ export const AddFee = () => {
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
+				<FormErrors />
 				<VStack>
 					<FormField
 						control={form.control}

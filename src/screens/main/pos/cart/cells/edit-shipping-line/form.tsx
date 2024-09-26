@@ -19,6 +19,7 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
+import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
 import { NumberInput } from '../../../../components/number-input';
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
@@ -97,6 +98,7 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
+				<FormErrors />
 				<View className="grid grid-cols-2 gap-4">
 					<FormField
 						control={form.control}

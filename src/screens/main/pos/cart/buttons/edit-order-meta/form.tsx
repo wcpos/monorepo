@@ -15,6 +15,7 @@ import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
 import { CurrencySelect } from '../../../../components/currency-select';
+import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
 import usePushDocument from '../../../../contexts/use-push-document';
 import { useLocalMutation } from '../../../../hooks/mutations/use-local-mutation';
@@ -111,6 +112,7 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
+				<FormErrors />
 				<VStack>
 					<View className="grid grid-cols-2 gap-4">
 						{/* <FormField

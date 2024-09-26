@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { View } from 'react-native';
 
-import { ErrorMessage } from '@hookform/error-message';
 import { zodResolver } from '@hookform/resolvers/zod';
 import isEmpty from 'lodash/isEmpty';
 import { useForm } from 'react-hook-form';
@@ -21,6 +20,7 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
+import { FormErrors } from '../../components/form-errors';
 import { NumberInput } from '../../components/number-input';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
@@ -58,7 +58,6 @@ export const AddShipping = () => {
 			tax_class: 'standard',
 		},
 	});
-	console.log(form.formState);
 
 	/**
 	 * NOTE: tax_class 'standard' needs to be sent as an empty string, otherwise the API will throw an error.
@@ -86,6 +85,7 @@ export const AddShipping = () => {
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
+				<FormErrors />
 				<VStack>
 					<View className="grid grid-cols-2 gap-4">
 						<FormField

@@ -55,7 +55,7 @@ interface AddCustomerProps {
 const formSchema = z.object({
 	...billingAddressSchema.shape,
 	...shippingAddressSchema.shape,
-	copyBillingToShipping: z.boolean().optional(),
+	copyBillingToShipping: z.boolean(),
 });
 
 /**

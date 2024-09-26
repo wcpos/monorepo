@@ -20,6 +20,7 @@ import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
 import { AmountWidget, amountWidgetSchema } from '../../../../components/amount-widget';
+import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
 import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
@@ -102,6 +103,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
+				<FormErrors />
 				<View className="grid grid-cols-2 gap-4">
 					<FormField
 						control={form.control}

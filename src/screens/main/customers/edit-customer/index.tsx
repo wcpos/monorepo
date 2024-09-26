@@ -49,7 +49,7 @@ export const EditCustomer = ({ resource }: Props) => {
 							</TabsTrigger>
 						</TabsList>
 						<TabsContent value="form">
-							<EditCustomerForm defaultValues={customer.toJSON()} />
+							<EditCustomerForm customer={customer} />
 						</TabsContent>
 						<TabsContent value="json">
 							<Tree value={customer.toJSON()} />

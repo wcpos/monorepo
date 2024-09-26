@@ -13,6 +13,7 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
+import { FormErrors } from '../../components/form-errors';
 import { NumberInput } from '../../components/number-input';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
@@ -74,6 +75,7 @@ export const AddMiscProduct = () => {
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
+				<FormErrors />
 				<VStack>
 					<FormField
 						control={form.control}
