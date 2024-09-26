@@ -14,7 +14,7 @@ interface ShippingData {
 	prices_include_tax: boolean;
 	tax_status: 'taxable' | 'none';
 	tax_class: string;
-	meta_data: { key: string; value: string }[];
+	meta_data?: { key: string; value: string }[];
 }
 
 /**

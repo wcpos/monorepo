@@ -1,18 +1,11 @@
 import * as React from 'react';
 
-import { useObservableEagerState } from 'observable-hooks';
-
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wcpos/components/src/tabs';
 import { Text } from '@wcpos/components/src/text';
 import { Tree } from '@wcpos/components/src/tree';
 
 import { EditLineItemForm } from './form';
 import { useT } from '../../../../../../contexts/translations';
-// import { AmountWidget } from '../../../components/amount-widget';
-// import { TaxClassSelect } from '../../../components/tax-class-select';
-// import { useCurrentOrder } from '../../contexts/current-order';
-// import { useFeeLineData } from '../../hooks/use-fee-line-data';
-// import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 interface Props {
 	uuid: string;
@@ -38,7 +31,7 @@ export const EditLineItem = ({ uuid, item, onClose }: Props) => {
 				</TabsTrigger>
 			</TabsList>
 			<TabsContent value="form">
-				<EditLineItemForm />
+				<EditLineItemForm uuid={uuid} item={item} />
 			</TabsContent>
 			<TabsContent value="json">
 				<Tree value={item} />

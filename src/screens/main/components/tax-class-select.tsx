@@ -28,6 +28,8 @@ export const TaxClassSelect = React.forwardRef<React.ElementRef<typeof Select>, 
 		/**
 		 * @NOTE: Because the WC REST API is trash, it won't accept 'standard' as a tax class,
 		 * so we need to send an empty string instead.
+		 * BUT! A select item can't have an empty string as a value, so we need to use 'standard'.
+		 * It's a mess.
 		 */
 		const options = React.useMemo(() => {
 			return (taxClasses || []).map((taxClass) => ({

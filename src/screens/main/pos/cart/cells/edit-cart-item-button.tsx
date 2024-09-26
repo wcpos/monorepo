@@ -40,20 +40,13 @@ const EditCartItemButton = ({ title, children }: Props) => {
 						<Text>{title}</Text>
 					</TooltipContent>
 				</Tooltip>
-				<DialogContent>
+				<DialogContent size="lg">
 					<DialogHeader>
 						<DialogTitle>
 							<Text>{title}</Text>
 						</DialogTitle>
 					</DialogHeader>
 					<DialogBody>{children}</DialogBody>
-					<DialogFooter>
-						<DialogClose asChild>
-							<Button variant="muted" onPress={() => setOpenDialog(false)}>
-								<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
-							</Button>
-						</DialogClose>
-					</DialogFooter>
 				</DialogContent>
 			</Dialog>
 		</ErrorBoundary>
