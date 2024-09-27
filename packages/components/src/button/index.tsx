@@ -129,18 +129,21 @@ type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 
 const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>(
 	({ className, variant, size, leftIcon, rightIcon, loading, children, ...props }, ref) => {
+		const disabled = props.disabled || loading;
+
 		return (
 			<TextClassContext.Provider
 				value={buttonTextVariants({ variant, size, className: 'web:pointer-events-none' })}
 			>
 				<Pressable
 					className={cn(
-						props.disabled && 'opacity-50 web:pointer-events-none',
+						disabled && 'opacity-50 web:pointer-events-none',
 						buttonVariants({ variant, size, className })
 					)}
 					ref={ref}
 					role="button"
 					{...props}
+					disabled={disabled}
 				>
 					{leftIcon || rightIcon || loading ? (
 						<HStack>
