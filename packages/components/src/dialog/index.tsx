@@ -17,6 +17,8 @@ const DialogPortal = DialogPrimitive.Portal;
 
 const DialogClose = DialogPrimitive.Close;
 
+const useRootContext = DialogPrimitive.useRootContext;
+
 const DialogOverlayWeb = React.forwardRef<
 	React.ElementRef<typeof DialogPrimitive.Overlay>,
 	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -68,7 +70,7 @@ const DialogOverlay = Platform.select({
 });
 
 const dialogContentVariants = cva(
-	'z-50 max-w-lg max-h-full gap-4 py-4 border border-border web:cursor-default bg-background shadow-lg web:duration-200 rounded-lg',
+	'z-50 max-w-full max-h-full gap-4 py-4 border border-border web:cursor-default bg-background shadow-lg web:duration-200 rounded-lg',
 	{
 		variants: {
 			size: {
@@ -182,4 +184,5 @@ export {
 	DialogTitle,
 	DialogTrigger,
 	DialogBody,
+	useRootContext,
 };

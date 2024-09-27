@@ -112,15 +112,20 @@ const TableHead = React.forwardRef<
 ));
 TableHead.displayName = 'TableHead';
 
+/**
+ * We wrap the children on flex-col shrink to stop it from overflowing the cell
+ */
 const TableCell = React.forwardRef<
 	React.ElementRef<typeof TablePrimitive.Cell>,
 	React.ComponentPropsWithoutRef<typeof TablePrimitive.Cell>
->(({ className, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
 	<TablePrimitive.Cell
 		ref={ref}
-		className={cn('flex-1 flex-row p-2 items-center [&:has([role=checkbox])]:pr-0', className)}
+		className={cn('flex-row flex-1 p-2 items-center [&:has([role=checkbox])]:pr-0', className)}
 		{...props}
-	/>
+	>
+		<View className="shrink w-full">{children}</View>
+	</TablePrimitive.Cell>
 ));
 TableCell.displayName = 'TableCell';
 

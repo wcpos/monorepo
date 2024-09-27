@@ -234,3 +234,4 @@ Input.InputField = InputField;
 Input.Right = Right;
 
 export { Input };
+export type { InputProps };
