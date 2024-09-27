@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { Box } from '@wcpos/components/src/box';
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
@@ -10,6 +9,7 @@ import { VStack } from '@wcpos/components/src/vstack';
 import { EditCartItemButton } from './edit-cart-item-button';
 import { EditLineItem } from './edit-line-item';
 import { useT } from '../../../../../contexts/translations';
+import { EditableName } from '../../../components/editable-name';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -48,17 +48,9 @@ export const ProductName = ({ row, column }: CellContext<Props, 'name'>) => {
 	 */
 	return (
 		<VStack>
-			<HStack className="w-full">
-				<View className="flex-row flex-1 w-full">
-					<Button
-						variant="outline"
-						className="max-w-full items-start"
-						//onChange={(name) => updateLineItem(uuid, { name })}
-					>
-						<ButtonText className="font-bold" numberOfLines={1}>
-							{item.name}
-						</ButtonText>
-					</Button>
+			<HStack className="gap-0">
+				<View className="flex-1">
+					<EditableName value={item.name} onChangeText={(name) => updateLineItem(uuid, { name })} />
 				</View>
 				<EditCartItemButton title={t('Edit {name}', { _tags: 'core', name: item.name })}>
 					<EditLineItem uuid={uuid} item={item} />

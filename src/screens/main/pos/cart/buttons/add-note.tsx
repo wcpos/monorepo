@@ -67,7 +67,7 @@ export const AddNoteButton = () => {
 					</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
-					<Textarea autoFocus value={text} onChangeText={onChangeText} />
+					<Textarea autoFocus value={text} minHeight={80} onChangeText={onChangeText} />
 				</DialogBody>
 				<DialogFooter>
 					<Button onPress={handleSave}>

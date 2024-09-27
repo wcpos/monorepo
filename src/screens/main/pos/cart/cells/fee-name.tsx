@@ -1,7 +1,7 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { Box } from '@wcpos/components/src/box';
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
@@ -9,6 +9,7 @@ import { VStack } from '@wcpos/components/src/vstack';
 import { EditCartItemButton } from './edit-cart-item-button';
 import { EditFeeLine } from './edit-fee-line';
 import { useT } from '../../../../../contexts/translations';
+import { EditableName } from '../../../components/editable-name';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
 
 import type { CellContext } from '@tanstack/react-table';
@@ -47,13 +48,10 @@ export const FeeName = ({ row }: CellContext<Props, 'name'>) => {
 	 */
 	return (
 		<VStack className="w-full">
-			<HStack>
-				<Button
-					variant="outline"
-					//onChange={(name) => updateLineItem(uuid, { name })}
-				>
-					<ButtonText className="font-bold">{item.name}</ButtonText>
-				</Button>
+			<HStack className="gap-0">
+				<View className="flex-1">
+					<EditableName value={item.name} onChangeText={(name) => updateFeeLine(uuid, { name })} />
+				</View>
 				<EditCartItemButton title={t('Edit {name}', { _tags: 'core', name: item.name })}>
 					<EditFeeLine uuid={uuid} item={item} />
 				</EditCartItemButton>

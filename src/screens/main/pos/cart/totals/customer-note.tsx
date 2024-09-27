@@ -69,9 +69,10 @@ export const CustomerNote = () => {
 					<Textarea
 						value={value}
 						onChangeText={setValue}
-						onBlur={handleSaveNote}
 						autoFocus
-						onReturnKeyPress={handleSaveNote}
+						onBlur={handleSaveNote}
+						onSubmitEditing={handleSaveNote}
+						blurOnSubmit
 					/>
 				) : (
 					<Pressable onPress={() => setIsEditing(true)}>

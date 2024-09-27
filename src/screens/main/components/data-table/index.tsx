@@ -110,7 +110,7 @@ const DataTable = <TDocument extends DocumentType>({
 					},
 				};
 			});
-	}, [uiColumns, getUILabel, renderCell]);
+	}, [uiColumns, renderHeader, getUILabel, renderCell]);
 
 	/**
 	 * Pass down
