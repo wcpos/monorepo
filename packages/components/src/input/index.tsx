@@ -1,9 +1,63 @@
 import * as React from 'react';
-import { TextInput, TextInputProps } from 'react-native';
+import { TextInput as RNTextInput, TextInputProps as RNTextInputProps, View } from 'react-native';
 
+import { useControllableState } from '@rn-primitives/hooks';
+
+import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
 
-interface InputProps extends React.ComponentPropsWithoutRef<typeof TextInput> {
+interface TextFieldContextValue {
+	isFocused: boolean;
+	setIsFocused: (focused: boolean) => void;
+}
+
+const TextFieldContext = React.createContext<TextFieldContextValue | undefined>(undefined);
+
+function useTextFieldContext() {
+	const context = React.useContext(TextFieldContext);
+	if (!context) {
+		throw new Error('TextField components must be used within a TextField.Root');
+	}
+	return context;
+}
+
+interface RootProps {
+	children: React.ReactNode;
+	className?: string;
+	editable?: boolean;
+}
+
+const Root = ({ children, className, editable = true }: RootProps) => {
+	const [isFocused, setIsFocused] = React.useState(false);
+
+	return (
+		<TextFieldContext.Provider value={{ isFocused, setIsFocused }}>
+			<View
+				className={cn(
+					'flex-row flex-1 items-center',
+					'h-10 native:h-12 w-full rounded-md border border-input bg-background',
+					'px-3 web:py-2',
+					'web:ring-offset-background',
+					isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
+					!editable && 'opacity-50 web:cursor-not-allowed',
+					className
+				)}
+			>
+				{children}
+			</View>
+		</TextFieldContext.Provider>
+	);
+};
+
+Root.displayName = 'InputRoot';
+
+const Left = ({ children, className }: { children: React.ReactNode; className?: string }) => {
+	return <View className={cn('mr-2', className)}>{children}</View>;
+};
+
+Left.displayName = 'InputLeft';
+
+interface InputFieldProps extends RNTextInputProps {
 	type?:
 		| 'text'
 		| 'numeric'
@@ -16,12 +70,15 @@ interface InputProps extends React.ComponentPropsWithoutRef<typeof TextInput> {
 		| 'name-phone'
 		| 'twitter'
 		| 'web-search';
+	className?: string;
 }
 
-const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
-	({ className, placeholderClassName, type = 'text', ...props }, ref) => {
-		let keyboardType: TextInputProps['keyboardType'] = 'default';
-		let inputMode: TextInputProps['inputMode'] = 'text';
+const InputField = React.forwardRef<RNTextInput, InputFieldProps>(
+	({ className, placeholderTextColor, type = 'text', editable = true, ...props }, ref) => {
+		const { setIsFocused } = useTextFieldContext();
+
+		let keyboardType: RNTextInputProps['keyboardType'] = 'default';
+		let inputMode: RNTextInputProps['inputMode'] = 'text';
 
 		switch (type) {
 			case 'numeric':
@@ -70,15 +127,26 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
 		}
 
 		return (
-			<TextInput
+			<RNTextInput
 				ref={ref}
+				editable={editable}
+				onFocus={(e) => {
+					setIsFocused(true);
+					props.onFocus?.(e);
+				}}
+				onBlur={(e) => {
+					setIsFocused(false);
+					props.onBlur?.(e);
+				}}
 				className={cn(
-					'web:flex h-10 native:h-12 web:w-full rounded-md border border-input bg-background px-3 web:py-2 text-base lg:text-sm native:text-lg native:leading-[1.25] text-foreground placeholder:text-muted-foreground file:border-0 file:bg-transparent file:font-medium',
-					'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
-					props.editable === false && 'opacity-50 web:cursor-not-allowed',
+					'flex-1',
+					'bg-transparent',
+					'text-base lg:text-sm native:text-lg native:leading-[1.25] text-foreground placeholder:text-muted-foreground',
+					'outline-none',
+					'web:focus-visible:outline-none',
 					className
 				)}
-				placeholderClassName={cn('text-muted-foreground', placeholderClassName)}
+				placeholderTextColor={placeholderTextColor || 'text-muted-foreground'}
 				keyboardType={keyboardType}
 				inputMode={inputMode}
 				{...props}
@@ -87,6 +155,82 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
 	}
 );
 
+InputField.displayName = 'InputField';
+
+const Right = ({ children, className }: { children: React.ReactNode; className?: string }) => {
+	return <View className={cn('ml-2', className)}>{children}</View>;
+};
+
+Right.displayName = 'InputRight';
+
+interface InputProps
+	extends Omit<InputFieldProps, 'children' | 'value' | 'defaultValue' | 'onChangeText'>,
+		Omit<RootProps, 'children' | 'editable'> {
+	editable?: boolean;
+	clearable?: boolean;
+	value?: string;
+	defaultValue?: string;
+	onChangeText?: (text: string) => void;
+}
+
+interface InputComponent
+	extends React.ForwardRefExoticComponent<InputProps & React.RefAttributes<RNTextInput>> {
+	Root: typeof Root;
+	Left: typeof Left;
+	InputField: typeof InputField;
+	Right: typeof Right;
+}
+
+const Input = React.forwardRef<RNTextInput, InputProps>(
+	(
+		{
+			className,
+			editable = true,
+			type,
+			clearable = false,
+			value: valueProp,
+			defaultValue,
+			onChangeText,
+			...props
+		},
+		ref
+	) => {
+		const [value, setValue] = useControllableState<string>({
+			prop: valueProp,
+			defaultProp: defaultValue,
+			onChange: onChangeText,
+		});
+
+		return (
+			<Root className={className} editable={editable}>
+				<InputField
+					ref={ref}
+					type={type}
+					editable={editable}
+					value={value}
+					onChangeText={setValue}
+					{...props}
+				/>
+				{clearable && value !== undefined && value.length > 0 && (
+					<Right>
+						<IconButton
+							name="xmark"
+							size="sm"
+							onPress={() => setValue('')}
+							accessibilityLabel="Clear text"
+						/>
+					</Right>
+				)}
+			</Root>
+		);
+	}
+) as InputComponent;
+
 Input.displayName = 'Input';
+
+Input.Root = Root;
+Input.Left = Left;
+Input.InputField = InputField;
+Input.Right = Right;
 
 export { Input };
