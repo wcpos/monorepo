@@ -5,8 +5,10 @@ import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 import { RxDBJsonDumpPlugin } from 'rxdb/plugins/json-dump';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
+// import { RxDBPipelinePlugin } from 'rxdb/plugins/pipeline';
 import { RxDBStatePlugin } from 'rxdb/plugins/state';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
+// import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
 
 import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';
@@ -41,6 +43,8 @@ addRxPlugin(RxDBJsonDumpPlugin);
 addRxPlugin(RxDBAttachmentsPlugin);
 addRxPlugin(RxDBStatePlugin);
 addRxPlugin(RxDBCleanupPlugin);
+// addRxPlugin(RxDBPipelinePlugin);
+// addRxPlugin(RxDBFlexSearchPlugin);
 
 // custom plugins
 addRxPlugin(RxDBGenerateIdPlugin); // should run before populate and parseRestResponse

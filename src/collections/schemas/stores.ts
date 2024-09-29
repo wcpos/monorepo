@@ -1,6 +1,6 @@
 export const storesLiteral = {
 	title: 'WCPOS Store schema',
-	version: 0,
+	version: 1,
 	description: 'WooCommerce POS Store',
 	type: 'object',
 	primaryKey: 'localID',
@@ -272,6 +272,14 @@ export const storesLiteral = {
 			description: 'This sets the thousand separator of displayed prices.',
 			type: 'string',
 			default: ',',
+		},
+		thousands_group_style: {
+			title: 'Thousand Separator Style',
+			description: 'This sets the thousand separator style of displayed prices.',
+			type: 'string',
+			default: 'thousand',
+			enum: ['thousand', 'lakh', 'wan'],
+			enumNames: ['Thousand', 'Lakh', 'Wan'],
 		},
 		price_decimal_sep: {
 			title: 'Decimal Separator',

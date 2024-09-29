@@ -54,7 +54,15 @@ const storeSchema: RxJsonSchema<StoreDocumentType> = storesLiteral;
 type StoreDocumentType = ExtractDocumentTypeFromTypedRxJsonSchema<typeof storesTyped>;
 export type StoreDocument = RxDocument<StoreDocumentType>;
 export type StoreCollection = RxCollection<StoreDocumentType>;
-const stores: RxCollectionCreator<StoreDocumentType> = { schema: storeSchema };
+const stores: RxCollectionCreator<StoreDocumentType> = {
+	schema: storeSchema,
+	migrationStrategies: {
+		1(oldDoc) {
+			oldDoc.thousands_group_style = 'thousand';
+			return oldDoc;
+		},
+	},
+};
 
 /**
  * WordPress Credientials

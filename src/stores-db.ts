@@ -1,3 +1,6 @@
+// import forEach from 'lodash/forEach';
+// import { addFulltextSearch } from 'rxdb-premium/plugins/flexsearch';
+
 import log from '@wcpos/utils/src/logger';
 
 import { storeCollections, StoreCollections } from './collections';
@@ -27,6 +30,24 @@ export async function createStoreDB(id: string) {
 	try {
 		const db = await createDB(name);
 		const collections = await db?.addCollections(storeCollections);
+		// loop over collections and add fulltext search
+		// forEach(collections, (collection) => {
+		// 	if (Array.isArray(collection?.options?.searchFields)) {
+		// 		addFulltextSearch({
+		// 			identifier: collection.name,
+		// 			collection,
+		// 			docToString: (doc) => {
+		// 				// extract collection?.options?.searchFields from the doc
+		// 				// filter out undefined fields
+		// 				return collection?.options?.searchFields
+		// 					?.map((field) => doc[field])
+		// 					.filter((field) => field !== undefined);
+		// 			},
+		// 		}).then((flexSearch) => {
+		// 			collection.flexSearch = flexSearch;
+		// 		});
+		// 	}
+		// });
 		return db;
 	} catch (error) {
 		log.error(error);
