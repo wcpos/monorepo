@@ -23,6 +23,7 @@ import { CurrencyPositionSelect } from '../components/currency-position-select';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
 import { LanguageSelect } from '../components/language-select';
+import { ThousandsStyleSelect } from '../components/thousands-style-select';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import useCustomerNameFormat from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
@@ -40,6 +41,7 @@ const formSchema = z.object({
 	price_thousand_sep: z.string().default(','),
 	price_decimal_sep: z.string().default('.'),
 	price_num_decimals: z.number().default(2),
+	thousands_group_style: z.enum(['thousand', 'lakh', 'wan']).default('thousand'),
 });
 
 /**
@@ -59,6 +61,7 @@ export const GeneralSettings = () => {
 			price_thousand_sep: store.price_thousand_sep,
 			price_decimal_sep: store.price_decimal_sep,
 			price_num_decimals: store.price_num_decimals,
+			thousands_group_style: store.thousands_group_style,
 		}),
 		'name',
 		'locale',
@@ -68,7 +71,8 @@ export const GeneralSettings = () => {
 		'currency_pos',
 		'price_thousand_sep',
 		'price_decimal_sep',
-		'price_num_decimals'
+		'price_num_decimals',
+		'thousands_group_style'
 	);
 	const { defaultCustomerResource } = useDefaultCustomer();
 	const defaultCustomer = useObservableSuspense(defaultCustomerResource);
@@ -185,29 +189,38 @@ export const GeneralSettings = () => {
 						/>
 					)}
 				/>
-				<View className="col-span-2 grid grid-cols-3  gap-4">
-					<FormField
-						control={form.control}
-						name="price_thousand_sep"
-						render={({ field }) => (
-							<FormInput label={t('Thousand Separator', { _tags: 'core' })} {...field} />
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="price_decimal_sep"
-						render={({ field }) => (
-							<FormInput label={t('Decimal Separator', { _tags: 'core' })} {...field} />
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="price_num_decimals"
-						render={({ field }) => (
-							<FormInput label={t('Number of Decimals', { _tags: 'core' })} {...field} />
-						)}
-					/>
-				</View>
+				<FormField
+					control={form.control}
+					name="price_decimal_sep"
+					render={({ field }) => (
+						<FormInput label={t('Decimal Separator', { _tags: 'core' })} {...field} />
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="price_num_decimals"
+					render={({ field }) => (
+						<FormInput label={t('Number of Decimals', { _tags: 'core' })} {...field} />
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="price_thousand_sep"
+					render={({ field }) => (
+						<FormInput label={t('Thousand Separator', { _tags: 'core' })} {...field} />
+					)}
+				/>
+				<FormField
+					control={form.control}
+					name="thousands_group_style"
+					render={({ field }) => (
+						<FormSelect
+							label={t('Thousands Group Style', { _tags: 'core' })}
+							customComponent={ThousandsStyleSelect}
+							{...field}
+						/>
+					)}
+				/>
 			</View>
 		</Form>
 	);

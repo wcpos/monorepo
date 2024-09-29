@@ -30,7 +30,7 @@ export const Quantity = ({ row, column }: CellContext<Props, 'quantity'>) => {
 	return (
 		<VStack className="justify-center">
 			<NumberInput
-				value={String(item.quantity)}
+				value={item.quantity}
 				onChange={(quantity) => updateLineItem(uuid, { quantity })}
 			/>
 			{column.columnDef.meta.show('split') && item.quantity > 1 && (

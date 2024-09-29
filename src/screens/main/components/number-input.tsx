@@ -1,167 +1,111 @@
 import * as React from 'react';
-import { StyleProp, ViewStyle } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Button, ButtonText } from '@wcpos/components/src/button';
 import { HStack } from '@wcpos/components/src/hstack';
+import { cn } from '@wcpos/components/src/lib/utils';
 import { Numpad } from '@wcpos/components/src/numpad';
 import { Popover, PopoverContent, PopoverTrigger } from '@wcpos/components/src/popover';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
-import { useCurrencyFormat } from '../hooks/use-currency-format';
+import { useNumberFormat, NumberFormatOptions } from '../hooks/use-number-format';
 
-interface NumberInputProps {
+export interface NumberInputProps {
 	/**  */
-	value: string;
+	value: number;
 
 	/**  */
-	onChange: (value: string) => void;
+	onChange: (value: number) => void;
 
 	/**  */
 	disabled?: boolean;
 
 	/**  */
-	showDecimals?: boolean;
+	showDiscounts?: boolean;
 
 	/**  */
-	showDiscounts?: number[];
-	/**
-	 *
-	 */
-	leftAccessory?: React.ReactNode;
-	/**
-	 *
-	 */
-	prefix?: string;
-	/**
-	 *
-	 */
-	rightAccessory?: React.ReactNode;
+	placement?: 'top' | 'bottom' | 'left' | 'right';
 
-	/** */
-	size?: import('@wcpos/themes').FontSizeTypes;
+	/**  */
+	className?: string;
 
-	/** */
-	placement?: PopoverProps['placement'];
-
-	/** */
-	style?: StyleProp<ViewStyle>;
-
-	buttonClassName?: string;
+	/**  */
+	formatOptions?: NumberFormatOptions;
 }
 
 /**
- * Note: value comes in as decimalSeparator = '.' we need to convert it to the correct decimal separator
- * @TODO - We need a format helper numbers, not just currency, eg: quantity: 1,000.01
+ *
  */
 export const NumberInput = ({
-	value = '0',
+	value = 0,
 	onChange,
-	disabled,
-	showDecimals = false,
+	disabled = false,
 	showDiscounts,
-	leftAccessory,
-	prefix,
-	rightAccessory,
-	size = 'normal',
 	placement = 'bottom',
-	style,
-	buttonClassName,
+	className,
+	formatOptions,
 }: NumberInputProps) => {
 	const { store } = useAppState();
 	const decimalSeparator = useObservableEagerState(store.price_decimal_sep$);
-	const { format } = useCurrencyFormat({ withSymbol: false });
-	const displayValue = showDecimals ? format(value) : value.replace(/\./g, decimalSeparator);
-	const [opened, setOpened] = React.useState(false);
-	const valueRef = React.useRef(displayValue);
 	const t = useT();
+	const triggerRef = React.useRef(null);
+	const numpadRef = React.useRef(null);
+	const { format } = useNumberFormat(formatOptions);
+	const { format: formatDisplay } = useNumberFormat({ fixedDecimalScale: false, decimalScale: 6 });
 
 	/**
-	 *
+	 * Handle change
+	 */
+	const handleChange = React.useCallback(
+		(newValue: number) => {
+			onChange(newValue);
+			if (triggerRef.current) {
+				triggerRef.current.close();
+			}
+		},
+		[onChange]
+	);
+
+	/**
+	 * Handle submit
 	 */
 	const handleSubmit = React.useCallback(() => {
-		onChange(valueRef.current.replace(decimalSeparator, '.'));
-		setOpened(false);
-	}, [decimalSeparator, onChange]);
+		if (numpadRef.current) {
+			const newValue = numpadRef.current.getValue();
+			handleChange(newValue);
+		}
+	}, [handleChange]);
 
 	/**
 	 *
 	 */
 	return (
 		<Popover>
-			<PopoverTrigger asChild>
-				<Button variant="outline" className={buttonClassName}>
-					<ButtonText>{displayValue}</ButtonText>
+			<PopoverTrigger ref={triggerRef} asChild>
+				<Button variant="outline" disabled={disabled} className={cn('items-start', className)}>
+					<ButtonText numberOfLines={1}>{format(value)}</ButtonText>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent side={placement} className="p-2 w-48">
-				<Numpad
-					initialValue={displayValue}
-					onChange={(newValue: string) => {
-						valueRef.current = newValue;
-					}}
-					onSubmitEditing={() => {
-						handleSubmit();
-					}}
-					decimalSeparator={decimalSeparator}
-					discounts={showDiscounts}
-				/>
-				<HStack className="justify-end">
-					<Button>
-						<ButtonText>{t('Done', { _tags: 'core' })}</ButtonText>
-					</Button>
-				</HStack>
+			<PopoverContent side={placement} className="p-2 w-auto">
+				<VStack className="gap-1">
+					<Numpad
+						ref={numpadRef}
+						initialValue={value}
+						onChange={handleChange}
+						decimalSeparator={decimalSeparator}
+						discounts={false}
+						formatDisplay={(value) => formatDisplay(value)}
+					/>
+					<HStack className="justify-end">
+						<Button onPress={handleSubmit}>
+							<ButtonText>{t('Done', { _tags: 'core' })}</ButtonText>
+						</Button>
+					</HStack>
+				</VStack>
 			</PopoverContent>
 		</Popover>
 	);
-
-	/**
-	 *
-	 */
-	// const children =
-	// 	leftAccessory || rightAccessory || prefix ? (
-	// 		<TextInputContainer
-	// 			prefix={prefix}
-	// 			leftAccessory={leftAccessory}
-	// 			rightAccessory={rightAccessory}
-	// 			onPress={() => setOpened(true)}
-	// 			style={style}
-	// 		>
-	// 			{displayValue}
-	// 		</TextInputContainer>
-	// 	) : (
-	// 		<Box border paddingY="xSmall" paddingX="small" rounding="large" style={style}>
-	// 			<Text>{displayValue}</Text>
-	// 		</Box>
-	// 	);
-
-	/**
-	 *
-	 */
-	// return disabled ? (
-	// 	<View style={{ flexDirection: 'row' }}>
-	// 		<Box border paddingY="xSmall" paddingX="small" rounding="large">
-	// 			<Text type="disabled">{displayValue}</Text>
-	// 		</Box>
-	// 	</View>
-	// ) : (
-	// 	<Popover>
-	// 		<PopoverTrigger>{children}</PopoverTrigger>
-	// 		<PopoverContent side={placement}>
-	// 			<Numpad
-	// 				initialValue={displayValue}
-	// 				onChange={(newValue: string) => {
-	// 					valueRef.current = newValue;
-	// 				}}
-	// 				onSubmitEditing={() => {
-	// 					handleSubmit();
-	// 				}}
-	// 				decimalSeparator={decimalSeparator}
-	// 				discounts={showDiscounts}
-	// 			/>
-	// 		</PopoverContent>
-	// 	</Popover>
-	// );
 };

@@ -40,10 +40,12 @@ export const Price = ({
 		return (
 			<Tooltip>
 				<TooltipTrigger>
-					<Text className={strikethrough && 'line-through'}>{format(displayValue)}</Text>
+					<Text className={strikethrough && 'line-through'}>
+						{format(parseFloat(displayValue))}
+					</Text>
 				</TooltipTrigger>
 				<TooltipContent>
-					<Text>{`${inclOrExcl} ${format(taxTotal)} tax`}</Text>
+					<Text>{`${inclOrExcl} ${format(parseFloat(taxTotal))} tax`}</Text>
 				</TooltipContent>
 			</Tooltip>
 		);
@@ -55,14 +57,14 @@ export const Price = ({
 	if (taxDisplay === 'text' && taxable) {
 		return (
 			<VStack className="justify-end">
-				<Text className={strikethrough && 'line-through'}>{format(displayValue)}</Text>
-				<Text className="text-sm text-muted-foreground">{`${inclOrExcl} ${format(taxTotal)} tax`}</Text>
+				<Text className={strikethrough && 'line-through'}>{format(parseFloat(displayValue))}</Text>
+				<Text className="text-sm text-muted-foreground">{`${inclOrExcl} ${format(parseFloat(taxTotal))} tax`}</Text>
 			</VStack>
 		);
 	}
 
 	// default just show the displayPrice
-	return <Text>{format(displayValue)}</Text>;
+	return <Text>{format(parseFloat(displayValue))}</Text>;
 };
 
 export default Price;

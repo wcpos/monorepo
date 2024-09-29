@@ -19,6 +19,8 @@ interface TaxDisplayValuesProps {
 
 /**
  * Calculate the display values with or without taxes (eg: price or total)
+ *
+ * @TODO - I should take and return numbers instead of strings
  */
 export const useTaxDisplayValues = ({
 	value,

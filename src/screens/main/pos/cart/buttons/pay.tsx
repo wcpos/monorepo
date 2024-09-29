@@ -57,7 +57,10 @@ export const PayButton = () => {
 			loading={loading}
 		>
 			<ButtonText>
-				{t('Checkout {order_total}', { order_total: format(total || 0), _tags: 'core' })}
+				{t('Checkout {order_total}', {
+					order_total: format(parseFloat(total) || 0),
+					_tags: 'core',
+				})}
 			</ButtonText>
 		</Button>
 	);

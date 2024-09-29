@@ -19,14 +19,8 @@ import { useT } from '../../../contexts/translations';
 
 export const Report = () => {
 	const t = useT();
-	const reportRef = React.useRef();
-
-	/**
-	 *
-	 */
-	const handlePrint = useReactToPrint({
-		content: () => reportRef.current,
-	});
+	const contentRef = React.useRef();
+	const handlePrint = useReactToPrint({ contentRef });
 
 	/**
 	 *
@@ -56,7 +50,7 @@ export const Report = () => {
 						</Select>
 					</HStack>
 				</CardHeader>
-				<CardContent ref={reportRef} className="flex-1 p-0">
+				<CardContent ref={contentRef} className="flex-1 p-0">
 					<Text>Test</Text>
 				</CardContent>
 				<CardFooter className="p-2 border-border border-t bg-muted justify-end">

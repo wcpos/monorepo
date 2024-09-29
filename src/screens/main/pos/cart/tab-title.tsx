@@ -5,7 +5,7 @@ import { useObservableEagerState } from 'observable-hooks';
 import { Text } from '@wcpos/components/src/text';
 
 import { useT } from '../../../../contexts/translations';
-import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
+import { useCurrencyFormat } from '../../hooks/use-currency-format';
 
 interface Props {
 	order: import('@wcpos/database').OrderDocument;
@@ -16,8 +16,13 @@ interface Props {
  */
 export const CartTabTitle = ({ order }: Props) => {
 	const total = useObservableEagerState(order.total$);
-	const { format } = useCurrentOrderCurrencyFormat();
+	const currencySymbol = useObservableEagerState(order.currency_symbol$);
+	const { format } = useCurrencyFormat({ currencySymbol });
 	const t = useT();
 
-	return <Text>{t('Cart {order_total}', { order_total: format(total || 0), _tags: 'core' })}</Text>;
+	return (
+		<Text>
+			{t('Cart {order_total}', { order_total: format(parseFloat(total) || 0), _tags: 'core' })}
+		</Text>
+	);
 };
