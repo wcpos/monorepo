@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { ActivityIndicator, Dimensions, RefreshControl, ScrollView } from 'react-native';
+import { ActivityIndicator, RefreshControl, LayoutChangeEvent } from 'react-native';
 
 import { FlashList, type FlashListProps } from '@shopify/flash-list';
 import {
@@ -12,7 +12,12 @@ import {
 	ExpandedState,
 } from '@tanstack/react-table';
 import { useObservableRef } from 'observable-hooks';
-import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
+import Animated, {
+	useSharedValue,
+	useAnimatedStyle,
+	FadeInUp,
+	FadeOutUp,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DataTableRow } from './row';
@@ -103,10 +108,18 @@ const DataTable = <TData, TValue>({
 			...tableMeta,
 		},
 		state: {
+			sorting: {
+				sortBy: 'name',
+				sortDirection: 'asc',
+			},
 			...tableState,
 		},
 		enableRowSelection: !!enableRowSelection,
 		onRowSelectionChange: onRowSelectionChange ? onRowSelectionChange : undefined,
+		manualSorting: true,
+		onSortingChange: (data) => {
+			console.log(data);
+		},
 	});
 
 	/**
@@ -123,6 +136,26 @@ const DataTable = <TData, TValue>({
 	 *
 	 */
 	const context = React.useMemo(() => ({ table, ...extraContext }), [table, extraContext]);
+
+	/**
+	 * FlashList wants to know the size of it's container, so we need to calculate it.
+	 */
+	const width = useSharedValue(0);
+	const height = useSharedValue(0);
+	const animatedStyle = useAnimatedStyle(() => {
+		return {
+			width: width.value !== 0 ? width.value : undefined,
+			height: height.value !== 0 ? height.value : undefined,
+		};
+	});
+
+	const onLayout = React.useCallback(
+		({ nativeEvent }: LayoutChangeEvent) => {
+			width.value = nativeEvent.layout.width;
+			height.value = nativeEvent.layout.height;
+		},
+		[height, width]
+	);
 
 	/**
 	 *
@@ -164,29 +197,31 @@ const DataTable = <TData, TValue>({
 						</TableRow>
 					))}
 				</TableHeader>
-				<TableBody>
-					<FlashList
-						data={table.getRowModel().rows}
-						estimatedItemSize={estimatedItemSize}
-						ListEmptyComponent={ListEmptyComponent}
-						ListFooterComponent={ListFooterComponent}
-						showsVerticalScrollIndicator={false}
-						contentContainerStyle={{
-							paddingBottom: insets.bottom,
-						}}
-						refreshControl={
-							<RefreshControl
-								refreshing={isRefreshing}
-								onRefresh={onRefresh}
-								style={{ opacity: 0 }}
-							/>
-						}
-						renderItem={renderItem || defaultRenderRow}
-						onEndReached={onEndReached}
-						onEndReachedThreshold={onEndReachedThreshold}
-						keyExtractor={(row) => row.original.uuid}
-						{...props}
-					/>
+				<TableBody onLayout={onLayout}>
+					<Animated.View style={[animatedStyle]}>
+						<FlashList
+							data={table.getRowModel().rows}
+							estimatedItemSize={estimatedItemSize}
+							ListEmptyComponent={ListEmptyComponent}
+							ListFooterComponent={ListFooterComponent}
+							showsVerticalScrollIndicator={false}
+							contentContainerStyle={{
+								paddingBottom: insets.bottom,
+							}}
+							refreshControl={
+								<RefreshControl
+									refreshing={isRefreshing}
+									onRefresh={onRefresh}
+									style={{ opacity: 0 }}
+								/>
+							}
+							renderItem={renderItem || defaultRenderRow}
+							onEndReached={onEndReached}
+							onEndReachedThreshold={onEndReachedThreshold}
+							keyExtractor={(row) => row.original.uuid}
+							{...props}
+						/>
+					</Animated.View>
 				</TableBody>
 			</Table>
 			{TableFooterComponent && <TableFooterComponent />}

@@ -23,7 +23,6 @@ export type CalculatorState = {
 };
 
 export type Config = {
-	decimalSeparator: string;
 	precision: number;
 };
 
@@ -38,9 +37,9 @@ function round(value: number, precision: number): string {
 /**
  *
  */
-function evaluate(state: CalculatorState, decimalSeparator: string, precision: number): string {
-	const prev = parseFloat(state.previousOperand?.replace(decimalSeparator, '.') || '');
-	const current = parseFloat(state.currentOperand?.replace(decimalSeparator, '.') || '');
+function evaluate(state: CalculatorState, precision: number): string {
+	const prev = parseFloat(state.previousOperand || '');
+	const current = parseFloat(state.currentOperand || '');
 	if (Number.isNaN(prev) || Number.isNaN(current)) return '';
 	let computation = 0;
 	switch (state.operation) {
@@ -62,15 +61,14 @@ function evaluate(state: CalculatorState, decimalSeparator: string, precision: n
 
 	// Round the result and replace the decimal point with the specified decimal separator
 	const roundedResult = round(computation, precision);
-	return roundedResult.replace('.', decimalSeparator);
+	return roundedResult;
 }
 
 /**
- *
+ * currentOperand is always a string with a dot as decimal separator, no thousand separator
  */
 export function reducer(state: CalculatorState, action: Action, config?: Config): CalculatorState {
 	const { type, payload } = action;
-	const decimalSeparator = config?.decimalSeparator || '.';
 	const precision = config?.precision || 6;
 
 	switch (type) {
@@ -85,17 +83,13 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 			if (payload.digit === '0' && state.currentOperand === '0') {
 				return state;
 			}
-			if (
-				payload.digit === decimalSeparator &&
-				state.currentOperand &&
-				state.currentOperand.includes(decimalSeparator)
-			) {
+			if (payload.digit === '.' && state.currentOperand && state.currentOperand.includes('.')) {
 				return state;
 			}
-			if (payload.digit === decimalSeparator && state.currentOperand == null) {
+			if (payload.digit === '.' && state.currentOperand == null) {
 				return {
 					...state,
-					currentOperand: `0${decimalSeparator}`,
+					currentOperand: '0.',
 				};
 			}
 			if (state.currentOperand === '0') {
@@ -132,7 +126,7 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 
 			return {
 				...state,
-				previousOperand: evaluate(state, decimalSeparator, precision),
+				previousOperand: evaluate(state, precision),
 				operation: payload.operation,
 				currentOperand: null,
 			};
@@ -156,6 +150,19 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 				return { ...state, currentOperand: null };
 			}
 
+			if (state.currentOperand.endsWith('.')) {
+				if (state.currentOperand.length <= 1) {
+					// Operand is only the decimalSeparator
+					return { ...state, currentOperand: null };
+				} else {
+					// Remove the decimalSeparator and the preceding digit
+					return {
+						...state,
+						currentOperand: state.currentOperand.slice(0, -2),
+					};
+				}
+			}
+
 			return {
 				...state,
 				currentOperand: state.currentOperand.slice(0, -1),
@@ -174,7 +181,7 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 				overwrite: true,
 				previousOperand: null,
 				operation: null,
-				currentOperand: evaluate(state, decimalSeparator, precision),
+				currentOperand: evaluate(state, precision),
 			};
 		case ACTIONS.SWITCH_SIGN:
 			if (!state.currentOperand || state.currentOperand === '0') return state;
@@ -190,14 +197,14 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 			};
 		case ACTIONS.APPLY_DISCOUNT: {
 			if (!state.currentOperand) return state;
-			const current = parseFloat(state.currentOperand?.replace(decimalSeparator, '.') || '');
+			const current = parseFloat(state.currentOperand);
 			const discountMultiplier = (100 - payload.discount) / 100;
 			const computation = current * discountMultiplier;
 			const roundedResult = round(computation, precision);
 
 			return {
 				...state,
-				currentOperand: roundedResult.replace('.', decimalSeparator),
+				currentOperand: roundedResult,
 				overwrite: true,
 			};
 		}

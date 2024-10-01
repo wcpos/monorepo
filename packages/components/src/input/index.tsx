@@ -6,15 +6,15 @@ import { useControllableState } from '@rn-primitives/hooks';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
 
-interface TextFieldContextValue {
+interface InputContextValue {
 	isFocused: boolean;
 	setIsFocused: (focused: boolean) => void;
 }
 
-const TextFieldContext = React.createContext<TextFieldContextValue | undefined>(undefined);
+const InputContext = React.createContext<InputContextValue | undefined>(undefined);
 
-function useTextFieldContext() {
-	const context = React.useContext(TextFieldContext);
+function useInputContext() {
+	const context = React.useContext(InputContext);
 	if (!context) {
 		throw new Error('TextField components must be used within a TextField.Root');
 	}
@@ -31,12 +31,11 @@ const Root = ({ children, className, editable = true }: RootProps) => {
 	const [isFocused, setIsFocused] = React.useState(false);
 
 	return (
-		<TextFieldContext.Provider value={{ isFocused, setIsFocused }}>
+		<InputContext.Provider value={{ isFocused, setIsFocused }}>
 			<View
 				className={cn(
-					'flex-row flex-1 items-center',
-					'h-10 native:h-12 w-full rounded-md border border-input bg-background',
-					'px-3 web:py-2',
+					'flex-row w-full items-center',
+					'h-10 native:h-12 rounded-md border border-input bg-background',
 					'web:ring-offset-background',
 					isFocused && 'web:ring-2 web:ring-ring web:ring-offset-1',
 					!editable && 'opacity-50 web:cursor-not-allowed',
@@ -45,14 +44,14 @@ const Root = ({ children, className, editable = true }: RootProps) => {
 			>
 				{children}
 			</View>
-		</TextFieldContext.Provider>
+		</InputContext.Provider>
 	);
 };
 
 Root.displayName = 'InputRoot';
 
 const Left = ({ children, className }: { children: React.ReactNode; className?: string }) => {
-	return <View className={cn('mr-2', className)}>{children}</View>;
+	return <View className={cn('py-2 pl-2', className)}>{children}</View>;
 };
 
 Left.displayName = 'InputLeft';
@@ -75,7 +74,7 @@ interface InputFieldProps extends RNTextInputProps {
 
 const InputField = React.forwardRef<RNTextInput, InputFieldProps>(
 	({ className, placeholderTextColor, type = 'text', editable = true, ...props }, ref) => {
-		const { setIsFocused } = useTextFieldContext();
+		const { setIsFocused } = useInputContext();
 
 		let keyboardType: RNTextInputProps['keyboardType'] = 'default';
 		let inputMode: RNTextInputProps['inputMode'] = 'text';
@@ -130,6 +129,16 @@ const InputField = React.forwardRef<RNTextInput, InputFieldProps>(
 			<RNTextInput
 				ref={ref}
 				editable={editable}
+				className={cn(
+					'flex-1 w-full py-2 px-3 bg-transparent',
+					'text-base lg:text-sm native:text-lg native:leading-[1.25] text-foreground placeholder:text-muted-foreground',
+					'outline-none web:focus-visible:outline-none',
+					className
+				)}
+				// placeholderTextColor={placeholderTextColor || 'text-muted-foreground'}
+				keyboardType={keyboardType}
+				inputMode={inputMode}
+				{...props}
 				onFocus={(e) => {
 					setIsFocused(true);
 					props.onFocus?.(e);
@@ -138,18 +147,6 @@ const InputField = React.forwardRef<RNTextInput, InputFieldProps>(
 					setIsFocused(false);
 					props.onBlur?.(e);
 				}}
-				className={cn(
-					'flex-1',
-					'bg-transparent',
-					'text-base lg:text-sm native:text-lg native:leading-[1.25] text-foreground placeholder:text-muted-foreground',
-					'outline-none',
-					'web:focus-visible:outline-none',
-					className
-				)}
-				placeholderTextColor={placeholderTextColor || 'text-muted-foreground'}
-				keyboardType={keyboardType}
-				inputMode={inputMode}
-				{...props}
 			/>
 		);
 	}
@@ -158,19 +155,17 @@ const InputField = React.forwardRef<RNTextInput, InputFieldProps>(
 InputField.displayName = 'InputField';
 
 const Right = ({ children, className }: { children: React.ReactNode; className?: string }) => {
-	return <View className={cn('ml-2', className)}>{children}</View>;
+	return <View className={cn('py-2 pr-2', className)}>{children}</View>;
 };
 
 Right.displayName = 'InputRight';
 
 interface InputProps
-	extends Omit<InputFieldProps, 'children' | 'value' | 'defaultValue' | 'onChangeText'>,
+	extends Omit<InputFieldProps, 'children'>,
 		Omit<RootProps, 'children' | 'editable'> {
-	editable?: boolean;
 	clearable?: boolean;
-	value?: string;
 	defaultValue?: string;
-	onChangeText?: (text: string) => void;
+	inputClassName?: string;
 }
 
 interface InputComponent
@@ -185,6 +180,7 @@ const Input = React.forwardRef<RNTextInput, InputProps>(
 	(
 		{
 			className,
+			inputClassName,
 			editable = true,
 			type,
 			clearable = false,
@@ -209,6 +205,7 @@ const Input = React.forwardRef<RNTextInput, InputProps>(
 					editable={editable}
 					value={value}
 					onChangeText={setValue}
+					className={inputClassName}
 					{...props}
 				/>
 				{clearable && value !== undefined && value.length > 0 && (

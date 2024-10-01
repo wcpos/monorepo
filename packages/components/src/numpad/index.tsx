@@ -1,42 +1,21 @@
 import * as React from 'react';
-import { View, NativeSyntheticEvent, TextInputKeyPressEventData } from 'react-native';
+import {
+	TextInput as RNTextInput,
+	View,
+	NativeSyntheticEvent,
+	TextInputKeyPressEventData,
+} from 'react-native';
 
-import get from 'lodash/get';
+import { useAugmentedRef } from '@rn-primitives/hooks';
 
-import useFocusTrap from '@wcpos/hooks/src/use-focus-trap';
+import useMergedRef from '@wcpos/hooks/src/use-merged-ref';
 
-import { reducer, ACTIONS, Action, Config, CalculatorState } from './reducer';
-import { Box } from '../box';
+import { useCalculator } from './use-calculator';
 import { Button, ButtonText } from '../button';
 import { Icon, IconName } from '../icon';
-import { Input } from '../input';
+import { IconButton } from '../icon-button';
+import { Input, InputProps } from '../input';
 import { VStack } from '../vstack';
-
-export interface NumpadProps {
-	/**  */
-	initialValue?: string;
-
-	/**  */
-	calculator?: boolean;
-
-	/** Emits on every change */
-	onChange?: (value: string) => void;
-
-	/** Triggers with the return key (returnKeyType) has been pressed */
-	onSubmitEditing?: (value: string) => void;
-
-	/** Decimal or comma */
-	decimalSeparator?: string;
-
-	/** Decimal or comma */
-	thousandSeparator?: string;
-
-	/** Discounts to show */
-	discounts?: number[];
-
-	/** Number of decimal places to round to */
-	precision?: number;
-}
 
 const iconMap: Record<string, IconName> = {
 	'%': 'percent',
@@ -46,194 +25,153 @@ const iconMap: Record<string, IconName> = {
 	'÷': 'divide',
 };
 
-const columnSize = 45;
+const Display = React.forwardRef<RNTextInput, InputProps>(({ ...props }, ref) => {
+	const inputRef = React.useRef<RNTextInput>(null);
+	const mergedRef = useMergedRef(ref, inputRef);
+	/**
+	 *
+	 */
+	const handleBackspacePress = React.useCallback(() => {
+		if (props.onKeyPress) {
+			props.onKeyPress({ nativeEvent: { key: 'Backspace' } as TextInputKeyPressEventData });
+		}
+		if (inputRef?.current) {
+			inputRef?.current.focus();
+		}
+	}, [props, inputRef]);
+
+	return (
+		<Input.Root {...props}>
+			<Input.InputField ref={mergedRef} autoFocus {...props} />
+			<Input.Right className="pr-1">
+				<IconButton name="deleteLeft" onPress={handleBackspacePress} />
+			</Input.Right>
+		</Input.Root>
+	);
+});
+
+Display.displayName = 'NumpadDisplay';
+
+interface NumpadKeyProps {
+	label?: string;
+	icon?: IconName;
+	onPress: () => void;
+}
+
+const Key = ({ label, icon, onPress }: NumpadKeyProps) => (
+	<Button variant="muted" onPress={onPress}>
+		{icon ? <Icon name={icon} /> : <ButtonText>{label}</ButtonText>}
+	</Button>
+);
+
+Key.displayName = 'NumpadKey';
+
+interface ButtonGridProps {
+	children: React.ReactNode;
+	columns: number;
+}
+
+const Grid = ({ children, columns }: ButtonGridProps) => (
+	<View className={`grid gap-1 grid-cols-${columns}`}>{children}</View>
+);
+
+Grid.displayName = 'NumpadGrid';
+
+interface NumpadProps {
+	initialValue?: number;
+	calculator?: boolean;
+	onChangeText?: (value: number) => void;
+	onSubmitEditing?: (value: string) => void;
+	decimalSeparator?: string;
+	discounts?: number[];
+	precision?: number;
+	columnSize?: number;
+	formatDisplay?: (value: number) => string;
+}
 
 /**
- * TODO: handle partial selected text?
+ * To avoid confusion, initialValue should be a number and it should emit a number rounded to precision (6)
+ * - for the reducer we need to use strings, but at least we know that the deceimal separator is a dot
  */
-export const Numpad = React.forwardRef<React.ElementRef<typeof Input>, any>(
+export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadProps>(
 	(
 		{
-			initialValue = '0',
+			initialValue = 0,
 			calculator = false,
-			onChange,
+			onChangeText,
 			decimalSeparator = '.',
-			thousandSeparator = ',',
 			onSubmitEditing,
 			discounts,
 			precision = 6,
+			columnSize = 45,
+			formatDisplay = (value) => String(value),
 		},
 		ref
 	) => {
-		const [textSelected, setTextSelected] = React.useState(false);
-		const focusTrapRef = useFocusTrap();
+		const { currentOperand, addDigit, chooseOperation, handleKeyPress } = useCalculator({
+			initialValue: String(initialValue),
+			decimalSeparator,
+			precision,
+		});
+		const currentValue = parseFloat(currentOperand || '0');
+		console.log(currentOperand);
 
-		/**
-		 * Reducer config
-		 */
-		const reducerConfig = React.useMemo<Config>(
-			() => ({
-				decimalSeparator,
-				precision,
-			}),
-			[decimalSeparator, precision]
-		);
-
-		/**
-		 *
-		 */
-		const [{ currentOperand, previousOperand, operation }, dispatch] = React.useReducer(
-			(state: CalculatorState, action: Action) => reducer(state, action, reducerConfig),
-			{
-				currentOperand: initialValue,
-				previousOperand: '0',
-				operation: '',
-			}
-		);
-
-		/**
-		 *
-		 */
-		React.useEffect(() => {
-			onChange && onChange(currentOperand || '');
-		}, [currentOperand, onChange]);
-
-		/**
-		 *
-		 */
-		const addDigit = React.useCallback(
-			(digit: string) => {
-				dispatch({
-					type: ACTIONS.ADD_DIGIT,
-					payload: { digit, overwrite: textSelected },
-				});
-				// @FIXME - this is a hack to make sure overwrite is not left on
-				setTextSelected(false);
-			},
-			[textSelected]
-		);
-
-		/**
-		 *
-		 */
-		const chooseOperation = React.useCallback((operation: string) => {
-			dispatch({ type: ACTIONS.CHOOSE_OPERATION, payload: { operation } });
-		}, []);
-
-		/**
-		 * dispatch integers to reducer
-		 * also handle backspace
-		 */
-		const handleKeyPress = React.useCallback(
-			(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-				const key = get(e, 'nativeEvent.key');
-
-				switch (key) {
-					case 'Backspace':
-						dispatch({ type: ACTIONS.DELETE_DIGIT });
-						break;
-					case 'Enter':
-						onSubmitEditing?.(currentOperand || '');
-						break;
-					case decimalSeparator:
-						if (!currentOperand.includes(decimalSeparator)) {
-							dispatch({
-								type: ACTIONS.ADD_DIGIT,
-								payload: { digit: key, overwrite: textSelected },
-							});
-						}
-						break;
-					default:
-						if (/^[0-9]$/.test(key)) {
-							dispatch({
-								type: ACTIONS.ADD_DIGIT,
-								payload: { digit: key, overwrite: textSelected },
-							});
-						}
-				}
-			},
-			[currentOperand, decimalSeparator, onSubmitEditing, textSelected]
-		);
-
-		/**
-		 *
-		 */
 		const totalWidth = React.useMemo(() => {
 			const baseWidth = columnSize * 3;
-			return (
-				baseWidth +
-				(calculator ? columnSize : 0) +
-				(discounts && discounts.length > 0 ? columnSize : 0)
-			);
-		}, [calculator, discounts]);
+			return baseWidth + (discounts && discounts.length > 0 ? columnSize : 0);
+		}, [columnSize, discounts]);
 
-		/**
-		 *
-		 */
+		const handleKeyPressEvent = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+			handleKeyPress(e.nativeEvent.key);
+		};
+
+		const augmentedRef = useAugmentedRef({
+			ref,
+			methods: {
+				getValue: () => currentValue,
+			},
+			deps: [currentValue],
+		});
+
 		return (
-			<VStack>
-				<Input
-					// ref={focusTrapRef}
-					ref={ref}
-					value={currentOperand || ''}
-					selectTextOnFocus
-					onSelectionChange={(e) => {
-						setTextSelected(e.nativeEvent.selection.start !== e.nativeEvent.selection.end);
-					}}
-					readonly
-					onKeyPress={handleKeyPress}
-					onChangeText={() => {}}
+			<VStack style={{ width: totalWidth }}>
+				<Display
+					ref={augmentedRef}
+					value={formatDisplay(currentValue)}
+					onSubmitEditing={() => onChangeText?.(currentValue)}
+					onKeyPress={handleKeyPressEvent}
 				/>
-				<View className={`grid gap-1 ${discounts ? 'grid-cols-4' : 'grid-cols-3'}`}>
-					{[
-						['1', '2', '3'],
-						['4', '5', '6'],
-						['7', '8', '9'],
-						['+/-', '0', decimalSeparator],
-					].map((row, rowIndex) =>
-						row.map((value, colIndex) => (
-							<Button
-								variant="muted"
-								key={`${rowIndex}-${colIndex}`}
-								onPress={() =>
-									value === '+/-' ? dispatch({ type: ACTIONS.SWITCH_SIGN }) : addDigit(value)
-								}
-							>
-								<ButtonText>{value}</ButtonText>
-							</Button>
-						))
-					)}
-					{calculator &&
-						['÷', '*', '+', '-'].map((op) => (
-							<Button key={op} onPress={() => chooseOperation(op)}>
-								<Icon name={iconMap[op]} />
-							</Button>
-						))}
-					{discounts &&
-						discounts.map((discount) => (
-							<Button
-								key={discount}
-								onPress={() =>
-									dispatch({
-										type: ACTIONS.APPLY_DISCOUNT,
-										payload: { discount },
-									})
-								}
-							>
-								<ButtonText>{`${discount}%`}</ButtonText>
-							</Button>
-						))}
-				</View>
-				{calculator && (
-					<Box className="grid grid-cols-2 gap-1">
-						<Button onPress={() => dispatch({ type: ACTIONS.CLEAR })}>
-							<ButtonText>Clear</ButtonText>
-						</Button>
-						<Button onPress={() => dispatch({ type: ACTIONS.EVALUATE })}>
-							<Icon name="equals" />
-						</Button>
-					</Box>
-				)}
+				<Grid columns={discounts ? 2 : 1}>
+					<Grid columns={3}>
+						{[
+							['1', '2', '3'],
+							['4', '5', '6'],
+							['7', '8', '9'],
+							['+/-', '0', decimalSeparator],
+						].map((row, rowIndex) =>
+							row.map((value, colIndex) => (
+								<Key
+									key={`${rowIndex}-${colIndex}`}
+									label={value === '+/-' ? undefined : value}
+									icon={value === '+/-' ? 'plusMinus' : undefined}
+									onPress={() =>
+										value === '+/-'
+											? chooseOperation('SWITCH_SIGN')
+											: value === decimalSeparator
+												? addDigit('.', false)
+												: addDigit(value, false)
+									}
+								/>
+							))
+						)}
+					</Grid>
+					<Grid columns={1}>
+						{discounts &&
+							discounts.map((discount) => (
+								<Key key={discount.label} label={discount.label} onPress={discount.onPress} />
+							))}
+					</Grid>
+				</Grid>
 			</VStack>
 		);
 	}
