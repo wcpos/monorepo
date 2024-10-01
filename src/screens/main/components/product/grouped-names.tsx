@@ -3,8 +3,9 @@ import * as React from 'react';
 import { CellContext } from '@tanstack/react-table';
 import { useObservableSuspense } from 'observable-hooks';
 
-import { useQuery } from '@wcpos/query';
+import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
+import { useQuery } from '@wcpos/query';
 
 import { useT } from '../../../../contexts/translations';
 
@@ -19,10 +20,10 @@ const GroupedNames = ({ query }) => {
 	const t = useT();
 
 	return (
-		<Text>
-			<Text className="text-sm text-muted-foreground">{`${t('Grouped', { _tags: 'core' })}: `}</Text>
-			<Text className="text-sm">{names.join(', ')}</Text>
-		</Text>
+		<HStack className="flex-wrap gap-0">
+			<Text className="text-xs text-muted-foreground">{`${t('Grouped', { _tags: 'core' })}: `}</Text>
+			<Text className="text-xs">{names.join(', ')}</Text>
+		</HStack>
 	);
 };
 

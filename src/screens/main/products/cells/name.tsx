@@ -26,7 +26,12 @@ export const ProductName = (props: CellContext<ProductDocument, 'name'>) => {
 	 */
 	return (
 		<VStack space="xs" className="w-full">
-			<EditableName value={name} onChangeText={(val) => console.log(val)} />
+			<EditableName
+				value={name}
+				onChangeText={(name) =>
+					props.table.options.meta.onChange({ row: props.row, changes: { name } })
+				}
+			/>
 			{show('sku') && <Text className="text-sm">{product.sku}</Text>}
 			{show('barcode') && <Text className="text-sm">{product.barcode}</Text>}
 			{show('attributes') && <PlainAttributes {...props} />}

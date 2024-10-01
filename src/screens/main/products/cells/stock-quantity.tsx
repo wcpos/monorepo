@@ -25,7 +25,7 @@ export const StockQuantity = ({ row, table }: CellContext<ProductDocument, 'stoc
 		<VStack>
 			<NumberInput
 				value={String(stockQuantity || 0)}
-				onChange={(stock_quantity) =>
+				onChangeText={(stock_quantity) =>
 					table.options.meta.onChange({ row, changes: { stock_quantity } })
 				}
 				disabled={!manageStock}

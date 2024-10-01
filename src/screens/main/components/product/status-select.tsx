@@ -1,8 +1,5 @@
 import * as React from 'react';
 
-import { ControllerRenderProps, FieldValues } from 'react-hook-form';
-
-import { cn } from '@wcpos/components/src/lib/utils';
 import {
 	Select,
 	SelectContent,
@@ -18,7 +15,10 @@ import { useT } from '../../../../contexts/translations';
 /**
  *
  */
-export const ProductStatusSelect = (props) => {
+export const ProductStatusSelect = React.forwardRef<
+	React.ElementRef<typeof Select>,
+	React.ComponentPropsWithoutRef<typeof Select>
+>(({ onValueChange, value, ...props }, ref) => {
 	const [selectTriggerWidth, setSelectTriggerWidth] = React.useState(0);
 	const t = useT();
 
@@ -38,20 +38,19 @@ export const ProductStatusSelect = (props) => {
 	/**
 	 *
 	 */
+	const label = options.find((option) => option.value === value?.value)?.label;
+
+	/**
+	 *
+	 */
 	return (
-		<Select {...props}>
+		<Select ref={ref} value={{ ...value, label }} {...props}>
 			<SelectTrigger
 				onLayout={(ev) => {
 					setSelectTriggerWidth(ev.nativeEvent.layout.width);
 				}}
 			>
-				<SelectValue
-					className={cn(
-						'text-sm native:text-lg',
-						props.value ? 'text-foreground' : 'text-muted-foreground'
-					)}
-					placeholder={t('Select Status', { _tags: 'core' })}
-				/>
+				<SelectValue placeholder={t('Select Status', { _tags: 'core' })} />
 			</SelectTrigger>
 			<SelectContent style={{ width: selectTriggerWidth }}>
 				<SelectGroup>
@@ -64,4 +63,4 @@ export const ProductStatusSelect = (props) => {
 			</SelectContent>
 		</Select>
 	);
-};
+});

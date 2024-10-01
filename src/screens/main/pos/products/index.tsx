@@ -175,6 +175,7 @@ const POSProducts = ({ isColumn = false }) => {
 									<QuerySearchInput
 										query={query}
 										placeholder={t('Search Products', { _tags: 'core' })}
+										className="flex-1"
 									/>
 								</ErrorBoundary>
 								<UISettingsDialog title={t('Product Settings', { _tags: 'core' })}>

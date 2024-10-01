@@ -57,8 +57,9 @@ export const useNumberFormat = (options?: NumberFormatOptions) => {
 	 * To prevent confusion, force the input value to be a number.
 	 */
 	const format = React.useCallback(
-		(value: number) => {
-			return _format(value.toString());
+		(value: number | null | undefined) => {
+			const safeValue = value ?? 0;
+			return _format(safeValue.toString());
 		},
 		[_format]
 	);

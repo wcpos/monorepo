@@ -1,6 +1,5 @@
 import * as React from 'react';
 
-import find from 'lodash/find';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/src/text';
@@ -20,22 +19,14 @@ export const Total = ({ row, column }: CellContext<OrderDocument, 'total'>) => {
 	const currencySymbol = useObservableEagerState(order.currency_symbol$);
 	const payment_method_title = useObservableEagerState(order.payment_method_title$);
 	const { format } = useCurrencyFormat({ currencySymbol });
-
-	/**
-	 *
-	 */
-	const show = React.useCallback(
-		(key: string): boolean => {
-			const d = find(column.display, { key });
-			return !!(d && d.show);
-		},
-		[column.display]
-	);
+	const { show } = column.columnDef.meta;
 
 	return (
 		<>
-			<Text>{format(total || 0)}</Text>
-			{show('payment_method') && <Text type="secondary">{payment_method_title}</Text>}
+			<Text>{format(parseFloat(total))}</Text>
+			{show('payment_method') && (
+				<Text className="text-sm text-muted-foreground">{payment_method_title}</Text>
+			)}
 		</>
 	);
 };

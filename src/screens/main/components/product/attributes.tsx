@@ -27,7 +27,7 @@ export const PlainAttributes = ({ row }: CellContext<ProductDocument, 'name'>) =
 	 *
 	 */
 	return (
-		<VStack>
+		<VStack space="xs">
 			{attributes
 				.filter((attr: any) => !attr.variation)
 				.map((attr: any) => (

@@ -83,7 +83,7 @@ const DataTable = <TDocument extends DocumentType>({
 							);
 						}
 
-						return <DataTableHeader title={getUILabel(props.column.id)} column={props.column} />;
+						return <DataTableHeader title={getUILabel(props.column.id)} {...props} />;
 					},
 					// size: column.size,
 					cell: (props) => {

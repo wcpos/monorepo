@@ -2,7 +2,6 @@ import * as React from 'react';
 
 import { useFormContext } from 'react-hook-form';
 
-import type { FormItemProps } from '@wcpos/components/src/form';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Label } from '@wcpos/components/src/label';
 import { RadioGroup, RadioGroupItem } from '@wcpos/components/src/radio-group';
@@ -14,7 +13,7 @@ import { useT } from '../../../contexts/translations';
  */
 export const TaxStatusRadioGroup = React.forwardRef<
 	React.ElementRef<typeof RadioGroup>,
-	Omit<FormItemProps<typeof RadioGroup, string>, 'type'>
+	React.ComponentPropsWithoutRef<typeof RadioGroup>
 >((props, ref) => {
 	const { setValue } = useFormContext();
 	const t = useT();

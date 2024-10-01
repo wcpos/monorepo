@@ -15,6 +15,7 @@ export const ProductVariationActions = ({
 	row,
 }: CellContext<ProductVariationDocument, 'actions'>) => {
 	const variation = row.original;
+	const parent = row.getParentRow();
 	const { addVariation } = useAddVariation();
 
 	/**

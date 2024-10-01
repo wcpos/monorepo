@@ -13,7 +13,7 @@ import { useRelationalQuery } from '@wcpos/query';
 
 import { Actions } from './cells/actions';
 import { Barcode } from './cells/barcode';
-import { EdittablePrice } from './cells/edittable-price';
+import { EditablePrice } from './cells/editable-price';
 import { ProductName } from './cells/name';
 import { Price } from './cells/price';
 import { StockQuantity } from './cells/stock-quantity';
@@ -49,8 +49,8 @@ const cells = {
 		name: ProductName,
 		barcode: Barcode,
 		price: Price,
-		regular_price: EdittablePrice,
-		sale_price: EdittablePrice,
+		regular_price: EditablePrice,
+		sale_price: EditablePrice,
 		date_created: Date,
 		date_modified: Date,
 		stock_quantity: StockQuantity,
@@ -79,8 +79,8 @@ const variationCells = {
 	actions: VariationActions,
 	price: Price,
 	name: ProductVariationName,
-	sale_price: EdittablePrice,
-	regular_price: EdittablePrice,
+	sale_price: EditablePrice,
+	regular_price: EditablePrice,
 	stock_quantity: StockQuantity,
 	date_created: Date,
 	date_modified: Date,
@@ -206,6 +206,7 @@ const Products = () => {
 								<QuerySearchInput
 									query={query}
 									placeholder={t('Search Products', { _tags: 'core' })}
+									className="flex-1"
 								/>
 							</ErrorBoundary>
 							{/* <Icon

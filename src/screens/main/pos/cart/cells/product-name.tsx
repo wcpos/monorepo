@@ -32,7 +32,7 @@ export const ProductName = ({ row, column }: CellContext<Props, 'name'>) => {
 	/**
 	 * filter out the private meta data
 	 */
-	const attributes = React.useMemo(
+	const metaData = React.useMemo(
 		() =>
 			item.meta_data.filter((meta) => {
 				if (meta.key) {
@@ -59,22 +59,15 @@ export const ProductName = ({ row, column }: CellContext<Props, 'name'>) => {
 
 			{column.columnDef.meta.show('sku') && <Text className="text-sm">{item.sku}</Text>}
 
-			{attributes.length > 0 && (
-				<Box className="grid gap-1 grid-cols-2 p-0">
-					{attributes.map((meta) => {
-						return (
-							<React.Fragment key={meta.id || meta.display_key || meta.key}>
-								<Text
-									className="text-sm"
-									numberOfLines={1}
-								>{`${meta.display_key || meta.key}:`}</Text>
-								<Text className="text-sm" numberOfLines={1}>
-									{meta.display_value || meta.value}
-								</Text>
-							</React.Fragment>
-						);
-					})}
-				</Box>
+			{metaData.length > 0 && (
+				<VStack space="xs">
+					{metaData.map((meta: any) => (
+						<HStack key={meta.id || meta.key || meta.display_key} className="flex-wrap gap-0">
+							<Text className="text-xs text-muted-foreground">{`${meta.display_key || meta.key}: `}</Text>
+							<Text className="text-xs">{meta.display_value || meta.value}</Text>
+						</HStack>
+					))}
+				</VStack>
 			)}
 		</VStack>
 	);

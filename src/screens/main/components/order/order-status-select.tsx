@@ -11,24 +11,20 @@ import {
 import { useT } from '../../../../contexts/translations';
 import { useOrderStatusLabel } from '../../hooks/use-order-status-label';
 
-interface OrderStatusSelectProps {
-	value?: string;
-	onChange?: (value: string) => void;
-	[key: string]: any;
-}
-
 /**
  *
  */
 export const OrderStatusSelect = React.forwardRef<
 	React.ElementRef<typeof Select>,
-	OrderStatusSelectProps
->((props, ref) => {
+	React.ComponentPropsWithoutRef<typeof Select>
+>(({ value, ...props }, ref) => {
 	const t = useT();
 	const { items } = useOrderStatusLabel();
 
+	const label = items.find((item) => item.value === value?.value)?.label;
+
 	return (
-		<Select ref={ref} {...props}>
+		<Select ref={ref} value={{ ...value, label }} {...props}>
 			<SelectTrigger>
 				<SelectValue
 					className="text-foreground text-sm native:text-lg"

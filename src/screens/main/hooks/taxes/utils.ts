@@ -1,12 +1,14 @@
 import flatten from 'lodash/flatten';
 import forEach from 'lodash/forEach';
 import groupBy from 'lodash/groupBy';
+import isNaN from 'lodash/isNaN';
 import map from 'lodash/map';
 import reverse from 'lodash/reverse';
 import round from 'lodash/round';
 import sortBy from 'lodash/sortBy';
 import sum from 'lodash/sum';
 import sumBy from 'lodash/sumBy';
+import toNumber from 'lodash/toNumber';
 
 type LineItemDocument = import('@wcpos/database').LineItemDocument;
 type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
@@ -26,6 +28,15 @@ interface Rate {
 }
 type RateArray = Rate[];
 
+export function toValidNumber(value: string | number | undefined | null): number {
+	const num = toNumber(value); // Convert the value to a number
+	return isNaN(num) ? 0 : num; // Return 0 if the result is NaN, otherwise return the number
+}
+
+export function toRoundedNumber(value: string | number | undefined | null): number {
+	return round(toValidNumber(value), 6); // Round the number to 6 decimal places
+}
+
 /**
  * Round all taxes to precision (4DP) before passing them back. Note, this is not the same rounding
  * as in the cart calculation class which, depending on settings, will round to 2DP when calculating
@@ -34,7 +45,7 @@ type RateArray = Rate[];
 function roundedTaxStrings(taxes: TaxArray) {
 	const roundedTaxes: TaxArray = [];
 	forEach(taxes, (tax) => {
-		roundedTaxes.push({ id: tax.id, total: String(round(parseFloat(tax.total), 6)) });
+		roundedTaxes.push({ id: tax.id, total: String(toRoundedNumber(tax.total), 6) });
 	});
 	return roundedTaxes;
 }
@@ -63,14 +74,14 @@ function calcInclusiveTax(price: number, rates: TaxRateDocument[]) {
 
 	forEach(compoundRates, (compoundRate) => {
 		const { id, rate } = compoundRate;
-		const total = nonCompoundPrice - nonCompoundPrice / (1 + parseFloat(rate) / 100);
+		const total = nonCompoundPrice - nonCompoundPrice / (1 + toValidNumber(rate) / 100);
 		taxes.push({ id, total: String(total) });
 		nonCompoundPrice -= total;
 	});
 
 	// Regular taxes.
 	const regularTaxRate =
-		1 + sumBy(regularRates, (regularRate) => parseFloat(regularRate.rate) / 100);
+		1 + sumBy(regularRates, (regularRate) => toValidNumber(regularRate.rate) / 100);
 
 	forEach(regularRates, (regularRate) => {
 		const { id, rate } = regularRate;
@@ -93,12 +104,12 @@ function calcExclusiveTax(price: number, rates: TaxRateDocument[]) {
 		const { id = '0', rate = '0', compound = false } = _rate;
 
 		if (!compound) {
-			const total = price * (parseFloat(rate) / 100);
+			const total = price * (toValidNumber(rate) / 100);
 			taxes.push({ id, total: String(total) });
 		}
 	});
 
-	let preCompoundTotal = sumBy(taxes, (tax) => parseFloat(tax.total));
+	let preCompoundTotal = sumBy(taxes, (tax) => toValidNumber(tax.total));
 
 	// Compound taxes.
 	forEach(rates, (_rate) => {
@@ -106,9 +117,9 @@ function calcExclusiveTax(price: number, rates: TaxRateDocument[]) {
 
 		if (compound) {
 			const thePriceIncTax = price + preCompoundTotal;
-			const total = thePriceIncTax * (parseFloat(rate) / 100);
+			const total = thePriceIncTax * (toValidNumber(rate) / 100);
 			taxes.push({ id, total: String(total) });
-			preCompoundTotal = sumBy(taxes, (tax) => parseFloat(tax.total));
+			preCompoundTotal = sumBy(taxes, (tax) => toValidNumber(tax.total));
 		}
 	});
 
@@ -131,7 +142,7 @@ export function calculateTaxes(price: number, rates: TaxRateDocument[], pricesIn
  *
  */
 export function sumTaxes(taxes: TaxArray, rounding = true) {
-	const sum = sumBy(taxes, (tax) => parseFloat(tax.total));
+	const sum = sumBy(taxes, (tax) => toValidNumber(tax.total));
 	if (rounding) {
 		return round(sum, 6);
 	}
@@ -160,17 +171,17 @@ export function calculateDisplayValues({
 	inclOrExcl,
 	taxRoundAtSubtotal,
 }: {
-	value: string | undefined;
+	value?: string | number;
 	rates: TaxRateDocument[];
 	pricesIncludeTax: boolean;
 	inclOrExcl: 'incl' | 'excl';
 	taxRoundAtSubtotal: boolean;
 }) {
-	const valueAsNumber = value ? parseFloat(value) : 0;
+	const valueAsNumber = toValidNumber(value);
 	const taxes = calculateTaxes(valueAsNumber, rates, pricesIncludeTax);
 	const itemizedTaxTotals = sumItemizedTaxes(taxes, taxRoundAtSubtotal);
 	const taxTotal = sumTaxes(itemizedTaxTotals);
-	let displayValue = value;
+	let displayValue = String(valueAsNumber);
 
 	if (pricesIncludeTax && inclOrExcl === 'excl') {
 		displayValue = String(round(valueAsNumber - taxTotal, 6));
@@ -206,13 +217,13 @@ export function calculateLineItemTotals({
 	taxRoundAtSubtotal: boolean;
 }) {
 	// Subtotal
-	const priceAsFloat = parseFloat(price);
+	const priceAsFloat = toValidNumber(price);
 	const subtotal = quantity * priceAsFloat;
 	const subtotalTaxes = calculateTaxes(subtotal, rates);
 	const itemizedSubTotalTaxes = sumItemizedTaxes(subtotalTaxes, taxRoundAtSubtotal);
 
 	// Total
-	const totalTaxes = calculateTaxes(parseFloat(total), rates);
+	const totalTaxes = calculateTaxes(toValidNumber(total), rates);
 	const itemizedTotalTaxes = sumItemizedTaxes(totalTaxes, taxRoundAtSubtotal);
 	const taxes = itemizedSubTotalTaxes.map((obj) => {
 		const index = itemizedTotalTaxes.findIndex((el) => el.id === obj.id);
@@ -267,53 +278,53 @@ export function calculateOrderTotalsAndTaxes({
 		compound: taxRate.compound,
 		tax_total: 0,
 		shipping_tax_total: 0,
-		rate_percent: parseFloat(taxRate.rate),
+		rate_percent: toValidNumber(taxRate.rate),
 		meta_data: [],
 	}));
 
 	// Calculate line item totals
 	lineItems.forEach((item) => {
-		discount_total += parseFloat(item.subtotal) - parseFloat(item.total);
-		discount_tax += parseFloat(item.subtotal_tax) - parseFloat(item.total_tax);
-		subtotal += parseFloat(item.subtotal);
-		subtotal_tax += parseFloat(item.subtotal_tax);
-		total += parseFloat(item.total);
-		total_tax += parseFloat(item.total_tax);
+		discount_total += toValidNumber(item.subtotal) - toValidNumber(item.total);
+		discount_tax += toValidNumber(item.subtotal_tax) - toValidNumber(item.total_tax);
+		subtotal += toValidNumber(item.subtotal);
+		subtotal_tax += toValidNumber(item.subtotal_tax);
+		total += toValidNumber(item.total);
+		total_tax += toValidNumber(item.total_tax);
 
 		item.taxes.forEach((tax) => {
 			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
 			if (taxLine) {
-				taxLine.tax_total += parseFloat(tax.total);
+				taxLine.tax_total += toValidNumber(tax.total);
 			}
 		});
 	});
 
 	// Calculate fee totals
 	feeLines.forEach((line) => {
-		fee_total += parseFloat(line.total);
-		fee_tax += parseFloat(line.total_tax);
-		total += parseFloat(line.total);
-		total_tax += parseFloat(line.total_tax);
+		fee_total += toValidNumber(line.total);
+		fee_tax += toValidNumber(line.total_tax);
+		total += toValidNumber(line.total);
+		total_tax += toValidNumber(line.total_tax);
 
 		line.taxes.forEach((tax) => {
 			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
 			if (taxLine) {
-				taxLine.tax_total += parseFloat(tax.total);
+				taxLine.tax_total += toValidNumber(tax.total);
 			}
 		});
 	});
 
 	// Calculate shipping totals
 	shippingLines.forEach((line) => {
-		shipping_total += parseFloat(line.total);
-		shipping_tax += parseFloat(line.total_tax);
-		total += parseFloat(line.total);
-		total_tax += parseFloat(line.total_tax);
+		shipping_total += toValidNumber(line.total);
+		shipping_tax += toValidNumber(line.total_tax);
+		total += toValidNumber(line.total);
+		total_tax += toValidNumber(line.total_tax);
 
 		line.taxes.forEach((tax) => {
 			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
 			if (taxLine) {
-				taxLine.shipping_tax_total += parseFloat(tax.total);
+				taxLine.shipping_tax_total += toValidNumber(tax.total);
 			}
 		});
 	});
@@ -325,7 +336,7 @@ export function calculateOrderTotalsAndTaxes({
 	});
 
 	// Remove tax lines with 0 tax total
-	const filteredTaxLines = taxLines.filter((taxLine) => parseFloat(taxLine.tax_total) !== 0);
+	const filteredTaxLines = taxLines.filter((taxLine) => toValidNumber(taxLine.tax_total) !== 0);
 
 	return {
 		discount_total: String(round(discount_total, 6)),

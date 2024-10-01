@@ -1,14 +1,38 @@
 import * as React from 'react';
+import { Pressable } from 'react-native';
 
-import { Column } from '@tanstack/react-table';
-
+import { HStack } from '@wcpos/components/src/hstack';
+import { SortIcon } from '@wcpos/components/src/sort-icon';
 import { Text } from '@wcpos/components/src/text';
 
-interface Props {
+import type { HeaderContext } from '@tanstack/react-table';
+
+interface Props extends HeaderContext<any, any> {
 	title: string;
-	column: Column<any>;
 }
 
-export const DataTableHeader = ({ title, column }: Props) => {
-	return <Text className={'font-medium text-muted-foreground'}>{title}</Text>;
+/**
+ *
+ */
+export const DataTableHeader = ({ title, column, header, table }: Props) => {
+	const disableSort = column.columnDef.meta?.disableSort;
+
+	if (disableSort) {
+		return <Text className={'font-medium text-muted-foreground'}>{title}</Text>;
+	}
+
+	return (
+		<Pressable
+			onPress={() =>
+				table.setSorting((old) => {
+					console.log(old);
+				})
+			}
+		>
+			<HStack>
+				<Text className={'font-medium text-muted-foreground'}>{title}</Text>
+				<SortIcon />
+			</HStack>
+		</Pressable>
+	);
 };

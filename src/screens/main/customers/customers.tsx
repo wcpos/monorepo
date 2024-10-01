@@ -66,6 +66,7 @@ const Customers = () => {
 						<QuerySearchInput
 							query={query}
 							placeholder={t('Search Customers', { _tags: 'core' })}
+							className="flex-1"
 						/>
 						<AddNewCustomer />
 						<UISettingsDialog title={t('Customer Settings', { _tags: 'core' })}>

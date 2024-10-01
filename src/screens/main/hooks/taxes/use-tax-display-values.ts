@@ -3,14 +3,11 @@ import * as React from 'react';
 import isEmpty from 'lodash/isEmpty';
 
 import { useTaxDisplay } from './use-tax-display';
-import { calculateDisplayValues } from './utils';
+import { calculateDisplayValues, toValidNumber } from './utils';
 import { useTaxRates } from '../../contexts/tax-rates';
 
 interface TaxDisplayValuesProps {
-	/**
-	 * Value, eg: price or total as a string
-	 */
-	value: string;
+	value?: number | string;
 	taxClass: string;
 	taxStatus: 'taxable' | 'none' | 'shipping';
 	context: 'shop' | 'cart';

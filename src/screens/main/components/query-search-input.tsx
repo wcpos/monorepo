@@ -2,18 +2,19 @@ import * as React from 'react';
 
 import { useSubscription } from 'observable-hooks';
 
-import type { Query } from '@wcpos/query';
 import { Input } from '@wcpos/components/src/input';
+import type { Query } from '@wcpos/query';
 
 interface Props {
 	query: Query<any>;
 	placeholder: string;
+	className?: string;
 }
 
 /**
  *
  */
-export const QuerySearchInput = ({ query, placeholder }: Props) => {
+export const QuerySearchInput = ({ query, placeholder, className }: Props) => {
 	const [search, setSearch] = React.useState('');
 
 	/**
@@ -46,5 +47,13 @@ export const QuerySearchInput = ({ query, placeholder }: Props) => {
 	/**
 	 *
 	 */
-	return <Input placeholder={placeholder} value={search} onChangeText={onSearch} clearable />;
+	return (
+		<Input
+			placeholder={placeholder}
+			value={search}
+			onChangeText={onSearch}
+			clearable
+			className={className}
+		/>
+	);
 };

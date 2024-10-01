@@ -87,7 +87,11 @@ const Orders = () => {
 				<CardHeader className="p-2 bg-input">
 					<VStack>
 						<HStack>
-							<QuerySearchInput query={query} placeholder={t('Search Orders', { _tags: 'core' })} />
+							<QuerySearchInput
+								query={query}
+								placeholder={t('Search Orders', { _tags: 'core' })}
+								className="flex-1"
+							/>
 							<UISettingsDialog title={t('Order Settings', { _tags: 'core' })}>
 								<UISettingsForm />
 							</UISettingsDialog>

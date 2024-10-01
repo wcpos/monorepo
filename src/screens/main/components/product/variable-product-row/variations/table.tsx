@@ -46,10 +46,7 @@ export const VariationsTable = ({ query, row }: Props) => {
 		<VStack className="gap-0">
 			{result.hits.map(({ id, document }, index) => {
 				return (
-					<TableRow
-						key={id}
-						className={cn('active:opacity-70', index % 2 && 'bg-zinc-100/50 dark:bg-zinc-900/50')}
-					>
+					<TableRow key={id} index={index}>
 						{row.getVisibleCells().map((cell) => {
 							const meta = cell.column.columnDef.meta;
 

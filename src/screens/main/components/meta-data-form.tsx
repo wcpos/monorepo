@@ -116,7 +116,7 @@ export const MetaDataForm: React.FC<MetaDataFormProps> = ({
 								</VStack>
 								<View className="p-2">
 									<Tooltip>
-										<TooltipTrigger>
+										<TooltipTrigger asChild>
 											<IconButton
 												variant="destructive"
 												name="circleMinus"
