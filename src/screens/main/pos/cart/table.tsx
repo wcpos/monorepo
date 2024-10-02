@@ -14,7 +14,7 @@ import isEqual from 'lodash/isEqual';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { cn } from '@wcpos/components/src/lib/utils';
+import { cn, getFlexAlign } from '@wcpos/components/src/lib/utils';
 import { Suspense } from '@wcpos/components/src/suspense';
 import {
 	Table,
@@ -252,15 +252,15 @@ export const CartTable = () => {
 						<TableRow key={headerGroup.id}>
 							{headerGroup.headers.map((header) => {
 								const meta = header.column.columnDef.meta;
+
 								return (
 									<TableHead
 										key={header.id}
-										className={cn(
-											meta?.flex && `flex-${meta.flex}`,
-											meta?.width && 'flex-none',
-											meta?.align && `text-${meta.flex}`
-										)}
-										style={{ width: meta?.width ? meta.width : undefined }}
+										style={{
+											flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
+											flexBasis: meta?.width ? meta.width : undefined,
+											alignItems: getFlexAlign(meta?.align || 'left'),
+										}}
 									>
 										{header.isPlaceholder || meta?.hideLabel
 											? null
@@ -289,12 +289,11 @@ export const CartTable = () => {
 									return (
 										<TableCell
 											key={cell.id}
-											className={cn(
-												meta?.flex && `flex-${meta.flex}`,
-												meta?.width && 'flex-none'
-												// meta?.align && getTailwindJustifyClass(meta.align)
-											)}
-											style={{ width: meta?.width ? meta.width : undefined }}
+											style={{
+												flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
+												flexBasis: meta?.width ? meta.width : undefined,
+												alignItems: getFlexAlign(meta?.align || 'left'),
+											}}
 										>
 											{flexRender(cell.column.columnDef.cell, cell.getContext())}
 										</TableCell>

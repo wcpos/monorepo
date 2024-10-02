@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 
@@ -25,14 +24,12 @@ export const EditablePrice = ({
 	 *
 	 */
 	return (
-		<View className="flex-1">
-			<CurrencyInput
-				value={price}
-				onChangeText={(price) =>
-					table.options.meta.onChange({ row, changes: { [column.id]: String(price) } })
-				}
-				disabled={column.id === 'sale_price' && !item.on_sale}
-			/>
-		</View>
+		<CurrencyInput
+			value={price}
+			onChangeText={(price) =>
+				table.options.meta.onChange({ row, changes: { [column.id]: String(price) } })
+			}
+			disabled={column.id === 'sale_price' && !item.on_sale}
+		/>
 	);
 };

@@ -33,6 +33,7 @@ import { BillingAddressForm, billingAddressSchema } from '../../components/billi
 import { CountrySelect, StateSelect } from '../../components/country-state-select';
 import { CurrencySelect } from '../../components/currency-select';
 import { CustomerSelect } from '../../components/customer-select';
+import { FormErrors } from '../../components/form-errors';
 import { MetaDataForm } from '../../components/meta-data-form';
 import { OrderStatusSelect } from '../../components/order/order-status-select';
 import { ShippingAddressForm } from '../../components/shipping-address-form';
@@ -184,6 +185,7 @@ export const EditOrderForm = ({ order }: Props) => {
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
+				<FormErrors />
 				<View className="grid grid-cols-3 gap-4">
 					<FormField
 						control={form.control}

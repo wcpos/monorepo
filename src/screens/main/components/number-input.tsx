@@ -25,7 +25,7 @@ export interface NumberInputProps {
 	disabled?: boolean;
 
 	/**  */
-	showDiscounts?: boolean;
+	discounts?: number[];
 
 	/**  */
 	placement?: 'top' | 'bottom' | 'left' | 'right';
@@ -45,7 +45,7 @@ export const NumberInput = React.forwardRef<React.ElementRef<typeof Numpad>, Num
 		{
 			onChangeText,
 			disabled = false,
-			showDiscounts,
+			discounts,
 			placement = 'bottom',
 			className,
 			formatOptions,
@@ -98,7 +98,11 @@ export const NumberInput = React.forwardRef<React.ElementRef<typeof Numpad>, Num
 		return (
 			<Popover>
 				<PopoverTrigger ref={triggerRef} asChild>
-					<Button variant="outline" disabled={disabled} className={cn('items-start', className)}>
+					<Button
+						variant="outline"
+						disabled={disabled}
+						className={cn('items-start min-w-10', className)}
+					>
 						<ButtonText numberOfLines={1}>{value !== '' ? format(value) : ''}</ButtonText>
 					</Button>
 				</PopoverTrigger>
@@ -109,7 +113,7 @@ export const NumberInput = React.forwardRef<React.ElementRef<typeof Numpad>, Num
 							initialValue={toNumber(value)}
 							onChangeText={handleChange}
 							decimalSeparator={decimalSeparator}
-							discounts={false}
+							discounts={discounts}
 							formatDisplay={(value) => formatDisplay(value)}
 						/>
 						<HStack className="justify-end">

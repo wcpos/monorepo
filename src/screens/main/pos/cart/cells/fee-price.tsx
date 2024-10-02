@@ -3,6 +3,7 @@ import * as React from 'react';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Icon } from '@wcpos/components/src/icon';
 
+import { CurrencyInput } from '../../../components/currency-input';
 import { NumberInput } from '../../../components/number-input';
 import { useFeeLineData } from '../../hooks/use-fee-line-data';
 import { useUpdateFeeLine } from '../../hooks/use-update-fee-line';
@@ -30,12 +31,11 @@ export const FeePrice = ({ row }: CellContext<Props, 'price'>) => {
 	 */
 	return (
 		<HStack space="xs" className="justify-center">
-			<NumberInput
-				value={amount}
-				onChange={(amount) => updateFeeLine(uuid, { amount })}
-				showDecimals={!percent}
-				// showDiscounts={ensureNumberArray(quickDiscounts)}
-			/>
+			{percent ? (
+				<NumberInput value={amount} onChangeText={(amount) => updateFeeLine(uuid, { amount })} />
+			) : (
+				<CurrencyInput value={amount} onChangeText={(amount) => updateFeeLine(uuid, { amount })} />
+			)}
 			{percent && <Icon name="percent" size="sm" />}
 		</HStack>
 	);

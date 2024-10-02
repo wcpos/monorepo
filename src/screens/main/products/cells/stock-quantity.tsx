@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { useObservableEagerState } from 'observable-hooks';
 
@@ -23,13 +24,15 @@ export const StockQuantity = ({ row, table }: CellContext<ProductDocument, 'stoc
 
 	return (
 		<VStack>
-			<NumberInput
-				value={String(stockQuantity || 0)}
-				onChangeText={(stock_quantity) =>
-					table.options.meta.onChange({ row, changes: { stock_quantity } })
-				}
-				disabled={!manageStock}
-			/>
+			<View className="flex-row justify-center">
+				<NumberInput
+					value={String(stockQuantity || 0)}
+					onChangeText={(stock_quantity) =>
+						table.options.meta.onChange({ row, changes: { stock_quantity } })
+					}
+					disabled={!manageStock}
+				/>
+			</View>
 			<SwitchWithLabel
 				nativeID="manage_stock"
 				label={t('Manage', { _tags: 'core' })}

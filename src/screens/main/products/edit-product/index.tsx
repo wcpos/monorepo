@@ -1,6 +1,10 @@
 import * as React from 'react';
 
-import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import {
+	useObservableSuspense,
+	ObservableResource,
+	useObservableEagerState,
+} from 'observable-hooks';
 
 import {
 	Modal,
@@ -27,6 +31,7 @@ export const EditProduct = ({ resource }: Props) => {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 	useModalRefreshFix();
+	useObservableEagerState(product.date_modified_gmt$);
 
 	return (
 		<Modal>

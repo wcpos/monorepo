@@ -47,7 +47,7 @@ export const ProductName = ({ row, column }: CellContext<Props, 'name'>) => {
 	 *
 	 */
 	return (
-		<VStack>
+		<VStack className="w-full">
 			<HStack className="gap-0">
 				<View className="flex-1">
 					<EditableName value={item.name} onChangeText={(name) => updateLineItem(uuid, { name })} />

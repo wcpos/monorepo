@@ -25,6 +25,7 @@ import { VStack } from '@wcpos/components/src/vstack';
 import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../contexts/translations';
+import { FormErrors } from '../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
 import { ProductStatusSelect } from '../../components/product/status-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
@@ -103,6 +104,7 @@ export const EditVariationForm = ({ variation }: Props) => {
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
+				<FormErrors />
 				<View className="grid grid-cols-2 gap-4">
 					<FormField
 						control={form.control}

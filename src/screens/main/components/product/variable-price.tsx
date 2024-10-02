@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
-import { Box } from '@wcpos/components/src/box';
 import { useDataTable } from '@wcpos/components/src/data-table';
+import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
@@ -75,7 +75,7 @@ export const VariableProductPrice = ({
 
 	// default, min and max are different
 	return (
-		<Box className="justify-end">
+		<HStack className="flex-wrap gap-1 justify-end">
 			<PriceWithTax
 				price={variablePrices[column.id].min}
 				taxStatus={taxStatus}
@@ -91,6 +91,6 @@ export const VariableProductPrice = ({
 				taxDisplay={column.columnDef.meta.show('tax') ? 'text' : 'tooltip'}
 				taxLocation={context?.taxLocation}
 			/>
-		</Box>
+		</HStack>
 	);
 };

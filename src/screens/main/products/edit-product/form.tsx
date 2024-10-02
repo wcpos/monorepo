@@ -22,6 +22,7 @@ import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { CurrencyInput } from '../../components/currency-input';
+import { FormErrors } from '../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
 import { NumberInput } from '../../components/number-input';
 import { ProductStatusSelect } from '../../components/product/status-select';
@@ -34,7 +35,7 @@ const schema = z.object({
 	name: z.string(),
 	regular_price: z.string(),
 	sale_price: z.string(),
-	stock_quantity: z.number().optional(),
+	stock_quantity: z.number().optional().nullable(),
 	manage_stock: z.boolean().optional(),
 	status: z.string(),
 	featured: z.boolean(),
@@ -121,6 +122,7 @@ export const EditProductForm = ({ product }: Props) => {
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
+				<FormErrors />
 				<View className="grid grid-cols-2 gap-4">
 					<View className="col-span-2">
 						<FormField

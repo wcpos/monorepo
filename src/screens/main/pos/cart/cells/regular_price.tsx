@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { NumberInput } from '../../../components/number-input';
+import { CurrencyInput } from '../../../components/currency-input';
 import { useUISettings } from '../../../contexts/ui-settings';
 import { useLineItemData } from '../../hooks/use-line-item-data';
 import { useUpdateLineItem } from '../../hooks/use-update-line-item';
@@ -49,11 +49,10 @@ export const RegularPrice = ({ row }: CellContext<Props, 'regular_price'>) => {
 	 *
 	 */
 	return (
-		<NumberInput
+		<CurrencyInput
 			value={value}
-			onChange={(regular_price) => updateLineItem(uuid, { regular_price })}
-			showDecimals
-			showDiscounts={ensureNumberArray(quickDiscounts)}
+			onChangeText={(regular_price) => updateLineItem(uuid, { regular_price })}
+			discounts={ensureNumberArray(quickDiscounts)}
 		/>
 	);
 };

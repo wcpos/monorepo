@@ -50,9 +50,8 @@ export const Price = ({ row }: CellContext<Props, 'price'>) => {
 	return (
 		<CurrencyInput
 			value={parseFloat(price)}
-			onChange={(price) => updateLineItem(uuid, { price })}
-			showDecimals
-			showDiscounts={ensureNumberArray(quickDiscounts)}
+			onChangeText={(price) => updateLineItem(uuid, { price })}
+			discounts={ensureNumberArray(quickDiscounts)}
 		/>
 	);
 };

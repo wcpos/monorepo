@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { cn } from '@wcpos/components/src/lib/utils';
 import { Text } from '@wcpos/components/src/text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@wcpos/components/src/tooltip';
 import { VStack } from '@wcpos/components/src/vstack';
@@ -40,7 +41,7 @@ export const Price = ({
 		return (
 			<Tooltip>
 				<TooltipTrigger>
-					<Text className={strikethrough && 'line-through'}>
+					<Text className={cn(strikethrough && 'line-through text-muted-foreground', 'text-right')}>
 						{format(parseFloat(displayValue))}
 					</Text>
 				</TooltipTrigger>
@@ -56,9 +57,16 @@ export const Price = ({
 	 */
 	if (taxDisplay === 'text' && taxable) {
 		return (
-			<VStack className="justify-end">
-				<Text className={strikethrough && 'line-through'}>{format(parseFloat(displayValue))}</Text>
-				<Text className="text-sm text-muted-foreground">{`${inclOrExcl} ${format(parseFloat(taxTotal))} tax`}</Text>
+			<VStack className="items-end gap-1">
+				<Text className={cn(strikethrough && 'line-through text-muted-foreground', 'text-right')}>
+					{format(parseFloat(displayValue))}
+				</Text>
+				<Text
+					className={cn(
+						strikethrough && 'line-through',
+						'text-sm text-right text-muted-foreground'
+					)}
+				>{`${inclOrExcl} ${format(parseFloat(taxTotal))} tax`}</Text>
 			</VStack>
 		);
 	}

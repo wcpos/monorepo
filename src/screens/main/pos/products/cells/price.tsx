@@ -20,10 +20,10 @@ export const Price = ({ row, column }: CellContext<ProductDocument, 'price'>) =>
 	const regular_price = useObservableEagerState(product.regular_price$);
 	const taxStatus = useObservableEagerState(product.tax_status$);
 	const taxClass = useObservableEagerState(product.tax_class$);
+	const onSale = useObservableEagerState(product.on_sale$);
 	const context = useDataTable();
 
-	const showRegularPrice =
-		column.columnDef.meta.show('on_sale') && parseFloat(price) !== parseFloat(regular_price);
+	const showRegularPrice = column.columnDef.meta.show('on_sale') && onSale;
 
 	/**
 	 *

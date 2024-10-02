@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../contexts/translations';
@@ -28,15 +29,15 @@ export const Quantity = ({ row, column }: CellContext<Props, 'quantity'>) => {
 	 *
 	 */
 	return (
-		<VStack className="justify-center">
+		<VStack className="justify-center items-center gap-1">
 			<NumberInput
 				value={item.quantity}
-				onChange={(quantity) => updateLineItem(uuid, { quantity })}
+				onChangeText={(quantity) => updateLineItem(uuid, { quantity })}
 			/>
 			{column.columnDef.meta.show('split') && item.quantity > 1 && (
-				<Button variant="link" size="sm" onPress={() => splitLineItem(uuid)}>
-					<ButtonText>{t('Split', { _tags: 'core', _context: 'Split quantity' })}</ButtonText>
-				</Button>
+				<Text variant="link" className="text-sm text-primary" onPress={() => splitLineItem(uuid)}>
+					{t('Split', { _tags: 'core', _context: 'Split quantity' })}
+				</Text>
 			)}
 		</VStack>
 	);

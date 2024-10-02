@@ -56,6 +56,10 @@ const DataTable = <TDocument extends DocumentType>({
 	const { uiSettings, getUILabel } = useUISettings(id);
 	const uiColumns = useObservableEagerState(uiSettings.columns$);
 	const result = useInfiniteScroll(query);
+	const sorting = React.useRef({
+		sortBy: uiSettings.sortBy,
+		sortDirection: uiSettings.sortDirection,
+	});
 
 	/**
 	 *
@@ -124,6 +128,17 @@ const DataTable = <TDocument extends DocumentType>({
 	);
 
 	/**
+	 * Sorting
+	 */
+	const handleSortingChange = React.useCallback(
+		({ sortBy, sortDirection }) => {
+			sorting.current = { sortBy, sortDirection };
+			query.sort(sortBy, sortDirection);
+		},
+		[query]
+	);
+
+	/**
 	 *
 	 */
 	return (
@@ -138,6 +153,8 @@ const DataTable = <TDocument extends DocumentType>({
 			TableFooterComponent={TableFooterComponent}
 			renderItem={renderItem ? (props) => renderItem(props) : undefined}
 			extraContext={context}
+			onSortingChange={handleSortingChange}
+			tableState={{ sorting }}
 			{...props}
 		/>
 	);
