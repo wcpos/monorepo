@@ -7,11 +7,13 @@ import {
 } from 'react-native';
 
 import { useAugmentedRef } from '@rn-primitives/hooks';
+import toNumber from 'lodash/toNumber';
 
 import useMergedRef from '@wcpos/hooks/src/use-merged-ref';
 
 import { useCalculator } from './use-calculator';
 import { Button, ButtonText } from '../button';
+import { HStack } from '../hstack';
 import { Icon, IconName } from '../icon';
 import { IconButton } from '../icon-button';
 import { Input, InputProps } from '../input';
@@ -25,9 +27,16 @@ const iconMap: Record<string, IconName> = {
 	'÷': 'divide',
 };
 
-const Display = React.forwardRef<RNTextInput, InputProps>(({ ...props }, ref) => {
+const Display = React.forwardRef<
+	RNTextInput,
+	InputProps & {
+		selection: { start: number; end: number };
+		onSelectionChange: (sel: { start: number; end: number }) => void;
+	}
+>(({ selection, onSelectionChange, ...props }, ref) => {
 	const inputRef = React.useRef<RNTextInput>(null);
 	const mergedRef = useMergedRef(ref, inputRef);
+
 	/**
 	 *
 	 */
@@ -40,9 +49,50 @@ const Display = React.forwardRef<RNTextInput, InputProps>(({ ...props }, ref) =>
 		}
 	}, [props, inputRef]);
 
+	/**
+	 * Focus and select all text on mount
+	 *
+	 * HACK: the focus doesn't seem to work, perhaps it's not on the screen yet?
+	 * - so we use a timer to focus after a short delay
+	 */
+	React.useEffect(
+		() => {
+			const timer = setTimeout(() => {
+				if (inputRef.current && props.value) {
+					inputRef.current.focus();
+					onSelectionChange({ start: 0, end: props.value.length });
+				}
+			}, 100);
+			return () => clearTimeout(timer);
+		},
+		[
+			// run once on mount
+		]
+	);
+
+	/**
+	 * Focus and move cursor to the end of the text when value changes (e.g. after button press)
+	 */
+	React.useEffect(() => {
+		if (props.value) {
+			if (inputRef.current && props.value) {
+				inputRef.current.focus();
+				onSelectionChange({ start: props.value.length, end: props.value.length });
+			}
+		}
+	}, [onSelectionChange, props.value]);
+
 	return (
 		<Input.Root {...props}>
-			<Input.InputField ref={mergedRef} autoFocus {...props} />
+			<Input.InputField
+				ref={mergedRef}
+				{...props}
+				autoFocus
+				selection={selection}
+				onSelectionChange={(event) => {
+					onSelectionChange(event.nativeEvent.selection);
+				}}
+			/>
 			<Input.Right className="pr-1">
 				<IconButton name="deleteLeft" onPress={handleBackspacePress} />
 			</Input.Right>
@@ -56,10 +106,11 @@ interface NumpadKeyProps {
 	label?: string;
 	icon?: IconName;
 	onPress: () => void;
+	discount?: boolean;
 }
 
-const Key = ({ label, icon, onPress }: NumpadKeyProps) => (
-	<Button variant="muted" onPress={onPress}>
+const Key = ({ label, icon, onPress, discount }: NumpadKeyProps) => (
+	<Button variant="muted" onPress={onPress} rightIcon={discount ? 'percent' : undefined}>
 		{icon ? <Icon name={icon} /> : <ButtonText>{label}</ButtonText>}
 	</Button>
 );
@@ -108,23 +159,48 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 		},
 		ref
 	) => {
-		const { currentOperand, addDigit, chooseOperation, handleKeyPress } = useCalculator({
+		const { currentOperand, addDigit, switchSign, deleteDigit, applyDiscount } = useCalculator({
 			initialValue: String(initialValue),
 			decimalSeparator,
 			precision,
 		});
-		const currentValue = parseFloat(currentOperand || '0');
-		console.log(currentOperand);
+		const currentValue = toNumber(currentOperand);
+		const hasDiscounts = discounts && discounts.length > 0;
 
-		const totalWidth = React.useMemo(() => {
-			const baseWidth = columnSize * 3;
-			return baseWidth + (discounts && discounts.length > 0 ? columnSize : 0);
-		}, [columnSize, discounts]);
+		/**
+		 * Selection state
+		 */
+		const [selection, setSelection] = React.useState<{ start: number; end: number }>({
+			start: 0,
+			end: 0,
+		});
+		const shouldReplace = selection.start === 0 && selection.end === (currentOperand?.length || 0);
 
-		const handleKeyPressEvent = (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
-			handleKeyPress(e.nativeEvent.key);
-		};
+		/**
+		 *
+		 */
+		const handleKeyPress = React.useCallback(
+			(e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+				const key = e.nativeEvent.key;
+				switch (key) {
+					case 'Backspace':
+						deleteDigit();
+						break;
+					case decimalSeparator:
+						addDigit('.', shouldReplace);
+						break;
+					default:
+						if (/^[0-9]$/.test(key)) {
+							addDigit(key, shouldReplace);
+						}
+				}
+			},
+			[deleteDigit, decimalSeparator, addDigit, shouldReplace]
+		);
 
+		/**
+		 * Allow external components to get the current value
+		 */
 		const augmentedRef = useAugmentedRef({
 			ref,
 			methods: {
@@ -133,15 +209,20 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 			deps: [currentValue],
 		});
 
+		/**
+		 *
+		 */
 		return (
-			<VStack style={{ width: totalWidth }}>
+			<VStack style={{ width: hasDiscounts ? '220px' : '146px' }}>
 				<Display
 					ref={augmentedRef}
 					value={formatDisplay(currentValue)}
 					onSubmitEditing={() => onChangeText?.(currentValue)}
-					onKeyPress={handleKeyPressEvent}
+					onKeyPress={handleKeyPress}
+					selection={selection}
+					onSelectionChange={setSelection}
 				/>
-				<Grid columns={discounts ? 2 : 1}>
+				<HStack className="gap-1">
 					<Grid columns={3}>
 						{[
 							['1', '2', '3'],
@@ -156,22 +237,27 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 									icon={value === '+/-' ? 'plusMinus' : undefined}
 									onPress={() =>
 										value === '+/-'
-											? chooseOperation('SWITCH_SIGN')
+											? switchSign()
 											: value === decimalSeparator
-												? addDigit('.', false)
-												: addDigit(value, false)
+												? addDigit('.', shouldReplace)
+												: addDigit(value, shouldReplace)
 									}
 								/>
 							))
 						)}
 					</Grid>
 					<Grid columns={1}>
-						{discounts &&
+						{hasDiscounts &&
 							discounts.map((discount) => (
-								<Key key={discount.label} label={discount.label} onPress={discount.onPress} />
+								<Key
+									key={discount}
+									label={String(discount)}
+									onPress={() => applyDiscount(discount)}
+									discount
+								/>
 							))}
 					</Grid>
-				</Grid>
+				</HStack>
 			</VStack>
 		);
 	}

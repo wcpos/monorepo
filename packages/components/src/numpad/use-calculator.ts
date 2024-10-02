@@ -64,24 +64,6 @@ export const useCalculator = ({
 		});
 	}, []);
 
-	const handleKeyPress = React.useCallback(
-		(key: string) => {
-			switch (key) {
-				case 'Backspace':
-					deleteDigit();
-					break;
-				case decimalSeparator:
-					addDigit('.', false);
-					break;
-				default:
-					if (/^[0-9]$/.test(key)) {
-						addDigit(key, false);
-					}
-			}
-		},
-		[decimalSeparator, addDigit, deleteDigit]
-	);
-
 	return {
 		currentOperand,
 		previousOperand,
@@ -93,6 +75,5 @@ export const useCalculator = ({
 		evaluateOperation,
 		switchSign,
 		applyDiscount,
-		handleKeyPress,
 	};
 };

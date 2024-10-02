@@ -125,9 +125,12 @@ const DialogContent = React.forwardRef<
 });
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
+/**
+ * NOTE: extra space on right for the close button
+ */
 const DialogHeader = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof View>) => (
 	<View
-		className={cn('flex flex-col px-4 gap-1.5 text-center sm:text-left', className)}
+		className={cn('flex flex-col pl-4 pr-8 gap-1.5 text-center sm:text-left', className)}
 		{...props}
 	/>
 );

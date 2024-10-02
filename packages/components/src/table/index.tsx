@@ -103,7 +103,7 @@ const TableHead = React.forwardRef<
 		<TablePrimitive.Head
 			ref={ref}
 			className={cn(
-				'flex-1 h-8 px-2 bg-muted justify-center [&:has([role=checkbox])]:pr-0',
+				'flex-col flex-1 h-8 px-2 bg-muted justify-center [&:has([role=checkbox])]:pr-0',
 				className
 			)}
 			{...props}
@@ -121,10 +121,10 @@ const TableCell = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
 	<TablePrimitive.Cell
 		ref={ref}
-		className={cn('flex-row flex-1 p-2 items-center [&:has([role=checkbox])]:pr-0', className)}
+		className={cn('flex-col flex-1 p-2 justify-center [&:has([role=checkbox])]:pr-0', className)}
 		{...props}
 	>
-		<View className="shrink w-full">{children}</View>
+		{children}
 	</TablePrimitive.Cell>
 ));
 TableCell.displayName = 'TableCell';
