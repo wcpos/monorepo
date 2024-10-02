@@ -22,14 +22,16 @@ export const SortIcon = ({ direction, hovered = false }: SortIconProps) => {
 				name="caretUp"
 				size="xs"
 				className={cn(
-					direction === 'asc' ? 'fill-primary' : hovered ? 'fill-foreground' : 'fill-transparent'
+					'-mb-0.5',
+					direction === 'asc' ? 'text-base' : hovered ? 'text-gray-300' : 'text-transparent'
 				)}
 			/>
 			<Icon
 				name="caretDown"
 				size="xs"
 				className={cn(
-					direction === 'desc' ? 'fill-primary' : hovered ? 'fill-foreground' : 'fill-transparent'
+					'-mt-0.5',
+					direction === 'desc' ? 'text-base' : hovered ? 'text-gray-300' : 'text-transparent'
 				)}
 			/>
 		</VStack>

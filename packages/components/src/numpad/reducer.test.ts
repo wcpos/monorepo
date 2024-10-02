@@ -120,4 +120,11 @@ describe('reducer', () => {
 			expect(state).toEqual({ currentOperand: '110', overwrite: true }); // 110% of 100 is 110
 		});
 	});
+
+	it('Fixes this bug:', () => {
+		let state = { currentOperand: '0.' };
+		state = reducer(state, { type: ACTIONS.DELETE_DIGIT });
+		state = reducer(state, { type: ACTIONS.ADD_DIGIT, payload: { digit: '.' } });
+		expect(state).toEqual({ currentOperand: '0.' });
+	});
 });

@@ -28,3 +28,19 @@ export const getTailwindJustifyClass = (align: 'left' | 'right' | 'center') => {
 			return '';
 	}
 };
+
+/**
+ *
+ */
+export const getFlexAlign = (align: 'left' | 'right' | 'center') => {
+	switch (align) {
+		case 'left':
+			return 'start';
+		case 'right':
+			return 'end';
+		case 'center':
+			return 'center';
+		default:
+			return 'start';
+	}
+};

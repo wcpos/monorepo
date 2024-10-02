@@ -21,7 +21,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DataTableRow } from './row';
-import { cn, getTailwindJustifyClass } from '../lib/utils';
+import { cn, getFlexAlign } from '../lib/utils';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table';
 
 interface DataTableProps<TData, TValue> {
@@ -81,6 +81,7 @@ const DataTable = <TData, TValue>({
 	tableState,
 	enableRowSelection,
 	onRowSelectionChange,
+	onSortingChange,
 	...props
 }: DataTableProps<TData, TValue>) => {
 	const [expandedRef, expanded$] = useObservableRef({} as ExpandedState);
@@ -117,9 +118,7 @@ const DataTable = <TData, TValue>({
 		enableRowSelection: !!enableRowSelection,
 		onRowSelectionChange: onRowSelectionChange ? onRowSelectionChange : undefined,
 		manualSorting: true,
-		onSortingChange: (data) => {
-			console.log(data);
-		},
+		onSortingChange,
 	});
 
 	/**
@@ -127,9 +126,9 @@ const DataTable = <TData, TValue>({
 	 */
 	const defaultRenderRow = React.useCallback(
 		({ item: row, index }: { item: Row<TData>; index: number }) => (
-			<DataTableRow row={row} index={index} onRowPress={onRowPress} columns={columns} />
+			<DataTableRow row={row} index={index} columns={columns} />
 		),
-		[onRowPress, columns]
+		[columns]
 	);
 
 	/**
@@ -181,12 +180,11 @@ const DataTable = <TData, TValue>({
 								return (
 									<TableHead
 										key={header.id}
-										className={cn(
-											meta?.flex && `flex-${meta.flex}`,
-											meta?.width && 'flex-none',
-											meta?.align && getTailwindJustifyClass(meta.align)
-										)}
-										style={{ width: meta?.width ? meta.width : undefined }}
+										style={{
+											flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
+											flexBasis: meta?.width ? meta.width : undefined,
+											alignItems: getFlexAlign(meta?.align || 'left'),
+										}}
 									>
 										{header.isPlaceholder || meta?.hideLabel
 											? null

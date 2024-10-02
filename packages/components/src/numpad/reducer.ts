@@ -76,7 +76,7 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 			if (state.overwrite || payload.overwrite) {
 				return {
 					...state,
-					currentOperand: payload.digit,
+					currentOperand: payload.digit === '.' ? '0.' : payload.digit,
 					overwrite: false,
 				};
 			}
@@ -150,8 +150,15 @@ export function reducer(state: CalculatorState, action: Action, config?: Config)
 				return { ...state, currentOperand: null };
 			}
 
+			if (state.currentOperand.length === 2 && state.currentOperand.startsWith('-')) {
+				return {
+					...state,
+					currentOperand: null,
+				};
+			}
+
 			if (state.currentOperand.endsWith('.')) {
-				if (state.currentOperand.length <= 1) {
+				if (state.currentOperand.length <= 2) {
 					// Operand is only the decimalSeparator
 					return { ...state, currentOperand: null };
 				} else {
