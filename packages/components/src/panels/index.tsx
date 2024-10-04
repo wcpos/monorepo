@@ -42,7 +42,7 @@ const PanelResizeHandle = () => {
 		rowHeight,
 		containerWidth,
 		containerHeight,
-		onLayout,
+		onResize,
 		isActivePanGesture,
 		startValue,
 		direction,
@@ -81,7 +81,7 @@ const PanelResizeHandle = () => {
 					isActivePanGesture.value = false;
 					const style =
 						direction === 'horizontal' ? { width: columnWidth.value } : { height: rowHeight.value };
-					runOnJS(onLayout)(style);
+					runOnJS(onResize)(style);
 				}),
 		[
 			columnWidth,
@@ -89,7 +89,7 @@ const PanelResizeHandle = () => {
 			containerWidth.value,
 			direction,
 			isActivePanGesture,
-			onLayout,
+			onResize,
 			rowHeight,
 			startValue,
 		]
@@ -140,7 +140,20 @@ const Panel = ({ children, index, defaultSize = 50 }) => {
 	const { columnWidth, rowHeight, direction } = React.useContext(PanelGroupContext);
 
 	/**
-	 *
+	 * Initialize columnWidth.value or rowHeight.value if they're null
+	 */
+	React.useEffect(() => {
+		if (index === 0) {
+			if (direction === 'horizontal' && columnWidth.value == null) {
+				columnWidth.value = defaultSize;
+			} else if (direction === 'vertical' && rowHeight.value == null) {
+				rowHeight.value = defaultSize;
+			}
+		}
+	}, [columnWidth, rowHeight, defaultSize, direction, index]);
+
+	/**
+	 * Animated style for the panel
 	 */
 	const animatedStyle = useAnimatedStyle(() => {
 		if (direction === 'horizontal') {
@@ -160,7 +173,7 @@ Panel.displayName = 'Panel';
 /**
  *
  */
-const PanelGroup = ({ children, onLayout, direction = 'horizontal' }) => {
+const PanelGroup = ({ children, onResize, direction = 'horizontal' }) => {
 	const columnWidth = useSharedValue(null);
 	const rowHeight = useSharedValue(null);
 	const startValue = useSharedValue(columnWidth.value);
@@ -192,7 +205,7 @@ const PanelGroup = ({ children, onLayout, direction = 'horizontal' }) => {
 				isActivePanGesture,
 				containerWidth,
 				containerHeight,
-				onLayout,
+				onResize,
 			}}
 		>
 			<View
