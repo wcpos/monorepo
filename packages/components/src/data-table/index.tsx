@@ -21,7 +21,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DataTableRow } from './row';
-import { cn, getFlexAlign } from '../lib/utils';
+import { getFlexAlign } from '../lib/utils';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '../table';
 
 interface DataTableProps<TData, TValue> {
@@ -161,7 +161,7 @@ const DataTable = <TData, TValue>({
 	 */
 	return (
 		<DataTableContext.Provider value={context}>
-			{isRefreshing && (
+			{/* {isRefreshing && (
 				<Animated.View
 					entering={FadeInUp}
 					exiting={FadeOutUp}
@@ -169,7 +169,7 @@ const DataTable = <TData, TValue>({
 				>
 					<ActivityIndicator size="small" className="text-foreground" />
 				</Animated.View>
-			)}
+			)} */}
 			<Table className="flex-1">
 				<TableHeader>
 					{table.getHeaderGroups().map((headerGroup) => (
