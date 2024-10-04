@@ -3,19 +3,26 @@ import * as React from 'react';
 import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
 
+import {
+	Modal,
+	ModalContent,
+	ModalTitle,
+	ModalHeader,
+	ModalBody,
+} from '@wcpos/components/src/modal';
 import { WebView } from '@wcpos/components/src/webview';
 import log from '@wcpos/utils/src/logger';
 
-interface LoginProps {
-	loginUrl: string;
-	wpCredentials: import('@wcpos/database').WPCredentialsDocument;
-}
+import { useAppState } from '../../contexts/app-state';
+import { useT } from '../../contexts/translations';
 
 /**
  *
  */
-const Login = ({ loginUrl, wpCredentials }: LoginProps) => {
+export const Login = () => {
+	const { site, wpCredentials } = useAppState();
 	const navigation = useNavigation();
+	const t = useT();
 
 	/**
 	 *
@@ -41,18 +48,25 @@ const Login = ({ loginUrl, wpCredentials }: LoginProps) => {
 	);
 
 	return (
-		<WebView
-			src={loginUrl}
-			style={{ height: '500px' }}
-			onMessage={(event) => {
-				const action = get(event, 'data.action');
-				const payload = get(event, 'data.payload');
-				if (action === 'wcpos-wp-credentials') {
-					handleLogin(payload);
-				}
-			}}
-		/>
+		<Modal>
+			<ModalContent>
+				<ModalHeader>
+					<ModalTitle>{t('Login', { _tags: 'core' })}</ModalTitle>
+				</ModalHeader>
+				<ModalBody>
+					<WebView
+						src={`${site.home}/wcpos-login`}
+						style={{ height: '500px' }}
+						onMessage={(event) => {
+							const action = get(event, 'data.action');
+							const payload = get(event, 'data.payload');
+							if (action === 'wcpos-wp-credentials') {
+								handleLogin(payload);
+							}
+						}}
+					/>
+				</ModalBody>
+			</ModalContent>
+		</Modal>
 	);
 };
-
-export default Login;

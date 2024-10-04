@@ -3,7 +3,7 @@ import { useWindowDimensions } from 'react-native';
 
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createStackNavigator } from '@react-navigation/stack';
-import { useForceUpdate, useObservableEagerState, useSubscription } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { isRxDatabase } from 'rxdb';
 
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
@@ -20,7 +20,7 @@ import CustomersNavigator from './customers';
 import { Errors } from './errors';
 import useKeyboardShortcuts from './hooks/use-keyboard-shortcuts';
 import { useRestHttpClient } from './hooks/use-rest-http-client';
-import Login from './login';
+import { Login } from './login';
 import { LogsWithProviders } from './logs';
 import OrdersNavigator from './orders';
 import POSNavigator from './pos';
@@ -34,7 +34,6 @@ import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';
 import { useLocale } from '../../hooks/use-locale';
 import { useVersionCheck } from '../../hooks/use-version-check';
-import { ModalLayout } from '../components/modal-layout';
 
 export type MainStackParamList = {
 	MainDrawer: undefined;
@@ -174,27 +173,6 @@ const DrawerNavigator = ({ navigation }) => {
 /**
  *
  */
-const LoginScreen = () => {
-	const { site, wpCredentials } = useAppState();
-	const t = useT();
-	// TODO - need to add a login url to the site object
-
-	return (
-		<ModalLayout
-			title={t('Login', { _tags: 'core' })}
-			// primaryAction={{ label: t('Login', { _tags: 'core' }) }}
-			// secondaryActions={[
-			// 	{ label: t('Cancel', { _tags: 'core' }), action: () => navigation.goBack() },
-			// ]}
-		>
-			<Login loginUrl={`${site.home}/wcpos-login`} wpCredentials={wpCredentials} />
-		</ModalLayout>
-	);
-};
-
-/**
- *
- */
 const TaxRatesScreen = () => {
 	const query = useQuery({
 		queryKeys: ['tax-rates'],
@@ -250,7 +228,7 @@ const MainNavigator = () => {
 							<Stack.Screen name="MainDrawer" component={DrawerNavigator} />
 							<Stack.Group screenOptions={{ presentation: 'transparentModal' }}>
 								<Stack.Screen name="Settings" component={SettingsTabs} />
-								<Stack.Screen name="Login" component={LoginScreen} />
+								<Stack.Screen name="Login" component={Login} />
 								<Stack.Screen name="TaxRates" component={TaxRatesScreen} />
 							</Stack.Group>
 						</Stack.Navigator>

@@ -19,9 +19,10 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
-import { AmountWidget, amountWidgetSchema } from '../../../../components/amount-widget';
+import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
+import { NumberInput } from '../../../../components/number-input';
 import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
 import { useFeeLineData } from '../../../hooks/use-fee-line-data';
@@ -31,10 +32,12 @@ import { useUpdateFeeLine } from '../../../hooks/use-update-fee-line';
  *
  */
 const formSchema = z.object({
+	name: z.string().optional(),
 	prices_include_tax: z.boolean().optional(),
 	tax_status: z.enum(['taxable', 'none']),
 	tax_class: z.string().optional(),
-	...amountWidgetSchema.shape,
+	amount: z.string().optional(),
+	percent: z.boolean().default(false),
 	meta_data: metaDataSchema,
 });
 
@@ -60,6 +63,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 	const form = useForm<z.infer<typeof formSchema>>({
 		resolver: zodResolver(formSchema),
 		defaultValues: {
+			name: item.name,
 			amount,
 			percent,
 			tax_status: item.tax_status,
@@ -76,6 +80,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 	const handleSave = React.useCallback(
 		(data: z.infer<typeof formSchema>) => {
 			const {
+				name,
 				amount,
 				percent,
 				tax_status,
@@ -84,7 +89,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 				percent_of_cart_total_with_tax,
 			} = data;
 			updateFeeLine(uuid, {
-				// total: isEmpty(total) ? '0' : total,
+				name,
 				amount,
 				tax_status,
 				tax_class: tax_class === 'standard' ? '' : tax_class,
@@ -98,26 +103,52 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 	);
 
 	/**
+	 * Watch for changes to `percent`
+	 */
+	const togglePercentage = form.watch('percent');
+
+	/**
 	 *
 	 */
 	return (
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
+				<FormField
+					control={form.control}
+					name="name"
+					render={({ field }) => (
+						<FormInput
+							label={t('Fee Name', { _tags: 'core' })}
+							placeholder={t('Fee', { _tags: 'core' })}
+							{...field}
+						/>
+					)}
+				/>
 				<View className="grid grid-cols-2 gap-4">
 					<FormField
 						control={form.control}
 						name="amount"
 						render={({ field }) => (
 							<FormInput
-								customComponent={AmountWidget}
-								label={t('Amount', { _tags: 'core' })}
-								currencySymbol="$"
+								customComponent={togglePercentage ? NumberInput : CurrencyInput}
+								label={
+									togglePercentage
+										? t('Percent', { _tags: 'core' })
+										: t('Amount', { _tags: 'core' })
+								}
 								{...field}
 							/>
 						)}
 					/>
-					<View className="justify-center">
+					<VStack className="justify-center">
+						<FormField
+							control={form.control}
+							name="percent"
+							render={({ field }) => (
+								<FormSwitch label={t('Percentage of Cart Total', { _tags: 'core' })} {...field} />
+							)}
+						/>
 						<FormField
 							control={form.control}
 							name="prices_include_tax"
@@ -125,7 +156,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 								<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
 							)}
 						/>
-					</View>
+					</VStack>
 					<FormField
 						control={form.control}
 						name="tax_class"

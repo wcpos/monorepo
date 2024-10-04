@@ -35,7 +35,7 @@ export const Taxes = ({ totalTax, taxLines = [] }: Props) => {
 						// tax_total and shipping_tax_total are separate, but we will display together
 						const displayTax = parseFloat(tax.tax_total) + parseFloat(tax.shipping_tax_total);
 						return (
-							<HStack key={index}>
+							<HStack key={index} className="justify-end">
 								<Text className="text-xs text-muted-foreground">
 									{inclOrExcl} {tax.label}
 								</Text>

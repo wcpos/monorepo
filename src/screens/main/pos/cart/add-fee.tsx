@@ -20,8 +20,9 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
-import { AmountWidget, amountWidgetSchema } from '../../components/amount-widget';
+import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
+import { NumberInput } from '../../components/number-input';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
 import { useAddFee } from '../hooks/use-add-fee';
@@ -34,7 +35,8 @@ const formSchema = z.object({
 	prices_include_tax: z.boolean().optional(),
 	tax_status: z.enum(['taxable', 'none']),
 	tax_class: z.string().optional(),
-	...amountWidgetSchema.shape,
+	amount: z.string().optional(),
+	percent: z.boolean().default(false),
 });
 
 /**
@@ -56,6 +58,7 @@ export const AddFee = () => {
 			prices_include_tax: true,
 			tax_status: 'taxable',
 			tax_class: 'standard',
+			percent: false,
 		},
 	});
 
@@ -75,7 +78,6 @@ export const AddFee = () => {
 			} = data;
 			addFee({
 				name: isEmpty(name) ? t('Fee', { _tags: 'core' }) : name,
-				// total: isEmpty(total) ? '0' : total,
 				amount,
 				tax_status,
 				tax_class: tax_class === 'standard' ? '' : tax_class,
@@ -87,6 +89,11 @@ export const AddFee = () => {
 		},
 		[addFee, onOpenChange, t]
 	);
+
+	/**
+	 * Watch for changes to `percent`
+	 */
+	const togglePercentage = form.watch('percent');
 
 	/**
 	 *
@@ -107,26 +114,38 @@ export const AddFee = () => {
 							/>
 						)}
 					/>
-					<FormField
-						control={form.control}
-						name="amount"
-						render={({ field }) => (
-							<FormInput
-								customComponent={AmountWidget}
-								label={t('Amount', { _tags: 'core' })}
-								currencySymbol="$"
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="prices_include_tax"
-						render={({ field }) => (
-							<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
-						)}
-					/>
 					<View className="grid grid-cols-2 gap-4">
+						<FormField
+							control={form.control}
+							name="amount"
+							render={({ field }) => (
+								<FormInput
+									customComponent={togglePercentage ? NumberInput : CurrencyInput}
+									label={
+										togglePercentage
+											? t('Percent', { _tags: 'core' })
+											: t('Amount', { _tags: 'core' })
+									}
+									{...field}
+								/>
+							)}
+						/>
+						<VStack className="justify-center">
+							<FormField
+								control={form.control}
+								name="percent"
+								render={({ field }) => (
+									<FormSwitch label={t('Percentage of Cart Total', { _tags: 'core' })} {...field} />
+								)}
+							/>
+							<FormField
+								control={form.control}
+								name="prices_include_tax"
+								render={({ field }) => (
+									<FormSwitch label={t('Amount Includes Tax', { _tags: 'core' })} {...field} />
+								)}
+							/>
+						</VStack>
 						<FormField
 							control={form.control}
 							name="tax_class"

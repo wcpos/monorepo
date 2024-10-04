@@ -4,7 +4,7 @@ import { flexRender } from '@tanstack/react-table';
 import { useObservableSuspense } from 'observable-hooks';
 
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
-import { cn, getTailwindJustifyClass } from '@wcpos/components/src/lib/utils';
+import { cn, getFlexAlign } from '@wcpos/components/src/lib/utils';
 import { Suspense } from '@wcpos/components/src/suspense';
 import { TableRow, TableCell } from '@wcpos/components/src/table';
 import { VStack } from '@wcpos/components/src/vstack';
@@ -67,13 +67,12 @@ export const VariationsTable = ({ query, row }: Props) => {
 							return (
 								<TableCell
 									key={cell.id}
-									className={cn(
-										meta?.flex && `flex-${meta.flex}`,
-										meta?.width && 'flex-none',
-										meta?.align && getTailwindJustifyClass(meta.align),
-										cell.column.id === 'image' && 'relative'
-									)}
-									style={{ width: meta?.width ? meta.width : undefined }}
+									className={cn(cell.column.id === 'image' && 'relative')}
+									style={{
+										flexGrow: meta?.width ? 0 : meta?.flex ? meta.flex : 1,
+										flexBasis: meta?.width ? meta.width : undefined,
+										alignItems: getFlexAlign(meta?.align || 'left'),
+									}}
 								>
 									{flexRender(cellRenderer, subrowCellContext)}
 								</TableCell>

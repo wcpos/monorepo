@@ -1,7 +1,8 @@
 import * as React from 'react';
 
 import find from 'lodash/find';
-import { useObservableEagerState } from 'observable-hooks';
+import { useObservableState } from 'observable-hooks';
+import { skip } from 'rxjs/operators';
 
 import { DataTable as Table, DataTableProps } from '@wcpos/components/src/data-table';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
@@ -54,16 +55,17 @@ const DataTable = <TDocument extends DocumentType>({
 	...props
 }: Props<TDocument>) => {
 	const { uiSettings, getUILabel } = useUISettings(id);
-	const uiColumns = useObservableEagerState(uiSettings.columns$);
+	/**
+	 * FIXME: A bug started happening where useObservableEagerState(uiSettings.columns$)
+	 * causes an infinite loop. This hack fixes it for now, but I would love to know why
+	 * this just started happening.
+	 */
+	const uiColumns = useObservableState(uiSettings.columns$.pipe(skip(1)), uiSettings.columns);
 	const result = useInfiniteScroll(query);
 	const sorting = React.useRef({
 		sortBy: uiSettings.sortBy,
 		sortDirection: uiSettings.sortDirection,
 	});
-
-	/**
-	 *
-	 */
 
 	/**
 	 *
@@ -143,8 +145,6 @@ const DataTable = <TDocument extends DocumentType>({
 	 */
 	return (
 		<Table
-			// isRefreshing={isRefreshing}
-			// onRefresh={onRefresh}
 			data={result.hits.map(({ document }) => document)}
 			columns={columns}
 			onEndReached={result.nextPage}

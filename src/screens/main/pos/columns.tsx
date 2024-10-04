@@ -18,8 +18,8 @@ const ResizableColumns = () => {
 	 *
 	 */
 	return (
-		<PanelGroup defaultSize={uiSettings.width} onLayout={({ width }) => patchUI({ width })}>
-			<Panel>
+		<PanelGroup onResize={({ width }) => patchUI({ width })}>
+			<Panel defaultSize={uiSettings.width}>
 				<Suspense>
 					<ErrorBoundary>
 						<Products isColumn />

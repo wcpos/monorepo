@@ -16,7 +16,8 @@ interface Props extends HeaderContext<any, any> {
  */
 export const DataTableHeader = ({ title, column, header, table }: Props) => {
 	const disableSort = column.columnDef.meta?.disableSort;
-	const isSorted = table.getState().sorting.current.sortBy === column.id;
+	const { sortBy, sortDirection } = table.getState().sorting?.current || {};
+	const isSorted = sortBy === column.id;
 
 	if (disableSort) {
 		return <Text className={'font-medium text-muted-foreground'}>{title}</Text>;
@@ -27,8 +28,7 @@ export const DataTableHeader = ({ title, column, header, table }: Props) => {
 			onPress={() =>
 				table.setSorting({
 					sortBy: column.id,
-					sortDirection:
-						isSorted && table.getState().sorting.current.sortDirection === 'asc' ? 'desc' : 'asc',
+					sortDirection: isSorted && sortDirection === 'asc' ? 'desc' : 'asc',
 				})
 			}
 		>
@@ -37,12 +37,7 @@ export const DataTableHeader = ({ title, column, header, table }: Props) => {
 				return (
 					<HStack className="gap-1">
 						<Text className={'font-medium text-muted-foreground'}>{title}</Text>
-						{showIcon && (
-							<SortIcon
-								direction={isSorted && table.getState().sorting.current.sortDirection}
-								hovered={hovered}
-							/>
-						)}
+						{showIcon && <SortIcon direction={isSorted && sortDirection} hovered={hovered} />}
 					</HStack>
 				);
 			}}

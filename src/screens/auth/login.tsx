@@ -4,12 +4,18 @@ import { useNavigation } from '@react-navigation/native';
 import get from 'lodash/get';
 import { useObservableSuspense } from 'observable-hooks';
 
+import {
+	Modal,
+	ModalContent,
+	ModalHeader,
+	ModalTitle,
+	ModalBody,
+} from '@wcpos/components/src/modal';
 import { WebView } from '@wcpos/components/src/webview';
 import log from '@wcpos/utils/src/logger';
 
 import { useAppState } from '../../contexts/app-state';
 import { useT } from '../../contexts/translations';
-import { ModalLayout } from '../components/modal-layout';
 
 /**
  *
@@ -62,23 +68,27 @@ const Login = ({ route }) => {
 		[navigation, site, userDB.wp_credentials]
 	);
 
-	/**
-	 *
-	 */
 	return (
-		<ModalLayout title={t('Login', { _tags: 'core' })}>
-			<WebView
-				src={`${site.home}/wcpos-login`}
-				style={{ height: '500px' }}
-				onMessage={(event) => {
-					const action = get(event, 'data.action');
-					const payload = get(event, 'data.payload');
-					if (action === 'wcpos-wp-credentials') {
-						handleLogin(payload);
-					}
-				}}
-			/>
-		</ModalLayout>
+		<Modal>
+			<ModalContent>
+				<ModalHeader>
+					<ModalTitle>{t('Login', { _tags: 'core' })}</ModalTitle>
+				</ModalHeader>
+				<ModalBody>
+					<WebView
+						src={`${site.home}/wcpos-login`}
+						style={{ height: '500px' }}
+						onMessage={(event) => {
+							const action = get(event, 'data.action');
+							const payload = get(event, 'data.payload');
+							if (action === 'wcpos-wp-credentials') {
+								handleLogin(payload);
+							}
+						}}
+					/>
+				</ModalBody>
+			</ModalContent>
+		</Modal>
 	);
 };
 

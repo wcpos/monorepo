@@ -1,13 +1,12 @@
 import * as React from 'react';
 
-import { ObservableResource, useObservable } from 'observable-hooks';
-import { switchMap, distinctUntilChanged, tap } from 'rxjs/operators';
+import { ObservableResource, useObservableSuspense } from 'observable-hooks';
 
 import log from '@wcpos/utils/src/logger';
 
+import { hydratedSettings } from './hydrate';
 import { useUILabel } from './use-ui-label';
 import {
-	mergeWithInitalValues,
 	UISettingSchema,
 	UISettingState,
 	resetToInitialValues,
@@ -20,16 +19,13 @@ interface UISettingsProviderProps {
 	children: React.ReactNode;
 }
 
+interface SuspendedSettingsProps {
+	children: React.ReactNode;
+	resource: ObservableResource<Record<UISettingID, UISettingState<UISettingID>>>;
+}
+
 export interface UISettingsContextValue {
-	resources: {
-		'pos-products': ObservableResource<UISettingState<'pos-products'>>;
-		'pos-cart': ObservableResource<UISettingState<'pos-cart'>>;
-		products: ObservableResource<UISettingState<'products'>>;
-		orders: ObservableResource<UISettingState<'orders'>>;
-		customers: ObservableResource<UISettingState<'customers'>>;
-		'reports-orders': ObservableResource<UISettingState<'reports-orders'>>;
-		logs: ObservableResource<UISettingState<'logs'>>;
-	};
+	states: Record<UISettingID, UISettingState<UISettingID>>;
 	getLabel: (id: string, key: string) => string;
 	reset: (id: UISettingID) => Promise<void>;
 	patch: <T extends UISettingID>(
@@ -41,106 +37,21 @@ export interface UISettingsContextValue {
 export const UISettingsContext = React.createContext<UISettingsContextValue>(null);
 
 /**
- * @TODO - this is messy, needs to be refactored, perhaps register uiSettings as part of
- * Store State Manager, and then use that to create the uiResources
+ *
  */
-export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
+const SuspendedSettings = ({ children, resource }: SuspendedSettingsProps) => {
 	const { storeDB } = useAppState();
 	const { getLabel } = useUILabel();
 
-	/**
-	 * Create UI Observables
-	 */
-	const posProducts$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'pos-products'>>('pos-products_v2');
-					await mergeWithInitalValues('pos-products', state);
-					return state;
-				})
-			),
-		[storeDB]
-	);
-
-	const posCart$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'pos-cart'>>('pos-cart_v2');
-					await mergeWithInitalValues('pos-cart', state);
-					return state;
-				})
-			),
-		[storeDB]
-	);
-
-	const products$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'products'>>('products_v2');
-					await mergeWithInitalValues('products', state);
-					return state;
-				})
-			),
-		[storeDB]
-	);
-
-	const orders$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'orders'>>('orders_v2');
-					await mergeWithInitalValues('orders', state);
-					return state;
-				})
-			),
-		[storeDB]
-	);
-
-	const customers$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'customers'>>('customers_v2');
-					await mergeWithInitalValues('customers', state);
-					return state;
-				})
-			),
-		[storeDB]
-	);
-
-	const reportsOrders$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'reports-orders'>>('reports-orders_v2');
-					await mergeWithInitalValues('reports-orders', state);
-					return state;
-				})
-			),
-		[storeDB]
-	);
-
-	const logs$ = useObservable(
-		(inputs$) =>
-			inputs$.pipe(
-				switchMap(async ([db]) => {
-					const state = await db.addState<UISettingSchema<'logs'>>('logs_v2');
-					await mergeWithInitalValues('logs', state);
-					return state;
-				})
-			),
-		[storeDB]
-	);
+	// Use useObservableSuspense to get the hydrated states
+	const states = useObservableSuspense(resource);
 
 	/**
 	 * Reset UI Settings
 	 */
 	const reset = React.useCallback(
 		async (id: UISettingID) => {
-			const state = await storeDB.addState(id + '_v2');
+			const state = await storeDB.addState(`${id}_v2`);
 			await resetToInitialValues(id, state);
 		},
 		[storeDB]
@@ -150,47 +61,39 @@ export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
 	 * Patch UI Settings
 	 */
 	const patch = React.useCallback(
-		async (id: UISettingID, data: Partial<UISettingSchema<UISettingID>>) => {
-			const state = await storeDB.addState(id + '_v2');
+		async <T extends UISettingID>(id: T, data: Partial<UISettingSchema<T>>) => {
+			const state = await storeDB.addState(`${id}_v2`);
 			await patchState(state, data);
 		},
 		[storeDB]
 	);
 
 	/**
-	 * Create UI Resources
+	 * Context value
 	 */
-	const value = React.useMemo(
+	const value = React.useMemo<UISettingsContextValue>(
 		() => ({
-			resources: {
-				'pos-products': new ObservableResource(posProducts$),
-				'pos-cart': new ObservableResource(posCart$),
-				products: new ObservableResource(products$),
-				orders: new ObservableResource(orders$),
-				customers: new ObservableResource(customers$),
-				'reports-orders': new ObservableResource(reportsOrders$),
-				logs: new ObservableResource(logs$),
-			},
+			states,
 			getLabel,
 			reset,
 			patch,
 		}),
-		[
-			customers$,
-			getLabel,
-			logs$,
-			orders$,
-			patch,
-			posCart$,
-			posProducts$,
-			products$,
-			reportsOrders$,
-			reset,
-		]
+		[states, getLabel, reset, patch]
 	);
 
-	/**
-	 *
-	 */
 	return <UISettingsContext.Provider value={value}>{children}</UISettingsContext.Provider>;
+};
+
+/**
+ *
+ */
+export const UISettingsProvider = ({ children }: UISettingsProviderProps) => {
+	const { storeDB } = useAppState();
+
+	const resource = React.useMemo(() => {
+		const settings$ = hydratedSettings(storeDB);
+		return new ObservableResource(settings$);
+	}, [storeDB]);
+
+	return <SuspendedSettings resource={resource}>{children}</SuspendedSettings>;
 };

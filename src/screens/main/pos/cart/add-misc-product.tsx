@@ -13,8 +13,8 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
+import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
-import { NumberInput } from '../../components/number-input';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
 import { useAddProduct } from '../hooks/use-add-product';
@@ -98,7 +98,7 @@ export const AddMiscProduct = () => {
 						name="price"
 						render={({ field }) => (
 							<FormInput
-								customComponent={NumberInput}
+								customComponent={CurrencyInput}
 								label={t('Price', { _tags: 'core' })}
 								placeholder="0"
 								{...field}

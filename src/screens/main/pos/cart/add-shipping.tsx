@@ -20,8 +20,8 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
+import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
-import { NumberInput } from '../../components/number-input';
 import { ShippingMethodSelect } from '../../components/shipping-method-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
@@ -115,7 +115,7 @@ export const AddShipping = () => {
 							name="amount"
 							render={({ field }) => (
 								<FormInput
-									customComponent={NumberInput}
+									customComponent={CurrencyInput}
 									label={t('Amount', { _tags: 'core' })}
 									{...field}
 								/>

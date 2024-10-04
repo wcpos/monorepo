@@ -29,7 +29,7 @@ export const ProductVariationImage = ({ row }: CellContext<ProductVariationDocum
 					<Line x1="50%" y1="50%" x2="100%" y2="50%" stroke="#E2E8F0" strokeWidth="1" />
 				</Svg>
 			</View>
-			<View className="pl-3 flex-1">
+			<View className="pl-3 w-full">
 				<Image source={source} recyclingKey={variation.uuid} className="w-full h-20" />
 			</View>
 		</>
