@@ -17,6 +17,13 @@ export const EditableName = ({
 	const [value, setValue] = React.useState(valueProp || defaultValue || '');
 
 	/**
+	 * Update value if prop changes
+	 */
+	React.useEffect(() => {
+		setValue(valueProp);
+	}, [valueProp]);
+
+	/**
 	 *
 	 */
 	const handleSubmit = React.useCallback(() => {

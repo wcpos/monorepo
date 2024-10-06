@@ -1,10 +1,11 @@
 import * as React from 'react';
 
+import { UTCDate } from '@date-fns/utc';
 import { format as formatDate } from 'date-fns';
-import { fromZonedTime } from 'date-fns-tz';
 import get from 'lodash/get';
 import { isRxDocument, RxDocument, RxCollection } from 'rxdb';
 
+import { Toast } from '@wcpos/components/src/toast';
 import type {
 	OrderDocument,
 	ProductDocument,
@@ -12,7 +13,6 @@ import type {
 	ProductVariationDocument,
 } from '@wcpos/database';
 import { useQueryManager } from '@wcpos/query';
-import { Toast } from '@wcpos/components/src/toast';
 import log from '@wcpos/utils/src/logger';
 
 import { useLocalMutation } from './use-local-mutation';
@@ -150,8 +150,7 @@ export const useMutation = ({ collectionName, endpoint }: Props) => {
 				const hasModifiedDate = get(collection, 'schema.jsonSchema.properties.date_modified_gmt');
 
 				if (hasCreatedDate) {
-					const nowUtc = fromZonedTime(new Date(), 'UTC');
-					emptyJSON.date_created_gmt = formatDate(nowUtc, "yyyy-MM-dd'T'HH:mm:ss");
+					emptyJSON.date_created_gmt = formatDate(new UTCDate(), "yyyy-MM-dd'T'HH:mm:ss");
 					if (hasModifiedDate) {
 						emptyJSON.date_modified_gmt = emptyJSON.date_created_gmt;
 					}

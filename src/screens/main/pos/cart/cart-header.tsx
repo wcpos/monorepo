@@ -11,10 +11,10 @@ import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
 
+import { AddNewCustomer } from './add-customer';
 import { Customer } from './customer';
 import { UISettingsForm } from './ui-settings-form';
 import { useT } from '../../../../contexts/translations';
-import { AddNewCustomer } from '../../components/customer/add-new';
 import { CustomerSearch } from '../../components/customer-select';
 import { UISettingsDialog } from '../../components/ui-settings';
 import { useAddCustomer } from '../hooks/use-add-customer';
@@ -87,7 +87,7 @@ export const CartHeader = () => {
 					)}
 				</ErrorBoundary>
 			</View>
-			<AddNewCustomer onAdd={(customer) => addCustomer(customer)} />
+			<AddNewCustomer />
 			<UISettingsDialog title={t('Cart Settings', { _tags: 'core' })}>
 				<UISettingsForm />
 			</UISettingsDialog>

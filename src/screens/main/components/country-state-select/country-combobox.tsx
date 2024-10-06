@@ -39,7 +39,7 @@ const _CountryCombobox = React.forwardRef<React.ElementRef<typeof Combobox>, any
 		 *
 		 */
 		const label = React.useMemo(() => {
-			const selected = options.find((option) => option.value === value.value);
+			const selected = options.find((option) => option.value === value?.value);
 			return selected?.label;
 		}, [options, value]);
 

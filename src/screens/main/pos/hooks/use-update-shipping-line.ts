@@ -18,6 +18,7 @@ type ShippingLine = NonNullable<OrderDocument['shipping_lines']>[number];
  */
 interface Changes {
 	method_title?: string;
+	method_id?: string;
 	instance_id?: string;
 	amount?: string;
 	prices_include_tax?: boolean;

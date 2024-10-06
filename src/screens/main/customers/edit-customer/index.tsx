@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
 
 import {
 	ModalContent,
@@ -13,7 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/src/
 import { Text } from '@wcpos/components/src/text';
 import { Tree } from '@wcpos/components/src/tree';
 
-// import { EditOrderForm } from './form';
 import { EditCustomerForm } from './form';
 import { useT } from '../../../../contexts/translations';
 import useModalRefreshFix from '../../../../hooks/use-modal-refresh-fix';
@@ -29,6 +29,20 @@ export const EditCustomer = ({ resource }: Props) => {
 	const [value, setValue] = React.useState('form');
 	const { format } = useCustomerNameFormat();
 	useModalRefreshFix();
+
+	if (!isRxDocument(customer)) {
+		return (
+			<Modal>
+				<ModalContent size="lg">
+					<ModalHeader>
+						<ModalTitle>
+							<Text>{t('No customer found', { _tags: 'core' })}</Text>
+						</ModalTitle>
+					</ModalHeader>
+				</ModalContent>
+			</Modal>
+		);
+	}
 
 	return (
 		<Modal>

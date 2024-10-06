@@ -14,19 +14,21 @@ import { useT } from '../../../contexts/translations';
  *
  */
 export const billingAddressSchema = z.object({
-	billing: z.object({
-		first_name: z.string().optional(),
-		last_name: z.string().optional(),
-		email: z.preprocess((val) => (val === '' ? undefined : val), z.string().email().optional()),
-		phone: z.string().optional(),
-		company: z.string().optional(),
-		address_1: z.string().optional(),
-		address_2: z.string().optional(),
-		city: z.string().optional(),
-		state: z.string().optional(),
-		country: z.string().optional(),
-		postcode: z.string().optional(),
-	}),
+	billing: z
+		.object({
+			first_name: z.string().optional(),
+			last_name: z.string().optional(),
+			email: z.preprocess((val) => (val === '' ? undefined : val), z.string().email().optional()),
+			phone: z.string().optional(),
+			company: z.string().optional(),
+			address_1: z.string().optional(),
+			address_2: z.string().optional(),
+			city: z.string().optional(),
+			state: z.string().optional(),
+			country: z.string().optional(),
+			postcode: z.string().optional(),
+		})
+		.optional(),
 });
 
 /**

@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { UTCDate, utc } from '@date-fns/utc';
 import {
 	parseISO,
 	format,
@@ -8,7 +9,6 @@ import {
 	isToday,
 	isValid,
 } from 'date-fns';
-import { toZonedTime } from 'date-fns-tz';
 import { useObservableState } from 'observable-hooks';
 import { switchMap, map, filter } from 'rxjs/operators';
 
@@ -24,7 +24,6 @@ export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', from
 	const t = useT();
 	const heartbeat$ = useHeartbeatObservable(60000); // every minute
 	const { visibile$ } = usePageVisibility();
-	const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 	let gmtDateObject;
 
 	// Determine if gmtDate is an ISO string or a Unix timestamp
@@ -36,19 +35,17 @@ export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', from
 		throw new Error('Invalid date format');
 	}
 
-	const localDate = toZonedTime(gmtDateObject, timeZone);
-
 	/**
 	 *
 	 */
 	const formatDate = React.useCallback(() => {
-		if (!isValid(localDate)) {
+		if (!isValid(gmtDateObject)) {
 			return null;
 		}
 		if (fromNow) {
-			const now = new Date();
-			const diffInMinutes = differenceInMinutes(now, localDate);
-			const diffInHours = differenceInHours(now, localDate);
+			const now = new UTCDate();
+			const diffInMinutes = differenceInMinutes(now, gmtDateObject);
+			const diffInHours = differenceInHours(now, gmtDateObject);
 
 			if (diffInMinutes < 1) {
 				return t('just now', { _tags: 'core' });
@@ -61,19 +58,19 @@ export const useDateFormat = (gmtDate = '', formatPattern = 'MMMM d, yyyy', from
 			} else if (diffInHours < 24) {
 				return t('{x} hours ago', { _tags: 'core', x: diffInHours });
 			} else {
-				return format(localDate, formatPattern);
+				return format(gmtDateObject, formatPattern, { in: utc });
 			}
 		} else {
-			return format(localDate, formatPattern);
+			return format(gmtDateObject, formatPattern, { in: utc });
 		}
-	}, [localDate, fromNow, t, formatPattern]);
+	}, [gmtDateObject, fromNow, t, formatPattern]);
 
 	/**
 	 *
 	 */
 	return useObservableState(
 		visibile$.pipe(
-			filter(() => isToday(localDate)),
+			filter(() => isToday(gmtDateObject, { in: utc })),
 			switchMap(() => heartbeat$),
 			map(formatDate)
 		),

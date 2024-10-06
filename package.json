@@ -14,6 +14,7 @@
     "clear-jest": "jest --clearCache"
   },
   "dependencies": {
+    "@date-fns/utc": "^2.1.0",
     "@hookform/error-message": "^2.0.1",
     "@hookform/resolvers": "^3.9.0",
     "@react-native-community/masked-view": "0.1.11",
@@ -36,7 +37,6 @@
     "axios": "1.7.7",
     "bottleneck": "^2.19.5",
     "date-fns": "4.1.0",
-    "date-fns-tz": "^3.1.3",
     "expo-barcode-scanner": "~13.0.1",
     "expo-crypto": "^13.0.2",
     "expo-haptics": "~13.0.1",

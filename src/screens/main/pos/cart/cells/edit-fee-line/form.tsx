@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -36,7 +37,7 @@ const formSchema = z.object({
 	prices_include_tax: z.boolean().optional(),
 	tax_status: z.enum(['taxable', 'none']),
 	tax_class: z.string().optional(),
-	amount: z.string().optional(),
+	amount: z.number().optional(),
 	percent: z.boolean().default(false),
 	meta_data: metaDataSchema,
 });
@@ -64,7 +65,7 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 		resolver: zodResolver(formSchema),
 		defaultValues: {
 			name: item.name,
-			amount,
+			amount: toNumber(amount),
 			percent,
 			tax_status: item.tax_status,
 			tax_class: item.tax_class === '' ? 'standard' : item.tax_class,
@@ -79,23 +80,14 @@ export const EditFeeLineForm = ({ uuid, item }: Props) => {
 	 */
 	const handleSave = React.useCallback(
 		(data: z.infer<typeof formSchema>) => {
-			const {
-				name,
-				amount,
-				percent,
-				tax_status,
-				tax_class,
-				prices_include_tax,
-				percent_of_cart_total_with_tax,
-			} = data;
 			updateFeeLine(uuid, {
-				name,
-				amount,
-				tax_status,
-				tax_class: tax_class === 'standard' ? '' : tax_class,
-				percent,
-				prices_include_tax,
-				percent_of_cart_total_with_tax,
+				name: data.name,
+				amount: String(data.amount),
+				tax_status: data.tax_status,
+				tax_class: data.tax_class === 'standard' ? '' : data.tax_class,
+				percent: data.percent,
+				prices_include_tax: data.prices_include_tax,
+				percent_of_cart_total_with_tax: data.percent_of_cart_total_with_tax,
 			});
 			onOpenChange(false);
 		},

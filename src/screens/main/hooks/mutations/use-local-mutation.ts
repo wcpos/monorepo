@@ -1,7 +1,7 @@
 import * as React from 'react';
 
+import { UTCDate } from '@date-fns/utc';
 import { format as formatDate } from 'date-fns';
-import { fromZonedTime } from 'date-fns-tz';
 import cloneDeep from 'lodash/cloneDeep';
 import get from 'lodash/get';
 import set from 'lodash/set';
@@ -41,8 +41,7 @@ export const useLocalMutation = () => {
 				const hasDate = get(document, 'collection.schema.jsonSchema.properties.date_modified_gmt');
 
 				if (hasDate) {
-					const nowUtc = fromZonedTime(new Date(), 'UTC');
-					data.date_modified_gmt = formatDate(nowUtc, "yyyy-MM-dd'T'HH:mm:ss");
+					data.date_modified_gmt = formatDate(new UTCDate(), "yyyy-MM-dd'T'HH:mm:ss");
 				}
 
 				const latest = document.getLatest(); // This seems to be required, else rxdb gives conflict error.

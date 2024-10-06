@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -12,6 +13,7 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
+import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
 import { NumberInput } from '../../../../components/number-input';
@@ -24,9 +26,11 @@ import { useUpdateLineItem } from '../../../hooks/use-update-line-item';
  *
  */
 const formSchema = z.object({
+	name: z.string().optional(),
 	sku: z.string().optional(),
-	price: z.string().optional(),
-	regular_price: z.string().optional(),
+	quantity: z.number().optional(),
+	price: z.number().optional(),
+	regular_price: z.number().optional(),
 	tax_status: z.enum(['taxable', 'none']),
 	tax_class: z.string().optional(),
 	meta_data: metaDataSchema,
@@ -53,9 +57,11 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 	const form = useForm<z.infer<typeof formSchema>>({
 		resolver: zodResolver(formSchema),
 		defaultValues: {
+			name: item.name,
 			sku: item.sku,
-			price,
-			regular_price,
+			quantity: item.quantity,
+			price: toNumber(price),
+			regular_price: toNumber(regular_price),
 			tax_status,
 			tax_class: item.tax_class === '' ? 'standard' : item.tax_class,
 			meta_data: item.meta_data,
@@ -67,14 +73,15 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 	 */
 	const handleSave = React.useCallback(
 		(data: z.infer<typeof formSchema>) => {
-			const { sku, price, regular_price, tax_status, tax_class, meta_data } = data;
 			updateLineItem(uuid, {
-				sku,
-				price,
-				regular_price,
-				tax_status,
-				tax_class: tax_class === 'standard' ? '' : tax_class,
-				meta_data,
+				name: data.name,
+				sku: data.sku,
+				quantity: data.quantity,
+				price: String(data.price),
+				regular_price: String(data.regular_price),
+				tax_status: data.tax_status,
+				tax_class: data.tax_class === 'standard' ? '' : data.tax_class,
+				meta_data: data.meta_data,
 			});
 			onOpenChange(false);
 		},
@@ -88,15 +95,37 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
+				<FormField
+					control={form.control}
+					name="name"
+					render={({ field }) => <FormInput label={t('Name', { _tags: 'core' })} {...field} />}
+				/>
 				<View className="grid grid-cols-2 gap-4">
+					<FormField
+						control={form.control}
+						name="sku"
+						render={({ field }) => <FormInput label={t('SKU', { _tags: 'core' })} {...field} />}
+					/>
+					<FormField
+						control={form.control}
+						name="quantity"
+						render={({ field }) => (
+							<FormInput
+								customComponent={NumberInput}
+								label={t('Quantity', { _tags: 'core' })}
+								type="numeric"
+								{...field}
+							/>
+						)}
+					/>
 					<FormField
 						control={form.control}
 						name="price"
 						render={({ field }) => (
 							<FormInput
-								customComponent={NumberInput}
+								customComponent={CurrencyInput}
 								label={t('Price', { _tags: 'core' })}
-								placeholder="0"
+								type="numeric"
 								{...field}
 							/>
 						)}
@@ -106,20 +135,13 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 						name="regular_price"
 						render={({ field }) => (
 							<FormInput
-								customComponent={NumberInput}
+								customComponent={CurrencyInput}
 								label={t('Regular Price', { _tags: 'core' })}
-								placeholder="0"
+								type="numeric"
 								{...field}
 							/>
 						)}
 					/>
-					<View className="col-span-2">
-						<FormField
-							control={form.control}
-							name="sku"
-							render={({ field }) => <FormInput label={t('SKU', { _tags: 'core' })} {...field} />}
-						/>
-					</View>
 					<FormField
 						control={form.control}
 						name="tax_class"

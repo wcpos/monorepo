@@ -1,5 +1,5 @@
+import { UTCDate } from '@date-fns/utc';
 import { format as formatDate } from 'date-fns';
-import { fromZonedTime } from 'date-fns-tz';
 import isEmpty from 'lodash/isEmpty';
 
 import log from '@wcpos/utils/src/logger';
@@ -24,10 +24,7 @@ export const sanitizePrice = (price?: string) => (price && price !== '' ? String
  */
 export const getCurrentGMTDate = () => {
 	// Get the current date and time in UTC
-	const nowUtc = fromZonedTime(new Date(), 'UTC');
-
-	// Format the date in the desired format
-	return formatDate(nowUtc, "yyyy-MM-dd'T'HH:mm:ss");
+	return formatDate(new UTCDate(), "yyyy-MM-dd'T'HH:mm:ss");
 };
 
 /**

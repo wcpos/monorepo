@@ -2,6 +2,8 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import toNumber from 'lodash/toNumber';
+import toString from 'lodash/toString';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -19,9 +21,9 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
+import { CurrencyInput } from '../../../../components/currency-input';
 import { FormErrors } from '../../../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../../../components/meta-data-form';
-import { NumberInput } from '../../../../components/number-input';
 import { ShippingMethodSelect } from '../../../../components/shipping-method-select';
 import { TaxClassSelect } from '../../../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../../../components/tax-status-radio-group';
@@ -32,9 +34,10 @@ import { useUpdateShippingLine } from '../../../hooks/use-update-shipping-line';
  *
  */
 const formSchema = z.object({
+	method_title: z.string().optional(),
 	method_id: z.string().optional(),
 	instance_id: z.string().optional(),
-	amount: z.string().optional(),
+	amount: z.number().optional(),
 	prices_include_tax: z.boolean().optional(),
 	tax_status: z.enum(['taxable', 'none']),
 	tax_class: z.string().optional(),
@@ -62,9 +65,10 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 	const form = useForm<z.infer<typeof formSchema>>({
 		resolver: zodResolver(formSchema),
 		defaultValues: {
+			method_title: item.method_title,
 			method_id: item.method_id,
 			instance_id: item.instance_id,
-			amount,
+			amount: toNumber(amount),
 			prices_include_tax,
 			tax_status,
 			tax_class: tax_class === '' ? 'standard' : tax_class,
@@ -77,14 +81,14 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 	 */
 	const handleSave = React.useCallback(
 		(data: z.infer<typeof formSchema>) => {
-			const { method_id, instance_id, amount, tax_status, tax_class, prices_include_tax } = data;
 			updateShippingLine(uuid, {
-				method_id,
-				instance_id,
-				amount,
-				tax_status,
-				tax_class: tax_class === 'standard' ? '' : tax_class,
-				prices_include_tax,
+				method_title: data.method_title,
+				method_id: data.method_id,
+				instance_id: data.instance_id,
+				amount: String(data.amount),
+				tax_status: data.tax_status,
+				tax_class: data.tax_class === 'standard' ? '' : data.tax_class,
+				prices_include_tax: data.prices_include_tax,
 				meta_data: data.meta_data,
 			});
 			onOpenChange(false);
@@ -99,6 +103,13 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 		<Form {...form}>
 			<VStack className="gap-4">
 				<FormErrors />
+				<FormField
+					control={form.control}
+					name="method_title"
+					render={({ field }) => (
+						<FormInput label={t('Shipping Method Title', { _tags: 'core' })} {...field} />
+					)}
+				/>
 				<View className="grid grid-cols-2 gap-4">
 					<FormField
 						control={form.control}
@@ -123,9 +134,9 @@ export const EditShippingLineForm = ({ uuid, item }: Props) => {
 						name="amount"
 						render={({ field }) => (
 							<FormInput
-								customComponent={NumberInput}
+								customComponent={CurrencyInput}
 								label={t('Amount', { _tags: 'core' })}
-								placeholder="0"
+								type="numeric"
 								{...field}
 							/>
 						)}

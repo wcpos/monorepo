@@ -1,15 +1,14 @@
 import * as React from 'react';
 
-import { StackActions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import get from 'lodash/get';
 import { ObservableResource } from 'observable-hooks';
-import { from } from 'rxjs';
+import { filter } from 'rxjs/operators';
 
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { Suspense } from '@wcpos/components/src/suspense';
 
-import AddCustomer from './add-customer';
+import { AddCustomer } from './add-customer';
 import Customers from './customers';
 import { EditCustomer } from './edit-customer';
 import { useCollection } from '../hooks/use-collection';
@@ -59,11 +58,9 @@ const EditCustomerWithProviders = ({
 }: NativeStackScreenProps<CustomersStackParamList, 'EditCustomer'>) => {
 	const customerID = get(route, ['params', 'customerID']);
 	const { collection } = useCollection('customers');
+	const query = collection.findOneFix(customerID);
 
-	const resource = React.useMemo(
-		() => new ObservableResource(from(collection.findOneFix(customerID).exec())),
-		[collection, customerID]
-	);
+	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);
 
 	return (
 		<ErrorBoundary>
