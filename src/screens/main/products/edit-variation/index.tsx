@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
 
 import {
 	ModalContent,
@@ -19,6 +20,7 @@ import useModalRefreshFix from '../../../../hooks/use-modal-refresh-fix';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').ProductVariationDocument>;
+	parentID: string;
 }
 
 export const EditVariation = ({ resource }: Props) => {
@@ -26,6 +28,20 @@ export const EditVariation = ({ resource }: Props) => {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 	useModalRefreshFix();
+
+	if (!isRxDocument(variation)) {
+		return (
+			<Modal>
+				<ModalContent size="lg">
+					<ModalHeader>
+						<ModalTitle>
+							<Text>{t('No variation found', { _tags: 'core' })}</Text>
+						</ModalTitle>
+					</ModalHeader>
+				</ModalContent>
+			</Modal>
+		);
+	}
 
 	return (
 		<Modal>

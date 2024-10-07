@@ -4,7 +4,6 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { orderBy } from '@shelf/fast-natural-order-by';
 import get from 'lodash/get';
 import { ObservableResource, useObservableEagerState } from 'observable-hooks';
-import { from } from 'rxjs';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
@@ -15,11 +14,9 @@ import Checkout from './checkout';
 import { CurrentOrderProvider } from './contexts/current-order';
 import POS from './pos';
 import { useAppState } from '../../../contexts/app-state';
-import { useT } from '../../../contexts/translations';
-import { ModalLayout } from '../../components/modal-layout';
 import { useCollection } from '../hooks/use-collection';
 // import { useRestHttpClient } from '../hooks/use-rest-http-client';
-import Receipt from '../receipt';
+import { ReceiptModal } from '../receipt';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 type OrderDocument = import('@wcpos/database').OrderDocument;
@@ -126,12 +123,9 @@ const CheckoutWithProviders = ({
 }: NativeStackScreenProps<POSStackParamList, 'Checkout'>) => {
 	const orderID = get(route, ['params', 'orderID']);
 	const { collection } = useCollection('orders');
-	const t = useT();
+	const query = collection.findOneFix(orderID);
 
-	const resource = React.useMemo(
-		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
-		[collection, orderID]
-	);
+	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);
 
 	return (
 		<ErrorBoundary>
@@ -148,32 +142,16 @@ const CheckoutWithProviders = ({
 const ReceiptWithProviders = ({ route }: NativeStackScreenProps<POSStackParamList, 'Receipt'>) => {
 	const orderID = get(route, ['params', 'orderID']);
 	const { collection } = useCollection('orders');
-	const t = useT();
+	const query = collection.findOneFix(orderID);
 
-	const resource = React.useMemo(
-		() => new ObservableResource(from(collection.findOneFix(orderID).exec())),
-		[collection, orderID]
-	);
+	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);
 
 	return (
-		// <ModalLayout
-		// 	title={t('Receipt', { _tags: 'core' })}
-		// 	primaryAction={{
-		// 		label: t('Print Receipt', { _tags: 'core' }),
-		// 	}}
-		// 	secondaryActions={[
-		// 		{
-		// 			label: t('Email Receipt', { _tags: 'core' }),
-		// 		},
-		// 	]}
-		// 	style={{ height: '100%' }}
-		// >
 		<ErrorBoundary>
 			<Suspense>
-				<Receipt resource={resource} />
+				<ReceiptModal resource={resource} />
 			</Suspense>
 		</ErrorBoundary>
-		// </ModalLayout>
 	);
 };
 

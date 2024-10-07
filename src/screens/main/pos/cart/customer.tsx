@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { ButtonPill, ButtonText, Button } from '@wcpos/components/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 import {
 	Dialog,
 	DialogBody,
@@ -10,8 +10,6 @@ import {
 	DialogTitle,
 	DialogTrigger,
 	DialogHeader,
-	DialogFooter,
-	DialogClose,
 } from '@wcpos/components/src/dialog';
 import { Text } from '@wcpos/components/src/text';
 
@@ -33,7 +31,6 @@ export const Customer = ({ setShowCustomerSelect }) => {
 	const { format } = useCustomerNameFormat();
 	const name = format({ billing, shipping, id: customer_id });
 	const t = useT();
-	const formRef = React.useRef(null);
 	const [open, setOpen] = React.useState(false);
 
 	/**
@@ -58,32 +55,8 @@ export const Customer = ({ setShowCustomerSelect }) => {
 					</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
-					<EditCartCustomerForm ref={formRef} />
+					<EditCartCustomerForm />
 				</DialogBody>
-				<DialogFooter>
-					<DialogClose asChild>
-						<Button variant="muted">
-							<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
-						</Button>
-					</DialogClose>
-					<Button
-						// variant="secondary"
-						onPress={async () => {
-							await formRef.current?.handleSaveToOrderAndToCustomer();
-							setOpen(false);
-						}}
-					>
-						<ButtonText>{t('Save to Order & Customer', { _tags: 'core' })}</ButtonText>
-					</Button>
-					<Button
-						onPress={async () => {
-							await formRef.current?.handleSaveToOrder();
-							setOpen(false);
-						}}
-					>
-						<ButtonText>{t('Save to Order', { _tags: 'core' })}</ButtonText>
-					</Button>
-				</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	);

@@ -20,8 +20,10 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/src/t
 
 import { useT } from '../../../../contexts/translations';
 import { CustomerForm, customerFormSchema } from '../../components/customer/customer-form';
+import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 import { useMutation } from '../../hooks/mutations/use-mutation';
 import useCustomerNameFormat from '../../hooks/use-customer-name-format';
+import { useCurrentOrder } from '../contexts/current-order';
 
 /**
  *
@@ -32,6 +34,8 @@ export const AddNewCustomer = () => {
 	const { create } = useMutation({ collectionName: 'customers' });
 	const [loading, setLoading] = React.useState(false);
 	const { format } = useCustomerNameFormat();
+	const { currentOrder } = useCurrentOrder();
+	const { localPatch } = useLocalMutation();
 
 	/**
 	 *
@@ -40,6 +44,15 @@ export const AddNewCustomer = () => {
 		resolver: zodResolver(customerFormSchema),
 		defaultValues: {},
 	});
+
+	/**
+	 * If the dialog is closed, reset the form. This clears any errors.
+	 */
+	React.useEffect(() => {
+		if (!open) {
+			form.reset({});
+		}
+	}, [form, open]);
 
 	/**
 	 * Save to server
@@ -54,6 +67,18 @@ export const AddNewCustomer = () => {
 						type: 'success',
 						text1: t('{name} saved', { _tags: 'core', name: format(savedDoc) }),
 					});
+					if (currentOrder) {
+						const json = savedDoc.toJSON();
+						await localPatch({
+							document: currentOrder,
+							data: {
+								customer_id: json.id,
+								billing: json.billing,
+								shipping: json.shipping,
+							},
+						});
+						setOpen(false);
+					}
 				}
 			} catch (error) {
 				Toast.show({
@@ -64,7 +89,7 @@ export const AddNewCustomer = () => {
 				setLoading(false);
 			}
 		},
-		[create, format, t]
+		[create, currentOrder, format, localPatch, t]
 	);
 
 	return (

@@ -5,9 +5,9 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { ObservableResource } from 'observable-hooks';
 import { from } from 'rxjs';
 
-import { useQuery } from '@wcpos/query';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { Suspense } from '@wcpos/components/src/suspense';
+import { useQuery } from '@wcpos/query';
 
 import { AddProduct } from './add-product';
 import { EditProduct } from './edit-product';
@@ -70,11 +70,9 @@ const EditProductWithProviders = ({
 }: NativeStackScreenProps<ProductsStackParamList, 'EditProduct'>) => {
 	const { productID } = route.params;
 	const { collection } = useCollection('products');
+	const query = collection.findOneFix(productID);
 
-	const resource = React.useMemo(
-		() => new ObservableResource(from(collection.findOneFix(productID).exec())),
-		[collection, productID]
-	);
+	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);
 
 	return (
 		<ErrorBoundary>
@@ -94,11 +92,9 @@ const EditVariationWithProviders = ({
 }: NativeStackScreenProps<ProductsStackParamList, 'EditVariation'>) => {
 	const { variationID, parentID } = route.params;
 	const { collection } = useCollection('variations');
+	const query = collection.findOneFix(variationID);
 
-	const resource = React.useMemo(
-		() => new ObservableResource(from(collection.findOneFix(variationID).exec())),
-		[collection, variationID]
-	);
+	const resource = React.useMemo(() => new ObservableResource(query.$), [query]);
 
 	/**
 	 *

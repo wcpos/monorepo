@@ -1,10 +1,7 @@
 import * as React from 'react';
 
-import {
-	useObservableSuspense,
-	ObservableResource,
-	useObservableEagerState,
-} from 'observable-hooks';
+import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
 
 import {
 	Modal,
@@ -17,7 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/src/
 import { Text } from '@wcpos/components/src/text';
 import { Tree } from '@wcpos/components/src/tree';
 
-// import { EditOrderForm } from './form';
 import { EditProductForm } from './form';
 import { useT } from '../../../../contexts/translations';
 import useModalRefreshFix from '../../../../hooks/use-modal-refresh-fix';
@@ -31,7 +27,20 @@ export const EditProduct = ({ resource }: Props) => {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 	useModalRefreshFix();
-	useObservableEagerState(product.date_modified_gmt$);
+
+	if (!isRxDocument(product)) {
+		return (
+			<Modal>
+				<ModalContent size="lg">
+					<ModalHeader>
+						<ModalTitle>
+							<Text>{t('No product found', { _tags: 'core' })}</Text>
+						</ModalTitle>
+					</ModalHeader>
+				</ModalContent>
+			</Modal>
+		);
+	}
 
 	return (
 		<Modal>

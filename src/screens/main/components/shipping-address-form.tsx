@@ -50,11 +50,6 @@ export const ShippingAddressForm = () => {
 				name="shipping.last_name"
 				render={({ field }) => <FormInput label={t('Last Name', { _tags: 'core' })} {...field} />}
 			/>
-			<FormField
-				control={control}
-				name="shipping.email"
-				render={({ field }) => <FormInput label={t('Email', { _tags: 'core' })} {...field} />}
-			/>
 			<View className="col-span-2">
 				<FormField
 					control={control}

@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -11,8 +12,8 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { Toast } from '@wcpos/components/src/toast';
 import { VStack } from '@wcpos/components/src/vstack';
 
-import { useT } from '../../../../contexts/translations';
-import { useRestHttpClient } from '../../hooks/use-rest-http-client';
+import { useT } from '../../../contexts/translations';
+import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 const formSchema = z.object({
 	email: z.string().email(),
@@ -20,17 +21,18 @@ const formSchema = z.object({
 });
 
 interface Props {
-	defaultEmail?: string;
-	orderID: number;
+	order: import('@wcpos/database').OrderDocument;
 }
 
 /**
  *
  */
-export const EmailForm = ({ defaultEmail = '', orderID }: Props) => {
+export const EmailForm = ({ order }: Props) => {
 	const http = useRestHttpClient();
 	const [loading, setLoading] = React.useState(false);
 	const t = useT();
+	const orderID = useObservableEagerState(order.id$);
+	const defaultEmail = useObservableEagerState(order.billing.email$);
 
 	/**
 	 *

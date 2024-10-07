@@ -3,18 +3,30 @@ import * as React from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
+import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import { Form, FormField, FormSwitch } from '@wcpos/components/src/form';
+import { Button, ButtonText } from '@wcpos/components/src/button';
+import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from '@wcpos/components/src/collapsible';
+import { DialogClose, useRootContext } from '@wcpos/components/src/dialog';
+import { Form } from '@wcpos/components/src/form';
 import { HStack } from '@wcpos/components/src/hstack';
-import { useAugmentedRef } from '@wcpos/components/src/lib/utils';
 import { Text } from '@wcpos/components/src/text';
+import { Toast } from '@wcpos/components/src/toast';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
 import { BillingAddressForm, billingAddressSchema } from '../../components/billing-address-form';
+import { FormErrors } from '../../components/form-errors';
 import { ShippingAddressForm, shippingAddressSchema } from '../../components/shipping-address-form';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
+import { useMutation } from '../../hooks/mutations/use-mutation';
+import { useCollection } from '../../hooks/use-collection';
+import useCustomerNameFormat from '../../hooks/use-customer-name-format';
 import { useCurrentOrder } from '../contexts/current-order';
 
 /**
@@ -23,7 +35,6 @@ import { useCurrentOrder } from '../contexts/current-order';
 const formSchema = z.object({
 	...billingAddressSchema.shape,
 	...shippingAddressSchema.shape,
-	copyBillingToShipping: z.boolean().optional(),
 });
 
 /**
@@ -32,11 +43,17 @@ const formSchema = z.object({
 export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 	const t = useT();
 	const { currentOrder } = useCurrentOrder();
+	const customerID = useObservableEagerState(currentOrder.customer_id$);
 	const billingProxy = useObservableEagerState(currentOrder.billing$);
 	const shippingProxy = useObservableEagerState(currentOrder.shipping$);
 	const billing = React.useMemo(() => JSON.parse(JSON.stringify(billingProxy)), [billingProxy]);
 	const shipping = React.useMemo(() => JSON.parse(JSON.stringify(shippingProxy)), [shippingProxy]);
 	const { localPatch } = useLocalMutation();
+	const { patch } = useMutation({ collectionName: 'customers' });
+	const { onOpenChange } = useRootContext();
+	const { collection: customerCollection } = useCollection('customers');
+	const { format } = useCustomerNameFormat();
+	const [loading, setLoading] = React.useState(false);
 
 	/**
 	 *
@@ -46,28 +63,20 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 		defaultValues: {
 			billing,
 			shipping,
-			copyBillingToShipping: true,
 		},
 	});
-
-	/**
-	 *
-	 */
-	const toggleShipping = form.watch('copyBillingToShipping');
 
 	/**
 	 * Track formData changes and reset form
 	 */
 	React.useEffect(() => {
-		const data = form.getValues();
-		form.reset({ billing, shipping, copyBillingToShipping: data.copyBillingToShipping });
+		form.reset({ billing, shipping });
 	}, [billing, shipping, form]);
 
 	/**
 	 *
 	 */
-	const handleSaveToOrder = async () => {
-		const data = form.getValues();
+	const handleSaveToOrder = async (data) => {
 		await localPatch({
 			document: currentOrder,
 			data: {
@@ -78,50 +87,108 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 	};
 
 	/**
-	 *
+	 * We need to get the customer document and patch it with the new address
 	 */
-	const handleSaveToOrderAndToCustomer = async () => {
-		await handleSaveToOrder();
-		// save to server
+	const handleSaveToOrderAndToCustomer = async (data) => {
+		await handleSaveToOrder(data);
+		const customer = await customerCollection.findOne({ selector: { id: customerID } }).exec();
+		if (!customer) {
+			Toast.show({
+				type: 'error',
+				text1: t('No customer found', { _tags: 'core' }),
+			});
+		}
+		setLoading(true);
+		try {
+			const savedDoc = await patch({
+				document: customer,
+				data: {
+					billing: data.billing,
+					shipping: data.shipping,
+				},
+			});
+			if (isRxDocument(savedDoc)) {
+				Toast.show({
+					type: 'success',
+					text1: t('{name} saved', { _tags: 'core', name: format(savedDoc) }),
+				});
+			}
+		} catch (error) {
+			Toast.show({
+				type: 'error',
+				text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+			});
+		} finally {
+			setLoading(false);
+		}
 	};
 
 	/**
 	 *
 	 */
-	const formRef = useAugmentedRef({
-		ref,
-		methods: {
-			handleSaveToOrder,
-			handleSaveToOrderAndToCustomer,
-		},
-	});
+	const handleCopyBillingToShipping = React.useCallback(() => {
+		const billingAddress = form.getValues().billing;
+		form.setValue('shipping', billingAddress);
+	}, [form]);
 
 	/**
 	 * Form doesn't have a ref? What else should I use?
 	 */
 	return (
 		<Form {...form}>
-			<VStack ref={formRef} className="gap-4">
-				<VStack>
-					<Text className="font-medium">{t('Billing Address', { _tags: 'core' })}</Text>
-					<BillingAddressForm />
-				</VStack>
-				<VStack>
+			<VStack className="gap-4">
+				<FormErrors />
+				<Collapsible open>
+					<CollapsibleTrigger>
+						<Text>{t('Billing Address', { _tags: 'core' })}</Text>
+					</CollapsibleTrigger>
+					<CollapsibleContent>
+						<BillingAddressForm />
+					</CollapsibleContent>
+				</Collapsible>
+				<Collapsible>
 					<HStack>
-						<Text className="font-medium">{t('Shipping Address', { _tags: 'core' })}</Text>
-						<FormField
-							control={form.control}
-							name="copyBillingToShipping"
-							render={({ field }) => (
-								<FormSwitch
-									label={t('Copy Billing Address to Shipping Address', { _tags: 'core' })}
-									{...field}
-								/>
-							)}
-						/>
+						<CollapsibleTrigger>
+							<Text>{t('Shipping Address', { _tags: 'core' })}</Text>
+						</CollapsibleTrigger>
 					</HStack>
-					{!toggleShipping && <ShippingAddressForm />}
-				</VStack>
+					<CollapsibleContent>
+						<VStack className="gap-4">
+							<Button variant="muted" onPress={handleCopyBillingToShipping}>
+								<ButtonText>
+									{t('Copy billing address to shipping address', { _tags: 'core' })}
+								</ButtonText>
+							</Button>
+							<ShippingAddressForm />
+						</VStack>
+					</CollapsibleContent>
+				</Collapsible>
+				<HStack className="justify-end">
+					<DialogClose asChild>
+						<Button variant="muted">
+							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
+						</Button>
+					</DialogClose>
+					{customerID !== 0 && (
+						<Button
+							onPress={async () => {
+								await form.handleSubmit(handleSaveToOrderAndToCustomer)();
+								onOpenChange(false);
+							}}
+							loading={loading}
+						>
+							<ButtonText>{t('Save to Order & Customer', { _tags: 'core' })}</ButtonText>
+						</Button>
+					)}
+					<Button
+						onPress={async () => {
+							await form.handleSubmit(handleSaveToOrder)();
+							onOpenChange(false);
+						}}
+					>
+						<ButtonText>{t('Save to Order', { _tags: 'core' })}</ButtonText>
+					</Button>
+				</HStack>
 			</VStack>
 		</Form>
 	);

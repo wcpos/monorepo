@@ -14,14 +14,17 @@ import { useT } from '../../../../../../contexts/translations';
 import { useCurrencyFormat } from '../../../../hooks/use-currency-format';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
-type LineItemDocument = import('@wcpos/database').LineItemDocument;
+type OrderDocument = import('@wcpos/database').OrderDocument;
 type ProductVariationCollection = import('@wcpos/database').ProductVariationCollection;
 type Query = import('@wcpos/query').Query<ProductVariationCollection>;
 
 interface VariationPopoverProps {
 	query: Query;
 	parent: import('@wcpos/database').ProductDocument;
-	addToCart: (variation: ProductDocument, metaData: LineItemDocument['meta_data']) => void;
+	addToCart: (
+		variation: ProductDocument,
+		metaData: OrderDocument['line_items'][number]['meta_data']
+	) => void;
 }
 
 /**
@@ -65,8 +68,8 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	 *
 	 */
 	const handleSelect = React.useCallback(
-		(attribute, option) => {
-			query.where('attributes', { $elemMatch: { id: attribute.id, name: attribute.name, option } });
+		(attribute) => {
+			query.where('attributes', { $elemMatch: attribute });
 		},
 		[query]
 	);
@@ -89,7 +92,7 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 	 *
 	 */
 	return (
-		<VStack>
+		<VStack className="min-w-52">
 			{attributes.map((attribute) => {
 				// find selected option
 				const selected = selectedAttributes?.find((a) => a.name === attribute.name);
@@ -100,25 +103,23 @@ const Variations = ({ query, parent, addToCart }: VariationPopoverProps) => {
 						{attribute.characterCount < 15 ? (
 							<VariationButtons
 								attribute={attribute}
-								onSelect={(option) => handleSelect(attribute, option)}
-								selectedOption={selected?.option}
+								onSelect={handleSelect}
+								selected={selected?.option}
 							/>
 						) : (
 							<VariationSelect
 								attribute={attribute}
-								onSelect={(option) => handleSelect(attribute, option)}
-								selectedOption={selected?.option}
+								onSelect={handleSelect}
+								selected={selected?.option}
 							/>
 						)}
 					</VStack>
 				);
 			})}
 			{selectedVariation && (
-				<View className="flex-row justify-end">
-					<Button onPress={handleAddToCart}>
-						<ButtonText>{t('Add to Cart') + ': ' + format(selectedVariation.price)}</ButtonText>
-					</Button>
-				</View>
+				<Button onPress={handleAddToCart}>
+					<ButtonText>{t('Add to Cart') + ': ' + format(selectedVariation.price)}</ButtonText>
+				</Button>
 			)}
 		</VStack>
 	);

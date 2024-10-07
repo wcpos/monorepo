@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
 
 import {
 	ModalContent,
@@ -26,6 +27,20 @@ export const EditOrder = ({ resource }: Props) => {
 	const t = useT();
 	const [value, setValue] = React.useState('form');
 	useModalRefreshFix();
+
+	if (!isRxDocument(order)) {
+		return (
+			<Modal>
+				<ModalContent size="lg">
+					<ModalHeader>
+						<ModalTitle>
+							<Text>{t('No order found', { _tags: 'core' })}</Text>
+						</ModalTitle>
+					</ModalHeader>
+				</ModalContent>
+			</Modal>
+		);
+	}
 
 	return (
 		<Modal>

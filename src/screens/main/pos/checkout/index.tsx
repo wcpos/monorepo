@@ -1,18 +1,19 @@
 import * as React from 'react';
-import { ScrollView } from 'react-native';
 
 import { useNavigation, StackActions } from '@react-navigation/native';
-import { useObservableState, useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { useObservableSuspense, ObservableResource } from 'observable-hooks';
+import { isRxDocument } from 'rxdb';
 
 import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
-	ModalOverlay,
-	ModalContainer,
+	Modal,
 	ModalContent,
 	ModalHeader,
 	ModalTitle,
 	ModalFooter,
+	ModalBody,
 } from '@wcpos/components/src/modal';
+import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { PaymentWebview } from './components/payment-webview';
@@ -34,28 +35,6 @@ const Checkout = ({ resource }: Props) => {
 	const navigation = useNavigation();
 	useModalRefreshFix();
 
-	if (!order) {
-		throw new Error(t('Order not found', { _tags: 'core' }));
-	}
-
-	const number = useObservableState(order.number$, order.number);
-	// const { setTitle } = useModal();
-
-	/**
-	 * Update title with order number
-	 */
-	// React.useEffect(() => {
-	// 	let title = t('Checkout', { _tags: 'core' });
-	// 	if (number) {
-	// 		title = t('Checkout Order #{number}', {
-	// 			_tags: 'core',
-	// 			number,
-	// 			_context: 'Checkout Order title',
-	// 		});
-	// 	}
-	// 	// setTitle(() => title);
-	// }, [number, setTitle, t]);
-
 	/**
 	 *
 	 */
@@ -68,26 +47,47 @@ const Checkout = ({ resource }: Props) => {
 	/**
 	 *
 	 */
+	if (!isRxDocument(order)) {
+		return (
+			<Modal>
+				<ModalContent size="lg">
+					<ModalHeader>
+						<ModalTitle>
+							<Text>{t('No order found', { _tags: 'core' })}</Text>
+						</ModalTitle>
+					</ModalHeader>
+				</ModalContent>
+			</Modal>
+		);
+	}
+
+	/**
+	 *
+	 */
 	return (
-		<ModalContainer className="w-full h-5/6 max-w-screen-md">
-			<ModalHeader>
-				<ModalTitle>{t('Checkout', { _tags: 'core' })}</ModalTitle>
-			</ModalHeader>
-			<ModalContent contentContainerStyle={{ height: '100%' }}>
-				<VStack className="h-full">
-					<CheckoutTitle order={order} />
-					<PaymentWebview order={order} ref={iframeRef} />
-				</VStack>
+		<Modal>
+			<ModalContent size="xl" className="h-full">
+				<ModalHeader>
+					<ModalTitle>
+						<Text>{t('Checkout', { _tags: 'core' })}</Text>
+					</ModalTitle>
+				</ModalHeader>
+				<ModalBody contentContainerStyle={{ height: '100%' }}>
+					<VStack className="flex-1">
+						<CheckoutTitle order={order} />
+						<PaymentWebview order={order} ref={iframeRef} />
+					</VStack>
+				</ModalBody>
+				<ModalFooter>
+					<Button variant="muted" onPress={() => navigation.dispatch(StackActions.pop(1))}>
+						<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
+					</Button>
+					<Button onPress={handleProcessPayment}>
+						<ButtonText>{t('Process Payment', { _tags: 'core' })}</ButtonText>
+					</Button>
+				</ModalFooter>
 			</ModalContent>
-			<ModalFooter>
-				<Button variant="muted" onPress={() => navigation.dispatch(StackActions.pop(1))}>
-					<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
-				</Button>
-				<Button onPress={handleProcessPayment}>
-					<ButtonText>{t('Process Payment', { _tags: 'core' })}</ButtonText>
-				</Button>
-			</ModalFooter>
-		</ModalContainer>
+		</Modal>
 	);
 };
 

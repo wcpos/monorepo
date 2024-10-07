@@ -3,8 +3,6 @@ import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { StackActions, useNavigation } from '@react-navigation/native';
-import get from 'lodash/get';
-import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
@@ -19,23 +17,26 @@ import {
 	FormRadioGroup,
 } from '@wcpos/components/src/form';
 import { HStack } from '@wcpos/components/src/hstack';
-import { Text } from '@wcpos/components/src/text';
 import { Toast } from '@wcpos/components/src/toast';
 import { VStack } from '@wcpos/components/src/vstack';
-import log from '@wcpos/utils/src/logger';
 
 import { useT } from '../../../../contexts/translations';
+import { CurrencyInput } from '../../components/currency-input';
 import { FormErrors } from '../../components/form-errors';
 import { MetaDataForm, metaDataSchema } from '../../components/meta-data-form';
+import { NumberInput } from '../../components/number-input';
 import { ProductStatusSelect } from '../../components/product/status-select';
 import { TaxClassSelect } from '../../components/tax-class-select';
 import { TaxStatusRadioGroup } from '../../components/tax-status-radio-group';
 import usePushDocument from '../../contexts/use-push-document';
+import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 const schema = z.object({
-	name: z.string(),
+	regular_price: z.string(),
+	sale_price: z.string(),
+	stock_quantity: z.number().optional().nullable(),
+	manage_stock: z.boolean().optional(),
 	status: z.string(),
-	featured: z.boolean(),
 	sku: z.string().optional(),
 	barcode: z.string().optional(),
 	tax_status: z.string(),
@@ -54,9 +55,11 @@ export const EditVariationForm = ({ variation }: Props) => {
 	const pushDocument = usePushDocument();
 	const t = useT();
 	const navigation = useNavigation();
+	const [loading, setLoading] = React.useState(false);
+	const { localPatch } = useLocalMutation();
 
 	if (!variation) {
-		throw new Error(t('Product not found', { _tags: 'core' }));
+		throw new Error(t('Variation not found', { _tags: 'core' }));
 	}
 
 	/**
@@ -64,22 +67,30 @@ export const EditVariationForm = ({ variation }: Props) => {
 	 */
 	const handleSave = React.useCallback(
 		async (data) => {
-			console.log('data', data);
+			setLoading(true);
 			try {
-				// const success = await pushDocument(product);
-				// if (isRxDocument(success)) {
-				// 	Toast.show({
-				// 		text1: t('Product {id} saved', { _tags: 'core', id: success.id }),
-				// 		type: 'success',
-				// 	});
-				// }
+				await localPatch({
+					document: variation,
+					data,
+				});
+				await pushDocument(variation).then((savedDoc) => {
+					if (isRxDocument(savedDoc)) {
+						Toast.show({
+							type: 'success',
+							text1: t('{name} saved', { _tags: 'core', name: variation.name }),
+						});
+					}
+				});
 			} catch (error) {
-				log.error(error);
+				Toast.show({
+					type: 'error',
+					text1: t('{message}', { _tags: 'core', message: error.message || 'Error' }),
+				});
 			} finally {
-				//
+				setLoading(false);
 			}
 		},
-		[variation, pushDocument, t]
+		[localPatch, variation, pushDocument, t]
 	);
 
 	/**
@@ -89,8 +100,11 @@ export const EditVariationForm = ({ variation }: Props) => {
 		resolver: zodResolver(schema),
 		defaultValues: {
 			status: variation.status,
-			featured: variation.featured,
 			sku: variation.sku,
+			regular_price: variation.regular_price,
+			sale_price: variation.sale_price,
+			stock_quantity: variation.stock_quantity,
+			manage_stock: variation.manage_stock,
 			barcode: variation.barcode,
 			tax_status: variation.tax_status,
 			tax_class: variation.tax_class,
@@ -108,6 +122,38 @@ export const EditVariationForm = ({ variation }: Props) => {
 				<View className="grid grid-cols-2 gap-4">
 					<FormField
 						control={form.control}
+						name="sku"
+						render={({ field }) => <FormInput label={t('SKU', { _tags: 'core' })} {...field} />}
+					/>
+					<FormField
+						control={form.control}
+						name="barcode"
+						render={({ field }) => <FormInput label={t('Barcode', { _tags: 'core' })} {...field} />}
+					/>
+					<FormField
+						control={form.control}
+						name="regular_price"
+						render={({ field }) => (
+							<FormInput
+								customComponent={CurrencyInput}
+								label={t('Regular Price', { _tags: 'core' })}
+								{...field}
+							/>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="sale_price"
+						render={({ field }) => (
+							<FormInput
+								customComponent={CurrencyInput}
+								label={t('Sale Price', { _tags: 'core' })}
+								{...field}
+							/>
+						)}
+					/>
+					<FormField
+						control={form.control}
 						name="status"
 						render={({ field }) => (
 							<FormSelect
@@ -117,22 +163,37 @@ export const EditVariationForm = ({ variation }: Props) => {
 							/>
 						)}
 					/>
+					<VStack>
+						<FormField
+							control={form.control}
+							name="stock_quantity"
+							render={({ field }) => (
+								<FormInput
+									customComponent={NumberInput}
+									type="numeric"
+									label={t('Stock Quantity', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="manage_stock"
+							render={({ field }) => (
+								<FormSwitch label={t('Manage Stock', { _tags: 'core' })} {...field} />
+							)}
+						/>
+					</VStack>
 					<FormField
 						control={form.control}
-						name="featured"
+						name="tax_class"
 						render={({ field }) => (
-							<FormSwitch label={t('Featured', { _tags: 'core' })} {...field} />
+							<FormSelect
+								label={t('Tax Class', { _tags: 'core' })}
+								customComponent={TaxClassSelect}
+								{...field}
+							/>
 						)}
-					/>
-					<FormField
-						control={form.control}
-						name="sku"
-						render={({ field }) => <FormInput label={t('SKU', { _tags: 'core' })} {...field} />}
-					/>
-					<FormField
-						control={form.control}
-						name="barcode"
-						render={({ field }) => <FormInput label={t('Barcode', { _tags: 'core' })} {...field} />}
 					/>
 					<FormField
 						control={form.control}
@@ -145,17 +206,6 @@ export const EditVariationForm = ({ variation }: Props) => {
 							/>
 						)}
 					/>
-					<FormField
-						control={form.control}
-						name="tax_class"
-						render={({ field }) => (
-							<FormSelect
-								label={t('Tax Class', { _tags: 'core' })}
-								customComponent={TaxClassSelect}
-								{...field}
-							/>
-						)}
-					/>
 					<View className="col-span-2">
 						<MetaDataForm />
 					</View>
@@ -164,8 +214,8 @@ export const EditVariationForm = ({ variation }: Props) => {
 					<Button variant="muted" onPress={() => navigation.dispatch(StackActions.pop(1))}>
 						<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
 					</Button>
-					<Button onPress={form.handleSubmit(handleSave)}>
-						<ButtonText>{t('Save to Server', { _tags: 'core' })}</ButtonText>
+					<Button loading={loading} onPress={form.handleSubmit(handleSave)}>
+						<ButtonText>{t('Save')}</ButtonText>
 					</Button>
 				</HStack>
 			</VStack>

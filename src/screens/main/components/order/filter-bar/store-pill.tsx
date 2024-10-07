@@ -4,8 +4,6 @@ import isString from 'lodash/isString';
 import { useObservableSuspense, ObservableResource, useObservableState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import type { ProductCollection, StoreDocument } from '@wcpos/database';
-import type { Query } from '@wcpos/query';
 import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 import {
 	Select,
@@ -16,6 +14,8 @@ import {
 	SelectLabel,
 	SelectSeparator,
 } from '@wcpos/components/src/select';
+import type { ProductCollection, StoreDocument } from '@wcpos/database';
+import type { Query } from '@wcpos/query';
 
 import { useT } from '../../../../../contexts/translations';
 
@@ -111,7 +111,7 @@ export const StorePill = ({ resource, query }: Props) => {
 					<ButtonText>{value?.label || t('Created via', { _tags: 'core' })}</ButtonText>
 				</ButtonPill>
 			</SelectPrimitive.Trigger>
-			<SelectContent className="min-w-[12rem]">
+			<SelectContent>
 				<SelectGroup>
 					<SelectLabel>{t('Created via', { _tags: 'core' })}</SelectLabel>
 					<SelectItem value="woocommerce-pos" label={t('POS', { _tags: 'core' })}>
