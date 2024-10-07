@@ -13,10 +13,13 @@ export function useFormChangeHandler<T extends FieldValues>({
 	onChange,
 }: UseFormChangeHandlerOptions<T>) {
 	React.useEffect(() => {
-		const subscription = form.watch((values, { type, name }) => {
-			if (type === 'change' && name) {
+		const subscription = form.watch((values, { name }) => {
+			if (name) {
 				const changes = { [name]: get(values, name) };
 				onChange(changes);
+			} else {
+				// If 'name' is undefined, handle the change accordingly
+				onChange(values);
 			}
 		});
 
