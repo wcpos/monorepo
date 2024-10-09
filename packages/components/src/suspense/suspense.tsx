@@ -3,13 +3,25 @@ import type { SuspenseProps } from 'react';
 
 import { Text } from '../text';
 
-const DevSuspense = ({ fallback, children }: SuspenseProps) => {
+export const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 	const renderCount = React.useRef(0);
+	const [isFallback, setIsFallback] = React.useState(false);
+
+	// Extract display names of child components
+	const childNames = React.useMemo(() => {
+		const names = React.Children.map(children, (child) => {
+			if (React.isValidElement(child)) {
+				return child.type.displayName || child.type.name || 'Unknown';
+			}
+			return 'Unknown';
+		});
+		return names;
+	}, [children]);
 
 	React.useEffect(() => {
 		renderCount.current += 1;
 
-		if (process.env.NODE_ENV === 'development' && renderCount.current > 5) {
+		if (renderCount.current > 5) {
 			// Arbitrary limit, adjust to your needs.
 			console.warn(
 				'Suspense fallback component has rendered more than 5 times. This might indicate a problem.'
@@ -17,7 +29,22 @@ const DevSuspense = ({ fallback, children }: SuspenseProps) => {
 		}
 	}, []);
 
-	return <React.Suspense fallback={<Text>Loading ...</Text>}>{children}</React.Suspense>;
-};
+	React.useEffect(() => {
+		if (isFallback) {
+			console.info('Suspense is in fallback state. Children:', childNames);
+			// console.trace('Suspense fallback stack trace:');
+		}
+	}, [isFallback, childNames]);
 
-export default DevSuspense;
+	// Wrapper component to detect when fallback is rendered
+	const FallbackWrapper = () => {
+		React.useEffect(() => {
+			setIsFallback(true);
+			return () => setIsFallback(false);
+		}, []);
+
+		return fallback || <Text>Loading ...</Text>;
+	};
+
+	return <React.Suspense fallback={<FallbackWrapper />}>{children}</React.Suspense>;
+};

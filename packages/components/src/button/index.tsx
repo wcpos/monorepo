@@ -1,13 +1,19 @@
 import * as React from 'react';
 import { Pressable, View, ViewProps } from 'react-native';
+import type { PressableStateCallbackType } from 'react-native';
 
-import { cva, type VariantProps } from 'class-variance-authority';
+import { cva } from 'class-variance-authority';
 
 import { HStack } from '../hstack';
 import { Icon, IconName } from '../icon';
 import { cn } from '../lib/utils';
 import { Loader } from '../loader';
 import { Text, TextClassContext } from '../text';
+
+import type { VariantProps } from 'class-variance-authority';
+
+const ButtonText = Text;
+ButtonText.displayName = 'ButtonText';
 
 const buttonVariants = cva(
 	[
@@ -122,14 +128,38 @@ const buttonTextVariants = cva(
  */
 type ButtonProps = React.ComponentPropsWithoutRef<typeof Pressable> &
 	VariantProps<typeof buttonVariants> & {
-		leftIcon?: IconName;
-		rightIcon?: IconName;
+		leftIcon?: IconName | React.ReactNode;
+		rightIcon?: IconName | React.ReactNode;
 		loading?: boolean;
 	};
 
 const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>(
 	({ className, variant, size, leftIcon, rightIcon, loading, children, ...props }, ref) => {
 		const disabled = props.disabled || loading;
+
+		/**
+		 * Render icon component based on type
+		 */
+		const renderIcon = (icon: IconName | React.ReactNode, position: 'left' | 'right') => {
+			if (typeof icon === 'string') {
+				return <Icon name={icon} variant={variant} size={size} />;
+			}
+			return icon;
+		};
+
+		/**
+		 * Wrap plain string children in ButtonText component to apply text styles
+		 */
+		const renderChildren = (pressableState: PressableStateCallbackType) => {
+			if (typeof children === 'string') {
+				return <ButtonText>{children}</ButtonText>;
+			}
+			if (typeof children === 'function') {
+				const rendered = children(pressableState);
+				return typeof rendered === 'string' ? <ButtonText>{rendered}</ButtonText> : rendered;
+			}
+			return children;
+		};
 
 		return (
 			<TextClassContext.Provider
@@ -143,21 +173,24 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
 					ref={ref}
 					role="button"
 					{...props}
-					disabled={disabled}
+					aria-disabled={disabled ?? undefined}
+					disabled={disabled ?? undefined}
 				>
-					{leftIcon || rightIcon || loading ? (
-						<HStack>
-							{loading ? (
-								<Loader variant={variant} size={size} />
-							) : (
-								leftIcon && <Icon name={leftIcon} variant={variant} size={size} />
-							)}
-							{children}
-							{rightIcon && <Icon name={rightIcon} variant={variant} size={size} />}
-						</HStack>
-					) : (
-						children
-					)}
+					{(pressableState) =>
+						leftIcon || rightIcon || loading ? (
+							<HStack>
+								{loading ? (
+									<Loader variant={variant} size={size} />
+								) : (
+									leftIcon && renderIcon(leftIcon, 'left')
+								)}
+								{renderChildren(pressableState)}
+								{rightIcon && renderIcon(rightIcon, 'right')}
+							</HStack>
+						) : (
+							renderChildren(pressableState)
+						)
+					}
 				</Pressable>
 			</TextClassContext.Provider>
 		);
@@ -265,7 +298,7 @@ ButtonPill.displayName = 'ButtonPill';
 
 export {
 	Button,
-	Text as ButtonText,
+	ButtonText,
 	ButtonGroup,
 	ButtonPill,
 	ButtonGroupSeparator,
