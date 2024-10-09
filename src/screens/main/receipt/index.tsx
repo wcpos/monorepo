@@ -6,7 +6,6 @@ import { useObservableSuspense, ObservableResource, useObservableState } from 'o
 import { isRxDocument } from 'rxdb';
 import { map } from 'rxjs/operators';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	Dialog,
 	DialogBody,
@@ -24,6 +23,7 @@ import {
 	ModalBody,
 	ModalClose,
 	ModalHeader,
+	ModalAction,
 } from '@wcpos/components/src/modal';
 import { Text } from '@wcpos/components/src/text';
 import { WebView } from '@wcpos/components/src/webview';
@@ -107,31 +107,23 @@ export const ReceiptModal = ({ resource }: Props) => {
 					</ErrorBoundary>
 				</ModalBody>
 				<ModalFooter>
-					<ModalClose asChild>
-						<Button variant="muted">
-							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
-						</Button>
-					</ModalClose>
+					<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
 					<Dialog>
 						<DialogTrigger asChild>
-							<Button>
-								<ButtonText>{t('Email Receipt', { _tags: 'core' })}</ButtonText>
-							</Button>
+							<ModalAction>{t('Email Receipt', { _tags: 'core' })}</ModalAction>
 						</DialogTrigger>
 						<DialogContent>
 							<DialogHeader>
-								<DialogTitle>
-									<Text>{t('Email Receipt', { _tags: 'core' })}</Text>
-								</DialogTitle>
+								<DialogTitle>{t('Email Receipt', { _tags: 'core' })}</DialogTitle>
 							</DialogHeader>
 							<DialogBody>
 								<EmailForm order={order} />
 							</DialogBody>
 						</DialogContent>
 					</Dialog>
-					<Button onPress={() => print()} loading={isPrinting}>
-						<ButtonText>{t('Print Receipt', { _tags: 'core' })}</ButtonText>
-					</Button>
+					<ModalAction onPress={() => print()} loading={isPrinting}>
+						{t('Print Receipt', { _tags: 'core' })}
+					</ModalAction>
 				</ModalFooter>
 			</ModalContent>
 		</Modal>

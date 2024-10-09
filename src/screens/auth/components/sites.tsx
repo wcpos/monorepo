@@ -13,6 +13,10 @@ import { Site } from './site';
 export const Sites = ({ user }) => {
 	const sites = useObservableSuspense(user.populateResource('sites'));
 
+	if (!sites || sites.length === 0) {
+		return null;
+	}
+
 	/**
 	 *
 	 */

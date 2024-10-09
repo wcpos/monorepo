@@ -137,8 +137,9 @@ export const CustomerForm = ({ form, onClose, onSubmit, loading }) => {
 					</CollapsibleContent>
 				</Collapsible>
 				<MetaDataForm />
+				{/** TODO: move the buttons to the parent component */}
 				<HStack className="justify-end">
-					<Button variant="muted" onPress={onClose}>
+					<Button variant="outline" onPress={onClose}>
 						<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
 					</Button>
 					<Button loading={loading} onPress={form.handleSubmit(onSubmit)}>

@@ -2,20 +2,18 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { StackActions, useNavigation } from '@react-navigation/native';
 import { useObservablePickState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	Collapsible,
 	CollapsibleTrigger,
 	CollapsibleContent,
 } from '@wcpos/components/src/collapsible';
 import { Form, FormField, FormInput, FormSelect, FormTextarea } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
+import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/src/modal';
 import { Text } from '@wcpos/components/src/text';
 import { Toast } from '@wcpos/components/src/toast';
 import { VStack } from '@wcpos/components/src/vstack';
@@ -57,7 +55,6 @@ export const EditOrderForm = ({ order }: Props) => {
 	const pushDocument = usePushDocument();
 	const { localPatch } = useLocalMutation();
 	const t = useT();
-	const navigation = useNavigation();
 	const [loading, setLoading] = React.useState(false);
 
 	if (!order) {
@@ -241,14 +238,12 @@ export const EditOrderForm = ({ order }: Props) => {
 						<MetaDataForm name="meta_data" />
 					</View>
 				</View>
-				<HStack className="justify-end">
-					<Button variant="muted" onPress={() => navigation.dispatch(StackActions.pop(1))}>
-						<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
-					</Button>
-					<Button loading={loading} onPress={form.handleSubmit(handleSaveToServer)}>
-						<ButtonText>{t('Save', { _tags: 'core' })}</ButtonText>
-					</Button>
-				</HStack>
+				<ModalFooter className="px-0">
+					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
+					<ModalAction loading={loading} onPress={form.handleSubmit(handleSaveToServer)}>
+						{t('Save', { _tags: 'core' })}
+					</ModalAction>
+				</ModalFooter>
 			</VStack>
 		</Form>
 	);

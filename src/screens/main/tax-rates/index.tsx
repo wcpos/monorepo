@@ -4,7 +4,6 @@ import get from 'lodash/get';
 import groupBy from 'lodash/groupBy';
 import { useObservableSuspense, useObservableEagerState } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	Modal,
 	ModalContent,
@@ -78,11 +77,7 @@ export const TaxRates = ({ query }: Props) => {
 					<TaxRatesFooter count={rates.length} query={query} />
 				</ModalBody>
 				<ModalFooter>
-					<ModalClose asChild>
-						<Button variant="muted">
-							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
-						</Button>
-					</ModalClose>
+					<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
 				</ModalFooter>
 			</ModalContent>
 		</Modal>

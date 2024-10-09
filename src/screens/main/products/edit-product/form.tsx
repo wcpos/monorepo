@@ -2,7 +2,6 @@ import * as React from 'react';
 import { View } from 'react-native';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { StackActions, useNavigation } from '@react-navigation/native';
 import { useForm } from 'react-hook-form';
 import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
@@ -17,6 +16,7 @@ import {
 	FormRadioGroup,
 } from '@wcpos/components/src/form';
 import { HStack } from '@wcpos/components/src/hstack';
+import { ModalAction, ModalClose, ModalFooter } from '@wcpos/components/src/modal';
 import { Toast } from '@wcpos/components/src/toast';
 import { VStack } from '@wcpos/components/src/vstack';
 
@@ -56,7 +56,6 @@ interface Props {
 export const EditProductForm = ({ product }: Props) => {
 	const pushDocument = usePushDocument();
 	const t = useT();
-	const navigation = useNavigation();
 	const [loading, setLoading] = React.useState(false);
 	const { localPatch } = useLocalMutation();
 
@@ -230,14 +229,12 @@ export const EditProductForm = ({ product }: Props) => {
 						<MetaDataForm />
 					</View>
 				</View>
-				<HStack className="justify-end">
-					<Button variant="muted" onPress={() => navigation.dispatch(StackActions.pop(1))}>
-						<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
-					</Button>
-					<Button loading={loading} onPress={form.handleSubmit(handleSave)}>
-						<ButtonText>{t('Save')}</ButtonText>
-					</Button>
-				</HStack>
+				<ModalFooter className="px-0">
+					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
+					<ModalAction loading={loading} onPress={form.handleSubmit(handleSave)}>
+						{t('Save')}
+					</ModalAction>
+				</ModalFooter>
 			</VStack>
 		</Form>
 	);

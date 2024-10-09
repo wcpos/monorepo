@@ -2,24 +2,27 @@ import * as React from 'react';
 
 import get from 'lodash/get';
 
-import useHttpClient from '@wcpos/hooks/src/use-http-client';
-import { Avatar } from '@wcpos/components/src/avatar';
 import {
-	Dialog,
-	DialogClose,
-	DialogContent,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from '@wcpos/components/src/dialog';
+	AlertDialog,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogAction,
+} from '@wcpos/components/src/alert-dialog';
+import { Avatar } from '@wcpos/components/src/avatar';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Icon } from '@wcpos/components/src/icon';
 import { IconButton } from '@wcpos/components/src/icon-button';
+import { cn } from '@wcpos/components/src/lib/utils';
 import { Suspense } from '@wcpos/components/src/suspense';
 import { Text } from '@wcpos/components/src/text';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@wcpos/components/src/tooltip';
 import { VStack } from '@wcpos/components/src/vstack';
+import useHttpClient from '@wcpos/hooks/src/use-http-client';
 
 import { WPUsers } from './wp-users';
 import { useT } from '../../../contexts/translations';
@@ -84,7 +87,7 @@ export const Site = ({ user, site, idx }: Props) => {
 
 	return (
 		<>
-			<HStack space="lg" className="p-4" style={{ borderTopWidth: idx === 0 ? 0 : 1 }}>
+			<HStack space="lg" className={cn('p-4', idx !== 0 && 'border-border border-t')}>
 				<Avatar
 					source={`https://icon.horse/icon/${getUrlWithoutProtocol(site.url)}`}
 					className="w-10 h-10"
@@ -122,21 +125,22 @@ export const Site = ({ user, site, idx }: Props) => {
 				</Tooltip>
 			</HStack>
 
-			<Dialog
-				open={deleteDialogOpened}
-				onAccept={handleRemoveSite}
-				onOpenChange={setDeleteDialogOpened}
-			>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>{t('Remove site', { _tags: 'core' })}</DialogTitle>
-					</DialogHeader>
-					{t('Remove store and associated users?', { _tags: 'core' })}
-					<DialogFooter>
-						<DialogClose />
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+			<AlertDialog open={deleteDialogOpened} onOpenChange={setDeleteDialogOpened}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>{t('Remove site', { _tags: 'core' })}</AlertDialogTitle>
+						<AlertDialogDescription>
+							{t('Remove store and associated users?', { _tags: 'core' })}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogAction variant="destructive" onPress={handleRemoveSite}>
+							{t('Remove', { _tags: 'core' })}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</>
 	);
 };

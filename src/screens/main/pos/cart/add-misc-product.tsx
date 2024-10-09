@@ -6,10 +6,13 @@ import isEmpty from 'lodash/isEmpty';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { useRootContext } from '@wcpos/components/src/dialog';
+import {
+	DialogAction,
+	DialogClose,
+	DialogFooter,
+	useRootContext,
+} from '@wcpos/components/src/dialog';
 import { Form, FormField, FormInput, FormSelect, FormRadioGroup } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../contexts/translations';
@@ -130,11 +133,12 @@ export const AddMiscProduct = () => {
 						/>
 					</View>
 				</VStack>
-				<HStack className="justify-end">
-					<Button onPress={form.handleSubmit(handleAdd)}>
-						<ButtonText>{t('Add to Cart', { _tags: 'core' })}</ButtonText>
-					</Button>
-				</HStack>
+				<DialogFooter className="px-0">
+					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
+					<DialogAction onPress={form.handleSubmit(handleAdd)}>
+						{t('Add to Cart', { _tags: 'core' })}
+					</DialogAction>
+				</DialogFooter>
 			</VStack>
 		</Form>
 	);

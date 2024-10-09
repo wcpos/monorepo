@@ -8,6 +8,8 @@ import {
 	DialogTitle,
 	DialogBody,
 	DialogFooter,
+	DialogClose,
+	DialogAction,
 } from '@wcpos/components/src/dialog';
 import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import { IconButton } from '@wcpos/components/src/icon-button';
@@ -67,15 +69,14 @@ const UISettingsDialog = ({ title, children }: Props) => {
 				<DialogContext.Provider value={{ buttonPressHandlerRef }}>
 					<DialogContent>
 						<DialogHeader>
-							<DialogTitle>
-								<Text>{title}</Text>
-							</DialogTitle>
+							<DialogTitle>{title}</DialogTitle>
 						</DialogHeader>
 						<DialogBody>{children}</DialogBody>
 						<DialogFooter>
-							<Button variant="destructive" onPress={handleButtonPress}>
-								<ButtonText>{t('Restore Default Settings', { _tags: 'core' })}</ButtonText>
-							</Button>
+							<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
+							<DialogAction variant="destructive" onPress={handleButtonPress}>
+								{t('Restore Default Settings', { _tags: 'core' })}
+							</DialogAction>
 						</DialogFooter>
 					</DialogContent>
 				</DialogContext.Provider>

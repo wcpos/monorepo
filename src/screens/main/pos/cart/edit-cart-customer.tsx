@@ -12,7 +12,12 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from '@wcpos/components/src/collapsible';
-import { DialogClose, useRootContext } from '@wcpos/components/src/dialog';
+import {
+	DialogAction,
+	DialogClose,
+	DialogFooter,
+	useRootContext,
+} from '@wcpos/components/src/dialog';
 import { Form } from '@wcpos/components/src/form';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
@@ -163,32 +168,28 @@ export const EditCartCustomerForm = React.forwardRef((props, ref) => {
 						</VStack>
 					</CollapsibleContent>
 				</Collapsible>
-				<HStack className="justify-end">
-					<DialogClose asChild>
-						<Button variant="muted">
-							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
-						</Button>
-					</DialogClose>
+				<DialogFooter className="px-0">
+					<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
 					{customerID !== 0 && (
-						<Button
+						<DialogAction
 							onPress={async () => {
 								await form.handleSubmit(handleSaveToOrderAndToCustomer)();
 								onOpenChange(false);
 							}}
 							loading={loading}
 						>
-							<ButtonText>{t('Save to Order & Customer', { _tags: 'core' })}</ButtonText>
-						</Button>
+							{t('Save to Order & Customer', { _tags: 'core' })}
+						</DialogAction>
 					)}
-					<Button
+					<DialogAction
 						onPress={async () => {
 							await form.handleSubmit(handleSaveToOrder)();
 							onOpenChange(false);
 						}}
 					>
-						<ButtonText>{t('Save to Order', { _tags: 'core' })}</ButtonText>
-					</Button>
-				</HStack>
+						{t('Save to Order', { _tags: 'core' })}
+					</DialogAction>
+				</DialogFooter>
 			</VStack>
 		</Form>
 	);

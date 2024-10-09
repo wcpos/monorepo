@@ -12,7 +12,6 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/src/alert-dialog';
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import { Checkbox } from '@wcpos/components/src/checkbox';
 import {
 	DropdownMenu,
@@ -107,7 +106,7 @@ export const Actions = ({ row }: CellContext<CustomerDocument, 'actions'>) => {
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{t('You are about to delete {name}', {
+							{t('Delete {name}', {
 								_tags: 'core',
 								name: format(customer),
 							})}
@@ -116,7 +115,7 @@ export const Actions = ({ row }: CellContext<CustomerDocument, 'actions'>) => {
 							<VStack>
 								<Text className="text-destructive">
 									{t(
-										'Warning! Deleting a user is permanent, there is no Trash for WordPress users.',
+										'Are you sure you want to delete this user? Deleting a user is permanent, there is no Trash for WordPress users.',
 										{
 											_tags: 'core',
 										}
@@ -137,13 +136,9 @@ export const Actions = ({ row }: CellContext<CustomerDocument, 'actions'>) => {
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>
-							<Text>{t('Cancel', { _tags: 'core' })}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction asChild onPress={handleDelete}>
-							<Button variant="destructive" disabled={!force}>
-								<ButtonText>{t('Delete', { _tags: 'core' })}</ButtonText>
-							</Button>
+						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogAction variant="destructive" disabled={!force} onPress={handleDelete}>
+							{t('Delete', { _tags: 'core' })}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

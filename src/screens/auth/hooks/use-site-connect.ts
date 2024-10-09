@@ -87,6 +87,9 @@ const useSiteConnect = () => {
 			// }
 			const urlWithoutProtocol = url.replace(/^.*:\/{2,}|\s|\/+$/g, '') || '';
 			const response = await http.head(`${protocol}://${urlWithoutProtocol}`);
+			if (!response) {
+				throw Error(t('URL not found', { _tags: 'core' }));
+			}
 			const link = get(response, ['headers', 'link']);
 			if (!link) {
 				/**

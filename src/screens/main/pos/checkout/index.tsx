@@ -1,10 +1,8 @@
 import * as React from 'react';
 
-import { useNavigation, StackActions } from '@react-navigation/native';
 import { useObservableSuspense, ObservableResource } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	Modal,
 	ModalContent,
@@ -12,6 +10,8 @@ import {
 	ModalTitle,
 	ModalFooter,
 	ModalBody,
+	ModalClose,
+	ModalAction,
 } from '@wcpos/components/src/modal';
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
@@ -32,7 +32,6 @@ const Checkout = ({ resource }: Props) => {
 	const order = useObservableSuspense(resource);
 	const t = useT();
 	const iframeRef = React.useRef<HTMLIFrameElement>();
-	const navigation = useNavigation();
 	useModalRefreshFix();
 
 	/**
@@ -79,12 +78,10 @@ const Checkout = ({ resource }: Props) => {
 					</VStack>
 				</ModalBody>
 				<ModalFooter>
-					<Button variant="muted" onPress={() => navigation.dispatch(StackActions.pop(1))}>
-						<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
-					</Button>
-					<Button onPress={handleProcessPayment}>
-						<ButtonText>{t('Process Payment', { _tags: 'core' })}</ButtonText>
-					</Button>
+					<ModalClose>{t('Cancel', { _tags: 'core' })}</ModalClose>
+					<ModalAction onPress={handleProcessPayment}>
+						{t('Process Payment', { _tags: 'core' })}
+					</ModalAction>
 				</ModalFooter>
 			</ModalContent>
 		</Modal>

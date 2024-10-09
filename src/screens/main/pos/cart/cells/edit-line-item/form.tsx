@@ -6,10 +6,13 @@ import toNumber from 'lodash/toNumber';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { DialogClose, useRootContext } from '@wcpos/components/src/dialog';
+import {
+	DialogAction,
+	DialogClose,
+	DialogFooter,
+	useRootContext,
+} from '@wcpos/components/src/dialog';
 import { Form, FormField, FormInput, FormRadioGroup, FormSelect } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useT } from '../../../../../../contexts/translations';
@@ -166,16 +169,12 @@ export const EditLineItemForm = ({ uuid, item }: Props) => {
 					/>
 				</View>
 				<MetaDataForm withDisplayValues />
-				<HStack className="justify-end">
-					<DialogClose asChild>
-						<Button variant="muted">
-							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
-						</Button>
-					</DialogClose>
-					<Button onPress={form.handleSubmit(handleSave)}>
-						<ButtonText>{t('Save', { _tags: 'core' })}</ButtonText>
-					</Button>
-				</HStack>
+				<DialogFooter className="px-0">
+					<DialogClose>{t('Close', { _tags: 'core' })}</DialogClose>
+					<DialogAction onPress={form.handleSubmit(handleSave)}>
+						{t('Save', { _tags: 'core' })}
+					</DialogAction>
+				</DialogFooter>
 			</VStack>
 		</Form>
 	);

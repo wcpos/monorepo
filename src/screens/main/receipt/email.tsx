@@ -5,10 +5,8 @@ import { useObservableEagerState } from 'observable-hooks';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { DialogClose } from '@wcpos/components/src/dialog';
+import { DialogAction, DialogClose, DialogFooter } from '@wcpos/components/src/dialog';
 import { Form, FormInput, FormField, FormSwitch } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
 import { Toast } from '@wcpos/components/src/toast';
 import { VStack } from '@wcpos/components/src/vstack';
 
@@ -97,16 +95,12 @@ export const EmailForm = ({ order }: Props) => {
 					/>
 				</VStack>
 			</Form>
-			<HStack className="justify-end">
-				<DialogClose asChild>
-					<Button variant="muted">
-						<ButtonText>{t('Cancel', { _tags: 'core' })}</ButtonText>
-					</Button>
-				</DialogClose>
-				<Button onPress={form.handleSubmit(handleSendEmail)} loading={loading}>
-					<ButtonText>{t('Send', { _tags: 'core' })}</ButtonText>
-				</Button>
-			</HStack>
+			<DialogFooter className="px-0">
+				<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
+				<DialogAction onPress={form.handleSubmit(handleSendEmail)} loading={loading}>
+					{t('Send', { _tags: 'core' })}
+				</DialogAction>
+			</DialogFooter>
 		</VStack>
 	);
 };

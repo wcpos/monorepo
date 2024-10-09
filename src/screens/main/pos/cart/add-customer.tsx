@@ -105,9 +105,7 @@ export const AddNewCustomer = () => {
 				</Tooltip>
 				<DialogContent size="lg">
 					<DialogHeader>
-						<DialogTitle>
-							<Text>{t('Add new customer', { _tags: 'core' })}</Text>
-						</DialogTitle>
+						<DialogTitle>{t('Add new customer', { _tags: 'core' })}</DialogTitle>
 					</DialogHeader>
 					<DialogBody>
 						<CustomerForm

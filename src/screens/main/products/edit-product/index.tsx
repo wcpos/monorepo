@@ -33,9 +33,7 @@ export const EditProduct = ({ resource }: Props) => {
 			<Modal>
 				<ModalContent size="lg">
 					<ModalHeader>
-						<ModalTitle>
-							<Text>{t('No product found', { _tags: 'core' })}</Text>
-						</ModalTitle>
+						<ModalTitle>{t('No product found', { _tags: 'core' })}</ModalTitle>
 					</ModalHeader>
 				</ModalContent>
 			</Modal>
@@ -46,9 +44,7 @@ export const EditProduct = ({ resource }: Props) => {
 		<Modal>
 			<ModalContent size="lg">
 				<ModalHeader>
-					<ModalTitle>
-						<Text>{t('Edit {name}', { name: product.name, _tags: 'core' })}</Text>
-					</ModalTitle>
+					<ModalTitle>{t('Edit {name}', { name: product.name, _tags: 'core' })}</ModalTitle>
 				</ModalHeader>
 				<ModalBody>
 					<Tabs value={value} onValueChange={setValue}>

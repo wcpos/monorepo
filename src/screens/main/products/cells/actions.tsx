@@ -7,11 +7,11 @@ import {
 	AlertDialogAction,
 	AlertDialogCancel,
 	AlertDialogContent,
+	AlertDialogDescription,
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from '@wcpos/components/src/alert-dialog';
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -95,17 +95,18 @@ export const Actions = ({ row }: CellContext<ProductDocument, 'actions'>) => {
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{t('You are about to delete {product}', { _tags: 'core', product: product.name })}
+							{t('Delete {product}', { _tags: 'core', product: product.name })}
 						</AlertDialogTitle>
+						<AlertDialogDescription>
+							{t(
+								'Are you sure you want to delete this product? Deleted products will be placed in the Trash on the server.'
+							)}
+						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>
-							<Text>{t('Cancel', { _tags: 'core' })}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction asChild onPress={handleDelete}>
-							<Button variant="destructive">
-								<ButtonText>{t('Delete', { _tags: 'core' })}</ButtonText>
-							</Button>
+						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogAction variant="destructive" onPress={handleDelete}>
+							{t('Delete', { _tags: 'core' })}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

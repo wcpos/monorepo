@@ -10,8 +10,8 @@ import {
 	AlertDialogFooter,
 	AlertDialogHeader,
 	AlertDialogTitle,
+	AlertDialogDescription,
 } from '@wcpos/components/src/alert-dialog';
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -105,20 +105,21 @@ export const VariationActions = ({ row }: CellContext<ProductVariationDocument, 
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{t('You are about to delete {product}', {
+							{t('Delete {product}', {
 								_tags: 'core',
 								product: `${parent.name} - ${variation.name}`,
 							})}
 						</AlertDialogTitle>
+						<AlertDialogDescription>
+							{t(
+								'Are you sure you want to delete this variation? Deleting a variation is permanent, there is no Trash for variations.'
+							)}
+						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>
-							<Text>{t('Cancel', { _tags: 'core' })}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction asChild onPress={handleDelete}>
-							<Button variant="destructive">
-								<ButtonText>{t('Delete', { _tags: 'core' })}</ButtonText>
-							</Button>
+						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogAction variant="destructive" onPress={handleDelete}>
+							{t('Delete', { _tags: 'core' })}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

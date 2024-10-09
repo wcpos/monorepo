@@ -11,7 +11,6 @@ import {
 	DialogTrigger,
 	DialogHeader,
 } from '@wcpos/components/src/dialog';
-import { Text } from '@wcpos/components/src/text';
 
 import { EditCartCustomerForm } from './edit-cart-customer';
 import { useT } from '../../../../contexts/translations';
@@ -50,9 +49,7 @@ export const Customer = ({ setShowCustomerSelect }) => {
 			</DialogTrigger>
 			<DialogContent size="lg">
 				<DialogHeader>
-					<DialogTitle>
-						<Text>{t('Edit Customer Address', { _tags: 'core' })}</Text>
-					</DialogTitle>
+					<DialogTitle>{t('Edit Customer Address', { _tags: 'core' })}</DialogTitle>
 				</DialogHeader>
 				<DialogBody>
 					<EditCartCustomerForm />

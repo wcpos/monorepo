@@ -11,8 +11,8 @@ import {
 	AlertDialogCancel,
 	AlertDialogAction,
 	AlertDialogFooter,
+	AlertDialogDescription,
 } from '@wcpos/components/src/alert-dialog';
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import {
 	DropdownMenu,
 	DropdownMenuTrigger,
@@ -143,20 +143,28 @@ export const Actions = ({ row }: CellContext<OrderDocument, 'actions'>) => {
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{t('You are about to delete order {id}', {
-								_tags: 'core',
-								id: order.id || order.uuid,
-							})}
+							{order.id
+								? t('Delete order {id}', {
+										_tags: 'core',
+										id: order.id,
+									})
+								: t('Delete order')}
 						</AlertDialogTitle>
+						<AlertDialogDescription>
+							{order.id
+								? t(
+										'Are you sure you want to delete this order? Deleted orders will be placed in the Trash on the server.'
+									)
+								: t(
+										'Are you sure you want to delete this order? This order has not been saved to the server, it will be deleted permanently.',
+										{ _tags: 'core' }
+									)}
+						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
-						<AlertDialogCancel>
-							<Text>{t('Cancel', { _tags: 'core' })}</Text>
-						</AlertDialogCancel>
-						<AlertDialogAction asChild onPress={handleDelete}>
-							<Button variant="destructive">
-								<ButtonText>{t('Delete', { _tags: 'core' })}</ButtonText>
-							</Button>
+						<AlertDialogCancel>{t('Cancel', { _tags: 'core' })}</AlertDialogCancel>
+						<AlertDialogAction variant="destructive" onPress={handleDelete}>
+							{t('Delete', { _tags: 'core' })}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

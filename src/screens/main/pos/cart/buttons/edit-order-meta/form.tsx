@@ -6,10 +6,13 @@ import { useForm } from 'react-hook-form';
 // import { isRxDocument } from 'rxdb';
 import * as z from 'zod';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
-import { DialogClose, useRootContext } from '@wcpos/components/src/dialog';
+import {
+	DialogAction,
+	DialogClose,
+	DialogFooter,
+	useRootContext,
+} from '@wcpos/components/src/dialog';
 import { Form, FormCombobox, FormField, FormInput } from '@wcpos/components/src/form';
-import { HStack } from '@wcpos/components/src/hstack';
 // import { Toast } from '@wcpos/components/src/toast';
 import { VStack } from '@wcpos/components/src/vstack';
 
@@ -154,19 +157,12 @@ export const EditOrderMetaForm = ({ order, formData }) => {
 					</View>
 					<MetaDataForm />
 				</VStack>
-				<HStack className="justify-end">
-					<DialogClose asChild>
-						<Button variant="muted">
-							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
-						</Button>
-					</DialogClose>
-					{/* <Button loading={loading} onPress={form.handleSubmit(handleSaveToServer)}>
-						<ButtonText>{t('Save to Server', { _tags: 'core' })}</ButtonText>
-					</Button> */}
-					<Button onPress={form.handleSubmit(handleSave)}>
-						<ButtonText>{t('Save', { _tags: 'core' })}</ButtonText>
-					</Button>
-				</HStack>
+				<DialogFooter className="px-0">
+					<DialogClose>{t('Cancel', { _tags: 'core' })}</DialogClose>
+					<DialogAction onPress={form.handleSubmit(handleSave)}>
+						{t('Save', { _tags: 'core' })}
+					</DialogAction>
+				</DialogFooter>
 			</VStack>
 		</Form>
 	);
