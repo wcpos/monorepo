@@ -1,21 +1,25 @@
 import * as React from 'react';
 import { Platform, StyleSheet, View, ScrollView } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 
 import * as DialogPrimitive from '@rn-primitives/dialog';
+import * as Slot from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { Button } from '../button';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { Text, TextClassContext } from '../text';
+
+import type { ButtonProps } from '../button';
+import type { PressableRef, TextRef, SlottableTextProps } from '@rn-primitives/types';
 
 const Dialog = DialogPrimitive.Root;
 
 const DialogTrigger = DialogPrimitive.Trigger;
 
 const DialogPortal = DialogPrimitive.Portal;
-
-const DialogClose = DialogPrimitive.Close;
 
 const useRootContext = DialogPrimitive.useRootContext;
 
@@ -64,13 +68,20 @@ const DialogOverlayNative = React.forwardRef<
 
 DialogOverlayNative.displayName = 'DialogOverlayNative';
 
+const DialogClose = React.forwardRef<PressableRef, ButtonProps>(({ asChild, ...props }, ref) => (
+	<DialogPrimitive.Close ref={ref} asChild>
+		{asChild ? <Slot.Pressable {...props} /> : <Button variant="outline" {...props} />}
+	</DialogPrimitive.Close>
+));
+DialogClose.displayName = 'DialogClose';
+
 const DialogOverlay = Platform.select({
 	web: DialogOverlayWeb,
 	default: DialogOverlayNative,
 });
 
 const dialogContentVariants = cva(
-	'z-50 max-w-full max-h-full gap-4 py-4 border border-border web:cursor-default bg-background shadow-lg web:duration-200 rounded-lg',
+	'z-50 max-w-full max-h-full gap-4 py-4 border border-border web:cursor-default bg-background rounded-lg',
 	{
 		variants: {
 			size: {
@@ -111,12 +122,12 @@ const DialogContent = React.forwardRef<
 				>
 					{children}
 					<View className="absolute right-2 top-2">
-						<DialogPrimitive.Close
+						<DialogClose
 							className="opacity-70 web:transition-opacity web:hover:opacity-100"
 							asChild
 						>
 							<IconButton name="xmark" />
-						</DialogPrimitive.Close>
+						</DialogClose>
 					</View>
 				</DialogPrimitive.Content>
 			</DialogOverlay>
@@ -144,15 +155,20 @@ const DialogFooter = ({ className, ...props }: React.ComponentPropsWithoutRef<ty
 );
 DialogFooter.displayName = 'DialogFooter';
 
-const DialogTitle = React.forwardRef<
-	React.ElementRef<typeof DialogPrimitive.Title>,
-	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
->(({ className, ...props }, ref) => (
-	<TextClassContext.Provider value="text-lg native:text-xl text-foreground font-semibold leading-none">
-		<DialogPrimitive.Title ref={ref} className={cn(className)} {...props} />
-	</TextClassContext.Provider>
-));
-DialogTitle.displayName = DialogPrimitive.Title.displayName;
+const DialogTitle = React.forwardRef<TextRef, SlottableTextProps>(
+	({ className, asChild, ...props }, ref) => {
+		const Component = asChild ? Slot.Text : Text;
+
+		return (
+			<TextClassContext.Provider value="text-lg native:text-xl text-foreground font-semibold leading-none">
+				<DialogPrimitive.Title asChild>
+					<Component {...props} ref={ref} />
+				</DialogPrimitive.Title>
+			</TextClassContext.Provider>
+		);
+	}
+);
+DialogTitle.displayName = 'DialogTitle';
 
 const DialogDescription = React.forwardRef<
 	React.ElementRef<typeof DialogPrimitive.Description>,
@@ -175,6 +191,28 @@ const DialogBody = ({ className, ...props }: React.ComponentPropsWithoutRef<type
 );
 DialogBody.displayName = 'DialogBody';
 
+/**
+ * TODO: it would be nice to pass the onPress handler to the useRootContext hook so that we can
+ * detect button presses from anywhere in the dialog.
+ */
+const DialogAction = React.forwardRef<PressableRef, ButtonProps>(
+	({ asChild, disabled, ...props }, ref) => {
+		return asChild ? (
+			<Slot.Pressable
+				ref={ref}
+				aria-disabled={disabled ?? undefined}
+				role="button"
+				disabled={disabled ?? undefined}
+				{...props}
+			/>
+		) : (
+			<Button aria-disabled={disabled ?? undefined} disabled={disabled ?? undefined} {...props} />
+		);
+	}
+);
+
+DialogAction.displayName = 'DialogAction';
+
 export {
 	Dialog,
 	DialogClose,
@@ -188,4 +226,5 @@ export {
 	DialogTrigger,
 	DialogBody,
 	useRootContext,
+	DialogAction,
 };

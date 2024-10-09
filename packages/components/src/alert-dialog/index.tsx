@@ -1,12 +1,17 @@
 import * as React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 
 import * as AlertDialogPrimitive from '@rn-primitives/alert-dialog';
+import * as Slot from '@rn-primitives/slot';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import { buttonTextVariants, buttonVariants } from '../button';
+import { Button } from '../button';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { TextClassContext, Text } from '../text';
+
+import type { ButtonProps } from '../button';
+import type { PressableRef, TextRef, SlottableTextProps } from '@rn-primitives/types';
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
@@ -72,7 +77,8 @@ const AlertDialogContent = React.forwardRef<
 				<AlertDialogPrimitive.Content
 					ref={ref}
 					className={cn(
-						'z-50 max-w-lg gap-4 border border-border bg-background p-6 shadow-lg shadow-foreground/10 web:duration-200 rounded-lg',
+						'z-50 max-w-lg gap-4 py-4 border border-border bg-background rounded-lg',
+						'shadow-lg shadow-foreground/10 web:duration-200',
 						open
 							? 'web:animate-in web:fade-in-0 web:zoom-in-95'
 							: 'web:animate-out web:fade-out-0 web:zoom-out-95',
@@ -90,7 +96,7 @@ const AlertDialogHeader = ({
 	className,
 	...props
 }: React.ComponentPropsWithoutRef<typeof View>) => (
-	<View className={cn('flex flex-col gap-2', className)} {...props} />
+	<View className={cn('flex flex-col px-4 gap-2', className)} {...props} />
 );
 AlertDialogHeader.displayName = 'AlertDialogHeader';
 
@@ -99,59 +105,93 @@ const AlertDialogFooter = ({
 	...props
 }: React.ComponentPropsWithoutRef<typeof View>) => (
 	<View
-		className={cn('flex flex-col-reverse sm:flex-row sm:justify-end gap-2', className)}
+		className={cn('flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-4', className)}
 		{...props}
 	/>
 );
 AlertDialogFooter.displayName = 'AlertDialogFooter';
 
-const AlertDialogTitle = React.forwardRef<
-	React.ElementRef<typeof AlertDialogPrimitive.Title>,
-	React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Title>
->(({ className, ...props }, ref) => (
-	<AlertDialogPrimitive.Title
-		ref={ref}
-		className={cn('text-lg native:text-xl text-foreground font-semibold', className)}
-		{...props}
-	/>
-));
-AlertDialogTitle.displayName = AlertDialogPrimitive.Title.displayName;
+const AlertDialogTitle = React.forwardRef<TextRef, SlottableTextProps>(
+	({ className, asChild, ...props }, ref) => {
+		const Component = asChild ? Slot.Text : Text;
+
+		return (
+			<TextClassContext.Provider value="text-lg native:text-xl text-foreground font-semibold leading-none">
+				<AlertDialogPrimitive.Title asChild>
+					<Component {...props} ref={ref} />
+				</AlertDialogPrimitive.Title>
+			</TextClassContext.Provider>
+		);
+	}
+);
+AlertDialogTitle.displayName = 'AlertDialogTitle';
 
 const AlertDialogDescription = React.forwardRef<
 	React.ElementRef<typeof AlertDialogPrimitive.Description>,
 	React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Description>
->(({ className, ...props }, ref) => (
-	<AlertDialogPrimitive.Description
-		ref={ref}
-		className={cn('text-sm native:text-base text-muted-foreground', className)}
-		{...props}
-	/>
-));
+>(({ className, asChild, ...props }, ref) => {
+	const Component = asChild ? Slot.Text : Text;
+
+	return (
+		<TextClassContext.Provider value="text-base text-foreground leading-5">
+			<AlertDialogPrimitive.Description asChild>
+				<Component {...props} ref={ref} />
+			</AlertDialogPrimitive.Description>
+		</TextClassContext.Provider>
+	);
+});
 AlertDialogDescription.displayName = AlertDialogPrimitive.Description.displayName;
 
-const AlertDialogAction = React.forwardRef<
-	React.ElementRef<typeof AlertDialogPrimitive.Action>,
-	React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action>
->(({ className, ...props }, ref) => (
-	<TextClassContext.Provider value={buttonTextVariants({ className })}>
-		<AlertDialogPrimitive.Action ref={ref} className={cn(buttonVariants(), className)} {...props} />
-	</TextClassContext.Provider>
-));
-AlertDialogAction.displayName = AlertDialogPrimitive.Action.displayName;
+const AlertDialogAction = React.forwardRef<PressableRef, ButtonProps>(
+	({ asChild, disabled, ...props }, ref) => {
+		return asChild ? (
+			<Slot.Pressable
+				ref={ref}
+				aria-disabled={disabled ?? undefined}
+				role="button"
+				disabled={disabled ?? undefined}
+				{...props}
+			/>
+		) : (
+			<Button aria-disabled={disabled ?? undefined} disabled={disabled ?? undefined} {...props} />
+		);
+	}
+);
 
-const AlertDialogCancel = React.forwardRef<
-	React.ElementRef<typeof AlertDialogPrimitive.Cancel>,
-	React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Cancel>
->(({ className, ...props }, ref) => (
-	<TextClassContext.Provider value={buttonTextVariants({ className, variant: 'outline' })}>
-		<AlertDialogPrimitive.Cancel
-			ref={ref}
-			className={cn(buttonVariants({ variant: 'outline', className }))}
-			{...props}
-		/>
-	</TextClassContext.Provider>
-));
-AlertDialogCancel.displayName = AlertDialogPrimitive.Cancel.displayName;
+AlertDialogAction.displayName = 'AlertDialogAction';
+
+const AlertDialogCancel = React.forwardRef<PressableRef, ButtonProps>(
+	({ asChild, disabled, ...props }, ref) => {
+		const { onOpenChange } = AlertDialogPrimitive.useRootContext();
+
+		function onPress(ev: GestureResponderEvent) {
+			if (props?.onPress) {
+				props.onPress(ev);
+			}
+			onOpenChange(false);
+		}
+
+		return asChild ? (
+			<Slot.Pressable
+				ref={ref}
+				onPress={onPress}
+				aria-disabled={disabled ?? undefined}
+				role="button"
+				disabled={disabled ?? undefined}
+				{...props}
+			/>
+		) : (
+			<Button
+				aria-disabled={disabled ?? undefined}
+				disabled={disabled ?? undefined}
+				onPress={onPress}
+				variant="outline"
+				{...props}
+			/>
+		);
+	}
+);
+AlertDialogCancel.displayName = 'AlertDialogCancel';
 
 export {
 	AlertDialog,

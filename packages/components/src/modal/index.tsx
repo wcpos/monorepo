@@ -1,25 +1,18 @@
 import * as React from 'react';
-import {
-	Platform,
-	StyleSheet,
-	View,
-	ScrollView,
-	Pressable,
-	type GestureResponderEvent,
-} from 'react-native';
+import { Platform, StyleSheet, View, ScrollView, type GestureResponderEvent } from 'react-native';
 
-import { Primitive } from '@radix-ui/react-primitive';
 import { useNavigation, StackActions } from '@react-navigation/native';
-import { useAugmentedRef } from '@rn-primitives/hooks';
 import * as Slot from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { Button } from '../button';
 import { IconButton } from '../icon-button';
 import { cn } from '../lib/utils';
-import { TextClassContext } from '../text';
+import { Text, TextClassContext } from '../text';
 
-import type { PressableRef, SlottablePressableProps } from '@rn-primitives/types';
+import type { ButtonProps } from '../button';
+import type { PressableRef, SlottableTextProps, TextRef } from '@rn-primitives/types';
 
 interface ModalContextProps {
 	onClose: (open: boolean) => void;
@@ -46,32 +39,26 @@ const Modal = ({ children, onClose }: { children: React.ReactNode; onClose?: () 
 	);
 };
 
-const ModalClose = React.forwardRef<PressableRef, SlottablePressableProps>(
-	({ asChild, onPress: onPressProp, disabled, ...props }, ref) => {
-		const augmentedRef = useAugmentedRef({ ref });
+const ModalClose = React.forwardRef<PressableRef, ButtonProps>(
+	({ asChild, disabled, ...props }, ref) => {
 		const { onClose } = useRootContext();
 
 		function onPress(ev: GestureResponderEvent) {
-			if (onClose) {
-				onClose(false);
+			if (props?.onPress) {
+				props.onPress(ev);
 			}
 			onClose(false);
 		}
 
-		React.useLayoutEffect(() => {
-			if (augmentedRef.current) {
-				const augRef = augmentedRef.current as unknown as HTMLButtonElement;
-				augRef.type = 'button';
-			}
-		}, []);
+		const Component = asChild ? Slot.Pressable : Button;
 
-		const Component = asChild ? Slot.Pressable : Pressable;
 		return (
 			<Component
-				ref={augmentedRef}
+				ref={ref}
+				aria-disabled={disabled ?? undefined}
+				disabled={disabled ?? undefined}
 				onPress={onPress}
-				role="button"
-				disabled={disabled}
+				variant="outline"
 				{...props}
 			/>
 		);
@@ -79,6 +66,24 @@ const ModalClose = React.forwardRef<PressableRef, SlottablePressableProps>(
 );
 
 ModalClose.displayName = 'ModalClose';
+
+const ModalAction = React.forwardRef<PressableRef, ButtonProps>(
+	({ asChild, disabled, ...props }, ref) => {
+		const Component = asChild ? Slot.Pressable : Button;
+
+		return (
+			<Component
+				ref={ref}
+				role="button"
+				aria-disabled={disabled ?? undefined}
+				disabled={disabled ?? undefined}
+				{...props}
+			/>
+		);
+	}
+);
+
+ModalAction.displayName = 'ModalAction';
 
 const ModalOverlayWeb = React.forwardRef<
 	React.ElementRef<typeof View>,
@@ -204,16 +209,16 @@ const ModalFooter = ({ className, ...props }: React.ComponentPropsWithoutRef<typ
 );
 ModalFooter.displayName = 'ModalFooter';
 
-type ModalTitleElement = React.ElementRef<typeof Primitive.h2>;
-type PrimitiveHeading2Props = React.ComponentPropsWithoutRef<typeof Primitive.h2>;
-interface ModalTitleProps extends PrimitiveHeading2Props {}
+const ModalTitle = React.forwardRef<TextRef, SlottableTextProps>(
+	({ className, asChild, ...props }, ref) => {
+		const Component = asChild ? Slot.Text : Text;
 
-const ModalTitle = React.forwardRef<ModalTitleElement, ModalTitleProps>(
-	({ className, ...props }, ref) => (
-		<TextClassContext.Provider value="text-lg native:text-xl text-foreground font-semibold leading-none">
-			<Primitive.h2 id="" {...props} ref={ref} />
-		</TextClassContext.Provider>
-	)
+		return (
+			<TextClassContext.Provider value="text-lg native:text-xl text-foreground font-semibold leading-none">
+				<Component {...props} ref={ref} />
+			</TextClassContext.Provider>
+		);
+	}
 );
 ModalTitle.displayName = 'ModalTitle';
 
@@ -226,4 +231,5 @@ export {
 	ModalTitle,
 	ModalBody,
 	ModalClose,
+	ModalAction,
 };
