@@ -32,7 +32,7 @@ import { EmailForm } from './email';
 import { useT } from '../../../contexts/translations';
 import useModalRefreshFix from '../../../hooks/use-modal-refresh-fix';
 import { useUISettings } from '../contexts/ui-settings';
-import { usePrint } from '../hooks/use-print';
+import { usePrintExternalURL } from '../hooks/use-print';
 
 interface Props {
 	resource: ObservableResource<import('@wcpos/database').OrderDocument>;
@@ -50,7 +50,7 @@ export const ReceiptModal = ({ resource }: Props) => {
 		order.links$.pipe(map((links) => get(links, ['receipt', 0, 'href']))),
 		get(order, ['links', 'receipt', 0, 'href'])
 	);
-	const { print, isPrinting } = usePrint({ externalURL: receiptURL });
+	const { print, isPrinting } = usePrintExternalURL({ externalURL: receiptURL });
 
 	/**
 	 * Allow auto print for checkout

@@ -71,11 +71,7 @@ export const SettingsTabs = () => {
 					</Tabs>
 				</ModalBody>
 				<ModalFooter>
-					<ModalClose asChild>
-						<Button variant="muted">
-							<ButtonText>{t('Close', { _tags: 'core' })}</ButtonText>
-						</Button>
-					</ModalClose>
+					<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
 				</ModalFooter>
 			</ModalContent>
 		</Modal>

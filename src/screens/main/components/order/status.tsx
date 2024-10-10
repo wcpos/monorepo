@@ -17,11 +17,11 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 const iconMap = {
 	pending: {
 		name: 'clock',
-		type: '#ffc107',
+		type: 'info',
 	},
 	processing: {
 		name: 'circleEllipsis',
-		type: 'attention',
+		type: 'info',
 	},
 	'on-hold': {
 		name: 'circlePause',
@@ -37,11 +37,11 @@ const iconMap = {
 	},
 	refunded: {
 		name: 'arrowRotateLeft',
-		type: 'attention',
+		type: 'warning',
 	},
 	failed: {
 		name: 'triangleExclamation',
-		type: 'critical',
+		type: 'error',
 	},
 	'pos-open': {
 		name: 'cartShopping',
@@ -49,7 +49,7 @@ const iconMap = {
 	},
 	'pos-partial': {
 		name: 'circleDollar',
-		type: 'primary',
+		type: 'info',
 	},
 };
 

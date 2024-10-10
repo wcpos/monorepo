@@ -74,12 +74,12 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "6.4.8",
-    "@testing-library/react": "^16.0.0",
+    "@testing-library/jest-dom": "6.5.0",
+    "@testing-library/react": "^16.0.1",
     "@testing-library/react-hooks": "8.0.1",
     "@types/core-js": "^2.5.8",
     "@types/jest": "^29.5.12",
-    "@types/lodash": "4.17.7",
+    "@types/lodash": "4.17.10",
     "@types/react": "^18.2.79",
     "@wcpos/babel-preset-expo": "*",
     "@wcpos/eslint-config": "*",
