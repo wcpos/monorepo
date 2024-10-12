@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { useFeeLineData } from './use-fee-line-data';
-import { useTaxCalculator } from '../../hooks/taxes/use-tax-calculator';
+import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
 import { useCurrentOrder } from '../contexts/current-order';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
@@ -11,7 +11,7 @@ type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
  * Returns the updated fee line object.
  */
 export const useCalculateFeeLineTaxAndTotals = () => {
-	const { calculateTaxesFromValue } = useTaxCalculator();
+	const { calculateTaxesFromValue } = useCalculateTaxesFromValue();
 	const { getFeeLineData } = useFeeLineData();
 	const { currentOrder } = useCurrentOrder();
 

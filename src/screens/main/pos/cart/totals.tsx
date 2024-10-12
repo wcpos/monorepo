@@ -8,8 +8,8 @@ import { VStack } from '@wcpos/components/src/vstack';
 import { CustomerNote } from './totals/customer-note';
 import { Taxes } from './totals/taxes';
 import { useT } from '../../../../contexts/translations';
-import { useTaxDisplay } from '../../hooks/taxes/use-tax-display';
 import { useCurrentOrderCurrencyFormat } from '../../hooks/use-current-order-currency-format';
+import { useTaxInclOrExcl } from '../../hooks/use-tax-incl-or-excl';
 import { useOrderTotals } from '../hooks/use-order-totals';
 
 /**
@@ -18,7 +18,7 @@ import { useOrderTotals } from '../hooks/use-order-totals';
 export const Totals = () => {
 	const t = useT();
 	const { format } = useCurrentOrderCurrencyFormat();
-	const { inclOrExcl } = useTaxDisplay({ context: 'cart' });
+	const { inclOrExcl } = useTaxInclOrExcl({ context: 'cart' });
 
 	const {
 		subtotal,

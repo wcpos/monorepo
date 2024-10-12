@@ -1,48 +1,48 @@
 import * as React from 'react';
 
+import toNumber from 'lodash/toNumber';
 import { useObservableEagerState } from 'observable-hooks';
 
-import { getMetaDataValueByKey } from './utils';
+import { parsePosData } from './utils';
 import { useAppState } from '../../../../contexts/app-state';
 
 type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 
 /**
- *
+ * Calculate default fee amount based on tax inclusion.
+ */
+const calculateDefaultAmount = (item: FeeLine, pricesIncludeTax: boolean) => {
+	const total = toNumber(item.total);
+	const totalTax = toNumber(item.total_tax);
+	return pricesIncludeTax ? total + totalTax : item.total;
+};
+
+/**
+ * Custom hook to retrieve and process fee line data.
  */
 export const useFeeLineData = () => {
 	const { store } = useAppState();
-	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$);
+	const pricesIncludeTax = useObservableEagerState(store.prices_include_tax$) === 'yes';
 
 	/**
 	 * Retrieves and processes the fee line data.
 	 */
 	const getFeeLineData = React.useCallback(
 		(item: FeeLine) => {
-			const defaultPricesIncludeTax = pricesIncludeTax === 'yes';
+			const defaultAmount = calculateDefaultAmount(item, pricesIncludeTax);
 			const defaultPercent = false;
-			const defaultAmount = defaultPricesIncludeTax
-				? String(parseFloat(item.total) + parseFloat(item.total_tax))
-				: item.total;
 
 			let amount = defaultAmount;
 			let percent = defaultPercent;
-			let prices_include_tax = defaultPricesIncludeTax;
-			let percent_of_cart_total_with_tax = defaultPricesIncludeTax;
+			let prices_include_tax = pricesIncludeTax;
+			let percent_of_cart_total_with_tax = pricesIncludeTax;
 
-			try {
-				const posData = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
-				if (posData) {
-					const parsedData = JSON.parse(posData);
-					({
-						amount = defaultAmount,
-						percent = defaultPercent,
-						prices_include_tax = defaultPricesIncludeTax,
-						percent_of_cart_total_with_tax = defaultPricesIncludeTax,
-					} = parsedData);
-				}
-			} catch (error) {
-				console.error('Error parsing posData:', error);
+			const posData = parsePosData(item);
+			if (posData) {
+				amount = posData.amount || defaultAmount;
+				percent = posData.percent ?? defaultPercent;
+				prices_include_tax = posData.prices_include_tax ?? pricesIncludeTax;
+				percent_of_cart_total_with_tax = posData.percent_of_cart_total_with_tax ?? pricesIncludeTax;
 			}
 
 			return {

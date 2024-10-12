@@ -13,7 +13,7 @@ import {
 describe('Calculate Taxes', () => {
 	it('should calculate the inclusive and exclusive tax', () => {
 		const taxRate = {
-			id: '72',
+			id: 72,
 			country: 'GB',
 			rate: '20.0000',
 			name: 'VAT',
@@ -26,17 +26,17 @@ describe('Calculate Taxes', () => {
 
 		// @ts-ignore
 		const inclusiveTaxes = calculateTaxes(9.99, [taxRate], true);
-		expect(inclusiveTaxes).toEqual([{ id: '72', total: '1.665' }]);
+		expect(inclusiveTaxes).toEqual([{ id: 72, total: '1.665' }]);
 
 		// @ts-ignore
 		const exclusiveTaxes = calculateTaxes(9.99, [taxRate], false);
-		expect(exclusiveTaxes).toEqual([{ id: '72', total: '1.998' }]);
+		expect(exclusiveTaxes).toEqual([{ id: 72, total: '1.998' }]);
 	});
 
 	it('should calculate the compound tax', () => {
 		const taxRates = [
 			{
-				id: '72',
+				id: 72,
 				country: 'CA',
 				rate: '5.0000',
 				name: 'GST',
@@ -47,7 +47,7 @@ describe('Calculate Taxes', () => {
 				class: '',
 			},
 			{
-				id: '17',
+				id: 17,
 				country: 'CA',
 				state: 'QC',
 				rate: '8.5000',
@@ -64,8 +64,8 @@ describe('Calculate Taxes', () => {
 		// @ts-ignore
 		const exclusiveTaxes = calculateTaxes(100, taxRates, false);
 		expect(exclusiveTaxes).toEqual([
-			{ id: '72', total: '5' },
-			{ id: '17', total: '8.925' },
+			{ id: 72, total: '5' },
+			{ id: 17, total: '8.925' },
 		]);
 
 		// prices inclusive of tax.
@@ -79,33 +79,33 @@ describe('Calculate Taxes', () => {
 		 * 92.1659 - ( 92.1659 / 1.05 ) = 4.38885.
 		 */
 		expect(inclusiveTaxes).toEqual([
-			{ id: '17', total: '7.8341' },
-			{ id: '72', total: '4.3889' },
+			{ id: 17, total: '7.8341' },
+			{ id: 72, total: '4.3889' },
 		]);
 	});
 
 	it('should sum taxes', () => {
 		const taxes = [
-			{ id: '1', total: '1.665' },
-			{ id: '2', total: '2' },
+			{ id: 1, total: '1.665' },
+			{ id: 2, total: '2' },
 		];
 		expect(sumTaxes(taxes)).toEqual(3.665);
 	});
 
 	it('should sum itemized taxes', () => {
 		const taxes1 = [
-			{ id: '1', total: '1.665' },
-			{ id: '2', total: '2' },
+			{ id: 1, total: '1.665' },
+			{ id: 2, total: '2' },
 		];
 		const taxes2 = [
-			{ id: '1', total: '1' },
-			{ id: '2', total: '2' },
+			{ id: 1, total: '1' },
+			{ id: 2, total: '2' },
 		];
 
 		// @ts-ignore
 		expect(sumItemizedTaxes([taxes1, taxes2])).toEqual([
-			{ id: '1', total: '2.665' },
-			{ id: '2', total: '4' },
+			{ id: 1, total: '2.665' },
+			{ id: 2, total: '4' },
 		]);
 	});
 
@@ -115,7 +115,7 @@ describe('Calculate Taxes', () => {
 			rates: [
 				// @ts-ignore
 				{
-					id: '72',
+					id: 72,
 					country: 'GB',
 					rate: '20.0000',
 					name: 'VAT',
@@ -130,9 +130,9 @@ describe('Calculate Taxes', () => {
 			taxDisplayShop: 'excl',
 			taxRoundAtSubtotal: true,
 		});
-		expect(result.displayPrice).toBe('83.3333');
+		expect(result.displayValue).toBe('83.3333');
 		expect(result.taxTotal).toBe('16.6667');
-		expect(result.taxDisplayShop).toBe('excl');
+		expect(result.inclOrExcl).toBe('excl');
 	});
 
 	describe('calculateLineItemTotals', () => {
@@ -143,7 +143,7 @@ describe('Calculate Taxes', () => {
 				rates: [
 					// @ts-ignore
 					{
-						id: '72',
+						id: 72,
 						country: 'GB',
 						rate: '20.0000',
 						name: 'VAT',
@@ -179,7 +179,7 @@ describe('Calculate Taxes', () => {
 				rates: [
 					// @ts-ignore
 					{
-						id: '72',
+						id: 72,
 						country: 'GB',
 						rate: '20.0000',
 						name: 'VAT',
@@ -200,7 +200,7 @@ describe('Calculate Taxes', () => {
 			expect(result.total_tax).toBe('40');
 			expect(result.taxes).toEqual([
 				{
-					id: '72',
+					id: 72,
 					subtotal: '40',
 					total: '40',
 				},
@@ -209,7 +209,7 @@ describe('Calculate Taxes', () => {
 
 		test('Calculates line item totals with no tax rates', () => {
 			const result = calculateLineItemTotals({
-				qty: 2,
+				quantity: 2,
 				price: '100',
 				rates: [],
 				pricesIncludeTax: false,
@@ -228,9 +228,8 @@ describe('Calculate Taxes', () => {
 				qty: 1,
 				price: '19',
 				rates: [
-					// @ts-ignore
 					{
-						id: '1',
+						id: 1,
 						label: 'Standard Rate',
 						rate: '10.0000',
 						class: 'standard',
@@ -257,7 +256,7 @@ describe('Calculate Taxes', () => {
 					total_tax: '20',
 					taxes: [
 						{
-							id: '1',
+							id: 1,
 							total: '20',
 						},
 					],
@@ -267,7 +266,7 @@ describe('Calculate Taxes', () => {
 					total_tax: '10',
 					taxes: [
 						{
-							id: '2',
+							id: 2,
 							total: '10',
 						},
 					],
@@ -275,19 +274,16 @@ describe('Calculate Taxes', () => {
 			];
 
 			const result = calculateOrderTotalsAndTaxes({
-				// @ts-ignore
 				lines,
 				taxRoundAtSubtotal: true,
 				rates: [
-					// @ts-ignore
 					{
-						id: '1',
+						id: 1,
 						label: 'Standard Rate',
 						compound: false,
 					},
-					// @ts-ignore
 					{
-						id: '2',
+						id: 2,
 						label: 'Reduced Rate',
 						compound: false,
 					},
@@ -298,13 +294,13 @@ describe('Calculate Taxes', () => {
 			expect(result.total_tax).toBe('30');
 			expect(result.tax_lines).toEqual([
 				{
-					rate_id: '1',
+					rate_id: 1,
 					label: 'Standard Rate',
 					compound: false,
 					tax_total: '20',
 				},
 				{
-					rate_id: '2',
+					rate_id: 2,
 					label: 'Reduced Rate',
 					compound: false,
 					tax_total: '10',
@@ -325,7 +321,6 @@ describe('Calculate Taxes', () => {
 			];
 
 			const result = calculateOrderTotalsAndTaxes({
-				// @ts-ignore
 				lines,
 				taxRoundAtSubtotal: true,
 				rates: [],
@@ -342,15 +337,13 @@ describe('Calculate Taxes', () => {
 				lines,
 				taxRoundAtSubtotal: true,
 				rates: [
-					// @ts-ignore
 					{
-						id: '1',
+						id: 1,
 						label: 'Standard Rate',
 						compound: false,
 					},
-					// @ts-ignore
 					{
-						id: '2',
+						id: 2,
 						label: 'Reduced Rate',
 						compound: false,
 					},
@@ -364,20 +357,18 @@ describe('Calculate Taxes', () => {
 
 		test('Calculates order totals with multiple tax rates', () => {
 			const customRates = [
-				// @ts-ignore
 				{
-					id: '1',
+					id: 1,
 					label: 'Standard Rate',
 					compound: false,
 				},
-				// @ts-ignore
 				{
-					id: '2',
+					id: 2,
 					label: 'Reduced Rate',
 					compound: false,
 				},
 				{
-					id: '3',
+					id: 3,
 					class: 'additional',
 					name: 'Additional Rate',
 					compound: 'no',
@@ -389,7 +380,7 @@ describe('Calculate Taxes', () => {
 					total_tax: '20',
 					taxes: [
 						{
-							id: '1',
+							id: 1,
 							total: '20',
 						},
 					],
@@ -399,17 +390,15 @@ describe('Calculate Taxes', () => {
 					total_tax: '15',
 					taxes: [
 						{
-							id: '3',
+							id: 3,
 							total: '15',
 						},
 					],
 				},
 			];
 			const result = calculateOrderTotalsAndTaxes({
-				// @ts-ignore
 				lines,
 				taxRoundAtSubtotal: true,
-				// @ts-ignore
 				rates: customRates,
 			});
 
@@ -417,13 +406,13 @@ describe('Calculate Taxes', () => {
 			expect(result.total_tax).toBe('35');
 			expect(result.tax_lines).toEqual([
 				{
-					rate_id: '1',
+					rate_id: 1,
 					label: 'Standard Rate',
 					compound: 'no',
 					tax_total: '20',
 				},
 				{
-					rate_id: '3',
+					rate_id: 3,
 					label: 'Additional Rate',
 					compound: 'no',
 					tax_total: '15',

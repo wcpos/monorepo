@@ -1,18 +1,22 @@
 import { UTCDate } from '@date-fns/utc';
 import { format as formatDate } from 'date-fns';
 import isEmpty from 'lodash/isEmpty';
+import toNumber from 'lodash/toNumber';
 
 import log from '@wcpos/utils/src/logger';
 
-type LineItem = import('@wcpos/database').OrderDocument['line_items'][number];
-type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
-type ShippingLine = import('@wcpos/database').OrderDocument['shipping_lines'][number];
+type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
+type FeeLine = NonNullable<import('@wcpos/database').OrderDocument['fee_lines']>[number];
+type ShippingLine = NonNullable<import('@wcpos/database').OrderDocument['shipping_lines']>[number];
 type CartLine = LineItem | FeeLine | ShippingLine;
 
 /**
  *
  */
-export const priceToNumber = (price?: string) => parseFloat(isEmpty(price) ? '0' : price);
+export const priceToNumber = (price?: string) => {
+	const number = toNumber(price);
+	return isNaN(number) ? 0 : number;
+};
 
 /**
  *
@@ -148,7 +152,7 @@ export const convertProductToLineItemWithoutTax = (
 	 * - this allows users to choose which meta data to transfer, allowing all would be too much
 	 */
 	const meta_data = (product.meta_data || [])
-		.filter((item) => item.key && metaDataKeys.includes(item.key))
+		.filter((item) => item.key && (metaDataKeys || []).includes(item.key))
 		.map(({ key, value }) => ({ key, value }));
 
 	/**
@@ -178,10 +182,17 @@ export const convertProductToLineItemWithoutTax = (
  * Convert a variation to the format expected by OrderDocument['line_items']
  */
 type Variation = import('@wcpos/database').ProductVariationDocument;
+type MetaData = {
+	id?: number;
+	key?: string;
+	value?: string;
+	display_key?: string;
+	display_value?: string;
+}[];
 export const convertVariationToLineItemWithoutTax = (
 	variation: Variation,
 	parent: Product,
-	metaData?: Partial<LineItem['meta_data'][number]>[],
+	metaData?: MetaData,
 	metaDataKeys?: string[]
 ): LineItem => {
 	const price = sanitizePrice(variation.price);
@@ -193,7 +204,7 @@ export const convertVariationToLineItemWithoutTax = (
 	 * Get attributes from variation if not passed in
 	 */
 	if (!attributes) {
-		attributes = variation.attributes.map((attr) => ({
+		attributes = (variation.attributes || []).map((attr) => ({
 			key: attr.name,
 			value: attr.option,
 			attr_id: attr.id,
@@ -207,13 +218,13 @@ export const convertVariationToLineItemWithoutTax = (
 	 * - this allows users to choose which meta data to transfer, allowing all would be too much
 	 */
 	const meta_data = (variation.meta_data || [])
-		.filter((item) => item.key && metaDataKeys.includes(item.key))
+		.filter((item) => item.key && (metaDataKeys || []).includes(item.key))
 		.map(({ key, value }) => ({ key, value }));
 
 	/**
 	 * NOTE: be careful not to mutate the data object passed in, especially the meta_data array.
 	 */
-	const new_meta_data = [...meta_data];
+	const new_meta_data: MetaData = [...meta_data];
 
 	new_meta_data.push({
 		key: '_woocommerce_pos_data',
@@ -237,28 +248,26 @@ export const convertVariationToLineItemWithoutTax = (
 };
 
 /**
- * Updates or adds _woocommerce_pos_data meta_data
+ * Implementation of updatePosDataMeta
  */
-export const updatePosDataMeta = (
-	item: FeeLine,
-	newData: Partial<{ amount: string; percent: boolean; prices_include_tax: boolean }>
-): FeeLine => {
+export function updatePosDataMeta(item: CartLine, newData: any): CartLine {
 	const meta_data = item.meta_data ?? [];
 	let posDataFound = false;
 
 	const updatedMetaData = meta_data.map((meta) => {
 		if (meta.key === '_woocommerce_pos_data') {
-			const posData = JSON.parse(meta.value);
-			Object.assign(posData, newData);
+			const posData = meta.value ? JSON.parse(meta.value) : {};
+			Object.assign(posData, newData); // Merge the existing data with new data
 			posDataFound = true;
 			return {
 				...meta,
-				value: JSON.stringify(posData),
+				value: JSON.stringify(posData), // Update the meta data value
 			};
 		}
 		return meta;
 	});
 
+	// If '_woocommerce_pos_data' was not found, add it to the metadata
 	if (!posDataFound) {
 		updatedMetaData.push({
 			key: '_woocommerce_pos_data',
@@ -268,6 +277,21 @@ export const updatePosDataMeta = (
 
 	return {
 		...item,
-		meta_data: updatedMetaData,
+		meta_data: updatedMetaData, // Return the updated item with new metadata
 	};
+}
+
+/**
+ * Extract and parse POS metadata from the line item.
+ */
+export const parsePosData = (item: CartLine) => {
+	try {
+		const posData = getMetaDataValueByKey(item.meta_data, '_woocommerce_pos_data');
+		if (posData) {
+			return JSON.parse(posData);
+		}
+	} catch (error) {
+		console.error('Error parsing posData:', error);
+	}
+	return null;
 };

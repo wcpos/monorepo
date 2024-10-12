@@ -8,8 +8,8 @@ import { VStack } from '@wcpos/components/src/vstack';
 
 import { useAppState } from '../../../../../contexts/app-state';
 import { useT } from '../../../../../contexts/translations';
-import { useTaxDisplay } from '../../../hooks/taxes/use-tax-display';
 import { useCurrentOrderCurrencyFormat } from '../../../hooks/use-current-order-currency-format';
+import { useTaxInclOrExcl } from '../../../hooks/use-tax-incl-or-excl';
 
 interface Props {
 	totalTax: string;
@@ -23,7 +23,7 @@ export const Taxes = ({ totalTax, taxLines = [] }: Props) => {
 	const { store } = useAppState();
 	const taxTotalDisplay = useObservableEagerState(store.tax_total_display$);
 	const { format } = useCurrentOrderCurrencyFormat();
-	const { inclOrExcl } = useTaxDisplay({ context: 'cart' });
+	const { inclOrExcl } = useTaxInclOrExcl({ context: 'cart' });
 	const t = useT();
 
 	if (taxTotalDisplay === 'itemized') {

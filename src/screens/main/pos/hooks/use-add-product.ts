@@ -2,8 +2,8 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { isRxDocument } from '@wcpos/database';
 import { Toast } from '@wcpos/components/src/toast';
+import { isRxDocument } from '@wcpos/database';
 import log from '@wcpos/utils/src/logger';
 
 import { useAddItemToOrder } from './use-add-item-to-order';

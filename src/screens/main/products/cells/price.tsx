@@ -4,7 +4,7 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { useDataTable } from '@wcpos/components/src/data-table';
 
-import PriceWithTax from '../../components/product/price';
+import { PriceWithTax } from '../../components/product/price-with-tax';
 
 import type { CellContext } from '@tanstack/react-table';
 

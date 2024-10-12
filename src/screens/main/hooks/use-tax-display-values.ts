@@ -2,16 +2,16 @@ import * as React from 'react';
 
 import isEmpty from 'lodash/isEmpty';
 
-import { useTaxDisplay } from './use-tax-display';
-import { calculateDisplayValues, toValidNumber } from './utils';
-import { useTaxRates } from '../../contexts/tax-rates';
+import { useTaxInclOrExcl } from './use-tax-incl-or-excl';
+import { calculateDisplayValues } from './utils/calculate-display-values';
+import { useTaxRates } from '../contexts/tax-rates';
 
 interface TaxDisplayValuesProps {
-	value?: number | string;
+	amount: number;
 	taxClass: string;
 	taxStatus: 'taxable' | 'none' | 'shipping';
 	context: 'shop' | 'cart';
-	valueIncludesTax?: boolean;
+	amountIncludesTax?: boolean;
 }
 
 /**
@@ -20,22 +20,22 @@ interface TaxDisplayValuesProps {
  * @TODO - I should take and return numbers instead of strings
  */
 export const useTaxDisplayValues = ({
-	value,
+	amount,
 	taxStatus,
 	context,
 	...props
 }: TaxDisplayValuesProps) => {
-	const taxClass = isEmpty(props.taxClass) ? 'standard' : props.taxClass;
-	const { rates, calcTaxes, pricesIncludeTax, taxRoundAtSubtotal } = useTaxRates();
-	const { inclOrExcl } = useTaxDisplay({ context });
-	const valueIncludesTax = props.valueIncludesTax ?? pricesIncludeTax;
+	const { rates, calcTaxes, pricesIncludeTax } = useTaxRates();
+	const { inclOrExcl } = useTaxInclOrExcl({ context });
+	const amountIncludesTax = props.amountIncludesTax ?? pricesIncludeTax;
 
 	/**
 	 *
 	 */
 	const appliedRates = React.useMemo(() => {
+		const taxClass = isEmpty(props.taxClass) ? 'standard' : props.taxClass;
 		return rates.filter((rate) => rate.class === taxClass);
-	}, [rates, taxClass]);
+	}, [props.taxClass, rates]);
 
 	/**
 	 *
@@ -44,18 +44,17 @@ export const useTaxDisplayValues = ({
 		// early return if no taxes
 		if (!calcTaxes || taxStatus === 'none' || appliedRates.length === 0) {
 			return {
-				displayValue: value,
-				taxTotal: '0',
+				displayValue: amount,
+				taxTotal: 0,
 				inclOrExcl,
 			};
 		}
 
 		return calculateDisplayValues({
-			value,
+			amount,
 			inclOrExcl,
-			pricesIncludeTax: valueIncludesTax,
+			amountIncludesTax,
 			rates: appliedRates,
-			taxRoundAtSubtotal,
 		});
-	}, [appliedRates, calcTaxes, inclOrExcl, valueIncludesTax, taxRoundAtSubtotal, taxStatus, value]);
+	}, [calcTaxes, taxStatus, appliedRates, amount, inclOrExcl, amountIncludesTax]);
 };

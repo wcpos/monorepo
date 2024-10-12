@@ -7,7 +7,7 @@ import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
 import log from '@wcpos/utils/src/logger';
 
-import PriceWithTax from './price';
+import { PriceWithTax } from './price-with-tax';
 
 import type { CellContext } from '@tanstack/react-table';
 

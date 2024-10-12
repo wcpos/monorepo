@@ -10,9 +10,9 @@ import sum from 'lodash/sum';
 import sumBy from 'lodash/sumBy';
 import toNumber from 'lodash/toNumber';
 
-type LineItemDocument = import('@wcpos/database').LineItemDocument;
-type FeeLineDocument = import('@wcpos/database').FeeLineDocument;
-type ShippingLineDocument = import('@wcpos/database').ShippingLineDocument;
+type LineItemDocument = import('@wcpos/database').OrderDocument['line_items'][number];
+type FeeLineDocument = import('@wcpos/database').OrderDocument['fee_lines'][number];
+type ShippingLineDocument = import('@wcpos/database').OrderDocument['shipping_lines'][number];
 type CartItem = LineItemDocument | FeeLineDocument | ShippingLineDocument;
 export type Cart = CartItem[];
 
@@ -61,7 +61,7 @@ function calcInclusiveTax(price: number, rates: TaxRateDocument[]) {
 
 	// Index array so taxes are output in correct order and see what compound/regular rates we have to calculate.
 	forEach(rates, (_rate) => {
-		const { id = '0', rate = '0', compound = false } = _rate;
+		const { id, rate, compound } = _rate;
 
 		if (compound) {
 			compoundRates.push({ id, rate });
@@ -101,7 +101,7 @@ function calcExclusiveTax(price: number, rates: TaxRateDocument[]) {
 	const taxes: TaxArray = [];
 
 	forEach(rates, (_rate) => {
-		const { id = '0', rate = '0', compound = false } = _rate;
+		const { id, rate, compound } = _rate;
 
 		if (!compound) {
 			const total = price * (toValidNumber(rate) / 100);
@@ -113,7 +113,7 @@ function calcExclusiveTax(price: number, rates: TaxRateDocument[]) {
 
 	// Compound taxes.
 	forEach(rates, (_rate) => {
-		const { id = '0', rate = '0', compound = false } = _rate;
+		const { id, rate, compound } = _rate;
 
 		if (compound) {
 			const thePriceIncTax = price + preCompoundTotal;
@@ -141,7 +141,7 @@ export function calculateTaxes(price: number, rates: TaxRateDocument[], pricesIn
 /**
  *
  */
-export function sumTaxes(taxes: TaxArray, rounding = true) {
+export function sumTaxes(taxes: Partial<TaxArray>, rounding = true) {
 	const sum = sumBy(taxes, (tax) => toValidNumber(tax.total));
 	if (rounding) {
 		return round(sum, 6);
@@ -273,7 +273,7 @@ export function calculateOrderTotalsAndTaxes({
 	let fee_tax = 0;
 
 	const taxLines = taxRates.map((taxRate) => ({
-		rate_id: parseInt(taxRate.id, 10),
+		rate_id: taxRate.id,
 		label: taxRate.name,
 		compound: taxRate.compound,
 		tax_total: 0,
@@ -292,7 +292,7 @@ export function calculateOrderTotalsAndTaxes({
 		total_tax += toValidNumber(item.total_tax);
 
 		item.taxes.forEach((tax) => {
-			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
+			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === tax.id);
 			if (taxLine) {
 				taxLine.tax_total += toValidNumber(tax.total);
 			}
@@ -307,7 +307,7 @@ export function calculateOrderTotalsAndTaxes({
 		total_tax += toValidNumber(line.total_tax);
 
 		line.taxes.forEach((tax) => {
-			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
+			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === tax.id);
 			if (taxLine) {
 				taxLine.tax_total += toValidNumber(tax.total);
 			}
@@ -322,7 +322,7 @@ export function calculateOrderTotalsAndTaxes({
 		total_tax += toValidNumber(line.total_tax);
 
 		line.taxes.forEach((tax) => {
-			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === parseInt(tax.id, 10));
+			const taxLine = taxLines.find((taxLine) => taxLine.rate_id === tax.id);
 			if (taxLine) {
 				taxLine.shipping_tax_total += toValidNumber(tax.total);
 			}
