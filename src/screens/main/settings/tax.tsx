@@ -20,6 +20,7 @@ import { VStack } from '@wcpos/components/src/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+import { FormErrors } from '../components/form-errors';
 import { InclExclRadioGroup } from '../components/incl-excl-tax-radio-group';
 import { TaxBasedOnSelect } from '../components/tax-based-on-select';
 import { TaxClassSelect } from '../components/tax-class-select';
@@ -118,103 +119,106 @@ export const TaxSettings = () => {
 				</Button>
 			</View>
 			<Form {...form}>
-				<View className="grid grid-cols-2 gap-4">
-					<FormField
-						control={form.control}
-						name="calc_taxes"
-						render={({ field }) => (
-							<FormRadioGroup
-								customComponent={YesNoRadioGroup}
-								label={t('Enable taxes', { _tags: 'core' })}
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="prices_include_tax"
-						render={({ field }) => (
-							<FormRadioGroup
-								customComponent={YesNoRadioGroup}
-								label={t('Prices entered with tax', { _tags: 'core' })}
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_based_on"
-						render={({ field }) => (
-							<FormSelect
-								customComponent={TaxBasedOnSelect}
-								label={t('Calculate tax based on', { _tags: 'core' })}
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="shipping_tax_class"
-						render={({ field }) => (
-							<FormSelect
-								customComponent={TaxClassSelect}
-								label={t('Shipping tax class', { _tags: 'core' })}
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_total_display"
-						render={({ field }) => (
-							<FormRadioGroup
-								customComponent={TaxDisplayRadioGroup}
-								label={t('Display tax totals', { _tags: 'core' })}
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_round_at_subtotal"
-						render={({ field }) => (
-							<FormRadioGroup
-								customComponent={YesNoRadioGroup}
-								label={t('Round tax at subtotal level', { _tags: 'core' })}
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_display_shop"
-						render={({ field }) => (
-							<FormRadioGroup
-								customComponent={InclExclRadioGroup}
-								label={t('Display prices in the shop', { _tags: 'core' })}
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="tax_display_cart"
-						render={({ field }) => (
-							<FormRadioGroup
-								customComponent={InclExclRadioGroup}
-								label={t('Display prices during cart and checkout', { _tags: 'core' })}
-								{...field}
-							/>
-						)}
-					/>
-					<FormField
-						control={form.control}
-						name="price_display_suffix"
-						render={({ field }) => (
-							<FormInput label={t('Price display suffix', { _tags: 'core' })} {...field} />
-						)}
-					/>
-				</View>
+				<VStack className="gap-4">
+					<FormErrors />
+					<View className="grid grid-cols-2 gap-4">
+						<FormField
+							control={form.control}
+							name="calc_taxes"
+							render={({ field }) => (
+								<FormRadioGroup
+									customComponent={YesNoRadioGroup}
+									label={t('Enable taxes', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="prices_include_tax"
+							render={({ field }) => (
+								<FormRadioGroup
+									customComponent={YesNoRadioGroup}
+									label={t('Prices entered with tax', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="tax_based_on"
+							render={({ field }) => (
+								<FormSelect
+									customComponent={TaxBasedOnSelect}
+									label={t('Calculate tax based on', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="shipping_tax_class"
+							render={({ field }) => (
+								<FormSelect
+									customComponent={TaxClassSelect}
+									label={t('Shipping tax class', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="tax_total_display"
+							render={({ field }) => (
+								<FormRadioGroup
+									customComponent={TaxDisplayRadioGroup}
+									label={t('Display tax totals', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="tax_round_at_subtotal"
+							render={({ field }) => (
+								<FormRadioGroup
+									customComponent={YesNoRadioGroup}
+									label={t('Round tax at subtotal level', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="tax_display_shop"
+							render={({ field }) => (
+								<FormRadioGroup
+									customComponent={InclExclRadioGroup}
+									label={t('Display prices in the shop', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="tax_display_cart"
+							render={({ field }) => (
+								<FormRadioGroup
+									customComponent={InclExclRadioGroup}
+									label={t('Display prices during cart and checkout', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+						<FormField
+							control={form.control}
+							name="price_display_suffix"
+							render={({ field }) => (
+								<FormInput label={t('Price display suffix', { _tags: 'core' })} {...field} />
+							)}
+						/>
+					</View>
+				</VStack>
 			</Form>
 		</VStack>
 	);

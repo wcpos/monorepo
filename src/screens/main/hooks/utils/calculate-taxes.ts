@@ -117,10 +117,19 @@ export function calculateTaxes({
 	 * We round to 6 decimal places to avoid floating point errors.
 	 * I believe WooCommerce rounds to 4dp.
 	 */
-	const roundedTaxes = taxes.map((tax) => ({
+	const roundedItemizedTaxes = taxes.map((tax) => ({
 		id: tax.id,
 		total: round(tax.total, 6),
 	}));
 
-	return roundedTaxes;
+	/**
+	 * Should we sum the roundedItemizedTaxes, or sum the original calculation?
+	 * -  at 6dp the rounding errors are minimal.
+	 */
+	const total = sumTaxes({ taxes });
+
+	return {
+		total: round(total, 6),
+		taxes: roundedItemizedTaxes,
+	};
 }

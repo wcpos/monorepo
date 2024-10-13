@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import toNumber from 'lodash/toNumber';
 import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/src/text';
@@ -32,14 +33,14 @@ export const ProductTotal = ({ row, column }: CellContext<Props, 'total'>) => {
 	const { displayTotal, displaySubtotal } = React.useMemo(() => {
 		if (taxDisplayCart === 'incl') {
 			return {
-				displayTotal: parseFloat(item.total) + parseFloat(item.total_tax),
-				displaySubtotal: parseFloat(item.subtotal) + parseFloat(item.subtotal_tax),
+				displayTotal: toNumber(item.total) + toNumber(item.total_tax),
+				displaySubtotal: toNumber(item.subtotal) + toNumber(item.subtotal_tax),
 			};
 		}
 
 		return {
-			displayTotal: item.total,
-			displaySubtotal: item.subtotal,
+			displayTotal: toNumber(item.total),
+			displaySubtotal: toNumber(item.subtotal),
 		};
 	}, [item.subtotal, item.subtotal_tax, item.total, item.total_tax, taxDisplayCart]);
 

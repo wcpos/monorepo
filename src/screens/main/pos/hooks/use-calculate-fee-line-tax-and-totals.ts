@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import round from 'lodash/round';
+
 import { useFeeLineData } from './use-fee-line-data';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
 import { useCurrentOrder } from '../contexts/current-order';
@@ -19,9 +21,15 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 	 * If fee is a fixed percent of the order total, calculate the amount.
 	 */
 	const calculatePercentAmount = React.useCallback(
-		({ amount, percent_of_cart_total_with_tax }) => {
+		({
+			amount,
+			percent_of_cart_total_with_tax,
+		}: {
+			amount: number;
+			percent_of_cart_total_with_tax: boolean;
+		}) => {
 			const order = currentOrder.getLatest();
-			const percentAmount = parseFloat(amount) / 100;
+			const percentAmount = amount / 100;
 
 			// Sum the total and total_tax of all line items
 			const { cart_total, cart_total_tax } = (order.line_items || []).reduce(
@@ -49,25 +57,25 @@ export const useCalculateFeeLineTaxAndTotals = () => {
 		(feeLine: Partial<FeeLine>) => {
 			const { amount, percent, prices_include_tax, percent_of_cart_total_with_tax } =
 				getFeeLineData(feeLine);
-			let value = parseFloat(amount);
+			let value = amount;
 
 			if (percent) {
 				value = calculatePercentAmount({ amount: value, percent_of_cart_total_with_tax });
 			}
 
 			const tax = calculateTaxesFromValue({
-				value,
+				amount: value,
 				taxClass: feeLine.tax_class,
 				taxStatus: feeLine.tax_status,
-				valueIncludesTax: prices_include_tax,
+				amountIncludesTax: prices_include_tax,
 			});
 
 			const total = prices_include_tax ? value - tax.total : value;
 
 			return {
 				...feeLine,
-				total: String(total),
-				total_tax: String(tax.total),
+				total: String(round(total, 6)),
+				total_tax: String(round(tax.total, 6)),
 				taxes: tax.taxes,
 			};
 		},

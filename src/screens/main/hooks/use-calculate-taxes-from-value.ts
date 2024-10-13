@@ -3,7 +3,6 @@ import * as React from 'react';
 import isEmpty from 'lodash/isEmpty';
 
 import { calculateTaxes } from './utils/calculate-taxes';
-import { sumTaxes } from './utils/sum-taxes';
 import { useTaxRates } from '../contexts/tax-rates';
 
 /**
@@ -45,15 +44,11 @@ export const useCalculateTaxesFromValue = () => {
 				};
 			}
 
-			const taxes = calculateTaxes({
+			return calculateTaxes({
 				amount,
 				rates: appliedRates,
 				amountIncludesTax,
 			});
-			return {
-				total: sumTaxes({ taxes }),
-				taxes,
-			};
 		},
 		[calcTaxes, pricesIncludeTax, rates]
 	);

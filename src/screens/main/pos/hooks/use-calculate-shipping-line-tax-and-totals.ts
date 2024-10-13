@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import round from 'lodash/round';
+
 import { useShippingLineData } from './use-shipping-line-data';
 import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from-value';
 
@@ -33,8 +35,8 @@ export const useCalculateShippingLineTaxAndTotals = () => {
 
 			return {
 				...shippingLine,
-				total: String(total),
-				total_tax: String(tax.total),
+				total: String(round(total, 6)),
+				total_tax: String(round(tax.total, 6)),
 				taxes: tax.taxes,
 			};
 		},

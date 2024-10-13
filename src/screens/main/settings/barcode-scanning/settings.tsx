@@ -7,9 +7,11 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Form, FormField, FormInput, useFormChangeHandler } from '@wcpos/components/src/form';
+import { VStack } from '@wcpos/components/src/vstack';
 
 import { useAppState } from '../../../../contexts/app-state';
 import { useT } from '../../../../contexts/translations';
+import { FormErrors } from '../../components/form-errors';
 import { useLocalMutation } from '../../hooks/mutations/use-local-mutation';
 
 const formSchema = z.object({
@@ -81,44 +83,47 @@ export const BarcodeSettings = () => {
 	 */
 	return (
 		<Form {...form}>
-			<View className="grid grid-cols-2 gap-4">
-				<FormField
-					control={form.control}
-					name="barcode_scanning_buffer"
-					render={({ field }) => (
-						<FormInput
-							label={t('Barcode Scanning Buffer (ms)', { _tags: 'core' })}
-							type="numeric"
-							{...field}
-						/>
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="barcode_scanning_min_chars"
-					render={({ field }) => (
-						<FormInput
-							label={t('Barcode Minimum Length', { _tags: 'core' })}
-							type="numeric"
-							{...field}
-						/>
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="barcode_scanning_prefix"
-					render={({ field }) => (
-						<FormInput label={t('Barcode Scanner Prefix', { _tags: 'core' })} {...field} />
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="barcode_scanning_suffix"
-					render={({ field }) => (
-						<FormInput label={t('Barcode Scanner Suffix', { _tags: 'core' })} {...field} />
-					)}
-				/>
-			</View>
+			<VStack className="gap-4">
+				<FormErrors />
+				<View className="grid grid-cols-2 gap-4">
+					<FormField
+						control={form.control}
+						name="barcode_scanning_buffer"
+						render={({ field }) => (
+							<FormInput
+								label={t('Barcode Scanning Buffer (ms)', { _tags: 'core' })}
+								type="numeric"
+								{...field}
+							/>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="barcode_scanning_min_chars"
+						render={({ field }) => (
+							<FormInput
+								label={t('Barcode Minimum Length', { _tags: 'core' })}
+								type="numeric"
+								{...field}
+							/>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="barcode_scanning_prefix"
+						render={({ field }) => (
+							<FormInput label={t('Barcode Scanner Prefix', { _tags: 'core' })} {...field} />
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="barcode_scanning_suffix"
+						render={({ field }) => (
+							<FormInput label={t('Barcode Scanner Suffix', { _tags: 'core' })} {...field} />
+						)}
+					/>
+				</View>
+			</VStack>
 		</Form>
 	);
 };

@@ -50,7 +50,6 @@ export const useUpdateLineItem = () => {
 				}
 			}
 
-			debugger;
 			return calculateLineItemTaxesAndTotals(updatedItem);
 		},
 		[calculateLineItemTaxesAndTotals, getLineItemData]

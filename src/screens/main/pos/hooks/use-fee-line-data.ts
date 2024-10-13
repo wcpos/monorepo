@@ -14,7 +14,7 @@ type FeeLine = import('@wcpos/database').OrderDocument['fee_lines'][number];
 const calculateDefaultAmount = (item: FeeLine, pricesIncludeTax: boolean) => {
 	const total = toNumber(item.total);
 	const totalTax = toNumber(item.total_tax);
-	return pricesIncludeTax ? total + totalTax : item.total;
+	return pricesIncludeTax ? total + totalTax : total;
 };
 
 /**

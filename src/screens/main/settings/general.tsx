@@ -22,6 +22,7 @@ import { useT } from '../../../contexts/translations';
 import { CurrencyPositionSelect } from '../components/currency-position-select';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
+import { FormErrors } from '../components/form-errors';
 import { LanguageSelect } from '../components/language-select';
 import { ThousandsStyleSelect } from '../components/thousands-style-select';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
@@ -122,106 +123,116 @@ export const GeneralSettings = () => {
 	 */
 	return (
 		<Form {...form}>
-			<View className="grid grid-cols-2 gap-4">
-				<View className="col-span-2">
+			<VStack className="gap-4">
+				<FormErrors />
+				<View className="grid grid-cols-2 gap-4">
+					<View className="col-span-2">
+						<FormField
+							control={form.control}
+							name="name"
+							render={({ field }) => (
+								<FormInput label={t('Store Name', { _tags: 'core' })} {...field} />
+							)}
+						/>
+					</View>
 					<FormField
 						control={form.control}
-						name="name"
+						name="locale"
 						render={({ field }) => (
-							<FormInput label={t('Store Name', { _tags: 'core' })} {...field} />
+							<FormSelect
+								customComponent={LanguageSelect}
+								label={t('Language', { _tags: 'core' })}
+								{...field}
+							/>
 						)}
 					/>
-				</View>
-				<FormField
-					control={form.control}
-					name="locale"
-					render={({ field }) => (
-						<FormSelect
-							customComponent={LanguageSelect}
-							label={t('Language', { _tags: 'core' })}
-							{...field}
+					<VStack>
+						<FormField
+							control={form.control}
+							name="default_customer"
+							render={({ field }) => (
+								<FormCombobox
+									customComponent={CustomerSelect}
+									label={t('Default Customer', { _tags: 'core' })}
+									withGuest
+									{...field}
+									// override value with defaultCustomer
+									value={{ value: field.value, label: format(defaultCustomer) }}
+									disabled={toggleCustomerSelect}
+								/>
+							)}
 						/>
-					)}
-				/>
-				<VStack>
+						<FormField
+							control={form.control}
+							name="default_customer_is_cashier"
+							render={({ field }) => (
+								<FormSwitch
+									label={t('Default Customer is cashier', { _tags: 'core' })}
+									{...field}
+								/>
+							)}
+						/>
+					</VStack>
 					<FormField
 						control={form.control}
-						name="default_customer"
+						name="currency"
 						render={({ field }) => (
 							<FormCombobox
-								customComponent={CustomerSelect}
-								label={t('Default Customer', { _tags: 'core' })}
-								withGuest
+								customComponent={CurrencySelect}
+								label={t('Currency', { _tags: 'core' })}
 								{...field}
-								// override value with defaultCustomer
-								value={{ value: field.value, label: format(defaultCustomer) }}
-								disabled={toggleCustomerSelect}
 							/>
 						)}
 					/>
 					<FormField
 						control={form.control}
-						name="default_customer_is_cashier"
+						name="currency_pos"
 						render={({ field }) => (
-							<FormSwitch label={t('Default Customer is cashier', { _tags: 'core' })} {...field} />
+							<FormSelect
+								customComponent={CurrencyPositionSelect}
+								label={t('Currency Position', { _tags: 'core' })}
+								{...field}
+							/>
 						)}
 					/>
-				</VStack>
-				<FormField
-					control={form.control}
-					name="currency"
-					render={({ field }) => (
-						<FormCombobox
-							customComponent={CurrencySelect}
-							label={t('Currency', { _tags: 'core' })}
-							{...field}
-						/>
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="currency_pos"
-					render={({ field }) => (
-						<FormSelect
-							customComponent={CurrencyPositionSelect}
-							label={t('Currency Position', { _tags: 'core' })}
-							{...field}
-						/>
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="price_decimal_sep"
-					render={({ field }) => (
-						<FormInput label={t('Decimal Separator', { _tags: 'core' })} {...field} />
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="price_num_decimals"
-					render={({ field }) => (
-						<FormInput label={t('Number of Decimals', { _tags: 'core' })} {...field} />
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="price_thousand_sep"
-					render={({ field }) => (
-						<FormInput label={t('Thousand Separator', { _tags: 'core' })} {...field} />
-					)}
-				/>
-				<FormField
-					control={form.control}
-					name="thousands_group_style"
-					render={({ field }) => (
-						<FormSelect
-							label={t('Thousands Group Style', { _tags: 'core' })}
-							customComponent={ThousandsStyleSelect}
-							{...field}
-						/>
-					)}
-				/>
-			</View>
+					<FormField
+						control={form.control}
+						name="price_decimal_sep"
+						render={({ field }) => (
+							<FormInput label={t('Decimal Separator', { _tags: 'core' })} {...field} />
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="price_num_decimals"
+						render={({ field }) => (
+							<FormInput
+								label={t('Number of Decimals', { _tags: 'core' })}
+								type="numeric"
+								{...field}
+							/>
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="price_thousand_sep"
+						render={({ field }) => (
+							<FormInput label={t('Thousand Separator', { _tags: 'core' })} {...field} />
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="thousands_group_style"
+						render={({ field }) => (
+							<FormSelect
+								label={t('Thousands Group Style', { _tags: 'core' })}
+								customComponent={ThousandsStyleSelect}
+								{...field}
+							/>
+						)}
+					/>
+				</View>
+			</VStack>
 		</Form>
 	);
 };

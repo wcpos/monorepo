@@ -3,7 +3,7 @@ import * as React from 'react';
 import isEmpty from 'lodash/isEmpty';
 
 import { useTaxInclOrExcl } from './use-tax-incl-or-excl';
-import { calculateDisplayValues } from './utils/calculate-display-values';
+import { calculateTaxes } from './utils/calculate-taxes';
 import { useTaxRates } from '../contexts/tax-rates';
 
 interface TaxDisplayValuesProps {
@@ -16,8 +16,6 @@ interface TaxDisplayValuesProps {
 
 /**
  * Calculate the display values with or without taxes (eg: price or total)
- *
- * @TODO - I should take and return numbers instead of strings
  */
 export const useTaxDisplayValues = ({
 	amount,
@@ -41,6 +39,8 @@ export const useTaxDisplayValues = ({
 	 *
 	 */
 	return React.useMemo(() => {
+		let displayValue = amount;
+
 		// early return if no taxes
 		if (!calcTaxes || taxStatus === 'none' || appliedRates.length === 0) {
 			return {
@@ -50,11 +50,20 @@ export const useTaxDisplayValues = ({
 			};
 		}
 
-		return calculateDisplayValues({
-			amount,
+		const { total: taxTotal } = calculateTaxes({ amount, rates: appliedRates, amountIncludesTax });
+
+		if (amountIncludesTax && inclOrExcl === 'excl') {
+			displayValue = amount - taxTotal;
+		}
+
+		if (!amountIncludesTax && inclOrExcl === 'incl') {
+			displayValue = amount + taxTotal;
+		}
+
+		return {
+			displayValue,
+			taxTotal,
 			inclOrExcl,
-			amountIncludesTax,
-			rates: appliedRates,
-		});
-	}, [calcTaxes, taxStatus, appliedRates, amount, inclOrExcl, amountIncludesTax]);
+		};
+	}, [amount, calcTaxes, taxStatus, appliedRates, amountIncludesTax, inclOrExcl]);
 };

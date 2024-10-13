@@ -1,23 +1,13 @@
 import * as React from 'react';
 
 import defaults from 'lodash/defaults';
+import round from 'lodash/round';
 import { useObservableEagerState } from 'observable-hooks';
-import { useNumericFormat, NumericFormatProps } from 'react-number-format';
+import { numericFormatter, NumericFormatProps } from 'react-number-format';
 
 import { useAppState } from '../../../contexts/app-state';
 
-export interface NumberFormatOptions {
-	thousandSeparator?: string;
-	decimalSeparator?: string;
-	allowedDecimalSeparators?: string[];
-	thousandsGroupStyle?: 'thousand' | 'lakh' | 'wan';
-	decimalScale?: number;
-	fixedDecimalScale?: boolean;
-	allowNegative?: boolean;
-	allowLeadingZeros?: boolean;
-	suffix?: string;
-	prefix?: string;
-}
+export interface NumberFormatOptions extends NumericFormatProps {}
 
 /**
  * Custom hook to format numbers based on application state and provided options.
@@ -34,7 +24,7 @@ export const useNumberFormat = (options?: NumberFormatOptions) => {
 	 *
 	 */
 	const mergedOptions = React.useMemo(() => {
-		return defaults(options, {
+		const opts = defaults(options, {
 			thousandSeparator,
 			decimalSeparator,
 			decimalScale: decimalPrecision,
@@ -46,26 +36,33 @@ export const useNumberFormat = (options?: NumberFormatOptions) => {
 			suffix: '',
 			prefix: '',
 		});
+		return opts;
 	}, [options, thousandSeparator, decimalSeparator, decimalPrecision, thousandsGroupStyle]);
 
 	/**
 	 *
 	 */
-	const { format: _format, ...rest } = useNumericFormat(mergedOptions as NumericFormatProps);
+	// const { format: _format, ...rest } = useNumericFormat(mergedOptions as NumericFormatProps);
 
 	/**
 	 * To prevent confusion, force the input value to be a number.
 	 */
 	const format = React.useCallback(
 		(value: number | null | undefined) => {
-			const safeValue = value ?? 0;
-			return _format(safeValue.toString());
+			let safeValue = value ?? 0;
+			/**
+			 * react-number-format will not round the number if decimalScale is set.
+			 * I think we do want rounding of our 6 dp numbers to the store setting.
+			 */
+			if (mergedOptions.fixedDecimalScale) {
+				safeValue = round(safeValue, mergedOptions.decimalScale);
+			}
+			return numericFormatter(safeValue.toString(), mergedOptions);
 		},
-		[_format]
+		[mergedOptions]
 	);
 
 	return {
 		format,
-		...rest,
 	};
 };

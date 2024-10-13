@@ -10,7 +10,6 @@ import { useCalculateTaxesFromValue } from '../../hooks/use-calculate-taxes-from
 
 type LineItem = NonNullable<import('@wcpos/database').OrderDocument['line_items']>[number];
 type Tax = { id: number; total: number };
-type TaxStatus = 'taxable' | 'none';
 
 /**
  * Consolidates unique taxes by combining subtotal and total tax values.
@@ -31,8 +30,8 @@ const consolidateTaxes = (
 
 		return {
 			id,
-			subtotal: noSubtotal ? '' : String(subtotalTax.total),
-			total: String(totalTax.total),
+			subtotal: noSubtotal ? '' : String(round(subtotalTax.total, 6)),
+			total: String(round(totalTax.total, 6)),
 		};
 	});
 };
@@ -46,98 +45,60 @@ export const useCalculateLineItemTaxAndTotals = () => {
 	const { getLineItemData } = useLineItemData();
 
 	/**
-	 * Calculate the taxes for a line item, based on total and subtotal.
-	 */
-	const calculateLineItemTaxes = React.useCallback(
-		({
-			total,
-			subtotal,
-			taxClass,
-			taxStatus,
-		}: {
-			total: number;
-			subtotal?: number;
-			taxClass: string;
-			taxStatus: TaxStatus;
-		}) => {
-			const noSubtotal = subtotal === undefined;
-
-			const subtotalTaxes = noSubtotal
-				? { total: 0, taxes: [] as Tax[] }
-				: calculateTaxesFromValue({
-						amount: subtotal,
-						taxClass,
-						taxStatus,
-						amountIncludesTax: false,
-					});
-
-			const totalTaxes = calculateTaxesFromValue({
-				amount: total,
-				taxClass,
-				taxStatus,
-				amountIncludesTax: false,
-			});
-
-			const taxes = consolidateTaxes(subtotalTaxes, totalTaxes, noSubtotal);
-
-			return {
-				total_tax: String(totalTaxes.total),
-				taxes,
-				subtotal_tax: noSubtotal ? undefined : String(subtotalTaxes.total),
-			};
-		},
-		[calculateTaxesFromValue]
-	);
-
-	/**
 	 * Calculate the tax and totals for a line item.
 	 */
 	const calculateLineItemTaxesAndTotals = React.useCallback(
 		(lineItem: Partial<LineItem>) => {
 			const { price, regular_price, tax_status } = getLineItemData(lineItem);
-
-			// Calculate tax for price and regular price
-			const tax = calculateTaxesFromValue({
-				amount: price,
-				taxClass: lineItem.tax_class ?? '',
-				taxStatus: tax_status,
-			});
-
-			const regularTax = calculateTaxesFromValue({
-				amount: regular_price,
-				taxClass: lineItem.tax_class ?? '',
-				taxStatus: tax_status,
-			});
-
-			// Adjust price and regular price if prices include tax
-			const priceWithoutTax = pricesIncludeTax ? price - tax.total : price;
-			const regularPriceWithoutTax = pricesIncludeTax
-				? regular_price - regularTax.total
-				: regular_price;
-
 			const quantity = lineItem.quantity ?? 0;
 
 			// Calculate total and subtotal based on quantity
-			const total = round(priceWithoutTax * quantity, 6);
-			const subtotal = round(regularPriceWithoutTax * quantity, 6);
+			const total = price * quantity;
+			const subtotal = regular_price * quantity;
 
-			// Calculate taxes for the line item
-			const totalTaxes = calculateLineItemTaxes({
-				total,
-				subtotal,
+			// Calculate taxes for total and subtotal
+			const totalTaxResult = calculateTaxesFromValue({
+				amount: total,
 				taxClass: lineItem.tax_class ?? '',
 				taxStatus: tax_status,
+				amountIncludesTax: pricesIncludeTax,
 			});
+
+			const subtotalTaxResult = calculateTaxesFromValue({
+				amount: subtotal,
+				taxClass: lineItem.tax_class ?? '',
+				taxStatus: tax_status,
+				amountIncludesTax: pricesIncludeTax,
+			});
+
+			const perUnitTaxResult = calculateTaxesFromValue({
+				amount: price,
+				taxClass: lineItem.tax_class ?? '',
+				taxStatus: tax_status,
+				amountIncludesTax: pricesIncludeTax,
+			});
+
+			// Calculate total and subtotal excluding tax
+			const totalExclTax = pricesIncludeTax ? total - totalTaxResult.total : total;
+			const subtotalExclTax = pricesIncludeTax ? subtotal - subtotalTaxResult.total : subtotal;
+
+			// Calculate price per unit excluding tax
+			const priceWithoutTax = pricesIncludeTax ? price - perUnitTaxResult.total : price;
+
+			// Consolidate taxes
+			const taxes = consolidateTaxes(subtotalTaxResult, totalTaxResult, false);
 
 			return {
 				...lineItem,
-				price: priceWithoutTax, // WC REST API always uses price without tax
-				total: String(total),
-				subtotal: String(subtotal),
-				...totalTaxes,
+				price: round(priceWithoutTax, 6), // WC REST API always uses price without tax
+				total: String(round(totalExclTax, 6)),
+				subtotal: String(round(subtotalExclTax, 6)),
+				total_tax: String(round(totalTaxResult.total, 6)),
+				subtotal_tax: String(round(subtotalTaxResult.total, 6)),
+				taxes,
 			};
 		},
-		[calculateLineItemTaxes, calculateTaxesFromValue, getLineItemData, pricesIncludeTax]
+		[calculateTaxesFromValue, getLineItemData, pricesIncludeTax]
 	);
 
 	return { calculateLineItemTaxesAndTotals };

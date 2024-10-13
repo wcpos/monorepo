@@ -20,14 +20,14 @@ describe('Calculate Taxes', () => {
 		const inclusiveTaxes = calculateTaxes({
 			amount: 9.99,
 			rates: [taxRate],
-			amountIncludesTax: true,
+			amountIncludeTax: true,
 		});
 		expect(inclusiveTaxes).toEqual([{ id: 72, total: 1.665 }]);
 
 		const exclusiveTaxes = calculateTaxes({
 			amount: 9.99,
 			rates: [taxRate],
-			amountIncludesTax: false,
+			amountIncludeTax: false,
 		});
 		expect(exclusiveTaxes).toEqual([{ id: 72, total: 1.998 }]);
 	});
@@ -63,7 +63,7 @@ describe('Calculate Taxes', () => {
 		const exclusiveTaxes = calculateTaxes({
 			amount: 100,
 			rates: taxRates,
-			amountIncludesTax: false,
+			amountIncludeTax: false,
 		});
 		expect(exclusiveTaxes).toEqual([
 			{ id: 72, total: 5 },
@@ -71,7 +71,7 @@ describe('Calculate Taxes', () => {
 		]);
 
 		// prices inclusive of tax.
-		const inclusiveTaxes = calculateTaxes({ amount: 100, rates: taxRates, amountIncludesTax: true });
+		const inclusiveTaxes = calculateTaxes({ amount: 100, rates: taxRates, amountIncludeTax: true });
 		/**
 		 * 100 is inclusive of all taxes.
 		 *
