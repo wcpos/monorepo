@@ -17,6 +17,7 @@ import { HStack } from '../hstack';
 import { Icon, IconName } from '../icon';
 import { IconButton } from '../icon-button';
 import { Input, InputProps } from '../input';
+import { Text } from '../text';
 import { VStack } from '../vstack';
 
 const iconMap: Record<string, IconName> = {
@@ -117,17 +118,6 @@ const Key = ({ label, icon, onPress, discount }: NumpadKeyProps) => (
 
 Key.displayName = 'NumpadKey';
 
-interface ButtonGridProps {
-	children: React.ReactNode;
-	columns: number;
-}
-
-const Grid = ({ children, columns }: ButtonGridProps) => (
-	<View className={`grid gap-1 grid-cols-${columns}`}>{children}</View>
-);
-
-Grid.displayName = 'NumpadGrid';
-
 interface NumpadProps {
 	initialValue?: number;
 	calculator?: boolean;
@@ -213,7 +203,7 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 		 *
 		 */
 		return (
-			<VStack style={{ width: hasDiscounts ? '220px' : '146px' }}>
+			<VStack style={{ width: hasDiscounts ? '222px' : '146px' }}>
 				<Display
 					ref={augmentedRef}
 					value={formatDisplay(currentValue)}
@@ -223,7 +213,7 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 					onSelectionChange={setSelection}
 				/>
 				<HStack className="gap-1">
-					<Grid columns={3}>
+					<View className="grid grid-cols-3 gap-1" style={{ width: '146px' }}>
 						{[
 							['1', '2', '3'],
 							['4', '5', '6'],
@@ -245,18 +235,19 @@ export const Numpad = React.forwardRef<React.ElementRef<typeof Display>, NumpadP
 								/>
 							))
 						)}
-					</Grid>
-					<Grid columns={1}>
-						{hasDiscounts &&
-							discounts.map((discount) => (
-								<Key
-									key={discount}
-									label={String(discount)}
-									onPress={() => applyDiscount(discount)}
-									discount
-								/>
+					</View>
+					{hasDiscounts && (
+						<View className="grid grid-cols-1 gap-1" style={{ width: '72px' }}>
+							{discounts.map((discount) => (
+								<Button key={discount} variant="muted" onPress={() => applyDiscount(discount)}>
+									<HStack className="gap-0.5">
+										<Text>{String(discount)}</Text>
+										<Icon name="percent" />
+									</HStack>
+								</Button>
 							))}
-					</Grid>
+						</View>
+					)}
 				</HStack>
 			</VStack>
 		);

@@ -17,7 +17,7 @@ ButtonText.displayName = 'ButtonText';
 
 const buttonVariants = cva(
 	[
-		'group flex items-center justify-center rounded-md web:transition-colors',
+		'group flex items-center justify-center rounded-md max-w-full web:transition-colors',
 		'web:ring-offset-background web:focus-visible:outline-none web:focus-visible:ring-2 web:focus-visible:ring-ring web:focus-visible:ring-offset-1',
 	],
 	{
@@ -152,11 +152,15 @@ const Button = React.forwardRef<React.ElementRef<typeof Pressable>, ButtonProps>
 		 */
 		const renderChildren = (pressableState: PressableStateCallbackType) => {
 			if (typeof children === 'string') {
-				return <ButtonText>{children}</ButtonText>;
+				return <ButtonText numberOfLines={1}>{children}</ButtonText>;
 			}
 			if (typeof children === 'function') {
 				const rendered = children(pressableState);
-				return typeof rendered === 'string' ? <ButtonText>{rendered}</ButtonText> : rendered;
+				return typeof rendered === 'string' ? (
+					<ButtonText numberOfLines={1}>{rendered}</ButtonText>
+				) : (
+					rendered
+				);
 			}
 			return children;
 		};

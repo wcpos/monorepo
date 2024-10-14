@@ -1,5 +1,6 @@
 import * as React from "react";
-import Svg, { SvgProps, Path } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
+import type { SvgProps } from "react-native-svg";
 const SvgWcpos = (props: SvgProps) => (
   <Svg viewBox="0 0 1260 1260" {...props}>
     <Path d="M0 360c45 45 135 45 180 0 45 45 135 45 180 0 45 45 135 45 180 0 45 45 135 45 180 0 45 45 135 45 180 0 45 45 135 45 180 0 45 45 135 45 180 0v540q0 90-90 90H360L0 1260zM90 0h1080v90H90z" />

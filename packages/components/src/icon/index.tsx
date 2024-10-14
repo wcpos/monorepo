@@ -23,6 +23,10 @@ const iconVariants = cva('inset-0 items-center content-center', {
 			muted: 'text-muted-foreground',
 			success: 'text-success',
 			error: 'text-error',
+			warning: 'text-warning',
+			info: 'text-info',
+			accent: 'text-accent-foreground',
+			attention: 'text-attention',
 		},
 		size: {
 			default: 'size-3.5', // 14px
