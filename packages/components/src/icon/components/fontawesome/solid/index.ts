@@ -104,7 +104,7 @@ export { default as plus } from './plus';
 export { default as receipt } from './receipt';
 export { default as rectangleBarcode } from './rectangleBarcode';
 export { default as rightLeft } from './rightLeft';
-export { default as scannerGun } from './scannerGun';
+// export { default as scannerGun } from './scannerGun';
 export { default as shop } from './shop';
 export { default as sliders } from './sliders';
 export { default as starOfLife } from './starOfLife';

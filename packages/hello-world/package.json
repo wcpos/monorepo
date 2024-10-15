@@ -18,7 +18,7 @@
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
     "react-native-builder-bob": "0.23.2",
-    "tsup": "^8.1.0",
+    "tsup": "^8.2.4",
     "typescript": "^5.4.5"
   },
   "eslintConfig": {
