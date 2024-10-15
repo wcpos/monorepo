@@ -1,8 +1,9 @@
 import * as React from 'react';
+import { View } from 'react-native';
 
 import { isRxDocument } from 'rxdb';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Button } from '@wcpos/components/src/button';
 import { Toast } from '@wcpos/components/src/toast';
 
 import { useT } from '../../../../../contexts/translations';
@@ -49,8 +50,10 @@ export const SaveButton = () => {
 	 *
 	 */
 	return (
-		<Button variant="outline" onPress={handleSave} loading={loading} disabled={loading}>
-			<ButtonText numberOfLines={1}>{t('Save to Server', { _tags: 'core' })}</ButtonText>
-		</Button>
+		<View>
+			<Button variant="outline" onPress={handleSave} loading={loading} disabled={loading}>
+				{t('Save to Server', { _tags: 'core' })}
+			</Button>
+		</View>
 	);
 };

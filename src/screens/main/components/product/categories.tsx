@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Button, ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
 import { useDataTable } from '@wcpos/components/src/data-table';
 import { HStack } from '@wcpos/components/src/hstack';
 
@@ -15,14 +15,18 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
  */
 export const ProductCategories = ({ row }: CellContext<ProductDocument, 'categories'>) => {
 	const product = row.original;
-	const categories = useObservableEagerState(product.categories$);
+	const categories = useObservableEagerState(product.categories$) || [];
 	const { query } = useDataTable();
+
+	if (categories.length === 0) {
+		return null;
+	}
 
 	/**
 	 *
 	 */
 	return (
-		<HStack>
+		<HStack className="flex-wrap gap-1 w-full">
 			{(categories || []).map((cat) => (
 				<ButtonPill
 					variant="ghost-primary"
@@ -30,7 +34,7 @@ export const ProductCategories = ({ row }: CellContext<ProductDocument, 'categor
 					key={cat.id}
 					onPress={() => query.where('categories', { $elemMatch: { id: cat.id } })}
 				>
-					<ButtonText>{cat.name}</ButtonText>
+					{cat.name}
 				</ButtonPill>
 			))}
 		</HStack>

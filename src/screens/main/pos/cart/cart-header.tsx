@@ -68,8 +68,8 @@ export const CartHeader = () => {
 	 */
 	return (
 		<HStack>
-			<Text className="font-bold">{t('Customer', { _tags: 'core' })}:</Text>
-			<View className="flex-1 flex-row items-center">
+			<HStack className="flex-wrap flex-1">
+				<Text className="font-bold">{t('Customer', { _tags: 'core' })}:</Text>
 				<ErrorBoundary>
 					{showCustomerSelect ? (
 						<Combobox onValueChange={handleSelectCustomer} onOpenChange={delayedCloseHandler}>
@@ -86,7 +86,7 @@ export const CartHeader = () => {
 						<Customer setShowCustomerSelect={setShowCustomerSelect} />
 					)}
 				</ErrorBoundary>
-			</View>
+			</HStack>
 			<AddNewCustomer />
 			<UISettingsDialog title={t('Cart Settings', { _tags: 'core' })}>
 				<UISettingsForm />

@@ -4,7 +4,7 @@ import { useNavigation, StackActions } from '@react-navigation/native';
 import { useObservableEagerState } from 'observable-hooks';
 import { isRxDocument } from 'rxdb';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Button } from '@wcpos/components/src/button';
 import { Toast } from '@wcpos/components/src/toast';
 
 import { useT } from '../../../../../contexts/translations';
@@ -56,12 +56,10 @@ export const PayButton = () => {
 			className="rounded-t-none rounded-bl-none flex-[3]"
 			loading={loading}
 		>
-			<ButtonText>
-				{t('Checkout {order_total}', {
-					order_total: format(parseFloat(total) || 0),
-					_tags: 'core',
-				})}
-			</ButtonText>
+			{t('Checkout {order_total}', {
+				order_total: format(parseFloat(total) || 0),
+				_tags: 'core',
+			})}
 		</Button>
 	);
 };

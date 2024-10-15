@@ -28,13 +28,13 @@ export const Customer = ({ row, column }: CellContext<OrderDocument, 'customer_i
 	const { show } = column.columnDef.meta;
 
 	return (
-		<VStack>
+		<VStack className="max-w-full">
 			<ButtonPill
 				variant="ghost-primary"
 				size="xs"
 				onPress={() => query.where('customer_id', customerID)}
 			>
-				<ButtonText>{format({ billing, shipping, id: customerID })}</ButtonText>
+				{format({ billing, shipping, id: customerID })}
 			</ButtonPill>
 			{show('billing') && <FormatAddress address={billing} showName={false} />}
 			{show('shipping') && <FormatAddress address={shipping} showName={false} />}

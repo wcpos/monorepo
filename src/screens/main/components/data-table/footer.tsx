@@ -28,7 +28,7 @@ export const DataTableFooter = ({ children }: Props) => {
 
 	return (
 		<HStack className="p-2 border-border border-t bg-muted">
-			<HStack className="justify-start flex-1">{children}</HStack>
+			<HStack className="justify-start flex-1 [&>*]:flex-1">{children}</HStack>
 			<HStack className="justify-end flex-1 gap-0">
 				<Text className="text-xs">
 					{t('Showing {count} of {total}', { count, total, _tags: 'core' })}

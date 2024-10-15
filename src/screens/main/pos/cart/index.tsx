@@ -66,7 +66,7 @@ const OpenOrders = ({ isColumn = false }) => {
 							<ErrorBoundary>
 								<Totals />
 							</ErrorBoundary>
-							<HStack className="p-2 bg-muted [&>*]:flex-grow">
+							<HStack className="p-2 bg-muted [&>*]:flex-1">
 								<ErrorBoundary>
 									<AddNoteButton />
 									<OrderMetaButton />

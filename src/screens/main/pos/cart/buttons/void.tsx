@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useNavigation } from '@react-navigation/native';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Button } from '@wcpos/components/src/button';
 import { Toast } from '@wcpos/components/src/toast';
 import log from '@wcpos/utils/src/logger';
 
@@ -64,7 +64,7 @@ export const VoidButton = () => {
 			variant="destructive"
 			className="rounded-t-none rounded-br-none flex-1"
 		>
-			<ButtonText>{t('Void', { _tags: 'core' })}</ButtonText>
+			{t('Void', { _tags: 'core' })}
 		</Button>
 	);
 };

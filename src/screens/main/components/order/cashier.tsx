@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { ButtonPill } from '@wcpos/components/src/button';
 import { useDataTable } from '@wcpos/components/src/data-table';
 
 import { useCollection } from '../../hooks/use-collection';
@@ -57,7 +57,7 @@ export const Cashier = ({ row }: CellContext<OrderDocument, 'cashier'>) => {
 				})
 			}
 		>
-			<ButtonText>{cashierName}</ButtonText>
+			{cashierName}
 		</ButtonPill>
 	);
 };

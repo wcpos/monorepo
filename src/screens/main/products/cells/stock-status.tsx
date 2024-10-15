@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { ButtonPill, ButtonText } from '@wcpos/components/src/button';
+import { ButtonPill } from '@wcpos/components/src/button';
 import { useDataTable } from '@wcpos/components/src/data-table';
 
 import { useStockStatusLabel } from '../../hooks/use-stock-status-label';
@@ -41,7 +41,7 @@ export const StockStatus = ({ row }: CellContext<ProductDocument, 'stock_status'
 			variant={variant}
 			onPress={() => query.where('stock_status', stockStatus)}
 		>
-			<ButtonText>{getLabel(stockStatus)}</ButtonText>
+			{getLabel(stockStatus)}
 		</ButtonPill>
 	);
 };

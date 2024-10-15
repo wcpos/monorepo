@@ -30,7 +30,7 @@ export const Name = (props: CellContext<ProductDocument, 'name'>) => {
 	 */
 
 	return (
-		<VStack space="xs">
+		<VStack space="xs" className="w-full">
 			<Text className="font-bold">{name}</Text>
 			{show('sku') && <Text className="text-small">{product.sku}</Text>}
 			{show('barcode') && <Text className="text-small">{product.barcode}</Text>}

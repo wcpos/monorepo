@@ -19,6 +19,7 @@ import { SKU } from './cells/sku';
 import { StockQuantity } from './cells/stock-quantity';
 import { VariableActions } from './cells/variable-actions';
 import { ProductVariationActions } from './cells/variation-actions';
+import { ScannerButton } from './scanner-button';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../../contexts/translations';
@@ -142,7 +143,7 @@ const POSProducts = ({ isColumn = false }) => {
 	/**
 	 * Barcode
 	 */
-	useBarcode(query);
+	// useBarcode(query);
 
 	/**
 	 *
@@ -171,6 +172,7 @@ const POSProducts = ({ isColumn = false }) => {
 					<ErrorBoundary>
 						<VStack>
 							<HStack>
+								<ScannerButton />
 								<ErrorBoundary>
 									<QuerySearchInput
 										query={query}

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { useObservableEagerState } from 'observable-hooks';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Button } from '@wcpos/components/src/button';
 import {
 	Dialog,
 	DialogTrigger,
@@ -57,9 +57,7 @@ export const AddNoteButton = () => {
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
-				<Button variant="outline">
-					<ButtonText numberOfLines={1}>{t('Order Note', { _tags: 'core' })}</ButtonText>
-				</Button>
+				<Button variant="outline">{t('Order Note', { _tags: 'core' })}</Button>
 			</DialogTrigger>
 			<DialogContent>
 				<DialogHeader>

@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { Button } from '@wcpos/components/src/button';
 import {
 	Dialog,
 	DialogTrigger,
@@ -24,9 +24,7 @@ export const OrderMetaButton = () => {
 	return (
 		<Dialog>
 			<DialogTrigger asChild>
-				<Button variant="outline">
-					<ButtonText>{t('Order Meta', { _tags: 'core' })}</ButtonText>
-				</Button>
+				<Button variant="outline">{t('Order Meta', { _tags: 'core' })}</Button>
 			</DialogTrigger>
 			<DialogContent size="lg">
 				<DialogHeader>
