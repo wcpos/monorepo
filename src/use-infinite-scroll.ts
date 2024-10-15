@@ -65,9 +65,12 @@ export const useInfiniteScroll = (
 	/**
 	 *
 	 */
-	return {
-		count: result.count,
-		hits: paginatedResult,
-		nextPage: debouncedNextPage,
-	} as InfiniteScrollResult<(typeof result.hits)[0]>;
+	return React.useMemo(
+		() => ({
+			count: result.count,
+			hits: paginatedResult,
+			nextPage: debouncedNextPage,
+		}),
+		[debouncedNextPage, paginatedResult, result.count]
+	);
 };

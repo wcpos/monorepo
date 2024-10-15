@@ -230,6 +230,9 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 				headers: {
 					'X-HTTP-Method-Override': 'GET',
 				},
+				params: {
+					_method: 'GET',
+				},
 			}
 		);
 

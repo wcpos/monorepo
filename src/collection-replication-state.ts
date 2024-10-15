@@ -567,6 +567,9 @@ export class CollectionReplicationState<T extends Collection> extends Subscribab
 				headers: {
 					'X-HTTP-Method-Override': 'GET',
 				},
+				params: {
+					_method: 'GET',
+				},
 			}
 		);
 
