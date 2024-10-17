@@ -172,7 +172,9 @@ export const CartTable = () => {
 				return {
 					accessorKey: col.key,
 					header: ({ column }) => (
-						<Text className={'font-medium text-muted-foreground'}>{getUILabel(column.id)}</Text>
+						<Text className={'font-medium text-muted-foreground'} numberOfLines={1}>
+							{getUILabel(column.id)}
+						</Text>
 					),
 					// size: column.size,
 					cell: (props) => {

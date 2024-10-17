@@ -93,7 +93,9 @@ export const NumberInput = React.forwardRef<React.ElementRef<typeof Numpad>, Num
 		}, [handleChange]);
 
 		/**
-		 *
+		 * NOTE: normally a button would truncate the text if there is not enough space, but
+		 * this could cause a problem with prices, what if the price is 100 and the button
+		 * only shows 10? So we need to make sure the button is wide enough to show the price.
 		 */
 		return (
 			<Popover>
@@ -103,7 +105,7 @@ export const NumberInput = React.forwardRef<React.ElementRef<typeof Numpad>, Num
 						disabled={disabled}
 						className={cn('items-start min-w-10', className)}
 					>
-						<ButtonText numberOfLines={1}>{value !== '' ? format(value) : ''}</ButtonText>
+						<ButtonText>{value !== '' ? format(value) : ''}</ButtonText>
 					</Button>
 				</PopoverTrigger>
 				<PopoverContent side={placement} className="p-2 w-auto">
@@ -117,9 +119,7 @@ export const NumberInput = React.forwardRef<React.ElementRef<typeof Numpad>, Num
 							formatDisplay={(value) => formatDisplay(value)}
 						/>
 						<HStack className="justify-end">
-							<Button onPress={handleSubmit}>
-								<ButtonText>{t('Done', { _tags: 'core' })}</ButtonText>
-							</Button>
+							<Button onPress={handleSubmit}>{t('Done', { _tags: 'core' })}</Button>
 						</HStack>
 					</VStack>
 				</PopoverContent>

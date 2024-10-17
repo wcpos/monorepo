@@ -20,11 +20,16 @@ export const DataTableHeader = ({ title, column, header, table }: Props) => {
 	const isSorted = sortBy === column.id;
 
 	if (disableSort) {
-		return <Text className={'font-medium text-muted-foreground'}>{title}</Text>;
+		return (
+			<Text className={'font-medium text-muted-foreground'} numberOfLines={1}>
+				{title}
+			</Text>
+		);
 	}
 
 	return (
 		<Pressable
+			className="max-w-full"
 			onPress={() =>
 				table.setSorting({
 					sortBy: column.id,
@@ -36,7 +41,9 @@ export const DataTableHeader = ({ title, column, header, table }: Props) => {
 				const showIcon = hovered || isSorted;
 				return (
 					<HStack className="gap-1">
-						<Text className={'font-medium text-muted-foreground'}>{title}</Text>
+						<Text className={'font-medium text-muted-foreground'} numberOfLines={1}>
+							{title}
+						</Text>
 						{showIcon && <SortIcon direction={isSorted && sortDirection} hovered={hovered} />}
 					</HStack>
 				);

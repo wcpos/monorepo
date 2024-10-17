@@ -13,7 +13,7 @@ type ProductCollection = import('@wcpos/database').ProductCollection;
 type Query = import('@wcpos/query').RelationalQuery<ProductCollection>;
 
 export const useBarcode = (productQuery: Query) => {
-	const { barcode$ } = useBarcodeDetection();
+	const { barcode$, onKeyPress } = useBarcodeDetection();
 	const { barcodeSearch } = useBarcodeSearch();
 	const { addProduct } = useAddProduct();
 	const { addVariation } = useAddVariation();
@@ -26,28 +26,30 @@ export const useBarcode = (productQuery: Query) => {
 	 *
 	 */
 	useSubscription(barcode$, async (barcode) => {
-		let message = t('Barcode scanned: {barcode}', { barcode, _tags: 'core' });
+		const text1 = t('Barcode scanned: {barcode}', { barcode, _tags: 'core' });
 		const results = await barcodeSearch(barcode);
 
 		if (results.length === 0 || results.length > 1) {
-			message +=
-				', ' + t('{count} products found locally', { count: results.length, _tags: 'core' });
-
-			Toast.show({ text1: message, type: 'error' });
+			Toast.show({
+				text1,
+				text2: t('{count} products found locally', { count: results.length, _tags: 'core' }),
+				type: 'error',
+			});
 			productQuery.search(barcode);
 			return;
 		}
 
-		message += ', ' + t('1 product found locally', { _tags: 'core' });
-
-		Toast.show({ text1: message, type: 'success' });
 		const [product] = results;
 
 		/**
 		 * TODO: what if product is out of stock?
 		 */
 		if (!showOutOfStock && product.stock_status !== 'instock') {
-			productQuery.search(barcode);
+			Toast.show({
+				text1,
+				text2: t('{name} out of stock', { name: product.name, _tags: 'core' }),
+				type: 'error',
+			});
 			return;
 		}
 
@@ -72,7 +74,18 @@ export const useBarcode = (productQuery: Query) => {
 			addProduct(product);
 		}
 
+		/**
+		 * Show success message
+		 */
+		Toast.show({
+			text1,
+			text2: t('{name} added to cart', { name: product.name, _tags: 'core' }),
+			type: 'success',
+		});
+
 		// clear search after successful scan?
 		productQuery.search('');
 	});
+
+	return { onKeyPress };
 };

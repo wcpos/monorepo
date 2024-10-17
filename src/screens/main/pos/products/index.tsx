@@ -19,7 +19,6 @@ import { SKU } from './cells/sku';
 import { StockQuantity } from './cells/stock-quantity';
 import { VariableActions } from './cells/variable-actions';
 import { ProductVariationActions } from './cells/variation-actions';
-import { ScannerButton } from './scanner-button';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../../contexts/translations';
@@ -143,7 +142,7 @@ const POSProducts = ({ isColumn = false }) => {
 	/**
 	 * Barcode
 	 */
-	// useBarcode(query);
+	useBarcode(query);
 
 	/**
 	 *
@@ -172,12 +171,20 @@ const POSProducts = ({ isColumn = false }) => {
 					<ErrorBoundary>
 						<VStack>
 							<HStack>
-								<ScannerButton />
 								<ErrorBoundary>
 									<QuerySearchInput
 										query={query}
 										placeholder={t('Search Products', { _tags: 'core' })}
 										className="flex-1"
+										onKeyPress={() => {
+											/**
+											 * This seems weird, but just the presence of this function will
+											 * bubble up the keypress event for the barcode scanner.
+											 *
+											 * Specifically handling the keypress event in the barcode hook
+											 * will result in double events.
+											 */
+										}}
 									/>
 								</ErrorBoundary>
 								<UISettingsDialog title={t('Product Settings', { _tags: 'core' })}>
