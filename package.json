@@ -19,10 +19,10 @@
   "dependencies": {
     "lodash": "4.17.21",
     "react-native-logs": "^5.1.0",
-    "react-native-web": "~0.19.12"
+    "react-native-web": "~0.19.13"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.12",
+    "@types/jest": "^29.5.13",
     "@types/lodash": "4.17.10",
     "@wcpos/eslint-config": "*",
     "@wcpos/tsconfig": "*",
