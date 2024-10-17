@@ -1,7 +1,6 @@
 import * as React from 'react';
 
-import { render, cleanup, waitFor } from '@testing-library/react';
-import { marbles } from 'rxjs-marbles/jest';
+import { render, cleanup } from '@testing-library/react';
 
 import { httpClientMock } from './__mocks__/http';
 import { createStoreDatabase, createSyncDatabase } from './helpers/db';
@@ -86,11 +85,13 @@ describe('QueryProvider', () => {
 			});
 
 			query.result$.subscribe((result) => {
-				expect(result).toEqual(expect.objectContaining({
-					searchActive: false,
-					hits: [],
-					count: 0
-				}));				
+				expect(result).toEqual(
+					expect.objectContaining({
+						searchActive: false,
+						hits: [],
+						count: 0,
+					})
+				);
 				done();
 			});
 

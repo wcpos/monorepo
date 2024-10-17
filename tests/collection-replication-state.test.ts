@@ -1,6 +1,6 @@
-import httpClientMock from './__mocks__/http';
-import { CollectionReplicationState } from '../src/collection-replication-state';
+import { httpClientMock } from './__mocks__/http';
 import { createStoreDatabase, createSyncDatabase } from './helpers/db';
+import { CollectionReplicationState } from '../src/collection-replication-state';
 
 import type { RxDatabase } from 'rxdb';
 

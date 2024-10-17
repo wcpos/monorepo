@@ -18,7 +18,7 @@ import {
 } from 'rxjs';
 import { map, switchMap, distinctUntilChanged, debounceTime, tap, startWith } from 'rxjs/operators';
 
-import { Search } from './search-state';
+// import { Search } from './search-state';
 import { SubscribableBase } from './subscribable-base';
 import { normalizeWhereClauses } from './utils';
 
@@ -82,7 +82,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	public readonly collection: T;
 	public readonly whereClauses: WhereClause[] = [];
 	public readonly hooks: QueryConfig<T>['hooks'];
-	public readonly searchService: Search;
+	// public readonly searchService: Search;
 	public readonly endpoint: string;
 	public readonly errorSubject: Subject<Error>;
 	public readonly primaryKey: string;
@@ -135,7 +135,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		 * @TODO - we only need a full text search service for some collections and fields
 		 * @TODO - we have full text search, but we need partial string search as well
 		 */
-		this.searchService = new Search({ collection, locale });
+		// this.searchService = new Search({ collection, locale });
 
 		/**
 		 * Set initial params
@@ -236,27 +236,29 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	}
 
 	handleSearchActive(modifiedParams: QueryParams) {
-		return this.searchService.search$(modifiedParams.search as string).pipe(
-			switchMap((searchResults) => {
-				return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
-					map((docs) => {
-						const filteredAndSortedDocs = searchResults.hits
-							.map((hit) => ({
-								...hit,
-								document: docs.find((doc) => doc[this.primaryKey] === hit.id),
-							}))
-							.filter((hit) => hit.document !== undefined);
+		console.log('FIXME: Search active', modifiedParams.search);
+		return this.handleSearchInactive(modifiedParams, {});
+		// return this.searchService.search$(modifiedParams.search as string).pipe(
+		// 	switchMap((searchResults) => {
+		// 		return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
+		// 			map((docs) => {
+		// 				const filteredAndSortedDocs = searchResults.hits
+		// 					.map((hit) => ({
+		// 						...hit,
+		// 						document: docs.find((doc) => doc[this.primaryKey] === hit.id),
+		// 					}))
+		// 					.filter((hit) => hit.document !== undefined);
 
-						return {
-							searchActive: true,
-							searchTerm: modifiedParams.search,
-							count: filteredAndSortedDocs.length,
-							hits: filteredAndSortedDocs,
-						};
-					})
-				);
-			})
-		);
+		// 				return {
+		// 					searchActive: true,
+		// 					searchTerm: modifiedParams.search,
+		// 					count: filteredAndSortedDocs.length,
+		// 					hits: filteredAndSortedDocs,
+		// 				};
+		// 			})
+		// 		);
+		// 	})
+		// );
 	}
 
 	handleSearchInactive(modifiedParams: QueryParams, originalParams: QueryParams) {

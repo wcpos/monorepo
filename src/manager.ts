@@ -97,7 +97,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		localDB: TDatabase,
 		fastLocalDB,
 		httpClient,
-		locale: string
+		locale: string = 'en'
 	) {
 		// Check if instance exists and dependencies are the same
 		if (
@@ -120,7 +120,7 @@ export class Manager<TDatabase extends RxDatabase> extends SubscribableBase {
 		return Manager.instance as Manager<TDatabase>;
 	}
 
-	stringify(params: any): string {
+	stringify(params: any): string | undefined {
 		try {
 			return JSON.stringify(params);
 		} catch (error) {

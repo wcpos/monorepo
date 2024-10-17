@@ -1,6 +1,6 @@
-import httpClientMock from './__mocks__/http';
-import { Manager } from '../src/manager';
+import { httpClientMock } from './__mocks__/http';
 import { createStoreDatabase, createSyncDatabase } from './helpers/db';
+import { Manager } from '../src/manager';
 
 import type { RxDatabase } from 'rxdb';
 
@@ -14,7 +14,7 @@ describe('Manager', () => {
 	beforeEach(async () => {
 		storeDatabase = await createStoreDatabase();
 		syncDatabase = await createSyncDatabase();
-		manager = new Manager(storeDatabase, syncDatabase, httpClientMock);
+		manager = Manager.getInstance(storeDatabase, syncDatabase, httpClientMock);
 	});
 
 	afterEach(async () => {
@@ -151,7 +151,9 @@ describe('Manager', () => {
 
 			const queryReplication1 = manager.getQuery(['newQuery1']);
 			const queryReplication2 = manager.getQuery(['newQuery2']);
-			expect(queryReplication1.collectionReplication).toEqual(queryReplication2.collectionReplication);
+			expect(queryReplication1.collectionReplication).toEqual(
+				queryReplication2.collectionReplication
+			);
 		});
 	});
 });

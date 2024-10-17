@@ -1,16 +1,7 @@
 {
+  "extends": "@wcpos/tsconfig/base.json",
   "compilerOptions": {
-    "module": "ESNext",
-    "target": "ESNext",
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "strict": true,
     "jsx": "react",
-    "moduleResolution": "Node",
-    "resolveJsonModule": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "typeRoots": ["./node_modules/@types", "./src/types"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx"]
+  "include": ["src"],
 }
