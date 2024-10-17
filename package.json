@@ -15,8 +15,7 @@
     "test": "yarn workspaces foreach run test",
     "utils": "yarn workspace @wcpos/utils",
     "with-flipper": "yarn workspace @wcpos/app-with-flipper",
-    "postinstall": "patch-package",
-    "preinstall": "npx ts-node ./scripts/install-rxdb-license.ts"
+    "postinstall": "patch-package"
   },
   "workspaces": {
     "packages": [
@@ -29,7 +28,7 @@
     "@babel/preset-env": "^7.24.6",
     "@babel/preset-react": "^7.24.6",
     "@transifex/cli": "^7.1.3",
-    "@types/jest": "^29.5.12",
+    "@types/jest": "^29.5.13",
     "@wcpos/eslint-config": "*",
     "babel-jest": "^29.7.0",
     "dotenv": "^16.4.5",
