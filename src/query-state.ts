@@ -15,6 +15,7 @@ import {
 	ReplaySubject,
 	combineLatest,
 	catchError,
+	from,
 } from 'rxjs';
 import { map, switchMap, distinctUntilChanged, debounceTime, tap, startWith } from 'rxjs/operators';
 
@@ -87,6 +88,8 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 	public readonly errorSubject: Subject<Error>;
 	public readonly primaryKey: string;
 	public readonly greedy: boolean;
+	public readonly searchInstancePromise: Promise<any>;
+	public readonly locale: string;
 
 	/**
 	 *
@@ -118,7 +121,7 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		endpoint,
 		errorSubject,
 		greedy = false,
-		locale,
+		locale = 'en',
 	}: QueryConfig<T>) {
 		super();
 		this.id = id;
@@ -128,6 +131,8 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		this.errorSubject = errorSubject;
 		this.primaryKey = collection.schema.primaryPath;
 		this.greedy = greedy;
+		this.searchInstancePromise = collection.initSearch(locale);
+		this.locale = locale;
 
 		/**
 		 * Search service
@@ -235,30 +240,42 @@ export class Query<T extends RxCollection> extends SubscribableBase {
 		);
 	}
 
+	/**
+	 * For search we get the matched IDs, then apply the other params
+	 * We also don't sort the results here, as they are already sorted by relevance
+	 */
 	handleSearchActive(modifiedParams: QueryParams) {
-		console.log('FIXME: Search active', modifiedParams.search);
-		return this.handleSearchInactive(modifiedParams, {});
-		// return this.searchService.search$(modifiedParams.search as string).pipe(
-		// 	switchMap((searchResults) => {
-		// 		return this.collection.find({ selector: modifiedParams?.selector || {} }).$.pipe(
-		// 			map((docs) => {
-		// 				const filteredAndSortedDocs = searchResults.hits
-		// 					.map((hit) => ({
-		// 						...hit,
-		// 						document: docs.find((doc) => doc[this.primaryKey] === hit.id),
-		// 					}))
-		// 					.filter((hit) => hit.document !== undefined);
+		return from(this.searchInstancePromise).pipe(
+			switchMap((searchInstance) =>
+				searchInstance.collection.$.pipe(
+					startWith(null),
+					switchMap(() => searchInstance.find(modifiedParams.search))
+				)
+			),
+			switchMap((searchResults: RxDocument[]) => {
+				const uuids = (searchResults || []).map((doc) => doc.uuid);
+				const selector = modifiedParams?.selector || {};
+				selector.uuid = { $in: uuids };
+				return this.collection.find({ selector }).$.pipe(
+					map((docs) => {
+						// Sort the results by the order of the search results
+						const sortedDocs = uuids
+							.map((uuid) => docs.find((doc) => doc.uuid === uuid))
+							.filter((doc) => doc !== undefined);
 
-		// 				return {
-		// 					searchActive: true,
-		// 					searchTerm: modifiedParams.search,
-		// 					count: filteredAndSortedDocs.length,
-		// 					hits: filteredAndSortedDocs,
-		// 				};
-		// 			})
-		// 		);
-		// 	})
-		// );
+						return {
+							searchActive: true,
+							searchTerm: modifiedParams.search,
+							count: sortedDocs.length,
+							hits: sortedDocs.map((doc) => ({
+								id: doc.uuid,
+								document: doc,
+							})),
+						};
+					})
+				);
+			})
+		);
 	}
 
 	handleSearchInactive(modifiedParams: QueryParams, originalParams: QueryParams) {

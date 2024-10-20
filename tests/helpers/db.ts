@@ -10,6 +10,7 @@ import {
 import { getRxStorageMemory } from 'rxdb/plugins/storage-memory';
 
 import { RxDBGenerateIdPlugin } from './generate-id';
+import { parseRestResponsePlugin } from './parse-rest-response';
 import { logsLiteral } from './schemas/logs';
 import { productsLiteral } from './schemas/products';
 import { syncLiteral } from './schemas/sync';
@@ -19,6 +20,7 @@ import type { RxCollectionCreator, RxCollection, RxDocument } from 'rxdb';
 
 // addRxPlugin(RxDBDevModePlugin);
 addRxPlugin(RxDBGenerateIdPlugin);
+addRxPlugin(parseRestResponsePlugin);
 
 /**
  * Products

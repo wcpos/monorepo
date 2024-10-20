@@ -13,15 +13,20 @@ interface HttpClientMock {
 	__setMockResponse: (
 		method: HttpMethod,
 		url: string,
-		params: Record<string, any>,
-		response: any
+		response: any,
+		options?: { params?: any; data?: any }
 	) => void;
 	__resetMockResponses: () => void;
 }
 
 type HttpMethod = 'get' | 'post' | 'put' | 'delete';
 
-const mockResponses: Record<string, MockResponse> = {};
+const mockResponses: Record<HttpMethod, Record<string, Record<string, any>>> = {
+	get: {},
+	post: {},
+	put: {},
+	delete: {},
+};
 
 const httpClientMock: HttpClientMock = {
 	get: jest.fn((url: string, config?: AxiosRequestConfig) => {
@@ -39,32 +44,42 @@ const httpClientMock: HttpClientMock = {
 	__setMockResponse: (
 		method: HttpMethod,
 		url: string,
-		params: Record<string, any>,
-		response: any
+		response: any,
+		options: { params?: any; data?: any } = {}
 	) => {
-		const key = `${method}:${url}:${JSON.stringify(params) || ''}`;
-		mockResponses[key] = response;
+		const key = getMockKey(url, options.params, options.data);
+		if (!mockResponses[method]) {
+			mockResponses[method] = {};
+		}
+		mockResponses[method][key] = response;
 	},
 	__resetMockResponses: () => {
-		Object.keys(mockResponses).forEach((key) => delete mockResponses[key]);
+		Object.keys(mockResponses).forEach((method) => {
+			mockResponses[method as HttpMethod] = {};
+		});
 	},
 };
 
-const standardErrorResponses = {
-	unauthorized: { status: 401, data: { message: 'Not authorized' } },
-	serverError: { status: 500, data: { message: 'Internal server error' } },
-	badRequest: { status: 400, data: { message: 'Bad request' } },
-};
+function getMockKey(url: string, params?: any, data?: any) {
+	const paramsKey = params ? JSON.stringify(params) : '';
+	const dataKey = data ? JSON.stringify(data) : '';
+	return `${url}|params:${paramsKey}|data:${dataKey}`;
+}
 
 function resolveResponse(method: HttpMethod, url: string, config?: AxiosRequestConfig, data?: any) {
-	const key = `${method}:${url}:${JSON.stringify(config?.params) || ''}`;
-	if (mockResponses[key]) {
-		return Promise.resolve({ data: mockResponses[key] });
-	} else if (mockResponses[method] && mockResponses[method][url]) {
-		return Promise.resolve({ data: mockResponses[method][url] });
+	const params = config?.params;
+	const key = getMockKey(url, params, data);
+	const methodResponses = mockResponses[method];
+	const mockResponse = methodResponses[key];
+
+	if (mockResponse !== undefined) {
+		return Promise.resolve({ data: mockResponse });
 	} else {
-		return Promise.resolve({ data: [] }); // Default response is an empty array
+		// You might want to handle the case where no mock response is set
+		// For now, let's throw an error to make it explicit
+		console.error(`No mock response for ${method.toUpperCase()} ${key}`);
+		return Promise.reject(new Error(`No mock response for ${method.toUpperCase()} ${key}`));
 	}
 }
 
-export { httpClientMock, standardErrorResponses };
+export { httpClientMock };

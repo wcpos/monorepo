@@ -1,16 +1,9 @@
 import intersection from 'lodash/intersection';
 import isEmpty from 'lodash/isEmpty';
 import { BehaviorSubject, Observable, Subscription, Subject, interval } from 'rxjs';
-import {
-	filter,
-	tap,
-	map,
-	switchMap,
-	startWith,
-	debounceTime,
-	distinctUntilChanged,
-} from 'rxjs/operators';
+import { filter, switchMap, startWith } from 'rxjs/operators';
 
+import { DataFetcher } from './data-fetcher';
 import { SubscribableBase } from './subscribable-base';
 import { getParamValueFromEndpoint } from './utils';
 
@@ -36,6 +29,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	public readonly collectionReplication: CollectionReplicationState<T>;
 	public syncCompleted = false;
 	public readonly greedy;
+	private dataFetcher: DataFetcher;
 
 	/**
 	 *
@@ -55,40 +49,32 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 	/**
 	 *
 	 */
-	constructor({
-		collection,
-		httpClient,
-		collectionReplication,
-		endpoint,
-		errorSubject,
-		greedy = false,
-	}: QueryReplicationConfig<T>) {
+	constructor(config: QueryReplicationConfig<T>) {
 		super();
-		this.collection = collection;
-		this.httpClient = httpClient;
-		this.endpoint = endpoint;
-		this.collectionReplication = collectionReplication;
-		this.errorSubject = errorSubject;
-		this.greedy = greedy;
+		this.collection = config.collection;
+		this.endpoint = config.endpoint;
+		this.collectionReplication = config.collectionReplication;
+		this.errorSubject = config.errorSubject;
+		this.greedy = config.greedy || false;
 
-		/**
-		 * Push all internal subscriptions to the subs array
-		 * Internal subscriptions are cleaned up when replication is canceled
-		 */
-		this.setupPolling();
+		// @NOTE: this endpoint is different to the general collection endpoint, it has query params
+		this.dataFetcher = new DataFetcher(config.httpClient, config.endpoint);
+
+		// Initialize subscriptions
+		this.setupSubscriptions();
 	}
 
 	/**
 	 * Set up a polling interval to run the replication
 	 */
-	private setupPolling() {
+	private setupSubscriptions() {
 		const polling$ = this.paused$.pipe(
 			switchMap((isPaused) => (isPaused ? [] : interval(this.pollingTime).pipe(startWith(0)))),
 			filter(() => !this.subjects.paused.getValue())
 		);
 
 		this.subs.push(
-			polling$.subscribe(async () => {
+			polling$.subscribe(() => {
 				this.run();
 			})
 		);
@@ -134,15 +120,11 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 		this.subjects.active.next(true);
 
-		// Create a sync promise to pause the collection sync, until we are finished
-		let resolveQueryPromise: () => void;
-		const queryPromise = new Promise<void>((resolve) => {
-			resolveQueryPromise = resolve;
-		});
-		this.collectionReplication.setQuerySyncPromise(queryPromise);
+		// pause the collection sync while we are syncing the query
+		this.collectionReplication.pause();
 
-		let include = await this.collectionReplication.getUnsyncedRemoteIDs();
-		let exclude = await this.collectionReplication.getSyncedRemoteIDs();
+		let include = await this.collectionReplication.syncStateManager.getUnsyncedRemoteIDs();
+		let exclude = await this.collectionReplication.syncStateManager.getSyncedRemoteIDs();
 		// const lastModified = this.collectionReplication.getLocalLastModifiedDate();
 
 		/**
@@ -170,9 +152,9 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 				response = { data: [] };
 			} else {
 				if (exclude?.length < include?.length) {
-					response = await this.fetchRemoteByIDs({ exclude });
+					response = await this.dataFetcher.fetchRemoteByIDs({ exclude });
 				} else {
-					response = await this.fetchRemoteByIDs({ include });
+					response = await this.dataFetcher.fetchRemoteByIDs({ include });
 				}
 			}
 
@@ -185,8 +167,7 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 		} catch (error) {
 			this.errorSubject.next(error);
 		} finally {
-			// Resolve the query sync promise
-			resolveQueryPromise();
+			this.collectionReplication.start();
 			this.subjects.active.next(false);
 		}
 	}
@@ -211,31 +192,5 @@ export class QueryReplicationState<T extends RxCollection> extends SubscribableB
 
 	isStopped() {
 		return this.isCanceled || this.subjects.paused.getValue();
-	}
-
-	/**
-	 * ------------------------------
-	 * Fetch methods
-	 * ------------------------------
-	 * @NOTE: this endpoint is different to the general collection endpoint, it has query params
-	 */
-	async fetchRemoteByIDs({ include = undefined, exclude = undefined }) {
-		const response = await this.httpClient.post(
-			this.endpoint,
-			{
-				include,
-				exclude,
-			},
-			{
-				headers: {
-					'X-HTTP-Method-Override': 'GET',
-				},
-				params: {
-					_method: 'GET',
-				},
-			}
-		);
-
-		return response;
 	}
 }
