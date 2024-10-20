@@ -8,14 +8,14 @@ import { RxDBMigrationPlugin } from 'rxdb/plugins/migration-schema';
 // import { RxDBPipelinePlugin } from 'rxdb/plugins/pipeline';
 import { RxDBStatePlugin } from 'rxdb/plugins/state';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
-// import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
+import { RxDBFlexSearchPlugin } from 'rxdb-premium/plugins/flexsearch';
 
 import { findOneFixPlugin } from './find-one-fix';
 import { RxDBGenerateIdPlugin } from './generate-id';
 import parseRestResponsePlugin from './parse-rest-response';
 import populatePlugin from './populate';
 import { resetCollectionPlugin } from './reset-collection';
-// import { searchPlugin } from './search';
+import { searchPlugin } from './search';
 
 if (process.env.NODE_ENV === 'development') {
 	// in dev-mode we add the dev-mode plugin
@@ -44,7 +44,7 @@ addRxPlugin(RxDBAttachmentsPlugin);
 addRxPlugin(RxDBStatePlugin);
 addRxPlugin(RxDBCleanupPlugin);
 // addRxPlugin(RxDBPipelinePlugin);
-// addRxPlugin(RxDBFlexSearchPlugin);
+addRxPlugin(RxDBFlexSearchPlugin);
 
 // custom plugins
 addRxPlugin(RxDBGenerateIdPlugin); // should run before populate and parseRestResponse
@@ -52,4 +52,4 @@ addRxPlugin(populatePlugin);
 addRxPlugin(findOneFixPlugin);
 addRxPlugin(parseRestResponsePlugin);
 addRxPlugin(resetCollectionPlugin);
-// addRxPlugin(searchPlugin);
+addRxPlugin(searchPlugin);

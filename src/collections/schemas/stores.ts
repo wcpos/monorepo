@@ -31,11 +31,15 @@ export const storesLiteral = {
 			description: 'The city in which your business is located.',
 			type: 'string',
 		},
-		default_country: {
-			title: 'Country / State',
-			description: 'The country and state or province, if any, in which your business is located.',
+		store_country: {
+			title: 'Country',
+			description: 'The country in which your business is located.',
 			type: 'string',
-			default: 'US:CA',
+		},
+		store_state: {
+			title: 'State',
+			description: 'The state or county, if any, in which your business is located.',
+			type: 'string',
 		},
 		store_postcode: {
 			title: 'Postcode / ZIP',

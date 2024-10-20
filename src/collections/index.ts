@@ -57,8 +57,11 @@ export type StoreCollection = RxCollection<StoreDocumentType>;
 const stores: RxCollectionCreator<StoreDocumentType> = {
 	schema: storeSchema,
 	migrationStrategies: {
-		1(oldDoc) {
+		1(oldDoc: StoreDocumentType) {
 			oldDoc.thousands_group_style = 'thousand';
+			const [country, state] = (oldDoc.default_country || '').split(':');
+			oldDoc.store_country = country;
+			oldDoc.store_state = state;
 			return oldDoc;
 		},
 	},
