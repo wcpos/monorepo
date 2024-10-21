@@ -19,6 +19,7 @@ import { Price } from './cells/price';
 import { StockQuantity } from './cells/stock-quantity';
 import { StockStatus } from './cells/stock-status';
 import { VariationActions } from './cells/variation-actions';
+import { ProductVariationName } from './cells/variation-name';
 import { UISettingsForm } from './ui-settings-form';
 import { useBarcode } from './use-barcode';
 import { useT } from '../../../contexts/translations';
@@ -33,7 +34,6 @@ import { VariableProductImage } from '../components/product/variable-image';
 import { VariableProductPrice } from '../components/product/variable-price';
 import { VariableProductRow } from '../components/product/variable-product-row';
 import { ProductVariationImage } from '../components/product/variation-image';
-import { ProductVariationName } from '../components/product/variation-name';
 import { QuerySearchInput } from '../components/query-search-input';
 import { UISettingsDialog } from '../components/ui-settings';
 import { useTaxRates } from '../contexts/tax-rates';
@@ -97,7 +97,7 @@ const variationCells = {
 const renderCell = ({ column, row }) => {
 	// just simple and variable for now
 	let type = 'simple';
-	if (row.original.type === 'variable') {
+	if (row.original.document.type === 'variable') {
 		type = 'variable';
 	}
 	return get(cells, [type, column.id]);
@@ -114,7 +114,7 @@ const variationRenderCell = ({ column, row }) => {
  *
  */
 const renderItem = ({ item: row, index }) => {
-	if (row.original.type === 'variable') {
+	if (row.original.document.type === 'variable') {
 		return <VariableProductRow row={row} index={index} />;
 	}
 	return <DataTableRow row={row} index={index} />;
@@ -180,12 +180,11 @@ const Products = () => {
 	 */
 	const tableMeta = React.useMemo(
 		() => ({
-			onChange: ({ row, changes }) => {
-				const type = get(row, 'original.type');
-				if (type === 'variation') {
-					variationsPatch({ document: row.original, data: changes });
+			onChange: ({ document, changes }) => {
+				if (document.type === 'variation') {
+					variationsPatch({ document, data: changes });
 				} else {
-					productsPatch({ document: row.original, data: changes });
+					productsPatch({ document, data: changes });
 				}
 			},
 			variationRenderCell,
@@ -234,8 +233,8 @@ const Products = () => {
 								noDataMessage={t('No products found', { _tags: 'core' })}
 								estimatedItemSize={100}
 								extraContext={context}
-								TableFooterComponent={calcTaxes && TableFooter}
-								getItemType={({ original }) => original.type}
+								TableFooterComponent={calcTaxes ? TableFooter : DataTableFooter}
+								getItemType={(row) => row.original.document.type}
 								tableMeta={tableMeta}
 							/>
 						</Suspense>

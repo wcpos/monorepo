@@ -30,8 +30,8 @@ const GroupedNames = ({ query }) => {
 /**
  *
  */
-const WrappedQuery = ({ row }: CellContext<ProductDocument, 'name'>) => {
-	const parent = row.original;
+const WrappedQuery = ({ row }: CellContext<{ document: ProductDocument }, 'name'>) => {
+	const parent = row.original.document;
 
 	/**
 	 *

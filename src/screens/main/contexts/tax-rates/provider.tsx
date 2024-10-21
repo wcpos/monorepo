@@ -6,7 +6,7 @@ import { map, switchMap, distinctUntilChanged } from 'rxjs/operators';
 
 import { filterTaxRates } from './tax-rates.helpers';
 import { useAppState } from '../../../../contexts/app-state';
-import useBaseTaxLocation from '../../hooks/use-base-tax-location';
+import { useBaseTaxLocation } from '../../hooks/use-base-tax-location';
 
 type TaxRateDocument = import('@wcpos/database').TaxRateDocument;
 type TaxRateCollection = import('@wcpos/database').TaxRateCollection;

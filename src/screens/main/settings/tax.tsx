@@ -16,6 +16,7 @@ import {
 	FormRadioGroup,
 	useFormChangeHandler,
 } from '@wcpos/components/src/form';
+import { ModalClose, ModalFooter } from '@wcpos/components/src/modal';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
@@ -27,6 +28,7 @@ import { TaxClassSelect } from '../components/tax-class-select';
 import { TaxDisplayRadioGroup } from '../components/tax-display-radio-group';
 import { YesNoRadioGroup } from '../components/yes-no-radio-group';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
+import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 const formSchema = z.object({
 	calc_taxes: z.enum(['yes', 'no']),
@@ -48,23 +50,28 @@ export const TaxSettings = () => {
 	const t = useT();
 	const navigation = useNavigation();
 	const { localPatch } = useLocalMutation();
+	const http = useRestHttpClient();
+	const [loading, setLoading] = React.useState(false);
 
 	/**
 	 *
 	 */
 	const formData = useObservablePickState(
 		store.$,
-		() => ({
-			calc_taxes: store.calc_taxes,
-			prices_include_tax: store.prices_include_tax,
-			tax_based_on: store.tax_based_on,
-			shipping_tax_class: store.shipping_tax_class,
-			tax_round_at_subtotal: store.tax_round_at_subtotal,
-			tax_display_shop: store.tax_display_shop,
-			tax_display_cart: store.tax_display_cart,
-			price_display_suffix: store.price_display_suffix,
-			tax_total_display: store.tax_total_display,
-		}),
+		() => {
+			const latest = store.getLatest();
+			return {
+				calc_taxes: latest.calc_taxes,
+				prices_include_tax: latest.prices_include_tax,
+				tax_based_on: latest.tax_based_on,
+				shipping_tax_class: latest.shipping_tax_class,
+				tax_round_at_subtotal: latest.tax_round_at_subtotal,
+				tax_display_shop: latest.tax_display_shop,
+				tax_display_cart: latest.tax_display_cart,
+				price_display_suffix: latest.price_display_suffix,
+				tax_total_display: latest.tax_total_display,
+			};
+		},
 		'calc_taxes',
 		'prices_include_tax',
 		'tax_based_on',
@@ -107,6 +114,35 @@ export const TaxSettings = () => {
 	React.useEffect(() => {
 		form.reset({ ...formData });
 	}, [formData, form]);
+
+	/**
+	 * Restore server settings
+	 */
+	const handleRestoreServerSettings = React.useCallback(async () => {
+		setLoading(true);
+		try {
+			const response = await http.get(`stores/${store.id}`);
+			const data = response.data;
+			await localPatch({
+				document: store,
+				data: {
+					calc_taxes: data.calc_taxes,
+					prices_include_tax: data.prices_include_tax,
+					tax_based_on: data.tax_based_on,
+					shipping_tax_class: data.shipping_tax_class,
+					tax_round_at_subtotal: data.tax_round_at_subtotal,
+					tax_display_shop: data.tax_display_shop,
+					tax_display_cart: data.tax_display_cart,
+					price_display_suffix: data.price_display_suffix,
+					tax_total_display: data.tax_total_display,
+				},
+			});
+		} catch (error) {
+			console.error(error);
+		} finally {
+			setLoading(false);
+		}
+	}, [http, localPatch, store]);
 
 	/**
 	 *
@@ -218,6 +254,12 @@ export const TaxSettings = () => {
 							)}
 						/>
 					</View>
+					<ModalFooter className="px-0">
+						<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
+							{t('Restore server settings', { _tags: 'core' })}
+						</Button>
+						<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
+					</ModalFooter>
 				</VStack>
 			</Form>
 		</VStack>

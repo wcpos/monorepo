@@ -16,8 +16,11 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const StockQuantity = ({ row, table }: CellContext<ProductDocument, 'stock_quantity'>) => {
-	const product = row.original;
+export const StockQuantity = ({
+	row,
+	table,
+}: CellContext<{ document: ProductDocument }, 'stock_quantity'>) => {
+	const product = row.original.document;
 	const stockQuantity = useObservableEagerState(product.stock_quantity$);
 	const manageStock = useObservableEagerState(product.manage_stock$);
 	const t = useT();
@@ -28,7 +31,7 @@ export const StockQuantity = ({ row, table }: CellContext<ProductDocument, 'stoc
 				<NumberInput
 					value={String(stockQuantity || 0)}
 					onChangeText={(stock_quantity) =>
-						table.options.meta.onChange({ row, changes: { stock_quantity } })
+						table.options.meta.onChange({ document: product, changes: { stock_quantity } })
 					}
 					disabled={!manageStock}
 				/>
@@ -38,7 +41,7 @@ export const StockQuantity = ({ row, table }: CellContext<ProductDocument, 'stoc
 				label={t('Manage', { _tags: 'core' })}
 				checked={manageStock}
 				onCheckedChange={(manage_stock) =>
-					table.options.meta.onChange({ row, changes: { manage_stock } })
+					table.options.meta.onChange({ document: product, changes: { manage_stock } })
 				}
 				size="sm"
 			/>

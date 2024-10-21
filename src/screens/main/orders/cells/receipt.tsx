@@ -16,8 +16,8 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const Receipt = ({ row }: CellContext<OrderDocument, any>) => {
-	const order = row.original;
+export const Receipt = ({ row }: CellContext<{ document: OrderDocument }, any>) => {
+	const order = row.original.document;
 	const orderHasID = !!useObservableEagerState(order.id$);
 	const t = useT();
 	const navigation = useNavigation();

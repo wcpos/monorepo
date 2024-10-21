@@ -67,7 +67,7 @@ const UISettingsDialog = ({ title, children }: Props) => {
 					</TooltipContent>
 				</Tooltip>
 				<DialogContext.Provider value={{ buttonPressHandlerRef }}>
-					<DialogContent>
+					<DialogContent size="md">
 						<DialogHeader>
 							<DialogTitle>{title}</DialogTitle>
 						</DialogHeader>

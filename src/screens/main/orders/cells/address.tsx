@@ -11,8 +11,11 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const Address = ({ row, column }: CellContext<OrderDocument, 'billing' | 'shipping'>) => {
-	const order = row.original;
+export const Address = ({
+	row,
+	column,
+}: CellContext<{ document: OrderDocument }, 'billing' | 'shipping'>) => {
+	const order = row.original.document;
 	const address = useObservableEagerState(order[`${column.id}$`]);
 
 	return address ? <FormatAddress address={address} showName={false} /> : null;

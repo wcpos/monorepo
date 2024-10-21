@@ -1,17 +1,15 @@
 import * as React from 'react';
-import { View } from 'react-native';
 
 import { CellContext } from '@tanstack/react-table';
-import { useObservableEagerState, useObservableState } from 'observable-hooks';
+import { useObservableEagerState } from 'observable-hooks';
 import { map } from 'rxjs/operators';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
 import { HStack } from '@wcpos/components/src/hstack';
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
 import { useQueryManager } from '@wcpos/query';
 
-import { useVariationTable } from './variation-table-rows/context';
+import { useVariationRow } from './variable-product-row/context';
 import { useT } from '../../../../contexts/translations';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
@@ -19,8 +17,8 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const PlainAttributes = ({ row }: CellContext<ProductDocument, 'name'>) => {
-	const product = row.original;
+export const PlainAttributes = ({ row }: CellContext<{ document: ProductDocument }, 'name'>) => {
+	const product = row.original.document;
 	const attributes = useObservableEagerState(product.attributes$);
 
 	/**
@@ -49,19 +47,13 @@ export const PlainAttributes = ({ row }: CellContext<ProductDocument, 'name'>) =
  *
  */
 export const ProductAttributes = ({ row, table }) => {
-	const product = row.original;
+	const product = row.original.document;
 	const attributes = useObservableEagerState(product.attributes$);
 	const isExpanded = useObservableEagerState(
 		table.options.meta.expanded$.pipe(map((expanded) => !!expanded[row.id]))
 	);
+	const { updateQueryParams } = useVariationRow();
 
-	// const {
-	// 	expanded,
-	// 	setExpanded,
-	// 	setInitialSelectedAttributes,
-	// 	childrenSearchCount,
-	// 	parentSearchTerm,
-	// } = useVariationTable();
 	const manager = useQueryManager();
 	const t = useT();
 
@@ -71,8 +63,9 @@ export const ProductAttributes = ({ row, table }) => {
 	const handleSelect = React.useCallback(
 		(attribute, option) => {
 			row.toggleExpanded(true);
-			const query = manager.getQuery(['variations', { parentID: product.id }]);
-			if (query) {
+
+			if (manager.hasQuery(['variations', { parentID: product.id }])) {
+				const query = manager.getQuery(['variations', { parentID: product.id }]);
 				query.where('attributes', {
 					$elemMatch: {
 						id: attribute.id,
@@ -82,37 +75,44 @@ export const ProductAttributes = ({ row, table }) => {
 				});
 			} else {
 				// we need to pass the attribute/option down so it can be used in the table
+				updateQueryParams('attributes', {
+					$elemMatch: {
+						id: attribute.id,
+						name: attribute.name,
+						option,
+					},
+				});
 			}
 		},
-		[manager, product.id, row]
+		[manager, product.id, row, updateQueryParams]
 	);
 
 	/**
 	 * Expand text string
 	 */
-	// const expandText = React.useMemo(() => {
-	// 	let text = '';
-	// 	if (expanded) {
-	// 		text += t('Collapse', { _tags: 'core' });
-	// 	} else {
-	// 		text += t('Expand', { _tags: 'core' });
-	// 	}
-	// 	if (childrenSearchCount === 1) {
-	// 		text += ' - ';
-	// 		text += t('1 variation found for {term}', {
-	// 			term: parentSearchTerm,
-	// 			_tags: 'core',
-	// 		});
-	// 	} else if (childrenSearchCount > 0) {
-	// 		text += ' - ';
-	// 		text += t('{count} variations found for {term}', {
-	// 			count: childrenSearchCount,
-	// 			term: parentSearchTerm,
-	// 			_tags: 'core',
-	// 		});
-	// 	}
-	// 	return text;
-	// }, [childrenSearchCount, expanded, parentSearchTerm, t]);
+	const expandText = React.useMemo(() => {
+		let text = '';
+		if (isExpanded) {
+			text += t('Collapse', { _tags: 'core' });
+		} else {
+			text += t('Expand', { _tags: 'core' });
+		}
+		if (row.original.childrenSearchCount === 1) {
+			text += ' - ';
+			text += t('1 variation found for {term}', {
+				term: row.original.parentSearchTerm,
+				_tags: 'core',
+			});
+		} else if (row.original.childrenSearchCount > 0) {
+			text += ' - ';
+			text += t('{count} variations found for {term}', {
+				count: row.original.childrenSearchCount,
+				term: row.original.parentSearchTerm,
+				_tags: 'core',
+			});
+		}
+		return text;
+	}, [isExpanded, row.original.childrenSearchCount, row.original.parentSearchTerm, t]);
 
 	/**
 	 *
@@ -139,7 +139,7 @@ export const ProductAttributes = ({ row, table }) => {
 					</HStack>
 				))}
 			<Text className="text-xs text-primary" variant="link" onPress={() => row.toggleExpanded()}>
-				{isExpanded ? 'Collapse' : 'Expand'}
+				{expandText}
 			</Text>
 		</VStack>
 	);

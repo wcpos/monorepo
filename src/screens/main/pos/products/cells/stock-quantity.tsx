@@ -6,23 +6,42 @@ import { useObservableEagerState } from 'observable-hooks';
 
 import { Text } from '@wcpos/components/src/text';
 
-import { useAppState } from '../../../../../contexts/app-state';
+import { useT } from '../../../../../contexts/translations';
+import { useNumberFormat } from '../../../hooks/use-number-format';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
-type Props = CellContext<ProductDocument, string> & { className?: string };
+type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
+type Props = CellContext<{ document: ProductDocument | ProductVariationDocument }, string> & {
+	className?: string;
+	withText?: boolean;
+};
 
 /**
- * @TODO - update the useCurrencyFormat hook to handle the decimal separator for quantity
+ *
  */
-export const StockQuantity = ({ row, className }: Props) => {
-	const product = row.original;
+export const StockQuantity = ({ row, className, withText = false }: Props) => {
+	const product = row.original.document;
 	const stockQuantity = useObservableEagerState(product.stock_quantity$);
 	const manageStock = useObservableEagerState(product.manage_stock$);
-	const { store } = useAppState();
-	const decimalSeparator = useObservableEagerState(store.price_decimal_sep$);
-	const displayStockQuantity = String(stockQuantity).replace('.', decimalSeparator);
+	const { format } = useNumberFormat();
+	const t = useT();
+
+	/**
+	 * Early exit
+	 */
+	if (!manageStock || !isFinite(stockQuantity)) {
+		return null;
+	}
+
+	if (withText) {
+		return (
+			<Text className={className}>
+				{t('{quantity} in stock', { quantity: format(stockQuantity), _tags: 'core' })}
+			</Text>
+		);
+	}
 
 	return manageStock && isFinite(stockQuantity) ? (
-		<Text className={className}>{displayStockQuantity}</Text>
+		<Text className={className}>{format(stockQuantity)}</Text>
 	) : null;
 };

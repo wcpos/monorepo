@@ -16,8 +16,6 @@ interface CurrencyFormatOptions extends NumberFormatOptions {
 
 /**
  * Hook to format numbers based on the selected currency.
- *
- * @TODO - fetch currency from server, wrap the app in a provider
  */
 export const useCurrencyFormat = (options?: CurrencyFormatOptions) => {
 	const { store } = useAppState();
@@ -26,6 +24,9 @@ export const useCurrencyFormat = (options?: CurrencyFormatOptions) => {
 
 	/**
 	 * Get currency symbol
+	 *
+	 * @TODO - fetch currency from server, wrap the app in a provider
+	 * @TODO - have a helper function on the provider to get currency symbol
 	 */
 	const currencySymbol = React.useMemo(() => {
 		if (options?.currencySymbol) {

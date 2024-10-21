@@ -16,8 +16,11 @@ export const EditablePrice = ({
 	row,
 	column,
 	table,
-}: CellContext<ProductDocument | ProductVariationDocument, 'sale_price' | 'regular_price'>) => {
-	const item = row.original;
+}: CellContext<
+	{ document: ProductDocument | ProductVariationDocument },
+	'sale_price' | 'regular_price'
+>) => {
+	const item = row.original.document;
 	const price = useObservableEagerState(item[`${column.id}$`]) as string;
 
 	/**
@@ -27,7 +30,7 @@ export const EditablePrice = ({
 		<CurrencyInput
 			value={price}
 			onChangeText={(price) =>
-				table.options.meta.onChange({ row, changes: { [column.id]: String(price) } })
+				table.options.meta.onChange({ document: item, changes: { [column.id]: String(price) } })
 			}
 			disabled={column.id === 'sale_price' && !item.on_sale}
 		/>

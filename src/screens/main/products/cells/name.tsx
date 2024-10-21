@@ -16,8 +16,8 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const ProductName = (props: CellContext<ProductDocument, 'name'>) => {
-	const product = props.row.original;
+export const ProductName = (props: CellContext<{ document: ProductDocument }, 'name'>) => {
+	const product = props.row.original.document;
 	const show = props.column.columnDef.meta.show;
 	const name = useObservableEagerState(product.name$);
 
@@ -29,7 +29,7 @@ export const ProductName = (props: CellContext<ProductDocument, 'name'>) => {
 			<EditableName
 				value={name}
 				onChangeText={(name) =>
-					props.table.options.meta.onChange({ row: props.row, changes: { name } })
+					props.table.options.meta.onChange({ document: product, changes: { name } })
 				}
 			/>
 			{show('sku') && <Text className="text-sm">{product.sku}</Text>}

@@ -66,19 +66,22 @@ export const EditOrderForm = ({ order }: Props) => {
 	 */
 	const formData = useObservablePickState(
 		order.$,
-		() => ({
-			status: order.status,
-			parent_id: order.parent_id,
-			currency: order.currency,
-			customer_id: order.customer_id,
-			customer_note: order.customer_note,
-			billing: order.billing,
-			shipping: order.shipping,
-			payment_method: order.payment_method,
-			payment_method_title: order.payment_method_title,
-			transaction_id: order.transaction_id,
-			meta_data: order.meta_data,
-		}),
+		() => {
+			const latest = order.getLatest();
+			return {
+				status: latest.status,
+				parent_id: latest.parent_id,
+				currency: latest.currency,
+				customer_id: latest.customer_id,
+				customer_note: latest.customer_note,
+				billing: latest.billing,
+				shipping: latest.shipping,
+				payment_method: latest.payment_method,
+				payment_method_title: latest.payment_method_title,
+				transaction_id: latest.transaction_id,
+				meta_data: latest.meta_data,
+			};
+		},
 		'status',
 		'parent_id',
 		'currency',

@@ -9,8 +9,8 @@ type LogDocument = import('@wcpos/database').LogDocument;
 /**
  *
  */
-export const Context = ({ row }: CellContext<LogDocument, 'context'>) => {
-	const log = row.original;
+export const Context = ({ row }: CellContext<{ document: LogDocument }, 'context'>) => {
+	const log = row.original.document;
 
 	return <Tree value={log.context} collapsed />;
 };

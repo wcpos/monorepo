@@ -34,12 +34,15 @@ export const BarcodeSettings = () => {
 	 */
 	const formData = useObservablePickState(
 		store.$,
-		() => ({
-			barcode_scanning_buffer: store.barcode_scanning_buffer,
-			barcode_scanning_min_chars: store.barcode_scanning_min_chars,
-			barcode_scanning_prefix: store.barcode_scanning_prefix,
-			barcode_scanning_suffix: store.barcode_scanning_suffix,
-		}),
+		() => {
+			const latest = store.getLatest();
+			return {
+				barcode_scanning_buffer: latest.barcode_scanning_buffer,
+				barcode_scanning_min_chars: latest.barcode_scanning_min_chars,
+				barcode_scanning_prefix: latest.barcode_scanning_prefix,
+				barcode_scanning_suffix: latest.barcode_scanning_suffix,
+			};
+		},
 		'barcode_scanning_buffer',
 		'barcode_scanning_min_chars',
 		'barcode_scanning_prefix',

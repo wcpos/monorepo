@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { useObservableState } from 'observable-hooks';
 
+import { ButtonPill } from '@wcpos/components/src/button';
 import { HStack } from '@wcpos/components/src/hstack';
 import { IconButton } from '@wcpos/components/src/icon-button';
 import type { ProductDocument, ProductVariationCollection } from '@wcpos/database';
@@ -12,7 +13,7 @@ import { VariationSelect } from '../../variation-select';
 import type { Row } from '@tanstack/react-table';
 
 interface Props {
-	row: Row<ProductDocument>;
+	row: Row<{ document: ProductDocument }>;
 	query: Query<ProductVariationCollection>;
 }
 
@@ -20,7 +21,7 @@ interface Props {
  *
  */
 export const VariationsFilterBar = ({ row, query }: Props) => {
-	const parent = row.original;
+	const parent = row.original.document;
 
 	/**
 	 * We need to trigger a re-render when the selected attributes change.
@@ -34,6 +35,16 @@ export const VariationsFilterBar = ({ row, query }: Props) => {
 	return (
 		<HStack className="p-2 bg-input">
 			<HStack className="flex-1">
+				{params?.search && (
+					<ButtonPill
+						leftIcon="magnifyingGlass"
+						size="xs"
+						removable
+						onRemove={() => query.search('')}
+					>
+						{params.search}
+					</ButtonPill>
+				)}
 				{(parent.attributes || [])
 					.filter((attribute) => attribute.variation)
 					.sort((a, b) => (a.position || 0) - (b.position || 0))

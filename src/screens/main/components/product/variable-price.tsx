@@ -44,8 +44,8 @@ function getVariablePrices(metaData) {
 export const VariableProductPrice = ({
 	row,
 	column,
-}: CellContext<ProductDocument, 'price' | 'regular_price' | 'sale_price'>) => {
-	const product = row.original;
+}: CellContext<{ document: ProductDocument }, 'price' | 'regular_price' | 'sale_price'>) => {
+	const product = row.original.document;
 	const taxStatus = useObservableState(product.tax_status$, product.tax_status);
 	const taxClass = useObservableState(product.tax_class$, product.tax_class);
 	const context = useDataTable();

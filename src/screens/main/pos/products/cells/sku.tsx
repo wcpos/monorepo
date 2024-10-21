@@ -11,8 +11,8 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const SKU = ({ row }: CellContext<ProductDocument, 'sku'>) => {
-	const product = row.original;
+export const SKU = ({ row }: CellContext<{ document: ProductDocument }, 'sku'>) => {
+	const product = row.original.document;
 	const sku = useObservableEagerState(product.sku$);
 
 	return <Text>{sku}</Text>;

@@ -39,8 +39,8 @@ type CustomerDocument = import('@wcpos/database').CustomerDocument;
 /**
  *
  */
-export const Actions = ({ row }: CellContext<CustomerDocument, 'actions'>) => {
-	const customer = row.original;
+export const Actions = ({ row }: CellContext<{ document: CustomerDocument }, 'actions'>) => {
+	const customer = row.original.document;
 	const navigation = useNavigation();
 	const pullDocument = usePullDocument();
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);

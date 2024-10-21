@@ -25,11 +25,14 @@ export const EditOrderMeta = ({ order }: Props) => {
 	 */
 	const formData = useObservablePickState(
 		order.$,
-		() => ({
-			currency: order.currency,
-			transaction_id: order.transaction_id,
-			meta_data: order.meta_data,
-		}),
+		() => {
+			const latest = order.getLatest();
+			return {
+				currency: latest.currency,
+				transaction_id: latest.transaction_id,
+				meta_data: latest.meta_data,
+			};
+		},
 		'currency',
 		'transaction_id',
 		'meta_data'

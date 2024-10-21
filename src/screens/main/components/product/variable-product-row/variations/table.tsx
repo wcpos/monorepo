@@ -17,7 +17,7 @@ import type { Row } from '@tanstack/react-table';
 
 interface Props {
 	query: any;
-	row: Row<ProductDocument>;
+	row: Row<{ document: ProductDocument }>;
 }
 
 const cellRenderer = (props) => {
@@ -44,9 +44,9 @@ export const VariationsTable = ({ query, row }: Props) => {
 
 	return (
 		<VStack className="gap-0">
-			{result.hits.map(({ id, document }, index) => {
+			{result.hits.map((hit, index) => {
 				return (
-					<TableRow key={id} index={index}>
+					<TableRow key={hit.id} index={index}>
 						{row.getVisibleCells().map((cell) => {
 							const meta = cell.column.columnDef.meta;
 
@@ -60,7 +60,7 @@ export const VariationsTable = ({ query, row }: Props) => {
 									...row,
 									parentId: row.id,
 									getParentRow: () => row.original,
-									original: document,
+									original: hit,
 								},
 							};
 
@@ -81,7 +81,11 @@ export const VariationsTable = ({ query, row }: Props) => {
 					</TableRow>
 				);
 			})}
-			<VariationTableFooter query={query} parent={row.original} count={result.hits.length} />
+			<VariationTableFooter
+				query={query}
+				parent={row.original.document}
+				count={result.hits.length}
+			/>
 		</VStack>
 	);
 };

@@ -18,8 +18,8 @@ const variantMap = {
  * @param param0
  * @returns
  */
-export const Level = ({ row }: CellContext<LogDocument, 'level'>) => {
-	const log = row.original;
+export const Level = ({ row }: CellContext<{ document: LogDocument }, 'level'>) => {
+	const log = row.original.document;
 
 	return (
 		<ButtonPill variant={variantMap[log.level]} size="xs">

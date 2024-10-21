@@ -1,14 +1,12 @@
 import * as React from 'react';
 
-import { Button, ButtonText } from '@wcpos/components/src/button';
+import { ErrorBoundary } from '@wcpos/components/src/error-boundary';
 import {
 	Modal,
 	ModalContent,
 	ModalHeader,
 	ModalTitle,
 	ModalBody,
-	ModalFooter,
-	ModalClose,
 } from '@wcpos/components/src/modal';
 import { Suspense } from '@wcpos/components/src/suspense';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@wcpos/components/src/tabs';
@@ -65,14 +63,13 @@ export const SettingsTabs = () => {
 						</TabsList>
 						{tabs.map((tab) => (
 							<TabsContent key={tab.value} value={tab.value}>
-								<Suspense>{tab.component}</Suspense>
+								<ErrorBoundary>
+									<Suspense>{tab.component}</Suspense>
+								</ErrorBoundary>
 							</TabsContent>
 						))}
 					</Tabs>
 				</ModalBody>
-				<ModalFooter>
-					<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
-				</ModalFooter>
 			</ModalContent>
 		</Modal>
 	);

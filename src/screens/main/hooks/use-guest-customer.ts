@@ -10,8 +10,7 @@ import { useT } from '../../../contexts/translations';
  */
 export const useGuestCustomer = () => {
 	const { store } = useAppState();
-	const defaultCountry = useObservableEagerState(store.default_country$);
-	const [country, state] = defaultCountry.split(':');
+	const country = useObservableEagerState(store.store_country$);
 	const t = useT();
 
 	return React.useMemo(

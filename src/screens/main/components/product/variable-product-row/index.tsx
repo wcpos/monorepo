@@ -12,6 +12,7 @@ import { map } from 'rxjs/operators';
 
 import { DataTableRow, useDataTable } from '@wcpos/components/src/data-table';
 
+import { VariationRowProvider } from './context';
 import { Variations } from './variations';
 
 const duration = 500;
@@ -61,7 +62,7 @@ export const VariableProductRow = ({ row, index }) => {
 	 * Render the row and the animated Variations component
 	 */
 	return (
-		<React.Fragment>
+		<VariationRowProvider row={row}>
 			<DataTableRow row={row} index={index} />
 			{shouldRender && (
 				<Animated.View style={[animatedStyle, { overflow: 'hidden' }]}>
@@ -73,6 +74,6 @@ export const VariableProductRow = ({ row, index }) => {
 					/>
 				</Animated.View>
 			)}
-		</React.Fragment>
+		</VariationRowProvider>
 	);
 };

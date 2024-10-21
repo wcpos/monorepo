@@ -13,8 +13,8 @@ type CustomerDocument = import('@wcpos/database').CustomerDocument;
 /**
  *
  */
-export const Avatar = ({ row }: CellContext<CustomerDocument, 'avatar_url'>) => {
-	const customer = row.original;
+export const Avatar = ({ row }: CellContext<{ document: CustomerDocument }, 'avatar_url'>) => {
+	const customer = row.original.document;
 	const avatarUrl = useObservableEagerState(customer.avatar_url$);
 	const source = useImageAttachment(customer, avatarUrl);
 

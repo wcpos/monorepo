@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { ModalClose, ModalFooter } from '@wcpos/components/src/modal';
 import {
 	Table,
 	TableHeader,
@@ -26,31 +27,36 @@ export const KeyboardShortcuts = () => {
 	];
 
 	return (
-		<Table aria-labelledby="keyboard-shortcuts">
-			<TableHeader>
-				<TableRow>
-					<TableHead>
-						<Text>{t('Key Combination', { _tags: 'core' })}</Text>
-					</TableHead>
-					<TableHead>
-						<Text>{t('Description', { _tags: 'core' })}</Text>
-					</TableHead>
-				</TableRow>
-			</TableHeader>
-			<TableBody>
-				{shortcuts.map((shortcut) => (
-					<TableRow key={shortcut.key}>
-						<TableCell>
-							<Text className="p-2 border border-border rounded bg-muted font-mono text-sm">
-								{shortcut.key}
-							</Text>
-						</TableCell>
-						<TableCell>
-							<Text>{shortcut.description}</Text>
-						</TableCell>
+		<>
+			<Table aria-labelledby="keyboard-shortcuts">
+				<TableHeader>
+					<TableRow>
+						<TableHead>
+							<Text>{t('Key Combination', { _tags: 'core' })}</Text>
+						</TableHead>
+						<TableHead>
+							<Text>{t('Description', { _tags: 'core' })}</Text>
+						</TableHead>
 					</TableRow>
-				))}
-			</TableBody>
-		</Table>
+				</TableHeader>
+				<TableBody>
+					{shortcuts.map((shortcut) => (
+						<TableRow key={shortcut.key}>
+							<TableCell>
+								<Text className="p-2 border border-border rounded bg-muted font-mono text-sm">
+									{shortcut.key}
+								</Text>
+							</TableCell>
+							<TableCell>
+								<Text>{shortcut.description}</Text>
+							</TableCell>
+						</TableRow>
+					))}
+				</TableBody>
+			</Table>
+			<ModalFooter className="px-0">
+				<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
+			</ModalFooter>
+		</>
 	);
 };

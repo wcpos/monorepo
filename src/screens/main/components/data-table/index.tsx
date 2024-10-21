@@ -139,7 +139,8 @@ const DataTable = <TDocument extends DocumentType>({
 	 */
 	return (
 		<Table
-			data={result.hits.map(({ document }) => document)}
+			// data={result.hits.map(({ document }) => document)}
+			data={result.hits}
 			columns={columns}
 			onEndReached={result.nextPage}
 			onEndReachedThreshold={0.5}

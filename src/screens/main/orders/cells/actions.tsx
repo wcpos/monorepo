@@ -49,8 +49,8 @@ const upsertMetaData = (metaDataArray, key, value) => {
 /**
  *
  */
-export const Actions = ({ row }: CellContext<OrderDocument, 'actions'>) => {
-	const order = row.original;
+export const Actions = ({ row }: CellContext<{ document: OrderDocument }, 'actions'>) => {
+	const order = row.original.document;
 	const navigation = useNavigation();
 	// const status = useObservableState(order.status$, order.status);
 	const pullDocument = usePullDocument();

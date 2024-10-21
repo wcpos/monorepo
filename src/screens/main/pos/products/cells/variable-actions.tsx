@@ -13,8 +13,8 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const VariableActions = ({ row }: CellContext<ProductDocument, 'actions'>) => {
-	const parent = row.original;
+export const VariableActions = ({ row }: CellContext<{ document: ProductDocument }, 'actions'>) => {
+	const parent = row.original.document;
 	const { addVariation } = useAddVariation();
 	const triggerRef = React.useRef(null);
 

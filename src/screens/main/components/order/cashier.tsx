@@ -16,8 +16,8 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const Cashier = ({ row }: CellContext<OrderDocument, 'cashier'>) => {
-	const order = row.original;
+export const Cashier = ({ row }: CellContext<{ document: OrderDocument }, 'cashier'>) => {
+	const order = row.original.document;
 	const { collection } = useCollection('customers');
 	const cashierID = useObservableEagerState(
 		order.meta_data$.pipe(

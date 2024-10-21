@@ -13,9 +13,9 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
  */
 export const ProductVariationActions = ({
 	row,
-}: CellContext<ProductVariationDocument, 'actions'>) => {
-	const variation = row.original;
-	const parent = row.getParentRow();
+}: CellContext<{ document: ProductVariationDocument }, 'actions'>) => {
+	const variation = row.original.document;
+	const parent = row.getParentRow().document;
 	const { addVariation } = useAddVariation();
 
 	/**

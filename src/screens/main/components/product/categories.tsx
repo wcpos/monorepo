@@ -13,8 +13,10 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const ProductCategories = ({ row }: CellContext<ProductDocument, 'categories'>) => {
-	const product = row.original;
+export const ProductCategories = ({
+	row,
+}: CellContext<{ document: ProductDocument }, 'categories'>) => {
+	const product = row.original.document;
 	const categories = useObservableEagerState(product.categories$) || [];
 	const { query } = useDataTable();
 

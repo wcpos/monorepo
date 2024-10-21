@@ -56,8 +56,8 @@ const iconMap = {
 /**
  *
  */
-export const Status = ({ row }: CellContext<OrderDocument, 'status'>) => {
-	const order = row.original;
+export const Status = ({ row }: CellContext<{ document: OrderDocument }, 'status'>) => {
+	const order = row.original.document;
 	const status = useObservableEagerState(order.status$);
 	const iconName = get(iconMap, [status, 'name'], 'circleQuestion');
 	const iconType = get(iconMap, [status, 'type'], 'disabled');

@@ -20,8 +20,7 @@ export const useAddCustomer = () => {
 	const guestCustomer = useGuestCustomer();
 	const { localPatch } = useLocalMutation();
 	const { store } = useAppState();
-	const defaultCountry = useObservableEagerState(store.default_country$);
-	const [country, state] = defaultCountry.split(':');
+	const country = useObservableEagerState(store.store_country$);
 
 	/**
 	 * Customer can be RxDocument or plain object

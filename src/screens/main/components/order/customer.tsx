@@ -18,8 +18,11 @@ type OrderDocument = import('@wcpos/database').OrderDocument;
 /**
  *
  */
-export const Customer = ({ row, column }: CellContext<OrderDocument, 'customer_id'>) => {
-	const order = row.original;
+export const Customer = ({
+	row,
+	column,
+}: CellContext<{ document: OrderDocument }, 'customer_id'>) => {
+	const order = row.original.document;
 	const { query } = useDataTable();
 	const { format } = useCustomerNameFormat();
 	const customerID = useObservableEagerState(order.customer_id$);

@@ -6,6 +6,7 @@ import { useObservablePickState, useObservableSuspense } from 'observable-hooks'
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
+import { Button } from '@wcpos/components/src/button';
 import {
 	Form,
 	FormField,
@@ -15,10 +16,13 @@ import {
 	FormCombobox,
 	useFormChangeHandler,
 } from '@wcpos/components/src/form';
+import { ModalClose, ModalFooter } from '@wcpos/components/src/modal';
 import { VStack } from '@wcpos/components/src/vstack';
 
 import { useAppState } from '../../../contexts/app-state';
 import { useT } from '../../../contexts/translations';
+import { CountryCombobox } from '../components/country-state-select/country-combobox';
+import { StateFormInput } from '../components/country-state-select/state-forminput';
 import { CurrencyPositionSelect } from '../components/currency-position-select';
 import { CurrencySelect } from '../components/currency-select';
 import { CustomerSelect } from '../components/customer-select';
@@ -28,12 +32,17 @@ import { ThousandsStyleSelect } from '../components/thousands-style-select';
 import { useLocalMutation } from '../hooks/mutations/use-local-mutation';
 import useCustomerNameFormat from '../hooks/use-customer-name-format';
 import { useDefaultCustomer } from '../hooks/use-default-customer';
+import { useRestHttpClient } from '../hooks/use-rest-http-client';
 
 /**
  *
  */
 const formSchema = z.object({
 	name: z.string().optional(),
+	store_country: z.string().optional(),
+	store_state: z.string().optional(),
+	store_city: z.string().optional(),
+	store_postcode: z.string().optional(),
 	locale: z.string().optional(),
 	default_customer: z.number().default(0),
 	default_customer_is_cashier: z.boolean().default(false),
@@ -52,19 +61,30 @@ export const GeneralSettings = () => {
 	const { store } = useAppState();
 	const formData = useObservablePickState(
 		store.$,
-		() => ({
-			name: store.name,
-			locale: store.locale,
-			default_customer: store.default_customer,
-			default_customer_is_cashier: store.default_customer_is_cashier,
-			currency: store.currency,
-			currency_pos: store.currency_pos,
-			price_thousand_sep: store.price_thousand_sep,
-			price_decimal_sep: store.price_decimal_sep,
-			price_num_decimals: store.price_num_decimals,
-			thousands_group_style: store.thousands_group_style,
-		}),
+		() => {
+			const latest = store.getLatest();
+			return {
+				name: latest.name,
+				store_country: latest.store_country,
+				store_state: latest.store_state,
+				store_city: latest.store_city,
+				store_postcode: latest.store_postcode,
+				locale: latest.locale,
+				default_customer: latest.default_customer,
+				default_customer_is_cashier: latest.default_customer_is_cashier,
+				currency: latest.currency,
+				currency_pos: latest.currency_pos,
+				price_thousand_sep: latest.price_thousand_sep,
+				price_decimal_sep: latest.price_decimal_sep,
+				price_num_decimals: latest.price_num_decimals,
+				thousands_group_style: latest.thousands_group_style,
+			};
+		},
 		'name',
+		'store_country',
+		'store_state',
+		'store_city',
+		'store_postcode',
 		'locale',
 		'default_customer',
 		'default_customer_is_cashier',
@@ -80,6 +100,8 @@ export const GeneralSettings = () => {
 	const t = useT();
 	const { localPatch } = useLocalMutation();
 	const { format } = useCustomerNameFormat();
+	const [loading, setLoading] = React.useState(false);
+	const http = useRestHttpClient();
 
 	/**
 	 *
@@ -108,6 +130,8 @@ export const GeneralSettings = () => {
 
 	/**
 	 * Track formData changes and reset form
+	 *
+	 * @FIXME: this unnecessarily resets twice on first load
 	 */
 	React.useEffect(() => {
 		form.reset({ ...formData });
@@ -117,6 +141,45 @@ export const GeneralSettings = () => {
 	 * Toggle customer select
 	 */
 	const toggleCustomerSelect = form.watch('default_customer_is_cashier');
+
+	/**
+	 * Get country code
+	 */
+	const countryCode = form.watch('store_country', form.getValues('store_country'));
+
+	/**
+	 * Restore server settings
+	 */
+	const handleRestoreServerSettings = React.useCallback(async () => {
+		setLoading(true);
+		try {
+			const response = await http.get(`stores/${store.id}`);
+			const data = response.data;
+			await localPatch({
+				document: store,
+				data: {
+					name: data.name,
+					store_country: data.store_country,
+					store_state: data.store_state,
+					store_city: data.store_city,
+					store_postcode: data.store_postcode,
+					locale: data.locale,
+					default_customer: data.default_customer,
+					default_customer_is_cashier: data.default_customer_is_cashier,
+					currency: data.currency,
+					currency_pos: data.currency_pos,
+					price_thousand_sep: data.price_thousand_sep,
+					price_decimal_sep: data.price_decimal_sep,
+					price_num_decimals: data.price_num_decimals,
+					// thousands_group_style: data.thousands_group_style,
+				},
+			});
+		} catch (error) {
+			console.error(error);
+		} finally {
+			setLoading(false);
+		}
+	}, [http, localPatch, store]);
 
 	/**
 	 *
@@ -135,6 +198,41 @@ export const GeneralSettings = () => {
 							)}
 						/>
 					</View>
+					<FormField
+						control={form.control}
+						name="store_city"
+						render={({ field }) => (
+							<FormInput label={t('Store Base City', { _tags: 'core' })} {...field} />
+						)}
+					/>
+					<FormField
+						control={form.control}
+						name="store_postcode"
+						render={({ field }) => (
+							<FormInput label={t('Store Base Postcode', { _tags: 'core' })} {...field} />
+						)}
+					/>
+					<FormField
+						name="store_state"
+						render={({ field }) => (
+							<FormInput
+								customComponent={StateFormInput}
+								label={t('Store Base State', { _tags: 'core' })}
+								{...field}
+								countryCode={countryCode}
+							/>
+						)}
+					/>
+					<FormField
+						name="store_country"
+						render={({ field }) => (
+							<FormCombobox
+								customComponent={CountryCombobox}
+								label={t('Store Base Country', { _tags: 'core' })}
+								{...field}
+							/>
+						)}
+					/>
 					<FormField
 						control={form.control}
 						name="locale"
@@ -232,6 +330,12 @@ export const GeneralSettings = () => {
 						)}
 					/>
 				</View>
+				<ModalFooter className="px-0">
+					<Button variant="destructive" onPress={handleRestoreServerSettings} loading={loading}>
+						{t('Restore server settings', { _tags: 'core' })}
+					</Button>
+					<ModalClose>{t('Close', { _tags: 'core' })}</ModalClose>
+				</ModalFooter>
 			</VStack>
 		</Form>
 	);

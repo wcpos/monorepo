@@ -16,8 +16,8 @@ type Document =
 /**
  * We should always use the GMT date, and then format it based on the user's timezone.
  */
-export const Date = ({ row, column }: CellContext<Document, string>) => {
-	const item = row.original;
+export const Date = ({ row, column }: CellContext<{ document: Document }, string>) => {
+	const item = row.original.document;
 	const key = column.id.endsWith('_gmt') ? column.id : column.id + '_gmt';
 	const dateGmt = useObservableEagerState(item[key + '$']);
 	const dateFormatted = useDateFormat(dateGmt);

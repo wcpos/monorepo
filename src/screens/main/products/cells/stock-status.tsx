@@ -14,8 +14,10 @@ type ProductDocument = import('@wcpos/database').ProductDocument;
 /**
  *
  */
-export const StockStatus = ({ row }: CellContext<ProductDocument, 'stock_status'>) => {
-	const product = row.original;
+export const StockStatus = ({
+	row,
+}: CellContext<{ document: ProductDocument }, 'stock_status'>) => {
+	const product = row.original.document;
 	const stockStatus = useObservableEagerState(product.stock_status$);
 	const { getLabel } = useStockStatusLabel();
 	const { query } = useDataTable();

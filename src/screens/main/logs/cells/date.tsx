@@ -11,8 +11,8 @@ type LogDocument = import('@wcpos/database').LogDocument;
 /**
  *
  */
-export const Date = ({ row }: CellContext<LogDocument, 'timestamp'>) => {
-	const item = row.original;
+export const Date = ({ row }: CellContext<{ document: LogDocument }, 'timestamp'>) => {
+	const item = row.original.document;
 	const dateFormatted = useDateFormat(item.timestamp);
 
 	return <Text>{dateFormatted}</Text>;

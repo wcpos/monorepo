@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { decode } from 'html-entities';
 import {
 	useObservableSuspense,
 	useObservableEagerState,
@@ -55,8 +56,7 @@ export const useNewOrder = () => {
 	const currency = useObservableEagerState(store.currency$);
 	// const prices_include_tax = useObservableEagerState(store.prices_include_tax$);
 	const tax_based_on = useObservableEagerState(store.tax_based_on$);
-	const defaultCountry = useObservableEagerState(store.default_country$);
-	const [country, state] = defaultCountry.split(':');
+	const country = useObservableEagerState(store.store_country$);
 	const newOrder = useObservableSuspense(newOrderResource);
 
 	/**
@@ -68,7 +68,8 @@ export const useNewOrder = () => {
 			: defaultCustomer;
 		const data = transformCustomerJSONToOrderJSON(customer, country);
 		data.currency = currency;
-		data.currency_symbol = allCurrencies.find((c) => c.code === currency).symbol || '';
+		const currencyData = allCurrencies.find((c) => c.code === currency) || {};
+		data.currency_symbol = decode(currencyData.symbol || '');
 		data.prices_include_tax = false; // This setting means nothing, WC REST API always returns prices excluding tax
 		data.meta_data = [
 			{

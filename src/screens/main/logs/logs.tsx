@@ -75,7 +75,7 @@ export const Logs = () => {
 								noDataMessage={t('No logs found', { _tags: 'core' })}
 								estimatedItemSize={100}
 								TableFooterComponent={TableFooter}
-								keyExtractor={(row) => row.original.logId}
+								keyExtractor={(row) => row.original.document.logId}
 							/>
 						</Suspense>
 					</ErrorBoundary>

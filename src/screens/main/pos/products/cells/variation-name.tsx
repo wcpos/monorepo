@@ -5,7 +5,7 @@ import { CellContext } from '@tanstack/react-table';
 import { Text } from '@wcpos/components/src/text';
 import { VStack } from '@wcpos/components/src/vstack';
 
-import StockQuantity from './stock-quantity';
+import { StockQuantity } from './stock-quantity';
 
 type ProductVariationDocument = import('@wcpos/database').ProductVariationDocument;
 
@@ -15,8 +15,8 @@ type ProductVariationDocument = import('@wcpos/database').ProductVariationDocume
 export const ProductVariationName = ({
 	row,
 	column,
-}: CellContext<ProductVariationDocument, 'name'>) => {
-	const variation = row.original;
+}: CellContext<{ document: ProductVariationDocument }, 'name'>) => {
+	const variation = row.original.document;
 	const { show } = column.columnDef.meta;
 
 	/**
@@ -28,7 +28,7 @@ export const ProductVariationName = ({
 			<Text className="font-bold">{variation.name}</Text>
 			{show('sku') && <Text className="text-sm">{variation.sku}</Text>}
 			{show('barcode') && <Text className="text-sm">{variation.barcode}</Text>}
-			{show('stock_quantity') && <StockQuantity row={row} className="text-sm" />}
+			{show('stock_quantity') && <StockQuantity row={row} className="text-sm" withText />}
 		</VStack>
 	);
 };

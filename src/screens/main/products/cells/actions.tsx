@@ -31,8 +31,8 @@ import type { CellContext } from '@tanstack/react-table';
 
 type ProductDocument = import('@wcpos/database').ProductDocument;
 
-export const Actions = ({ row }: CellContext<ProductDocument, 'actions'>) => {
-	const product = row.original;
+export const Actions = ({ row }: CellContext<{ document: ProductDocument }, 'actions'>) => {
+	const product = row.original.document;
 	const [deleteDialogOpened, setDeleteDialogOpened] = React.useState(false);
 	const navigation = useNavigation();
 	const pullDocument = usePullDocument();
